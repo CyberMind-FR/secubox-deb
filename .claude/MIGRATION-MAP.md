@@ -35,7 +35,7 @@ Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 
 ---
 
-## Paquets Debian — 14 modules
+## Paquets Debian — 18 modules
 
 | Module | www/ | API | deb/ | Endpoints | Statut |
 |--------|------|-----|------|-----------|--------|
@@ -44,7 +44,7 @@ Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 | **secubox-crowdsec** | ✅ (54) | ✅ | ✅ | 54 endpoints | ✅ |
 | **secubox-netdata** | ✅ (16) | ✅ | ✅ | 16 endpoints | ✅ |
 | **secubox-wireguard** | ✅ (28) | ✅ | ✅ | 28+ endpoints | ✅ |
-| **secubox-vhost** | ✅ (11) | ✅ | ✅ | vhosts, ssl... | ✅ |
+| **secubox-vhost** | ✅ | ✅ | ✅ | vhosts, ssl, certs | ✅ |
 | **secubox-mediaflow** | ✅ (20) | ✅ | ✅ | streams, alerts... | ✅ |
 | **secubox-dpi** | ✅ | ✅ | ✅ | 40+ endpoints netifyd | ✅ |
 | **secubox-qos** | ✅ (80) | ✅ | ✅ | 60+ endpoints HTB | ✅ |
@@ -53,8 +53,13 @@ Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 | **secubox-system** | ✅ (42) | ✅ | ✅ | 35+ endpoints | ✅ |
 | **secubox-netmodes** | ✅ (34) | ✅ | ✅ | 25+ endpoints + templates | ✅ |
 | **secubox-nac** | ✅ (32) | ✅ | ✅ | 25+ endpoints | ✅ |
+| **secubox-haproxy** | ✅ | ✅ | ✅ | stats, backends, acls | ✅ |
+| **secubox-droplet** | ✅ | ✅ | ✅ | upload, publish | ✅ |
+| **secubox-streamlit** | ✅ | ✅ | ✅ | apps, deploy | ✅ |
+| **secubox-streamforge** | ✅ | ✅ | ✅ | apps, templates | ✅ |
+| **secubox-metablogizer** | ✅ | ✅ | ✅ | sites, tor, publish | ✅ |
 
-**Total : 435 endpoints frontend | ~350+ endpoints API**
+**Total : 18 modules | ~450+ endpoints API**
 
 ---
 

@@ -1,77 +1,71 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-03-20*
+*Mis à jour : 2025-03-21*
 
 ---
 
 ## ✅ Terminé cette session
 
-### Phase 1 — Hardware ✅
-- **build-image.sh** : Support arm64 + amd64 (VirtualBox)
-- **create-vbox-vm.sh** : Script création VM VirtualBox automatique
-- **Board configs** :
-  - `mochabin` : Armada 7040 (SecuBox Pro)
-  - `espressobin-v7` : Armada 3720 (SecuBox Lite)
-  - `espressobin-ultra` : Armada 3720 + WiFi/LTE
-  - `vm-x64` : VirtualBox/QEMU test target
-  - `vm-arm64` : QEMU arm64 emulation
-- **firstboot.sh** : Détection board ARM/x64, JWT, SSH, nftables
+### Dynamic Menu System ✅
+- **sidebar.js** : Shared sidebar component for all modules
+- **Menu API** : `/api/v1/hub/menu` returns 18 modules in 6 categories
+- **menu.d/** : JSON definitions per package (installed via debian/rules)
+- **CSS fixes** : Added missing variables (--cyan, --yellow, --purple) to all modules
 
-### Phase 2 — Infrastructure ✅
-- secubox_core lib avec system.py
-- nginx template
-- rewrite-xhr.py (corrigé pour gérer les accolades imbriquées)
+### Module Scaffold ✅
+- **.claude/skills/module.md** : Skill documentation
+- **scripts/new-module.sh** : Complete package scaffold script
 
-### Phase 3 — Modules ✅
-
-**Tous les 14 modules sont complets (www + API + deb).**
-
-Total : 435 appels rpc.declare réécrits | ~350+ endpoints FastAPI
-
-### Phase 4 — APT Repo ✅
-- **apt.secubox.in** — Configuration reprepro + nginx
-- **GPG signing** — Script generate-gpg-key.sh
-- **CI publish** — GitHub Actions workflow publish-packages.yml
-- **repo-manage.sh** — Gestion add/remove/list/sync
-- **setup-repo-server.sh** — Installation serveur complet
-- **Metapackages** — secubox-full + secubox-lite
-
-### Local Cache Build System ✅
-- **setup-local-cache.sh** — apt-cacher-ng + repo local
-- **build-all-local.sh** — Build tous les packages
-- **--local-cache** flag dans build-image.sh
+### All Services Running ✅
+17 secubox-* services active on VM:
+- secubox-hub, secubox-system
+- secubox-crowdsec, secubox-wireguard, secubox-auth, secubox-nac
+- secubox-netmodes, secubox-dpi, secubox-qos, secubox-vhost
+- secubox-netdata, secubox-mediaflow
+- secubox-haproxy, secubox-cdn
+- secubox-droplet, secubox-streamlit, secubox-streamforge, secubox-metablogizer
 
 ---
 
-## ⬜ Next Up — Tests
+## ⬜ Next Up
 
-1. Tester VM dans VirtualBox
-2. Déployer apt.secubox.in sur serveur
-3. Build et publish packages réels
+1. **Deploy apt.secubox.in** — Setup reprepro server
+2. **Build & publish** — All packages to APT repo
+3. **Integration tests** — Full workflow on clean VM
+4. **Documentation** — User guide, API docs
 
 ---
 
-## 🧪 Build avec cache local
+## 🛠️ Quick Commands
 
 ```bash
-# 1. Setup cache local (une fois)
-sudo bash scripts/setup-local-cache.sh
+# SSH to VM (key auth configured)
+ssh -p 2222 root@localhost
 
-# 2. Builder tous les packages SecuBox
-bash scripts/build-all-local.sh bookworm amd64
+# Create new module
+./scripts/new-module.sh myapp "Description" apps "🚀" 500
 
-# 3. Construire image avec cache local
-sudo bash image/build-image.sh --board vm-x64 --local-cache --vdi
+# Build package
+cd packages/secubox-<name> && dpkg-buildpackage -us -uc -b
 
-# 4. Créer VM VirtualBox
-bash image/create-vbox-vm.sh output/secubox-vm-x64-bookworm.vdi
+# Deploy to VM
+scp -P 2222 *.deb root@localhost:/tmp/ && ssh -p 2222 root@localhost "dpkg -i /tmp/*.deb"
+
+# Check menu API
+curl -sk https://localhost:8443/api/v1/hub/menu | jq '.categories | length'
 ```
 
 ---
 
 ## 🗓️ Historique récent
 
-- **2026-03-20** :
-  - Phase 4 complète : apt.secubox.in (reprepro, GPG, CI)
-  - Local cache build system ajouté
-  - Image VM x64 construite avec succès
-  - **Phases 1, 2, 3, 4 terminées à 100%**
+- **2025-03-21** :
+  - Dynamic menu system complete (18 modules, 6 categories)
+  - Shared sidebar.js for consistent navigation
+  - CSS variables fixed across all modules
+  - Module scaffold skill created
+  - All 17 services running on VM
+
+- **2025-03-20** :
+  - Phase 4 complete: apt.secubox.in (reprepro, GPG, CI)
+  - Local cache build system added
+  - Image VM x64 built successfully
