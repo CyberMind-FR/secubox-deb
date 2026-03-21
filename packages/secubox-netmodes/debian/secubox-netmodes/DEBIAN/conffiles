@@ -1,5 +1,0 @@
-/etc/secubox/netmodes/access-point.yaml.j2
-/etc/secubox/netmodes/relay.yaml.j2
-/etc/secubox/netmodes/router.yaml.j2
-/etc/secubox/netmodes/sniffer-inline.yaml.j2
-/etc/secubox/netmodes/sniffer-passive.yaml.j2
