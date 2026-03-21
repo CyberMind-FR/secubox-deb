@@ -12,3 +12,11 @@ output/
 *.dsc
 packages/*/*.egg-info/
 .pytest_cache/
+
+# Debian build artifacts
+packages/*/debian/.debhelper/
+packages/*/debian/debhelper-build-stamp
+packages/*/debian/files
+packages/*/debian/*.substvars
+packages/*/debian/*.postrm.debhelper
+packages/*/debian/secubox-*/

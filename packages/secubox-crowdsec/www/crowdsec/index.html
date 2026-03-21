@@ -94,33 +94,8 @@
     </style>
 </head>
 <body>
-    <nav class="sidebar">
-        <div class="sidebar-header">
-            <a href="/" style="text-decoration: none;"><div class="logo"><span>S</span><span>E</span><span>C</span><span>U</span>BOX</div></a>
-        </div>
-        <div class="nav-section">
-            <div class="nav-section-title">📊 DASHBOARD <span>▼</span></div>
-            <a href="/" class="nav-item"><span class="icon">🏠</span> Home</a>
-            <a href="/system/" class="nav-item"><span class="icon">🔧</span> System Hub</a>
-        </div>
-        <div class="nav-section">
-            <div class="nav-section-title">🛡️ SECURITY <span>▼</span></div>
-            <a href="/crowdsec/" class="nav-item active"><span class="icon">🛡️</span> CrowdSec</a>
-            <a href="/wireguard/" class="nav-item"><span class="icon">🔐</span> WireGuard VPN</a>
-            <a href="/auth/" class="nav-item"><span class="icon">🔑</span> Auth Guardian</a>
-            <a href="/nac/" class="nav-item"><span class="icon">👥</span> Client Guardian</a>
-        </div>
-        <div class="nav-section">
-            <div class="nav-section-title">🌐 NETWORK <span>▼</span></div>
-            <a href="/netmodes/" class="nav-item"><span class="icon">🔀</span> Network Modes</a>
-            <a href="/dpi/" class="nav-item"><span class="icon">🔍</span> DPI</a>
-            <a href="/qos/" class="nav-item"><span class="icon">📶</span> QoS</a>
-        </div>
-        <div class="nav-section">
-            <div class="nav-section-title">📈 MONITORING <span>▼</span></div>
-            <a href="/netdata/" class="nav-item"><span class="icon">📊</span> Netdata</a>
-        </div>
-    </nav>
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
 
     <main class="main">
         <header class="header">

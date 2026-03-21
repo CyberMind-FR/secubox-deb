@@ -5,9 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SecuBox - HAProxy Dashboard</title>
     <style>
-        :root { --bg-dark: #0d1117; --bg-card: #161b22; --border: #30363d; --text: #c9d1d9; --text-dim: #8b949e; --primary: #58a6ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; }
+        :root { --bg-dark: #0d1117; --bg-card: #161b22; --bg-sidebar: #0d1117; --border: #30363d; --text: #c9d1d9; --text-dim: #8b949e; --primary: #58a6ff; --cyan: #00d4ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; --purple: #a371f7; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: -apple-system, sans-serif; background: var(--bg-dark); color: var(--text); padding: 1.5rem; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
+        .sidebar { width: 220px; background: var(--bg-sidebar); border-right: 1px solid var(--border); position: fixed; height: 100vh; overflow-y: auto; }
+        .sidebar-header { padding: 1rem; border-bottom: 1px solid var(--border); }
+        .logo { font-weight: bold; font-size: 1.2rem; }
+        .logo span:nth-child(1) { color: var(--cyan); } .logo span:nth-child(2) { color: var(--red); } .logo span:nth-child(3) { color: var(--green); } .logo span:nth-child(4) { color: var(--yellow); }
+        .nav-section { padding: 0.5rem 0; }
+        .nav-section-title { padding: 0.5rem 1rem; font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
+        .nav-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 1rem; color: var(--text-dim); text-decoration: none; font-size: 0.9rem; border-left: 3px solid transparent; }
+        .nav-item:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+        .nav-item.active { background: rgba(88,166,255,0.1); color: var(--primary); border-left-color: var(--primary); }
+        .nav-item .icon { width: 20px; text-align: center; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
         .header h1 { font-size: 1.5rem; }
         .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; }
@@ -25,46 +36,52 @@
         .badge.up { background: rgba(63,185,80,0.2); color: var(--green); }
         .badge.down { background: rgba(248,81,73,0.2); color: var(--red); }
         .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+        @media (max-width: 900px) { .sidebar { display: none; } .main { margin-left: 0; } }
     </style>
 </head>
 <body>
-    <header class="header">
-        <h1>HAProxy Dashboard</h1>
-        <div><button class="btn" onclick="refresh()">Refresh</button> <button class="btn primary" onclick="reload()">Reload</button></div>
-    </header>
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
 
-    <div class="stats-row">
-        <div class="stat-card"><div class="value" id="status">-</div><div class="label">Status</div></div>
-        <div class="stat-card"><div class="value" id="vhosts">-</div><div class="label">VHosts</div></div>
-        <div class="stat-card"><div class="value" id="backends">-</div><div class="label">Backends</div></div>
-        <div class="stat-card"><div class="value" id="requests">-</div><div class="label">Requests</div></div>
-    </div>
+    <main class="main">
+        <header class="header">
+            <h1>HAProxy Dashboard</h1>
+            <div><button class="btn" onclick="refresh()">Refresh</button> <button class="btn primary" onclick="reload()">Reload</button></div>
+        </header>
 
-    <div class="grid-2">
-        <div class="card">
-            <h2>VHosts</h2>
-            <table>
-                <thead><tr><th>Domain</th><th>Backend</th><th>SSL</th></tr></thead>
-                <tbody id="vhost-list"><tr><td colspan="3">Loading...</td></tr></tbody>
-            </table>
+        <div class="stats-row">
+            <div class="stat-card"><div class="value" id="status">-</div><div class="label">Status</div></div>
+            <div class="stat-card"><div class="value" id="vhosts">-</div><div class="label">VHosts</div></div>
+            <div class="stat-card"><div class="value" id="backends">-</div><div class="label">Backends</div></div>
+            <div class="stat-card"><div class="value" id="requests">-</div><div class="label">Requests</div></div>
+        </div>
+
+        <div class="grid-2">
+            <div class="card">
+                <h2>VHosts</h2>
+                <table>
+                    <thead><tr><th>Domain</th><th>Backend</th><th>SSL</th></tr></thead>
+                    <tbody id="vhost-list"><tr><td colspan="3">Loading...</td></tr></tbody>
+                </table>
+            </div>
+
+            <div class="card">
+                <h2>Backends</h2>
+                <table>
+                    <thead><tr><th>Name</th><th>Mode</th><th>Servers</th></tr></thead>
+                    <tbody id="backend-list"><tr><td colspan="3">Loading...</td></tr></tbody>
+                </table>
+            </div>
         </div>
 
         <div class="card">
-            <h2>Backends</h2>
+            <h2>Frontend/Backend Stats</h2>
             <table>
-                <thead><tr><th>Name</th><th>Mode</th><th>Servers</th></tr></thead>
-                <tbody id="backend-list"><tr><td colspan="3">Loading...</td></tr></tbody>
+                <thead><tr><th>Name</th><th>Type</th><th>Status</th><th>Sessions</th><th>Bytes In</th><th>Bytes Out</th></tr></thead>
+                <tbody id="stats-list"><tr><td colspan="6">Loading...</td></tr></tbody>
             </table>
         </div>
-    </div>
-
-    <div class="card">
-        <h2>Frontend/Backend Stats</h2>
-        <table>
-            <thead><tr><th>Name</th><th>Type</th><th>Status</th><th>Sessions</th><th>Bytes In</th><th>Bytes Out</th></tr></thead>
-            <tbody id="stats-list"><tr><td colspan="6">Loading...</td></tr></tbody>
-        </table>
-    </div>
+    </main>
 
     <script>
         const API = '/api/v1/haproxy';
