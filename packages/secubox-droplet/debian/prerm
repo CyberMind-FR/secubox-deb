@@ -1,11 +1,14 @@
 #!/bin/bash
 set -e
 case "$1" in
-  remove|upgrade|deconfigure)
+  remove|deconfigure)
     rm -f /etc/nginx/secubox.d/droplet.conf
-    systemctl stop secubox-droplet.service || true
-    systemctl disable secubox-droplet.service || true
     systemctl reload nginx 2>/dev/null || true
     ;;
+  upgrade)
+    # Don't remove nginx config on upgrade
+    ;;
 esac
+systemctl stop    secubox-droplet.service 2>/dev/null || true
+systemctl disable secubox-droplet.service 2>/dev/null || true
 #DEBHELPER#

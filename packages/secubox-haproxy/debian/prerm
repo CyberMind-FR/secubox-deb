@@ -1,11 +1,14 @@
 #!/bin/bash
 set -e
 case "$1" in
-  remove|upgrade|deconfigure)
+  remove|deconfigure)
     rm -f /etc/nginx/secubox.d/haproxy.conf
-    systemctl stop secubox-haproxy.service || true
-    systemctl disable secubox-haproxy.service || true
     systemctl reload nginx 2>/dev/null || true
     ;;
+  upgrade)
+    # Don't remove nginx config on upgrade
+    ;;
 esac
+systemctl stop    secubox-haproxy.service 2>/dev/null || true
+systemctl disable secubox-haproxy.service 2>/dev/null || true
 #DEBHELPER#
