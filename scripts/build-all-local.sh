@@ -21,22 +21,44 @@ ok()   { echo -e "${GREEN}[  OK ]${NC} $*"; }
 err()  { echo -e "${RED}[FAIL ]${NC} $*" >&2; }
 warn() { echo -e "${GOLD}[ WARN]${NC} $*"; }
 
-# Packages dans l'ordre de dépendance
+# Packages dans l'ordre de dépendance (core first, metapackages last)
 PACKAGES=(
+  # Core library (dependency for all)
   "secubox-core"
+  # Dashboard & System
   "secubox-hub"
-  "secubox-crowdsec"
-  "secubox-netdata"
-  "secubox-wireguard"
-  "secubox-vhost"
-  "secubox-dpi"
-  "secubox-mediaflow"
-  "secubox-qos"
+  "secubox-portal"
   "secubox-system"
-  "secubox-netmodes"
-  "secubox-nac"
+  # Security
+  "secubox-crowdsec"
+  "secubox-wireguard"
   "secubox-auth"
+  "secubox-nac"
+  "secubox-waf"
+  # Network
+  "secubox-netmodes"
+  "secubox-dpi"
+  "secubox-qos"
+  "secubox-vhost"
+  "secubox-haproxy"
+  "secubox-dns"
+  # Monitoring
+  "secubox-netdata"
+  "secubox-mediaflow"
   "secubox-cdn"
+  # Publishing
+  "secubox-droplet"
+  "secubox-streamlit"
+  "secubox-streamforge"
+  "secubox-metablogizer"
+  "secubox-publish"
+  # Email
+  "secubox-mail"
+  "secubox-mail-lxc"
+  "secubox-webmail"
+  "secubox-webmail-lxc"
+  "secubox-users"
+  # Metapackages (last)
   "secubox-full"
   "secubox-lite"
 )
