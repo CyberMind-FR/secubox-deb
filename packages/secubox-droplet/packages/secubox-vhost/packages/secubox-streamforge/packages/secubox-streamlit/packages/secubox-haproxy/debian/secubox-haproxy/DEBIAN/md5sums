@@ -1,6 +1,0 @@
-e7345eedfccf1fd1f33df9c959eb69b9  usr/lib/secubox/haproxy/api/__init__.py
-c612c2e85cd8a9375042186627233b54  usr/lib/secubox/haproxy/api/main.py
-5989143dc8ad785991a42ff683e39280  usr/lib/secubox/haproxy/api/routers/__init__.py
-4f8a340873238ed95341bbf0d103e100  usr/lib/systemd/system/secubox-haproxy.service
-6020ec62461ddcc48e9fce87a50e0152  usr/share/doc/secubox-haproxy/changelog.Debian.gz
-ebfc371d06ec09a950188d578741e1a7  usr/share/secubox/www/haproxy/index.html

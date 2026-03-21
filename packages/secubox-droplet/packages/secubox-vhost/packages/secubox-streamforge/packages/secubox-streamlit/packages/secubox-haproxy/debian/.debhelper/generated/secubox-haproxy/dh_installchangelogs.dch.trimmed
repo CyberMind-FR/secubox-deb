@@ -1,6 +1,0 @@
-secubox-haproxy (1.0.0-1~bookworm1) bookworm; urgency=medium
-
-  * Initial Debian port from OpenWrt luci-app-haproxy
-  * HAProxy dashboard with vhost and backend management
-
- -- Gandalf / CyberMind <gk@cybermind.fr>  Sat, 21 Mar 2026 10:30:00 +0100

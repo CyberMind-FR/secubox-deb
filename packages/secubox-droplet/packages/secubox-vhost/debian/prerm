@@ -1,9 +1,0 @@
-#!/bin/bash
-set -e
-case "$1" in
-  remove|upgrade|deconfigure)
-    systemctl stop secubox-vhost.service || true
-    systemctl disable secubox-vhost.service || true
-    ;;
-esac
-#DEBHELPER#
