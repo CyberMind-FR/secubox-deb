@@ -1,0 +1,12 @@
+Package: secubox-vhost
+Version: 1.0.0-1~bookworm1
+Architecture: all
+Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Installed-Size: 40
+Depends: secubox-core (>= 1.0), python3-uvicorn, nginx
+Recommends: acme.sh
+Section: net
+Priority: optional
+Description: SecuBox Virtual Host Manager
+ Gestion des virtual hosts Nginx avec support ACME/TLS.
+ Port Debian bookworm de luci-app-vhost-manager (SecuBox OpenWrt).

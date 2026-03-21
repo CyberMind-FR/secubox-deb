@@ -1,0 +1,9 @@
+#!/bin/bash
+set -e
+case "$1" in
+  remove|upgrade|deconfigure)
+    systemctl stop secubox-streamforge.service || true
+    systemctl disable secubox-streamforge.service || true
+    ;;
+esac
+#DEBHELPER#

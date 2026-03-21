@@ -1,0 +1,11 @@
+Package: secubox-droplet
+Version: 1.0.0-1~bookworm1
+Architecture: all
+Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Installed-Size: 67
+Depends: secubox-core (>= 1.0), python3-uvicorn, python3-aiofiles
+Section: net
+Priority: optional
+Description: SecuBox Droplet File Publisher
+ Dashboard pour la publication de fichiers et sites statiques.
+ Port Debian bookworm de luci-app-droplet (SecuBox OpenWrt).

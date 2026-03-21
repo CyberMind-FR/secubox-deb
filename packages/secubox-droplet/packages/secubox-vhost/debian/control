@@ -1,0 +1,14 @@
+Source: secubox-vhost
+Section: net
+Priority: optional
+Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+
+Package: secubox-vhost
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn, nginx
+Recommends: acme.sh
+Description: SecuBox Virtual Host Manager
+ Gestion des virtual hosts Nginx avec support ACME/TLS.
+ Port Debian bookworm de luci-app-vhost-manager (SecuBox OpenWrt).

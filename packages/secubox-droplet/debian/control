@@ -1,0 +1,13 @@
+Source: secubox-droplet
+Section: net
+Priority: optional
+Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+
+Package: secubox-droplet
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn, python3-aiofiles
+Description: SecuBox Droplet File Publisher
+ Dashboard pour la publication de fichiers et sites statiques.
+ Port Debian bookworm de luci-app-droplet (SecuBox OpenWrt).

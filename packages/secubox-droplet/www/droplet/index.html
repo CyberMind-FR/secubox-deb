@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - Droplet Publisher</title>
+    <style>
+        :root { --bg-dark: #0d1117; --bg-card: #161b22; --bg-sidebar: #0d1117; --border: #30363d; --text: #c9d1d9; --text-dim: #8b949e; --primary: #58a6ff; --cyan: #00d4ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; --purple: #a371f7; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
+        .sidebar { width: 220px; background: var(--bg-sidebar); border-right: 1px solid var(--border); position: fixed; height: 100vh; overflow-y: auto; }
+        .sidebar-header { padding: 1rem; border-bottom: 1px solid var(--border); }
+        .logo { font-weight: bold; font-size: 1.2rem; }
+        .logo span:nth-child(1) { color: var(--cyan); } .logo span:nth-child(2) { color: var(--red); } .logo span:nth-child(3) { color: var(--green); } .logo span:nth-child(4) { color: var(--yellow); }
+        .nav-section { padding: 0.5rem 0; }
+        .nav-section-title { padding: 0.5rem 1rem; font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
+        .nav-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 1rem; color: var(--text-dim); text-decoration: none; font-size: 0.9rem; border-left: 3px solid transparent; }
+        .nav-item:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+        .nav-item.active { background: rgba(88,166,255,0.1); color: var(--primary); border-left-color: var(--primary); }
+        .main { flex: 1; margin-left: 220px; }
+        .header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); background: var(--bg-card); }
+        .header-title h1 { font-size: 1.5rem; font-weight: 600; }
+        .header-actions { display: flex; gap: 0.75rem; }
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.875rem; }
+        .btn:hover { background: var(--bg-dark); }
+        .btn.primary { background: rgba(88,166,255,0.1); border-color: var(--primary); color: var(--primary); }
+        .content { padding: 1.5rem; }
+        .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; text-align: center; }
+        .stat-card .value { font-size: 2.5rem; font-weight: bold; margin-bottom: 0.25rem; }
+        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
+        .stat-card.cyan .value { color: var(--cyan); }
+        .stat-card.green .value { color: var(--green); }
+        .stat-card.purple .value { color: var(--purple); }
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .card-header h2 { font-size: 1rem; font-weight: 600; }
+        .droplet-table { width: 100%; border-collapse: collapse; }
+        .droplet-table th { text-align: left; padding: 0.75rem; color: var(--text-dim); font-size: 0.75rem; text-transform: uppercase; border-bottom: 1px solid var(--border); }
+        .droplet-table td { padding: 0.75rem; border-bottom: 1px solid var(--border); }
+        .badge { padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; }
+        .badge.static { background: rgba(88,166,255,0.2); color: var(--primary); }
+        .badge.streamlit { background: rgba(163,113,247,0.2); color: var(--purple); }
+        .badge.enabled { background: rgba(63,185,80,0.2); color: var(--green); }
+        .badge.disabled { background: rgba(139,148,158,0.2); color: var(--text-dim); }
+        .upload-zone { border: 2px dashed var(--border); border-radius: 8px; padding: 2rem; text-align: center; cursor: pointer; transition: all 0.2s; }
+        .upload-zone:hover { border-color: var(--primary); background: rgba(88,166,255,0.05); }
+        .upload-zone.dragover { border-color: var(--green); background: rgba(63,185,80,0.1); }
+        input[type="file"] { display: none; }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; color: var(--text-dim); font-size: 0.875rem; }
+        .form-group input { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-dark); color: var(--text); }
+        @media (max-width: 900px) { .stats-row { grid-template-columns: 1fr; } .sidebar { display: none; } .main { margin-left: 0; } }
+    </style>
+</head>
+<body>
+    <nav class="sidebar">
+        <div class="sidebar-header"><a href="/" style="text-decoration: none;"><div class="logo"><span>S</span><span>E</span><span>C</span><span>U</span>BOX</div></a></div>
+        <div class="nav-section">
+            <div class="nav-section-title">Dashboard</div>
+            <a href="/" class="nav-item">Home</a>
+            <a href="/system/" class="nav-item">System Hub</a>
+        </div>
+        <div class="nav-section">
+            <div class="nav-section-title">Publishing</div>
+            <a href="/droplet/" class="nav-item active">Droplet</a>
+            <a href="/metablogizer/" class="nav-item">MetaBlogizer</a>
+            <a href="/streamlit/" class="nav-item">Streamlit</a>
+        </div>
+    </nav>
+
+    <main class="main">
+        <header class="header">
+            <div class="header-title"><h1>Droplet Publisher</h1></div>
+            <div class="header-actions">
+                <button class="btn" onclick="refresh()">Refresh</button>
+            </div>
+        </header>
+
+        <div class="content">
+            <div class="stats-row">
+                <div class="stat-card cyan">
+                    <div class="value" id="total-count">-</div>
+                    <div class="label">Total Droplets</div>
+                </div>
+                <div class="stat-card green">
+                    <div class="value" id="sites-count">-</div>
+                    <div class="label">Static Sites</div>
+                </div>
+                <div class="stat-card purple">
+                    <div class="value" id="apps-count">-</div>
+                    <div class="label">Streamlit Apps</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><h2>Upload New Droplet</h2></div>
+                <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()">
+                    <p>Drag & drop a file or click to browse</p>
+                    <p style="color: var(--text-dim); font-size: 0.875rem; margin-top: 0.5rem;">Supports ZIP, HTML, or static site archives</p>
+                </div>
+                <input type="file" id="file-input" accept=".zip,.html,.tar.gz">
+                <div class="form-group" style="margin-top: 1rem;">
+                    <label>Name</label>
+                    <input type="text" id="droplet-name" placeholder="my-site">
+                </div>
+                <div class="form-group">
+                    <label>Domain (optional)</label>
+                    <input type="text" id="droplet-domain" placeholder="Leave empty for default">
+                </div>
+                <button class="btn primary" onclick="uploadDroplet()" style="margin-top: 0.5rem;">Publish</button>
+                <div id="upload-status" style="margin-top: 1rem;"></div>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><h2>Published Droplets</h2></div>
+                <table class="droplet-table">
+                    <thead>
+                        <tr><th>Name</th><th>Domain</th><th>Type</th><th>Status</th><th>Actions</th></tr>
+                    </thead>
+                    <tbody id="droplet-list">
+                        <tr><td colspan="5">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const API = '/api/v1/droplet';
+
+        async function api(endpoint, options = {}) {
+            const token = localStorage.getItem('sbx_token');
+            const headers = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = 'Bearer ' + token;
+            try {
+                const res = await fetch(API + endpoint, { ...options, headers });
+                if (res.status === 401) { window.location = '/login/'; return {}; }
+                return res.json();
+            } catch (e) { return {}; }
+        }
+
+        async function loadStatus() {
+            const data = await api('/status');
+            document.getElementById('sites-count').textContent = data.sites_count || 0;
+            document.getElementById('apps-count').textContent = data.apps_count || 0;
+        }
+
+        async function loadDroplets() {
+            const data = await api('/list');
+            const list = document.getElementById('droplet-list');
+            const droplets = data.droplets || [];
+
+            document.getElementById('total-count').textContent = droplets.length;
+
+            if (droplets.length === 0) {
+                list.innerHTML = '<tr><td colspan="5" style="color: var(--text-dim);">No droplets published yet</td></tr>';
+                return;
+            }
+
+            list.innerHTML = droplets.map(d => `
+                <tr>
+                    <td>${d.name}</td>
+                    <td><a href="https://${d.domain}" target="_blank" style="color: var(--primary);">${d.domain}</a></td>
+                    <td><span class="badge ${d.type}">${d.type}</span></td>
+                    <td><span class="badge ${d.enabled ? 'enabled' : 'disabled'}">${d.enabled ? 'Enabled' : 'Disabled'}</span></td>
+                    <td><button class="btn" onclick="removeDroplet('${d.name}')">Remove</button></td>
+                </tr>
+            `).join('');
+        }
+
+        async function uploadDroplet() {
+            const fileInput = document.getElementById('file-input');
+            const name = document.getElementById('droplet-name').value.trim();
+            const domain = document.getElementById('droplet-domain').value.trim();
+            const status = document.getElementById('upload-status');
+
+            if (!fileInput.files.length) { status.innerHTML = '<span style="color: var(--red);">Please select a file</span>'; return; }
+            if (!name) { status.innerHTML = '<span style="color: var(--red);">Please enter a name</span>'; return; }
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            formData.append('name', name);
+            if (domain) formData.append('domain', domain);
+
+            status.innerHTML = '<span style="color: var(--cyan);">Uploading...</span>';
+
+            const token = localStorage.getItem('sbx_token');
+            const res = await fetch(API + '/upload', {
+                method: 'POST',
+                headers: token ? { 'Authorization': 'Bearer ' + token } : {},
+                body: formData
+            });
+
+            const data = await res.json();
+            if (data.job_id) {
+                status.innerHTML = '<span style="color: var(--cyan);">Publishing... (job ' + data.job_id + ')</span>';
+                pollJob(data.job_id);
+            } else {
+                status.innerHTML = '<span style="color: var(--red);">' + (data.detail || 'Upload failed') + '</span>';
+            }
+        }
+
+        async function pollJob(jobId) {
+            const status = document.getElementById('upload-status');
+            const check = async () => {
+                const data = await api('/job/' + jobId);
+                if (data.status === 'complete') {
+                    if (data.success) {
+                        status.innerHTML = '<span style="color: var(--green);">Published: <a href="' + data.url + '" target="_blank">' + data.vhost + '</a></span>';
+                        refresh();
+                    } else {
+                        status.innerHTML = '<span style="color: var(--red);">Failed: ' + data.error + '</span>';
+                    }
+                } else if (data.status === 'running' || data.status === 'started') {
+                    setTimeout(check, 2000);
+                }
+            };
+            check();
+        }
+
+        async function removeDroplet(name) {
+            if (!confirm('Remove droplet "' + name + '"?')) return;
+            const data = await api('/remove', { method: 'POST', body: JSON.stringify({ name }) });
+            if (data.success) refresh();
+            else alert('Failed: ' + data.message);
+        }
+
+        function refresh() { loadStatus(); loadDroplets(); }
+
+        // Drag & drop
+        const zone = document.getElementById('upload-zone');
+        zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+        zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+        zone.addEventListener('drop', e => {
+            e.preventDefault();
+            zone.classList.remove('dragover');
+            document.getElementById('file-input').files = e.dataTransfer.files;
+        });
+        document.getElementById('file-input').addEventListener('change', e => {
+            if (e.target.files.length) zone.querySelector('p').textContent = e.target.files[0].name;
+        });
+
+        refresh();
+    </script>
+</body>
+</html>

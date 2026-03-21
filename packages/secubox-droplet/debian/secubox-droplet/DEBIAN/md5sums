@@ -1,0 +1,7 @@
+673a3a853469737c9ed53ec66eac8cb0  usr/lib/secubox/droplet/api/__init__.py
+14d249f62379d47d89738258c04e898e  usr/lib/secubox/droplet/api/main.py
+fe0745f59f344ca6bbe03d1ea702ddc6  usr/lib/secubox/droplet/api/routers/__init__.py
+289c65f347b500f231226ca652f6c398  usr/lib/systemd/system/secubox-droplet.service
+848b43b6d7ca2b8f2652cd6d5811a01e  usr/share/doc/secubox-droplet/changelog.Debian.gz
+c70687349c97f51e1c63f19b23e4b916  usr/share/secubox/www/droplet/index.html
+007b907d42141a11aeea80800589217e  usr/share/secubox/www/droplet/overview.js

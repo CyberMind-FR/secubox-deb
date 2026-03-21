@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - HAProxy Dashboard</title>
+    <style>
+        :root { --bg-dark: #0d1117; --bg-card: #161b22; --border: #30363d; --text: #c9d1d9; --text-dim: #8b949e; --primary: #58a6ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg-dark); color: var(--text); padding: 1.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        .header h1 { font-size: 1.5rem; }
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; }
+        .btn.primary { background: rgba(88,166,255,0.1); color: var(--primary); }
+        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
+        .stat-card .value { font-size: 2rem; font-weight: bold; color: var(--primary); }
+        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); }
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
+        .card h2 { margin-bottom: 1rem; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+        th { color: var(--text-dim); font-size: 0.75rem; }
+        .badge { padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; }
+        .badge.up { background: rgba(63,185,80,0.2); color: var(--green); }
+        .badge.down { background: rgba(248,81,73,0.2); color: var(--red); }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <h1>HAProxy Dashboard</h1>
+        <div><button class="btn" onclick="refresh()">Refresh</button> <button class="btn primary" onclick="reload()">Reload</button></div>
+    </header>
+
+    <div class="stats-row">
+        <div class="stat-card"><div class="value" id="status">-</div><div class="label">Status</div></div>
+        <div class="stat-card"><div class="value" id="vhosts">-</div><div class="label">VHosts</div></div>
+        <div class="stat-card"><div class="value" id="backends">-</div><div class="label">Backends</div></div>
+        <div class="stat-card"><div class="value" id="requests">-</div><div class="label">Requests</div></div>
+    </div>
+
+    <div class="grid-2">
+        <div class="card">
+            <h2>VHosts</h2>
+            <table>
+                <thead><tr><th>Domain</th><th>Backend</th><th>SSL</th></tr></thead>
+                <tbody id="vhost-list"><tr><td colspan="3">Loading...</td></tr></tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h2>Backends</h2>
+            <table>
+                <thead><tr><th>Name</th><th>Mode</th><th>Servers</th></tr></thead>
+                <tbody id="backend-list"><tr><td colspan="3">Loading...</td></tr></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Frontend/Backend Stats</h2>
+        <table>
+            <thead><tr><th>Name</th><th>Type</th><th>Status</th><th>Sessions</th><th>Bytes In</th><th>Bytes Out</th></tr></thead>
+            <tbody id="stats-list"><tr><td colspan="6">Loading...</td></tr></tbody>
+        </table>
+    </div>
+
+    <script>
+        const API = '/api/v1/haproxy';
+        const headers = () => ({ 'Authorization': 'Bearer ' + (localStorage.getItem('sbx_token') || '') });
+        async function api(path) { try { return (await fetch(API + path, { headers: headers() })).json(); } catch { return {}; } }
+
+        async function loadStatus() {
+            const d = await api('/status');
+            document.getElementById('status').textContent = d.running ? 'Running' : 'Stopped';
+            document.getElementById('status').style.color = d.running ? 'var(--green)' : 'var(--red)';
+            document.getElementById('vhosts').textContent = d.vhost_count || 0;
+            document.getElementById('backends').textContent = d.backend_count || 0;
+        }
+
+        async function loadVhosts() {
+            const d = await api('/vhosts');
+            const list = document.getElementById('vhost-list');
+            const vhosts = d.vhosts || [];
+            if (!vhosts.length) { list.innerHTML = '<tr><td colspan="3">No vhosts</td></tr>'; return; }
+            list.innerHTML = vhosts.map(v => `<tr><td>${v.domain}</td><td>${v.backend}</td><td>${v.ssl ? 'Yes' : 'No'}</td></tr>`).join('');
+        }
+
+        async function loadBackends() {
+            const d = await api('/backends');
+            const list = document.getElementById('backend-list');
+            const backends = d.backends || [];
+            if (!backends.length) { list.innerHTML = '<tr><td colspan="3">No backends</td></tr>'; return; }
+            list.innerHTML = backends.map(b => `<tr><td>${b.name}</td><td>${b.mode}</td><td>${(b.servers||[]).length}</td></tr>`).join('');
+        }
+
+        async function loadStats() {
+            const d = await api('/stats');
+            const list = document.getElementById('stats-list');
+            const stats = (d.stats || []).filter(s => s.svname && s.svname !== 'BACKEND' && s.svname !== 'FRONTEND').slice(0, 20);
+            let totalReqs = 0;
+            (d.stats || []).forEach(s => totalReqs += parseInt(s.stot || 0));
+            document.getElementById('requests').textContent = totalReqs;
+            if (!stats.length) { list.innerHTML = '<tr><td colspan="6">No stats</td></tr>'; return; }
+            list.innerHTML = stats.map(s => `<tr>
+                <td>${s.pxname}/${s.svname}</td>
+                <td>${s.type === '0' ? 'FE' : s.type === '1' ? 'BE' : 'SRV'}</td>
+                <td><span class="badge ${s.status === 'UP' ? 'up' : 'down'}">${s.status}</span></td>
+                <td>${s.scur || 0}</td>
+                <td>${s.bin || 0}</td>
+                <td>${s.bout || 0}</td>
+            </tr>`).join('');
+        }
+
+        async function reload() {
+            await fetch(API + '/reload', { method: 'POST', headers: headers() });
+            refresh();
+        }
+
+        function refresh() { loadStatus(); loadVhosts(); loadBackends(); loadStats(); }
+        refresh();
+    </script>
+</body>
+</html>
