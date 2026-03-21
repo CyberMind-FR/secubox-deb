@@ -1,0 +1,9 @@
+{
+  "id": "haproxy",
+  "name": "HAProxy",
+  "category": "network",
+  "icon": "⚖️",
+  "path": "/haproxy/",
+  "order": 250,
+  "description": "Load balancer dashboard"
+}

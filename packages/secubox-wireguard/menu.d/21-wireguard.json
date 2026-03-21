@@ -1,0 +1,9 @@
+{
+  "id": "wireguard",
+  "name": "WireGuard VPN",
+  "category": "security",
+  "icon": "🔐",
+  "path": "/wireguard/",
+  "order": 110,
+  "description": "Modern VPN management"
+}

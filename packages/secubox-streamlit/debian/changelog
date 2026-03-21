@@ -1,3 +1,10 @@
+secubox-streamlit (1.0.1-1~bookworm1) bookworm; urgency=medium
+
+  * Add dynamic menu system with menu.d JSON definitions
+  * Menu items auto-registered when package installed
+
+ -- SecuBox Team <dev@secubox.gondwana.systems>  Sat, 21 Mar 2026 16:37:28 +0100
+
 secubox-streamlit (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial Debian port from OpenWrt luci-app-streamlit

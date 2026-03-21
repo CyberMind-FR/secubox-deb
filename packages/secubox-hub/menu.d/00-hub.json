@@ -1,0 +1,9 @@
+{
+  "id": "hub",
+  "name": "Dashboard",
+  "category": "dashboard",
+  "icon": "🏠",
+  "path": "/",
+  "order": 0,
+  "description": "SecuBox Control Center"
+}

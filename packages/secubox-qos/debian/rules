@@ -7,3 +7,5 @@ override_dh_auto_install:
 	cp -r api debian/secubox-qos/usr/lib/secubox/qos/
 	install -d debian/secubox-qos/usr/share/secubox/www
 	[ -d www ] && cp -r www/. debian/secubox-qos/usr/share/secubox/www/ || true
+	install -d debian/secubox-qos/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-qos/usr/share/secubox/menu.d/ || true

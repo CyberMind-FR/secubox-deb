@@ -10,3 +10,5 @@ override_dh_auto_install:
 	# Templates netplan par mode
 	install -d debian/secubox-netmodes/etc/secubox/netmodes
 	[ -d templates ] && cp -r templates/*.yaml.j2 debian/secubox-netmodes/etc/secubox/netmodes/ || true
+	install -d debian/secubox-netmodes/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-netmodes/usr/share/secubox/menu.d/ || true

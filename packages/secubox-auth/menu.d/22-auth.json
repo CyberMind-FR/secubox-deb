@@ -1,0 +1,9 @@
+{
+  "id": "auth",
+  "name": "Auth Guardian",
+  "category": "security",
+  "icon": "🔑",
+  "path": "/auth/",
+  "order": 120,
+  "description": "Authentication management"
+}

@@ -1,0 +1,9 @@
+{
+  "id": "droplet",
+  "name": "Droplet",
+  "category": "publishing",
+  "icon": "📤",
+  "path": "/droplet/",
+  "order": 400,
+  "description": "File publisher"
+}

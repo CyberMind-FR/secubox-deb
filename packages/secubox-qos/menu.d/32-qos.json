@@ -1,0 +1,9 @@
+{
+  "id": "qos",
+  "name": "Bandwidth Manager",
+  "category": "network",
+  "icon": "📶",
+  "path": "/qos/",
+  "order": 220,
+  "description": "Traffic shaping and QoS"
+}

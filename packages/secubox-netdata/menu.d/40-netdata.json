@@ -1,0 +1,9 @@
+{
+  "id": "netdata",
+  "name": "Netdata",
+  "category": "monitoring",
+  "icon": "📊",
+  "path": "/netdata/",
+  "order": 300,
+  "description": "Real-time system monitoring"
+}

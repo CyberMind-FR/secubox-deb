@@ -1,0 +1,9 @@
+{
+  "id": "dpi",
+  "name": "DPI",
+  "category": "network",
+  "icon": "🔍",
+  "path": "/dpi/",
+  "order": 210,
+  "description": "Deep packet inspection"
+}

@@ -1,0 +1,9 @@
+{
+  "id": "mediaflow",
+  "name": "Media Flow",
+  "category": "monitoring",
+  "icon": "📺",
+  "path": "/mediaflow/",
+  "order": 310,
+  "description": "Media traffic analytics"
+}
