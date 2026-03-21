@@ -22,7 +22,7 @@ _jobs: dict = {}
 def _cfg():
     cfg = get_config("droplet")
     return {
-        "upload_dir": cfg.get("upload_dir", "/tmp/droplet-upload"),
+        "upload_dir": cfg.get("upload_dir", "/srv/droplet"),
         "default_domain": cfg.get("default_domain", "secubox.local"),
     }
 

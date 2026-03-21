@@ -1,0 +1,9 @@
+{
+  "id": "dns",
+  "name": "Dns",
+  "category": "network",
+  "icon": "🌐",
+  "path": "/dns/",
+  "order": 32,
+  "description": "DNS Master - BIND Zone Management"
+}

@@ -3,40 +3,58 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - HAProxy Dashboard</title>
+    <title>SecuBox - HAProxy + WAF Dashboard</title>
     <style>
-        :root { --bg-dark: #0d1117; --bg-card: #161b22; --bg-sidebar: #0d1117; --border: #30363d; --text: #c9d1d9; --text-dim: #8b949e; --primary: #58a6ff; --cyan: #00d4ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; --purple: #a371f7; }
+        :root { --bg-dark: #0d1117; --bg-card: #161b22; --bg-sidebar: #0d1117; --border: #30363d; --text: #c9d1d9; --text-dim: #8b949e; --primary: #58a6ff; --cyan: #00d4ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; --purple: #a371f7; --orange: #f0883e; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: -apple-system, sans-serif; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
         .sidebar { width: 220px; background: var(--bg-sidebar); border-right: 1px solid var(--border); position: fixed; height: 100vh; overflow-y: auto; }
-        .sidebar-header { padding: 1rem; border-bottom: 1px solid var(--border); }
-        .logo { font-weight: bold; font-size: 1.2rem; }
-        .logo span:nth-child(1) { color: var(--cyan); } .logo span:nth-child(2) { color: var(--red); } .logo span:nth-child(3) { color: var(--green); } .logo span:nth-child(4) { color: var(--yellow); }
-        .nav-section { padding: 0.5rem 0; }
-        .nav-section-title { padding: 0.5rem 1rem; font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
-        .nav-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 1rem; color: var(--text-dim); text-decoration: none; font-size: 0.9rem; border-left: 3px solid transparent; }
-        .nav-item:hover { background: rgba(255,255,255,0.05); color: var(--text); }
-        .nav-item.active { background: rgba(88,166,255,0.1); color: var(--primary); border-left-color: var(--primary); }
-        .nav-item .icon { width: 20px; text-align: center; }
         .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
         .header h1 { font-size: 1.5rem; }
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; }
-        .btn.primary { background: rgba(88,166,255,0.1); color: var(--primary); }
-        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.9rem; }
+        .btn:hover { background: var(--bg-dark); }
+        .btn.primary { background: rgba(88,166,255,0.1); border-color: var(--primary); color: var(--primary); }
+        .btn.success { background: rgba(63,185,80,0.1); border-color: var(--green); color: var(--green); }
+        .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
+        .btn-group { display: flex; gap: 0.5rem; }
+        .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
         .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
-        .stat-card .value { font-size: 2rem; font-weight: bold; color: var(--primary); }
-        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); }
+        .stat-card .value { font-size: 1.5rem; font-weight: bold; color: var(--primary); }
+        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; }
+        .stat-card.running .value { color: var(--green); }
+        .stat-card.stopped .value { color: var(--red); }
+        .stat-card.waf .value { color: var(--orange); }
         .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
-        .card h2 { margin-bottom: 1rem; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
-        th { color: var(--text-dim); font-size: 0.75rem; }
-        .badge { padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; }
+        .card h2 { margin-bottom: 1rem; color: var(--cyan); display: flex; align-items: center; gap: 0.5rem; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        th, td { padding: 0.6rem; text-align: left; border-bottom: 1px solid var(--border); }
+        th { color: var(--text-dim); font-size: 0.8rem; }
+        .badge { padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600; }
         .badge.up { background: rgba(63,185,80,0.2); color: var(--green); }
         .badge.down { background: rgba(248,81,73,0.2); color: var(--red); }
+        .badge.waf { background: rgba(240,136,62,0.2); color: var(--orange); }
+        .badge.bypass { background: rgba(139,148,158,0.2); color: var(--text-dim); }
         .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
-        @media (max-width: 900px) { .sidebar { display: none; } .main { margin-left: 0; } }
+        .waf-panel { background: linear-gradient(135deg, rgba(240,136,62,0.1), rgba(248,81,73,0.1)); border: 1px solid var(--orange); }
+        .waf-panel h2 { color: var(--orange); }
+        .toggle { position: relative; width: 50px; height: 26px; display: inline-block; }
+        .toggle input { opacity: 0; width: 0; height: 0; }
+        .toggle .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: var(--border); border-radius: 26px; transition: 0.3s; }
+        .toggle .slider:before { position: absolute; content: ""; height: 20px; width: 20px; left: 3px; bottom: 3px; background: var(--text); border-radius: 50%; transition: 0.3s; }
+        .toggle input:checked + .slider { background: var(--green); }
+        .toggle input:checked + .slider:before { transform: translateX(24px); }
+        .waf-status { display: flex; align-items: center; gap: 1rem; padding: 1rem; background: var(--bg-dark); border-radius: 6px; margin-bottom: 1rem; }
+        .waf-status .indicator { width: 12px; height: 12px; border-radius: 50%; }
+        .waf-status .indicator.active { background: var(--green); box-shadow: 0 0 8px var(--green); }
+        .waf-status .indicator.inactive { background: var(--red); }
+        .tabs { display: flex; gap: 0; margin-bottom: 1rem; border-bottom: 1px solid var(--border); }
+        .tab { padding: 0.75rem 1.25rem; cursor: pointer; color: var(--text-dim); border-bottom: 2px solid transparent; }
+        .tab:hover { color: var(--text); }
+        .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        @media (max-width: 900px) { .sidebar { display: none; } .main { margin-left: 0; } .grid-2 { grid-template-columns: 1fr; } }
     </style>
 </head>
 <body>
@@ -45,98 +63,282 @@
 
     <main class="main">
         <header class="header">
-            <h1>HAProxy Dashboard</h1>
-            <div><button class="btn" onclick="refresh()">Refresh</button> <button class="btn primary" onclick="reload()">Reload</button></div>
+            <h1>HAProxy + WAF Dashboard</h1>
+            <div class="btn-group">
+                <button class="btn" onclick="refresh()">Refresh</button>
+                <button class="btn primary" onclick="generateConfig()">Generate Config</button>
+                <button class="btn success" onclick="reload()">Reload</button>
+            </div>
         </header>
 
         <div class="stats-row">
-            <div class="stat-card"><div class="value" id="status">-</div><div class="label">Status</div></div>
-            <div class="stat-card"><div class="value" id="vhosts">-</div><div class="label">VHosts</div></div>
-            <div class="stat-card"><div class="value" id="backends">-</div><div class="label">Backends</div></div>
-            <div class="stat-card"><div class="value" id="requests">-</div><div class="label">Requests</div></div>
+            <div class="stat-card" id="statusCard">
+                <div class="value" id="status">-</div>
+                <div class="label">HAProxy Status</div>
+            </div>
+            <div class="stat-card waf" id="wafCard">
+                <div class="value" id="wafStatus">-</div>
+                <div class="label">WAF Status</div>
+            </div>
+            <div class="stat-card">
+                <div class="value" id="vhosts">-</div>
+                <div class="label">VHosts</div>
+            </div>
+            <div class="stat-card">
+                <div class="value" id="backends">-</div>
+                <div class="label">Backends</div>
+            </div>
+            <div class="stat-card">
+                <div class="value" id="requests">-</div>
+                <div class="label">Total Requests</div>
+            </div>
+            <div class="stat-card">
+                <div class="value" id="bans">-</div>
+                <div class="label">Active Bans</div>
+            </div>
         </div>
 
-        <div class="grid-2">
-            <div class="card">
-                <h2>VHosts</h2>
-                <table>
-                    <thead><tr><th>Domain</th><th>Backend</th><th>SSL</th></tr></thead>
-                    <tbody id="vhost-list"><tr><td colspan="3">Loading...</td></tr></tbody>
-                </table>
+        <!-- WAF Control Panel -->
+        <div class="card waf-panel">
+            <h2>WAF Integration</h2>
+            <div class="waf-status">
+                <div class="indicator" id="wafIndicator"></div>
+                <span id="wafLabel">WAF Protection</span>
+                <label class="toggle" style="margin-left: auto;">
+                    <input type="checkbox" id="wafToggle" onchange="toggleWAF(this.checked)">
+                    <span class="slider"></span>
+                </label>
             </div>
-
-            <div class="card">
-                <h2>Backends</h2>
-                <table>
-                    <thead><tr><th>Name</th><th>Mode</th><th>Servers</th></tr></thead>
-                    <tbody id="backend-list"><tr><td colspan="3">Loading...</td></tr></tbody>
-                </table>
+            <p style="color: var(--text-dim); font-size: 0.85rem; margin-bottom: 1rem;">
+                When enabled, all HTTP traffic is inspected by the WAF before reaching backends.
+                Traffic flow: Client → HAProxy → WAF Inspector → Backend
+            </p>
+            <div class="btn-group">
+                <button class="btn" onclick="syncRoutes()">Sync WAF Routes</button>
+                <button class="btn" onclick="window.location='/waf/'">Open WAF Dashboard</button>
             </div>
         </div>
 
+        <!-- Tabbed Content -->
         <div class="card">
-            <h2>Frontend/Backend Stats</h2>
-            <table>
-                <thead><tr><th>Name</th><th>Type</th><th>Status</th><th>Sessions</th><th>Bytes In</th><th>Bytes Out</th></tr></thead>
-                <tbody id="stats-list"><tr><td colspan="6">Loading...</td></tr></tbody>
-            </table>
+            <div class="tabs">
+                <div class="tab active" data-tab="vhosts" onclick="switchTab('vhosts')">VHosts</div>
+                <div class="tab" data-tab="backends" onclick="switchTab('backends')">Backends</div>
+                <div class="tab" data-tab="stats" onclick="switchTab('stats')">Live Stats</div>
+                <div class="tab" data-tab="certs" onclick="switchTab('certs')">Certificates</div>
+            </div>
+
+            <div id="vhosts" class="tab-content active">
+                <table>
+                    <thead><tr><th>Domain</th><th>Backend</th><th>SSL</th><th>WAF</th><th>Actions</th></tr></thead>
+                    <tbody id="vhost-list"><tr><td colspan="5">Loading...</td></tr></tbody>
+                </table>
+            </div>
+
+            <div id="backends" class="tab-content">
+                <table>
+                    <thead><tr><th>Name</th><th>Mode</th><th>Balance</th><th>Servers</th><th>Type</th></tr></thead>
+                    <tbody id="backend-list"><tr><td colspan="5">Loading...</td></tr></tbody>
+                </table>
+            </div>
+
+            <div id="stats" class="tab-content">
+                <table>
+                    <thead><tr><th>Name</th><th>Type</th><th>Status</th><th>Sessions</th><th>Bytes In</th><th>Bytes Out</th></tr></thead>
+                    <tbody id="stats-list"><tr><td colspan="6">Loading...</td></tr></tbody>
+                </table>
+            </div>
+
+            <div id="certs" class="tab-content">
+                <table>
+                    <thead><tr><th>Certificate</th><th>Path</th></tr></thead>
+                    <tbody id="cert-list"><tr><td colspan="2">Loading...</td></tr></tbody>
+                </table>
+            </div>
         </div>
     </main>
 
     <script>
         const API = '/api/v1/haproxy';
-        const headers = () => ({ 'Authorization': 'Bearer ' + (localStorage.getItem('sbx_token') || '') });
-        async function api(path) { try { return (await fetch(API + path, { headers: headers() })).json(); } catch { return {}; } }
+        const token = () => localStorage.getItem('sbx_token');
+        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+
+        async function api(path, opts = {}) {
+            try {
+                const res = await fetch(API + path, { ...opts, headers: headers() });
+                if (res.status === 401) { window.location = '/login/'; return {}; }
+                return res.json();
+            } catch { return {}; }
+        }
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+            document.getElementById(tabName).classList.add('active');
+        }
 
         async function loadStatus() {
             const d = await api('/status');
-            document.getElementById('status').textContent = d.running ? 'Running' : 'Stopped';
-            document.getElementById('status').style.color = d.running ? 'var(--green)' : 'var(--red)';
+
+            // HAProxy status
+            const statusEl = document.getElementById('status');
+            const statusCard = document.getElementById('statusCard');
+            statusEl.textContent = d.running ? 'Running' : 'Stopped';
+            statusCard.className = d.running ? 'stat-card running' : 'stat-card stopped';
+
+            // WAF status
+            const wafEl = document.getElementById('wafStatus');
+            const wafIndicator = document.getElementById('wafIndicator');
+            const wafToggle = document.getElementById('wafToggle');
+
+            if (d.waf_enabled && d.waf_available) {
+                wafEl.textContent = 'Active';
+                wafIndicator.className = 'indicator active';
+                wafToggle.checked = true;
+            } else if (d.waf_enabled) {
+                wafEl.textContent = 'Unavailable';
+                wafIndicator.className = 'indicator inactive';
+                wafToggle.checked = true;
+            } else {
+                wafEl.textContent = 'Disabled';
+                wafIndicator.className = 'indicator inactive';
+                wafToggle.checked = false;
+            }
+
             document.getElementById('vhosts').textContent = d.vhost_count || 0;
             document.getElementById('backends').textContent = d.backend_count || 0;
+
+            // Get CrowdSec bans
+            const cs = await api('/crowdsec/status');
+            document.getElementById('bans').textContent = cs.active_bans || 0;
         }
 
         async function loadVhosts() {
             const d = await api('/vhosts');
             const list = document.getElementById('vhost-list');
             const vhosts = d.vhosts || [];
-            if (!vhosts.length) { list.innerHTML = '<tr><td colspan="3">No vhosts</td></tr>'; return; }
-            list.innerHTML = vhosts.map(v => `<tr><td>${v.domain}</td><td>${v.backend}</td><td>${v.ssl ? 'Yes' : 'No'}</td></tr>`).join('');
+            if (!vhosts.length) {
+                list.innerHTML = '<tr><td colspan="5" style="color:var(--text-dim)">No vhosts configured</td></tr>';
+                return;
+            }
+            list.innerHTML = vhosts.map(v => `
+                <tr>
+                    <td>${v.domain}</td>
+                    <td>${v.backend}</td>
+                    <td>${v.ssl ? '<span class="badge up">SSL</span>' : '-'}</td>
+                    <td>${v.waf_bypass ? '<span class="badge bypass">Bypass</span>' : '<span class="badge waf">Protected</span>'}</td>
+                    <td>
+                        <button class="btn" onclick="toggleVhostWAF('${v.name}', ${!v.waf_bypass})">
+                            ${v.waf_bypass ? 'Enable WAF' : 'Bypass WAF'}
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
         }
 
         async function loadBackends() {
             const d = await api('/backends');
             const list = document.getElementById('backend-list');
             const backends = d.backends || [];
-            if (!backends.length) { list.innerHTML = '<tr><td colspan="3">No backends</td></tr>'; return; }
-            list.innerHTML = backends.map(b => `<tr><td>${b.name}</td><td>${b.mode}</td><td>${(b.servers||[]).length}</td></tr>`).join('');
+            if (!backends.length) {
+                list.innerHTML = '<tr><td colspan="5" style="color:var(--text-dim)">No backends</td></tr>';
+                return;
+            }
+            list.innerHTML = backends.map(b => `
+                <tr>
+                    <td>${b.name}</td>
+                    <td>${b.mode || 'http'}</td>
+                    <td>${b.balance || '-'}</td>
+                    <td>${b.type === 'waf' ? '-' : (b.servers || []).length}</td>
+                    <td>${b.type === 'waf' ? '<span class="badge waf">WAF Inspector</span>' : ''}</td>
+                </tr>
+            `).join('');
         }
 
         async function loadStats() {
             const d = await api('/stats');
             const list = document.getElementById('stats-list');
-            const stats = (d.stats || []).filter(s => s.svname && s.svname !== 'BACKEND' && s.svname !== 'FRONTEND').slice(0, 20);
+            const stats = (d.stats || []).filter(s => s.svname).slice(0, 30);
             let totalReqs = 0;
             (d.stats || []).forEach(s => totalReqs += parseInt(s.stot || 0));
-            document.getElementById('requests').textContent = totalReqs;
-            if (!stats.length) { list.innerHTML = '<tr><td colspan="6">No stats</td></tr>'; return; }
-            list.innerHTML = stats.map(s => `<tr>
-                <td>${s.pxname}/${s.svname}</td>
-                <td>${s.type === '0' ? 'FE' : s.type === '1' ? 'BE' : 'SRV'}</td>
-                <td><span class="badge ${s.status === 'UP' ? 'up' : 'down'}">${s.status}</span></td>
-                <td>${s.scur || 0}</td>
-                <td>${s.bin || 0}</td>
-                <td>${s.bout || 0}</td>
-            </tr>`).join('');
+            document.getElementById('requests').textContent = totalReqs.toLocaleString();
+
+            if (!stats.length) {
+                list.innerHTML = '<tr><td colspan="6" style="color:var(--text-dim)">No stats available</td></tr>';
+                return;
+            }
+            list.innerHTML = stats.map(s => `
+                <tr>
+                    <td>${s.pxname}/${s.svname}</td>
+                    <td>${s.type === '0' ? 'Frontend' : s.type === '1' ? 'Backend' : 'Server'}</td>
+                    <td><span class="badge ${s.status === 'UP' || s.status === 'OPEN' ? 'up' : 'down'}">${s.status || '-'}</span></td>
+                    <td>${s.scur || 0}</td>
+                    <td>${formatBytes(s.bin || 0)}</td>
+                    <td>${formatBytes(s.bout || 0)}</td>
+                </tr>
+            `).join('');
         }
 
-        async function reload() {
-            await fetch(API + '/reload', { method: 'POST', headers: headers() });
+        async function loadCerts() {
+            const d = await api('/certificates');
+            const list = document.getElementById('cert-list');
+            const certs = d.certificates || [];
+            if (!certs.length) {
+                list.innerHTML = '<tr><td colspan="2" style="color:var(--text-dim)">No certificates</td></tr>';
+                return;
+            }
+            list.innerHTML = certs.map(c => `<tr><td>${c.name}</td><td style="font-family:monospace;font-size:0.8rem">${c.path}</td></tr>`).join('');
+        }
+
+        function formatBytes(bytes) {
+            bytes = parseInt(bytes) || 0;
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            if (bytes < 1024 * 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+            return (bytes / 1024 / 1024 / 1024).toFixed(2) + ' GB';
+        }
+
+        async function toggleWAF(enabled) {
+            await api('/waf/toggle', { method: 'POST', body: JSON.stringify({ enabled }) });
             refresh();
         }
 
-        function refresh() { loadStatus(); loadVhosts(); loadBackends(); loadStats(); }
+        async function toggleVhostWAF(name, bypass) {
+            await api(`/vhost/${name}/waf-bypass`, { method: 'POST', body: JSON.stringify({ bypass }) });
+            loadVhosts();
+        }
+
+        async function syncRoutes() {
+            const d = await api('/waf/sync-routes', { method: 'POST' });
+            alert(`Synced ${d.routes} routes to WAF`);
+        }
+
+        async function generateConfig() {
+            const d = await api('/generate', { method: 'POST' });
+            if (d.success) {
+                alert(`Config generated: ${d.vhosts} vhosts, ${d.backends} backends, WAF: ${d.waf_enabled ? 'enabled' : 'disabled'}`);
+            } else {
+                alert('Config validation failed: ' + (d.validation || 'Unknown error'));
+            }
+            refresh();
+        }
+
+        async function reload() {
+            await api('/reload', { method: 'POST' });
+            refresh();
+        }
+
+        function refresh() {
+            loadStatus();
+            loadVhosts();
+            loadBackends();
+            loadStats();
+            loadCerts();
+        }
+
         refresh();
+        setInterval(refresh, 15000);
     </script>
 </body>
 </html>

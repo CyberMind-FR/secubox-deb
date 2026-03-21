@@ -1,0 +1,21 @@
+Source: secubox-mail
+Section: admin
+Priority: optional
+Maintainer: SecuBox <dev@secubox.local>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+
+Package: secubox-mail
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0.0)
+Recommends: secubox-mail-lxc
+Description: SecuBox Mail Module
+ Email server management API and dashboard.
+ Layer 2 of the 2-layer mail architecture.
+ .
+ Features:
+  - User/alias management via mailctl
+  - DKIM/SPF configuration
+  - Service monitoring
+ .
+ For containerized deployment, install secubox-mail-lxc.

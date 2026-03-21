@@ -9,3 +9,6 @@ override_dh_auto_install:
 	[ -d www ] && cp -r www/. debian/secubox-wireguard/usr/share/secubox/www/ || true
 	install -d debian/secubox-wireguard/usr/share/secubox/menu.d
 	[ -d menu.d ] && cp -r menu.d/. debian/secubox-wireguard/usr/share/secubox/menu.d/ || true
+	# Modular nginx config
+	install -d debian/secubox-wireguard/etc/nginx/secubox.d
+	[ -f nginx/wireguard.conf ] && cp nginx/wireguard.conf debian/secubox-wireguard/etc/nginx/secubox.d/ || true

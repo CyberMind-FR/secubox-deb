@@ -1,0 +1,9 @@
+{
+  "id": "waf",
+  "name": "Waf",
+  "category": "security",
+  "icon": "🛡️",
+  "path": "/waf/",
+  "order": 110,
+  "description": "Web Application Firewall"
+}

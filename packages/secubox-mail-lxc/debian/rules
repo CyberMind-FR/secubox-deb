@@ -1,0 +1,14 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-mail-lxc/usr/lib/secubox/mail-lxc
+	cp -r api debian/secubox-mail-lxc/usr/lib/secubox/mail-lxc/
+	install -d debian/secubox-mail-lxc/usr/share/secubox/www/mail-lxc
+	cp -r www/mail-lxc/. debian/secubox-mail-lxc/usr/share/secubox/www/mail-lxc/
+	install -d debian/secubox-mail-lxc/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-mail-lxc/usr/share/secubox/menu.d/ || true
+	# Modular nginx config
+	install -d debian/secubox-mail-lxc/etc/nginx/secubox.d
+	[ -f nginx/mail-lxc.conf ] && cp nginx/mail-lxc.conf debian/secubox-mail-lxc/etc/nginx/secubox.d/ || true

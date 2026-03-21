@@ -12,3 +12,6 @@ override_dh_auto_install:
 	[ -d templates ] && cp -r templates/*.yaml.j2 debian/secubox-netmodes/etc/secubox/netmodes/ || true
 	install -d debian/secubox-netmodes/usr/share/secubox/menu.d
 	[ -d menu.d ] && cp -r menu.d/. debian/secubox-netmodes/usr/share/secubox/menu.d/ || true
+	# Modular nginx config
+	install -d debian/secubox-netmodes/etc/nginx/secubox.d
+	[ -f nginx/netmodes.conf ] && cp nginx/netmodes.conf debian/secubox-netmodes/etc/nginx/secubox.d/ || true

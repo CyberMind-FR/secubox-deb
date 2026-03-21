@@ -335,7 +335,7 @@ return view.extend({
                 // Upload file
                 var formData = new FormData();
                 formData.append('sessionid', rpc.getSessionID());
-                formData.append('filename', '/tmp/droplet-upload/' + item.file.name);
+                formData.append('filename', '/srv/droplet/' + item.file.name);
                 formData.append('filedata', item.file);
 
                 fetch('/cgi-bin/cgi-upload', {

@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - Client Guardian</title>
+    <link rel="stylesheet" href="/shared/sidebar.css">
+    <style>
+        :root { --bg-dark: #0d1117; --bg-card: #161b22; --bg-sidebar: #0d1117; --border: #30363d; --text: #c9d1d9; --text-dim: #8b949e; --primary: #58a6ff; --cyan: #00d4ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        .header h1 { font-size: 1.5rem; }
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.9rem; }
+        .btn:hover { background: var(--bg-dark); }
+        .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
+        .card h2 { font-size: 1rem; margin-bottom: 1rem; color: var(--cyan); }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
+        .stat-card .value { font-size: 1.8rem; font-weight: bold; }
+        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; }
+        .stat-card.online .value { color: var(--green); }
+        .stat-card.quarantine .value { color: var(--red); }
+        .stat-card.total .value { color: var(--cyan); }
+        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        th, td { padding: 0.6rem; text-align: left; border-bottom: 1px solid var(--border); }
+        th { color: var(--text-dim); font-weight: 500; font-size: 0.8rem; }
+        .badge { display: inline-block; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600; }
+        .badge.online { background: rgba(63,185,80,0.2); color: var(--green); }
+        .badge.offline { background: rgba(139,148,158,0.2); color: var(--text-dim); }
+        .badge.quarantine { background: rgba(248,81,73,0.2); color: var(--red); }
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+    <main class="main">
+        <header class="header">
+            <h1>👥 Client Guardian (NAC)</h1>
+            <button class="btn" onclick="refresh()">Refresh</button>
+        </header>
+
+        <div class="grid">
+            <div class="stat-card total">
+                <div class="value" id="total">-</div>
+                <div class="label">Total Clients</div>
+            </div>
+            <div class="stat-card online">
+                <div class="value" id="online">-</div>
+                <div class="label">Online</div>
+            </div>
+            <div class="stat-card quarantine">
+                <div class="value" id="quarantine">-</div>
+                <div class="label">Quarantined</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Connected Clients</h2>
+            <table>
+                <thead><tr><th>MAC</th><th>IP</th><th>Hostname</th><th>Status</th><th>Actions</th></tr></thead>
+                <tbody id="clientsTable"><tr><td colspan="5">Loading...</td></tr></tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h2>Quarantine List</h2>
+            <table>
+                <thead><tr><th>MAC</th><th>Reason</th><th>Since</th><th>Actions</th></tr></thead>
+                <tbody id="quarantineTable"><tr><td colspan="4">Loading...</td></tr></tbody>
+            </table>
+        </div>
+    </main>
+
+    <script>
+        const API = '/api/v1/nac';
+
+        async function api(path, opts = {}) {
+            try {
+                const res = await fetch(API + path, { credentials: 'include', ...opts });
+                return res.json();
+            } catch { return {}; }
+        }
+
+        async function refresh() {
+            const status = await api('/status');
+            document.getElementById('total').textContent = status.total_clients || 0;
+            document.getElementById('online').textContent = status.online || 0;
+            document.getElementById('quarantine').textContent = status.quarantined || 0;
+
+            const clients = await api('/clients');
+            const tbody = document.getElementById('clientsTable');
+            if (clients.clients && clients.clients.length > 0) {
+                tbody.innerHTML = clients.clients.map(c => `
+                    <tr>
+                        <td style="font-family:monospace">${c.mac}</td>
+                        <td style="font-family:monospace">${c.ip}</td>
+                        <td>${c.hostname || '-'}</td>
+                        <td><span class="badge ${c.status}">${c.status}</span></td>
+                        <td><button class="btn danger" onclick="quarantine('${c.mac}')">Quarantine</button></td>
+                    </tr>
+                `).join('');
+            } else {
+                tbody.innerHTML = '<tr><td colspan="5" style="color:var(--text-dim)">No clients connected</td></tr>';
+            }
+
+            const quarantine = await api('/quarantine');
+            const qbody = document.getElementById('quarantineTable');
+            if (quarantine.clients && quarantine.clients.length > 0) {
+                qbody.innerHTML = quarantine.clients.map(c => `
+                    <tr>
+                        <td style="font-family:monospace">${c.mac}</td>
+                        <td>${c.reason || '-'}</td>
+                        <td>${c.since || '-'}</td>
+                        <td><button class="btn" onclick="unquarantine('${c.mac}')">Release</button></td>
+                    </tr>
+                `).join('');
+            } else {
+                qbody.innerHTML = '<tr><td colspan="4" style="color:var(--text-dim)">No quarantined clients</td></tr>';
+            }
+        }
+
+        async function quarantine(mac) {
+            if (!confirm(`Quarantine client ${mac}?`)) return;
+            await api('/quarantine', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({mac}) });
+            refresh();
+        }
+
+        async function unquarantine(mac) {
+            await api('/unquarantine', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({mac}) });
+            refresh();
+        }
+
+        refresh();
+        setInterval(refresh, 15000);
+    </script>
+</body>
+</html>

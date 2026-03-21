@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - Webmail</title>
+    <style>
+        :root { --bg-dark: #0d1117; --bg-card: #161b22; --bg-sidebar: #0d1117; --border: #30363d; --text: #c9d1d9; --text-dim: #8b949e; --primary: #58a6ff; --cyan: #00d4ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; --purple: #a371f7; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
+        .sidebar { width: 220px; background: var(--bg-sidebar); border-right: 1px solid var(--border); position: fixed; height: 100vh; overflow-y: auto; }
+        .sidebar-header { padding: 1rem; border-bottom: 1px solid var(--border); }
+        .logo { font-weight: bold; font-size: 1.2rem; }
+        .logo span:nth-child(1) { color: var(--cyan); } .logo span:nth-child(2) { color: var(--red); } .logo span:nth-child(3) { color: var(--green); } .logo span:nth-child(4) { color: var(--yellow); }
+        .nav-section { padding: 0.5rem 0; }
+        .nav-section-title { padding: 0.5rem 1rem; font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
+        .nav-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 1rem; color: var(--text-dim); text-decoration: none; font-size: 0.9rem; border-left: 3px solid transparent; }
+        .nav-item:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+        .nav-item.active { background: rgba(88,166,255,0.1); color: var(--primary); border-left-color: var(--primary); }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        .header h1 { font-size: 1.5rem; }
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; margin-left: 0.5rem; }
+        .btn:hover { background: var(--bg-dark); }
+        .btn.primary { background: rgba(88,166,255,0.1); border-color: var(--primary); color: var(--primary); }
+        .btn.success { background: rgba(63,185,80,0.1); border-color: var(--green); color: var(--green); }
+        .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
+        .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
+        .stat-card .value { font-size: 2rem; font-weight: bold; color: var(--purple); }
+        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); }
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
+        .card h2 { font-size: 1rem; margin-bottom: 1rem; }
+        .webmail-frame { width: 100%; height: 500px; border: 1px solid var(--border); border-radius: 8px; background: #fff; }
+        .launch-btn { display: inline-flex; align-items: center; gap: 0.5rem; padding: 1rem 2rem; font-size: 1.1rem; background: rgba(88,166,255,0.15); border: 1px solid var(--primary); color: var(--primary); border-radius: 8px; cursor: pointer; text-decoration: none; }
+        .launch-btn:hover { background: rgba(88,166,255,0.25); }
+        .info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+        .info-item { padding: 1rem; background: var(--bg-dark); border-radius: 6px; }
+        .info-item .label { font-size: 0.75rem; color: var(--text-dim); margin-bottom: 0.25rem; }
+        .info-item .value { font-family: monospace; }
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+    <main class="main">
+        <header class="header">
+            <h1>📬 Webmail</h1>
+            <div>
+                <button class="btn success" onclick="startService()">Start</button>
+                <button class="btn danger" onclick="stopService()">Stop</button>
+                <button class="btn" onclick="restartService()">Restart</button>
+                <button class="btn" onclick="refresh()">Refresh</button>
+            </div>
+        </header>
+
+        <div class="stats-row">
+            <div class="stat-card"><div class="value" id="webmail-status">-</div><div class="label">Status</div></div>
+            <div class="stat-card"><div class="value" id="webmail-type">-</div><div class="label">Type</div></div>
+            <div class="stat-card"><div class="value" id="mail-server">-</div><div class="label">Mail Server</div></div>
+        </div>
+
+        <div class="card">
+            <h2>Launch Webmail</h2>
+            <div style="text-align: center; padding: 2rem;">
+                <a href="/roundcube/" target="_blank" class="launch-btn" id="launch-link">
+                    📧 Open Webmail
+                </a>
+                <p style="margin-top: 1rem; color: var(--text-dim); font-size: 0.875rem;">
+                    Opens webmail in a new tab. Login with your email credentials.
+                </p>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Configuration</h2>
+            <div class="info-grid" id="config-info">
+                <div class="info-item">
+                    <div class="label">IMAP Server</div>
+                    <div class="value" id="imap-server">-</div>
+                </div>
+                <div class="info-item">
+                    <div class="label">SMTP Server</div>
+                    <div class="value" id="smtp-server">-</div>
+                </div>
+                <div class="info-item">
+                    <div class="label">Webmail URL</div>
+                    <div class="value" id="webmail-url">-</div>
+                </div>
+                <div class="info-item">
+                    <div class="label">Cache</div>
+                    <div class="value"><button class="btn" onclick="clearCache()">Clear Cache</button></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Quick Actions</h2>
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+                <button class="btn" onclick="showLogs()">View Logs</button>
+                <button class="btn primary" onclick="clearCache()">Clear Cache</button>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const API = '/api/v1/webmail';
+        const token = () => localStorage.getItem('sbx_token');
+        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+
+        async function api(path, opts = {}) {
+            try {
+                const res = await fetch(API + path, { ...opts, headers: headers() });
+                if (res.status === 401) { window.location = '/login/'; return {}; }
+                return res.json();
+            } catch { return {}; }
+        }
+
+        async function loadStatus() {
+            const d = await api('/status');
+            document.getElementById('webmail-status').textContent = d.running ? 'Online' : 'Offline';
+            document.getElementById('webmail-status').style.color = d.running ? 'var(--green)' : 'var(--red)';
+            document.getElementById('webmail-type').textContent = d.type || 'None';
+            document.getElementById('mail-server').textContent = d.mail_server || '-';
+
+            // Update launch link based on type
+            const launchLink = document.getElementById('launch-link');
+            if (d.type === 'roundcube') {
+                launchLink.href = '/roundcube/';
+            } else if (d.type === 'sogo') {
+                launchLink.href = '/SOGo/';
+            }
+        }
+
+        async function loadConfig() {
+            const d = await api('/config');
+            document.getElementById('imap-server').textContent = d.mail_server || 'localhost';
+            document.getElementById('smtp-server').textContent = d.smtp_server || 'localhost';
+            document.getElementById('webmail-url').textContent = window.location.origin + (d.type === 'sogo' ? '/SOGo/' : '/roundcube/');
+        }
+
+        async function startService() {
+            await api('/start', { method: 'POST' });
+            setTimeout(refresh, 1000);
+        }
+
+        async function stopService() {
+            await api('/stop', { method: 'POST' });
+            refresh();
+        }
+
+        async function restartService() {
+            await api('/restart', { method: 'POST' });
+            setTimeout(refresh, 1000);
+        }
+
+        async function clearCache() {
+            const r = await api('/clear-cache', { method: 'POST' });
+            alert(r.success ? 'Cache cleared' : 'Failed to clear cache');
+        }
+
+        async function showLogs() {
+            const r = await api('/logs');
+            alert(r.logs || 'No logs');
+        }
+
+        function refresh() { loadStatus(); loadConfig(); }
+        refresh();
+    </script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+Source: secubox-publish
+Section: admin
+Priority: optional
+Maintainer: SecuBox <dev@secubox.local>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+
+Package: secubox-publish
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0.0), python3-httpx
+Recommends: secubox-streamlit, secubox-streamforge, secubox-droplet, secubox-metablogizer
+Description: SecuBox Publishing Platform
+ Unified Layer 2 dashboard for all publishing modules.
+ .
+ Aggregates and orchestrates:
+  - Streamlit (data apps)
+  - StreamForge (app templates)
+  - Droplet (file publishing)
+  - MetaBlogizer (static sites)
+ .
+ Provides quick-publish actions and unified overview.

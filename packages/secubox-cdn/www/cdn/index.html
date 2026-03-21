@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - CDN Cache</title>
+    <link rel="stylesheet" href="/shared/sidebar.css">
+    <style>
+        :root { --bg-dark: #0d1117; --bg-card: #161b22; --bg-sidebar: #0d1117; --border: #30363d; --text: #c9d1d9; --text-dim: #8b949e; --primary: #58a6ff; --cyan: #00d4ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; --purple: #a371f7; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        .header h1 { font-size: 1.5rem; }
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.9rem; }
+        .btn:hover { background: var(--bg-dark); }
+        .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
+        .btn-group { display: flex; gap: 0.5rem; }
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
+        .card h2 { font-size: 1rem; margin-bottom: 1rem; color: var(--cyan); }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
+        .stat-card .value { font-size: 1.8rem; font-weight: bold; }
+        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; }
+        .stat-card.hit .value { color: var(--green); }
+        .stat-card.miss .value { color: var(--yellow); }
+        .stat-card.size .value { color: var(--cyan); }
+        .stat-card.peers .value { color: var(--purple); }
+        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        th, td { padding: 0.6rem; text-align: left; border-bottom: 1px solid var(--border); }
+        th { color: var(--text-dim); font-weight: 500; font-size: 0.8rem; }
+        .progress { background: var(--bg-dark); border-radius: 4px; height: 8px; overflow: hidden; width: 100px; display: inline-block; }
+        .progress-bar { height: 100%; background: var(--green); }
+        .badge { display: inline-block; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600; }
+        .badge.online { background: rgba(63,185,80,0.2); color: var(--green); }
+        .badge.offline { background: rgba(139,148,158,0.2); color: var(--text-dim); }
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+    <main class="main">
+        <header class="header">
+            <h1>💾 CDN Cache</h1>
+            <div class="btn-group">
+                <button class="btn" onclick="refresh()">Refresh</button>
+                <button class="btn danger" onclick="clearCache()">Clear Cache</button>
+            </div>
+        </header>
+
+        <div class="grid">
+            <div class="stat-card hit">
+                <div class="value" id="hitRate">-</div>
+                <div class="label">Hit Rate %</div>
+            </div>
+            <div class="stat-card size">
+                <div class="value" id="cacheSize">-</div>
+                <div class="label">Cache Size</div>
+            </div>
+            <div class="stat-card miss">
+                <div class="value" id="objects">-</div>
+                <div class="label">Cached Objects</div>
+            </div>
+            <div class="stat-card peers">
+                <div class="value" id="peers">-</div>
+                <div class="label">Mesh Peers</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Cache Statistics</h2>
+            <table>
+                <thead><tr><th>Metric</th><th>Value</th><th>Graph</th></tr></thead>
+                <tbody id="statsTable"><tr><td colspan="3">Loading...</td></tr></tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h2>P2P Mesh Peers</h2>
+            <table>
+                <thead><tr><th>Peer</th><th>IP</th><th>Objects</th><th>Status</th><th>Latency</th></tr></thead>
+                <tbody id="peersTable"><tr><td colspan="5">Loading...</td></tr></tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h2>Top Cached Domains</h2>
+            <table>
+                <thead><tr><th>Domain</th><th>Requests</th><th>Bandwidth Saved</th></tr></thead>
+                <tbody id="domainsTable"><tr><td colspan="3">Loading...</td></tr></tbody>
+            </table>
+        </div>
+    </main>
+
+    <script>
+        const API = '/api/v1/cdn';
+
+        async function api(path, opts = {}) {
+            try {
+                const res = await fetch(API + path, { credentials: 'include', ...opts });
+                return res.json();
+            } catch { return {}; }
+        }
+
+        async function refresh() {
+            const status = await api('/status');
+            document.getElementById('hitRate').textContent = (status.hit_rate || 0).toFixed(1);
+            document.getElementById('cacheSize').textContent = status.cache_size || '0 MB';
+            document.getElementById('objects').textContent = status.objects || 0;
+            document.getElementById('peers').textContent = status.mesh_peers || 0;
+
+            // Stats table
+            const statsBody = document.getElementById('statsTable');
+            const stats = [
+                { name: 'Cache Hits', value: status.hits || 0, percent: status.hit_rate || 0 },
+                { name: 'Cache Misses', value: status.misses || 0, percent: 100 - (status.hit_rate || 0) },
+                { name: 'Bandwidth Saved', value: status.bandwidth_saved || '0 MB', percent: 0 },
+            ];
+            statsBody.innerHTML = stats.map(s => `
+                <tr>
+                    <td>${s.name}</td>
+                    <td>${s.value}</td>
+                    <td>${s.percent > 0 ? `<div class="progress"><div class="progress-bar" style="width:${s.percent}%"></div></div>` : '-'}</td>
+                </tr>
+            `).join('');
+
+            // Mesh peers
+            const mesh = await api('/mesh/peers');
+            const peersBody = document.getElementById('peersTable');
+            if (mesh.peers && mesh.peers.length > 0) {
+                peersBody.innerHTML = mesh.peers.map(p => `
+                    <tr>
+                        <td>${p.name || p.id}</td>
+                        <td style="font-family:monospace">${p.ip}</td>
+                        <td>${p.objects || 0}</td>
+                        <td><span class="badge ${p.online ? 'online' : 'offline'}">${p.online ? 'Online' : 'Offline'}</span></td>
+                        <td>${p.latency || '-'}</td>
+                    </tr>
+                `).join('');
+            } else {
+                peersBody.innerHTML = '<tr><td colspan="5" style="color:var(--text-dim)">No mesh peers connected</td></tr>';
+            }
+
+            // Top domains
+            const domains = await api('/domains');
+            const domainsBody = document.getElementById('domainsTable');
+            if (domains.domains && domains.domains.length > 0) {
+                domainsBody.innerHTML = domains.domains.slice(0, 10).map(d => `
+                    <tr>
+                        <td>${d.domain}</td>
+                        <td>${d.requests}</td>
+                        <td>${d.saved || '-'}</td>
+                    </tr>
+                `).join('');
+            } else {
+                domainsBody.innerHTML = '<tr><td colspan="3" style="color:var(--text-dim)">No cached domains</td></tr>';
+            }
+        }
+
+        async function clearCache() {
+            if (!confirm('Clear all cache? This cannot be undone.')) return;
+            await api('/clear', { method: 'POST' });
+            refresh();
+        }
+
+        refresh();
+        setInterval(refresh, 30000);
+    </script>
+</body>
+</html>

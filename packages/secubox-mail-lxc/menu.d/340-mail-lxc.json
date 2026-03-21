@@ -1,0 +1,9 @@
+{
+  "id": "mail-lxc",
+  "name": "Mail-lxc",
+  "category": "network",
+  "icon": "📬",
+  "path": "/mail-lxc/",
+  "order": 340,
+  "description": "Mail Server LXC Container (Postfix/Dovecot)"
+}

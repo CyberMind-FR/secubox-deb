@@ -452,6 +452,105 @@ async def health():
     return {"status": "ok", "module": "hub"}
 
 
+# ── Development Roadmap / Migration Status ───────────────────────
+
+# OpenWRT source modules to port
+OPENWRT_MODULES = {
+    # Portés et complets
+    "luci-app-secubox": {"deb": "secubox-hub", "status": "complete", "category": "core"},
+    "luci-app-crowdsec-dashboard": {"deb": "secubox-crowdsec", "status": "complete", "category": "security"},
+    "luci-app-wireguard-dashboard": {"deb": "secubox-wireguard", "status": "complete", "category": "security"},
+    "luci-app-auth-guardian": {"deb": "secubox-auth", "status": "complete", "category": "security"},
+    "luci-app-client-guardian": {"deb": "secubox-nac", "status": "complete", "category": "security"},
+    "luci-app-network-modes": {"deb": "secubox-netmodes", "status": "complete", "category": "network"},
+    "luci-app-netifyd-dashboard": {"deb": "secubox-dpi", "status": "complete", "category": "network"},
+    "luci-app-bandwidth-manager": {"deb": "secubox-qos", "status": "complete", "category": "network"},
+    "luci-app-vhost-manager": {"deb": "secubox-vhost", "status": "complete", "category": "network"},
+    "luci-app-cdn-cache": {"deb": "secubox-cdn", "status": "complete", "category": "network"},
+    "luci-app-haproxy": {"deb": "secubox-haproxy", "status": "complete", "category": "network"},
+    "luci-app-netdata-dashboard": {"deb": "secubox-netdata", "status": "complete", "category": "monitoring"},
+    "luci-app-media-flow": {"deb": "secubox-mediaflow", "status": "complete", "category": "monitoring"},
+    "luci-app-system-hub": {"deb": "secubox-system", "status": "complete", "category": "system"},
+    "luci-app-droplet": {"deb": "secubox-droplet", "status": "complete", "category": "publishing"},
+    "luci-app-metablogizer": {"deb": "secubox-metablogizer", "status": "complete", "category": "publishing"},
+    "luci-app-streamlit": {"deb": "secubox-streamlit", "status": "complete", "category": "apps"},
+    "luci-app-streamlit-forge": {"deb": "secubox-streamforge", "status": "complete", "category": "apps"},
+    # Nouveaux modules Debian
+    "secubox-waf": {"deb": "secubox-waf", "status": "complete", "category": "security", "new": True},
+    "secubox-portal": {"deb": "secubox-portal", "status": "complete", "category": "security", "new": True},
+    "secubox-dns": {"deb": "secubox-dns", "status": "complete", "category": "network", "new": True},
+    "secubox-mail": {"deb": "secubox-mail", "status": "complete", "category": "admin", "new": True},
+    "secubox-webmail": {"deb": "secubox-webmail", "status": "complete", "category": "admin", "new": True},
+    "secubox-users": {"deb": "secubox-users", "status": "complete", "category": "admin", "new": True},
+    "secubox-publish": {"deb": "secubox-publish", "status": "complete", "category": "publishing", "new": True},
+    "secubox-mail-lxc": {"deb": "secubox-mail-lxc", "status": "complete", "category": "admin", "new": True},
+    "secubox-webmail-lxc": {"deb": "secubox-webmail-lxc", "status": "complete", "category": "admin", "new": True},
+    # En cours
+    "luci-app-device-intel": {"deb": "secubox-device-intel", "status": "planned", "category": "monitoring"},
+    "luci-app-vortex-dns": {"deb": "secubox-vortex-dns", "status": "planned", "category": "network"},
+    "luci-app-vortex-firewall": {"deb": "secubox-vortex-firewall", "status": "planned", "category": "security"},
+    "luci-app-meshname-dns": {"deb": "secubox-meshname", "status": "planned", "category": "network"},
+    "luci-app-secubox-p2p": {"deb": "secubox-p2p", "status": "planned", "category": "network"},
+}
+
+
+@router.get("/roadmap")
+async def roadmap():
+    """Migration roadmap: OpenWRT → Debian status."""
+    complete = []
+    in_progress = []
+    planned = []
+    new_modules = []
+
+    for openwrt, info in OPENWRT_MODULES.items():
+        deb = info["deb"]
+        sock = Path(f"/run/secubox/{deb.replace('secubox-','')}.sock")
+        installed = sock.exists()
+
+        entry = {
+            "source": openwrt,
+            "target": deb,
+            "category": info["category"],
+            "status": info["status"],
+            "installed": installed,
+            "new": info.get("new", False),
+        }
+
+        if info.get("new"):
+            new_modules.append(entry)
+        elif info["status"] == "complete":
+            complete.append(entry)
+        elif info["status"] == "in_progress":
+            in_progress.append(entry)
+        else:
+            planned.append(entry)
+
+    total = len(OPENWRT_MODULES)
+    done = len([m for m in OPENWRT_MODULES.values() if m["status"] == "complete"])
+
+    return {
+        "summary": {
+            "total": total,
+            "complete": done,
+            "in_progress": len(in_progress),
+            "planned": len(planned),
+            "new_debian": len(new_modules),
+            "progress_percent": round(done / total * 100) if total else 0,
+        },
+        "by_category": {
+            cat: {
+                "total": len([m for m in OPENWRT_MODULES.values() if m["category"] == cat]),
+                "complete": len([m for m in OPENWRT_MODULES.values() if m["category"] == cat and m["status"] == "complete"]),
+            }
+            for cat in ["core", "security", "network", "monitoring", "publishing", "apps", "admin", "system"]
+        },
+        "complete": complete,
+        "in_progress": in_progress,
+        "planned": planned,
+        "new_modules": new_modules,
+    }
+
+
 # ── Dynamic Menu System ──────────────────────────────────────────
 
 MENU_DIR = Path("/usr/share/secubox/menu.d")
@@ -461,6 +560,7 @@ DEFAULT_MENU = [
     {"id": "hub", "name": "Dashboard", "category": "dashboard", "icon": "🏠", "path": "/", "order": 0},
     {"id": "system", "name": "System Hub", "category": "dashboard", "icon": "🔧", "path": "/system/", "order": 10},
     {"id": "crowdsec", "name": "CrowdSec", "category": "security", "icon": "🛡️", "path": "/crowdsec/", "order": 100},
+    {"id": "waf", "name": "WAF", "category": "security", "icon": "🔥", "path": "/waf/", "order": 105},
     {"id": "wireguard", "name": "WireGuard VPN", "category": "security", "icon": "🔐", "path": "/wireguard/", "order": 110},
     {"id": "auth", "name": "Auth Guardian", "category": "security", "icon": "🔑", "path": "/auth/", "order": 120},
     {"id": "nac", "name": "Client Guardian", "category": "security", "icon": "👥", "path": "/nac/", "order": 130},
@@ -470,12 +570,20 @@ DEFAULT_MENU = [
     {"id": "vhost", "name": "Virtual Hosts", "category": "network", "icon": "🌍", "path": "/vhost/", "order": 230},
     {"id": "cdn", "name": "CDN Cache", "category": "network", "icon": "💾", "path": "/cdn/", "order": 240},
     {"id": "haproxy", "name": "HAProxy", "category": "network", "icon": "⚖️", "path": "/haproxy/", "order": 250},
+    {"id": "dns", "name": "DNS", "category": "network", "icon": "🌐", "path": "/dns/", "order": 260},
     {"id": "netdata", "name": "Netdata", "category": "monitoring", "icon": "📊", "path": "/netdata/", "order": 300},
     {"id": "mediaflow", "name": "Media Flow", "category": "monitoring", "icon": "📺", "path": "/mediaflow/", "order": 310},
     {"id": "droplet", "name": "Droplet", "category": "publishing", "icon": "📤", "path": "/droplet/", "order": 400},
     {"id": "metablogizer", "name": "MetaBlogizer", "category": "publishing", "icon": "📝", "path": "/metablogizer/", "order": 410},
+    {"id": "publish", "name": "Publish", "category": "publishing", "icon": "🚀", "path": "/publish/", "order": 420},
     {"id": "streamlit", "name": "Streamlit", "category": "apps", "icon": "🎯", "path": "/streamlit/", "order": 500},
     {"id": "streamforge", "name": "StreamForge", "category": "apps", "icon": "🔨", "path": "/streamforge/", "order": 510},
+    {"id": "users", "name": "Users", "category": "admin", "icon": "👤", "path": "/users/", "order": 600},
+    {"id": "mail", "name": "Mail Server", "category": "admin", "icon": "📧", "path": "/mail/", "order": 610},
+    {"id": "webmail", "name": "Webmail", "category": "admin", "icon": "📬", "path": "/webmail/", "order": 620},
+    {"id": "mail-lxc", "name": "Mail LXC", "category": "admin", "icon": "📧", "path": "/mail-lxc/", "order": 630},
+    {"id": "webmail-lxc", "name": "Webmail LXC", "category": "admin", "icon": "📬", "path": "/webmail-lxc/", "order": 640},
+    {"id": "portal", "name": "Portal", "category": "security", "icon": "🚪", "path": "/portal/", "order": 140},
 ]
 
 CATEGORY_META = {
@@ -485,6 +593,7 @@ CATEGORY_META = {
     "monitoring": {"name": "Monitoring", "icon": "📈", "order": 3},
     "publishing": {"name": "Publishing", "icon": "📤", "order": 4},
     "apps": {"name": "Applications", "icon": "🎯", "order": 5},
+    "admin": {"name": "Administration", "icon": "⚙️", "order": 6},
 }
 
 

@@ -10,7 +10,7 @@ case "$1" in
     # Create runtime directories
     install -d -o secubox -g secubox -m 750 /run/secubox
     install -d -o secubox -g secubox -m 750 /var/lib/secubox
-    install -d -o secubox -g secubox -m 755 /tmp/droplet-upload
+    install -d -o secubox -g secubox -m 755 /srv/droplet
 
     # Enable and start service
     systemctl daemon-reload
@@ -18,6 +18,7 @@ case "$1" in
     systemctl start secubox-droplet.service || true
 
     # Reload nginx if present
+    install -d -m 755 /etc/nginx/secubox.d
     systemctl reload nginx 2>/dev/null || true
     ;;
 esac

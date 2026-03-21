@@ -2,8 +2,10 @@
 set -e
 case "$1" in
   remove|upgrade|deconfigure)
+    rm -f /etc/nginx/secubox.d/droplet.conf
     systemctl stop secubox-droplet.service || true
     systemctl disable secubox-droplet.service || true
+    systemctl reload nginx 2>/dev/null || true
     ;;
 esac
 #DEBHELPER#

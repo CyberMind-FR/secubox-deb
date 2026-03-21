@@ -1,0 +1,17 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-waf/usr/lib/secubox/waf
+	cp -r api debian/secubox-waf/usr/lib/secubox/waf/
+	install -d debian/secubox-waf/usr/share/secubox/www/waf
+	cp -r www/waf/. debian/secubox-waf/usr/share/secubox/www/waf/
+	install -d debian/secubox-waf/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-waf/usr/share/secubox/menu.d/ || true
+	install -d debian/secubox-waf/usr/share/secubox/waf
+	[ -d config ] && cp -r config/. debian/secubox-waf/usr/share/secubox/waf/ || true
+	install -d debian/secubox-waf/var/log/secubox
+	# Modular nginx config
+	install -d debian/secubox-waf/etc/nginx/secubox.d
+	[ -f nginx/waf.conf ] && cp nginx/waf.conf debian/secubox-waf/etc/nginx/secubox.d/ || true

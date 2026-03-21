@@ -1,0 +1,9 @@
+#!/bin/sh
+set -e
+if [ "$1" = "configure" ]; then
+    systemctl daemon-reload
+    systemctl enable secubox-users.service || true
+    systemctl start secubox-users.service || true
+fi
+#DEBHELPER#
+exit 0

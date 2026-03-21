@@ -1,5 +1,5 @@
 # MIGRATION MAP — SecuBox OpenWrt → Debian
-*Mis à jour : 2026-03-20*
+*Mis à jour : 2026-03-21*
 
 Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 
@@ -35,7 +35,7 @@ Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 
 ---
 
-## Paquets Debian — 18 modules
+## Paquets Debian — 26 modules
 
 | Module | www/ | API | deb/ | Endpoints | Statut |
 |--------|------|-----|------|-----------|--------|
@@ -58,8 +58,16 @@ Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 | **secubox-streamlit** | ✅ | ✅ | ✅ | apps, deploy | ✅ |
 | **secubox-streamforge** | ✅ | ✅ | ✅ | apps, templates | ✅ |
 | **secubox-metablogizer** | ✅ | ✅ | ✅ | sites, tor, publish | ✅ |
+| **secubox-dns** | ✅ | ✅ | ✅ | zones, records, BIND | ✅ |
+| **secubox-mail** | ✅ | ✅ | ✅ | Postfix/Dovecot, users | ✅ |
+| **secubox-users** | ✅ | ✅ | ✅ | unified identity | ✅ |
+| **secubox-webmail** | ✅ | ✅ | ✅ | Roundcube/SOGo | ✅ |
+| **secubox-mail-lxc** | ✅ | ✅ | ✅ | LXC Postfix/Dovecot | ✅ |
+| **secubox-webmail-lxc** | ✅ | ✅ | ✅ | LXC Roundcube/SOGo | ✅ |
+| **secubox-publish** | ✅ | ✅ | ✅ | Unified publishing | ✅ |
+| **secubox-waf** | ✅ | ✅ | ✅ | 300+ rules, CrowdSec | ✅ |
 
-**Total : 18 modules | ~450+ endpoints API**
+**Total : 26 modules | ~600+ endpoints API**
 
 ---
 

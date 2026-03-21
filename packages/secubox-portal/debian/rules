@@ -1,0 +1,14 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-portal/usr/lib/secubox/portal
+	cp -r api debian/secubox-portal/usr/lib/secubox/portal/
+	install -d debian/secubox-portal/usr/share/secubox/www
+	[ -d www ] && cp -r www/. debian/secubox-portal/usr/share/secubox/www/ || true
+	install -d debian/secubox-portal/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-portal/usr/share/secubox/menu.d/ || true
+	# Modular nginx config
+	install -d debian/secubox-portal/etc/nginx/secubox.d
+	[ -f nginx/portal.conf ] && cp nginx/portal.conf debian/secubox-portal/etc/nginx/secubox.d/ || true

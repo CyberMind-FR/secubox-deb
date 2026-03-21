@@ -30,3 +30,5 @@ override_dh_auto_install:
 	install -d debian/secubox-core/usr/lib/systemd/system
 	install -m 644 debian/secubox-core.service \
 	               debian/secubox-core/usr/lib/systemd/system/
+	# Create modular nginx directory (modules install their snippets here)
+	install -d debian/secubox-core/etc/nginx/secubox.d
