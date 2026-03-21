@@ -1,0 +1,13 @@
+Package: secubox-netdata
+Version: 1.0.3-1~bookworm1
+Architecture: all
+Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Installed-Size: 142
+Depends: secubox-core (>= 1.0), netdata
+Section: net
+Priority: optional
+Homepage: https://cybermind.fr/secubox
+Description: SecuBox Netdata Dashboard
+ Monitoring temps réel via Netdata REST v2 : CPU, RAM, réseau, température, processus.
+ .
+ Port Debian bookworm de luci-app-netdata-dashboard (SecuBox OpenWrt / CyberMind.fr).

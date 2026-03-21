@@ -1,0 +1,41 @@
+# /etc/netplan/00-secubox.yaml — MOCHAbin — Mode Router (défaut)
+# Généré par build-image.sh · Modifié par secubox-netmodes lors du changement de mode
+# Marvell Armada 7040 : mvpp2 (SFP+) + mvneta (GbE) + DSA (switch 88E6341)
+network:
+  version: 2
+  renderer: networkd
+
+  ethernets:
+    # WAN — connecté à l'opérateur
+    eth0:
+      dhcp4: true
+      dhcp6: false
+      optional: true
+
+    # LAN — ports GbE (DSA ou directs selon la config switch)
+    eth1:
+      optional: true
+    eth2:
+      optional: true
+    eth3:
+      optional: true
+    eth4:
+      optional: true
+
+    # SFP+ 10GbE
+    eth5:
+      optional: true
+    eth6:
+      optional: true
+
+  bridges:
+    # Bridge LAN
+    br-lan:
+      interfaces: [eth1, eth2, eth3, eth4]
+      addresses: [192.168.1.1/24]
+      dhcp4: false
+      parameters:
+        stp: false
+        forward-delay: 0
+
+  # DHCP server sur br-lan géré par dnsmasq (secubox-nac)

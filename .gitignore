@@ -1,0 +1,14 @@
+.venv/
+.env
+__pycache__/
+*.pyc
+*.pyo
+output/
+*.img
+*.img.gz
+*.deb
+*.changes
+*.buildinfo
+*.dsc
+packages/*/*.egg-info/
+.pytest_cache/

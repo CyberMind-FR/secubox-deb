@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - Monitoring</title>
+    <style>
+        :root { --bg-dark: #0d1117; --bg-card: #161b22; --bg-sidebar: #0d1117; --border: #30363d; --text: #c9d1d9; --text-dim: #8b949e; --primary: #58a6ff; --cyan: #00d4ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; --purple: #a371f7; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
+        .sidebar { width: 220px; background: var(--bg-sidebar); border-right: 1px solid var(--border); position: fixed; height: 100vh; overflow-y: auto; }
+        .sidebar-header { padding: 1rem; border-bottom: 1px solid var(--border); }
+        .logo { font-weight: bold; font-size: 1.2rem; }
+        .logo span:nth-child(1) { color: var(--cyan); } .logo span:nth-child(2) { color: var(--red); } .logo span:nth-child(3) { color: var(--green); } .logo span:nth-child(4) { color: var(--yellow); }
+        .nav-section { padding: 0.5rem 0; }
+        .nav-section-title { padding: 0.5rem 1rem; font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
+        .nav-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 1rem; color: var(--text-dim); text-decoration: none; font-size: 0.9rem; border-left: 3px solid transparent; }
+        .nav-item:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+        .nav-item.active { background: rgba(88,166,255,0.1); color: var(--primary); border-left-color: var(--primary); }
+        .nav-item .icon { width: 20px; text-align: center; }
+        .main { flex: 1; margin-left: 220px; }
+        .header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); background: var(--bg-card); }
+        .header-title { display: flex; align-items: center; gap: 1rem; }
+        .header-title h1 { font-size: 1.5rem; font-weight: 600; }
+        .header-actions { display: flex; gap: 0.75rem; align-items: center; }
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.875rem; }
+        .btn:hover { background: var(--bg-dark); }
+        .btn.primary { background: rgba(88,166,255,0.1); border-color: var(--primary); color: var(--primary); }
+        .content { padding: 1.5rem; }
+        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; text-align: center; }
+        .stat-card .value { font-size: 2.5rem; font-weight: bold; margin-bottom: 0.25rem; }
+        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
+        .stat-card.cyan .value { color: var(--cyan); }
+        .stat-card.purple .value { color: var(--purple); }
+        .stat-card.green .value { color: var(--green); }
+        .stat-card.yellow .value { color: var(--yellow); }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .card-header h2 { font-size: 1rem; font-weight: 600; }
+        .chart-container { height: 180px; position: relative; background: var(--bg-dark); border-radius: 6px; padding: 0.5rem; }
+        .chart { width: 100%; height: 100%; }
+        .gauge-container { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+        .gauge { text-align: center; }
+        .gauge-ring { width: 100px; height: 100px; margin: 0 auto; position: relative; }
+        .gauge-ring svg { transform: rotate(-90deg); }
+        .gauge-ring circle { fill: none; stroke-width: 8; }
+        .gauge-ring .bg { stroke: var(--border); }
+        .gauge-ring .value { stroke-linecap: round; transition: stroke-dasharray 0.5s; }
+        .gauge-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 1.25rem; font-weight: bold; }
+        .gauge-label { margin-top: 0.5rem; color: var(--text-dim); font-size: 0.85rem; }
+        .process-table { width: 100%; border-collapse: collapse; }
+        .process-table th { text-align: left; padding: 0.5rem; color: var(--text-dim); font-size: 0.75rem; text-transform: uppercase; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--bg-card); }
+        .process-table td { padding: 0.5rem; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
+        .scroll-list { max-height: 280px; overflow-y: auto; }
+        .load-box { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; text-align: center; padding: 1rem; background: var(--bg-dark); border-radius: 6px; }
+        .load-box .value { font-size: 1.75rem; font-weight: bold; color: var(--cyan); }
+        .load-box .label { font-size: 0.75rem; color: var(--text-dim); }
+        .alert-item { padding: 0.75rem; background: rgba(248,81,73,0.1); border-left: 3px solid var(--red); border-radius: 0 6px 6px 0; margin-bottom: 0.5rem; }
+        .alert-item.warning { background: rgba(210,153,34,0.1); border-left-color: var(--yellow); }
+        @media (max-width: 1200px) { .stats-row { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } .sidebar { display: none; } .main { margin-left: 0; } }
+    </style>
+</head>
+<body>
+    <nav class="sidebar">
+        <div class="sidebar-header"><a href="/" style="text-decoration: none;"><div class="logo"><span>S</span><span>E</span><span>C</span><span>U</span>BOX</div></a></div>
+        <div class="nav-section">
+            <div class="nav-section-title">📊 DASHBOARD</div>
+            <a href="/" class="nav-item"><span class="icon">🏠</span> Home</a>
+            <a href="/system/" class="nav-item"><span class="icon">🔧</span> System Hub</a>
+        </div>
+        <div class="nav-section">
+            <div class="nav-section-title">🛡️ SECURITY</div>
+            <a href="/crowdsec/" class="nav-item"><span class="icon">🛡️</span> CrowdSec</a>
+            <a href="/wireguard/" class="nav-item"><span class="icon">🔐</span> WireGuard VPN</a>
+        </div>
+        <div class="nav-section">
+            <div class="nav-section-title">🌐 NETWORK</div>
+            <a href="/netmodes/" class="nav-item"><span class="icon">🔀</span> Network Modes</a>
+            <a href="/dpi/" class="nav-item"><span class="icon">🔍</span> DPI</a>
+        </div>
+        <div class="nav-section">
+            <div class="nav-section-title">📈 MONITORING</div>
+            <a href="/netdata/" class="nav-item active"><span class="icon">📊</span> Netdata</a>
+            <a href="/mediaflow/" class="nav-item"><span class="icon">📺</span> Media Flow</a>
+        </div>
+    </nav>
+
+    <main class="main">
+        <header class="header">
+            <div class="header-title">
+                <h1>📊 System Monitoring</h1>
+                <span id="last-update" style="color: var(--text-dim); font-size: 0.85rem;">-</span>
+            </div>
+            <div class="header-actions">
+                <button class="btn" onclick="refresh()">🔄 Refresh</button>
+                <button class="btn primary" onclick="openNetdata()">Open Netdata UI</button>
+            </div>
+        </header>
+
+        <div class="content">
+            <div class="stats-row">
+                <div class="stat-card cyan">
+                    <div class="value" id="cpu-value">-</div>
+                    <div class="label">CPU Usage</div>
+                </div>
+                <div class="stat-card purple">
+                    <div class="value" id="mem-value">-</div>
+                    <div class="label">Memory Usage</div>
+                </div>
+                <div class="stat-card green">
+                    <div class="value" id="disk-value">-</div>
+                    <div class="label">Disk Usage</div>
+                </div>
+                <div class="stat-card yellow">
+                    <div class="value" id="net-value">-</div>
+                    <div class="label">Network I/O</div>
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="card">
+                    <div class="card-header"><h2>📈 CPU History</h2></div>
+                    <div class="chart-container">
+                        <canvas id="cpu-chart" class="chart"></canvas>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header"><h2>🧠 Memory History</h2></div>
+                    <div class="chart-container">
+                        <canvas id="mem-chart" class="chart"></canvas>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header"><h2>🖥️ System Gauges</h2></div>
+                    <div class="gauge-container">
+                        <div class="gauge">
+                            <div class="gauge-ring">
+                                <svg viewBox="0 0 100 100">
+                                    <circle class="bg" cx="50" cy="50" r="40"/>
+                                    <circle class="value" id="cpu-gauge" cx="50" cy="50" r="40" stroke="var(--cyan)" stroke-dasharray="0 251"/>
+                                </svg>
+                                <div class="gauge-text" id="cpu-gauge-text">-</div>
+                            </div>
+                            <div class="gauge-label">CPU</div>
+                        </div>
+                        <div class="gauge">
+                            <div class="gauge-ring">
+                                <svg viewBox="0 0 100 100">
+                                    <circle class="bg" cx="50" cy="50" r="40"/>
+                                    <circle class="value" id="mem-gauge" cx="50" cy="50" r="40" stroke="var(--purple)" stroke-dasharray="0 251"/>
+                                </svg>
+                                <div class="gauge-text" id="mem-gauge-text">-</div>
+                            </div>
+                            <div class="gauge-label">Memory</div>
+                        </div>
+                        <div class="gauge">
+                            <div class="gauge-ring">
+                                <svg viewBox="0 0 100 100">
+                                    <circle class="bg" cx="50" cy="50" r="40"/>
+                                    <circle class="value" id="disk-gauge" cx="50" cy="50" r="40" stroke="var(--green)" stroke-dasharray="0 251"/>
+                                </svg>
+                                <div class="gauge-text" id="disk-gauge-text">-</div>
+                            </div>
+                            <div class="gauge-label">Disk</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header"><h2>📊 Load Average</h2></div>
+                    <div class="load-box">
+                        <div><div class="value" id="load1">-</div><div class="label">1 min</div></div>
+                        <div><div class="value" id="load5">-</div><div class="label">5 min</div></div>
+                        <div><div class="value" id="load15">-</div><div class="label">15 min</div></div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header"><h2>🔄 Top Processes</h2></div>
+                    <div class="scroll-list">
+                        <table class="process-table">
+                            <thead><tr><th>Process</th><th>CPU %</th><th>MEM %</th><th>PID</th></tr></thead>
+                            <tbody id="process-list"><tr><td colspan="4">Loading...</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header"><h2>⚠️ Alerts</h2></div>
+                    <div id="alerts-list">
+                        <p style="color: var(--green);">No active alerts</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const API = '/api/v1/netdata';
+        let cpuHistory = [], memHistory = [];
+
+        async function api(endpoint) {
+            try { const res = await fetch(API + endpoint); return res.json(); } catch (e) { return {}; }
+        }
+
+        function formatBytes(b) {
+            if (!b) return '0';
+            const k = 1024, s = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(b) / Math.log(k));
+            return (b / Math.pow(k, i)).toFixed(1) + s[i];
+        }
+
+        function setGauge(id, percent) {
+            const circumference = 251;
+            const offset = (percent / 100) * circumference;
+            document.getElementById(id).setAttribute('stroke-dasharray', `${offset} ${circumference}`);
+            document.getElementById(id + '-text').textContent = percent.toFixed(0) + '%';
+        }
+
+        function drawChart(canvasId, data, color) {
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d');
+            const w = canvas.width = canvas.offsetWidth;
+            const h = canvas.height = canvas.offsetHeight;
+
+            ctx.clearRect(0, 0, w, h);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+
+            const step = w / (data.length - 1 || 1);
+            data.forEach((v, i) => {
+                const x = i * step;
+                const y = h - (v / 100) * h;
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            });
+            ctx.stroke();
+
+            ctx.lineTo(w, h);
+            ctx.lineTo(0, h);
+            ctx.closePath();
+            ctx.fillStyle = color.replace(')', ', 0.1)').replace('rgb', 'rgba');
+            ctx.fill();
+        }
+
+        async function loadStats() {
+            const data = await api('/stats');
+            const cpu = data.cpu_percent || 0;
+            const mem = data.memory_percent || 0;
+            const disk = data.disk_percent || 0;
+
+            document.getElementById('cpu-value').textContent = cpu.toFixed(1) + '%';
+            document.getElementById('mem-value').textContent = mem.toFixed(1) + '%';
+            document.getElementById('disk-value').textContent = disk.toFixed(1) + '%';
+            document.getElementById('net-value').textContent = formatBytes((data.net_rx || 0) + (data.net_tx || 0)) + '/s';
+
+            setGauge('cpu-gauge', cpu);
+            setGauge('mem-gauge', mem);
+            setGauge('disk-gauge', disk);
+
+            const load = data.load_avg || [0, 0, 0];
+            document.getElementById('load1').textContent = load[0]?.toFixed(2) || '-';
+            document.getElementById('load5').textContent = load[1]?.toFixed(2) || '-';
+            document.getElementById('load15').textContent = load[2]?.toFixed(2) || '-';
+
+            cpuHistory.push(cpu);
+            memHistory.push(mem);
+            if (cpuHistory.length > 60) cpuHistory.shift();
+            if (memHistory.length > 60) memHistory.shift();
+
+            drawChart('cpu-chart', cpuHistory, 'rgb(0, 212, 255)');
+            drawChart('mem-chart', memHistory, 'rgb(163, 113, 247)');
+
+            document.getElementById('last-update').textContent = 'Updated: ' + new Date().toLocaleTimeString();
+        }
+
+        async function loadProcesses() {
+            const data = await api('/processes');
+            const list = document.getElementById('process-list');
+            const processes = data.processes || [];
+
+            list.innerHTML = processes.slice(0, 12).map(p => `
+                <tr>
+                    <td>${p.name}</td>
+                    <td style="color: var(--cyan);">${p.cpu_percent?.toFixed(1) || 0}%</td>
+                    <td style="color: var(--purple);">${p.memory_percent?.toFixed(1) || 0}%</td>
+                    <td style="color: var(--text-dim);">${p.pid}</td>
+                </tr>
+            `).join('') || '<tr><td colspan="4">No processes</td></tr>';
+        }
+
+        async function loadAlerts() {
+            const data = await api('/alerts');
+            const list = document.getElementById('alerts-list');
+            const alerts = data.alerts || [];
+
+            if (alerts.length === 0) {
+                list.innerHTML = '<p style="color: var(--green);">No active alerts</p>';
+            } else {
+                list.innerHTML = alerts.map(a => `
+                    <div class="alert-item ${a.severity}">
+                        <strong>${a.type}</strong>: ${a.message}
+                    </div>
+                `).join('');
+            }
+        }
+
+        function openNetdata() { window.open('/netdata-ui/', '_blank'); }
+
+        function refresh() {
+            loadStats();
+            loadProcesses();
+            loadAlerts();
+        }
+
+        refresh();
+        setInterval(refresh, 5000);
+    </script>
+</body>
+</html>

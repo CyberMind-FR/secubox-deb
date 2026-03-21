@@ -1,0 +1,6 @@
+d41d8cd98f00b204e9800998ecf8427e  usr/lib/secubox/dpi/api/__init__.py
+a6e4e8656ea2d8ccec27bf077d22df04  usr/lib/secubox/dpi/api/main.py
+d41d8cd98f00b204e9800998ecf8427e  usr/lib/secubox/dpi/api/routers/__init__.py
+ca641ff5e741f1c3304e2add02f8beda  usr/lib/systemd/system/secubox-dpi.service
+391484eb122414af24febf332a3ebd85  usr/share/doc/secubox-dpi/changelog.Debian.gz
+b770df63b0ba7bd57b103857ca3b8c6a  usr/share/secubox/www/dpi/index.html

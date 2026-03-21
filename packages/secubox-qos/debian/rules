@@ -1,0 +1,9 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-qos/usr/lib/secubox/qos/
+	cp -r api debian/secubox-qos/usr/lib/secubox/qos/
+	install -d debian/secubox-qos/usr/share/secubox/www
+	[ -d www ] && cp -r www/. debian/secubox-qos/usr/share/secubox/www/ || true

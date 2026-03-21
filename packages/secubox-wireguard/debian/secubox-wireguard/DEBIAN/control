@@ -1,0 +1,13 @@
+Package: secubox-wireguard
+Version: 1.0.3-1~bookworm1
+Architecture: all
+Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Installed-Size: 283
+Depends: secubox-core (>= 1.0), wireguard-tools, qrencode
+Section: net
+Priority: optional
+Homepage: https://cybermind.fr/secubox
+Description: SecuBox WireGuard Dashboard
+ Gestion WireGuard VPN : tunnels, pairs, trafic, QR codes, génération de clés.
+ .
+ Port Debian bookworm de luci-app-wireguard-dashboard (SecuBox OpenWrt / CyberMind.fr).

@@ -1,0 +1,34 @@
+{
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+  "python.analysis.extraPaths": ["${workspaceFolder}/common"],
+  "python.terminal.activateEnvironment": true,
+
+  "terminal.integrated.env.linux": {
+    "PYTHONPATH": "${workspaceFolder}/common",
+    "SECUBOX_DEBUG": "1"
+  },
+  "terminal.integrated.env.osx": {
+    "PYTHONPATH": "${workspaceFolder}/common",
+    "SECUBOX_DEBUG": "1"
+  },
+
+  "editor.formatOnSave": true,
+  "editor.rulers": [100],
+  "[python]": { "editor.defaultFormatter": "ms-python.black-formatter" },
+
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/*.pyc": true,
+    "output/": false
+  },
+
+  "files.associations": {
+    "*.conf": "nginx",
+    "secubox.conf*": "toml"
+  },
+
+  "search.exclude": {
+    "output/**": true,
+    "**/__pycache__/**": true
+  }
+}

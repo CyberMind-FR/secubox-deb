@@ -1,0 +1,9 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-wireguard/usr/lib/secubox/wireguard/
+	cp -r api debian/secubox-wireguard/usr/lib/secubox/wireguard/
+	install -d debian/secubox-wireguard/usr/share/secubox/www
+	[ -d www ] && cp -r www/. debian/secubox-wireguard/usr/share/secubox/www/ || true

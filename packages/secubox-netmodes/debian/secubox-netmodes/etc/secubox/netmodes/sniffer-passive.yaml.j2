@@ -1,0 +1,13 @@
+# SecuBox Network Mode: Sniffer Passive
+# Out-of-band monitoring via SPAN/TAP port
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    {{ mgmt | default('eth0') }}:
+      dhcp4: true
+    {{ monitor | default('eth1') }}:
+      # Promiscuous mode interface for traffic capture
+      dhcp4: false
+      addresses: []
+      optional: true

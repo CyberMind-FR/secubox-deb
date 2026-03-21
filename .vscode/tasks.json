@@ -1,0 +1,269 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+
+    // ──────────────────────────────────────────────────────
+    // GROUPE : SETUP
+    // ──────────────────────────────────────────────────────
+    {
+      "label": "🔧 Setup dev environment",
+      "type": "shell",
+      "command": "bash setup-dev.sh",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "new" },
+      "problemMatcher": []
+    },
+
+    // ──────────────────────────────────────────────────────
+    // GROUPE : FRONTEND PORTING
+    // ──────────────────────────────────────────────────────
+    {
+      "label": "📥 Port frontend — module unique",
+      "type": "shell",
+      "command": "bash scripts/port-frontend.sh ${input:luciModuleName}",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "📥 Port frontend — TOUS les modules",
+      "type": "shell",
+      "command": "bash scripts/port-frontend.sh --all",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "🔄 Réécrire XHR — module unique",
+      "type": "shell",
+      "command": "python3 scripts/rewrite-xhr.py --module ${input:debModuleName}",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "dedicated" },
+      "problemMatcher": []
+    },
+    {
+      "label": "🔄 Réécrire XHR — dry-run tous modules",
+      "type": "shell",
+      "command": "python3 scripts/rewrite-xhr.py --all --dry-run",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "dedicated" },
+      "problemMatcher": []
+    },
+
+    // ──────────────────────────────────────────────────────
+    // GROUPE : DEV API (lancer localement)
+    // ──────────────────────────────────────────────────────
+    {
+      "label": "🚀 Run API — module en dev",
+      "type": "shell",
+      "command": "cd packages/secubox-${input:debModuleName} && PYTHONPATH=${workspaceFolder}/common SECUBOX_DEBUG=1 uvicorn api.main:app --reload --host 127.0.0.1 --port 8${input:devPort}",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "dedicated" },
+      "problemMatcher": [],
+      "isBackground": true
+    },
+    {
+      "label": "🚀 Run secubox-crowdsec en dev (port 8001)",
+      "type": "shell",
+      "command": "cd packages/secubox-crowdsec && PYTHONPATH=${workspaceFolder}/common SECUBOX_DEBUG=1 uvicorn api.main:app --reload --host 127.0.0.1 --port 8001",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "dedicated" },
+      "problemMatcher": [],
+      "isBackground": true
+    },
+    {
+      "label": "🚀 Run secubox-wireguard en dev (port 8003)",
+      "type": "shell",
+      "command": "cd packages/secubox-wireguard && PYTHONPATH=${workspaceFolder}/common SECUBOX_DEBUG=1 uvicorn api.main:app --reload --host 127.0.0.1 --port 8003",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "dedicated" },
+      "problemMatcher": [],
+      "isBackground": true
+    },
+
+    // ──────────────────────────────────────────────────────
+    // GROUPE : BUILD .DEB
+    // ──────────────────────────────────────────────────────
+    {
+      "label": "📦 Build .deb — module unique (arm64)",
+      "type": "shell",
+      "command": "cd packages/secubox-${input:debModuleName} && dpkg-buildpackage --host-arch arm64 --target-arch arm64 -us -uc -b 2>&1 | tail -20",
+      "group": { "kind": "build", "isDefault": true },
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "📦 Build .deb — secubox-core",
+      "type": "shell",
+      "command": "cd packages/secubox-core && dpkg-buildpackage --host-arch arm64 -us -uc -b 2>&1",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "dedicated" },
+      "problemMatcher": []
+    },
+    {
+      "label": "📦 Build .deb — TOUS (séquentiel)",
+      "type": "shell",
+      "command": "for pkg in packages/secubox-*/; do echo \"=== $(basename $pkg) ===\"; cd $pkg && dpkg-buildpackage --host-arch arm64 -us -uc -b 2>&1 | tail -5; cd ${workspaceFolder}; done",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+      "problemMatcher": []
+    },
+
+    // ──────────────────────────────────────────────────────
+    // GROUPE : DÉPLOIEMENT SSH
+    // ──────────────────────────────────────────────────────
+    {
+      "label": "🚢 Déployer — module unique",
+      "type": "shell",
+      "command": "bash scripts/deploy.sh secubox-${input:debModuleName} ${input:boardHost} --restart",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "dedicated" },
+      "problemMatcher": []
+    },
+    {
+      "label": "🚢 Déployer — TOUT sur le board",
+      "type": "shell",
+      "command": "bash scripts/deploy.sh --all ${input:boardHost} --restart",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+      "problemMatcher": []
+    },
+
+    // ──────────────────────────────────────────────────────
+    // GROUPE : IMAGE
+    // ──────────────────────────────────────────────────────
+    {
+      "label": "💿 Build image — MOCHAbin",
+      "type": "shell",
+      "command": "sudo bash image/build-image.sh --board mochabin --out output/",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "💿 Build image — ESPRESSObin v7",
+      "type": "shell",
+      "command": "sudo bash image/build-image.sh --board espressobin-v7 --out output/",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "💾 Flash image sur board (dd via SSH)",
+      "type": "shell",
+      "command": "zcat output/secubox-${input:boardName}-bookworm.img.gz | ssh ${input:boardHost} 'dd of=/dev/mmcblk0 bs=4M status=progress'",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "dedicated" },
+      "problemMatcher": []
+    },
+
+    // ──────────────────────────────────────────────────────
+    // GROUPE : SCAFFOLD
+    // ──────────────────────────────────────────────────────
+    {
+      "label": "🆕 Créer nouveau paquet",
+      "type": "shell",
+      "command": "bash scripts/new-package.sh ${input:newPkgName} '${input:newPkgDesc}'",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "dedicated" },
+      "problemMatcher": []
+    },
+
+    // ──────────────────────────────────────────────────────
+    // GROUPE : TESTS / VÉRIFICATION
+    // ──────────────────────────────────────────────────────
+    {
+      "label": "🔍 Tester API — health check (dev local)",
+      "type": "shell",
+      "command": "curl -s http://127.0.0.1:8001/health | python3 -m json.tool",
+      "group": "test",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "🔍 Tester API — login + token",
+      "type": "shell",
+      "command": "curl -s -X POST http://127.0.0.1:8001/auth/login -H 'Content-Type: application/json' -d '{\"username\":\"admin\",\"password\":\"secubox\"}' | python3 -m json.tool",
+      "group": "test",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "✅ Valider structure paquets",
+      "type": "shell",
+      "command": "python3 -c \"\nimport os, sys\nfrom pathlib import Path\nerrors = []\nfor d in sorted(Path('packages').iterdir()):\n    if not d.is_dir(): continue\n    for f in ['debian/control', 'api/main.py']:\n        if not (d/f).exists():\n            errors.append(f'{d.name}: manque {f}')\nif errors:\n    print('\\n'.join(errors))\n    sys.exit(1)\nelse:\n    print(f'OK — {len(list(Path(\\\"packages\\\").iterdir()))} paquets valides')\n\"",
+      "group": "test",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+
+    // ──────────────────────────────────────────────────────
+    // GROUPE : MIGRATION WORKFLOW COMPLET
+    // ──────────────────────────────────────────────────────
+    {
+      "label": "⚡ Workflow complet — un module",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "📥 Port frontend — module unique",
+        "🔄 Réécrire XHR — module unique",
+        "📦 Build .deb — module unique (arm64)"
+      ],
+      "group": "build",
+      "presentation": { "reveal": "always" },
+      "problemMatcher": []
+    }
+  ],
+
+  "inputs": [
+    {
+      "id": "luciModuleName",
+      "type": "pickString",
+      "description": "Module luci-app source",
+      "options": [
+        "crowdsec-dashboard", "netdata-dashboard", "wireguard-dashboard",
+        "network-modes", "client-guardian", "auth-guardian",
+        "bandwidth-manager", "media-flow", "cdn-cache",
+        "vhost-manager", "system-hub", "netifyd-dashboard", "secubox"
+      ]
+    },
+    {
+      "id": "debModuleName",
+      "type": "pickString",
+      "description": "Nom du module Debian (sans secubox-)",
+      "options": [
+        "core", "hub", "crowdsec", "netdata", "wireguard",
+        "netmodes", "nac", "auth", "qos", "mediaflow",
+        "cdn", "vhost", "system", "dpi"
+      ]
+    },
+    {
+      "id": "boardHost",
+      "type": "promptString",
+      "description": "Adresse SSH du board (user@host)",
+      "default": "root@192.168.1.1"
+    },
+    {
+      "id": "boardName",
+      "type": "pickString",
+      "description": "Board cible",
+      "options": ["mochabin", "espressobin-v7", "espressobin-ultra"]
+    },
+    {
+      "id": "newPkgName",
+      "type": "promptString",
+      "description": "Nom du nouveau module (ex: mymodule)"
+    },
+    {
+      "id": "newPkgDesc",
+      "type": "promptString",
+      "description": "Description courte du module"
+    },
+    {
+      "id": "devPort",
+      "type": "pickString",
+      "description": "Port dev (80XX)",
+      "options": ["001", "002", "003", "004", "005", "006", "007", "008"],
+      "default": "001"
+    }
+  ]
+}

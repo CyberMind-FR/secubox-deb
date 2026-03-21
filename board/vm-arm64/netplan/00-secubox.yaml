@@ -1,0 +1,22 @@
+# /etc/netplan/00-secubox.yaml — VM arm64 (QEMU) — Mode Router
+# QEMU virt machine avec virtio-net
+network:
+  version: 2
+  renderer: networkd
+
+  ethernets:
+    # WAN — Interface 1 QEMU (user mode ou bridge)
+    enp0s1:
+      dhcp4: true
+      dhcp6: false
+      optional: true
+
+    # LAN — Interface 2 QEMU (si configurée)
+    enp0s2:
+      addresses: [192.168.100.1/24]
+      dhcp4: false
+      optional: true
+
+  # Note: Pour QEMU arm64, utiliser :
+  # -netdev user,id=net0 -device virtio-net-pci,netdev=net0
+  # -netdev tap,id=net1,ifname=tap0 -device virtio-net-pci,netdev=net1

@@ -1,0 +1,9 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-netdata/usr/lib/secubox/netdata/
+	cp -r api debian/secubox-netdata/usr/lib/secubox/netdata/
+	install -d debian/secubox-netdata/usr/share/secubox/www
+	[ -d www ] && cp -r www/. debian/secubox-netdata/usr/share/secubox/www/ || true

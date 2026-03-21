@@ -1,0 +1,23 @@
+# /etc/netplan/00-secubox.yaml — VM x64 — Mode Router (défaut)
+# Généré par build-image.sh · Modifié par secubox-netmodes lors du changement de mode
+# VirtualBox : 2 interfaces réseau (NAT/Bridge + Internal/HostOnly)
+network:
+  version: 2
+  renderer: networkd
+
+  ethernets:
+    # WAN — Interface 1 VirtualBox (NAT ou Bridge)
+    enp0s3:
+      dhcp4: true
+      dhcp6: false
+      optional: true
+
+    # LAN — Interface 2 VirtualBox (Internal Network ou Host-Only)
+    enp0s8:
+      addresses: [192.168.100.1/24]
+      dhcp4: false
+      optional: true
+
+  # Note: Pour VirtualBox, configurer :
+  # - Adapter 1 : NAT ou Bridged (WAN)
+  # - Adapter 2 : Internal Network "intnet" ou Host-Only (LAN)

@@ -1,0 +1,16 @@
+Source: secubox-vhost
+Section: net
+Priority: optional
+Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
+
+Package: secubox-vhost
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0), nginx, python3-jinja2
+Description: SecuBox Virtual Host Manager
+ Gestion des hôtes virtuels nginx et SSL : Let's Encrypt, autosigné, reverse proxy, redirections.
+ .
+ Port Debian bookworm de luci-app-vhost-manager (SecuBox OpenWrt / CyberMind.fr).

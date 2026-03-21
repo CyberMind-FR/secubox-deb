@@ -1,0 +1,15 @@
+[Unit]
+Description=SecuBox Core Setup
+After=network.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/mkdir -p /run/secubox
+ExecStart=/bin/chown secubox:secubox /run/secubox
+ExecStart=/bin/chmod 775 /run/secubox
+# Add www-data to secubox group if not already (for nginx access)
+ExecStart=/bin/sh -c "id -nG www-data | grep -q secubox || usermod -aG secubox www-data"
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,26 @@
+# SecuBox Network Mode: Relay/Extender
+# Network relay with WireGuard VPN
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    {{ wan | default('eth0') }}:
+      dhcp4: true
+      mtu: 1420
+    {{ lan | default('eth1') }}:
+      addresses:
+        - 192.168.200.1/24
+      dhcp4: false
+  tunnels:
+    wg0:
+      mode: wireguard
+      addresses:
+        - {{ wg_address | default('10.100.0.2/24') }}
+      key: {{ wg_private_key | default('PRIVATE_KEY_HERE') }}
+      peers:
+        - allowed-ips:
+            - 0.0.0.0/0
+          endpoint: {{ wg_endpoint | default('vpn.example.com:51820') }}
+          keys:
+            public: {{ wg_peer_public | default('PEER_PUBLIC_KEY') }}
+          keepalive: 25

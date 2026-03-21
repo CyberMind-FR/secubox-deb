@@ -1,0 +1,21 @@
+[Unit]
+Description=SecuBox System Hub API
+After=network.target secubox-core.service
+Requires=secubox-core.service
+
+[Service]
+UMask=0000
+Type=simple
+User=secubox
+Group=secubox
+AmbientCapabilities=CAP_SYS_ADMIN CAP_NET_ADMIN
+WorkingDirectory=/usr/lib/secubox/system
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app \
+    --uds /run/secubox/system.sock \
+    --log-level warning
+Restart=on-failure
+RestartSec=5
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

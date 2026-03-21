@@ -1,0 +1,9 @@
+#!/bin/bash
+set -e
+case "$1" in
+  remove|upgrade)
+    systemctl stop    secubox-wireguard.service 2>/dev/null || true
+    systemctl disable secubox-wireguard.service 2>/dev/null || true
+    ;;
+esac
+#DEBHELPER#

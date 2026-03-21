@@ -1,0 +1,15 @@
+d41d8cd98f00b204e9800998ecf8427e  usr/lib/secubox/cdn/api/__init__.py
+77c230b7e2e20a16768cc0bda5eb2174  usr/lib/secubox/cdn/api/main.py
+d41d8cd98f00b204e9800998ecf8427e  usr/lib/secubox/cdn/api/routers/__init__.py
+c39c6e2f2f732b9a27506384f3f3ac19  usr/lib/systemd/system/secubox-cdn.service
+9078537f2b213688d7411459ad8cdfa3  usr/share/doc/secubox-cdn/changelog.Debian.gz
+1d4ee19ec4d1e9c3b73e7027ba05d758  usr/share/secubox/www/luci-static/resources/cdn-cache/api.js
+8f20f6fb8d116e842cc3911e1c56954c  usr/share/secubox/www/luci-static/resources/cdn-cache/common.css
+d1616a79af765c063c2a24ddce3049d5  usr/share/secubox/www/luci-static/resources/cdn-cache/dashboard.css
+d75d7c005b43c02287838b736700db3d  usr/share/secubox/www/luci-static/resources/cdn-cache/nav.js
+dfb8e9931a383937d0eaa7ab9329088e  usr/share/secubox/www/luci-static/resources/view/cdn-cache/cache.js
+46c0b4ee28fa9061d1b5f5352325ea18  usr/share/secubox/www/luci-static/resources/view/cdn-cache/maintenance.js
+6756b1716f04267fb5b8dce8d9711d64  usr/share/secubox/www/luci-static/resources/view/cdn-cache/overview.js
+b605f700915188f1bd0ac76e7f7147f3  usr/share/secubox/www/luci-static/resources/view/cdn-cache/policies.js
+36d589c23285bf3d0b1e7e48616489c7  usr/share/secubox/www/luci-static/resources/view/cdn-cache/settings.js
+923a7e56bed6b8a893d3ae3fac1b17ea  usr/share/secubox/www/luci-static/resources/view/cdn-cache/statistics.js

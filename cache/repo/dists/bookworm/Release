@@ -1,0 +1,38 @@
+Origin: SecuBox-Local
+Label: SecuBox Local Build Cache
+Suite: bookworm
+Codename: bookworm
+Date: Fri, 20 Mar 2026 18:04:37 UTC
+Architectures: arm64 amd64
+Components: main
+Description: Local SecuBox packages for build testing
+MD5Sum:
+ a9c3fe33e3121b41738b27aec8b94faf 12693 main/binary-arm64/Packages
+ dc3c7a76273c8d0d3e651e7488b85a45 3892 main/binary-arm64/Packages.gz
+ 89021d25d0382e8e7500bfac7ae6d5ae 163 main/binary-arm64/Release
+ a9c3fe33e3121b41738b27aec8b94faf 12693 main/binary-amd64/Packages
+ dc3c7a76273c8d0d3e651e7488b85a45 3892 main/binary-amd64/Packages.gz
+ 48919ce031baa9b92065ddeee1d0ebcb 163 main/binary-amd64/Release
+ d41d8cd98f00b204e9800998ecf8427e 0 main/source/Sources
+ 7029066c27ac6f5ef18d660d5741979a 20 main/source/Sources.gz
+ 66799a66fdc7c2f024d5bf47960a5dae 164 main/source/Release
+SHA1:
+ 58537b126a3f4c67377a4f689059fbb57b492d03 12693 main/binary-arm64/Packages
+ 05686126dd85ad91f8479877d6645efa698c7537 3892 main/binary-arm64/Packages.gz
+ 2e546ac3cc4a8340644c79553a7fe6994527e002 163 main/binary-arm64/Release
+ 58537b126a3f4c67377a4f689059fbb57b492d03 12693 main/binary-amd64/Packages
+ 05686126dd85ad91f8479877d6645efa698c7537 3892 main/binary-amd64/Packages.gz
+ 6bd47610caa2ab17472f10789d144f3fbae1ec31 163 main/binary-amd64/Release
+ da39a3ee5e6b4b0d3255bfef95601890afd80709 0 main/source/Sources
+ 46c6643f07aa7f6bfe7118de926b86defc5087c4 20 main/source/Sources.gz
+ fb88e06690ef274d6cea3983c44e303101865d83 164 main/source/Release
+SHA256:
+ b28937f5d0ba0bb409bbd7022d9e1b88fccb0e9c93351fdae784b22eace22b23 12693 main/binary-arm64/Packages
+ 78a26d3421a7f0b9e7456edce70ccddc44fa8d51a8a6bc2d1220f7205d1cf34d 3892 main/binary-arm64/Packages.gz
+ bae2017f309123f713fb839984c794a69c0d3455d7d2e5a3e73d8bcfcd5b0d6b 163 main/binary-arm64/Release
+ b28937f5d0ba0bb409bbd7022d9e1b88fccb0e9c93351fdae784b22eace22b23 12693 main/binary-amd64/Packages
+ 78a26d3421a7f0b9e7456edce70ccddc44fa8d51a8a6bc2d1220f7205d1cf34d 3892 main/binary-amd64/Packages.gz
+ afd4e7aab2c507c4cc031f7907c6749272fdbc11426fbb080e25365547ba5f49 163 main/binary-amd64/Release
+ e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 0 main/source/Sources
+ 59869db34853933b239f1e2219cf7d431da006aa919635478511fabbfc8849d2 20 main/source/Sources.gz
+ d9236fa9daf40df0f3f787f42fa1ad783da02a3f85fb1b9788c23b0e6bcaee7d 164 main/source/Release

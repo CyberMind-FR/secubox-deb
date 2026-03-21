@@ -1,0 +1,6 @@
+Archive: bookworm
+Component: main
+Origin: SecuBox-Local
+Label: SecuBox Local Build Cache
+Architecture: amd64
+Description: Local SecuBox packages for build testing

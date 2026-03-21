@@ -1,0 +1,18 @@
+Source: secubox-qos
+Section: net
+Priority: optional
+Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
+
+Package: secubox-qos
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0), iproute2, nftables
+Recommends: vnstat
+Suggests: python3-pyroute2
+Description: SecuBox QoS / Bandwidth Manager
+ QoS avancé : classes HTB pyroute2, quotas par client, planification horaire, détection média.
+ .
+ Port Debian bookworm de luci-app-bandwidth-manager (SecuBox OpenWrt / CyberMind.fr).

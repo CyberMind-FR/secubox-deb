@@ -1,0 +1,23 @@
+[Unit]
+Description=SecuBox SecuBox CDN Cache API
+After=network.target secubox-core.service
+Requires=secubox-core.service
+
+[Service]
+UMask=0000
+Type=simple
+User=secubox
+Group=secubox
+WorkingDirectory=/usr/lib/secubox/cdn
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app \
+    --uds /run/secubox/cdn.sock \
+    --log-level warning
+Restart=on-failure
+RestartSec=5
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox
+
+[Install]
+WantedBy=multi-user.target

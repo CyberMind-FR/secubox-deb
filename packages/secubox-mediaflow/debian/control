@@ -1,0 +1,16 @@
+Source: secubox-mediaflow
+Section: net
+Priority: optional
+Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
+
+Package: secubox-mediaflow
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0), secubox-dpi
+Description: SecuBox Media Flow
+ Détection trafic streaming et VoIP : Netflix, YouTube, Zoom, Spotify, qualité d'expérience.
+ .
+ Port Debian bookworm de luci-app-media-flow (SecuBox OpenWrt / CyberMind.fr).

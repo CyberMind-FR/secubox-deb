@@ -1,0 +1,16 @@
+Source: secubox-cdn
+Section: net
+Priority: optional
+Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
+
+Package: secubox-cdn
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0), nginx
+Description: SecuBox CDN Cache
+ Cache CDN local : économies bande passante, politiques par domaine/extension, stats hit ratio.
+ .
+ Port Debian bookworm de luci-app-cdn-cache (SecuBox OpenWrt / CyberMind.fr).
