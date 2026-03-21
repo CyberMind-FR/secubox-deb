@@ -53,12 +53,24 @@
 
 ---
 
+## ✅ Completed this session
+
+### Build & Integration ✅
+- **30 packages built** — All packages compile successfully
+- **27 services running** — Full deployment on VM
+- **27 nginx configs** — Modular API routing working
+- **Fixed prerm scripts** — No longer remove nginx configs on upgrade
+- **Fixed hub uptime** — int(float()) for /proc/uptime parsing
+- **Fixed portal login** — Now stores JWT token to localStorage
+- **Fixed logout** — Clears tokens and redirects properly
+
+---
+
 ## ⬜ Next Up
 
 1. **Deploy apt.secubox.in** — Setup reprepro server
-2. **Build & publish** — All packages to APT repo
-3. **Integration tests** — Full workflow on clean VM
-4. **Documentation** — User guide, API docs
+2. **Publish packages** — Upload all 30 debs to APT repo
+3. **Documentation** — User guide, API docs
 
 ---
 
