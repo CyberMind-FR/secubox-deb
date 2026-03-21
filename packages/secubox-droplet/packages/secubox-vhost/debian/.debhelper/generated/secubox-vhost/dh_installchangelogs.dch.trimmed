@@ -1,6 +1,0 @@
-secubox-vhost (1.0.0-1~bookworm1) bookworm; urgency=medium
-
-  * Initial Debian port from OpenWrt luci-app-vhost-manager
-  * Nginx vhost management with ACME support
-
- -- Gandalf / CyberMind <gk@cybermind.fr>  Sat, 21 Mar 2026 10:00:00 +0100

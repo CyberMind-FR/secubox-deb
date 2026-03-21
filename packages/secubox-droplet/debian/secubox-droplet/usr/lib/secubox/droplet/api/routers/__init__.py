@@ -1,1 +1,0 @@
-# secubox-droplet routers

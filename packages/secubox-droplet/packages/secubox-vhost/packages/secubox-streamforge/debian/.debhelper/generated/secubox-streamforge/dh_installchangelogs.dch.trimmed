@@ -1,6 +1,0 @@
-secubox-streamforge (1.0.0-1~bookworm1) bookworm; urgency=medium
-
-  * Initial Debian port from OpenWrt luci-app-streamlit-forge
-  * Streamlit app management with templates
-
- -- Gandalf / CyberMind <gk@cybermind.fr>  Sat, 21 Mar 2026 10:10:00 +0100
