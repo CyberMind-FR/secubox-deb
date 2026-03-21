@@ -452,4 +452,148 @@ async def health():
     return {"status": "ok", "module": "hub"}
 
 
+# ── Dynamic Menu System ──────────────────────────────────────────
+
+MENU_DIR = Path("/usr/share/secubox/menu.d")
+
+# Default menu definitions (used if menu.d files don't exist)
+DEFAULT_MENU = [
+    {"id": "hub", "name": "Dashboard", "category": "dashboard", "icon": "🏠", "path": "/", "order": 0},
+    {"id": "system", "name": "System Hub", "category": "dashboard", "icon": "🔧", "path": "/system/", "order": 10},
+    {"id": "crowdsec", "name": "CrowdSec", "category": "security", "icon": "🛡️", "path": "/crowdsec/", "order": 100},
+    {"id": "wireguard", "name": "WireGuard VPN", "category": "security", "icon": "🔐", "path": "/wireguard/", "order": 110},
+    {"id": "auth", "name": "Auth Guardian", "category": "security", "icon": "🔑", "path": "/auth/", "order": 120},
+    {"id": "nac", "name": "Client Guardian", "category": "security", "icon": "👥", "path": "/nac/", "order": 130},
+    {"id": "netmodes", "name": "Network Modes", "category": "network", "icon": "🔀", "path": "/netmodes/", "order": 200},
+    {"id": "dpi", "name": "DPI", "category": "network", "icon": "🔍", "path": "/dpi/", "order": 210},
+    {"id": "qos", "name": "Bandwidth Manager", "category": "network", "icon": "📶", "path": "/qos/", "order": 220},
+    {"id": "vhost", "name": "Virtual Hosts", "category": "network", "icon": "🌍", "path": "/vhost/", "order": 230},
+    {"id": "cdn", "name": "CDN Cache", "category": "network", "icon": "💾", "path": "/cdn/", "order": 240},
+    {"id": "haproxy", "name": "HAProxy", "category": "network", "icon": "⚖️", "path": "/haproxy/", "order": 250},
+    {"id": "netdata", "name": "Netdata", "category": "monitoring", "icon": "📊", "path": "/netdata/", "order": 300},
+    {"id": "mediaflow", "name": "Media Flow", "category": "monitoring", "icon": "📺", "path": "/mediaflow/", "order": 310},
+    {"id": "droplet", "name": "Droplet", "category": "publishing", "icon": "📤", "path": "/droplet/", "order": 400},
+    {"id": "metablogizer", "name": "MetaBlogizer", "category": "publishing", "icon": "📝", "path": "/metablogizer/", "order": 410},
+    {"id": "streamlit", "name": "Streamlit", "category": "apps", "icon": "🎯", "path": "/streamlit/", "order": 500},
+    {"id": "streamforge", "name": "StreamForge", "category": "apps", "icon": "🔨", "path": "/streamforge/", "order": 510},
+]
+
+CATEGORY_META = {
+    "dashboard": {"name": "Dashboard", "icon": "📊", "order": 0},
+    "security": {"name": "Security", "icon": "🛡️", "order": 1},
+    "network": {"name": "Network", "icon": "🌐", "order": 2},
+    "monitoring": {"name": "Monitoring", "icon": "📈", "order": 3},
+    "publishing": {"name": "Publishing", "icon": "📤", "order": 4},
+    "apps": {"name": "Applications", "icon": "🎯", "order": 5},
+}
+
+
+def _load_menu_definitions() -> list:
+    """Load menu definitions from menu.d directory or use defaults."""
+    import json
+    menu_items = []
+
+    if MENU_DIR.exists():
+        for f in sorted(MENU_DIR.glob("*.json")):
+            try:
+                data = json.loads(f.read_text())
+                if isinstance(data, list):
+                    menu_items.extend(data)
+                elif isinstance(data, dict):
+                    menu_items.append(data)
+            except Exception as e:
+                log.warning("Failed to load menu %s: %s", f.name, e)
+
+    # If no menu files found, use defaults
+    if not menu_items:
+        menu_items = DEFAULT_MENU.copy()
+
+    return menu_items
+
+
+def _check_module_installed(module_id: str) -> bool:
+    """Check if a module is installed by checking for its socket or service."""
+    # Check for socket
+    sock = Path(f"/run/secubox/{module_id}.sock")
+    if sock.exists():
+        return True
+
+    # Check for service
+    svc_name = f"secubox-{module_id}"
+    result = subprocess.run(
+        ["systemctl", "list-unit-files", f"{svc_name}.service"],
+        capture_output=True, text=True
+    )
+    return svc_name in result.stdout
+
+
+def _check_module_active(module_id: str) -> bool:
+    """Check if a module's service is active."""
+    sock = Path(f"/run/secubox/{module_id}.sock")
+    if sock.exists():
+        return True
+
+    svc_name = f"secubox-{module_id}"
+    result = subprocess.run(
+        ["systemctl", "is-active", svc_name],
+        capture_output=True, text=True
+    )
+    return result.stdout.strip() == "active"
+
+
+@router.get("/menu")
+async def menu():
+    """
+    Dynamic menu endpoint (public).
+    Returns categorized menu items for installed modules only.
+    """
+    menu_items = _load_menu_definitions()
+
+    # Filter to only installed modules and check active status
+    installed_items = []
+    for item in menu_items:
+        module_id = item.get("id", "")
+
+        # Hub is always installed
+        if module_id == "hub":
+            item["installed"] = True
+            item["active"] = True
+            installed_items.append(item)
+            continue
+
+        # Check if module is installed
+        if _check_module_installed(module_id):
+            item["installed"] = True
+            item["active"] = _check_module_active(module_id)
+            installed_items.append(item)
+
+    # Group by category
+    categories = {}
+    for item in installed_items:
+        cat = item.get("category", "other")
+        if cat not in categories:
+            cat_meta = CATEGORY_META.get(cat, {"name": cat.title(), "icon": "📦", "order": 99})
+            categories[cat] = {
+                "id": cat,
+                "name": cat_meta["name"],
+                "icon": cat_meta["icon"],
+                "order": cat_meta["order"],
+                "items": []
+            }
+        categories[cat]["items"].append(item)
+
+    # Sort items within each category
+    for cat in categories.values():
+        cat["items"].sort(key=lambda x: x.get("order", 999))
+
+    # Sort categories by order
+    sorted_categories = sorted(categories.values(), key=lambda x: x["order"])
+
+    return {
+        "categories": sorted_categories,
+        "total_installed": len(installed_items),
+        "total_active": sum(1 for i in installed_items if i.get("active")),
+    }
+
+
 app.include_router(router)

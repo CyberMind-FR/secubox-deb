@@ -1,0 +1,9 @@
+{
+  "id": "metablogizer",
+  "name": "MetaBlogizer",
+  "category": "publishing",
+  "icon": "📝",
+  "path": "/metablogizer/",
+  "order": 410,
+  "description": "Static site publisher"
+}

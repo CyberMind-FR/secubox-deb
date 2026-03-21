@@ -1,0 +1,9 @@
+{
+  "id": "system",
+  "name": "System Hub",
+  "category": "dashboard",
+  "icon": "🔧",
+  "path": "/system/",
+  "order": 10,
+  "description": "System configuration and management"
+}

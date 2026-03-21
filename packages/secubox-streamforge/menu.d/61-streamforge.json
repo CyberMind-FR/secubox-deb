@@ -1,0 +1,9 @@
+{
+  "id": "streamforge",
+  "name": "StreamForge",
+  "category": "apps",
+  "icon": "🔨",
+  "path": "/streamforge/",
+  "order": 510,
+  "description": "Streamlit app development"
+}

@@ -7,3 +7,5 @@ override_dh_auto_install:
 	cp -r api debian/secubox-metablogizer/usr/lib/secubox/metablogizer/
 	install -d debian/secubox-metablogizer/usr/share/secubox/www
 	[ -d www ] && cp -r www/. debian/secubox-metablogizer/usr/share/secubox/www/ || true
+	install -d debian/secubox-metablogizer/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-metablogizer/usr/share/secubox/menu.d/ || true

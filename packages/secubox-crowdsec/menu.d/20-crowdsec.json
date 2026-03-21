@@ -1,0 +1,9 @@
+{
+  "id": "crowdsec",
+  "name": "CrowdSec",
+  "category": "security",
+  "icon": "🛡️",
+  "path": "/crowdsec/",
+  "order": 100,
+  "description": "Collaborative security engine"
+}

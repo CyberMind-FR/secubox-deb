@@ -1,0 +1,9 @@
+{
+  "id": "cdn",
+  "name": "CDN Cache",
+  "category": "network",
+  "icon": "💾",
+  "path": "/cdn/",
+  "order": 240,
+  "description": "Content delivery cache"
+}

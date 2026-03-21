@@ -1,0 +1,9 @@
+{
+  "id": "nac",
+  "name": "Client Guardian",
+  "category": "security",
+  "icon": "👥",
+  "path": "/nac/",
+  "order": 130,
+  "description": "Network access control"
+}

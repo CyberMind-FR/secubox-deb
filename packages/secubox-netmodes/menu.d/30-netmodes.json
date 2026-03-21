@@ -1,0 +1,9 @@
+{
+  "id": "netmodes",
+  "name": "Network Modes",
+  "category": "network",
+  "icon": "🔀",
+  "path": "/netmodes/",
+  "order": 200,
+  "description": "Network topology configuration"
+}

@@ -39,6 +39,8 @@
         .nav-item.active { background: rgba(88,166,255,0.1); color: var(--primary); border-left-color: var(--primary); }
         .nav-item .icon { width: 20px; text-align: center; }
         .nav-item .arrow { margin-left: auto; font-size: 0.7rem; }
+        .status-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--red); margin-left: auto; }
+        .status-dot.active { background: var(--green); box-shadow: 0 0 6px var(--green); }
 
         /* Main content */
         .main { flex: 1; margin-left: 220px; }
@@ -116,35 +118,14 @@
     </style>
 </head>
 <body>
-    <nav class="sidebar">
+    <nav class="sidebar" id="sidebar">
         <div class="sidebar-header">
             <div class="logo"><span>S</span><span>E</span><span>C</span><span>U</span>BOX</div>
         </div>
-        <div class="nav-section">
-            <div class="nav-section-title">📊 DASHBOARD <span>▼</span></div>
-            <a href="/" class="nav-item active"><span class="icon">🏠</span> Home</a>
-            <a href="/" class="nav-item"><span class="icon">📊</span> Dashboard</a>
-            <a href="/system/" class="nav-item"><span class="icon">🔧</span> System Hub</a>
-        </div>
-        <div class="nav-section">
-            <div class="nav-section-title">🛡️ SECURITY <span>▼</span></div>
-            <a href="/crowdsec/" class="nav-item"><span class="icon">🛡️</span> CrowdSec</a>
-            <a href="/wireguard/" class="nav-item"><span class="icon">🔐</span> WireGuard VPN</a>
-            <a href="/auth/" class="nav-item"><span class="icon">🔑</span> Auth Guardian</a>
-            <a href="/nac/" class="nav-item"><span class="icon">👥</span> Client Guardian</a>
-        </div>
-        <div class="nav-section">
-            <div class="nav-section-title">🌐 NETWORK <span>▼</span></div>
-            <a href="/netmodes/" class="nav-item"><span class="icon">🔀</span> Network Modes</a>
-            <a href="/dpi/" class="nav-item"><span class="icon">🔍</span> DPI</a>
-            <a href="/qos/" class="nav-item"><span class="icon">📶</span> Bandwidth Manager</a>
-            <a href="/vhost/" class="nav-item"><span class="icon">🌍</span> Virtual Hosts</a>
-            <a href="/cdn/" class="nav-item"><span class="icon">💾</span> CDN Cache</a>
-        </div>
-        <div class="nav-section">
-            <div class="nav-section-title">📈 MONITORING <span>▼</span></div>
-            <a href="/netdata/" class="nav-item"><span class="icon">📊</span> Netdata</a>
-            <a href="/mediaflow/" class="nav-item"><span class="icon">📺</span> Media Flow</a>
+        <div id="nav-menu">
+            <div class="nav-section">
+                <div class="nav-section-title">Loading...</div>
+            </div>
         </div>
     </nav>
 
@@ -280,20 +261,9 @@
 
     <script>
         const API = '/api/v1/hub';
-        const MODULES_META = {
-            'crowdsec': { icon: '🛡️', category: 'security' },
-            'wireguard': { icon: '🔐', category: 'security' },
-            'auth': { icon: '🔑', category: 'security' },
-            'nac': { icon: '👥', category: 'security' },
-            'dpi': { icon: '🔍', category: 'network' },
-            'netmodes': { icon: '🔀', category: 'network' },
-            'qos': { icon: '📶', category: 'networking' },
-            'vhost': { icon: '🌍', category: 'networking' },
-            'cdn': { icon: '💾', category: 'networking' },
-            'netdata': { icon: '📊', category: 'monitoring' },
-            'mediaflow': { icon: '📺', category: 'monitoring' },
-            'system': { icon: '🔧', category: 'system' }
-        };
+
+        // Dynamic menu cache
+        let menuData = null;
 
         async function api(endpoint, method = 'GET', data = null) {
             const opts = { method, headers: { 'Content-Type': 'application/json' } };
@@ -311,6 +281,41 @@
             return (b / Math.pow(k, i)).toFixed(1) + ' ' + s[i];
         }
 
+        // ── Dynamic Menu ────────────────────────────────────────────
+        async function loadMenu() {
+            try {
+                const data = await api('/menu');
+                if (!data || !data.categories) return;
+
+                menuData = data;
+                const container = document.getElementById('nav-menu');
+                const currentPath = window.location.pathname;
+
+                container.innerHTML = data.categories.map(cat => `
+                    <div class="nav-section">
+                        <div class="nav-section-title">${cat.icon} ${cat.name.toUpperCase()} <span>▼</span></div>
+                        ${cat.items.map(item => {
+                            const isActive = currentPath === item.path ||
+                                (item.path !== '/' && currentPath.startsWith(item.path));
+                            const statusDot = item.active
+                                ? '<span class="status-dot active"></span>'
+                                : '<span class="status-dot"></span>';
+                            return `<a href="${item.path}" class="nav-item${isActive ? ' active' : ''}">
+                                <span class="icon">${item.icon}</span> ${item.name} ${statusDot}
+                            </a>`;
+                        }).join('')}
+                    </div>
+                `).join('');
+
+                // Update header badge
+                document.getElementById('status-badge').textContent =
+                    `${data.total_active}/${data.total_installed} Active`;
+
+            } catch (e) {
+                console.error('Failed to load menu:', e);
+            }
+        }
+
         async function loadDashboard() {
             const data = await api('/dashboard');
             if (!data || data.detail) return;
@@ -320,9 +325,8 @@
             const active = Object.values(modules).filter(m => m.active).length;
 
             document.getElementById('total-modules').textContent = total;
-            document.getElementById('installed-modules').textContent = total;
-            document.getElementById('active-modules').textContent = active;
-            document.getElementById('status-badge').textContent = `${active}/${total} Active`;
+            document.getElementById('installed-modules').textContent = menuData?.total_installed || total;
+            document.getElementById('active-modules').textContent = menuData?.total_active || active;
 
             // CPU/Memory/Disk
             const cpu = data.cpu_percent || 0;
@@ -340,17 +344,28 @@
             document.getElementById('disk-bar').style.width = disk + '%';
             document.getElementById('disk-percent').textContent = disk.toFixed(0) + '%';
 
-            // Modules table
+            // Modules table - use menu data if available
             const tbody = document.getElementById('modules-table');
-            tbody.innerHTML = Object.entries(modules).map(([name, m]) => {
-                const meta = MODULES_META[name] || { icon: '📦', category: 'other' };
-                return `<tr>
-                    <td><span class="module-icon">${meta.icon}</span>${name.charAt(0).toUpperCase() + name.slice(1)}</td>
-                    <td>${meta.category}</td>
-                    <td><span class="status-badge ${m.active ? 'active' : 'inactive'}">${m.active ? 'Active' : 'Inactive'}</span></td>
-                    <td>-</td>
-                </tr>`;
-            }).join('');
+            if (menuData && menuData.categories) {
+                const allItems = menuData.categories.flatMap(c => c.items);
+                tbody.innerHTML = allItems.slice(0, 10).map(item => `
+                    <tr onclick="location.href='${item.path}'" style="cursor:pointer">
+                        <td><span class="module-icon">${item.icon}</span>${item.name}</td>
+                        <td>${item.category}</td>
+                        <td><span class="status-badge ${item.active ? 'active' : 'inactive'}">${item.active ? 'Active' : 'Inactive'}</span></td>
+                        <td>-</td>
+                    </tr>
+                `).join('');
+            } else {
+                tbody.innerHTML = Object.entries(modules).map(([name, m]) => `
+                    <tr>
+                        <td><span class="module-icon">📦</span>${name.charAt(0).toUpperCase() + name.slice(1)}</td>
+                        <td>-</td>
+                        <td><span class="status-badge ${m.active ? 'active' : 'inactive'}">${m.active ? 'Active' : 'Inactive'}</span></td>
+                        <td>-</td>
+                    </tr>
+                `).join('');
+            }
         }
 
         async function loadHealth() {
@@ -369,8 +384,8 @@
             if (Array.isArray(alerts) && alerts.length > 0) {
                 list.innerHTML = alerts.slice(0, 5).map(a => `
                     <div class="alert-item">
-                        <div class="time">${Date.now()}</div>
-                        <div class="message">${a.type?.replace(/_/g, ' ') || 'Alert'}</div>
+                        <div class="time">${new Date().toLocaleTimeString()}</div>
+                        <div class="message">${a.type?.replace(/_/g, ' ') || 'Alert'}: ${a.module || ''}</div>
                     </div>
                 `).join('');
             }
@@ -389,7 +404,8 @@
         function exportConfig() { alert('Export started'); }
         function logout() { localStorage.removeItem('secubox_token'); location.reload(); }
 
-        function refresh() {
+        async function refresh() {
+            await loadMenu();
             loadDashboard();
             loadHealth();
             loadAlerts();
@@ -397,7 +413,7 @@
         }
 
         refresh();
-        setInterval(refresh, 15000);
+        setInterval(refresh, 30000);
     </script>
 </body>
 </html>

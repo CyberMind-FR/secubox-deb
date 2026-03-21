@@ -1,0 +1,9 @@
+{
+  "id": "streamlit",
+  "name": "Streamlit",
+  "category": "apps",
+  "icon": "🎯",
+  "path": "/streamlit/",
+  "order": 500,
+  "description": "Streamlit app platform"
+}
