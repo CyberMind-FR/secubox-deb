@@ -102,6 +102,27 @@
         .alert-item .time { font-size: 0.75rem; color: var(--text-dim); }
         .alert-item .message { font-size: 0.9rem; }
 
+        /* Roadmap widget */
+        .roadmap-progress { margin-bottom: 1rem; }
+        .roadmap-bar { height: 12px; background: var(--bg-dark); border-radius: 6px; overflow: hidden; position: relative; }
+        .roadmap-bar .fill { height: 100%; background: linear-gradient(90deg, var(--green) 0%, var(--cyan) 100%); border-radius: 6px; transition: width 0.5s; }
+        .roadmap-stats { display: flex; justify-content: space-between; margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-dim); }
+        .roadmap-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
+        .roadmap-category { background: var(--bg-dark); border-radius: 6px; padding: 0.75rem; text-align: center; }
+        .roadmap-category .cat-icon { font-size: 1.5rem; margin-bottom: 0.25rem; }
+        .roadmap-category .cat-name { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
+        .roadmap-category .cat-count { font-size: 1.2rem; font-weight: bold; color: var(--cyan); }
+        .roadmap-lists { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+        .roadmap-list h4 { font-size: 0.8rem; color: var(--text-dim); margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem; }
+        .roadmap-list h4 .count { background: var(--bg-dark); padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.7rem; }
+        .roadmap-list ul { list-style: none; font-size: 0.85rem; }
+        .roadmap-list li { padding: 0.25rem 0; display: flex; align-items: center; gap: 0.5rem; }
+        .roadmap-list li::before { content: ''; width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+        .roadmap-list.complete li::before { background: var(--green); }
+        .roadmap-list.progress li::before { background: var(--yellow); }
+        .roadmap-list.planned li::before { background: var(--text-dim); }
+        @media (max-width: 768px) { .roadmap-lists { grid-template-columns: 1fr; } }
+
         /* System health */
         .health-item { margin-bottom: 1rem; }
         .health-header { display: flex; justify-content: space-between; margin-bottom: 0.25rem; font-size: 0.9rem; }
@@ -256,6 +277,41 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Migration Roadmap Widget -->
+            <div class="card" id="roadmap-card">
+                <div class="card-header">
+                    <h2>🗺️ Migration Roadmap: OpenWRT → Debian</h2>
+                    <a href="https://github.com/gkerma/secubox-openwrt" target="_blank">Source →</a>
+                </div>
+                <div class="roadmap-progress">
+                    <div class="roadmap-bar">
+                        <div class="fill" id="roadmap-bar" style="width: 0%"></div>
+                    </div>
+                    <div class="roadmap-stats">
+                        <span id="roadmap-complete">0 complete</span>
+                        <span id="roadmap-percent">0%</span>
+                        <span id="roadmap-total">0 total</span>
+                    </div>
+                </div>
+                <div class="roadmap-grid" id="roadmap-categories">
+                    <div class="roadmap-category"><div class="cat-icon">⏳</div><div class="cat-name">Loading...</div></div>
+                </div>
+                <div class="roadmap-lists">
+                    <div class="roadmap-list complete">
+                        <h4>✅ Complete <span class="count" id="complete-count">0</span></h4>
+                        <ul id="complete-list"></ul>
+                    </div>
+                    <div class="roadmap-list progress">
+                        <h4>🔄 In Progress <span class="count" id="progress-count">0</span></h4>
+                        <ul id="progress-list"></ul>
+                    </div>
+                    <div class="roadmap-list planned">
+                        <h4>📋 Planned <span class="count" id="planned-count">0</span></h4>
+                        <ul id="planned-list"></ul>
+                    </div>
+                </div>
+            </div>
         </div>
     </main>
 
@@ -404,12 +460,59 @@
         function exportConfig() { alert('Export started'); }
         function logout() { localStorage.removeItem('secubox_token'); location.reload(); }
 
+        async function loadRoadmap() {
+            const data = await api('/roadmap');
+            if (!data || !data.summary) return;
+
+            // Progress bar
+            const pct = data.summary.progress_percent || 0;
+            document.getElementById('roadmap-bar').style.width = pct + '%';
+            document.getElementById('roadmap-percent').textContent = pct.toFixed(0) + '%';
+            document.getElementById('roadmap-complete').textContent = data.summary.complete + ' complete';
+            document.getElementById('roadmap-total').textContent = data.summary.total + ' total';
+
+            // Categories
+            const catGrid = document.getElementById('roadmap-categories');
+            if (data.by_category) {
+                const catIcons = { core: '🔧', security: '🛡️', network: '🌐', monitoring: '📊', publishing: '📰', apps: '🚀', admin: '⚙️' };
+                catGrid.innerHTML = Object.entries(data.by_category).map(([cat, info]) => `
+                    <div class="roadmap-category">
+                        <div class="cat-icon">${catIcons[cat] || '📦'}</div>
+                        <div class="cat-count">${info.complete}/${info.total}</div>
+                        <div class="cat-name">${cat}</div>
+                    </div>
+                `).join('');
+            }
+
+            // Module lists
+            const renderList = (list, elemId) => {
+                const el = document.getElementById(elemId);
+                el.innerHTML = (list || []).slice(0, 8).map(m => `<li>${m.deb || m}</li>`).join('');
+            };
+            renderList(data.complete, 'complete-list');
+            renderList(data.in_progress, 'progress-list');
+            renderList(data.planned, 'planned-list');
+
+            document.getElementById('complete-count').textContent = (data.complete || []).length;
+            document.getElementById('progress-count').textContent = (data.in_progress || []).length;
+            document.getElementById('planned-count').textContent = (data.planned || []).length;
+
+            // Add new modules if any
+            if (data.new_modules && data.new_modules.length > 0) {
+                const plannedList = document.getElementById('planned-list');
+                data.new_modules.forEach(m => {
+                    plannedList.innerHTML += `<li style="color:var(--purple)">✨ ${m.name} (new)</li>`;
+                });
+            }
+        }
+
         async function refresh() {
             await loadMenu();
             loadDashboard();
             loadHealth();
             loadAlerts();
             loadNetwork();
+            loadRoadmap();
         }
 
         refresh();

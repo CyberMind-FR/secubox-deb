@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - Portal</title>
+    <link rel="stylesheet" href="/shared/sidebar.css">
+    <style>
+        :root { --bg-dark: #0d1117; --bg-card: #161b22; --bg-sidebar: #0d1117; --border: #30363d; --text: #c9d1d9; --text-dim: #8b949e; --primary: #58a6ff; --cyan: #00d4ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; --purple: #a371f7; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        .header h1 { font-size: 1.5rem; }
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.9rem; }
+        .btn:hover { background: var(--bg-dark); }
+        .btn.primary { background: rgba(88,166,255,0.1); border-color: var(--primary); color: var(--primary); }
+        .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
+        .btn-group { display: flex; gap: 0.5rem; }
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
+        .card h2 { font-size: 1rem; margin-bottom: 1rem; color: var(--cyan); }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
+        .stat-card .value { font-size: 1.8rem; font-weight: bold; }
+        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; }
+        .stat-card.sessions .value { color: var(--cyan); }
+        .stat-card.active .value { color: var(--green); }
+        .stat-card.users .value { color: var(--purple); }
+        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        th, td { padding: 0.6rem; text-align: left; border-bottom: 1px solid var(--border); }
+        th { color: var(--text-dim); font-weight: 500; font-size: 0.8rem; }
+        .badge { display: inline-block; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600; }
+        .badge.admin { background: rgba(163,113,247,0.2); color: var(--purple); }
+        .badge.user { background: rgba(88,166,255,0.2); color: var(--primary); }
+        .badge.active { background: rgba(63,185,80,0.2); color: var(--green); }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-dim); }
+        .form-group input, .form-group select { width: 100%; padding: 0.6rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-dark); color: var(--text); font-size: 0.9rem; }
+        .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center; }
+        .modal.show { display: flex; }
+        .modal-content { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; width: 400px; max-width: 90%; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .modal-header h3 { font-size: 1.1rem; }
+        .modal-close { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.5rem; }
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+    <main class="main">
+        <header class="header">
+            <h1>Portal - Authentication</h1>
+            <div class="btn-group">
+                <button class="btn" onclick="refresh()">Refresh</button>
+                <button class="btn primary" onclick="showAddUser()">Add User</button>
+            </div>
+        </header>
+
+        <div class="grid">
+            <div class="stat-card sessions">
+                <div class="value" id="activeSessions">-</div>
+                <div class="label">Active Sessions</div>
+            </div>
+            <div class="stat-card users">
+                <div class="value" id="totalUsers">-</div>
+                <div class="label">Total Users</div>
+            </div>
+            <div class="stat-card active">
+                <div class="value" id="authRequired">-</div>
+                <div class="label">Auth Status</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Current Session</h2>
+            <table>
+                <tbody id="currentSession">
+                    <tr><td colspan="2">Checking session...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h2>Active Sessions</h2>
+            <table>
+                <thead><tr><th>Username</th><th>Login Time</th><th>IP</th><th>Actions</th></tr></thead>
+                <tbody id="sessionsTable"><tr><td colspan="4">Loading...</td></tr></tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h2>User Accounts</h2>
+            <table>
+                <thead><tr><th>Username</th><th>Email</th><th>Role</th><th>Created</th></tr></thead>
+                <tbody id="usersTable"><tr><td colspan="4">Loading...</td></tr></tbody>
+            </table>
+        </div>
+    </main>
+
+    <!-- Add User Modal -->
+    <div class="modal" id="addUserModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add User</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <form id="addUserForm" onsubmit="createUser(event)">
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" name="username" required>
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" name="email" required>
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" name="password" required minlength="6">
+                </div>
+                <div class="form-group">
+                    <label>Role</label>
+                    <select name="role">
+                        <option value="user">User</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn primary" style="width:100%">Create User</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const API = '/api/v1/portal';
+
+        async function api(path, opts = {}) {
+            try {
+                const res = await fetch(API + path, { credentials: 'include', ...opts });
+                return res.json();
+            } catch { return {}; }
+        }
+
+        async function refresh() {
+            // Status
+            const status = await api('/status');
+            document.getElementById('activeSessions').textContent = status.active_sessions || 0;
+            document.getElementById('authRequired').textContent = status.auth_required ? 'Enabled' : 'Disabled';
+
+            // Current session
+            const verify = await api('/verify');
+            const sessionBody = document.getElementById('currentSession');
+            if (verify.valid) {
+                sessionBody.innerHTML = `
+                    <tr><td style="color:var(--text-dim)">Username</td><td>${verify.username}</td></tr>
+                    <tr><td style="color:var(--text-dim)">Role</td><td><span class="badge ${verify.role}">${verify.role}</span></td></tr>
+                    <tr><td style="color:var(--text-dim)">Status</td><td><span class="badge active">Active</span></td></tr>
+                `;
+            } else {
+                sessionBody.innerHTML = '<tr><td colspan="2" style="color:var(--yellow)">Not logged in</td></tr>';
+            }
+
+            // Sessions (admin only)
+            const sessions = await api('/sessions');
+            const sessionsBody = document.getElementById('sessionsTable');
+            if (sessions.sessions && Object.keys(sessions.sessions).length > 0) {
+                sessionsBody.innerHTML = Object.entries(sessions.sessions).map(([user, s]) => `
+                    <tr>
+                        <td>${user}</td>
+                        <td style="font-family:monospace;font-size:0.8rem">${s.login_time || '-'}</td>
+                        <td style="font-family:monospace">${s.ip || '-'}</td>
+                        <td><button class="btn danger" onclick="endSession('${user}')">End</button></td>
+                    </tr>
+                `).join('');
+            } else if (sessions.detail) {
+                sessionsBody.innerHTML = '<tr><td colspan="4" style="color:var(--yellow)">Admin access required</td></tr>';
+            } else {
+                sessionsBody.innerHTML = '<tr><td colspan="4" style="color:var(--text-dim)">No active sessions</td></tr>';
+            }
+
+            // Users (admin only)
+            const users = await api('/users');
+            const usersBody = document.getElementById('usersTable');
+            document.getElementById('totalUsers').textContent = users.users?.length || 0;
+            if (users.users && users.users.length > 0) {
+                usersBody.innerHTML = users.users.map(u => `
+                    <tr>
+                        <td>${u.username}</td>
+                        <td>${u.email || '-'}</td>
+                        <td><span class="badge ${u.role}">${u.role}</span></td>
+                        <td style="font-size:0.8rem">${u.created ? new Date(u.created).toLocaleDateString() : '-'}</td>
+                    </tr>
+                `).join('');
+            } else if (users.detail) {
+                usersBody.innerHTML = '<tr><td colspan="4" style="color:var(--yellow)">Admin access required</td></tr>';
+            } else {
+                usersBody.innerHTML = '<tr><td colspan="4" style="color:var(--text-dim)">No users</td></tr>';
+            }
+        }
+
+        function showAddUser() {
+            document.getElementById('addUserModal').classList.add('show');
+        }
+
+        function closeModal() {
+            document.getElementById('addUserModal').classList.remove('show');
+        }
+
+        async function createUser(e) {
+            e.preventDefault();
+            const form = e.target;
+            const data = {
+                username: form.username.value,
+                email: form.email.value,
+                password: form.password.value,
+                role: form.role.value
+            };
+            const res = await api('/users/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            if (res.success) {
+                closeModal();
+                form.reset();
+                refresh();
+            } else {
+                alert(res.detail || 'Error creating user');
+            }
+        }
+
+        async function endSession(username) {
+            if (!confirm(`End session for ${username}?`)) return;
+            // In production, would have an endpoint to end specific sessions
+            alert('Session management coming soon');
+        }
+
+        refresh();
+        setInterval(refresh, 30000);
+    </script>
+</body>
+</html>

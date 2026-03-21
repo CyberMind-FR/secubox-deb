@@ -1,0 +1,150 @@
+/**
+ * SecuBox Shared Sidebar CSS
+ * Include in all module frontends for consistent navigation styling.
+ */
+
+/* Sidebar container */
+.sidebar {
+    width: 220px;
+    background: var(--bg-sidebar, #0d1117);
+    border-right: 1px solid var(--border, #30363d);
+    position: fixed;
+    height: 100vh;
+    overflow-y: auto;
+}
+
+/* Header with logo */
+.sidebar-header {
+    padding: 1rem;
+    border-bottom: 1px solid var(--border, #30363d);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.sidebar-header a {
+    text-decoration: none;
+}
+
+/* Logo styling */
+.logo {
+    font-size: 1.2rem;
+    font-weight: 700;
+    letter-spacing: 2px;
+}
+
+.logo span:nth-child(1) { color: var(--cyan, #00d4ff); }
+.logo span:nth-child(2) { color: var(--green, #3fb950); }
+.logo span:nth-child(3) { color: var(--yellow, #d29922); }
+.logo span:nth-child(4) { color: var(--red, #f85149); }
+
+/* Navigation sections */
+.nav-section {
+    padding: 0.5rem 0;
+}
+
+.nav-section-title {
+    padding: 0.5rem 1rem;
+    font-size: 0.75rem;
+    color: var(--text-dim, #8b949e);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+}
+
+.nav-section-title:hover {
+    color: var(--text, #c9d1d9);
+}
+
+/* Navigation items */
+.nav-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 1rem;
+    color: var(--text-dim, #8b949e);
+    text-decoration: none;
+    font-size: 0.9rem;
+    transition: all 0.15s ease;
+}
+
+.nav-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text, #c9d1d9);
+}
+
+.nav-item.active {
+    background: rgba(88, 166, 255, 0.1);
+    color: var(--primary, #58a6ff);
+    border-left: 2px solid var(--primary, #58a6ff);
+}
+
+.nav-item .icon {
+    font-size: 1rem;
+    width: 1.2rem;
+    text-align: center;
+}
+
+/* Status indicators */
+.status-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--red, #f85149);
+    margin-left: auto;
+}
+
+.status-dot.active {
+    background: var(--green, #3fb950);
+    box-shadow: 0 0 6px var(--green, #3fb950);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .sidebar {
+        width: 60px;
+        overflow-x: hidden;
+    }
+
+    .sidebar-header {
+        justify-content: center;
+        padding: 0.75rem;
+    }
+
+    .logo span:not(:first-child) {
+        display: none;
+    }
+
+    .nav-section-title {
+        padding: 0.5rem;
+        justify-content: center;
+    }
+
+    .nav-section-title span:not(.icon) {
+        display: none;
+    }
+
+    .nav-item {
+        padding: 0.75rem;
+        justify-content: center;
+    }
+
+    .nav-item span:not(.icon):not(.status-dot) {
+        display: none;
+    }
+
+    .status-dot {
+        position: absolute;
+        top: 0.25rem;
+        right: 0.25rem;
+    }
+
+    .main {
+        margin-left: 60px !important;
+    }
+}

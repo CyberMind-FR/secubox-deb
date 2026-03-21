@@ -1,0 +1,9 @@
+{
+  "id": "publish",
+  "name": "Publish",
+  "category": "publishing",
+  "icon": "📡",
+  "path": "/publish/",
+  "order": 600,
+  "description": "SecuBox Publishing Platform"
+}

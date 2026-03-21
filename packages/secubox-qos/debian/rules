@@ -9,3 +9,6 @@ override_dh_auto_install:
 	[ -d www ] && cp -r www/. debian/secubox-qos/usr/share/secubox/www/ || true
 	install -d debian/secubox-qos/usr/share/secubox/menu.d
 	[ -d menu.d ] && cp -r menu.d/. debian/secubox-qos/usr/share/secubox/menu.d/ || true
+	# Modular nginx config
+	install -d debian/secubox-qos/etc/nginx/secubox.d
+	[ -f nginx/qos.conf ] && cp nginx/qos.conf debian/secubox-qos/etc/nginx/secubox.d/ || true

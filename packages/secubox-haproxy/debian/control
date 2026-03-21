@@ -7,8 +7,14 @@ Standards-Version: 4.6.2
 
 Package: secubox-haproxy
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn
-Recommends: haproxy
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn, python3-httpx
+Recommends: haproxy, secubox-waf
 Description: SecuBox HAProxy Dashboard
  Dashboard HAProxy avec gestion des vhosts et backends.
  Port Debian bookworm de luci-app-haproxy (SecuBox OpenWrt).
+ .
+ Features:
+  - WAF integration for MITM traffic inspection
+  - Per-vhost WAF bypass controls
+  - CrowdSec ban synchronization
+  - Dynamic route syncing with WAF module

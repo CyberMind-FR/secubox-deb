@@ -1,0 +1,9 @@
+{
+  "id": "webmail",
+  "name": "Webmail",
+  "category": "apps",
+  "icon": "📬",
+  "path": "/webmail/",
+  "order": 56,
+  "description": "Webmail - Roundcube/SOGo"
+}

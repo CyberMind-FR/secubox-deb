@@ -1,0 +1,5 @@
+secubox-mail (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release
+
+ -- SecuBox <dev@secubox.local>  Sat, 21 Mar 2026 18:31:10 +0100

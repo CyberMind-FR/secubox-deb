@@ -36,7 +36,8 @@ case "$1" in
       fi
       rm -f /etc/nginx/sites-enabled/default
 
-      nginx -t && systemctl reload nginx 2>/dev/null || true
+      nginx -t && install -d -m 755 /etc/nginx/secubox.d
+    systemctl reload nginx 2>/dev/null || true
     fi
 
     systemctl daemon-reload

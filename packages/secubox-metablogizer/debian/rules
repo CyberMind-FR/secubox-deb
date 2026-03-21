@@ -9,3 +9,6 @@ override_dh_auto_install:
 	[ -d www ] && cp -r www/. debian/secubox-metablogizer/usr/share/secubox/www/ || true
 	install -d debian/secubox-metablogizer/usr/share/secubox/menu.d
 	[ -d menu.d ] && cp -r menu.d/. debian/secubox-metablogizer/usr/share/secubox/menu.d/ || true
+	# Modular nginx config
+	install -d debian/secubox-metablogizer/etc/nginx/secubox.d
+	[ -f nginx/metablogizer.conf ] && cp nginx/metablogizer.conf debian/secubox-metablogizer/etc/nginx/secubox.d/ || true

@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - Publishing Platform</title>
+    <style>
+        :root { --bg-dark: #0d1117; --bg-card: #161b22; --bg-sidebar: #0d1117; --border: #30363d; --text: #c9d1d9; --text-dim: #8b949e; --primary: #58a6ff; --cyan: #00d4ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; --purple: #a371f7; --orange: #f0883e; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
+        .sidebar { width: 220px; background: var(--bg-sidebar); border-right: 1px solid var(--border); position: fixed; height: 100vh; overflow-y: auto; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        .header h1 { font-size: 1.5rem; }
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.9rem; transition: all 0.2s; }
+        .btn:hover { background: var(--bg-dark); transform: translateY(-1px); }
+        .btn.primary { background: rgba(88,166,255,0.1); border-color: var(--primary); color: var(--primary); }
+        .btn.success { background: rgba(63,185,80,0.1); border-color: var(--green); color: var(--green); }
+        .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
+        .btn-group { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
+        .card h2 { font-size: 1rem; margin-bottom: 1rem; color: var(--cyan); display: flex; align-items: center; gap: 0.5rem; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; cursor: pointer; transition: all 0.2s; }
+        .stat-card:hover { border-color: var(--primary); transform: translateY(-2px); }
+        .stat-card .icon { font-size: 1.5rem; margin-bottom: 0.5rem; }
+        .stat-card .value { font-size: 1.5rem; font-weight: bold; }
+        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; }
+        .stat-card.streamlit .value { color: var(--red); }
+        .stat-card.streamforge .value { color: var(--purple); }
+        .stat-card.droplet .value { color: var(--cyan); }
+        .stat-card.metablogizer .value { color: var(--green); }
+        .badge { display: inline-block; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.7rem; font-weight: 500; }
+        .badge.running { background: rgba(63,185,80,0.2); color: var(--green); }
+        .badge.stopped { background: rgba(248,81,73,0.2); color: var(--red); }
+        .badge.published { background: rgba(0,212,255,0.2); color: var(--cyan); }
+        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        th, td { padding: 0.6rem; text-align: left; border-bottom: 1px solid var(--border); }
+        th { color: var(--text-dim); font-weight: 500; font-size: 0.8rem; }
+        .tabs { display: flex; gap: 0; margin-bottom: 1rem; border-bottom: 1px solid var(--border); }
+        .tab { padding: 0.75rem 1.25rem; cursor: pointer; color: var(--text-dim); border-bottom: 2px solid transparent; transition: all 0.2s; }
+        .tab:hover { color: var(--text); }
+        .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .quick-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; }
+        .quick-action { background: var(--bg-dark); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; text-align: center; cursor: pointer; transition: all 0.2s; }
+        .quick-action:hover { border-color: var(--primary); background: rgba(88,166,255,0.05); }
+        .quick-action .icon { font-size: 2rem; margin-bottom: 0.5rem; }
+        .quick-action .title { font-weight: 600; margin-bottom: 0.25rem; }
+        .quick-action .desc { font-size: 0.75rem; color: var(--text-dim); }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; align-items: center; justify-content: center; }
+        .modal.show { display: flex; }
+        .modal-content { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; width: 450px; max-width: 90%; }
+        .modal h3 { margin-bottom: 1rem; }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; color: var(--text-dim); font-size: 0.85rem; }
+        .form-group input, .form-group select { width: 100%; padding: 0.5rem; background: var(--bg-dark); border: 1px solid var(--border); border-radius: 4px; color: var(--text); }
+        .empty { color: var(--text-dim); text-align: center; padding: 2rem; }
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+    <main class="main">
+        <header class="header">
+            <h1>Publishing Platform</h1>
+            <div class="btn-group">
+                <button class="btn" onclick="refresh()">Refresh</button>
+                <button class="btn primary" onclick="showQuickPublish()">Quick Publish</button>
+            </div>
+        </header>
+
+        <!-- Module Status Cards -->
+        <div class="grid">
+            <div class="stat-card streamlit" onclick="switchTab('apps')">
+                <div class="icon">🎯</div>
+                <div class="value" id="streamlitCount">-</div>
+                <div class="label">Streamlit Apps</div>
+            </div>
+            <div class="stat-card streamforge" onclick="switchTab('projects')">
+                <div class="icon">🔧</div>
+                <div class="value" id="streamforgeCount">-</div>
+                <div class="label">StreamForge Projects</div>
+            </div>
+            <div class="stat-card droplet" onclick="switchTab('files')">
+                <div class="icon">📤</div>
+                <div class="value" id="dropletCount">-</div>
+                <div class="label">Droplet Files</div>
+            </div>
+            <div class="stat-card metablogizer" onclick="switchTab('sites')">
+                <div class="icon">📝</div>
+                <div class="value" id="metablogizerCount">-</div>
+                <div class="label">MetaBlogizer Sites</div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="card">
+            <h2>Quick Actions</h2>
+            <div class="quick-actions">
+                <div class="quick-action" onclick="showCreateApp()">
+                    <div class="icon">🚀</div>
+                    <div class="title">New App</div>
+                    <div class="desc">Create Streamlit app</div>
+                </div>
+                <div class="quick-action" onclick="showCreateSite()">
+                    <div class="icon">🌐</div>
+                    <div class="title">New Site</div>
+                    <div class="desc">Create static site</div>
+                </div>
+                <div class="quick-action" onclick="window.location='/droplet/'">
+                    <div class="icon">📁</div>
+                    <div class="title">Upload File</div>
+                    <div class="desc">Publish via Droplet</div>
+                </div>
+                <div class="quick-action" onclick="window.location='/streamforge/'">
+                    <div class="icon">📋</div>
+                    <div class="title">Templates</div>
+                    <div class="desc">Browse templates</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabbed Content -->
+        <div class="card">
+            <div class="tabs">
+                <div class="tab active" data-tab="apps" onclick="switchTab('apps')">Streamlit Apps</div>
+                <div class="tab" data-tab="projects" onclick="switchTab('projects')">StreamForge</div>
+                <div class="tab" data-tab="files" onclick="switchTab('files')">Droplet Files</div>
+                <div class="tab" data-tab="sites" onclick="switchTab('sites')">MetaBlogizer</div>
+            </div>
+
+            <div id="apps" class="tab-content active">
+                <table>
+                    <thead><tr><th>Name</th><th>Status</th><th>Port</th><th>Actions</th></tr></thead>
+                    <tbody id="appsTable"><tr><td colspan="4" class="empty">Loading...</td></tr></tbody>
+                </table>
+            </div>
+
+            <div id="projects" class="tab-content">
+                <table>
+                    <thead><tr><th>Name</th><th>Template</th><th>Created</th><th>Actions</th></tr></thead>
+                    <tbody id="projectsTable"><tr><td colspan="4" class="empty">Loading...</td></tr></tbody>
+                </table>
+            </div>
+
+            <div id="files" class="tab-content">
+                <table>
+                    <thead><tr><th>File</th><th>Size</th><th>Status</th><th>Actions</th></tr></thead>
+                    <tbody id="filesTable"><tr><td colspan="4" class="empty">Loading...</td></tr></tbody>
+                </table>
+            </div>
+
+            <div id="sites" class="tab-content">
+                <table>
+                    <thead><tr><th>Site</th><th>URL</th><th>Status</th><th>Actions</th></tr></thead>
+                    <tbody id="sitesTable"><tr><td colspan="4" class="empty">Loading...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <!-- Create App Modal -->
+    <div class="modal" id="createAppModal">
+        <div class="modal-content">
+            <h3>Create Streamlit App</h3>
+            <div class="form-group">
+                <label>App Name</label>
+                <input type="text" id="appName" placeholder="my-app">
+            </div>
+            <div class="form-group">
+                <label>Template</label>
+                <select id="appTemplate">
+                    <option value="basic">Basic</option>
+                    <option value="dashboard">Dashboard</option>
+                    <option value="data-explorer">Data Explorer</option>
+                </select>
+            </div>
+            <div class="btn-group">
+                <button class="btn primary" onclick="createApp()">Create & Deploy</button>
+                <button class="btn" onclick="hideModal('createAppModal')">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Site Modal -->
+    <div class="modal" id="createSiteModal">
+        <div class="modal-content">
+            <h3>Create Static Site</h3>
+            <div class="form-group">
+                <label>Site Name</label>
+                <input type="text" id="siteName" placeholder="my-site">
+            </div>
+            <div class="form-group">
+                <label>Title</label>
+                <input type="text" id="siteTitle" placeholder="My Awesome Site">
+            </div>
+            <div class="btn-group">
+                <button class="btn primary" onclick="createSite()">Create & Publish</button>
+                <button class="btn" onclick="hideModal('createSiteModal')">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API = '/api/v1/publish';
+        const token = () => localStorage.getItem('sbx_token');
+        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+
+        async function api(path, opts = {}) {
+            try {
+                const res = await fetch(API + path, { ...opts, headers: headers() });
+                if (res.status === 401) { window.location = '/login/'; return {}; }
+                return res.json();
+            } catch { return {}; }
+        }
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+            document.getElementById(tabName).classList.add('active');
+        }
+
+        async function loadOverview() {
+            const d = await api('/overview');
+
+            // Update counts
+            document.getElementById('streamlitCount').textContent = d.apps?.length || 0;
+            document.getElementById('streamforgeCount').textContent = d.projects?.length || 0;
+            document.getElementById('dropletCount').textContent = d.files?.length || 0;
+            document.getElementById('metablogizerCount').textContent = d.sites?.length || 0;
+
+            // Apps table
+            const appsTable = document.getElementById('appsTable');
+            if (!d.apps || d.apps.length === 0) {
+                appsTable.innerHTML = '<tr><td colspan="4" class="empty">No Streamlit apps</td></tr>';
+            } else {
+                appsTable.innerHTML = d.apps.map(a => `
+                    <tr>
+                        <td>${a.name}</td>
+                        <td><span class="badge ${a.running ? 'running' : 'stopped'}">${a.running ? 'Running' : 'Stopped'}</span></td>
+                        <td>${a.port || '-'}</td>
+                        <td class="btn-group">
+                            ${a.running
+                                ? `<button class="btn danger" onclick="stopApp('${a.name}')">Stop</button>`
+                                : `<button class="btn success" onclick="deployApp('${a.name}')">Deploy</button>`
+                            }
+                        </td>
+                    </tr>
+                `).join('');
+            }
+
+            // Projects table
+            const projectsTable = document.getElementById('projectsTable');
+            if (!d.projects || d.projects.length === 0) {
+                projectsTable.innerHTML = '<tr><td colspan="4" class="empty">No StreamForge projects</td></tr>';
+            } else {
+                projectsTable.innerHTML = d.projects.map(p => `
+                    <tr>
+                        <td>${p.name}</td>
+                        <td>${p.template || '-'}</td>
+                        <td>${p.created || '-'}</td>
+                        <td><button class="btn primary" onclick="deployApp('${p.name}')">Deploy</button></td>
+                    </tr>
+                `).join('');
+            }
+
+            // Files table
+            const filesTable = document.getElementById('filesTable');
+            if (!d.files || d.files.length === 0) {
+                filesTable.innerHTML = '<tr><td colspan="4" class="empty">No Droplet files</td></tr>';
+            } else {
+                filesTable.innerHTML = d.files.map(f => `
+                    <tr>
+                        <td>${f.name}</td>
+                        <td>${f.size || '-'}</td>
+                        <td><span class="badge ${f.published ? 'published' : 'stopped'}">${f.published ? 'Published' : 'Draft'}</span></td>
+                        <td><button class="btn primary" onclick="publishFile('${f.name}')">Publish</button></td>
+                    </tr>
+                `).join('');
+            }
+
+            // Sites table
+            const sitesTable = document.getElementById('sitesTable');
+            if (!d.sites || d.sites.length === 0) {
+                sitesTable.innerHTML = '<tr><td colspan="4" class="empty">No MetaBlogizer sites</td></tr>';
+            } else {
+                sitesTable.innerHTML = d.sites.map(s => `
+                    <tr>
+                        <td>${s.name}</td>
+                        <td><a href="${s.url || '#'}" target="_blank">${s.url || '-'}</a></td>
+                        <td><span class="badge ${s.published ? 'published' : 'stopped'}">${s.published ? 'Live' : 'Draft'}</span></td>
+                        <td><button class="btn primary" onclick="publishSite('${s.name}')">Publish</button></td>
+                    </tr>
+                `).join('');
+            }
+        }
+
+        function showModal(id) { document.getElementById(id).classList.add('show'); }
+        function hideModal(id) { document.getElementById(id).classList.remove('show'); }
+        function showCreateApp() { showModal('createAppModal'); }
+        function showCreateSite() { showModal('createSiteModal'); }
+        function showQuickPublish() { showCreateApp(); }
+
+        async function createApp() {
+            const name = document.getElementById('appName').value;
+            const template = document.getElementById('appTemplate').value;
+            if (!name) return alert('Enter app name');
+            await api('/quick-publish', { method: 'POST', body: JSON.stringify({ content_type: 'app', name, template }) });
+            hideModal('createAppModal');
+            document.getElementById('appName').value = '';
+            refresh();
+        }
+
+        async function createSite() {
+            const name = document.getElementById('siteName').value;
+            const title = document.getElementById('siteTitle').value;
+            if (!name) return alert('Enter site name');
+            await api('/quick-publish', { method: 'POST', body: JSON.stringify({ content_type: 'site', name, data: { title } }) });
+            hideModal('createSiteModal');
+            document.getElementById('siteName').value = '';
+            document.getElementById('siteTitle').value = '';
+            refresh();
+        }
+
+        async function deployApp(name) {
+            await api(`/streamlit/deploy?name=${name}`, { method: 'POST' });
+            refresh();
+        }
+
+        async function stopApp(name) {
+            await api(`/streamlit/stop?name=${name}`, { method: 'POST' });
+            refresh();
+        }
+
+        async function publishFile(name) {
+            await api('/droplet/publish', { method: 'POST', body: JSON.stringify({ file: name }) });
+            refresh();
+        }
+
+        async function publishSite(name) {
+            await api(`/metablogizer/publish/${name}`, { method: 'POST' });
+            refresh();
+        }
+
+        function refresh() { loadOverview(); }
+        refresh();
+        setInterval(refresh, 15000);
+    </script>
+</body>
+</html>

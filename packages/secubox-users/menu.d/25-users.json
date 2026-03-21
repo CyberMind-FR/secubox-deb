@@ -1,0 +1,9 @@
+{
+  "id": "users",
+  "name": "Users",
+  "category": "security",
+  "icon": "👥",
+  "path": "/users/",
+  "order": 25,
+  "description": "SecuBox Users - Unified Identity"
+}

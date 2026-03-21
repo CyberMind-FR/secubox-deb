@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - DNS Master</title>
+    <style>
+        :root { --bg-dark: #0d1117; --bg-card: #161b22; --bg-sidebar: #0d1117; --border: #30363d; --text: #c9d1d9; --text-dim: #8b949e; --primary: #58a6ff; --cyan: #00d4ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; --purple: #a371f7; --orange: #f0883e; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
+        .sidebar { width: 220px; background: var(--bg-sidebar); border-right: 1px solid var(--border); position: fixed; height: 100vh; overflow-y: auto; }
+        .sidebar-header { padding: 1rem; border-bottom: 1px solid var(--border); }
+        .logo { font-weight: bold; font-size: 1.2rem; }
+        .logo span:nth-child(1) { color: var(--cyan); } .logo span:nth-child(2) { color: var(--red); } .logo span:nth-child(3) { color: var(--green); } .logo span:nth-child(4) { color: var(--yellow); }
+        .nav-section { padding: 0.5rem 0; }
+        .nav-section-title { padding: 0.5rem 1rem; font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
+        .nav-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 1rem; color: var(--text-dim); text-decoration: none; font-size: 0.9rem; border-left: 3px solid transparent; }
+        .nav-item:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+        .nav-item.active { background: rgba(88,166,255,0.1); color: var(--primary); border-left-color: var(--primary); }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        .header h1 { font-size: 1.5rem; }
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; margin-left: 0.5rem; }
+        .btn:hover { background: var(--bg-dark); }
+        .btn.primary { background: rgba(88,166,255,0.1); border-color: var(--primary); color: var(--primary); }
+        .btn.success { background: rgba(63,185,80,0.1); border-color: var(--green); color: var(--green); }
+        .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
+        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
+        .stat-card .value { font-size: 2rem; font-weight: bold; color: var(--cyan); }
+        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); }
+        .grid-2 { display: grid; grid-template-columns: 300px 1fr; gap: 1.5rem; }
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
+        .card h2 { font-size: 1rem; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; }
+        .zone-list { display: flex; flex-direction: column; gap: 0.5rem; }
+        .zone-item { padding: 0.75rem; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+        .zone-item:hover { background: rgba(255,255,255,0.03); }
+        .zone-item.active { border-color: var(--primary); background: rgba(88,166,255,0.1); }
+        .zone-item .name { font-weight: 600; }
+        .zone-item .count { font-size: 0.75rem; color: var(--text-dim); }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 0.6rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.875rem; }
+        th { color: var(--text-dim); font-size: 0.75rem; text-transform: uppercase; }
+        .type-badge { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 0.7rem; font-weight: 700; font-family: monospace; }
+        .type-A { background: rgba(63,185,80,0.2); color: var(--green); }
+        .type-AAAA { background: rgba(88,166,255,0.2); color: var(--primary); }
+        .type-CNAME { background: rgba(0,212,255,0.2); color: var(--cyan); }
+        .type-MX { background: rgba(163,113,247,0.2); color: var(--purple); }
+        .type-TXT { background: rgba(210,153,34,0.2); color: var(--yellow); }
+        .type-NS { background: rgba(139,148,158,0.2); color: var(--text-dim); }
+        .mono { font-family: monospace; font-size: 0.8rem; }
+        .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: center; justify-content: center; }
+        .modal.show { display: flex; }
+        .modal-content { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; min-width: 400px; }
+        .modal-content h3 { margin-bottom: 1rem; }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.25rem; font-size: 0.8rem; color: var(--text-dim); }
+        .form-group input, .form-group select { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-dark); color: var(--text); }
+        .form-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
+        .filter-bar { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+        .filter-btn { padding: 0.25rem 0.5rem; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-dark); color: var(--text-dim); cursor: pointer; font-size: 0.75rem; }
+        .filter-btn.active { border-color: var(--primary); color: var(--primary); background: rgba(88,166,255,0.1); }
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+    <main class="main">
+        <header class="header">
+            <h1>DNS Master</h1>
+            <div>
+                <button class="btn" onclick="reloadBind()">Reload BIND</button>
+                <button class="btn" onclick="refresh()">Refresh</button>
+            </div>
+        </header>
+
+        <div class="stats-row">
+            <div class="stat-card"><div class="value" id="bind-status">-</div><div class="label">BIND Status</div></div>
+            <div class="stat-card"><div class="value" id="zone-count">-</div><div class="label">Zones</div></div>
+            <div class="stat-card"><div class="value" id="record-count">-</div><div class="label">Records</div></div>
+            <div class="stat-card"><div class="value" id="default-ttl">-</div><div class="label">Default TTL</div></div>
+        </div>
+
+        <div class="grid-2">
+            <div class="card">
+                <h2>Zones <button class="btn success" onclick="showAddZone()">+ Add</button></h2>
+                <div class="zone-list" id="zone-list">Loading...</div>
+            </div>
+
+            <div class="card">
+                <h2>Records <span id="current-zone"></span> <button class="btn success" id="add-record-btn" style="display:none" onclick="showAddRecord()">+ Add</button></h2>
+                <div class="filter-bar" id="filter-bar" style="display:none">
+                    <button class="filter-btn active" data-type="ALL">ALL</button>
+                    <button class="filter-btn" data-type="A">A</button>
+                    <button class="filter-btn" data-type="AAAA">AAAA</button>
+                    <button class="filter-btn" data-type="CNAME">CNAME</button>
+                    <button class="filter-btn" data-type="MX">MX</button>
+                    <button class="filter-btn" data-type="TXT">TXT</button>
+                    <button class="filter-btn" data-type="NS">NS</button>
+                </div>
+                <div id="records-container"><p style="color:var(--text-dim)">Select a zone to view records</p></div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Add Zone Modal -->
+    <div class="modal" id="zone-modal">
+        <div class="modal-content">
+            <h3>Add Zone</h3>
+            <div class="form-group">
+                <label>Zone Name</label>
+                <input type="text" id="zone-name" placeholder="example.com">
+            </div>
+            <div class="form-actions">
+                <button class="btn" onclick="hideModal('zone-modal')">Cancel</button>
+                <button class="btn success" onclick="addZone()">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Record Modal -->
+    <div class="modal" id="record-modal">
+        <div class="modal-content">
+            <h3 id="record-modal-title">Add Record</h3>
+            <div class="form-group">
+                <label>Type</label>
+                <select id="record-type">
+                    <option value="A">A - IPv4 Address</option>
+                    <option value="AAAA">AAAA - IPv6 Address</option>
+                    <option value="CNAME">CNAME - Canonical Name</option>
+                    <option value="MX">MX - Mail Exchange</option>
+                    <option value="TXT">TXT - Text Record</option>
+                    <option value="NS">NS - Nameserver</option>
+                    <option value="SRV">SRV - Service</option>
+                    <option value="CAA">CAA - Cert Authority</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Name</label>
+                <input type="text" id="record-name" placeholder="@ or www">
+            </div>
+            <div class="form-group">
+                <label>Value</label>
+                <input type="text" id="record-value" placeholder="192.168.1.1">
+            </div>
+            <div class="form-group">
+                <label>TTL (seconds)</label>
+                <input type="number" id="record-ttl" value="300">
+            </div>
+            <div class="form-actions">
+                <button class="btn" onclick="hideModal('record-modal')">Cancel</button>
+                <button class="btn success" onclick="addRecord()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API = '/api/v1/dns';
+        const token = () => localStorage.getItem('sbx_token');
+        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+
+        let currentZone = null;
+        let currentRecords = [];
+        let typeFilter = 'ALL';
+
+        async function api(path, opts = {}) {
+            try {
+                const res = await fetch(API + path, { ...opts, headers: headers() });
+                if (res.status === 401) { window.location = '/login/'; return {}; }
+                return res.json();
+            } catch { return {}; }
+        }
+
+        async function loadStatus() {
+            const d = await api('/status');
+            document.getElementById('bind-status').textContent = d.running ? 'UP' : 'DOWN';
+            document.getElementById('bind-status').style.color = d.running ? 'var(--green)' : 'var(--red)';
+            document.getElementById('zone-count').textContent = d.zones || 0;
+            document.getElementById('record-count').textContent = d.records || 0;
+            document.getElementById('default-ttl').textContent = (d.default_ttl || 300) + 's';
+        }
+
+        async function loadZones() {
+            const d = await api('/zones');
+            const list = document.getElementById('zone-list');
+            const zones = d.zones || [];
+            if (!zones.length) { list.innerHTML = '<p style="color:var(--text-dim)">No zones configured</p>'; return; }
+            list.innerHTML = zones.map(z => `
+                <div class="zone-item ${currentZone === z.name ? 'active' : ''}" onclick="selectZone('${z.name}')">
+                    <div>
+                        <div class="name">${z.name}</div>
+                        <div class="count">${z.records || 0} records</div>
+                    </div>
+                    <span style="color:${z.valid ? 'var(--green)' : 'var(--red)'}">${z.valid ? '✓' : '✗'}</span>
+                </div>
+            `).join('');
+        }
+
+        async function selectZone(name) {
+            currentZone = name;
+            document.getElementById('current-zone').textContent = ': ' + name;
+            document.getElementById('add-record-btn').style.display = '';
+            document.getElementById('filter-bar').style.display = '';
+            loadZones();
+            const d = await api(`/zone/${name}/records`);
+            currentRecords = d.records || [];
+            renderRecords();
+        }
+
+        function renderRecords() {
+            const container = document.getElementById('records-container');
+            let filtered = currentRecords;
+            if (typeFilter !== 'ALL') filtered = filtered.filter(r => r.type === typeFilter);
+            if (!filtered.length) {
+                container.innerHTML = '<p style="color:var(--text-dim)">No records</p>';
+                return;
+            }
+            container.innerHTML = `<table>
+                <thead><tr><th>Type</th><th>Name</th><th>Value</th><th>TTL</th><th></th></tr></thead>
+                <tbody>${filtered.map(r => `<tr>
+                    <td><span class="type-badge type-${r.type}">${r.type}</span></td>
+                    <td class="mono">${r.name}</td>
+                    <td class="mono" style="max-width:200px;overflow:hidden;text-overflow:ellipsis">${r.value}</td>
+                    <td>${r.ttl || '-'}</td>
+                    <td><button class="btn danger" style="padding:0.25rem 0.5rem;font-size:0.75rem" onclick="deleteRecord('${r.type}','${r.name}','${r.value}')">Del</button></td>
+                </tr>`).join('')}</tbody>
+            </table>`;
+        }
+
+        document.getElementById('filter-bar').addEventListener('click', e => {
+            if (e.target.classList.contains('filter-btn')) {
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                typeFilter = e.target.dataset.type;
+                renderRecords();
+            }
+        });
+
+        function showModal(id) { document.getElementById(id).classList.add('show'); }
+        function hideModal(id) { document.getElementById(id).classList.remove('show'); }
+        function showAddZone() { showModal('zone-modal'); }
+        function showAddRecord() { showModal('record-modal'); }
+
+        async function addZone() {
+            const name = document.getElementById('zone-name').value.trim();
+            if (!name) { alert('Zone name required'); return; }
+            const r = await api('/zone', { method: 'POST', body: JSON.stringify({ name }) });
+            if (r.success) { hideModal('zone-modal'); refresh(); document.getElementById('zone-name').value = ''; }
+            else alert('Error: ' + (r.output || 'Failed'));
+        }
+
+        async function addRecord() {
+            const type = document.getElementById('record-type').value;
+            const name = document.getElementById('record-name').value.trim() || '@';
+            const value = document.getElementById('record-value').value.trim();
+            const ttl = parseInt(document.getElementById('record-ttl').value) || 300;
+            if (!value) { alert('Value required'); return; }
+            const r = await api('/record', { method: 'POST', body: JSON.stringify({ zone: currentZone, type, name, value, ttl }) });
+            if (r.success) { hideModal('record-modal'); selectZone(currentZone); }
+            else alert('Error: ' + (r.output || 'Failed'));
+        }
+
+        async function deleteRecord(type, name, value) {
+            if (!confirm(`Delete ${type} record for "${name}"?`)) return;
+            const r = await api('/record', { method: 'DELETE', body: JSON.stringify({ zone: currentZone, type, name, value }) });
+            if (r.success) selectZone(currentZone);
+            else alert('Error: ' + (r.output || 'Failed'));
+        }
+
+        async function reloadBind() {
+            const r = await api('/reload', { method: 'POST' });
+            alert(r.success ? 'BIND reloaded' : 'Error: ' + (r.output || 'Failed'));
+        }
+
+        function refresh() { loadStatus(); loadZones(); if (currentZone) selectZone(currentZone); }
+        refresh();
+    </script>
+</body>
+</html>

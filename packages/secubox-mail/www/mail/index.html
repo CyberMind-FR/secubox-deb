@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - Mail Server</title>
+    <style>
+        :root { --bg-dark: #0d1117; --bg-card: #161b22; --bg-sidebar: #0d1117; --border: #30363d; --text: #c9d1d9; --text-dim: #8b949e; --primary: #58a6ff; --cyan: #00d4ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; --purple: #a371f7; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
+        .sidebar { width: 220px; background: var(--bg-sidebar); border-right: 1px solid var(--border); position: fixed; height: 100vh; overflow-y: auto; }
+        .sidebar-header { padding: 1rem; border-bottom: 1px solid var(--border); }
+        .logo { font-weight: bold; font-size: 1.2rem; }
+        .logo span:nth-child(1) { color: var(--cyan); } .logo span:nth-child(2) { color: var(--red); } .logo span:nth-child(3) { color: var(--green); } .logo span:nth-child(4) { color: var(--yellow); }
+        .nav-section { padding: 0.5rem 0; }
+        .nav-section-title { padding: 0.5rem 1rem; font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
+        .nav-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 1rem; color: var(--text-dim); text-decoration: none; font-size: 0.9rem; border-left: 3px solid transparent; }
+        .nav-item:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+        .nav-item.active { background: rgba(88,166,255,0.1); color: var(--primary); border-left-color: var(--primary); }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        .header h1 { font-size: 1.5rem; }
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; margin-left: 0.5rem; }
+        .btn:hover { background: var(--bg-dark); }
+        .btn.primary { background: rgba(88,166,255,0.1); border-color: var(--primary); color: var(--primary); }
+        .btn.success { background: rgba(63,185,80,0.1); border-color: var(--green); color: var(--green); }
+        .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
+        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
+        .stat-card .value { font-size: 2rem; font-weight: bold; color: var(--purple); }
+        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
+        .card h2 { font-size: 1rem; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 0.6rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.875rem; }
+        th { color: var(--text-dim); font-size: 0.75rem; text-transform: uppercase; }
+        .mono { font-family: monospace; font-size: 0.85rem; }
+        .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: center; justify-content: center; }
+        .modal.show { display: flex; }
+        .modal-content { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; min-width: 400px; }
+        .modal-content h3 { margin-bottom: 1rem; }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.25rem; font-size: 0.8rem; color: var(--text-dim); }
+        .form-group input { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-dark); color: var(--text); }
+        .form-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+    <main class="main">
+        <header class="header">
+            <h1>📧 Mail Server</h1>
+            <div>
+                <button class="btn success" onclick="startServices()">Start</button>
+                <button class="btn danger" onclick="stopServices()">Stop</button>
+                <button class="btn" onclick="restartServices()">Restart</button>
+                <button class="btn" onclick="refresh()">Refresh</button>
+            </div>
+        </header>
+
+        <div class="stats-row">
+            <div class="stat-card"><div class="value" id="mail-status">-</div><div class="label">Status</div></div>
+            <div class="stat-card"><div class="value" id="user-count">-</div><div class="label">Users</div></div>
+            <div class="stat-card"><div class="value" id="storage">-</div><div class="label">Storage</div></div>
+            <div class="stat-card"><div class="value" id="domain">-</div><div class="label">Domain</div></div>
+        </div>
+
+        <div class="grid-2">
+            <div class="card">
+                <h2>Mail Users <button class="btn success" onclick="showAddUser()">+ Add</button></h2>
+                <table>
+                    <thead><tr><th>Email</th><th>Quota</th><th></th></tr></thead>
+                    <tbody id="user-list"><tr><td colspan="3">Loading...</td></tr></tbody>
+                </table>
+            </div>
+
+            <div class="card">
+                <h2>Aliases <button class="btn success" onclick="showAddAlias()">+ Add</button></h2>
+                <table>
+                    <thead><tr><th>Alias</th><th>Target</th><th></th></tr></thead>
+                    <tbody id="alias-list"><tr><td colspan="3">Loading...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Quick Actions</h2>
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+                <button class="btn primary" onclick="setupDNS()">Setup DNS Records</button>
+                <button class="btn primary" onclick="setupSSL()">Setup SSL</button>
+                <button class="btn" onclick="showLogs()">View Logs</button>
+            </div>
+        </div>
+    </main>
+
+    <!-- Add User Modal -->
+    <div class="modal" id="user-modal">
+        <div class="modal-content">
+            <h3>Add Mail User</h3>
+            <div class="form-group">
+                <label>Email Address</label>
+                <input type="email" id="user-email" placeholder="user@example.com">
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" id="user-password" placeholder="Strong password">
+            </div>
+            <div class="form-actions">
+                <button class="btn" onclick="hideModal('user-modal')">Cancel</button>
+                <button class="btn success" onclick="addUser()">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Alias Modal -->
+    <div class="modal" id="alias-modal">
+        <div class="modal-content">
+            <h3>Add Alias</h3>
+            <div class="form-group">
+                <label>Alias Address</label>
+                <input type="email" id="alias-from" placeholder="alias@example.com">
+            </div>
+            <div class="form-group">
+                <label>Target Address</label>
+                <input type="email" id="alias-to" placeholder="user@example.com">
+            </div>
+            <div class="form-actions">
+                <button class="btn" onclick="hideModal('alias-modal')">Cancel</button>
+                <button class="btn success" onclick="addAlias()">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API = '/api/v1/mail';
+        const token = () => localStorage.getItem('sbx_token');
+        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+
+        async function api(path, opts = {}) {
+            try {
+                const res = await fetch(API + path, { ...opts, headers: headers() });
+                if (res.status === 401) { window.location = '/login/'; return {}; }
+                return res.json();
+            } catch { return {}; }
+        }
+
+        async function loadStatus() {
+            const d = await api('/status');
+            const running = d.postfix_running && d.dovecot_running;
+            document.getElementById('mail-status').textContent = running ? 'UP' : 'DOWN';
+            document.getElementById('mail-status').style.color = running ? 'var(--green)' : 'var(--red)';
+            document.getElementById('user-count').textContent = d.users || 0;
+            document.getElementById('storage').textContent = d.storage || '0';
+            document.getElementById('domain').textContent = d.domain || '-';
+        }
+
+        async function loadUsers() {
+            const d = await api('/users');
+            const list = document.getElementById('user-list');
+            const users = d.users || [];
+            if (!users.length) { list.innerHTML = '<tr><td colspan="3" style="color:var(--text-dim)">No users</td></tr>'; return; }
+            list.innerHTML = users.map(u => `<tr>
+                <td class="mono">${u.email}</td>
+                <td>${u.quota || '1G'}</td>
+                <td><button class="btn danger" style="padding:0.25rem 0.5rem;font-size:0.75rem" onclick="deleteUser('${u.email}')">Delete</button></td>
+            </tr>`).join('');
+        }
+
+        async function loadAliases() {
+            const d = await api('/aliases');
+            const list = document.getElementById('alias-list');
+            const aliases = d.aliases || [];
+            if (!aliases.length) { list.innerHTML = '<tr><td colspan="3" style="color:var(--text-dim)">No aliases</td></tr>'; return; }
+            list.innerHTML = aliases.map(a => `<tr>
+                <td class="mono">${a.alias}</td>
+                <td class="mono">${a.target}</td>
+                <td><button class="btn danger" style="padding:0.25rem 0.5rem;font-size:0.75rem" onclick="deleteAlias('${a.alias}')">Delete</button></td>
+            </tr>`).join('');
+        }
+
+        function showModal(id) { document.getElementById(id).classList.add('show'); }
+        function hideModal(id) { document.getElementById(id).classList.remove('show'); }
+        function showAddUser() { showModal('user-modal'); }
+        function showAddAlias() { showModal('alias-modal'); }
+
+        async function addUser() {
+            const email = document.getElementById('user-email').value.trim();
+            const password = document.getElementById('user-password').value;
+            if (!email || !password) { alert('Email and password required'); return; }
+            const r = await api('/user', { method: 'POST', body: JSON.stringify({ email, password }) });
+            if (r.success) { hideModal('user-modal'); refresh(); } else alert('Error: ' + (r.output || 'Failed'));
+        }
+
+        async function deleteUser(email) {
+            if (!confirm(`Delete user ${email}?`)) return;
+            const r = await api(`/user/${encodeURIComponent(email)}`, { method: 'DELETE' });
+            if (r.success) refresh(); else alert('Error: ' + (r.output || 'Failed'));
+        }
+
+        async function addAlias() {
+            const alias = document.getElementById('alias-from').value.trim();
+            const target = document.getElementById('alias-to').value.trim();
+            if (!alias || !target) { alert('Both addresses required'); return; }
+            const r = await api('/alias', { method: 'POST', body: JSON.stringify({ alias, target }) });
+            if (r.success) { hideModal('alias-modal'); refresh(); } else alert('Error: ' + (r.output || 'Failed'));
+        }
+
+        async function deleteAlias(alias) {
+            if (!confirm(`Delete alias ${alias}?`)) return;
+            const r = await api(`/alias/${encodeURIComponent(alias)}`, { method: 'DELETE' });
+            if (r.success) refresh(); else alert('Error: ' + (r.output || 'Failed'));
+        }
+
+        async function startServices() { await api('/start', { method: 'POST' }); refresh(); }
+        async function stopServices() { await api('/stop', { method: 'POST' }); refresh(); }
+        async function restartServices() { await api('/restart', { method: 'POST' }); refresh(); }
+        async function setupDNS() { const r = await api('/dns-setup', { method: 'POST' }); alert(r.success ? 'DNS records configured' : 'Error: ' + r.output); }
+        async function setupSSL() { const r = await api('/ssl-setup', { method: 'POST' }); alert(r.success ? 'SSL configured' : 'Error: ' + r.output); }
+        async function showLogs() { const r = await api('/logs'); alert(r.logs || 'No logs'); }
+
+        function refresh() { loadStatus(); loadUsers(); loadAliases(); }
+        refresh();
+    </script>
+</body>
+</html>

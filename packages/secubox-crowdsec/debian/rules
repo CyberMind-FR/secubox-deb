@@ -9,3 +9,6 @@ override_dh_auto_install:
 	[ -d www ] && cp -r www/. debian/secubox-crowdsec/usr/share/secubox/www/ || true
 	install -d debian/secubox-crowdsec/usr/share/secubox/menu.d
 	[ -d menu.d ] && cp -r menu.d/. debian/secubox-crowdsec/usr/share/secubox/menu.d/ || true
+	# Modular nginx config
+	install -d debian/secubox-crowdsec/etc/nginx/secubox.d
+	[ -f nginx/crowdsec.conf ] && cp nginx/crowdsec.conf debian/secubox-crowdsec/etc/nginx/secubox.d/ || true

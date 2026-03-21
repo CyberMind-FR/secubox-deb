@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - Media Flow</title>
+    <link rel="stylesheet" href="/shared/sidebar.css">
+    <style>
+        :root { --bg-dark: #0d1117; --bg-card: #161b22; --bg-sidebar: #0d1117; --border: #30363d; --text: #c9d1d9; --text-dim: #8b949e; --primary: #58a6ff; --cyan: #00d4ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; --purple: #a371f7; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        .header h1 { font-size: 1.5rem; }
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.9rem; }
+        .btn:hover { background: var(--bg-dark); }
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
+        .card h2 { font-size: 1rem; margin-bottom: 1rem; color: var(--cyan); }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
+        .stat-card .value { font-size: 1.8rem; font-weight: bold; }
+        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; }
+        .stat-card.video .value { color: var(--red); }
+        .stat-card.audio .value { color: var(--green); }
+        .stat-card.bandwidth .value { color: var(--cyan); }
+        .stat-card.streams .value { color: var(--purple); }
+        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        th, td { padding: 0.6rem; text-align: left; border-bottom: 1px solid var(--border); }
+        th { color: var(--text-dim); font-weight: 500; font-size: 0.8rem; }
+        .badge { display: inline-block; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600; }
+        .badge.video { background: rgba(248,81,73,0.2); color: var(--red); }
+        .badge.audio { background: rgba(63,185,80,0.2); color: var(--green); }
+        .badge.live { background: rgba(163,113,247,0.2); color: var(--purple); }
+        .progress { background: var(--bg-dark); border-radius: 4px; height: 6px; overflow: hidden; }
+        .progress-bar { height: 100%; background: var(--cyan); }
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+    <main class="main">
+        <header class="header">
+            <h1>📺 Media Flow</h1>
+            <button class="btn" onclick="refresh()">Refresh</button>
+        </header>
+
+        <div class="grid">
+            <div class="stat-card video">
+                <div class="value" id="videoStreams">-</div>
+                <div class="label">Video Streams</div>
+            </div>
+            <div class="stat-card audio">
+                <div class="value" id="audioStreams">-</div>
+                <div class="label">Audio Streams</div>
+            </div>
+            <div class="stat-card bandwidth">
+                <div class="value" id="bandwidth">-</div>
+                <div class="label">Bandwidth (Mbps)</div>
+            </div>
+            <div class="stat-card streams">
+                <div class="value" id="activeClients">-</div>
+                <div class="label">Active Clients</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Active Streams</h2>
+            <table>
+                <thead><tr><th>Client</th><th>Type</th><th>Service</th><th>Bandwidth</th><th>Duration</th></tr></thead>
+                <tbody id="streamsTable"><tr><td colspan="5">Loading...</td></tr></tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h2>Top Media Services</h2>
+            <table>
+                <thead><tr><th>Service</th><th>Streams</th><th>Bandwidth</th><th>Usage %</th></tr></thead>
+                <tbody id="servicesTable"><tr><td colspan="4">Loading...</td></tr></tbody>
+            </table>
+        </div>
+    </main>
+
+    <script>
+        const API = '/api/v1/mediaflow';
+
+        async function api(path) {
+            try {
+                const res = await fetch(API + path, { credentials: 'include' });
+                return res.json();
+            } catch { return {}; }
+        }
+
+        async function refresh() {
+            const status = await api('/status');
+            document.getElementById('videoStreams').textContent = status.video_streams || 0;
+            document.getElementById('audioStreams').textContent = status.audio_streams || 0;
+            document.getElementById('bandwidth').textContent = (status.bandwidth_mbps || 0).toFixed(1);
+            document.getElementById('activeClients').textContent = status.active_clients || 0;
+
+            const streams = await api('/streams');
+            const streamsBody = document.getElementById('streamsTable');
+            if (streams.streams && streams.streams.length > 0) {
+                streamsBody.innerHTML = streams.streams.map(s => `
+                    <tr>
+                        <td style="font-family:monospace">${s.client_ip}</td>
+                        <td><span class="badge ${s.type}">${s.type}</span></td>
+                        <td>${s.service || 'Unknown'}</td>
+                        <td>${s.bandwidth || '-'}</td>
+                        <td>${s.duration || '-'}</td>
+                    </tr>
+                `).join('');
+            } else {
+                streamsBody.innerHTML = '<tr><td colspan="5" style="color:var(--text-dim)">No active streams</td></tr>';
+            }
+
+            const services = await api('/services');
+            const servicesBody = document.getElementById('servicesTable');
+            if (services.services && services.services.length > 0) {
+                servicesBody.innerHTML = services.services.map(s => `
+                    <tr>
+                        <td>${s.name}</td>
+                        <td>${s.streams}</td>
+                        <td>${s.bandwidth}</td>
+                        <td style="width:100px">
+                            <div class="progress"><div class="progress-bar" style="width:${s.percent || 0}%"></div></div>
+                        </td>
+                    </tr>
+                `).join('');
+            } else {
+                servicesBody.innerHTML = '<tr><td colspan="4" style="color:var(--text-dim)">No media services detected</td></tr>';
+            }
+        }
+
+        refresh();
+        setInterval(refresh, 5000);
+    </script>
+</body>
+</html>

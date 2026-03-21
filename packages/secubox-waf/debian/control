@@ -1,0 +1,23 @@
+Source: secubox-waf
+Section: admin
+Priority: optional
+Maintainer: SecuBox <dev@secubox.local>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+
+Package: secubox-waf
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0.0)
+Recommends: crowdsec, secubox-crowdsec, secubox-haproxy
+Description: SecuBox Web Application Firewall
+ Mitmproxy-based threat detection with CrowdSec integration.
+ .
+ Features:
+  - 300+ threat detection rules across 14+ categories
+  - SQL injection, XSS, RCE, LFI detection
+  - VoIP/SIP and XMPP attack detection
+  - Router botnet and CVE exploit detection
+  - Auto-ban with configurable sensitivity
+  - Rate limiting per IP
+  - CrowdSec integration for centralized banning
+  - HAProxy reverse proxy integration

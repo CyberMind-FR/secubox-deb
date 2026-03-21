@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - Webmail LXC Container</title>
+    <style>
+        :root { --bg-dark: #0d1117; --bg-card: #161b22; --bg-sidebar: #0d1117; --border: #30363d; --text: #c9d1d9; --text-dim: #8b949e; --primary: #58a6ff; --cyan: #00d4ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; --purple: #a371f7; --orange: #f0883e; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
+        .sidebar { width: 220px; background: var(--bg-sidebar); border-right: 1px solid var(--border); position: fixed; height: 100vh; overflow-y: auto; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        .header h1 { font-size: 1.5rem; }
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.9rem; }
+        .btn:hover { background: var(--bg-dark); }
+        .btn.primary { background: rgba(88,166,255,0.1); border-color: var(--primary); color: var(--primary); }
+        .btn.success { background: rgba(63,185,80,0.1); border-color: var(--green); color: var(--green); }
+        .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
+        .btn-group { display: flex; gap: 0.5rem; }
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
+        .card h2 { font-size: 1rem; margin-bottom: 1rem; color: var(--cyan); }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
+        .stat-card .value { font-size: 1.5rem; font-weight: bold; }
+        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; }
+        .stat-card.running .value { color: var(--green); }
+        .stat-card.stopped .value { color: var(--red); }
+        .stat-card.info .value { color: var(--cyan); }
+        .logs { background: #000; border-radius: 4px; padding: 1rem; font-family: monospace; font-size: 0.8rem; max-height: 300px; overflow-y: auto; white-space: pre-wrap; color: var(--green); }
+        .radio-group { display: flex; gap: 1rem; margin: 1rem 0; }
+        .radio-group label { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; padding: 0.75rem 1rem; background: var(--bg-dark); border: 1px solid var(--border); border-radius: 6px; }
+        .radio-group input:checked + span { color: var(--primary); }
+        .plugin-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.5rem; }
+        .plugin-item { background: var(--bg-dark); padding: 0.5rem; border-radius: 4px; font-size: 0.85rem; }
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+    <main class="main">
+        <header class="header">
+            <h1>Webmail LXC Container</h1>
+            <div class="btn-group">
+                <button class="btn" onclick="refresh()">Refresh</button>
+                <button class="btn primary" id="installBtn" onclick="showInstall()">Install</button>
+            </div>
+        </header>
+
+        <div class="grid">
+            <div class="stat-card" id="statusCard">
+                <div class="value" id="containerStatus">--</div>
+                <div class="label">Container Status</div>
+            </div>
+            <div class="stat-card info">
+                <div class="value" id="webmailType">--</div>
+                <div class="label">Webmail Type</div>
+            </div>
+            <div class="stat-card info">
+                <div class="value" id="containerIP">--</div>
+                <div class="label">IP Address</div>
+            </div>
+            <div class="stat-card info">
+                <div class="value" id="httpPort">--</div>
+                <div class="label">HTTP Port</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Container Controls</h2>
+            <div class="btn-group">
+                <button class="btn success" id="startBtn" onclick="startContainer()">Start</button>
+                <button class="btn danger" id="stopBtn" onclick="stopContainer()">Stop</button>
+                <button class="btn" onclick="restartContainer()">Restart</button>
+                <button class="btn" onclick="clearCache()">Clear Cache</button>
+                <button class="btn danger" onclick="uninstallContainer()">Uninstall</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Mail Server Connection</h2>
+            <p style="color: var(--text-dim); margin-bottom: 0.5rem;">Connected to: <span id="mailServer" style="color: var(--cyan);">--</span></p>
+        </div>
+
+        <div class="card">
+            <h2>Plugins (Roundcube)</h2>
+            <div class="plugin-list" id="pluginList">Loading...</div>
+        </div>
+
+        <div class="card">
+            <h2>Logs</h2>
+            <div class="logs" id="logsArea">Loading...</div>
+        </div>
+    </main>
+
+    <div class="modal" id="installModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:1000; align-items:center; justify-content:center;">
+        <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; width: 400px;">
+            <h3 style="margin-bottom: 1rem;">Install Webmail Container</h3>
+            <p style="color: var(--text-dim); margin-bottom: 1rem;">Select webmail application:</p>
+            <div class="radio-group">
+                <label><input type="radio" name="webmailType" value="roundcube" checked><span>Roundcube</span></label>
+                <label><input type="radio" name="webmailType" value="sogo"><span>SOGo</span></label>
+            </div>
+            <div class="btn-group" style="margin-top: 1rem;">
+                <button class="btn primary" onclick="installContainer()">Install</button>
+                <button class="btn" onclick="hideInstall()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API = '/api/v1/webmail-lxc';
+        const token = () => localStorage.getItem('sbx_token');
+        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+
+        async function api(path, opts = {}) {
+            try {
+                const res = await fetch(API + path, { ...opts, headers: headers() });
+                if (res.status === 401) { window.location = '/login/'; return {}; }
+                return res.json();
+            } catch { return {}; }
+        }
+
+        async function loadStatus() {
+            const d = await api('/status');
+            const statusEl = document.getElementById('containerStatus');
+            const cardEl = document.getElementById('statusCard');
+
+            if (d.running) {
+                statusEl.textContent = 'RUNNING';
+                cardEl.className = 'stat-card running';
+            } else if (d.exists) {
+                statusEl.textContent = 'STOPPED';
+                cardEl.className = 'stat-card stopped';
+            } else {
+                statusEl.textContent = 'NOT INSTALLED';
+                cardEl.className = 'stat-card stopped';
+            }
+
+            document.getElementById('containerIP').textContent = d.ip || '--';
+            document.getElementById('webmailType').textContent = (d.webmail_type || '--').toUpperCase();
+            document.getElementById('httpPort').textContent = d.http_port || '--';
+            document.getElementById('mailServer').textContent = d.mail_server || '--';
+
+            document.getElementById('startBtn').disabled = d.running;
+            document.getElementById('stopBtn').disabled = !d.running;
+            document.getElementById('installBtn').style.display = d.exists ? 'none' : 'inline-block';
+        }
+
+        async function loadPlugins() {
+            const d = await api('/plugins');
+            const el = document.getElementById('pluginList');
+            if (!d.plugins || d.plugins.length === 0) {
+                el.innerHTML = '<span style="color: var(--text-dim)">No plugins</span>';
+                return;
+            }
+            el.innerHTML = d.plugins.map(p => `<div class="plugin-item">${p}</div>`).join('');
+        }
+
+        async function loadLogs() {
+            const d = await api('/logs?lines=50');
+            document.getElementById('logsArea').textContent = d.logs ? d.logs.join('\n') : 'No logs';
+        }
+
+        function showInstall() { document.getElementById('installModal').style.display = 'flex'; }
+        function hideInstall() { document.getElementById('installModal').style.display = 'none'; }
+
+        async function installContainer() {
+            const type = document.querySelector('input[name="webmailType"]:checked').value;
+            document.getElementById('containerStatus').textContent = 'INSTALLING...';
+            hideInstall();
+            await api('/install', { method: 'POST', body: JSON.stringify({ webmail_type: type }) });
+            refresh();
+        }
+
+        async function startContainer() {
+            await api('/start', { method: 'POST' });
+            refresh();
+        }
+
+        async function stopContainer() {
+            await api('/stop', { method: 'POST' });
+            refresh();
+        }
+
+        async function restartContainer() {
+            await api('/restart', { method: 'POST' });
+            refresh();
+        }
+
+        async function clearCache() {
+            await api('/clear-cache', { method: 'POST' });
+            alert('Cache cleared');
+        }
+
+        async function uninstallContainer() {
+            if (!confirm('Uninstall webmail container?')) return;
+            await api('/uninstall', { method: 'DELETE' });
+            refresh();
+        }
+
+        function refresh() { loadStatus(); loadPlugins(); loadLogs(); }
+        refresh();
+        setInterval(loadStatus, 10000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+Source: secubox-portal
+Section: admin
+Priority: optional
+Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+
+Package: secubox-portal
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn, python3-jwt
+Description: SecuBox Portal - Web Authentication
+ Centralized web authentication for all SecuBox modules.
+ .
+ Features:
+  - JWT token-based authentication
+  - Session management
+  - Login/logout endpoints
+  - User management
+  - Password recovery

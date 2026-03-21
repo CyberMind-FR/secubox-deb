@@ -1,0 +1,9 @@
+{
+  "id": "mail",
+  "name": "Mail",
+  "category": "apps",
+  "icon": "📧",
+  "path": "/mail/",
+  "order": 55,
+  "description": "Email Server - Postfix/Dovecot"
+}

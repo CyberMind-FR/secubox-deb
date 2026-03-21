@@ -2,8 +2,10 @@
 set -e
 case "$1" in
   remove|upgrade|deconfigure)
+    rm -f /etc/nginx/secubox.d/streamforge.conf
     systemctl stop secubox-streamforge.service || true
     systemctl disable secubox-streamforge.service || true
+    systemctl reload nginx 2>/dev/null || true
     ;;
 esac
 #DEBHELPER#

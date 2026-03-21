@@ -1,0 +1,14 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-webmail/usr/lib/secubox/webmail
+	cp -r api debian/secubox-webmail/usr/lib/secubox/webmail/
+	install -d debian/secubox-webmail/usr/share/secubox/www/webmail
+	cp -r www/webmail/. debian/secubox-webmail/usr/share/secubox/www/webmail/
+	install -d debian/secubox-webmail/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-webmail/usr/share/secubox/menu.d/ || true
+	# Modular nginx config
+	install -d debian/secubox-webmail/etc/nginx/secubox.d
+	[ -f nginx/webmail.conf ] && cp nginx/webmail.conf debian/secubox-webmail/etc/nginx/secubox.d/ || true

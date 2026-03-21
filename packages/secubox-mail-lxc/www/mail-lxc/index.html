@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - Mail LXC Container</title>
+    <style>
+        :root { --bg-dark: #0d1117; --bg-card: #161b22; --bg-sidebar: #0d1117; --border: #30363d; --text: #c9d1d9; --text-dim: #8b949e; --primary: #58a6ff; --cyan: #00d4ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; --purple: #a371f7; --orange: #f0883e; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
+        .sidebar { width: 220px; background: var(--bg-sidebar); border-right: 1px solid var(--border); position: fixed; height: 100vh; overflow-y: auto; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        .header h1 { font-size: 1.5rem; display: flex; align-items: center; gap: 0.5rem; }
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.9rem; }
+        .btn:hover { background: var(--bg-dark); }
+        .btn.primary { background: rgba(88,166,255,0.1); border-color: var(--primary); color: var(--primary); }
+        .btn.success { background: rgba(63,185,80,0.1); border-color: var(--green); color: var(--green); }
+        .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
+        .btn-group { display: flex; gap: 0.5rem; }
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
+        .card h2 { font-size: 1rem; margin-bottom: 1rem; color: var(--cyan); }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
+        .stat-card .value { font-size: 1.5rem; font-weight: bold; }
+        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; }
+        .stat-card.running .value { color: var(--green); }
+        .stat-card.stopped .value { color: var(--red); }
+        .stat-card.info .value { color: var(--cyan); }
+        .badge { display: inline-block; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 500; }
+        .badge.running { background: rgba(63,185,80,0.2); color: var(--green); }
+        .badge.stopped { background: rgba(248,81,73,0.2); color: var(--red); }
+        .badge.installing { background: rgba(210,153,34,0.2); color: var(--yellow); }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+        th { color: var(--text-dim); font-weight: 500; font-size: 0.85rem; }
+        .logs { background: #000; border-radius: 4px; padding: 1rem; font-family: monospace; font-size: 0.8rem; max-height: 300px; overflow-y: auto; white-space: pre-wrap; color: var(--green); }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; align-items: center; justify-content: center; }
+        .modal.show { display: flex; }
+        .modal-content { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; width: 400px; max-width: 90%; }
+        .modal h3 { margin-bottom: 1rem; }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; color: var(--text-dim); font-size: 0.85rem; }
+        .form-group input { width: 100%; padding: 0.5rem; background: var(--bg-dark); border: 1px solid var(--border); border-radius: 4px; color: var(--text); }
+        .ports-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
+        .port-item { background: var(--bg-dark); padding: 0.5rem; border-radius: 4px; text-align: center; }
+        .port-item .port { font-weight: bold; color: var(--cyan); }
+        .port-item .name { font-size: 0.7rem; color: var(--text-dim); }
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+    <main class="main">
+        <header class="header">
+            <h1>Mail LXC Container</h1>
+            <div class="btn-group">
+                <button class="btn" onclick="refresh()">Refresh</button>
+                <button class="btn primary" id="installBtn" onclick="installContainer()">Install</button>
+            </div>
+        </header>
+
+        <div class="grid">
+            <div class="stat-card" id="statusCard">
+                <div class="value" id="containerStatus">--</div>
+                <div class="label">Container Status</div>
+            </div>
+            <div class="stat-card info">
+                <div class="value" id="containerIP">--</div>
+                <div class="label">IP Address</div>
+            </div>
+            <div class="stat-card info">
+                <div class="value" id="hostname">--</div>
+                <div class="label">Hostname</div>
+            </div>
+            <div class="stat-card info">
+                <div class="value" id="domain">--</div>
+                <div class="label">Domain</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Container Controls</h2>
+            <div class="btn-group">
+                <button class="btn success" id="startBtn" onclick="startContainer()">Start</button>
+                <button class="btn danger" id="stopBtn" onclick="stopContainer()">Stop</button>
+                <button class="btn" onclick="restartContainer()">Restart</button>
+                <button class="btn danger" onclick="uninstallContainer()">Uninstall</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Mail Ports</h2>
+            <div class="ports-grid" id="portsGrid">
+                <div class="port-item"><div class="port">25</div><div class="name">SMTP</div></div>
+                <div class="port-item"><div class="port">465</div><div class="name">SMTPS</div></div>
+                <div class="port-item"><div class="port">587</div><div class="name">Submission</div></div>
+                <div class="port-item"><div class="port">143</div><div class="name">IMAP</div></div>
+                <div class="port-item"><div class="port">993</div><div class="name">IMAPS</div></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Mail Users</h2>
+            <div class="btn-group" style="margin-bottom: 1rem;">
+                <button class="btn primary" onclick="showAddUser()">Add User</button>
+            </div>
+            <table>
+                <thead><tr><th>Username</th><th>Actions</th></tr></thead>
+                <tbody id="usersTable"><tr><td colspan="2">Loading...</td></tr></tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h2>Logs</h2>
+            <div class="logs" id="logsArea">Loading...</div>
+        </div>
+    </main>
+
+    <div class="modal" id="addUserModal">
+        <div class="modal-content">
+            <h3>Add Mail User</h3>
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" id="newUsername" placeholder="user">
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" id="newPassword" placeholder="password">
+            </div>
+            <div class="btn-group">
+                <button class="btn primary" onclick="addUser()">Create</button>
+                <button class="btn" onclick="hideModal('addUserModal')">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API = '/api/v1/mail-lxc';
+        const token = () => localStorage.getItem('sbx_token');
+        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+
+        async function api(path, opts = {}) {
+            try {
+                const res = await fetch(API + path, { ...opts, headers: headers() });
+                if (res.status === 401) { window.location = '/login/'; return {}; }
+                return res.json();
+            } catch { return {}; }
+        }
+
+        async function loadStatus() {
+            const d = await api('/status');
+            const statusEl = document.getElementById('containerStatus');
+            const cardEl = document.getElementById('statusCard');
+
+            if (d.running) {
+                statusEl.textContent = 'RUNNING';
+                cardEl.className = 'stat-card running';
+            } else if (d.exists) {
+                statusEl.textContent = 'STOPPED';
+                cardEl.className = 'stat-card stopped';
+            } else {
+                statusEl.textContent = 'NOT INSTALLED';
+                cardEl.className = 'stat-card stopped';
+            }
+
+            document.getElementById('containerIP').textContent = d.ip || '--';
+            document.getElementById('hostname').textContent = d.hostname || '--';
+            document.getElementById('domain').textContent = d.domain || '--';
+
+            document.getElementById('startBtn').disabled = d.running;
+            document.getElementById('stopBtn').disabled = !d.running;
+            document.getElementById('installBtn').style.display = d.exists ? 'none' : 'inline-block';
+        }
+
+        async function loadUsers() {
+            const d = await api('/users');
+            const tbody = document.getElementById('usersTable');
+            if (!d.users || d.users.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="2" style="color: var(--text-dim)">No users</td></tr>';
+                return;
+            }
+            tbody.innerHTML = d.users.map(u => `
+                <tr>
+                    <td>${u.username}</td>
+                    <td><button class="btn danger" onclick="deleteUser('${u.username}')">Delete</button></td>
+                </tr>
+            `).join('');
+        }
+
+        async function loadLogs() {
+            const d = await api('/logs?lines=50');
+            document.getElementById('logsArea').textContent = d.logs ? d.logs.join('\n') : 'No logs';
+        }
+
+        async function installContainer() {
+            if (!confirm('Install mail server container?')) return;
+            document.getElementById('containerStatus').textContent = 'INSTALLING...';
+            await api('/install', { method: 'POST', body: JSON.stringify({}) });
+            refresh();
+        }
+
+        async function startContainer() {
+            await api('/start', { method: 'POST' });
+            refresh();
+        }
+
+        async function stopContainer() {
+            await api('/stop', { method: 'POST' });
+            refresh();
+        }
+
+        async function restartContainer() {
+            await api('/restart', { method: 'POST' });
+            refresh();
+        }
+
+        async function uninstallContainer() {
+            if (!confirm('Uninstall container? All data will be preserved in /srv/mail.')) return;
+            await api('/uninstall', { method: 'DELETE' });
+            refresh();
+        }
+
+        function showAddUser() { document.getElementById('addUserModal').classList.add('show'); }
+        function hideModal(id) { document.getElementById(id).classList.remove('show'); }
+
+        async function addUser() {
+            const username = document.getElementById('newUsername').value;
+            const password = document.getElementById('newPassword').value;
+            if (!username || !password) return alert('Fill all fields');
+            await api('/user', { method: 'POST', body: JSON.stringify({ username, password }) });
+            hideModal('addUserModal');
+            document.getElementById('newUsername').value = '';
+            document.getElementById('newPassword').value = '';
+            loadUsers();
+        }
+
+        async function deleteUser(username) {
+            if (!confirm(`Delete user ${username}?`)) return;
+            await api(`/user/${username}`, { method: 'DELETE' });
+            loadUsers();
+        }
+
+        function refresh() { loadStatus(); loadUsers(); loadLogs(); }
+        refresh();
+        setInterval(loadStatus, 10000);
+    </script>
+</body>
+</html>

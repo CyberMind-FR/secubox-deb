@@ -169,10 +169,7 @@ secubox-$NAME (1.0.0-1~bookworm1) bookworm; urgency=medium
  -- SecuBox <dev@secubox.local>  $(date -R)
 EOF
 
-# Debian compat
-echo "13" > "$PKG/debian/compat"
-
-# Debian rules
+# Debian rules (compat handled by debhelper-compat in control)
 cat > "$PKG/debian/rules" << 'EOF'
 #!/usr/bin/make -f
 %:
@@ -185,8 +182,6 @@ override_dh_auto_install:
 	cp -r www/MODULE/. debian/secubox-MODULE/usr/share/secubox/www/MODULE/
 	install -d debian/secubox-MODULE/usr/share/secubox/menu.d
 	[ -d menu.d ] && cp -r menu.d/. debian/secubox-MODULE/usr/share/secubox/menu.d/ || true
-	install -d debian/secubox-MODULE/lib/systemd/system
-	install -m 644 debian/secubox-MODULE.service debian/secubox-MODULE/lib/systemd/system/
 EOF
 sed -i "s/MODULE/$NAME/g" "$PKG/debian/rules"
 chmod +x "$PKG/debian/rules"

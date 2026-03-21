@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - User Management</title>
+    <style>
+        :root { --bg-dark: #0d1117; --bg-card: #161b22; --bg-sidebar: #0d1117; --border: #30363d; --text: #c9d1d9; --text-dim: #8b949e; --primary: #58a6ff; --cyan: #00d4ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; --purple: #a371f7; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
+        .sidebar { width: 220px; background: var(--bg-sidebar); border-right: 1px solid var(--border); position: fixed; height: 100vh; overflow-y: auto; }
+        .sidebar-header { padding: 1rem; border-bottom: 1px solid var(--border); }
+        .logo { font-weight: bold; font-size: 1.2rem; }
+        .logo span:nth-child(1) { color: var(--cyan); } .logo span:nth-child(2) { color: var(--red); } .logo span:nth-child(3) { color: var(--green); } .logo span:nth-child(4) { color: var(--yellow); }
+        .nav-section { padding: 0.5rem 0; }
+        .nav-section-title { padding: 0.5rem 1rem; font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
+        .nav-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 1rem; color: var(--text-dim); text-decoration: none; font-size: 0.9rem; border-left: 3px solid transparent; }
+        .nav-item:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+        .nav-item.active { background: rgba(88,166,255,0.1); color: var(--primary); border-left-color: var(--primary); }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        .header h1 { font-size: 1.5rem; }
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; margin-left: 0.5rem; }
+        .btn:hover { background: var(--bg-dark); }
+        .btn.primary { background: rgba(88,166,255,0.1); border-color: var(--primary); color: var(--primary); }
+        .btn.success { background: rgba(63,185,80,0.1); border-color: var(--green); color: var(--green); }
+        .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
+        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
+        .stat-card .value { font-size: 2rem; font-weight: bold; color: var(--purple); }
+        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); }
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
+        .card h2 { font-size: 1rem; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; }
+        .services-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .service-card { background: var(--bg-dark); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
+        .service-card .icon { font-size: 2rem; margin-bottom: 0.5rem; }
+        .service-card .name { font-weight: 600; }
+        .service-card .status { font-size: 0.75rem; margin-top: 0.25rem; }
+        .service-card.running .status { color: var(--green); }
+        .service-card.stopped .status { color: var(--red); }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 0.6rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.875rem; }
+        th { color: var(--text-dim); font-size: 0.75rem; text-transform: uppercase; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 0.7rem; }
+        .badge.enabled { background: rgba(63,185,80,0.2); color: var(--green); }
+        .badge.disabled { background: rgba(248,81,73,0.2); color: var(--red); }
+        .service-badges { display: flex; gap: 4px; flex-wrap: wrap; }
+        .service-badge { padding: 2px 6px; border-radius: 4px; font-size: 0.65rem; background: rgba(88,166,255,0.15); color: var(--primary); }
+        .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: center; justify-content: center; }
+        .modal.show { display: flex; }
+        .modal-content { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; min-width: 450px; }
+        .modal-content h3 { margin-bottom: 1rem; }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.25rem; font-size: 0.8rem; color: var(--text-dim); }
+        .form-group input { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-dark); color: var(--text); }
+        .form-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
+        .checkbox-group { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+        .checkbox-item { display: flex; align-items: center; gap: 0.5rem; }
+        .checkbox-item input { width: auto; }
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+    <main class="main">
+        <header class="header">
+            <h1>👥 User Management</h1>
+            <div>
+                <button class="btn success" onclick="showAddUser()">+ Add User</button>
+                <button class="btn" onclick="refresh()">Refresh</button>
+            </div>
+        </header>
+
+        <div class="stats-row">
+            <div class="stat-card"><div class="value" id="user-count">-</div><div class="label">Total Users</div></div>
+            <div class="stat-card"><div class="value" id="active-services">-</div><div class="label">Active Services</div></div>
+            <div class="stat-card"><div class="value" id="domain">-</div><div class="label">Domain</div></div>
+            <div class="stat-card"><div class="value" id="status">-</div><div class="label">Status</div></div>
+        </div>
+
+        <div class="card">
+            <h2>Connected Services</h2>
+            <div class="services-grid" id="services-grid">Loading...</div>
+        </div>
+
+        <div class="card">
+            <h2>Users</h2>
+            <table>
+                <thead><tr><th>Username</th><th>Email</th><th>Status</th><th>Services</th><th>Created</th><th></th></tr></thead>
+                <tbody id="user-list"><tr><td colspan="6">Loading...</td></tr></tbody>
+            </table>
+        </div>
+    </main>
+
+    <!-- Add User Modal -->
+    <div class="modal" id="user-modal">
+        <div class="modal-content">
+            <h3>Add User</h3>
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" id="new-username" placeholder="johndoe">
+            </div>
+            <div class="form-group">
+                <label>Email</label>
+                <input type="email" id="new-email" placeholder="john@example.com">
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" id="new-password" placeholder="Strong password">
+            </div>
+            <div class="form-group">
+                <label>Provision to Services</label>
+                <div class="checkbox-group" id="service-checkboxes"></div>
+            </div>
+            <div class="form-actions">
+                <button class="btn" onclick="hideModal('user-modal')">Cancel</button>
+                <button class="btn success" onclick="addUser()">Create User</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API = '/api/v1/users';
+        const token = () => localStorage.getItem('sbx_token');
+        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+
+        const SERVICE_ICONS = {
+            nextcloud: '☁️', matrix: '💬', gitea: '🐙', email: '📧',
+            jellyfin: '🎬', peertube: '📹', jabber: '💭'
+        };
+
+        let services = {};
+
+        async function api(path, opts = {}) {
+            try {
+                const res = await fetch(API + path, { ...opts, headers: headers() });
+                if (res.status === 401) { window.location = '/login/'; return {}; }
+                return res.json();
+            } catch { return {}; }
+        }
+
+        async function loadStatus() {
+            const d = await api('/status');
+            document.getElementById('user-count').textContent = d.user_count || 0;
+            document.getElementById('domain').textContent = d.domain || '-';
+            document.getElementById('status').textContent = 'Online';
+            document.getElementById('status').style.color = 'var(--green)';
+
+            services = d.services || {};
+            const activeCount = Object.values(services).filter(v => v).length;
+            document.getElementById('active-services').textContent = activeCount;
+        }
+
+        async function loadServices() {
+            const d = await api('/services');
+            const grid = document.getElementById('services-grid');
+            const svcData = d.services || {};
+
+            grid.innerHTML = Object.entries(svcData).map(([name, info]) => `
+                <div class="service-card ${info.running ? 'running' : 'stopped'}">
+                    <div class="icon">${SERVICE_ICONS[name] || '📦'}</div>
+                    <div class="name">${name}</div>
+                    <div class="status">${info.running ? 'Running' : 'Stopped'}</div>
+                </div>
+            `).join('');
+
+            // Update service checkboxes
+            const checkboxes = document.getElementById('service-checkboxes');
+            checkboxes.innerHTML = Object.entries(svcData).map(([name, info]) => `
+                <label class="checkbox-item">
+                    <input type="checkbox" name="services" value="${name}" ${info.running ? '' : 'disabled'}>
+                    ${SERVICE_ICONS[name] || '📦'} ${name}
+                </label>
+            `).join('');
+        }
+
+        async function loadUsers() {
+            const d = await api('/users');
+            const list = document.getElementById('user-list');
+            const users = d.users || [];
+            if (!users.length) {
+                list.innerHTML = '<tr><td colspan="6" style="color:var(--text-dim)">No users</td></tr>';
+                return;
+            }
+            list.innerHTML = users.map(u => `<tr>
+                <td><strong>${u.username}</strong></td>
+                <td>${u.email}</td>
+                <td><span class="badge ${u.enabled ? 'enabled' : 'disabled'}">${u.enabled ? 'Enabled' : 'Disabled'}</span></td>
+                <td><div class="service-badges">${(u.services || []).map(s => `<span class="service-badge">${SERVICE_ICONS[s] || ''} ${s}</span>`).join('')}</div></td>
+                <td style="font-size:0.75rem;color:var(--text-dim)">${u.created ? new Date(u.created).toLocaleDateString() : '-'}</td>
+                <td>
+                    <button class="btn" style="padding:0.25rem 0.5rem;font-size:0.75rem" onclick="syncUser('${u.username}')">Sync</button>
+                    <button class="btn danger" style="padding:0.25rem 0.5rem;font-size:0.75rem" onclick="deleteUser('${u.username}')">Delete</button>
+                </td>
+            </tr>`).join('');
+        }
+
+        function showModal(id) { document.getElementById(id).classList.add('show'); }
+        function hideModal(id) { document.getElementById(id).classList.remove('show'); }
+        function showAddUser() { showModal('user-modal'); }
+
+        async function addUser() {
+            const username = document.getElementById('new-username').value.trim();
+            const email = document.getElementById('new-email').value.trim();
+            const password = document.getElementById('new-password').value;
+            const serviceBoxes = document.querySelectorAll('input[name="services"]:checked');
+            const selectedServices = Array.from(serviceBoxes).map(cb => cb.value);
+
+            if (!username || !email || !password) {
+                alert('All fields required');
+                return;
+            }
+
+            const r = await api('/user', {
+                method: 'POST',
+                body: JSON.stringify({ username, email, password, services: selectedServices })
+            });
+
+            if (r.success) {
+                hideModal('user-modal');
+                document.getElementById('new-username').value = '';
+                document.getElementById('new-email').value = '';
+                document.getElementById('new-password').value = '';
+                refresh();
+            } else {
+                alert('Error: ' + (r.detail || 'Failed'));
+            }
+        }
+
+        async function deleteUser(username) {
+            if (!confirm(`Delete user "${username}" and remove from all services?`)) return;
+            const r = await api(`/user/${encodeURIComponent(username)}`, { method: 'DELETE' });
+            if (r.success) refresh();
+            else alert('Error: ' + (r.detail || 'Failed'));
+        }
+
+        async function syncUser(username) {
+            const r = await api(`/user/${encodeURIComponent(username)}/sync`, { method: 'POST' });
+            alert(r.success ? 'User synced to services' : 'Sync failed');
+        }
+
+        function refresh() { loadStatus(); loadServices(); loadUsers(); }
+        refresh();
+    </script>
+</body>
+</html>

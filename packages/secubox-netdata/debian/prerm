@@ -2,8 +2,10 @@
 set -e
 case "$1" in
   remove|upgrade)
+    rm -f /etc/nginx/secubox.d/netdata.conf
     systemctl stop    secubox-netdata.service 2>/dev/null || true
     systemctl disable secubox-netdata.service 2>/dev/null || true
+    systemctl reload nginx 2>/dev/null || true
     ;;
 esac
 #DEBHELPER#

@@ -10,6 +10,7 @@ case "$1" in
     systemctl daemon-reload
     systemctl enable secubox-auth.service
     systemctl start  secubox-auth.service || true
+    install -d -m 755 /etc/nginx/secubox.d
     systemctl reload nginx 2>/dev/null || true
     ;;
 esac

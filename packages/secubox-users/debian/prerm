@@ -1,0 +1,9 @@
+#!/bin/sh
+set -e
+if [ "$1" = "remove" ]; then
+    systemctl stop secubox-users.service || true
+    systemctl disable secubox-users.service || true
+    systemctl reload nginx 2>/dev/null || true
+fi
+#DEBHELPER#
+exit 0

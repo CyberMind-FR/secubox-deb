@@ -9,3 +9,6 @@ override_dh_auto_install:
 	[ -d www ] && cp -r www/. debian/secubox-nac/usr/share/secubox/www/ || true
 	install -d debian/secubox-nac/usr/share/secubox/menu.d
 	[ -d menu.d ] && cp -r menu.d/. debian/secubox-nac/usr/share/secubox/menu.d/ || true
+	# Modular nginx config
+	install -d debian/secubox-nac/etc/nginx/secubox.d
+	[ -f nginx/nac.conf ] && cp nginx/nac.conf debian/secubox-nac/etc/nginx/secubox.d/ || true
