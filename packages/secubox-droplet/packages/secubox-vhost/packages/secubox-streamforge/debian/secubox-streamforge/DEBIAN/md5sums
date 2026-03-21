@@ -1,0 +1,6 @@
+860da31931d05ec90ee413f940a8de5b  usr/lib/secubox/streamforge/api/__init__.py
+55664465e96de625349b5a280abd4b84  usr/lib/secubox/streamforge/api/main.py
+8afddf62be3deb17195925bec9f11147  usr/lib/secubox/streamforge/api/routers/__init__.py
+3f99a74a346bc6703d910196baaf9093  usr/lib/systemd/system/secubox-streamforge.service
+ccf10d2b77227fdbf4e83f0f8b7cae5c  usr/share/doc/secubox-streamforge/changelog.Debian.gz
+4545c971eaaf94d2aa30e1961471f64f  usr/share/secubox/www/streamforge/index.html

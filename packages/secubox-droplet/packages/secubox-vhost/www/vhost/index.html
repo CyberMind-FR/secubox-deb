@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - VHost Manager</title>
+    <style>
+        :root { --bg-dark: #0d1117; --bg-card: #161b22; --border: #30363d; --text: #c9d1d9; --text-dim: #8b949e; --primary: #58a6ff; --cyan: #00d4ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg-dark); color: var(--text); padding: 1.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        .header h1 { font-size: 1.5rem; }
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; }
+        .btn:hover { background: var(--bg-dark); }
+        .btn.primary { background: rgba(88,166,255,0.1); border-color: var(--primary); color: var(--primary); }
+        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
+        .stat-card .value { font-size: 2rem; font-weight: bold; color: var(--cyan); }
+        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); }
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
+        .card h2 { font-size: 1rem; margin-bottom: 1rem; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+        th { color: var(--text-dim); font-size: 0.75rem; text-transform: uppercase; }
+        .badge { padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; }
+        .badge.enabled { background: rgba(63,185,80,0.2); color: var(--green); }
+        .badge.disabled { background: rgba(139,148,158,0.2); color: var(--text-dim); }
+        .badge.ssl { background: rgba(88,166,255,0.2); color: var(--primary); }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; color: var(--text-dim); font-size: 0.875rem; }
+        .form-group input, .form-group select { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-dark); color: var(--text); }
+        @media (max-width: 800px) { .stats-row { grid-template-columns: repeat(2, 1fr); } .form-row { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <h1>VHost Manager</h1>
+        <div><button class="btn" onclick="refresh()">Refresh</button></div>
+    </header>
+
+    <div class="stats-row">
+        <div class="stat-card"><div class="value" id="vhost-count">-</div><div class="label">Total VHosts</div></div>
+        <div class="stat-card"><div class="value" id="enabled-count">-</div><div class="label">Enabled</div></div>
+        <div class="stat-card"><div class="value" id="ssl-count">-</div><div class="label">SSL Enabled</div></div>
+        <div class="stat-card"><div class="value" id="nginx-status">-</div><div class="label">Nginx Status</div></div>
+    </div>
+
+    <div class="card">
+        <h2>Add VHost</h2>
+        <div class="form-row">
+            <div class="form-group"><label>Domain</label><input type="text" id="new-domain" placeholder="example.com"></div>
+            <div class="form-group"><label>Backend URL</label><input type="text" id="new-backend" placeholder="http://127.0.0.1:8080"></div>
+        </div>
+        <div class="form-row">
+            <div class="form-group"><label>SSL</label><select id="new-ssl"><option value="false">No SSL</option><option value="true">Enable SSL</option></select></div>
+            <div class="form-group"><label>Enabled</label><select id="new-enabled"><option value="true">Yes</option><option value="false">No</option></select></div>
+        </div>
+        <button class="btn primary" onclick="addVhost()">Create VHost</button>
+    </div>
+
+    <div class="card">
+        <h2>Virtual Hosts</h2>
+        <table>
+            <thead><tr><th>Domain</th><th>Backend</th><th>SSL</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody id="vhost-list"><tr><td colspan="5">Loading...</td></tr></tbody>
+        </table>
+    </div>
+
+    <div class="card">
+        <h2>Certificates</h2>
+        <table>
+            <thead><tr><th>Domain</th><th>Expires</th><th>Actions</th></tr></thead>
+            <tbody id="cert-list"><tr><td colspan="3">Loading...</td></tr></tbody>
+        </table>
+    </div>
+
+    <script>
+        const API = '/api/v1/vhost';
+        const token = () => localStorage.getItem('sbx_token');
+        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+
+        async function api(path, opts = {}) {
+            try {
+                const res = await fetch(API + path, { ...opts, headers: headers() });
+                if (res.status === 401) { window.location = '/login/'; return {}; }
+                return res.json();
+            } catch { return {}; }
+        }
+
+        async function loadStatus() {
+            const d = await api('/status');
+            document.getElementById('vhost-count').textContent = d.vhost_count || 0;
+            document.getElementById('enabled-count').textContent = d.enabled_count || 0;
+            document.getElementById('ssl-count').textContent = d.ssl_count || 0;
+            document.getElementById('nginx-status').textContent = d.nginx_running ? 'Running' : 'Stopped';
+            document.getElementById('nginx-status').style.color = d.nginx_running ? 'var(--green)' : 'var(--red)';
+        }
+
+        async function loadVhosts() {
+            const d = await api('/vhosts');
+            const list = document.getElementById('vhost-list');
+            const vhosts = d.vhosts || [];
+            if (!vhosts.length) { list.innerHTML = '<tr><td colspan="5" style="color:var(--text-dim)">No vhosts</td></tr>'; return; }
+            list.innerHTML = vhosts.map(v => `<tr>
+                <td><a href="https://${v.domain}" target="_blank" style="color:var(--primary)">${v.domain}</a></td>
+                <td style="color:var(--text-dim)">${v.backend || '-'}</td>
+                <td>${v.ssl ? '<span class="badge ssl">SSL</span>' : '-'}</td>
+                <td><span class="badge ${v.enabled ? 'enabled' : 'disabled'}">${v.enabled ? 'Enabled' : 'Disabled'}</span></td>
+                <td><button class="btn" onclick="deleteVhost('${v.domain}')">Delete</button></td>
+            </tr>`).join('');
+        }
+
+        async function loadCerts() {
+            const d = await api('/certificates');
+            const list = document.getElementById('cert-list');
+            const certs = d.certificates || [];
+            if (!certs.length) { list.innerHTML = '<tr><td colspan="3" style="color:var(--text-dim)">No certificates</td></tr>'; return; }
+            list.innerHTML = certs.map(c => `<tr>
+                <td>${c.domain}</td>
+                <td>${c.expires || '-'}</td>
+                <td><button class="btn" onclick="renewCert('${c.domain}')">Renew</button></td>
+            </tr>`).join('');
+        }
+
+        async function addVhost() {
+            const domain = document.getElementById('new-domain').value.trim();
+            const backend = document.getElementById('new-backend').value.trim();
+            const ssl = document.getElementById('new-ssl').value === 'true';
+            const enabled = document.getElementById('new-enabled').value === 'true';
+            if (!domain || !backend) { alert('Domain and backend required'); return; }
+            const r = await api('/vhost', { method: 'POST', body: JSON.stringify({ domain, backend, ssl, enabled }) });
+            if (r.success) { refresh(); document.getElementById('new-domain').value = ''; document.getElementById('new-backend').value = ''; }
+            else alert('Failed: ' + JSON.stringify(r));
+        }
+
+        async function deleteVhost(domain) {
+            if (!confirm('Delete vhost ' + domain + '?')) return;
+            const r = await api('/vhost/' + domain, { method: 'DELETE' });
+            if (r.success) refresh(); else alert('Failed');
+        }
+
+        async function renewCert(domain) {
+            const r = await api('/certificate/issue', { method: 'POST', body: JSON.stringify({ domain }) });
+            alert(r.success ? 'Certificate renewed' : 'Failed: ' + r.output);
+        }
+
+        function refresh() { loadStatus(); loadVhosts(); loadCerts(); }
+        refresh();
+    </script>
+</body>
+</html>

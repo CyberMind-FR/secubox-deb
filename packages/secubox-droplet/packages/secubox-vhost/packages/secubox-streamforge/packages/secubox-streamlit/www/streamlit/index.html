@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - Streamlit Platform</title>
+    <style>
+        :root { --bg-dark: #0d1117; --bg-card: #161b22; --border: #30363d; --text: #c9d1d9; --text-dim: #8b949e; --primary: #58a6ff; --green: #3fb950; --red: #f85149; --purple: #a371f7; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg-dark); color: var(--text); padding: 1.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        .header h1 { font-size: 1.5rem; }
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; }
+        .btn.primary { background: rgba(88,166,255,0.1); border-color: var(--primary); color: var(--primary); }
+        .btn.success { background: rgba(63,185,80,0.1); color: var(--green); }
+        .btn.danger { background: rgba(248,81,73,0.1); color: var(--red); }
+        .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
+        .stat-card .value { font-size: 2rem; font-weight: bold; color: var(--purple); }
+        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); }
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
+        .card h2 { margin-bottom: 1rem; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+        th { color: var(--text-dim); font-size: 0.75rem; }
+        .badge { padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; }
+        .badge.running { background: rgba(63,185,80,0.2); color: var(--green); }
+        .badge.stopped { background: rgba(139,148,158,0.2); color: var(--text-dim); }
+        .upload-zone { border: 2px dashed var(--border); border-radius: 8px; padding: 2rem; text-align: center; cursor: pointer; }
+        .upload-zone:hover { border-color: var(--primary); }
+        input[type="file"] { display: none; }
+    </style>
+</head>
+<body>
+    <header class="header"><h1>Streamlit Platform</h1><button class="btn" onclick="refresh()">Refresh</button></header>
+
+    <div class="stats-row">
+        <div class="stat-card"><div class="value" id="app-count">-</div><div class="label">Apps</div></div>
+        <div class="stat-card"><div class="value" id="running-count">-</div><div class="label">Running</div></div>
+        <div class="stat-card"><div class="value" id="container-status">-</div><div class="label">Container</div></div>
+    </div>
+
+    <div class="card">
+        <h2>Deploy App</h2>
+        <div class="upload-zone" onclick="document.getElementById('file-input').click()">
+            <p>Drag & drop a ZIP file or click to browse</p>
+        </div>
+        <input type="file" id="file-input" accept=".zip" onchange="deployApp()">
+        <div id="deploy-status" style="margin-top:1rem;"></div>
+    </div>
+
+    <div class="card">
+        <h2>Applications</h2>
+        <table>
+            <thead><tr><th>Name</th><th>Port</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody id="app-list"><tr><td colspan="4">Loading...</td></tr></tbody>
+        </table>
+    </div>
+
+    <script>
+        const API = '/api/v1/streamlit';
+        const headers = () => ({ 'Authorization': 'Bearer ' + (localStorage.getItem('sbx_token') || '') });
+
+        async function api(path, opts = {}) {
+            try {
+                const res = await fetch(API + path, { ...opts, headers: { ...headers(), ...(opts.headers || {}) } });
+                return res.json();
+            } catch { return {}; }
+        }
+
+        async function loadStatus() {
+            const d = await api('/status');
+            document.getElementById('app-count').textContent = d.app_count || 0;
+            document.getElementById('running-count').textContent = d.running_count || 0;
+            document.getElementById('container-status').textContent = d.container_status || 'N/A';
+        }
+
+        async function loadApps() {
+            const d = await api('/apps');
+            const list = document.getElementById('app-list');
+            const apps = d.apps || [];
+            if (!apps.length) { list.innerHTML = '<tr><td colspan="4">No apps</td></tr>'; return; }
+            list.innerHTML = apps.map(a => `<tr>
+                <td>${a.name}</td>
+                <td>${a.port || '-'}</td>
+                <td><span class="badge ${a.status}">${a.status}</span></td>
+                <td>
+                    ${a.status === 'running' 
+                        ? `<button class="btn danger" onclick="stopApp('${a.name}')">Stop</button>`
+                        : `<button class="btn success" onclick="startApp('${a.name}')">Start</button>`}
+                    <button class="btn" onclick="window.open('http://'+location.hostname+':${a.port}')">Open</button>
+                </td>
+            </tr>`).join('');
+        }
+
+        async function deployApp() {
+            const input = document.getElementById('file-input');
+            if (!input.files.length) return;
+            const status = document.getElementById('deploy-status');
+            status.innerHTML = '<span style="color:var(--primary)">Deploying...</span>';
+            const form = new FormData();
+            form.append('file', input.files[0]);
+            const r = await fetch(API + '/deploy', { method: 'POST', headers: headers(), body: form });
+            const d = await r.json();
+            status.innerHTML = d.success ? '<span style="color:var(--green)">Deployed!</span>' : '<span style="color:var(--red)">Failed</span>';
+            refresh();
+        }
+
+        async function startApp(name) { await api(`/app/${name}/start`, { method: 'POST' }); setTimeout(refresh, 1000); }
+        async function stopApp(name) { await api(`/app/${name}/stop`, { method: 'POST' }); refresh(); }
+
+        function refresh() { loadStatus(); loadApps(); }
+        refresh();
+    </script>
+</body>
+</html>

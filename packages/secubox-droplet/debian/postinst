@@ -1,0 +1,24 @@
+#!/bin/bash
+set -e
+case "$1" in
+  configure)
+    # Create secubox system user if missing
+    id -u secubox >/dev/null 2>&1 || \
+      adduser --system --group --no-create-home \
+        --home /var/lib/secubox --shell /usr/sbin/nologin secubox
+
+    # Create runtime directories
+    install -d -o secubox -g secubox -m 750 /run/secubox
+    install -d -o secubox -g secubox -m 750 /var/lib/secubox
+    install -d -o secubox -g secubox -m 755 /tmp/droplet-upload
+
+    # Enable and start service
+    systemctl daemon-reload
+    systemctl enable secubox-droplet.service
+    systemctl start secubox-droplet.service || true
+
+    # Reload nginx if present
+    systemctl reload nginx 2>/dev/null || true
+    ;;
+esac
+#DEBHELPER#

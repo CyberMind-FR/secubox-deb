@@ -1,0 +1,12 @@
+Package: secubox-streamlit
+Version: 1.0.0-1~bookworm1
+Architecture: all
+Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Installed-Size: 40
+Depends: secubox-core (>= 1.0), python3-uvicorn, python3-psutil
+Recommends: streamlit, lxc
+Section: net
+Priority: optional
+Description: SecuBox Streamlit Platform
+ Plateforme d'applications Streamlit avec support LXC.
+ Port Debian bookworm de luci-app-streamlit (SecuBox OpenWrt).

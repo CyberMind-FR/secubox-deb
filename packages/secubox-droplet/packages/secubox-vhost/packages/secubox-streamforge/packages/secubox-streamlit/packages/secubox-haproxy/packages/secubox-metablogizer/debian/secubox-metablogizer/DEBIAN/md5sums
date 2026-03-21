@@ -1,0 +1,6 @@
+0bc42880378ac49e04e5ed80b4634ead  usr/lib/secubox/metablogizer/api/__init__.py
+d290a92041b11ca4526cf98ece5ff7c2  usr/lib/secubox/metablogizer/api/main.py
+32a522b9592288e3453666bd115d78c1  usr/lib/secubox/metablogizer/api/routers/__init__.py
+e1300efd376d928fcaae99bbcb9db5d5  usr/lib/systemd/system/secubox-metablogizer.service
+42f421ee705ca72b8987486615546fca  usr/share/doc/secubox-metablogizer/changelog.Debian.gz
+75b0585cfd9c94be4ef5e3531e024255  usr/share/secubox/www/metablogizer/index.html

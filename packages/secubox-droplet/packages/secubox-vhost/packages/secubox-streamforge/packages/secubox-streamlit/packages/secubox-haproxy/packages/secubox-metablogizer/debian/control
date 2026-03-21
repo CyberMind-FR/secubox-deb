@@ -1,0 +1,14 @@
+Source: secubox-metablogizer
+Section: net
+Priority: optional
+Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+
+Package: secubox-metablogizer
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn
+Recommends: python3-qrcode, tor
+Description: SecuBox MetaBlogizer Static Site Publisher
+ Publisheur de sites statiques avec support HAProxy et Tor.
+ Port Debian bookworm de luci-app-metablogizer (SecuBox OpenWrt).
