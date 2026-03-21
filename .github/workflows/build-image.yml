@@ -1,0 +1,58 @@
+name: Build SecuBox-DEB images (.img.gz)
+
+on:
+  workflow_dispatch:
+    inputs:
+      board:
+        description: 'Board cible'
+        required: true
+        type: choice
+        options: [mochabin, espressobin-v7, espressobin-ultra, all]
+        default: mochabin
+  push:
+    tags: ['v*']
+
+jobs:
+  build-image:
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        board: ${{ fromJson(
+          github.event.inputs.board == 'all'
+          && '["mochabin","espressobin-v7","espressobin-ultra"]'
+          || format('["{0}"]', github.event.inputs.board || 'mochabin')
+        ) }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup QEMU + binfmt
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            debootstrap qemu-user-static binfmt-support \
+            parted dosfstools e2fsprogs rsync \
+            gzip pigz
+
+      - name: Build image for ${{ matrix.board }}
+        run: |
+          sudo bash image/build-image.sh \
+            --board ${{ matrix.board }} \
+            --suite bookworm \
+            --out output/ \
+            --size 4G
+        timeout-minutes: 60
+
+      - name: Upload image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: secubox-${{ matrix.board }}-bookworm
+          path: output/secubox-${{ matrix.board }}-bookworm.img.gz*
+          if-no-files-found: error

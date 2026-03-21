@@ -1,0 +1,13 @@
+Package: secubox-system
+Version: 1.0.3-1~bookworm1
+Architecture: all
+Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Installed-Size: 389
+Depends: secubox-core (>= 1.0), python3-psutil
+Section: net
+Priority: optional
+Homepage: https://cybermind.fr/secubox
+Description: SecuBox System Hub
+ Centre de contrôle système : santé, services systemd, logs journald, diagnostics, backup.
+ .
+ Port Debian bookworm de luci-app-system-hub (SecuBox OpenWrt / CyberMind.fr).

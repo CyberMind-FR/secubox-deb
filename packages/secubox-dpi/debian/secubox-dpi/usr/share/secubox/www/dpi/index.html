@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - DPI Dashboard</title>
+    <style>
+        :root { --bg-dark: #0d1117; --bg-card: #161b22; --bg-sidebar: #0d1117; --border: #30363d; --text: #c9d1d9; --text-dim: #8b949e; --primary: #58a6ff; --cyan: #00d4ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; --purple: #a371f7; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
+        .sidebar { width: 220px; background: var(--bg-sidebar); border-right: 1px solid var(--border); position: fixed; height: 100vh; overflow-y: auto; }
+        .sidebar-header { padding: 1rem; border-bottom: 1px solid var(--border); }
+        .logo { font-weight: bold; font-size: 1.2rem; }
+        .logo span:nth-child(1) { color: var(--cyan); } .logo span:nth-child(2) { color: var(--red); } .logo span:nth-child(3) { color: var(--green); } .logo span:nth-child(4) { color: var(--yellow); }
+        .nav-section { padding: 0.5rem 0; }
+        .nav-section-title { padding: 0.5rem 1rem; font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
+        .nav-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 1rem; color: var(--text-dim); text-decoration: none; font-size: 0.9rem; border-left: 3px solid transparent; }
+        .nav-item:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+        .nav-item.active { background: rgba(88,166,255,0.1); color: var(--primary); border-left-color: var(--primary); }
+        .nav-item .icon { width: 20px; text-align: center; }
+        .main { flex: 1; margin-left: 220px; }
+        .header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); background: var(--bg-card); }
+        .header-title { display: flex; align-items: center; gap: 1rem; }
+        .header-title h1 { font-size: 1.5rem; font-weight: 600; }
+        .badge { padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.75rem; }
+        .badge.active { background: rgba(63,185,80,0.2); color: var(--green); }
+        .badge.inactive { background: rgba(248,81,73,0.2); color: var(--red); }
+        .header-actions { display: flex; gap: 0.75rem; }
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.875rem; }
+        .btn:hover { background: var(--bg-dark); }
+        .btn.primary { background: rgba(88,166,255,0.1); border-color: var(--primary); color: var(--primary); }
+        .btn.success { background: rgba(63,185,80,0.1); border-color: var(--green); color: var(--green); }
+        .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
+        .content { padding: 1.5rem; }
+        .status-bar { display: flex; gap: 1.5rem; margin-bottom: 1.5rem; padding: 1rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; }
+        .status-item { display: flex; align-items: center; gap: 0.5rem; }
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; }
+        .status-dot.active { background: var(--green); box-shadow: 0 0 8px var(--green); }
+        .status-dot.inactive { background: var(--red); }
+        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; text-align: center; }
+        .stat-card .value { font-size: 2rem; font-weight: bold; margin-bottom: 0.25rem; }
+        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
+        .stat-card.cyan .value { color: var(--cyan); }
+        .stat-card.green .value { color: var(--green); }
+        .stat-card.yellow .value { color: var(--yellow); }
+        .stat-card.purple .value { color: var(--purple); }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .card-header h2 { font-size: 1rem; font-weight: 600; }
+        .app-list { max-height: 280px; overflow-y: auto; }
+        .app-item { display: flex; justify-content: space-between; align-items: center; padding: 0.6rem; border-bottom: 1px solid var(--border); }
+        .app-item:hover { background: rgba(255,255,255,0.02); }
+        .app-item:last-child { border-bottom: none; }
+        .bytes { font-family: monospace; color: var(--green); }
+        .input-group { display: flex; gap: 0.5rem; margin-top: 1rem; }
+        .input-group input, .input-group select { flex: 1; padding: 0.5rem; border: 1px solid var(--border); background: var(--bg-dark); color: var(--text); border-radius: 6px; }
+        .rule-item { display: flex; justify-content: space-between; align-items: center; padding: 0.6rem; background: rgba(255,255,255,0.02); border-radius: 6px; margin-bottom: 0.5rem; }
+        @media (max-width: 1200px) { .stats-row { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } .sidebar { display: none; } .main { margin-left: 0; } }
+    </style>
+</head>
+<body>
+    <nav class="sidebar">
+        <div class="sidebar-header"><a href="/" style="text-decoration: none;"><div class="logo"><span>S</span><span>E</span><span>C</span><span>U</span>BOX</div></a></div>
+        <div class="nav-section">
+            <div class="nav-section-title">📊 DASHBOARD</div>
+            <a href="/" class="nav-item"><span class="icon">🏠</span> Home</a>
+            <a href="/system/" class="nav-item"><span class="icon">🔧</span> System Hub</a>
+        </div>
+        <div class="nav-section">
+            <div class="nav-section-title">🛡️ SECURITY</div>
+            <a href="/crowdsec/" class="nav-item"><span class="icon">🛡️</span> CrowdSec</a>
+            <a href="/wireguard/" class="nav-item"><span class="icon">🔐</span> WireGuard VPN</a>
+        </div>
+        <div class="nav-section">
+            <div class="nav-section-title">🌐 NETWORK</div>
+            <a href="/netmodes/" class="nav-item"><span class="icon">🔀</span> Network Modes</a>
+            <a href="/dpi/" class="nav-item active"><span class="icon">🔍</span> DPI</a>
+            <a href="/qos/" class="nav-item"><span class="icon">📶</span> QoS</a>
+        </div>
+        <div class="nav-section">
+            <div class="nav-section-title">📈 MONITORING</div>
+            <a href="/netdata/" class="nav-item"><span class="icon">📊</span> Netdata</a>
+            <a href="/mediaflow/" class="nav-item"><span class="icon">📺</span> Media Flow</a>
+        </div>
+    </nav>
+
+    <main class="main">
+        <header class="header">
+            <div class="header-title">
+                <h1>🔍 Deep Packet Inspection</h1>
+                <span class="badge" id="netifyd-badge">-</span>
+            </div>
+            <div class="header-actions">
+                <button class="btn" onclick="refreshAll()">🔄 Refresh</button>
+                <button class="btn primary" onclick="restartNetifyd()">♻️ Restart netifyd</button>
+            </div>
+        </header>
+
+        <div class="content">
+            <div class="status-bar">
+                <div class="status-item">
+                    <div class="status-dot" id="netifyd-status"></div>
+                    <span>netifyd</span>
+                </div>
+                <div class="status-item">
+                    <span>Mode:</span>
+                    <span id="dpi-mode" style="color: var(--cyan);">-</span>
+                </div>
+                <div class="status-item">
+                    <span>Interface:</span>
+                    <span id="dpi-interface" style="color: var(--cyan);">-</span>
+                </div>
+                <div class="status-item">
+                    <span>Mirred:</span>
+                    <span id="mirred-status" style="color: var(--text-dim);">-</span>
+                </div>
+            </div>
+
+            <div class="stats-row">
+                <div class="stat-card cyan">
+                    <div class="value" id="flow-count">0</div>
+                    <div class="label">Active Flows</div>
+                </div>
+                <div class="stat-card green">
+                    <div class="value" id="apps-count">0</div>
+                    <div class="label">Applications</div>
+                </div>
+                <div class="stat-card purple">
+                    <div class="value" id="protocols-count">0</div>
+                    <div class="label">Protocols</div>
+                </div>
+                <div class="stat-card yellow">
+                    <div class="value" id="devices-count">0</div>
+                    <div class="label">Devices</div>
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="card">
+                    <div class="card-header"><h2>📊 Top Applications</h2></div>
+                    <div class="app-list" id="top-apps">
+                        <p style="color: var(--text-dim);">Loading...</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header"><h2>📡 Top Protocols</h2></div>
+                    <div class="app-list" id="top-protocols">
+                        <p style="color: var(--text-dim);">Loading...</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header"><h2>💻 Bandwidth by Device</h2></div>
+                    <div class="app-list" id="bandwidth-devices">
+                        <p style="color: var(--text-dim);">Loading...</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header"><h2>🌐 Active Flows</h2></div>
+                    <div class="app-list" id="active-flows">
+                        <p style="color: var(--text-dim);">Loading...</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header"><h2>🚫 Block Rules</h2></div>
+                    <div class="app-list" id="block-rules">
+                        <p style="color: var(--text-dim);">No rules</p>
+                    </div>
+                    <div class="input-group">
+                        <input type="text" id="new-rule-app" placeholder="Application or category">
+                        <select id="new-rule-action">
+                            <option value="block">Block</option>
+                            <option value="limit">Limit</option>
+                            <option value="mark">Mark</option>
+                        </select>
+                        <button class="btn primary" onclick="addBlockRule()">Add</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header"><h2>⚙️ Controls</h2></div>
+                    <button class="btn success" onclick="setupMirred()" style="width: 100%; margin-bottom: 0.5rem;">Setup Mirred</button>
+                    <button class="btn danger" onclick="removeMirred()" style="width: 100%; margin-bottom: 0.5rem;">Remove Mirred</button>
+                    <button class="btn" onclick="restartNetifyd()" style="width: 100%; margin-bottom: 0.5rem;">Restart netifyd</button>
+                    <button class="btn primary" onclick="refreshAll()" style="width: 100%;">🔄 Refresh All</button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const API = '/api/v1/dpi';
+
+        async function api(endpoint, method = 'GET', data = null) {
+            const opts = { method, headers: { 'Content-Type': 'application/json' } };
+            if (data) opts.body = JSON.stringify(data);
+            try { const res = await fetch(API + endpoint, opts); return res.json(); } catch (e) { return {}; }
+        }
+
+        function formatBytes(bytes) {
+            if (!bytes) return '0 B';
+            const k = 1024, sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return (bytes / Math.pow(k, i)).toFixed(1) + ' ' + sizes[i];
+        }
+
+        async function loadStatus() {
+            const data = await api('/status');
+            document.getElementById('netifyd-status').className = 'status-dot ' + (data.running ? 'active' : 'inactive');
+            document.getElementById('netifyd-badge').className = 'badge ' + (data.running ? 'active' : 'inactive');
+            document.getElementById('netifyd-badge').textContent = data.running ? 'Running' : 'Stopped';
+            document.getElementById('dpi-mode').textContent = data.mode || '-';
+            document.getElementById('dpi-interface').textContent = data.interface || '-';
+            document.getElementById('mirred-status').textContent = data.mirred_active ? 'Active' : 'Inactive';
+            document.getElementById('mirred-status').style.color = data.mirred_active ? 'var(--green)' : 'var(--text-dim)';
+        }
+
+        async function loadTopApps() {
+            const data = await api('/top_apps?limit=10');
+            const container = document.getElementById('top-apps');
+            const apps = Array.isArray(data) ? data : [];
+            document.getElementById('apps-count').textContent = apps.length;
+
+            container.innerHTML = apps.length > 0 ? apps.map(app => `
+                <div class="app-item">
+                    <span>${app.app}</span>
+                    <span class="bytes">${formatBytes(app.bytes)}</span>
+                </div>
+            `).join('') : '<p style="color: var(--text-dim);">No data</p>';
+        }
+
+        async function loadTopProtocols() {
+            const data = await api('/top_protocols?limit=10');
+            const container = document.getElementById('top-protocols');
+            const protocols = Array.isArray(data) ? data : [];
+            document.getElementById('protocols-count').textContent = protocols.length;
+
+            container.innerHTML = protocols.length > 0 ? protocols.map(proto => `
+                <div class="app-item">
+                    <span>${proto.protocol}</span>
+                    <span class="bytes">${formatBytes(proto.bytes)}</span>
+                </div>
+            `).join('') : '<p style="color: var(--text-dim);">No data</p>';
+        }
+
+        async function loadBandwidthDevices() {
+            const data = await api('/bandwidth_by_device');
+            const container = document.getElementById('bandwidth-devices');
+            const devices = Array.isArray(data) ? data : [];
+            document.getElementById('devices-count').textContent = devices.length;
+
+            container.innerHTML = devices.length > 0 ? devices.map(dev => `
+                <div class="app-item">
+                    <span style="font-family: monospace;">${dev.mac}</span>
+                    <span class="bytes">${formatBytes(dev.bytes)}</span>
+                </div>
+            `).join('') : '<p style="color: var(--text-dim);">No data</p>';
+        }
+
+        async function loadActiveFlows() {
+            const data = await api('/active_flows');
+            const container = document.getElementById('active-flows');
+            const flows = data.flows || [];
+            document.getElementById('flow-count').textContent = flows.length;
+
+            container.innerHTML = flows.length > 0 ? flows.slice(0, 15).map(f => `
+                <div class="app-item">
+                    <span>${f.detected_application_name || 'unknown'}</span>
+                    <span class="bytes">${formatBytes(f.bytes || 0)}</span>
+                </div>
+            `).join('') : '<p style="color: var(--text-dim);">No active flows</p>';
+        }
+
+        async function loadBlockRules() {
+            const data = await api('/block_rules');
+            const container = document.getElementById('block-rules');
+            const rules = Array.isArray(data) ? data : [];
+
+            container.innerHTML = rules.length > 0 ? rules.map(rule => `
+                <div class="rule-item">
+                    <span>${rule.app_or_category} <span style="color: var(--text-dim);">(${rule.action})</span></span>
+                    <button class="btn danger" onclick="deleteBlockRule('${rule.app_or_category}')">🗑️</button>
+                </div>
+            `).join('') : '<p style="color: var(--text-dim);">No rules</p>';
+        }
+
+        async function setupMirred() { const r = await api('/setup_mirred', 'POST'); alert(r.error ? 'Error: ' + r.error : 'Mirred configured'); loadStatus(); }
+        async function removeMirred() { await api('/remove_mirred', 'POST'); alert('Mirred removed'); loadStatus(); }
+        async function restartNetifyd() { await api('/restart', 'POST'); alert('netifyd restarted'); loadStatus(); }
+
+        async function addBlockRule() {
+            const app = document.getElementById('new-rule-app').value;
+            const action = document.getElementById('new-rule-action').value;
+            if (!app) return alert('Enter an application');
+            await api('/add_block_rule', 'POST', { app_or_category: app, action: action });
+            document.getElementById('new-rule-app').value = '';
+            loadBlockRules();
+        }
+
+        async function deleteBlockRule(app) {
+            await api('/delete_block_rule?app_or_category=' + encodeURIComponent(app), 'POST');
+            loadBlockRules();
+        }
+
+        function refreshAll() {
+            loadStatus();
+            loadTopApps();
+            loadTopProtocols();
+            loadBandwidthDevices();
+            loadActiveFlows();
+            loadBlockRules();
+        }
+
+        refreshAll();
+        setInterval(refreshAll, 10000);
+    </script>
+</body>
+</html>

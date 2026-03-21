@@ -1,0 +1,17 @@
+Package: secubox-lite
+Version: 1.0.3-1~bookworm1
+Architecture: all
+Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Installed-Size: 7
+Depends: secubox-core (>= 1.0), secubox-hub (>= 1.0), secubox-crowdsec (>= 1.0), secubox-wireguard (>= 1.0), secubox-netmodes (>= 1.0), secubox-nac (>= 1.0), secubox-system (>= 1.0)
+Recommends: crowdsec, wireguard-tools
+Suggests: secubox-netdata, secubox-qos, secubox-auth
+Section: metapackages
+Priority: optional
+Homepage: https://secubox.gondwana.systems
+Description: SecuBox Lite — Essential modules for low-RAM devices
+ Metapackage installing essential SecuBox modules for ESPRESSObin
+ and other devices with 1-2GB RAM.
+ .
+ Includes: Hub, CrowdSec, WireGuard, Network Modes, NAC, and System.
+ DPI, QoS, CDN and other heavy modules are excluded.

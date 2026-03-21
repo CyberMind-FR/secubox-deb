@@ -1,0 +1,13 @@
+Package: secubox-crowdsec
+Version: 1.0.3-1~bookworm1
+Architecture: all
+Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Installed-Size: 187
+Depends: secubox-core (>= 1.0), crowdsec
+Section: net
+Priority: optional
+Homepage: https://cybermind.fr/secubox
+Description: SecuBox CrowdSec Dashboard
+ Tableau de bord CrowdSec : décisions, alertes, bouncers, métriques géographiques.
+ .
+ Port Debian bookworm de luci-app-crowdsec-dashboard (SecuBox OpenWrt / CyberMind.fr).

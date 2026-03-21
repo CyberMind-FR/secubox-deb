@@ -1,0 +1,26 @@
+# /etc/netplan/00-secubox.yaml — ESPRESSObin Ultra — Mode Router
+network:
+  version: 2
+  renderer: networkd
+
+  ethernets:
+    eth0:
+      dhcp4: true
+      optional: true
+    lan0:
+      optional: true
+    lan1:
+      optional: true
+    lan2:
+      optional: true
+    lan3:
+      optional: true
+
+  bridges:
+    br-lan:
+      interfaces: [lan0, lan1, lan2, lan3]
+      addresses: [192.168.1.1/24]
+      dhcp4: false
+      parameters:
+        stp: false
+        forward-delay: 0

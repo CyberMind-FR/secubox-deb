@@ -1,0 +1,15 @@
+d41d8cd98f00b204e9800998ecf8427e  usr/lib/secubox/netdata/api/__init__.py
+d6127104af47d5a8edda4fcbc6010f38  usr/lib/secubox/netdata/api/main.py
+d41d8cd98f00b204e9800998ecf8427e  usr/lib/secubox/netdata/api/routers/__init__.py
+707f449a1b93de36fdb90e6179c1d460  usr/lib/systemd/system/secubox-netdata.service
+f7f400deab9c599b2a23a2c1e9d96b6a  usr/share/doc/secubox-netdata/changelog.Debian.gz
+8fe885db3ba92bf27293a163ff751d73  usr/share/secubox/www/luci-static/resources/netdata-dashboard/api.js
+9442d464cdfe6a32790d87cb902e8b3c  usr/share/secubox/www/luci-static/resources/netdata-dashboard/common.css
+c96df3df59961d9c3f381785b4def3db  usr/share/secubox/www/luci-static/resources/netdata-dashboard/dashboard.css
+e8a5b17cf2a276ccd10f3ea865c03b5b  usr/share/secubox/www/luci-static/resources/view/netdata-dashboard/dashboard.js
+0309698fbe96ca6e2fb6ae92ef82d676  usr/share/secubox/www/luci-static/resources/view/netdata-dashboard/network.js
+b1222eea12006d81f2820350c36bc1fe  usr/share/secubox/www/luci-static/resources/view/netdata-dashboard/processes.js
+4224f2fdab85572c85d773bce9f95cb7  usr/share/secubox/www/luci-static/resources/view/netdata-dashboard/realtime.js
+07502d95c2aa40abf8df6346d019aba6  usr/share/secubox/www/luci-static/resources/view/netdata-dashboard/settings.js
+57766716fee0e9403ffbfa1621c2367b  usr/share/secubox/www/luci-static/resources/view/netdata-dashboard/system.js
+f31f4593c943610b72085cde17083d61  usr/share/secubox/www/netdata/index.html

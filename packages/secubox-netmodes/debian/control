@@ -1,0 +1,16 @@
+Source: secubox-netmodes
+Section: net
+Priority: optional
+Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
+
+Package: secubox-netmodes
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0), netplan.io, iproute2, bridge-utils
+Description: SecuBox Network Modes
+ Commutation de modes réseau : router, sniffer-inline, sniffer-passif, AP, relay. Templates netplan par mode.
+ .
+ Port Debian bookworm de luci-app-network-modes (SecuBox OpenWrt / CyberMind.fr).

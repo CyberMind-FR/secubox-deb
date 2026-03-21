@@ -1,0 +1,156 @@
+name: Build SecuBox .deb packages (arm64)
+
+on:
+  push:
+    branches: [main, master]
+    tags:     ['v*']
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      package:
+        description: 'Package à builder (vide = tous)'
+        required: false
+        default: ''
+
+jobs:
+  build-debs:
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - secubox-core
+          - secubox-hub
+          - secubox-crowdsec
+          - secubox-netdata
+          - secubox-wireguard
+          - secubox-vhost
+          - secubox-dpi
+          - secubox-mediaflow
+          - secubox-qos
+          - secubox-netmodes
+          - secubox-nac
+          - secubox-auth
+          - secubox-cdn
+          - secubox-system
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Skip if specific package requested and this is not it
+        if: ${{ github.event.inputs.package != '' && github.event.inputs.package != matrix.package }}
+        run: echo "Skipping ${{ matrix.package }}" && exit 0
+
+      - name: Setup QEMU + binfmt (arm64)
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            dpkg-dev debhelper devscripts \
+            qemu-user-static binfmt-support \
+            crossbuild-essential-arm64
+
+      - name: Install secubox-core as build dep (for non-core packages)
+        if: matrix.package != 'secubox-core'
+        run: |
+          # Installer la lib Python core localement pour les tests de build
+          pip install fastapi uvicorn python-jose httpx jinja2 --quiet
+
+      - name: Build ${{ matrix.package }}
+        run: |
+          cd packages/${{ matrix.package }}
+
+          # Vérifier que debian/control existe
+          if [ ! -f debian/control ]; then
+            echo "⚠ debian/control manquant pour ${{ matrix.package }} — skip"
+            exit 0
+          fi
+
+          # Build
+          dpkg-buildpackage \
+            --host-arch arm64 \
+            --target-arch arm64 \
+            -us -uc -b \
+            2>&1 | tail -20
+
+          echo "✅ Build OK: ${{ matrix.package }}"
+
+      - name: Collect .deb artifacts
+        if: success()
+        run: |
+          mkdir -p /tmp/debs
+          find . -name "*.deb" -newer packages/${{ matrix.package }}/debian/control \
+            -exec cp {} /tmp/debs/ \; 2>/dev/null || true
+          ls -lh /tmp/debs/ || echo "(aucun .deb produit)"
+
+      - name: Upload .deb artifacts
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debs-${{ matrix.package }}
+          path: /tmp/debs/*.deb
+          if-no-files-found: warn
+
+  # ── Publication APT repo (sur tag v*) ───────────────────────────
+  publish-apt:
+    needs: build-debs
+    runs-on: ubuntu-22.04
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Download all .deb artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: debs-*
+          merge-multiple: true
+          path: debs/
+
+      - name: Generate SHA256SUMS
+        run: |
+          cd debs/
+          sha256sum *.deb > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Sign SHA256SUMS
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.CYBERMIND_GPG_KEY }}
+        run: |
+          echo "$GPG_PRIVATE_KEY" | gpg --import
+          gpg --clearsign --yes debs/SHA256SUMS
+
+      - name: Publish to APT repo via SSH
+        env:
+          APT_SSH_KEY: ${{ secrets.APT_REPO_SSH_KEY }}
+          APT_HOST:    ${{ secrets.APT_REPO_HOST }}
+        run: |
+          echo "$APT_SSH_KEY" > /tmp/apt_key && chmod 600 /tmp/apt_key
+          rsync -az -e "ssh -i /tmp/apt_key -o StrictHostKeyChecking=no" \
+            debs/*.deb \
+            "${APT_HOST}:/srv/apt/secubox/incoming/"
+          ssh -i /tmp/apt_key -o StrictHostKeyChecking=no "${APT_HOST}" \
+            "reprepro -b /srv/apt/secubox includedeb bookworm /srv/apt/secubox/incoming/*.deb"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: debs/*.deb
+          body: |
+            ## SecuBox-DEB ${{ github.ref_name }}
+
+            Paquets Debian bookworm arm64 pour GlobalScale MOCHAbin / ESPRESSObin.
+
+            **Installation :**
+            ```bash
+            curl -fsSL https://apt.secubox.gondwana.systems/secubox-keyring.gpg \
+              | sudo tee /usr/share/keyrings/secubox.gpg > /dev/null
+            echo "deb [signed-by=/usr/share/keyrings/secubox.gpg] \
+              https://apt.secubox.gondwana.systems bookworm main" \
+              | sudo tee /etc/apt/sources.list.d/secubox.list
+            sudo apt update && sudo apt install secubox-full
+            ```

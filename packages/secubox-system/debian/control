@@ -1,0 +1,16 @@
+Source: secubox-system
+Section: net
+Priority: optional
+Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
+
+Package: secubox-system
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-psutil
+Description: SecuBox System Hub
+ Centre de contrôle système : santé, services systemd, logs journald, diagnostics, backup.
+ .
+ Port Debian bookworm de luci-app-system-hub (SecuBox OpenWrt / CyberMind.fr).

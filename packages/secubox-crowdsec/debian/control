@@ -1,0 +1,16 @@
+Source: secubox-crowdsec
+Section: net
+Priority: optional
+Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
+
+Package: secubox-crowdsec
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0), crowdsec
+Description: SecuBox CrowdSec Dashboard
+ Tableau de bord CrowdSec : décisions, alertes, bouncers, métriques géographiques.
+ .
+ Port Debian bookworm de luci-app-crowdsec-dashboard (SecuBox OpenWrt / CyberMind.fr).

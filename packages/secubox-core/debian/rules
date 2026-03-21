@@ -1,0 +1,32 @@
+#!/usr/bin/make -f
+export DH_VERBOSE = 1
+
+%:
+	dh $@ --with python3
+
+override_dh_auto_install:
+	# Installer la lib Python
+	install -d debian/secubox-core/usr/lib/python3/dist-packages/
+	cp -r ../../common/secubox_core \
+	      debian/secubox-core/usr/lib/python3/dist-packages/
+
+	# Ressources partagées
+	install -d debian/secubox-core/usr/share/secubox-core/nginx
+	cp ../../common/nginx/secubox.conf \
+	   debian/secubox-core/usr/share/secubox-core/nginx/
+	cp ../../common/nginx/secubox-proxy.conf \
+	   debian/secubox-core/usr/share/secubox-core/nginx/
+
+	# Config example
+	cp ../../secubox.conf.example \
+	   debian/secubox-core/usr/share/secubox-core/
+
+	# Script firstboot
+	install -d debian/secubox-core/usr/bin
+	install -m 755 ../../image/firstboot.sh \
+	               debian/secubox-core/usr/bin/secubox-firstboot
+
+	# Systemd service
+	install -d debian/secubox-core/usr/lib/systemd/system
+	install -m 644 debian/secubox-core.service \
+	               debian/secubox-core/usr/lib/systemd/system/

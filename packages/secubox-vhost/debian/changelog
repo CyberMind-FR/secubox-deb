@@ -1,0 +1,23 @@
+secubox-vhost (1.0.3-1~bookworm1) bookworm; urgency=medium
+
+  * Add UMask=0000 for world-accessible sockets
+  * Add www-data to secubox group for nginx access
+  * Make dashboard endpoints public (no auth for read-only)
+  * Fix security endpoint error handling
+
+ -- SecuBox Team <dev@secubox.gondwana.systems>  Sat, 21 Mar 2026 08:12:37 +0100
+
+secubox-vhost (1.0.2-1~bookworm1) bookworm; urgency=medium
+
+  * Fix RuntimeDirectory conflict between services
+  * Only secubox-core manages /run/secubox directory
+  * Fix secubox-core.service install path (use /usr/lib/systemd/system)
+
+ -- SecuBox Team <dev@secubox.gondwana.systems>  Sat, 21 Mar 2026 08:06:00 +0100
+
+secubox-vhost (1.0.1-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release — migration depuis SecuBox OpenWrt.
+  * Port de luci-app-vhost-manager : backend FastAPI + frontend conservé.
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Sat, 21 Mar 2026 07:36:46 +0100

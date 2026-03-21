@@ -1,0 +1,9 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-mediaflow/usr/lib/secubox/mediaflow/
+	cp -r api debian/secubox-mediaflow/usr/lib/secubox/mediaflow/
+	install -d debian/secubox-mediaflow/usr/share/secubox/www
+	[ -d www ] && cp -r www/. debian/secubox-mediaflow/usr/share/secubox/www/ || true

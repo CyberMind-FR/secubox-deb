@@ -1,0 +1,9 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-dpi/usr/lib/secubox/dpi/
+	cp -r api debian/secubox-dpi/usr/lib/secubox/dpi/
+	install -d debian/secubox-dpi/usr/share/secubox/www
+	[ -d www ] && cp -r www/. debian/secubox-dpi/usr/share/secubox/www/ || true

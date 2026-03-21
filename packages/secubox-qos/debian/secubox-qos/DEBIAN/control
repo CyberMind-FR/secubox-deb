@@ -1,0 +1,15 @@
+Package: secubox-qos
+Version: 1.0.3-1~bookworm1
+Architecture: all
+Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Installed-Size: 276
+Depends: secubox-core (>= 1.0), iproute2, nftables
+Recommends: vnstat
+Suggests: python3-pyroute2
+Section: net
+Priority: optional
+Homepage: https://cybermind.fr/secubox
+Description: SecuBox QoS / Bandwidth Manager
+ QoS avancé : classes HTB pyroute2, quotas par client, planification horaire, détection média.
+ .
+ Port Debian bookworm de luci-app-bandwidth-manager (SecuBox OpenWrt / CyberMind.fr).

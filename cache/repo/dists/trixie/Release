@@ -1,0 +1,38 @@
+Origin: SecuBox-Local
+Label: SecuBox Local Build Cache
+Suite: trixie
+Codename: trixie
+Date: Fri, 20 Mar 2026 18:04:36 UTC
+Architectures: arm64 amd64
+Components: main
+Description: Local SecuBox packages for build testing
+MD5Sum:
+ d41d8cd98f00b204e9800998ecf8427e 0 main/binary-arm64/Packages
+ 7029066c27ac6f5ef18d660d5741979a 20 main/binary-arm64/Packages.gz
+ 377733dcbed87fb6f5e5abfab5e6f709 161 main/binary-arm64/Release
+ d41d8cd98f00b204e9800998ecf8427e 0 main/binary-amd64/Packages
+ 7029066c27ac6f5ef18d660d5741979a 20 main/binary-amd64/Packages.gz
+ 5b09001a5dd5a01d38e7e684ebac2eb2 161 main/binary-amd64/Release
+ d41d8cd98f00b204e9800998ecf8427e 0 main/source/Sources
+ 7029066c27ac6f5ef18d660d5741979a 20 main/source/Sources.gz
+ d51392125c6a17f772ff85139b68b006 162 main/source/Release
+SHA1:
+ da39a3ee5e6b4b0d3255bfef95601890afd80709 0 main/binary-arm64/Packages
+ 46c6643f07aa7f6bfe7118de926b86defc5087c4 20 main/binary-arm64/Packages.gz
+ 776129ebfd9e60cfd7ab80f35400dcf3ef0e216d 161 main/binary-arm64/Release
+ da39a3ee5e6b4b0d3255bfef95601890afd80709 0 main/binary-amd64/Packages
+ 46c6643f07aa7f6bfe7118de926b86defc5087c4 20 main/binary-amd64/Packages.gz
+ 71fb7ed1daae0fca4aca332981ea36e489509f89 161 main/binary-amd64/Release
+ da39a3ee5e6b4b0d3255bfef95601890afd80709 0 main/source/Sources
+ 46c6643f07aa7f6bfe7118de926b86defc5087c4 20 main/source/Sources.gz
+ 8a9b1605b591815a4bc6cfe64b4e478e30d4f222 162 main/source/Release
+SHA256:
+ e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 0 main/binary-arm64/Packages
+ 59869db34853933b239f1e2219cf7d431da006aa919635478511fabbfc8849d2 20 main/binary-arm64/Packages.gz
+ bca8261ae97be7b21c1027b2fdd94ffddb9b87e3be430c3df9bd3de10550200f 161 main/binary-arm64/Release
+ e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 0 main/binary-amd64/Packages
+ 59869db34853933b239f1e2219cf7d431da006aa919635478511fabbfc8849d2 20 main/binary-amd64/Packages.gz
+ 741ee10cb0829a47514ccc2e3c0cca69339e9ecdc3a61668ccc5115f992bb0c9 161 main/binary-amd64/Release
+ e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 0 main/source/Sources
+ 59869db34853933b239f1e2219cf7d431da006aa919635478511fabbfc8849d2 20 main/source/Sources.gz
+ 4837b77f96c77377ba14a65f0ce0fc2f20804c58d6e611f1ba90278fdde56dcc 162 main/source/Release

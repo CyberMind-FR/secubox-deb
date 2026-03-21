@@ -1,0 +1,19 @@
+# SecuBox Network Mode: Access Point
+# WiFi AP with 802.11r/k/v
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    {{ wan | default('eth0') }}:
+      dhcp4: true
+  bridges:
+    br-ap:
+      interfaces:
+        - {{ lan | default('eth1') }}
+      addresses:
+        - 192.168.50.1/24
+      dhcp4: false
+      parameters:
+        stp: false
+        forward-delay: 0
+# Note: WiFi configuration handled by hostapd

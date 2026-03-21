@@ -1,0 +1,26 @@
+Source: secubox-core
+Section: net
+Priority: optional
+Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Build-Depends: debhelper-compat (= 13), dh-python, python3-all
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
+
+Package: secubox-core
+Architecture: all
+Depends: ${misc:Depends}, ${python3:Depends},
+ python3-fastapi | python3-pip,
+ python3-uvicorn | python3-pip,
+ python3-jose,
+ python3-httpx,
+ nginx,
+ nftables,
+ openssl
+Recommends: crowdsec, wireguard-tools
+Description: SecuBox-DEB — bibliothèque centrale et infrastructure
+ Bibliothèque Python partagée (JWT auth, config TOML, logging structuré),
+ configuration nginx reverse proxy, et scripts d'initialisation firstboot.
+ .
+ Ce paquet est requis par tous les modules secubox-*.
+ Port Debian bookworm du cœur de SecuBox OpenWrt (CyberMind.fr).

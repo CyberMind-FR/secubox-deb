@@ -1,0 +1,318 @@
+'use strict';
+'require view';
+'require dom';
+'require poll';
+'require crowdsec-dashboard.api as api';
+'require crowdsec-dashboard.heatmap as heatmap';
+'require secubox/kiss-theme';
+
+// Freshness helpers
+function formatAge(seconds) {
+	if (seconds < 60) return seconds + 's ago';
+	if (seconds < 3600) return Math.floor(seconds / 60) + 'm ago';
+	return Math.floor(seconds / 3600) + 'h ago';
+}
+
+function getFreshnessClass(age) {
+	if (age < 30) return 'fresh';      // < 30s = green/fresh
+	if (age < 90) return 'recent';     // < 90s = yellow/recent
+	return 'stale';                     // > 90s = red/stale
+}
+
+return view.extend({
+	load: function() {
+		var link = document.createElement('link');
+		link.rel = 'stylesheet';
+		link.href = L.resource('crowdsec-dashboard/dashboard.css');
+		document.head.appendChild(link);
+		return api.getOverview().catch(function() { return {}; });
+	},
+
+	parseCountries: function(data) {
+		var countries = {};
+		// Handle top_countries_raw (JSON string array)
+		if (data.top_countries_raw) {
+			try {
+				var arr = typeof data.top_countries_raw === 'string'
+					? JSON.parse(data.top_countries_raw)
+					: data.top_countries_raw;
+				if (Array.isArray(arr)) {
+					arr.forEach(function(item) {
+						if (item.country) countries[item.country] = item.count || 0;
+					});
+				}
+			} catch (e) {}
+		}
+		// Handle countries field - can be array or object
+		if (data.countries) {
+			if (Array.isArray(data.countries)) {
+				// Array of {country, count} objects
+				data.countries.forEach(function(item) {
+					if (item.country) countries[item.country] = item.count || 0;
+				});
+			} else if (typeof data.countries === 'object') {
+				// Plain object {US: 10, FR: 5}
+				for (var k in data.countries) countries[k] = data.countries[k];
+			}
+		}
+		return countries;
+	},
+
+	parseAlerts: function(data) {
+		var alerts = [];
+		// Handle alerts_raw (JSON string array)
+		if (data.alerts_raw) {
+			try {
+				alerts = typeof data.alerts_raw === 'string'
+					? JSON.parse(data.alerts_raw)
+					: data.alerts_raw;
+			} catch (e) {}
+		}
+		// Also handle direct alerts array if present
+		if (Array.isArray(data.alerts) && data.alerts.length > 0) {
+			alerts = data.alerts;
+		}
+		// Fallback to decisions_raw if no alerts (decisions = active bans from alerts)
+		if ((!alerts || alerts.length === 0) && data.decisions_raw) {
+			try {
+				var decisions = typeof data.decisions_raw === 'string'
+					? JSON.parse(data.decisions_raw)
+					: data.decisions_raw;
+				if (Array.isArray(decisions)) {
+					// Convert decisions to alert-like format
+					alerts = decisions.map(function(d) {
+						return {
+							source_ip: d.value,
+							scenario: d.scenario,
+							created_at: new Date().toISOString(), // No timestamp in decision, use now
+							type: d.type,
+							duration: d.duration
+						};
+					});
+				}
+			} catch (e) {}
+		}
+		return Array.isArray(alerts) ? alerts : [];
+	},
+
+	parseGeoData: function(raw) {
+		if (!raw) return [];
+		if (typeof raw === 'string') {
+			try { raw = JSON.parse(raw); } catch(e) { return []; }
+		}
+		if (!Array.isArray(raw)) return [];
+		return raw.filter(function(item) {
+			return item && item.country && typeof item.count === 'number';
+		});
+	},
+
+	render: function(data) {
+		var self = this;
+		// Ensure s is always an object (data could be error code like 5)
+		var s = (data && typeof data === 'object' && !Array.isArray(data)) ? data : {};
+		s.countries = this.parseCountries(s);
+		s.alerts = this.parseAlerts(s);
+		// Parse geo data for heatmap
+		s.geoLocal = this.parseGeoData(s.geo_local_raw || s.top_countries_raw);
+		s.geoCapi = this.parseGeoData(s.geo_capi_raw);
+
+		// Parse freshness data
+		var freshness = s._freshness || { age: 0, fresh: true };
+		var freshClass = getFreshnessClass(freshness.age || 0);
+		var freshAge = freshness.age || 0;
+
+		var content = [
+			// Header with freshness indicator
+			E('div', { 'style': 'margin-bottom: 24px;' }, [
+				E('div', { 'style': 'display: flex; align-items: center; justify-content: space-between;' }, [
+					E('div', { 'style': 'display: flex; align-items: center; gap: 16px;' }, [
+						E('h2', { 'style': 'font-size: 24px; font-weight: 700; margin: 0;' }, 'CrowdSec Dashboard'),
+						KissTheme.badge(s.crowdsec === 'running' ? 'RUNNING' : 'STOPPED',
+							s.crowdsec === 'running' ? 'green' : 'red')
+					]),
+					E('div', { 'class': 'cs-freshness', 'id': 'cs-freshness', 'style': 'display:flex; align-items:center; gap:8px; padding:6px 12px; border-radius:16px; background:var(--kiss-bg2); border:1px solid var(--kiss-line); font-size:12px;' }, [
+						E('span', { 'class': 'cs-fresh-dot ' + freshClass, 'id': 'cs-fresh-dot', 'style': 'width:8px; height:8px; border-radius:50%; background:' + (freshClass === 'fresh' ? '#00c853' : (freshClass === 'recent' ? '#ff9800' : '#f44336')) + '; box-shadow:0 0 4px ' + (freshClass === 'fresh' ? '#00c853' : (freshClass === 'recent' ? '#ff9800' : '#f44336')) + ';' }),
+						E('span', { 'id': 'cs-age', 'style': 'color:' + (freshClass === 'fresh' ? '#00c853' : (freshClass === 'recent' ? '#ff9800' : '#f44336')) + ';' }, freshAge < 5 ? 'just now' : formatAge(freshAge))
+					])
+				]),
+				E('p', { 'style': 'color: var(--kiss-muted); margin: 8px 0 0 0;' }, 'Collaborative security engine')
+			]),
+
+			// Navigation
+			this.renderNav('overview'),
+
+			// Stats
+			E('div', { 'class': 'kiss-grid kiss-grid-4', 'id': 'cs-stats', 'style': 'margin: 20px 0;' }, this.renderStats(s)),
+
+			// Two column layout
+			E('div', { 'class': 'kiss-grid kiss-grid-2' }, [
+				// Active bans card
+				KissTheme.card('Active Bans', E('div', { 'id': 'cs-alerts' }, this.renderAlerts(s.alerts))),
+				// Health card
+				KissTheme.card('System Health', this.renderHealth(s))
+			]),
+
+			// Geo card - heatmap + legend
+			KissTheme.card('Threat Origins', E('div', { 'id': 'cs-geo' }, this.renderGeo(s)))
+		];
+
+		poll.add(L.bind(this.pollData, this), 30);
+		return KissTheme.wrap(content, 'admin/secubox/security/crowdsec/overview');
+	},
+
+	renderNav: function(active) {
+		var tabs = [
+			{ id: 'overview', label: 'Overview' },
+			{ id: 'alerts', label: 'Alerts' },
+			{ id: 'decisions', label: 'Decisions' },
+			{ id: 'bouncers', label: 'Bouncers' },
+			{ id: 'settings', label: 'Settings' }
+		];
+		return E('div', { 'style': 'display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid var(--kiss-line); padding-bottom: 12px;' }, tabs.map(function(t) {
+			var isActive = active === t.id;
+			return E('a', {
+				'href': L.url('admin/secubox/security/crowdsec/' + t.id),
+				'style': 'padding: 8px 16px; text-decoration: none; border-radius: 6px; font-size: 13px; ' +
+					(isActive ? 'background: rgba(0,200,83,0.1); color: var(--kiss-green); border: 1px solid rgba(0,200,83,0.3);' :
+						'color: var(--kiss-muted); border: 1px solid transparent;')
+			}, t.label);
+		}));
+	},
+
+	renderStats: function(s) {
+		var c = KissTheme.colors;
+		var stats = [
+			{ label: 'Active Bans', value: s.active_bans || 0, color: (s.active_bans || 0) > 0 ? c.green : c.muted },
+			{ label: 'Alerts (24h)', value: s.alerts_24h || 0, color: (s.alerts_24h || 0) > 10 ? c.orange : c.muted },
+			{ label: 'WAF Threats', value: s.waf_threats_today || 0, color: (s.waf_threats_today || 0) > 0 ? c.orange : c.muted },
+			{ label: 'WAF Auto-Bans', value: s.waf_bans_today || 0, color: (s.waf_bans_today || 0) > 0 ? c.red : c.muted }
+		];
+		return stats.map(function(st) {
+			return KissTheme.stat(st.value, st.label, st.color);
+		});
+	},
+
+	renderAlerts: function(alerts) {
+		alerts = Array.isArray(alerts) ? alerts : [];
+		if (!alerts.length) {
+			return E('div', { 'style': 'text-align: center; padding: 24px; color: var(--kiss-muted);' }, 'No active bans');
+		}
+		// Check if we have duration (from decisions) or created_at (from alerts)
+		var hasDuration = alerts[0] && alerts[0].duration;
+		return E('table', { 'class': 'kiss-table' }, [
+			E('thead', {}, E('tr', {}, [
+				E('th', {}, hasDuration ? 'Expires' : 'Time'),
+				E('th', {}, 'Source'),
+				E('th', {}, 'Scenario')
+			])),
+			E('tbody', {}, alerts.slice(0, 8).map(function(a) {
+				var src = a.source || {};
+				var timeCol = a.duration
+					? a.duration.replace(/([0-9]+)h([0-9]+)m.*/, '$1h $2m')
+					: api.formatRelativeTime(a.created_at);
+				return E('tr', {}, [
+					E('td', { 'style': 'font-family: monospace; font-size: 12px; color: var(--kiss-muted);' }, timeCol),
+					E('td', {}, E('span', { 'style': 'font-family: monospace; color: var(--kiss-cyan);' }, src.ip || a.source_ip || a.value || '-')),
+					E('td', {}, E('span', { 'style': 'font-size: 12px;' }, api.parseScenario(a.scenario)))
+				]);
+			}))
+		]);
+	},
+
+	renderHealth: function(s) {
+		var checks = [
+			{ label: 'CrowdSec', ok: s.crowdsec === 'running' },
+			{ label: 'LAPI', ok: s.lapi_status === 'available' },
+			{ label: 'CAPI', ok: s.capi_enrolled },
+			{ label: 'Bouncer', ok: (s.bouncer_count || 0) > 0 },
+			{ label: 'GeoIP', ok: s.geoip_enabled },
+			{ label: 'WAF Auto-Ban', ok: s.waf_autoban_enabled, value: s.waf_sensitivity }
+		];
+		return E('div', { 'style': 'display: flex; flex-direction: column; gap: 8px;' }, checks.map(function(c) {
+			var valueText = c.value ? c.value : (c.ok ? 'OK' : 'Disabled');
+			return E('div', { 'style': 'display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.03);' }, [
+				E('div', { 'style': 'width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; ' +
+					(c.ok ? 'background: rgba(0,200,83,0.15); color: var(--kiss-green);' : 'background: rgba(255,23,68,0.15); color: var(--kiss-red);') },
+					c.ok ? '\u2713' : '\u2717'),
+				E('div', { 'style': 'flex: 1;' }, [
+					E('div', { 'style': 'font-size: 13px; color: var(--kiss-text);' }, c.label),
+					E('div', { 'style': 'font-size: 11px; color: var(--kiss-muted);' }, valueText)
+				])
+			]);
+		}));
+	},
+
+	renderGeo: function(s) {
+		var countries = s.countries || {};
+		var entries = Object.entries(countries);
+		var hasData = entries.length > 0 || (s.geoLocal && s.geoLocal.length > 0) || (s.geoCapi && s.geoCapi.length > 0);
+
+		if (!hasData) {
+			return E('div', { 'style': 'text-align: center; padding: 24px; color: var(--kiss-muted);' }, 'No geographic data');
+		}
+
+		// Render heatmap
+		var heatmapEl = heatmap.render({
+			local: s.geoLocal || [],
+			capi: s.geoCapi || [],
+			waf: [] // WAF geo data could be added later
+		}, { width: 600, height: 300 });
+
+		// Flag legend below heatmap
+		entries.sort(function(a, b) { return b[1] - a[1]; });
+		var flagLegend = E('div', { 'style': 'display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 12px; margin-top: 16px;' }, entries.slice(0, 12).map(function(e) {
+			return E('div', { 'style': 'display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: rgba(255,255,255,0.02); border-radius: 6px;' }, [
+				E('span', { 'style': 'font-size: 18px;' }, api.getCountryFlag(e[0])),
+				E('span', { 'style': 'font-family: monospace; font-weight: 600; color: var(--kiss-orange);' }, String(e[1])),
+				E('span', { 'style': 'font-size: 11px; color: var(--kiss-muted);' }, e[0])
+			]);
+		}));
+
+		return E('div', {}, [heatmapEl, flagLegend]);
+	},
+
+	fmt: function(n) {
+		if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+		if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+		return String(n);
+	},
+
+	pollData: function() {
+		var self = this;
+		return api.getOverview().then(function(data) {
+			// Ensure s is always an object (data could be error code)
+			var s = (data && typeof data === 'object' && !Array.isArray(data)) ? data : {};
+			s.countries = self.parseCountries(s);
+			s.alerts = self.parseAlerts(s);
+			s.geoLocal = self.parseGeoData(s.geo_local_raw || s.top_countries_raw);
+			s.geoCapi = self.parseGeoData(s.geo_capi_raw);
+
+			// Update freshness indicator
+			var freshness = s._freshness || { age: 0, fresh: true };
+			var freshClass = getFreshnessClass(freshness.age || 0);
+			var freshAge = freshness.age || 0;
+			var dotEl = document.getElementById('cs-fresh-dot');
+			var ageEl = document.getElementById('cs-age');
+			if (dotEl) {
+				var color = freshClass === 'fresh' ? '#00c853' : (freshClass === 'recent' ? '#ff9800' : '#f44336');
+				dotEl.style.background = color;
+				dotEl.style.boxShadow = '0 0 4px ' + color;
+			}
+			if (ageEl) {
+				ageEl.textContent = freshAge < 5 ? 'just now' : formatAge(freshAge);
+				ageEl.style.color = freshClass === 'fresh' ? '#00c853' : (freshClass === 'recent' ? '#ff9800' : '#f44336');
+			}
+
+			var el = document.getElementById('cs-stats');
+			if (el) dom.content(el, self.renderStats(s));
+			el = document.getElementById('cs-alerts');
+			if (el) dom.content(el, self.renderAlerts(s.alerts));
+			el = document.getElementById('cs-geo');
+			if (el) dom.content(el, self.renderGeo(s));
+		});
+	},
+
+	handleSaveApply: null,
+	handleSave: null,
+	handleReset: null
+});

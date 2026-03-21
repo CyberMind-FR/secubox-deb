@@ -1,0 +1,14 @@
+Package: secubox-dpi
+Version: 1.0.3-1~bookworm1
+Architecture: all
+Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Installed-Size: 54
+Depends: secubox-core (>= 1.0), iproute2
+Recommends: netifyd
+Section: net
+Priority: optional
+Homepage: https://cybermind.fr/secubox
+Description: SecuBox DPI — netifyd Dashboard
+ Deep Packet Inspection dual-stream : netifyd/nDPId, tc mirred ifb0, classification applicative.
+ .
+ Port Debian bookworm de luci-app-netifyd-dashboard (SecuBox OpenWrt / CyberMind.fr).

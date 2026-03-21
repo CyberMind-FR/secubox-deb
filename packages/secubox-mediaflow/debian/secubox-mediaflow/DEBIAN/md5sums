@@ -1,0 +1,13 @@
+d41d8cd98f00b204e9800998ecf8427e  usr/lib/secubox/mediaflow/api/__init__.py
+c0ca27c9e7009a08cf622d19a86cbdb4  usr/lib/secubox/mediaflow/api/main.py
+d41d8cd98f00b204e9800998ecf8427e  usr/lib/secubox/mediaflow/api/routers/__init__.py
+0755670d07275e531bf1af3e8030ba4d  usr/lib/systemd/system/secubox-mediaflow.service
+a5b61db07577d9207316dc8e4902839f  usr/share/doc/secubox-mediaflow/changelog.Debian.gz
+7708e0433e2cb57cf20734f5759cceb6  usr/share/secubox/www/luci-static/resources/media-flow/api.js
+9442d464cdfe6a32790d87cb902e8b3c  usr/share/secubox/www/luci-static/resources/media-flow/common.css
+153da722ec6158342d5ce9a8701c8e77  usr/share/secubox/www/luci-static/resources/media-flow/nav.js
+bdd7bae0cad017138602b172bca27416  usr/share/secubox/www/luci-static/resources/view/media-flow/alerts.js
+66406ff32683d42d28c2ecd4bb5ab1ad  usr/share/secubox/www/luci-static/resources/view/media-flow/clients.js
+3e472d617c9a08bd3ad7906db1757171  usr/share/secubox/www/luci-static/resources/view/media-flow/dashboard.js
+6f67c2440f656884e65ef9d31e9c7592  usr/share/secubox/www/luci-static/resources/view/media-flow/history.js
+fc83e21057105f747d7533dbee579538  usr/share/secubox/www/luci-static/resources/view/media-flow/services.js

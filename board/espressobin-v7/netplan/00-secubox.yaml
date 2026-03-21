@@ -1,0 +1,25 @@
+# /etc/netplan/00-secubox.yaml — ESPRESSObin v7 — Mode Router
+# Marvell Armada 3720 : mvneta WAN + DSA 88E6341 (lan0/lan1)
+network:
+  version: 2
+  renderer: networkd
+
+  ethernets:
+    eth0:
+      dhcp4: true
+      dhcp6: false
+      optional: true
+    # Ports DSA du switch 88E6341
+    lan0:
+      optional: true
+    lan1:
+      optional: true
+
+  bridges:
+    br-lan:
+      interfaces: [lan0, lan1]
+      addresses: [192.168.1.1/24]
+      dhcp4: false
+      parameters:
+        stp: false
+        forward-delay: 0

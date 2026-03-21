@@ -1,0 +1,9 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-crowdsec/usr/lib/secubox/crowdsec/
+	cp -r api debian/secubox-crowdsec/usr/lib/secubox/crowdsec/
+	install -d debian/secubox-crowdsec/usr/share/secubox/www
+	[ -d www ] && cp -r www/. debian/secubox-crowdsec/usr/share/secubox/www/ || true
