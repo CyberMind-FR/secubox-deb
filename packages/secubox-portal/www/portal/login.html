@@ -151,11 +151,14 @@ function handleLogin(e) {
   })
   .then(function(data) {
     if (data.success) {
+      // Store JWT token for API authentication
+      localStorage.setItem('sbx_token', data.token);
+      localStorage.setItem('secubox_token', data.token);
       localStorage.setItem('secubox_user', data.username);
       localStorage.setItem('secubox_role', data.role);
       showMsg('Login successful!', 'success');
       setTimeout(function() {
-        window.location.href = '/hub/';
+        window.location.href = '/';
       }, 500);
     } else {
       throw new Error(data.error || 'Login failed');

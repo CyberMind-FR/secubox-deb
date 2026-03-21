@@ -458,7 +458,7 @@
         function checkUpdates() { location.href = '/system/'; }
         function viewLogs() { location.href = '/system/'; }
         function exportConfig() { alert('Export started'); }
-        function logout() { localStorage.removeItem('secubox_token'); location.reload(); }
+        function logout() { localStorage.removeItem('secubox_token'); localStorage.removeItem('sbx_token'); window.location.href = '/portal/login.html'; }
 
         async function loadRoadmap() {
             const data = await api('/roadmap');
@@ -487,7 +487,7 @@
             // Module lists
             const renderList = (list, elemId) => {
                 const el = document.getElementById(elemId);
-                el.innerHTML = (list || []).slice(0, 8).map(m => `<li>${m.deb || m}</li>`).join('');
+                el.innerHTML = (list || []).slice(0, 8).map(m => `<li>${m.target || m}</li>`).join('');
             };
             renderList(data.complete, 'complete-list');
             renderList(data.in_progress, 'progress-list');
@@ -501,7 +501,7 @@
             if (data.new_modules && data.new_modules.length > 0) {
                 const plannedList = document.getElementById('planned-list');
                 data.new_modules.forEach(m => {
-                    plannedList.innerHTML += `<li style="color:var(--purple)">✨ ${m.name} (new)</li>`;
+                    plannedList.innerHTML += `<li style="color:var(--purple)">✨ ${m.target} (new)</li>`;
                 });
             }
         }
