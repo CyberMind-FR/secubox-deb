@@ -1,3 +1,14 @@
+secubox-mail (1.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * Add ACME certificate support (Let's Encrypt)
+  * mailserverctl v2.2.0: acme issue/renew/install commands
+  * Add ssl status, ssl selfsigned commands
+  * Enable Dovecot SSL with proper TLS 1.2+ configuration
+  * Add API endpoints: /acme/status, /acme/issue, /acme/renew
+  * Update /ssl endpoint with certificate type detection
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Mar 2026 14:30:00 +0100
+
 secubox-mail (1.4.0-1~bookworm1) bookworm; urgency=medium
 
   * Switch LXC containers to Debian bookworm (from Alpine)

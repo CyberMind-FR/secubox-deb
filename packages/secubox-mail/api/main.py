@@ -17,7 +17,7 @@ from pydantic import BaseModel
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
 
-app = FastAPI(title="SecuBox Mail", version="1.3.0")
+app = FastAPI(title="SecuBox Mail", version="1.4.0")
 config = get_config("mail")
 
 DATA_PATH = Path(config.get("data_path", "/srv/mail"))
@@ -487,27 +487,141 @@ async def get_ssl_status():
     """Get SSL certificate status"""
     cert_file = DATA_PATH / "ssl" / "fullchain.pem"
     if not cert_file.exists():
-        return {"installed": False}
-    success, out, _ = run_cmd(["openssl", "x509", "-in", str(cert_file), "-noout", "-subject", "-dates"])
+        return {"installed": False, "type": None}
+
+    # Get certificate info
+    info = {"installed": True}
+    success, out, _ = run_cmd(["openssl", "x509", "-in", str(cert_file),
+                               "-noout", "-subject", "-dates", "-issuer"])
     if success:
-        info = {}
         for line in out.split("\n"):
             if "=" in line:
                 key, val = line.split("=", 1)
                 info[key.strip().lower()] = val.strip()
-        return {"installed": True, **info}
-    return {"installed": True}
+
+    # Determine certificate type (ACME vs self-signed)
+    fqdn = f"{HOSTNAME}.{DOMAIN}"
+    acme_dir = Path("/etc/acme") / fqdn
+    home_acme = Path.home() / ".acme.sh" / fqdn
+
+    if acme_dir.exists() or home_acme.exists():
+        info["type"] = "acme"
+        info["auto_renew"] = True
+    else:
+        info["type"] = "selfsigned"
+        info["auto_renew"] = False
+
+    # Calculate days until expiration
+    if "notafter" in info:
+        import time
+        try:
+            # Parse date format: "Mar 22 10:30:00 2027 GMT"
+            from datetime import datetime
+            expires = datetime.strptime(info["notafter"], "%b %d %H:%M:%S %Y %Z")
+            days_left = (expires - datetime.now()).days
+            info["days_remaining"] = days_left
+            if days_left < 0:
+                info["status"] = "expired"
+            elif days_left < 30:
+                info["status"] = "expiring_soon"
+            else:
+                info["status"] = "valid"
+        except Exception:
+            info["status"] = "unknown"
+
+    return info
 
 
 @app.post("/ssl/setup", dependencies=[Depends(require_jwt)])
 async def setup_ssl(background_tasks: BackgroundTasks):
-    """Setup SSL certificate"""
+    """Setup SSL certificate (self-signed)"""
     def do_setup():
-        subprocess.run(["/usr/sbin/mailctl", "ssl", "setup"],
+        subprocess.run(["/usr/sbin/mailserverctl", "ssl", "selfsigned"],
                       stdout=open("/var/log/mail-ssl.log", "w"),
                       stderr=subprocess.STDOUT)
     background_tasks.add_task(do_setup)
-    return {"success": True, "message": "SSL setup started"}
+    return {"success": True, "message": "Self-signed SSL setup started"}
+
+
+# =============================================================================
+# ACME CERTIFICATE MANAGEMENT
+# =============================================================================
+
+class AcmeIssueRequest(BaseModel):
+    email: Optional[str] = None
+
+
+@app.get("/acme/status", dependencies=[Depends(require_jwt)])
+async def acme_status():
+    """Get ACME certificate status"""
+    fqdn = f"{HOSTNAME}.{DOMAIN}"
+    acme_dir = Path("/etc/acme") / fqdn
+    home_acme = Path.home() / ".acme.sh" / fqdn
+
+    # Check if acme.sh is available
+    acme_available = False
+    success, out, _ = run_cmd(["which", "acme.sh"])
+    if success:
+        acme_available = True
+
+    # Check for existing certificate
+    cert_exists = False
+    cert_info = {}
+    if acme_dir.exists() or home_acme.exists():
+        cert_exists = True
+        cert_path = acme_dir / "fullchain.cer"
+        if not cert_path.exists():
+            cert_path = home_acme / "fullchain.cer"
+        if cert_path.exists():
+            success, out, _ = run_cmd(["openssl", "x509", "-in", str(cert_path),
+                                       "-noout", "-subject", "-dates"])
+            if success:
+                for line in out.split("\n"):
+                    if "=" in line:
+                        key, val = line.split("=", 1)
+                        cert_info[key.strip().lower()] = val.strip()
+
+    return {
+        "acme_available": acme_available,
+        "certificate_exists": cert_exists,
+        "domain": fqdn,
+        "cert_info": cert_info,
+    }
+
+
+@app.post("/acme/issue", dependencies=[Depends(require_jwt)])
+async def acme_issue(req: AcmeIssueRequest, background_tasks: BackgroundTasks):
+    """Request ACME certificate from Let's Encrypt"""
+    def do_issue():
+        cmd = ["/usr/sbin/mailserverctl", "acme", "issue"]
+        if req.email:
+            cmd.append(req.email)
+        subprocess.run(cmd,
+                      stdout=open("/var/log/mail-acme.log", "w"),
+                      stderr=subprocess.STDOUT)
+    background_tasks.add_task(do_issue)
+    return {"success": True, "message": "ACME certificate request started",
+            "log": "/var/log/mail-acme.log"}
+
+
+@app.post("/acme/renew", dependencies=[Depends(require_jwt)])
+async def acme_renew(background_tasks: BackgroundTasks):
+    """Renew ACME certificate"""
+    def do_renew():
+        subprocess.run(["/usr/sbin/mailserverctl", "acme", "renew"],
+                      stdout=open("/var/log/mail-acme.log", "w"),
+                      stderr=subprocess.STDOUT)
+    background_tasks.add_task(do_renew)
+    return {"success": True, "message": "ACME renewal started"}
+
+
+@app.post("/acme/install", dependencies=[Depends(require_jwt)])
+async def acme_install():
+    """Install ACME certificate to mail server"""
+    success, out, err = run_cmd(["/usr/sbin/mailserverctl", "acme", "install"])
+    if success:
+        return {"success": True, "message": "Certificate installed"}
+    raise HTTPException(500, f"Failed: {err}")
 
 
 # =============================================================================

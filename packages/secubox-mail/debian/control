@@ -7,17 +7,19 @@ Standards-Version: 4.6.2
 
 Package: secubox-mail
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0.0)
-Recommends: secubox-mail-lxc, secubox-webmail-lxc
+Depends: ${misc:Depends}, secubox-core (>= 1.0.0), lxc, debootstrap, openssl
+Suggests: acme.sh
 Description: SecuBox Mail Module
  Complete email server management API and dashboard.
- Integrates mail server (Postfix/Dovecot) and webmail (Roundcube).
+ Postfix/Dovecot mail server and Roundcube webmail in Debian LXC containers.
  .
  Features:
   - User/alias management via mailctl
-  - DKIM/SPF configuration
+  - DKIM/SPF/DMARC configuration
+  - ACME certificate automation (Let's Encrypt)
   - Service monitoring
   - Webmail integration (Roundcube in LXC)
   - Three-fold architecture (components, status, access)
  .
- For containerized deployment, install secubox-mail-lxc and secubox-webmail-lxc.
+ For Let's Encrypt certificates, install acme.sh:
+   curl https://get.acme.sh | sh
