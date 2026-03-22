@@ -10,14 +10,16 @@ SecuBox is an appliance and network model - distributed peer applications.
 import subprocess
 import os
 import json
+import uuid
 from pathlib import Path
 from typing import Optional, List, Dict, Any
-from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks
+from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, Request
+from fastapi.responses import Response
 from pydantic import BaseModel
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
 
-app = FastAPI(title="SecuBox Mail", version="1.5.0")
+app = FastAPI(title="SecuBox Mail", version="1.6.0")
 config = get_config("mail")
 
 DATA_PATH = Path(config.get("data_path", "/srv/mail"))
@@ -204,6 +206,225 @@ async def get_access():
             "apple": f"https://{fqdn}/{DOMAIN}.mobileconfig",
         }
     }
+
+
+# =============================================================================
+# AUTODISCOVER - Email client auto-configuration
+# =============================================================================
+
+@app.get("/mail/config-v1.1.xml")
+@app.get("/autoconfig/mail/config-v1.1.xml")
+async def thunderbird_autoconfig():
+    """Mozilla Thunderbird/Evolution autoconfig (RFC 6186 style)"""
+    fqdn = f"{HOSTNAME}.{DOMAIN}"
+    ssl_enabled = (DATA_PATH / "ssl" / "fullchain.pem").exists()
+
+    xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<clientConfig version="1.1">
+  <emailProvider id="{DOMAIN}">
+    <domain>{DOMAIN}</domain>
+    <displayName>{DOMAIN} Mail</displayName>
+    <displayShortName>{DOMAIN}</displayShortName>
+
+    <incomingServer type="imap">
+      <hostname>{fqdn}</hostname>
+      <port>993</port>
+      <socketType>SSL</socketType>
+      <authentication>password-cleartext</authentication>
+      <username>%EMAILADDRESS%</username>
+    </incomingServer>
+
+    <incomingServer type="imap">
+      <hostname>{fqdn}</hostname>
+      <port>143</port>
+      <socketType>STARTTLS</socketType>
+      <authentication>password-cleartext</authentication>
+      <username>%EMAILADDRESS%</username>
+    </incomingServer>
+
+    <incomingServer type="pop3">
+      <hostname>{fqdn}</hostname>
+      <port>995</port>
+      <socketType>SSL</socketType>
+      <authentication>password-cleartext</authentication>
+      <username>%EMAILADDRESS%</username>
+    </incomingServer>
+
+    <outgoingServer type="smtp">
+      <hostname>{fqdn}</hostname>
+      <port>587</port>
+      <socketType>STARTTLS</socketType>
+      <authentication>password-cleartext</authentication>
+      <username>%EMAILADDRESS%</username>
+    </outgoingServer>
+
+    <outgoingServer type="smtp">
+      <hostname>{fqdn}</hostname>
+      <port>465</port>
+      <socketType>SSL</socketType>
+      <authentication>password-cleartext</authentication>
+      <username>%EMAILADDRESS%</username>
+    </outgoingServer>
+
+    <documentation url="https://webmail.{DOMAIN}">
+      <descr lang="en">Webmail access</descr>
+    </documentation>
+  </emailProvider>
+</clientConfig>"""
+
+    return Response(content=xml, media_type="application/xml")
+
+
+@app.get("/autodiscover/autodiscover.xml")
+@app.post("/autodiscover/autodiscover.xml")
+@app.post("/Autodiscover/Autodiscover.xml")
+async def outlook_autodiscover(request: Request):
+    """Microsoft Outlook/ActiveSync autodiscover"""
+    fqdn = f"{HOSTNAME}.{DOMAIN}"
+
+    # Try to extract email from POST request body
+    email = ""
+    if request.method == "POST":
+        try:
+            body = await request.body()
+            body_str = body.decode("utf-8")
+            # Extract email from XML: <EMailAddress>user@domain</EMailAddress>
+            import re
+            match = re.search(r"<EMailAddress>([^<]+)</EMailAddress>", body_str)
+            if match:
+                email = match.group(1)
+        except Exception:
+            pass
+
+    xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<Autodiscover xmlns="http://schemas.microsoft.com/exchange/autodiscover/responseschema/2006">
+  <Response xmlns="http://schemas.microsoft.com/exchange/autodiscover/outlook/responseschema/2006a">
+    <Account>
+      <AccountType>email</AccountType>
+      <Action>settings</Action>
+      <Protocol>
+        <Type>IMAP</Type>
+        <Server>{fqdn}</Server>
+        <Port>993</Port>
+        <SSL>on</SSL>
+        <SPA>off</SPA>
+        <AuthRequired>on</AuthRequired>
+        <LoginName>{email if email else "%EMAILADDRESS%"}</LoginName>
+      </Protocol>
+      <Protocol>
+        <Type>SMTP</Type>
+        <Server>{fqdn}</Server>
+        <Port>587</Port>
+        <SSL>on</SSL>
+        <Encryption>TLS</Encryption>
+        <SPA>off</SPA>
+        <AuthRequired>on</AuthRequired>
+        <LoginName>{email if email else "%EMAILADDRESS%"}</LoginName>
+      </Protocol>
+    </Account>
+  </Response>
+</Autodiscover>"""
+
+    return Response(content=xml, media_type="application/xml")
+
+
+@app.get("/{domain}.mobileconfig")
+async def apple_mobileconfig(domain: str):
+    """Apple iOS/macOS mail configuration profile"""
+    if domain != DOMAIN:
+        raise HTTPException(404, "Domain not found")
+
+    fqdn = f"{HOSTNAME}.{DOMAIN}"
+    profile_uuid = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"mail.{DOMAIN}"))
+    payload_uuid = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"mail.payload.{DOMAIN}"))
+
+    plist = f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>PayloadContent</key>
+    <array>
+        <dict>
+            <key>EmailAccountDescription</key>
+            <string>{DOMAIN} Mail</string>
+            <key>EmailAccountName</key>
+            <string>{DOMAIN}</string>
+            <key>EmailAccountType</key>
+            <string>EmailTypeIMAP</string>
+            <key>EmailAddress</key>
+            <string></string>
+            <key>IncomingMailServerAuthentication</key>
+            <string>EmailAuthPassword</string>
+            <key>IncomingMailServerHostName</key>
+            <string>{fqdn}</string>
+            <key>IncomingMailServerPortNumber</key>
+            <integer>993</integer>
+            <key>IncomingMailServerUseSSL</key>
+            <true/>
+            <key>IncomingMailServerUsername</key>
+            <string></string>
+            <key>OutgoingMailServerAuthentication</key>
+            <string>EmailAuthPassword</string>
+            <key>OutgoingMailServerHostName</key>
+            <string>{fqdn}</string>
+            <key>OutgoingMailServerPortNumber</key>
+            <integer>587</integer>
+            <key>OutgoingMailServerUseSSL</key>
+            <true/>
+            <key>OutgoingMailServerUsername</key>
+            <string></string>
+            <key>OutgoingPasswordSameAsIncomingPassword</key>
+            <true/>
+            <key>PayloadDescription</key>
+            <string>Configures email for {DOMAIN}</string>
+            <key>PayloadDisplayName</key>
+            <string>{DOMAIN} Email</string>
+            <key>PayloadIdentifier</key>
+            <string>com.secubox.mail.{DOMAIN}</string>
+            <key>PayloadType</key>
+            <string>com.apple.mail.managed</string>
+            <key>PayloadUUID</key>
+            <string>{payload_uuid}</string>
+            <key>PayloadVersion</key>
+            <integer>1</integer>
+            <key>PreventAppSheet</key>
+            <false/>
+            <key>PreventMove</key>
+            <false/>
+            <key>SMIMEEnabled</key>
+            <false/>
+        </dict>
+    </array>
+    <key>PayloadDescription</key>
+    <string>Email configuration for {DOMAIN}</string>
+    <key>PayloadDisplayName</key>
+    <string>{DOMAIN} Mail Settings</string>
+    <key>PayloadIdentifier</key>
+    <string>com.secubox.mailconfig.{DOMAIN}</string>
+    <key>PayloadOrganization</key>
+    <string>SecuBox</string>
+    <key>PayloadRemovalDisallowed</key>
+    <false/>
+    <key>PayloadType</key>
+    <string>Configuration</string>
+    <key>PayloadUUID</key>
+    <string>{profile_uuid}</string>
+    <key>PayloadVersion</key>
+    <integer>1</integer>
+</dict>
+</plist>"""
+
+    return Response(
+        content=plist,
+        media_type="application/x-apple-aspen-config",
+        headers={"Content-Disposition": f'attachment; filename="{DOMAIN}.mobileconfig"'}
+    )
+
+
+@app.get("/.well-known/autoconfig/mail/config-v1.1.xml")
+async def wellknown_autoconfig():
+    """Well-known autoconfig location"""
+    return await thunderbird_autoconfig()
 
 
 # =============================================================================

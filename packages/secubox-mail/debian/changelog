@@ -1,3 +1,14 @@
+secubox-mail (1.7.0-1~bookworm1) bookworm; urgency=medium
+
+  * Add email client autodiscover endpoints
+  * Thunderbird/Evolution: /mail/config-v1.1.xml (Mozilla autoconfig)
+  * Outlook: /autodiscover/autodiscover.xml (Microsoft format)
+  * Apple iOS/macOS: /{domain}.mobileconfig (configuration profile)
+  * Well-known autoconfig: /.well-known/autoconfig/mail/config-v1.1.xml
+  * All endpoints public for email client access
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Mar 2026 15:30:00 +0100
+
 secubox-mail (1.6.0-1~bookworm1) bookworm; urgency=medium
 
   * Full OpenDKIM integration with Postfix
