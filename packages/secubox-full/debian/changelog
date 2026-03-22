@@ -5,7 +5,7 @@ secubox-full (1.0.3-1~bookworm1) bookworm; urgency=medium
   * Make dashboard endpoints public (no auth for read-only)
   * Fix security endpoint error handling
 
- -- SecuBox Team <dev@secubox.gondwana.systems>  Sat, 21 Mar 2026 08:12:37 +0100
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 21 Mar 2026 08:12:37 +0100
 
 secubox-full (1.0.2-1~bookworm1) bookworm; urgency=medium
 
@@ -13,10 +13,10 @@ secubox-full (1.0.2-1~bookworm1) bookworm; urgency=medium
   * Only secubox-core manages /run/secubox directory
   * Fix secubox-core.service install path (use /usr/lib/systemd/system)
 
- -- SecuBox Team <dev@secubox.gondwana.systems>  Sat, 21 Mar 2026 08:06:00 +0100
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 21 Mar 2026 08:06:00 +0100
 
 secubox-full (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial release — metapackage for full SecuBox installation.
 
- -- Gandalf / CyberMind <gk@cybermind.fr>  Thu, 20 Mar 2026 12:00:00 +0100
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 20 Mar 2026 12:00:00 +0100

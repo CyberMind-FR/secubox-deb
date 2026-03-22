@@ -1,7 +1,7 @@
 Source: secubox-full
 Section: metapackages
 Priority: optional
-Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.6.2
 Homepage: https://secubox.gondwana.systems

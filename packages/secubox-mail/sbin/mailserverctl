@@ -1,11 +1,12 @@
 #!/bin/bash
 # SecuBox Mail Server LXC Controller
-# Postfix + Dovecot in Alpine LXC
+# Postfix + Dovecot in Debian LXC
 
-VERSION="2.0.0"
+VERSION="2.1.0"
 CONFIG_FILE="/etc/secubox/mail.toml"
 CONTAINER="mailserver"
-LXC_PATH="/srv/lxc/mailserver"
+LXC_BASE="/srv/lxc"
+LXC_PATH="$LXC_BASE/mailserver"
 DATA_PATH="/srv/mail"
 
 RED='\033[0;31m'
@@ -24,13 +25,12 @@ config_get() {
 
 DOMAIN=$(config_get "domain" "secubox.local")
 HOSTNAME=$(config_get "hostname" "mail")
-MAIL_IP=$(config_get "mail_ip" "192.168.255.30")
 
 require_root() {
     [ "$(id -u)" -eq 0 ] || { error "Root required"; exit 1; }
 }
 
-lxc_running() { lxc-info -n "$CONTAINER" 2>/dev/null | grep -q "State:.*RUNNING"; }
+lxc_running() { lxc-info -n "$CONTAINER" -P "$LXC_BASE" 2>/dev/null | grep -q "State:.*RUNNING"; }
 lxc_exists() { [ -d "$LXC_PATH/rootfs" ]; }
 
 # ============================================================================
@@ -42,14 +42,10 @@ create_lxc_config() {
     cat > "$LXC_PATH/config" << EOF
 lxc.uts.name = mailserver
 lxc.rootfs.path = dir:${LXC_PATH}/rootfs
-lxc.net.0.type = veth
-lxc.net.0.link = br0
-lxc.net.0.flags = up
-lxc.net.0.ipv4.address = ${MAIL_IP}/24
-lxc.net.0.ipv4.gateway = auto
+lxc.net.0.type = none
 lxc.mount.auto = proc:mixed sys:ro cgroup:mixed
 lxc.cap.drop = sys_module mac_admin mac_override sys_time
-lxc.tty.max = 0
+lxc.tty.max = 4
 lxc.pty.max = 256
 lxc.cgroup2.memory.max = 512M
 lxc.init.cmd = /opt/start-mail.sh
@@ -63,95 +59,85 @@ EOF
 create_startup_script() {
     mkdir -p "$LXC_PATH/rootfs/opt"
     cat > "$LXC_PATH/rootfs/opt/start-mail.sh" << 'EOF'
-#!/bin/sh
-# Mailserver startup
+#!/bin/bash
+# Mailserver startup (Debian)
 
-# Fix dovecot permissions
-addgroup dovenull dovecot 2>/dev/null || true
-mkdir -p /run/dovecot /run/dovecot/login /run/dovecot/token-login
+# Fix permissions
+mkdir -p /run/dovecot /run/dovecot/login /var/spool/postfix/private
 chown -R dovecot:dovecot /run/dovecot
-chown root:dovenull /run/dovecot/login /run/dovecot/token-login
-chmod 755 /run/dovecot
-chmod 750 /run/dovecot/login /run/dovecot/token-login
-rm -f /run/dovecot/auth-token-secret.dat
 
 # Ensure users file readable
 [ -f /etc/dovecot/users ] && chmod 644 /etc/dovecot/users
 
-# Start services
-/usr/sbin/rsyslogd 2>/dev/null || true
-sleep 1
-/usr/sbin/postfix start
-/usr/sbin/dovecot
+# Start rsyslog for logging
+service rsyslog start 2>/dev/null || true
 
-echo "Mail services started"
-exec tail -f /var/log/mail.log /var/log/messages 2>/dev/null || exec sleep infinity
+# Start Postfix
+service postfix start
+
+# Start Dovecot
+service dovecot start
+
+echo "Mail services started: Postfix + Dovecot"
+exec tail -f /var/log/mail.log 2>/dev/null || exec sleep infinity
 EOF
     chmod +x "$LXC_PATH/rootfs/opt/start-mail.sh"
 }
 
 # ============================================================================
-# Alpine Bootstrap
+# Debian Bootstrap
 # ============================================================================
 
-bootstrap_alpine() {
+bootstrap_debian() {
     require_root
-    log "Bootstrapping Alpine Linux..."
+    log "Bootstrapping Debian bookworm..."
 
     mkdir -p "$LXC_PATH"
-    cd "$LXC_PATH"
 
-    # Download apk-tools-static
-    if [ ! -f sbin/apk.static ]; then
-        log "Downloading apk-tools-static..."
-        local arch=$(uname -m)
-        [ "$arch" = "x86_64" ] && arch="x86_64"
-        [ "$arch" = "aarch64" ] && arch="aarch64"
-        curl -L -o apk-tools-static.apk \
-            "https://dl-cdn.alpinelinux.org/alpine/v3.21/main/${arch}/apk-tools-static-2.14.6-r3.apk"
-        tar -xzf apk-tools-static.apk sbin/apk.static
-        rm -f apk-tools-static.apk
+    if ! command -v debootstrap &>/dev/null; then
+        error "debootstrap not installed. Run: apt install debootstrap"
+        exit 1
     fi
 
-    log "Installing base system..."
-    ./sbin/apk.static -X https://dl-cdn.alpinelinux.org/alpine/v3.21/main \
-        -U --allow-untrusted --root rootfs --initdb add \
-        alpine-base alpine-baselayout busybox musl openrc
+    log "Running debootstrap (this takes a few minutes)..."
+    debootstrap --variant=minbase bookworm "$LXC_PATH/rootfs" http://deb.debian.org/debian
 
-    mkdir -p rootfs/etc/apk
-    cat > rootfs/etc/apk/repositories << 'EOF'
-https://dl-cdn.alpinelinux.org/alpine/v3.21/main
-https://dl-cdn.alpinelinux.org/alpine/v3.21/community
-EOF
+    # Configure basic system
+    echo "mailserver" > "$LXC_PATH/rootfs/etc/hostname"
 
-    cat > rootfs/etc/resolv.conf << 'EOF'
+    cat > "$LXC_PATH/rootfs/etc/resolv.conf" << 'EOF'
 nameserver 8.8.8.8
 nameserver 1.1.1.1
 EOF
 
-    echo "mailserver" > rootfs/etc/hostname
-    log "Base system installed"
+    log "Debian base system installed"
 }
 
 install_mail_packages() {
     require_root
-
-    if ! lxc_running; then
-        log "Starting container for package installation..."
-        lxc-start -n "$CONTAINER" -d
-        sleep 5
-    fi
+    local rootfs="$LXC_PATH/rootfs"
 
     log "Installing mail packages..."
-    lxc-attach -n "$CONTAINER" -- apk update
-    lxc-attach -n "$CONTAINER" -- apk add --no-cache \
-        postfix postfix-pcre \
-        dovecot dovecot-lmtpd dovecot-pop3d \
-        ca-certificates openssl rsyslog
 
-    # Create vmail user
-    lxc-attach -n "$CONTAINER" -- addgroup -g 5000 vmail 2>/dev/null || true
-    lxc-attach -n "$CONTAINER" -- adduser -D -H -u 5000 -G vmail -s /sbin/nologin vmail 2>/dev/null || true
+    # Install via chroot
+    chroot "$rootfs" /bin/bash << 'CHROOT_EOF'
+export DEBIAN_FRONTEND=noninteractive
+
+# Update and install packages
+apt-get update
+apt-get install -y --no-install-recommends \
+    postfix postfix-lmdb \
+    dovecot-core dovecot-imapd dovecot-pop3d dovecot-lmtpd \
+    rsyslog ca-certificates openssl
+
+# Create vmail user
+groupadd -g 5000 vmail 2>/dev/null || true
+useradd -u 5000 -g vmail -s /usr/sbin/nologin -d /var/mail -M vmail 2>/dev/null || true
+
+# Clean up
+apt-get clean
+rm -rf /var/lib/apt/lists/*
+CHROOT_EOF
 
     log "Packages installed"
 }
@@ -208,39 +194,39 @@ inet_protocols = ipv4
 EOF
 
     cat > "$rootfs/etc/postfix/master.cf" << 'EOF'
-smtp      inet  n       -       n       -       -       smtpd
-submission inet n       -       n       -       -       smtpd
+smtp      inet  n       -       y       -       -       smtpd
+submission inet n       -       y       -       -       smtpd
   -o syslog_name=postfix/submission
   -o smtpd_tls_security_level=encrypt
   -o smtpd_sasl_auth_enable=yes
   -o smtpd_recipient_restrictions=permit_sasl_authenticated,reject
-smtps     inet  n       -       n       -       -       smtpd
+smtps     inet  n       -       y       -       -       smtpd
   -o syslog_name=postfix/smtps
   -o smtpd_tls_wrappermode=yes
   -o smtpd_sasl_auth_enable=yes
   -o smtpd_recipient_restrictions=permit_sasl_authenticated,reject
-pickup    unix  n       -       n       60      1       pickup
-cleanup   unix  n       -       n       -       0       cleanup
+pickup    unix  n       -       y       60      1       pickup
+cleanup   unix  n       -       y       -       0       cleanup
 qmgr      unix  n       -       n       300     1       qmgr
-tlsmgr    unix  -       -       n       1000?   1       tlsmgr
-rewrite   unix  -       -       n       -       -       trivial-rewrite
-bounce    unix  -       -       n       -       0       bounce
-defer     unix  -       -       n       -       0       bounce
-trace     unix  -       -       n       -       0       bounce
-verify    unix  -       -       n       -       1       verify
-flush     unix  n       -       n       1000?   0       flush
+tlsmgr    unix  -       -       y       1000?   1       tlsmgr
+rewrite   unix  -       -       y       -       -       trivial-rewrite
+bounce    unix  -       -       y       -       0       bounce
+defer     unix  -       -       y       -       0       bounce
+trace     unix  -       -       y       -       0       bounce
+verify    unix  -       -       y       -       1       verify
+flush     unix  n       -       y       1000?   0       flush
 proxymap  unix  -       -       n       -       -       proxymap
-smtp      unix  -       -       n       -       -       smtp
-relay     unix  -       -       n       -       -       smtp
-showq     unix  n       -       n       -       -       showq
-error     unix  -       -       n       -       -       error
-retry     unix  -       -       n       -       -       error
-discard   unix  -       -       n       -       -       discard
+smtp      unix  -       -       y       -       -       smtp
+relay     unix  -       -       y       -       -       smtp
+showq     unix  n       -       y       -       -       showq
+error     unix  -       -       y       -       -       error
+retry     unix  -       -       y       -       -       error
+discard   unix  -       -       y       -       -       discard
 local     unix  -       n       n       -       -       local
 virtual   unix  -       n       n       -       -       virtual
-lmtp      unix  -       -       n       -       -       lmtp
-anvil     unix  -       -       n       -       1       anvil
-scache    unix  -       -       n       -       1       scache
+lmtp      unix  -       -       y       -       -       lmtp
+anvil     unix  -       -       y       -       1       anvil
+scache    unix  -       -       y       -       1       scache
 EOF
 
     # Create empty maps
@@ -276,20 +262,28 @@ userdb {
   args = uid=5000 gid=5000 home=/var/mail/%d/%n
 }
 
-# SSL
-ssl = yes
-ssl_cert = </etc/ssl/mail/fullchain.pem
-ssl_key = </etc/ssl/mail/privkey.pem
+# SSL disabled by default (use reverse proxy for TLS)
+ssl = no
 
 # Services
 service imap-login {
-  inet_listener imap { port = 143 }
-  inet_listener imaps { port = 993; ssl = yes }
+  inet_listener imap {
+    port = 143
+  }
+  inet_listener imaps {
+    port = 993
+    ssl = yes
+  }
 }
 
 service pop3-login {
-  inet_listener pop3 { port = 110 }
-  inet_listener pop3s { port = 995; ssl = yes }
+  inet_listener pop3 {
+    port = 110
+  }
+  inet_listener pop3s {
+    port = 995
+    ssl = yes
+  }
 }
 
 service lmtp {
@@ -314,7 +308,7 @@ namespace inbox {
 }
 
 log_path = /var/log/dovecot.log
-info_log_path = /var/log/dovecot-info.log
+info_log_path = /var/log/dovecot.log
 EOF
 
     # Create empty users file
@@ -345,37 +339,44 @@ generate_ssl_cert() {
 
 cmd_install() {
     require_root
-    log "Installing Mail Server LXC..."
+    log "Installing Mail Server LXC (Debian bookworm)..."
 
-    mkdir -p "$DATA_PATH"/{mail,config,ssl}
+    # Create data directories
+    mkdir -p "$DATA_PATH"/{mail,config,ssl,dkim,backups}
+    touch "$DATA_PATH/config/users"
+    touch "$DATA_PATH/config/vmailbox"
+    touch "$DATA_PATH/config/virtual"
+    chmod 644 "$DATA_PATH/config/users"
 
     if ! lxc_exists; then
-        bootstrap_alpine
+        bootstrap_debian
     fi
 
-    create_lxc_config
-    create_startup_script
-
-    # Start for package installation
-    lxc-start -n "$CONTAINER" -d
-    sleep 5
-
-    if lxc_running; then
-        install_mail_packages
-        lxc-stop -n "$CONTAINER"
-    fi
-
+    install_mail_packages
     configure_postfix
     configure_dovecot
+    create_lxc_config
+    create_startup_script
 
     # Generate self-signed cert if none exists
     [ ! -f "$DATA_PATH/ssl/fullchain.pem" ] && generate_ssl_cert
 
-    # Create directories
+    # Create directories in container
     mkdir -p "$LXC_PATH/rootfs/var/mail"
     mkdir -p "$LXC_PATH/rootfs/var/spool/postfix/private"
+    mkdir -p "$LXC_PATH/rootfs/etc/ssl/mail"
+    mkdir -p "$LXC_PATH/rootfs/etc/dovecot"
+    mkdir -p "$LXC_PATH/rootfs/etc/postfix"
+
+    # Copy initial config files
+    cp "$DATA_PATH/config/users" "$LXC_PATH/rootfs/etc/dovecot/users"
+    cp "$DATA_PATH/config/vmailbox" "$LXC_PATH/rootfs/etc/postfix/vmailbox"
+    cp "$DATA_PATH/config/virtual" "$LXC_PATH/rootfs/etc/postfix/virtual"
+    cp "$DATA_PATH/ssl/"*.pem "$LXC_PATH/rootfs/etc/ssl/mail/" 2>/dev/null || true
 
     log "Mail Server installed!"
+    log "Start with: mailserverctl start"
+    log "Add users with: mailctl user add user@$DOMAIN"
 }
 
 cmd_start() {
@@ -394,11 +395,11 @@ cmd_start() {
     create_lxc_config
 
     log "Starting Mail Server..."
-    lxc-start -n "$CONTAINER" -d
+    lxc-start -n "$CONTAINER" -P "$LXC_BASE" -d
     sleep 5
 
     if lxc_running; then
-        log "Mail server started at $MAIL_IP"
+        log "Mail server started"
     else
         error "Failed to start"
         return 1
@@ -414,7 +415,7 @@ cmd_stop() {
     fi
 
     log "Stopping Mail Server..."
-    lxc-stop -n "$CONTAINER"
+    lxc-stop -n "$CONTAINER" -P "$LXC_BASE"
     log "Stopped"
 }
 
@@ -430,10 +431,12 @@ cmd_status() {
     echo "========================="
     echo ""
     echo "Container: $CONTAINER"
+    echo "Base OS: Debian bookworm"
 
     if lxc_running; then
         echo -e "Status: ${GREEN}Running${NC}"
-        echo "IP: $MAIL_IP"
+        echo "Domain: $DOMAIN"
+        echo "Hostname: $HOSTNAME.$DOMAIN"
     elif lxc_exists; then
         echo -e "Status: ${YELLOW}Stopped${NC}"
     else
@@ -446,33 +449,174 @@ cmd_shell() {
         error "Container not running"
         return 1
     fi
-    lxc-attach -n "$CONTAINER" -- /bin/sh
+    lxc-attach -n "$CONTAINER" -P "$LXC_BASE" -- /bin/bash
+}
+
+cmd_sync() {
+    require_root
+    log "Syncing configuration to container..."
+
+    if [ ! -d "$LXC_PATH/rootfs" ]; then
+        error "Container not installed"
+        return 1
+    fi
+
+    # Sync user files
+    cp "$DATA_PATH/config/users" "$LXC_PATH/rootfs/etc/dovecot/users"
+    cp "$DATA_PATH/config/vmailbox" "$LXC_PATH/rootfs/etc/postfix/vmailbox"
+    cp "$DATA_PATH/config/virtual" "$LXC_PATH/rootfs/etc/postfix/virtual"
+    chmod 644 "$LXC_PATH/rootfs/etc/dovecot/users"
+
+    # Sync SSL if exists
+    cp "$DATA_PATH/ssl/"*.pem "$LXC_PATH/rootfs/etc/ssl/mail/" 2>/dev/null || true
+
+    # Rebuild postmap if running
+    if lxc_running; then
+        lxc-attach -n "$CONTAINER" -P "$LXC_BASE" -- postmap lmdb:/etc/postfix/vmailbox 2>/dev/null || true
+        lxc-attach -n "$CONTAINER" -P "$LXC_BASE" -- postmap lmdb:/etc/postfix/virtual 2>/dev/null || true
+        lxc-attach -n "$CONTAINER" -P "$LXC_BASE" -- postfix reload 2>/dev/null || true
+    fi
+
+    log "Configuration synced"
+}
+
+cmd_dkim() {
+    require_root
+    log "Generating DKIM keys for $DOMAIN..."
+
+    mkdir -p "$DATA_PATH/dkim"
+
+    # Generate key pair
+    openssl genrsa -out "$DATA_PATH/dkim/default.private" 2048 2>/dev/null
+    openssl rsa -in "$DATA_PATH/dkim/default.private" -pubout -out "$DATA_PATH/dkim/default.pub" 2>/dev/null
+
+    # Extract public key for DNS
+    local pubkey=$(grep -v "^-" "$DATA_PATH/dkim/default.pub" | tr -d '\n')
+
+    # Save DNS record
+    cat > "$DATA_PATH/dkim/default.txt" << EOF
+default._domainkey.$DOMAIN. IN TXT "v=DKIM1; k=rsa; p=$pubkey"
+EOF
+
+    log "DKIM key generated"
+    log "Add this TXT record to DNS:"
+    echo ""
+    cat "$DATA_PATH/dkim/default.txt"
+    echo ""
+}
+
+cmd_logs() {
+    local lines="${1:-50}"
+    if ! lxc_running; then
+        error "Container not running"
+        return 1
+    fi
+    lxc-attach -n "$CONTAINER" -P "$LXC_BASE" -- tail -n "$lines" /var/log/mail.log 2>/dev/null || \
+        lxc-attach -n "$CONTAINER" -P "$LXC_BASE" -- tail -n "$lines" /var/log/syslog
+}
+
+# ============================================================================
+# THREE-FOLD ARCHITECTURE
+# ============================================================================
+
+cmd_components() {
+    local installed=false
+    local running=false
+    lxc_exists && installed=true
+    lxc_running && running=true
+
+    cat <<EOF
+{
+  "components": [
+    {
+      "name": "Mail Server",
+      "type": "lxc",
+      "container": "$CONTAINER",
+      "description": "Postfix + Dovecot mail server",
+      "os": "debian-bookworm",
+      "installed": $installed,
+      "running": $running
+    },
+    {
+      "name": "Postfix",
+      "type": "service",
+      "description": "SMTP server (MTA)",
+      "ports": [25, 465, 587],
+      "parent": "$CONTAINER"
+    },
+    {
+      "name": "Dovecot",
+      "type": "service",
+      "description": "IMAP/POP3 server (MDA)",
+      "ports": [143, 993, 110, 995],
+      "parent": "$CONTAINER"
+    }
+  ]
+}
+EOF
+}
+
+cmd_access() {
+    local running=false
+    lxc_running && running=true
+
+    cat <<EOF
+{
+  "smtp": {
+    "host": "$HOSTNAME.$DOMAIN",
+    "ports": {"smtp": 25, "submission": 587, "smtps": 465}
+  },
+  "imap": {
+    "host": "$HOSTNAME.$DOMAIN",
+    "ports": {"imap": 143, "imaps": 993}
+  },
+  "pop3": {
+    "host": "$HOSTNAME.$DOMAIN",
+    "ports": {"pop3": 110, "pop3s": 995}
+  },
+  "running": $running
+}
+EOF
 }
 
 show_help() {
     cat << EOF
 Mail Server LXC Controller v$VERSION
+Debian bookworm based container
+Three-fold architecture: Components, Status, Access
 
 Usage: mailserverctl <command>
 
 Commands:
-  install     Install LXC container
+  install     Install LXC container (Debian)
   start       Start mail server
   stop        Stop mail server
   restart     Restart
   status      Show status
   shell       Open shell in container
+  sync        Sync config files to container
+  dkim        Generate DKIM keys
+  logs [n]    View last n lines of mail.log
+
+Three-fold:
+  components  List system components (JSON)
+  access      Show connection info (JSON)
 
 EOF
 }
 
 case "${1:-}" in
-    install)  shift; cmd_install "$@" ;;
-    start)    shift; cmd_start "$@" ;;
-    stop)     shift; cmd_stop "$@" ;;
-    restart)  shift; cmd_restart "$@" ;;
-    status)   shift; cmd_status "$@" ;;
-    shell)    shift; cmd_shell "$@" ;;
+    install)    shift; cmd_install "$@" ;;
+    start)      shift; cmd_start "$@" ;;
+    stop)       shift; cmd_stop "$@" ;;
+    restart)    shift; cmd_restart "$@" ;;
+    status)     shift; cmd_status "$@" ;;
+    shell)      shift; cmd_shell "$@" ;;
+    sync)       shift; cmd_sync "$@" ;;
+    dkim)       shift; cmd_dkim "$@" ;;
+    logs)       shift; cmd_logs "$@" ;;
+    components) cmd_components ;;
+    access)     cmd_access ;;
     help|--help|-h|'') show_help ;;
-    *)        error "Unknown: $1"; exit 1 ;;
+    *)          error "Unknown: $1"; exit 1 ;;
 esac

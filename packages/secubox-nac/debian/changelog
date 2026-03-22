@@ -3,7 +3,7 @@ secubox-nac (1.0.4-1~bookworm1) bookworm; urgency=medium
   * Add dynamic menu system with menu.d JSON definitions
   * Menu items auto-registered when package installed
 
- -- SecuBox Team <dev@secubox.gondwana.systems>  Sat, 21 Mar 2026 16:36:21 +0100
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 21 Mar 2026 16:36:21 +0100
 
 secubox-nac (1.0.3-1~bookworm1) bookworm; urgency=medium
 
@@ -12,7 +12,7 @@ secubox-nac (1.0.3-1~bookworm1) bookworm; urgency=medium
   * Make dashboard endpoints public (no auth for read-only)
   * Fix security endpoint error handling
 
- -- SecuBox Team <dev@secubox.gondwana.systems>  Sat, 21 Mar 2026 08:12:37 +0100
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 21 Mar 2026 08:12:37 +0100
 
 secubox-nac (1.0.2-1~bookworm1) bookworm; urgency=medium
 
@@ -20,11 +20,11 @@ secubox-nac (1.0.2-1~bookworm1) bookworm; urgency=medium
   * Only secubox-core manages /run/secubox directory
   * Fix secubox-core.service install path (use /usr/lib/systemd/system)
 
- -- SecuBox Team <dev@secubox.gondwana.systems>  Sat, 21 Mar 2026 08:06:00 +0100
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 21 Mar 2026 08:06:00 +0100
 
 secubox-nac (1.0.1-1~bookworm1) bookworm; urgency=medium
 
   * Initial release — migration depuis SecuBox OpenWrt.
   * Port de luci-app-client-guardian : backend FastAPI + frontend conservé.
 
- -- Gandalf / CyberMind <gk@cybermind.fr>  Sat, 21 Mar 2026 07:36:46 +0100
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 21 Mar 2026 07:36:46 +0100

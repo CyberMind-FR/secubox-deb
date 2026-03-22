@@ -1,8 +1,9 @@
 #!/bin/bash
 # SecuBox MetaBlogizer Controller
 # Static site publisher for Debian
+# Three-fold architecture: Components, Status, Access
 
-VERSION="1.0.0"
+VERSION="1.1.0"
 CONFIG_FILE="/etc/secubox/metablogizer.toml"
 SITES_ROOT="/srv/metablogizer/sites"
 DATA_PATH="/srv/metablogizer"
@@ -286,11 +287,98 @@ cmd_status() {
     echo ""
 }
 
+# ============================================================================
+# THREE-FOLD ARCHITECTURE: Components (What)
+# ============================================================================
+
+cmd_components() {
+    local site_count=0
+    local published_count=0
+    if [ -d "$SITES_ROOT" ]; then
+        site_count=$(find "$SITES_ROOT" -maxdepth 1 -type d 2>/dev/null | wc -l)
+        site_count=$((site_count - 1))
+        [ $site_count -lt 0 ] && site_count=0
+        for site_dir in "$SITES_ROOT"/*/; do
+            [ -d "$site_dir" ] || continue
+            local name=$(basename "$site_dir")
+            [ -L "$NGINX_ENABLED_DIR/${name}.conf" ] && published_count=$((published_count + 1))
+        done
+    fi
+
+    cat <<EOF
+{
+  "components": [
+    {
+      "name": "Site Publisher",
+      "type": "service",
+      "description": "Static site publishing engine",
+      "runtime": "$RUNTIME"
+    },
+    {
+      "name": "Sites",
+      "type": "content",
+      "path": "$SITES_ROOT",
+      "count": $site_count
+    },
+    {
+      "name": "Published Sites",
+      "type": "vhosts",
+      "count": $published_count
+    },
+    {
+      "name": "Templates",
+      "type": "templates",
+      "path": "$DATA_PATH/templates"
+    }
+  ]
+}
+EOF
+}
+
+# ============================================================================
+# THREE-FOLD ARCHITECTURE: Access (How to connect)
+# ============================================================================
+
+cmd_access() {
+    local sites_json="["
+    local first=true
+
+    if [ -d "$SITES_ROOT" ]; then
+        for site_dir in "$SITES_ROOT"/*/; do
+            [ -d "$site_dir" ] || continue
+            local name=$(basename "$site_dir")
+            local published=false
+            local domain=""
+            [ -L "$NGINX_ENABLED_DIR/${name}.conf" ] && published=true
+            [ -f "$site_dir/.domain" ] && domain=$(cat "$site_dir/.domain")
+
+            $first || sites_json+=","
+            first=false
+            sites_json+="{\"name\":\"$name\",\"published\":$published,\"domain\":\"$domain\"}"
+        done
+    fi
+    sites_json+="]"
+
+    cat <<EOF
+{
+  "sites_root": "$SITES_ROOT",
+  "admin_panel": "/metablogizer/",
+  "sites": $sites_json
+}
+EOF
+}
+
 show_help() {
     cat << EOF
 SecuBox MetaBlogizer v$VERSION
+Three-fold architecture: Components, Status, Access
 
 Usage: metablogizerctl <command> [options]
+
+Information (Three-fold):
+  components           List system components (JSON)
+  status               Show status
+  access               Show sites and access info (JSON)
 
 Sites:
   site create <name> [domain] [template]  Create new site
@@ -300,10 +388,10 @@ Sites:
   site list                                List all sites
 
 Service:
-  status                                   Show status
   migrate [host]                           Migrate from OpenWrt
 
 Examples:
+  metablogizerctl components            # JSON components
   metablogizerctl site create myblog blog.example.com
   metablogizerctl site publish myblog
   metablogizerctl migrate 192.168.255.1
@@ -318,6 +406,11 @@ EOF
 init_dirs
 
 case "${1:-}" in
+    # Three-fold architecture
+    components) cmd_components ;;
+    access)     cmd_access ;;
+    status)     shift; cmd_status "$@" ;;
+    # Sites
     site)
         shift
         case "$1" in
@@ -329,7 +422,6 @@ case "${1:-}" in
             *) echo "Usage: metablogizerctl site create|delete|publish|unpublish|list" ;;
         esac
         ;;
-    status) shift; cmd_status "$@" ;;
     migrate) shift; cmd_migrate "$@" ;;
     help|--help|-h|'') show_help ;;
     *) error "Unknown: $1"; exit 1 ;;

@@ -18,6 +18,9 @@
         .btn.primary { background: rgba(88,166,255,0.1); border-color: var(--primary); color: var(--primary); }
         .btn.success { background: rgba(63,185,80,0.1); border-color: var(--green); color: var(--green); }
         .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
+        .btn.warning { background: rgba(210,153,34,0.1); border-color: var(--yellow); color: var(--yellow); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-sm { padding: 4px 10px; font-size: 0.75rem; }
         .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
         .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
         .stat-card .value { font-size: 2rem; font-weight: bold; color: var(--mail); }
@@ -28,6 +31,7 @@
         .status-badge { display: inline-flex; align-items: center; gap: 0.5rem; padding: 4px 12px; border-radius: 12px; font-size: 0.8rem; }
         .status-badge.running { background: rgba(63,185,80,0.15); color: var(--green); }
         .status-badge.stopped { background: rgba(248,81,73,0.15); color: var(--red); }
+        .status-badge.installing { background: rgba(88,166,255,0.15); color: var(--primary); }
         table { width: 100%; border-collapse: collapse; }
         th, td { padding: 0.6rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.875rem; }
         th { color: var(--text-dim); font-size: 0.75rem; text-transform: uppercase; }
@@ -37,6 +41,7 @@
         .component-info { flex: 1; }
         .component-name { font-weight: bold; font-size: 0.9rem; }
         .component-detail { font-size: 0.75rem; color: var(--text-dim); }
+        .component-actions { display: flex; gap: 0.25rem; }
         .url-box { background: var(--bg-dark); padding: 0.75rem; border-radius: 6px; font-family: monospace; font-size: 0.85rem; margin-bottom: 0.5rem; }
         .url-label { font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; margin-bottom: 0.25rem; }
         .port-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.5rem; }
@@ -47,11 +52,12 @@
         .port-item.inactive .num { color: var(--red); }
         .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: center; justify-content: center; }
         .modal.show { display: flex; }
-        .modal-content { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; min-width: 400px; }
+        .modal-content { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; min-width: 450px; max-width: 90vw; }
         .modal-content h3 { margin-bottom: 1rem; }
         .form-group { margin-bottom: 1rem; }
         .form-group label { display: block; margin-bottom: 0.25rem; font-size: 0.8rem; color: var(--text-dim); }
-        .form-group input { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-dark); color: var(--text); }
+        .form-group input, .form-group select { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-dark); color: var(--text); }
+        .form-group small { font-size: 0.7rem; color: var(--text-dim); }
         .form-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
         .tabs { display: flex; gap: 0; margin-bottom: 1rem; border-bottom: 1px solid var(--border); }
         .tab { padding: 0.75rem 1rem; cursor: pointer; border-bottom: 2px solid transparent; color: var(--text-dim); }
@@ -59,6 +65,16 @@
         .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
+        .install-banner { background: linear-gradient(135deg, rgba(88,166,255,0.1), rgba(163,113,247,0.1)); border: 1px solid var(--primary); border-radius: 8px; padding: 2rem; text-align: center; margin-bottom: 1.5rem; }
+        .install-banner h2 { font-size: 1.25rem; margin-bottom: 0.5rem; }
+        .install-banner p { color: var(--text-dim); margin-bottom: 1rem; }
+        .install-progress { background: var(--bg-dark); border-radius: 4px; height: 8px; overflow: hidden; margin: 1rem 0; }
+        .install-progress-bar { height: 100%; background: var(--primary); transition: width 0.3s; }
+        .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+        .alert { padding: 0.75rem 1rem; border-radius: 6px; margin-bottom: 1rem; font-size: 0.85rem; }
+        .alert.info { background: rgba(88,166,255,0.1); border: 1px solid var(--primary); color: var(--primary); }
+        .alert.success { background: rgba(63,185,80,0.1); border: 1px solid var(--green); color: var(--green); }
+        .alert.warning { background: rgba(210,153,34,0.1); border: 1px solid var(--yellow); color: var(--yellow); }
     </style>
 </head>
 <body>
@@ -69,112 +85,198 @@
             <h1>📧 Mail</h1>
             <div>
                 <span class="status-badge" id="status-badge">Loading...</span>
+                <button class="btn primary" id="btn-install" onclick="showInstallModal()" style="display:none">Install</button>
                 <button class="btn success" id="btn-start" onclick="startServices()" style="display:none">Start</button>
                 <button class="btn danger" id="btn-stop" onclick="stopServices()" style="display:none">Stop</button>
                 <button class="btn" onclick="refresh()">Refresh</button>
             </div>
         </header>
 
-        <div class="stats-row">
-            <div class="stat-card"><div class="value" id="user-count">-</div><div class="label">Users</div></div>
-            <div class="stat-card"><div class="value" id="storage">-</div><div class="label">Storage</div></div>
-            <div class="stat-card"><div class="value" id="domain">-</div><div class="label">Domain</div></div>
-            <div class="stat-card"><div class="value" id="ssl-status">-</div><div class="label">SSL</div></div>
+        <!-- Install Banner (shown when not installed) -->
+        <div class="install-banner" id="install-banner" style="display:none">
+            <h2>Mail Server Not Installed</h2>
+            <p>Install Postfix + Dovecot mail server and Roundcube webmail in LXC containers.</p>
+            <button class="btn primary" onclick="showInstallModal()" style="font-size:1rem;padding:0.75rem 2rem">Install Mail Server</button>
         </div>
 
-        <!-- Components Section -->
-        <div class="grid-2">
-            <div class="card">
-                <h2>Components</h2>
-                <div class="component" id="comp-mail">
-                    <span class="component-icon">📬</span>
-                    <div class="component-info">
-                        <div class="component-name">Mail Server</div>
-                        <div class="component-detail">Postfix + Dovecot (LXC)</div>
-                    </div>
-                    <span class="status-badge stopped" id="mail-badge">Stopped</span>
-                </div>
-                <div class="component" id="comp-webmail">
-                    <span class="component-icon">🌐</span>
-                    <div class="component-info">
-                        <div class="component-name">Webmail</div>
-                        <div class="component-detail">Roundcube (LXC)</div>
-                    </div>
-                    <span class="status-badge stopped" id="webmail-badge">Stopped</span>
-                </div>
+        <!-- Main Content (hidden when not installed) -->
+        <div id="main-content">
+            <div class="stats-row">
+                <div class="stat-card"><div class="value" id="user-count">-</div><div class="label">Users</div></div>
+                <div class="stat-card"><div class="value" id="storage">-</div><div class="label">Storage</div></div>
+                <div class="stat-card"><div class="value" id="domain">-</div><div class="label">Domain</div></div>
+                <div class="stat-card"><div class="value" id="ssl-status">-</div><div class="label">SSL</div></div>
             </div>
 
-            <div class="card">
-                <h2>Ports</h2>
-                <div class="port-grid" id="port-grid">
-                    <div class="port-item"><div class="num">25</div><div class="name">SMTP</div></div>
-                    <div class="port-item"><div class="num">587</div><div class="name">Submit</div></div>
-                    <div class="port-item"><div class="num">465</div><div class="name">SMTPS</div></div>
-                    <div class="port-item"><div class="num">993</div><div class="name">IMAPS</div></div>
-                    <div class="port-item"><div class="num">995</div><div class="name">POP3S</div></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Access Section -->
-        <div class="card">
-            <h2>Access</h2>
+            <!-- Components Section -->
             <div class="grid-2">
-                <div>
-                    <div class="url-label">Webmail</div>
-                    <div class="url-box"><a id="webmail-url" href="#" target="_blank" style="color:var(--primary)">-</a></div>
-                    <div class="url-label">IMAP Server</div>
-                    <div class="url-box" id="imap-url">-</div>
-                    <div class="url-label">SMTP Server</div>
-                    <div class="url-box" id="smtp-url">-</div>
+                <div class="card">
+                    <h2>Components</h2>
+                    <div class="component" id="comp-mail">
+                        <span class="component-icon">📬</span>
+                        <div class="component-info">
+                            <div class="component-name">Mail Server</div>
+                            <div class="component-detail">Postfix + Dovecot (LXC)</div>
+                        </div>
+                        <div class="component-actions">
+                            <button class="btn btn-sm success" id="mail-start" onclick="startMail()" style="display:none">Start</button>
+                            <button class="btn btn-sm danger" id="mail-stop" onclick="stopMail()" style="display:none">Stop</button>
+                            <button class="btn btn-sm primary" id="mail-install" onclick="installMail()" style="display:none">Install</button>
+                        </div>
+                        <span class="status-badge stopped" id="mail-badge">Stopped</span>
+                    </div>
+                    <div class="component" id="comp-webmail">
+                        <span class="component-icon">🌐</span>
+                        <div class="component-info">
+                            <div class="component-name">Webmail</div>
+                            <div class="component-detail">Roundcube (LXC)</div>
+                        </div>
+                        <div class="component-actions">
+                            <button class="btn btn-sm success" id="webmail-start" onclick="startWebmail()" style="display:none">Start</button>
+                            <button class="btn btn-sm danger" id="webmail-stop" onclick="stopWebmail()" style="display:none">Stop</button>
+                            <button class="btn btn-sm primary" id="webmail-install" onclick="installWebmail()" style="display:none">Install</button>
+                        </div>
+                        <span class="status-badge stopped" id="webmail-badge">Stopped</span>
+                    </div>
                 </div>
-                <div>
-                    <div class="url-label">Thunderbird Autoconfig</div>
-                    <div class="url-box" id="autoconfig-url">-</div>
-                    <div class="url-label">Outlook Autodiscover</div>
-                    <div class="url-box" id="autodiscover-url">-</div>
+
+                <div class="card">
+                    <h2>Ports</h2>
+                    <div class="port-grid" id="port-grid">
+                        <div class="port-item"><div class="num">25</div><div class="name">SMTP</div></div>
+                        <div class="port-item"><div class="num">587</div><div class="name">Submit</div></div>
+                        <div class="port-item"><div class="num">465</div><div class="name">SMTPS</div></div>
+                        <div class="port-item"><div class="num">993</div><div class="name">IMAPS</div></div>
+                        <div class="port-item"><div class="num">995</div><div class="name">POP3S</div></div>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Tabs: Users / Aliases / Actions -->
-        <div class="card">
-            <div class="tabs">
-                <div class="tab active" onclick="showTab('users')">Users</div>
-                <div class="tab" onclick="showTab('aliases')">Aliases</div>
-                <div class="tab" onclick="showTab('actions')">Actions</div>
-            </div>
-
-            <div class="tab-content active" id="tab-users">
-                <div style="margin-bottom:1rem">
-                    <button class="btn success" onclick="showModal('user-modal')">+ Add User</button>
+            <!-- Access Section -->
+            <div class="card">
+                <h2>Access</h2>
+                <div class="grid-2">
+                    <div>
+                        <div class="url-label">Webmail</div>
+                        <div class="url-box"><a id="webmail-url" href="#" target="_blank" style="color:var(--primary)">-</a></div>
+                        <div class="url-label">IMAP Server</div>
+                        <div class="url-box" id="imap-url">-</div>
+                        <div class="url-label">SMTP Server</div>
+                        <div class="url-box" id="smtp-url">-</div>
+                    </div>
+                    <div>
+                        <div class="url-label">Thunderbird Autoconfig</div>
+                        <div class="url-box" id="autoconfig-url">-</div>
+                        <div class="url-label">Outlook Autodiscover</div>
+                        <div class="url-box" id="autodiscover-url">-</div>
+                    </div>
                 </div>
-                <table>
-                    <thead><tr><th>Email</th><th>Size</th><th>Messages</th><th></th></tr></thead>
-                    <tbody id="user-list"><tr><td colspan="4">Loading...</td></tr></tbody>
-                </table>
             </div>
 
-            <div class="tab-content" id="tab-aliases">
-                <div style="margin-bottom:1rem">
-                    <button class="btn success" onclick="showModal('alias-modal')">+ Add Alias</button>
+            <!-- Tabs: Users / Aliases / Settings / Actions -->
+            <div class="card">
+                <div class="tabs">
+                    <div class="tab active" onclick="showTab('users')">Users</div>
+                    <div class="tab" onclick="showTab('aliases')">Aliases</div>
+                    <div class="tab" onclick="showTab('settings')">Settings</div>
+                    <div class="tab" onclick="showTab('actions')">Actions</div>
                 </div>
-                <table>
-                    <thead><tr><th>Alias</th><th>Target</th><th></th></tr></thead>
-                    <tbody id="alias-list"><tr><td colspan="3">Loading...</td></tr></tbody>
-                </table>
-            </div>
 
-            <div class="tab-content" id="tab-actions">
-                <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
-                    <button class="btn primary" onclick="setupSSL()">Setup SSL Certificate</button>
-                    <button class="btn" onclick="createBackup()">Create Backup</button>
-                    <button class="btn" onclick="showMigrate()">Migrate from OpenWrt</button>
-                    <button class="btn danger" onclick="restartServices()">Restart Services</button>
+                <div class="tab-content active" id="tab-users">
+                    <div style="margin-bottom:1rem">
+                        <button class="btn success" onclick="showModal('user-modal')">+ Add User</button>
+                    </div>
+                    <table>
+                        <thead><tr><th>Email</th><th>Size</th><th>Messages</th><th></th></tr></thead>
+                        <tbody id="user-list"><tr><td colspan="4">Loading...</td></tr></tbody>
+                    </table>
+                </div>
+
+                <div class="tab-content" id="tab-aliases">
+                    <div style="margin-bottom:1rem">
+                        <button class="btn success" onclick="showModal('alias-modal')">+ Add Alias</button>
+                    </div>
+                    <table>
+                        <thead><tr><th>Alias</th><th>Target</th><th></th></tr></thead>
+                        <tbody id="alias-list"><tr><td colspan="3">Loading...</td></tr></tbody>
+                    </table>
+                </div>
+
+                <div class="tab-content" id="tab-settings">
+                    <div class="settings-grid">
+                        <div class="form-group">
+                            <label>Mail Domain</label>
+                            <input type="text" id="cfg-domain" placeholder="example.com">
+                            <small>Primary domain for email addresses</small>
+                        </div>
+                        <div class="form-group">
+                            <label>Hostname</label>
+                            <input type="text" id="cfg-hostname" placeholder="mail">
+                            <small>Mail server hostname (mail.domain.com)</small>
+                        </div>
+                        <div class="form-group">
+                            <label>Mail Server IP</label>
+                            <input type="text" id="cfg-mail-ip" placeholder="192.168.255.30">
+                            <small>LXC container IP address</small>
+                        </div>
+                        <div class="form-group">
+                            <label>Webmail Port</label>
+                            <input type="number" id="cfg-webmail-port" placeholder="8027">
+                            <small>Local port for Roundcube</small>
+                        </div>
+                    </div>
+                    <div style="margin-top:1rem">
+                        <button class="btn primary" onclick="saveSettings()">Save Settings</button>
+                        <button class="btn" onclick="loadSettings()">Reset</button>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="tab-actions">
+                    <div class="alert info">
+                        DNS records must be configured for mail delivery. Use the DNS Setup button to see required records.
+                    </div>
+                    <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+                        <button class="btn primary" onclick="showDNSSetup()">DNS Setup</button>
+                        <button class="btn primary" onclick="setupSSL()">Setup SSL Certificate</button>
+                        <button class="btn" onclick="setupDKIM()">Generate DKIM Key</button>
+                        <button class="btn" onclick="createBackup()">Create Backup</button>
+                        <button class="btn" onclick="showMigrate()">Migrate from OpenWrt</button>
+                        <button class="btn warning" onclick="fixPorts()">Fix Ports</button>
+                        <button class="btn danger" onclick="restartServices()">Restart Services</button>
+                    </div>
                 </div>
             </div>
         </div>
     </main>
+
+    <!-- Install Modal -->
+    <div class="modal" id="install-modal">
+        <div class="modal-content">
+            <h3>Install Mail Server</h3>
+            <p style="color:var(--text-dim);margin-bottom:1rem">This will install Postfix + Dovecot mail server and optionally Roundcube webmail in LXC containers.</p>
+            <div class="form-group">
+                <label>Mail Domain</label>
+                <input type="text" id="install-domain" placeholder="example.com" value="">
+            </div>
+            <div class="form-group">
+                <label>Hostname</label>
+                <input type="text" id="install-hostname" placeholder="mail" value="mail">
+            </div>
+            <div class="form-group">
+                <label><input type="checkbox" id="install-webmail" checked> Install Webmail (Roundcube)</label>
+            </div>
+            <div id="install-status" style="display:none">
+                <div class="install-progress">
+                    <div class="install-progress-bar" id="install-progress" style="width:0%"></div>
+                </div>
+                <p id="install-message" style="font-size:0.85rem;color:var(--text-dim);text-align:center">Installing...</p>
+            </div>
+            <div class="form-actions" id="install-actions">
+                <button class="btn" onclick="hideModal('install-modal')">Cancel</button>
+                <button class="btn success" onclick="doInstall()">Install</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Add User Modal -->
     <div class="modal" id="user-modal">
@@ -215,6 +317,21 @@
         </div>
     </div>
 
+    <!-- DNS Setup Modal -->
+    <div class="modal" id="dns-modal">
+        <div class="modal-content" style="min-width:600px">
+            <h3>DNS Records Setup</h3>
+            <p style="color:var(--text-dim);margin-bottom:1rem">Add these records to your DNS provider:</p>
+            <table>
+                <thead><tr><th>Type</th><th>Name</th><th>Value</th></tr></thead>
+                <tbody id="dns-records"></tbody>
+            </table>
+            <div class="form-actions">
+                <button class="btn" onclick="hideModal('dns-modal')">Close</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const API = '/api/v1/mail';
         const token = () => localStorage.getItem('sbx_token');
@@ -223,58 +340,99 @@
         async function api(path, opts = {}) {
             try {
                 const res = await fetch(API + path, { ...opts, headers: headers() });
-                if (res.status === 401) { window.location = '/login.html'; return {}; }
+                if (res.status === 401) { window.location = '/portal/login.html'; return {}; }
                 return res.json();
             } catch { return {}; }
         }
 
         let status = {};
+        let config = {};
 
         async function loadStatus() {
             status = await api('/status');
             const badge = document.getElementById('status-badge');
+            const mailInstalled = status.components?.mail_server?.installed || false;
+            const webmailInstalled = status.components?.webmail?.installed || false;
             const running = status.running;
 
+            // Show/hide install banner vs main content
+            if (!mailInstalled) {
+                document.getElementById('install-banner').style.display = 'block';
+                document.getElementById('main-content').style.display = 'none';
+                document.getElementById('btn-install').style.display = 'inline-block';
+                document.getElementById('btn-start').style.display = 'none';
+                document.getElementById('btn-stop').style.display = 'none';
+                badge.textContent = 'Not Installed';
+                badge.className = 'status-badge stopped';
+                return;
+            }
+
+            document.getElementById('install-banner').style.display = 'none';
+            document.getElementById('main-content').style.display = 'block';
+            document.getElementById('btn-install').style.display = 'none';
+
             if (running) {
-                badge.textContent = '● Running';
+                badge.textContent = 'Running';
                 badge.className = 'status-badge running';
                 document.getElementById('btn-start').style.display = 'none';
                 document.getElementById('btn-stop').style.display = 'inline-block';
-            } else if (status.installed) {
-                badge.textContent = '○ Stopped';
+            } else {
+                badge.textContent = 'Stopped';
                 badge.className = 'status-badge stopped';
                 document.getElementById('btn-start').style.display = 'inline-block';
                 document.getElementById('btn-stop').style.display = 'none';
-            } else {
-                badge.textContent = '○ Not Installed';
-                badge.className = 'status-badge stopped';
             }
 
             document.getElementById('user-count').textContent = status.user_count || 0;
             document.getElementById('storage').textContent = status.storage || '0';
             document.getElementById('domain').textContent = status.domain || '-';
 
-            // Components
-            const comps = status.components || {};
-            if (comps.mail_server) {
-                const mb = document.getElementById('mail-badge');
-                if (comps.mail_server.running) {
-                    mb.textContent = '● Running';
+            // Mail component
+            const mailRunning = status.components?.mail_server?.running;
+            const mb = document.getElementById('mail-badge');
+            if (mailInstalled) {
+                if (mailRunning) {
+                    mb.textContent = 'Running';
                     mb.className = 'status-badge running';
+                    document.getElementById('mail-start').style.display = 'none';
+                    document.getElementById('mail-stop').style.display = 'inline-block';
                 } else {
-                    mb.textContent = '○ Stopped';
+                    mb.textContent = 'Stopped';
                     mb.className = 'status-badge stopped';
+                    document.getElementById('mail-start').style.display = 'inline-block';
+                    document.getElementById('mail-stop').style.display = 'none';
                 }
+                document.getElementById('mail-install').style.display = 'none';
+            } else {
+                mb.textContent = 'Not Installed';
+                mb.className = 'status-badge stopped';
+                document.getElementById('mail-install').style.display = 'inline-block';
+                document.getElementById('mail-start').style.display = 'none';
+                document.getElementById('mail-stop').style.display = 'none';
             }
-            if (comps.webmail) {
-                const wb = document.getElementById('webmail-badge');
-                if (comps.webmail.running) {
-                    wb.textContent = '● Running';
+
+            // Webmail component
+            const webmailRunning = status.components?.webmail?.running;
+            const wb = document.getElementById('webmail-badge');
+            if (webmailInstalled) {
+                if (webmailRunning) {
+                    wb.textContent = 'Running';
                     wb.className = 'status-badge running';
+                    document.getElementById('webmail-start').style.display = 'none';
+                    document.getElementById('webmail-stop').style.display = 'inline-block';
                 } else {
-                    wb.textContent = '○ Stopped';
+                    wb.textContent = 'Stopped';
                     wb.className = 'status-badge stopped';
+                    document.getElementById('webmail-start').style.display = 'inline-block';
+                    document.getElementById('webmail-stop').style.display = 'none';
                 }
+                document.getElementById('webmail-install').style.display = 'none';
+            } else {
+                wb.textContent = 'Not Installed';
+                wb.className = 'status-badge stopped';
+                document.getElementById('webmail-install').style.display = 'inline-block';
+                document.getElementById('webmail-start').style.display = 'none';
+                document.getElementById('webmail-stop').style.display = 'none';
             }
 
             // Ports
@@ -305,6 +463,25 @@
             document.getElementById('ssl-status').style.color = ssl.installed ? 'var(--green)' : 'var(--red)';
         }
 
+        async function loadSettings() {
+            const d = await api('/access');
+            document.getElementById('cfg-domain').value = d.domain || '';
+            document.getElementById('cfg-hostname').value = d.mail_server?.split('.')[0] || 'mail';
+            document.getElementById('cfg-mail-ip').value = '192.168.255.30';
+            document.getElementById('cfg-webmail-port').value = '8027';
+        }
+
+        async function saveSettings() {
+            const settings = {
+                domain: document.getElementById('cfg-domain').value,
+                hostname: document.getElementById('cfg-hostname').value,
+                mail_ip: document.getElementById('cfg-mail-ip').value,
+                webmail_port: parseInt(document.getElementById('cfg-webmail-port').value) || 8027
+            };
+            const r = await api('/settings', { method: 'POST', body: JSON.stringify(settings) });
+            alert(r.success ? 'Settings saved. Restart services to apply.' : 'Error: ' + (r.detail || 'Failed'));
+        }
+
         async function loadUsers() {
             const d = await api('/users');
             const list = document.getElementById('user-list');
@@ -318,8 +495,8 @@
                 <td>${u.size}</td>
                 <td>${u.messages}</td>
                 <td>
-                    <button class="btn" style="padding:2px 8px;font-size:0.7rem" onclick="changePassword('${u.email}')">Password</button>
-                    <button class="btn danger" style="padding:2px 8px;font-size:0.7rem" onclick="deleteUser('${u.email}')">Delete</button>
+                    <button class="btn btn-sm" onclick="changePassword('${u.email}')">Password</button>
+                    <button class="btn btn-sm danger" onclick="deleteUser('${u.email}')">Delete</button>
                 </td>
             </tr>`).join('');
         }
@@ -335,20 +512,65 @@
             list.innerHTML = aliases.map(a => `<tr>
                 <td class="mono">${a.alias}</td>
                 <td class="mono">${a.target}</td>
-                <td><button class="btn danger" style="padding:2px 8px;font-size:0.7rem" onclick="deleteAlias('${a.alias}')">Delete</button></td>
+                <td><button class="btn btn-sm danger" onclick="deleteAlias('${a.alias}')">Delete</button></td>
             </tr>`).join('');
         }
 
         function showTab(name) {
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            document.querySelector(`.tab:nth-child(${name === 'users' ? 1 : name === 'aliases' ? 2 : 3})`).classList.add('active');
+            const tabIndex = {users: 1, aliases: 2, settings: 3, actions: 4}[name];
+            document.querySelector(`.tab:nth-child(${tabIndex})`).classList.add('active');
             document.getElementById(`tab-${name}`).classList.add('active');
+            if (name === 'settings') loadSettings();
         }
 
         function showModal(id) { document.getElementById(id).classList.add('show'); }
         function hideModal(id) { document.getElementById(id).classList.remove('show'); }
         function showMigrate() { showModal('migrate-modal'); }
+        function showInstallModal() { showModal('install-modal'); }
+
+        async function doInstall() {
+            const domain = document.getElementById('install-domain').value.trim();
+            const hostname = document.getElementById('install-hostname').value.trim() || 'mail';
+            const webmail = document.getElementById('install-webmail').checked;
+
+            if (!domain) { alert('Domain is required'); return; }
+
+            document.getElementById('install-actions').style.display = 'none';
+            document.getElementById('install-status').style.display = 'block';
+            document.getElementById('install-message').textContent = 'Installing mail server...';
+            document.getElementById('install-progress').style.width = '20%';
+
+            // Install mail server
+            await api('/install', { method: 'POST', body: JSON.stringify({ domain, hostname }) });
+            document.getElementById('install-progress').style.width = '60%';
+            document.getElementById('install-message').textContent = 'Mail server installation started...';
+
+            if (webmail) {
+                document.getElementById('install-message').textContent = 'Installing webmail...';
+                await api('/webmail/install', { method: 'POST' });
+            }
+
+            document.getElementById('install-progress').style.width = '100%';
+            document.getElementById('install-message').textContent = 'Installation complete! Check logs for details.';
+
+            setTimeout(() => {
+                hideModal('install-modal');
+                document.getElementById('install-actions').style.display = 'flex';
+                document.getElementById('install-status').style.display = 'none';
+                refresh();
+            }, 2000);
+        }
+
+        // Component controls
+        async function startMail() { await api('/start', { method: 'POST' }); setTimeout(refresh, 2000); }
+        async function stopMail() { await api('/stop', { method: 'POST' }); setTimeout(refresh, 1000); }
+        async function installMail() { await api('/install', { method: 'POST' }); alert('Installation started in background'); }
+
+        async function startWebmail() { await api('/webmail/start', { method: 'POST' }); setTimeout(refresh, 2000); }
+        async function stopWebmail() { await api('/webmail/stop', { method: 'POST' }); setTimeout(refresh, 1000); }
+        async function installWebmail() { await api('/webmail/install', { method: 'POST' }); alert('Webmail installation started in background'); }
 
         async function addUser() {
             const email = document.getElementById('user-email').value.trim();
@@ -394,9 +616,30 @@
             alert(r.success ? 'SSL setup started in background' : 'Error');
         }
 
+        async function setupDKIM() {
+            const r = await api('/dkim/setup', { method: 'POST' });
+            alert(r.success ? 'DKIM key generated. Add the TXT record shown in DNS Setup.' : 'Error');
+        }
+
+        async function fixPorts() {
+            const r = await api('/fix-ports', { method: 'POST' });
+            alert(r.success ? 'Ports fixed: ' + r.output : 'Error');
+        }
+
         async function createBackup() {
             const r = await api('/backup', { method: 'POST' });
             alert(r.success ? `Backup created: ${r.file}` : 'Backup failed');
+        }
+
+        async function showDNSSetup() {
+            const d = await api('/dns-setup');
+            const tbody = document.getElementById('dns-records');
+            tbody.innerHTML = (d.records || []).map(r => `<tr>
+                <td><strong>${r.type}</strong></td>
+                <td class="mono">${r.name}</td>
+                <td class="mono" style="word-break:break-all">${r.value}</td>
+            </tr>`).join('');
+            showModal('dns-modal');
         }
 
         async function doMigrate() {

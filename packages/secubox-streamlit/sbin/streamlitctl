@@ -1,7 +1,10 @@
 #!/bin/bash
 # streamlitctl - Streamlit Platform Manager for SecuBox Debian
 # Control script for LXC-based Streamlit application hosting
+# Three-fold architecture: Components, Status, Access
 set -e
+
+VERSION="1.1.0"
 
 LXC_NAME="streamlit"
 LXC_PATH="/var/lib/lxc/$LXC_NAME"
@@ -198,6 +201,84 @@ cmd_status() {
   "container": "$LXC_NAME",
   "data_path": "$DATA_PATH",
   "app_count": $app_count
+}
+EOF
+}
+
+# ─────────────────────────────────────────────────────────────────────
+# THREE-FOLD ARCHITECTURE: Components (What)
+# ─────────────────────────────────────────────────────────────────────
+
+cmd_components() {
+    local installed=false
+    local running=false
+    lxc_exists && installed=true
+    lxc_running && running=true
+
+    local app_count=0
+    [ -d "$APPS_PATH" ] && app_count=$(find "$APPS_PATH" -maxdepth 1 -type d 2>/dev/null | wc -l)
+    app_count=$((app_count - 1))
+    [ $app_count -lt 0 ] && app_count=0
+
+    cat <<EOF
+{
+  "components": [
+    {
+      "name": "Streamlit Container",
+      "type": "lxc",
+      "container": "$LXC_NAME",
+      "description": "Python Streamlit application runtime",
+      "installed": $installed,
+      "running": $running
+    },
+    {
+      "name": "Applications",
+      "type": "apps",
+      "path": "$APPS_PATH",
+      "description": "Deployed Streamlit applications",
+      "count": $app_count
+    },
+    {
+      "name": "Python Runtime",
+      "type": "runtime",
+      "description": "Python 3 with Streamlit packages",
+      "installed": $installed
+    }
+  ]
+}
+EOF
+}
+
+# ─────────────────────────────────────────────────────────────────────
+# THREE-FOLD ARCHITECTURE: Access (How to connect)
+# ─────────────────────────────────────────────────────────────────────
+
+cmd_access() {
+    local apps_json="["
+    local first=true
+
+    for app_dir in "$APPS_PATH"/*/; do
+        [ -d "$app_dir" ] || continue
+        local name=$(basename "$app_dir")
+        [ "$name" = "*" ] && continue
+
+        local port=$(grep -E "^port\s*=" "$app_dir/.streamlit.toml" 2>/dev/null | cut -d'=' -f2 | tr -d ' ' || echo "")
+        local running=false
+        [ -n "$port" ] && ss -tln "sport = :$port" 2>/dev/null | grep -q "$port" && running=true
+
+        $first || apps_json+=","
+        first=false
+        apps_json+="{\"name\":\"$name\",\"port\":${port:-0},\"running\":$running,\"url\":\"http://localhost:${port:-8501}\"}"
+    done
+    apps_json+="]"
+
+    cat <<EOF
+{
+  "data_path": "$DATA_PATH",
+  "apps_path": "$APPS_PATH",
+  "apps": $apps_json,
+  "admin_panel": "/streamlit/",
+  "default_port_range": "8501-8600"
 }
 EOF
 }
@@ -593,12 +674,16 @@ cmd_gitea_clone() {
 load_config
 
 case "${1:-}" in
+    # Three-fold architecture
+    components) cmd_components ;;
+    access)     cmd_access ;;
+    status)     cmd_status ;;
+    # Container control
     install)    cmd_install ;;
     uninstall)  cmd_uninstall ;;
     update)     cmd_update ;;
     start)      cmd_start ;;
     stop)       cmd_stop ;;
-    status)     cmd_status ;;
     restart)    cmd_stop; sleep 1; cmd_start ;;
 
     app)
@@ -635,7 +720,13 @@ case "${1:-}" in
 
     *)
         cat << EOF
-streamlitctl - Streamlit Platform Manager
+streamlitctl v$VERSION - Streamlit Platform Manager
+Three-fold architecture: Components, Status, Access
+
+Information (Three-fold):
+  components    List system components (JSON)
+  status        Show container status (JSON)
+  access        Show apps and access info (JSON)
 
 Container:
   install       Install LXC container with Streamlit
@@ -643,7 +734,6 @@ Container:
   update        Update packages in container
   start         Start container
   stop          Stop container
-  status        Show container status (JSON)
   restart       Restart container
 
 Apps:
@@ -663,6 +753,10 @@ Integration:
   migrate [source]      Migrate from OpenWrt (default: 192.168.255.1)
   gitea push <app>      Push app to Gitea
   gitea clone <name> <url>  Clone from Gitea
+
+Examples:
+  streamlitctl components        # JSON list of components
+  streamlitctl access            # JSON list of apps with URLs
 
 EOF
         ;;

@@ -17,7 +17,7 @@ from pydantic import BaseModel
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
 
-app = FastAPI(title="SecuBox Mail", version="1.0.0")
+app = FastAPI(title="SecuBox Mail", version="1.3.0")
 config = get_config("mail")
 
 DATA_PATH = Path(config.get("data_path", "/srv/mail"))
@@ -128,6 +128,52 @@ async def health():
         "status": "ok" if (mail_ok and webmail_ok) else "degraded",
         "mail_server": "ok" if mail_ok else "down",
         "webmail": "ok" if webmail_ok else "down",
+    }
+
+
+# =============================================================================
+# COMPONENTS - Three-fold architecture (What)
+# =============================================================================
+
+@app.get("/components")
+async def get_components():
+    """List system components (public, three-fold: what)"""
+    return {
+        "components": [
+            {
+                "name": "Mail Server",
+                "type": "lxc",
+                "container": MAIL_CONTAINER,
+                "description": "Postfix + Dovecot mail server",
+                "installed": lxc_exists(MAIL_CONTAINER),
+                "running": lxc_running(MAIL_CONTAINER),
+                "ports": [25, 587, 465, 143, 993, 110, 995],
+                "ip": MAIL_IP,
+            },
+            {
+                "name": "Webmail",
+                "type": "lxc",
+                "container": WEBMAIL_CONTAINER,
+                "description": "Roundcube webmail interface",
+                "installed": lxc_exists(WEBMAIL_CONTAINER),
+                "running": lxc_running(WEBMAIL_CONTAINER),
+                "port": WEBMAIL_PORT,
+            },
+            {
+                "name": "User Database",
+                "type": "file",
+                "path": str(DATA_PATH / "config" / "users"),
+                "description": "Dovecot passwd-file users",
+                "installed": True,
+            },
+            {
+                "name": "SSL Certificates",
+                "type": "file",
+                "path": str(DATA_PATH / "ssl" / "fullchain.pem"),
+                "description": "TLS certificates for mail server",
+                "installed": (DATA_PATH / "ssl" / "fullchain.pem").exists(),
+            },
+        ]
     }
 
 
@@ -306,6 +352,62 @@ async def install_service(background_tasks: BackgroundTasks):
 
 
 # =============================================================================
+# WEBMAIL CONTROL (via roundcubectl)
+# =============================================================================
+
+@app.get("/webmail/status")
+async def webmail_status():
+    """Get webmail container status"""
+    running = lxc_running(WEBMAIL_CONTAINER)
+    installed = lxc_exists(WEBMAIL_CONTAINER)
+    return {
+        "container": WEBMAIL_CONTAINER,
+        "installed": installed,
+        "running": running,
+        "url": f"https://webmail.{DOMAIN}" if running else None,
+        "local_url": f"http://localhost:{WEBMAIL_PORT}" if running else None,
+    }
+
+
+@app.post("/webmail/start", dependencies=[Depends(require_jwt)])
+async def webmail_start():
+    """Start webmail container"""
+    success, _, err = run_cmd(["/usr/sbin/roundcubectl", "start"])
+    if success:
+        return {"success": True, "message": "Webmail started"}
+    raise HTTPException(500, f"Failed: {err}")
+
+
+@app.post("/webmail/stop", dependencies=[Depends(require_jwt)])
+async def webmail_stop():
+    """Stop webmail container"""
+    success, _, err = run_cmd(["/usr/sbin/roundcubectl", "stop"])
+    if success:
+        return {"success": True, "message": "Webmail stopped"}
+    raise HTTPException(500, f"Failed: {err}")
+
+
+@app.post("/webmail/restart", dependencies=[Depends(require_jwt)])
+async def webmail_restart():
+    """Restart webmail container"""
+    success, _, err = run_cmd(["/usr/sbin/roundcubectl", "restart"])
+    if success:
+        return {"success": True, "message": "Webmail restarted"}
+    raise HTTPException(500, f"Failed: {err}")
+
+
+@app.post("/webmail/install", dependencies=[Depends(require_jwt)])
+async def webmail_install(background_tasks: BackgroundTasks):
+    """Install webmail container (background)"""
+    def do_install():
+        subprocess.run(["/usr/sbin/roundcubectl", "install"],
+                      stdout=open("/var/log/webmail-install.log", "w"),
+                      stderr=subprocess.STDOUT)
+    background_tasks.add_task(do_install)
+    return {"success": True, "message": "Webmail installation started"}
+
+
+# =============================================================================
 # MIGRATION
 # =============================================================================
 
@@ -406,3 +508,137 @@ async def setup_ssl(background_tasks: BackgroundTasks):
                       stderr=subprocess.STDOUT)
     background_tasks.add_task(do_setup)
     return {"success": True, "message": "SSL setup started"}
+
+
+# =============================================================================
+# DNS SETUP
+# =============================================================================
+
+@app.get("/dns-setup", dependencies=[Depends(require_jwt)])
+async def get_dns_records():
+    """Get DNS records to configure"""
+    fqdn = f"{HOSTNAME}.{DOMAIN}"
+    return {
+        "domain": DOMAIN,
+        "records": [
+            {"type": "MX", "name": DOMAIN, "value": f"10 {fqdn}.", "description": "Mail exchanger"},
+            {"type": "A", "name": f"{HOSTNAME}.{DOMAIN}", "value": "<YOUR_IP>", "description": "Mail server IP"},
+            {"type": "A", "name": f"webmail.{DOMAIN}", "value": "<YOUR_IP>", "description": "Webmail IP"},
+            {"type": "TXT", "name": DOMAIN, "value": f"v=spf1 mx a:{fqdn} -all", "description": "SPF record"},
+            {"type": "TXT", "name": f"_dmarc.{DOMAIN}", "value": f"v=DMARC1; p=quarantine; rua=mailto:postmaster@{DOMAIN}", "description": "DMARC policy"},
+        ],
+        "note": "DKIM record requires key generation. Run: mailctl dkim-setup"
+    }
+
+
+# =============================================================================
+# USER REPAIR
+# =============================================================================
+
+@app.post("/user/repair/{email}", dependencies=[Depends(require_jwt)])
+async def repair_user_mailbox(email: str):
+    """Repair user mailbox (doveadm force-resync)"""
+    if not lxc_running(MAIL_CONTAINER):
+        raise HTTPException(503, "Mail container not running")
+    success, out, err = lxc_attach(MAIL_CONTAINER, f"doveadm force-resync -u '{email}' '*'")
+    if success:
+        return {"success": True, "message": f"Mailbox repaired for {email}"}
+    raise HTTPException(500, f"Repair failed: {err}")
+
+
+# =============================================================================
+# FIX PORTS
+# =============================================================================
+
+@app.post("/fix-ports", dependencies=[Depends(require_jwt)])
+async def fix_ports():
+    """Check and fix mail server ports"""
+    success, out, err = run_cmd(["/usr/sbin/mailctl", "fix-ports"])
+    if success:
+        return {"success": True, "output": out}
+    raise HTTPException(500, f"Failed: {err}")
+
+
+# =============================================================================
+# SETTINGS
+# =============================================================================
+
+class SettingsUpdate(BaseModel):
+    domain: Optional[str] = None
+    hostname: Optional[str] = None
+    mail_ip: Optional[str] = None
+    webmail_port: Optional[int] = None
+
+
+@app.get("/settings", dependencies=[Depends(require_jwt)])
+async def get_settings():
+    """Get mail configuration settings"""
+    return {
+        "domain": DOMAIN,
+        "hostname": HOSTNAME,
+        "mail_ip": MAIL_IP,
+        "webmail_port": WEBMAIL_PORT,
+        "mail_container": MAIL_CONTAINER,
+        "webmail_container": WEBMAIL_CONTAINER,
+        "data_path": str(DATA_PATH),
+    }
+
+
+@app.post("/settings", dependencies=[Depends(require_jwt)])
+async def update_settings(settings: SettingsUpdate):
+    """Update mail configuration settings"""
+    config_file = Path("/etc/secubox/mail.toml")
+
+    # Read current config
+    current = {}
+    if config_file.exists():
+        for line in config_file.read_text().splitlines():
+            if "=" in line and not line.strip().startswith("#"):
+                key, val = line.split("=", 1)
+                current[key.strip()] = val.strip().strip('"')
+
+    # Update values
+    if settings.domain:
+        current["domain"] = settings.domain
+    if settings.hostname:
+        current["hostname"] = settings.hostname
+    if settings.mail_ip:
+        current["mail_ip"] = settings.mail_ip
+    if settings.webmail_port:
+        current["webmail_port"] = str(settings.webmail_port)
+
+    # Write config
+    config_file.parent.mkdir(parents=True, exist_ok=True)
+    lines = ["# SecuBox Mail Configuration"]
+    for key, val in current.items():
+        if val.isdigit():
+            lines.append(f'{key} = {val}')
+        else:
+            lines.append(f'{key} = "{val}"')
+    config_file.write_text("\n".join(lines) + "\n")
+
+    return {"success": True, "message": "Settings saved"}
+
+
+# =============================================================================
+# DKIM SETUP
+# =============================================================================
+
+@app.post("/dkim/setup", dependencies=[Depends(require_jwt)])
+async def setup_dkim(background_tasks: BackgroundTasks):
+    """Generate DKIM key"""
+    def do_setup():
+        subprocess.run(["/usr/sbin/mailctl", "dkim", "setup"],
+                      stdout=open("/var/log/mail-dkim.log", "w"),
+                      stderr=subprocess.STDOUT)
+    background_tasks.add_task(do_setup)
+    return {"success": True, "message": "DKIM key generation started"}
+
+
+@app.get("/dkim/record", dependencies=[Depends(require_jwt)])
+async def get_dkim_record():
+    """Get DKIM DNS record"""
+    dkim_file = DATA_PATH / "dkim" / f"{DOMAIN}.txt"
+    if dkim_file.exists():
+        return {"exists": True, "record": dkim_file.read_text().strip()}
+    return {"exists": False}

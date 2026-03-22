@@ -185,5 +185,5 @@ cd packages/secubox-crowdsec && uvicorn api.main:app --reload --uds /tmp/crowdse
 
 ## 📡 Auteur
 
-Gandalf / CyberMind · Notre-Dame-du-Cruet, Savoie, France
+Gerald KERMA <devel@cybermind.fr>
 https://cybermind.fr · https://secubox.in

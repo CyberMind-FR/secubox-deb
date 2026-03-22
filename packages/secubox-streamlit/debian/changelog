@@ -1,3 +1,10 @@
+secubox-streamlit (1.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Add streamlitctl three-fold commands: components, access (JSON output)
+  * Update version to 1.1.0
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Mar 2026 11:15:00 +0100
+
 secubox-streamlit (1.0.2-1~bookworm1) bookworm; urgency=medium
 
   * Three-fold architecture (Components/Status/Access)
@@ -7,18 +14,18 @@ secubox-streamlit (1.0.2-1~bookworm1) bookworm; urgency=medium
   * Multi-instance support with port management
   * Tabbed UI with comprehensive app management
 
- -- CyberMind <admin@cybermind.fr>  Sat, 22 Mar 2025 12:00:00 +0100
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Mar 2026 12:00:00 +0100
 
 secubox-streamlit (1.0.1-1~bookworm1) bookworm; urgency=medium
 
   * Add dynamic menu system with menu.d JSON definitions
   * Menu items auto-registered when package installed
 
- -- SecuBox Team <dev@secubox.gondwana.systems>  Sat, 21 Mar 2026 16:37:28 +0100
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 21 Mar 2026 16:37:28 +0100
 
 secubox-streamlit (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial Debian port from OpenWrt luci-app-streamlit
   * Streamlit platform with LXC support
 
- -- Gandalf / CyberMind <gk@cybermind.fr>  Sat, 21 Mar 2026 10:20:00 +0100
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 21 Mar 2026 10:20:00 +0100

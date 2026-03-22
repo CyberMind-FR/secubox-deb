@@ -1,0 +1,21 @@
+# SecuBox Mail Server Configuration
+
+[mail]
+enabled = true
+domain = "secubox.local"
+hostname = "mail"
+data_path = "/srv/mail"
+lxc_path = "/srv/lxc"
+
+# Mail server container
+mail_container = "mailserver"
+mail_ip = "192.168.255.30"
+
+# Webmail container
+webmail_container = "roundcube"
+webmail_ip = "192.168.255.31"
+webmail_port = 8027
+
+# SSL settings
+ssl_provider = "acme"  # acme, manual, none
+acme_email = ""

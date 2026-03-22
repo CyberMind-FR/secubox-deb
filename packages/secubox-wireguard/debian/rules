@@ -12,3 +12,8 @@ override_dh_auto_install:
 	# Modular nginx config
 	install -d debian/secubox-wireguard/etc/nginx/secubox.d
 	[ -f nginx/wireguard.conf ] && cp nginx/wireguard.conf debian/secubox-wireguard/etc/nginx/secubox.d/ || true
+	# Install control scripts
+	install -d debian/secubox-wireguard/usr/sbin
+	[ -d sbin ] && install -m 755 sbin/* debian/secubox-wireguard/usr/sbin/ || true
+	# Create data directories
+	install -d debian/secubox-wireguard/var/lib/secubox/wireguard/peers

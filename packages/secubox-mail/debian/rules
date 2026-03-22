@@ -3,12 +3,30 @@
 	dh $@
 
 override_dh_auto_install:
+	# API
 	install -d debian/secubox-mail/usr/lib/secubox/mail
 	cp -r api debian/secubox-mail/usr/lib/secubox/mail/
+
+	# Library scripts
+	install -d debian/secubox-mail/usr/lib/secubox/mail/lib
+	[ -d lib/mail ] && cp -r lib/mail/. debian/secubox-mail/usr/lib/secubox/mail/lib/ || true
+
+	# Control scripts (sbin)
+	install -d debian/secubox-mail/usr/sbin
+	[ -d sbin ] && install -m 755 sbin/* debian/secubox-mail/usr/sbin/ || true
+
+	# Web interface
 	install -d debian/secubox-mail/usr/share/secubox/www/mail
 	cp -r www/mail/. debian/secubox-mail/usr/share/secubox/www/mail/
+
+	# Menu entry
 	install -d debian/secubox-mail/usr/share/secubox/menu.d
 	[ -d menu.d ] && cp -r menu.d/. debian/secubox-mail/usr/share/secubox/menu.d/ || true
+
 	# Modular nginx config
 	install -d debian/secubox-mail/etc/nginx/secubox.d
 	[ -f nginx/mail.conf ] && cp nginx/mail.conf debian/secubox-mail/etc/nginx/secubox.d/ || true
+
+	# Default config
+	install -d debian/secubox-mail/etc/secubox
+	[ -f config/mail.toml ] && install -m 644 config/mail.toml debian/secubox-mail/etc/secubox/ || true
