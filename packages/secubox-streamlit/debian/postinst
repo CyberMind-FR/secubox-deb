@@ -5,7 +5,8 @@ case "$1" in
     id -u secubox >/dev/null 2>&1 || \
       adduser --system --group --no-create-home --home /var/lib/secubox --shell /usr/sbin/nologin secubox
     install -d -o secubox -g secubox -m 750 /run/secubox /var/lib/secubox
-    install -d -o secubox -g secubox -m 755 /srv/streamlit/apps
+    install -d -o secubox -g secubox -m 755 /srv/streamlit/apps /srv/streamlit/logs
+    install -d -o secubox -g secubox -m 755 /var/log/secubox
     systemctl daemon-reload
     systemctl enable secubox-streamlit.service
     systemctl start secubox-streamlit.service || true

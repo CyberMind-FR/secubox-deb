@@ -1,0 +1,9 @@
+{
+  "id": "gitea",
+  "name": "Gitea",
+  "category": "apps",
+  "icon": "🐙",
+  "path": "/gitea/",
+  "order": 504,
+  "description": "Gitea Git Server"
+}

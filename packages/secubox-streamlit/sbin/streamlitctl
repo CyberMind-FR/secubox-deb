@@ -1,0 +1,669 @@
+#!/bin/bash
+# streamlitctl - Streamlit Platform Manager for SecuBox Debian
+# Control script for LXC-based Streamlit application hosting
+set -e
+
+LXC_NAME="streamlit"
+LXC_PATH="/var/lib/lxc/$LXC_NAME"
+DATA_PATH="/srv/streamlit"
+APPS_PATH="$DATA_PATH/apps"
+CONF_PATH="/etc/secubox/streamlit.toml"
+LOG_FILE="/var/log/secubox/streamlit.log"
+
+# Logging
+log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE" 2>/dev/null || echo "$*"; }
+error() { log "ERROR: $*" >&2; }
+
+# Load config
+load_config() {
+    if [ -f "$CONF_PATH" ]; then
+        DATA_PATH=$(grep -E '^data_path\s*=' "$CONF_PATH" | cut -d'"' -f2 || echo "$DATA_PATH")
+        APPS_PATH="$DATA_PATH/apps"
+    fi
+}
+
+# LXC helpers
+lxc_running() { lxc-info -n "$LXC_NAME" -s 2>/dev/null | grep -q "RUNNING"; }
+lxc_exists() { [ -d "$LXC_PATH/rootfs" ]; }
+
+# ─────────────────────────────────────────────────────────────────────
+# CONTAINER MANAGEMENT
+# ─────────────────────────────────────────────────────────────────────
+
+cmd_install() {
+    if lxc_exists; then
+        log "Container already exists. Use 'update' to upgrade."
+        return 1
+    fi
+
+    log "Installing Streamlit LXC container..."
+    mkdir -p "$DATA_PATH" "$APPS_PATH" "$(dirname $LOG_FILE)"
+
+    # Create Alpine-based LXC container
+    lxc-create -n "$LXC_NAME" -t download -- \
+        -d alpine -r 3.19 -a arm64 || {
+        error "Failed to create LXC container"
+        return 1
+    }
+
+    # Configure container
+    cat >> "$LXC_PATH/config" << EOF
+
+# Streamlit bind mounts
+lxc.mount.entry = $APPS_PATH srv/apps none bind,create=dir 0 0
+lxc.mount.entry = $DATA_PATH/logs var/log/streamlit none bind,create=dir 0 0
+
+# Network
+lxc.net.0.type = veth
+lxc.net.0.link = br-lan
+lxc.net.0.flags = up
+lxc.net.0.name = eth0
+
+# Resource limits
+lxc.cgroup2.memory.max = 1G
+lxc.cgroup2.cpu.max = 100000 100000
+EOF
+
+    # Start container and install packages
+    lxc-start -n "$LXC_NAME"
+    sleep 5
+
+    log "Installing packages inside container..."
+    lxc-attach -n "$LXC_NAME" -- sh -c '
+        apk update
+        apk add python3 py3-pip py3-virtualenv git bash curl
+        pip3 install --break-system-packages streamlit pandas numpy plotly altair pillow
+        mkdir -p /srv/apps /var/log/streamlit
+    '
+
+    # Create hello world app
+    cat > "$APPS_PATH/hello/app.py" << 'PYEOF'
+import streamlit as st
+
+st.set_page_config(page_title="SecuBox Streamlit", page_icon=":rocket:")
+st.title("Welcome to SecuBox Streamlit Platform")
+st.markdown("""
+This is your Streamlit application hosting environment.
+
+### Getting Started
+1. Upload a ZIP file containing your app
+2. The app should have an `app.py` or `main.py` entrypoint
+3. Include `requirements.txt` for dependencies
+
+### Features
+- Isolated LXC container execution
+- Automatic dependency installation
+- Domain/vhost publishing
+- Gitea integration for version control
+""")
+PYEOF
+
+    log "Container installation complete"
+    return 0
+}
+
+cmd_uninstall() {
+    log "Uninstalling Streamlit container..."
+
+    if lxc_running; then
+        lxc-stop -n "$LXC_NAME" || true
+        sleep 2
+    fi
+
+    if lxc_exists; then
+        lxc-destroy -n "$LXC_NAME" || true
+    fi
+
+    log "Container removed (data preserved in $DATA_PATH)"
+}
+
+cmd_update() {
+    if ! lxc_exists; then
+        error "Container not installed. Run install first."
+        return 1
+    fi
+
+    local was_running=false
+    if lxc_running; then
+        was_running=true
+        log "Stopping container for update..."
+        lxc-stop -n "$LXC_NAME"
+        sleep 2
+    fi
+
+    log "Updating packages inside container..."
+    lxc-start -n "$LXC_NAME"
+    sleep 3
+
+    lxc-attach -n "$LXC_NAME" -- sh -c '
+        apk update && apk upgrade
+        pip3 install --break-system-packages --upgrade streamlit pandas numpy
+    '
+
+    if ! $was_running; then
+        lxc-stop -n "$LXC_NAME"
+    fi
+
+    log "Update complete"
+}
+
+cmd_start() {
+    if ! lxc_exists; then
+        error "Container not installed"
+        return 1
+    fi
+
+    if lxc_running; then
+        log "Container already running"
+        return 0
+    fi
+
+    log "Starting Streamlit container..."
+    lxc-start -n "$LXC_NAME"
+    sleep 2
+
+    # Start any autostart instances
+    cmd_autostart
+
+    log "Container started"
+}
+
+cmd_stop() {
+    if ! lxc_running; then
+        log "Container not running"
+        return 0
+    fi
+
+    log "Stopping Streamlit container..."
+    lxc-stop -n "$LXC_NAME"
+    log "Container stopped"
+}
+
+cmd_status() {
+    local running="false"
+    local installed="false"
+
+    lxc_exists && installed="true"
+    lxc_running && running="true"
+
+    local app_count=0
+    [ -d "$APPS_PATH" ] && app_count=$(find "$APPS_PATH" -maxdepth 1 -type d | wc -l)
+    app_count=$((app_count - 1))
+    [ $app_count -lt 0 ] && app_count=0
+
+    cat << EOF
+{
+  "installed": $installed,
+  "running": $running,
+  "container": "$LXC_NAME",
+  "data_path": "$DATA_PATH",
+  "app_count": $app_count
+}
+EOF
+}
+
+# ─────────────────────────────────────────────────────────────────────
+# APP MANAGEMENT
+# ─────────────────────────────────────────────────────────────────────
+
+cmd_app_list() {
+    echo '{"apps":['
+    local first=true
+
+    for app_dir in "$APPS_PATH"/*/; do
+        [ -d "$app_dir" ] || continue
+        local name=$(basename "$app_dir")
+        [ "$name" = "*" ] && continue
+
+        # Find main py file
+        local main_py=""
+        for candidate in app.py main.py streamlit_app.py; do
+            [ -f "$app_dir/$candidate" ] && main_py="$candidate" && break
+        done
+
+        # Check if running (by checking port)
+        local running="false"
+        local port=$(grep -E "^port\s*=" "$app_dir/.streamlit.toml" 2>/dev/null | cut -d'=' -f2 | tr -d ' ' || echo "")
+        [ -n "$port" ] && ss -tln "sport = :$port" 2>/dev/null | grep -q "$port" && running="true"
+
+        $first || echo ","
+        first=false
+
+        cat << EOF
+  {"name": "$name", "main": "$main_py", "running": $running, "port": ${port:-0}}
+EOF
+    done
+
+    echo ']}'
+}
+
+cmd_app_start() {
+    local name="$1"
+    local port="${2:-8501}"
+
+    [ -z "$name" ] && { error "Usage: streamlitctl app start <name> [port]"; return 1; }
+    [ -d "$APPS_PATH/$name" ] || { error "App not found: $name"; return 1; }
+
+    if ! lxc_running; then
+        error "Container not running. Start it first."
+        return 1
+    fi
+
+    # Find entrypoint
+    local entrypoint=""
+    for candidate in app.py main.py streamlit_app.py; do
+        [ -f "$APPS_PATH/$name/$candidate" ] && entrypoint="$candidate" && break
+    done
+
+    [ -z "$entrypoint" ] && { error "No entrypoint found in $name"; return 1; }
+
+    # Save port config
+    mkdir -p "$APPS_PATH/$name"
+    echo "port = $port" > "$APPS_PATH/$name/.streamlit.toml"
+
+    log "Starting app $name on port $port..."
+
+    lxc-attach -n "$LXC_NAME" -- sh -c "
+        cd /srv/apps/$name
+        nohup streamlit run $entrypoint \
+            --server.port=$port \
+            --server.headless=true \
+            --server.address=0.0.0.0 \
+            > /var/log/streamlit/$name.log 2>&1 &
+        echo \$! > /var/run/streamlit-$name.pid
+    "
+
+    log "App $name started"
+}
+
+cmd_app_stop() {
+    local name="$1"
+    [ -z "$name" ] && { error "Usage: streamlitctl app stop <name>"; return 1; }
+
+    if ! lxc_running; then
+        return 0
+    fi
+
+    log "Stopping app $name..."
+
+    lxc-attach -n "$LXC_NAME" -- sh -c "
+        if [ -f /var/run/streamlit-$name.pid ]; then
+            kill \$(cat /var/run/streamlit-$name.pid) 2>/dev/null || true
+            rm -f /var/run/streamlit-$name.pid
+        fi
+        pkill -f \"streamlit.*$name\" 2>/dev/null || true
+    "
+
+    log "App $name stopped"
+}
+
+cmd_app_deploy() {
+    local zip_file="$1"
+    local name="$2"
+
+    [ -z "$zip_file" ] || [ ! -f "$zip_file" ] && {
+        error "Usage: streamlitctl app deploy <zipfile> [name]"
+        return 1
+    }
+
+    # Auto-name from filename if not specified
+    [ -z "$name" ] && name=$(basename "$zip_file" .zip | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g')
+
+    local app_dir="$APPS_PATH/$name"
+    log "Deploying $name from $zip_file..."
+
+    # Remove existing
+    [ -d "$app_dir" ] && rm -rf "$app_dir"
+    mkdir -p "$app_dir"
+
+    # Extract with flattening
+    local tmpdir="/tmp/streamlit_extract_$$"
+    mkdir -p "$tmpdir"
+    unzip -q "$zip_file" -d "$tmpdir"
+
+    # Check for single root directory
+    local root_count=$(ls -1 "$tmpdir" | wc -l)
+    if [ "$root_count" = "1" ]; then
+        local single_root="$tmpdir/$(ls -1 $tmpdir | head -1)"
+        if [ -d "$single_root" ]; then
+            mv "$single_root"/* "$app_dir/" 2>/dev/null || true
+            mv "$single_root"/.[!.]* "$app_dir/" 2>/dev/null || true
+        else
+            mv "$single_root" "$app_dir/"
+        fi
+    else
+        mv "$tmpdir"/* "$app_dir/" 2>/dev/null || true
+    fi
+    rm -rf "$tmpdir"
+
+    # Install requirements if present and container is running
+    if [ -f "$app_dir/requirements.txt" ] && lxc_running; then
+        log "Installing requirements..."
+        lxc-attach -n "$LXC_NAME" -- pip3 install --break-system-packages -r "/srv/apps/$name/requirements.txt" || true
+    fi
+
+    log "App $name deployed to $app_dir"
+    echo '{"success": true, "name": "'"$name"'", "path": "'"$app_dir"'"}'
+}
+
+cmd_app_remove() {
+    local name="$1"
+    [ -z "$name" ] && { error "Usage: streamlitctl app remove <name>"; return 1; }
+
+    # Stop if running
+    cmd_app_stop "$name" 2>/dev/null || true
+
+    # Remove directory
+    if [ -d "$APPS_PATH/$name" ]; then
+        rm -rf "$APPS_PATH/$name"
+        log "App $name removed"
+    else
+        error "App not found: $name"
+        return 1
+    fi
+}
+
+cmd_app_logs() {
+    local name="$1"
+    local lines="${2:-100}"
+
+    [ -z "$name" ] && { error "Usage: streamlitctl app logs <name> [lines]"; return 1; }
+
+    local log_file="$DATA_PATH/logs/$name.log"
+    if [ -f "$log_file" ]; then
+        tail -n "$lines" "$log_file"
+    else
+        echo "No logs found for $name"
+    fi
+}
+
+cmd_autostart() {
+    # Start apps marked for autostart in config
+    if [ -f "$CONF_PATH" ]; then
+        local apps=$(grep -E '^\[apps\.' "$CONF_PATH" | sed 's/\[apps\.//;s/\]//')
+        for name in $apps; do
+            local autostart=$(grep -A5 "^\[apps\.$name\]" "$CONF_PATH" | grep -E '^autostart\s*=' | grep -q 'true' && echo "true" || echo "false")
+            local port=$(grep -A5 "^\[apps\.$name\]" "$CONF_PATH" | grep -E '^port\s*=' | cut -d'=' -f2 | tr -d ' ')
+            if [ "$autostart" = "true" ] && [ -n "$port" ]; then
+                cmd_app_start "$name" "$port" 2>/dev/null || true
+            fi
+        done
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────────────
+# INSTANCE MANAGEMENT (multiple instances per app)
+# ─────────────────────────────────────────────────────────────────────
+
+cmd_instance_list() {
+    echo '{"instances":['
+    local first=true
+
+    if [ -f "$CONF_PATH" ]; then
+        grep -E '^\[instances\.' "$CONF_PATH" | while read -r line; do
+            local id=$(echo "$line" | sed 's/\[instances\.//;s/\]//')
+
+            # Parse instance config
+            local section=$(sed -n "/^\[instances\.$id\]/,/^\[/p" "$CONF_PATH" | head -n -1)
+            local app=$(echo "$section" | grep -E '^app\s*=' | cut -d'"' -f2)
+            local port=$(echo "$section" | grep -E '^port\s*=' | cut -d'=' -f2 | tr -d ' ')
+            local enabled=$(echo "$section" | grep -E '^enabled\s*=' | grep -q 'true' && echo "true" || echo "false")
+
+            local running="false"
+            [ -n "$port" ] && ss -tln "sport = :$port" 2>/dev/null | grep -q "$port" && running="true"
+
+            $first || echo ","
+            first=false
+
+            echo "  {\"id\": \"$id\", \"app\": \"$app\", \"port\": ${port:-0}, \"enabled\": $enabled, \"running\": $running}"
+        done
+    fi
+
+    echo ']}'
+}
+
+cmd_instance_start() {
+    local id="$1"
+    [ -z "$id" ] && { error "Usage: streamlitctl instance start <id>"; return 1; }
+
+    # Read instance config
+    if [ -f "$CONF_PATH" ]; then
+        local section=$(sed -n "/^\[instances\.$id\]/,/^\[/p" "$CONF_PATH" | head -n -1)
+        local app=$(echo "$section" | grep -E '^app\s*=' | cut -d'"' -f2)
+        local port=$(echo "$section" | grep -E '^port\s*=' | cut -d'=' -f2 | tr -d ' ')
+
+        [ -z "$app" ] || [ -z "$port" ] && { error "Instance $id not configured"; return 1; }
+
+        cmd_app_start "$app" "$port"
+    else
+        error "No config file found"
+        return 1
+    fi
+}
+
+cmd_instance_stop() {
+    local id="$1"
+    [ -z "$id" ] && { error "Usage: streamlitctl instance stop <id>"; return 1; }
+
+    if [ -f "$CONF_PATH" ]; then
+        local section=$(sed -n "/^\[instances\.$id\]/,/^\[/p" "$CONF_PATH" | head -n -1)
+        local app=$(echo "$section" | grep -E '^app\s*=' | cut -d'"' -f2)
+
+        [ -n "$app" ] && cmd_app_stop "$app"
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────────────
+# MIGRATION
+# ─────────────────────────────────────────────────────────────────────
+
+cmd_migrate() {
+    local source="${1:-192.168.255.1}"
+
+    log "Migrating Streamlit data from $source..."
+    mkdir -p "$DATA_PATH" "$APPS_PATH"
+
+    # Sync apps directory
+    log "Syncing applications..."
+    rsync -avz --progress "root@$source:/srv/streamlit/apps/" "$APPS_PATH/" 2>/dev/null || {
+        # Try alternative path
+        rsync -avz --progress "root@$source:/overlay/upper/srv/streamlit/apps/" "$APPS_PATH/" 2>/dev/null || true
+    }
+
+    # Convert UCI config to TOML
+    log "Converting UCI configuration to TOML..."
+    ssh "root@$source" "uci show streamlit 2>/dev/null" | while read -r line; do
+        case "$line" in
+            streamlit.main.*)
+                key=$(echo "$line" | cut -d'.' -f3 | cut -d'=' -f1)
+                val=$(echo "$line" | cut -d'=' -f2- | tr -d "'")
+                echo "$key = \"$val\""
+                ;;
+        esac
+    done > "$CONF_PATH.tmp"
+
+    # Add apps sections
+    for app_dir in "$APPS_PATH"/*/; do
+        [ -d "$app_dir" ] || continue
+        local name=$(basename "$app_dir")
+        [ "$name" = "*" ] && continue
+
+        # Get port from UCI if available
+        local port=$(ssh "root@$source" "uci -q get streamlit.$name.port 2>/dev/null" || echo "")
+        local enabled=$(ssh "root@$source" "uci -q get streamlit.$name.enabled 2>/dev/null" || echo "1")
+
+        cat >> "$CONF_PATH.tmp" << EOF
+
+[apps.$name]
+enabled = $([ "$enabled" = "1" ] && echo "true" || echo "false")
+port = ${port:-0}
+EOF
+    done
+
+    # Finalize config
+    [ -s "$CONF_PATH.tmp" ] && mv "$CONF_PATH.tmp" "$CONF_PATH"
+
+    # Count migrated apps
+    local count=$(find "$APPS_PATH" -maxdepth 1 -type d | wc -l)
+    count=$((count - 1))
+
+    log "Migration complete: $count apps imported"
+    echo "{\"success\": true, \"apps_migrated\": $count}"
+}
+
+# ─────────────────────────────────────────────────────────────────────
+# GITEA INTEGRATION
+# ─────────────────────────────────────────────────────────────────────
+
+cmd_gitea_push() {
+    local name="$1"
+    [ -z "$name" ] && { error "Usage: streamlitctl gitea push <app>"; return 1; }
+    [ -d "$APPS_PATH/$name" ] || { error "App not found: $name"; return 1; }
+
+    # Read Gitea config
+    if [ ! -f "$CONF_PATH" ]; then
+        error "No config file. Configure Gitea first."
+        return 1
+    fi
+
+    local gitea_url=$(grep -E '^url\s*=' "$CONF_PATH" | head -1 | cut -d'"' -f2)
+    local gitea_user=$(grep -E '^user\s*=' "$CONF_PATH" | head -1 | cut -d'"' -f2)
+    local gitea_token=$(grep -E '^token\s*=' "$CONF_PATH" | head -1 | cut -d'"' -f2)
+
+    [ -z "$gitea_url" ] && { error "Gitea URL not configured"; return 1; }
+
+    cd "$APPS_PATH/$name"
+
+    # Initialize git if needed
+    if [ ! -d .git ]; then
+        git init
+        git add -A
+        git commit -m "Initial commit from SecuBox Streamlit"
+    fi
+
+    # Create repo on Gitea if it doesn't exist
+    if [ -n "$gitea_token" ]; then
+        curl -s -X POST "$gitea_url/api/v1/user/repos" \
+            -H "Authorization: token $gitea_token" \
+            -H "Content-Type: application/json" \
+            -d "{\"name\": \"$name\", \"private\": true}" 2>/dev/null || true
+    fi
+
+    # Set remote and push
+    local remote_url="$gitea_url/${gitea_user}/${name}.git"
+    git remote remove origin 2>/dev/null || true
+    git remote add origin "$remote_url"
+
+    if [ -n "$gitea_token" ]; then
+        # Use token in URL
+        remote_url=$(echo "$remote_url" | sed "s|://|://$gitea_token@|")
+        git push -u "$remote_url" main 2>/dev/null || git push -u "$remote_url" master 2>/dev/null || true
+    fi
+
+    log "Pushed $name to Gitea"
+}
+
+cmd_gitea_clone() {
+    local name="$1"
+    local repo="$2"
+
+    [ -z "$name" ] || [ -z "$repo" ] && {
+        error "Usage: streamlitctl gitea clone <name> <repo_url>"
+        return 1
+    }
+
+    local app_dir="$APPS_PATH/$name"
+    [ -d "$app_dir" ] && { error "App already exists: $name"; return 1; }
+
+    log "Cloning $repo to $name..."
+    git clone "$repo" "$app_dir"
+
+    # Install requirements if present
+    if [ -f "$app_dir/requirements.txt" ] && lxc_running; then
+        lxc-attach -n "$LXC_NAME" -- pip3 install --break-system-packages -r "/srv/apps/$name/requirements.txt" || true
+    fi
+
+    log "Cloned $name from Gitea"
+}
+
+# ─────────────────────────────────────────────────────────────────────
+# MAIN
+# ─────────────────────────────────────────────────────────────────────
+
+load_config
+
+case "${1:-}" in
+    install)    cmd_install ;;
+    uninstall)  cmd_uninstall ;;
+    update)     cmd_update ;;
+    start)      cmd_start ;;
+    stop)       cmd_stop ;;
+    status)     cmd_status ;;
+    restart)    cmd_stop; sleep 1; cmd_start ;;
+
+    app)
+        case "${2:-}" in
+            list)   cmd_app_list ;;
+            start)  cmd_app_start "$3" "$4" ;;
+            stop)   cmd_app_stop "$3" ;;
+            deploy) cmd_app_deploy "$3" "$4" ;;
+            remove) cmd_app_remove "$3" ;;
+            logs)   cmd_app_logs "$3" "$4" ;;
+            *)      echo "Usage: streamlitctl app {list|start|stop|deploy|remove|logs} [args]" ;;
+        esac
+        ;;
+
+    instance)
+        case "${2:-}" in
+            list)   cmd_instance_list ;;
+            start)  cmd_instance_start "$3" ;;
+            stop)   cmd_instance_stop "$3" ;;
+            *)      echo "Usage: streamlitctl instance {list|start|stop} [id]" ;;
+        esac
+        ;;
+
+    migrate)    cmd_migrate "$2" ;;
+    autostart)  cmd_autostart ;;
+
+    gitea)
+        case "${2:-}" in
+            push)   cmd_gitea_push "$3" ;;
+            clone)  cmd_gitea_clone "$3" "$4" ;;
+            *)      echo "Usage: streamlitctl gitea {push|clone} [args]" ;;
+        esac
+        ;;
+
+    *)
+        cat << EOF
+streamlitctl - Streamlit Platform Manager
+
+Container:
+  install       Install LXC container with Streamlit
+  uninstall     Remove container (preserves data)
+  update        Update packages in container
+  start         Start container
+  stop          Stop container
+  status        Show container status (JSON)
+  restart       Restart container
+
+Apps:
+  app list              List all apps
+  app start <name> [port]   Start an app
+  app stop <name>           Stop an app
+  app deploy <zip> [name]   Deploy from ZIP
+  app remove <name>         Remove an app
+  app logs <name> [lines]   View app logs
+
+Instances:
+  instance list         List configured instances
+  instance start <id>   Start instance
+  instance stop <id>    Stop instance
+
+Integration:
+  migrate [source]      Migrate from OpenWrt (default: 192.168.255.1)
+  gitea push <app>      Push app to Gitea
+  gitea clone <name> <url>  Clone from Gitea
+
+EOF
+        ;;
+esac

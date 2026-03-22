@@ -12,3 +12,6 @@ override_dh_auto_install:
 	# Modular nginx config
 	install -d debian/secubox-streamlit/etc/nginx/secubox.d
 	[ -f nginx/streamlit.conf ] && cp nginx/streamlit.conf debian/secubox-streamlit/etc/nginx/secubox.d/ || true
+	# Install control scripts
+	install -d debian/secubox-streamlit/usr/sbin
+	[ -d sbin ] && install -m 755 sbin/* debian/secubox-streamlit/usr/sbin/ || true

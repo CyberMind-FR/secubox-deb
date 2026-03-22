@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - Gitea Git Server</title>
+    <link rel="stylesheet" href="/shared/sidebar.css">
+    <style>
+        :root { --bg-dark: #0d1117; --bg-card: #161b22; --bg-sidebar: #0d1117; --border: #30363d; --text: #c9d1d9; --text-dim: #8b949e; --primary: #58a6ff; --cyan: #00d4ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; --purple: #a371f7; --orange: #f0883e; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
+        .sidebar { width: 220px; background: var(--bg-sidebar); border-right: 1px solid var(--border); position: fixed; height: 100vh; overflow-y: auto; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        .header h1 { font-size: 1.5rem; display: flex; align-items: center; gap: 0.5rem; }
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; margin-left: 0.5rem; }
+        .btn:hover { background: var(--bg-dark); }
+        .btn.primary { background: rgba(88,166,255,0.1); border-color: var(--primary); color: var(--primary); }
+        .btn.success { background: rgba(63,185,80,0.1); border-color: var(--green); color: var(--green); }
+        .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
+        .btn.warning { background: rgba(210,153,34,0.1); border-color: var(--yellow); color: var(--yellow); }
+
+        /* Three-fold tabs */
+        .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
+        .tab { padding: 0.75rem 1.5rem; cursor: pointer; border-bottom: 2px solid transparent; color: var(--text-dim); }
+        .tab:hover { color: var(--text); }
+        .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Stats row */
+        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
+        .stat-card .value { font-size: 2rem; font-weight: bold; color: var(--orange); }
+        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); }
+
+        /* Components grid */
+        .components-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .component-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; }
+        .component-card h3 { font-size: 1rem; margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center; }
+        .component-card .meta { font-size: 0.8rem; color: var(--text-dim); margin-bottom: 0.5rem; }
+        .component-card .status-row { display: flex; justify-content: space-between; align-items: center; }
+
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
+        .card h2 { font-size: 1rem; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; }
+        .status-badge { display: inline-flex; align-items: center; gap: 0.5rem; padding: 4px 12px; border-radius: 12px; font-size: 0.8rem; }
+        .status-badge.running { background: rgba(63,185,80,0.15); color: var(--green); }
+        .status-badge.stopped { background: rgba(248,81,73,0.15); color: var(--red); }
+        .status-badge.installing { background: rgba(210,153,34,0.15); color: var(--yellow); }
+
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 0.6rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.875rem; }
+        th { color: var(--text-dim); font-size: 0.75rem; text-transform: uppercase; }
+
+        /* Access URLs */
+        .url-box { background: var(--bg-dark); padding: 0.75rem; border-radius: 6px; font-family: monospace; font-size: 0.85rem; margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center; }
+        .url-label { font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; margin-bottom: 0.25rem; }
+        .url-box a { color: var(--primary); }
+        .copy-btn { background: var(--bg-card); border: 1px solid var(--border); color: var(--text-dim); padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 0.7rem; }
+        .copy-btn:hover { color: var(--text); }
+
+        .progress-bar { width: 100%; height: 8px; background: var(--bg-dark); border-radius: 4px; overflow: hidden; }
+        .progress-fill { height: 100%; background: var(--primary); transition: width 0.3s; }
+
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: center; justify-content: center; }
+        .modal.show { display: flex; }
+        .modal-content { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; min-width: 400px; max-width: 90vw; }
+        .modal-content h3 { margin-bottom: 1rem; }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.25rem; font-size: 0.8rem; color: var(--text-dim); }
+        .form-group input { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-dark); color: var(--text); }
+        .form-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+    <main class="main">
+        <header class="header">
+            <h1>Gitea Git Server</h1>
+            <div>
+                <span class="status-badge" id="status-badge">Loading...</span>
+                <button class="btn success" id="btn-start" onclick="startService()" style="display:none">Start</button>
+                <button class="btn danger" id="btn-stop" onclick="stopService()" style="display:none">Stop</button>
+                <button class="btn" onclick="refresh()">Refresh</button>
+            </div>
+        </header>
+
+        <!-- Three-fold navigation -->
+        <div class="tabs">
+            <div class="tab active" onclick="showTab('components')">Components</div>
+            <div class="tab" onclick="showTab('status')">Status</div>
+            <div class="tab" onclick="showTab('access')">Access</div>
+            <div class="tab" onclick="showTab('repos')">Repositories</div>
+            <div class="tab" onclick="showTab('users')">Users</div>
+            <div class="tab" onclick="showTab('actions')">Actions</div>
+        </div>
+
+        <!-- COMPONENTS TAB -->
+        <div class="tab-content active" id="tab-components">
+            <div class="components-grid">
+                <div class="component-card">
+                    <h3>
+                        Gitea LXC
+                        <span class="status-badge" id="gitea-badge">-</span>
+                    </h3>
+                    <div class="meta">Alpine Linux container running Gitea git server</div>
+                    <div class="meta" id="gitea-ip">IP: -</div>
+                    <div class="meta" id="gitea-version">Version: -</div>
+                    <div class="status-row">
+                        <span id="gitea-installed">Not installed</span>
+                        <div>
+                            <button class="btn" onclick="showLogs()" style="padding:0.25rem 0.5rem;font-size:0.75rem">Logs</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card" id="install-card" style="display:none">
+                <h2>Installation Progress</h2>
+                <div class="progress-bar"><div class="progress-fill" id="install-progress" style="width:0%"></div></div>
+                <p id="install-message" style="margin-top:0.5rem;color:var(--text-dim)">Initializing...</p>
+            </div>
+
+            <div class="card">
+                <h2>Quick Stats</h2>
+                <div class="stats-row">
+                    <div class="stat-card"><div class="value" id="repo-count">-</div><div class="label">Repositories</div></div>
+                    <div class="stat-card"><div class="value" id="user-count">-</div><div class="label">Users</div></div>
+                    <div class="stat-card"><div class="value" id="disk-usage">-</div><div class="label">Disk Usage</div></div>
+                    <div class="stat-card"><div class="value" id="version">-</div><div class="label">Version</div></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- STATUS TAB -->
+        <div class="tab-content" id="tab-status">
+            <div class="card">
+                <h2>Service Health</h2>
+                <table>
+                    <thead><tr><th>Component</th><th>Status</th><th>Details</th></tr></thead>
+                    <tbody id="health-table">
+                        <tr><td>Gitea</td><td id="health-gitea">-</td><td id="health-gitea-detail">-</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="card">
+                <h2>Container Information</h2>
+                <table>
+                    <tbody>
+                        <tr><td>Container Name</td><td id="container-name">gitea</td></tr>
+                        <tr><td>Container IP</td><td id="container-ip">-</td></tr>
+                        <tr><td>HTTP Port</td><td id="http-port">-</td></tr>
+                        <tr><td>SSH Port</td><td id="ssh-port">-</td></tr>
+                        <tr><td>Data Path</td><td>/srv/gitea</td></tr>
+                        <tr><td>LXC Path</td><td>/srv/lxc/gitea</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ACCESS TAB -->
+        <div class="tab-content" id="tab-access">
+            <div class="card">
+                <h2>Web Interface</h2>
+                <div class="url-label">Gitea Dashboard</div>
+                <div class="url-box">
+                    <a id="web-url" href="#" target="_blank">-</a>
+                    <button class="copy-btn" onclick="copyUrl('web-url')">Copy</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>Clone URLs</h2>
+                <div class="url-label">HTTP Clone</div>
+                <div class="url-box">
+                    <span id="http-clone">-</span>
+                    <button class="copy-btn" onclick="copyUrl('http-clone')">Copy</button>
+                </div>
+                <div class="url-label">SSH Clone</div>
+                <div class="url-box">
+                    <span id="ssh-clone">-</span>
+                    <button class="copy-btn" onclick="copyUrl('ssh-clone')">Copy</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>API Access</h2>
+                <div class="url-label">Gitea API</div>
+                <div class="url-box">
+                    <span id="api-url">-</span>
+                    <button class="copy-btn" onclick="copyUrl('api-url')">Copy</button>
+                </div>
+                <p style="margin-top:0.5rem;font-size:0.8rem;color:var(--text-dim)">
+                    API documentation available at <code>/api/swagger</code>
+                </p>
+            </div>
+        </div>
+
+        <!-- REPOS TAB -->
+        <div class="tab-content" id="tab-repos">
+            <div class="card">
+                <h2>Repositories <button class="btn" style="padding:0.25rem 0.5rem;font-size:0.75rem" onclick="loadRepos()">Refresh</button></h2>
+                <table>
+                    <thead><tr><th>Name</th><th>Owner</th><th>Size</th><th>Actions</th></tr></thead>
+                    <tbody id="repo-list"><tr><td colspan="4">Loading...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- USERS TAB -->
+        <div class="tab-content" id="tab-users">
+            <div class="card">
+                <h2>Users <button class="btn success" style="padding:0.25rem 0.5rem;font-size:0.75rem" onclick="showAddUser()">+ Add User</button></h2>
+                <table>
+                    <thead><tr><th>Username</th><th>Email</th><th>Admin</th><th>Actions</th></tr></thead>
+                    <tbody id="user-list"><tr><td colspan="4">Loading...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ACTIONS TAB -->
+        <div class="tab-content" id="tab-actions">
+            <div class="card">
+                <h2>Service Control</h2>
+                <button class="btn success" onclick="startService()">Start</button>
+                <button class="btn danger" onclick="stopService()">Stop</button>
+                <button class="btn" onclick="restartService()">Restart</button>
+                <button class="btn primary" id="btn-install" onclick="installGitea()" style="display:none">Install Gitea</button>
+            </div>
+
+            <div class="card">
+                <h2>Backup & Restore</h2>
+                <button class="btn" onclick="createBackup()">Create Backup</button>
+                <button class="btn" onclick="showBackups()">View Backups</button>
+            </div>
+
+            <div class="card">
+                <h2>Migration</h2>
+                <p style="margin-bottom:1rem;color:var(--text-dim);font-size:0.85rem">
+                    Import repositories and users from existing OpenWrt SecuBox installation.
+                </p>
+                <button class="btn warning" onclick="showMigrate()">Migrate from OpenWrt</button>
+            </div>
+
+            <div class="card">
+                <h2>Diagnostics</h2>
+                <button class="btn" onclick="showLogs()">View Logs</button>
+                <button class="btn" onclick="openShell()">Container Shell</button>
+            </div>
+        </div>
+    </main>
+
+    <!-- Add User Modal -->
+    <div class="modal" id="user-modal">
+        <div class="modal-content">
+            <h3>Add User</h3>
+            <div class="form-group"><label>Username</label><input type="text" id="new-username"></div>
+            <div class="form-group"><label>Email</label><input type="email" id="new-email"></div>
+            <div class="form-group"><label>Password</label><input type="password" id="new-password"></div>
+            <div class="form-group"><label><input type="checkbox" id="new-admin"> Admin user</label></div>
+            <div class="form-actions">
+                <button class="btn" onclick="hideModal('user-modal')">Cancel</button>
+                <button class="btn success" onclick="addUser()">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Migration Modal -->
+    <div class="modal" id="migrate-modal">
+        <div class="modal-content">
+            <h3>Migrate from OpenWrt</h3>
+            <p style="margin-bottom:1rem;color:var(--text-dim);font-size:0.85rem">
+                This will import git repositories, users, and configuration from an existing OpenWrt SecuBox installation.
+            </p>
+            <div class="form-group">
+                <label>Source IP Address</label>
+                <input type="text" id="migrate-source" value="192.168.255.1" placeholder="192.168.255.1">
+            </div>
+            <p style="color:var(--yellow);font-size:0.8rem;margin-bottom:1rem">
+                Ensure SSH key is configured: <code>ssh-copy-id root@192.168.255.1</code>
+            </p>
+            <div class="form-actions">
+                <button class="btn" onclick="hideModal('migrate-modal')">Cancel</button>
+                <button class="btn warning" onclick="doMigrate()">Start Migration</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Logs Modal -->
+    <div class="modal" id="logs-modal">
+        <div class="modal-content" style="min-width:600px;max-height:80vh;overflow:auto">
+            <h3>Gitea Logs</h3>
+            <pre id="logs-content" style="background:var(--bg-dark);padding:1rem;border-radius:6px;font-size:0.75rem;overflow-x:auto;max-height:400px;overflow-y:auto">Loading...</pre>
+            <div class="form-actions">
+                <button class="btn" onclick="hideModal('logs-modal')">Close</button>
+                <button class="btn" onclick="loadLogs()">Refresh</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API = '/api/v1/gitea';
+        const token = () => localStorage.getItem('sbx_token');
+        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+
+        async function api(path, opts = {}) {
+            try {
+                const res = await fetch(API + path, { ...opts, headers: headers() });
+                if (res.status === 401) { window.location = '/login.html'; return {}; }
+                return res.json();
+            } catch { return {}; }
+        }
+
+        let status = {};
+        let access = {};
+
+        function showTab(name) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelector(`[onclick="showTab('${name}')"]`).classList.add('active');
+            document.getElementById('tab-' + name).classList.add('active');
+
+            if (name === 'repos') loadRepos();
+            if (name === 'users') loadUsers();
+        }
+
+        async function loadStatus() {
+            status = await api('/status');
+            const badge = document.getElementById('status-badge');
+
+            if (status.running) {
+                badge.textContent = 'Running';
+                badge.className = 'status-badge running';
+                document.getElementById('btn-start').style.display = 'none';
+                document.getElementById('btn-stop').style.display = 'inline-block';
+                document.getElementById('btn-install').style.display = 'none';
+                document.getElementById('gitea-badge').textContent = 'Running';
+                document.getElementById('gitea-badge').className = 'status-badge running';
+            } else if (status.installed) {
+                badge.textContent = 'Stopped';
+                badge.className = 'status-badge stopped';
+                document.getElementById('btn-start').style.display = 'inline-block';
+                document.getElementById('btn-stop').style.display = 'none';
+                document.getElementById('btn-install').style.display = 'none';
+                document.getElementById('gitea-badge').textContent = 'Stopped';
+                document.getElementById('gitea-badge').className = 'status-badge stopped';
+            } else {
+                badge.textContent = 'Not Installed';
+                badge.className = 'status-badge stopped';
+                document.getElementById('btn-start').style.display = 'none';
+                document.getElementById('btn-stop').style.display = 'none';
+                document.getElementById('btn-install').style.display = 'inline-block';
+                document.getElementById('gitea-badge').textContent = 'Not Installed';
+                document.getElementById('gitea-badge').className = 'status-badge stopped';
+            }
+
+            // Stats
+            document.getElementById('repo-count').textContent = status.repo_count || 0;
+            document.getElementById('user-count').textContent = status.user_count || 0;
+            document.getElementById('disk-usage').textContent = status.storage || '-';
+            document.getElementById('version').textContent = status.version || '-';
+            document.getElementById('gitea-version').textContent = 'Version: ' + (status.version || '-');
+
+            // Container info
+            const comp = status.components?.gitea || {};
+            document.getElementById('gitea-ip').textContent = 'IP: ' + (comp.ip || '-');
+            document.getElementById('gitea-installed').textContent = comp.installed ? 'Installed' : 'Not installed';
+            document.getElementById('container-ip').textContent = comp.ip || '-';
+            document.getElementById('http-port').textContent = status.http_port || 3000;
+            document.getElementById('ssh-port').textContent = status.ssh_port || 2222;
+
+            // Health
+            document.getElementById('health-gitea').innerHTML = status.running
+                ? '<span style="color:var(--green)">OK</span>'
+                : '<span style="color:var(--red)">DOWN</span>';
+            document.getElementById('health-gitea-detail').textContent = status.running
+                ? 'Container running at ' + (comp.ip || '-')
+                : 'Container stopped';
+        }
+
+        async function loadAccess() {
+            access = await api('/access');
+            const ip = access.http?.url?.replace('http://', '').split(':')[0] || 'localhost';
+            const port = status.http_port || 3000;
+            const sshPort = status.ssh_port || 2222;
+
+            document.getElementById('web-url').textContent = access.web_interface || '-';
+            document.getElementById('web-url').href = access.web_interface || '#';
+            document.getElementById('http-clone').textContent = `http://${ip}:${port}/OWNER/REPO.git`;
+            document.getElementById('ssh-clone').textContent = `git@${ip}:${sshPort}/OWNER/REPO.git`;
+            document.getElementById('api-url').textContent = access.api || '-';
+        }
+
+        async function loadRepos() {
+            const d = await api('/repos');
+            const list = document.getElementById('repo-list');
+            const repos = d.repos || [];
+            if (!repos.length) {
+                list.innerHTML = '<tr><td colspan="4" style="color:var(--text-dim)">No repositories</td></tr>';
+                return;
+            }
+            list.innerHTML = repos.map(r => `<tr>
+                <td><strong>${r.name}</strong></td>
+                <td>${r.owner}</td>
+                <td>${r.size}</td>
+                <td>
+                    <a href="${r.clone_http?.replace('.git','')}" target="_blank" class="btn" style="padding:2px 8px;font-size:0.7rem">Open</a>
+                </td>
+            </tr>`).join('');
+        }
+
+        async function loadUsers() {
+            const d = await api('/users');
+            const list = document.getElementById('user-list');
+            const users = d.users || [];
+            if (!users.length) {
+                list.innerHTML = '<tr><td colspan="4" style="color:var(--text-dim)">No users</td></tr>';
+                return;
+            }
+            list.innerHTML = users.map(u => `<tr>
+                <td><strong>${u.name}</strong></td>
+                <td>${u.email}</td>
+                <td>${u.is_admin ? '<span style="color:var(--green)">Yes</span>' : ''}</td>
+                <td>
+                    <button class="btn danger" onclick="deleteUser('${u.name}')" style="padding:2px 8px;font-size:0.7rem">Delete</button>
+                </td>
+            </tr>`).join('');
+        }
+
+        async function startService() {
+            await api('/start', { method: 'POST' });
+            setTimeout(refresh, 2000);
+        }
+
+        async function stopService() {
+            await api('/stop', { method: 'POST' });
+            setTimeout(refresh, 1000);
+        }
+
+        async function restartService() {
+            await api('/restart', { method: 'POST' });
+            setTimeout(refresh, 3000);
+        }
+
+        async function installGitea() {
+            await api('/install', { method: 'POST' });
+            document.getElementById('install-card').style.display = 'block';
+            pollInstallProgress();
+        }
+
+        async function pollInstallProgress() {
+            const d = await api('/install-progress');
+            document.getElementById('install-progress').style.width = d.progress + '%';
+            document.getElementById('install-message').textContent = d.message;
+            if (d.status === 'running') {
+                setTimeout(pollInstallProgress, 2000);
+            } else if (d.status === 'completed') {
+                document.getElementById('install-card').style.display = 'none';
+                refresh();
+            }
+        }
+
+        async function createBackup() {
+            const r = await api('/backup', { method: 'POST' });
+            alert(r.success ? 'Backup created: ' + (r.file || '') : 'Backup failed');
+        }
+
+        function showModal(id) { document.getElementById(id).classList.add('show'); }
+        function hideModal(id) { document.getElementById(id).classList.remove('show'); }
+        function showAddUser() { showModal('user-modal'); }
+        function showMigrate() { showModal('migrate-modal'); }
+
+        async function addUser() {
+            const username = document.getElementById('new-username').value;
+            const email = document.getElementById('new-email').value;
+            const password = document.getElementById('new-password').value;
+            const admin = document.getElementById('new-admin').checked;
+
+            const r = await api('/user', {
+                method: 'POST',
+                body: JSON.stringify({ username, email, password, admin })
+            });
+            if (r.success) {
+                hideModal('user-modal');
+                loadUsers();
+            } else {
+                alert('Error: ' + (r.detail || 'Failed'));
+            }
+        }
+
+        async function deleteUser(username) {
+            if (!confirm(`Delete user ${username}?`)) return;
+            const r = await api('/user/' + username, { method: 'DELETE' });
+            if (r.success) loadUsers();
+            else alert('Error: ' + (r.detail || 'Failed'));
+        }
+
+        async function doMigrate() {
+            const source = document.getElementById('migrate-source').value;
+            const r = await api('/migrate', {
+                method: 'POST',
+                body: JSON.stringify({ source })
+            });
+            hideModal('migrate-modal');
+            if (r.success) {
+                alert('Migration started. Check logs for progress.');
+            } else {
+                alert('Error: ' + (r.detail || 'Failed'));
+            }
+        }
+
+        async function loadLogs() {
+            const d = await api('/logs?lines=100');
+            document.getElementById('logs-content').textContent = (d.logs || []).join('\n') || 'No logs';
+        }
+
+        function showLogs() {
+            loadLogs();
+            showModal('logs-modal');
+        }
+
+        function showBackups() {
+            alert('Backup management coming soon');
+        }
+
+        function openShell() {
+            alert('Shell access: ssh root@HOST then lxc-attach -n gitea');
+        }
+
+        function copyUrl(id) {
+            const el = document.getElementById(id);
+            const text = el.textContent || el.innerText;
+            navigator.clipboard.writeText(text);
+        }
+
+        function refresh() { loadStatus(); loadAccess(); }
+        refresh();
+    </script>
+</body>
+</html>

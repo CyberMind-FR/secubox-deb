@@ -8,86 +8,257 @@
     <style>
         :root { --bg-dark: #0d1117; --bg-card: #161b22; --bg-sidebar: #0d1117; --border: #30363d; --text: #c9d1d9; --text-dim: #8b949e; --primary: #58a6ff; --cyan: #00d4ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; --purple: #a371f7; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
-        .sidebar { width: 220px; background: var(--bg-dark); border-right: 1px solid var(--border); position: fixed; height: 100vh; overflow-y: auto; }
-        .sidebar-header { padding: 1rem; border-bottom: 1px solid var(--border); }
-        .logo { font-weight: bold; font-size: 1.2rem; }
-        .logo span:nth-child(1) { color: var(--cyan); } .logo span:nth-child(2) { color: var(--red); } .logo span:nth-child(3) { color: var(--green); } .logo span:nth-child(4) { color: var(--yellow); }
-        .nav-section { padding: 0.5rem 0; }
-        .nav-section-title { padding: 0.5rem 1rem; font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
-        .nav-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 1rem; color: var(--text-dim); text-decoration: none; font-size: 0.9rem; border-left: 3px solid transparent; }
-        .nav-item:hover { background: rgba(255,255,255,0.05); color: var(--text); }
-        .nav-item.active { background: rgba(88,166,255,0.1); color: var(--primary); border-left-color: var(--primary); }
-        .nav-item .icon { width: 20px; text-align: center; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
+        .sidebar { width: 220px; background: var(--bg-sidebar); border-right: 1px solid var(--border); position: fixed; height: 100vh; overflow-y: auto; }
         .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
         .header h1 { font-size: 1.5rem; }
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; }
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; margin-left: 0.5rem; }
         .btn:hover { background: var(--bg-dark); }
         .btn.primary { background: rgba(88,166,255,0.1); border-color: var(--primary); color: var(--primary); }
+        .btn.success { background: rgba(63,185,80,0.1); border-color: var(--green); color: var(--green); }
+        .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
+        .btn.warning { background: rgba(210,153,34,0.1); border-color: var(--yellow); color: var(--yellow); }
+
+        .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
+        .tab { padding: 0.75rem 1.5rem; cursor: pointer; border-bottom: 2px solid transparent; color: var(--text-dim); }
+        .tab:hover { color: var(--text); }
+        .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
         .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
         .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
         .stat-card .value { font-size: 2rem; font-weight: bold; color: var(--cyan); }
         .stat-card .label { font-size: 0.75rem; color: var(--text-dim); }
+
+        .components-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .component-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; }
+        .component-card h3 { font-size: 1rem; margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center; }
+        .component-card .meta { font-size: 0.8rem; color: var(--text-dim); margin-bottom: 0.5rem; }
+
         .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
-        .card h2 { font-size: 1rem; margin-bottom: 1rem; }
+        .card h2 { font-size: 1rem; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; }
+        .status-badge { display: inline-flex; align-items: center; gap: 0.5rem; padding: 4px 12px; border-radius: 12px; font-size: 0.8rem; }
+        .status-badge.running { background: rgba(63,185,80,0.15); color: var(--green); }
+        .status-badge.stopped { background: rgba(248,81,73,0.15); color: var(--red); }
+
         table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+        th, td { padding: 0.6rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.875rem; }
         th { color: var(--text-dim); font-size: 0.75rem; text-transform: uppercase; }
         .badge { padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; }
         .badge.enabled { background: rgba(63,185,80,0.2); color: var(--green); }
         .badge.disabled { background: rgba(139,148,158,0.2); color: var(--text-dim); }
         .badge.ssl { background: rgba(88,166,255,0.2); color: var(--primary); }
+
         .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
         .form-group { margin-bottom: 1rem; }
-        .form-group label { display: block; margin-bottom: 0.5rem; color: var(--text-dim); font-size: 0.875rem; }
+        .form-group label { display: block; margin-bottom: 0.25rem; font-size: 0.8rem; color: var(--text-dim); }
         .form-group input, .form-group select { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-dark); color: var(--text); }
-        @media (max-width: 900px) { .sidebar { display: none; } .main { margin-left: 0; } .stats-row { grid-template-columns: repeat(2, 1fr); } .form-row { grid-template-columns: 1fr; } }
+        .form-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
+
+        .url-box { background: var(--bg-dark); padding: 0.75rem; border-radius: 6px; font-family: monospace; font-size: 0.85rem; margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center; }
+        .url-label { font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; margin-bottom: 0.25rem; }
+        .url-box a { color: var(--primary); }
+
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: center; justify-content: center; }
+        .modal.show { display: flex; }
+        .modal-content { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; min-width: 400px; max-width: 90vw; }
+        .modal-content h3 { margin-bottom: 1rem; }
     </style>
 </head>
 <body>
     <nav class="sidebar" id="sidebar"></nav>
     <script src="/shared/sidebar.js"></script>
     <main class="main">
-    <header class="header">
-        <h1>VHost Manager</h1>
-        <div><button class="btn" onclick="refresh()">Refresh</button></div>
-    </header>
+        <header class="header">
+            <h1>VHost Manager</h1>
+            <div>
+                <span class="status-badge" id="status-badge">Loading...</span>
+                <button class="btn" onclick="reloadNginx()">Reload Nginx</button>
+                <button class="btn" onclick="refresh()">Refresh</button>
+            </div>
+        </header>
 
-    <div class="stats-row">
-        <div class="stat-card"><div class="value" id="vhost-count">-</div><div class="label">Total VHosts</div></div>
-        <div class="stat-card"><div class="value" id="enabled-count">-</div><div class="label">Enabled</div></div>
-        <div class="stat-card"><div class="value" id="ssl-count">-</div><div class="label">SSL Enabled</div></div>
-        <div class="stat-card"><div class="value" id="nginx-status">-</div><div class="label">Nginx Status</div></div>
-    </div>
+        <!-- Three-fold navigation -->
+        <div class="tabs">
+            <div class="tab active" onclick="showTab('components')">Components</div>
+            <div class="tab" onclick="showTab('status')">Status</div>
+            <div class="tab" onclick="showTab('access')">Access</div>
+            <div class="tab" onclick="showTab('vhosts')">VHosts</div>
+            <div class="tab" onclick="showTab('certs')">Certificates</div>
+            <div class="tab" onclick="showTab('actions')">Actions</div>
+        </div>
 
-    <div class="card">
-        <h2>Add VHost</h2>
-        <div class="form-row">
+        <!-- COMPONENTS TAB -->
+        <div class="tab-content active" id="tab-components">
+            <div class="components-grid">
+                <div class="component-card">
+                    <h3>Nginx <span class="status-badge" id="nginx-badge">-</span></h3>
+                    <div class="meta">High-performance HTTP server and reverse proxy</div>
+                    <div class="meta" id="nginx-version">Version: -</div>
+                </div>
+                <div class="component-card">
+                    <h3>ACME <span class="status-badge" id="acme-badge">-</span></h3>
+                    <div class="meta">Let's Encrypt certificate automation</div>
+                    <div class="meta" id="acme-status">acme.sh client</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>Quick Stats</h2>
+                <div class="stats-row">
+                    <div class="stat-card"><div class="value" id="vhost-count">-</div><div class="label">Total VHosts</div></div>
+                    <div class="stat-card"><div class="value" id="enabled-count">-</div><div class="label">Enabled</div></div>
+                    <div class="stat-card"><div class="value" id="cert-count">-</div><div class="label">Certificates</div></div>
+                    <div class="stat-card"><div class="value" id="nginx-status">-</div><div class="label">Nginx Status</div></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- STATUS TAB -->
+        <div class="tab-content" id="tab-status">
+            <div class="card">
+                <h2>Service Health</h2>
+                <table>
+                    <thead><tr><th>Component</th><th>Status</th><th>Details</th></tr></thead>
+                    <tbody>
+                        <tr>
+                            <td>Nginx</td>
+                            <td id="health-nginx">-</td>
+                            <td id="health-nginx-detail">-</td>
+                        </tr>
+                        <tr>
+                            <td>ACME</td>
+                            <td id="health-acme">-</td>
+                            <td id="health-acme-detail">acme.sh certificate client</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="card">
+                <h2>Configuration</h2>
+                <table>
+                    <tbody>
+                        <tr><td>VHost Config Dir</td><td>/etc/nginx/sites-available</td></tr>
+                        <tr><td>Enabled Dir</td><td>/etc/nginx/sites-enabled</td></tr>
+                        <tr><td>ACME Dir</td><td>/etc/acme</td></tr>
+                        <tr><td>Webroot</td><td>/var/www/acme</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ACCESS TAB -->
+        <div class="tab-content" id="tab-access">
+            <div class="card">
+                <h2>Configured Domains</h2>
+                <div id="access-domains">Loading...</div>
+            </div>
+        </div>
+
+        <!-- VHOSTS TAB -->
+        <div class="tab-content" id="tab-vhosts">
+            <div class="card">
+                <h2>Add VHost <button class="btn success" style="padding:0.25rem 0.5rem;font-size:0.75rem" onclick="showAddVhost()">+ New</button></h2>
+            </div>
+
+            <div class="card">
+                <h2>Virtual Hosts</h2>
+                <table>
+                    <thead><tr><th>Domain</th><th>Backend</th><th>TLS</th><th>Status</th><th>Actions</th></tr></thead>
+                    <tbody id="vhost-list"><tr><td colspan="5">Loading...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- CERTS TAB -->
+        <div class="tab-content" id="tab-certs">
+            <div class="card">
+                <h2>Certificates <button class="btn success" style="padding:0.25rem 0.5rem;font-size:0.75rem" onclick="showRequestCert()">+ Request</button></h2>
+                <table>
+                    <thead><tr><th>Domain</th><th>Expires</th><th>Issuer</th><th>Actions</th></tr></thead>
+                    <tbody id="cert-list"><tr><td colspan="4">Loading...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ACTIONS TAB -->
+        <div class="tab-content" id="tab-actions">
+            <div class="card">
+                <h2>Service Control</h2>
+                <button class="btn" onclick="reloadNginx()">Reload Nginx</button>
+                <button class="btn" onclick="testConfig()">Test Config</button>
+            </div>
+
+            <div class="card">
+                <h2>Migration</h2>
+                <p style="margin-bottom:1rem;color:var(--text-dim);font-size:0.85rem">
+                    Import vhosts and certificates from existing OpenWrt SecuBox installation.
+                </p>
+                <button class="btn warning" onclick="showMigrate()">Migrate from OpenWrt</button>
+            </div>
+        </div>
+    </main>
+
+    <!-- Add VHost Modal -->
+    <div class="modal" id="vhost-modal">
+        <div class="modal-content">
+            <h3>Add VHost</h3>
             <div class="form-group"><label>Domain</label><input type="text" id="new-domain" placeholder="example.com"></div>
-            <div class="form-group"><label>Backend URL</label><input type="text" id="new-backend" placeholder="http://127.0.0.1:8080"></div>
+            <div class="form-group"><label>Backend URL</label><input type="text" id="new-backend" placeholder="http://localhost:3000"></div>
+            <div class="form-row">
+                <div class="form-group"><label>TLS Mode</label>
+                    <select id="new-tls">
+                        <option value="off">Off</option>
+                        <option value="acme">ACME (Let's Encrypt)</option>
+                        <option value="manual">Manual</option>
+                    </select>
+                </div>
+                <div class="form-group"><label>WebSocket</label>
+                    <select id="new-websocket">
+                        <option value="false">No</option>
+                        <option value="true">Yes</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-actions">
+                <button class="btn" onclick="hideModal('vhost-modal')">Cancel</button>
+                <button class="btn success" onclick="addVhost()">Create</button>
+            </div>
         </div>
-        <div class="form-row">
-            <div class="form-group"><label>SSL</label><select id="new-ssl"><option value="false">No SSL</option><option value="true">Enable SSL</option></select></div>
-            <div class="form-group"><label>Enabled</label><select id="new-enabled"><option value="true">Yes</option><option value="false">No</option></select></div>
-        </div>
-        <button class="btn primary" onclick="addVhost()">Create VHost</button>
     </div>
 
-    <div class="card">
-        <h2>Virtual Hosts</h2>
-        <table>
-            <thead><tr><th>Domain</th><th>Backend</th><th>SSL</th><th>Status</th><th>Actions</th></tr></thead>
-            <tbody id="vhost-list"><tr><td colspan="5">Loading...</td></tr></tbody>
-        </table>
+    <!-- Request Cert Modal -->
+    <div class="modal" id="cert-modal">
+        <div class="modal-content">
+            <h3>Request Certificate</h3>
+            <div class="form-group"><label>Domain</label><input type="text" id="cert-domain" placeholder="example.com"></div>
+            <div class="form-group"><label>Email</label><input type="email" id="cert-email" placeholder="admin@example.com"></div>
+            <div class="form-actions">
+                <button class="btn" onclick="hideModal('cert-modal')">Cancel</button>
+                <button class="btn success" onclick="requestCert()">Request</button>
+            </div>
+        </div>
     </div>
 
-    <div class="card">
-        <h2>Certificates</h2>
-        <table>
-            <thead><tr><th>Domain</th><th>Expires</th><th>Actions</th></tr></thead>
-            <tbody id="cert-list"><tr><td colspan="3">Loading...</td></tr></tbody>
-        </table>
+    <!-- Migration Modal -->
+    <div class="modal" id="migrate-modal">
+        <div class="modal-content">
+            <h3>Migrate from OpenWrt</h3>
+            <p style="margin-bottom:1rem;color:var(--text-dim);font-size:0.85rem">
+                Import vhosts and certificates from existing SecuBox.
+            </p>
+            <div class="form-group">
+                <label>Source IP Address</label>
+                <input type="text" id="migrate-source" value="192.168.255.1">
+            </div>
+            <div class="form-actions">
+                <button class="btn" onclick="hideModal('migrate-modal')">Cancel</button>
+                <button class="btn warning" onclick="doMigrate()">Start Migration</button>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -98,31 +269,80 @@
         async function api(path, opts = {}) {
             try {
                 const res = await fetch(API + path, { ...opts, headers: headers() });
-                if (res.status === 401) { window.location = '/login/'; return {}; }
+                if (res.status === 401) { window.location = '/login.html'; return {}; }
                 return res.json();
             } catch { return {}; }
         }
 
+        let status = {};
+
+        function showTab(name) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelector(`[onclick="showTab('${name}')"]`).classList.add('active');
+            document.getElementById('tab-' + name).classList.add('active');
+            if (name === 'vhosts') loadVhosts();
+            if (name === 'certs') loadCerts();
+            if (name === 'access') loadAccess();
+        }
+
         async function loadStatus() {
-            const d = await api('/status');
-            document.getElementById('vhost-count').textContent = d.vhost_count || 0;
-            document.getElementById('enabled-count').textContent = d.enabled_count || 0;
-            document.getElementById('ssl-count').textContent = d.ssl_count || 0;
-            document.getElementById('nginx-status').textContent = d.nginx_running ? 'Running' : 'Stopped';
-            document.getElementById('nginx-status').style.color = d.nginx_running ? 'var(--green)' : 'var(--red)';
+            status = await api('/status');
+            const badge = document.getElementById('status-badge');
+            const comp = status.components || {};
+
+            if (status.running) {
+                badge.textContent = 'Running';
+                badge.className = 'status-badge running';
+                document.getElementById('nginx-badge').textContent = 'Running';
+                document.getElementById('nginx-badge').className = 'status-badge running';
+            } else {
+                badge.textContent = 'Stopped';
+                badge.className = 'status-badge stopped';
+                document.getElementById('nginx-badge').textContent = 'Stopped';
+                document.getElementById('nginx-badge').className = 'status-badge stopped';
+            }
+
+            document.getElementById('vhost-count').textContent = status.vhost_count || 0;
+            document.getElementById('enabled-count').textContent = status.enabled_count || 0;
+            document.getElementById('cert-count').textContent = status.cert_count || 0;
+            document.getElementById('nginx-status').textContent = status.running ? 'Running' : 'Stopped';
+            document.getElementById('nginx-status').style.color = status.running ? 'var(--green)' : 'var(--red)';
+
+            const nginx = comp.nginx || {};
+            document.getElementById('nginx-version').textContent = 'Version: ' + (nginx.version || '-');
+            document.getElementById('health-nginx').innerHTML = status.running
+                ? '<span style="color:var(--green)">OK</span>'
+                : '<span style="color:var(--red)">DOWN</span>';
+            document.getElementById('health-nginx-detail').textContent = status.running
+                ? 'Nginx is running, version ' + (nginx.version || 'unknown')
+                : 'Nginx is not running';
+
+            const acme = comp.acme || {};
+            document.getElementById('acme-badge').textContent = acme.installed ? 'Ready' : 'Not Installed';
+            document.getElementById('acme-badge').className = acme.installed ? 'status-badge running' : 'status-badge stopped';
+            document.getElementById('health-acme').innerHTML = acme.installed
+                ? '<span style="color:var(--green)">OK</span>'
+                : '<span style="color:var(--yellow)">N/A</span>';
         }
 
         async function loadVhosts() {
             const d = await api('/vhosts');
             const list = document.getElementById('vhost-list');
             const vhosts = d.vhosts || [];
-            if (!vhosts.length) { list.innerHTML = '<tr><td colspan="5" style="color:var(--text-dim)">No vhosts</td></tr>'; return; }
+            if (!vhosts.length) {
+                list.innerHTML = '<tr><td colspan="5" style="color:var(--text-dim)">No vhosts configured</td></tr>';
+                return;
+            }
             list.innerHTML = vhosts.map(v => `<tr>
-                <td><a href="https://${v.domain}" target="_blank" style="color:var(--primary)">${v.domain}</a></td>
-                <td style="color:var(--text-dim)">${v.backend || '-'}</td>
-                <td>${v.ssl ? '<span class="badge ssl">SSL</span>' : '-'}</td>
+                <td><a href="${v.ssl ? 'https' : 'http'}://${v.domain}" target="_blank" style="color:var(--primary)">${v.domain}</a></td>
+                <td style="color:var(--text-dim);font-family:monospace;font-size:0.8rem">${v.backend || '-'}</td>
+                <td>${v.ssl ? '<span class="badge ssl">' + (v.tls_mode || 'SSL') + '</span>' : '-'}</td>
                 <td><span class="badge ${v.enabled ? 'enabled' : 'disabled'}">${v.enabled ? 'Enabled' : 'Disabled'}</span></td>
-                <td><button class="btn" onclick="deleteVhost('${v.domain}')">Delete</button></td>
+                <td>
+                    <button class="btn" onclick="toggleVhost('${v.domain}', ${!v.enabled})" style="padding:2px 8px;font-size:0.7rem">${v.enabled ? 'Disable' : 'Enable'}</button>
+                    <button class="btn danger" onclick="deleteVhost('${v.domain}')" style="padding:2px 8px;font-size:0.7rem">Delete</button>
+                </td>
             </tr>`).join('');
         }
 
@@ -130,39 +350,128 @@
             const d = await api('/certificates');
             const list = document.getElementById('cert-list');
             const certs = d.certificates || [];
-            if (!certs.length) { list.innerHTML = '<tr><td colspan="3" style="color:var(--text-dim)">No certificates</td></tr>'; return; }
+            if (!certs.length) {
+                list.innerHTML = '<tr><td colspan="4" style="color:var(--text-dim)">No certificates</td></tr>';
+                return;
+            }
             list.innerHTML = certs.map(c => `<tr>
                 <td>${c.domain}</td>
                 <td>${c.expires || '-'}</td>
-                <td><button class="btn" onclick="renewCert('${c.domain}')">Renew</button></td>
+                <td style="color:var(--text-dim);font-size:0.8rem">${c.issuer || '-'}</td>
+                <td><button class="btn" onclick="renewCert('${c.domain}')" style="padding:2px 8px;font-size:0.7rem">Renew</button></td>
             </tr>`).join('');
         }
+
+        async function loadAccess() {
+            const d = await api('/access');
+            const container = document.getElementById('access-domains');
+            const vhosts = d.vhosts || [];
+            if (!vhosts.length) {
+                container.innerHTML = '<p style="color:var(--text-dim)">No domains configured</p>';
+                return;
+            }
+            container.innerHTML = vhosts.map(v => `
+                <div class="url-label">${v.domain}</div>
+                <div class="url-box">
+                    <a href="${v.url}" target="_blank">${v.url}</a>
+                    <span style="color:var(--text-dim);font-size:0.8rem">${v.backend}</span>
+                </div>
+            `).join('');
+        }
+
+        function showModal(id) { document.getElementById(id).classList.add('show'); }
+        function hideModal(id) { document.getElementById(id).classList.remove('show'); }
+        function showAddVhost() { showModal('vhost-modal'); }
+        function showRequestCert() { showModal('cert-modal'); }
+        function showMigrate() { showModal('migrate-modal'); }
 
         async function addVhost() {
             const domain = document.getElementById('new-domain').value.trim();
             const backend = document.getElementById('new-backend').value.trim();
-            const ssl = document.getElementById('new-ssl').value === 'true';
-            const enabled = document.getElementById('new-enabled').value === 'true';
+            const tls_mode = document.getElementById('new-tls').value;
+            const websocket = document.getElementById('new-websocket').value === 'true';
+
             if (!domain || !backend) { alert('Domain and backend required'); return; }
-            const r = await api('/vhost', { method: 'POST', body: JSON.stringify({ domain, backend, ssl, enabled }) });
-            if (r.success) { refresh(); document.getElementById('new-domain').value = ''; document.getElementById('new-backend').value = ''; }
-            else alert('Failed: ' + JSON.stringify(r));
+
+            const r = await api('/vhost', {
+                method: 'POST',
+                body: JSON.stringify({ domain, backend, tls_mode, websocket })
+            });
+            if (r.success) {
+                hideModal('vhost-modal');
+                refresh();
+                if (r.reload_required) reloadNginx();
+            } else {
+                alert('Failed: ' + (r.detail || JSON.stringify(r)));
+            }
+        }
+
+        async function toggleVhost(domain, enable) {
+            const r = await api('/vhost/' + domain, {
+                method: 'PUT',
+                body: JSON.stringify({ enabled: enable })
+            });
+            if (r.success) {
+                loadVhosts();
+                if (r.reload_required) reloadNginx();
+            }
         }
 
         async function deleteVhost(domain) {
             if (!confirm('Delete vhost ' + domain + '?')) return;
             const r = await api('/vhost/' + domain, { method: 'DELETE' });
-            if (r.success) refresh(); else alert('Failed');
+            if (r.success) {
+                refresh();
+                if (r.reload_required) reloadNginx();
+            }
+        }
+
+        async function requestCert() {
+            const domain = document.getElementById('cert-domain').value.trim();
+            const email = document.getElementById('cert-email').value.trim();
+            if (!domain || !email) { alert('Domain and email required'); return; }
+            const r = await api('/certificate/issue', {
+                method: 'POST',
+                body: JSON.stringify({ domain, email })
+            });
+            hideModal('cert-modal');
+            alert(r.success ? 'Certificate request started' : 'Failed');
         }
 
         async function renewCert(domain) {
-            const r = await api('/certificate/issue', { method: 'POST', body: JSON.stringify({ domain }) });
-            alert(r.success ? 'Certificate renewed' : 'Failed: ' + r.output);
+            const r = await api('/certificate/issue', {
+                method: 'POST',
+                body: JSON.stringify({ domain, email: 'admin@' + domain })
+            });
+            alert(r.success ? 'Certificate renewal started' : 'Failed');
+        }
+
+        async function reloadNginx() {
+            const r = await api('/reload', { method: 'POST' });
+            if (r.success) {
+                alert('Nginx reloaded');
+            } else {
+                alert('Reload failed: ' + (r.message || ''));
+            }
+        }
+
+        async function testConfig() {
+            const r = await api('/test', { method: 'POST' });
+            alert(r.valid ? 'Configuration is valid' : 'Invalid: ' + r.message);
+        }
+
+        async function doMigrate() {
+            const source = document.getElementById('migrate-source').value;
+            const r = await api('/migrate', {
+                method: 'POST',
+                body: JSON.stringify({ source })
+            });
+            hideModal('migrate-modal');
+            alert(r.success ? 'Migration started' : 'Failed');
         }
 
         function refresh() { loadStatus(); loadVhosts(); loadCerts(); }
         refresh();
     </script>
-    </main>
 </body>
 </html>

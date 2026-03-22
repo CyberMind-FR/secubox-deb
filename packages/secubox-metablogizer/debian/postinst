@@ -1,14 +1,8 @@
 #!/bin/bash
 set -e
-case "$1" in
-  configure)
-    id -u secubox >/dev/null 2>&1 || \
-      adduser --system --group --no-create-home --home /var/lib/secubox --shell /usr/sbin/nologin secubox
-    install -d -o secubox -g secubox -m 750 /run/secubox /var/lib/secubox
-    install -d -o secubox -g secubox -m 755 /srv/metablogizer/sites
-    systemctl daemon-reload
-    systemctl enable secubox-metablogizer.service
-    systemctl start secubox-metablogizer.service || true
-    ;;
-esac
-#DEBHELPER#
+mkdir -p /run/secubox /srv/metablogizer/sites
+chown secubox:secubox /run/secubox /srv/metablogizer/sites 2>/dev/null || true
+systemctl daemon-reload
+systemctl enable secubox-metablogizer 2>/dev/null || true
+systemctl start secubox-metablogizer 2>/dev/null || true
+exit 0

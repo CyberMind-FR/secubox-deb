@@ -26,6 +26,8 @@ CONFIG_DIR = "/etc/haproxy"
 WAF_SOCKET = "/run/secubox/waf.sock"
 HAPROXY_CFG = "/etc/haproxy/haproxy.cfg"
 VHOST_ROUTES_FILE = "/var/lib/secubox/haproxy/vhost-routes.json"
+CTL = "/usr/sbin/haproxyctl"
+CERTS_DIR = "/srv/haproxy/certs"
 
 
 def _cfg():
@@ -176,7 +178,107 @@ def _load_vhost_routes() -> Dict[str, str]:
     return {}
 
 
-# ── Status ────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════
+# THREE-FOLD ARCHITECTURE
+# ═══════════════════════════════════════════════════════════════════════
+
+# ── COMPONENTS ─────────────────────────────────────────────────────────
+
+@router.get("/components")
+async def components():
+    """List system components (public)."""
+    cfg = _cfg()
+
+    return {
+        "components": [
+            {
+                "name": "HAProxy Service",
+                "type": "service",
+                "description": "Load balancer and reverse proxy",
+                "running": _haproxy_running() or _docker_running(),
+                "config_path": HAPROXY_CFG
+            },
+            {
+                "name": "WAF Inspector",
+                "type": "service",
+                "description": "Web Application Firewall (mitmproxy)",
+                "enabled": cfg["waf_enabled"],
+                "available": _waf_available(),
+                "port": cfg["waf_backend_port"]
+            },
+            {
+                "name": "haproxyctl",
+                "type": "cli",
+                "description": "Control script for HAProxy management",
+                "path": CTL,
+                "installed": Path(CTL).exists()
+            },
+            {
+                "name": "Certificate Store",
+                "type": "storage",
+                "description": "TLS certificates directory",
+                "path": CERTS_DIR,
+                "exists": Path(CERTS_DIR).exists()
+            },
+            {
+                "name": "CrowdSec Bouncer",
+                "type": "integration",
+                "description": "IP reputation and blocking",
+                "enabled": cfg["crowdsec_enabled"]
+            }
+        ]
+    }
+
+
+# ── ACCESS ─────────────────────────────────────────────────────────────
+
+@router.get("/access")
+async def access():
+    """Get access information for HAProxy services (public)."""
+    cfg = _cfg()
+    vhosts = _load_vhosts()
+
+    access_points = [
+        {
+            "name": "HTTP Frontend",
+            "type": "frontend",
+            "port": cfg["http_port"],
+            "url": f"http://{{{{hostname}}}}:{cfg['http_port']}",
+            "protocol": "http"
+        },
+        {
+            "name": "HTTPS Frontend",
+            "type": "frontend",
+            "port": cfg["https_port"],
+            "url": f"https://{{{{hostname}}}}:{cfg['https_port']}",
+            "protocol": "https"
+        },
+        {
+            "name": "Stats Dashboard",
+            "type": "admin",
+            "port": cfg["stats_port"],
+            "url": f"http://{{{{hostname}}}}:{cfg['stats_port']}/stats",
+            "protocol": "http"
+        }
+    ]
+
+    # Add vhost access points
+    for vh in vhosts:
+        if vh.get("enabled"):
+            proto = "https" if vh.get("ssl") else "http"
+            access_points.append({
+                "name": vh["domain"],
+                "type": "vhost",
+                "domain": vh["domain"],
+                "backend": vh["backend"],
+                "url": f"{proto}://{vh['domain']}",
+                "waf_protected": not vh.get("waf_bypass", False)
+            })
+
+    return {"access": access_points}
+
+
+# ── STATUS ─────────────────────────────────────────────────────────────
 
 @router.get("/status")
 async def status():
@@ -635,7 +737,58 @@ async def get_config_file():
 
 @router.get("/health")
 async def health():
-    return {"status": "ok", "module": "haproxy"}
+    """Health check endpoint (public)."""
+    checks = {
+        "api": "ok",
+        "haproxyctl": "ok" if Path(CTL).exists() else "missing",
+        "haproxy": "running" if _haproxy_running() else "stopped",
+        "config": "ok" if Path(HAPROXY_CFG).exists() else "missing"
+    }
+
+    if _cfg()["waf_enabled"]:
+        checks["waf"] = "available" if _waf_available() else "unavailable"
+
+    overall = "healthy" if checks["haproxy"] == "running" else "degraded"
+
+    return {
+        "status": overall,
+        "module": "haproxy",
+        "checks": checks
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# MIGRATION
+# ═══════════════════════════════════════════════════════════════════════
+
+class MigrateRequest(BaseModel):
+    source: str = "192.168.255.1"
+
+
+@router.post("/migrate", dependencies=[Depends(require_jwt)])
+async def migrate(req: MigrateRequest):
+    """Migrate HAProxy config from OpenWrt SecuBox."""
+    import asyncio
+
+    def do_migrate():
+        return subprocess.run(
+            [CTL, "migrate", req.source],
+            capture_output=True, text=True, timeout=300
+        )
+
+    result = await asyncio.get_event_loop().run_in_executor(None, do_migrate)
+
+    if result.returncode == 0:
+        log.info("Migration completed from %s", req.source)
+        # Try to parse JSON output
+        try:
+            data = json.loads(result.stdout)
+            return {"success": True, **data}
+        except json.JSONDecodeError:
+            return {"success": True, "message": "Migration completed"}
+    else:
+        log.error("Migration failed: %s", result.stderr)
+        return {"success": False, "error": result.stderr or "Migration failed"}
 
 
 app.include_router(router)

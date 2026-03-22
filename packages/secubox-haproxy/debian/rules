@@ -12,3 +12,6 @@ override_dh_auto_install:
 	# Modular nginx config
 	install -d debian/secubox-haproxy/etc/nginx/secubox.d
 	[ -f nginx/haproxy.conf ] && cp nginx/haproxy.conf debian/secubox-haproxy/etc/nginx/secubox.d/ || true
+	# Install control scripts
+	install -d debian/secubox-haproxy/usr/sbin
+	[ -d sbin ] && install -m 755 sbin/* debian/secubox-haproxy/usr/sbin/ || true

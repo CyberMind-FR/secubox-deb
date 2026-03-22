@@ -178,7 +178,7 @@ fetch(API + '/verify', {credentials: 'include'})
   .then(function(r) { return r.json(); })
   .then(function(data) {
     if (data.valid) {
-      window.location.href = '/hub/';
+      window.location.href = '/';
     }
   })
   .catch(function() {});

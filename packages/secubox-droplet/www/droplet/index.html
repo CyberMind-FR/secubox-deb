@@ -124,7 +124,7 @@
             if (token) headers['Authorization'] = 'Bearer ' + token;
             try {
                 const res = await fetch(API + endpoint, { ...options, headers });
-                if (res.status === 401) { window.location = '/login/'; return {}; }
+                if (res.status === 401) { window.location = '/login.html'; return {}; }
                 return res.json();
             } catch (e) { return {}; }
         }

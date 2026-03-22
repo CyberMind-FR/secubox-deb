@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - Services Portal</title>
+    <style>
+        :root {
+            --bg-dark: #0d1117;
+            --bg-card: #161b22;
+            --bg-sidebar: #0d1117;
+            --border: #30363d;
+            --text: #c9d1d9;
+            --text-dim: #8b949e;
+            --primary: #58a6ff;
+            --cyan: #00d4ff;
+            --green: #3fb950;
+            --red: #f85149;
+            --yellow: #d29922;
+            --purple: #a371f7;
+            --orange: #f0883e;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg-dark);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 2rem;
+        }
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(88,166,255,0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(88,166,255,0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+            pointer-events: none;
+            z-index: -1;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header { text-align: center; margin-bottom: 3rem; }
+        .logo {
+            font-size: 3rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(135deg, var(--cyan), var(--primary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .logo-icon {
+            display: inline-block;
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, var(--primary), var(--cyan));
+            border-radius: 20px;
+            line-height: 80px;
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 8px 32px rgba(88, 166, 255, 0.3);
+        }
+        .tagline { color: var(--text-dim); font-size: 1.1rem; }
+        .section { margin-bottom: 2.5rem; }
+        .section-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-dim);
+            margin-bottom: 1rem;
+            padding-left: 0.5rem;
+            border-left: 3px solid var(--primary);
+        }
+        .services-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+        .service-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            text-align: center;
+            text-decoration: none;
+            color: var(--text);
+            transition: all 0.2s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        .service-card:hover {
+            border-color: var(--primary);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+        }
+        .service-card .icon {
+            font-size: 2.5rem;
+            width: 60px;
+            height: 60px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .service-card .name { font-weight: 600; font-size: 1rem; }
+        .service-card .desc { font-size: 0.75rem; color: var(--text-dim); }
+        .service-card .status {
+            font-size: 0.7rem;
+            padding: 2px 8px;
+            border-radius: 10px;
+            margin-top: auto;
+        }
+        .service-card .status.online { background: rgba(63, 185, 80, 0.15); color: var(--green); }
+        .service-card .status.offline { background: rgba(248, 81, 73, 0.15); color: var(--red); }
+        .service-card .status.external { background: rgba(88, 166, 255, 0.15); color: var(--primary); }
+
+        /* Icon backgrounds */
+        .icon.security { background: rgba(248, 81, 73, 0.15); }
+        .icon.network { background: rgba(88, 166, 255, 0.15); }
+        .icon.monitoring { background: rgba(63, 185, 80, 0.15); }
+        .icon.apps { background: rgba(163, 113, 247, 0.15); }
+        .icon.email { background: rgba(210, 153, 34, 0.15); }
+        .icon.dns { background: rgba(0, 212, 255, 0.15); }
+
+        .footer {
+            text-align: center;
+            margin-top: 3rem;
+            padding-top: 2rem;
+            border-top: 1px solid var(--border);
+            color: var(--text-dim);
+            font-size: 0.85rem;
+        }
+        .footer a { color: var(--primary); text-decoration: none; }
+
+        .quick-links {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-top: 1.5rem;
+            flex-wrap: wrap;
+        }
+        .quick-link {
+            padding: 0.5rem 1rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            text-decoration: none;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+        .quick-link:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="logo-icon">🔐</div>
+            <h1 class="logo">SecuBox</h1>
+            <p class="tagline">Secure Network Appliance — Services Portal</p>
+            <div class="quick-links">
+                <a href="/" class="quick-link">📊 Dashboard</a>
+                <a href="/system/" class="quick-link">⚙️ System</a>
+                <a href="/login.html" class="quick-link" id="auth-link">🔑 Login</a>
+            </div>
+        </header>
+
+        <section class="section">
+            <h2 class="section-title">Security</h2>
+            <div class="services-grid" id="security-services"></div>
+        </section>
+
+        <section class="section">
+            <h2 class="section-title">Network</h2>
+            <div class="services-grid" id="network-services"></div>
+        </section>
+
+        <section class="section">
+            <h2 class="section-title">Applications</h2>
+            <div class="services-grid" id="apps-services"></div>
+        </section>
+
+        <section class="section">
+            <h2 class="section-title">Email & DNS</h2>
+            <div class="services-grid" id="comm-services"></div>
+        </section>
+
+        <section class="section">
+            <h2 class="section-title">External Services</h2>
+            <div class="services-grid" id="external-services"></div>
+        </section>
+
+        <footer class="footer">
+            <p>SecuBox &copy; 2026 <a href="https://cybermind.fr">CyberMind</a></p>
+            <p style="margin-top: 0.5rem; font-size: 0.75rem;">C3Box Services Portal • 192.168.255.1</p>
+        </footer>
+    </div>
+
+    <script>
+        const services = {
+            security: [
+                { name: 'CrowdSec', icon: '🛡️', desc: 'IDS/IPS Protection', url: '/crowdsec/', iconClass: 'security' },
+                { name: 'WireGuard', icon: '🔒', desc: 'VPN Server', url: '/wireguard/', iconClass: 'security' },
+                { name: 'WAF', icon: '🔥', desc: 'Web Application Firewall', url: '/waf/', iconClass: 'security' },
+                { name: 'NAC', icon: '👁️', desc: 'Network Access Control', url: '/nac/', iconClass: 'security' },
+                { name: 'Auth', icon: '🎫', desc: 'OAuth2 & Captive Portal', url: '/auth/', iconClass: 'security' },
+            ],
+            network: [
+                { name: 'HAProxy', icon: '⚡', desc: 'Load Balancer', url: '/haproxy/', iconClass: 'network' },
+                { name: 'VHosts', icon: '🌐', desc: 'Virtual Hosts', url: '/vhost/', iconClass: 'network' },
+                { name: 'NetModes', icon: '🔀', desc: 'Network Modes', url: '/netmodes/', iconClass: 'network' },
+                { name: 'DPI', icon: '🔍', desc: 'Deep Packet Inspection', url: '/dpi/', iconClass: 'network' },
+                { name: 'QoS', icon: '📶', desc: 'Bandwidth Manager', url: '/qos/', iconClass: 'network' },
+            ],
+            apps: [
+                { name: 'Droplet', icon: '📁', desc: 'File Publisher', url: '/droplet/', iconClass: 'apps' },
+                { name: 'Streamlit', icon: '📊', desc: 'Python Apps', url: '/streamlit/', iconClass: 'apps' },
+                { name: 'StreamForge', icon: '🔨', desc: 'App Manager', url: '/streamforge/', iconClass: 'apps' },
+                { name: 'MetaBlogizer', icon: '📝', desc: 'Static Sites', url: '/metablogizer/', iconClass: 'apps' },
+                { name: 'Publish', icon: '🚀', desc: 'Publishing Hub', url: '/publish/', iconClass: 'apps' },
+            ],
+            comm: [
+                { name: 'DNS', icon: '🌍', desc: 'DNS Server', url: '/dns/', iconClass: 'dns' },
+                { name: 'Mail', icon: '📧', desc: 'Email Server', url: '/mail/', iconClass: 'email' },
+                { name: 'Webmail', icon: '💌', desc: 'Roundcube/SOGo', url: '/webmail/', iconClass: 'email' },
+                { name: 'Users', icon: '👥', desc: 'Identity Manager', url: '/users/', iconClass: 'apps' },
+            ],
+            external: [
+                { name: 'Netdata', icon: '📈', desc: 'Real-time Monitoring', url: '/netdata/', iconClass: 'monitoring', external: true },
+                { name: 'CDN', icon: '🌐', desc: 'Cache Server', url: '/cdn/', iconClass: 'network' },
+                { name: 'MediaFlow', icon: '🎬', desc: 'Media Streaming', url: '/mediaflow/', iconClass: 'apps' },
+            ]
+        };
+
+        function renderService(svc) {
+            const statusClass = svc.external ? 'external' : 'online';
+            const statusText = svc.external ? 'External' : 'Local';
+            return `
+                <a href="${svc.url}" class="service-card">
+                    <div class="icon ${svc.iconClass}">${svc.icon}</div>
+                    <div class="name">${svc.name}</div>
+                    <div class="desc">${svc.desc}</div>
+                    <div class="status ${statusClass}">${statusText}</div>
+                </a>
+            `;
+        }
+
+        function render() {
+            document.getElementById('security-services').innerHTML = services.security.map(renderService).join('');
+            document.getElementById('network-services').innerHTML = services.network.map(renderService).join('');
+            document.getElementById('apps-services').innerHTML = services.apps.map(renderService).join('');
+            document.getElementById('comm-services').innerHTML = services.comm.map(renderService).join('');
+            document.getElementById('external-services').innerHTML = services.external.map(renderService).join('');
+
+            // Update auth link based on login state
+            const token = localStorage.getItem('sbx_token');
+            if (token) {
+                const authLink = document.getElementById('auth-link');
+                authLink.textContent = '🚪 Logout';
+                authLink.onclick = async (e) => {
+                    e.preventDefault();
+                    await fetch('/api/v1/portal/logout', { method: 'POST', credentials: 'include' });
+                    localStorage.removeItem('sbx_token');
+                    localStorage.removeItem('secubox_token');
+                    location.reload();
+                };
+            }
+        }
+
+        render();
+    </script>
+</body>
+</html>

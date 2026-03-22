@@ -1,0 +1,9 @@
+{
+  "id": "nextcloud",
+  "name": "Nextcloud",
+  "category": "apps",
+  "icon": "☁️",
+  "path": "/nextcloud/",
+  "order": 505,
+  "description": "Nextcloud File Sync"
+}

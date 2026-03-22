@@ -6,108 +6,369 @@
     <title>SecuBox - Streamlit Platform</title>
     <link rel="stylesheet" href="/shared/sidebar.css">
     <style>
-        :root { --bg-dark: #0d1117; --bg-card: #161b22; --bg-sidebar: #0d1117; --border: #30363d; --text: #c9d1d9; --text-dim: #8b949e; --primary: #58a6ff; --cyan: #00d4ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; --purple: #a371f7; }
+        :root { --bg-dark: #0d1117; --bg-card: #161b22; --border: #30363d; --text: #c9d1d9; --text-dim: #8b949e; --primary: #58a6ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; --purple: #a371f7; --cyan: #00d4ff; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: -apple-system, sans-serif; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
-        .sidebar { width: 220px; background: var(--bg-dark); border-right: 1px solid var(--border); position: fixed; height: 100vh; overflow-y: auto; }
-        .sidebar-header { padding: 1rem; border-bottom: 1px solid var(--border); }
-        .logo { font-weight: bold; font-size: 1.2rem; }
-        .logo span:nth-child(1) { color: var(--cyan); } .logo span:nth-child(2) { color: var(--red); } .logo span:nth-child(3) { color: var(--green); } .logo span:nth-child(4) { color: var(--yellow); }
-        .nav-section { padding: 0.5rem 0; }
-        .nav-section-title { padding: 0.5rem 1rem; font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
-        .nav-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 1rem; color: var(--text-dim); text-decoration: none; font-size: 0.9rem; border-left: 3px solid transparent; }
-        .nav-item:hover { background: rgba(255,255,255,0.05); color: var(--text); }
-        .nav-item.active { background: rgba(88,166,255,0.1); color: var(--primary); border-left-color: var(--primary); }
-        .nav-item .icon { width: 20px; text-align: center; }
+        .sidebar { width: 220px; background: var(--bg-dark); border-right: 1px solid var(--border); position: fixed; height: 100vh; }
         .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
         .header h1 { font-size: 1.5rem; }
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; }
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; margin-left: 0.5rem; }
+        .btn:hover { background: var(--bg-dark); }
         .btn.primary { background: rgba(88,166,255,0.1); border-color: var(--primary); color: var(--primary); }
-        .btn.success { background: rgba(63,185,80,0.1); color: var(--green); }
-        .btn.danger { background: rgba(248,81,73,0.1); color: var(--red); }
-        .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+        .btn.success { background: rgba(63,185,80,0.1); border-color: var(--green); color: var(--green); }
+        .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
+        .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
+        .tab { padding: 0.75rem 1.5rem; cursor: pointer; border-bottom: 2px solid transparent; color: var(--text-dim); }
+        .tab:hover { color: var(--text); }
+        .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
         .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
         .stat-card .value { font-size: 2rem; font-weight: bold; color: var(--purple); }
         .stat-card .label { font-size: 0.75rem; color: var(--text-dim); }
         .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
-        .card h2 { margin-bottom: 1rem; }
+        .card h2 { font-size: 1rem; margin-bottom: 1rem; }
         table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
-        th { color: var(--text-dim); font-size: 0.75rem; }
-        .badge { padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; }
+        th, td { padding: 0.6rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.875rem; }
+        th { color: var(--text-dim); font-size: 0.75rem; text-transform: uppercase; }
+        .badge { padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; }
         .badge.running { background: rgba(63,185,80,0.2); color: var(--green); }
         .badge.stopped { background: rgba(139,148,158,0.2); color: var(--text-dim); }
-        .upload-zone { border: 2px dashed var(--border); border-radius: 8px; padding: 2rem; text-align: center; cursor: pointer; }
+        .badge.installed { background: rgba(88,166,255,0.2); color: var(--primary); }
+        .badge.missing { background: rgba(248,81,73,0.2); color: var(--red); }
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: center; justify-content: center; }
+        .modal.show { display: flex; }
+        .modal-content { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; min-width: 400px; max-width: 500px; }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.25rem; font-size: 0.8rem; color: var(--text-dim); }
+        .form-group input, .form-group select { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-dark); color: var(--text); }
+        .form-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
+        .upload-zone { border: 2px dashed var(--border); border-radius: 8px; padding: 2rem; text-align: center; cursor: pointer; transition: border-color 0.2s; }
         .upload-zone:hover { border-color: var(--primary); }
+        .upload-zone.dragover { border-color: var(--green); background: rgba(63,185,80,0.1); }
         input[type="file"] { display: none; }
+        .access-item { background: var(--bg-dark); padding: 0.75rem 1rem; border-radius: 6px; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center; }
+        .access-item a { color: var(--primary); text-decoration: none; }
+        .access-item a:hover { text-decoration: underline; }
+        .component-row { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 0; border-bottom: 1px solid var(--border); }
+        .component-row:last-child { border-bottom: none; }
+        .component-info { flex: 1; }
+        .component-name { font-weight: 500; }
+        .component-desc { font-size: 0.8rem; color: var(--text-dim); }
     </style>
 </head>
 <body>
     <nav class="sidebar" id="sidebar"></nav>
     <script src="/shared/sidebar.js"></script>
     <main class="main">
-    <header class="header"><h1>Streamlit Platform</h1><button class="btn" onclick="refresh()">Refresh</button></header>
+        <header class="header">
+            <h1>Streamlit Platform</h1>
+            <div>
+                <button class="btn success" onclick="showDeploy()">+ Deploy App</button>
+                <button class="btn" onclick="refresh()">Refresh</button>
+            </div>
+        </header>
 
-    <div class="stats-row">
-        <div class="stat-card"><div class="value" id="app-count">-</div><div class="label">Apps</div></div>
-        <div class="stat-card"><div class="value" id="running-count">-</div><div class="label">Running</div></div>
-        <div class="stat-card"><div class="value" id="container-status">-</div><div class="label">Container</div></div>
-    </div>
-
-    <div class="card">
-        <h2>Deploy App</h2>
-        <div class="upload-zone" onclick="document.getElementById('file-input').click()">
-            <p>Drag & drop a ZIP file or click to browse</p>
+        <div class="tabs">
+            <div class="tab active" onclick="showTab('components')">Components</div>
+            <div class="tab" onclick="showTab('status')">Status</div>
+            <div class="tab" onclick="showTab('access')">Access</div>
+            <div class="tab" onclick="showTab('apps')">Apps</div>
+            <div class="tab" onclick="showTab('instances')">Instances</div>
+            <div class="tab" onclick="showTab('actions')">Actions</div>
         </div>
-        <input type="file" id="file-input" accept=".zip" onchange="deployApp()">
-        <div id="deploy-status" style="margin-top:1rem;"></div>
+
+        <!-- COMPONENTS TAB -->
+        <div class="tab-content active" id="tab-components">
+            <div class="card">
+                <h2>System Components</h2>
+                <div id="components-list">Loading...</div>
+            </div>
+        </div>
+
+        <!-- STATUS TAB -->
+        <div class="tab-content" id="tab-status">
+            <div class="stats-row">
+                <div class="stat-card"><div class="value" id="app-count">-</div><div class="label">Apps</div></div>
+                <div class="stat-card"><div class="value" id="running-apps">-</div><div class="label">Running Apps</div></div>
+                <div class="stat-card"><div class="value" id="instance-count">-</div><div class="label">Instances</div></div>
+                <div class="stat-card"><div class="value" id="container-status">-</div><div class="label">Container</div></div>
+            </div>
+            <div class="card">
+                <h2>Health Checks</h2>
+                <div id="health-checks">Loading...</div>
+            </div>
+        </div>
+
+        <!-- ACCESS TAB -->
+        <div class="tab-content" id="tab-access">
+            <div class="card">
+                <h2>Running Applications</h2>
+                <p style="color:var(--text-dim);margin-bottom:1rem;font-size:0.9rem">Click links to open running Streamlit apps</p>
+                <div id="access-list">Loading...</div>
+            </div>
+        </div>
+
+        <!-- APPS TAB -->
+        <div class="tab-content" id="tab-apps">
+            <div class="card">
+                <h2>Deploy App</h2>
+                <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()">
+                    <p>Drag & drop a ZIP file or click to browse</p>
+                    <p style="font-size:0.8rem;color:var(--text-dim);margin-top:0.5rem">ZIP should contain app.py or main.py</p>
+                </div>
+                <input type="file" id="file-input" accept=".zip" onchange="deployApp()">
+                <div id="deploy-status" style="margin-top:1rem;"></div>
+            </div>
+            <div class="card">
+                <h2>Applications</h2>
+                <table>
+                    <thead><tr><th>Name</th><th>Entrypoint</th><th>Port</th><th>Status</th><th>Actions</th></tr></thead>
+                    <tbody id="app-list"><tr><td colspan="5">Loading...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- INSTANCES TAB -->
+        <div class="tab-content" id="tab-instances">
+            <div class="card">
+                <h2>App Instances</h2>
+                <p style="color:var(--text-dim);margin-bottom:1rem;font-size:0.9rem">Multiple instances can run the same app on different ports</p>
+                <table>
+                    <thead><tr><th>ID</th><th>App</th><th>Port</th><th>Status</th><th>Actions</th></tr></thead>
+                    <tbody id="instance-list"><tr><td colspan="5">Loading...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ACTIONS TAB -->
+        <div class="tab-content" id="tab-actions">
+            <div class="card">
+                <h2>Container Management</h2>
+                <p style="margin-bottom:1rem;color:var(--text-dim)">Manage the Streamlit LXC container</p>
+                <div id="container-actions">
+                    <button class="btn success" onclick="containerStart()">Start Container</button>
+                    <button class="btn danger" onclick="containerStop()">Stop Container</button>
+                    <button class="btn primary" onclick="containerInstall()">Install Container</button>
+                </div>
+            </div>
+            <div class="card">
+                <h2>Migration</h2>
+                <p style="margin-bottom:1rem;color:var(--text-dim)">Import apps from OpenWrt SecuBox</p>
+                <button class="btn" onclick="showMigrate()">Migrate from OpenWrt</button>
+            </div>
+            <div class="card">
+                <h2>Gitea Integration</h2>
+                <p style="margin-bottom:1rem;color:var(--text-dim)">Clone or push apps to Gitea repositories</p>
+                <button class="btn" onclick="showGiteaClone()">Clone from Gitea</button>
+            </div>
+        </div>
+    </main>
+
+    <!-- Deploy Modal -->
+    <div class="modal" id="deploy-modal">
+        <div class="modal-content">
+            <h3>Deploy Application</h3>
+            <div class="form-group"><label>App Name</label><input type="text" id="deploy-name" placeholder="my-app"></div>
+            <div class="form-group"><label>Port</label><input type="number" id="deploy-port" value="8501" placeholder="8501"></div>
+            <div class="form-actions">
+                <button class="btn" onclick="hideModal('deploy-modal')">Cancel</button>
+                <button class="btn success" onclick="confirmDeploy()">Deploy</button>
+            </div>
+        </div>
     </div>
 
-    <div class="card">
-        <h2>Applications</h2>
-        <table>
-            <thead><tr><th>Name</th><th>Port</th><th>Status</th><th>Actions</th></tr></thead>
-            <tbody id="app-list"><tr><td colspan="4">Loading...</td></tr></tbody>
-        </table>
+    <!-- Migrate Modal -->
+    <div class="modal" id="migrate-modal">
+        <div class="modal-content">
+            <h3>Migrate from OpenWrt</h3>
+            <div class="form-group"><label>Source IP</label><input type="text" id="migrate-source" value="192.168.255.1"></div>
+            <div class="form-actions">
+                <button class="btn" onclick="hideModal('migrate-modal')">Cancel</button>
+                <button class="btn primary" onclick="doMigrate()">Start Migration</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gitea Clone Modal -->
+    <div class="modal" id="gitea-modal">
+        <div class="modal-content">
+            <h3>Clone from Gitea</h3>
+            <div class="form-group"><label>App Name</label><input type="text" id="gitea-name" placeholder="my-app"></div>
+            <div class="form-group"><label>Repository URL</label><input type="text" id="gitea-repo" placeholder="http://gitea.local/user/repo.git"></div>
+            <div class="form-actions">
+                <button class="btn" onclick="hideModal('gitea-modal')">Cancel</button>
+                <button class="btn success" onclick="doGiteaClone()">Clone</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Start App Modal -->
+    <div class="modal" id="start-modal">
+        <div class="modal-content">
+            <h3>Start Application</h3>
+            <div class="form-group"><label>App Name</label><input type="text" id="start-name" readonly></div>
+            <div class="form-group"><label>Port</label><input type="number" id="start-port" value="8501"></div>
+            <div class="form-actions">
+                <button class="btn" onclick="hideModal('start-modal')">Cancel</button>
+                <button class="btn success" onclick="confirmStart()">Start</button>
+            </div>
+        </div>
     </div>
 
     <script>
         const API = '/api/v1/streamlit';
-        const headers = () => ({ 'Authorization': 'Bearer ' + (localStorage.getItem('sbx_token') || '') });
+        const token = () => localStorage.getItem('sbx_token');
+        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
 
         async function api(path, opts = {}) {
             try {
-                const res = await fetch(API + path, { ...opts, headers: { ...headers(), ...(opts.headers || {}) } });
+                const res = await fetch(API + path, { ...opts, headers: headers() });
+                if (res.status === 401) { window.location = '/login.html'; return {}; }
                 return res.json();
             } catch { return {}; }
         }
 
+        function showTab(name) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelector(`[onclick="showTab('${name}')"]`).classList.add('active');
+            document.getElementById('tab-' + name).classList.add('active');
+        }
+
+        function showModal(id) { document.getElementById(id).classList.add('show'); }
+        function hideModal(id) { document.getElementById(id).classList.remove('show'); }
+        function showDeploy() { showModal('deploy-modal'); }
+        function showMigrate() { showModal('migrate-modal'); }
+        function showGiteaClone() { showModal('gitea-modal'); }
+
+        // Components
+        async function loadComponents() {
+            const d = await api('/components');
+            const list = document.getElementById('components-list');
+            const components = d.components || [];
+            if (!components.length) { list.innerHTML = '<p style="color:var(--text-dim)">No components</p>'; return; }
+            list.innerHTML = components.map(c => `
+                <div class="component-row">
+                    <div class="component-info">
+                        <div class="component-name">${c.name}</div>
+                        <div class="component-desc">${c.description}</div>
+                    </div>
+                    <span class="badge ${c.installed || c.exists ? 'installed' : 'missing'}">${c.installed || c.exists ? 'Installed' : 'Missing'}</span>
+                </div>
+            `).join('');
+        }
+
+        // Status
         async function loadStatus() {
             const d = await api('/status');
             document.getElementById('app-count').textContent = d.app_count || 0;
-            document.getElementById('running-count').textContent = d.running_count || 0;
-            document.getElementById('container-status').textContent = d.container_status || 'N/A';
+            document.getElementById('running-apps').textContent = d.running_apps || 0;
+            document.getElementById('instance-count').textContent = d.instance_count || 0;
+            const cs = document.getElementById('container-status');
+            cs.textContent = d.container_status || 'N/A';
+            cs.style.color = d.container_status === 'running' ? 'var(--green)' : 'var(--red)';
         }
 
+        async function loadHealth() {
+            const d = await api('/health');
+            const checks = d.checks || {};
+            const list = document.getElementById('health-checks');
+            list.innerHTML = Object.entries(checks).map(([k, v]) => `
+                <div class="component-row">
+                    <span>${k}</span>
+                    <span class="badge ${v === 'ok' || v === 'running' ? 'running' : 'stopped'}">${v}</span>
+                </div>
+            `).join('');
+        }
+
+        // Access
+        async function loadAccess() {
+            const d = await api('/access');
+            const list = document.getElementById('access-list');
+            const access = d.access || [];
+            if (!access.length) { list.innerHTML = '<p style="color:var(--text-dim)">No running apps</p>'; return; }
+            list.innerHTML = access.map(a => {
+                const url = a.url.replace('{{hostname}}', location.hostname);
+                return `<div class="access-item">
+                    <div>
+                        <strong>${a.name}</strong>
+                        <span style="color:var(--text-dim);margin-left:1rem">${a.type} - port ${a.port}</span>
+                    </div>
+                    <a href="${url}" target="_blank">${url}</a>
+                </div>`;
+            }).join('');
+        }
+
+        // Apps
         async function loadApps() {
             const d = await api('/apps');
             const list = document.getElementById('app-list');
             const apps = d.apps || [];
-            if (!apps.length) { list.innerHTML = '<tr><td colspan="4">No apps</td></tr>'; return; }
+            if (!apps.length) { list.innerHTML = '<tr><td colspan="5" style="color:var(--text-dim)">No apps deployed</td></tr>'; return; }
             list.innerHTML = apps.map(a => `<tr>
-                <td>${a.name}</td>
+                <td><strong>${a.name}</strong></td>
+                <td style="color:var(--text-dim)">${a.main || '-'}</td>
                 <td>${a.port || '-'}</td>
-                <td><span class="badge ${a.status}">${a.status}</span></td>
+                <td><span class="badge ${a.running ? 'running' : 'stopped'}">${a.running ? 'Running' : 'Stopped'}</span></td>
                 <td>
-                    ${a.status === 'running' 
-                        ? `<button class="btn danger" onclick="stopApp('${a.name}')">Stop</button>`
-                        : `<button class="btn success" onclick="startApp('${a.name}')">Start</button>`}
-                    <button class="btn" onclick="window.open('http://'+location.hostname+':${a.port}')">Open</button>
+                    ${a.running
+                        ? `<button class="btn danger" onclick="stopApp('${a.name}')" style="padding:2px 8px;font-size:0.7rem">Stop</button>
+                           <button class="btn" onclick="window.open('http://'+location.hostname+':${a.port}')" style="padding:2px 8px;font-size:0.7rem">Open</button>`
+                        : `<button class="btn success" onclick="promptStartApp('${a.name}')" style="padding:2px 8px;font-size:0.7rem">Start</button>`}
+                    <button class="btn danger" onclick="deleteApp('${a.name}')" style="padding:2px 8px;font-size:0.7rem">Delete</button>
                 </td>
             </tr>`).join('');
         }
 
+        // Instances
+        async function loadInstances() {
+            const d = await api('/instances');
+            const list = document.getElementById('instance-list');
+            const instances = d.instances || [];
+            if (!instances.length) { list.innerHTML = '<tr><td colspan="5" style="color:var(--text-dim)">No instances configured</td></tr>'; return; }
+            list.innerHTML = instances.map(i => `<tr>
+                <td><strong>${i.id}</strong></td>
+                <td>${i.app || '-'}</td>
+                <td>${i.port || '-'}</td>
+                <td><span class="badge ${i.running ? 'running' : 'stopped'}">${i.running ? 'Running' : 'Stopped'}</span></td>
+                <td>
+                    ${i.running
+                        ? `<button class="btn danger" onclick="stopInstance('${i.id}')" style="padding:2px 8px;font-size:0.7rem">Stop</button>`
+                        : `<button class="btn success" onclick="startInstance('${i.id}')" style="padding:2px 8px;font-size:0.7rem">Start</button>`}
+                </td>
+            </tr>`).join('');
+        }
+
+        // App actions
+        function promptStartApp(name) {
+            document.getElementById('start-name').value = name;
+            document.getElementById('start-port').value = 8501;
+            showModal('start-modal');
+        }
+
+        async function confirmStart() {
+            const name = document.getElementById('start-name').value;
+            const port = document.getElementById('start-port').value;
+            await api(`/app/${name}/start?port=${port}`, { method: 'POST' });
+            hideModal('start-modal');
+            setTimeout(refresh, 1000);
+        }
+
+        async function stopApp(name) {
+            await api(`/app/${name}/stop`, { method: 'POST' });
+            refresh();
+        }
+
+        async function deleteApp(name) {
+            if (!confirm('Delete app ' + name + '?')) return;
+            await api(`/app/${name}`, { method: 'DELETE' });
+            refresh();
+        }
+
+        // Deploy
         async function deployApp() {
             const input = document.getElementById('file-input');
             if (!input.files.length) return;
@@ -115,18 +376,68 @@
             status.innerHTML = '<span style="color:var(--primary)">Deploying...</span>';
             const form = new FormData();
             form.append('file', input.files[0]);
-            const r = await fetch(API + '/deploy', { method: 'POST', headers: headers(), body: form });
-            const d = await r.json();
-            status.innerHTML = d.success ? '<span style="color:var(--green)">Deployed!</span>' : '<span style="color:var(--red)">Failed</span>';
+            const name = document.getElementById('deploy-name').value;
+            const port = document.getElementById('deploy-port').value;
+            if (name) form.append('name', name);
+            if (port) form.append('port', port);
+            const res = await fetch(API + '/deploy', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token() }, body: form });
+            const d = await res.json();
+            status.innerHTML = d.success ? '<span style="color:var(--green)">Deployed!</span>' : '<span style="color:var(--red)">Failed: ' + (d.error || 'Unknown') + '</span>';
             refresh();
         }
 
-        async function startApp(name) { await api(`/app/${name}/start`, { method: 'POST' }); setTimeout(refresh, 1000); }
-        async function stopApp(name) { await api(`/app/${name}/stop`, { method: 'POST' }); refresh(); }
+        // Instance actions
+        async function startInstance(id) { await api(`/instance/${id}/start`, { method: 'POST' }); setTimeout(refresh, 1000); }
+        async function stopInstance(id) { await api(`/instance/${id}/stop`, { method: 'POST' }); refresh(); }
 
-        function refresh() { loadStatus(); loadApps(); }
+        // Container actions
+        async function containerStart() { await api('/container/start', { method: 'POST' }); setTimeout(refresh, 2000); }
+        async function containerStop() { await api('/container/stop', { method: 'POST' }); setTimeout(refresh, 1000); }
+        async function containerInstall() {
+            if (!confirm('Install Streamlit container? This may take several minutes.')) return;
+            await api('/container/install', { method: 'POST' });
+            alert('Installation started in background. Check status in a few minutes.');
+        }
+
+        // Migration
+        async function doMigrate() {
+            const source = document.getElementById('migrate-source').value;
+            await api('/migrate', { method: 'POST', body: JSON.stringify({ source }) });
+            hideModal('migrate-modal');
+            alert('Migration started. Apps will appear shortly.');
+        }
+
+        // Gitea
+        async function doGiteaClone() {
+            const name = document.getElementById('gitea-name').value;
+            const repo = document.getElementById('gitea-repo').value;
+            if (!name || !repo) { alert('Name and repo URL required'); return; }
+            await api(`/gitea/clone/${name}`, { method: 'POST', body: JSON.stringify({ repo }) });
+            hideModal('gitea-modal');
+            refresh();
+        }
+
+        // Drag and drop
+        const uploadZone = document.getElementById('upload-zone');
+        ['dragenter', 'dragover'].forEach(e => uploadZone.addEventListener(e, ev => { ev.preventDefault(); uploadZone.classList.add('dragover'); }));
+        ['dragleave', 'drop'].forEach(e => uploadZone.addEventListener(e, ev => { ev.preventDefault(); uploadZone.classList.remove('dragover'); }));
+        uploadZone.addEventListener('drop', ev => {
+            const files = ev.dataTransfer.files;
+            if (files.length) {
+                document.getElementById('file-input').files = files;
+                deployApp();
+            }
+        });
+
+        function refresh() {
+            loadComponents();
+            loadStatus();
+            loadHealth();
+            loadAccess();
+            loadApps();
+            loadInstances();
+        }
         refresh();
     </script>
-</main>
 </body>
 </html>

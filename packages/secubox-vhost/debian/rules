@@ -9,6 +9,9 @@ override_dh_auto_install:
 	[ -d www ] && cp -r www/. debian/secubox-vhost/usr/share/secubox/www/ || true
 	install -d debian/secubox-vhost/usr/share/secubox/menu.d
 	[ -d menu.d ] && cp -r menu.d/. debian/secubox-vhost/usr/share/secubox/menu.d/ || true
+	# Control script
+	install -d debian/secubox-vhost/usr/sbin
+	[ -d sbin ] && install -m 755 sbin/* debian/secubox-vhost/usr/sbin/ || true
 	# Modular nginx config
 	install -d debian/secubox-vhost/etc/nginx/secubox.d
 	[ -f nginx/vhost.conf ] && cp nginx/vhost.conf debian/secubox-vhost/etc/nginx/secubox.d/ || true
