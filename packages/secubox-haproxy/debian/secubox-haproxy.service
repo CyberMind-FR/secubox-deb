@@ -9,6 +9,7 @@ Type=simple
 User=secubox
 Group=secubox
 WorkingDirectory=/usr/lib/secubox/haproxy
+RuntimeDirectory=haproxy
 ExecStart=/usr/bin/python3 -m uvicorn api.main:app \
     --uds /run/secubox/haproxy.sock \
     --log-level warning
