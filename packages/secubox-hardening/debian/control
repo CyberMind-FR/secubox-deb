@@ -1,0 +1,25 @@
+Source: secubox-hardening
+Section: admin
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13), dh-python, python3-all
+Standards-Version: 4.6.2
+Homepage: https://github.com/gkerma/secubox-deb
+
+Package: secubox-hardening
+Architecture: all
+Depends: ${misc:Depends}, ${python3:Depends},
+ secubox-core,
+ python3-fastapi,
+ python3-uvicorn
+Recommends: auditd
+Description: SecuBox Kernel and System Hardening
+ Kernel and system hardening for SecuBox appliances.
+ .
+ Features:
+  - Kernel sysctl hardening (ASLR, kptr_restrict, etc.)
+  - Network hardening (SYN cookies, reverse path filter)
+  - Module blacklist (uncommon protocols, filesystems)
+  - Security benchmark tool
+ .
+ Based on ANSSI/CIS benchmark recommendations.

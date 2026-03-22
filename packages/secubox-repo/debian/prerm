@@ -1,0 +1,13 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+    remove|purge)
+        systemctl stop secubox-repo.service || true
+        systemctl disable secubox-repo.service || true
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

@@ -1,0 +1,413 @@
+#!/usr/bin/env bash
+# ══════════════════════════════════════════════════════════════════
+#  repoctl — SecuBox APT Repository Manager
+#  Usage: repoctl <command> [options]
+# ══════════════════════════════════════════════════════════════════
+set -euo pipefail
+
+VERSION="1.0.0"
+SCRIPT_NAME="$(basename "$0")"
+
+# Configuration
+REPO_BASE="${REPO_BASE:-/var/lib/secubox-repo}"
+REPO_CONF="${REPO_BASE}/conf"
+REPO_OUT="${REPO_OUT:-/var/www/apt.secubox.in}"
+GPG_HOME="${REPO_BASE}/gpg"
+GPG_EMAIL="packages@secubox.in"
+DEFAULT_DIST="bookworm"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+CYAN='\033[0;36m'
+GOLD='\033[0;33m'
+NC='\033[0m'
+
+log()  { echo -e "${CYAN}[repo]${NC} $*"; }
+ok()   { echo -e "${GREEN}[OK]${NC} $*"; }
+warn() { echo -e "${GOLD}[WARN]${NC} $*"; }
+err()  { echo -e "${RED}[ERR]${NC} $*" >&2; exit 1; }
+
+# ══════════════════════════════════════════════════════════════════
+# Helper Functions
+# ══════════════════════════════════════════════════════════════════
+
+check_reprepro() {
+    command -v reprepro &>/dev/null || err "reprepro not found. Install with: apt install reprepro"
+}
+
+check_gpg_key() {
+    gpg --homedir "${GPG_HOME}" --list-keys "${GPG_EMAIL}" &>/dev/null
+}
+
+# ══════════════════════════════════════════════════════════════════
+# Commands
+# ══════════════════════════════════════════════════════════════════
+
+cmd_status() {
+    local json="${1:-false}"
+
+    local repo_exists="false"
+    local gpg_exists="false"
+    local pkg_count=0
+    local dists=""
+
+    [[ -d "${REPO_BASE}" ]] && repo_exists="true"
+    check_gpg_key 2>/dev/null && gpg_exists="true"
+
+    if [[ -d "${REPO_OUT}/pool" ]]; then
+        pkg_count=$(find "${REPO_OUT}/pool" -name "*.deb" 2>/dev/null | wc -l)
+    fi
+
+    if [[ -d "${REPO_OUT}/dists" ]]; then
+        dists=$(ls "${REPO_OUT}/dists" 2>/dev/null | tr '\n' ',' | sed 's/,$//')
+    fi
+
+    if [[ "$json" == "true" ]]; then
+        cat <<EOF
+{
+  "version": "${VERSION}",
+  "repo_base": "${REPO_BASE}",
+  "repo_out": "${REPO_OUT}",
+  "repo_exists": ${repo_exists},
+  "gpg_configured": ${gpg_exists},
+  "gpg_email": "${GPG_EMAIL}",
+  "package_count": ${pkg_count},
+  "distributions": "${dists}"
+}
+EOF
+    else
+        echo "SecuBox APT Repository v${VERSION}"
+        echo "=================================="
+        echo "Repository Base : ${REPO_BASE}"
+        echo "Output Dir      : ${REPO_OUT}"
+        echo "Repo Exists     : ${repo_exists}"
+        echo "GPG Configured  : ${gpg_exists}"
+        echo "GPG Email       : ${GPG_EMAIL}"
+        echo "Package Count   : ${pkg_count}"
+        echo "Distributions   : ${dists:-none}"
+    fi
+}
+
+cmd_init() {
+    check_reprepro
+
+    log "Initializing APT repository..."
+
+    # Create directories
+    mkdir -p "${REPO_BASE}" "${REPO_CONF}" "${REPO_OUT}" "${GPG_HOME}"
+    chmod 700 "${GPG_HOME}"
+
+    # Create distributions config
+    cat > "${REPO_CONF}/distributions" <<'EOF'
+Origin: SecuBox
+Label: SecuBox
+Suite: bookworm
+Codename: bookworm
+Version: 12.0
+Architectures: arm64 amd64 source
+Components: main
+Description: SecuBox Debian packages for Armada/x86_64
+SignWith: packages@secubox.in
+Contents: percomponent nocompatsymlink
+
+Origin: SecuBox
+Label: SecuBox
+Suite: trixie
+Codename: trixie
+Version: 13.0
+Architectures: arm64 amd64 source
+Components: main
+Description: SecuBox Debian packages (testing)
+SignWith: packages@secubox.in
+Contents: percomponent nocompatsymlink
+EOF
+
+    # Create options
+    cat > "${REPO_CONF}/options" <<EOF
+verbose
+basedir ${REPO_BASE}
+outdir ${REPO_OUT}
+gnupghome ${GPG_HOME}
+EOF
+
+    ok "Repository initialized at ${REPO_BASE}"
+}
+
+cmd_gpg_setup() {
+    if check_gpg_key 2>/dev/null; then
+        warn "GPG key already exists for ${GPG_EMAIL}"
+        gpg --homedir "${GPG_HOME}" --list-keys "${GPG_EMAIL}"
+        return 0
+    fi
+
+    log "Generating GPG signing key..."
+
+    mkdir -p "${GPG_HOME}"
+    chmod 700 "${GPG_HOME}"
+
+    cat > "${GPG_HOME}/gen-key-params" <<EOF
+%echo Generating SecuBox package signing key
+Key-Type: RSA
+Key-Length: 4096
+Subkey-Type: RSA
+Subkey-Length: 4096
+Name-Real: SecuBox Package Signing Key
+Name-Comment: apt.secubox.in
+Name-Email: ${GPG_EMAIL}
+Expire-Date: 0
+%no-protection
+%commit
+%echo Key generated
+EOF
+
+    gpg --homedir "${GPG_HOME}" --batch --gen-key "${GPG_HOME}/gen-key-params"
+    rm -f "${GPG_HOME}/gen-key-params"
+
+    # Export public key
+    gpg --homedir "${GPG_HOME}" --armor --export "${GPG_EMAIL}" > "${REPO_OUT}/secubox-keyring.gpg"
+    gpg --homedir "${GPG_HOME}" --export "${GPG_EMAIL}" > "${REPO_OUT}/secubox-keyring.gpg.bin"
+
+    ok "GPG key generated and exported to ${REPO_OUT}/secubox-keyring.gpg"
+}
+
+cmd_gpg_export() {
+    local output="${1:-.}"
+    local type="${2:-public}"
+
+    check_gpg_key || err "GPG key not found. Run: repoctl gpg-setup"
+
+    case "$type" in
+        public)
+            gpg --homedir "${GPG_HOME}" --armor --export "${GPG_EMAIL}" > "${output}/secubox-keyring.gpg"
+            ok "Public key exported to ${output}/secubox-keyring.gpg"
+            ;;
+        private)
+            gpg --homedir "${GPG_HOME}" --armor --export-secret-keys "${GPG_EMAIL}" > "${output}/secubox-private.key"
+            chmod 600 "${output}/secubox-private.key"
+            ok "Private key exported to ${output}/secubox-private.key"
+            warn "Keep this file secure!"
+            ;;
+        fingerprint)
+            gpg --homedir "${GPG_HOME}" --fingerprint "${GPG_EMAIL}"
+            ;;
+        *)
+            err "Unknown type: $type (use: public, private, fingerprint)"
+            ;;
+    esac
+}
+
+cmd_add() {
+    local dist="${1:-$DEFAULT_DIST}"
+    shift || true
+
+    check_reprepro
+    check_gpg_key || err "GPG key not found. Run: repoctl gpg-setup"
+
+    [[ $# -eq 0 ]] && err "Usage: repoctl add <dist> <file.deb> [file2.deb ...]"
+
+    log "Adding packages to ${dist}..."
+
+    local added=0
+    local failed=0
+
+    for deb in "$@"; do
+        if [[ -f "$deb" ]]; then
+            if reprepro -b "${REPO_BASE}" includedeb "${dist}" "$deb" 2>/dev/null; then
+                ok "Added: $(basename "$deb")"
+                ((added++))
+            else
+                warn "Failed: $(basename "$deb")"
+                ((failed++))
+            fi
+        else
+            warn "Not found: $deb"
+            ((failed++))
+        fi
+    done
+
+    log "Added ${added} packages, ${failed} failed"
+}
+
+cmd_remove() {
+    local dist="${1:-}"
+    local pkg="${2:-}"
+
+    [[ -z "$dist" ]] && err "Usage: repoctl remove <dist> <package>"
+    [[ -z "$pkg" ]] && err "Usage: repoctl remove <dist> <package>"
+
+    check_reprepro
+
+    log "Removing ${pkg} from ${dist}..."
+    reprepro -b "${REPO_BASE}" remove "${dist}" "${pkg}"
+    ok "Removed: ${pkg}"
+}
+
+cmd_list() {
+    local dist="${1:-$DEFAULT_DIST}"
+    local json="${2:-false}"
+
+    check_reprepro
+
+    if [[ "$json" == "true" ]]; then
+        echo "["
+        local first=true
+        reprepro -b "${REPO_BASE}" list "${dist}" 2>/dev/null | while read -r line; do
+            local pkg=$(echo "$line" | awk '{print $2}')
+            local ver=$(echo "$line" | awk '{print $3}')
+            local arch=$(echo "$line" | awk '{print $4}')
+            [[ "$first" == "true" ]] && first=false || echo ","
+            echo "  {\"package\": \"${pkg}\", \"version\": \"${ver}\", \"arch\": \"${arch}\"}"
+        done
+        echo "]"
+    else
+        reprepro -b "${REPO_BASE}" list "${dist}"
+    fi
+}
+
+cmd_sync() {
+    local dest="${1:-}"
+
+    [[ -z "$dest" ]] && err "Usage: repoctl sync <user@host:/path/>"
+
+    log "Syncing repository to ${dest}..."
+    rsync -avz --delete \
+        "${REPO_OUT}/dists/" \
+        "${REPO_OUT}/pool/" \
+        "${REPO_OUT}/secubox-keyring.gpg" \
+        "${REPO_OUT}/secubox-keyring.gpg.bin" \
+        "${REPO_OUT}/install.sh" \
+        "${dest}"
+    ok "Sync complete"
+}
+
+cmd_serve() {
+    local port="${1:-8888}"
+
+    log "Starting local HTTP server on port ${port}..."
+    log "Repository URL: http://localhost:${port}"
+    log "Press Ctrl+C to stop"
+
+    cd "${REPO_OUT}"
+    python3 -m http.server "${port}"
+}
+
+cmd_components() {
+    cat <<EOF
+{
+  "components": [
+    {
+      "name": "reprepro",
+      "description": "Debian repository manager",
+      "installed": $(command -v reprepro &>/dev/null && echo "true" || echo "false"),
+      "required": true
+    },
+    {
+      "name": "gpg",
+      "description": "GNU Privacy Guard for signing",
+      "installed": $(command -v gpg &>/dev/null && echo "true" || echo "false"),
+      "required": true
+    },
+    {
+      "name": "rsync",
+      "description": "Remote sync for deployment",
+      "installed": $(command -v rsync &>/dev/null && echo "true" || echo "false"),
+      "required": false
+    },
+    {
+      "name": "nginx",
+      "description": "Web server for repository",
+      "installed": $(command -v nginx &>/dev/null && echo "true" || echo "false"),
+      "required": false
+    }
+  ]
+}
+EOF
+}
+
+cmd_access() {
+    cat <<EOF
+{
+  "endpoints": [
+    {"path": "/", "description": "Repository index", "public": true},
+    {"path": "/dists/", "description": "Distribution metadata", "public": true},
+    {"path": "/pool/", "description": "Package pool", "public": true},
+    {"path": "/secubox-keyring.gpg", "description": "GPG public key", "public": true},
+    {"path": "/install.sh", "description": "Installation script", "public": true}
+  ],
+  "repository_url": "https://apt.secubox.in",
+  "install_command": "curl -fsSL https://apt.secubox.in/install.sh | sudo bash"
+}
+EOF
+}
+
+cmd_help() {
+    cat <<EOF
+repoctl v${VERSION} — SecuBox APT Repository Manager
+
+Usage: ${SCRIPT_NAME} <command> [options]
+
+Repository Commands:
+  status [--json]              Show repository status
+  init                         Initialize repository structure
+  add <dist> <deb...>          Add packages to distribution
+  remove <dist> <package>      Remove a package
+  list <dist> [--json]         List packages in distribution
+  sync <user@host:/path/>      Sync to remote server
+  serve [port]                 Start local HTTP server
+
+GPG Commands:
+  gpg-setup                    Generate GPG signing key
+  gpg-export [dir] [type]      Export key (public/private/fingerprint)
+
+Info Commands:
+  components                   List required components (JSON)
+  access                       Show access endpoints (JSON)
+  help                         Show this help
+
+Distributions: bookworm, trixie
+
+Examples:
+  ${SCRIPT_NAME} init
+  ${SCRIPT_NAME} gpg-setup
+  ${SCRIPT_NAME} add bookworm *.deb
+  ${SCRIPT_NAME} list bookworm
+  ${SCRIPT_NAME} sync deploy@apt.secubox.in:/var/www/apt.secubox.in/
+
+EOF
+}
+
+# ══════════════════════════════════════════════════════════════════
+# Main
+# ══════════════════════════════════════════════════════════════════
+
+[[ $# -eq 0 ]] && { cmd_help; exit 0; }
+
+CMD="$1"
+shift
+
+case "$CMD" in
+    status)
+        json="false"
+        [[ "${1:-}" == "--json" ]] && json="true"
+        cmd_status "$json"
+        ;;
+    init)           cmd_init ;;
+    gpg-setup)      cmd_gpg_setup ;;
+    gpg-export)     cmd_gpg_export "${1:-.}" "${2:-public}" ;;
+    add)            cmd_add "$@" ;;
+    remove)         cmd_remove "$@" ;;
+    list)
+        dist="${1:-$DEFAULT_DIST}"
+        json="false"
+        [[ "${2:-}" == "--json" ]] && json="true"
+        cmd_list "$dist" "$json"
+        ;;
+    sync)           cmd_sync "$@" ;;
+    serve)          cmd_serve "${1:-8888}" ;;
+    components)     cmd_components ;;
+    access)         cmd_access ;;
+    help|--help|-h) cmd_help ;;
+    version|--version|-v) echo "repoctl v${VERSION}" ;;
+    *)              err "Unknown command: $CMD. Use '${SCRIPT_NAME} help' for usage." ;;
+esac

@@ -1,9 +1,84 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-03-22 (Session 5)*
+*Mis à jour : 2026-03-22 (Session 7)*
 
 ---
 
 ## ✅ Terminé cette session
+
+### New Modules (2) ✅
+- **secubox-repo** (v1.0.0) — APT repository management module
+  - repoctl CLI for package management
+  - GPG key generation and signing
+  - Multi-distribution support (bookworm, trixie)
+  - Web dashboard for repository status
+  - FastAPI endpoints for remote management
+
+- **secubox-hardening** (v1.0.0) — Kernel and system hardening
+  - hardeningctl CLI for security management
+  - Sysctl hardening (ASLR, kptr_restrict, SYN cookies, etc.)
+  - Module blacklist (uncommon protocols, filesystems)
+  - Security benchmark tool
+  - Web dashboard with security score
+
+### APT Repository Deployment Scripts ✅
+- **export-secrets.sh** — Export GPG + SSH keys for GitHub Actions
+- **local-publish.sh** — Local test server (reprepro + Python HTTP)
+- **install.sh** — User installation script (`curl | bash`)
+- **README updates** — Complete deployment documentation
+
+### Nextcloud File Sync ✅
+- **nextcloudctl v1.2.0** — Full Nextcloud LXC management
+- **Debian bookworm LXC** — PHP 8.2, Nginx, Redis, SQLite
+- **Nextcloud 30.0.4** — Latest stable release
+- **Port 9080** — Avoids CrowdSec conflict (8080)
+- **Redis caching** — Fixed systemd unit for LXC
+- **Admin user** — ncadmin / secubox123
+- **WebDAV, CalDAV, CardDAV** — All enabled
+- **Bind mounts** — /srv/nextcloud/{data,config} persistent
+
+### Gitea Git Server ✅
+- **giteactl v1.4.0** — Full Gitea LXC management
+- **Alpine Linux LXC** — Lightweight container via debootstrap
+- **Host networking** — No br0 bridge required (lxc.net.0.type = none)
+- **Two-phase install** — install-init.sh → start-gitea.sh
+- **PATH/HOME fix** — Export environment for su-exec
+- **WORK_PATH config** — Gitea 1.22.6 requirement
+- **Admin user** — Created via `giteactl user add`
+- **SSH + HTTP** — Port 2222 (SSH), 3000 (HTTP)
+- **LFS support** — Enabled with proper config
+
+### AppArmor Security Profiles ✅
+- **Base profile** — secubox-base abstractions for all services
+- **Hub profile** — Menu, systemd, monitoring access
+- **Mail profile** — LXC containers, ACME, mail data
+- **WireGuard profile** — wg tools, config, QR codes
+- **CrowdSec profile** — cscli, logs, API socket
+- **Generic profile** — For simple API services
+- **Install script** — scripts/install-apparmor.sh
+
+### Audit Rules ✅
+- **50-secubox.rules** — Comprehensive audit rules
+- **Config changes** — secubox, wireguard, mail, haproxy
+- **Security events** — JWT access, privilege escalation, failed access
+- **System changes** — nftables, netplan, SSH, sudo
+- **Install script** — scripts/install-audit.sh
+
+### ClamAV Antivirus ✅
+- **mailserverctl v2.6.0** — av setup/enable/disable/status/update commands
+- **ClamAV daemon + milter** — Installed in LXC container via apt
+- **Postfix integration** — Via clamav-milter on port 8894
+- **Freshclam** — Automatic virus definition updates
+- **API endpoints** — /av/status, /av/setup, /av/enable, /av/disable, /av/update
+- **secubox-mail v2.0.0** — Full mail security stack complete
+
+### Postgrey Greylisting ✅
+- **mailserverctl v2.5.0** — grey setup/enable/disable/status commands
+- **Postgrey** — Installed in LXC container via apt
+- **Whitelist** — Common mail providers (Google, Microsoft, Yahoo, etc.)
+- **Postfix integration** — smtpd_recipient_restrictions with policy service
+- **Auto-whitelist** — After 5 successful deliveries from same sender
+- **API endpoints** — /grey/status, /grey/setup, /grey/enable, /grey/disable
+- **secubox-mail v1.9.0** — Deployed and tested
 
 ### Service Fixes ✅
 - **secubox-haproxy v1.1.1** — Fixed systemd namespace error when HAProxy not installed
@@ -65,19 +140,32 @@
 
 ## ⬜ Next Up
 
-### Mail Server Production
-1. **Greylisting** — Postgrey integration (optional)
-2. **ClamAV** — Virus scanning (optional)
+### Mail Server ✅ COMPLETE
+All optional mail security features implemented:
+- DKIM signing (OpenDKIM)
+- Spam filtering (SpamAssassin)
+- Greylisting (Postgrey)
+- Virus scanning (ClamAV)
+
+### CI/CD Workflows ✅
+- **build-packages.yml** — Dynamic matrix for all 33 packages
+- **build-image.yml** — System images for 5 boards (MOCHAbin, ESPRESSObin, VM)
+- **Dual architecture** — arm64 + amd64 builds
+- **Auto-publish** — On tag v* → APT repo + GitHub Release
+- **GPG signed** — SHA256SUMS with GPG signatures
+- **build-all.sh** — Local build script for development
+
+### APT Repository Scripts ✅
+- **export-secrets.sh** — Export GPG keys and SSH deploy keys for GitHub Actions
+- **local-publish.sh** — Local testing with Python HTTP server
+- **install.sh** — User installation script for apt.secubox.in
+- **Deployment docs** — Complete GitHub secrets configuration
 
 ### Infrastructure
-1. **Deploy apt.secubox.in** — Setup reprepro server
-2. **Publish packages** — Upload all 33 debs to APT repo
-3. **Documentation** — User guide, API docs
-
-### Infrastructure
-1. **Deploy apt.secubox.in** — Setup reprepro server
-2. **Publish packages** — Upload all 33 debs to APT repo
-3. **Documentation** — User guide, API docs
+1. **Configure GitHub Secrets** — Add GPG_PRIVATE_KEY, DEPLOY_SSH_KEY, DEPLOY_KNOWN_HOSTS
+2. **Deploy apt.secubox.in server** — Run setup-repo-server.sh on VPS
+3. **Create initial release** — Tag v1.0.0 to trigger workflows
+4. **Documentation** — User guide, API docs
 
 ---
 

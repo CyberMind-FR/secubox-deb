@@ -9,3 +9,5 @@ override_dh_auto_install:
 	cp -r www/nextcloud/. debian/secubox-nextcloud/usr/share/secubox/www/nextcloud/
 	install -d debian/secubox-nextcloud/usr/share/secubox/menu.d
 	[ -d menu.d ] && cp -r menu.d/. debian/secubox-nextcloud/usr/share/secubox/menu.d/ || true
+	install -d debian/secubox-nextcloud/usr/sbin
+	[ -d sbin ] && install -m 755 sbin/* debian/secubox-nextcloud/usr/sbin/ || true

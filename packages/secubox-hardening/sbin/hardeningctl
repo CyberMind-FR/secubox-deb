@@ -1,0 +1,311 @@
+#!/usr/bin/env bash
+# ══════════════════════════════════════════════════════════════════
+#  hardeningctl — SecuBox System Hardening Manager
+#  Usage: hardeningctl <command> [options]
+# ══════════════════════════════════════════════════════════════════
+set -euo pipefail
+
+VERSION="1.0.0"
+SCRIPT_NAME="$(basename "$0")"
+
+# Configuration paths
+SYSCTL_CONF="/etc/sysctl.d/99-secubox-hardening.conf"
+MODPROBE_CONF="/etc/modprobe.d/secubox-blacklist.conf"
+SECUBOX_CONF_DIR="/etc/secubox/hardening"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+CYAN='\033[0;36m'
+GOLD='\033[0;33m'
+NC='\033[0m'
+
+log()  { echo -e "${CYAN}[hardening]${NC} $*"; }
+ok()   { echo -e "${GREEN}[OK]${NC} $*"; }
+warn() { echo -e "${GOLD}[WARN]${NC} $*"; }
+err()  { echo -e "${RED}[ERR]${NC} $*" >&2; exit 1; }
+
+# ══════════════════════════════════════════════════════════════════
+# Check Functions
+# ══════════════════════════════════════════════════════════════════
+
+check_sysctl() {
+    local key="$1"
+    local expected="$2"
+    local current
+
+    current=$(sysctl -n "$key" 2>/dev/null || echo "N/A")
+    if [[ "$current" == "$expected" ]]; then
+        echo "pass"
+    else
+        echo "fail:${current}"
+    fi
+}
+
+check_aslr() {
+    check_sysctl "kernel.randomize_va_space" "2"
+}
+
+check_kptr_restrict() {
+    check_sysctl "kernel.kptr_restrict" "2"
+}
+
+check_dmesg_restrict() {
+    check_sysctl "kernel.dmesg_restrict" "1"
+}
+
+check_syncookies() {
+    check_sysctl "net.ipv4.tcp_syncookies" "1"
+}
+
+check_rp_filter() {
+    check_sysctl "net.ipv4.conf.all.rp_filter" "1"
+}
+
+check_icmp_redirects() {
+    check_sysctl "net.ipv4.conf.all.accept_redirects" "0"
+}
+
+check_source_routing() {
+    check_sysctl "net.ipv4.conf.all.accept_source_route" "0"
+}
+
+# ══════════════════════════════════════════════════════════════════
+# Commands
+# ══════════════════════════════════════════════════════════════════
+
+cmd_status() {
+    local json="${1:-false}"
+
+    local checks=(
+        "aslr:ASLR:$(check_aslr)"
+        "kptr:Kernel Pointer Restrict:$(check_kptr_restrict)"
+        "dmesg:Dmesg Restrict:$(check_dmesg_restrict)"
+        "syncookies:SYN Cookies:$(check_syncookies)"
+        "rp_filter:Reverse Path Filter:$(check_rp_filter)"
+        "icmp_redirects:ICMP Redirects Disabled:$(check_icmp_redirects)"
+        "source_routing:Source Routing Disabled:$(check_source_routing)"
+    )
+
+    local passed=0
+    local total=${#checks[@]}
+
+    if [[ "$json" == "true" ]]; then
+        echo "{"
+        echo "  \"version\": \"${VERSION}\","
+        echo "  \"sysctl_applied\": $([ -f "$SYSCTL_CONF" ] && echo "true" || echo "false"),"
+        echo "  \"modprobe_applied\": $([ -f "$MODPROBE_CONF" ] && echo "true" || echo "false"),"
+        echo "  \"checks\": ["
+
+        local first=true
+        for check in "${checks[@]}"; do
+            IFS=':' read -r id name result <<< "$check"
+            local status="pass"
+            local current=""
+            if [[ "$result" == fail:* ]]; then
+                status="fail"
+                current="${result#fail:}"
+            fi
+            [[ "$status" == "pass" ]] && passed=$((passed + 1))
+
+            [[ "$first" == "true" ]] && first=false || echo ","
+            echo -n "    {\"id\": \"$id\", \"name\": \"$name\", \"status\": \"$status\""
+            [[ -n "$current" ]] && echo -n ", \"current\": \"$current\""
+            echo -n "}"
+        done
+        echo ""
+        echo "  ],"
+        echo "  \"passed\": ${passed},"
+        echo "  \"total\": ${total},"
+        echo "  \"score\": $((passed * 100 / total))"
+        echo "}"
+    else
+        echo "SecuBox Hardening Status v${VERSION}"
+        echo "====================================="
+        echo ""
+        echo "Sysctl Config : $([ -f "$SYSCTL_CONF" ] && echo "Applied" || echo "Not applied")"
+        echo "Module Blacklist : $([ -f "$MODPROBE_CONF" ] && echo "Applied" || echo "Not applied")"
+        echo ""
+        echo "Security Checks:"
+        for check in "${checks[@]}"; do
+            IFS=':' read -r id name result <<< "$check"
+            if [[ "$result" == "pass" ]]; then
+                echo -e "  ${GREEN}✓${NC} $name"
+                passed=$((passed + 1))
+            else
+                local current="${result#fail:}"
+                echo -e "  ${RED}✗${NC} $name (current: $current)"
+            fi
+        done
+        echo ""
+        echo "Score: ${passed}/${total} ($((passed * 100 / total))%)"
+    fi
+}
+
+cmd_apply() {
+    log "Applying kernel hardening..."
+
+    # Apply sysctl settings
+    if [[ -f "$SYSCTL_CONF" ]]; then
+        sysctl -p "$SYSCTL_CONF" >/dev/null 2>&1 || warn "Some sysctl settings may not apply"
+        ok "Sysctl settings applied"
+    else
+        warn "Sysctl config not found at $SYSCTL_CONF"
+    fi
+
+    # Load module blacklist
+    if [[ -f "$MODPROBE_CONF" ]]; then
+        ok "Module blacklist in place (takes effect on next boot)"
+    fi
+
+    cmd_status
+}
+
+cmd_install() {
+    log "Installing hardening configuration..."
+
+    # Install sysctl config
+    if [[ -f "${SECUBOX_CONF_DIR}/99-secubox-hardening.conf" ]]; then
+        cp "${SECUBOX_CONF_DIR}/99-secubox-hardening.conf" "$SYSCTL_CONF"
+        ok "Sysctl config installed"
+    fi
+
+    # Install module blacklist
+    if [[ -f "${SECUBOX_CONF_DIR}/blacklist-modules.conf" ]]; then
+        cp "${SECUBOX_CONF_DIR}/blacklist-modules.conf" "$MODPROBE_CONF"
+        ok "Module blacklist installed"
+    fi
+
+    cmd_apply
+}
+
+cmd_uninstall() {
+    log "Removing hardening configuration..."
+
+    [[ -f "$SYSCTL_CONF" ]] && rm -f "$SYSCTL_CONF" && ok "Sysctl config removed"
+    [[ -f "$MODPROBE_CONF" ]] && rm -f "$MODPROBE_CONF" && ok "Module blacklist removed"
+
+    warn "Reboot required to restore default settings"
+}
+
+cmd_benchmark() {
+    log "Running security benchmark..."
+
+    local score=0
+    local max=0
+
+    # Kernel hardening checks
+    echo "Kernel Hardening:"
+    for check in "kernel.randomize_va_space:2" "kernel.kptr_restrict:2" "kernel.dmesg_restrict:1"; do
+        IFS=':' read -r key expected <<< "$check"
+        max=$((max + 1))
+        local current=$(sysctl -n "$key" 2>/dev/null || echo "N/A")
+        if [[ "$current" == "$expected" ]]; then
+            echo -e "  ${GREEN}✓${NC} $key = $expected"
+            score=$((score + 1))
+        else
+            echo -e "  ${RED}✗${NC} $key = $current (expected: $expected)"
+        fi
+    done
+
+    # Network hardening checks
+    echo ""
+    echo "Network Hardening:"
+    for check in "net.ipv4.tcp_syncookies:1" "net.ipv4.conf.all.rp_filter:1" "net.ipv4.conf.all.accept_redirects:0"; do
+        IFS=':' read -r key expected <<< "$check"
+        max=$((max + 1))
+        local current=$(sysctl -n "$key" 2>/dev/null || echo "N/A")
+        if [[ "$current" == "$expected" ]]; then
+            echo -e "  ${GREEN}✓${NC} $key = $expected"
+            score=$((score + 1))
+        else
+            echo -e "  ${RED}✗${NC} $key = $current (expected: $expected)"
+        fi
+    done
+
+    echo ""
+    echo "Score: ${score}/${max} ($((score * 100 / max))%)"
+}
+
+cmd_components() {
+    cat <<EOF
+{
+  "components": [
+    {
+      "name": "sysctl",
+      "description": "Kernel parameter hardening",
+      "installed": $([ -f "$SYSCTL_CONF" ] && echo "true" || echo "false"),
+      "path": "${SYSCTL_CONF}"
+    },
+    {
+      "name": "modprobe",
+      "description": "Module blacklist",
+      "installed": $([ -f "$MODPROBE_CONF" ] && echo "true" || echo "false"),
+      "path": "${MODPROBE_CONF}"
+    }
+  ]
+}
+EOF
+}
+
+cmd_access() {
+    cat <<EOF
+{
+  "endpoints": [
+    {"path": "/status", "method": "GET", "description": "Get hardening status"},
+    {"path": "/apply", "method": "POST", "description": "Apply hardening settings"},
+    {"path": "/benchmark", "method": "GET", "description": "Run security benchmark"}
+  ]
+}
+EOF
+}
+
+cmd_help() {
+    cat <<EOF
+hardeningctl v${VERSION} — SecuBox System Hardening Manager
+
+Usage: ${SCRIPT_NAME} <command> [options]
+
+Commands:
+  status [--json]    Show current hardening status
+  apply              Apply hardening settings from config
+  install            Install hardening configuration files
+  uninstall          Remove hardening configuration
+  benchmark          Run security benchmark checks
+  components         List hardening components (JSON)
+  access             Show API endpoints (JSON)
+  help               Show this help
+
+Examples:
+  ${SCRIPT_NAME} status
+  ${SCRIPT_NAME} apply
+  ${SCRIPT_NAME} benchmark
+
+EOF
+}
+
+# ══════════════════════════════════════════════════════════════════
+# Main
+# ══════════════════════════════════════════════════════════════════
+
+[[ $# -eq 0 ]] && { cmd_help; exit 0; }
+
+CMD="$1"
+shift
+
+case "$CMD" in
+    status)
+        json="false"
+        [[ "${1:-}" == "--json" ]] && json="true"
+        cmd_status "$json"
+        ;;
+    apply)      cmd_apply ;;
+    install)    cmd_install ;;
+    uninstall)  cmd_uninstall ;;
+    benchmark)  cmd_benchmark ;;
+    components) cmd_components ;;
+    access)     cmd_access ;;
+    help|--help|-h) cmd_help ;;
+    version|--version|-v) echo "hardeningctl v${VERSION}" ;;
+    *)          err "Unknown command: $CMD. Use '${SCRIPT_NAME} help' for usage." ;;
+esac

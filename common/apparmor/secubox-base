@@ -1,0 +1,54 @@
+# SecuBox Base AppArmor Abstractions
+# Include in all secubox-* profiles
+
+  # Python runtime
+  /usr/bin/python3* rix,
+  /usr/lib/python3/** r,
+  /usr/lib/python3/dist-packages/** r,
+  /usr/local/lib/python3/** r,
+
+  # SecuBox core library
+  /usr/lib/secubox/** r,
+  /usr/share/secubox/** r,
+
+  # Configuration
+  /etc/secubox/ r,
+  /etc/secubox/** r,
+
+  # Runtime socket
+  /run/secubox/ rw,
+  /run/secubox/*.sock rw,
+
+  # Logging
+  /var/log/secubox/ rw,
+  /var/log/secubox/** rw,
+
+  # Data directory
+  /var/lib/secubox/ r,
+  /var/lib/secubox/** rw,
+
+  # System info
+  /proc/sys/kernel/random/uuid r,
+  /proc/meminfo r,
+  /proc/cpuinfo r,
+  /proc/loadavg r,
+  /proc/uptime r,
+  /proc/stat r,
+  /sys/devices/system/cpu/** r,
+  /sys/class/net/** r,
+
+  # Networking
+  /etc/hosts r,
+  /etc/resolv.conf r,
+  /etc/nsswitch.conf r,
+  /etc/passwd r,
+  /etc/group r,
+
+  # SSL certificates
+  /etc/ssl/certs/** r,
+  /usr/share/ca-certificates/** r,
+
+  # Deny dangerous operations
+  deny /proc/*/mem rw,
+  deny /proc/kcore rw,
+  deny /sys/kernel/security/** rwx,

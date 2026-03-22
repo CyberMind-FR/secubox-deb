@@ -19,7 +19,7 @@ from pydantic import BaseModel
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
 
-app = FastAPI(title="SecuBox Mail", version="1.6.0")
+app = FastAPI(title="SecuBox Mail", version="1.8.0")
 config = get_config("mail")
 
 DATA_PATH = Path(config.get("data_path", "/srv/mail"))
@@ -1119,3 +1119,157 @@ async def spam_update(background_tasks: BackgroundTasks):
                       stderr=subprocess.STDOUT)
     background_tasks.add_task(do_update)
     return {"success": True, "message": "SpamAssassin rules update started"}
+
+
+# =============================================================================
+# GREYLISTING - Postgrey
+# =============================================================================
+
+@app.get("/grey/status", dependencies=[Depends(require_jwt)])
+async def grey_status():
+    """Get Postgrey greylisting status"""
+    rootfs = LXC_PATH / MAIL_CONTAINER / "rootfs"
+
+    status = {
+        "installed": (rootfs / "usr/sbin/postgrey").exists(),
+        "configured": (rootfs / "etc/default/postgrey").exists(),
+        "enabled": False,
+        "running": False,
+    }
+
+    # Check if enabled in Postfix
+    main_cf = rootfs / "etc/postfix/main.cf"
+    if main_cf.exists():
+        content = main_cf.read_text()
+        status["enabled"] = "check_policy_service inet:127.0.0.1:10023" in content
+
+    # Check if postgrey is running
+    if lxc_running(MAIL_CONTAINER):
+        success, out, _ = lxc_attach(MAIL_CONTAINER, "pgrep postgrey")
+        status["running"] = success
+
+    # Greylisting settings
+    status["settings"] = {
+        "delay": 300,  # 5 minutes initial delay
+        "auto_whitelist_after": 5,
+        "retry_window_days": 2,
+    }
+
+    return status
+
+
+@app.post("/grey/setup", dependencies=[Depends(require_jwt)])
+async def grey_setup(background_tasks: BackgroundTasks):
+    """Full Postgrey setup (install + configure + enable)"""
+    def do_setup():
+        subprocess.run(["/usr/sbin/mailserverctl", "grey", "setup"],
+                      stdout=open("/var/log/mail-grey.log", "w"),
+                      stderr=subprocess.STDOUT)
+    background_tasks.add_task(do_setup)
+    return {"success": True, "message": "Greylisting setup started",
+            "log": "/var/log/mail-grey.log"}
+
+
+@app.post("/grey/enable", dependencies=[Depends(require_jwt)])
+async def grey_enable():
+    """Enable greylisting"""
+    success, out, err = run_cmd(["/usr/sbin/mailserverctl", "grey", "enable"])
+    if success:
+        return {"success": True, "message": "Greylisting enabled"}
+    raise HTTPException(500, f"Failed: {err}")
+
+
+@app.post("/grey/disable", dependencies=[Depends(require_jwt)])
+async def grey_disable():
+    """Disable greylisting"""
+    success, out, err = run_cmd(["/usr/sbin/mailserverctl", "grey", "disable"])
+    if success:
+        return {"success": True, "message": "Greylisting disabled"}
+    raise HTTPException(500, f"Failed: {err}")
+
+
+# =============================================================================
+# CLAMAV - Virus Scanning
+# =============================================================================
+
+@app.get("/av/status", dependencies=[Depends(require_jwt)])
+async def av_status():
+    """Get ClamAV antivirus status"""
+    rootfs = LXC_PATH / MAIL_CONTAINER / "rootfs"
+
+    status = {
+        "installed": (rootfs / "usr/sbin/clamd").exists(),
+        "configured": (rootfs / "etc/clamav/clamd.conf").exists(),
+        "enabled": False,
+        "running": False,
+        "milter_running": False,
+    }
+
+    # Check if enabled in Postfix
+    main_cf = rootfs / "etc/postfix/main.cf"
+    if main_cf.exists():
+        content = main_cf.read_text()
+        status["enabled"] = "inet:localhost:8894" in content
+
+    # Check if clamd and milter are running
+    if lxc_running(MAIL_CONTAINER):
+        success, out, _ = lxc_attach(MAIL_CONTAINER, "pgrep clamd")
+        status["running"] = success
+        success, out, _ = lxc_attach(MAIL_CONTAINER, "pgrep clamav-milter")
+        status["milter_running"] = success
+
+    # Check virus database
+    db_file = rootfs / "var/lib/clamav/main.cvd"
+    if db_file.exists():
+        import datetime
+        mtime = datetime.datetime.fromtimestamp(db_file.stat().st_mtime)
+        status["database_updated"] = mtime.strftime("%Y-%m-%d %H:%M")
+    else:
+        db_file = rootfs / "var/lib/clamav/main.cld"
+        if db_file.exists():
+            import datetime
+            mtime = datetime.datetime.fromtimestamp(db_file.stat().st_mtime)
+            status["database_updated"] = mtime.strftime("%Y-%m-%d %H:%M")
+
+    return status
+
+
+@app.post("/av/setup", dependencies=[Depends(require_jwt)])
+async def av_setup(background_tasks: BackgroundTasks):
+    """Full ClamAV setup (install + configure + enable)"""
+    def do_setup():
+        subprocess.run(["/usr/sbin/mailserverctl", "av", "setup"],
+                      stdout=open("/var/log/mail-av.log", "w"),
+                      stderr=subprocess.STDOUT)
+    background_tasks.add_task(do_setup)
+    return {"success": True, "message": "ClamAV setup started (this may take several minutes)",
+            "log": "/var/log/mail-av.log"}
+
+
+@app.post("/av/enable", dependencies=[Depends(require_jwt)])
+async def av_enable():
+    """Enable ClamAV virus scanning"""
+    success, out, err = run_cmd(["/usr/sbin/mailserverctl", "av", "enable"])
+    if success:
+        return {"success": True, "message": "ClamAV enabled"}
+    raise HTTPException(500, f"Failed: {err}")
+
+
+@app.post("/av/disable", dependencies=[Depends(require_jwt)])
+async def av_disable():
+    """Disable ClamAV virus scanning"""
+    success, out, err = run_cmd(["/usr/sbin/mailserverctl", "av", "disable"])
+    if success:
+        return {"success": True, "message": "ClamAV disabled"}
+    raise HTTPException(500, f"Failed: {err}")
+
+
+@app.post("/av/update", dependencies=[Depends(require_jwt)])
+async def av_update(background_tasks: BackgroundTasks):
+    """Update ClamAV virus definitions"""
+    def do_update():
+        subprocess.run(["/usr/sbin/mailserverctl", "av", "update"],
+                      stdout=open("/var/log/mail-av-update.log", "w"),
+                      stderr=subprocess.STDOUT)
+    background_tasks.add_task(do_update)
+    return {"success": True, "message": "ClamAV virus database update started"}

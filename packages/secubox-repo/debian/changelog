@@ -1,0 +1,11 @@
+secubox-repo (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release
+  * APT repository management (repoctl)
+  * GPG key generation and package signing
+  * Multiple distribution support (bookworm, trixie)
+  * FastAPI management interface
+  * Web dashboard for repository status
+  * Remote sync support
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Mar 2026 18:30:00 +0100

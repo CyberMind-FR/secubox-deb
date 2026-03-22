@@ -1,19 +1,29 @@
 # SecuBox APT Repository — apt.secubox.in
 
-Configuration et scripts pour le repository APT SecuBox.
+Configuration and scripts for the SecuBox APT repository.
+
+## Quick Install (for users)
+
+```bash
+curl -fsSL https://apt.secubox.in/install.sh | sudo bash
+sudo apt install secubox-full
+```
 
 ## Structure
 
 ```
 repo/
 ├── conf/
-│   ├── distributions    # Configuration reprepro (bookworm, trixie)
-│   └── options          # Options reprepro
+│   ├── distributions         # reprepro config (bookworm, trixie)
+│   └── options               # reprepro options
 ├── scripts/
-│   ├── generate-gpg-key.sh   # Génération clé GPG
-│   ├── repo-manage.sh        # Gestion du repo (add, remove, list, sync)
-│   └── setup-repo-server.sh  # Installation serveur complet
-├── nginx-apt.secubox.in.conf # Config nginx avec SSL
+│   ├── export-secrets.sh     # Export secrets for GitHub Actions
+│   ├── generate-gpg-key.sh   # Generate GPG signing key
+│   ├── local-publish.sh      # Local testing server
+│   ├── repo-manage.sh        # Repository management (add, remove, sync)
+│   └── setup-repo-server.sh  # Full server setup
+├── install.sh                # User installation script
+├── nginx-apt.secubox.in.conf # nginx config with SSL
 └── README.md
 ```
 
@@ -56,45 +66,123 @@ bash repo/scripts/repo-manage.sh list bookworm
 bash repo/scripts/repo-manage.sh sync deploy@apt.secubox.in:/var/www/apt.secubox.in/
 ```
 
+## Local Testing
+
+Test the repository locally before deploying:
+
+```bash
+# Build all packages first
+bash scripts/build-all.sh
+
+# Create local repo and serve on port 8888
+bash repo/scripts/local-publish.sh --serve
+
+# On VM/target machine
+curl -fsSL http://<host-ip>:8888/install-local.sh | bash
+sudo apt install secubox-full
+```
+
 ## CI/CD
 
-Le workflow `.github/workflows/publish-packages.yml` :
-1. Build les packages pour arm64 et amd64
-2. Signe avec GPG
-3. Publie sur apt.secubox.in
+The `.github/workflows/publish-packages.yml` workflow:
+1. Builds packages for arm64 and amd64
+2. Signs with GPG
+3. Publishes to apt.secubox.in
 
-### Secrets GitHub requis
+### GitHub Secrets Configuration
 
 | Secret | Description |
 |--------|-------------|
-| `GPG_PRIVATE_KEY` | Clé GPG privée (armor export) |
-| `DEPLOY_SSH_KEY` | Clé SSH pour rsync vers le serveur |
-| `DEPLOY_KNOWN_HOSTS` | known_hosts du serveur |
+| `GPG_PRIVATE_KEY` | GPG private key (armored) |
+| `DEPLOY_SSH_KEY` | SSH private key for rsync |
+| `DEPLOY_KNOWN_HOSTS` | Server known_hosts entry |
 
-### Export de la clé GPG pour CI
+### Exporting Secrets
 
 ```bash
-gpg --armor --export-secret-keys packages@secubox.in > gpg-private.key
-# Ajouter le contenu dans GitHub Secrets > GPG_PRIVATE_KEY
+# Generate GPG key and export all secrets
+bash repo/scripts/export-secrets.sh --output ./secrets
+
+# Files created:
+#   secrets/GPG_PRIVATE_KEY.txt    → GitHub secret: GPG_PRIVATE_KEY
+#   secrets/deploy_key             → GitHub secret: DEPLOY_SSH_KEY
+#   secrets/deploy_key.pub         → Add to server authorized_keys
+#   secrets/GITHUB_SECRETS_INSTRUCTIONS.md
 ```
 
-## Packages disponibles
+### Server-Side Setup
 
+1. Add deploy public key to server:
+```bash
+# On apt.secubox.in
+cat secrets/deploy_key.pub >> /home/deploy/.ssh/authorized_keys
+```
+
+2. Get known_hosts entry:
+```bash
+ssh-keyscan -H apt.secubox.in
+# Copy output to GitHub secret: DEPLOY_KNOWN_HOSTS
+```
+
+## Packages disponibles (33 packages)
+
+### Metapackages
 | Package | Description |
 |---------|-------------|
-| `secubox-full` | Tous les modules (4GB+ RAM) |
-| `secubox-lite` | Modules essentiels (1-2GB RAM) |
-| `secubox-core` | Bibliothèque partagée |
-| `secubox-hub` | Dashboard central |
-| `secubox-crowdsec` | Intégration CrowdSec |
-| `secubox-netdata` | Monitoring Netdata |
-| `secubox-wireguard` | VPN WireGuard |
-| `secubox-dpi` | Deep Packet Inspection |
-| `secubox-netmodes` | Modes réseau |
+| `secubox-full` | All modules (4GB+ RAM recommended) |
+| `secubox-lite` | Essential modules only (1-2GB RAM) |
+
+### Core Infrastructure
+| Package | Description |
+|---------|-------------|
+| `secubox-core` | Shared Python library |
+| `secubox-hub` | Central dashboard |
+| `secubox-portal` | Login portal |
+| `secubox-system` | System management |
+
+### Security
+| Package | Description |
+|---------|-------------|
+| `secubox-crowdsec` | CrowdSec integration |
+| `secubox-waf` | Web Application Firewall (300+ rules) |
+| `secubox-auth` | Authentication |
 | `secubox-nac` | Network Access Control |
-| `secubox-auth` | Authentification |
+
+### Networking
+| Package | Description |
+|---------|-------------|
+| `secubox-wireguard` | WireGuard VPN |
+| `secubox-netmodes` | Network modes |
+| `secubox-dpi` | Deep Packet Inspection |
 | `secubox-qos` | Quality of Service |
-| `secubox-mediaflow` | Media Flow Analysis |
-| `secubox-cdn` | CDN Cache |
-| `secubox-vhost` | Virtual Hosts |
-| `secubox-system` | System Hub |
+| `secubox-vhost` | Virtual hosts |
+| `secubox-haproxy` | HAProxy management |
+| `secubox-cdn` | CDN cache |
+
+### Applications
+| Package | Description |
+|---------|-------------|
+| `secubox-mail` | Mail server (Postfix/Dovecot + DKIM + SpamAssassin + ClamAV) |
+| `secubox-mail-lxc` | Mail LXC container |
+| `secubox-webmail` | Roundcube webmail |
+| `secubox-webmail-lxc` | Webmail LXC container |
+| `secubox-gitea` | Gitea Git server (LXC) |
+| `secubox-nextcloud` | Nextcloud file sync (LXC) |
+| `secubox-dns` | DNS/BIND management |
+| `secubox-users` | Unified identity |
+
+### Publishing
+| Package | Description |
+|---------|-------------|
+| `secubox-droplet` | File publisher |
+| `secubox-streamlit` | Streamlit apps |
+| `secubox-streamforge` | Streamlit app manager |
+| `secubox-metablogizer` | Static site generator |
+| `secubox-publish` | Unified publishing |
+
+### Monitoring
+| Package | Description |
+|---------|-------------|
+| `secubox-netdata` | Netdata integration |
+| `secubox-mediaflow` | Media flow analysis |
+| `secubox-c3box` | Services portal |

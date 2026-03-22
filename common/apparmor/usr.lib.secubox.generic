@@ -1,0 +1,40 @@
+# Generic AppArmor profile for SecuBox API services
+# For services that only need basic API functionality
+
+#include <tunables/global>
+
+# This profile can be symlinked for simple services:
+# ln -s usr.lib.secubox.generic usr.lib.secubox.netdata
+# ln -s usr.lib.secubox.generic usr.lib.secubox.mediaflow
+# etc.
+
+profile secubox-generic /usr/lib/secubox/*/** {
+  #include <abstractions/base>
+  #include <abstractions/python>
+  #include <abstractions/nameservice>
+
+  # SecuBox base permissions
+  #include <local/secubox-base>
+
+  # Process info for status endpoints
+  /proc/ r,
+  /proc/[0-9]*/ r,
+  /proc/[0-9]*/stat r,
+  /proc/[0-9]*/status r,
+  /proc/[0-9]*/cmdline r,
+
+  # Network info
+  /proc/net/** r,
+  /sys/class/net/** r,
+
+  # Systemd status (read-only)
+  /run/systemd/private r,
+
+  # Deny dangerous operations
+  deny /root/** rwx,
+  deny /home/*/.ssh/** rwx,
+  deny /etc/shadow r,
+  deny /etc/gshadow r,
+  deny /proc/kcore r,
+  deny /proc/*/mem rw,
+}

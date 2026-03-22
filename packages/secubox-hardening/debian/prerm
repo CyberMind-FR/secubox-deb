@@ -1,0 +1,13 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+    remove|purge)
+        systemctl stop secubox-hardening.service || true
+        systemctl disable secubox-hardening.service || true
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

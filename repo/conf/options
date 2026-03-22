@@ -1,6 +1,5 @@
-# reprepro options
+# reprepro options for SecuBox APT repository
 verbose
 basedir /var/lib/secubox-repo
 outdir /var/www/apt.secubox.in
 gnupghome /var/lib/secubox-repo/gpg
-ask-passphrase

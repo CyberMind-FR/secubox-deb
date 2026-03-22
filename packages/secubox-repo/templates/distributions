@@ -1,0 +1,21 @@
+Origin: SecuBox
+Label: SecuBox
+Suite: bookworm
+Codename: bookworm
+Version: 12.0
+Architectures: arm64 amd64 source
+Components: main
+Description: SecuBox Debian packages for Armada/x86_64
+SignWith: packages@secubox.in
+Contents: percomponent nocompatsymlink
+
+Origin: SecuBox
+Label: SecuBox
+Suite: trixie
+Codename: trixie
+Version: 13.0
+Architectures: arm64 amd64 source
+Components: main
+Description: SecuBox Debian packages (testing)
+SignWith: packages@secubox.in
+Contents: percomponent nocompatsymlink

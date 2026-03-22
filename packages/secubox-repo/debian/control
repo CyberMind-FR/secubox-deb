@@ -1,0 +1,30 @@
+Source: secubox-repo
+Section: admin
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13), dh-python, python3-all
+Standards-Version: 4.6.2
+Homepage: https://github.com/gkerma/secubox-deb
+
+Package: secubox-repo
+Architecture: all
+Depends: ${misc:Depends}, ${python3:Depends},
+ secubox-core,
+ python3-fastapi,
+ python3-uvicorn,
+ python3-aiofiles,
+ reprepro,
+ gnupg,
+ rsync
+Recommends: nginx, certbot
+Description: SecuBox APT Repository Manager
+ Management interface for the SecuBox APT repository (apt.secubox.in).
+ .
+ Features:
+  - Package management (add, remove, list)
+  - GPG key generation and signing
+  - Multiple distribution support (bookworm, trixie)
+  - Remote sync via rsync
+  - Web interface for repository status
+ .
+ This is the control plane for apt.secubox.in.
