@@ -1,3 +1,15 @@
+secubox-mail (1.8.0-1~bookworm1) bookworm; urgency=medium
+
+  * Add SpamAssassin spam filtering integration
+  * mailserverctl v2.4.0: spam setup/enable/disable/status/update commands
+  * Install SpamAssassin and spamc in LXC container
+  * Configure Postfix content filter integration
+  * Bayes learning and network checks enabled by default
+  * Add API endpoints: /spam/status, /spam/setup, /spam/enable, /spam/disable
+  * Add SpamAssassin to components JSON output
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Mar 2026 16:00:00 +0100
+
 secubox-mail (1.7.0-1~bookworm1) bookworm; urgency=medium
 
   * Add email client autodiscover endpoints
