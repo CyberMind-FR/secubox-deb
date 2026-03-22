@@ -5,6 +5,13 @@
 
 ## ✅ Terminé cette session
 
+### Mail Autodiscover ✅
+- **Thunderbird/Evolution** — /mail/config-v1.1.xml (Mozilla autoconfig)
+- **Outlook** — /autodiscover/autodiscover.xml (Microsoft format)
+- **Apple iOS/macOS** — /{domain}.mobileconfig (configuration profile)
+- **Well-known** — /.well-known/autoconfig/mail/config-v1.1.xml
+- **Public endpoints** — No authentication required for client access
+
 ### OpenDKIM Integration ✅
 - **mailserverctl v2.3.0** — Full DKIM/OpenDKIM support
 - **dkim setup** — Complete setup (keygen + install + configure + sync)
@@ -47,8 +54,13 @@
 ## ⬜ Next Up
 
 ### Mail Server Production
-1. **Mail autodiscover** — Thunderbird/Outlook autoconfig endpoints
-2. **SpamAssassin** — Spam filtering integration
+1. **SpamAssassin** — Spam filtering integration
+2. **Greylisting** — Postgrey integration
+
+### Infrastructure
+1. **Deploy apt.secubox.in** — Setup reprepro server
+2. **Publish packages** — Upload all 33 debs to APT repo
+3. **Documentation** — User guide, API docs
 
 ### Infrastructure
 1. **Deploy apt.secubox.in** — Setup reprepro server
