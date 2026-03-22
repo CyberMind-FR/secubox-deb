@@ -2,7 +2,7 @@
 # SecuBox Mail Server LXC Controller
 # Postfix + Dovecot in Debian LXC
 
-VERSION="2.2.0"
+VERSION="2.3.0"
 CONFIG_FILE="/etc/secubox/mail.toml"
 CONTAINER="mailserver"
 LXC_BASE="/srv/lxc"
@@ -64,8 +64,9 @@ create_startup_script() {
 # Mailserver startup (Debian)
 
 # Fix permissions
-mkdir -p /run/dovecot /run/dovecot/login /var/spool/postfix/private
+mkdir -p /run/dovecot /run/dovecot/login /var/spool/postfix/private /run/opendkim
 chown -R dovecot:dovecot /run/dovecot
+chown opendkim:opendkim /run/opendkim 2>/dev/null || true
 
 # Ensure users file readable
 [ -f /etc/dovecot/users ] && chmod 644 /etc/dovecot/users
@@ -73,13 +74,19 @@ chown -R dovecot:dovecot /run/dovecot
 # Start rsyslog for logging
 service rsyslog start 2>/dev/null || true
 
+# Start OpenDKIM (if installed)
+if [ -x /usr/sbin/opendkim ] && [ -f /etc/opendkim.conf ]; then
+    chown -R opendkim:opendkim /etc/opendkim 2>/dev/null || true
+    /usr/sbin/opendkim -x /etc/opendkim.conf 2>/dev/null && echo "OpenDKIM started" || true
+fi
+
 # Start Postfix
 service postfix start
 
 # Start Dovecot
 service dovecot start
 
-echo "Mail services started: Postfix + Dovecot"
+echo "Mail services started: Postfix + Dovecot + OpenDKIM"
 exec tail -f /var/log/mail.log 2>/dev/null || exec sleep infinity
 EOF
     chmod +x "$LXC_PATH/rootfs/opt/start-mail.sh"
@@ -694,29 +701,259 @@ cmd_sync() {
     log "Configuration synced"
 }
 
-cmd_dkim() {
+# ============================================================================
+# DKIM with OpenDKIM Integration
+# ============================================================================
+
+cmd_dkim_setup() {
+    require_root
+    log "Setting up DKIM signing for $DOMAIN..."
+
+    # Generate keys
+    cmd_dkim_keygen
+
+    # Install OpenDKIM in container
+    cmd_dkim_install
+
+    # Configure OpenDKIM
+    cmd_dkim_configure
+
+    # Sync to container and reload
+    cmd_dkim_sync
+
+    log "DKIM setup complete!"
+    log ""
+    log "Add this TXT record to DNS:"
+    cat "$DATA_PATH/dkim/default.txt"
+}
+
+cmd_dkim_keygen() {
     require_root
     log "Generating DKIM keys for $DOMAIN..."
 
     mkdir -p "$DATA_PATH/dkim"
 
-    # Generate key pair
-    openssl genrsa -out "$DATA_PATH/dkim/default.private" 2048 2>/dev/null
-    openssl rsa -in "$DATA_PATH/dkim/default.private" -pubout -out "$DATA_PATH/dkim/default.pub" 2>/dev/null
+    # Generate 2048-bit RSA key pair
+    local selector="default"
+    openssl genrsa -out "$DATA_PATH/dkim/${selector}.private" 2048 2>/dev/null
+    openssl rsa -in "$DATA_PATH/dkim/${selector}.private" -pubout -out "$DATA_PATH/dkim/${selector}.pub" 2>/dev/null
 
-    # Extract public key for DNS
-    local pubkey=$(grep -v "^-" "$DATA_PATH/dkim/default.pub" | tr -d '\n')
+    # Extract public key for DNS (remove headers and newlines)
+    local pubkey=$(grep -v "^-" "$DATA_PATH/dkim/${selector}.pub" | tr -d '\n')
 
-    # Save DNS record
-    cat > "$DATA_PATH/dkim/default.txt" << EOF
-default._domainkey.$DOMAIN. IN TXT "v=DKIM1; k=rsa; p=$pubkey"
+    # Save DNS record in split format (for long keys)
+    cat > "$DATA_PATH/dkim/${selector}.txt" << EOF
+${selector}._domainkey.$DOMAIN. IN TXT "v=DKIM1; k=rsa; p=$pubkey"
 EOF
 
-    log "DKIM key generated"
-    log "Add this TXT record to DNS:"
+    # Also save in BIND format
+    cat > "$DATA_PATH/dkim/${selector}.bind" << EOF
+; DKIM record for $DOMAIN
+; Selector: ${selector}
+; Generated: $(date -Iseconds)
+${selector}._domainkey IN TXT ( "v=DKIM1; k=rsa; "
+  "p=$pubkey" )
+EOF
+
+    chmod 600 "$DATA_PATH/dkim/"*.private
+
+    log "DKIM keys generated"
+}
+
+cmd_dkim_install() {
+    require_root
+
+    if ! lxc_exists; then
+        error "Container not installed"
+        return 1
+    fi
+
+    log "Installing OpenDKIM in container..."
+
+    # Use lxc-attach if container is running, otherwise chroot
+    if lxc_running; then
+        lxc-attach -n "$CONTAINER" -P "$LXC_BASE" -- /bin/bash << 'EOF'
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+apt-get install -y -o Dpkg::Options::="--force-confold" --no-install-recommends opendkim opendkim-tools
+apt-get clean
+rm -rf /var/lib/apt/lists/*
+EOF
+    else
+        chroot "$LXC_PATH/rootfs" /bin/bash << 'CHROOT_EOF'
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+apt-get install -y -o Dpkg::Options::="--force-confold" --no-install-recommends opendkim opendkim-tools
+apt-get clean
+rm -rf /var/lib/apt/lists/*
+CHROOT_EOF
+    fi
+
+    log "OpenDKIM installed"
+}
+
+cmd_dkim_configure() {
+    require_root
+    local rootfs="$LXC_PATH/rootfs"
+
+    if [ ! -d "$rootfs" ]; then
+        error "Container not installed"
+        return 1
+    fi
+
+    log "Configuring OpenDKIM..."
+
+    mkdir -p "$rootfs/etc/opendkim/keys/$DOMAIN"
+
+    # Main OpenDKIM config
+    cat > "$rootfs/etc/opendkim.conf" << EOF
+# SecuBox OpenDKIM Configuration
+Syslog                  yes
+SyslogSuccess           yes
+LogWhy                  yes
+
+Canonicalization        relaxed/simple
+Mode                    sv
+SubDomains              no
+AutoRestart             yes
+AutoRestartRate         10/1M
+Background              yes
+DNSTimeout              5
+SignatureAlgorithm      rsa-sha256
+
+# Tables
+KeyTable                /etc/opendkim/KeyTable
+SigningTable            refile:/etc/opendkim/SigningTable
+ExternalIgnoreList      /etc/opendkim/TrustedHosts
+InternalHosts           /etc/opendkim/TrustedHosts
+
+# Socket for Postfix
+Socket                  inet:8891@localhost
+UMask                   002
+UserID                  opendkim:opendkim
+
+PidFile                 /run/opendkim/opendkim.pid
+EOF
+
+    # Key table
+    cat > "$rootfs/etc/opendkim/KeyTable" << EOF
+default._domainkey.$DOMAIN $DOMAIN:default:/etc/opendkim/keys/$DOMAIN/default.private
+EOF
+
+    # Signing table
+    cat > "$rootfs/etc/opendkim/SigningTable" << EOF
+*@$DOMAIN default._domainkey.$DOMAIN
+EOF
+
+    # Trusted hosts
+    cat > "$rootfs/etc/opendkim/TrustedHosts" << EOF
+127.0.0.1
+localhost
+$DOMAIN
+*.${DOMAIN}
+EOF
+
+    log "OpenDKIM configured"
+}
+
+cmd_dkim_sync() {
+    require_root
+    local rootfs="$LXC_PATH/rootfs"
+
+    if [ ! -d "$rootfs" ]; then
+        error "Container not installed"
+        return 1
+    fi
+
+    log "Syncing DKIM keys to container..."
+
+    # Copy private key
+    mkdir -p "$rootfs/etc/opendkim/keys/$DOMAIN"
+    cp "$DATA_PATH/dkim/default.private" "$rootfs/etc/opendkim/keys/$DOMAIN/"
+    chown -R 128:130 "$rootfs/etc/opendkim/keys/$DOMAIN" 2>/dev/null || \
+    chroot "$rootfs" chown -R opendkim:opendkim /etc/opendkim/keys 2>/dev/null || true
+    chmod 600 "$rootfs/etc/opendkim/keys/$DOMAIN/"*.private
+
+    # Update Postfix to use milter
+    if [ -f "$rootfs/etc/postfix/main.cf" ]; then
+        if ! grep -q "milter_protocol" "$rootfs/etc/postfix/main.cf"; then
+            cat >> "$rootfs/etc/postfix/main.cf" << 'EOF'
+
+# DKIM via OpenDKIM
+milter_protocol = 6
+milter_default_action = accept
+smtpd_milters = inet:localhost:8891
+non_smtpd_milters = $smtpd_milters
+EOF
+        fi
+    fi
+
+    # Reload services if running
+    if lxc_running; then
+        lxc-attach -n "$CONTAINER" -P "$LXC_BASE" -- mkdir -p /run/opendkim
+        lxc-attach -n "$CONTAINER" -P "$LXC_BASE" -- chown opendkim:opendkim /run/opendkim
+        lxc-attach -n "$CONTAINER" -P "$LXC_BASE" -- service opendkim start 2>/dev/null || true
+        lxc-attach -n "$CONTAINER" -P "$LXC_BASE" -- postfix reload 2>/dev/null || true
+    fi
+
+    log "DKIM keys synced"
+}
+
+cmd_dkim_status() {
     echo ""
+    echo "DKIM Status for $DOMAIN"
+    echo "========================"
+    echo ""
+
+    # Check key files
+    if [ -f "$DATA_PATH/dkim/default.private" ]; then
+        echo -e "Private key: ${GREEN}Installed${NC}"
+        echo "  Path: $DATA_PATH/dkim/default.private"
+    else
+        echo -e "Private key: ${RED}Not found${NC}"
+        echo "  Run: mailserverctl dkim setup"
+        return
+    fi
+
+    # Check DNS record
+    echo ""
+    echo "DNS Record:"
+    if [ -f "$DATA_PATH/dkim/default.txt" ]; then
+        cat "$DATA_PATH/dkim/default.txt"
+    fi
+
+    # Check OpenDKIM service in container
+    if lxc_running; then
+        echo ""
+        echo "OpenDKIM service:"
+        if lxc-attach -n "$CONTAINER" -P "$LXC_BASE" -- pgrep opendkim >/dev/null 2>&1; then
+            echo -e "  Status: ${GREEN}Running${NC}"
+        else
+            echo -e "  Status: ${YELLOW}Stopped${NC}"
+        fi
+    fi
+
+    # Check Postfix milter config
+    if [ -f "$LXC_PATH/rootfs/etc/postfix/main.cf" ]; then
+        echo ""
+        echo "Postfix milter integration:"
+        if grep -q "smtpd_milters.*8891" "$LXC_PATH/rootfs/etc/postfix/main.cf" 2>/dev/null; then
+            echo -e "  Status: ${GREEN}Configured${NC}"
+        else
+            echo -e "  Status: ${YELLOW}Not configured${NC}"
+        fi
+    fi
+    echo ""
+}
+
+cmd_dkim() {
+    # For backward compatibility, default to keygen only
+    cmd_dkim_keygen
+    echo ""
+    log "Add this TXT record to DNS:"
     cat "$DATA_PATH/dkim/default.txt"
     echo ""
+    log "For full OpenDKIM integration, run: mailserverctl dkim setup"
 }
 
 cmd_logs() {
@@ -862,7 +1099,11 @@ SSL/TLS:
   acme install  Install ACME cert to container
 
 DKIM:
-  dkim          Generate DKIM keys
+  dkim setup    Full OpenDKIM setup (keygen + install + configure)
+  dkim keygen   Generate DKIM key pair only
+  dkim status   Show DKIM status
+  dkim sync     Sync keys to container
+  dkim          Legacy: keygen only (deprecated)
 
 Three-fold:
   components    List system components (JSON)
@@ -884,7 +1125,19 @@ case "${1:-}" in
     status)     shift; cmd_status "$@" ;;
     shell)      shift; cmd_shell "$@" ;;
     sync)       shift; cmd_sync "$@" ;;
-    dkim)       shift; cmd_dkim "$@" ;;
+    # DKIM commands
+    dkim)
+        shift
+        case "${1:-}" in
+            setup)   cmd_dkim_setup ;;
+            keygen)  cmd_dkim_keygen ;;
+            status)  cmd_dkim_status ;;
+            sync)    cmd_dkim_sync ;;
+            install) cmd_dkim_install ;;
+            configure) cmd_dkim_configure ;;
+            *)       cmd_dkim ;;  # Legacy compatibility
+        esac
+        ;;
     logs)       shift; cmd_logs "$@" ;;
     components) cmd_components ;;
     access)     cmd_access ;;

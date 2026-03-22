@@ -5,13 +5,22 @@
 
 ## ✅ Terminé cette session
 
+### OpenDKIM Integration ✅
+- **mailserverctl v2.3.0** — Full DKIM/OpenDKIM support
+- **dkim setup** — Complete setup (keygen + install + configure + sync)
+- **dkim keygen** — Generate 2048-bit RSA key pair
+- **dkim status** — Show key, DNS record, service status
+- **OpenDKIM** — Installed in LXC container with milter
+- **Postfix integration** — smtpd_milters configured
+- **DNS records** — Standard and BIND format output
+- **API endpoints** — /dkim/status, /dkim/setup, /dkim/keygen, /dkim/sync
+
 ### ACME Certificate Support ✅
-- **mailserverctl v2.2.0** — Added ACME certificate management
+- **mailserverctl v2.2.0** — ACME certificate management
 - **acme.sh integration** — issue, renew, install commands
 - **SSL/TLS commands** — ssl status, ssl selfsigned
-- **Dovecot SSL** — TLS 1.2+ configuration via conf.d/10-ssl.conf
-- **API endpoints** — /acme/status, /acme/issue, /acme/renew, /acme/install
-- **Certificate sync** — Auto-sync certificates to LXC container
+- **Dovecot SSL** — TLS 1.2+ configuration
+- **API endpoints** — /acme/status, /acme/issue, /acme/renew
 
 ### Previous: Mail Server LXC ✅
 - **mailserverctl v2.1.0** — Debian bookworm via debootstrap
@@ -38,8 +47,8 @@
 ## ⬜ Next Up
 
 ### Mail Server Production
-1. **DKIM signing** — Integrate OpenDKIM with Postfix
-2. **Mail autodiscover** — Thunderbird/Outlook autoconfig endpoints
+1. **Mail autodiscover** — Thunderbird/Outlook autoconfig endpoints
+2. **SpamAssassin** — Spam filtering integration
 
 ### Infrastructure
 1. **Deploy apt.secubox.in** — Setup reprepro server
