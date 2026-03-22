@@ -6,59 +6,81 @@
     <title>SecuBox - WireGuard VPN</title>
     <link rel="stylesheet" href="/shared/sidebar.css">
     <style>
-        :root { --bg-dark: #0d1117; --bg-card: #161b22; --bg-sidebar: #0d1117; --border: #30363d; --text: #c9d1d9; --text-dim: #8b949e; --primary: #58a6ff; --cyan: #00d4ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; --purple: #a371f7; }
+        :root {
+            --bg-dark: #0d1117;
+            --bg-card: #161b22;
+            --border: #30363d;
+            --text: #c9d1d9;
+            --text-dim: #8b949e;
+            --primary: #58a6ff;
+            --cyan: #00d4ff;
+            --green: #3fb950;
+            --red: #f85149;
+            --yellow: #d29922;
+            --purple: #a371f7;
+        }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
-        .sidebar { width: 220px; background: var(--bg-sidebar); border-right: 1px solid var(--border); position: fixed; height: 100vh; overflow-y: auto; }
-        .sidebar-header { padding: 1rem; border-bottom: 1px solid var(--border); }
-        .logo { font-weight: bold; font-size: 1.2rem; }
-        .logo span:nth-child(1) { color: var(--cyan); } .logo span:nth-child(2) { color: var(--red); } .logo span:nth-child(3) { color: var(--green); } .logo span:nth-child(4) { color: var(--yellow); }
-        .nav-section { padding: 0.5rem 0; }
-        .nav-section-title { padding: 0.5rem 1rem; font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
-        .nav-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 1rem; color: var(--text-dim); text-decoration: none; font-size: 0.9rem; border-left: 3px solid transparent; }
-        .nav-item:hover { background: rgba(255,255,255,0.05); color: var(--text); }
-        .nav-item.active { background: rgba(88,166,255,0.1); color: var(--primary); border-left-color: var(--primary); }
-        .nav-item .icon { width: 20px; text-align: center; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
+        .sidebar { width: 220px; background: var(--bg-dark); border-right: 1px solid var(--border); position: fixed; height: 100vh; }
         .main { flex: 1; margin-left: 220px; }
         .header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); background: var(--bg-card); }
         .header-title { display: flex; align-items: center; gap: 1rem; }
-        .header-title h1 { font-size: 1.5rem; font-weight: 600; }
+        .header-title h1 { font-size: 1.5rem; }
         .badge { padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.75rem; }
         .badge.active { background: rgba(63,185,80,0.2); color: var(--green); }
         .badge.inactive { background: rgba(248,81,73,0.2); color: var(--red); }
-        .header-actions { display: flex; gap: 0.75rem; }
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.875rem; }
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; }
         .btn:hover { background: var(--bg-dark); }
         .btn.primary { background: rgba(88,166,255,0.1); border-color: var(--primary); color: var(--primary); }
-        .btn.success { background: rgba(63,185,80,0.1); border-color: var(--green); color: var(--green); }
         .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
-        .content { padding: 1.5rem; }
+        .btn.success { background: rgba(63,185,80,0.1); border-color: var(--green); color: var(--green); }
+        .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--bg-card); padding: 0 1rem; }
+        .tab { padding: 0.75rem 1.25rem; cursor: pointer; color: var(--text-dim); border-bottom: 2px solid transparent; }
+        .tab:hover { color: var(--text); }
+        .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+        .tab-content { display: none; padding: 1.5rem; }
+        .tab-content.active { display: block; }
         .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
         .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; text-align: center; }
         .stat-card .value { font-size: 2rem; font-weight: bold; margin-bottom: 0.25rem; }
         .stat-card .label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
         .stat-card.cyan .value { color: var(--cyan); }
         .stat-card.green .value { color: var(--green); }
+        .stat-card.yellow .value { color: var(--yellow); }
         .stat-card.purple .value { color: var(--purple); }
         .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
         .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
         .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
         .card-header h2 { font-size: 1rem; font-weight: 600; }
-        .interface-card { border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
-        .interface-card.active { border-color: var(--green); background: rgba(63,185,80,0.05); }
-        .interface-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
-        .interface-header h3 { font-size: 1.1rem; }
-        .interface-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; font-size: 0.85rem; color: var(--text-dim); }
-        .peer-item { background: rgba(255,255,255,0.02); border-radius: 6px; padding: 0.75rem; margin-bottom: 0.5rem; }
-        .peer-item .name { font-weight: 500; margin-bottom: 0.25rem; }
-        .peer-item .details { font-size: 0.85rem; color: var(--text-dim); }
-        .peer-item .traffic { display: flex; gap: 1rem; margin-top: 0.5rem; font-size: 0.85rem; }
+        .table { width: 100%; border-collapse: collapse; }
+        .table th { text-align: left; padding: 0.75rem; color: var(--text-dim); font-size: 0.75rem; text-transform: uppercase; border-bottom: 1px solid var(--border); }
+        .table td { padding: 0.75rem; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+        .table tr:hover { background: rgba(255,255,255,0.02); }
+        .scroll-list { max-height: 400px; overflow-y: auto; }
+        .input-group { display: flex; gap: 0.5rem; margin-top: 1rem; }
+        .input-group input, .input-group select { flex: 1; padding: 0.5rem; border: 1px solid var(--border); background: var(--bg-dark); color: var(--text); border-radius: 6px; }
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+        .status-dot.active { background: var(--green); box-shadow: 0 0 8px var(--green); }
+        .status-dot.inactive { background: var(--red); }
+        .status-dot.recent { background: var(--yellow); }
+        .component-list { display: grid; gap: 1rem; }
+        .component-card { background: var(--bg-dark); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; display: flex; align-items: flex-start; gap: 1rem; }
+        .component-info h3 { font-size: 0.95rem; margin-bottom: 0.25rem; }
+        .component-info p { font-size: 0.8rem; color: var(--text-dim); }
+        .endpoint-card { background: var(--bg-dark); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
+        .endpoint-card h3 { font-size: 0.95rem; margin-bottom: 0.5rem; }
+        .endpoint-card .url { font-family: monospace; color: var(--cyan); font-size: 0.85rem; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center; }
+        .modal.show { display: flex; }
+        .modal-content { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; width: 90%; max-width: 500px; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .modal-close { background: none; border: none; color: var(--text-dim); font-size: 1.5rem; cursor: pointer; }
         .form-group { margin-bottom: 1rem; }
-        .form-group label { display: block; margin-bottom: 0.25rem; color: var(--text-dim); font-size: 0.9rem; }
-        .form-group input, .form-group select { width: 100%; padding: 0.5rem; border: 1px solid var(--border); background: var(--bg-dark); color: var(--text); border-radius: 6px; }
-        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-        .config-box { background: var(--bg-dark); border: 1px solid var(--border); border-radius: 6px; padding: 1rem; font-family: monospace; font-size: 0.85rem; max-height: 200px; overflow-y: auto; white-space: pre-wrap; }
-        .scroll-list { max-height: 350px; overflow-y: auto; }
+        .form-group label { display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--text-dim); }
+        .form-group input { width: 100%; padding: 0.5rem; border: 1px solid var(--border); background: var(--bg-dark); color: var(--text); border-radius: 6px; }
+        .qr-container { text-align: center; padding: 1rem; background: white; border-radius: 8px; margin: 1rem 0; }
+        .qr-container img { max-width: 200px; }
+        @media (max-width: 1200px) { .stats-row { grid-template-columns: repeat(2, 1fr); } }
         @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } .sidebar { display: none; } .main { margin-left: 0; } }
     </style>
 </head>
@@ -69,265 +91,353 @@
     <main class="main">
         <header class="header">
             <div class="header-title">
-                <h1>🔐 WireGuard VPN</h1>
-                <span class="badge" id="wg-badge">-</span>
+                <h1>WireGuard VPN</h1>
+                <span class="badge" id="status-badge">-</span>
             </div>
             <div class="header-actions">
-                <button class="btn primary" onclick="showCreateInterface()">+ New Interface</button>
-                <button class="btn" onclick="generateKeys()">🔑 Generate Keys</button>
-                <button class="btn" onclick="reloadAll()">🔄 Reload</button>
+                <button class="btn" onclick="showMigrateModal()">Import from OpenWrt</button>
+                <button class="btn primary" onclick="showAddPeerModal()">+ Add Peer</button>
             </div>
         </header>
 
+        <div class="tabs">
+            <div class="tab active" data-tab="status">Status</div>
+            <div class="tab" data-tab="components">Components</div>
+            <div class="tab" data-tab="access">Access</div>
+            <div class="tab" data-tab="interfaces">Interfaces</div>
+            <div class="tab" data-tab="peers">Peers</div>
+            <div class="tab" data-tab="actions">Actions</div>
+        </div>
+
         <div class="content">
-            <div class="stats-row">
-                <div class="stat-card cyan">
-                    <div class="value" id="interfaces-count">0</div>
-                    <div class="label">Interfaces</div>
+            <!-- Status Tab -->
+            <div id="tab-status" class="tab-content active">
+                <div class="stats-row">
+                    <div class="stat-card cyan">
+                        <div class="value" id="interface-count">0</div>
+                        <div class="label">Interfaces</div>
+                    </div>
+                    <div class="stat-card green">
+                        <div class="value" id="total-peers">0</div>
+                        <div class="label">Total Peers</div>
+                    </div>
+                    <div class="stat-card purple">
+                        <div class="value" id="active-peers">0</div>
+                        <div class="label">Active Peers</div>
+                    </div>
+                    <div class="stat-card yellow">
+                        <div class="value" id="total-traffic">0</div>
+                        <div class="label">Total Traffic</div>
+                    </div>
                 </div>
-                <div class="stat-card green">
-                    <div class="value" id="interfaces-up">0</div>
-                    <div class="label">Active</div>
-                </div>
-                <div class="stat-card purple">
-                    <div class="value" id="peers-count">0</div>
-                    <div class="label">Peers</div>
-                </div>
-                <div class="stat-card cyan">
-                    <div class="value" id="total-traffic">0</div>
-                    <div class="label">Total Traffic</div>
+
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="card-header"><h2>Interfaces</h2></div>
+                        <div id="interfaces-quick"></div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header"><h2>Recent Peers</h2></div>
+                        <div id="peers-quick"></div>
+                    </div>
                 </div>
             </div>
 
-            <div class="grid-2">
+            <!-- Components Tab -->
+            <div id="tab-components" class="tab-content">
+                <div class="component-list" id="components-list"></div>
+            </div>
+
+            <!-- Access Tab -->
+            <div id="tab-access" class="tab-content">
+                <div id="access-endpoints"></div>
+            </div>
+
+            <!-- Interfaces Tab -->
+            <div id="tab-interfaces" class="tab-content">
                 <div class="card">
                     <div class="card-header">
-                        <h2>📡 Interfaces</h2>
+                        <h2>WireGuard Interfaces</h2>
                     </div>
-                    <div class="scroll-list" id="interfaces-list">
-                        <p style="color: var(--text-dim);">Loading...</p>
+                    <div class="scroll-list">
+                        <table class="table" id="interfaces-table">
+                            <thead><tr><th>Name</th><th>State</th><th>IP</th><th>Port</th><th>Peers</th><th>Traffic</th><th>Actions</th></tr></thead>
+                            <tbody><tr><td colspan="7">Loading...</td></tr></tbody>
+                        </table>
                     </div>
                 </div>
+            </div>
 
+            <!-- Peers Tab -->
+            <div id="tab-peers" class="tab-content">
                 <div class="card">
                     <div class="card-header">
-                        <h2>👥 Peers</h2>
-                        <button class="btn primary" onclick="showAddPeer()">+ Add Peer</button>
+                        <h2>Connected Peers</h2>
+                        <button class="btn primary" onclick="showAddPeerModal()">+ Add Peer</button>
                     </div>
-                    <div class="scroll-list" id="peers-list">
-                        <p style="color: var(--text-dim);">Loading...</p>
+                    <div class="scroll-list">
+                        <table class="table" id="peers-table">
+                            <thead><tr><th>Name</th><th>Status</th><th>Endpoint</th><th>Allowed IPs</th><th>Transfer</th><th>Actions</th></tr></thead>
+                            <tbody><tr><td colspan="6">Loading...</td></tr></tbody>
+                        </table>
                     </div>
                 </div>
+            </div>
 
-                <div class="card" id="config-card" style="display: none;">
-                    <div class="card-header">
-                        <h2>⚙️ Configuration</h2>
-                        <div>
-                            <button class="btn" onclick="copyConfig()">📋 Copy</button>
-                            <button class="btn" onclick="downloadConfig()">💾 Download</button>
-                        </div>
+            <!-- Actions Tab -->
+            <div id="tab-actions" class="tab-content">
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="card-header"><h2>Key Generation</h2></div>
+                        <button class="btn" onclick="generateKeyPair()" style="width: 100%; margin-bottom: 0.5rem;">Generate Key Pair</button>
+                        <button class="btn" onclick="generatePSK()" style="width: 100%;">Generate PSK</button>
+                        <div id="key-output" style="margin-top: 1rem; font-family: monospace; font-size: 0.8rem;"></div>
                     </div>
-                    <div class="config-box" id="config-text"></div>
-                </div>
-
-                <div class="card" id="form-card" style="display: none;">
-                    <div class="card-header">
-                        <h2 id="form-title">New Interface</h2>
-                        <button class="btn" onclick="hideForm()">✕</button>
-                    </div>
-                    <form id="wg-form">
-                        <div id="form-fields"></div>
-                        <div style="margin-top: 1rem;">
-                            <button type="submit" class="btn success">Save</button>
-                            <button type="button" class="btn" onclick="hideForm()">Cancel</button>
-                        </div>
-                    </form>
-                </div>
-
-                <div class="card">
-                    <div class="card-header">
-                        <h2>📊 Traffic Stats</h2>
-                    </div>
-                    <div id="traffic-stats">
-                        <p style="color: var(--text-dim);">Loading...</p>
+                    <div class="card">
+                        <div class="card-header"><h2>Migration</h2></div>
+                        <p style="margin-bottom: 1rem; color: var(--text-dim);">Import WireGuard configuration from OpenWrt.</p>
+                        <button class="btn" onclick="showMigrateModal()" style="width: 100%;">Start Migration</button>
                     </div>
                 </div>
             </div>
         </div>
     </main>
 
+    <!-- Add Peer Modal -->
+    <div id="add-peer-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Add New Peer</h2>
+                <button class="modal-close" onclick="closeAddPeerModal()">&times;</button>
+            </div>
+            <div class="form-group">
+                <label>Peer Name</label>
+                <input type="text" id="peer-name" placeholder="e.g., myphone, laptop">
+            </div>
+            <div class="form-group">
+                <label>Interface</label>
+                <select id="peer-interface"></select>
+            </div>
+            <button class="btn primary" onclick="addPeer()" style="width: 100%;">Create Peer</button>
+            <div id="peer-result" style="margin-top: 1rem; display: none;"></div>
+        </div>
+    </div>
+
+    <!-- QR Modal -->
+    <div id="qr-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Peer QR Code</h2>
+                <button class="modal-close" onclick="closeQRModal()">&times;</button>
+            </div>
+            <div class="qr-container" id="qr-container"></div>
+            <p style="text-align: center; color: var(--text-dim);">Scan with WireGuard mobile app</p>
+        </div>
+    </div>
+
+    <!-- Migrate Modal -->
+    <div id="migrate-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Migrate from OpenWrt</h2>
+                <button class="modal-close" onclick="closeMigrateModal()">&times;</button>
+            </div>
+            <div class="form-group">
+                <label>Source IP Address</label>
+                <input type="text" id="migrate-source" value="192.168.255.1">
+            </div>
+            <div class="form-group">
+                <label><input type="checkbox" id="migrate-dry-run"> Dry run</label>
+            </div>
+            <button class="btn primary" onclick="runMigration()" style="width: 100%;">Start Migration</button>
+            <div id="migrate-result" style="margin-top: 1rem; display: none;"></div>
+        </div>
+    </div>
+
     <script>
         const API = '/api/v1/wireguard';
-        let currentInterface = null;
-
         async function api(endpoint, method = 'GET', data = null) {
             const opts = { method, headers: { 'Content-Type': 'application/json' } };
             if (data) opts.body = JSON.stringify(data);
-            try { const res = await fetch(API + endpoint, opts); return res.json(); } catch (e) { return {}; }
+            try { const res = await fetch(API + endpoint, opts); return res.json(); }
+            catch (e) { console.error('API error:', e); return {}; }
         }
 
-        function formatBytes(b) {
-            if (!b) return '0 B';
-            const k = 1024, s = ['B', 'KB', 'MB', 'GB'];
-            const i = Math.floor(Math.log(b) / Math.log(k));
-            return (b / Math.pow(k, i)).toFixed(1) + ' ' + s[i];
+        // Tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+            });
+        });
+
+        function formatBytes(bytes) {
+            if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(2) + ' GB';
+            if (bytes >= 1048576) return (bytes / 1048576).toFixed(2) + ' MB';
+            if (bytes >= 1024) return (bytes / 1024).toFixed(2) + ' KB';
+            return bytes + ' B';
+        }
+
+        async function loadStatus() {
+            const data = await api('/status');
+            document.getElementById('interface-count').textContent = data.interface_count || 0;
+            document.getElementById('total-peers').textContent = data.total_peers || 0;
+            document.getElementById('active-peers').textContent = data.active_peers || 0;
+            document.getElementById('total-traffic').textContent = formatBytes((data.total_rx_bytes || 0) + (data.total_tx_bytes || 0));
+            
+            const badge = document.getElementById('status-badge');
+            if (data.interface_count > 0) {
+                badge.className = 'badge active';
+                badge.textContent = data.interface_count + ' interfaces';
+            } else {
+                badge.className = 'badge inactive';
+                badge.textContent = 'No interfaces';
+            }
+
+            // Quick interfaces
+            const ifaces = data.interfaces || [];
+            document.getElementById('interfaces-quick').innerHTML = ifaces.length > 0 ?
+                ifaces.map(i => '<div style="padding: 0.5rem; border-bottom: 1px solid var(--border);"><strong>' + i.name + '</strong> - ' + 
+                    '<span class="status-dot ' + (i.state === 'up' ? 'active' : 'inactive') + '"></span> ' + i.state + 
+                    ', ' + i.peers + ' peers</div>').join('') :
+                '<p style="color: var(--text-dim);">No interfaces configured</p>';
         }
 
         async function loadInterfaces() {
             const data = await api('/interfaces');
-            const interfaces = data.interfaces || [];
-            const list = document.getElementById('interfaces-list');
-            const active = interfaces.filter(i => i.up).length;
-
-            document.getElementById('interfaces-count').textContent = interfaces.length;
-            document.getElementById('interfaces-up').textContent = active;
-            document.getElementById('wg-badge').className = 'badge ' + (active > 0 ? 'active' : 'inactive');
-            document.getElementById('wg-badge').textContent = active > 0 ? active + ' Active' : 'No Active';
-
-            if (interfaces.length === 0) {
-                list.innerHTML = '<p style="color: var(--text-dim);">No interfaces configured</p>';
-                return;
-            }
-
-            list.innerHTML = interfaces.map(iface => `
-                <div class="interface-card ${iface.up ? 'active' : ''}">
-                    <div class="interface-header">
-                        <h3>${iface.name}</h3>
-                        <span class="badge ${iface.up ? 'active' : 'inactive'}">${iface.up ? 'UP' : 'DOWN'}</span>
-                    </div>
-                    <div class="interface-stats">
-                        <div>Address: ${iface.address || '-'}</div>
-                        <div>Port: ${iface.listen_port || '-'}</div>
-                        <div>Peers: ${iface.peer_count || 0}</div>
-                        <div>Key: ${(iface.public_key || '').substring(0, 12)}...</div>
-                    </div>
-                    <div style="margin-top: 0.75rem;">
-                        <button class="btn ${iface.up ? 'danger' : 'success'}" onclick="${iface.up ? 'stopInterface' : 'startInterface'}('${iface.name}')">${iface.up ? 'Stop' : 'Start'}</button>
-                        <button class="btn" onclick="showInterfaceConfig('${iface.name}')">Config</button>
-                        <button class="btn danger" onclick="deleteInterface('${iface.name}')">Delete</button>
-                    </div>
-                </div>
-            `).join('');
+            const ifaces = data.interfaces || [];
+            const tbody = document.querySelector('#interfaces-table tbody');
+            const select = document.getElementById('peer-interface');
+            
+            select.innerHTML = ifaces.map(i => '<option value="' + i.name + '">' + i.name + '</option>').join('');
+            
+            tbody.innerHTML = ifaces.length > 0 ? ifaces.map(i => 
+                '<tr><td>' + i.name + '</td>' +
+                '<td><span class="status-dot ' + (i.state === 'up' ? 'active' : 'inactive') + '"></span> ' + i.state + '</td>' +
+                '<td style="font-family: monospace;">' + (i.ipv4 || '-') + '</td>' +
+                '<td>' + (i.listen_port || '-') + '</td>' +
+                '<td>' + i.peer_count + '</td>' +
+                '<td>' + formatBytes(i.rx_bytes) + ' / ' + formatBytes(i.tx_bytes) + '</td>' +
+                '<td>' + (i.state === 'up' ? 
+                    '<button class="btn danger" onclick="interfaceDown(\'' + i.name + '\')">Down</button>' :
+                    '<button class="btn success" onclick="interfaceUp(\'' + i.name + '\')">Up</button>') + '</td></tr>'
+            ).join('') : '<tr><td colspan="7">No interfaces</td></tr>';
         }
 
         async function loadPeers() {
             const data = await api('/peers');
             const peers = data.peers || [];
-            const list = document.getElementById('peers-list');
+            const tbody = document.querySelector('#peers-table tbody');
+            
+            tbody.innerHTML = peers.length > 0 ? peers.map(p => {
+                const statusClass = p.status === 'active' ? 'active' : (p.status === 'recent' ? 'recent' : 'inactive');
+                return '<tr><td>' + (p.name || p.public_key.substring(0, 8) + '...') + '</td>' +
+                    '<td><span class="status-dot ' + statusClass + '"></span> ' + p.status + '</td>' +
+                    '<td style="font-family: monospace; font-size: 0.8rem;">' + (p.endpoint || '-') + '</td>' +
+                    '<td style="font-family: monospace; font-size: 0.8rem;">' + (p.allowed_ips || '-') + '</td>' +
+                    '<td>' + formatBytes(p.rx_bytes) + ' / ' + formatBytes(p.tx_bytes) + '</td>' +
+                    '<td>' + (p.name ? '<button class="btn" onclick="showQR(\'' + p.name + '\')">QR</button> ' : '') +
+                    '<button class="btn danger" onclick="removePeer(\'' + (p.name || p.public_key) + '\')">Remove</button></td></tr>';
+            }).join('') : '<tr><td colspan="6">No peers</td></tr>';
 
-            document.getElementById('peers-count').textContent = peers.length;
+            // Quick peers
+            document.getElementById('peers-quick').innerHTML = peers.slice(0, 5).map(p =>
+                '<div style="padding: 0.5rem; border-bottom: 1px solid var(--border);"><strong>' + 
+                (p.name || p.public_key.substring(0, 8) + '...') + '</strong> - ' +
+                '<span class="status-dot ' + (p.status === 'active' ? 'active' : 'inactive') + '"></span></div>'
+            ).join('') || '<p style="color: var(--text-dim);">No peers</p>';
+        }
 
-            if (peers.length === 0) {
-                list.innerHTML = '<p style="color: var(--text-dim);">No peers configured</p>';
-                return;
+        async function loadComponents() {
+            const data = await api('/components');
+            document.getElementById('components-list').innerHTML = (data.components || []).map(c =>
+                '<div class="component-card"><div class="component-info"><h3>' + c.name + '</h3>' +
+                '<p>' + c.description + '</p></div></div>'
+            ).join('');
+        }
+
+        async function loadAccess() {
+            const data = await api('/access');
+            document.getElementById('access-endpoints').innerHTML = (data.endpoints || []).map(e =>
+                '<div class="endpoint-card"><h3>' + e.name + '</h3>' +
+                '<div class="url">' + (e.url || e.host + ':' + e.port) + '</div></div>'
+            ).join('');
+        }
+
+        async function interfaceUp(name) { await api('/interface/' + name + '/up', 'POST'); loadInterfaces(); loadStatus(); }
+        async function interfaceDown(name) { await api('/interface/' + name + '/down', 'POST'); loadInterfaces(); loadStatus(); }
+
+        function showAddPeerModal() { document.getElementById('add-peer-modal').classList.add('show'); }
+        function closeAddPeerModal() { document.getElementById('add-peer-modal').classList.remove('show'); document.getElementById('peer-result').style.display = 'none'; }
+
+        async function addPeer() {
+            const name = document.getElementById('peer-name').value.trim();
+            const iface = document.getElementById('peer-interface').value;
+            if (!name) return alert('Enter peer name');
+            
+            const result = await api('/peer', 'POST', { name, interface: iface });
+            const div = document.getElementById('peer-result');
+            div.style.display = 'block';
+            
+            if (result.success) {
+                div.innerHTML = '<p style="color: var(--green);">Peer created!</p><p>Config: ' + result.config_file + '</p>';
+                loadPeers();
+                loadStatus();
+            } else {
+                div.innerHTML = '<p style="color: var(--red);">Failed: ' + (result.error || 'Unknown error') + '</p>';
             }
-
-            list.innerHTML = peers.map(peer => `
-                <div class="peer-item">
-                    <div class="name">${peer.name || peer.public_key.substring(0, 12) + '...'}</div>
-                    <div class="details">${peer.allowed_ips || '-'} | ${peer.interface || '-'}</div>
-                    <div class="traffic">
-                        <span style="color: var(--green);">↓ ${formatBytes(peer.rx_bytes)}</span>
-                        <span style="color: var(--cyan);">↑ ${formatBytes(peer.tx_bytes)}</span>
-                        <span style="color: var(--text-dim);">Last: ${peer.latest_handshake || 'never'}</span>
-                    </div>
-                    <div style="margin-top: 0.5rem;">
-                        <button class="btn" onclick="showPeerConfig('${peer.public_key}')">Config</button>
-                        <button class="btn danger" onclick="deletePeer('${peer.public_key}')">Delete</button>
-                    </div>
-                </div>
-            `).join('');
         }
 
-        async function loadTrafficStats() {
-            const data = await api('/traffic');
-            const stats = document.getElementById('traffic-stats');
-            const traffic = data.traffic || {};
-            let totalRx = 0, totalTx = 0;
-
-            Object.values(traffic).forEach(t => { totalRx += t.rx_bytes || 0; totalTx += t.tx_bytes || 0; });
-            document.getElementById('total-traffic').textContent = formatBytes(totalRx + totalTx);
-
-            stats.innerHTML = Object.entries(traffic).map(([iface, t]) => `
-                <div style="margin-bottom: 1rem; padding: 0.75rem; background: var(--bg-dark); border-radius: 6px;">
-                    <strong>${iface}</strong>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.5rem; font-size: 0.9rem;">
-                        <div>RX: <span style="color: var(--green);">${formatBytes(t.rx_bytes)}</span></div>
-                        <div>TX: <span style="color: var(--cyan);">${formatBytes(t.tx_bytes)}</span></div>
-                    </div>
-                </div>
-            `).join('') || '<p style="color: var(--text-dim);">No traffic data</p>';
+        async function removePeer(id) {
+            if (!confirm('Remove peer ' + id + '?')) return;
+            await api('/peer', 'DELETE', { identifier: id });
+            loadPeers();
+            loadStatus();
         }
 
-        async function startInterface(name) { await api('/start', 'POST', { interface: name }); loadInterfaces(); }
-        async function stopInterface(name) { await api('/stop', 'POST', { interface: name }); loadInterfaces(); }
-        async function deleteInterface(name) { if (confirm(`Delete ${name}?`)) { await api('/delete_interface', 'POST', { interface: name }); loadInterfaces(); } }
-        async function deletePeer(pk) { if (confirm('Delete peer?')) { await api('/delete_peer', 'POST', { public_key: pk }); loadPeers(); } }
+        async function showQR(name) {
+            const result = await api('/peer/' + name + '/qr');
+            const container = document.getElementById('qr-container');
+            if (result.qr_base64) {
+                container.innerHTML = '<img src="data:image/png;base64,' + result.qr_base64 + '" alt="QR Code">';
+                document.getElementById('qr-modal').classList.add('show');
+            } else {
+                alert('QR code not available');
+            }
+        }
+        function closeQRModal() { document.getElementById('qr-modal').classList.remove('show'); }
 
-        async function showInterfaceConfig(name) {
-            const data = await api('/get_config?interface=' + name);
-            document.getElementById('config-text').textContent = data.config || 'No config';
-            document.getElementById('config-card').style.display = 'block';
-            currentInterface = name;
+        async function generateKeyPair() {
+            const result = await api('/genkey', 'POST');
+            document.getElementById('key-output').innerHTML = 
+                '<p><strong>Private:</strong> ' + result.private_key + '</p>' +
+                '<p><strong>Public:</strong> ' + result.public_key + '</p>';
         }
 
-        function copyConfig() { navigator.clipboard.writeText(document.getElementById('config-text').textContent); alert('Copied'); }
-        function downloadConfig() {
-            const blob = new Blob([document.getElementById('config-text').textContent], { type: 'text/plain' });
-            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = (currentInterface || 'wg') + '.conf'; a.click();
+        async function generatePSK() {
+            const result = await api('/genpsk', 'POST');
+            document.getElementById('key-output').innerHTML = '<p><strong>PSK:</strong> ' + result.preshared_key + '</p>';
         }
 
-        function showCreateInterface() {
-            document.getElementById('form-title').textContent = 'New Interface';
-            document.getElementById('form-fields').innerHTML = `
-                <div class="form-row">
-                    <div class="form-group"><label>Interface Name</label><input type="text" name="name" value="wg0" required></div>
-                    <div class="form-group"><label>Listen Port</label><input type="number" name="port" value="51820"></div>
-                </div>
-                <div class="form-group"><label>Address (CIDR)</label><input type="text" name="address" placeholder="10.0.0.1/24" required></div>
-            `;
-            document.getElementById('wg-form').onsubmit = createInterface;
-            document.getElementById('form-card').style.display = 'block';
+        function showMigrateModal() { document.getElementById('migrate-modal').classList.add('show'); }
+        function closeMigrateModal() { document.getElementById('migrate-modal').classList.remove('show'); }
+
+        async function runMigration() {
+            const source = document.getElementById('migrate-source').value.trim();
+            const dryRun = document.getElementById('migrate-dry-run').checked;
+            const result = await api('/migrate', 'POST', { source, dry_run: dryRun });
+            const div = document.getElementById('migrate-result');
+            div.style.display = 'block';
+            div.innerHTML = result.success ? 
+                '<p style="color: var(--green);">Migration complete!</p>' :
+                '<p style="color: var(--red);">Failed: ' + (result.error || 'Unknown error') + '</p>';
         }
 
-        function showAddPeer() {
-            document.getElementById('form-title').textContent = 'Add Peer';
-            document.getElementById('form-fields').innerHTML = `
-                <div class="form-group"><label>Interface</label><select name="interface" required><option value="wg0">wg0</option></select></div>
-                <div class="form-group"><label>Peer Name</label><input type="text" name="name" placeholder="client1"></div>
-                <div class="form-group"><label>Allowed IPs</label><input type="text" name="allowed_ips" placeholder="10.0.0.2/32" required></div>
-                <div class="form-group"><label>Endpoint (optional)</label><input type="text" name="endpoint" placeholder="vpn.example.com:51820"></div>
-            `;
-            document.getElementById('wg-form').onsubmit = addPeer;
-            document.getElementById('form-card').style.display = 'block';
-        }
-
-        function hideForm() { document.getElementById('form-card').style.display = 'none'; }
-
-        async function createInterface(e) {
-            e.preventDefault();
-            const form = new FormData(e.target);
-            await api('/create_interface', 'POST', { name: form.get('name'), port: parseInt(form.get('port')), address: form.get('address') });
-            hideForm(); loadInterfaces();
-        }
-
-        async function addPeer(e) {
-            e.preventDefault();
-            const form = new FormData(e.target);
-            await api('/add_peer', 'POST', { interface: form.get('interface'), name: form.get('name'), allowed_ips: form.get('allowed_ips'), endpoint: form.get('endpoint') });
-            hideForm(); loadPeers();
-        }
-
-        async function generateKeys() {
-            const data = await api('/generate_keys');
-            alert('Private: ' + data.private_key + '\nPublic: ' + data.public_key);
-        }
-
-        async function reloadAll() { await api('/reload', 'POST'); loadInterfaces(); loadPeers(); }
-
-        function refresh() { loadInterfaces(); loadPeers(); loadTrafficStats(); }
+        function refresh() { loadStatus(); loadInterfaces(); loadPeers(); loadComponents(); loadAccess(); }
         refresh();
-        setInterval(refresh, 15000);
+        setInterval(refresh, 30000);
     </script>
 </body>
 </html>

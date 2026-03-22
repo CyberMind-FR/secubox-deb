@@ -12,3 +12,6 @@ override_dh_auto_install:
 	# Modular nginx config
 	install -d debian/secubox-crowdsec/etc/nginx/secubox.d
 	[ -f nginx/crowdsec.conf ] && cp nginx/crowdsec.conf debian/secubox-crowdsec/etc/nginx/secubox.d/ || true
+	# Install control scripts
+	install -d debian/secubox-crowdsec/usr/sbin
+	[ -d sbin ] && install -m 755 sbin/* debian/secubox-crowdsec/usr/sbin/ || true

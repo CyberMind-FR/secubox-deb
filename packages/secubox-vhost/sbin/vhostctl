@@ -1,8 +1,9 @@
 #!/bin/bash
 # SecuBox VHost Controller
 # Nginx virtual host management for Debian
+# Three-fold architecture: Components, Status, Access
 
-VERSION="1.0.0"
+VERSION="1.1.0"
 CONFIG_FILE="/etc/secubox/vhost.toml"
 NGINX_VHOST_DIR="/etc/nginx/sites-available"
 NGINX_ENABLED_DIR="/etc/nginx/sites-enabled"
@@ -409,6 +410,103 @@ cmd_migrate() {
 }
 
 # ============================================================================
+# THREE-FOLD ARCHITECTURE: Components (What)
+# ============================================================================
+
+cmd_components() {
+    local nginx_running=false
+    pgrep nginx >/dev/null 2>&1 && nginx_running=true
+
+    local acme_installed=false
+    command -v acme.sh >/dev/null 2>&1 && acme_installed=true
+
+    local vhost_count=0
+    for conf in "$NGINX_VHOST_DIR"/*.conf; do
+        [ -f "$conf" ] && vhost_count=$((vhost_count + 1))
+    done
+
+    local cert_count=0
+    if [ -d "$ACME_DIR" ]; then
+        for cert_dir in "$ACME_DIR"/*/; do
+            [ -d "$cert_dir" ] && [ -f "$cert_dir/fullchain.cer" ] && cert_count=$((cert_count + 1))
+        done
+    fi
+
+    cat <<EOF
+{
+  "components": [
+    {
+      "name": "Nginx Web Server",
+      "type": "service",
+      "description": "HTTP/HTTPS reverse proxy",
+      "installed": true,
+      "running": $nginx_running,
+      "version": "$(nginx -v 2>&1 | grep -o '[0-9.]*' | head -1)"
+    },
+    {
+      "name": "ACME Client",
+      "type": "tool",
+      "description": "Let's Encrypt certificate automation",
+      "installed": $acme_installed,
+      "running": false
+    },
+    {
+      "name": "VHost Configs",
+      "type": "config",
+      "path": "$NGINX_VHOST_DIR",
+      "description": "Virtual host configurations",
+      "count": $vhost_count
+    },
+    {
+      "name": "SSL Certificates",
+      "type": "certs",
+      "path": "$ACME_DIR",
+      "description": "Let's Encrypt certificates",
+      "count": $cert_count
+    }
+  ]
+}
+EOF
+}
+
+# ============================================================================
+# THREE-FOLD ARCHITECTURE: Access (How to connect)
+# ============================================================================
+
+cmd_access() {
+    local vhosts_json="["
+    local first=true
+
+    for conf in "$NGINX_VHOST_DIR"/*.conf; do
+        [ -f "$conf" ] || continue
+        local domain=$(basename "$conf" .conf)
+        local enabled=false
+        [ -L "$NGINX_ENABLED_DIR/${domain}.conf" ] && enabled=true
+        local backend=$(grep -E "proxy_pass" "$conf" 2>/dev/null | head -1 | awk '{print $2}' | tr -d ';')
+        local ssl=false
+        grep -q "listen 443" "$conf" 2>/dev/null && ssl=true
+
+        [ "$first" = "false" ] && vhosts_json+=","
+        first=false
+        vhosts_json+="{\"domain\":\"$domain\",\"enabled\":$enabled,\"ssl\":$ssl,\"backend\":\"$backend\"}"
+    done
+    vhosts_json+="]"
+
+    cat <<EOF
+{
+  "nginx_status_url": "http://localhost/nginx_status",
+  "admin_panel": "/vhost/",
+  "vhosts": $vhosts_json,
+  "management": {
+    "add": "vhostctl add <domain> <backend> [acme|manual|off] [websocket:0|1]",
+    "cert": "vhostctl cert request <domain>",
+    "list": "vhostctl list"
+  }
+}
+EOF
+}
+
+# ============================================================================
 # Commands
 # ============================================================================
 
@@ -458,8 +556,14 @@ cmd_status() {
 show_help() {
     cat << EOF
 SecuBox VHost Manager v$VERSION
+Three-fold architecture: Components, Status, Access
 
 Usage: vhostctl <command> [options]
+
+Information (Three-fold):
+  components                           List system components (JSON)
+  status                               Show service status
+  access                               Show vhosts and access info (JSON)
 
 VHost Management:
   add <domain> <backend> [tls] [ws]   Add vhost (tls: off/acme/manual, ws: 0/1)
@@ -479,14 +583,14 @@ Certificates:
 
 Service:
   reload                               Reload nginx
-  status                               Show status
   migrate [host]                       Migrate from OpenWrt
 
 Examples:
+  vhostctl components                  # JSON list of components
+  vhostctl access                      # JSON list of vhosts
   vhostctl add app.example.com http://localhost:3000
   vhostctl add secure.example.com http://localhost:8080 acme 1
   vhostctl cert request secure.example.com admin@example.com
-  vhostctl migrate 192.168.255.1
 
 EOF
 }
@@ -498,12 +602,18 @@ EOF
 init_dirs
 
 case "${1:-}" in
-    add)      shift; vhost_add "$@" ;;
-    update)   shift; vhost_update "$@" ;;
-    delete)   shift; vhost_delete "$@" ;;
-    enable)   shift; vhost_enable "$@" ;;
-    disable)  shift; vhost_disable "$@" ;;
-    list)     shift; vhost_list "$@" ;;
+    # Three-fold architecture
+    components) cmd_components ;;
+    access)     cmd_access ;;
+    status)     shift; cmd_status "$@" ;;
+    # VHost management
+    add)        shift; vhost_add "$@" ;;
+    update)     shift; vhost_update "$@" ;;
+    delete)     shift; vhost_delete "$@" ;;
+    enable)     shift; vhost_enable "$@" ;;
+    disable)    shift; vhost_disable "$@" ;;
+    list)       shift; vhost_list "$@" ;;
+    # Auth
     auth)
         shift
         case "$1" in
@@ -512,6 +622,7 @@ case "${1:-}" in
             *) echo "Usage: vhostctl auth add|remove ..." ;;
         esac
         ;;
+    # Certificates
     cert)
         shift
         case "$1" in
@@ -520,11 +631,12 @@ case "${1:-}" in
             *) echo "Usage: vhostctl cert request|list ..." ;;
         esac
         ;;
-    reload)   shift; cmd_reload "$@" ;;
-    status)   shift; cmd_status "$@" ;;
-    migrate)  shift; cmd_migrate "$@" ;;
+    # Service
+    reload)     shift; cmd_reload "$@" ;;
+    migrate)    shift; cmd_migrate "$@" ;;
+    # Help
     help|--help|-h|'') show_help ;;
-    *)        error "Unknown: $1"; exit 1 ;;
+    *)          error "Unknown: $1"; exit 1 ;;
 esac
 
 exit 0

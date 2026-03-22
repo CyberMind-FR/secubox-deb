@@ -2,4 +2,4 @@ secubox-waf (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial release
 
- -- SecuBox <dev@secubox.local>  Sat, 21 Mar 2026 19:08:13 +0100
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 21 Mar 2026 19:08:13 +0100

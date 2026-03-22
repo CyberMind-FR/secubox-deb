@@ -1,30 +1,11 @@
-secubox-wireguard (1.0.4-1~bookworm1) bookworm; urgency=medium
+secubox-wireguard (1.0.0-1~bookworm1) bookworm; urgency=medium
 
-  * Add dynamic menu system with menu.d JSON definitions
-  * Menu items auto-registered when package installed
+  * Initial release - migration from OpenWrt luci-app-wireguard-dashboard
+  * Three-fold architecture (Components/Status/Access)
+  * Real wgctl control script with interface and peer management
+  * Auto-config generation for new peers
+  * QR code generation for mobile clients
+  * Migration from OpenWrt with UCI conversion
+  * Tabbed UI with peer management
 
- -- SecuBox Team <dev@secubox.gondwana.systems>  Sat, 21 Mar 2026 16:36:21 +0100
-
-secubox-wireguard (1.0.3-1~bookworm1) bookworm; urgency=medium
-
-  * Add UMask=0000 for world-accessible sockets
-  * Add www-data to secubox group for nginx access
-  * Make dashboard endpoints public (no auth for read-only)
-  * Fix security endpoint error handling
-
- -- SecuBox Team <dev@secubox.gondwana.systems>  Sat, 21 Mar 2026 08:12:37 +0100
-
-secubox-wireguard (1.0.2-1~bookworm1) bookworm; urgency=medium
-
-  * Fix RuntimeDirectory conflict between services
-  * Only secubox-core manages /run/secubox directory
-  * Fix secubox-core.service install path (use /usr/lib/systemd/system)
-
- -- SecuBox Team <dev@secubox.gondwana.systems>  Sat, 21 Mar 2026 08:06:00 +0100
-
-secubox-wireguard (1.0.1-1~bookworm1) bookworm; urgency=medium
-
-  * Initial release — migration depuis SecuBox OpenWrt.
-  * Port de luci-app-wireguard-dashboard : backend FastAPI + frontend conservé.
-
- -- Gandalf / CyberMind <gk@cybermind.fr>  Sat, 21 Mar 2026 07:36:46 +0100
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Mar 2025 15:00:00 +0100

@@ -1,16 +1,21 @@
 Source: secubox-wireguard
 Section: net
 Priority: optional
-Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.6.2
-Homepage: https://cybermind.fr/secubox
-Rules-Requires-Root: no
 
 Package: secubox-wireguard
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0), wireguard-tools, qrencode
-Description: SecuBox WireGuard Dashboard
- Gestion WireGuard VPN : tunnels, pairs, trafic, QR codes, génération de clés.
- .
- Port Debian bookworm de luci-app-wireguard-dashboard (SecuBox OpenWrt / CyberMind.fr).
+Depends: ${misc:Depends},
+         secubox-core,
+         wireguard-tools,
+         qrencode
+Description: SecuBox WireGuard VPN Dashboard
+ WireGuard VPN management interface for SecuBox.
+ Features:
+  - Interface management (up/down/status)
+  - Peer management with auto-config and QR codes
+  - Traffic statistics and monitoring
+  - Migration from OpenWrt
+  - Three-fold architecture (Components/Status/Access)

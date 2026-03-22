@@ -1,0 +1,925 @@
+#!/bin/bash
+# crowdsecctl - CrowdSec management control script for SecuBox
+# Part of secubox-crowdsec package
+# Following three-fold architecture: Components, Status, Access
+
+set -e
+
+# === Configuration ===
+CONFIG_FILE="/etc/secubox/secubox.conf"
+CROWDSEC_CONFIG="/etc/crowdsec/config.yaml"
+CROWDSEC_CREDS="/etc/crowdsec/local_api_credentials.yaml"
+BOUNCER_CONFIG="/etc/crowdsec/bouncers/crowdsec-firewall-bouncer.yaml"
+LOG_FILE="/var/log/secubox/crowdsec.log"
+DATA_DIR="/var/lib/crowdsec"
+HUB_DIR="/etc/crowdsec/hub"
+
+# Default values
+LAPI_URL="${CROWDSEC_LAPI_URL:-http://127.0.0.1:8080}"
+CSCLI="/usr/bin/cscli"
+
+# === Logging ===
+log() {
+    local level="$1"
+    shift
+    local msg="$*"
+    local ts
+    ts=$(date '+%Y-%m-%d %H:%M:%S')
+    echo "[$ts] [$level] $msg" | tee -a "$LOG_FILE" 2>/dev/null || echo "[$ts] [$level] $msg"
+}
+
+error() { log "ERROR" "$@"; }
+info()  { log "INFO" "$@"; }
+warn()  { log "WARN" "$@"; }
+debug() { [ "${DEBUG:-0}" = "1" ] && log "DEBUG" "$@" || true; }
+
+# === Helper functions ===
+check_cscli() {
+    if [ ! -x "$CSCLI" ]; then
+        error "cscli not found at $CSCLI"
+        return 1
+    fi
+}
+
+check_running() {
+    pgrep -x crowdsec >/dev/null 2>&1
+}
+
+run_cscli() {
+    local timeout_sec="${CSCLI_TIMEOUT:-10}"
+    if command -v timeout >/dev/null 2>&1; then
+        timeout "$timeout_sec" "$CSCLI" "$@" 2>/dev/null
+    else
+        "$CSCLI" "$@" 2>/dev/null
+    fi
+}
+
+json_output() {
+    if command -v jq >/dev/null 2>&1; then
+        jq -r '.' 2>/dev/null || cat
+    else
+        cat
+    fi
+}
+
+# === Core Commands ===
+
+# Show components (three-fold: what)
+cmd_components() {
+    cat <<EOF
+{
+  "components": [
+    {
+      "name": "CrowdSec Engine",
+      "type": "service",
+      "description": "Security automation engine with behavior detection",
+      "package": "crowdsec",
+      "service": "crowdsec.service",
+      "binary": "/usr/bin/crowdsec"
+    },
+    {
+      "name": "CrowdSec LAPI",
+      "type": "api",
+      "description": "Local API for decision management and bouncer communication",
+      "port": 8080,
+      "protocol": "http"
+    },
+    {
+      "name": "Firewall Bouncer",
+      "type": "service",
+      "description": "nftables/iptables bouncer for IP blocking",
+      "package": "crowdsec-firewall-bouncer-nftables",
+      "service": "crowdsec-firewall-bouncer.service"
+    },
+    {
+      "name": "Hub Collections",
+      "type": "content",
+      "description": "Scenarios, parsers, and postoverflows from CrowdSec Hub",
+      "path": "/etc/crowdsec/hub"
+    },
+    {
+      "name": "crowdsecctl",
+      "type": "cli",
+      "description": "SecuBox CrowdSec control interface",
+      "path": "/usr/sbin/crowdsecctl"
+    },
+    {
+      "name": "Configuration",
+      "type": "config",
+      "description": "CrowdSec and bouncer configuration files",
+      "paths": [
+        "/etc/crowdsec/config.yaml",
+        "/etc/crowdsec/acquis.yaml",
+        "/etc/crowdsec/bouncers/"
+      ]
+    }
+  ]
+}
+EOF
+}
+
+# Show status (three-fold: health)
+cmd_status() {
+    local cs_running="false"
+    local bouncer_running="false"
+    local lapi_reachable="false"
+    local capi_registered="false"
+    local version="unknown"
+    local bouncer_version="unknown"
+    local decisions_count=0
+    local alerts_24h=0
+    local bouncers_count=0
+    local machines_count=0
+
+    # Check CrowdSec engine
+    if check_running; then
+        cs_running="true"
+    fi
+
+    # Check bouncer
+    if pgrep -f "crowdsec-firewall-bouncer" >/dev/null 2>&1; then
+        bouncer_running="true"
+    fi
+
+    # Get versions
+    if check_cscli; then
+        version=$(run_cscli version 2>/dev/null | grep -E "^version:" | awk '{print $2}' || echo "unknown")
+    fi
+
+    if [ -x "/usr/bin/crowdsec-firewall-bouncer" ]; then
+        bouncer_version=$(/usr/bin/crowdsec-firewall-bouncer -version 2>&1 | head -1 || echo "unknown")
+    fi
+
+    # Check LAPI
+    if curl -s -o /dev/null -w "%{http_code}" "${LAPI_URL}/health" 2>/dev/null | grep -q "200"; then
+        lapi_reachable="true"
+    fi
+
+    # Check CAPI registration
+    if check_cscli && run_cscli capi status 2>/dev/null | grep -qi "registered\|online"; then
+        capi_registered="true"
+    fi
+
+    # Get counts if cscli available
+    if check_cscli && [ "$cs_running" = "true" ]; then
+        decisions_count=$(run_cscli decisions list -o json 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
+        alerts_24h=$(run_cscli alerts list --since 24h -o json 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
+        bouncers_count=$(run_cscli bouncers list -o json 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
+        machines_count=$(run_cscli machines list -o json 2>/dev/null | jq 'length' 2>/dev/null || echo "0")
+    fi
+
+    cat <<EOF
+{
+  "crowdsec": {
+    "running": $cs_running,
+    "version": "$version",
+    "service": "crowdsec.service"
+  },
+  "bouncer": {
+    "running": $bouncer_running,
+    "version": "$bouncer_version",
+    "type": "nftables"
+  },
+  "lapi": {
+    "reachable": $lapi_reachable,
+    "url": "$LAPI_URL"
+  },
+  "capi": {
+    "registered": $capi_registered
+  },
+  "stats": {
+    "active_decisions": ${decisions_count:-0},
+    "alerts_24h": ${alerts_24h:-0},
+    "bouncers": ${bouncers_count:-0},
+    "machines": ${machines_count:-0}
+  }
+}
+EOF
+}
+
+# Show access info (three-fold: how to connect)
+cmd_access() {
+    local hostname
+    hostname=$(hostname -f 2>/dev/null || hostname)
+
+    cat <<EOF
+{
+  "endpoints": [
+    {
+      "name": "CrowdSec Dashboard",
+      "url": "https://${hostname}/crowdsec/",
+      "description": "SecuBox CrowdSec management interface"
+    },
+    {
+      "name": "LAPI (Local)",
+      "url": "$LAPI_URL",
+      "description": "Local API for bouncers and decisions",
+      "internal": true
+    },
+    {
+      "name": "Prometheus Metrics",
+      "url": "http://127.0.0.1:6060/metrics",
+      "description": "CrowdSec metrics endpoint",
+      "internal": true
+    }
+  ],
+  "cli": {
+    "tool": "cscli",
+    "examples": [
+      "cscli decisions list",
+      "cscli alerts list",
+      "cscli bouncers list",
+      "cscli hub list",
+      "cscli metrics"
+    ]
+  },
+  "documentation": "https://docs.crowdsec.net/"
+}
+EOF
+}
+
+# Start CrowdSec
+cmd_start() {
+    info "Starting CrowdSec..."
+    systemctl start crowdsec
+
+    if [ -f "/etc/crowdsec/bouncers/crowdsec-firewall-bouncer.yaml" ]; then
+        info "Starting Firewall Bouncer..."
+        systemctl start crowdsec-firewall-bouncer || warn "Bouncer not configured"
+    fi
+
+    sleep 2
+    if check_running; then
+        info "CrowdSec started successfully"
+        cmd_status
+    else
+        error "Failed to start CrowdSec"
+        return 1
+    fi
+}
+
+# Stop CrowdSec
+cmd_stop() {
+    info "Stopping CrowdSec services..."
+    systemctl stop crowdsec-firewall-bouncer 2>/dev/null || true
+    systemctl stop crowdsec
+    info "CrowdSec stopped"
+}
+
+# Restart
+cmd_restart() {
+    cmd_stop
+    sleep 1
+    cmd_start
+}
+
+# Reload
+cmd_reload() {
+    info "Reloading CrowdSec..."
+    systemctl reload crowdsec 2>/dev/null || systemctl restart crowdsec
+    info "CrowdSec reloaded"
+}
+
+# === Decision Management ===
+
+cmd_decisions() {
+    local subcmd="${1:-list}"
+    shift || true
+
+    check_cscli || return 1
+
+    case "$subcmd" in
+        list)
+            run_cscli decisions list -o json | json_output
+            ;;
+        add|ban)
+            local ip="$1"
+            local duration="${2:-24h}"
+            local reason="${3:-manual-secubox}"
+
+            if [ -z "$ip" ]; then
+                error "Usage: crowdsecctl decisions add <ip> [duration] [reason]"
+                return 1
+            fi
+
+            info "Adding ban for $ip ($duration)"
+            run_cscli decisions add --ip "$ip" --duration "$duration" --reason "$reason"
+            ;;
+        delete|unban)
+            local ip="$1"
+            if [ -z "$ip" ]; then
+                error "Usage: crowdsecctl decisions delete <ip>"
+                return 1
+            fi
+
+            info "Removing ban for $ip"
+            run_cscli decisions delete --ip "$ip"
+            ;;
+        flush)
+            warn "Flushing all decisions..."
+            run_cscli decisions delete --all
+            info "All decisions flushed"
+            ;;
+        *)
+            error "Unknown decisions command: $subcmd"
+            echo "Usage: crowdsecctl decisions {list|add|delete|flush}"
+            return 1
+            ;;
+    esac
+}
+
+# === Alerts ===
+
+cmd_alerts() {
+    local subcmd="${1:-list}"
+    local limit="${2:-50}"
+
+    check_cscli || return 1
+
+    case "$subcmd" in
+        list)
+            run_cscli alerts list -o json --limit "$limit" | json_output
+            ;;
+        inspect)
+            local alert_id="$2"
+            if [ -z "$alert_id" ]; then
+                error "Usage: crowdsecctl alerts inspect <id>"
+                return 1
+            fi
+            run_cscli alerts inspect "$alert_id" -o json | json_output
+            ;;
+        delete)
+            local alert_id="$2"
+            if [ -z "$alert_id" ]; then
+                error "Usage: crowdsecctl alerts delete <id>"
+                return 1
+            fi
+            run_cscli alerts delete "$alert_id"
+            ;;
+        *)
+            error "Unknown alerts command: $subcmd"
+            return 1
+            ;;
+    esac
+}
+
+# === Bouncers ===
+
+cmd_bouncers() {
+    local subcmd="${1:-list}"
+    shift || true
+
+    check_cscli || return 1
+
+    case "$subcmd" in
+        list)
+            run_cscli bouncers list -o json | json_output
+            ;;
+        add)
+            local name="$1"
+            if [ -z "$name" ]; then
+                error "Usage: crowdsecctl bouncers add <name>"
+                return 1
+            fi
+            info "Adding bouncer: $name"
+            run_cscli bouncers add "$name"
+            ;;
+        delete)
+            local name="$1"
+            if [ -z "$name" ]; then
+                error "Usage: crowdsecctl bouncers delete <name>"
+                return 1
+            fi
+            run_cscli bouncers delete "$name"
+            ;;
+        *)
+            error "Unknown bouncers command: $subcmd"
+            return 1
+            ;;
+    esac
+}
+
+# === Hub Management ===
+
+cmd_hub() {
+    local subcmd="${1:-list}"
+    shift || true
+
+    check_cscli || return 1
+
+    case "$subcmd" in
+        list)
+            run_cscli hub list -o json | json_output
+            ;;
+        update)
+            info "Updating CrowdSec hub..."
+            run_cscli hub update
+            info "Hub updated"
+            ;;
+        upgrade)
+            info "Upgrading all hub items..."
+            run_cscli hub upgrade
+            info "Hub upgraded"
+            ;;
+        *)
+            error "Unknown hub command: $subcmd"
+            return 1
+            ;;
+    esac
+}
+
+# === Collections ===
+
+cmd_collections() {
+    local subcmd="${1:-list}"
+    shift || true
+
+    check_cscli || return 1
+
+    case "$subcmd" in
+        list)
+            run_cscli collections list -o json | json_output
+            ;;
+        install)
+            local name="$1"
+            if [ -z "$name" ]; then
+                error "Usage: crowdsecctl collections install <name>"
+                return 1
+            fi
+            info "Installing collection: $name"
+            run_cscli collections install "$name"
+            ;;
+        remove)
+            local name="$1"
+            if [ -z "$name" ]; then
+                error "Usage: crowdsecctl collections remove <name>"
+                return 1
+            fi
+            run_cscli collections remove "$name"
+            ;;
+        *)
+            error "Unknown collections command: $subcmd"
+            return 1
+            ;;
+    esac
+}
+
+# === Metrics ===
+
+cmd_metrics() {
+    check_cscli || return 1
+    run_cscli metrics -o json | json_output
+}
+
+# === Machines ===
+
+cmd_machines() {
+    local subcmd="${1:-list}"
+    shift || true
+
+    check_cscli || return 1
+
+    case "$subcmd" in
+        list)
+            run_cscli machines list -o json | json_output
+            ;;
+        add)
+            local name="$1"
+            if [ -z "$name" ]; then
+                error "Usage: crowdsecctl machines add <name>"
+                return 1
+            fi
+            run_cscli machines add "$name" --auto
+            ;;
+        delete)
+            local name="$1"
+            run_cscli machines delete "$name"
+            ;;
+        *)
+            error "Unknown machines command: $subcmd"
+            return 1
+            ;;
+    esac
+}
+
+# === nftables Statistics ===
+
+cmd_nftables() {
+    local ipv4_exists="false"
+    local ipv6_exists="false"
+    local ipv4_count=0
+    local ipv6_count=0
+    local ipv4_rules=0
+    local ipv6_rules=0
+
+    if ! command -v nft >/dev/null 2>&1; then
+        echo '{"available": false, "error": "nftables not installed"}'
+        return 1
+    fi
+
+    # Check IPv4 table
+    if nft list table ip crowdsec >/dev/null 2>&1; then
+        ipv4_exists="true"
+        ipv4_count=$(nft list table ip crowdsec 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | wc -l || echo "0")
+        ipv4_rules=$(nft list table ip crowdsec 2>/dev/null | grep -c "rule" || echo "0")
+    fi
+
+    # Check IPv6 table
+    if nft list table ip6 crowdsec6 >/dev/null 2>&1; then
+        ipv6_exists="true"
+        ipv6_count=$(nft list table ip6 crowdsec6 2>/dev/null | grep -oE '([0-9a-fA-F:]+:+)+[0-9a-fA-F]+' | wc -l || echo "0")
+        ipv6_rules=$(nft list table ip6 crowdsec6 2>/dev/null | grep -c "rule" || echo "0")
+    fi
+
+    cat <<EOF
+{
+  "available": true,
+  "ipv4": {
+    "table_exists": $ipv4_exists,
+    "blocked_ips": $ipv4_count,
+    "rules": $ipv4_rules
+  },
+  "ipv6": {
+    "table_exists": $ipv6_exists,
+    "blocked_ips": $ipv6_count,
+    "rules": $ipv6_rules
+  }
+}
+EOF
+}
+
+# === Logs ===
+
+cmd_logs() {
+    local lines="${1:-50}"
+    local logfile="/var/log/crowdsec.log"
+
+    if [ -f "$logfile" ]; then
+        tail -n "$lines" "$logfile"
+    else
+        journalctl -u crowdsec -n "$lines" --no-pager
+    fi
+}
+
+# === Migration from OpenWrt ===
+
+cmd_migrate() {
+    local source="${1:-192.168.255.1}"
+    local dry_run="${2:-}"
+
+    info "Migrating CrowdSec configuration from OpenWrt: $source"
+
+    # Create backup
+    local backup_dir="/var/lib/secubox/backup/crowdsec-$(date +%Y%m%d-%H%M%S)"
+    mkdir -p "$backup_dir"
+
+    if [ -d "/etc/crowdsec" ]; then
+        cp -a /etc/crowdsec "$backup_dir/" 2>/dev/null || true
+    fi
+
+    # Sync collections and parsers from OpenWrt
+    info "Syncing hub content..."
+    if [ "$dry_run" = "--dry-run" ]; then
+        rsync -avzn --progress "root@$source:/etc/crowdsec/hub/" "/etc/crowdsec/hub/"
+        rsync -avzn --progress "root@$source:/etc/crowdsec/collections/" "/etc/crowdsec/collections/"
+        rsync -avzn --progress "root@$source:/etc/crowdsec/scenarios/" "/etc/crowdsec/scenarios/"
+        rsync -avzn --progress "root@$source:/etc/crowdsec/parsers/" "/etc/crowdsec/parsers/"
+    else
+        rsync -avz --progress "root@$source:/etc/crowdsec/hub/" "/etc/crowdsec/hub/" 2>/dev/null || warn "Hub sync skipped"
+        rsync -avz --progress "root@$source:/etc/crowdsec/collections/" "/etc/crowdsec/collections/" 2>/dev/null || warn "Collections sync skipped"
+        rsync -avz --progress "root@$source:/etc/crowdsec/scenarios/" "/etc/crowdsec/scenarios/" 2>/dev/null || warn "Scenarios sync skipped"
+        rsync -avz --progress "root@$source:/etc/crowdsec/parsers/" "/etc/crowdsec/parsers/" 2>/dev/null || warn "Parsers sync skipped"
+    fi
+
+    # Sync acquisition config
+    info "Syncing acquisition configuration..."
+    if [ "$dry_run" != "--dry-run" ]; then
+        rsync -avz --progress "root@$source:/etc/crowdsec/acquis.yaml" "/etc/crowdsec/acquis.yaml" 2>/dev/null || warn "acquis.yaml sync skipped"
+        rsync -avz --progress "root@$source:/etc/crowdsec/acquis.d/" "/etc/crowdsec/acquis.d/" 2>/dev/null || true
+    fi
+
+    # Convert UCI bouncer config to YAML if needed
+    info "Checking bouncer configuration..."
+    local uci_config
+    uci_config=$(ssh "root@$source" "uci export crowdsec 2>/dev/null" 2>/dev/null || echo "")
+
+    if [ -n "$uci_config" ]; then
+        info "Converting UCI bouncer config to YAML..."
+
+        # Extract bouncer settings from UCI
+        local api_url api_key deny_action
+        api_url=$(echo "$uci_config" | grep -oP "option api_url '\K[^']+")
+        api_key=$(echo "$uci_config" | grep -oP "option api_key '\K[^']+")
+        deny_action=$(echo "$uci_config" | grep -oP "option deny_action '\K[^']+")
+
+        if [ -n "$api_key" ] && [ "$api_key" != "API_KEY" ]; then
+            if [ "$dry_run" != "--dry-run" ]; then
+                mkdir -p /etc/crowdsec/bouncers
+                cat > /etc/crowdsec/bouncers/crowdsec-firewall-bouncer.yaml <<BOUNCER_EOF
+mode: nftables
+pid_dir: /run/
+update_frequency: 10s
+daemonize: false
+log_mode: file
+log_dir: /var/log/
+log_level: info
+log_compression: true
+log_max_size: 100
+log_max_backups: 3
+log_max_age: 30
+api_url: ${api_url:-http://127.0.0.1:8080/}
+api_key: ${api_key}
+insecure_skip_verify: false
+disable_ipv6: false
+deny_action: ${deny_action:-DROP}
+deny_log: true
+deny_log_prefix: "CROWDSEC: "
+nftables:
+  ipv4:
+    enabled: true
+    set-only: false
+    table: crowdsec
+    chain: crowdsec-chain
+    priority: -10
+  ipv6:
+    enabled: true
+    set-only: false
+    table: crowdsec6
+    chain: crowdsec6-chain
+    priority: -10
+BOUNCER_EOF
+                info "Bouncer config created at /etc/crowdsec/bouncers/crowdsec-firewall-bouncer.yaml"
+            else
+                info "[DRY-RUN] Would create bouncer config with api_key: ${api_key:0:8}..."
+            fi
+        fi
+    fi
+
+    # Export and import decisions
+    info "Exporting decisions from source..."
+    if [ "$dry_run" != "--dry-run" ]; then
+        local decisions_json
+        decisions_json=$(ssh "root@$source" "cscli decisions list -o json 2>/dev/null" || echo "[]")
+
+        if [ "$decisions_json" != "[]" ] && [ -n "$decisions_json" ]; then
+            info "Importing decisions..."
+            echo "$decisions_json" | jq -r '.[] | select(.origin == "cscli") | "cscli decisions add --ip \(.value) --duration \(.duration) --reason \(.scenario // "migrated")"' | while read -r cmd; do
+                eval "$cmd" 2>/dev/null || true
+            done
+            info "Decisions imported"
+        fi
+    fi
+
+    info "Migration complete. Backup saved to: $backup_dir"
+    info "Please restart CrowdSec: systemctl restart crowdsec crowdsec-firewall-bouncer"
+}
+
+# === Installation ===
+
+cmd_install() {
+    local mode="${1:-native}"
+
+    info "Installing CrowdSec in $mode mode..."
+
+    case "$mode" in
+        native)
+            # Install via APT
+            apt-get update
+            apt-get install -y crowdsec crowdsec-firewall-bouncer-nftables
+
+            # Enable services
+            systemctl enable crowdsec
+            systemctl start crowdsec
+
+            # Register bouncer
+            local api_key
+            api_key=$(cscli bouncers add secubox-firewall -o raw 2>/dev/null || echo "")
+
+            if [ -n "$api_key" ]; then
+                mkdir -p /etc/crowdsec/bouncers
+                cat > /etc/crowdsec/bouncers/crowdsec-firewall-bouncer.yaml <<EOF
+mode: nftables
+pid_dir: /run/
+update_frequency: 10s
+api_url: http://127.0.0.1:8080/
+api_key: ${api_key}
+deny_action: DROP
+deny_log: true
+deny_log_prefix: "CROWDSEC: "
+nftables:
+  ipv4:
+    enabled: true
+    table: crowdsec
+    chain: crowdsec-chain
+  ipv6:
+    enabled: true
+    table: crowdsec6
+    chain: crowdsec6-chain
+EOF
+                systemctl enable crowdsec-firewall-bouncer
+                systemctl start crowdsec-firewall-bouncer
+                info "Firewall bouncer configured with API key"
+            fi
+
+            # Install recommended collections
+            info "Installing recommended collections..."
+            cscli collections install crowdsecurity/linux
+            cscli collections install crowdsecurity/nginx
+            cscli collections install crowdsecurity/sshd
+
+            info "CrowdSec installed and configured"
+            ;;
+        docker)
+            error "Docker mode not yet implemented"
+            return 1
+            ;;
+        *)
+            error "Unknown install mode: $mode"
+            return 1
+            ;;
+    esac
+}
+
+# === Console Connection ===
+
+cmd_console() {
+    local subcmd="${1:-status}"
+    shift || true
+
+    check_cscli || return 1
+
+    case "$subcmd" in
+        status)
+            run_cscli console status
+            ;;
+        enroll)
+            local key="$1"
+            if [ -z "$key" ]; then
+                error "Usage: crowdsecctl console enroll <enrollment-key>"
+                return 1
+            fi
+            info "Enrolling to CrowdSec Console..."
+            run_cscli console enroll "$key"
+            ;;
+        enable)
+            local feature="$1"
+            run_cscli console enable "$feature"
+            ;;
+        disable)
+            local feature="$1"
+            run_cscli console disable "$feature"
+            ;;
+        *)
+            error "Unknown console command: $subcmd"
+            return 1
+            ;;
+    esac
+}
+
+# === Debug Info ===
+
+cmd_debug() {
+    info "Collecting debug information..."
+
+    echo "=== CrowdSec Version ==="
+    cscli version 2>/dev/null || echo "N/A"
+
+    echo ""
+    echo "=== Service Status ==="
+    systemctl status crowdsec --no-pager 2>/dev/null | head -20 || echo "Service not found"
+
+    echo ""
+    echo "=== Bouncer Status ==="
+    systemctl status crowdsec-firewall-bouncer --no-pager 2>/dev/null | head -10 || echo "Bouncer not found"
+
+    echo ""
+    echo "=== LAPI Status ==="
+    cscli lapi status 2>/dev/null || echo "LAPI check failed"
+
+    echo ""
+    echo "=== CAPI Status ==="
+    cscli capi status 2>/dev/null || echo "CAPI check failed"
+
+    echo ""
+    echo "=== Bouncers ==="
+    cscli bouncers list 2>/dev/null || echo "No bouncers"
+
+    echo ""
+    echo "=== Machines ==="
+    cscli machines list 2>/dev/null || echo "No machines"
+
+    echo ""
+    echo "=== nftables Tables ==="
+    nft list tables 2>/dev/null | grep -i crowdsec || echo "No crowdsec tables"
+
+    echo ""
+    echo "=== Active Decisions (first 10) ==="
+    cscli decisions list 2>/dev/null | head -15 || echo "No decisions"
+}
+
+# === Help ===
+
+cmd_help() {
+    cat <<'EOF'
+crowdsecctl - CrowdSec management for SecuBox
+
+Three-Fold Architecture Commands:
+  components              Show system components (what)
+  status                  Show health status (health)
+  access                  Show connection endpoints (how)
+
+Service Commands:
+  start                   Start CrowdSec and bouncer
+  stop                    Stop all CrowdSec services
+  restart                 Restart services
+  reload                  Reload configuration
+  install [native|docker] Install CrowdSec
+
+Decision Management:
+  decisions list          List active decisions/bans
+  decisions add <ip> [duration] [reason]  Add manual ban
+  decisions delete <ip>   Remove ban
+  decisions flush         Remove all decisions
+
+Alert Management:
+  alerts list [limit]     List recent alerts
+  alerts inspect <id>     Show alert details
+  alerts delete <id>      Delete an alert
+
+Bouncer Management:
+  bouncers list           List registered bouncers
+  bouncers add <name>     Register new bouncer
+  bouncers delete <name>  Remove bouncer
+
+Hub & Collections:
+  hub list                List hub items
+  hub update              Update hub index
+  hub upgrade             Upgrade all items
+  collections list        List collections
+  collections install <n> Install collection
+  collections remove <n>  Remove collection
+
+Machine Management:
+  machines list           List registered machines
+  machines add <name>     Add new machine
+  machines delete <name>  Remove machine
+
+Console:
+  console status          Check Console connection
+  console enroll <key>    Enroll to CrowdSec Console
+
+Other Commands:
+  metrics                 Show CrowdSec metrics
+  nftables                Show nftables statistics
+  logs [lines]            Show recent logs
+  migrate <source> [--dry-run]  Migrate from OpenWrt
+  debug                   Collect debug information
+
+Examples:
+  crowdsecctl status
+  crowdsecctl decisions add 1.2.3.4 4h "brute-force"
+  crowdsecctl collections install crowdsecurity/nginx
+  crowdsecctl migrate 192.168.255.1
+
+EOF
+}
+
+# === Main ===
+
+main() {
+    mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null || true
+
+    local cmd="${1:-help}"
+    shift || true
+
+    case "$cmd" in
+        components) cmd_components "$@" ;;
+        status)     cmd_status "$@" ;;
+        access)     cmd_access "$@" ;;
+        start)      cmd_start "$@" ;;
+        stop)       cmd_stop "$@" ;;
+        restart)    cmd_restart "$@" ;;
+        reload)     cmd_reload "$@" ;;
+        install)    cmd_install "$@" ;;
+        decisions)  cmd_decisions "$@" ;;
+        alerts)     cmd_alerts "$@" ;;
+        bouncers)   cmd_bouncers "$@" ;;
+        hub)        cmd_hub "$@" ;;
+        collections) cmd_collections "$@" ;;
+        machines)   cmd_machines "$@" ;;
+        metrics)    cmd_metrics "$@" ;;
+        nftables)   cmd_nftables "$@" ;;
+        logs)       cmd_logs "$@" ;;
+        console)    cmd_console "$@" ;;
+        migrate)    cmd_migrate "$@" ;;
+        debug)      cmd_debug "$@" ;;
+        help|--help|-h) cmd_help ;;
+        *)
+            error "Unknown command: $cmd"
+            cmd_help
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"

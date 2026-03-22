@@ -1,5 +1,5 @@
 # MIGRATION MAP — SecuBox OpenWrt → Debian
-*Mis à jour : 2026-03-21*
+*Mis à jour : 2026-03-22*
 
 Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 
@@ -35,12 +35,13 @@ Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 
 ---
 
-## Paquets Debian — 26 modules
+## Paquets Debian — 33 modules
 
 | Module | www/ | API | deb/ | Endpoints | Statut |
 |--------|------|-----|------|-----------|--------|
 | **secubox-core** | — | — | ✅ | — | ✅ |
 | **secubox-hub** | ✅ (71) | ✅ | ✅ | 40+ endpoints | ✅ |
+| **secubox-portal** | ✅ | ✅ | ✅ | login, auth | ✅ |
 | **secubox-crowdsec** | ✅ (54) | ✅ | ✅ | 54 endpoints | ✅ |
 | **secubox-netdata** | ✅ (16) | ✅ | ✅ | 16 endpoints | ✅ |
 | **secubox-wireguard** | ✅ (28) | ✅ | ✅ | 28+ endpoints | ✅ |
@@ -59,15 +60,20 @@ Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 | **secubox-streamforge** | ✅ | ✅ | ✅ | apps, templates | ✅ |
 | **secubox-metablogizer** | ✅ | ✅ | ✅ | sites, tor, publish | ✅ |
 | **secubox-dns** | ✅ | ✅ | ✅ | zones, records, BIND | ✅ |
-| **secubox-mail** | ✅ | ✅ | ✅ | Postfix/Dovecot, users | ✅ |
+| **secubox-mail** | ✅ | ✅ | ✅ | Postfix/Dovecot + webmail | ✅ |
 | **secubox-users** | ✅ | ✅ | ✅ | unified identity | ✅ |
 | **secubox-webmail** | ✅ | ✅ | ✅ | Roundcube/SOGo | ✅ |
-| **secubox-mail-lxc** | ✅ | ✅ | ✅ | LXC Postfix/Dovecot | ✅ |
-| **secubox-webmail-lxc** | ✅ | ✅ | ✅ | LXC Roundcube/SOGo | ✅ |
+| **secubox-mail-lxc** | — | ✅ | ✅ | LXC backend (no UI) | ✅ |
+| **secubox-webmail-lxc** | — | ✅ | ✅ | LXC backend (no UI) | ✅ |
 | **secubox-publish** | ✅ | ✅ | ✅ | Unified publishing | ✅ |
 | **secubox-waf** | ✅ | ✅ | ✅ | 300+ rules, CrowdSec | ✅ |
+| **secubox-gitea** | ✅ | ✅ | ✅ | Git server LXC | ✅ |
+| **secubox-nextcloud** | ✅ | ✅ | ✅ | File sync LXC | ✅ |
+| **secubox-c3box** | ✅ | ✅ | ✅ | Services portal | ✅ |
 
-**Total : 26 modules | ~600+ endpoints API**
+**Total : 33 modules | ~700+ endpoints API**
+
+*Note: mail-lxc and webmail-lxc are backend components integrated into secubox-mail*
 
 ---
 

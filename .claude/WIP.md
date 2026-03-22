@@ -1,9 +1,75 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-03-22*
+*Mis à jour : 2026-03-22 (Session 4)*
 
 ---
 
 ## ✅ Terminé cette session
+
+### Mail Server LXC Implementation ✅
+- **mailserverctl v2.1.0** — Updated to use Debian bookworm via debootstrap
+- **roundcubectl v1.4.0** — Updated to use Debian bookworm via debootstrap
+- **Host networking** — LXC containers use `lxc.net.0.type = none` for simplified networking
+- **Three-fold commands** — Both scripts have `components` and `access` JSON commands
+- **LXC path flag** — All lxc-* commands now use `-P /srv/lxc` for custom LXC path
+
+### Mail Server Working (Alpine LXC) ✅
+- **Postfix + Dovecot** — Tested and working on Alpine LXC container
+- **User management** — mailctl user add/list/remove working
+- **Authentication** — doveadm auth test verified
+- **Email delivery** — Postfix → Dovecot LMTP → Maildir working
+- **Ports listening** — SMTP (25, 465, 587), IMAP (143), POP3 (110)
+
+### VM Service Count ✅
+- **30 services running** — All SecuBox APIs active
+- **Disk space constraint** — VM has 2.4GB root, Debian LXC needs 4GB+
+
+---
+
+## ⚠️ Known Issues
+
+### Debian LXC Disk Space
+- **VM root partition** — Only 2.4GB, Debian debootstrap needs ~500MB per container
+- **Solution** — Move /srv/lxc to /data partition (symlinked)
+- **Recommendation** — Production systems need 8GB+ root partition
+
+---
+
+## ⬜ Next Up
+
+### Mail Server Production
+1. **Debian LXC containers** — Require larger VM disk or fresh install
+2. **SSL/TLS certificates** — ACME integration for mail domains
+3. **DKIM signing** — Integrate with Postfix
+
+### Infrastructure
+1. **Deploy apt.secubox.in** — Setup reprepro server
+2. **Publish packages** — Upload all 33 debs to APT repo
+3. **Documentation** — User guide, API docs
+
+---
+
+## ✅ Précédemment terminé
+
+### Three-fold Architecture ✅
+- **6 modules upgraded** — vhost, haproxy, streamlit, gitea, metablogizer, roundcube
+- **All *ctl scripts have** — `components` and `access` JSON commands
+- **Version bumps** — 1.1.0 for all modules with three-fold
+
+### Mail Integration ✅
+- **mail-lxc and webmail-lxc** — Integrated into secubox-mail (no standalone UI)
+- **secubox-mail 1.3.0** — Full mail management with installation wizard
+- **roundcubectl** — Added three-fold commands (components, access)
+- **API endpoints** — /webmail/start, /webmail/stop, /webmail/install, /settings, /dkim/setup
+
+### Mail Frontend ✅
+- **Install banner** — Shows when mail not installed with wizard button
+- **Settings tab** — Domain, hostname, IP, ports configuration
+- **Per-component controls** — Install/Start/Stop buttons for mail server and webmail
+- **DNS Setup modal** — Shows required DNS records
+- **DKIM Setup** — Generate DKIM keys with one click
+
+### Maintainer Update ✅
+- **Gerald KERMA <devel@cybermind.fr>** — Propagated to 33 control + 33 changelog files
 
 ### Authentication Fix ✅
 - **JWT secret mismatch fixed** — Portal and modules now use same secret

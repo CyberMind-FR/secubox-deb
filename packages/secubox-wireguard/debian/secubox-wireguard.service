@@ -1,5 +1,5 @@
 [Unit]
-Description=SecuBox SecuBox WireGuard Dashboard API
+Description=SecuBox WireGuard API
 After=network.target secubox-core.service
 Requires=secubox-core.service
 
@@ -15,9 +15,9 @@ ExecStart=/usr/bin/python3 -m uvicorn api.main:app \
 Restart=on-failure
 RestartSec=5
 PrivateTmp=true
-NoNewPrivileges=false
+NoNewPrivileges=true
 ProtectSystem=strict
-ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox
+ReadWritePaths=/run/secubox /var/lib/secubox /etc/wireguard /var/log/secubox
 
 [Install]
 WantedBy=multi-user.target

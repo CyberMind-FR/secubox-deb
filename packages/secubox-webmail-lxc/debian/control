@@ -1,19 +1,21 @@
 Source: secubox-webmail-lxc
 Section: admin
 Priority: optional
-Maintainer: SecuBox <dev@secubox.local>
+Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.6.2
 
 Package: secubox-webmail-lxc
 Architecture: all
 Depends: ${misc:Depends}, secubox-core (>= 1.0.0), lxc, wget
-Recommends: secubox-webmail, secubox-mail-lxc
-Description: SecuBox Webmail LXC Container
- LXC container management for Roundcube/SOGo webmail.
- Layer 1 of the 2-layer webmail architecture.
+Recommends: secubox-mail, secubox-mail-lxc
+Description: SecuBox Webmail LXC Container (Backend)
+ LXC container management for Roundcube webmail.
+ Backend component consumed by secubox-mail (no standalone UI).
  .
  Provides Alpine Linux container with:
-  - Roundcube or SOGo webmail
+  - Roundcube webmail
   - Nginx + PHP-FPM
   - Auto-configuration for mail server
+ .
+ Install secubox-mail for the management UI.

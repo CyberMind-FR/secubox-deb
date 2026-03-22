@@ -1,7 +1,14 @@
+secubox-metablogizer (1.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Add metablogizerctl three-fold commands: components, access (JSON output)
+  * Update version to 1.1.0
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Mar 2026 11:30:00 +0100
+
 secubox-metablogizer (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial release with three-fold architecture
   * Site management and publishing
   * Migration from OpenWrt support
 
- -- CyberMind <admin@cybermind.fr>  Sat, 22 Mar 2025 08:00:00 +0100
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Mar 2026 08:00:00 +0100

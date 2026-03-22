@@ -1,14 +1,13 @@
-#!/bin/bash
+#!/bin/sh
 set -e
+
 case "$1" in
-  remove|deconfigure)
-    rm -f /etc/nginx/secubox.d/wireguard.conf
-    systemctl reload nginx 2>/dev/null || true
-    ;;
-  upgrade)
-    # Don't remove nginx config on upgrade
-    ;;
+    remove|upgrade|deconfigure)
+        systemctl stop secubox-wireguard.service || true
+        systemctl disable secubox-wireguard.service || true
+        ;;
 esac
-systemctl stop    secubox-wireguard.service 2>/dev/null || true
-systemctl disable secubox-wireguard.service 2>/dev/null || true
+
 #DEBHELPER#
+
+exit 0

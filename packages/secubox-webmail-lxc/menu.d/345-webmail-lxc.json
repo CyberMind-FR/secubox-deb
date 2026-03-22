@@ -1,9 +1,0 @@
-{
-  "id": "webmail-lxc",
-  "name": "Webmail-lxc",
-  "category": "network",
-  "icon": "📧",
-  "path": "/webmail-lxc/",
-  "order": 345,
-  "description": "Webmail LXC Container (Roundcube/SOGo)"
-}

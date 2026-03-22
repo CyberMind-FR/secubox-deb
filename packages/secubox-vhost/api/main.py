@@ -17,7 +17,7 @@ from pydantic import BaseModel
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
 
-app = FastAPI(title="SecuBox VHost", version="1.0.0")
+app = FastAPI(title="SecuBox VHost", version="1.1.0")
 config = get_config("vhost")
 
 NGINX_VHOST_DIR = Path(config.get("nginx_vhost_dir", "/etc/nginx/sites-available") if config else "/etc/nginx/sites-available")
@@ -114,6 +114,59 @@ async def health():
     return {
         "status": "ok" if running else "degraded",
         "nginx": "ok" if running else "down",
+    }
+
+
+# =============================================================================
+# COMPONENTS - Three-fold architecture (What)
+# =============================================================================
+
+@app.get("/components")
+async def get_components():
+    """List system components (public, three-fold: what)"""
+    running = nginx_running()
+    acme = acme_available()
+
+    vhost_count = 0
+    if NGINX_VHOST_DIR.exists():
+        vhost_count = len(list(NGINX_VHOST_DIR.glob("*.conf")))
+
+    cert_count = 0
+    if ACME_DIR.exists():
+        cert_count = len([d for d in ACME_DIR.iterdir() if d.is_dir() and (d / "fullchain.cer").exists()])
+
+    return {
+        "components": [
+            {
+                "name": "Nginx Web Server",
+                "type": "service",
+                "description": "HTTP/HTTPS reverse proxy",
+                "installed": True,
+                "running": running,
+                "version": get_nginx_version() if running else None,
+            },
+            {
+                "name": "ACME Client",
+                "type": "tool",
+                "description": "Let's Encrypt certificate automation",
+                "installed": acme,
+                "running": False,
+            },
+            {
+                "name": "VHost Configs",
+                "type": "config",
+                "path": str(NGINX_VHOST_DIR),
+                "description": "Virtual host configurations",
+                "count": vhost_count,
+            },
+            {
+                "name": "SSL Certificates",
+                "type": "certs",
+                "path": str(ACME_DIR),
+                "description": "Let's Encrypt certificates",
+                "count": cert_count,
+            },
+        ]
     }
 
 

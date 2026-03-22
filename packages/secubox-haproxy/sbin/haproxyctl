@@ -1,7 +1,10 @@
 #!/bin/bash
 # haproxyctl - HAProxy Manager for SecuBox Debian
 # Control script for HAProxy with LXC/Docker container support
+# Three-fold architecture: Components, Status, Access
 set -e
+
+VERSION="1.1.0"
 
 LXC_NAME="haproxy"
 LXC_PATH="/var/lib/lxc/$LXC_NAME"
@@ -232,6 +235,125 @@ cmd_status() {
   "vhost_count": $vhost_count,
   "backend_count": $backend_count,
   "cert_count": $cert_count
+}
+EOF
+}
+
+# ─────────────────────────────────────────────────────────────────────
+# THREE-FOLD ARCHITECTURE: Components (What)
+# ─────────────────────────────────────────────────────────────────────
+
+cmd_components() {
+    local running=false
+    haproxy_running && running=true
+
+    local acme_installed=false
+    command -v acme.sh >/dev/null 2>&1 && acme_installed=true
+
+    local stats_socket_ok=false
+    [ -S "$STATS_SOCKET" ] && stats_socket_ok=true
+
+    local waf_enabled=false
+    grep -q '^waf_enabled\s*=\s*true' "$CONF_PATH" 2>/dev/null && waf_enabled=true
+
+    local vhost_count=0
+    local backend_count=0
+    local cert_count=0
+    [ -f "$CONF_PATH" ] && vhost_count=$(grep -c '^\[vhosts\.' "$CONF_PATH" 2>/dev/null || echo "0")
+    [ -f "$CONF_PATH" ] && backend_count=$(grep -c '^\[backends\.' "$CONF_PATH" 2>/dev/null || echo "0")
+    [ -d "$CERTS_DIR" ] && cert_count=$(ls -1 "$CERTS_DIR"/*.pem 2>/dev/null | wc -l || echo "0")
+
+    cat <<EOF
+{
+  "components": [
+    {
+      "name": "HAProxy",
+      "type": "service",
+      "description": "High-performance load balancer",
+      "installed": true,
+      "running": $running,
+      "mode": "$MODE"
+    },
+    {
+      "name": "Stats Socket",
+      "type": "socket",
+      "path": "$STATS_SOCKET",
+      "description": "HAProxy admin socket",
+      "running": $stats_socket_ok
+    },
+    {
+      "name": "ACME Client",
+      "type": "tool",
+      "description": "Let's Encrypt certificate automation",
+      "installed": $acme_installed
+    },
+    {
+      "name": "WAF Integration",
+      "type": "module",
+      "description": "Web Application Firewall MITM",
+      "enabled": $waf_enabled
+    },
+    {
+      "name": "VHosts",
+      "type": "config",
+      "count": $vhost_count
+    },
+    {
+      "name": "Backends",
+      "type": "config",
+      "count": $backend_count
+    },
+    {
+      "name": "SSL Certificates",
+      "type": "certs",
+      "path": "$CERTS_DIR",
+      "count": $cert_count
+    }
+  ]
+}
+EOF
+}
+
+# ─────────────────────────────────────────────────────────────────────
+# THREE-FOLD ARCHITECTURE: Access (How to connect)
+# ─────────────────────────────────────────────────────────────────────
+
+cmd_access() {
+    local http_port=$(grep -E '^http_port\s*=' "$CONF_PATH" 2>/dev/null | cut -d'=' -f2 | tr -d ' ' || echo "80")
+    local https_port=$(grep -E '^https_port\s*=' "$CONF_PATH" 2>/dev/null | cut -d'=' -f2 | tr -d ' ' || echo "443")
+    local stats_port=$(grep -E '^stats_port\s*=' "$CONF_PATH" 2>/dev/null | cut -d'=' -f2 | tr -d ' ' || echo "8404")
+
+    # Get vhosts as JSON array
+    local vhosts_json="["
+    local first=true
+    if [ -f "$CONF_PATH" ]; then
+        grep '^\[vhosts\.' "$CONF_PATH" | while read -r line; do
+            local name=$(echo "$line" | sed 's/\[vhosts\.//;s/\]//')
+            local section=$(sed -n "/^\[vhosts\.$name\]/,/^\[/p" "$CONF_PATH" | head -n -1)
+            local domain=$(echo "$section" | grep -E '^domain\s*=' | cut -d'"' -f2)
+            local ssl=$(echo "$section" | grep -E '^ssl\s*=' | grep -q 'true' && echo "true" || echo "false")
+            local enabled=$(echo "$section" | grep -E '^enabled\s*=' | grep -q 'false' && echo "false" || echo "true")
+
+            [ -n "$domain" ] && {
+                $first || echo -n ","
+                first=false
+                echo -n "{\"domain\":\"$domain\",\"ssl\":$ssl,\"enabled\":$enabled}"
+            }
+        done
+    fi
+    vhosts_json+="]"
+
+    cat <<EOF
+{
+  "ports": {
+    "http": $http_port,
+    "https": $https_port,
+    "stats": $stats_port
+  },
+  "stats_url": "http://localhost:${stats_port}/stats",
+  "admin_panel": "/haproxy/",
+  "config_dir": "$CONFIG_DIR",
+  "certs_dir": "$CERTS_DIR"
 }
 EOF
 }
@@ -663,13 +785,17 @@ EOF
 load_config
 
 case "${1:-}" in
+    # Three-fold architecture
+    components) cmd_components ;;
+    access)     cmd_access ;;
+    status)     cmd_status ;;
+    # Service control
     install)    cmd_install ;;
     uninstall)  cmd_uninstall ;;
     start)      cmd_start ;;
     stop)       cmd_stop ;;
     restart)    cmd_stop; sleep 1; cmd_start ;;
     reload)     cmd_reload ;;
-    status)     cmd_status ;;
     stats)      cmd_stats ;;
     info)       cmd_info ;;
     generate)   cmd_generate ;;
@@ -703,7 +829,13 @@ case "${1:-}" in
 
     *)
         cat << EOF
-haproxyctl - HAProxy Manager
+haproxyctl v$VERSION - HAProxy Manager
+Three-fold architecture: Components, Status, Access
+
+Information (Three-fold):
+  components    List system components (JSON)
+  status        Show status (JSON)
+  access        Show ports and access info (JSON)
 
 Service:
   install       Install HAProxy (native/lxc/docker based on config)
@@ -712,7 +844,6 @@ Service:
   stop          Stop HAProxy
   restart       Restart HAProxy
   reload        Reload configuration
-  status        Show status (JSON)
   stats         Show live stats
   info          Show HAProxy info
 
@@ -734,6 +865,11 @@ Certificates:
 
 Migration:
   migrate [source]        Migrate from OpenWrt (default: 192.168.255.1)
+
+Examples:
+  haproxyctl components             # JSON list of components
+  haproxyctl access                 # JSON port and URL info
+  haproxyctl vhost add app.ex.com backend_app true
 
 EOF
         ;;

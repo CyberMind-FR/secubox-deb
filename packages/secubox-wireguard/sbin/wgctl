@@ -1,0 +1,791 @@
+#!/bin/bash
+# wgctl - WireGuard management control script for SecuBox
+# Part of secubox-wireguard package
+# Following three-fold architecture: Components, Status, Access
+
+set -e
+
+# === Configuration ===
+CONFIG_FILE="/etc/secubox/secubox.conf"
+WG_CONFIG_DIR="/etc/wireguard"
+LOG_FILE="/var/log/secubox/wireguard.log"
+PEERS_DIR="/var/lib/secubox/wireguard/peers"
+
+# === Logging ===
+log() {
+    local level="$1"
+    shift
+    local msg="$*"
+    local ts
+    ts=$(date '+%Y-%m-%d %H:%M:%S')
+    echo "[$ts] [$level] $msg" | tee -a "$LOG_FILE" 2>/dev/null || echo "[$ts] [$level] $msg"
+}
+
+error() { log "ERROR" "$@"; }
+info()  { log "INFO" "$@"; }
+warn()  { log "WARN" "$@"; }
+debug() { [ "${DEBUG:-0}" = "1" ] && log "DEBUG" "$@" || true; }
+
+# === Helper functions ===
+check_wg() {
+    if ! command -v wg >/dev/null 2>&1; then
+        error "wireguard-tools not installed"
+        return 1
+    fi
+}
+
+json_output() {
+    if command -v jq >/dev/null 2>&1; then
+        jq -r '.' 2>/dev/null || cat
+    else
+        cat
+    fi
+}
+
+format_bytes() {
+    local bytes="$1"
+    if [ "$bytes" -ge 1073741824 ]; then
+        echo "$(echo "scale=2; $bytes/1073741824" | bc) GB"
+    elif [ "$bytes" -ge 1048576 ]; then
+        echo "$(echo "scale=2; $bytes/1048576" | bc) MB"
+    elif [ "$bytes" -ge 1024 ]; then
+        echo "$(echo "scale=2; $bytes/1024" | bc) KB"
+    else
+        echo "$bytes B"
+    fi
+}
+
+# === Core Commands ===
+
+# Show components (three-fold: what)
+cmd_components() {
+    cat <<EOF
+{
+  "components": [
+    {
+      "name": "WireGuard Kernel Module",
+      "type": "kernel",
+      "description": "High-performance VPN kernel module",
+      "module": "wireguard",
+      "path": "/sys/module/wireguard"
+    },
+    {
+      "name": "WireGuard Tools",
+      "type": "cli",
+      "description": "wg and wg-quick command line utilities",
+      "package": "wireguard-tools",
+      "binary": "/usr/bin/wg"
+    },
+    {
+      "name": "Interface Configuration",
+      "type": "config",
+      "description": "WireGuard interface configuration files",
+      "path": "/etc/wireguard/"
+    },
+    {
+      "name": "Peer Database",
+      "type": "storage",
+      "description": "Peer configurations and QR codes",
+      "path": "/var/lib/secubox/wireguard/peers"
+    },
+    {
+      "name": "wgctl",
+      "type": "cli",
+      "description": "SecuBox WireGuard control interface",
+      "path": "/usr/sbin/wgctl"
+    }
+  ]
+}
+EOF
+}
+
+# Show status (three-fold: health)
+cmd_status() {
+    check_wg || return 1
+
+    local interfaces
+    interfaces=$(wg show interfaces 2>/dev/null)
+
+    local iface_count=0
+    local total_peers=0
+    local active_peers=0
+    local total_rx=0
+    local total_tx=0
+    local interfaces_json="[]"
+
+    if [ -n "$interfaces" ]; then
+        interfaces_json="["
+        local first=true
+
+        for iface in $interfaces; do
+            iface_count=$((iface_count + 1))
+
+            local pubkey
+            pubkey=$(wg show "$iface" public-key 2>/dev/null || echo "")
+            local port
+            port=$(wg show "$iface" listen-port 2>/dev/null || echo "0")
+            local peers
+            peers=$(wg show "$iface" peers 2>/dev/null | wc -l)
+            total_peers=$((total_peers + peers))
+
+            # Get IP address
+            local ip
+            ip=$(ip -4 addr show "$iface" 2>/dev/null | grep -oP 'inet \K[\d.]+' || echo "")
+
+            # Check state
+            local state="down"
+            if ip link show "$iface" 2>/dev/null | grep -q "UP"; then
+                state="up"
+            fi
+
+            # Get transfer stats
+            local rx_bytes=0
+            local tx_bytes=0
+            if [ -f "/sys/class/net/$iface/statistics/rx_bytes" ]; then
+                rx_bytes=$(cat "/sys/class/net/$iface/statistics/rx_bytes")
+                tx_bytes=$(cat "/sys/class/net/$iface/statistics/tx_bytes")
+            fi
+            total_rx=$((total_rx + rx_bytes))
+            total_tx=$((total_tx + tx_bytes))
+
+            # Count active peers (handshake in last 3 minutes)
+            local now
+            now=$(date +%s)
+            local handshakes
+            handshakes=$(wg show "$iface" latest-handshakes 2>/dev/null || echo "")
+            while IFS= read -r line; do
+                local hs_time
+                hs_time=$(echo "$line" | awk '{print $2}')
+                if [ -n "$hs_time" ] && [ "$hs_time" != "0" ]; then
+                    local age=$((now - hs_time))
+                    if [ "$age" -lt 180 ]; then
+                        active_peers=$((active_peers + 1))
+                    fi
+                fi
+            done <<< "$handshakes"
+
+            [ "$first" = "true" ] && first=false || interfaces_json="${interfaces_json},"
+            interfaces_json="${interfaces_json}{\"name\":\"$iface\",\"state\":\"$state\",\"listen_port\":$port,\"ip\":\"$ip\",\"peers\":$peers,\"rx_bytes\":$rx_bytes,\"tx_bytes\":$tx_bytes}"
+        done
+        interfaces_json="${interfaces_json}]"
+    fi
+
+    # Check if kernel module is loaded
+    local module_loaded="false"
+    if lsmod | grep -q "^wireguard"; then
+        module_loaded="true"
+    fi
+
+    cat <<EOF
+{
+  "installed": true,
+  "module_loaded": $module_loaded,
+  "interface_count": $iface_count,
+  "total_peers": $total_peers,
+  "active_peers": $active_peers,
+  "total_rx_bytes": $total_rx,
+  "total_tx_bytes": $total_tx,
+  "interfaces": $interfaces_json
+}
+EOF
+}
+
+# Show access info (three-fold: how to connect)
+cmd_access() {
+    local hostname
+    hostname=$(hostname -f 2>/dev/null || hostname)
+
+    # Get public IP
+    local public_ip
+    public_ip=$(curl -s --max-time 5 https://api.ipify.org 2>/dev/null || echo "")
+
+    # Get first interface port
+    local listen_port
+    listen_port=$(wg show 2>/dev/null | grep "listening port" | head -1 | awk '{print $3}' || echo "51820")
+
+    cat <<EOF
+{
+  "endpoints": [
+    {
+      "name": "WireGuard Dashboard",
+      "url": "https://${hostname}/wireguard/",
+      "description": "SecuBox WireGuard management interface"
+    },
+    {
+      "name": "VPN Endpoint",
+      "host": "${public_ip:-$hostname}",
+      "port": ${listen_port:-51820},
+      "protocol": "udp",
+      "description": "WireGuard VPN endpoint for peer connections"
+    }
+  ],
+  "cli": {
+    "tool": "wg",
+    "examples": [
+      "wg show",
+      "wg show wg0 peers",
+      "wg-quick up wg0",
+      "wgctl peer add myphone"
+    ]
+  },
+  "documentation": "https://www.wireguard.com/quickstart/"
+}
+EOF
+}
+
+# === Interface Management ===
+
+cmd_interfaces() {
+    check_wg || return 1
+
+    local interfaces
+    interfaces=$(wg show interfaces 2>/dev/null)
+
+    echo '{"interfaces":['
+    local first=true
+
+    for iface in $interfaces; do
+        local pubkey
+        pubkey=$(wg show "$iface" public-key 2>/dev/null)
+        local port
+        port=$(wg show "$iface" listen-port 2>/dev/null)
+        local ipv4
+        ipv4=$(ip -4 addr show "$iface" 2>/dev/null | grep -oP 'inet \K[\d./]+' || echo "")
+        local ipv6
+        ipv6=$(ip -6 addr show "$iface" 2>/dev/null | grep -oP 'inet6 \K[a-f0-9:/]+' | grep -v "^fe80" | head -1 || echo "")
+        local state="down"
+        ip link show "$iface" 2>/dev/null | grep -q "UP" && state="up"
+        local mtu
+        mtu=$(cat "/sys/class/net/$iface/mtu" 2>/dev/null || echo "1420")
+        local rx_bytes
+        rx_bytes=$(cat "/sys/class/net/$iface/statistics/rx_bytes" 2>/dev/null || echo "0")
+        local tx_bytes
+        tx_bytes=$(cat "/sys/class/net/$iface/statistics/tx_bytes" 2>/dev/null || echo "0")
+        local peer_count
+        peer_count=$(wg show "$iface" peers 2>/dev/null | wc -l)
+
+        [ "$first" = "true" ] && first=false || echo ","
+        cat <<EOF
+{"name":"$iface","public_key":"$pubkey","listen_port":${port:-0},"ipv4":"$ipv4","ipv6":"$ipv6","state":"$state","mtu":$mtu,"rx_bytes":$rx_bytes,"tx_bytes":$tx_bytes,"peer_count":$peer_count}
+EOF
+    done
+
+    echo ']}'
+}
+
+cmd_interface_up() {
+    local iface="$1"
+    if [ -z "$iface" ]; then
+        error "Usage: wgctl interface up <name>"
+        return 1
+    fi
+
+    info "Bringing up $iface..."
+    if [ -f "$WG_CONFIG_DIR/$iface.conf" ]; then
+        wg-quick up "$iface"
+    else
+        ip link set "$iface" up
+    fi
+    info "Interface $iface is up"
+}
+
+cmd_interface_down() {
+    local iface="$1"
+    if [ -z "$iface" ]; then
+        error "Usage: wgctl interface down <name>"
+        return 1
+    fi
+
+    info "Bringing down $iface..."
+    if [ -f "$WG_CONFIG_DIR/$iface.conf" ]; then
+        wg-quick down "$iface"
+    else
+        ip link set "$iface" down
+    fi
+    info "Interface $iface is down"
+}
+
+# === Peer Management ===
+
+cmd_peers() {
+    local iface="${1:-}"
+    check_wg || return 1
+
+    local interfaces
+    if [ -n "$iface" ]; then
+        interfaces="$iface"
+    else
+        interfaces=$(wg show interfaces 2>/dev/null)
+    fi
+
+    echo '{"peers":['
+    local first=true
+    local now
+    now=$(date +%s)
+
+    for iface in $interfaces; do
+        local peers
+        peers=$(wg show "$iface" peers 2>/dev/null)
+
+        for peer_pubkey in $peers; do
+            local endpoint
+            endpoint=$(wg show "$iface" endpoints 2>/dev/null | grep "^$peer_pubkey" | awk '{print $2}')
+            local allowed_ips
+            allowed_ips=$(wg show "$iface" allowed-ips 2>/dev/null | grep "^$peer_pubkey" | cut -f2)
+            local handshake
+            handshake=$(wg show "$iface" latest-handshakes 2>/dev/null | grep "^$peer_pubkey" | awk '{print $2}')
+            local transfer
+            transfer=$(wg show "$iface" transfer 2>/dev/null | grep "^$peer_pubkey")
+            local rx_bytes
+            rx_bytes=$(echo "$transfer" | awk '{print $2}')
+            local tx_bytes
+            tx_bytes=$(echo "$transfer" | awk '{print $3}')
+            local keepalive
+            keepalive=$(wg show "$iface" persistent-keepalive 2>/dev/null | grep "^$peer_pubkey" | awk '{print $2}')
+            local psk_set="false"
+            if wg show "$iface" preshared-keys 2>/dev/null | grep -q "^$peer_pubkey"; then
+                local psk_val
+                psk_val=$(wg show "$iface" preshared-keys 2>/dev/null | grep "^$peer_pubkey" | awk '{print $2}')
+                [ "$psk_val" != "(none)" ] && psk_set="true"
+            fi
+
+            # Calculate handshake age and status
+            local status="inactive"
+            local handshake_ago=0
+            if [ -n "$handshake" ] && [ "$handshake" != "0" ]; then
+                handshake_ago=$((now - handshake))
+                if [ "$handshake_ago" -lt 180 ]; then
+                    status="active"
+                elif [ "$handshake_ago" -lt 600 ]; then
+                    status="recent"
+                fi
+            fi
+
+            # Look up friendly name from peers database
+            local friendly_name=""
+            local peer_file="$PEERS_DIR/${peer_pubkey:0:8}.json"
+            if [ -f "$peer_file" ]; then
+                friendly_name=$(jq -r '.name // ""' "$peer_file" 2>/dev/null)
+            fi
+
+            [ "$first" = "true" ] && first=false || echo ","
+            cat <<EOF
+{"interface":"$iface","public_key":"$peer_pubkey","name":"$friendly_name","endpoint":"${endpoint:-(none)}","allowed_ips":"$allowed_ips","status":"$status","last_handshake":${handshake:-0},"handshake_ago":$handshake_ago,"rx_bytes":${rx_bytes:-0},"tx_bytes":${tx_bytes:-0},"persistent_keepalive":"${keepalive:-off}","preshared_key":$psk_set}
+EOF
+        done
+    done
+
+    echo ']}'
+}
+
+cmd_peer_add() {
+    local name="$1"
+    local iface="${2:-wg0}"
+
+    if [ -z "$name" ]; then
+        error "Usage: wgctl peer add <name> [interface]"
+        return 1
+    fi
+
+    mkdir -p "$PEERS_DIR"
+    check_wg || return 1
+
+    # Generate keys for peer
+    local peer_privkey
+    peer_privkey=$(wg genkey)
+    local peer_pubkey
+    peer_pubkey=$(echo "$peer_privkey" | wg pubkey)
+    local psk
+    psk=$(wg genpsk)
+
+    # Get server info
+    local server_pubkey
+    server_pubkey=$(wg show "$iface" public-key 2>/dev/null)
+    local server_port
+    server_port=$(wg show "$iface" listen-port 2>/dev/null)
+    local server_ip
+    server_ip=$(curl -s --max-time 5 https://api.ipify.org 2>/dev/null || hostname -I | awk '{print $1}')
+
+    # Allocate IP for peer
+    local server_network
+    server_network=$(ip -4 addr show "$iface" 2>/dev/null | grep -oP 'inet \K[\d.]+' | head -1)
+    if [ -z "$server_network" ]; then
+        server_network="10.0.0.1"
+    fi
+
+    # Find next available IP
+    local base_ip
+    base_ip=$(echo "$server_network" | cut -d. -f1-3)
+    local next_ip=2
+    while wg show "$iface" allowed-ips 2>/dev/null | grep -q "${base_ip}.${next_ip}/32"; do
+        next_ip=$((next_ip + 1))
+    done
+    local peer_ip="${base_ip}.${next_ip}"
+
+    # Add peer to interface
+    info "Adding peer $name (${peer_pubkey:0:8}...) to $iface"
+    wg set "$iface" peer "$peer_pubkey" preshared-key <(echo "$psk") allowed-ips "${peer_ip}/32"
+
+    # Save peer config to server conf
+    if [ -f "$WG_CONFIG_DIR/$iface.conf" ]; then
+        cat >> "$WG_CONFIG_DIR/$iface.conf" <<PEER_EOF
+
+[Peer]
+# $name
+PublicKey = $peer_pubkey
+PresharedKey = $psk
+AllowedIPs = ${peer_ip}/32
+PEER_EOF
+    fi
+
+    # Generate client config
+    local client_conf="${PEERS_DIR}/${name}.conf"
+    cat > "$client_conf" <<CLIENT_EOF
+[Interface]
+PrivateKey = $peer_privkey
+Address = ${peer_ip}/32
+DNS = 1.1.1.1, 8.8.8.8
+
+[Peer]
+PublicKey = $server_pubkey
+PresharedKey = $psk
+Endpoint = ${server_ip}:${server_port}
+AllowedIPs = 0.0.0.0/0, ::/0
+PersistentKeepalive = 25
+CLIENT_EOF
+
+    # Save peer metadata
+    cat > "$PEERS_DIR/${peer_pubkey:0:8}.json" <<META_EOF
+{
+  "name": "$name",
+  "public_key": "$peer_pubkey",
+  "ip": "$peer_ip",
+  "interface": "$iface",
+  "created": "$(date -Iseconds)"
+}
+META_EOF
+
+    # Generate QR code if qrencode is available
+    local qr_file=""
+    if command -v qrencode >/dev/null 2>&1; then
+        qr_file="${PEERS_DIR}/${name}.png"
+        qrencode -t PNG -o "$qr_file" < "$client_conf"
+        info "QR code saved to $qr_file"
+    fi
+
+    info "Peer $name added successfully"
+    echo "Client config saved to: $client_conf"
+
+    # Return JSON
+    cat <<EOF
+{
+  "success": true,
+  "name": "$name",
+  "public_key": "$peer_pubkey",
+  "ip": "$peer_ip",
+  "interface": "$iface",
+  "config_file": "$client_conf",
+  "qr_file": "${qr_file:-null}"
+}
+EOF
+}
+
+cmd_peer_remove() {
+    local identifier="$1"
+    local iface="${2:-}"
+
+    if [ -z "$identifier" ]; then
+        error "Usage: wgctl peer remove <name|pubkey> [interface]"
+        return 1
+    fi
+
+    check_wg || return 1
+
+    # Find peer by name or pubkey
+    local peer_pubkey=""
+    local peer_name=""
+
+    # Check if it's a public key
+    if [ ${#identifier} -eq 44 ]; then
+        peer_pubkey="$identifier"
+    else
+        # Look up by name
+        for meta_file in "$PEERS_DIR"/*.json; do
+            [ -f "$meta_file" ] || continue
+            local fname
+            fname=$(jq -r '.name' "$meta_file" 2>/dev/null)
+            if [ "$fname" = "$identifier" ]; then
+                peer_pubkey=$(jq -r '.public_key' "$meta_file")
+                peer_name="$identifier"
+                break
+            fi
+        done
+    fi
+
+    if [ -z "$peer_pubkey" ]; then
+        error "Peer not found: $identifier"
+        return 1
+    fi
+
+    # Find interface if not specified
+    if [ -z "$iface" ]; then
+        for i in $(wg show interfaces 2>/dev/null); do
+            if wg show "$i" peers 2>/dev/null | grep -q "^$peer_pubkey"; then
+                iface="$i"
+                break
+            fi
+        done
+    fi
+
+    if [ -z "$iface" ]; then
+        error "Interface not found for peer"
+        return 1
+    fi
+
+    info "Removing peer ${peer_name:-$peer_pubkey} from $iface"
+    wg set "$iface" peer "$peer_pubkey" remove
+
+    # Remove config files
+    rm -f "$PEERS_DIR/${peer_pubkey:0:8}.json"
+    [ -n "$peer_name" ] && rm -f "$PEERS_DIR/${peer_name}.conf" "$PEERS_DIR/${peer_name}.png"
+
+    info "Peer removed"
+    echo '{"success": true}'
+}
+
+cmd_peer_qr() {
+    local name="$1"
+
+    if [ -z "$name" ]; then
+        error "Usage: wgctl peer qr <name>"
+        return 1
+    fi
+
+    local conf_file="$PEERS_DIR/${name}.conf"
+    if [ ! -f "$conf_file" ]; then
+        error "Config not found for peer: $name"
+        return 1
+    fi
+
+    if ! command -v qrencode >/dev/null 2>&1; then
+        error "qrencode not installed"
+        return 1
+    fi
+
+    qrencode -t ANSIUTF8 < "$conf_file"
+}
+
+cmd_peer_config() {
+    local name="$1"
+
+    if [ -z "$name" ]; then
+        error "Usage: wgctl peer config <name>"
+        return 1
+    fi
+
+    local conf_file="$PEERS_DIR/${name}.conf"
+    if [ ! -f "$conf_file" ]; then
+        error "Config not found for peer: $name"
+        return 1
+    fi
+
+    cat "$conf_file"
+}
+
+# === Key Generation ===
+
+cmd_genkey() {
+    local privkey
+    privkey=$(wg genkey)
+    local pubkey
+    pubkey=$(echo "$privkey" | wg pubkey)
+
+    cat <<EOF
+{
+  "private_key": "$privkey",
+  "public_key": "$pubkey"
+}
+EOF
+}
+
+cmd_genpsk() {
+    local psk
+    psk=$(wg genpsk)
+    echo "{\"preshared_key\": \"$psk\"}"
+}
+
+# === Migration ===
+
+cmd_migrate() {
+    local source="${1:-192.168.255.1}"
+    local dry_run="${2:-}"
+
+    info "Migrating WireGuard configuration from OpenWrt: $source"
+
+    # Create backup
+    local backup_dir="/var/lib/secubox/backup/wireguard-$(date +%Y%m%d-%H%M%S)"
+    mkdir -p "$backup_dir"
+
+    if [ -d "$WG_CONFIG_DIR" ]; then
+        cp -a "$WG_CONFIG_DIR" "$backup_dir/"
+    fi
+
+    # Sync WireGuard configs
+    info "Syncing WireGuard configurations..."
+    if [ "$dry_run" = "--dry-run" ]; then
+        rsync -avzn --progress "root@$source:/etc/wireguard/" "$WG_CONFIG_DIR/"
+    else
+        rsync -avz --progress "root@$source:/etc/wireguard/" "$WG_CONFIG_DIR/" 2>/dev/null || warn "Config sync skipped"
+    fi
+
+    # Convert UCI network config if present
+    info "Checking for UCI WireGuard config..."
+    local uci_config
+    uci_config=$(ssh "root@$source" "uci show network 2>/dev/null | grep wireguard" 2>/dev/null || echo "")
+
+    if [ -n "$uci_config" ] && [ "$dry_run" != "--dry-run" ]; then
+        info "Converting UCI WireGuard configuration..."
+
+        # Extract interface configs
+        for iface in $(echo "$uci_config" | grep "\.proto='wireguard'" | cut -d. -f2); do
+            local privkey
+            privkey=$(ssh "root@$source" "uci -q get network.${iface}.private_key")
+            local port
+            port=$(ssh "root@$source" "uci -q get network.${iface}.listen_port")
+            local addresses
+            addresses=$(ssh "root@$source" "uci -q get network.${iface}.addresses")
+
+            if [ -n "$privkey" ]; then
+                cat > "$WG_CONFIG_DIR/${iface}.conf" <<CONF_EOF
+[Interface]
+PrivateKey = $privkey
+ListenPort = ${port:-51820}
+Address = $addresses
+CONF_EOF
+
+                # Get peers
+                local peer_idx=0
+                while true; do
+                    local peer_pubkey
+                    peer_pubkey=$(ssh "root@$source" "uci -q get network.@wireguard_${iface}[$peer_idx].public_key" 2>/dev/null)
+                    [ -z "$peer_pubkey" ] && break
+
+                    local peer_psk
+                    peer_psk=$(ssh "root@$source" "uci -q get network.@wireguard_${iface}[$peer_idx].preshared_key" 2>/dev/null)
+                    local peer_endpoint
+                    peer_endpoint=$(ssh "root@$source" "uci -q get network.@wireguard_${iface}[$peer_idx].endpoint_host" 2>/dev/null)
+                    local peer_port
+                    peer_port=$(ssh "root@$source" "uci -q get network.@wireguard_${iface}[$peer_idx].endpoint_port" 2>/dev/null)
+                    local peer_allowed
+                    peer_allowed=$(ssh "root@$source" "uci -q get network.@wireguard_${iface}[$peer_idx].allowed_ips" 2>/dev/null)
+                    local peer_keepalive
+                    peer_keepalive=$(ssh "root@$source" "uci -q get network.@wireguard_${iface}[$peer_idx].persistent_keepalive" 2>/dev/null)
+
+                    cat >> "$WG_CONFIG_DIR/${iface}.conf" <<PEER_EOF
+
+[Peer]
+PublicKey = $peer_pubkey
+PEER_EOF
+                    [ -n "$peer_psk" ] && echo "PresharedKey = $peer_psk" >> "$WG_CONFIG_DIR/${iface}.conf"
+                    [ -n "$peer_endpoint" ] && echo "Endpoint = ${peer_endpoint}:${peer_port:-51820}" >> "$WG_CONFIG_DIR/${iface}.conf"
+                    [ -n "$peer_allowed" ] && echo "AllowedIPs = $peer_allowed" >> "$WG_CONFIG_DIR/${iface}.conf"
+                    [ -n "$peer_keepalive" ] && echo "PersistentKeepalive = $peer_keepalive" >> "$WG_CONFIG_DIR/${iface}.conf"
+
+                    peer_idx=$((peer_idx + 1))
+                done
+
+                info "Created $WG_CONFIG_DIR/${iface}.conf"
+            fi
+        done
+    fi
+
+    info "Migration complete. Backup saved to: $backup_dir"
+    info "Restart interfaces with: wg-quick up <interface>"
+}
+
+# === Help ===
+
+cmd_help() {
+    cat <<'EOF'
+wgctl - WireGuard management for SecuBox
+
+Three-Fold Architecture Commands:
+  components              Show system components (what)
+  status                  Show health status (health)
+  access                  Show connection endpoints (how)
+
+Interface Commands:
+  interfaces              List all WireGuard interfaces
+  interface up <name>     Bring interface up
+  interface down <name>   Bring interface down
+
+Peer Management:
+  peers [interface]       List all peers
+  peer add <name> [iface] Add new peer with auto-config
+  peer remove <id> [iface] Remove peer
+  peer qr <name>          Show QR code for peer
+  peer config <name>      Show peer config file
+
+Key Generation:
+  genkey                  Generate new key pair
+  genpsk                  Generate preshared key
+
+Migration:
+  migrate <source> [--dry-run]  Migrate from OpenWrt
+
+Examples:
+  wgctl status
+  wgctl peer add myphone
+  wgctl peer qr myphone
+  wgctl migrate 192.168.255.1
+
+EOF
+}
+
+# === Main ===
+
+main() {
+    mkdir -p "$(dirname "$LOG_FILE")" "$PEERS_DIR" 2>/dev/null || true
+
+    local cmd="${1:-help}"
+    shift || true
+
+    case "$cmd" in
+        components)     cmd_components "$@" ;;
+        status)         cmd_status "$@" ;;
+        access)         cmd_access "$@" ;;
+        interfaces)     cmd_interfaces "$@" ;;
+        interface)
+            local subcmd="${1:-}"
+            shift || true
+            case "$subcmd" in
+                up)     cmd_interface_up "$@" ;;
+                down)   cmd_interface_down "$@" ;;
+                *)      error "Unknown interface command: $subcmd" ;;
+            esac
+            ;;
+        peers)          cmd_peers "$@" ;;
+        peer)
+            local subcmd="${1:-}"
+            shift || true
+            case "$subcmd" in
+                add)    cmd_peer_add "$@" ;;
+                remove) cmd_peer_remove "$@" ;;
+                qr)     cmd_peer_qr "$@" ;;
+                config) cmd_peer_config "$@" ;;
+                *)      error "Unknown peer command: $subcmd" ;;
+            esac
+            ;;
+        genkey)         cmd_genkey ;;
+        genpsk)         cmd_genpsk ;;
+        migrate)        cmd_migrate "$@" ;;
+        help|--help|-h) cmd_help ;;
+        *)
+            error "Unknown command: $cmd"
+            cmd_help
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"
