@@ -1,0 +1,740 @@
+#!/bin/bash
+# haproxyctl - HAProxy Manager for SecuBox Debian
+# Control script for HAProxy with LXC/Docker container support
+set -e
+
+LXC_NAME="haproxy"
+LXC_PATH="/var/lib/lxc/$LXC_NAME"
+DOCKER_NAME="secubox-haproxy"
+DATA_PATH="/srv/haproxy"
+CONF_PATH="/etc/secubox/haproxy.toml"
+CONFIG_DIR="/etc/haproxy"
+CERTS_DIR="$DATA_PATH/certs"
+STATS_SOCKET="/run/haproxy/admin.sock"
+LOG_FILE="/var/log/secubox/haproxy.log"
+
+# Mode: native, lxc, or docker
+MODE="native"
+
+# Logging
+log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE" 2>/dev/null || echo "$*"; }
+error() { log "ERROR: $*" >&2; }
+
+# Load config
+load_config() {
+    if [ -f "$CONF_PATH" ]; then
+        MODE=$(grep -E '^mode\s*=' "$CONF_PATH" | cut -d'"' -f2 || echo "native")
+        DATA_PATH=$(grep -E '^data_path\s*=' "$CONF_PATH" | cut -d'"' -f2 || echo "$DATA_PATH")
+    fi
+}
+
+# Check container status
+lxc_running() { lxc-info -n "$LXC_NAME" -s 2>/dev/null | grep -q "RUNNING"; }
+lxc_exists() { [ -d "$LXC_PATH/rootfs" ]; }
+docker_running() { docker ps --filter "name=$DOCKER_NAME" --format '{{.Names}}' 2>/dev/null | grep -q "$DOCKER_NAME"; }
+docker_exists() { docker images "$DOCKER_NAME" --format '{{.Repository}}' 2>/dev/null | grep -q "$DOCKER_NAME"; }
+
+# HAProxy native running check
+haproxy_running() {
+    case "$MODE" in
+        docker) docker_running ;;
+        lxc) lxc_running ;;
+        *) pgrep -x haproxy >/dev/null 2>&1 ;;
+    esac
+}
+
+# ─────────────────────────────────────────────────────────────────────
+# CONTAINER MANAGEMENT
+# ─────────────────────────────────────────────────────────────────────
+
+cmd_install() {
+    log "Installing HAProxy ($MODE mode)..."
+    mkdir -p "$DATA_PATH" "$CERTS_DIR" "$CONFIG_DIR" "$(dirname $LOG_FILE)" /run/haproxy
+
+    case "$MODE" in
+        lxc)
+            if lxc_exists; then
+                log "LXC container already exists"
+                return 0
+            fi
+
+            lxc-create -n "$LXC_NAME" -t download -- \
+                -d alpine -r 3.19 -a arm64 || {
+                error "Failed to create LXC container"
+                return 1
+            }
+
+            cat >> "$LXC_PATH/config" << EOF
+
+# HAProxy bind mounts
+lxc.mount.entry = $CONFIG_DIR etc/haproxy none bind,create=dir 0 0
+lxc.mount.entry = $CERTS_DIR srv/haproxy/certs none bind,create=dir 0 0
+lxc.mount.entry = /run/haproxy run/haproxy none bind,create=dir 0 0
+
+# Network - use macvlan for public access
+lxc.net.0.type = veth
+lxc.net.0.link = br-lan
+lxc.net.0.flags = up
+lxc.net.0.name = eth0
+
+# Resource limits
+lxc.cgroup2.memory.max = 512M
+EOF
+
+            lxc-start -n "$LXC_NAME"
+            sleep 3
+
+            lxc-attach -n "$LXC_NAME" -- sh -c '
+                apk update
+                apk add haproxy openssl curl
+                mkdir -p /run/haproxy
+            '
+            ;;
+
+        docker)
+            log "Building HAProxy Docker image..."
+            mkdir -p /tmp/haproxy-build
+            cat > /tmp/haproxy-build/Dockerfile << 'EOF'
+FROM haproxy:2.8-alpine
+RUN apk add --no-cache openssl curl
+COPY haproxy.cfg /usr/local/etc/haproxy/haproxy.cfg
+EOF
+            # Create minimal config
+            cmd_generate > /tmp/haproxy-build/haproxy.cfg 2>/dev/null || \
+                echo "# Minimal HAProxy config" > /tmp/haproxy-build/haproxy.cfg
+
+            docker build -t "$DOCKER_NAME" /tmp/haproxy-build/
+            rm -rf /tmp/haproxy-build
+            ;;
+
+        *)
+            # Native install - assume haproxy package is installed
+            if ! command -v haproxy >/dev/null; then
+                error "HAProxy not found. Install with: apt install haproxy"
+                return 1
+            fi
+            ;;
+    esac
+
+    # Generate default config
+    cmd_generate
+
+    log "HAProxy installation complete ($MODE mode)"
+}
+
+cmd_uninstall() {
+    log "Uninstalling HAProxy container..."
+
+    case "$MODE" in
+        lxc)
+            lxc_running && lxc-stop -n "$LXC_NAME"
+            lxc_exists && lxc-destroy -n "$LXC_NAME"
+            ;;
+        docker)
+            docker stop "$DOCKER_NAME" 2>/dev/null || true
+            docker rm "$DOCKER_NAME" 2>/dev/null || true
+            docker rmi "$DOCKER_NAME" 2>/dev/null || true
+            ;;
+    esac
+
+    log "Container removed (config preserved in $CONFIG_DIR)"
+}
+
+cmd_start() {
+    log "Starting HAProxy ($MODE mode)..."
+
+    case "$MODE" in
+        lxc)
+            lxc_exists || { error "Container not installed"; return 1; }
+            lxc_running || lxc-start -n "$LXC_NAME"
+            sleep 2
+            lxc-attach -n "$LXC_NAME" -- haproxy -f /etc/haproxy/haproxy.cfg -D
+            ;;
+        docker)
+            docker run -d --name "$DOCKER_NAME" \
+                -p 80:80 -p 443:443 -p 8404:8404 \
+                -v "$CONFIG_DIR:/usr/local/etc/haproxy:ro" \
+                -v "$CERTS_DIR:/certs:ro" \
+                -v "/run/haproxy:/run/haproxy" \
+                "$DOCKER_NAME" 2>/dev/null || \
+            docker start "$DOCKER_NAME"
+            ;;
+        *)
+            systemctl start haproxy || \
+                haproxy -f /etc/haproxy/haproxy.cfg -D
+            ;;
+    esac
+
+    log "HAProxy started"
+}
+
+cmd_stop() {
+    log "Stopping HAProxy..."
+
+    case "$MODE" in
+        lxc)
+            lxc_running && lxc-attach -n "$LXC_NAME" -- killall haproxy 2>/dev/null || true
+            ;;
+        docker)
+            docker stop "$DOCKER_NAME" 2>/dev/null || true
+            ;;
+        *)
+            systemctl stop haproxy 2>/dev/null || killall haproxy 2>/dev/null || true
+            ;;
+    esac
+
+    log "HAProxy stopped"
+}
+
+cmd_reload() {
+    log "Reloading HAProxy configuration..."
+
+    case "$MODE" in
+        lxc)
+            lxc-attach -n "$LXC_NAME" -- sh -c 'kill -USR2 $(cat /run/haproxy/haproxy.pid 2>/dev/null) 2>/dev/null' || \
+            lxc-attach -n "$LXC_NAME" -- haproxy -f /etc/haproxy/haproxy.cfg -sf $(pidof haproxy)
+            ;;
+        docker)
+            docker kill -s HUP "$DOCKER_NAME" 2>/dev/null || \
+            { docker stop "$DOCKER_NAME"; docker start "$DOCKER_NAME"; }
+            ;;
+        *)
+            systemctl reload haproxy 2>/dev/null || \
+                haproxy -f /etc/haproxy/haproxy.cfg -sf $(pidof haproxy)
+            ;;
+    esac
+
+    log "HAProxy reloaded"
+}
+
+cmd_status() {
+    local running="false"
+    local mode="$MODE"
+
+    haproxy_running && running="true"
+
+    local vhost_count=0
+    local backend_count=0
+    local cert_count=0
+
+    [ -f "$CONF_PATH" ] && {
+        vhost_count=$(grep -c '^\[vhosts\.' "$CONF_PATH" 2>/dev/null || echo "0")
+        backend_count=$(grep -c '^\[backends\.' "$CONF_PATH" 2>/dev/null || echo "0")
+    }
+    [ -d "$CERTS_DIR" ] && cert_count=$(ls -1 "$CERTS_DIR"/*.pem 2>/dev/null | wc -l || echo "0")
+
+    cat << EOF
+{
+  "running": $running,
+  "mode": "$mode",
+  "config_dir": "$CONFIG_DIR",
+  "data_path": "$DATA_PATH",
+  "vhost_count": $vhost_count,
+  "backend_count": $backend_count,
+  "cert_count": $cert_count
+}
+EOF
+}
+
+# ─────────────────────────────────────────────────────────────────────
+# STATS
+# ─────────────────────────────────────────────────────────────────────
+
+cmd_stats() {
+    if [ -S "$STATS_SOCKET" ]; then
+        echo "show stat" | socat stdio "$STATS_SOCKET" 2>/dev/null
+    else
+        echo "Stats socket not available"
+        return 1
+    fi
+}
+
+cmd_info() {
+    if [ -S "$STATS_SOCKET" ]; then
+        echo "show info" | socat stdio "$STATS_SOCKET" 2>/dev/null
+    else
+        echo "Stats socket not available"
+        return 1
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────────────
+# VHOST MANAGEMENT
+# ─────────────────────────────────────────────────────────────────────
+
+cmd_vhost_list() {
+    echo '{"vhosts":['
+    local first=true
+
+    if [ -f "$CONF_PATH" ]; then
+        grep '^\[vhosts\.' "$CONF_PATH" | while read -r line; do
+            local name=$(echo "$line" | sed 's/\[vhosts\.//;s/\]//')
+            local section=$(sed -n "/^\[vhosts\.$name\]/,/^\[/p" "$CONF_PATH" | head -n -1)
+            local domain=$(echo "$section" | grep -E '^domain\s*=' | cut -d'"' -f2)
+            local backend=$(echo "$section" | grep -E '^backend\s*=' | cut -d'"' -f2)
+            local ssl=$(echo "$section" | grep -E '^ssl\s*=' | grep -q 'true' && echo "true" || echo "false")
+            local enabled=$(echo "$section" | grep -E '^enabled\s*=' | grep -q 'false' && echo "false" || echo "true")
+
+            $first || echo ","
+            first=false
+
+            echo "  {\"name\": \"$name\", \"domain\": \"$domain\", \"backend\": \"$backend\", \"ssl\": $ssl, \"enabled\": $enabled}"
+        done
+    fi
+
+    echo ']}'
+}
+
+cmd_vhost_add() {
+    local domain="$1"
+    local backend="$2"
+    local ssl="${3:-false}"
+
+    [ -z "$domain" ] || [ -z "$backend" ] && {
+        error "Usage: haproxyctl vhost add <domain> <backend> [ssl]"
+        return 1
+    }
+
+    local name=$(echo "$domain" | tr '.-' '_')
+
+    # Append to config
+    cat >> "$CONF_PATH" << EOF
+
+[vhosts.$name]
+domain = "$domain"
+backend = "$backend"
+ssl = $ssl
+ssl_redirect = true
+enabled = true
+EOF
+
+    log "Added vhost: $domain -> $backend"
+    cmd_generate
+}
+
+cmd_vhost_remove() {
+    local name="$1"
+    [ -z "$name" ] && { error "Usage: haproxyctl vhost remove <name>"; return 1; }
+
+    # Remove section from TOML (sed-based)
+    sed -i "/^\[vhosts\.$name\]/,/^\[/d" "$CONF_PATH" 2>/dev/null
+
+    log "Removed vhost: $name"
+    cmd_generate
+}
+
+# ─────────────────────────────────────────────────────────────────────
+# BACKEND MANAGEMENT
+# ─────────────────────────────────────────────────────────────────────
+
+cmd_backend_list() {
+    echo '{"backends":['
+    local first=true
+
+    if [ -f "$CONF_PATH" ]; then
+        grep '^\[backends\.' "$CONF_PATH" | while read -r line; do
+            local name=$(echo "$line" | sed 's/\[backends\.//;s/\]//')
+            local section=$(sed -n "/^\[backends\.$name\]/,/^\[/p" "$CONF_PATH" | head -n -1)
+            local mode=$(echo "$section" | grep -E '^mode\s*=' | cut -d'"' -f2 || echo "http")
+            local balance=$(echo "$section" | grep -E '^balance\s*=' | cut -d'"' -f2 || echo "roundrobin")
+
+            $first || echo ","
+            first=false
+
+            echo "  {\"name\": \"$name\", \"mode\": \"$mode\", \"balance\": \"$balance\"}"
+        done
+    fi
+
+    echo ']}'
+}
+
+# ─────────────────────────────────────────────────────────────────────
+# CERTIFICATE MANAGEMENT
+# ─────────────────────────────────────────────────────────────────────
+
+cmd_cert_list() {
+    echo '{"certificates":['
+    local first=true
+
+    if [ -d "$CERTS_DIR" ]; then
+        for cert in "$CERTS_DIR"/*.pem; do
+            [ -f "$cert" ] || continue
+            local name=$(basename "$cert" .pem)
+            local expiry=""
+
+            # Get expiry date
+            expiry=$(openssl x509 -in "$cert" -noout -enddate 2>/dev/null | sed 's/notAfter=//')
+
+            $first || echo ","
+            first=false
+
+            echo "  {\"name\": \"$name\", \"path\": \"$cert\", \"expiry\": \"$expiry\"}"
+        done
+    fi
+
+    echo ']}'
+}
+
+cmd_cert_add() {
+    local domain="$1"
+    local staging="${2:-}"
+
+    [ -z "$domain" ] && { error "Usage: haproxyctl cert add <domain> [--staging]"; return 1; }
+
+    log "Requesting certificate for $domain..."
+    mkdir -p "$CERTS_DIR"
+
+    # Use acme.sh if available
+    if command -v acme.sh >/dev/null; then
+        local acme_opts=""
+        [ "$staging" = "--staging" ] && acme_opts="--staging"
+
+        acme.sh --issue -d "$domain" --standalone $acme_opts && \
+        acme.sh --install-cert -d "$domain" \
+            --key-file "$CERTS_DIR/${domain}.key" \
+            --fullchain-file "$CERTS_DIR/${domain}.crt"
+
+        # Combine for HAProxy
+        cat "$CERTS_DIR/${domain}.crt" "$CERTS_DIR/${domain}.key" > "$CERTS_DIR/${domain}.pem"
+        chmod 600 "$CERTS_DIR/${domain}.pem"
+
+        log "Certificate installed: $CERTS_DIR/${domain}.pem"
+    else
+        error "acme.sh not found. Install with: curl https://get.acme.sh | sh"
+        return 1
+    fi
+}
+
+cmd_cert_renew() {
+    log "Renewing certificates..."
+    if command -v acme.sh >/dev/null; then
+        acme.sh --renew-all
+        # Rebuild combined certs
+        for crt in "$CERTS_DIR"/*.crt; do
+            [ -f "$crt" ] || continue
+            local name=$(basename "$crt" .crt)
+            [ -f "$CERTS_DIR/${name}.key" ] && \
+                cat "$crt" "$CERTS_DIR/${name}.key" > "$CERTS_DIR/${name}.pem"
+        done
+        cmd_reload
+    else
+        error "acme.sh not found"
+        return 1
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────────────
+# CONFIG GENERATION
+# ─────────────────────────────────────────────────────────────────────
+
+cmd_generate() {
+    log "Generating HAProxy configuration..."
+
+    local http_port=$(grep -E '^http_port\s*=' "$CONF_PATH" 2>/dev/null | cut -d'=' -f2 | tr -d ' ' || echo "80")
+    local https_port=$(grep -E '^https_port\s*=' "$CONF_PATH" 2>/dev/null | cut -d'=' -f2 | tr -d ' ' || echo "443")
+    local stats_port=$(grep -E '^stats_port\s*=' "$CONF_PATH" 2>/dev/null | cut -d'=' -f2 | tr -d ' ' || echo "8404")
+    local waf_enabled=$(grep -E '^waf_enabled\s*=' "$CONF_PATH" 2>/dev/null | grep -q 'true' && echo "1" || echo "0")
+    local waf_port=$(grep -E '^waf_backend_port\s*=' "$CONF_PATH" 2>/dev/null | cut -d'=' -f2 | tr -d ' ' || echo "8890")
+
+    mkdir -p "$CONFIG_DIR" /run/haproxy
+
+    cat > "$CONFIG_DIR/haproxy.cfg" << EOF
+# SecuBox HAProxy Configuration (Auto-generated)
+# Generated: $(date)
+
+global
+    daemon
+    maxconn 4096
+    stats socket /run/haproxy/admin.sock mode 660 level admin
+    log /dev/log local0
+
+defaults
+    mode http
+    timeout connect 5s
+    timeout client 30s
+    timeout server 30s
+    option httplog
+    option dontlognull
+    option forwardfor
+
+frontend stats
+    bind *:${stats_port}
+    stats enable
+    stats uri /stats
+    stats refresh 10s
+
+frontend http-in
+    bind *:${http_port}
+    mode http
+EOF
+
+    # Add ACLs and use_backend rules for vhosts
+    if [ -f "$CONF_PATH" ]; then
+        grep '^\[vhosts\.' "$CONF_PATH" | while read -r line; do
+            local name=$(echo "$line" | sed 's/\[vhosts\.//;s/\]//')
+            local section=$(sed -n "/^\[vhosts\.$name\]/,/^\[/p" "$CONF_PATH" | head -n -1)
+            local domain=$(echo "$section" | grep -E '^domain\s*=' | cut -d'"' -f2)
+            local backend=$(echo "$section" | grep -E '^backend\s*=' | cut -d'"' -f2)
+            local enabled=$(echo "$section" | grep -E '^enabled\s*=' | grep -q 'false' && echo "0" || echo "1")
+
+            [ "$enabled" = "1" ] && [ -n "$domain" ] && {
+                echo "    acl host_$name hdr(host) -i $domain"
+                if [ "$waf_enabled" = "1" ]; then
+                    echo "    use_backend waf_inspector if host_$name"
+                else
+                    echo "    use_backend $backend if host_$name"
+                fi
+            }
+        done >> "$CONFIG_DIR/haproxy.cfg"
+    fi
+
+    cat >> "$CONFIG_DIR/haproxy.cfg" << EOF
+    default_backend fallback
+
+frontend https-in
+    bind *:${https_port} ssl crt $CERTS_DIR/
+    mode http
+EOF
+
+    # HTTPS vhost rules (same pattern)
+    if [ -f "$CONF_PATH" ]; then
+        grep '^\[vhosts\.' "$CONF_PATH" | while read -r line; do
+            local name=$(echo "$line" | sed 's/\[vhosts\.//;s/\]//')
+            local section=$(sed -n "/^\[vhosts\.$name\]/,/^\[/p" "$CONF_PATH" | head -n -1)
+            local domain=$(echo "$section" | grep -E '^domain\s*=' | cut -d'"' -f2)
+            local backend=$(echo "$section" | grep -E '^backend\s*=' | cut -d'"' -f2)
+            local ssl=$(echo "$section" | grep -E '^ssl\s*=' | grep -q 'true' && echo "1" || echo "0")
+            local enabled=$(echo "$section" | grep -E '^enabled\s*=' | grep -q 'false' && echo "0" || echo "1")
+
+            [ "$enabled" = "1" ] && [ "$ssl" = "1" ] && [ -n "$domain" ] && {
+                echo "    acl host_$name hdr(host) -i $domain"
+                if [ "$waf_enabled" = "1" ]; then
+                    echo "    use_backend waf_inspector if host_$name"
+                else
+                    echo "    use_backend $backend if host_$name"
+                fi
+            }
+        done >> "$CONFIG_DIR/haproxy.cfg"
+    fi
+
+    cat >> "$CONFIG_DIR/haproxy.cfg" << EOF
+    default_backend fallback
+
+EOF
+
+    # WAF inspector backend
+    [ "$waf_enabled" = "1" ] && cat >> "$CONFIG_DIR/haproxy.cfg" << EOF
+# WAF Inspector Backend (mitmproxy)
+backend waf_inspector
+    mode http
+    option forwardfor
+    http-request set-header X-Real-IP %[src]
+    server waf 127.0.0.1:${waf_port} check
+
+EOF
+
+    # User backends
+    if [ -f "$CONF_PATH" ]; then
+        grep '^\[backends\.' "$CONF_PATH" | while read -r line; do
+            local name=$(echo "$line" | sed 's/\[backends\.//;s/\]//')
+            local section=$(sed -n "/^\[backends\.$name\]/,/^\[/p" "$CONF_PATH" | head -n -1)
+            local mode=$(echo "$section" | grep -E '^mode\s*=' | cut -d'"' -f2 || echo "http")
+            local balance=$(echo "$section" | grep -E '^balance\s*=' | cut -d'"' -f2 || echo "roundrobin")
+            local servers=$(echo "$section" | grep -E '^servers\s*=' | cut -d'[' -f2 | cut -d']' -f1 | tr -d '"' | tr ',' '\n')
+
+            cat >> "$CONFIG_DIR/haproxy.cfg" << EOF
+backend $name
+    mode $mode
+    balance $balance
+EOF
+            local i=0
+            echo "$servers" | while read -r srv; do
+                [ -n "$srv" ] && {
+                    srv=$(echo "$srv" | tr -d ' ')
+                    echo "    server srv$i $srv check" >> "$CONFIG_DIR/haproxy.cfg"
+                    i=$((i + 1))
+                }
+            done
+            echo "" >> "$CONFIG_DIR/haproxy.cfg"
+        done
+    fi
+
+    # Fallback backend
+    cat >> "$CONFIG_DIR/haproxy.cfg" << EOF
+backend fallback
+    mode http
+    http-request deny deny_status 503
+EOF
+
+    # Validate config
+    if haproxy -c -f "$CONFIG_DIR/haproxy.cfg" 2>/dev/null; then
+        log "Configuration generated and validated: $CONFIG_DIR/haproxy.cfg"
+        return 0
+    else
+        error "Configuration validation failed"
+        haproxy -c -f "$CONFIG_DIR/haproxy.cfg"
+        return 1
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────────────
+# MIGRATION
+# ─────────────────────────────────────────────────────────────────────
+
+cmd_migrate() {
+    local source="${1:-192.168.255.1}"
+
+    log "Migrating HAProxy config from $source..."
+    mkdir -p "$DATA_PATH" "$CERTS_DIR" "$CONFIG_DIR"
+
+    # Sync certificates
+    log "Syncing certificates..."
+    rsync -avz --progress "root@$source:/srv/haproxy/certs/" "$CERTS_DIR/" 2>/dev/null || \
+    rsync -avz --progress "root@$source:/etc/haproxy/certs/" "$CERTS_DIR/" 2>/dev/null || true
+
+    # Convert UCI config to TOML
+    log "Converting UCI configuration to TOML..."
+
+    cat > "$CONF_PATH" << EOF
+# HAProxy Configuration (Migrated from OpenWrt)
+# Generated: $(date)
+
+[main]
+mode = "native"
+http_port = 80
+https_port = 443
+stats_port = 8404
+waf_enabled = true
+waf_backend_port = 8890
+
+EOF
+
+    # Convert vhosts
+    ssh "root@$source" "uci show haproxy 2>/dev/null" | grep '=vhost$' | while read -r line; do
+        local section=$(echo "$line" | cut -d'.' -f2 | cut -d'=' -f1)
+        local domain=$(ssh "root@$source" "uci -q get haproxy.$section.domain" || echo "")
+        local backend=$(ssh "root@$source" "uci -q get haproxy.$section.backend" || echo "")
+        local ssl=$(ssh "root@$source" "uci -q get haproxy.$section.ssl" || echo "0")
+        local enabled=$(ssh "root@$source" "uci -q get haproxy.$section.enabled" || echo "1")
+
+        [ -n "$domain" ] && cat >> "$CONF_PATH" << EOF
+[vhosts.$section]
+domain = "$domain"
+backend = "$backend"
+ssl = $([ "$ssl" = "1" ] && echo "true" || echo "false")
+ssl_redirect = true
+enabled = $([ "$enabled" = "1" ] && echo "true" || echo "false")
+
+EOF
+    done
+
+    # Convert backends
+    ssh "root@$source" "uci show haproxy 2>/dev/null" | grep '=backend$' | while read -r line; do
+        local section=$(echo "$line" | cut -d'.' -f2 | cut -d'=' -f1)
+        local mode=$(ssh "root@$source" "uci -q get haproxy.$section.mode" || echo "http")
+        local balance=$(ssh "root@$source" "uci -q get haproxy.$section.balance" || echo "roundrobin")
+        local server=$(ssh "root@$source" "uci -q get haproxy.$section.server" || echo "")
+
+        cat >> "$CONF_PATH" << EOF
+[backends.$section]
+mode = "$mode"
+balance = "$balance"
+servers = ["$server"]
+
+EOF
+    done
+
+    # Count migrated items
+    local vhost_count=$(grep -c '^\[vhosts\.' "$CONF_PATH" 2>/dev/null || echo "0")
+    local backend_count=$(grep -c '^\[backends\.' "$CONF_PATH" 2>/dev/null || echo "0")
+    local cert_count=$(ls -1 "$CERTS_DIR"/*.pem 2>/dev/null | wc -l || echo "0")
+
+    # Generate new config
+    cmd_generate
+
+    log "Migration complete: $vhost_count vhosts, $backend_count backends, $cert_count certificates"
+    echo "{\"success\": true, \"vhosts\": $vhost_count, \"backends\": $backend_count, \"certs\": $cert_count}"
+}
+
+# ─────────────────────────────────────────────────────────────────────
+# MAIN
+# ─────────────────────────────────────────────────────────────────────
+
+load_config
+
+case "${1:-}" in
+    install)    cmd_install ;;
+    uninstall)  cmd_uninstall ;;
+    start)      cmd_start ;;
+    stop)       cmd_stop ;;
+    restart)    cmd_stop; sleep 1; cmd_start ;;
+    reload)     cmd_reload ;;
+    status)     cmd_status ;;
+    stats)      cmd_stats ;;
+    info)       cmd_info ;;
+    generate)   cmd_generate ;;
+
+    vhost)
+        case "${2:-}" in
+            list)   cmd_vhost_list ;;
+            add)    cmd_vhost_add "$3" "$4" "$5" ;;
+            remove) cmd_vhost_remove "$3" ;;
+            *)      echo "Usage: haproxyctl vhost {list|add|remove} [args]" ;;
+        esac
+        ;;
+
+    backend)
+        case "${2:-}" in
+            list)   cmd_backend_list ;;
+            *)      echo "Usage: haproxyctl backend {list}" ;;
+        esac
+        ;;
+
+    cert)
+        case "${2:-}" in
+            list)   cmd_cert_list ;;
+            add)    cmd_cert_add "$3" "$4" ;;
+            renew)  cmd_cert_renew ;;
+            *)      echo "Usage: haproxyctl cert {list|add|renew} [domain]" ;;
+        esac
+        ;;
+
+    migrate)    cmd_migrate "$2" ;;
+
+    *)
+        cat << EOF
+haproxyctl - HAProxy Manager
+
+Service:
+  install       Install HAProxy (native/lxc/docker based on config)
+  uninstall     Remove HAProxy container
+  start         Start HAProxy
+  stop          Stop HAProxy
+  restart       Restart HAProxy
+  reload        Reload configuration
+  status        Show status (JSON)
+  stats         Show live stats
+  info          Show HAProxy info
+
+Config:
+  generate      Generate HAProxy config from TOML
+
+VHosts:
+  vhost list              List vhosts
+  vhost add <domain> <backend> [ssl]   Add vhost
+  vhost remove <name>     Remove vhost
+
+Backends:
+  backend list            List backends
+
+Certificates:
+  cert list               List certificates
+  cert add <domain> [--staging]   Request certificate
+  cert renew              Renew all certificates
+
+Migration:
+  migrate [source]        Migrate from OpenWrt (default: 192.168.255.1)
+
+EOF
+        ;;
+esac

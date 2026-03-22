@@ -1,0 +1,11 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-nextcloud/usr/lib/secubox/nextcloud
+	cp -r api debian/secubox-nextcloud/usr/lib/secubox/nextcloud/
+	install -d debian/secubox-nextcloud/usr/share/secubox/www/nextcloud
+	cp -r www/nextcloud/. debian/secubox-nextcloud/usr/share/secubox/www/nextcloud/
+	install -d debian/secubox-nextcloud/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-nextcloud/usr/share/secubox/menu.d/ || true

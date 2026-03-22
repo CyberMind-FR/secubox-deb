@@ -1,9 +1,29 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-03-21*
+*Mis à jour : 2026-03-22*
 
 ---
 
 ## ✅ Terminé cette session
+
+### Authentication Fix ✅
+- **JWT secret mismatch fixed** — Portal and modules now use same secret
+- **Fixed redirect paths** — All 12 modules now redirect to `/portal/login.html` instead of `/login/`
+- **Token flow working** — Login → localStorage → API auth chain verified
+
+### New Modules (4) ✅
+- **secubox-c3box** — Services Portal page with links to all SecuBox services
+- **secubox-gitea** — Gitea Git Server management (LXC, repos, users, backups)
+- **secubox-nextcloud** — Nextcloud File Sync (LXC, storage, users, backups)
+- **secubox-portal** — Added to navbar, links to services portal
+
+### Module Count ✅
+- **33 packages total** — 30 services + 3 new modules
+- **29 services running** — All core + new modules active on VM
+- **Menu shows 26 modules** — Organized in 6 categories
+
+---
+
+## ✅ Précédemment terminé
 
 ### WAF + HAProxy Integration ✅
 - **secubox-waf** : Web Application Firewall (300+ rules, 17 categories)

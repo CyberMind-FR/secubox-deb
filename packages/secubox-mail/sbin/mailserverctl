@@ -1,0 +1,478 @@
+#!/bin/bash
+# SecuBox Mail Server LXC Controller
+# Postfix + Dovecot in Alpine LXC
+
+VERSION="2.0.0"
+CONFIG_FILE="/etc/secubox/mail.toml"
+CONTAINER="mailserver"
+LXC_PATH="/srv/lxc/mailserver"
+DATA_PATH="/srv/mail"
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+log() { echo -e "${GREEN}[MAILSERVER]${NC} $1"; }
+warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
+error() { echo -e "${RED}[ERROR]${NC} $1" >&2; }
+
+config_get() {
+    local key="$1" default="$2"
+    [ -f "$CONFIG_FILE" ] && grep "^${key} *=" "$CONFIG_FILE" 2>/dev/null | head -1 | cut -d= -f2- | tr -d ' "' || echo "$default"
+}
+
+DOMAIN=$(config_get "domain" "secubox.local")
+HOSTNAME=$(config_get "hostname" "mail")
+MAIL_IP=$(config_get "mail_ip" "192.168.255.30")
+
+require_root() {
+    [ "$(id -u)" -eq 0 ] || { error "Root required"; exit 1; }
+}
+
+lxc_running() { lxc-info -n "$CONTAINER" 2>/dev/null | grep -q "State:.*RUNNING"; }
+lxc_exists() { [ -d "$LXC_PATH/rootfs" ]; }
+
+# ============================================================================
+# LXC Configuration
+# ============================================================================
+
+create_lxc_config() {
+    mkdir -p "$LXC_PATH"
+    cat > "$LXC_PATH/config" << EOF
+lxc.uts.name = mailserver
+lxc.rootfs.path = dir:${LXC_PATH}/rootfs
+lxc.net.0.type = veth
+lxc.net.0.link = br0
+lxc.net.0.flags = up
+lxc.net.0.ipv4.address = ${MAIL_IP}/24
+lxc.net.0.ipv4.gateway = auto
+lxc.mount.auto = proc:mixed sys:ro cgroup:mixed
+lxc.cap.drop = sys_module mac_admin mac_override sys_time
+lxc.tty.max = 0
+lxc.pty.max = 256
+lxc.cgroup2.memory.max = 512M
+lxc.init.cmd = /opt/start-mail.sh
+
+# Bind mounts for persistent data
+lxc.mount.entry = ${DATA_PATH}/mail var/mail none bind,create=dir 0 0
+lxc.mount.entry = ${DATA_PATH}/ssl etc/ssl/mail none bind,create=dir 0 0
+EOF
+}
+
+create_startup_script() {
+    mkdir -p "$LXC_PATH/rootfs/opt"
+    cat > "$LXC_PATH/rootfs/opt/start-mail.sh" << 'EOF'
+#!/bin/sh
+# Mailserver startup
+
+# Fix dovecot permissions
+addgroup dovenull dovecot 2>/dev/null || true
+mkdir -p /run/dovecot /run/dovecot/login /run/dovecot/token-login
+chown -R dovecot:dovecot /run/dovecot
+chown root:dovenull /run/dovecot/login /run/dovecot/token-login
+chmod 755 /run/dovecot
+chmod 750 /run/dovecot/login /run/dovecot/token-login
+rm -f /run/dovecot/auth-token-secret.dat
+
+# Ensure users file readable
+[ -f /etc/dovecot/users ] && chmod 644 /etc/dovecot/users
+
+# Start services
+/usr/sbin/rsyslogd 2>/dev/null || true
+sleep 1
+/usr/sbin/postfix start
+/usr/sbin/dovecot
+
+echo "Mail services started"
+exec tail -f /var/log/mail.log /var/log/messages 2>/dev/null || exec sleep infinity
+EOF
+    chmod +x "$LXC_PATH/rootfs/opt/start-mail.sh"
+}
+
+# ============================================================================
+# Alpine Bootstrap
+# ============================================================================
+
+bootstrap_alpine() {
+    require_root
+    log "Bootstrapping Alpine Linux..."
+
+    mkdir -p "$LXC_PATH"
+    cd "$LXC_PATH"
+
+    # Download apk-tools-static
+    if [ ! -f sbin/apk.static ]; then
+        log "Downloading apk-tools-static..."
+        local arch=$(uname -m)
+        [ "$arch" = "x86_64" ] && arch="x86_64"
+        [ "$arch" = "aarch64" ] && arch="aarch64"
+        curl -L -o apk-tools-static.apk \
+            "https://dl-cdn.alpinelinux.org/alpine/v3.21/main/${arch}/apk-tools-static-2.14.6-r3.apk"
+        tar -xzf apk-tools-static.apk sbin/apk.static
+        rm -f apk-tools-static.apk
+    fi
+
+    log "Installing base system..."
+    ./sbin/apk.static -X https://dl-cdn.alpinelinux.org/alpine/v3.21/main \
+        -U --allow-untrusted --root rootfs --initdb add \
+        alpine-base alpine-baselayout busybox musl openrc
+
+    mkdir -p rootfs/etc/apk
+    cat > rootfs/etc/apk/repositories << 'EOF'
+https://dl-cdn.alpinelinux.org/alpine/v3.21/main
+https://dl-cdn.alpinelinux.org/alpine/v3.21/community
+EOF
+
+    cat > rootfs/etc/resolv.conf << 'EOF'
+nameserver 8.8.8.8
+nameserver 1.1.1.1
+EOF
+
+    echo "mailserver" > rootfs/etc/hostname
+    log "Base system installed"
+}
+
+install_mail_packages() {
+    require_root
+
+    if ! lxc_running; then
+        log "Starting container for package installation..."
+        lxc-start -n "$CONTAINER" -d
+        sleep 5
+    fi
+
+    log "Installing mail packages..."
+    lxc-attach -n "$CONTAINER" -- apk update
+    lxc-attach -n "$CONTAINER" -- apk add --no-cache \
+        postfix postfix-pcre \
+        dovecot dovecot-lmtpd dovecot-pop3d \
+        ca-certificates openssl rsyslog
+
+    # Create vmail user
+    lxc-attach -n "$CONTAINER" -- addgroup -g 5000 vmail 2>/dev/null || true
+    lxc-attach -n "$CONTAINER" -- adduser -D -H -u 5000 -G vmail -s /sbin/nologin vmail 2>/dev/null || true
+
+    log "Packages installed"
+}
+
+# ============================================================================
+# Mail Configuration
+# ============================================================================
+
+configure_postfix() {
+    local rootfs="$LXC_PATH/rootfs"
+    log "Configuring Postfix..."
+
+    mkdir -p "$rootfs/etc/postfix"
+
+    cat > "$rootfs/etc/postfix/main.cf" << EOF
+# SecuBox Postfix Configuration
+myhostname = ${HOSTNAME}.${DOMAIN}
+mydomain = ${DOMAIN}
+myorigin = \$mydomain
+mydestination = \$myhostname, localhost.\$mydomain, localhost
+mynetworks = 127.0.0.0/8 [::1]/128 192.168.0.0/16 10.0.0.0/8
+
+# Virtual mailbox
+virtual_mailbox_domains = ${DOMAIN}
+virtual_mailbox_base = /var/mail
+virtual_mailbox_maps = lmdb:/etc/postfix/vmailbox
+virtual_alias_maps = lmdb:/etc/postfix/virtual
+virtual_uid_maps = static:5000
+virtual_gid_maps = static:5000
+virtual_transport = lmtp:unix:private/dovecot-lmtp
+
+# SASL auth via Dovecot
+smtpd_sasl_auth_enable = yes
+smtpd_sasl_type = dovecot
+smtpd_sasl_path = private/auth
+smtpd_sasl_security_options = noanonymous
+broken_sasl_auth_clients = yes
+
+# TLS
+smtpd_tls_cert_file = /etc/ssl/mail/fullchain.pem
+smtpd_tls_key_file = /etc/ssl/mail/privkey.pem
+smtpd_tls_security_level = may
+smtp_tls_security_level = may
+
+# Restrictions
+smtpd_recipient_restrictions = permit_sasl_authenticated, permit_mynetworks, reject_unauth_destination
+smtpd_sender_restrictions = permit_sasl_authenticated, permit_mynetworks
+
+# Limits
+mailbox_size_limit = 0
+message_size_limit = 52428800
+inet_interfaces = all
+inet_protocols = ipv4
+EOF
+
+    cat > "$rootfs/etc/postfix/master.cf" << 'EOF'
+smtp      inet  n       -       n       -       -       smtpd
+submission inet n       -       n       -       -       smtpd
+  -o syslog_name=postfix/submission
+  -o smtpd_tls_security_level=encrypt
+  -o smtpd_sasl_auth_enable=yes
+  -o smtpd_recipient_restrictions=permit_sasl_authenticated,reject
+smtps     inet  n       -       n       -       -       smtpd
+  -o syslog_name=postfix/smtps
+  -o smtpd_tls_wrappermode=yes
+  -o smtpd_sasl_auth_enable=yes
+  -o smtpd_recipient_restrictions=permit_sasl_authenticated,reject
+pickup    unix  n       -       n       60      1       pickup
+cleanup   unix  n       -       n       -       0       cleanup
+qmgr      unix  n       -       n       300     1       qmgr
+tlsmgr    unix  -       -       n       1000?   1       tlsmgr
+rewrite   unix  -       -       n       -       -       trivial-rewrite
+bounce    unix  -       -       n       -       0       bounce
+defer     unix  -       -       n       -       0       bounce
+trace     unix  -       -       n       -       0       bounce
+verify    unix  -       -       n       -       1       verify
+flush     unix  n       -       n       1000?   0       flush
+proxymap  unix  -       -       n       -       -       proxymap
+smtp      unix  -       -       n       -       -       smtp
+relay     unix  -       -       n       -       -       smtp
+showq     unix  n       -       n       -       -       showq
+error     unix  -       -       n       -       -       error
+retry     unix  -       -       n       -       -       error
+discard   unix  -       -       n       -       -       discard
+local     unix  -       n       n       -       -       local
+virtual   unix  -       n       n       -       -       virtual
+lmtp      unix  -       -       n       -       -       lmtp
+anvil     unix  -       -       n       -       1       anvil
+scache    unix  -       -       n       -       1       scache
+EOF
+
+    # Create empty maps
+    touch "$rootfs/etc/postfix/vmailbox"
+    touch "$rootfs/etc/postfix/virtual"
+
+    log "Postfix configured"
+}
+
+configure_dovecot() {
+    local rootfs="$LXC_PATH/rootfs"
+    log "Configuring Dovecot..."
+
+    mkdir -p "$rootfs/etc/dovecot"
+
+    cat > "$rootfs/etc/dovecot/dovecot.conf" << 'EOF'
+protocols = imap pop3 lmtp
+listen = *
+mail_location = maildir:/var/mail/%d/%n
+mail_uid = 5000
+mail_gid = 5000
+first_valid_uid = 500
+last_valid_uid = 65534
+
+# Auth
+auth_mechanisms = plain login
+passdb {
+  driver = passwd-file
+  args = /etc/dovecot/users
+}
+userdb {
+  driver = static
+  args = uid=5000 gid=5000 home=/var/mail/%d/%n
+}
+
+# SSL
+ssl = yes
+ssl_cert = </etc/ssl/mail/fullchain.pem
+ssl_key = </etc/ssl/mail/privkey.pem
+
+# Services
+service imap-login {
+  inet_listener imap { port = 143 }
+  inet_listener imaps { port = 993; ssl = yes }
+}
+
+service pop3-login {
+  inet_listener pop3 { port = 110 }
+  inet_listener pop3s { port = 995; ssl = yes }
+}
+
+service lmtp {
+  unix_listener /var/spool/postfix/private/dovecot-lmtp {
+    mode = 0600
+    user = postfix
+    group = postfix
+  }
+}
+
+service auth {
+  unix_listener /var/spool/postfix/private/auth {
+    mode = 0660
+    user = postfix
+    group = postfix
+  }
+}
+
+namespace inbox {
+  inbox = yes
+  separator = /
+}
+
+log_path = /var/log/dovecot.log
+info_log_path = /var/log/dovecot-info.log
+EOF
+
+    # Create empty users file
+    touch "$rootfs/etc/dovecot/users"
+    chmod 644 "$rootfs/etc/dovecot/users"
+
+    log "Dovecot configured"
+}
+
+generate_ssl_cert() {
+    log "Generating self-signed SSL certificate..."
+
+    mkdir -p "$DATA_PATH/ssl"
+
+    openssl req -x509 -nodes -days 3650 \
+        -newkey rsa:2048 \
+        -keyout "$DATA_PATH/ssl/privkey.pem" \
+        -out "$DATA_PATH/ssl/fullchain.pem" \
+        -subj "/CN=${HOSTNAME}.${DOMAIN}/O=SecuBox/C=FR" 2>/dev/null
+
+    chmod 600 "$DATA_PATH/ssl/"*.pem
+    log "SSL certificate generated"
+}
+
+# ============================================================================
+# Commands
+# ============================================================================
+
+cmd_install() {
+    require_root
+    log "Installing Mail Server LXC..."
+
+    mkdir -p "$DATA_PATH"/{mail,config,ssl}
+
+    if ! lxc_exists; then
+        bootstrap_alpine
+    fi
+
+    create_lxc_config
+    create_startup_script
+
+    # Start for package installation
+    lxc-start -n "$CONTAINER" -d
+    sleep 5
+
+    if lxc_running; then
+        install_mail_packages
+        lxc-stop -n "$CONTAINER"
+    fi
+
+    configure_postfix
+    configure_dovecot
+
+    # Generate self-signed cert if none exists
+    [ ! -f "$DATA_PATH/ssl/fullchain.pem" ] && generate_ssl_cert
+
+    # Create directories
+    mkdir -p "$LXC_PATH/rootfs/var/mail"
+    mkdir -p "$LXC_PATH/rootfs/var/spool/postfix/private"
+
+    log "Mail Server installed!"
+}
+
+cmd_start() {
+    require_root
+
+    if lxc_running; then
+        log "Mail server already running"
+        return 0
+    fi
+
+    if ! lxc_exists; then
+        error "Mail server not installed. Run 'mailserverctl install' first"
+        return 1
+    fi
+
+    create_lxc_config
+
+    log "Starting Mail Server..."
+    lxc-start -n "$CONTAINER" -d
+    sleep 5
+
+    if lxc_running; then
+        log "Mail server started at $MAIL_IP"
+    else
+        error "Failed to start"
+        return 1
+    fi
+}
+
+cmd_stop() {
+    require_root
+
+    if ! lxc_running; then
+        log "Mail server is not running"
+        return 0
+    fi
+
+    log "Stopping Mail Server..."
+    lxc-stop -n "$CONTAINER"
+    log "Stopped"
+}
+
+cmd_restart() {
+    cmd_stop
+    sleep 2
+    cmd_start
+}
+
+cmd_status() {
+    echo ""
+    echo "Mail Server LXC v$VERSION"
+    echo "========================="
+    echo ""
+    echo "Container: $CONTAINER"
+
+    if lxc_running; then
+        echo -e "Status: ${GREEN}Running${NC}"
+        echo "IP: $MAIL_IP"
+    elif lxc_exists; then
+        echo -e "Status: ${YELLOW}Stopped${NC}"
+    else
+        echo -e "Status: ${RED}Not installed${NC}"
+    fi
+}
+
+cmd_shell() {
+    if ! lxc_running; then
+        error "Container not running"
+        return 1
+    fi
+    lxc-attach -n "$CONTAINER" -- /bin/sh
+}
+
+show_help() {
+    cat << EOF
+Mail Server LXC Controller v$VERSION
+
+Usage: mailserverctl <command>
+
+Commands:
+  install     Install LXC container
+  start       Start mail server
+  stop        Stop mail server
+  restart     Restart
+  status      Show status
+  shell       Open shell in container
+
+EOF
+}
+
+case "${1:-}" in
+    install)  shift; cmd_install "$@" ;;
+    start)    shift; cmd_start "$@" ;;
+    stop)     shift; cmd_stop "$@" ;;
+    restart)  shift; cmd_restart "$@" ;;
+    status)   shift; cmd_status "$@" ;;
+    shell)    shift; cmd_shell "$@" ;;
+    help|--help|-h|'') show_help ;;
+    *)        error "Unknown: $1"; exit 1 ;;
+esac

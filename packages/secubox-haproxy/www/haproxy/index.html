@@ -123,13 +123,27 @@
         <!-- Tabbed Content -->
         <div class="card">
             <div class="tabs">
-                <div class="tab active" data-tab="vhosts" onclick="switchTab('vhosts')">VHosts</div>
+                <div class="tab active" data-tab="components" onclick="switchTab('components')">Components</div>
+                <div class="tab" data-tab="access" onclick="switchTab('access')">Access</div>
+                <div class="tab" data-tab="vhosts" onclick="switchTab('vhosts')">VHosts</div>
                 <div class="tab" data-tab="backends" onclick="switchTab('backends')">Backends</div>
                 <div class="tab" data-tab="stats" onclick="switchTab('stats')">Live Stats</div>
                 <div class="tab" data-tab="certs" onclick="switchTab('certs')">Certificates</div>
+                <div class="tab" data-tab="actions" onclick="switchTab('actions')">Actions</div>
             </div>
 
-            <div id="vhosts" class="tab-content active">
+            <div id="components" class="tab-content active">
+                <table>
+                    <thead><tr><th>Component</th><th>Description</th><th>Status</th></tr></thead>
+                    <tbody id="components-list"><tr><td colspan="3">Loading...</td></tr></tbody>
+                </table>
+            </div>
+
+            <div id="access" class="tab-content">
+                <div id="access-list" style="display: grid; gap: 0.5rem;"></div>
+            </div>
+
+            <div id="vhosts" class="tab-content">
                 <table>
                     <thead><tr><th>Domain</th><th>Backend</th><th>SSL</th><th>WAF</th><th>Actions</th></tr></thead>
                     <tbody id="vhost-list"><tr><td colspan="5">Loading...</td></tr></tbody>
@@ -156,8 +170,41 @@
                     <tbody id="cert-list"><tr><td colspan="2">Loading...</td></tr></tbody>
                 </table>
             </div>
+
+            <div id="actions" class="tab-content">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div style="background: var(--bg-dark); padding: 1rem; border-radius: 6px;">
+                        <h3 style="margin-bottom: 0.5rem;">Migration</h3>
+                        <p style="color: var(--text-dim); font-size: 0.85rem; margin-bottom: 1rem;">Import vhosts and certificates from OpenWrt SecuBox</p>
+                        <button class="btn" onclick="showMigrate()">Migrate from OpenWrt</button>
+                    </div>
+                    <div style="background: var(--bg-dark); padding: 1rem; border-radius: 6px;">
+                        <h3 style="margin-bottom: 0.5rem;">Service Control</h3>
+                        <p style="color: var(--text-dim); font-size: 0.85rem; margin-bottom: 1rem;">Manage HAProxy service</p>
+                        <div class="btn-group">
+                            <button class="btn success" onclick="restart()">Restart</button>
+                            <button class="btn primary" onclick="reload()">Reload Config</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </main>
+
+    <!-- Migrate Modal -->
+    <div id="migrate-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:100;align-items:center;justify-content:center;">
+        <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:1.5rem;min-width:400px;">
+            <h3 style="margin-bottom:1rem;">Migrate from OpenWrt</h3>
+            <div style="margin-bottom:1rem;">
+                <label style="display:block;margin-bottom:0.25rem;font-size:0.8rem;color:var(--text-dim);">Source IP</label>
+                <input type="text" id="migrate-source" value="192.168.255.1" style="width:100%;padding:0.5rem;border:1px solid var(--border);border-radius:4px;background:var(--bg-dark);color:var(--text);">
+            </div>
+            <div style="display:flex;justify-content:flex-end;gap:0.5rem;">
+                <button class="btn" onclick="hideMigrate()">Cancel</button>
+                <button class="btn primary" onclick="doMigrate()">Start Migration</button>
+            </div>
+        </div>
+    </div>
 
     <script>
         const API = '/api/v1/haproxy';
@@ -167,7 +214,7 @@
         async function api(path, opts = {}) {
             try {
                 const res = await fetch(API + path, { ...opts, headers: headers() });
-                if (res.status === 401) { window.location = '/login/'; return {}; }
+                if (res.status === 401) { window.location = '/login.html'; return {}; }
                 return res.json();
             } catch { return {}; }
         }
@@ -330,7 +377,74 @@
             refresh();
         }
 
+        async function loadComponents() {
+            const d = await api('/components');
+            const list = document.getElementById('components-list');
+            const components = d.components || [];
+            if (!components.length) {
+                list.innerHTML = '<tr><td colspan="3" style="color:var(--text-dim)">No components</td></tr>';
+                return;
+            }
+            list.innerHTML = components.map(c => {
+                let status = 'stopped';
+                let statusText = 'Unknown';
+                if (c.running || c.available || c.enabled || c.installed || c.exists) {
+                    status = 'up';
+                    statusText = c.running ? 'Running' : (c.available ? 'Available' : (c.enabled ? 'Enabled' : (c.installed ? 'Installed' : 'OK')));
+                } else {
+                    statusText = c.running === false ? 'Stopped' : (c.available === false ? 'Unavailable' : 'Missing');
+                }
+                return `<tr>
+                    <td>${c.name}</td>
+                    <td style="color:var(--text-dim)">${c.description}</td>
+                    <td><span class="badge ${status}">${statusText}</span></td>
+                </tr>`;
+            }).join('');
+        }
+
+        async function loadAccess() {
+            const d = await api('/access');
+            const list = document.getElementById('access-list');
+            const access = d.access || [];
+            if (!access.length) {
+                list.innerHTML = '<p style="color:var(--text-dim)">No access points</p>';
+                return;
+            }
+            list.innerHTML = access.map(a => {
+                const url = a.url.replace('{{hostname}}', location.hostname);
+                return `<div style="background:var(--bg-dark);padding:0.75rem 1rem;border-radius:6px;display:flex;justify-content:space-between;align-items:center;">
+                    <div>
+                        <strong>${a.name}</strong>
+                        <span style="color:var(--text-dim);margin-left:1rem;font-size:0.85rem">${a.type}${a.waf_protected !== undefined ? (a.waf_protected ? ' - WAF Protected' : ' - WAF Bypass') : ''}</span>
+                    </div>
+                    <a href="${url}" target="_blank" style="color:var(--primary)">${url}</a>
+                </div>`;
+            }).join('');
+        }
+
+        function showMigrate() { document.getElementById('migrate-modal').style.display = 'flex'; }
+        function hideMigrate() { document.getElementById('migrate-modal').style.display = 'none'; }
+
+        async function doMigrate() {
+            const source = document.getElementById('migrate-source').value;
+            const d = await api('/migrate', { method: 'POST', body: JSON.stringify({ source }) });
+            hideMigrate();
+            if (d.success) {
+                alert(`Migration complete: ${d.vhosts || 0} vhosts, ${d.backends || 0} backends, ${d.certs || 0} certificates`);
+                refresh();
+            } else {
+                alert('Migration failed: ' + (d.error || 'Unknown error'));
+            }
+        }
+
+        async function restart() {
+            await api('/restart', { method: 'POST' });
+            setTimeout(refresh, 2000);
+        }
+
         function refresh() {
+            loadComponents();
+            loadAccess();
             loadStatus();
             loadVhosts();
             loadBackends();

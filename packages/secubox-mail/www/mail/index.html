@@ -3,24 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - Mail Server</title>
+    <title>SecuBox - Mail</title>
     <link rel="stylesheet" href="/shared/sidebar.css">
     <style>
-        :root { --bg-dark: #0d1117; --bg-card: #161b22; --bg-sidebar: #0d1117; --border: #30363d; --text: #c9d1d9; --text-dim: #8b949e; --primary: #58a6ff; --cyan: #00d4ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; --purple: #a371f7; }
+        :root { --bg-dark: #0d1117; --bg-card: #161b22; --bg-sidebar: #0d1117; --border: #30363d; --text: #c9d1d9; --text-dim: #8b949e; --primary: #58a6ff; --cyan: #00d4ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; --purple: #a371f7; --mail: #ea4335; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: -apple-system, sans-serif; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
         .sidebar { width: 220px; background: var(--bg-sidebar); border-right: 1px solid var(--border); position: fixed; height: 100vh; overflow-y: auto; }
-        .sidebar-header { padding: 1rem; border-bottom: 1px solid var(--border); }
-        .logo { font-weight: bold; font-size: 1.2rem; }
-        .logo span:nth-child(1) { color: var(--cyan); } .logo span:nth-child(2) { color: var(--red); } .logo span:nth-child(3) { color: var(--green); } .logo span:nth-child(4) { color: var(--yellow); }
-        .nav-section { padding: 0.5rem 0; }
-        .nav-section-title { padding: 0.5rem 1rem; font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
-        .nav-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 1rem; color: var(--text-dim); text-decoration: none; font-size: 0.9rem; border-left: 3px solid transparent; }
-        .nav-item:hover { background: rgba(255,255,255,0.05); color: var(--text); }
-        .nav-item.active { background: rgba(88,166,255,0.1); color: var(--primary); border-left-color: var(--primary); }
         .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-        .header h1 { font-size: 1.5rem; }
+        .header h1 { font-size: 1.5rem; display: flex; align-items: center; gap: 0.5rem; }
         .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; margin-left: 0.5rem; }
         .btn:hover { background: var(--bg-dark); }
         .btn.primary { background: rgba(88,166,255,0.1); border-color: var(--primary); color: var(--primary); }
@@ -28,16 +20,32 @@
         .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
         .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
         .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
-        .stat-card .value { font-size: 2rem; font-weight: bold; color: var(--purple); }
+        .stat-card .value { font-size: 2rem; font-weight: bold; color: var(--mail); }
         .stat-card .label { font-size: 0.75rem; color: var(--text-dim); }
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem; }
         .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
         .card h2 { font-size: 1rem; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; }
+        .status-badge { display: inline-flex; align-items: center; gap: 0.5rem; padding: 4px 12px; border-radius: 12px; font-size: 0.8rem; }
+        .status-badge.running { background: rgba(63,185,80,0.15); color: var(--green); }
+        .status-badge.stopped { background: rgba(248,81,73,0.15); color: var(--red); }
         table { width: 100%; border-collapse: collapse; }
         th, td { padding: 0.6rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.875rem; }
         th { color: var(--text-dim); font-size: 0.75rem; text-transform: uppercase; }
         .mono { font-family: monospace; font-size: 0.85rem; }
-        .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: center; justify-content: center; }
+        .component { display: flex; align-items: center; gap: 1rem; padding: 0.75rem; background: var(--bg-dark); border-radius: 6px; margin-bottom: 0.5rem; }
+        .component-icon { font-size: 1.5rem; }
+        .component-info { flex: 1; }
+        .component-name { font-weight: bold; font-size: 0.9rem; }
+        .component-detail { font-size: 0.75rem; color: var(--text-dim); }
+        .url-box { background: var(--bg-dark); padding: 0.75rem; border-radius: 6px; font-family: monospace; font-size: 0.85rem; margin-bottom: 0.5rem; }
+        .url-label { font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; margin-bottom: 0.25rem; }
+        .port-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.5rem; }
+        .port-item { background: var(--bg-dark); padding: 0.5rem; border-radius: 4px; text-align: center; }
+        .port-item .num { font-family: monospace; font-weight: bold; }
+        .port-item .name { font-size: 0.65rem; color: var(--text-dim); }
+        .port-item.active .num { color: var(--green); }
+        .port-item.inactive .num { color: var(--red); }
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: center; justify-content: center; }
         .modal.show { display: flex; }
         .modal-content { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; min-width: 400px; }
         .modal-content h3 { margin-bottom: 1rem; }
@@ -45,6 +53,12 @@
         .form-group label { display: block; margin-bottom: 0.25rem; font-size: 0.8rem; color: var(--text-dim); }
         .form-group input { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-dark); color: var(--text); }
         .form-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
+        .tabs { display: flex; gap: 0; margin-bottom: 1rem; border-bottom: 1px solid var(--border); }
+        .tab { padding: 0.75rem 1rem; cursor: pointer; border-bottom: 2px solid transparent; color: var(--text-dim); }
+        .tab:hover { color: var(--text); }
+        .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
     </style>
 </head>
 <body>
@@ -52,46 +66,112 @@
     <script src="/shared/sidebar.js"></script>
     <main class="main">
         <header class="header">
-            <h1>📧 Mail Server</h1>
+            <h1>📧 Mail</h1>
             <div>
-                <button class="btn success" onclick="startServices()">Start</button>
-                <button class="btn danger" onclick="stopServices()">Stop</button>
-                <button class="btn" onclick="restartServices()">Restart</button>
+                <span class="status-badge" id="status-badge">Loading...</span>
+                <button class="btn success" id="btn-start" onclick="startServices()" style="display:none">Start</button>
+                <button class="btn danger" id="btn-stop" onclick="stopServices()" style="display:none">Stop</button>
                 <button class="btn" onclick="refresh()">Refresh</button>
             </div>
         </header>
 
         <div class="stats-row">
-            <div class="stat-card"><div class="value" id="mail-status">-</div><div class="label">Status</div></div>
             <div class="stat-card"><div class="value" id="user-count">-</div><div class="label">Users</div></div>
             <div class="stat-card"><div class="value" id="storage">-</div><div class="label">Storage</div></div>
             <div class="stat-card"><div class="value" id="domain">-</div><div class="label">Domain</div></div>
+            <div class="stat-card"><div class="value" id="ssl-status">-</div><div class="label">SSL</div></div>
         </div>
 
+        <!-- Components Section -->
         <div class="grid-2">
             <div class="card">
-                <h2>Mail Users <button class="btn success" onclick="showAddUser()">+ Add</button></h2>
-                <table>
-                    <thead><tr><th>Email</th><th>Quota</th><th></th></tr></thead>
-                    <tbody id="user-list"><tr><td colspan="3">Loading...</td></tr></tbody>
-                </table>
+                <h2>Components</h2>
+                <div class="component" id="comp-mail">
+                    <span class="component-icon">📬</span>
+                    <div class="component-info">
+                        <div class="component-name">Mail Server</div>
+                        <div class="component-detail">Postfix + Dovecot (LXC)</div>
+                    </div>
+                    <span class="status-badge stopped" id="mail-badge">Stopped</span>
+                </div>
+                <div class="component" id="comp-webmail">
+                    <span class="component-icon">🌐</span>
+                    <div class="component-info">
+                        <div class="component-name">Webmail</div>
+                        <div class="component-detail">Roundcube (LXC)</div>
+                    </div>
+                    <span class="status-badge stopped" id="webmail-badge">Stopped</span>
+                </div>
             </div>
 
             <div class="card">
-                <h2>Aliases <button class="btn success" onclick="showAddAlias()">+ Add</button></h2>
+                <h2>Ports</h2>
+                <div class="port-grid" id="port-grid">
+                    <div class="port-item"><div class="num">25</div><div class="name">SMTP</div></div>
+                    <div class="port-item"><div class="num">587</div><div class="name">Submit</div></div>
+                    <div class="port-item"><div class="num">465</div><div class="name">SMTPS</div></div>
+                    <div class="port-item"><div class="num">993</div><div class="name">IMAPS</div></div>
+                    <div class="port-item"><div class="num">995</div><div class="name">POP3S</div></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Access Section -->
+        <div class="card">
+            <h2>Access</h2>
+            <div class="grid-2">
+                <div>
+                    <div class="url-label">Webmail</div>
+                    <div class="url-box"><a id="webmail-url" href="#" target="_blank" style="color:var(--primary)">-</a></div>
+                    <div class="url-label">IMAP Server</div>
+                    <div class="url-box" id="imap-url">-</div>
+                    <div class="url-label">SMTP Server</div>
+                    <div class="url-box" id="smtp-url">-</div>
+                </div>
+                <div>
+                    <div class="url-label">Thunderbird Autoconfig</div>
+                    <div class="url-box" id="autoconfig-url">-</div>
+                    <div class="url-label">Outlook Autodiscover</div>
+                    <div class="url-box" id="autodiscover-url">-</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabs: Users / Aliases / Actions -->
+        <div class="card">
+            <div class="tabs">
+                <div class="tab active" onclick="showTab('users')">Users</div>
+                <div class="tab" onclick="showTab('aliases')">Aliases</div>
+                <div class="tab" onclick="showTab('actions')">Actions</div>
+            </div>
+
+            <div class="tab-content active" id="tab-users">
+                <div style="margin-bottom:1rem">
+                    <button class="btn success" onclick="showModal('user-modal')">+ Add User</button>
+                </div>
+                <table>
+                    <thead><tr><th>Email</th><th>Size</th><th>Messages</th><th></th></tr></thead>
+                    <tbody id="user-list"><tr><td colspan="4">Loading...</td></tr></tbody>
+                </table>
+            </div>
+
+            <div class="tab-content" id="tab-aliases">
+                <div style="margin-bottom:1rem">
+                    <button class="btn success" onclick="showModal('alias-modal')">+ Add Alias</button>
+                </div>
                 <table>
                     <thead><tr><th>Alias</th><th>Target</th><th></th></tr></thead>
                     <tbody id="alias-list"><tr><td colspan="3">Loading...</td></tr></tbody>
                 </table>
             </div>
-        </div>
 
-        <div class="card">
-            <h2>Quick Actions</h2>
-            <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
-                <button class="btn primary" onclick="setupDNS()">Setup DNS Records</button>
-                <button class="btn primary" onclick="setupSSL()">Setup SSL</button>
-                <button class="btn" onclick="showLogs()">View Logs</button>
+            <div class="tab-content" id="tab-actions">
+                <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+                    <button class="btn primary" onclick="setupSSL()">Setup SSL Certificate</button>
+                    <button class="btn" onclick="createBackup()">Create Backup</button>
+                    <button class="btn" onclick="showMigrate()">Migrate from OpenWrt</button>
+                    <button class="btn danger" onclick="restartServices()">Restart Services</button>
+                </div>
             </div>
         </div>
     </main>
@@ -100,14 +180,8 @@
     <div class="modal" id="user-modal">
         <div class="modal-content">
             <h3>Add Mail User</h3>
-            <div class="form-group">
-                <label>Email Address</label>
-                <input type="email" id="user-email" placeholder="user@example.com">
-            </div>
-            <div class="form-group">
-                <label>Password</label>
-                <input type="password" id="user-password" placeholder="Strong password">
-            </div>
+            <div class="form-group"><label>Email Address</label><input type="email" id="user-email" placeholder="user@example.com"></div>
+            <div class="form-group"><label>Password</label><input type="password" id="user-password" placeholder="Strong password"></div>
             <div class="form-actions">
                 <button class="btn" onclick="hideModal('user-modal')">Cancel</button>
                 <button class="btn success" onclick="addUser()">Create</button>
@@ -118,18 +192,25 @@
     <!-- Add Alias Modal -->
     <div class="modal" id="alias-modal">
         <div class="modal-content">
-            <h3>Add Alias</h3>
-            <div class="form-group">
-                <label>Alias Address</label>
-                <input type="email" id="alias-from" placeholder="alias@example.com">
-            </div>
-            <div class="form-group">
-                <label>Target Address</label>
-                <input type="email" id="alias-to" placeholder="user@example.com">
-            </div>
+            <h3>Add Email Alias</h3>
+            <div class="form-group"><label>Alias Address</label><input type="email" id="alias-from" placeholder="alias@example.com"></div>
+            <div class="form-group"><label>Target Address</label><input type="email" id="alias-to" placeholder="user@example.com"></div>
             <div class="form-actions">
                 <button class="btn" onclick="hideModal('alias-modal')">Cancel</button>
                 <button class="btn success" onclick="addAlias()">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Migrate Modal -->
+    <div class="modal" id="migrate-modal">
+        <div class="modal-content">
+            <h3>Migrate from OpenWrt</h3>
+            <div class="form-group"><label>Source IP</label><input type="text" id="migrate-source" value="192.168.255.1"></div>
+            <p style="font-size:0.8rem;color:var(--text-dim);margin-bottom:1rem">This will copy users, mailboxes, and configuration from the source system.</p>
+            <div class="form-actions">
+                <button class="btn" onclick="hideModal('migrate-modal')">Cancel</button>
+                <button class="btn primary" onclick="doMigrate()">Start Migration</button>
             </div>
         </div>
     </div>
@@ -142,30 +223,104 @@
         async function api(path, opts = {}) {
             try {
                 const res = await fetch(API + path, { ...opts, headers: headers() });
-                if (res.status === 401) { window.location = '/login/'; return {}; }
+                if (res.status === 401) { window.location = '/login.html'; return {}; }
                 return res.json();
             } catch { return {}; }
         }
 
+        let status = {};
+
         async function loadStatus() {
-            const d = await api('/status');
-            const running = d.postfix_running && d.dovecot_running;
-            document.getElementById('mail-status').textContent = running ? 'UP' : 'DOWN';
-            document.getElementById('mail-status').style.color = running ? 'var(--green)' : 'var(--red)';
-            document.getElementById('user-count').textContent = d.users || 0;
-            document.getElementById('storage').textContent = d.storage || '0';
-            document.getElementById('domain').textContent = d.domain || '-';
+            status = await api('/status');
+            const badge = document.getElementById('status-badge');
+            const running = status.running;
+
+            if (running) {
+                badge.textContent = '● Running';
+                badge.className = 'status-badge running';
+                document.getElementById('btn-start').style.display = 'none';
+                document.getElementById('btn-stop').style.display = 'inline-block';
+            } else if (status.installed) {
+                badge.textContent = '○ Stopped';
+                badge.className = 'status-badge stopped';
+                document.getElementById('btn-start').style.display = 'inline-block';
+                document.getElementById('btn-stop').style.display = 'none';
+            } else {
+                badge.textContent = '○ Not Installed';
+                badge.className = 'status-badge stopped';
+            }
+
+            document.getElementById('user-count').textContent = status.user_count || 0;
+            document.getElementById('storage').textContent = status.storage || '0';
+            document.getElementById('domain').textContent = status.domain || '-';
+
+            // Components
+            const comps = status.components || {};
+            if (comps.mail_server) {
+                const mb = document.getElementById('mail-badge');
+                if (comps.mail_server.running) {
+                    mb.textContent = '● Running';
+                    mb.className = 'status-badge running';
+                } else {
+                    mb.textContent = '○ Stopped';
+                    mb.className = 'status-badge stopped';
+                }
+            }
+            if (comps.webmail) {
+                const wb = document.getElementById('webmail-badge');
+                if (comps.webmail.running) {
+                    wb.textContent = '● Running';
+                    wb.className = 'status-badge running';
+                } else {
+                    wb.textContent = '○ Stopped';
+                    wb.className = 'status-badge stopped';
+                }
+            }
+
+            // Ports
+            const ports = status.ports || {};
+            const portMap = {25: 'SMTP', 587: 'Submit', 465: 'SMTPS', 993: 'IMAPS', 995: 'POP3S'};
+            const grid = document.getElementById('port-grid');
+            grid.innerHTML = Object.entries(portMap).map(([port, name]) => {
+                const active = ports[port] ? 'active' : 'inactive';
+                return `<div class="port-item ${active}"><div class="num">${port}</div><div class="name">${name}</div></div>`;
+            }).join('');
+        }
+
+        async function loadAccess() {
+            const d = await api('/access');
+            const domain = d.domain || 'example.com';
+            const host = d.mail_server || `mail.${domain}`;
+
+            document.getElementById('webmail-url').textContent = d.webmail?.url || `https://webmail.${domain}`;
+            document.getElementById('webmail-url').href = d.webmail?.local_url || '#';
+            document.getElementById('imap-url').textContent = `${host}:993 (SSL)`;
+            document.getElementById('smtp-url').textContent = `${host}:587 (STARTTLS)`;
+            document.getElementById('autoconfig-url').textContent = d.apps?.thunderbird || '-';
+            document.getElementById('autodiscover-url').textContent = d.apps?.outlook || '-';
+
+            // SSL status
+            const ssl = await api('/ssl');
+            document.getElementById('ssl-status').textContent = ssl.installed ? '✓' : '✗';
+            document.getElementById('ssl-status').style.color = ssl.installed ? 'var(--green)' : 'var(--red)';
         }
 
         async function loadUsers() {
             const d = await api('/users');
             const list = document.getElementById('user-list');
             const users = d.users || [];
-            if (!users.length) { list.innerHTML = '<tr><td colspan="3" style="color:var(--text-dim)">No users</td></tr>'; return; }
+            if (!users.length) {
+                list.innerHTML = '<tr><td colspan="4" style="color:var(--text-dim)">No users</td></tr>';
+                return;
+            }
             list.innerHTML = users.map(u => `<tr>
                 <td class="mono">${u.email}</td>
-                <td>${u.quota || '1G'}</td>
-                <td><button class="btn danger" style="padding:0.25rem 0.5rem;font-size:0.75rem" onclick="deleteUser('${u.email}')">Delete</button></td>
+                <td>${u.size}</td>
+                <td>${u.messages}</td>
+                <td>
+                    <button class="btn" style="padding:2px 8px;font-size:0.7rem" onclick="changePassword('${u.email}')">Password</button>
+                    <button class="btn danger" style="padding:2px 8px;font-size:0.7rem" onclick="deleteUser('${u.email}')">Delete</button>
+                </td>
             </tr>`).join('');
         }
 
@@ -173,31 +328,47 @@
             const d = await api('/aliases');
             const list = document.getElementById('alias-list');
             const aliases = d.aliases || [];
-            if (!aliases.length) { list.innerHTML = '<tr><td colspan="3" style="color:var(--text-dim)">No aliases</td></tr>'; return; }
+            if (!aliases.length) {
+                list.innerHTML = '<tr><td colspan="3" style="color:var(--text-dim)">No aliases</td></tr>';
+                return;
+            }
             list.innerHTML = aliases.map(a => `<tr>
                 <td class="mono">${a.alias}</td>
                 <td class="mono">${a.target}</td>
-                <td><button class="btn danger" style="padding:0.25rem 0.5rem;font-size:0.75rem" onclick="deleteAlias('${a.alias}')">Delete</button></td>
+                <td><button class="btn danger" style="padding:2px 8px;font-size:0.7rem" onclick="deleteAlias('${a.alias}')">Delete</button></td>
             </tr>`).join('');
+        }
+
+        function showTab(name) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelector(`.tab:nth-child(${name === 'users' ? 1 : name === 'aliases' ? 2 : 3})`).classList.add('active');
+            document.getElementById(`tab-${name}`).classList.add('active');
         }
 
         function showModal(id) { document.getElementById(id).classList.add('show'); }
         function hideModal(id) { document.getElementById(id).classList.remove('show'); }
-        function showAddUser() { showModal('user-modal'); }
-        function showAddAlias() { showModal('alias-modal'); }
+        function showMigrate() { showModal('migrate-modal'); }
 
         async function addUser() {
             const email = document.getElementById('user-email').value.trim();
             const password = document.getElementById('user-password').value;
             if (!email || !password) { alert('Email and password required'); return; }
             const r = await api('/user', { method: 'POST', body: JSON.stringify({ email, password }) });
-            if (r.success) { hideModal('user-modal'); refresh(); } else alert('Error: ' + (r.output || 'Failed'));
+            if (r.success) { hideModal('user-modal'); refresh(); } else alert('Error: ' + (r.detail || 'Failed'));
         }
 
         async function deleteUser(email) {
             if (!confirm(`Delete user ${email}?`)) return;
-            const r = await api(`/user/${encodeURIComponent(email)}`, { method: 'DELETE' });
-            if (r.success) refresh(); else alert('Error: ' + (r.output || 'Failed'));
+            await api(`/user/${encodeURIComponent(email)}`, { method: 'DELETE' });
+            refresh();
+        }
+
+        async function changePassword(email) {
+            const password = prompt(`New password for ${email}:`);
+            if (!password) return;
+            const r = await api('/user/password', { method: 'POST', body: JSON.stringify({ email, password }) });
+            alert(r.success ? 'Password changed' : 'Error: ' + (r.detail || 'Failed'));
         }
 
         async function addAlias() {
@@ -205,23 +376,37 @@
             const target = document.getElementById('alias-to').value.trim();
             if (!alias || !target) { alert('Both addresses required'); return; }
             const r = await api('/alias', { method: 'POST', body: JSON.stringify({ alias, target }) });
-            if (r.success) { hideModal('alias-modal'); refresh(); } else alert('Error: ' + (r.output || 'Failed'));
+            if (r.success) { hideModal('alias-modal'); refresh(); } else alert('Error: ' + (r.detail || 'Failed'));
         }
 
         async function deleteAlias(alias) {
             if (!confirm(`Delete alias ${alias}?`)) return;
-            const r = await api(`/alias/${encodeURIComponent(alias)}`, { method: 'DELETE' });
-            if (r.success) refresh(); else alert('Error: ' + (r.output || 'Failed'));
+            await api(`/alias/${encodeURIComponent(alias)}`, { method: 'DELETE' });
+            refresh();
         }
 
-        async function startServices() { await api('/start', { method: 'POST' }); refresh(); }
-        async function stopServices() { await api('/stop', { method: 'POST' }); refresh(); }
-        async function restartServices() { await api('/restart', { method: 'POST' }); refresh(); }
-        async function setupDNS() { const r = await api('/dns-setup', { method: 'POST' }); alert(r.success ? 'DNS records configured' : 'Error: ' + r.output); }
-        async function setupSSL() { const r = await api('/ssl-setup', { method: 'POST' }); alert(r.success ? 'SSL configured' : 'Error: ' + r.output); }
-        async function showLogs() { const r = await api('/logs'); alert(r.logs || 'No logs'); }
+        async function startServices() { await api('/start', { method: 'POST' }); setTimeout(refresh, 2000); }
+        async function stopServices() { await api('/stop', { method: 'POST' }); setTimeout(refresh, 1000); }
+        async function restartServices() { await api('/restart', { method: 'POST' }); setTimeout(refresh, 3000); }
 
-        function refresh() { loadStatus(); loadUsers(); loadAliases(); }
+        async function setupSSL() {
+            const r = await api('/ssl/setup', { method: 'POST' });
+            alert(r.success ? 'SSL setup started in background' : 'Error');
+        }
+
+        async function createBackup() {
+            const r = await api('/backup', { method: 'POST' });
+            alert(r.success ? `Backup created: ${r.file}` : 'Backup failed');
+        }
+
+        async function doMigrate() {
+            const source = document.getElementById('migrate-source').value;
+            const r = await api('/migrate', { method: 'POST', body: JSON.stringify({ source }) });
+            hideModal('migrate-modal');
+            alert(r.success ? 'Migration started in background. Check /var/log/mail-migrate.log' : 'Migration failed');
+        }
+
+        function refresh() { loadStatus(); loadAccess(); loadUsers(); loadAliases(); }
         refresh();
     </script>
 </body>

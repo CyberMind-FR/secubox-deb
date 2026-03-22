@@ -21,13 +21,21 @@ import jwt
 
 from secubox_core.config import get_config
 from secubox_core.logger import get_logger
+from secubox_core.auth import create_token as core_create_token
 
 app = FastAPI(title="secubox-portal", version="1.0.0", root_path="/api/v1/portal")
 router = APIRouter()
 log = get_logger("portal")
 
-# Configuration
-JWT_SECRET = os.environ.get("JWT_SECRET", "secubox-dev-secret-change-in-production")
+# Configuration - use same secret as secubox_core.auth
+def _get_jwt_secret() -> str:
+    """Get JWT secret - must match secubox_core.auth._secret()"""
+    cfg = get_config("api")
+    s = cfg.get("jwt_secret", "")
+    if not s:
+        s = os.environ.get("SECUBOX_JWT_SECRET", "CHANGEME_INSECURE")
+    return s
+
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_HOURS = 24
 USERS_FILE = Path("/etc/secubox/users.json")
@@ -60,7 +68,7 @@ def _save_users(users: dict):
 
 
 def _create_token(username: str, role: str = "user") -> str:
-    """Create JWT token."""
+    """Create JWT token using shared secret."""
     payload = {
         "sub": username,
         "role": role,
@@ -68,13 +76,13 @@ def _create_token(username: str, role: str = "user") -> str:
         "exp": datetime.utcnow() + timedelta(hours=JWT_EXPIRE_HOURS),
         "jti": secrets.token_hex(16)
     }
-    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    return jwt.encode(payload, _get_jwt_secret(), algorithm=JWT_ALGORITHM)
 
 
 def _verify_token(token: str) -> Optional[dict]:
-    """Verify and decode JWT token."""
+    """Verify and decode JWT token using shared secret."""
     try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        payload = jwt.decode(token, _get_jwt_secret(), algorithms=[JWT_ALGORITHM])
         return payload
     except jwt.ExpiredSignatureError:
         return None

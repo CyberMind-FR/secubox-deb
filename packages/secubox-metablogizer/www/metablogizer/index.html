@@ -6,133 +6,213 @@
     <title>SecuBox - MetaBlogizer</title>
     <link rel="stylesheet" href="/shared/sidebar.css">
     <style>
-        :root { --bg-dark: #0d1117; --bg-card: #161b22; --bg-sidebar: #0d1117; --border: #30363d; --text: #c9d1d9; --text-dim: #8b949e; --primary: #58a6ff; --cyan: #00d4ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; --purple: #a371f7; }
+        :root { --bg-dark: #0d1117; --bg-card: #161b22; --border: #30363d; --text: #c9d1d9; --text-dim: #8b949e; --primary: #58a6ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; --purple: #a371f7; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: -apple-system, sans-serif; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
-        .sidebar { width: 220px; background: var(--bg-dark); border-right: 1px solid var(--border); position: fixed; height: 100vh; overflow-y: auto; }
-        .sidebar-header { padding: 1rem; border-bottom: 1px solid var(--border); }
-        .logo { font-weight: bold; font-size: 1.2rem; }
-        .logo span:nth-child(1) { color: var(--cyan); } .logo span:nth-child(2) { color: var(--red); } .logo span:nth-child(3) { color: var(--green); } .logo span:nth-child(4) { color: var(--yellow); }
-        .nav-section { padding: 0.5rem 0; }
-        .nav-section-title { padding: 0.5rem 1rem; font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
-        .nav-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 1rem; color: var(--text-dim); text-decoration: none; font-size: 0.9rem; border-left: 3px solid transparent; }
-        .nav-item:hover { background: rgba(255,255,255,0.05); color: var(--text); }
-        .nav-item.active { background: rgba(88,166,255,0.1); color: var(--primary); border-left-color: var(--primary); }
-        .nav-item .icon { width: 20px; text-align: center; }
+        .sidebar { width: 220px; background: var(--bg-dark); border-right: 1px solid var(--border); position: fixed; height: 100vh; }
         .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
         .header h1 { font-size: 1.5rem; }
         .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; margin-left: 0.5rem; }
-        .btn.primary { background: rgba(88,166,255,0.1); color: var(--primary); }
-        .btn.success { background: rgba(63,185,80,0.1); color: var(--green); }
-        .btn.danger { background: rgba(248,81,73,0.1); color: var(--red); }
+        .btn:hover { background: var(--bg-dark); }
+        .btn.primary { background: rgba(88,166,255,0.1); border-color: var(--primary); color: var(--primary); }
+        .btn.success { background: rgba(63,185,80,0.1); border-color: var(--green); color: var(--green); }
+        .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
+        .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
+        .tab { padding: 0.75rem 1.5rem; cursor: pointer; border-bottom: 2px solid transparent; color: var(--text-dim); }
+        .tab:hover { color: var(--text); }
+        .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
         .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
         .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
         .stat-card .value { font-size: 2rem; font-weight: bold; color: var(--purple); }
         .stat-card .label { font-size: 0.75rem; color: var(--text-dim); }
         .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
-        .card h2 { margin-bottom: 1rem; }
-        .site-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem; }
-        .site-card { background: var(--bg-dark); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; }
-        .site-card h3 { color: var(--purple); margin-bottom: 0.5rem; }
-        .site-card .domain { color: var(--text-dim); font-size: 0.875rem; margin-bottom: 0.75rem; }
-        .site-card .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-        .badge { padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; }
+        .card h2 { font-size: 1rem; margin-bottom: 1rem; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 0.6rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.875rem; }
+        th { color: var(--text-dim); font-size: 0.75rem; text-transform: uppercase; }
+        .badge { padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; }
         .badge.published { background: rgba(63,185,80,0.2); color: var(--green); }
         .badge.draft { background: rgba(139,148,158,0.2); color: var(--text-dim); }
-        .form-row { display: flex; gap: 1rem; margin-bottom: 1rem; }
-        .form-row input { flex: 1; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-dark); color: var(--text); }
-        .upload-zone { border: 2px dashed var(--border); border-radius: 8px; padding: 1.5rem; text-align: center; cursor: pointer; margin-top: 1rem; }
-        input[type="file"] { display: none; }
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: center; justify-content: center; }
+        .modal.show { display: flex; }
+        .modal-content { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; min-width: 400px; }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.25rem; font-size: 0.8rem; color: var(--text-dim); }
+        .form-group input { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-dark); color: var(--text); }
+        .form-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
     </style>
 </head>
 <body>
     <nav class="sidebar" id="sidebar"></nav>
     <script src="/shared/sidebar.js"></script>
     <main class="main">
-    <header class="header">
-        <h1>MetaBlogizer</h1>
-        <div><button class="btn" onclick="refresh()">Refresh</button></div>
-    </header>
+        <header class="header">
+            <h1>MetaBlogizer - Static Sites</h1>
+            <div>
+                <button class="btn success" onclick="showCreateSite()">+ New Site</button>
+                <button class="btn" onclick="refresh()">Refresh</button>
+            </div>
+        </header>
 
-    <div class="stats-row">
-        <div class="stat-card"><div class="value" id="site-count">-</div><div class="label">Sites</div></div>
-        <div class="stat-card"><div class="value" id="published-count">-</div><div class="label">Published</div></div>
-        <div class="stat-card"><div class="value" id="tor-status">-</div><div class="label">Tor</div></div>
-    </div>
+        <div class="tabs">
+            <div class="tab active" onclick="showTab('sites')">Sites</div>
+            <div class="tab" onclick="showTab('access')">Access</div>
+            <div class="tab" onclick="showTab('actions')">Actions</div>
+        </div>
 
-    <div class="card">
-        <h2>Create Site</h2>
-        <div class="form-row">
-            <input type="text" id="new-name" placeholder="Site name">
-            <input type="text" id="new-domain" placeholder="Domain (optional)">
-            <button class="btn primary" onclick="createSite()">Create</button>
+        <div class="tab-content active" id="tab-sites">
+            <div class="stats-row">
+                <div class="stat-card"><div class="value" id="site-count">-</div><div class="label">Total Sites</div></div>
+                <div class="stat-card"><div class="value" id="published-count">-</div><div class="label">Published</div></div>
+                <div class="stat-card"><div class="value" id="nginx-status">-</div><div class="label">Nginx</div></div>
+            </div>
+            <div class="card">
+                <h2>Sites</h2>
+                <table>
+                    <thead><tr><th>Name</th><th>Domain</th><th>Status</th><th>Size</th><th>Actions</th></tr></thead>
+                    <tbody id="site-list"><tr><td colspan="5">Loading...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="tab-content" id="tab-access">
+            <div class="card">
+                <h2>Published Sites</h2>
+                <div id="access-list">Loading...</div>
+            </div>
+        </div>
+
+        <div class="tab-content" id="tab-actions">
+            <div class="card">
+                <h2>Migration</h2>
+                <p style="margin-bottom:1rem;color:var(--text-dim)">Import sites from OpenWrt SecuBox.</p>
+                <button class="btn" onclick="showMigrate()">Migrate from OpenWrt</button>
+            </div>
+        </div>
+    </main>
+
+    <div class="modal" id="create-modal">
+        <div class="modal-content">
+            <h3>Create Site</h3>
+            <div class="form-group"><label>Site Name</label><input type="text" id="new-name" placeholder="my-blog"></div>
+            <div class="form-group"><label>Domain</label><input type="text" id="new-domain" placeholder="blog.example.com"></div>
+            <div class="form-actions">
+                <button class="btn" onclick="hideModal('create-modal')">Cancel</button>
+                <button class="btn success" onclick="createSite()">Create</button>
+            </div>
         </div>
     </div>
 
-    <div class="card">
-        <h2>Sites</h2>
-        <div class="site-grid" id="site-list">Loading...</div>
+    <div class="modal" id="migrate-modal">
+        <div class="modal-content">
+            <h3>Migrate from OpenWrt</h3>
+            <div class="form-group"><label>Source IP</label><input type="text" id="migrate-source" value="192.168.255.1"></div>
+            <div class="form-actions">
+                <button class="btn" onclick="hideModal('migrate-modal')">Cancel</button>
+                <button class="btn" onclick="doMigrate()">Start Migration</button>
+            </div>
+        </div>
     </div>
 
     <script>
         const API = '/api/v1/metablogizer';
-        const headers = () => ({ 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem('sbx_token') || '') });
+        const token = () => localStorage.getItem('sbx_token');
+        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+
         async function api(path, opts = {}) {
-            try { return (await fetch(API + path, { ...opts, headers: { ...headers(), ...(opts.headers || {}) } })).json(); }
-            catch { return {}; }
+            try {
+                const res = await fetch(API + path, { ...opts, headers: headers() });
+                if (res.status === 401) { window.location = '/login.html'; return {}; }
+                return res.json();
+            } catch { return {}; }
+        }
+
+        function showTab(name) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelector(`[onclick="showTab('${name}')"]`).classList.add('active');
+            document.getElementById('tab-' + name).classList.add('active');
         }
 
         async function loadStatus() {
             const d = await api('/status');
             document.getElementById('site-count').textContent = d.site_count || 0;
             document.getElementById('published-count').textContent = d.published_count || 0;
-            
-            const tor = await api('/tor/status');
-            document.getElementById('tor-status').textContent = tor.enabled ? 'Active' : 'Off';
-            document.getElementById('tor-status').style.color = tor.enabled ? 'var(--green)' : 'var(--text-dim)';
+            document.getElementById('nginx-status').textContent = d.running ? 'Running' : 'Stopped';
+            document.getElementById('nginx-status').style.color = d.running ? 'var(--green)' : 'var(--red)';
         }
 
         async function loadSites() {
             const d = await api('/sites');
-            const grid = document.getElementById('site-list');
+            const list = document.getElementById('site-list');
             const sites = d.sites || [];
-            if (!sites.length) { grid.innerHTML = '<p style="color:var(--text-dim)">No sites yet</p>'; return; }
-            grid.innerHTML = sites.map(s => `
-                <div class="site-card">
-                    <h3>${s.name} <span class="badge ${s.published ? 'published' : 'draft'}">${s.published ? 'Published' : 'Draft'}</span></h3>
-                    <div class="domain">${s.domain}</div>
-                    <div class="actions">
-                        <button class="btn" onclick="window.open('https://${s.domain}')">Visit</button>
-                        <button class="btn primary" onclick="publishSite('${s.name}')">Publish</button>
-                        <button class="btn danger" onclick="deleteSite('${s.name}')">Delete</button>
-                    </div>
-                </div>
-            `).join('');
+            if (!sites.length) { list.innerHTML = '<tr><td colspan="5" style="color:var(--text-dim)">No sites</td></tr>'; return; }
+            list.innerHTML = sites.map(s => `<tr>
+                <td><strong>${s.name}</strong></td>
+                <td style="color:var(--text-dim)">${s.domain}</td>
+                <td><span class="badge ${s.published ? 'published' : 'draft'}">${s.published ? 'Published' : 'Draft'}</span></td>
+                <td>${s.size || '-'}</td>
+                <td>
+                    ${s.published ? 
+                        `<a href="http://${s.domain}" target="_blank" class="btn" style="padding:2px 8px;font-size:0.7rem">View</a>
+                         <button class="btn" onclick="unpublishSite('${s.name}')" style="padding:2px 8px;font-size:0.7rem">Unpublish</button>` :
+                        `<button class="btn success" onclick="publishSite('${s.name}')" style="padding:2px 8px;font-size:0.7rem">Publish</button>`}
+                    <button class="btn danger" onclick="deleteSite('${s.name}')" style="padding:2px 8px;font-size:0.7rem">Delete</button>
+                </td>
+            </tr>`).join('');
         }
+
+        async function loadAccess() {
+            const d = await api('/access');
+            const list = document.getElementById('access-list');
+            const sites = (d.sites || []).filter(s => s.published);
+            if (!sites.length) { list.innerHTML = '<p style="color:var(--text-dim)">No published sites</p>'; return; }
+            list.innerHTML = sites.map(s => `<div style="background:var(--bg-dark);padding:0.75rem;border-radius:6px;margin-bottom:0.5rem">
+                <a href="${s.url}" target="_blank" style="color:var(--primary)">${s.url}</a>
+            </div>`).join('');
+        }
+
+        function showModal(id) { document.getElementById(id).classList.add('show'); }
+        function hideModal(id) { document.getElementById(id).classList.remove('show'); }
+        function showCreateSite() { showModal('create-modal'); }
+        function showMigrate() { showModal('migrate-modal'); }
 
         async function createSite() {
             const name = document.getElementById('new-name').value.trim();
-            const domain = document.getElementById('new-domain').value.trim();
-            if (!name) { alert('Name required'); return; }
-            const r = await api('/site', { method: 'POST', body: JSON.stringify({ name, domain: domain || undefined }) });
-            if (r.success) { refresh(); document.getElementById('new-name').value = ''; document.getElementById('new-domain').value = ''; }
+            const domain = document.getElementById('new-domain').value.trim() || undefined;
+            const r = await api('/site', { method: 'POST', body: JSON.stringify({ name, domain }) });
+            if (r.success) { hideModal('create-modal'); refresh(); }
+            else alert('Error: ' + (r.detail || 'Failed'));
         }
 
         async function publishSite(name) {
-            const r = await api(`/site/${name}/publish`, { method: 'POST' });
+            const r = await api('/site/' + name + '/publish', { method: 'POST' });
+            if (r.success) refresh();
+        }
+
+        async function unpublishSite(name) {
+            const r = await api('/site/' + name + '/unpublish', { method: 'POST' });
             if (r.success) refresh();
         }
 
         async function deleteSite(name) {
-            if (!confirm(`Delete "${name}"?`)) return;
-            await api(`/site/${name}`, { method: 'DELETE' });
-            refresh();
+            if (!confirm('Delete site ' + name + '?')) return;
+            const r = await api('/site/' + name, { method: 'DELETE' });
+            if (r.success) refresh();
         }
 
-        function refresh() { loadStatus(); loadSites(); }
+        async function doMigrate() {
+            const source = document.getElementById('migrate-source').value;
+            await api('/migrate', { method: 'POST', body: JSON.stringify({ source }) });
+            hideModal('migrate-modal');
+            alert('Migration started');
+        }
+
+        function refresh() { loadStatus(); loadSites(); loadAccess(); }
         refresh();
     </script>
-</main>
 </body>
 </html>

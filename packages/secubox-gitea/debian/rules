@@ -1,0 +1,13 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-gitea/usr/lib/secubox/gitea
+	cp -r api debian/secubox-gitea/usr/lib/secubox/gitea/
+	install -d debian/secubox-gitea/usr/share/secubox/www/gitea
+	cp -r www/gitea/. debian/secubox-gitea/usr/share/secubox/www/gitea/
+	install -d debian/secubox-gitea/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-gitea/usr/share/secubox/menu.d/ || true
+	install -d debian/secubox-gitea/usr/sbin
+	[ -d sbin ] && install -m 755 sbin/* debian/secubox-gitea/usr/sbin/ || true

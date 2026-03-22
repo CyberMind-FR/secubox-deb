@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - Nextcloud</title>
+    <link rel="stylesheet" href="/shared/sidebar.css">
+    <style>
+        :root { --bg-dark: #0d1117; --bg-card: #161b22; --bg-sidebar: #0d1117; --border: #30363d; --text: #c9d1d9; --text-dim: #8b949e; --primary: #58a6ff; --cyan: #00d4ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; --purple: #a371f7; --nextcloud: #0082c9; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
+        .sidebar { width: 220px; background: var(--bg-sidebar); border-right: 1px solid var(--border); position: fixed; height: 100vh; overflow-y: auto; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        .header h1 { font-size: 1.5rem; display: flex; align-items: center; gap: 0.5rem; }
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; margin-left: 0.5rem; }
+        .btn:hover { background: var(--bg-dark); }
+        .btn.primary { background: rgba(0,130,201,0.1); border-color: var(--nextcloud); color: var(--nextcloud); }
+        .btn.success { background: rgba(63,185,80,0.1); border-color: var(--green); color: var(--green); }
+        .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
+        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
+        .stat-card .value { font-size: 2rem; font-weight: bold; color: var(--nextcloud); }
+        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); }
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
+        .card h2 { font-size: 1rem; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; }
+        .status-badge { display: inline-flex; align-items: center; gap: 0.5rem; padding: 4px 12px; border-radius: 12px; font-size: 0.8rem; }
+        .status-badge.running { background: rgba(63,185,80,0.15); color: var(--green); }
+        .status-badge.stopped { background: rgba(248,81,73,0.15); color: var(--red); }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 0.6rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.875rem; }
+        th { color: var(--text-dim); font-size: 0.75rem; text-transform: uppercase; }
+        .url-box { background: var(--bg-dark); padding: 0.75rem; border-radius: 6px; font-family: monospace; font-size: 0.85rem; margin-bottom: 0.75rem; word-break: break-all; }
+        .url-label { font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; margin-bottom: 0.25rem; }
+        .storage-bar { width: 100%; height: 24px; background: var(--bg-dark); border-radius: 6px; overflow: hidden; margin-top: 0.5rem; }
+        .storage-fill { height: 100%; background: linear-gradient(90deg, var(--green), var(--nextcloud)); display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; font-size: 0.75rem; }
+        .app-links { display: flex; gap: 1rem; margin-top: 1rem; }
+        .app-link { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: var(--bg-dark); border-radius: 6px; color: var(--text); text-decoration: none; font-size: 0.9rem; }
+        .app-link:hover { background: var(--border); }
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+    <main class="main">
+        <header class="header">
+            <h1>☁️ Nextcloud</h1>
+            <div>
+                <span class="status-badge" id="status-badge">Loading...</span>
+                <button class="btn success" id="btn-start" onclick="startService()" style="display:none">Start</button>
+                <button class="btn danger" id="btn-stop" onclick="stopService()" style="display:none">Stop</button>
+                <button class="btn" onclick="refresh()">Refresh</button>
+            </div>
+        </header>
+
+        <div class="stats-row">
+            <div class="stat-card"><div class="value" id="user-count">-</div><div class="label">Users</div></div>
+            <div class="stat-card"><div class="value" id="data-size">-</div><div class="label">Data Size</div></div>
+            <div class="stat-card"><div class="value" id="disk-free">-</div><div class="label">Free Space</div></div>
+            <div class="stat-card"><div class="value" id="version">-</div><div class="label">Version</div></div>
+        </div>
+
+        <div class="card">
+            <h2>Storage</h2>
+            <div class="storage-bar">
+                <div class="storage-fill" id="storage-fill" style="width:0%">0%</div>
+            </div>
+            <p style="margin-top:0.5rem;font-size:0.8rem;color:var(--text-dim)">
+                <span id="disk-used">-</span> used of <span id="disk-total">-</span>
+            </p>
+        </div>
+
+        <div class="card">
+            <h2>Connection URLs</h2>
+            <div class="url-label">Web Interface</div>
+            <div class="url-box"><a id="web-url" href="#" target="_blank" style="color:var(--nextcloud)">-</a></div>
+            <div class="url-label">WebDAV</div>
+            <div class="url-box" id="webdav-url">-</div>
+            <div class="url-label">CalDAV (Calendar)</div>
+            <div class="url-box" id="caldav-url">-</div>
+            <div class="url-label">CardDAV (Contacts)</div>
+            <div class="url-box" id="carddav-url">-</div>
+            <div class="app-links">
+                <a href="#" id="ios-link" class="app-link" target="_blank">📱 iOS App</a>
+                <a href="#" id="android-link" class="app-link" target="_blank">🤖 Android App</a>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Users</h2>
+            <table>
+                <thead><tr><th>Username</th><th>Display Name</th><th></th></tr></thead>
+                <tbody id="user-list"><tr><td colspan="3">Loading...</td></tr></tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h2>Backups</h2>
+            <table>
+                <thead><tr><th>Name</th><th>Size</th><th>Date</th><th></th></tr></thead>
+                <tbody id="backup-list"><tr><td colspan="4">Loading...</td></tr></tbody>
+            </table>
+            <button class="btn primary" onclick="createBackup()" style="margin-top:1rem">Create Backup</button>
+        </div>
+
+        <div class="card">
+            <h2>Actions</h2>
+            <button class="btn" onclick="restartService()">Restart Container</button>
+            <button class="btn primary" id="btn-install" onclick="installNextcloud()" style="display:none">Install Nextcloud</button>
+        </div>
+    </main>
+
+    <script>
+        const API = '/api/v1/nextcloud';
+        const token = () => localStorage.getItem('sbx_token');
+        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+
+        async function api(path, opts = {}) {
+            try {
+                const res = await fetch(API + path, { ...opts, headers: headers() });
+                if (res.status === 401) { window.location = '/login.html'; return {}; }
+                return res.json();
+            } catch { return {}; }
+        }
+
+        let status = {};
+
+        async function loadStatus() {
+            status = await api('/status');
+            const badge = document.getElementById('status-badge');
+
+            if (status.running) {
+                badge.textContent = '● Running';
+                badge.className = 'status-badge running';
+                document.getElementById('btn-start').style.display = 'none';
+                document.getElementById('btn-stop').style.display = 'inline-block';
+                document.getElementById('btn-install').style.display = 'none';
+            } else if (status.installed) {
+                badge.textContent = '○ Stopped';
+                badge.className = 'status-badge stopped';
+                document.getElementById('btn-start').style.display = 'inline-block';
+                document.getElementById('btn-stop').style.display = 'none';
+                document.getElementById('btn-install').style.display = 'none';
+            } else {
+                badge.textContent = '○ Not Installed';
+                badge.className = 'status-badge stopped';
+                document.getElementById('btn-start').style.display = 'none';
+                document.getElementById('btn-stop').style.display = 'none';
+                document.getElementById('btn-install').style.display = 'inline-block';
+            }
+
+            document.getElementById('user-count').textContent = status.user_count || 0;
+            document.getElementById('data-size').textContent = status.disk_used || '-';
+            document.getElementById('version').textContent = status.version || '-';
+
+            const port = status.http_port || 8080;
+            document.getElementById('web-url').textContent = `http://localhost:${port}`;
+            document.getElementById('web-url').href = `http://localhost:${port}`;
+        }
+
+        async function loadStorage() {
+            const d = await api('/storage');
+            document.getElementById('disk-free').textContent = d.disk_free || '-';
+            document.getElementById('disk-used').textContent = d.total_size || '-';
+            document.getElementById('disk-total').textContent = d.disk_total || '-';
+
+            const pct = d.disk_used_percent || 0;
+            document.getElementById('storage-fill').style.width = pct + '%';
+            document.getElementById('storage-fill').textContent = pct + '%';
+        }
+
+        async function loadConnections() {
+            const d = await api('/connections');
+            document.getElementById('webdav-url').textContent = d.webdav || '-';
+            document.getElementById('caldav-url').textContent = d.caldav || '-';
+            document.getElementById('carddav-url').textContent = d.carddav || '-';
+            document.getElementById('ios-link').href = d.ios_app || '#';
+            document.getElementById('android-link').href = d.android_app || '#';
+        }
+
+        async function loadUsers() {
+            const d = await api('/users');
+            const list = document.getElementById('user-list');
+            const users = d.users || [];
+            if (!users.length) {
+                list.innerHTML = '<tr><td colspan="3" style="color:var(--text-dim)">No users</td></tr>';
+                return;
+            }
+            list.innerHTML = users.map(u => `<tr>
+                <td><strong>${u.uid}</strong></td>
+                <td>${u.displayname}</td>
+                <td><button class="btn" style="padding:2px 8px;font-size:0.7rem" onclick="resetPassword('${u.uid}')">Reset Password</button></td>
+            </tr>`).join('');
+        }
+
+        async function loadBackups() {
+            const d = await api('/backups');
+            const list = document.getElementById('backup-list');
+            const backups = d.backups || [];
+            if (!backups.length) {
+                list.innerHTML = '<tr><td colspan="4" style="color:var(--text-dim)">No backups</td></tr>';
+                return;
+            }
+            list.innerHTML = backups.map(b => `<tr>
+                <td><strong>${b.name}</strong></td>
+                <td>${b.size}</td>
+                <td>${new Date(b.timestamp * 1000).toLocaleDateString()}</td>
+                <td>
+                    <button class="btn" style="padding:2px 8px;font-size:0.7rem" onclick="restoreBackup('${b.name}')">Restore</button>
+                    <button class="btn danger" style="padding:2px 8px;font-size:0.7rem" onclick="deleteBackup('${b.name}')">Delete</button>
+                </td>
+            </tr>`).join('');
+        }
+
+        async function startService() {
+            await api('/start', { method: 'POST' });
+            setTimeout(refresh, 2000);
+        }
+
+        async function stopService() {
+            await api('/stop', { method: 'POST' });
+            setTimeout(refresh, 1000);
+        }
+
+        async function restartService() {
+            await api('/restart', { method: 'POST' });
+            setTimeout(refresh, 3000);
+        }
+
+        async function installNextcloud() {
+            await api('/install', { method: 'POST' });
+            alert('Installation started in background. This may take several minutes.');
+            setTimeout(refresh, 10000);
+        }
+
+        async function createBackup() {
+            const r = await api('/backup', { method: 'POST' });
+            if (r.success) {
+                alert('Backup created');
+                loadBackups();
+            } else {
+                alert('Backup failed');
+            }
+        }
+
+        async function deleteBackup(name) {
+            if (!confirm(`Delete backup "${name}"?`)) return;
+            await api(`/backup/${name}`, { method: 'DELETE' });
+            loadBackups();
+        }
+
+        async function restoreBackup(name) {
+            if (!confirm(`Restore from backup "${name}"? This will overwrite current data.`)) return;
+            await api(`/restore/${name}`, { method: 'POST' });
+            alert('Restore started in background');
+        }
+
+        async function resetPassword(uid) {
+            const password = prompt(`New password for ${uid}:`);
+            if (!password) return;
+            const r = await api('/user/password', {
+                method: 'POST',
+                body: JSON.stringify({ uid, password })
+            });
+            alert(r.success ? 'Password reset' : 'Failed: ' + (r.detail || 'Error'));
+        }
+
+        function refresh() { loadStatus(); loadStorage(); loadConnections(); loadUsers(); loadBackups(); }
+        refresh();
+    </script>
+</body>
+</html>

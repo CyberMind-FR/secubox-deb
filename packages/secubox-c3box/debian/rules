@@ -1,0 +1,11 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-c3box/usr/lib/secubox/c3box
+	cp -r api debian/secubox-c3box/usr/lib/secubox/c3box/
+	install -d debian/secubox-c3box/usr/share/secubox/www/c3box
+	cp -r www/c3box/. debian/secubox-c3box/usr/share/secubox/www/c3box/
+	install -d debian/secubox-c3box/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-c3box/usr/share/secubox/menu.d/ || true

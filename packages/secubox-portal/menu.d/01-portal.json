@@ -1,0 +1,9 @@
+{
+  "id": "portal",
+  "name": "Portal",
+  "category": "dashboard",
+  "icon": "🔐",
+  "path": "/c3box/",
+  "order": 1,
+  "description": "Services Portal"
+}

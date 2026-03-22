@@ -1,0 +1,5 @@
+secubox-nextcloud (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release
+
+ -- SecuBox <dev@secubox.local>  Sun, 22 Mar 2026 05:37:11 +0100

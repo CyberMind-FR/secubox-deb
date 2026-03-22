@@ -1,5 +1,6 @@
-"""secubox-streamlit — Streamlit Platform API"""
+"""secubox-streamlit — Streamlit Platform API (Three-Fold Architecture)"""
 import os
+import json
 import subprocess
 import shutil
 import zipfile
@@ -18,6 +19,7 @@ log = get_logger("streamlit")
 
 APPS_DIR = "/srv/streamlit/apps"
 LXC_NAME = "streamlit"
+CTL = "/usr/sbin/streamlitctl"
 
 
 def _cfg():
@@ -25,8 +27,24 @@ def _cfg():
     return {
         "apps_dir": cfg.get("apps_dir", APPS_DIR) if cfg else APPS_DIR,
         "default_port": cfg.get("default_port", 8501) if cfg else 8501,
-        "use_lxc": cfg.get("use_lxc", False) if cfg else False,
+        "use_lxc": cfg.get("use_lxc", True) if cfg else True,
     }
+
+
+def _run_ctl(*args, timeout: int = 30) -> dict:
+    """Run streamlitctl and return parsed JSON or error."""
+    try:
+        result = subprocess.run(
+            [CTL, *args],
+            capture_output=True, text=True, timeout=timeout
+        )
+        if result.stdout.strip().startswith("{"):
+            return json.loads(result.stdout)
+        return {"output": result.stdout, "error": result.stderr, "code": result.returncode}
+    except subprocess.TimeoutExpired:
+        return {"error": "timeout", "success": False}
+    except Exception as e:
+        return {"error": str(e), "success": False}
 
 
 def _lxc_running() -> bool:
@@ -43,95 +61,179 @@ def _lxc_exists() -> bool:
     return Path(f"/var/lib/lxc/{LXC_NAME}").exists()
 
 
-def _get_app_port(name: str) -> int:
-    """Get port for an app."""
-    cfg = get_config("streamlit") or {}
-    apps = cfg.get("apps", {})
-    return apps.get(name, {}).get("port", 0)
+def _get_apps() -> List[dict]:
+    """Get list of apps from streamlitctl."""
+    result = _run_ctl("app", "list")
+    return result.get("apps", [])
 
 
-def _is_app_running(name: str) -> bool:
-    """Check if app process is running."""
-    port = _get_app_port(name)
-    if not port:
-        return False
-    result = subprocess.run(
-        ["ss", "-tln", f"sport = :{port}"],
-        capture_output=True, text=True
-    )
-    return str(port) in result.stdout
+def _get_instances() -> List[dict]:
+    """Get list of instances from streamlitctl."""
+    result = _run_ctl("instance", "list")
+    return result.get("instances", [])
 
 
-def _load_apps() -> List[dict]:
-    """Load apps from directory."""
-    apps = []
-    apps_dir = Path(_cfg()["apps_dir"])
-    if not apps_dir.exists():
-        return apps
-    
-    cfg = get_config("streamlit") or {}
-    app_configs = cfg.get("apps", {})
-    
-    for app_dir in apps_dir.iterdir():
-        if not app_dir.is_dir() or app_dir.name.startswith("."):
-            continue
-        
-        name = app_dir.name
-        app_cfg = app_configs.get(name, {})
-        port = app_cfg.get("port", 0)
-        
-        apps.append({
-            "name": name,
-            "enabled": app_cfg.get("enabled", False),
-            "port": port,
-            "domain": app_cfg.get("domain", ""),
-            "status": "running" if _is_app_running(name) else "stopped",
-        })
-    
-    return apps
+# ═══════════════════════════════════════════════════════════════════════
+# THREE-FOLD ARCHITECTURE
+# ═══════════════════════════════════════════════════════════════════════
+
+# ── COMPONENTS ─────────────────────────────────────────────────────────
+# What makes up the system
+
+@router.get("/components")
+async def components():
+    """List system components (public)."""
+    cfg = _cfg()
+    lxc_installed = _lxc_exists()
+
+    return {
+        "components": [
+            {
+                "name": "Streamlit LXC Container",
+                "type": "container",
+                "description": "Alpine-based LXC container running Streamlit",
+                "installed": lxc_installed,
+                "config_path": "/etc/secubox/streamlit.toml"
+            },
+            {
+                "name": "Application Directory",
+                "type": "storage",
+                "description": "Directory containing deployed apps",
+                "path": cfg["apps_dir"],
+                "exists": Path(cfg["apps_dir"]).exists()
+            },
+            {
+                "name": "streamlitctl",
+                "type": "cli",
+                "description": "Control script for container and app management",
+                "path": CTL,
+                "installed": Path(CTL).exists()
+            }
+        ],
+        "use_lxc": cfg["use_lxc"]
+    }
 
 
-# ── Status ────────────────────────────────────────────────────────
+# ── STATUS ─────────────────────────────────────────────────────────────
+# Health and runtime state
 
 @router.get("/status")
 async def status():
-    """Streamlit platform status (public)."""
-    apps = _load_apps()
+    """Get platform status (public)."""
+    apps = _get_apps()
+    instances = _get_instances()
     cfg = _cfg()
-    
+
     container_status = "not_configured"
     if cfg["use_lxc"]:
         if _lxc_exists():
             container_status = "running" if _lxc_running() else "stopped"
         else:
             container_status = "not_installed"
-    
+
+    running_apps = sum(1 for a in apps if a.get("running"))
+    running_instances = sum(1 for i in instances if i.get("running"))
+
     return {
         "app_count": len(apps),
-        "running_count": sum(1 for a in apps if a["status"] == "running"),
+        "running_apps": running_apps,
+        "instance_count": len(instances),
+        "running_instances": running_instances,
         "container_status": container_status,
         "use_lxc": cfg["use_lxc"],
-        "default_port": cfg["default_port"],
+        "default_port": cfg["default_port"]
     }
 
+
+@router.get("/health")
+async def health():
+    """Health check endpoint (public)."""
+    checks = {
+        "api": "ok",
+        "streamlitctl": "ok" if Path(CTL).exists() else "missing",
+        "apps_dir": "ok" if Path(_cfg()["apps_dir"]).exists() else "missing"
+    }
+
+    if _cfg()["use_lxc"]:
+        if _lxc_exists():
+            checks["container"] = "running" if _lxc_running() else "stopped"
+        else:
+            checks["container"] = "not_installed"
+
+    overall = "healthy" if all(v in ["ok", "running"] for v in checks.values()) else "degraded"
+
+    return {
+        "status": overall,
+        "module": "streamlit",
+        "checks": checks
+    }
+
+
+# ── ACCESS ─────────────────────────────────────────────────────────────
+# How to connect to services
+
+@router.get("/access")
+async def access():
+    """Get access information for running apps (public)."""
+    apps = _get_apps()
+    instances = _get_instances()
+    cfg = _cfg()
+
+    access_points = []
+
+    # Add running apps
+    for app in apps:
+        if app.get("running") and app.get("port"):
+            access_points.append({
+                "name": app["name"],
+                "type": "app",
+                "port": app["port"],
+                "url": f"http://{{{{hostname}}}}:{app['port']}",
+                "status": "running"
+            })
+
+    # Add running instances
+    for inst in instances:
+        if inst.get("running") and inst.get("port"):
+            access_points.append({
+                "name": inst.get("id", inst.get("name", "unknown")),
+                "type": "instance",
+                "app": inst.get("app"),
+                "port": inst["port"],
+                "url": f"http://{{{{hostname}}}}:{inst['port']}",
+                "domain": inst.get("domain"),
+                "status": "running"
+            })
+
+    return {
+        "access": access_points,
+        "default_port": cfg["default_port"]
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# APPS
+# ═══════════════════════════════════════════════════════════════════════
 
 @router.get("/apps")
 async def list_apps():
     """List all apps (public)."""
-    return {"apps": _load_apps()}
+    return {"apps": _get_apps()}
 
 
 @router.get("/app/{name}")
 async def get_app(name: str, user=Depends(require_jwt)):
     """Get app details."""
-    apps = _load_apps()
+    apps = _get_apps()
     for a in apps:
-        if a["name"] == name:
+        if a.get("name") == name:
+            # Add extra details
+            app_dir = Path(_cfg()["apps_dir"]) / name
+            a["path"] = str(app_dir)
+            a["has_requirements"] = (app_dir / "requirements.txt").exists()
             return a
     raise HTTPException(404, f"App not found: {name}")
 
-
-# ── Deploy ────────────────────────────────────────────────────────
 
 @router.post("/deploy")
 async def deploy(
@@ -142,152 +244,169 @@ async def deploy(
 ):
     """Deploy a Streamlit app from ZIP."""
     if not name:
-        name = file.filename.replace(".zip", "").replace(" ", "_")
-    
-    apps_dir = Path(_cfg()["apps_dir"])
-    app_dir = apps_dir / name
-    
-    if app_dir.exists():
-        shutil.rmtree(app_dir)
-    
-    app_dir.mkdir(parents=True)
-    
-    # Save and extract ZIP
-    zip_path = app_dir / "upload.zip"
+        name = file.filename.replace(".zip", "").replace(" ", "_").lower()
+
+    # Save uploaded file
+    tmp_path = f"/tmp/streamlit_upload_{name}.zip"
     content = await file.read()
-    zip_path.write_bytes(content)
-    
-    try:
-        with zipfile.ZipFile(zip_path, 'r') as zf:
-            # Extract flattening single root directory
-            names = zf.namelist()
-            root_dirs = set(n.split('/')[0] for n in names if '/' in n)
-            
-            if len(root_dirs) == 1:
-                # Single root dir - extract and flatten
-                root = list(root_dirs)[0]
-                for member in zf.namelist():
-                    if member.startswith(root + '/'):
-                        target = app_dir / member[len(root)+1:]
-                        if member.endswith('/'):
-                            target.mkdir(parents=True, exist_ok=True)
-                        else:
-                            target.parent.mkdir(parents=True, exist_ok=True)
-                            target.write_bytes(zf.read(member))
-            else:
-                zf.extractall(app_dir)
-        
-        zip_path.unlink()
-        
-        # Install requirements if present
-        req_file = app_dir / "requirements.txt"
-        if req_file.exists():
-            subprocess.run(
-                ["pip3", "install", "-r", str(req_file)],
-                capture_output=True, timeout=120
-            )
-        
+    Path(tmp_path).write_bytes(content)
+
+    # Deploy via streamlitctl
+    result = _run_ctl("app", "deploy", tmp_path, name, timeout=120)
+
+    # Cleanup
+    Path(tmp_path).unlink(missing_ok=True)
+
+    if result.get("success"):
         log.info("Deployed app: %s", name)
-        return {"success": True, "name": name, "directory": str(app_dir)}
-    
-    except Exception as e:
-        log.error("Deploy failed: %s", e)
-        raise HTTPException(500, str(e))
+        return result
+    else:
+        log.error("Deploy failed: %s", result.get("error", "unknown"))
+        raise HTTPException(500, result.get("error", "Deploy failed"))
 
-
-# ── App Control ───────────────────────────────────────────────────
 
 @router.post("/app/{name}/start")
-async def start_app(name: str, user=Depends(require_jwt)):
+async def start_app(name: str, port: int = 0, user=Depends(require_jwt)):
     """Start an app."""
-    apps_dir = Path(_cfg()["apps_dir"])
-    app_dir = apps_dir / name
-    
-    if not app_dir.exists():
-        raise HTTPException(404, f"App not found: {name}")
-    
-    port = _get_app_port(name) or _cfg()["default_port"]
-    
-    # Find entrypoint
-    entrypoint = None
-    for candidate in ["app.py", "main.py", "streamlit_app.py"]:
-        if (app_dir / candidate).exists():
-            entrypoint = candidate
-            break
-    
-    if not entrypoint:
-        raise HTTPException(400, "No entrypoint found (app.py, main.py)")
-    
-    # Start app
-    subprocess.Popen(
-        ["streamlit", "run", entrypoint,
-         "--server.port", str(port),
-         "--server.headless", "true"],
-        cwd=str(app_dir),
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-    
-    log.info("Started app: %s on port %d", name, port)
-    return {"success": True, "name": name, "port": port}
+    cfg = _cfg()
+    port = port or cfg["default_port"]
+
+    result = _run_ctl("app", "start", name, str(port))
+
+    if "error" not in result or result.get("code", 0) == 0:
+        log.info("Started app: %s on port %d", name, port)
+        return {"success": True, "name": name, "port": port}
+    else:
+        raise HTTPException(500, result.get("error", "Failed to start"))
 
 
 @router.post("/app/{name}/stop")
 async def stop_app(name: str, user=Depends(require_jwt)):
     """Stop an app."""
-    subprocess.run(["pkill", "-f", f"streamlit.*{name}"], timeout=5)
+    result = _run_ctl("app", "stop", name)
     log.info("Stopped app: %s", name)
+    return {"success": True, "name": name}
+
+
+@router.delete("/app/{name}")
+async def delete_app(name: str, user=Depends(require_jwt)):
+    """Delete an app."""
+    result = _run_ctl("app", "remove", name)
+    log.info("Removed app: %s", name)
     return {"success": True, "name": name}
 
 
 @router.get("/app/{name}/logs")
 async def get_logs(name: str, lines: int = 100, user=Depends(require_jwt)):
     """Get app logs."""
-    result = subprocess.run(
-        ["journalctl", "-u", f"streamlit-app@{name}", "-n", str(lines), "--no-pager"],
-        capture_output=True, text=True, timeout=10
-    )
-    return {"logs": result.stdout.splitlines()}
+    result = _run_ctl("app", "logs", name, str(lines))
+    return {"logs": result.get("output", "").splitlines()}
 
 
-# ── Container Control ─────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════
+# INSTANCES
+# ═══════════════════════════════════════════════════════════════════════
+
+@router.get("/instances")
+async def list_instances(user=Depends(require_jwt)):
+    """List all instances."""
+    return {"instances": _get_instances()}
+
+
+@router.post("/instance/{id}/start")
+async def start_instance(id: str, user=Depends(require_jwt)):
+    """Start an instance."""
+    result = _run_ctl("instance", "start", id)
+    return {"success": True, "id": id}
+
+
+@router.post("/instance/{id}/stop")
+async def stop_instance(id: str, user=Depends(require_jwt)):
+    """Stop an instance."""
+    result = _run_ctl("instance", "stop", id)
+    return {"success": True, "id": id}
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# CONTAINER CONTROL
+# ═══════════════════════════════════════════════════════════════════════
 
 @router.get("/container/status")
 async def container_status(user=Depends(require_jwt)):
     """Get LXC container status."""
     if not _cfg()["use_lxc"]:
         return {"enabled": False}
-    
+
     return {
         "enabled": True,
         "exists": _lxc_exists(),
-        "running": _lxc_running(),
+        "running": _lxc_running()
     }
+
+
+@router.post("/container/install")
+async def container_install(background_tasks: BackgroundTasks, user=Depends(require_jwt)):
+    """Install LXC container (background)."""
+    def do_install():
+        subprocess.run([CTL, "install"], timeout=600)
+
+    background_tasks.add_task(do_install)
+    return {"success": True, "message": "Installation started in background"}
 
 
 @router.post("/container/start")
 async def container_start(user=Depends(require_jwt)):
     """Start LXC container."""
-    result = subprocess.run(
-        ["lxc-start", "-n", LXC_NAME],
-        capture_output=True, text=True, timeout=30
-    )
-    return {"success": result.returncode == 0}
+    result = _run_ctl("start", timeout=60)
+    return {"success": "error" not in result}
 
 
 @router.post("/container/stop")
 async def container_stop(user=Depends(require_jwt)):
     """Stop LXC container."""
-    result = subprocess.run(
-        ["lxc-stop", "-n", LXC_NAME],
-        capture_output=True, text=True, timeout=30
-    )
-    return {"success": result.returncode == 0}
+    result = _run_ctl("stop", timeout=60)
+    return {"success": "error" not in result}
 
 
-@router.get("/health")
-async def health():
-    return {"status": "ok", "module": "streamlit"}
+# ═══════════════════════════════════════════════════════════════════════
+# MIGRATION
+# ═══════════════════════════════════════════════════════════════════════
+
+class MigrateRequest(BaseModel):
+    source: str = "192.168.255.1"
+
+
+@router.post("/migrate")
+async def migrate(req: MigrateRequest, background_tasks: BackgroundTasks, user=Depends(require_jwt)):
+    """Migrate apps from OpenWrt SecuBox."""
+    def do_migrate():
+        subprocess.run([CTL, "migrate", req.source], timeout=600)
+
+    background_tasks.add_task(do_migrate)
+    log.info("Migration started from %s", req.source)
+    return {"success": True, "message": f"Migration from {req.source} started"}
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# GITEA INTEGRATION
+# ═══════════════════════════════════════════════════════════════════════
+
+@router.post("/gitea/push/{name}")
+async def gitea_push(name: str, user=Depends(require_jwt)):
+    """Push app to Gitea repository."""
+    result = _run_ctl("gitea", "push", name, timeout=60)
+    return {"success": "error" not in result, "name": name}
+
+
+class GiteaCloneRequest(BaseModel):
+    repo: str
+
+
+@router.post("/gitea/clone/{name}")
+async def gitea_clone(name: str, req: GiteaCloneRequest, user=Depends(require_jwt)):
+    """Clone app from Gitea repository."""
+    result = _run_ctl("gitea", "clone", name, req.repo, timeout=120)
+    return {"success": "error" not in result, "name": name}
 
 
 app.include_router(router)

@@ -458,7 +458,12 @@
         function checkUpdates() { location.href = '/system/'; }
         function viewLogs() { location.href = '/system/'; }
         function exportConfig() { alert('Export started'); }
-        function logout() { localStorage.removeItem('secubox_token'); localStorage.removeItem('sbx_token'); window.location.href = '/portal/login.html'; }
+        async function logout() {
+            await fetch('/api/v1/portal/logout', { method: 'POST', credentials: 'include' });
+            localStorage.removeItem('secubox_token');
+            localStorage.removeItem('sbx_token');
+            window.location.href = '/login.html';
+        }
 
         async function loadRoadmap() {
             const data = await api('/roadmap');
