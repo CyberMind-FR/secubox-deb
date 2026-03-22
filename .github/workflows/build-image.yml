@@ -1,18 +1,32 @@
-name: Build SecuBox-DEB images (.img.gz)
+name: Build SecuBox System Images
 
 on:
   workflow_dispatch:
     inputs:
       board:
-        description: 'Board cible'
+        description: 'Target board'
         required: true
         type: choice
-        options: [mochabin, espressobin-v7, espressobin-ultra, all]
-        default: mochabin
+        options:
+          - mochabin
+          - espressobin-v7
+          - espressobin-ultra
+          - vm-x64
+          - vm-arm64
+          - all
+        default: vm-x64
+      size:
+        description: 'Image size'
+        required: false
+        default: '8G'
   push:
     tags: ['v*']
 
+env:
+  DEBIAN_SUITE: bookworm
+
 jobs:
+  # Build system images
   build-image:
     runs-on: ubuntu-22.04
     strategy:
@@ -20,15 +34,21 @@ jobs:
       matrix:
         board: ${{ fromJson(
           github.event.inputs.board == 'all'
-          && '["mochabin","espressobin-v7","espressobin-ultra"]'
-          || format('["{0}"]', github.event.inputs.board || 'mochabin')
+          && '["mochabin","espressobin-v7","espressobin-ultra","vm-x64"]'
+          || format('["{0}"]', github.event.inputs.board || 'vm-x64')
         ) }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          df -h
+
       - name: Setup QEMU + binfmt
+        if: contains(matrix.board, 'arm') || contains(matrix.board, 'espresso') || contains(matrix.board, 'mocha')
         uses: docker/setup-qemu-action@v3
         with:
           platforms: arm64
@@ -39,20 +59,155 @@ jobs:
           sudo apt-get install -y -qq \
             debootstrap qemu-user-static binfmt-support \
             parted dosfstools e2fsprogs rsync \
-            gzip pigz
+            gzip pigz xz-utils
+
+      - name: Determine architecture
+        id: arch
+        run: |
+          case "${{ matrix.board }}" in
+            vm-x64)
+              echo "arch=amd64" >> $GITHUB_OUTPUT
+              echo "is_arm=false" >> $GITHUB_OUTPUT
+              ;;
+            *)
+              echo "arch=arm64" >> $GITHUB_OUTPUT
+              echo "is_arm=true" >> $GITHUB_OUTPUT
+              ;;
+          esac
 
       - name: Build image for ${{ matrix.board }}
         run: |
           sudo bash image/build-image.sh \
             --board ${{ matrix.board }} \
-            --suite bookworm \
+            --suite ${{ env.DEBIAN_SUITE }} \
             --out output/ \
-            --size 4G
-        timeout-minutes: 60
+            --size ${{ github.event.inputs.size || '8G' }}
+        timeout-minutes: 90
+
+      - name: Compress image
+        run: |
+          cd output/
+          for img in *.img; do
+            [ -f "$img" ] || continue
+            echo "Compressing $img..."
+            pigz -9 -k "$img"
+            # Also create xz for smaller size
+            xz -9 -k "$img"
+          done
+          ls -lh
+
+      - name: Generate checksums
+        run: |
+          cd output/
+          sha256sum *.img.gz *.img.xz 2>/dev/null > SHA256SUMS || true
+          cat SHA256SUMS
 
       - name: Upload image artifact
         uses: actions/upload-artifact@v4
         with:
-          name: secubox-${{ matrix.board }}-bookworm
-          path: output/secubox-${{ matrix.board }}-bookworm.img.gz*
+          name: secubox-${{ matrix.board }}-${{ env.DEBIAN_SUITE }}
+          path: |
+            output/*.img.gz
+            output/*.img.xz
+            output/SHA256SUMS
           if-no-files-found: error
+          retention-days: 30
+
+  # Collect all images and create release
+  release:
+    needs: build-image
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: images/
+          merge-multiple: true
+
+      - name: Generate combined checksums
+        run: |
+          cd images/
+          # Remove individual SHA256SUMS files
+          rm -f SHA256SUMS
+          # Generate combined checksums
+          sha256sum *.img.gz *.img.xz 2>/dev/null | sort > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Sign checksums
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          if [ -n "$GPG_PRIVATE_KEY" ]; then
+            echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+            cd images/
+            gpg --clearsign SHA256SUMS
+            mv SHA256SUMS.asc SHA256SUMS.gpg
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            images/*.img.gz
+            images/*.img.xz
+            images/SHA256SUMS
+            images/SHA256SUMS.gpg
+          body: |
+            ## SecuBox-DEB ${{ github.ref_name }} System Images
+
+            Flashable system images for SecuBox appliances.
+
+            ### Available Images
+
+            | Image | Board | Architecture | Description |
+            |-------|-------|--------------|-------------|
+            | `secubox-mochabin-bookworm.img.gz` | MOCHAbin | arm64 | Marvell Armada 7040 (Pro) |
+            | `secubox-espressobin-v7-bookworm.img.gz` | ESPRESSObin v7 | arm64 | Marvell Armada 3720 (Lite) |
+            | `secubox-espressobin-ultra-bookworm.img.gz` | ESPRESSObin Ultra | arm64 | Marvell Armada 3720 (Lite+) |
+            | `secubox-vm-x64-bookworm.img.gz` | VirtualBox/QEMU | amd64 | VM for testing |
+
+            ### Installation
+
+            **ARM64 boards (MOCHAbin, ESPRESSObin):**
+            ```bash
+            # Flash to SD card or eMMC
+            gunzip -c secubox-mochabin-bookworm.img.gz | sudo dd of=/dev/sdX bs=4M status=progress
+            sync
+            ```
+
+            **VirtualBox (x64):**
+            ```bash
+            # Convert to VDI
+            gunzip secubox-vm-x64-bookworm.img.gz
+            VBoxManage convertfromraw secubox-vm-x64-bookworm.img secubox.vdi --format VDI
+
+            # Create VM
+            VBoxManage createvm --name SecuBox --ostype Debian_64 --register
+            VBoxManage modifyvm SecuBox --memory 2048 --cpus 2 --nic1 nat
+            VBoxManage storagectl SecuBox --name SATA --add sata
+            VBoxManage storageattach SecuBox --storagectl SATA --port 0 --device 0 --type hdd --medium secubox.vdi
+            ```
+
+            ### Verification
+
+            ```bash
+            sha256sum -c SHA256SUMS
+            gpg --verify SHA256SUMS.gpg
+            ```
+
+            ### Default Credentials
+
+            - **SSH:** root / (SSH key only, set during firstboot)
+            - **Web UI:** https://secubox.local:8443 (admin / generated at firstboot)
+
+            ### Included Packages
+
+            33 SecuBox packages including:
+            - Security: CrowdSec, WAF, Auth, NAC
+            - Networking: WireGuard, HAProxy, DPI, QoS
+            - Applications: Mail (Postfix/Dovecot), Gitea, Nextcloud
+            - Publishing: Streamlit, MetaBlogizer, Droplet
+          draft: false
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}

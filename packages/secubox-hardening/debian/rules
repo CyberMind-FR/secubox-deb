@@ -1,0 +1,31 @@
+#!/usr/bin/make -f
+export DH_VERBOSE = 1
+
+%:
+	dh $@ --with python3
+
+override_dh_auto_install:
+	install -d $(CURDIR)/debian/secubox-hardening/usr/sbin
+	install -d $(CURDIR)/debian/secubox-hardening/usr/lib/secubox/hardening/api
+	install -d $(CURDIR)/debian/secubox-hardening/usr/share/secubox/www/hardening
+	install -d $(CURDIR)/debian/secubox-hardening/etc/secubox/hardening
+	install -d $(CURDIR)/debian/secubox-hardening/usr/share/secubox/menu.d
+
+	# Install hardeningctl
+	install -m 755 sbin/hardeningctl $(CURDIR)/debian/secubox-hardening/usr/sbin/
+
+	# Install API
+	cp -r api/* $(CURDIR)/debian/secubox-hardening/usr/lib/secubox/hardening/api/
+
+	# Install configuration
+	install -m 644 conf/99-secubox-hardening.conf $(CURDIR)/debian/secubox-hardening/etc/secubox/hardening/
+	install -m 644 conf/blacklist-modules.conf $(CURDIR)/debian/secubox-hardening/etc/secubox/hardening/
+
+	# Install web frontend
+	cp -r www/hardening/* $(CURDIR)/debian/secubox-hardening/usr/share/secubox/www/hardening/ || true
+
+	# Install menu entry
+	install -m 644 debian/menu.json $(CURDIR)/debian/secubox-hardening/usr/share/secubox/menu.d/hardening.json || true
+
+override_dh_installsystemd:
+	dh_installsystemd --name=secubox-hardening

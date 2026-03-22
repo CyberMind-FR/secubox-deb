@@ -1,0 +1,52 @@
+# SecuBox Audit Rules
+# Install to /etc/audit/rules.d/50-secubox.rules
+
+# Monitor SecuBox configuration changes
+-w /etc/secubox/ -p wa -k secubox_config
+-w /etc/secubox/secubox.conf -p wa -k secubox_config
+
+# Monitor JWT secret access
+-w /run/secubox/jwt.secret -p r -k secubox_jwt
+
+# Monitor WireGuard configuration
+-w /etc/wireguard/ -p wa -k wireguard_config
+
+# Monitor mail server configuration
+-w /srv/mail/config/ -p wa -k mail_config
+-w /srv/mail/ssl/ -p wa -k mail_ssl
+
+# Monitor nftables rules
+-w /etc/nftables.conf -p wa -k firewall_rules
+
+# Monitor HAProxy configuration
+-w /etc/haproxy/ -p wa -k haproxy_config
+
+# Monitor user authentication
+-w /var/log/auth.log -p wa -k auth_log
+
+# Monitor sudo usage
+-w /etc/sudoers -p wa -k sudoers
+-w /etc/sudoers.d/ -p wa -k sudoers
+
+# Monitor SSH configuration
+-w /etc/ssh/sshd_config -p wa -k sshd_config
+-w /root/.ssh/authorized_keys -p wa -k ssh_keys
+
+# Monitor systemd service changes
+-w /lib/systemd/system/secubox- -p wa -k secubox_services
+
+# Monitor privilege escalation attempts
+-a always,exit -F arch=b64 -S setuid -S setgid -S setreuid -S setregid -k privilege_escalation
+-a always,exit -F arch=b32 -S setuid -S setgid -S setreuid -S setregid -k privilege_escalation
+
+# Monitor failed access attempts
+-a always,exit -F arch=b64 -S open -S openat -F exit=-EACCES -k access_denied
+-a always,exit -F arch=b64 -S open -S openat -F exit=-EPERM -k access_denied
+
+# Monitor network configuration changes
+-w /etc/netplan/ -p wa -k network_config
+-w /etc/network/ -p wa -k network_config
+
+# Monitor package management
+-w /var/log/dpkg.log -p wa -k package_mgmt
+-w /var/log/apt/ -p wa -k package_mgmt

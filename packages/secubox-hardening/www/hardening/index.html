@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hardening - SecuBox</title>
+    <link rel="stylesheet" href="/portal/css/style.css">
+    <style>
+        .score-card {
+            background: var(--surface0);
+            border-radius: 8px;
+            padding: 2rem;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        .score-value {
+            font-size: 4rem;
+            font-weight: bold;
+        }
+        .score-value.good { color: var(--green); }
+        .score-value.medium { color: var(--yellow); }
+        .score-value.bad { color: var(--red); }
+        .checks-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1rem;
+        }
+        .check-item {
+            background: var(--surface0);
+            border-radius: 8px;
+            padding: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        .check-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+        .check-icon.pass { background: var(--green); color: var(--base); }
+        .check-icon.fail { background: var(--red); color: var(--base); }
+        .check-details h4 { margin: 0 0 0.25rem 0; }
+        .check-details .status { font-size: 0.875rem; color: var(--subtext0); }
+        .action-section {
+            margin-top: 2rem;
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+        .action-btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        .action-btn.primary { background: var(--blue); color: var(--base); }
+        .action-btn.secondary { background: var(--surface1); color: var(--text); }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <nav class="sidebar" id="sidebar"></nav>
+
+        <main class="main-content">
+            <header class="content-header">
+                <h1>System Hardening</h1>
+                <p class="subtitle">Kernel and network security configuration</p>
+            </header>
+
+            <div class="score-card">
+                <div class="score-value" id="score">--</div>
+                <div>Security Score</div>
+            </div>
+
+            <h2>Security Checks</h2>
+            <div class="checks-grid" id="checks"></div>
+
+            <div class="action-section">
+                <button class="action-btn primary" onclick="applyHardening()">Apply Hardening</button>
+                <button class="action-btn secondary" onclick="runBenchmark()">Run Benchmark</button>
+                <button class="action-btn secondary" onclick="refreshStatus()">Refresh Status</button>
+            </div>
+        </main>
+    </div>
+
+    <script src="/portal/js/sidebar.js"></script>
+    <script>
+        const API_BASE = '/api/v1/hardening';
+
+        async function fetchAPI(endpoint, options = {}) {
+            const token = localStorage.getItem('jwt_token');
+            const headers = {
+                'Content-Type': 'application/json',
+                ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+                ...options.headers
+            };
+            const response = await fetch(`${API_BASE}${endpoint}`, { ...options, headers });
+            if (!response.ok) throw new Error(`API error: ${response.status}`);
+            return response.json();
+        }
+
+        async function loadStatus() {
+            try {
+                const data = await fetchAPI('/status');
+
+                // Update score
+                const scoreEl = document.getElementById('score');
+                const score = data.score || 0;
+                scoreEl.textContent = score + '%';
+                scoreEl.className = 'score-value ' + (score >= 80 ? 'good' : score >= 50 ? 'medium' : 'bad');
+
+                // Update checks
+                const checksEl = document.getElementById('checks');
+                if (data.checks && data.checks.length > 0) {
+                    checksEl.innerHTML = data.checks.map(check => `
+                        <div class="check-item">
+                            <div class="check-icon ${check.status}">${check.status === 'pass' ? '✓' : '✗'}</div>
+                            <div class="check-details">
+                                <h4>${check.name}</h4>
+                                <div class="status">
+                                    ${check.status === 'pass' ? 'Configured correctly' :
+                                      'Current: ' + (check.current || 'Not set')}
+                                </div>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    checksEl.innerHTML = '<div class="check-item">No checks available</div>';
+                }
+            } catch (e) {
+                console.error('Failed to load status:', e);
+                document.getElementById('score').textContent = 'Error';
+            }
+        }
+
+        async function applyHardening() {
+            try {
+                await fetchAPI('/apply', { method: 'POST' });
+                alert('Hardening applied');
+                loadStatus();
+            } catch (e) {
+                alert('Failed to apply: ' + e.message);
+            }
+        }
+
+        async function runBenchmark() {
+            try {
+                const result = await fetchAPI('/benchmark');
+                if (result.output) {
+                    alert(result.output);
+                }
+                loadStatus();
+            } catch (e) {
+                alert('Benchmark failed: ' + e.message);
+            }
+        }
+
+        function refreshStatus() {
+            loadStatus();
+        }
+
+        document.addEventListener('DOMContentLoaded', loadStatus);
+    </script>
+</body>
+</html>

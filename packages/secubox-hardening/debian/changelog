@@ -1,0 +1,11 @@
+secubox-hardening (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release
+  * Kernel sysctl hardening configuration
+  * Network security hardening
+  * Module blacklist for attack surface reduction
+  * hardeningctl management tool
+  * Security benchmark functionality
+  * FastAPI management interface
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Mar 2026 18:45:00 +0100

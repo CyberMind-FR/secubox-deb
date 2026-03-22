@@ -1,3 +1,29 @@
+secubox-mail (2.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Add ClamAV antivirus scanning integration
+  * mailserverctl v2.6.0: av setup/enable/disable/status/update commands
+  * Install ClamAV daemon + milter in LXC container
+  * Configure Postfix milter integration for virus scanning
+  * Automatic virus definition updates via freshclam
+  * Add API endpoints: /av/status, /av/setup, /av/enable, /av/disable, /av/update
+  * Add ClamAV to components JSON output
+  * Full mail security stack: DKIM + SpamAssassin + Postgrey + ClamAV
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Mar 2026 17:30:00 +0100
+
+secubox-mail (1.9.0-1~bookworm1) bookworm; urgency=medium
+
+  * Add Postgrey greylisting anti-spam integration
+  * mailserverctl v2.5.0: grey setup/enable/disable/status commands
+  * Install Postgrey in LXC container with whitelist for major providers
+  * Configure Postfix smtpd_recipient_restrictions with policy service
+  * Auto-whitelist after 5 successful deliveries
+  * Add API endpoints: /grey/status, /grey/setup, /grey/enable, /grey/disable
+  * Add Postgrey to components JSON output
+  * Update startup script to start Postgrey and SpamAssassin services
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Mar 2026 17:00:00 +0100
+
 secubox-mail (1.8.0-1~bookworm1) bookworm; urgency=medium
 
   * Add SpamAssassin spam filtering integration

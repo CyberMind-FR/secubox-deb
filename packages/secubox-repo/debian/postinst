@@ -1,0 +1,29 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+    configure)
+        # Create directories
+        mkdir -p /var/lib/secubox-repo/{conf,gpg}
+        mkdir -p /var/www/apt.secubox.in/{dists,pool}
+        chmod 700 /var/lib/secubox-repo/gpg
+
+        # Set permissions
+        chown -R secubox:secubox /var/lib/secubox-repo
+        chown -R secubox:secubox /var/www/apt.secubox.in
+
+        # Enable nginx config if nginx is installed
+        if [ -d /etc/nginx/sites-enabled ]; then
+            ln -sf /etc/nginx/snippets/secubox-repo.conf /etc/nginx/conf.d/secubox-repo.conf 2>/dev/null || true
+        fi
+
+        # Enable and start service
+        systemctl daemon-reload
+        systemctl enable secubox-repo.service
+        systemctl start secubox-repo.service || true
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

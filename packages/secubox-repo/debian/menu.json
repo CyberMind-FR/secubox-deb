@@ -1,0 +1,10 @@
+{
+  "id": "repo",
+  "label": "APT Repo",
+  "icon": "archive",
+  "path": "/repo/",
+  "api": "/api/v1/repo/",
+  "category": "system",
+  "order": 150,
+  "description": "APT repository management"
+}

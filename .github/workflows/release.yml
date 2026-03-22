@@ -1,0 +1,156 @@
+# SecuBox — Complete Release Workflow
+# Orchestrates package builds, image builds, and publishing
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., v1.0.0)'
+        required: true
+      build_images:
+        description: 'Build system images'
+        type: boolean
+        default: true
+      publish:
+        description: 'Publish to APT repo'
+        type: boolean
+        default: true
+
+jobs:
+  # Build all packages
+  build-packages:
+    uses: ./.github/workflows/build-packages.yml
+    secrets: inherit
+
+  # Build system images (optional)
+  build-images:
+    if: ${{ github.event.inputs.build_images != 'false' }}
+    needs: build-packages
+    uses: ./.github/workflows/build-image.yml
+    with:
+      board: all
+      size: '8G'
+    secrets: inherit
+
+  # Publish to APT repository
+  publish:
+    if: ${{ github.event.inputs.publish != 'false' }}
+    needs: build-packages
+    uses: ./.github/workflows/publish-packages.yml
+    secrets: inherit
+
+  # Create unified release
+  create-release:
+    needs: [build-packages, build-images]
+    if: always() && needs.build-packages.result == 'success'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: secubox-debs-all
+          path: release/packages/
+
+      - name: Download image artifacts
+        if: needs.build-images.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: secubox-*-bookworm
+          path: release/images/
+          merge-multiple: true
+
+      - name: Generate release notes
+        run: |
+          VERSION="${{ github.ref_name || github.event.inputs.version }}"
+
+          cat > release/RELEASE_NOTES.md << EOF
+          # SecuBox-DEB ${VERSION}
+
+          ## What's Included
+
+          ### Packages (33 total)
+          - **Core:** hub, core, portal, system
+          - **Security:** crowdsec, waf, auth, nac
+          - **Networking:** wireguard, haproxy, dpi, qos, netmodes, vhost, cdn
+          - **Applications:** mail, gitea, nextcloud, webmail, dns, users
+          - **Publishing:** droplet, streamlit, streamforge, metablogizer, publish
+          - **Monitoring:** netdata, mediaflow, c3box
+
+          ### System Images
+          - MOCHAbin (Marvell Armada 7040) - arm64
+          - ESPRESSObin v7 (Marvell Armada 3720) - arm64
+          - ESPRESSObin Ultra (Marvell Armada 3720) - arm64
+          - VM x64 (VirtualBox/QEMU) - amd64
+
+          ## Quick Install
+
+          ### From APT Repository
+          \`\`\`bash
+          curl -fsSL https://apt.secubox.in/install.sh | sudo bash
+          sudo apt install secubox-full
+          \`\`\`
+
+          ### From Image
+          \`\`\`bash
+          # ARM64 boards
+          gunzip -c secubox-mochabin-bookworm.img.gz | sudo dd of=/dev/sdX bs=4M status=progress
+
+          # VirtualBox
+          gunzip secubox-vm-x64-bookworm.img.gz
+          VBoxManage convertfromraw secubox-vm-x64-bookworm.img secubox.vdi --format VDI
+          \`\`\`
+
+          ## Checksums
+
+          All files are signed with GPG key \`packages@secubox.in\`.
+
+          \`\`\`bash
+          gpg --verify SHA256SUMS.gpg
+          sha256sum -c SHA256SUMS
+          \`\`\`
+
+          ## Documentation
+
+          - [Installation Guide](https://github.com/gkerma/secubox-deb/wiki/Installation)
+          - [API Documentation](https://github.com/gkerma/secubox-deb/wiki/API)
+          - [Security Hardening](https://github.com/gkerma/secubox-deb/wiki/Security)
+
+          EOF
+
+      - name: Generate combined checksums
+        run: |
+          cd release/
+          find . -name "*.deb" -o -name "*.img.gz" -o -name "*.img.xz" | \
+            xargs sha256sum 2>/dev/null | sort > SHA256SUMS || true
+
+      - name: Sign checksums
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          if [ -n "$GPG_PRIVATE_KEY" ]; then
+            echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+            cd release/
+            gpg --clearsign SHA256SUMS
+            mv SHA256SUMS.asc SHA256SUMS.gpg
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: SecuBox-DEB ${{ github.ref_name || github.event.inputs.version }}
+          body_path: release/RELEASE_NOTES.md
+          files: |
+            release/packages/*.deb
+            release/images/*.img.gz
+            release/images/*.img.xz
+            release/SHA256SUMS
+            release/SHA256SUMS.gpg
+          draft: false
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}

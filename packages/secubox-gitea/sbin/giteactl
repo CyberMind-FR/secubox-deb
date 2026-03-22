@@ -3,7 +3,7 @@
 # Git server in Alpine LXC for Debian
 # Three-fold architecture: Components, Status, Access
 
-VERSION="1.1.0"
+VERSION="1.4.0"
 CONFIG_FILE="/etc/secubox/gitea.toml"
 LXC_PATH="/srv/lxc"
 DATA_PATH="/srv/gitea"
@@ -38,12 +38,12 @@ require_root() {
     [ "$(id -u)" -eq 0 ] || { error "Root required"; exit 1; }
 }
 
-lxc_running() { lxc-info -n "$CONTAINER" 2>/dev/null | grep -q "State:.*RUNNING"; }
+lxc_running() { lxc-info -n "$CONTAINER" -P "$LXC_PATH" 2>/dev/null | grep -q "State:.*RUNNING"; }
 lxc_exists() { [ -d "$LXC_PATH/$CONTAINER/rootfs" ]; }
 
 lxc_attach() {
     local cmd="$1"
-    lxc-attach -n "$CONTAINER" -- sh -c "$cmd"
+    lxc-attach -n "$CONTAINER" -P "$LXC_PATH" -- sh -c "$cmd"
 }
 
 # ============================================================================
@@ -98,11 +98,10 @@ create_lxc_config() {
     cat > "$LXC_PATH/$CONTAINER/config" << EOF
 lxc.uts.name = gitea
 lxc.rootfs.path = dir:${LXC_PATH}/${CONTAINER}/rootfs
-lxc.net.0.type = veth
-lxc.net.0.link = br0
-lxc.net.0.flags = up
-lxc.net.0.ipv4.address = ${LXC_IP}/24
-lxc.net.0.ipv4.gateway = auto
+
+# Host networking (no bridge required)
+lxc.net.0.type = none
+
 lxc.mount.auto = proc:mixed sys:ro cgroup:mixed
 lxc.cap.drop = sys_module mac_admin mac_override sys_time
 lxc.tty.max = 0
@@ -118,21 +117,40 @@ EOF
     log "LXC config created"
 }
 
+create_install_init() {
+    # Temporary init script for installation phase - just keeps container running
+    mkdir -p "$LXC_PATH/$CONTAINER/rootfs/opt"
+    cat > "$LXC_PATH/$CONTAINER/rootfs/opt/install-init.sh" << 'EOF'
+#!/bin/sh
+# Temporary init for installation - keeps container running
+exec /bin/sleep infinity
+EOF
+    chmod +x "$LXC_PATH/$CONTAINER/rootfs/opt/install-init.sh"
+
+    # Update config to use install init
+    sed -i 's|lxc.init.cmd = .*|lxc.init.cmd = /opt/install-init.sh|' "$LXC_PATH/$CONTAINER/config"
+}
+
 create_startup_script() {
     mkdir -p "$LXC_PATH/$CONTAINER/rootfs/opt"
     cat > "$LXC_PATH/$CONTAINER/rootfs/opt/start-gitea.sh" << 'EOF'
 #!/bin/sh
 # Gitea startup script
+export PATH=/usr/local/bin:/usr/bin:/bin:/sbin:/usr/sbin
+export HOME=/var/lib/gitea
 
 # Ensure directories exist
-mkdir -p /var/lib/gitea /var/log/gitea /etc/gitea
-chown -R git:git /var/lib/gitea /var/log/gitea /etc/gitea
+mkdir -p /var/lib/gitea /var/log/gitea /etc/gitea/conf
+chown -R git:git /var/lib/gitea /var/log/gitea /etc/gitea 2>/dev/null || true
 
 # Start Gitea as git user
 cd /var/lib/gitea
-exec su-exec git /usr/local/bin/gitea web --config /etc/gitea/app.ini
+exec su-exec git /usr/local/bin/gitea web --config /etc/gitea/conf/app.ini --work-path /var/lib/gitea
 EOF
     chmod +x "$LXC_PATH/$CONTAINER/rootfs/opt/start-gitea.sh"
+
+    # Update config to use gitea startup
+    sed -i 's|lxc.init.cmd = .*|lxc.init.cmd = /opt/start-gitea.sh|' "$LXC_PATH/$CONTAINER/config"
 }
 
 # ============================================================================
@@ -145,7 +163,7 @@ install_gitea() {
 
     if ! lxc_running; then
         log "Starting container..."
-        lxc-start -n "$CONTAINER" -d
+        lxc-start -n "$CONTAINER" -P "$LXC_PATH" -d
         sleep 5
     fi
 
@@ -184,6 +202,7 @@ create_gitea_config() {
 APP_NAME = ${APP_NAME}
 RUN_USER = git
 RUN_MODE = prod
+WORK_PATH = /var/lib/gitea
 
 [server]
 DOMAIN = ${DOMAIN}
@@ -193,8 +212,10 @@ DISABLE_SSH = false
 SSH_PORT = ${SSH_PORT}
 BUILTIN_SSH_SERVER_USER = git
 START_SSH_SERVER = true
-LFS_START_SERVER = true
-LFS_CONTENT_PATH = /var/lib/gitea/lfs
+
+[lfs]
+ENABLED = true
+PATH = /var/lib/gitea/lfs
 
 [database]
 DB_TYPE = sqlite3
@@ -253,7 +274,7 @@ user_add() {
         --password '$password' \
         --email '$email' \
         $admin_flag \
-        --config /etc/gitea/app.ini"
+        --config /etc/gitea/conf/app.ini"
 }
 
 user_del() {
@@ -272,7 +293,7 @@ user_del() {
     log "Deleting user: $username"
     lxc_attach "su-exec git /usr/local/bin/gitea admin user delete \
         --username '$username' \
-        --config /etc/gitea/app.ini"
+        --config /etc/gitea/conf/app.ini"
 }
 
 user_passwd() {
@@ -293,7 +314,7 @@ user_passwd() {
     lxc_attach "su-exec git /usr/local/bin/gitea admin user change-password \
         --username '$username' \
         --password '$password' \
-        --config /etc/gitea/app.ini"
+        --config /etc/gitea/conf/app.ini"
 }
 
 user_list() {
@@ -304,7 +325,7 @@ user_list() {
 
     echo "Gitea Users:"
     echo "============"
-    lxc_attach "su-exec git /usr/local/bin/gitea admin user list --config /etc/gitea/app.ini"
+    lxc_attach "su-exec git /usr/local/bin/gitea admin user list --config /etc/gitea/conf/app.ini"
 }
 
 # ============================================================================
@@ -370,7 +391,7 @@ cmd_backup() {
     # Stop Gitea for consistent backup
     if lxc_running; then
         log "Stopping Gitea for backup..."
-        lxc-stop -n "$CONTAINER"
+        lxc-stop -n "$CONTAINER" -P "$LXC_PATH"
         sleep 2
     fi
 
@@ -380,7 +401,7 @@ cmd_backup() {
         2>/dev/null
 
     # Restart
-    lxc-start -n "$CONTAINER" -d
+    lxc-start -n "$CONTAINER" -P "$LXC_PATH" -d
 
     log "Backup created: $backup_file"
     echo "$backup_file"
@@ -402,13 +423,13 @@ cmd_restore() {
     [ "$confirm" != "yes" ] && { echo "Aborted"; return 1; }
 
     log "Stopping Gitea..."
-    lxc-stop -n "$CONTAINER" 2>/dev/null
+    lxc-stop -n "$CONTAINER" -P "$LXC_PATH" 2>/dev/null
 
     log "Restoring from: $backup_file"
     tar -xzf "$backup_file" -C "$DATA_PATH"
 
     log "Starting Gitea..."
-    lxc-start -n "$CONTAINER" -d
+    lxc-start -n "$CONTAINER" -P "$LXC_PATH" -d
 
     log "Restore complete!"
 }
@@ -436,7 +457,7 @@ cmd_migrate() {
     # Stop local Gitea
     if lxc_running; then
         log "Stopping local Gitea..."
-        lxc-stop -n "$CONTAINER"
+        lxc-stop -n "$CONTAINER" -P "$LXC_PATH"
         sleep 2
     fi
 
@@ -490,7 +511,7 @@ cmd_migrate() {
 
     # Start Gitea
     log "Starting Gitea..."
-    lxc-start -n "$CONTAINER" -d
+    lxc-start -n "$CONTAINER" -P "$LXC_PATH" -d
 
     log "Migration complete!"
     log "Data backed up to: $backup_dir"
@@ -511,15 +532,22 @@ cmd_install() {
     fi
 
     create_lxc_config
-    create_startup_script
+    create_install_init  # Use temporary init for installation
 
     # Start for package installation
-    lxc-start -n "$CONTAINER" -d
-    sleep 5
+    log "Starting container for installation..."
+    lxc-start -n "$CONTAINER" -P "$LXC_PATH" -d
+    sleep 3
 
     if lxc_running; then
         install_gitea
-        lxc-stop -n "$CONTAINER"
+
+        # Stop and switch to gitea startup script
+        log "Switching to Gitea startup..."
+        lxc-stop -n "$CONTAINER" -P "$LXC_PATH"
+        sleep 2
+        create_startup_script  # Switch to actual gitea init
+
         log "Gitea installed! Start with: giteactl start"
     else
         error "Failed to start container for installation"
@@ -536,7 +564,7 @@ cmd_uninstall() {
     [ "$confirm" != "yes" ] && { echo "Aborted"; return 1; }
 
     log "Stopping container..."
-    lxc-stop -n "$CONTAINER" 2>/dev/null
+    lxc-stop -n "$CONTAINER" -P "$LXC_PATH" 2>/dev/null
 
     log "Removing container..."
     rm -rf "$LXC_PATH/$CONTAINER"
@@ -560,7 +588,7 @@ cmd_start() {
     create_lxc_config
 
     log "Starting Gitea..."
-    lxc-start -n "$CONTAINER" -d
+    lxc-start -n "$CONTAINER" -P "$LXC_PATH" -d
     sleep 3
 
     if lxc_running; then
@@ -580,7 +608,7 @@ cmd_stop() {
     fi
 
     log "Stopping Gitea..."
-    lxc-stop -n "$CONTAINER"
+    lxc-stop -n "$CONTAINER" -P "$LXC_PATH"
     log "Stopped"
 }
 
@@ -698,7 +726,7 @@ cmd_shell() {
         error "Container not running"
         return 1
     fi
-    lxc-attach -n "$CONTAINER" -- /bin/sh
+    lxc-attach -n "$CONTAINER" -P "$LXC_PATH" -- /bin/sh
 }
 
 cmd_logs() {

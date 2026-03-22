@@ -1,0 +1,36 @@
+# AppArmor profile for secubox-wireguard
+# WireGuard VPN Dashboard API
+
+#include <tunables/global>
+
+profile secubox-wireguard /usr/lib/secubox/wireguard/** {
+  #include <abstractions/base>
+  #include <abstractions/python>
+  #include <abstractions/nameservice>
+
+  # SecuBox base permissions
+  #include <local/secubox-base>
+
+  # WireGuard configuration
+  /etc/wireguard/ r,
+  /etc/wireguard/** rw,
+
+  # WireGuard tools
+  /usr/bin/wg Ux,
+  /usr/bin/wg-quick Ux,
+
+  # QR code generation
+  /usr/bin/qrencode Ux,
+
+  # Network interface info
+  /sys/class/net/** r,
+  /proc/net/** r,
+
+  # IP tools
+  /sbin/ip Ux,
+  /usr/sbin/ip Ux,
+
+  # Deny sensitive paths
+  deny /etc/shadow r,
+  deny /etc/gshadow r,
+}

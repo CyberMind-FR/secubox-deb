@@ -2,7 +2,7 @@
 # SecuBox Mail Server LXC Controller
 # Postfix + Dovecot in Debian LXC
 
-VERSION="2.4.0"
+VERSION="2.6.0"
 CONFIG_FILE="/etc/secubox/mail.toml"
 CONTAINER="mailserver"
 LXC_BASE="/srv/lxc"
@@ -80,13 +80,32 @@ if [ -x /usr/sbin/opendkim ] && [ -f /etc/opendkim.conf ]; then
     /usr/sbin/opendkim -x /etc/opendkim.conf 2>/dev/null && echo "OpenDKIM started" || true
 fi
 
+# Start Postgrey (if installed)
+if [ -x /usr/sbin/postgrey ]; then
+    service postgrey start 2>/dev/null && echo "Postgrey started" || true
+fi
+
+# Start SpamAssassin (if installed and enabled)
+if [ -x /usr/sbin/spamd ] && [ -f /etc/default/spamassassin ]; then
+    . /etc/default/spamassassin
+    [ "$ENABLED" = "1" ] && /usr/sbin/spamd -d -c -u spamd 2>/dev/null && echo "SpamAssassin started" || true
+fi
+
+# Start ClamAV (if installed)
+if [ -x /usr/sbin/clamd ]; then
+    mkdir -p /run/clamav
+    chown clamav:clamav /run/clamav
+    service clamav-daemon start 2>/dev/null && echo "ClamAV daemon started" || true
+    service clamav-milter start 2>/dev/null && echo "ClamAV milter started" || true
+fi
+
 # Start Postfix
 service postfix start
 
 # Start Dovecot
 service dovecot start
 
-echo "Mail services started: Postfix + Dovecot + OpenDKIM"
+echo "Mail services started: Postfix + Dovecot + OpenDKIM + Postgrey + SpamAssassin + ClamAV"
 exec tail -f /var/log/mail.log 2>/dev/null || exec sleep infinity
 EOF
     chmod +x "$LXC_PATH/rootfs/opt/start-mail.sh"
@@ -1213,6 +1232,525 @@ cmd_logs() {
 }
 
 # ============================================================================
+# POSTGREY - Greylisting
+# ============================================================================
+
+cmd_grey_install() {
+    require_root
+
+    if ! lxc_exists; then
+        error "Container not installed"
+        return 1
+    fi
+
+    log "Installing Postgrey in container..."
+
+    if lxc_running; then
+        lxc-attach -n "$CONTAINER" -P "$LXC_BASE" -- /bin/bash << 'EOF'
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+apt-get install -y -o Dpkg::Options::="--force-confold" --no-install-recommends postgrey
+apt-get clean
+rm -rf /var/lib/apt/lists/*
+EOF
+    else
+        chroot "$LXC_PATH/rootfs" /bin/bash << 'CHROOT_EOF'
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+apt-get install -y -o Dpkg::Options::="--force-confold" --no-install-recommends postgrey
+apt-get clean
+rm -rf /var/lib/apt/lists/*
+CHROOT_EOF
+    fi
+
+    log "Postgrey installed"
+}
+
+cmd_grey_configure() {
+    require_root
+    local rootfs="$LXC_PATH/rootfs"
+
+    if [ ! -d "$rootfs" ]; then
+        error "Container not installed"
+        return 1
+    fi
+
+    log "Configuring Postgrey..."
+
+    # Postgrey default options
+    cat > "$rootfs/etc/default/postgrey" << 'EOF'
+# SecuBox Postgrey Configuration
+
+# Listening on localhost:10023 (default)
+POSTGREY_OPTS="--inet=127.0.0.1:10023 --delay=300 --max-age=35 --retry-window=2"
+
+# Auto-whitelist after N successful deliveries
+POSTGREY_OPTS="$POSTGREY_OPTS --auto-whitelist-clients=5"
+
+# Whitelist common mail providers
+POSTGREY_OPTS="$POSTGREY_OPTS --whitelist-clients=/etc/postgrey/whitelist_clients"
+EOF
+
+    # Create whitelist for common mail providers
+    mkdir -p "$rootfs/etc/postgrey"
+    cat > "$rootfs/etc/postgrey/whitelist_clients" << 'EOF'
+# Common mail providers - don't greylist
+google.com
+gmail.com
+googlemail.com
+outlook.com
+microsoft.com
+yahoo.com
+hotmail.com
+icloud.com
+apple.com
+protonmail.com
+fastmail.com
+zoho.com
+mail.ru
+gmx.net
+gmx.de
+web.de
+EOF
+
+    log "Postgrey configured"
+}
+
+cmd_grey_enable() {
+    require_root
+    local rootfs="$LXC_PATH/rootfs"
+
+    if [ ! -d "$rootfs" ]; then
+        error "Container not installed"
+        return 1
+    fi
+
+    log "Enabling Greylisting in Postfix..."
+
+    # Update smtpd_recipient_restrictions to include postgrey check
+    if [ -f "$rootfs/etc/postfix/main.cf" ]; then
+        # Check if already enabled
+        if grep -q "check_policy_service inet:127.0.0.1:10023" "$rootfs/etc/postfix/main.cf" 2>/dev/null; then
+            log "Greylisting already enabled"
+            return 0
+        fi
+
+        # Update recipient restrictions to include postgrey
+        sed -i 's/smtpd_recipient_restrictions = permit_sasl_authenticated, permit_mynetworks, reject_unauth_destination/smtpd_recipient_restrictions = permit_sasl_authenticated, permit_mynetworks, reject_unauth_destination, check_policy_service inet:127.0.0.1:10023/' "$rootfs/etc/postfix/main.cf"
+    fi
+
+    # Start Postgrey if container is running
+    if lxc_running; then
+        lxc-attach -n "$CONTAINER" -P "$LXC_BASE" -- service postgrey start 2>/dev/null || true
+        lxc-attach -n "$CONTAINER" -P "$LXC_BASE" -- postfix reload 2>/dev/null || true
+    fi
+
+    log "Greylisting enabled"
+}
+
+cmd_grey_disable() {
+    require_root
+    local rootfs="$LXC_PATH/rootfs"
+
+    if [ ! -d "$rootfs" ]; then
+        error "Container not installed"
+        return 1
+    fi
+
+    log "Disabling Greylisting..."
+
+    # Remove postgrey from recipient restrictions
+    if [ -f "$rootfs/etc/postfix/main.cf" ]; then
+        sed -i 's/, check_policy_service inet:127.0.0.1:10023//' "$rootfs/etc/postfix/main.cf"
+    fi
+
+    # Stop Postgrey if running
+    if lxc_running; then
+        lxc-attach -n "$CONTAINER" -P "$LXC_BASE" -- service postgrey stop 2>/dev/null || true
+        lxc-attach -n "$CONTAINER" -P "$LXC_BASE" -- postfix reload 2>/dev/null || true
+    fi
+
+    log "Greylisting disabled"
+}
+
+cmd_grey_status() {
+    echo ""
+    echo "Greylisting (Postgrey) Status"
+    echo "=============================="
+    echo ""
+
+    local rootfs="$LXC_PATH/rootfs"
+
+    # Check if installed
+    if [ -f "$rootfs/usr/sbin/postgrey" ]; then
+        echo -e "Installed: ${GREEN}Yes${NC}"
+    else
+        echo -e "Installed: ${RED}No${NC}"
+        echo "  Run: mailserverctl grey install"
+        return
+    fi
+
+    # Check if configured
+    if [ -f "$rootfs/etc/default/postgrey" ]; then
+        echo -e "Configured: ${GREEN}Yes${NC}"
+    else
+        echo -e "Configured: ${YELLOW}No${NC}"
+    fi
+
+    # Check if enabled in Postfix
+    if grep -q "check_policy_service inet:127.0.0.1:10023" "$rootfs/etc/postfix/main.cf" 2>/dev/null; then
+        echo -e "Enabled: ${GREEN}Yes${NC}"
+    else
+        echo -e "Enabled: ${YELLOW}No${NC}"
+    fi
+
+    # Check postgrey process
+    if lxc_running; then
+        if lxc-attach -n "$CONTAINER" -P "$LXC_BASE" -- pgrep postgrey >/dev/null 2>&1; then
+            echo -e "Postgrey running: ${GREEN}Yes${NC}"
+        else
+            echo -e "Postgrey running: ${YELLOW}No${NC}"
+        fi
+
+        # Show some stats if available
+        if [ -d "$rootfs/var/lib/postgrey" ]; then
+            local db_count=$(ls "$rootfs/var/lib/postgrey/"*.db 2>/dev/null | wc -l)
+            if [ "$db_count" -gt 0 ]; then
+                echo ""
+                echo "Database files: $db_count"
+            fi
+        fi
+    fi
+
+    echo ""
+    echo "Settings:"
+    echo "  Initial delay: 300 seconds (5 minutes)"
+    echo "  Auto-whitelist after: 5 successful deliveries"
+    echo "  Retry window: 2 days"
+    echo ""
+}
+
+cmd_grey_setup() {
+    require_root
+    log "Setting up Greylisting (Postgrey)..."
+
+    cmd_grey_install
+    cmd_grey_configure
+    cmd_grey_enable
+
+    log "Greylisting setup complete!"
+}
+
+# ============================================================================
+# CLAMAV - Virus Scanning
+# ============================================================================
+
+cmd_av_install() {
+    require_root
+
+    if ! lxc_exists; then
+        error "Container not installed"
+        return 1
+    fi
+
+    log "Installing ClamAV in container (this may take a while)..."
+
+    if lxc_running; then
+        lxc-attach -n "$CONTAINER" -P "$LXC_BASE" -- /bin/bash << 'EOF'
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+apt-get install -y -o Dpkg::Options::="--force-confold" --no-install-recommends \
+    clamav clamav-daemon clamav-freshclam clamav-milter
+# Create directories
+mkdir -p /run/clamav
+chown clamav:clamav /run/clamav
+# Update virus definitions (this takes time)
+freshclam --quiet || true
+apt-get clean
+rm -rf /var/lib/apt/lists/*
+EOF
+    else
+        chroot "$LXC_PATH/rootfs" /bin/bash << 'CHROOT_EOF'
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+apt-get install -y -o Dpkg::Options::="--force-confold" --no-install-recommends \
+    clamav clamav-daemon clamav-freshclam clamav-milter
+mkdir -p /run/clamav
+chown clamav:clamav /run/clamav
+freshclam --quiet || true
+apt-get clean
+rm -rf /var/lib/apt/lists/*
+CHROOT_EOF
+    fi
+
+    log "ClamAV installed"
+}
+
+cmd_av_configure() {
+    require_root
+    local rootfs="$LXC_PATH/rootfs"
+
+    if [ ! -d "$rootfs" ]; then
+        error "Container not installed"
+        return 1
+    fi
+
+    log "Configuring ClamAV..."
+
+    # Configure clamav-milter
+    mkdir -p "$rootfs/etc/clamav"
+    cat > "$rootfs/etc/clamav/clamav-milter.conf" << 'EOF'
+# SecuBox ClamAV Milter Configuration
+MilterSocket inet:8894@localhost
+User clamav
+AllowSupplementaryGroups true
+ReadTimeout 120
+Foreground false
+PidFile /run/clamav/clamav-milter.pid
+ClamdSocket unix:/run/clamav/clamd.ctl
+OnClean Accept
+OnInfected Reject
+OnFail Defer
+AddHeader Replace
+LogSyslog true
+LogFacility LOG_MAIL
+LogVerbose false
+LogInfected Basic
+LogClean Off
+MaxFileSize 25M
+SupportMultipleRecipients true
+RejectMsg Virus detected: %v
+EOF
+
+    # Configure clamd
+    cat > "$rootfs/etc/clamav/clamd.conf" << 'EOF'
+# SecuBox ClamAV Daemon Configuration
+LocalSocket /run/clamav/clamd.ctl
+FixStaleSocket true
+LocalSocketGroup clamav
+LocalSocketMode 666
+User clamav
+ReadTimeout 180
+MaxThreads 12
+MaxConnectionQueueLength 15
+MaxRecursion 16
+MaxFiles 10000
+MaxEmbeddedPE 10M
+MaxHTMLNormalize 10M
+MaxHTMLNoTags 2M
+MaxScriptNormalize 5M
+MaxZipTypeRcg 1M
+MaxPartitions 50
+MaxIconsPE 100
+PCREMatchLimit 10000
+PCRERecMatchLimit 5000
+ScanPE true
+ScanELF true
+ScanMail true
+ScanOLE2 true
+ScanPDF true
+ScanHTML true
+ScanArchive true
+ArchiveBlockEncrypted false
+Foreground false
+PidFile /run/clamav/clamd.pid
+DatabaseDirectory /var/lib/clamav
+OfficialDatabaseOnly false
+SelfCheck 600
+LogSyslog true
+LogFacility LOG_MAIL
+LogRotate true
+LogTime true
+EOF
+
+    # Configure freshclam auto-update
+    cat > "$rootfs/etc/clamav/freshclam.conf" << 'EOF'
+# SecuBox ClamAV Freshclam Configuration
+DatabaseOwner clamav
+UpdateLogFile /var/log/clamav/freshclam.log
+LogVerbose false
+LogSyslog true
+LogFacility LOG_MAIL
+LogRotate true
+DatabaseDirectory /var/lib/clamav
+NotifyClamd /etc/clamav/clamd.conf
+Checks 24
+DatabaseMirror database.clamav.net
+MaxAttempts 5
+ScriptedUpdates yes
+CompressLocalDatabase no
+EOF
+
+    log "ClamAV configured"
+}
+
+cmd_av_enable() {
+    require_root
+    local rootfs="$LXC_PATH/rootfs"
+
+    if [ ! -d "$rootfs" ]; then
+        error "Container not installed"
+        return 1
+    fi
+
+    log "Enabling ClamAV in Postfix..."
+
+    # Add milter to Postfix
+    if [ -f "$rootfs/etc/postfix/main.cf" ]; then
+        # Check if already enabled
+        if grep -q "inet:localhost:8894" "$rootfs/etc/postfix/main.cf" 2>/dev/null; then
+            log "ClamAV milter already enabled"
+        else
+            # Check if smtpd_milters line exists
+            if grep -q "^smtpd_milters" "$rootfs/etc/postfix/main.cf"; then
+                # Append clamav-milter to existing milters
+                sed -i 's/^smtpd_milters = \(.*\)/smtpd_milters = \1, inet:localhost:8894/' "$rootfs/etc/postfix/main.cf"
+            else
+                # Add milter configuration
+                cat >> "$rootfs/etc/postfix/main.cf" << 'EOF'
+
+# ClamAV via milter
+smtpd_milters = inet:localhost:8894
+non_smtpd_milters = $smtpd_milters
+milter_protocol = 6
+milter_default_action = accept
+EOF
+            fi
+        fi
+    fi
+
+    # Start services if running
+    if lxc_running; then
+        lxc-attach -n "$CONTAINER" -P "$LXC_BASE" -- mkdir -p /run/clamav
+        lxc-attach -n "$CONTAINER" -P "$LXC_BASE" -- chown clamav:clamav /run/clamav
+        lxc-attach -n "$CONTAINER" -P "$LXC_BASE" -- service clamav-daemon start 2>/dev/null || true
+        lxc-attach -n "$CONTAINER" -P "$LXC_BASE" -- service clamav-milter start 2>/dev/null || true
+        lxc-attach -n "$CONTAINER" -P "$LXC_BASE" -- postfix reload 2>/dev/null || true
+    fi
+
+    log "ClamAV enabled"
+}
+
+cmd_av_disable() {
+    require_root
+    local rootfs="$LXC_PATH/rootfs"
+
+    if [ ! -d "$rootfs" ]; then
+        error "Container not installed"
+        return 1
+    fi
+
+    log "Disabling ClamAV..."
+
+    # Remove clamav-milter from Postfix
+    if [ -f "$rootfs/etc/postfix/main.cf" ]; then
+        sed -i 's/, inet:localhost:8894//' "$rootfs/etc/postfix/main.cf"
+        sed -i 's/inet:localhost:8894, //' "$rootfs/etc/postfix/main.cf"
+        sed -i 's/inet:localhost:8894//' "$rootfs/etc/postfix/main.cf"
+    fi
+
+    # Stop services
+    if lxc_running; then
+        lxc-attach -n "$CONTAINER" -P "$LXC_BASE" -- service clamav-milter stop 2>/dev/null || true
+        lxc-attach -n "$CONTAINER" -P "$LXC_BASE" -- postfix reload 2>/dev/null || true
+    fi
+
+    log "ClamAV disabled"
+}
+
+cmd_av_status() {
+    echo ""
+    echo "ClamAV Antivirus Status"
+    echo "========================"
+    echo ""
+
+    local rootfs="$LXC_PATH/rootfs"
+
+    # Check if installed
+    if [ -f "$rootfs/usr/sbin/clamd" ]; then
+        echo -e "Installed: ${GREEN}Yes${NC}"
+    else
+        echo -e "Installed: ${RED}No${NC}"
+        echo "  Run: mailserverctl av install"
+        return
+    fi
+
+    # Check if configured
+    if [ -f "$rootfs/etc/clamav/clamd.conf" ]; then
+        echo -e "Configured: ${GREEN}Yes${NC}"
+    else
+        echo -e "Configured: ${YELLOW}No${NC}"
+    fi
+
+    # Check if enabled in Postfix
+    if grep -q "inet:localhost:8894" "$rootfs/etc/postfix/main.cf" 2>/dev/null; then
+        echo -e "Enabled: ${GREEN}Yes${NC}"
+    else
+        echo -e "Enabled: ${YELLOW}No${NC}"
+    fi
+
+    # Check clamd process
+    if lxc_running; then
+        echo ""
+        if lxc-attach -n "$CONTAINER" -P "$LXC_BASE" -- pgrep clamd >/dev/null 2>&1; then
+            echo -e "clamd running: ${GREEN}Yes${NC}"
+        else
+            echo -e "clamd running: ${YELLOW}No${NC}"
+        fi
+
+        if lxc-attach -n "$CONTAINER" -P "$LXC_BASE" -- pgrep clamav-milter >/dev/null 2>&1; then
+            echo -e "clamav-milter running: ${GREEN}Yes${NC}"
+        else
+            echo -e "clamav-milter running: ${YELLOW}No${NC}"
+        fi
+
+        # Check virus database
+        if [ -f "$rootfs/var/lib/clamav/main.cvd" ] || [ -f "$rootfs/var/lib/clamav/main.cld" ]; then
+            echo ""
+            echo "Virus database:"
+            if [ -f "$rootfs/var/lib/clamav/main.cvd" ]; then
+                local db_date=$(stat -c %y "$rootfs/var/lib/clamav/main.cvd" 2>/dev/null | cut -d' ' -f1)
+                echo "  Last updated: $db_date"
+            fi
+            local sig_count=$(lxc-attach -n "$CONTAINER" -P "$LXC_BASE" -- sigtool --info /var/lib/clamav/main.cvd 2>/dev/null | grep "Signatures:" | cut -d: -f2 | tr -d ' ')
+            [ -n "$sig_count" ] && echo "  Signatures: $sig_count"
+        else
+            echo ""
+            echo -e "Virus database: ${YELLOW}Not downloaded${NC}"
+            echo "  Run: mailserverctl av update"
+        fi
+    fi
+
+    echo ""
+}
+
+cmd_av_update() {
+    require_root
+
+    if ! lxc_running; then
+        error "Container not running"
+        return 1
+    fi
+
+    log "Updating ClamAV virus definitions..."
+    lxc-attach -n "$CONTAINER" -P "$LXC_BASE" -- freshclam 2>&1 || true
+    lxc-attach -n "$CONTAINER" -P "$LXC_BASE" -- service clamav-daemon reload 2>/dev/null || true
+    log "Virus definitions updated"
+}
+
+cmd_av_setup() {
+    require_root
+    log "Setting up ClamAV antivirus..."
+
+    cmd_av_install
+    cmd_av_configure
+    cmd_av_enable
+
+    log "ClamAV setup complete!"
+    log "Note: Initial virus database download may take several minutes"
+}
+
+# ============================================================================
 # THREE-FOLD ARCHITECTURE
 # ============================================================================
 
@@ -1288,6 +1826,20 @@ cmd_components() {
       "description": "Spam filtering",
       "installed": $([ -f "$LXC_PATH/rootfs/usr/bin/spamc" ] && echo true || echo false),
       "enabled": $(grep -q "^content_filter.*spamfilter" "$LXC_PATH/rootfs/etc/postfix/main.cf" 2>/dev/null && echo true || echo false)
+    },
+    {
+      "name": "Postgrey",
+      "type": "service",
+      "description": "Greylisting anti-spam",
+      "installed": $([ -f "$LXC_PATH/rootfs/usr/sbin/postgrey" ] && echo true || echo false),
+      "enabled": $(grep -q "check_policy_service inet:127.0.0.1:10023" "$LXC_PATH/rootfs/etc/postfix/main.cf" 2>/dev/null && echo true || echo false)
+    },
+    {
+      "name": "ClamAV",
+      "type": "service",
+      "description": "Virus scanning",
+      "installed": $([ -f "$LXC_PATH/rootfs/usr/sbin/clamd" ] && echo true || echo false),
+      "enabled": $(grep -q "inet:localhost:8894" "$LXC_PATH/rootfs/etc/postfix/main.cf" 2>/dev/null && echo true || echo false)
     }
   ]
 }
@@ -1364,6 +1916,19 @@ Spam Filtering:
   spam disable  Disable spam filtering
   spam update   Update SpamAssassin rules
 
+Greylisting:
+  grey setup    Full Postgrey setup
+  grey status   Show greylisting status
+  grey enable   Enable greylisting
+  grey disable  Disable greylisting
+
+Antivirus:
+  av setup      Full ClamAV setup
+  av status     Show ClamAV status
+  av enable     Enable virus scanning
+  av disable    Disable virus scanning
+  av update     Update virus definitions
+
 Three-fold:
   components    List system components (JSON)
   access        Show connection info (JSON)
@@ -1409,6 +1974,33 @@ case "${1:-}" in
             status)  cmd_spam_status ;;
             update)  cmd_spam_update ;;
             *)       cmd_spam_status ;;
+        esac
+        ;;
+    # Greylisting commands
+    grey|greylist|postgrey)
+        shift
+        case "${1:-status}" in
+            setup)   cmd_grey_setup ;;
+            install) cmd_grey_install ;;
+            configure) cmd_grey_configure ;;
+            enable)  cmd_grey_enable ;;
+            disable) cmd_grey_disable ;;
+            status)  cmd_grey_status ;;
+            *)       cmd_grey_status ;;
+        esac
+        ;;
+    # ClamAV commands
+    av|clamav|antivirus)
+        shift
+        case "${1:-status}" in
+            setup)   cmd_av_setup ;;
+            install) cmd_av_install ;;
+            configure) cmd_av_configure ;;
+            enable)  cmd_av_enable ;;
+            disable) cmd_av_disable ;;
+            status)  cmd_av_status ;;
+            update)  cmd_av_update ;;
+            *)       cmd_av_status ;;
         esac
         ;;
     logs)       shift; cmd_logs "$@" ;;

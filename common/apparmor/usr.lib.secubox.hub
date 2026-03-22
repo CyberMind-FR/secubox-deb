@@ -1,0 +1,39 @@
+# AppArmor profile for secubox-hub
+# SecuBox Hub - Central Dashboard API
+
+#include <tunables/global>
+
+profile secubox-hub /usr/lib/secubox/hub/** {
+  #include <abstractions/base>
+  #include <abstractions/python>
+  #include <abstractions/nameservice>
+
+  # SecuBox base permissions
+  #include <local/secubox-base>
+
+  # Hub-specific: read all module status
+  /run/secubox/*.sock rw,
+
+  # Menu definitions
+  /etc/secubox/menu.d/ r,
+  /etc/secubox/menu.d/** r,
+
+  # System monitoring
+  /proc/ r,
+  /proc/[0-9]*/ r,
+  /proc/[0-9]*/stat r,
+  /proc/[0-9]*/status r,
+  /proc/[0-9]*/cmdline r,
+  /proc/diskstats r,
+  /proc/net/** r,
+
+  # Systemd status queries
+  /run/systemd/private rw,
+  /run/dbus/system_bus_socket rw,
+
+  # Deny sensitive paths
+  deny /root/** rwx,
+  deny /home/*/.ssh/** rwx,
+  deny /etc/shadow r,
+  deny /etc/gshadow r,
+}

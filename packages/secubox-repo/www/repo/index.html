@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>APT Repository - SecuBox</title>
+    <link rel="stylesheet" href="/portal/css/style.css">
+    <style>
+        .repo-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        .stat-card {
+            background: var(--surface0);
+            border-radius: 8px;
+            padding: 1.5rem;
+            text-align: center;
+        }
+        .stat-card h3 {
+            color: var(--subtext0);
+            font-size: 0.875rem;
+            margin-bottom: 0.5rem;
+        }
+        .stat-card .value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: var(--blue);
+        }
+        .package-list {
+            background: var(--surface0);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .package-list table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .package-list th,
+        .package-list td {
+            padding: 0.75rem 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--surface1);
+        }
+        .package-list th {
+            background: var(--surface1);
+            color: var(--subtext0);
+            font-weight: 500;
+        }
+        .package-list tr:hover {
+            background: var(--surface1);
+        }
+        .dist-tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        .dist-tab {
+            padding: 0.5rem 1rem;
+            background: var(--surface1);
+            border: none;
+            border-radius: 4px;
+            color: var(--text);
+            cursor: pointer;
+        }
+        .dist-tab.active {
+            background: var(--blue);
+            color: var(--base);
+        }
+        .install-box {
+            background: var(--mantle);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        .install-box h3 {
+            margin-bottom: 1rem;
+        }
+        .install-box pre {
+            background: var(--crust);
+            padding: 1rem;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        .install-box code {
+            color: var(--green);
+        }
+        .action-btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        .action-btn.primary {
+            background: var(--blue);
+            color: var(--base);
+        }
+        .action-btn.danger {
+            background: var(--red);
+            color: var(--base);
+        }
+        .gpg-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .gpg-status .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+        .gpg-status .dot.ok { background: var(--green); }
+        .gpg-status .dot.error { background: var(--red); }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <nav class="sidebar" id="sidebar"></nav>
+
+        <main class="main-content">
+            <header class="content-header">
+                <h1>APT Repository</h1>
+                <p class="subtitle">apt.secubox.in package management</p>
+            </header>
+
+            <div class="install-box">
+                <h3>Quick Install</h3>
+                <pre><code>curl -fsSL https://apt.secubox.in/install.sh | sudo bash
+sudo apt install secubox-full</code></pre>
+            </div>
+
+            <div class="repo-stats" id="stats">
+                <div class="stat-card">
+                    <h3>Total Packages</h3>
+                    <div class="value" id="pkg-count">--</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Distributions</h3>
+                    <div class="value" id="dist-count">--</div>
+                </div>
+                <div class="stat-card">
+                    <h3>GPG Status</h3>
+                    <div class="gpg-status" id="gpg-status">
+                        <span class="dot"></span>
+                        <span>Checking...</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <h3>Repository</h3>
+                    <div class="value" id="repo-status">--</div>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>Packages</h2>
+                <div class="dist-tabs" id="dist-tabs"></div>
+                <div class="package-list">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Package</th>
+                                <th>Version</th>
+                                <th>Architecture</th>
+                            </tr>
+                        </thead>
+                        <tbody id="package-table"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="section" style="margin-top: 2rem;">
+                <h2>Actions</h2>
+                <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                    <button class="action-btn primary" onclick="initRepo()">Initialize Repository</button>
+                    <button class="action-btn primary" onclick="setupGPG()">Setup GPG Key</button>
+                    <button class="action-btn" onclick="refreshPackages()">Refresh Package List</button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/portal/js/sidebar.js"></script>
+    <script>
+        const API_BASE = '/api/v1/repo';
+        let currentDist = 'bookworm';
+
+        async function fetchAPI(endpoint, options = {}) {
+            const token = localStorage.getItem('jwt_token');
+            const headers = {
+                'Content-Type': 'application/json',
+                ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+                ...options.headers
+            };
+            const response = await fetch(`${API_BASE}${endpoint}`, { ...options, headers });
+            if (!response.ok) throw new Error(`API error: ${response.status}`);
+            return response.json();
+        }
+
+        async function loadStatus() {
+            try {
+                const status = await fetchAPI('/status');
+                document.getElementById('pkg-count').textContent = status.package_count || 0;
+                document.getElementById('dist-count').textContent =
+                    status.distributions ? status.distributions.split(',').length : 0;
+                document.getElementById('repo-status').textContent =
+                    status.repo_exists ? 'Active' : 'Not initialized';
+
+                const gpgEl = document.getElementById('gpg-status');
+                if (status.gpg_configured) {
+                    gpgEl.innerHTML = '<span class="dot ok"></span><span>Configured</span>';
+                } else {
+                    gpgEl.innerHTML = '<span class="dot error"></span><span>Not configured</span>';
+                }
+            } catch (e) {
+                console.error('Failed to load status:', e);
+            }
+        }
+
+        async function loadDistributions() {
+            try {
+                const data = await fetchAPI('/distributions');
+                const tabs = document.getElementById('dist-tabs');
+                tabs.innerHTML = data.distributions.map(dist =>
+                    `<button class="dist-tab ${dist === currentDist ? 'active' : ''}"
+                             onclick="selectDist('${dist}')">${dist}</button>`
+                ).join('');
+            } catch (e) {
+                console.error('Failed to load distributions:', e);
+            }
+        }
+
+        async function loadPackages(dist) {
+            try {
+                const data = await fetchAPI(`/packages/${dist}`);
+                const tbody = document.getElementById('package-table');
+                if (data.packages && data.packages.length > 0) {
+                    tbody.innerHTML = data.packages.map(pkg => `
+                        <tr>
+                            <td>${pkg.package}</td>
+                            <td>${pkg.version}</td>
+                            <td>${pkg.arch}</td>
+                        </tr>
+                    `).join('');
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: var(--subtext0);">No packages found</td></tr>';
+                }
+            } catch (e) {
+                console.error('Failed to load packages:', e);
+                document.getElementById('package-table').innerHTML =
+                    '<tr><td colspan="3" style="text-align: center; color: var(--red);">Failed to load packages</td></tr>';
+            }
+        }
+
+        function selectDist(dist) {
+            currentDist = dist;
+            document.querySelectorAll('.dist-tab').forEach(tab => {
+                tab.classList.toggle('active', tab.textContent === dist);
+            });
+            loadPackages(dist);
+        }
+
+        async function initRepo() {
+            try {
+                await fetchAPI('/init', { method: 'POST' });
+                alert('Repository initialized');
+                loadStatus();
+            } catch (e) {
+                alert('Failed to initialize: ' + e.message);
+            }
+        }
+
+        async function setupGPG() {
+            try {
+                await fetchAPI('/gpg/setup', { method: 'POST' });
+                alert('GPG key generated');
+                loadStatus();
+            } catch (e) {
+                alert('Failed to setup GPG: ' + e.message);
+            }
+        }
+
+        function refreshPackages() {
+            loadPackages(currentDist);
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadStatus();
+            loadDistributions();
+            loadPackages(currentDist);
+        });
+    </script>
+</body>
+</html>

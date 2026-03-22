@@ -1,0 +1,10 @@
+{
+  "id": "hardening",
+  "label": "Hardening",
+  "icon": "shield-check",
+  "path": "/hardening/",
+  "api": "/api/v1/hardening/",
+  "category": "security",
+  "order": 120,
+  "description": "Kernel and system hardening"
+}

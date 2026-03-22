@@ -1,10 +1,12 @@
 # SecuBox — Publish packages to apt.secubox.in
+# This workflow is triggered after build-packages.yml completes on a tag
 name: Publish Packages
 
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_run:
+    workflows: ["Build SecuBox .deb packages"]
+    types: [completed]
+    branches: [main, master]
   workflow_dispatch:
     inputs:
       distribution:
@@ -15,6 +17,9 @@ on:
         options:
           - bookworm
           - trixie
+      run_id:
+        description: 'Build workflow run ID to publish (leave empty for latest)'
+        required: false
 
 env:
   REPO_HOST: apt.secubox.in
@@ -22,77 +27,35 @@ env:
   REPO_PATH: /var/www/apt.secubox.in
 
 jobs:
-  build-packages:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        arch: [arm64, amd64]
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        if: matrix.arch == 'arm64'
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: arm64
-
-      - name: Install build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y devscripts debhelper dpkg-dev
-          if [[ "${{ matrix.arch }}" == "arm64" ]]; then
-            sudo apt-get install -y gcc-aarch64-linux-gnu
-          fi
-
-      - name: Build packages
-        run: |
-          mkdir -p output
-          for pkg in packages/secubox-*/; do
-            if [[ -d "${pkg}/debian" ]]; then
-              echo "Building $(basename $pkg)..."
-              cd "$pkg"
-              if [[ "${{ matrix.arch }}" == "arm64" ]]; then
-                dpkg-buildpackage -a arm64 --host-arch arm64 -us -uc -b
-              else
-                dpkg-buildpackage -us -uc -b
-              fi
-              cd ../..
-              mv packages/*.deb output/ 2>/dev/null || true
-            fi
-          done
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: debs-${{ matrix.arch }}
-          path: output/*.deb
-          retention-days: 7
-
   publish:
-    needs: build-packages
     runs-on: ubuntu-latest
+    # Only run if triggered workflow succeeded and was a tag
+    if: |
+      (github.event.workflow_run.conclusion == 'success' &&
+       startsWith(github.event.workflow_run.head_branch, 'v')) ||
+      github.event_name == 'workflow_dispatch'
     environment: production
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download arm64 packages
-        uses: actions/download-artifact@v4
+      - name: Download artifacts from build workflow
+        uses: dawidd6/action-download-artifact@v3
         with:
-          name: debs-arm64
+          workflow: build-packages.yml
+          run_id: ${{ github.event.inputs.run_id || github.event.workflow_run.id }}
+          name: secubox-debs-all
           path: debs/
 
-      - name: Download amd64 packages
-        uses: actions/download-artifact@v4
-        with:
-          name: debs-amd64
-          path: debs/
+      - name: List downloaded packages
+        run: |
+          echo "Downloaded packages:"
+          ls -lh debs/*.deb 2>/dev/null | head -40 || echo "No .deb files found"
+          echo "Total: $(ls -1 debs/*.deb 2>/dev/null | wc -l) packages"
 
       - name: Install reprepro
-        run: sudo apt-get install -y reprepro gnupg
+        run: sudo apt-get update && sudo apt-get install -y reprepro gnupg
 
       - name: Import GPG key
         env:
@@ -101,29 +64,61 @@ jobs:
           echo "$GPG_PRIVATE_KEY" | gpg --batch --import
           gpg --list-keys
 
-      - name: Setup repository
+      - name: Setup repository structure
         run: |
           mkdir -p repo/conf
           cp repo/conf/distributions repo/conf/
-          cat > repo/conf/options <<EOF
+          cat > repo/conf/options << EOF
           verbose
           basedir $(pwd)/repo
-          gnupghome ~/.gnupg
           EOF
 
       - name: Add packages to repository
         env:
           DIST: ${{ github.event.inputs.distribution || 'bookworm' }}
         run: |
+          echo "Adding packages to $DIST..."
           for deb in debs/*.deb; do
-            echo "Adding: $(basename $deb)"
-            reprepro -b repo includedeb "$DIST" "$deb"
+            [ -f "$deb" ] || continue
+            echo "  Adding: $(basename $deb)"
+            reprepro -b repo includedeb "$DIST" "$deb" || echo "    Warning: Failed to add $(basename $deb)"
           done
 
-      - name: Export public key
+      - name: Export public GPG key
         run: |
-          gpg --armor --export packages@secubox.in > repo/dists/secubox-keyring.gpg
-          gpg --export packages@secubox.in > repo/dists/secubox-keyring.gpg.bin
+          gpg --armor --export packages@secubox.in > repo/secubox-keyring.gpg
+          gpg --export packages@secubox.in > repo/secubox-keyring.gpg.bin
+          cp repo/secubox-keyring.gpg repo/dists/
+
+      - name: Generate install script
+        run: |
+          cat > repo/install.sh << 'INSTALL'
+          #!/bin/bash
+          # SecuBox APT Repository Installation Script
+          set -e
+
+          echo "Installing SecuBox APT repository..."
+
+          # Download and install GPG key
+          curl -fsSL https://apt.secubox.in/secubox-keyring.gpg | \
+            sudo tee /usr/share/keyrings/secubox.gpg > /dev/null
+
+          # Add repository
+          echo "deb [signed-by=/usr/share/keyrings/secubox.gpg] https://apt.secubox.in bookworm main" | \
+            sudo tee /etc/apt/sources.list.d/secubox.list
+
+          # Update package lists
+          sudo apt-get update
+
+          echo ""
+          echo "SecuBox repository installed successfully!"
+          echo ""
+          echo "Install packages with:"
+          echo "  sudo apt install secubox-full    # All modules"
+          echo "  sudo apt install secubox-lite    # Essential modules only"
+          echo ""
+          INSTALL
+          chmod +x repo/install.sh
 
       - name: Deploy to server
         env:
@@ -135,10 +130,15 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           echo "$KNOWN_HOSTS" > ~/.ssh/known_hosts
 
+          echo "Deploying to ${REPO_HOST}..."
           rsync -avz --delete \
-            repo/dists/ repo/pool/ repo/secubox-keyring.gpg \
+            repo/dists/ repo/pool/ repo/secubox-keyring.gpg repo/secubox-keyring.gpg.bin repo/install.sh \
             ${REPO_USER}@${REPO_HOST}:${REPO_PATH}/
 
       - name: Verify deployment
         run: |
-          curl -sf "https://${REPO_HOST}/dists/bookworm/Release" | head -20
+          echo "Verifying deployment..."
+          curl -sf "https://${REPO_HOST}/dists/bookworm/Release" | head -10
+          echo ""
+          echo "Repository published successfully!"
+          echo "Install with: curl -fsSL https://${REPO_HOST}/install.sh | sudo bash"

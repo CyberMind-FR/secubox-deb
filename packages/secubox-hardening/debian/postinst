@@ -1,0 +1,26 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+    configure)
+        # Apply sysctl hardening on install
+        if [ -f /etc/secubox/hardening/99-secubox-hardening.conf ]; then
+            cp /etc/secubox/hardening/99-secubox-hardening.conf /etc/sysctl.d/
+            sysctl -p /etc/sysctl.d/99-secubox-hardening.conf >/dev/null 2>&1 || true
+        fi
+
+        # Install module blacklist
+        if [ -f /etc/secubox/hardening/blacklist-modules.conf ]; then
+            cp /etc/secubox/hardening/blacklist-modules.conf /etc/modprobe.d/secubox-blacklist.conf
+        fi
+
+        # Enable and start service
+        systemctl daemon-reload
+        systemctl enable secubox-hardening.service
+        systemctl start secubox-hardening.service || true
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

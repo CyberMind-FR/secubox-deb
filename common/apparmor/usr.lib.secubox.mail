@@ -1,0 +1,47 @@
+# AppArmor profile for secubox-mail
+# Mail Server Management API (Postfix/Dovecot LXC)
+
+#include <tunables/global>
+
+profile secubox-mail /usr/lib/secubox/mail/** {
+  #include <abstractions/base>
+  #include <abstractions/python>
+  #include <abstractions/nameservice>
+
+  # SecuBox base permissions
+  #include <local/secubox-base>
+
+  # Mail data directory
+  /srv/mail/ r,
+  /srv/mail/** rwk,
+
+  # LXC container management
+  /srv/lxc/ r,
+  /srv/lxc/** rwk,
+  /usr/bin/lxc-* Ux,
+  /usr/sbin/lxc-* Ux,
+
+  # LXC control scripts
+  /usr/sbin/mailserverctl Ux,
+  /usr/sbin/roundcubectl Ux,
+  /usr/sbin/mailctl Ux,
+
+  # ACME certificates
+  /etc/acme/ r,
+  /etc/acme/** rw,
+  /root/.acme.sh/ r,
+  /root/.acme.sh/** r,
+
+  # OpenSSL for certificate operations
+  /usr/bin/openssl Ux,
+
+  # Process management
+  /proc/ r,
+  /proc/[0-9]*/ r,
+  /proc/[0-9]*/stat r,
+  /proc/[0-9]*/status r,
+
+  # Deny sensitive paths
+  deny /etc/shadow r,
+  deny /etc/gshadow r,
+}

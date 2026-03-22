@@ -1,0 +1,22 @@
+[Unit]
+Description=SecuBox Hardening API
+After=network.target secubox-core.service
+Requires=secubox-core.service
+
+[Service]
+Type=simple
+User=secubox
+Group=secubox
+WorkingDirectory=/usr/lib/secubox/hardening
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app \
+    --uds /run/secubox/hardening.sock \
+    --log-level warning
+Restart=on-failure
+RestartSec=5
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/run/secubox /etc/sysctl.d /etc/modprobe.d
+
+[Install]
+WantedBy=multi-user.target
