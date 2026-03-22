@@ -2,7 +2,7 @@
 # SecuBox Mail Server LXC Controller
 # Postfix + Dovecot in Debian LXC
 
-VERSION="2.3.0"
+VERSION="2.4.0"
 CONFIG_FILE="/etc/secubox/mail.toml"
 CONTAINER="mailserver"
 LXC_BASE="/srv/lxc"
@@ -956,6 +956,252 @@ cmd_dkim() {
     log "For full OpenDKIM integration, run: mailserverctl dkim setup"
 }
 
+# ============================================================================
+# SPAMASSASSIN - Spam filtering
+# ============================================================================
+
+cmd_spam_install() {
+    require_root
+
+    if ! lxc_exists; then
+        error "Container not installed"
+        return 1
+    fi
+
+    log "Installing SpamAssassin in container..."
+
+    if lxc_running; then
+        lxc-attach -n "$CONTAINER" -P "$LXC_BASE" -- /bin/bash << 'EOF'
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+apt-get install -y -o Dpkg::Options::="--force-confold" --no-install-recommends \
+    spamassassin spamc
+# Create spamd user
+useradd -r -s /usr/sbin/nologin -d /var/lib/spamassassin -m spamd 2>/dev/null || true
+# Enable spamd
+mkdir -p /var/lib/spamassassin/.spamassassin
+chown -R spamd:spamd /var/lib/spamassassin
+apt-get clean
+rm -rf /var/lib/apt/lists/*
+EOF
+    else
+        chroot "$LXC_PATH/rootfs" /bin/bash << 'CHROOT_EOF'
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+apt-get install -y -o Dpkg::Options::="--force-confold" --no-install-recommends \
+    spamassassin spamc
+useradd -r -s /usr/sbin/nologin -d /var/lib/spamassassin -m spamd 2>/dev/null || true
+mkdir -p /var/lib/spamassassin/.spamassassin
+chown -R spamd:spamd /var/lib/spamassassin
+apt-get clean
+rm -rf /var/lib/apt/lists/*
+CHROOT_EOF
+    fi
+
+    log "SpamAssassin installed"
+}
+
+cmd_spam_configure() {
+    require_root
+    local rootfs="$LXC_PATH/rootfs"
+
+    if [ ! -d "$rootfs" ]; then
+        error "Container not installed"
+        return 1
+    fi
+
+    log "Configuring SpamAssassin..."
+
+    # SpamAssassin local config
+    mkdir -p "$rootfs/etc/spamassassin"
+    cat > "$rootfs/etc/spamassassin/local.cf" << 'EOF'
+# SecuBox SpamAssassin Configuration
+
+# Rewrite subject for spam
+rewrite_header Subject [SPAM]
+
+# Spam threshold (5 is default)
+required_score 5.0
+
+# Use Bayes learning
+use_bayes 1
+bayes_auto_learn 1
+
+# Skip RBL checks for internal networks
+trusted_networks 127.0.0.0/8 192.168.0.0/16 10.0.0.0/8
+
+# Enable network checks
+skip_rbl_checks 0
+dns_available yes
+
+# Report settings
+report_safe 0
+
+# Auto-whitelist
+use_auto_whitelist 0
+
+# Scores
+score URIBL_BLOCKED 0.001
+score RCVD_IN_DNSWL_NONE 0
+score RCVD_IN_DNSWL_LOW -0.7
+score RCVD_IN_DNSWL_MED -2.3
+score RCVD_IN_DNSWL_HI -4.3
+EOF
+
+    # Spamassassin default options
+    cat > "$rootfs/etc/default/spamassassin" << 'EOF'
+# SecuBox SpamAssassin defaults
+ENABLED=1
+OPTIONS="--create-prefs --max-children 5 --helper-home-dir -u spamd -g spamd"
+PIDFILE="/run/spamd.pid"
+CRON=1
+EOF
+
+    # Create spamfilter script for Postfix
+    cat > "$rootfs/usr/local/bin/spamfilter" << 'EOF'
+#!/bin/bash
+# SpamAssassin filter for Postfix
+SENDMAIL="/usr/sbin/sendmail -i"
+/usr/bin/spamc | $SENDMAIL "$@"
+exit $?
+EOF
+    chmod +x "$rootfs/usr/local/bin/spamfilter"
+
+    log "SpamAssassin configured"
+}
+
+cmd_spam_enable() {
+    require_root
+    local rootfs="$LXC_PATH/rootfs"
+
+    if [ ! -d "$rootfs" ]; then
+        error "Container not installed"
+        return 1
+    fi
+
+    log "Enabling SpamAssassin in Postfix..."
+
+    # Add content filter to master.cf if not present
+    if ! grep -q "spamfilter" "$rootfs/etc/postfix/master.cf" 2>/dev/null; then
+        cat >> "$rootfs/etc/postfix/master.cf" << 'EOF'
+
+# SpamAssassin content filter
+spamfilter unix  -       n       n       -       -       pipe
+  flags=Rq user=spamd argv=/usr/local/bin/spamfilter -oi -f ${sender} ${recipient}
+EOF
+    fi
+
+    # Update main.cf with content filter
+    if ! grep -q "content_filter.*spamfilter" "$rootfs/etc/postfix/main.cf" 2>/dev/null; then
+        cat >> "$rootfs/etc/postfix/main.cf" << 'EOF'
+
+# SpamAssassin content filter
+content_filter = spamfilter:dummy
+EOF
+    fi
+
+    # Start spamd if running
+    if lxc_running; then
+        lxc-attach -n "$CONTAINER" -P "$LXC_BASE" -- /usr/sbin/spamd -d -c -u spamd 2>/dev/null || true
+        lxc-attach -n "$CONTAINER" -P "$LXC_BASE" -- postfix reload 2>/dev/null || true
+    fi
+
+    log "SpamAssassin enabled"
+}
+
+cmd_spam_disable() {
+    require_root
+    local rootfs="$LXC_PATH/rootfs"
+
+    if [ ! -d "$rootfs" ]; then
+        error "Container not installed"
+        return 1
+    fi
+
+    log "Disabling SpamAssassin..."
+
+    # Comment out content filter in main.cf
+    if [ -f "$rootfs/etc/postfix/main.cf" ]; then
+        sed -i 's/^content_filter = spamfilter/#content_filter = spamfilter/' "$rootfs/etc/postfix/main.cf"
+    fi
+
+    # Stop spamd if running
+    if lxc_running; then
+        lxc-attach -n "$CONTAINER" -P "$LXC_BASE" -- pkill spamd 2>/dev/null || true
+        lxc-attach -n "$CONTAINER" -P "$LXC_BASE" -- postfix reload 2>/dev/null || true
+    fi
+
+    log "SpamAssassin disabled"
+}
+
+cmd_spam_status() {
+    echo ""
+    echo "SpamAssassin Status"
+    echo "==================="
+    echo ""
+
+    local rootfs="$LXC_PATH/rootfs"
+
+    # Check if installed
+    if [ -f "$rootfs/usr/bin/spamc" ]; then
+        echo -e "Installed: ${GREEN}Yes${NC}"
+    else
+        echo -e "Installed: ${RED}No${NC}"
+        echo "  Run: mailserverctl spam install"
+        return
+    fi
+
+    # Check if configured
+    if [ -f "$rootfs/etc/spamassassin/local.cf" ]; then
+        echo -e "Configured: ${GREEN}Yes${NC}"
+    else
+        echo -e "Configured: ${YELLOW}No${NC}"
+    fi
+
+    # Check if enabled in Postfix
+    if grep -q "^content_filter.*spamfilter" "$rootfs/etc/postfix/main.cf" 2>/dev/null; then
+        echo -e "Enabled: ${GREEN}Yes${NC}"
+    else
+        echo -e "Enabled: ${YELLOW}No${NC}"
+    fi
+
+    # Check spamd process
+    if lxc_running; then
+        if lxc-attach -n "$CONTAINER" -P "$LXC_BASE" -- pgrep spamd >/dev/null 2>&1; then
+            echo -e "spamd running: ${GREEN}Yes${NC}"
+        else
+            echo -e "spamd running: ${YELLOW}No${NC}"
+        fi
+    fi
+
+    echo ""
+}
+
+cmd_spam_setup() {
+    require_root
+    log "Setting up SpamAssassin..."
+
+    cmd_spam_install
+    cmd_spam_configure
+    cmd_spam_enable
+
+    log "SpamAssassin setup complete!"
+}
+
+cmd_spam_update() {
+    require_root
+
+    if ! lxc_running; then
+        error "Container not running"
+        return 1
+    fi
+
+    log "Updating SpamAssassin rules..."
+    lxc-attach -n "$CONTAINER" -P "$LXC_BASE" -- sa-update 2>&1 || true
+    lxc-attach -n "$CONTAINER" -P "$LXC_BASE" -- pkill -HUP spamd 2>/dev/null || true
+    log "Rules updated"
+}
+
 cmd_logs() {
     local lines="${1:-50}"
     if ! lxc_running; then
@@ -1035,6 +1281,13 @@ cmd_components() {
       "type": "tool",
       "description": "Let's Encrypt certificate automation",
       "installed": $acme_available
+    },
+    {
+      "name": "SpamAssassin",
+      "type": "service",
+      "description": "Spam filtering",
+      "installed": $([ -f "$LXC_PATH/rootfs/usr/bin/spamc" ] && echo true || echo false),
+      "enabled": $(grep -q "^content_filter.*spamfilter" "$LXC_PATH/rootfs/etc/postfix/main.cf" 2>/dev/null && echo true || echo false)
     }
   ]
 }
@@ -1103,7 +1356,13 @@ DKIM:
   dkim keygen   Generate DKIM key pair only
   dkim status   Show DKIM status
   dkim sync     Sync keys to container
-  dkim          Legacy: keygen only (deprecated)
+
+Spam Filtering:
+  spam setup    Full SpamAssassin setup
+  spam status   Show SpamAssassin status
+  spam enable   Enable spam filtering
+  spam disable  Disable spam filtering
+  spam update   Update SpamAssassin rules
 
 Three-fold:
   components    List system components (JSON)
@@ -1136,6 +1395,20 @@ case "${1:-}" in
             install) cmd_dkim_install ;;
             configure) cmd_dkim_configure ;;
             *)       cmd_dkim ;;  # Legacy compatibility
+        esac
+        ;;
+    # SpamAssassin commands
+    spam)
+        shift
+        case "${1:-status}" in
+            setup)   cmd_spam_setup ;;
+            install) cmd_spam_install ;;
+            configure) cmd_spam_configure ;;
+            enable)  cmd_spam_enable ;;
+            disable) cmd_spam_disable ;;
+            status)  cmd_spam_status ;;
+            update)  cmd_spam_update ;;
+            *)       cmd_spam_status ;;
         esac
         ;;
     logs)       shift; cmd_logs "$@" ;;

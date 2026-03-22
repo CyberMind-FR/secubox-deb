@@ -1047,3 +1047,75 @@ async def get_dkim_record():
         result["bind_format"] = bind_file.read_text().strip()
 
     return result
+
+
+# =============================================================================
+# SPAMASSASSIN - Spam Filtering
+# =============================================================================
+
+@app.get("/spam/status", dependencies=[Depends(require_jwt)])
+async def spam_status():
+    """Get SpamAssassin status"""
+    rootfs = LXC_PATH / MAIL_CONTAINER / "rootfs"
+
+    status = {
+        "installed": (rootfs / "usr/bin/spamc").exists(),
+        "configured": (rootfs / "etc/spamassassin/local.cf").exists(),
+        "enabled": False,
+        "running": False,
+    }
+
+    # Check if enabled in Postfix
+    main_cf = rootfs / "etc/postfix/main.cf"
+    if main_cf.exists():
+        content = main_cf.read_text()
+        status["enabled"] = "content_filter = spamfilter" in content and \
+                           not "#content_filter = spamfilter" in content
+
+    # Check if spamd is running
+    if lxc_running(MAIL_CONTAINER):
+        success, out, _ = lxc_attach(MAIL_CONTAINER, "pgrep spamd")
+        status["running"] = success
+
+    return status
+
+
+@app.post("/spam/setup", dependencies=[Depends(require_jwt)])
+async def spam_setup(background_tasks: BackgroundTasks):
+    """Full SpamAssassin setup (install + configure + enable)"""
+    def do_setup():
+        subprocess.run(["/usr/sbin/mailserverctl", "spam", "setup"],
+                      stdout=open("/var/log/mail-spam.log", "w"),
+                      stderr=subprocess.STDOUT)
+    background_tasks.add_task(do_setup)
+    return {"success": True, "message": "SpamAssassin setup started",
+            "log": "/var/log/mail-spam.log"}
+
+
+@app.post("/spam/enable", dependencies=[Depends(require_jwt)])
+async def spam_enable():
+    """Enable SpamAssassin filtering"""
+    success, out, err = run_cmd(["/usr/sbin/mailserverctl", "spam", "enable"])
+    if success:
+        return {"success": True, "message": "SpamAssassin enabled"}
+    raise HTTPException(500, f"Failed: {err}")
+
+
+@app.post("/spam/disable", dependencies=[Depends(require_jwt)])
+async def spam_disable():
+    """Disable SpamAssassin filtering"""
+    success, out, err = run_cmd(["/usr/sbin/mailserverctl", "spam", "disable"])
+    if success:
+        return {"success": True, "message": "SpamAssassin disabled"}
+    raise HTTPException(500, f"Failed: {err}")
+
+
+@app.post("/spam/update", dependencies=[Depends(require_jwt)])
+async def spam_update(background_tasks: BackgroundTasks):
+    """Update SpamAssassin rules"""
+    def do_update():
+        subprocess.run(["/usr/sbin/mailserverctl", "spam", "update"],
+                      stdout=open("/var/log/mail-spam-update.log", "w"),
+                      stderr=subprocess.STDOUT)
+    background_tasks.add_task(do_update)
+    return {"success": True, "message": "SpamAssassin rules update started"}

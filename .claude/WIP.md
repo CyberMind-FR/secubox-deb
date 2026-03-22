@@ -5,6 +5,13 @@
 
 ## ✅ Terminé cette session
 
+### SpamAssassin Integration ✅
+- **mailserverctl v2.4.0** — spam setup/enable/disable/status/update commands
+- **SpamAssassin + spamc** — Installed in LXC container
+- **Postfix content filter** — Integrates via spamfilter pipe
+- **Bayes learning** — Auto-learn enabled by default
+- **API endpoints** — /spam/status, /spam/setup, /spam/enable, /spam/disable
+
 ### Mail Autodiscover ✅
 - **Thunderbird/Evolution** — /mail/config-v1.1.xml (Mozilla autoconfig)
 - **Outlook** — /autodiscover/autodiscover.xml (Microsoft format)
@@ -54,8 +61,8 @@
 ## ⬜ Next Up
 
 ### Mail Server Production
-1. **SpamAssassin** — Spam filtering integration
-2. **Greylisting** — Postgrey integration
+1. **Greylisting** — Postgrey integration (optional)
+2. **ClamAV** — Virus scanning (optional)
 
 ### Infrastructure
 1. **Deploy apt.secubox.in** — Setup reprepro server
