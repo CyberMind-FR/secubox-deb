@@ -5,6 +5,11 @@
 
 ## ✅ Terminé cette session
 
+### Service Fixes ✅
+- **secubox-haproxy v1.1.1** — Fixed systemd namespace error when HAProxy not installed
+- **RuntimeDirectory=haproxy** — Automatically creates /run/haproxy
+- **All 32 services** — Now running on VM
+
 ### SpamAssassin Integration ✅
 - **mailserverctl v2.4.0** — spam setup/enable/disable/status/update commands
 - **SpamAssassin + spamc** — Installed in LXC container
