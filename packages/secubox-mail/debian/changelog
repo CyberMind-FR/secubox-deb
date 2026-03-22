@@ -1,3 +1,14 @@
+secubox-mail (1.6.0-1~bookworm1) bookworm; urgency=medium
+
+  * Full OpenDKIM integration with Postfix
+  * mailserverctl v2.3.0: dkim setup/keygen/status/sync commands
+  * Install OpenDKIM in LXC container
+  * Configure Postfix milter integration
+  * Add API endpoints: /dkim/status, /dkim/setup, /dkim/keygen, /dkim/sync
+  * Generate DNS records in both standard and BIND format
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Mar 2026 15:00:00 +0100
+
 secubox-mail (1.5.0-1~bookworm1) bookworm; urgency=medium
 
   * Add ACME certificate support (Let's Encrypt)

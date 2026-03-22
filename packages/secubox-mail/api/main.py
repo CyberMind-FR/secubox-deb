@@ -17,7 +17,7 @@ from pydantic import BaseModel
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
 
-app = FastAPI(title="SecuBox Mail", version="1.4.0")
+app = FastAPI(title="SecuBox Mail", version="1.5.0")
 config = get_config("mail")
 
 DATA_PATH = Path(config.get("data_path", "/srv/mail"))
@@ -738,21 +738,91 @@ async def update_settings(settings: SettingsUpdate):
 # DKIM SETUP
 # =============================================================================
 
+# =============================================================================
+# DKIM MANAGEMENT
+# =============================================================================
+
+@app.get("/dkim/status", dependencies=[Depends(require_jwt)])
+async def dkim_status():
+    """Get DKIM status"""
+    private_key = DATA_PATH / "dkim" / "default.private"
+    dns_record = DATA_PATH / "dkim" / "default.txt"
+
+    status = {
+        "key_exists": private_key.exists(),
+        "dns_record_exists": dns_record.exists(),
+        "domain": DOMAIN,
+        "selector": "default",
+    }
+
+    # Get DNS record content
+    if dns_record.exists():
+        status["dns_record"] = dns_record.read_text().strip()
+
+    # Check OpenDKIM service in container
+    if lxc_running(MAIL_CONTAINER):
+        success, out, _ = lxc_attach(MAIL_CONTAINER, "pgrep opendkim")
+        status["opendkim_running"] = success
+
+        # Check milter config
+        success, out, _ = lxc_attach(MAIL_CONTAINER, "grep -q smtpd_milters /etc/postfix/main.cf")
+        status["milter_configured"] = success
+    else:
+        status["opendkim_running"] = False
+        status["milter_configured"] = False
+
+    return status
+
+
 @app.post("/dkim/setup", dependencies=[Depends(require_jwt)])
 async def setup_dkim(background_tasks: BackgroundTasks):
-    """Generate DKIM key"""
+    """Full DKIM setup (keygen + OpenDKIM install + configure)"""
     def do_setup():
-        subprocess.run(["/usr/sbin/mailctl", "dkim", "setup"],
+        subprocess.run(["/usr/sbin/mailserverctl", "dkim", "setup"],
                       stdout=open("/var/log/mail-dkim.log", "w"),
                       stderr=subprocess.STDOUT)
     background_tasks.add_task(do_setup)
-    return {"success": True, "message": "DKIM key generation started"}
+    return {"success": True, "message": "DKIM setup started", "log": "/var/log/mail-dkim.log"}
+
+
+@app.post("/dkim/keygen", dependencies=[Depends(require_jwt)])
+async def dkim_keygen():
+    """Generate DKIM keys only"""
+    success, out, err = run_cmd(["/usr/sbin/mailserverctl", "dkim", "keygen"])
+    if success:
+        # Get the DNS record
+        dns_file = DATA_PATH / "dkim" / "default.txt"
+        dns_record = dns_file.read_text().strip() if dns_file.exists() else ""
+        return {"success": True, "message": "DKIM keys generated", "dns_record": dns_record}
+    raise HTTPException(500, f"Failed: {err}")
+
+
+@app.post("/dkim/sync", dependencies=[Depends(require_jwt)])
+async def dkim_sync():
+    """Sync DKIM keys to container"""
+    success, out, err = run_cmd(["/usr/sbin/mailserverctl", "dkim", "sync"])
+    if success:
+        return {"success": True, "message": "DKIM keys synced to container"}
+    raise HTTPException(500, f"Failed: {err}")
 
 
 @app.get("/dkim/record", dependencies=[Depends(require_jwt)])
 async def get_dkim_record():
     """Get DKIM DNS record"""
-    dkim_file = DATA_PATH / "dkim" / f"{DOMAIN}.txt"
-    if dkim_file.exists():
-        return {"exists": True, "record": dkim_file.read_text().strip()}
-    return {"exists": False}
+    dns_file = DATA_PATH / "dkim" / "default.txt"
+    bind_file = DATA_PATH / "dkim" / "default.bind"
+
+    if not dns_file.exists():
+        return {"exists": False}
+
+    result = {
+        "exists": True,
+        "selector": "default",
+        "domain": DOMAIN,
+        "record": dns_file.read_text().strip(),
+    }
+
+    if bind_file.exists():
+        result["bind_format"] = bind_file.read_text().strip()
+
+    return result
