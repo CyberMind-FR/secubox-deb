@@ -1,27 +1,28 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-03-22 (Session 4)*
+*Mis à jour : 2026-03-22 (Session 5)*
 
 ---
 
 ## ✅ Terminé cette session
 
-### Mail Server LXC Implementation ✅
-- **mailserverctl v2.1.0** — Updated to use Debian bookworm via debootstrap
-- **roundcubectl v1.4.0** — Updated to use Debian bookworm via debootstrap
-- **Host networking** — LXC containers use `lxc.net.0.type = none` for simplified networking
-- **Three-fold commands** — Both scripts have `components` and `access` JSON commands
-- **LXC path flag** — All lxc-* commands now use `-P /srv/lxc` for custom LXC path
+### ACME Certificate Support ✅
+- **mailserverctl v2.2.0** — Added ACME certificate management
+- **acme.sh integration** — issue, renew, install commands
+- **SSL/TLS commands** — ssl status, ssl selfsigned
+- **Dovecot SSL** — TLS 1.2+ configuration via conf.d/10-ssl.conf
+- **API endpoints** — /acme/status, /acme/issue, /acme/renew, /acme/install
+- **Certificate sync** — Auto-sync certificates to LXC container
 
-### Mail Server Working (Alpine LXC) ✅
-- **Postfix + Dovecot** — Tested and working on Alpine LXC container
-- **User management** — mailctl user add/list/remove working
-- **Authentication** — doveadm auth test verified
-- **Email delivery** — Postfix → Dovecot LMTP → Maildir working
-- **Ports listening** — SMTP (25, 465, 587), IMAP (143), POP3 (110)
+### Previous: Mail Server LXC ✅
+- **mailserverctl v2.1.0** — Debian bookworm via debootstrap
+- **roundcubectl v1.4.0** — Debian bookworm via debootstrap
+- **Host networking** — LXC containers use `lxc.net.0.type = none`
+- **Three-fold commands** — Both scripts have `components` and `access` JSON commands
+- **Postfix + Dovecot** — Tested and working with authentication
 
 ### VM Service Count ✅
 - **30 services running** — All SecuBox APIs active
-- **Disk space constraint** — VM has 2.4GB root, Debian LXC needs 4GB+
+- **Disk expanded** — VM disk resized to 16GB for Debian LXC
 
 ---
 
@@ -37,9 +38,8 @@
 ## ⬜ Next Up
 
 ### Mail Server Production
-1. **Debian LXC containers** — Require larger VM disk or fresh install
-2. **SSL/TLS certificates** — ACME integration for mail domains
-3. **DKIM signing** — Integrate with Postfix
+1. **DKIM signing** — Integrate OpenDKIM with Postfix
+2. **Mail autodiscover** — Thunderbird/Outlook autoconfig endpoints
 
 ### Infrastructure
 1. **Deploy apt.secubox.in** — Setup reprepro server

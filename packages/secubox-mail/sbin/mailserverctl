@@ -2,12 +2,13 @@
 # SecuBox Mail Server LXC Controller
 # Postfix + Dovecot in Debian LXC
 
-VERSION="2.1.0"
+VERSION="2.2.0"
 CONFIG_FILE="/etc/secubox/mail.toml"
 CONTAINER="mailserver"
 LXC_BASE="/srv/lxc"
 LXC_PATH="$LXC_BASE/mailserver"
 DATA_PATH="/srv/mail"
+ACME_DIR="/etc/acme"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -334,6 +335,219 @@ generate_ssl_cert() {
 }
 
 # ============================================================================
+# ACME Certificate Management (Let's Encrypt)
+# ============================================================================
+
+acme_available() {
+    command -v acme.sh >/dev/null 2>&1
+}
+
+cmd_acme_issue() {
+    require_root
+    local email="${1:-admin@${DOMAIN}}"
+
+    if ! acme_available; then
+        error "acme.sh not installed"
+        echo "Install with: curl https://get.acme.sh | sh"
+        return 1
+    fi
+
+    local fqdn="${HOSTNAME}.${DOMAIN}"
+
+    log "Requesting certificate for $fqdn..."
+
+    # Stop container temporarily for standalone mode
+    local was_running=false
+    if lxc_running; then
+        was_running=true
+        log "Stopping container for certificate issuance..."
+        cmd_stop
+        sleep 2
+    fi
+
+    # Request certificate with all mail-related names
+    local domains="-d $fqdn"
+    [ "$HOSTNAME" != "mail" ] && domains="$domains -d mail.${DOMAIN}"
+    domains="$domains -d smtp.${DOMAIN} -d imap.${DOMAIN} -d pop3.${DOMAIN}"
+
+    if acme.sh --issue $domains --standalone --accountemail "$email" --force; then
+        log "Certificate issued successfully!"
+
+        # Install certificate to data directory
+        cmd_acme_install
+
+        # Restart container
+        [ "$was_running" = "true" ] && cmd_start
+        return 0
+    else
+        error "Certificate request failed"
+        [ "$was_running" = "true" ] && cmd_start
+        return 1
+    fi
+}
+
+cmd_acme_install() {
+    require_root
+
+    if ! acme_available; then
+        error "acme.sh not installed"
+        return 1
+    fi
+
+    local fqdn="${HOSTNAME}.${DOMAIN}"
+    local acme_cert_dir="$ACME_DIR/${fqdn}"
+
+    if [ ! -d "$acme_cert_dir" ] && [ ! -d "${HOME}/.acme.sh/${fqdn}" ]; then
+        error "No ACME certificate found for $fqdn"
+        return 1
+    fi
+
+    # Find certificate location
+    local cert_src="${acme_cert_dir}/fullchain.cer"
+    local key_src="${acme_cert_dir}/${fqdn}.key"
+
+    if [ ! -f "$cert_src" ]; then
+        cert_src="${HOME}/.acme.sh/${fqdn}/fullchain.cer"
+        key_src="${HOME}/.acme.sh/${fqdn}/${fqdn}.key"
+    fi
+
+    if [ ! -f "$cert_src" ]; then
+        error "Certificate files not found"
+        return 1
+    fi
+
+    log "Installing certificate..."
+    mkdir -p "$DATA_PATH/ssl"
+    cp "$cert_src" "$DATA_PATH/ssl/fullchain.pem"
+    cp "$key_src" "$DATA_PATH/ssl/privkey.pem"
+    chmod 600 "$DATA_PATH/ssl/"*.pem
+
+    # Sync to container
+    cmd_sync_ssl
+
+    log "Certificate installed"
+}
+
+cmd_acme_renew() {
+    require_root
+
+    if ! acme_available; then
+        error "acme.sh not installed"
+        return 1
+    fi
+
+    local fqdn="${HOSTNAME}.${DOMAIN}"
+
+    log "Renewing certificate for $fqdn..."
+
+    if acme.sh --renew -d "$fqdn" --force; then
+        log "Certificate renewed"
+        cmd_acme_install
+    else
+        warn "Certificate renewal failed or not yet due"
+    fi
+}
+
+cmd_sync_ssl() {
+    log "Syncing SSL certificates to container..."
+
+    if [ ! -d "$LXC_PATH/rootfs" ]; then
+        error "Container not installed"
+        return 1
+    fi
+
+    mkdir -p "$LXC_PATH/rootfs/etc/ssl/mail"
+    cp "$DATA_PATH/ssl/"*.pem "$LXC_PATH/rootfs/etc/ssl/mail/" 2>/dev/null || true
+    chmod 600 "$LXC_PATH/rootfs/etc/ssl/mail/"*.pem 2>/dev/null || true
+
+    # Enable SSL in Dovecot if we have certs
+    if [ -f "$DATA_PATH/ssl/fullchain.pem" ]; then
+        enable_dovecot_ssl
+    fi
+
+    # Reload services if running
+    if lxc_running; then
+        lxc-attach -n "$CONTAINER" -P "$LXC_BASE" -- postfix reload 2>/dev/null || true
+        lxc-attach -n "$CONTAINER" -P "$LXC_BASE" -- doveadm reload 2>/dev/null || true
+    fi
+
+    log "SSL certificates synced"
+}
+
+enable_dovecot_ssl() {
+    local rootfs="$LXC_PATH/rootfs"
+    [ ! -d "$rootfs/etc/dovecot" ] && return
+
+    log "Enabling Dovecot SSL..."
+
+    # Update dovecot config to enable SSL
+    cat > "$rootfs/etc/dovecot/conf.d/10-ssl.conf" << 'EOF'
+# SecuBox SSL Configuration
+ssl = yes
+ssl_cert = </etc/ssl/mail/fullchain.pem
+ssl_key = </etc/ssl/mail/privkey.pem
+ssl_min_protocol = TLSv1.2
+ssl_cipher_list = ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384
+ssl_prefer_server_ciphers = yes
+EOF
+
+    log "Dovecot SSL enabled"
+}
+
+cmd_ssl_status() {
+    echo ""
+    echo "SSL Certificate Status"
+    echo "======================"
+    echo ""
+
+    local cert_file="$DATA_PATH/ssl/fullchain.pem"
+
+    if [ ! -f "$cert_file" ]; then
+        echo -e "Certificate: ${RED}Not installed${NC}"
+        echo ""
+        echo "Options:"
+        echo "  1. Generate self-signed: mailserverctl ssl selfsigned"
+        echo "  2. Request ACME cert:    mailserverctl acme issue [email]"
+        return 0
+    fi
+
+    echo -e "Certificate: ${GREEN}Installed${NC}"
+    echo ""
+
+    # Show certificate info
+    openssl x509 -in "$cert_file" -noout -subject -dates -issuer 2>/dev/null | while read line; do
+        echo "  $line"
+    done
+
+    # Check if ACME managed
+    local fqdn="${HOSTNAME}.${DOMAIN}"
+    if [ -d "$ACME_DIR/${fqdn}" ] || [ -d "${HOME}/.acme.sh/${fqdn}" ]; then
+        echo ""
+        echo -e "Type: ${GREEN}ACME (Let's Encrypt)${NC}"
+        echo "Auto-renewal: Enabled via acme.sh cron"
+    else
+        echo ""
+        echo -e "Type: ${YELLOW}Self-signed${NC}"
+    fi
+
+    # Check expiration
+    local expires=$(openssl x509 -in "$cert_file" -noout -enddate 2>/dev/null | cut -d= -f2)
+    local expires_epoch=$(date -d "$expires" +%s 2>/dev/null || echo 0)
+    local now_epoch=$(date +%s)
+    local days_left=$(( (expires_epoch - now_epoch) / 86400 ))
+
+    echo ""
+    if [ "$days_left" -lt 0 ]; then
+        echo -e "Status: ${RED}EXPIRED${NC}"
+    elif [ "$days_left" -lt 30 ]; then
+        echo -e "Status: ${YELLOW}Expires in $days_left days${NC}"
+    else
+        echo -e "Status: ${GREEN}Valid ($days_left days remaining)${NC}"
+    fi
+    echo ""
+}
+
+# ============================================================================
 # Commands
 # ============================================================================
 
@@ -525,6 +739,26 @@ cmd_components() {
     lxc_exists && installed=true
     lxc_running && running=true
 
+    # SSL status
+    local ssl_installed=false
+    local ssl_type="none"
+    local ssl_expires=""
+    local fqdn="${HOSTNAME}.${DOMAIN}"
+
+    if [ -f "$DATA_PATH/ssl/fullchain.pem" ]; then
+        ssl_installed=true
+        ssl_expires=$(openssl x509 -in "$DATA_PATH/ssl/fullchain.pem" -noout -enddate 2>/dev/null | cut -d= -f2)
+        if [ -d "$ACME_DIR/${fqdn}" ] || [ -d "${HOME}/.acme.sh/${fqdn}" ]; then
+            ssl_type="acme"
+        else
+            ssl_type="selfsigned"
+        fi
+    fi
+
+    # ACME status
+    local acme_available=false
+    command -v acme.sh >/dev/null 2>&1 && acme_available=true
+
     cat <<EOF
 {
   "components": [
@@ -550,6 +784,20 @@ cmd_components() {
       "description": "IMAP/POP3 server (MDA)",
       "ports": [143, 993, 110, 995],
       "parent": "$CONTAINER"
+    },
+    {
+      "name": "SSL/TLS Certificate",
+      "type": "certificate",
+      "description": "TLS encryption for mail protocols",
+      "installed": $ssl_installed,
+      "type_detail": "$ssl_type",
+      "expires": "$ssl_expires"
+    },
+    {
+      "name": "ACME Client",
+      "type": "tool",
+      "description": "Let's Encrypt certificate automation",
+      "installed": $acme_available
     }
   ]
 }
@@ -560,21 +808,30 @@ cmd_access() {
     local running=false
     lxc_running && running=true
 
+    local ssl_enabled=false
+    [ -f "$DATA_PATH/ssl/fullchain.pem" ] && ssl_enabled=true
+
     cat <<EOF
 {
   "smtp": {
     "host": "$HOSTNAME.$DOMAIN",
-    "ports": {"smtp": 25, "submission": 587, "smtps": 465}
+    "ports": {"smtp": 25, "submission": 587, "smtps": 465},
+    "tls": $ssl_enabled,
+    "starttls": true
   },
   "imap": {
     "host": "$HOSTNAME.$DOMAIN",
-    "ports": {"imap": 143, "imaps": 993}
+    "ports": {"imap": 143, "imaps": 993},
+    "tls": $ssl_enabled
   },
   "pop3": {
     "host": "$HOSTNAME.$DOMAIN",
-    "ports": {"pop3": 110, "pop3s": 995}
+    "ports": {"pop3": 110, "pop3s": 995},
+    "tls": $ssl_enabled
   },
-  "running": $running
+  "ssl_enabled": $ssl_enabled,
+  "running": $running,
+  "webmail": "https://webmail.$DOMAIN"
 }
 EOF
 }
@@ -587,20 +844,34 @@ Three-fold architecture: Components, Status, Access
 
 Usage: mailserverctl <command>
 
-Commands:
-  install     Install LXC container (Debian)
-  start       Start mail server
-  stop        Stop mail server
-  restart     Restart
-  status      Show status
-  shell       Open shell in container
-  sync        Sync config files to container
-  dkim        Generate DKIM keys
-  logs [n]    View last n lines of mail.log
+Container:
+  install       Install LXC container (Debian)
+  start         Start mail server
+  stop          Stop mail server
+  restart       Restart
+  status        Show status
+  shell         Open shell in container
+  sync          Sync config files to container
+  logs [n]      View last n lines of mail.log
+
+SSL/TLS:
+  ssl status    Show certificate status
+  ssl selfsigned Generate self-signed certificate
+  acme issue [email]  Request Let's Encrypt certificate
+  acme renew    Renew ACME certificate
+  acme install  Install ACME cert to container
+
+DKIM:
+  dkim          Generate DKIM keys
 
 Three-fold:
-  components  List system components (JSON)
-  access      Show connection info (JSON)
+  components    List system components (JSON)
+  access        Show connection info (JSON)
+
+Examples:
+  mailserverctl install
+  mailserverctl acme issue admin@example.com
+  mailserverctl ssl status
 
 EOF
 }
@@ -617,6 +888,25 @@ case "${1:-}" in
     logs)       shift; cmd_logs "$@" ;;
     components) cmd_components ;;
     access)     cmd_access ;;
+    # SSL/TLS commands
+    ssl)
+        shift
+        case "${1:-status}" in
+            status)    cmd_ssl_status ;;
+            selfsigned) generate_ssl_cert && cmd_sync_ssl ;;
+            *)         cmd_ssl_status ;;
+        esac
+        ;;
+    # ACME commands
+    acme)
+        shift
+        case "${1:-}" in
+            issue)   shift; cmd_acme_issue "$@" ;;
+            renew)   cmd_acme_renew ;;
+            install) cmd_acme_install ;;
+            *)       echo "Usage: mailserverctl acme issue|renew|install" ;;
+        esac
+        ;;
     help|--help|-h|'') show_help ;;
     *)          error "Unknown: $1"; exit 1 ;;
 esac
