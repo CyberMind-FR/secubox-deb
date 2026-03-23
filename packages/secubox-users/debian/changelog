@@ -1,3 +1,15 @@
+secubox-users (1.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Add usersctl CLI controller for unified user management
+  * Add groups support with permissions
+  * Add import/export functionality for bulk user management
+  * Add service provisioning to Nextcloud, Gitea, Email, Matrix, etc.
+  * Enhance API with validation and group endpoints
+  * New modern Catppuccin-styled frontend with modals
+  * Add nginx config for frontend serving
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 23 Mar 2026 10:30:00 +0100
+
 secubox-users (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial release
