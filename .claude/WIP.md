@@ -1,9 +1,33 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-03-23 (Session 8)*
+*Mis à jour : 2026-03-23 (Session 9)*
 
 ---
 
 ## ✅ Terminé cette session
+
+### 6 New Modules Committed (Session 9) ✅
+- **secubox-backup** v1.0.0 — System config and LXC container backup/restore
+- **secubox-watchdog** v1.0.0 — Container, service, and endpoint monitoring
+- **secubox-tor** v1.0.0 — Tor circuits and hidden services management
+- **secubox-exposure** v1.0.0 — Unified exposure settings (Tor, SSL, DNS, Mesh)
+- **secubox-mitmproxy** v1.0.0 — WAF with traffic inspection, alerts, and bans
+- **secubox-traffic** v1.0.0 — TC/CAKE QoS traffic shaping per interface
+
+All modules include FastAPI backend, Catppuccin frontend, Debian packaging.
+Total modules: **41** (was 35)
+
+### Menu.d Fixes ✅
+- Added missing menu.d JSON files for exposure, mitmproxy, traffic
+- Updated debian/rules to install menu.d files
+
+### Metapackages Updated to v1.1.0 ✅
+- **secubox-full** — Now includes all 39 modules (was 14)
+- **secubox-lite** — Added portal, hardening; watchdog/backup in suggests
+- **repo/README.md** — Updated package list (41 total)
+
+---
+
+## ✅ Previously Done (Session 8)
 
 ### secubox-mail Enhancement (v2.1.0) ✅
 - **Security features dashboard** — Visual grid with toggle switches
