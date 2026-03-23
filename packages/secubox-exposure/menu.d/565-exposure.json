@@ -1,0 +1,8 @@
+{
+  "id": "exposure",
+  "title": "Exposure",
+  "icon": "🌐",
+  "path": "/exposure/",
+  "category": "network",
+  "order": 565
+}

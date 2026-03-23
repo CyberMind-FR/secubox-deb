@@ -1,0 +1,8 @@
+{
+  "id": "mitmproxy",
+  "title": "MITM Proxy",
+  "icon": "🔍",
+  "path": "/mitmproxy/",
+  "category": "security",
+  "order": 115
+}
