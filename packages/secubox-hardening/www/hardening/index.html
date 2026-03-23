@@ -61,9 +61,197 @@
         }
         .action-btn.primary { background: var(--blue); color: var(--base); }
         .action-btn.secondary { background: var(--surface1); color: var(--text); }
+    
+        /* CRT Enhancements */
+        .main { margin-left: 220px; padding: 1.5rem; }
+
+        .header h1 {
+            color: var(--p31-hot);
+            text-shadow: var(--bloom-text);
+            font-weight: 700;
+            letter-spacing: 0.05em;
+        }
+
+        .badge {
+            font-family: 'Courier Prime', monospace;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            border: 1px solid;
+        }
+        .badge-blue, .badge-primary { background: rgba(51,255,102,0.1); border-color: var(--p31-peak); color: var(--p31-peak); }
+        .badge-green { background: rgba(51,255,102,0.15); border-color: var(--p31-peak); color: var(--p31-peak); text-shadow: var(--bloom-soft); }
+        .badge-cyan { background: rgba(51,255,102,0.1); border-color: var(--p31-mid); color: var(--p31-mid); }
+        .badge-purple { background: rgba(163,113,247,0.1); border-color: #a371f7; color: #a371f7; }
+        .badge-yellow, .badge-amber { background: rgba(255,179,71,0.1); border-color: var(--p31-decay); color: var(--p31-decay); }
+        .badge-red { background: rgba(255,68,102,0.1); border-color: #ff4466; color: #ff4466; }
+
+        .btn {
+            font-family: 'Courier Prime', monospace;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            border: 1px solid var(--p31-ghost);
+            background: var(--tube-deep);
+            color: var(--p31-mid);
+            transition: all 0.2s;
+        }
+        .btn:hover {
+            border-color: var(--p31-dim);
+            color: var(--p31-peak);
+            text-shadow: var(--bloom-soft);
+            box-shadow: 0 0 12px rgba(51,255,102,0.1);
+        }
+        .btn-green, .btn-primary, .btn.primary, .btn.success {
+            border-color: var(--p31-peak);
+            color: var(--p31-peak);
+            background: rgba(51,255,102,0.1);
+        }
+        .btn-green:hover, .btn-primary:hover, .btn.primary:hover, .btn.success:hover {
+            background: rgba(51,255,102,0.2);
+            box-shadow: 0 0 16px rgba(51,255,102,0.2);
+        }
+        .btn-red, .btn.danger {
+            border-color: #ff4466;
+            color: #ff4466;
+            background: rgba(255,68,102,0.1);
+        }
+        .btn-red:hover, .btn.danger:hover {
+            background: rgba(255,68,102,0.2);
+        }
+        .btn-blue {
+            border-color: var(--p31-mid);
+            color: var(--p31-mid);
+            background: rgba(51,255,102,0.05);
+        }
+        .btn-blue:hover {
+            border-color: var(--p31-peak);
+            color: var(--p31-peak);
+        }
+
+        .card {
+            background: var(--tube-deep);
+            border: 1px solid var(--p31-ghost);
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
+        }
+        .card:hover {
+            border-color: var(--p31-dim);
+            box-shadow: 0 0 8px rgba(51,255,102,0.05), inset 0 0 20px rgba(0,0,0,0.3);
+        }
+        .card-title, .card-header h2 {
+            color: var(--p31-decay);
+            text-shadow: var(--bloom-amber);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+        }
+
+        .stat-card {
+            background: var(--tube-deep);
+            border: 1px solid var(--p31-ghost);
+        }
+        .stat-value, .stat-card .value {
+            text-shadow: 0 0 10px currentColor;
+        }
+        .stat-label, .stat-card .label {
+            color: var(--p31-dim);
+            letter-spacing: 0.15em;
+        }
+        .stat-card.cyan .value, .stat-card.green .value { color: var(--p31-peak); }
+        .stat-card.yellow .value { color: var(--p31-decay); }
+        .stat-card.red .value { color: #ff4466; }
+
+        table, .table {
+            font-family: 'Courier Prime', monospace;
+        }
+        th, .table th {
+            color: var(--p31-decay);
+            text-shadow: var(--bloom-amber);
+            letter-spacing: 0.15em;
+            border-bottom: 1px solid var(--p31-ghost);
+        }
+        td, .table td {
+            border-bottom: 1px solid var(--p31-ghost);
+            color: var(--p31-mid);
+        }
+        tr:hover, .table tr:hover {
+            background: rgba(51,255,102,0.03);
+        }
+
+        .status-dot.active, .status-running {
+            color: var(--p31-peak);
+            text-shadow: var(--bloom-soft);
+        }
+        .status-dot.active {
+            background: var(--p31-peak);
+            box-shadow: 0 0 8px var(--p31-peak);
+        }
+
+        .toast {
+            background: var(--tube-deep);
+            border: 1px solid var(--p31-dim);
+            font-family: 'Courier Prime', monospace;
+        }
+        .toast-success { border-color: var(--p31-peak); }
+        .toast-error { border-color: #ff4466; }
+
+        .modal {
+            background: rgba(0,0,0,0.85);
+        }
+        .modal-content {
+            background: var(--tube-deep);
+            border: 1px solid var(--p31-dim);
+            box-shadow: 0 0 30px rgba(51,255,102,0.1);
+        }
+        .modal-title {
+            color: var(--p31-decay);
+            text-shadow: var(--bloom-amber);
+            letter-spacing: 0.1em;
+        }
+
+        .tabs {
+            background: var(--tube-deep);
+            border-bottom: 1px solid var(--p31-ghost);
+        }
+        .tab {
+            color: var(--p31-dim);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+        }
+        .tab:hover { color: var(--p31-mid); }
+        .tab.active {
+            color: var(--p31-peak);
+            text-shadow: var(--bloom-soft);
+            border-bottom-color: var(--p31-peak);
+        }
+
+        input, select, textarea {
+            font-family: 'Courier Prime', monospace;
+            background: var(--tube-black);
+            border: 1px solid var(--p31-ghost);
+            color: var(--p31-mid);
+            padding: 0.5rem;
+        }
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--p31-dim);
+            box-shadow: 0 0 8px rgba(51,255,102,0.1);
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: var(--tube-black); }
+        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
+        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
+
+        /* Empty states */
+        .empty { color: var(--p31-dim); }
+
+        @media (max-width: 768px) {
+            .main { margin-left: 0; }
+        }
     </style>
 </head>
-<body>
+<body class="crt-body crt-scanlines crt-body crt-scanlines">
     <div class="app-container">
         <nav class="sidebar" id="sidebar"></nav>
 
@@ -167,5 +355,6 @@
 
         document.addEventListener('DOMContentLoaded', loadStatus);
     </script>
+    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>

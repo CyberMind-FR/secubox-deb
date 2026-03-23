@@ -1,15 +1,14 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - Auth Guardian</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-system.css">
-    <link rel="stylesheet" href="/shared/sidebar.css">
-    <style>
-        :root {
+#!/usr/bin/env python3
+"""
+Apply CRT P31 Phosphor theme to all SecuBox module UIs
+"""
+
+import os
+import re
+import glob
+
+# CRT CSS variables to inject
+CRT_ROOT_VARS = """:root {
             /* P31 Phosphor spectrum */
             --p31-peak: #33ff66;
             --p31-hot: #66ffaa;
@@ -40,35 +39,20 @@
             --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
             --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
             --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
+        }"""
+
+# New body styles
+CRT_BODY_STYLES = """body {
             font-family: 'Courier Prime', 'Courier New', monospace;
             background: var(--tube-black);
             background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
             color: var(--p31-mid);
             display: flex;
             min-height: 100vh;
-        }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-        .header h1 { font-size: 1.5rem; display: flex; align-items: center; gap: 0.5rem; }
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.9rem; }
-        .btn:hover { background: var(--bg-dark); }
-        .btn.primary { background: rgba(88,166,255,0.1); border-color: var(--primary); color: var(--primary); }
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
-        .card h2 { font-size: 1rem; margin-bottom: 1rem; color: var(--cyan); }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
-        .stat-card .value { font-size: 1.8rem; font-weight: bold; color: var(--cyan); }
-        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; }
-        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-        th, td { padding: 0.6rem; text-align: left; border-bottom: 1px solid var(--border); }
-        th { color: var(--text-dim); font-weight: 500; font-size: 0.8rem; }
-        .badge { display: inline-block; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600; }
-        .badge.active { background: rgba(63,185,80,0.2); color: var(--green); }
-        .badge.inactive { background: rgba(139,148,158,0.2); color: var(--text-dim); }
-    
+        }"""
+
+# Additional CRT styles to add
+CRT_ADDITIONAL_STYLES = """
         /* CRT Enhancements */
         .main { margin-left: 220px; padding: 1.5rem; }
 
@@ -255,105 +239,89 @@
 
         @media (max-width: 768px) {
             .main { margin-left: 0; }
-        }
-    </style>
-</head>
-<body class="crt-body crt-scanlines crt-body crt-scanlines">
-    <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-    <main class="main">
-        <header class="header">
-            <h1>🔑 Auth Guardian</h1>
-            <div>
-                <button class="btn" onclick="refresh()">Refresh</button>
-                <button class="btn primary" onclick="showAddProvider()">Add Provider</button>
-            </div>
-        </header>
+        }"""
 
-        <div class="grid">
-            <div class="stat-card">
-                <div class="value" id="providers">-</div>
-                <div class="label">OAuth Providers</div>
-            </div>
-            <div class="stat-card">
-                <div class="value" id="sessions">-</div>
-                <div class="label">Active Sessions</div>
-            </div>
-            <div class="stat-card">
-                <div class="value" id="logins">-</div>
-                <div class="label">Logins Today</div>
-            </div>
-        </div>
+def process_file(filepath):
+    """Process a single HTML file"""
+    print(f"  Processing: {filepath}")
 
-        <div class="card">
-            <h2>OAuth Providers</h2>
-            <table>
-                <thead><tr><th>Provider</th><th>Type</th><th>Status</th><th>Users</th></tr></thead>
-                <tbody id="providersTable"><tr><td colspan="4">Loading...</td></tr></tbody>
-            </table>
-        </div>
+    with open(filepath, 'r', encoding='utf-8') as f:
+        content = f.read()
 
-        <div class="card">
-            <h2>Recent Sessions</h2>
-            <table>
-                <thead><tr><th>User</th><th>Provider</th><th>IP</th><th>Last Active</th></tr></thead>
-                <tbody id="sessionsTable"><tr><td colspan="4">Loading...</td></tr></tbody>
-            </table>
-        </div>
-    </main>
+    original = content
 
-    <script>
-        const API = '/api/v1/auth';
+    # Add CRT system CSS link after sidebar.css
+    if 'crt-system.css' not in content:
+        content = content.replace(
+            '<link rel="stylesheet" href="/shared/sidebar.css">',
+            '<link rel="stylesheet" href="/shared/crt-system.css">\n    <link rel="stylesheet" href="/shared/sidebar.css">'
+        )
 
-        async function api(path) {
-            try {
-                const res = await fetch(API + path, { credentials: 'include' });
-                return res.json();
-            } catch { return {}; }
-        }
+    # Add Google Fonts import if not present
+    if 'Courier+Prime' not in content:
+        content = re.sub(
+            r'(<link rel="stylesheet" href="/shared/crt-system.css">)',
+            r'<link rel="preconnect" href="https://fonts.googleapis.com">\n    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">\n    \1',
+            content
+        )
 
-        async function refresh() {
-            const status = await api('/status');
-            document.getElementById('providers').textContent = status.providers || 0;
-            document.getElementById('sessions').textContent = status.sessions || 0;
-            document.getElementById('logins').textContent = status.logins_today || 0;
+    # Replace old :root variables with CRT variables
+    content = re.sub(
+        r':root\s*\{[^}]+\}',
+        CRT_ROOT_VARS,
+        content
+    )
 
-            const providers = await api('/providers');
-            const tbody = document.getElementById('providersTable');
-            if (providers.providers && providers.providers.length > 0) {
-                tbody.innerHTML = providers.providers.map(p => `
-                    <tr>
-                        <td>${p.name}</td>
-                        <td>${p.type}</td>
-                        <td><span class="badge ${p.enabled ? 'active' : 'inactive'}">${p.enabled ? 'Active' : 'Disabled'}</span></td>
-                        <td>${p.users || 0}</td>
-                    </tr>
-                `).join('');
-            } else {
-                tbody.innerHTML = '<tr><td colspan="4" style="color:var(--text-dim)">No providers configured</td></tr>';
-            }
+    # Update body styles
+    content = re.sub(
+        r'body\s*\{[^}]+font-family:[^}]+\}',
+        CRT_BODY_STYLES,
+        content
+    )
 
-            const sessions = await api('/sessions');
-            const sessBody = document.getElementById('sessionsTable');
-            if (sessions.sessions && sessions.sessions.length > 0) {
-                sessBody.innerHTML = sessions.sessions.slice(0, 10).map(s => `
-                    <tr>
-                        <td>${s.user}</td>
-                        <td>${s.provider}</td>
-                        <td style="font-family:monospace">${s.ip}</td>
-                        <td>${s.last_active}</td>
-                    </tr>
-                `).join('');
-            } else {
-                sessBody.innerHTML = '<tr><td colspan="4" style="color:var(--text-dim)">No active sessions</td></tr>';
-            }
-        }
+    # Add CRT additional styles before </style>
+    if 'CRT Enhancements' not in content:
+        content = content.replace('</style>', CRT_ADDITIONAL_STYLES + '\n    </style>')
 
-        function showAddProvider() { alert('Provider configuration coming soon'); }
+    # Add CRT engine script before </body>
+    if 'crt-engine.js' not in content:
+        content = content.replace(
+            '</body>',
+            '    <script src="/shared/crt-engine.js"></script>\n</body>'
+        )
 
-        refresh();
-        setInterval(refresh, 30000);
-    </script>
-    <script src="/shared/crt-engine.js"></script>
-</body>
-</html>
+    # Update body tag to include CRT classes
+    if 'crt-body' not in content:
+        content = re.sub(
+            r'<body>',
+            '<body class="crt-body crt-scanlines">',
+            content
+        )
+        content = re.sub(
+            r'<body class="([^"]*)"',
+            r'<body class="crt-body crt-scanlines \1"',
+            content
+        )
+
+    if content != original:
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write(content)
+        return True
+    return False
+
+def main():
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    pattern = os.path.join(base_dir, 'packages', 'secubox-*', 'www', '**', 'index.html')
+
+    files = glob.glob(pattern, recursive=True)
+    print(f"Found {len(files)} HTML files to process")
+
+    updated = 0
+    for filepath in sorted(files):
+        if process_file(filepath):
+            updated += 1
+
+    print(f"\nUpdated {updated}/{len(files)} files")
+
+if __name__ == '__main__':
+    main()
