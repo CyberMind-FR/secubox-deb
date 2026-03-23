@@ -1,3 +1,16 @@
+secubox-mail (2.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Enhanced frontend with security features dashboard
+  * Security score indicator (DKIM, SpamAssassin, Greylisting, ClamAV)
+  * Toggle switches for enabling/disabling security features
+  * Mail logs viewer tab with configurable line count
+  * Mailbox repair action for users
+  * Toast notifications for all actions
+  * DKIM record display in DNS setup modal
+  * Improved component status indicators
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 23 Mar 2026 11:00:00 +0100
+
 secubox-mail (2.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Add ClamAV antivirus scanning integration
