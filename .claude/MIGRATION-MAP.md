@@ -70,8 +70,14 @@ Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 | **secubox-gitea** | ✅ | ✅ | ✅ | Git server LXC | ✅ |
 | **secubox-nextcloud** | ✅ | ✅ | ✅ | File sync LXC | ✅ |
 | **secubox-c3box** | ✅ | ✅ | ✅ | Services portal | ✅ |
+| **secubox-backup** | ✅ | ✅ | ✅ | config, container backup | ✅ |
+| **secubox-watchdog** | ✅ | ✅ | ✅ | containers, services, endpoints | ✅ |
+| **secubox-tor** | ✅ | ✅ | ✅ | circuits, hidden services | ✅ |
+| **secubox-exposure** | ✅ | ✅ | ✅ | Tor, SSL, DNS, Mesh | ✅ |
+| **secubox-mitmproxy** | ✅ | ✅ | ✅ | WAF, alerts, bans | ✅ |
+| **secubox-traffic** | ✅ | ✅ | ✅ | TC/CAKE QoS | ✅ |
 
-**Total : 35 modules | ~700+ endpoints API**
+**Total : 41 modules | ~800+ endpoints API**
 
 *Note: mail-lxc and webmail-lxc are backend components integrated into secubox-mail*
 

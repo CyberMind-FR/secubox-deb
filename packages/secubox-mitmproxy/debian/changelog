@@ -1,0 +1,12 @@
+secubox-mitmproxy (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release
+  * HTTP/HTTPS traffic inspection and WAF
+  * Transparent, upstream, and reverse proxy modes
+  * WAN protection with nftables integration
+  * Threat detection and auto-banning
+  * CrowdSec feed integration
+  * Real-time alerts and statistics
+  * Dashboard with mode selection
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 23 Mar 2026 14:45:00 +0100

@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - Exposure Manager</title>
+    <link rel="stylesheet" href="/shared/sidebar.css">
+    <style>
+        :root { --bg-dark: #0d1117; --bg-card: #161b22; --bg-sidebar: #0d1117; --border: #30363d; --text: #c9d1d9; --text-dim: #8b949e; --primary: #58a6ff; --cyan: #00d4ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; --purple: #a371f7; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        .header h1 { font-size: 1.5rem; display: flex; align-items: center; gap: 0.5rem; }
+        .badge { padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
+        .badge-green { background: rgba(63,185,80,0.15); color: var(--green); }
+        .badge-red { background: rgba(248,81,73,0.15); color: var(--red); }
+        .badge-yellow { background: rgba(210,153,34,0.15); color: var(--yellow); }
+        .badge-blue { background: rgba(88,166,255,0.15); color: var(--primary); }
+        .badge-purple { background: rgba(163,113,247,0.15); color: var(--purple); }
+
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.875rem; transition: all 0.2s; }
+        .btn:hover { background: var(--bg-dark); }
+        .btn-purple { background: rgba(163,113,247,0.15); border-color: var(--purple); color: var(--purple); }
+        .btn-green { background: rgba(63,185,80,0.15); border-color: var(--green); color: var(--green); }
+        .btn-red { background: rgba(248,81,73,0.15); border-color: var(--red); color: var(--red); }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; }
+        .card-title { font-size: 1rem; font-weight: 600; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; }
+
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+        .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+        @media (max-width: 1200px) { .grid-3 { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 768px) { .grid-3, .grid-2 { grid-template-columns: 1fr; } .main { margin-left: 0; } }
+
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
+        .stat-value { font-size: 2rem; font-weight: bold; }
+        .stat-label { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; }
+
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+        th { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
+        td { font-size: 0.875rem; }
+        tr:hover { background: rgba(255,255,255,0.02); }
+
+        .onion { font-family: monospace; font-size: 0.75rem; color: var(--purple); }
+        .external { color: var(--yellow); }
+        .internal { color: var(--green); }
+
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center; }
+        .modal.active { display: flex; }
+        .modal-content { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; width: 90%; max-width: 500px; }
+        .modal-title { font-size: 1.25rem; margin-bottom: 1rem; }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--text-dim); }
+        .form-group input, .form-group select { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-dark); color: var(--text); }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--primary); }
+        .form-check { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+        .form-check input { width: auto; }
+
+        .toast { position: fixed; bottom: 20px; right: 20px; padding: 1rem 1.5rem; border-radius: 8px; background: var(--bg-card); border: 1px solid var(--border); z-index: 1000; animation: slideIn 0.3s; }
+        .toast-success { border-color: var(--green); }
+        .toast-error { border-color: var(--red); }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        .actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+        .empty { text-align: center; padding: 2rem; color: var(--text-dim); }
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+
+    <main class="main">
+        <header class="header">
+            <h1>Exposure Manager</h1>
+            <div class="actions">
+                <button class="btn btn-purple" onclick="showEmancipateModal()">+ Emancipate Service</button>
+                <button class="btn" onclick="refresh()">Refresh</button>
+            </div>
+        </header>
+
+        <p style="color: var(--text-dim); margin-bottom: 1.5rem;">Manage service exposure via Tor, SSL, DNS, and Mesh networks</p>
+
+        <!-- Stats -->
+        <div class="grid-3">
+            <div class="stat-card">
+                <div class="stat-value" style="color: var(--primary);" id="stat-total">0</div>
+                <div class="stat-label">Services Listening</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" style="color: var(--purple);" id="stat-tor">0</div>
+                <div class="stat-label">Tor Hidden Services</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" style="color: var(--green);" id="stat-ssl">0</div>
+                <div class="stat-label">SSL Backends</div>
+            </div>
+        </div>
+
+        <div class="grid-2">
+            <!-- Services -->
+            <div class="card">
+                <div class="card-title">
+                    <span>Listening Services</span>
+                    <span class="badge badge-blue" id="services-count">0</span>
+                </div>
+                <div id="services-table">
+                    <div class="empty">Loading...</div>
+                </div>
+            </div>
+
+            <!-- Tor Hidden Services -->
+            <div class="card">
+                <div class="card-title">
+                    <span>Tor Hidden Services</span>
+                    <button class="btn btn-purple btn-sm" onclick="showTorModal()">+ Add</button>
+                </div>
+                <div id="tor-table">
+                    <div class="empty">Loading...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Emancipated Services -->
+        <div class="card">
+            <div class="card-title">
+                <span>Emancipated Services</span>
+                <span class="badge badge-purple" id="emancipated-count">0</span>
+            </div>
+            <div id="emancipated-table">
+                <div class="empty">Loading...</div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Emancipate Modal -->
+    <div class="modal" id="emancipate-modal">
+        <div class="modal-content">
+            <div class="modal-title">Emancipate Service</div>
+            <form onsubmit="emancipate(event)">
+                <div class="form-group">
+                    <label>Service Name</label>
+                    <input type="text" id="em-service" required placeholder="myapp">
+                </div>
+                <div class="form-group">
+                    <label>Local Port</label>
+                    <input type="number" id="em-port" required placeholder="8080">
+                </div>
+                <div class="form-group">
+                    <label>Domain (optional)</label>
+                    <input type="text" id="em-domain" placeholder="myapp.example.com">
+                </div>
+                <div class="form-group">
+                    <label>Exposure Methods</label>
+                    <div class="form-check">
+                        <input type="checkbox" id="em-tor">
+                        <label for="em-tor">Tor Hidden Service</label>
+                    </div>
+                    <div class="form-check">
+                        <input type="checkbox" id="em-dns">
+                        <label for="em-dns">DNS Registration</label>
+                    </div>
+                    <div class="form-check">
+                        <input type="checkbox" id="em-mesh">
+                        <label for="em-mesh">Mesh Network</label>
+                    </div>
+                </div>
+                <div class="actions" style="justify-content: flex-end;">
+                    <button type="button" class="btn" onclick="closeModal('emancipate-modal')">Cancel</button>
+                    <button type="submit" class="btn btn-purple">Emancipate</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tor Modal -->
+    <div class="modal" id="tor-modal">
+        <div class="modal-content">
+            <div class="modal-title">Add Tor Hidden Service</div>
+            <form onsubmit="addTor(event)">
+                <div class="form-group">
+                    <label>Service Name</label>
+                    <input type="text" id="tor-service" required placeholder="myservice">
+                </div>
+                <div class="form-group">
+                    <label>Local Port</label>
+                    <input type="number" id="tor-local-port" required value="80">
+                </div>
+                <div class="form-group">
+                    <label>Onion Port</label>
+                    <input type="number" id="tor-onion-port" required value="80">
+                </div>
+                <div class="actions" style="justify-content: flex-end;">
+                    <button type="button" class="btn" onclick="closeModal('tor-modal')">Cancel</button>
+                    <button type="submit" class="btn btn-purple">Create</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="toast"></div>
+
+    <script>
+        const API = '/api/v1/exposure';
+        const token = () => localStorage.getItem('sbx_token');
+        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+
+        async function api(path, opts = {}) {
+            try {
+                const res = await fetch(API + path, { ...opts, headers: headers() });
+                if (res.status === 401) { window.location = '/portal/login.html'; return null; }
+                return res.json();
+            } catch (e) { console.error(e); return null; }
+        }
+
+        function showToast(msg, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.innerHTML = `<div class="toast toast-${type}">${msg}</div>`;
+            setTimeout(() => toast.innerHTML = '', 3000);
+        }
+
+        function showModal(id) { document.getElementById(id).classList.add('active'); }
+        function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+        function showEmancipateModal() { showModal('emancipate-modal'); }
+        function showTorModal() { showModal('tor-modal'); }
+
+        async function loadStatus() {
+            const data = await api('/status') || {};
+
+            document.getElementById('stat-total').textContent = data.services?.total || 0;
+            document.getElementById('stat-tor').textContent = data.tor?.count || 0;
+            document.getElementById('stat-ssl').textContent = data.ssl?.count || 0;
+        }
+
+        async function loadServices() {
+            const data = await api('/scan') || {};
+            const services = data.services || [];
+
+            document.getElementById('services-count').textContent = services.length;
+
+            if (services.length === 0) {
+                document.getElementById('services-table').innerHTML = '<div class="empty">No services detected</div>';
+                return;
+            }
+
+            const rows = services.map(s => `
+                <tr>
+                    <td><strong>${s.name}</strong></td>
+                    <td>${s.port}</td>
+                    <td class="${s.external ? 'external' : 'internal'}">${s.external ? 'External' : 'Internal'}</td>
+                    <td style="color: var(--text-dim);">${s.process}</td>
+                </tr>
+            `).join('');
+
+            document.getElementById('services-table').innerHTML = `
+                <table>
+                    <thead><tr><th>Name</th><th>Port</th><th>Exposure</th><th>Process</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            `;
+        }
+
+        async function loadTor() {
+            const data = await api('/tor_list') || {};
+            const services = data.services || [];
+
+            if (services.length === 0) {
+                document.getElementById('tor-table').innerHTML = '<div class="empty">No hidden services</div>';
+                return;
+            }
+
+            const rows = services.map(s => `
+                <tr>
+                    <td><strong>${s.service}</strong></td>
+                    <td class="onion">${s.onion}</td>
+                    <td>${s.port}</td>
+                    <td>
+                        <button class="btn btn-red btn-sm" onclick="removeTor('${s.service}')">Remove</button>
+                    </td>
+                </tr>
+            `).join('');
+
+            document.getElementById('tor-table').innerHTML = `
+                <table>
+                    <thead><tr><th>Name</th><th>Onion Address</th><th>Port</th><th>Action</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            `;
+        }
+
+        async function loadEmancipated() {
+            const data = await api('/emancipated') || {};
+            const services = data.services || [];
+
+            document.getElementById('emancipated-count').textContent = services.length;
+
+            if (services.length === 0) {
+                document.getElementById('emancipated-table').innerHTML = '<div class="empty">No emancipated services</div>';
+                return;
+            }
+
+            const rows = services.map(s => `
+                <tr>
+                    <td><strong>${s.name}</strong></td>
+                    <td>${s.port}</td>
+                    <td>${s.domain || '-'}</td>
+                    <td>
+                        ${s.tor ? '<span class="badge badge-purple">Tor</span>' : ''}
+                        ${s.dns ? '<span class="badge badge-blue">DNS</span>' : ''}
+                        ${s.mesh ? '<span class="badge badge-green">Mesh</span>' : ''}
+                    </td>
+                    <td>${s.onion ? `<span class="onion">${s.onion}</span>` : '-'}</td>
+                    <td>
+                        <button class="btn btn-red btn-sm" onclick="revoke('${s.name}')">Revoke</button>
+                    </td>
+                </tr>
+            `).join('');
+
+            document.getElementById('emancipated-table').innerHTML = `
+                <table>
+                    <thead><tr><th>Name</th><th>Port</th><th>Domain</th><th>Methods</th><th>Onion</th><th>Action</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            `;
+        }
+
+        async function emancipate(e) {
+            e.preventDefault();
+            const data = {
+                service: document.getElementById('em-service').value,
+                port: parseInt(document.getElementById('em-port').value),
+                domain: document.getElementById('em-domain').value || null,
+                tor: document.getElementById('em-tor').checked,
+                dns: document.getElementById('em-dns').checked,
+                mesh: document.getElementById('em-mesh').checked
+            };
+
+            const res = await api('/emancipate', { method: 'POST', body: JSON.stringify(data) });
+            if (res && res.success) {
+                showToast('Service emancipated');
+                closeModal('emancipate-modal');
+                refresh();
+            } else {
+                showToast(res?.detail || 'Failed to emancipate', 'error');
+            }
+        }
+
+        async function addTor(e) {
+            e.preventDefault();
+            const data = {
+                service: document.getElementById('tor-service').value,
+                local_port: parseInt(document.getElementById('tor-local-port').value),
+                onion_port: parseInt(document.getElementById('tor-onion-port').value)
+            };
+
+            const res = await api('/tor/add', { method: 'POST', body: JSON.stringify(data) });
+            if (res && res.success) {
+                showToast(res.onion ? `Created: ${res.onion}` : 'Hidden service created');
+                closeModal('tor-modal');
+                refresh();
+            } else {
+                showToast(res?.detail || 'Failed to create', 'error');
+            }
+        }
+
+        async function removeTor(name) {
+            if (!confirm(`Remove hidden service "${name}"?`)) return;
+            const res = await api('/tor/remove', { method: 'POST', body: JSON.stringify({ service: name }) });
+            if (res && res.success) {
+                showToast('Hidden service removed');
+                refresh();
+            } else {
+                showToast(res?.detail || 'Failed to remove', 'error');
+            }
+        }
+
+        async function revoke(name) {
+            if (!confirm(`Revoke exposure for "${name}"?`)) return;
+            const res = await api('/revoke', { method: 'POST', body: JSON.stringify({ service: name, tor: true, dns: true, mesh: true }) });
+            if (res && res.success) {
+                showToast('Service revoked');
+                refresh();
+            } else {
+                showToast(res?.detail || 'Failed to revoke', 'error');
+            }
+        }
+
+        async function refresh() {
+            await Promise.all([loadStatus(), loadServices(), loadTor(), loadEmancipated()]);
+        }
+
+        refresh();
+    </script>
+</body>
+</html>

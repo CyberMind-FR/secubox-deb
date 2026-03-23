@@ -1,0 +1,11 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-backup/usr/lib/secubox/backup
+	cp -r api debian/secubox-backup/usr/lib/secubox/backup/
+	install -d debian/secubox-backup/usr/share/secubox/www/backup
+	cp -r www/backup/. debian/secubox-backup/usr/share/secubox/www/backup/
+	install -d debian/secubox-backup/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-backup/usr/share/secubox/menu.d/ || true

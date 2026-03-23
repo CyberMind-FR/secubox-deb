@@ -1,0 +1,21 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    configure)
+        # Create config directory
+        mkdir -p /etc/secubox
+
+        # Create run directory
+        mkdir -p /run/secubox
+
+        # Enable and start service
+        systemctl daemon-reload
+        systemctl enable secubox-traffic.service
+        systemctl start secubox-traffic.service || true
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

@@ -1,0 +1,11 @@
+secubox-traffic (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release
+  * Advanced QoS traffic control with TC/CAKE
+  * Traffic class management with priorities
+  * Classification rules (port, IP, protocol)
+  * Built-in presets: Gaming, Streaming, Work From Home
+  * Real-time traffic statistics
+  * Dashboard with class and rule management
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 23 Mar 2026 15:00:00 +0100

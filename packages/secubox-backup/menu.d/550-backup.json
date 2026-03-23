@@ -1,0 +1,9 @@
+{
+  "id": "backup",
+  "name": "Backup",
+  "category": "system",
+  "icon": "💾",
+  "path": "/backup/",
+  "order": 550,
+  "description": "Backup Manager for system configs and LXC containers"
+}

@@ -1,0 +1,11 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-watchdog/usr/lib/secubox/watchdog
+	cp -r api debian/secubox-watchdog/usr/lib/secubox/watchdog/
+	install -d debian/secubox-watchdog/usr/share/secubox/www/watchdog
+	cp -r www/watchdog/. debian/secubox-watchdog/usr/share/secubox/www/watchdog/
+	install -d debian/secubox-watchdog/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-watchdog/usr/share/secubox/menu.d/ || true

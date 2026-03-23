@@ -1,0 +1,14 @@
+secubox-tor (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release
+  * Tor anonymity network management
+  * Transparent proxy and SOCKS modes
+  * Hidden service configuration
+  * Circuit monitoring and identity rotation
+  * DNS over Tor and kill switch support
+  * Bridge support (obfs4)
+  * Leak detection testing
+  * Real-time dashboard with bootstrap progress
+  * API: status, circuits, hidden_services, enable, disable, new_identity
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 23 Mar 2026 14:00:00 +0100

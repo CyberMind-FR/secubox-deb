@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - Tor Shield</title>
+    <link rel="stylesheet" href="/shared/sidebar.css">
+    <style>
+        :root { --bg-dark: #0d1117; --bg-card: #161b22; --bg-sidebar: #0d1117; --border: #30363d; --text: #c9d1d9; --text-dim: #8b949e; --primary: #58a6ff; --cyan: #00d4ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; --purple: #a371f7; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        .header h1 { font-size: 1.5rem; display: flex; align-items: center; gap: 0.5rem; }
+        .badge { padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
+        .badge-green { background: rgba(63,185,80,0.15); color: var(--green); }
+        .badge-red { background: rgba(248,81,73,0.15); color: var(--red); }
+        .badge-purple { background: rgba(163,113,247,0.15); color: var(--purple); }
+        .badge-yellow { background: rgba(210,153,34,0.15); color: var(--yellow); }
+
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.875rem; transition: all 0.2s; }
+        .btn:hover { background: var(--bg-dark); }
+        .btn-green { background: rgba(63,185,80,0.15); border-color: var(--green); color: var(--green); }
+        .btn-purple { background: rgba(163,113,247,0.15); border-color: var(--purple); color: var(--purple); }
+        .btn-red { background: rgba(248,81,73,0.15); border-color: var(--red); color: var(--red); }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; }
+        .card-title { font-size: 1rem; font-weight: 600; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; }
+
+        .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+        .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+        @media (max-width: 1200px) { .grid-4 { grid-template-columns: repeat(2, 1fr); } .grid-2 { grid-template-columns: 1fr; } }
+        @media (max-width: 768px) { .grid-4 { grid-template-columns: 1fr; } .main { margin-left: 0; } }
+
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
+        .stat-value { font-size: 2rem; font-weight: bold; }
+        .stat-label { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; }
+
+        .progress-bar { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; margin-top: 0.5rem; }
+        .progress-fill { height: 100%; background: var(--purple); transition: width 0.3s; }
+
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+        th { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
+        td { font-size: 0.875rem; }
+
+        .onion { font-family: monospace; font-size: 0.8rem; color: var(--purple); word-break: break-all; }
+        .circuit-path { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+        .circuit-node { background: var(--bg-dark); padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; }
+        .circuit-arrow { color: var(--text-dim); }
+
+        .toast { position: fixed; bottom: 20px; right: 20px; padding: 1rem 1.5rem; border-radius: 8px; background: var(--bg-card); border: 1px solid var(--border); z-index: 1000; animation: slideIn 0.3s; }
+        .toast-success { border-color: var(--green); }
+        .toast-error { border-color: var(--red); }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+        .modal-content { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; max-width: 400px; width: 90%; }
+        .modal-title { font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem; }
+
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--text-dim); }
+        .form-group input, .form-group select { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-dark); color: var(--text); }
+
+        .actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+        .empty { text-align: center; padding: 2rem; color: var(--text-dim); }
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+
+    <main class="main">
+        <header class="header">
+            <h1>🧅 Tor Shield <span class="badge" id="status-badge">Loading...</span></h1>
+            <div class="actions">
+                <button class="btn btn-purple" onclick="newIdentity()">🔄 New Identity</button>
+                <button class="btn" onclick="refresh()">↻ Refresh</button>
+            </div>
+        </header>
+
+        <p style="color: var(--text-dim); margin-bottom: 1.5rem;">Tor anonymity network and hidden services management</p>
+
+        <!-- Stats -->
+        <div class="grid-4" id="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value" style="color: var(--purple);" id="stat-bootstrap">0%</div>
+                <div class="stat-label">Bootstrap</div>
+                <div class="progress-bar"><div class="progress-fill" id="bootstrap-bar" style="width: 0%;"></div></div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" style="color: var(--cyan);" id="stat-circuits">0</div>
+                <div class="stat-label">Circuits</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" style="color: var(--green);" id="stat-download">0</div>
+                <div class="stat-label">Downloaded</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" style="color: var(--yellow);" id="stat-upload">0</div>
+                <div class="stat-label">Uploaded</div>
+            </div>
+        </div>
+
+        <!-- Control Panel -->
+        <div class="card">
+            <div class="card-title">Control Panel</div>
+            <div class="actions">
+                <button class="btn btn-green" onclick="enableTor('anonymous')">🛡️ Anonymous Mode</button>
+                <button class="btn btn-purple" onclick="enableTor('stealth')">🥷 Stealth Mode</button>
+                <button class="btn" onclick="enableTor('minimal')">⚡ Minimal Mode</button>
+                <button class="btn btn-red" onclick="disableTor()">⏹️ Disable Tor</button>
+            </div>
+            <p style="margin-top: 1rem; font-size: 0.85rem; color: var(--text-dim);">
+                <strong>Exit IP:</strong> <span id="exit-ip">-</span>
+            </p>
+        </div>
+
+        <!-- Two Column Layout -->
+        <div class="grid-2">
+            <!-- Circuits -->
+            <div class="card">
+                <div class="card-title">
+                    <span>🔗 Active Circuits</span>
+                    <span class="badge badge-purple" id="circuit-badge">0</span>
+                </div>
+                <div id="circuits-list">
+                    <div class="empty">Loading...</div>
+                </div>
+            </div>
+
+            <!-- Hidden Services -->
+            <div class="card">
+                <div class="card-title">
+                    <span>🧅 Hidden Services</span>
+                    <button class="btn btn-purple btn-sm" onclick="showAddHiddenService()">+ Add</button>
+                </div>
+                <div id="hidden-services">
+                    <div class="empty">Loading...</div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div id="modal" class="modal" style="display: none;"></div>
+    <div id="toast"></div>
+
+    <script>
+        const API = '/api/v1/tor';
+        const token = () => localStorage.getItem('sbx_token');
+        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+
+        async function api(path, opts = {}) {
+            try {
+                const res = await fetch(API + path, { ...opts, headers: headers() });
+                if (res.status === 401) { window.location = '/portal/login.html'; return null; }
+                return res.json();
+            } catch (e) { console.error(e); return null; }
+        }
+
+        function showToast(msg, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.innerHTML = `<div class="toast toast-${type}">${msg}</div>`;
+            setTimeout(() => toast.innerHTML = '', 3000);
+        }
+
+        function formatBytes(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+            return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
+        }
+
+        async function loadStatus() {
+            const data = await api('/status') || {};
+
+            // Update status badge
+            const badge = document.getElementById('status-badge');
+            if (data.running) {
+                badge.textContent = data.bootstrap >= 100 ? 'Connected' : 'Connecting...';
+                badge.className = data.bootstrap >= 100 ? 'badge badge-green' : 'badge badge-yellow';
+            } else if (data.enabled) {
+                badge.textContent = 'Starting';
+                badge.className = 'badge badge-yellow';
+            } else {
+                badge.textContent = 'Disabled';
+                badge.className = 'badge badge-red';
+            }
+
+            // Update stats
+            document.getElementById('stat-bootstrap').textContent = (data.bootstrap || 0) + '%';
+            document.getElementById('bootstrap-bar').style.width = (data.bootstrap || 0) + '%';
+            document.getElementById('stat-circuits').textContent = data.circuit_count || 0;
+            document.getElementById('stat-download').textContent = formatBytes(data.bytes_read || 0);
+            document.getElementById('stat-upload').textContent = formatBytes(data.bytes_written || 0);
+            document.getElementById('exit-ip').textContent = data.exit_ip || '-';
+        }
+
+        async function loadCircuits() {
+            const data = await api('/circuits') || {};
+            const circuits = data.circuits || [];
+
+            document.getElementById('circuit-badge').textContent = circuits.length;
+
+            if (circuits.length === 0) {
+                document.getElementById('circuits-list').innerHTML = '<div class="empty">No active circuits</div>';
+                return;
+            }
+
+            const html = circuits.slice(0, 5).map(c => `
+                <div style="margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border);">
+                    <div style="font-size: 0.75rem; color: var(--text-dim); margin-bottom: 0.5rem;">Circuit #${c.id}</div>
+                    <div class="circuit-path">
+                        ${c.nodes.map((n, i) => `
+                            ${i > 0 ? '<span class="circuit-arrow">→</span>' : ''}
+                            <span class="circuit-node" title="${n.fingerprint}">${n.name}</span>
+                        `).join('')}
+                    </div>
+                </div>
+            `).join('');
+
+            document.getElementById('circuits-list').innerHTML = html;
+        }
+
+        async function loadHiddenServices() {
+            const data = await api('/hidden_services') || {};
+            const services = data.services || [];
+
+            if (services.length === 0) {
+                document.getElementById('hidden-services').innerHTML = '<div class="empty">No hidden services configured</div>';
+                return;
+            }
+
+            const rows = services.map(s => `
+                <tr>
+                    <td style="font-weight: 600;">${s.name}</td>
+                    <td class="onion">${s.onion_address || 'Generating...'}</td>
+                    <td>${s.virtual_port}→${s.local_port}</td>
+                    <td><button class="btn btn-red btn-sm" onclick="removeHiddenService('${s.name}')">Remove</button></td>
+                </tr>
+            `).join('');
+
+            document.getElementById('hidden-services').innerHTML = `
+                <table>
+                    <thead><tr><th>Name</th><th>Onion Address</th><th>Ports</th><th>Action</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            `;
+        }
+
+        async function enableTor(preset) {
+            showToast(`Enabling Tor (${preset} mode)...`);
+            const res = await api('/enable', {
+                method: 'POST',
+                body: JSON.stringify({ preset })
+            });
+
+            if (res && res.success) {
+                showToast('Tor enabled');
+            } else {
+                showToast(res?.error || 'Failed to enable Tor', 'error');
+            }
+            refresh();
+        }
+
+        async function disableTor() {
+            const res = await api('/disable', { method: 'POST' });
+            if (res && res.success) {
+                showToast('Tor disabled');
+            } else {
+                showToast(res?.error || 'Failed to disable Tor', 'error');
+            }
+            refresh();
+        }
+
+        async function newIdentity() {
+            const res = await api('/new_identity', { method: 'POST' });
+            if (res && res.success) {
+                showToast('New identity requested');
+            } else {
+                showToast(res?.error || 'Failed to request new identity', 'error');
+            }
+            refresh();
+        }
+
+        function showAddHiddenService() {
+            document.getElementById('modal').innerHTML = `
+                <div class="modal-content">
+                    <div class="modal-title">Add Hidden Service</div>
+                    <div class="form-group">
+                        <label>Service Name</label>
+                        <input type="text" id="hs-name" placeholder="myservice">
+                    </div>
+                    <div class="form-group">
+                        <label>Local Port</label>
+                        <input type="number" id="hs-local-port" value="80">
+                    </div>
+                    <div class="form-group">
+                        <label>Virtual Port (Onion)</label>
+                        <input type="number" id="hs-virtual-port" value="80">
+                    </div>
+                    <div class="actions" style="justify-content: flex-end;">
+                        <button class="btn" onclick="hideModal()">Cancel</button>
+                        <button class="btn btn-purple" onclick="addHiddenService()">Add</button>
+                    </div>
+                </div>
+            `;
+            document.getElementById('modal').style.display = 'flex';
+        }
+
+        function hideModal() {
+            document.getElementById('modal').style.display = 'none';
+        }
+
+        async function addHiddenService() {
+            const name = document.getElementById('hs-name').value;
+            const local_port = parseInt(document.getElementById('hs-local-port').value);
+            const virtual_port = parseInt(document.getElementById('hs-virtual-port').value);
+
+            if (!name) {
+                showToast('Name is required', 'error');
+                return;
+            }
+
+            const res = await api('/hidden_service/add', {
+                method: 'POST',
+                body: JSON.stringify({ name, local_port, virtual_port })
+            });
+
+            hideModal();
+
+            if (res && res.success) {
+                showToast('Hidden service created');
+                loadHiddenServices();
+            } else {
+                showToast(res?.error || res?.detail || 'Failed to create hidden service', 'error');
+            }
+        }
+
+        async function removeHiddenService(name) {
+            if (!confirm(`Remove hidden service "${name}"?`)) return;
+
+            const res = await api('/hidden_service/remove', {
+                method: 'POST',
+                body: JSON.stringify({ name })
+            });
+
+            if (res && res.success) {
+                showToast('Hidden service removed');
+                loadHiddenServices();
+            } else {
+                showToast(res?.error || 'Failed to remove hidden service', 'error');
+            }
+        }
+
+        async function refresh() {
+            await Promise.all([loadStatus(), loadCircuits(), loadHiddenServices()]);
+        }
+
+        document.getElementById('modal').addEventListener('click', (e) => {
+            if (e.target.id === 'modal') hideModal();
+        });
+
+        refresh();
+        setInterval(loadStatus, 10000);
+    </script>
+</body>
+</html>

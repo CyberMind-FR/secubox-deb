@@ -1,0 +1,20 @@
+Source: secubox-mitmproxy
+Section: admin
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://secubox.gondwana.systems
+
+Package: secubox-mitmproxy
+Architecture: all
+Depends: ${misc:Depends},
+ python3,
+ python3-fastapi,
+ python3-uvicorn,
+ secubox-core
+Recommends: lxc, nftables, crowdsec
+Description: SecuBox MITMProxy WAF
+ HTTP/HTTPS traffic inspection and web application firewall.
+ Provides transparent proxy, WAN protection, threat detection,
+ auto-banning, and CrowdSec integration.

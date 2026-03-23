@@ -1,0 +1,11 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-tor/usr/lib/secubox/tor
+	cp -r api debian/secubox-tor/usr/lib/secubox/tor/
+	install -d debian/secubox-tor/usr/share/secubox/www/tor
+	cp -r www/tor/. debian/secubox-tor/usr/share/secubox/www/tor/
+	install -d debian/secubox-tor/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-tor/usr/share/secubox/menu.d/ || true

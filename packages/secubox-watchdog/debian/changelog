@@ -1,0 +1,11 @@
+secubox-watchdog (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release
+  * Monitor LXC containers, services, and HTTP endpoints
+  * Auto-restart capabilities for failed containers and services
+  * Health check with issue detection
+  * Event logging with clear functionality
+  * Real-time dashboard with 30s auto-refresh
+  * API: status, containers, services, endpoints, logs, check
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 23 Mar 2026 08:30:00 +0100

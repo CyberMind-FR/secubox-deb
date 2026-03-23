@@ -1,0 +1,26 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    configure)
+        # Create config directory
+        mkdir -p /etc/secubox
+
+        # Create run directory
+        mkdir -p /run/secubox
+
+        # Create data directories
+        mkdir -p /srv/mitmproxy
+        mkdir -p /srv/mitmproxy-in
+        mkdir -p /tmp/secubox
+
+        # Enable and start service
+        systemctl daemon-reload
+        systemctl enable secubox-mitmproxy.service
+        systemctl start secubox-mitmproxy.service || true
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

@@ -1,0 +1,17 @@
+[Unit]
+Description=SecuBox MITMProxy WAF API
+After=network.target secubox-core.service
+Wants=secubox-core.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/usr/lib/secubox/mitmproxy
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/mitmproxy.sock --log-level warning
+Restart=on-failure
+RestartSec=5
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

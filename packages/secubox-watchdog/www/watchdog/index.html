@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - Watchdog</title>
+    <link rel="stylesheet" href="/shared/sidebar.css">
+    <style>
+        :root { --bg-dark: #0d1117; --bg-card: #161b22; --bg-sidebar: #0d1117; --border: #30363d; --text: #c9d1d9; --text-dim: #8b949e; --primary: #58a6ff; --cyan: #00d4ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; --purple: #a371f7; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        .header h1 { font-size: 1.5rem; display: flex; align-items: center; gap: 0.5rem; }
+        .badge { padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
+        .badge-green { background: rgba(63,185,80,0.15); color: var(--green); }
+        .badge-red { background: rgba(248,81,73,0.15); color: var(--red); }
+        .badge-yellow { background: rgba(210,153,34,0.15); color: var(--yellow); }
+        .badge-blue { background: rgba(88,166,255,0.15); color: var(--primary); }
+
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.875rem; transition: all 0.2s; }
+        .btn:hover { background: var(--bg-dark); }
+        .btn-green { background: rgba(63,185,80,0.15); border-color: var(--green); color: var(--green); }
+        .btn-blue { background: rgba(88,166,255,0.15); border-color: var(--primary); color: var(--primary); }
+        .btn-red { background: rgba(248,81,73,0.15); border-color: var(--red); color: var(--red); }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; }
+        .card-title { font-size: 1rem; font-weight: 600; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; }
+
+        .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+        @media (max-width: 1200px) { .grid-4 { grid-template-columns: repeat(2, 1fr); } .grid-3 { grid-template-columns: 1fr; } }
+        @media (max-width: 768px) { .grid-4 { grid-template-columns: 1fr; } .main { margin-left: 0; } }
+
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
+        .stat-value { font-size: 2rem; font-weight: bold; }
+        .stat-label { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; }
+
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+        th { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
+        td { font-size: 0.875rem; }
+        tr:hover { background: rgba(255,255,255,0.02); }
+
+        .status-running { color: var(--green); }
+        .status-stopped { color: var(--red); }
+        .status-healthy { color: var(--green); }
+        .status-unhealthy { color: var(--red); }
+
+        .toast { position: fixed; bottom: 20px; right: 20px; padding: 1rem 1.5rem; border-radius: 8px; background: var(--bg-card); border: 1px solid var(--border); z-index: 1000; animation: slideIn 0.3s; }
+        .toast-success { border-color: var(--green); }
+        .toast-error { border-color: var(--red); }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        .logs { background: #0d1117; border: 1px solid var(--border); border-radius: 6px; padding: 1rem; max-height: 300px; overflow-y: auto; font-family: monospace; font-size: 0.8rem; line-height: 1.5; }
+        .log-line { color: var(--text-dim); }
+        .log-line:hover { color: var(--text); }
+
+        .actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+        .empty { text-align: center; padding: 2rem; color: var(--text-dim); }
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+
+    <main class="main">
+        <header class="header">
+            <h1>🔍 Watchdog <span class="badge" id="status-badge">Loading...</span></h1>
+            <div class="actions">
+                <button class="btn btn-green" onclick="runCheck()">▶ Run Check</button>
+                <button class="btn" onclick="refresh()">↻ Refresh</button>
+            </div>
+        </header>
+
+        <p style="color: var(--text-dim); margin-bottom: 1.5rem;">Service and container health monitoring with auto-recovery</p>
+
+        <!-- Stats -->
+        <div class="grid-4" id="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value status-running" id="stat-containers">0</div>
+                <div class="stat-label">Containers OK</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value status-running" id="stat-services">0</div>
+                <div class="stat-label">Services OK</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value status-healthy" id="stat-endpoints">0</div>
+                <div class="stat-label">Endpoints OK</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" style="color: var(--yellow);" id="stat-issues">0</div>
+                <div class="stat-label">Issues</div>
+            </div>
+        </div>
+
+        <!-- Three Column Layout -->
+        <div class="grid-3">
+            <!-- Containers -->
+            <div class="card">
+                <div class="card-title">
+                    <span>🐳 Containers</span>
+                    <span class="badge badge-blue" id="container-badge">0</span>
+                </div>
+                <div id="containers-table">
+                    <div class="empty">Loading...</div>
+                </div>
+            </div>
+
+            <!-- Services -->
+            <div class="card">
+                <div class="card-title">
+                    <span>⚙️ Services</span>
+                    <span class="badge badge-blue" id="service-badge">0</span>
+                </div>
+                <div id="services-table">
+                    <div class="empty">Loading...</div>
+                </div>
+            </div>
+
+            <!-- Endpoints -->
+            <div class="card">
+                <div class="card-title">
+                    <span>🌐 Endpoints</span>
+                    <span class="badge badge-blue" id="endpoint-badge">0</span>
+                </div>
+                <div id="endpoints-table">
+                    <div class="empty">Loading...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Logs -->
+        <div class="card">
+            <div class="card-title">
+                <span>📋 Event Log</span>
+                <button class="btn btn-red btn-sm" onclick="clearLogs()">Clear Logs</button>
+            </div>
+            <div class="logs" id="logs">
+                <div class="empty">No logs</div>
+            </div>
+        </div>
+    </main>
+
+    <div id="toast"></div>
+
+    <script>
+        const API = '/api/v1/watchdog';
+        const token = () => localStorage.getItem('sbx_token');
+        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+
+        async function api(path, opts = {}) {
+            try {
+                const res = await fetch(API + path, { ...opts, headers: headers() });
+                if (res.status === 401) { window.location = '/portal/login.html'; return null; }
+                return res.json();
+            } catch (e) { console.error(e); return null; }
+        }
+
+        function showToast(msg, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.innerHTML = `<div class="toast toast-${type}">${msg}</div>`;
+            setTimeout(() => toast.innerHTML = '', 3000);
+        }
+
+        let statusData = {};
+
+        async function loadStatus() {
+            statusData = await api('/status') || {};
+
+            // Update status badge
+            const badge = document.getElementById('status-badge');
+            if (statusData.enabled) {
+                badge.textContent = statusData.running ? 'Active' : 'Enabled';
+                badge.className = 'badge badge-green';
+            } else {
+                badge.textContent = 'Disabled';
+                badge.className = 'badge badge-red';
+            }
+
+            // Count stats
+            const containers = statusData.containers || [];
+            const services = statusData.services || [];
+            const endpoints = statusData.endpoints || [];
+
+            const containersOK = containers.filter(c => c.state === 'running').length;
+            const servicesOK = services.filter(s => s.state === 'running').length;
+            const endpointsOK = endpoints.filter(e => e.healthy).length;
+            const issues = (containers.length - containersOK) + (services.length - servicesOK) + (endpoints.length - endpointsOK);
+
+            document.getElementById('stat-containers').textContent = `${containersOK}/${containers.length}`;
+            document.getElementById('stat-services').textContent = `${servicesOK}/${services.length}`;
+            document.getElementById('stat-endpoints').textContent = `${endpointsOK}/${endpoints.length}`;
+            document.getElementById('stat-issues').textContent = issues;
+
+            // Render tables
+            renderContainers(containers);
+            renderServices(services);
+            renderEndpoints(endpoints);
+        }
+
+        function renderContainers(containers) {
+            document.getElementById('container-badge').textContent = containers.length;
+
+            if (containers.length === 0) {
+                document.getElementById('containers-table').innerHTML = '<div class="empty">No containers monitored</div>';
+                return;
+            }
+
+            const rows = containers.map(c => `
+                <tr>
+                    <td style="font-weight: 600;">${c.name}</td>
+                    <td class="status-${c.state}">${c.state === 'running' ? '● Running' : '○ Stopped'}</td>
+                    <td><button class="btn btn-blue btn-sm" onclick="restartContainer('${c.name}')">Restart</button></td>
+                </tr>
+            `).join('');
+
+            document.getElementById('containers-table').innerHTML = `
+                <table>
+                    <thead><tr><th>Name</th><th>State</th><th>Action</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            `;
+        }
+
+        function renderServices(services) {
+            document.getElementById('service-badge').textContent = services.length;
+
+            if (services.length === 0) {
+                document.getElementById('services-table').innerHTML = '<div class="empty">No services monitored</div>';
+                return;
+            }
+
+            const rows = services.map(s => `
+                <tr>
+                    <td style="font-weight: 600;">${s.name}</td>
+                    <td class="status-${s.state}">${s.state === 'running' ? '● Running' : '○ Stopped'}</td>
+                    <td><button class="btn btn-blue btn-sm" onclick="restartService('${s.name}')">Restart</button></td>
+                </tr>
+            `).join('');
+
+            document.getElementById('services-table').innerHTML = `
+                <table>
+                    <thead><tr><th>Name</th><th>State</th><th>Action</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            `;
+        }
+
+        function renderEndpoints(endpoints) {
+            document.getElementById('endpoint-badge').textContent = endpoints.length;
+
+            if (endpoints.length === 0) {
+                document.getElementById('endpoints-table').innerHTML = '<div class="empty">No endpoints monitored</div>';
+                return;
+            }
+
+            const rows = endpoints.map(e => `
+                <tr>
+                    <td style="font-weight: 600;">${e.name}</td>
+                    <td class="${e.healthy ? 'status-healthy' : 'status-unhealthy'}">${e.healthy ? '✓ OK' : '✗ ' + e.code}</td>
+                </tr>
+            `).join('');
+
+            document.getElementById('endpoints-table').innerHTML = `
+                <table>
+                    <thead><tr><th>Name</th><th>Status</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            `;
+        }
+
+        async function loadLogs() {
+            const data = await api('/logs?lines=50') || {};
+            const lines = data.lines || [];
+
+            if (lines.length === 0) {
+                document.getElementById('logs').innerHTML = '<div class="empty">No log entries</div>';
+                return;
+            }
+
+            document.getElementById('logs').innerHTML = lines.map(l => `<div class="log-line">${l}</div>`).join('');
+        }
+
+        async function restartContainer(name) {
+            showToast(`Restarting container ${name}...`);
+            const res = await api('/container/restart', {
+                method: 'POST',
+                body: JSON.stringify({ name })
+            });
+
+            if (res && res.success) {
+                showToast(`Container ${name} restarted`);
+            } else {
+                showToast(res?.error || 'Restart failed', 'error');
+            }
+            refresh();
+        }
+
+        async function restartService(name) {
+            showToast(`Restarting service ${name}...`);
+            const res = await api('/service/restart', {
+                method: 'POST',
+                body: JSON.stringify({ name })
+            });
+
+            if (res && res.success) {
+                showToast(`Service ${name} restarted`);
+            } else {
+                showToast(res?.error || 'Restart failed', 'error');
+            }
+            refresh();
+        }
+
+        async function runCheck() {
+            showToast('Running health check...');
+            const res = await api('/check', { method: 'POST' });
+
+            if (res && res.success) {
+                if (res.issues && res.issues.length > 0) {
+                    showToast(`Found ${res.issues.length} issues`, 'error');
+                } else {
+                    showToast('All systems healthy');
+                }
+            } else {
+                showToast('Health check failed', 'error');
+            }
+            refresh();
+        }
+
+        async function clearLogs() {
+            if (!confirm('Clear all watchdog logs?')) return;
+            await api('/logs/clear', { method: 'POST' });
+            showToast('Logs cleared');
+            loadLogs();
+        }
+
+        async function refresh() {
+            await Promise.all([loadStatus(), loadLogs()]);
+        }
+
+        refresh();
+        // Auto-refresh every 30 seconds
+        setInterval(refresh, 30000);
+    </script>
+</body>
+</html>
