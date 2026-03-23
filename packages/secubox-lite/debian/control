@@ -4,7 +4,7 @@ Priority: optional
 Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.6.2
-Homepage: https://secubox.gondwana.systems
+Homepage: https://secubox.in
 Rules-Requires-Root: no
 
 Package: secubox-lite
@@ -12,13 +12,15 @@ Architecture: all
 Depends: ${misc:Depends},
  secubox-core (>= 1.0),
  secubox-hub (>= 1.0),
+ secubox-portal (>= 1.0),
  secubox-crowdsec (>= 1.0),
  secubox-wireguard (>= 1.0),
  secubox-netmodes (>= 1.0),
  secubox-nac (>= 1.0),
- secubox-system (>= 1.0)
+ secubox-system (>= 1.0),
+ secubox-hardening (>= 1.0)
 Recommends: crowdsec, wireguard-tools
-Suggests: secubox-netdata, secubox-qos, secubox-auth
+Suggests: secubox-netdata, secubox-qos, secubox-auth, secubox-watchdog, secubox-backup
 Description: SecuBox Lite — Essential modules for low-RAM devices
  Metapackage installing essential SecuBox modules for ESPRESSObin
  and other devices with 1-2GB RAM.

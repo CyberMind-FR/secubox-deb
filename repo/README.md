@@ -124,12 +124,12 @@ ssh-keyscan -H apt.secubox.in
 # Copy output to GitHub secret: DEPLOY_KNOWN_HOSTS
 ```
 
-## Packages disponibles (33 packages)
+## Packages disponibles (41 packages)
 
 ### Metapackages
 | Package | Description |
 |---------|-------------|
-| `secubox-full` | All modules (4GB+ RAM recommended) |
+| `secubox-full` | All 39 modules (4GB+ RAM recommended) |
 | `secubox-lite` | Essential modules only (1-2GB RAM) |
 
 ### Core Infrastructure
@@ -145,8 +145,10 @@ ssh-keyscan -H apt.secubox.in
 |---------|-------------|
 | `secubox-crowdsec` | CrowdSec integration |
 | `secubox-waf` | Web Application Firewall (300+ rules) |
+| `secubox-mitmproxy` | MITM proxy with WAF inspection |
 | `secubox-auth` | Authentication |
 | `secubox-nac` | Network Access Control |
+| `secubox-hardening` | Kernel and system hardening |
 
 ### Networking
 | Package | Description |
@@ -155,9 +157,12 @@ ssh-keyscan -H apt.secubox.in
 | `secubox-netmodes` | Network modes |
 | `secubox-dpi` | Deep Packet Inspection |
 | `secubox-qos` | Quality of Service |
+| `secubox-traffic` | TC/CAKE traffic shaping |
 | `secubox-vhost` | Virtual hosts |
 | `secubox-haproxy` | HAProxy management |
 | `secubox-cdn` | CDN cache |
+| `secubox-tor` | Tor circuits and hidden services |
+| `secubox-exposure` | Unified exposure (Tor, SSL, DNS, Mesh) |
 
 ### Applications
 | Package | Description |
@@ -169,7 +174,7 @@ ssh-keyscan -H apt.secubox.in
 | `secubox-gitea` | Gitea Git server (LXC) |
 | `secubox-nextcloud` | Nextcloud file sync (LXC) |
 | `secubox-dns` | DNS/BIND management |
-| `secubox-users` | Unified identity |
+| `secubox-users` | Unified identity (7 services) |
 
 ### Publishing
 | Package | Description |
@@ -180,9 +185,12 @@ ssh-keyscan -H apt.secubox.in
 | `secubox-metablogizer` | Static site generator |
 | `secubox-publish` | Unified publishing |
 
-### Monitoring
+### Monitoring & Infrastructure
 | Package | Description |
 |---------|-------------|
 | `secubox-netdata` | Netdata integration |
 | `secubox-mediaflow` | Media flow analysis |
 | `secubox-c3box` | Services portal |
+| `secubox-watchdog` | Container/service/endpoint monitoring |
+| `secubox-backup` | System and container backups |
+| `secubox-repo` | APT repository management |
