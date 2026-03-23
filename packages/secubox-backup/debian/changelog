@@ -1,0 +1,11 @@
+secubox-backup (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release
+  * Full API: status, list, containers, create, restore, cleanup
+  * Container backup/restore with automatic stop/start
+  * Config backup: /etc/secubox, nginx, wireguard, haproxy, nftables
+  * Services backup: /var/lib/secubox, nextcloud, gitea data
+  * Modern dark-themed frontend with stats and history tables
+  * Quick actions for full, config-only, containers-only backups
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 23 Mar 2026 08:00:00 +0100

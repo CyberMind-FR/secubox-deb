@@ -1,0 +1,21 @@
+Source: secubox-traffic
+Section: admin
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://secubox.gondwana.systems
+
+Package: secubox-traffic
+Architecture: all
+Depends: ${misc:Depends},
+ python3,
+ python3-fastapi,
+ python3-uvicorn,
+ secubox-core,
+ iproute2
+Recommends: linux-image-amd64 (>= 5.4) | linux-image-arm64 (>= 5.4)
+Description: SecuBox Traffic Shaper
+ Advanced QoS traffic control with TC/CAKE.
+ Provides traffic classification, bandwidth management,
+ priority-based shaping, and preset configurations.

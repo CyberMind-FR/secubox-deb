@@ -1,0 +1,9 @@
+#!/bin/sh
+set -e
+if [ "$1" = "configure" ]; then
+    systemctl daemon-reload
+    systemctl enable secubox-backup.service || true
+    systemctl start secubox-backup.service || true
+fi
+#DEBHELPER#
+exit 0

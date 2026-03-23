@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - MITMProxy WAF</title>
+    <link rel="stylesheet" href="/shared/sidebar.css">
+    <style>
+        :root { --bg-dark: #0d1117; --bg-card: #161b22; --bg-sidebar: #0d1117; --border: #30363d; --text: #c9d1d9; --text-dim: #8b949e; --primary: #58a6ff; --cyan: #00d4ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; --purple: #a371f7; --orange: #f0883e; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        .header h1 { font-size: 1.5rem; display: flex; align-items: center; gap: 0.5rem; }
+        .badge { padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
+        .badge-green { background: rgba(63,185,80,0.15); color: var(--green); }
+        .badge-red { background: rgba(248,81,73,0.15); color: var(--red); }
+        .badge-yellow { background: rgba(210,153,34,0.15); color: var(--yellow); }
+        .badge-blue { background: rgba(88,166,255,0.15); color: var(--primary); }
+        .badge-orange { background: rgba(240,136,62,0.15); color: var(--orange); }
+
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.875rem; transition: all 0.2s; }
+        .btn:hover { background: var(--bg-dark); }
+        .btn-green { background: rgba(63,185,80,0.15); border-color: var(--green); color: var(--green); }
+        .btn-red { background: rgba(248,81,73,0.15); border-color: var(--red); color: var(--red); }
+        .btn-orange { background: rgba(240,136,62,0.15); border-color: var(--orange); color: var(--orange); }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; }
+        .card-title { font-size: 1rem; font-weight: 600; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; }
+
+        .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+        .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+        @media (max-width: 1200px) { .grid-4 { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 768px) { .grid-4, .grid-2 { grid-template-columns: 1fr; } .main { margin-left: 0; } }
+
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
+        .stat-value { font-size: 2rem; font-weight: bold; }
+        .stat-label { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; }
+
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+        th { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
+        td { font-size: 0.875rem; }
+        tr:hover { background: rgba(255,255,255,0.02); }
+
+        .mode-selector { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+        .mode-btn { flex: 1; padding: 0.75rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-dark); color: var(--text-dim); cursor: pointer; text-align: center; transition: all 0.2s; }
+        .mode-btn:hover { border-color: var(--orange); }
+        .mode-btn.active { border-color: var(--orange); color: var(--orange); background: rgba(240,136,62,0.1); }
+
+        .alerts { max-height: 300px; overflow-y: auto; }
+        .alert-item { padding: 0.75rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+        .alert-item:last-child { border-bottom: none; }
+        .alert-threat { color: var(--red); font-weight: 600; }
+        .alert-ip { color: var(--text-dim); font-family: monospace; }
+        .alert-time { color: var(--text-dim); font-size: 0.75rem; }
+
+        .toast { position: fixed; bottom: 20px; right: 20px; padding: 1rem 1.5rem; border-radius: 8px; background: var(--bg-card); border: 1px solid var(--border); z-index: 1000; animation: slideIn 0.3s; }
+        .toast-success { border-color: var(--green); }
+        .toast-error { border-color: var(--red); }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        .actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+        .empty { text-align: center; padding: 2rem; color: var(--text-dim); }
+
+        .toggle { position: relative; display: inline-block; width: 44px; height: 24px; }
+        .toggle input { opacity: 0; width: 0; height: 0; }
+        .toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: var(--bg-dark); border: 1px solid var(--border); border-radius: 24px; transition: 0.3s; }
+        .toggle-slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 2px; bottom: 2px; background: var(--text-dim); border-radius: 50%; transition: 0.3s; }
+        .toggle input:checked + .toggle-slider { background: var(--green); border-color: var(--green); }
+        .toggle input:checked + .toggle-slider:before { transform: translateX(20px); background: white; }
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+
+    <main class="main">
+        <header class="header">
+            <h1>MITMProxy WAF <span class="badge" id="status-badge">Loading...</span></h1>
+            <div class="actions">
+                <button class="btn btn-green" id="toggle-btn" onclick="toggleService()">Start</button>
+                <button class="btn" onclick="refresh()">Refresh</button>
+            </div>
+        </header>
+
+        <p style="color: var(--text-dim); margin-bottom: 1.5rem;">HTTP/HTTPS traffic inspection and web application firewall</p>
+
+        <!-- Stats -->
+        <div class="grid-4">
+            <div class="stat-card">
+                <div class="stat-value" style="color: var(--red);" id="stat-threats">0</div>
+                <div class="stat-label">Threats Today</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" style="color: var(--orange);" id="stat-autobans">0</div>
+                <div class="stat-label">Auto-bans Today</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" style="color: var(--yellow);" id="stat-pending">0</div>
+                <div class="stat-label">Pending Bans</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" style="color: var(--primary);" id="stat-total-bans">0</div>
+                <div class="stat-label">Total Bans</div>
+            </div>
+        </div>
+
+        <!-- Mode Selection -->
+        <div class="card">
+            <div class="card-title">Operation Mode</div>
+            <div class="mode-selector" id="mode-selector">
+                <div class="mode-btn" data-mode="regular" onclick="setMode('regular')">
+                    <strong>Regular</strong><br>
+                    <small>Manual proxy configuration</small>
+                </div>
+                <div class="mode-btn" data-mode="transparent" onclick="setMode('transparent')">
+                    <strong>Transparent</strong><br>
+                    <small>Intercept LAN traffic</small>
+                </div>
+                <div class="mode-btn" data-mode="upstream" onclick="setMode('upstream')">
+                    <strong>Upstream</strong><br>
+                    <small>Chain to another proxy</small>
+                </div>
+                <div class="mode-btn" data-mode="reverse" onclick="setMode('reverse')">
+                    <strong>Reverse</strong><br>
+                    <small>Protect backend servers</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid-2">
+            <!-- Settings -->
+            <div class="card">
+                <div class="card-title">Settings</div>
+                <table>
+                    <tr>
+                        <td>WAN Protection</td>
+                        <td style="text-align: right;">
+                            <label class="toggle">
+                                <input type="checkbox" id="wan-protection" onchange="updateSetting('wan_protection_enabled', this.checked)">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>CrowdSec Feed</td>
+                        <td style="text-align: right;">
+                            <label class="toggle">
+                                <input type="checkbox" id="crowdsec-feed" onchange="updateSetting('crowdsec_feed', this.checked)">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Block Bots</td>
+                        <td style="text-align: right;">
+                            <label class="toggle">
+                                <input type="checkbox" id="block-bots" onchange="updateSetting('block_bots', this.checked)">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Auto-ban</td>
+                        <td style="text-align: right;">
+                            <label class="toggle">
+                                <input type="checkbox" id="autoban" onchange="updateSetting('autoban_enabled', this.checked)">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </td>
+                    </tr>
+                </table>
+                <div style="margin-top: 1rem;">
+                    <small style="color: var(--text-dim);">
+                        Proxy: <span id="proxy-port">8888</span> | Web UI: <span id="web-port">8081</span>
+                    </small>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="card">
+                <div class="card-title">Quick Actions</div>
+                <div class="actions" style="flex-direction: column; gap: 0.5rem;">
+                    <button class="btn btn-orange" onclick="setupFirewall()">Setup Firewall Rules</button>
+                    <button class="btn" onclick="clearFirewall()">Clear Firewall Rules</button>
+                    <button class="btn btn-orange" onclick="wanSetup()">Setup WAN Protection</button>
+                    <button class="btn" onclick="wanClear()">Clear WAN Protection</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Alerts -->
+        <div class="card">
+            <div class="card-title">
+                <span>Recent Alerts</span>
+                <button class="btn btn-red btn-sm" onclick="clearAlerts()">Clear</button>
+            </div>
+            <div class="alerts" id="alerts">
+                <div class="empty">Loading...</div>
+            </div>
+        </div>
+
+        <!-- Banned IPs -->
+        <div class="card">
+            <div class="card-title">
+                <span>Banned IPs</span>
+                <span class="badge badge-red" id="bans-count">0</span>
+            </div>
+            <div id="bans-table">
+                <div class="empty">Loading...</div>
+            </div>
+        </div>
+    </main>
+
+    <div id="toast"></div>
+
+    <script>
+        const API = '/api/v1/mitmproxy';
+        const token = () => localStorage.getItem('sbx_token');
+        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+
+        async function api(path, opts = {}) {
+            try {
+                const res = await fetch(API + path, { ...opts, headers: headers() });
+                if (res.status === 401) { window.location = '/portal/login.html'; return null; }
+                return res.json();
+            } catch (e) { console.error(e); return null; }
+        }
+
+        function showToast(msg, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.innerHTML = `<div class="toast toast-${type}">${msg}</div>`;
+            setTimeout(() => toast.innerHTML = '', 3000);
+        }
+
+        let statusData = {};
+
+        async function loadStatus() {
+            statusData = await api('/status') || {};
+
+            // Update badge
+            const badge = document.getElementById('status-badge');
+            const toggleBtn = document.getElementById('toggle-btn');
+
+            if (statusData.running) {
+                badge.textContent = 'Running';
+                badge.className = 'badge badge-green';
+                toggleBtn.textContent = 'Stop';
+                toggleBtn.className = 'btn btn-red';
+            } else {
+                badge.textContent = 'Stopped';
+                badge.className = 'badge badge-red';
+                toggleBtn.textContent = 'Start';
+                toggleBtn.className = 'btn btn-green';
+            }
+
+            // Update stats
+            document.getElementById('stat-threats').textContent = statusData.threats_today || 0;
+            document.getElementById('stat-autobans').textContent = statusData.autobans_today || 0;
+            document.getElementById('stat-pending').textContent = statusData.autobans_pending || 0;
+            document.getElementById('stat-total-bans').textContent = statusData.autobans_total || 0;
+
+            // Update mode
+            document.querySelectorAll('.mode-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.mode === statusData.mode);
+            });
+
+            // Update settings
+            document.getElementById('wan-protection').checked = statusData.wan_protection_enabled || false;
+            document.getElementById('crowdsec-feed').checked = statusData.crowdsec_feed || false;
+            document.getElementById('block-bots').checked = statusData.block_bots || false;
+            document.getElementById('autoban').checked = statusData.autoban_enabled || false;
+
+            // Update ports
+            document.getElementById('proxy-port').textContent = statusData.proxy_port || 8888;
+            document.getElementById('web-port').textContent = statusData.web_port || 8081;
+        }
+
+        async function loadAlerts() {
+            const data = await api('/alerts') || {};
+            const alerts = data.alerts || [];
+
+            if (alerts.length === 0) {
+                document.getElementById('alerts').innerHTML = '<div class="empty">No recent alerts</div>';
+                return;
+            }
+
+            const items = alerts.slice(0, 20).map(a => `
+                <div class="alert-item">
+                    <div>
+                        <span class="alert-threat">${a.threat_type || a.type || 'Unknown'}</span>
+                        <span class="alert-ip">${a.client_ip || a.ip || '-'}</span>
+                    </div>
+                    <span class="alert-time">${a.timestamp ? new Date(a.timestamp).toLocaleString() : '-'}</span>
+                </div>
+            `).join('');
+
+            document.getElementById('alerts').innerHTML = items;
+        }
+
+        async function loadBans() {
+            const data = await api('/bans') || {};
+            const bans = data.bans || [];
+
+            document.getElementById('bans-count').textContent = data.total || 0;
+
+            if (bans.length === 0) {
+                document.getElementById('bans-table').innerHTML = '<div class="empty">No banned IPs</div>';
+                return;
+            }
+
+            const rows = bans.slice(0, 20).map(b => `
+                <tr>
+                    <td style="font-family: monospace;">${b.ip || b.value}</td>
+                    <td>${b.reason || b.scenario || '-'}</td>
+                    <td>${b.duration || '-'}</td>
+                    <td><button class="btn btn-sm" onclick="unban('${b.ip || b.value}')">Unban</button></td>
+                </tr>
+            `).join('');
+
+            document.getElementById('bans-table').innerHTML = `
+                <table>
+                    <thead><tr><th>IP</th><th>Reason</th><th>Duration</th><th>Action</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            `;
+        }
+
+        async function toggleService() {
+            const action = statusData.running ? '/stop' : '/start';
+            await api(action, { method: 'POST' });
+            showToast(statusData.running ? 'Stopping...' : 'Starting...');
+            setTimeout(refresh, 2000);
+        }
+
+        async function setMode(mode) {
+            const res = await api('/set_mode', {
+                method: 'POST',
+                body: JSON.stringify({ mode, apply_now: statusData.running })
+            });
+            if (res && res.success) {
+                showToast(`Mode set to ${mode}`);
+                refresh();
+            } else {
+                showToast(res?.error || 'Failed to set mode', 'error');
+            }
+        }
+
+        async function updateSetting(key, value) {
+            const body = { [key]: value, apply_now: false };
+            const res = await api('/save_settings', { method: 'POST', body: JSON.stringify(body) });
+            if (res && res.success) {
+                showToast('Setting updated');
+            } else {
+                showToast('Failed to update', 'error');
+            }
+        }
+
+        async function setupFirewall() {
+            const res = await api('/setup_firewall', { method: 'POST' });
+            showToast(res?.success ? 'Firewall rules applied' : (res?.error || 'Failed'), res?.success ? 'success' : 'error');
+        }
+
+        async function clearFirewall() {
+            const res = await api('/clear_firewall', { method: 'POST' });
+            showToast(res?.success ? 'Firewall rules cleared' : (res?.error || 'Failed'), res?.success ? 'success' : 'error');
+        }
+
+        async function wanSetup() {
+            const res = await api('/wan_setup', { method: 'POST' });
+            showToast(res?.success ? 'WAN protection enabled' : (res?.error || 'Failed'), res?.success ? 'success' : 'error');
+        }
+
+        async function wanClear() {
+            const res = await api('/wan_clear', { method: 'POST' });
+            showToast(res?.success ? 'WAN protection disabled' : (res?.error || 'Failed'), res?.success ? 'success' : 'error');
+        }
+
+        async function clearAlerts() {
+            if (!confirm('Clear all alerts?')) return;
+            const res = await api('/clear_alerts', { method: 'POST' });
+            showToast(res?.success ? 'Alerts cleared' : 'Failed', res?.success ? 'success' : 'error');
+            loadAlerts();
+        }
+
+        async function unban(ip) {
+            const res = await api('/unban', { method: 'POST', body: JSON.stringify({ ip }) });
+            showToast(res?.success ? `Unbanned ${ip}` : 'Failed', res?.success ? 'success' : 'error');
+            loadBans();
+        }
+
+        async function refresh() {
+            await Promise.all([loadStatus(), loadAlerts(), loadBans()]);
+        }
+
+        refresh();
+        setInterval(refresh, 30000);
+    </script>
+</body>
+</html>

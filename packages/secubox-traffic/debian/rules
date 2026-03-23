@@ -1,0 +1,12 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d $(CURDIR)/debian/secubox-traffic/usr/lib/secubox/traffic/api
+	install -m 644 api/*.py $(CURDIR)/debian/secubox-traffic/usr/lib/secubox/traffic/api/
+	install -d $(CURDIR)/debian/secubox-traffic/usr/share/secubox/www/traffic
+	install -m 644 www/traffic/*.html $(CURDIR)/debian/secubox-traffic/usr/share/secubox/www/traffic/
+	install -d $(CURDIR)/debian/secubox-traffic/lib/systemd/system
+	install -m 644 debian/secubox-traffic.service $(CURDIR)/debian/secubox-traffic/lib/systemd/system/

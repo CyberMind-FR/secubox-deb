@@ -1,0 +1,9 @@
+{
+  "id": "tor",
+  "name": "Tor",
+  "category": "security",
+  "icon": "🧅",
+  "path": "/tor/",
+  "order": 560,
+  "description": "Tor anonymity network and hidden services"
+}

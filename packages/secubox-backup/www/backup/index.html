@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - Backup Manager</title>
+    <link rel="stylesheet" href="/shared/sidebar.css">
+    <style>
+        :root { --bg-dark: #0d1117; --bg-card: #161b22; --bg-sidebar: #0d1117; --border: #30363d; --text: #c9d1d9; --text-dim: #8b949e; --primary: #58a6ff; --cyan: #00d4ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; --purple: #a371f7; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        .header h1 { font-size: 1.5rem; display: flex; align-items: center; gap: 0.5rem; }
+        .badge { padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
+        .badge-blue { background: rgba(88,166,255,0.15); color: var(--primary); }
+        .badge-green { background: rgba(63,185,80,0.15); color: var(--green); }
+        .badge-purple { background: rgba(163,113,247,0.15); color: var(--purple); }
+        .badge-cyan { background: rgba(0,212,255,0.15); color: var(--cyan); }
+
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.875rem; transition: all 0.2s; }
+        .btn:hover { background: var(--bg-dark); }
+        .btn-green { background: rgba(63,185,80,0.15); border-color: var(--green); color: var(--green); }
+        .btn-green:hover { background: rgba(63,185,80,0.25); }
+        .btn-blue { background: rgba(88,166,255,0.15); border-color: var(--primary); color: var(--primary); }
+        .btn-blue:hover { background: rgba(88,166,255,0.25); }
+        .btn-red { background: rgba(248,81,73,0.15); border-color: var(--red); color: var(--red); }
+        .btn-red:hover { background: rgba(248,81,73,0.25); }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; }
+        .card-title { font-size: 1rem; font-weight: 600; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; }
+
+        .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+        .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+        @media (max-width: 1200px) { .grid-4 { grid-template-columns: repeat(2, 1fr); } .grid-2 { grid-template-columns: 1fr; } }
+        @media (max-width: 768px) { .grid-4 { grid-template-columns: 1fr; } .main { margin-left: 0; } }
+
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
+        .stat-value { font-size: 2rem; font-weight: bold; }
+        .stat-label { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; }
+
+        .actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+        th { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
+        td { font-size: 0.875rem; }
+        tr:hover { background: rgba(255,255,255,0.02); }
+
+        .status-running { color: var(--green); }
+        .status-stopped { color: var(--text-dim); }
+
+        .toast { position: fixed; bottom: 20px; right: 20px; padding: 1rem 1.5rem; border-radius: 8px; background: var(--bg-card); border: 1px solid var(--border); z-index: 1000; animation: slideIn 0.3s; }
+        .toast-success { border-color: var(--green); }
+        .toast-error { border-color: var(--red); }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+        .modal-content { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; max-width: 500px; width: 90%; }
+        .modal-title { font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem; }
+        .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .empty { text-align: center; padding: 2rem; color: var(--text-dim); }
+        .mono { font-family: monospace; font-size: 0.8rem; }
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+
+    <main class="main">
+        <header class="header">
+            <h1>💾 Backup Manager <span class="badge badge-blue" id="backup-count">0 backups</span></h1>
+            <button class="btn" onclick="refresh()">↻ Refresh</button>
+        </header>
+
+        <p style="color: var(--text-dim); margin-bottom: 1.5rem;">System backups, container snapshots, and configuration archives</p>
+
+        <!-- Stats -->
+        <div class="grid-4" id="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value" style="color: var(--primary);" id="stat-backups">0</div>
+                <div class="stat-label">Backups</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" style="color: var(--cyan);" id="stat-containers">0</div>
+                <div class="stat-label">Containers</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" style="color: var(--green);" id="stat-running">0</div>
+                <div class="stat-label">Running</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" style="color: var(--purple);" id="stat-storage">0</div>
+                <div class="stat-label">Storage Used</div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="card">
+            <div class="card-title">Quick Actions</div>
+            <div class="actions">
+                <button class="btn btn-green" onclick="createBackup('full')">📦 Full Backup</button>
+                <button class="btn btn-blue" onclick="createBackup('config')">⚙️ Config Only</button>
+                <button class="btn" onclick="createBackup('containers')">🐳 Containers Only</button>
+                <button class="btn btn-red" onclick="cleanupBackups()">🗑️ Cleanup Old</button>
+            </div>
+        </div>
+
+        <!-- Two Column Layout -->
+        <div class="grid-2">
+            <!-- Containers -->
+            <div class="card">
+                <div class="card-title">
+                    <span>LXC Containers</span>
+                    <span class="badge badge-cyan" id="container-badge">0 containers</span>
+                </div>
+                <div id="containers-table">
+                    <div class="empty">Loading...</div>
+                </div>
+            </div>
+
+            <!-- Backup History -->
+            <div class="card">
+                <div class="card-title">
+                    <span>Backup History</span>
+                    <span class="badge badge-purple" id="history-badge">0 files</span>
+                </div>
+                <div id="backups-table">
+                    <div class="empty">Loading...</div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div id="modal" class="modal" style="display: none;"></div>
+    <div id="toast"></div>
+
+    <script>
+        const API = '/api/v1/backup';
+        const token = () => localStorage.getItem('sbx_token');
+        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+
+        async function api(path, opts = {}) {
+            try {
+                const res = await fetch(API + path, { ...opts, headers: headers() });
+                if (res.status === 401) { window.location = '/portal/login.html'; return null; }
+                return res.json();
+            } catch (e) { console.error(e); return null; }
+        }
+
+        function showToast(msg, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.innerHTML = `<div class="toast toast-${type}">${msg}</div>`;
+            setTimeout(() => toast.innerHTML = '', 3000);
+        }
+
+        function showModal(title, content) {
+            document.getElementById('modal').innerHTML = `
+                <div class="modal-content">
+                    <div class="modal-title">${title}</div>
+                    <div>${content}</div>
+                </div>
+            `;
+            document.getElementById('modal').style.display = 'flex';
+        }
+
+        function hideModal() {
+            document.getElementById('modal').style.display = 'none';
+        }
+
+        function formatDate(ts) {
+            if (!ts || ts === 0) return '-';
+            return new Date(ts * 1000).toLocaleString();
+        }
+
+        let statusData = {};
+        let backupsData = [];
+        let containersData = [];
+
+        async function loadStatus() {
+            statusData = await api('/status') || {};
+            document.getElementById('stat-storage').textContent = statusData.storage_used || '0';
+            document.getElementById('stat-containers').textContent = statusData.container_count || 0;
+        }
+
+        async function loadBackups() {
+            const data = await api('/list?type=all') || {};
+            backupsData = data.backups || [];
+
+            document.getElementById('stat-backups').textContent = backupsData.length;
+            document.getElementById('backup-count').textContent = backupsData.length + ' backups';
+            document.getElementById('history-badge').textContent = backupsData.length + ' files';
+
+            if (backupsData.length === 0) {
+                document.getElementById('backups-table').innerHTML = '<div class="empty">No backups found</div>';
+                return;
+            }
+
+            const typeColors = { config: 'blue', containers: 'cyan', services: 'purple' };
+            const rows = backupsData.slice(0, 15).map(b => `
+                <tr>
+                    <td class="mono">${b.file}</td>
+                    <td><span class="badge badge-${typeColors[b.type] || 'blue'}">${b.type}</span></td>
+                    <td style="color: var(--text-dim);">${b.size}</td>
+                    <td style="color: var(--text-dim);">${formatDate(b.timestamp)}</td>
+                </tr>
+            `).join('');
+
+            document.getElementById('backups-table').innerHTML = `
+                <table>
+                    <thead><tr><th>File</th><th>Type</th><th>Size</th><th>Date</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            `;
+        }
+
+        async function loadContainers() {
+            const data = await api('/containers') || {};
+            containersData = data.containers || [];
+
+            const running = containersData.filter(c => c.state === 'running').length;
+            document.getElementById('stat-running').textContent = running;
+            document.getElementById('container-badge').textContent = containersData.length + ' containers';
+
+            if (containersData.length === 0) {
+                document.getElementById('containers-table').innerHTML = '<div class="empty">No LXC containers found</div>';
+                return;
+            }
+
+            const rows = containersData.map(c => `
+                <tr>
+                    <td style="font-weight: 600;">${c.name}</td>
+                    <td class="status-${c.state}">${c.state === 'running' ? '● Running' : '○ Stopped'}</td>
+                    <td style="color: var(--text-dim);">${c.size}</td>
+                    <td style="color: var(--text-dim);">${c.backups}</td>
+                    <td><button class="btn btn-blue btn-sm" onclick="backupContainer('${c.name}')">Backup</button></td>
+                </tr>
+            `).join('');
+
+            document.getElementById('containers-table').innerHTML = `
+                <table>
+                    <thead><tr><th>Name</th><th>State</th><th>Size</th><th>Backups</th><th>Actions</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            `;
+        }
+
+        async function createBackup(type) {
+            showModal('Creating Backup', `<p><span class="spinner"></span> Creating ${type} backup...</p>`);
+
+            const res = await api('/create', {
+                method: 'POST',
+                body: JSON.stringify({ type })
+            });
+
+            hideModal();
+
+            if (res && res.code === 0) {
+                showToast('Backup created successfully');
+                refresh();
+            } else {
+                showToast(res?.output || 'Backup failed', 'error');
+            }
+        }
+
+        async function backupContainer(name) {
+            showModal('Backing Up Container', `<p><span class="spinner"></span> Backing up ${name}...</p>`);
+
+            const res = await api('/container/backup', {
+                method: 'POST',
+                body: JSON.stringify({ name })
+            });
+
+            hideModal();
+
+            if (res && res.code === 0) {
+                showToast('Container backup created');
+                refresh();
+            } else {
+                showToast(res?.output || 'Backup failed', 'error');
+            }
+        }
+
+        async function cleanupBackups() {
+            if (!confirm('Remove old backups? (keeps last 5 per type)')) return;
+
+            const res = await api('/cleanup', { method: 'POST' });
+
+            if (res && res.code === 0) {
+                showToast(`Removed ${res.removed?.length || 0} old backups`);
+                refresh();
+            } else {
+                showToast('Cleanup failed', 'error');
+            }
+        }
+
+        async function refresh() {
+            await Promise.all([loadStatus(), loadBackups(), loadContainers()]);
+        }
+
+        // Close modal on click outside
+        document.getElementById('modal').addEventListener('click', (e) => {
+            if (e.target.id === 'modal') hideModal();
+        });
+
+        refresh();
+    </script>
+</body>
+</html>

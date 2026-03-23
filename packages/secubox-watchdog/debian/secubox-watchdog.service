@@ -1,0 +1,21 @@
+[Unit]
+Description=SecuBox Watchdog API
+After=network.target secubox-core.service
+Requires=secubox-core.service
+
+[Service]
+Type=simple
+User=secubox
+Group=secubox
+WorkingDirectory=/usr/lib/secubox/watchdog
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/watchdog.sock --log-level warning
+Restart=on-failure
+RestartSec=5
+UMask=0000
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - Traffic Shaper</title>
+    <link rel="stylesheet" href="/shared/sidebar.css">
+    <style>
+        :root { --bg-dark: #0d1117; --bg-card: #161b22; --bg-sidebar: #0d1117; --border: #30363d; --text: #c9d1d9; --text-dim: #8b949e; --primary: #58a6ff; --cyan: #00d4ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; --purple: #a371f7; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        .header h1 { font-size: 1.5rem; display: flex; align-items: center; gap: 0.5rem; }
+        .badge { padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
+        .badge-green { background: rgba(63,185,80,0.15); color: var(--green); }
+        .badge-red { background: rgba(248,81,73,0.15); color: var(--red); }
+        .badge-yellow { background: rgba(210,153,34,0.15); color: var(--yellow); }
+        .badge-blue { background: rgba(88,166,255,0.15); color: var(--primary); }
+        .badge-cyan { background: rgba(0,212,255,0.15); color: var(--cyan); }
+
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.875rem; transition: all 0.2s; }
+        .btn:hover { background: var(--bg-dark); }
+        .btn-cyan { background: rgba(0,212,255,0.15); border-color: var(--cyan); color: var(--cyan); }
+        .btn-green { background: rgba(63,185,80,0.15); border-color: var(--green); color: var(--green); }
+        .btn-red { background: rgba(248,81,73,0.15); border-color: var(--red); color: var(--red); }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; }
+        .card-title { font-size: 1rem; font-weight: 600; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; }
+
+        .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+        .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+        @media (max-width: 1200px) { .grid-4 { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 768px) { .grid-4, .grid-2 { grid-template-columns: 1fr; } .main { margin-left: 0; } }
+
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
+        .stat-value { font-size: 2rem; font-weight: bold; }
+        .stat-label { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; }
+
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+        th { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
+        td { font-size: 0.875rem; }
+        tr:hover { background: rgba(255,255,255,0.02); }
+
+        .presets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+        .preset-card { background: var(--bg-dark); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; cursor: pointer; transition: all 0.2s; }
+        .preset-card:hover { border-color: var(--cyan); }
+        .preset-card h3 { font-size: 1rem; margin-bottom: 0.5rem; color: var(--cyan); }
+        .preset-card p { font-size: 0.75rem; color: var(--text-dim); }
+
+        .priority { display: inline-block; width: 24px; height: 24px; line-height: 24px; text-align: center; border-radius: 50%; font-size: 0.75rem; font-weight: bold; }
+        .priority-1 { background: var(--red); color: white; }
+        .priority-2 { background: var(--yellow); color: black; }
+        .priority-3 { background: var(--green); color: white; }
+        .priority-4 { background: var(--primary); color: white; }
+        .priority-5 { background: var(--text-dim); color: white; }
+
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center; }
+        .modal.active { display: flex; }
+        .modal-content { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; width: 90%; max-width: 500px; }
+        .modal-title { font-size: 1.25rem; margin-bottom: 1rem; }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--text-dim); }
+        .form-group input, .form-group select { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-dark); color: var(--text); }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--primary); }
+
+        .toast { position: fixed; bottom: 20px; right: 20px; padding: 1rem 1.5rem; border-radius: 8px; background: var(--bg-card); border: 1px solid var(--border); z-index: 1000; animation: slideIn 0.3s; }
+        .toast-success { border-color: var(--green); }
+        .toast-error { border-color: var(--red); }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        .actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+        .empty { text-align: center; padding: 2rem; color: var(--text-dim); }
+
+        .rate { font-family: monospace; color: var(--cyan); }
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+
+    <main class="main">
+        <header class="header">
+            <h1>Traffic Shaper <span class="badge" id="status-badge">Loading...</span></h1>
+            <div class="actions">
+                <button class="btn btn-cyan" onclick="showClassModal()">+ Add Class</button>
+                <button class="btn btn-cyan" onclick="showRuleModal()">+ Add Rule</button>
+                <button class="btn" onclick="refresh()">Refresh</button>
+            </div>
+        </header>
+
+        <p style="color: var(--text-dim); margin-bottom: 1.5rem;">Advanced QoS traffic control with TC/CAKE</p>
+
+        <!-- Stats -->
+        <div class="grid-4">
+            <div class="stat-card">
+                <div class="stat-value" style="color: var(--cyan);" id="stat-classes">0</div>
+                <div class="stat-label">Traffic Classes</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" style="color: var(--primary);" id="stat-rules">0</div>
+                <div class="stat-label">Classification Rules</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" style="color: var(--green);" id="stat-qdiscs">0</div>
+                <div class="stat-label">Active QDiscs</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" style="color: var(--yellow);" id="stat-interfaces">0</div>
+                <div class="stat-label">Shaped Interfaces</div>
+            </div>
+        </div>
+
+        <!-- Presets -->
+        <div class="card">
+            <div class="card-title">Quick Presets</div>
+            <div class="presets" id="presets">
+                <div class="preset-card" onclick="applyPreset('gaming')">
+                    <h3>Gaming</h3>
+                    <p>Low latency for online gaming</p>
+                </div>
+                <div class="preset-card" onclick="applyPreset('streaming')">
+                    <h3>Streaming</h3>
+                    <p>Prioritize video streaming</p>
+                </div>
+                <div class="preset-card" onclick="applyPreset('work_from_home')">
+                    <h3>Work From Home</h3>
+                    <p>VPN and video conferencing</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid-2">
+            <!-- Classes -->
+            <div class="card">
+                <div class="card-title">
+                    <span>Traffic Classes</span>
+                    <span class="badge badge-cyan" id="classes-count">0</span>
+                </div>
+                <div id="classes-table">
+                    <div class="empty">Loading...</div>
+                </div>
+            </div>
+
+            <!-- Rules -->
+            <div class="card">
+                <div class="card-title">
+                    <span>Classification Rules</span>
+                    <span class="badge badge-blue" id="rules-count">0</span>
+                </div>
+                <div id="rules-table">
+                    <div class="empty">Loading...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="card">
+            <div class="card-title">
+                <span>Traffic Statistics</span>
+                <button class="btn btn-sm" onclick="loadStats()">Update</button>
+            </div>
+            <div id="stats-table">
+                <div class="empty">Click Update to load statistics</div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="card">
+            <div class="card-title">Actions</div>
+            <div class="actions">
+                <button class="btn btn-green" onclick="applyConfig()">Apply Configuration</button>
+                <button class="btn btn-red" onclick="clearShaping()">Clear All Shaping</button>
+            </div>
+        </div>
+    </main>
+
+    <!-- Class Modal -->
+    <div class="modal" id="class-modal">
+        <div class="modal-content">
+            <div class="modal-title">Add Traffic Class</div>
+            <form onsubmit="addClass(event)">
+                <div class="form-group">
+                    <label>Name</label>
+                    <input type="text" id="class-name" required placeholder="Gaming, Streaming, etc.">
+                </div>
+                <div class="form-group">
+                    <label>Priority (1=highest, 5=default)</label>
+                    <select id="class-priority">
+                        <option value="1">1 - Highest</option>
+                        <option value="2">2 - High</option>
+                        <option value="3">3 - Medium</option>
+                        <option value="4">4 - Low</option>
+                        <option value="5" selected>5 - Default</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Rate (guaranteed bandwidth)</label>
+                    <input type="text" id="class-rate" required value="1mbit" placeholder="1mbit, 10mbit, etc.">
+                </div>
+                <div class="form-group">
+                    <label>Ceil (maximum bandwidth)</label>
+                    <input type="text" id="class-ceil" required value="10mbit" placeholder="10mbit, 100mbit, etc.">
+                </div>
+                <div class="form-group">
+                    <label>Interface</label>
+                    <input type="text" id="class-interface" required value="wan">
+                </div>
+                <div class="actions" style="justify-content: flex-end;">
+                    <button type="button" class="btn" onclick="closeModal('class-modal')">Cancel</button>
+                    <button type="submit" class="btn btn-cyan">Create</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Rule Modal -->
+    <div class="modal" id="rule-modal">
+        <div class="modal-content">
+            <div class="modal-title">Add Classification Rule</div>
+            <form onsubmit="addRule(event)">
+                <div class="form-group">
+                    <label>Target Class</label>
+                    <select id="rule-class" required>
+                        <!-- Populated dynamically -->
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Match Type</label>
+                    <select id="rule-type">
+                        <option value="dport">Destination Port</option>
+                        <option value="sport">Source Port</option>
+                        <option value="ip">IP Address</option>
+                        <option value="proto">Protocol</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Match Value</label>
+                    <input type="text" id="rule-value" required placeholder="80,443 or 3074,27015-27030">
+                </div>
+                <div class="actions" style="justify-content: flex-end;">
+                    <button type="button" class="btn" onclick="closeModal('rule-modal')">Cancel</button>
+                    <button type="submit" class="btn btn-cyan">Create</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="toast"></div>
+
+    <script>
+        const API = '/api/v1/traffic';
+        const token = () => localStorage.getItem('sbx_token');
+        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+
+        async function api(path, opts = {}) {
+            try {
+                const res = await fetch(API + path, { ...opts, headers: headers() });
+                if (res.status === 401) { window.location = '/portal/login.html'; return null; }
+                return res.json();
+            } catch (e) { console.error(e); return null; }
+        }
+
+        function showToast(msg, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.innerHTML = `<div class="toast toast-${type}">${msg}</div>`;
+            setTimeout(() => toast.innerHTML = '', 3000);
+        }
+
+        function showModal(id) { document.getElementById(id).classList.add('active'); }
+        function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+        function showClassModal() { showModal('class-modal'); }
+        function showRuleModal() {
+            updateRuleClassOptions();
+            showModal('rule-modal');
+        }
+
+        let classesData = [];
+
+        async function loadStatus() {
+            const data = await api('/status') || {};
+
+            const badge = document.getElementById('status-badge');
+            if (data.active) {
+                badge.textContent = 'Active';
+                badge.className = 'badge badge-green';
+            } else {
+                badge.textContent = 'Inactive';
+                badge.className = 'badge badge-red';
+            }
+
+            document.getElementById('stat-classes').textContent = data.class_count || 0;
+            document.getElementById('stat-rules').textContent = data.rule_count || 0;
+            document.getElementById('stat-qdiscs').textContent = data.qdisc_count || 0;
+            document.getElementById('stat-interfaces').textContent = (data.interfaces || []).length;
+        }
+
+        async function loadClasses() {
+            const data = await api('/classes') || {};
+            classesData = data.classes || [];
+
+            document.getElementById('classes-count').textContent = classesData.length;
+
+            if (classesData.length === 0) {
+                document.getElementById('classes-table').innerHTML = '<div class="empty">No traffic classes defined</div>';
+                return;
+            }
+
+            const rows = classesData.map(c => `
+                <tr>
+                    <td><span class="priority priority-${c.priority}">${c.priority}</span></td>
+                    <td><strong>${c.name}</strong></td>
+                    <td class="rate">${c.rate}</td>
+                    <td class="rate">${c.ceil}</td>
+                    <td>${c.interface}</td>
+                    <td><button class="btn btn-red btn-sm" onclick="deleteClass('${c.id}')">Delete</button></td>
+                </tr>
+            `).join('');
+
+            document.getElementById('classes-table').innerHTML = `
+                <table>
+                    <thead><tr><th>Pri</th><th>Name</th><th>Rate</th><th>Ceil</th><th>Interface</th><th>Action</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            `;
+        }
+
+        async function loadRules() {
+            const data = await api('/rules') || {};
+            const rules = data.rules || [];
+
+            document.getElementById('rules-count').textContent = rules.length;
+
+            if (rules.length === 0) {
+                document.getElementById('rules-table').innerHTML = '<div class="empty">No classification rules</div>';
+                return;
+            }
+
+            const rows = rules.map(r => `
+                <tr>
+                    <td><strong>${r.class}</strong></td>
+                    <td>${r.match_type}</td>
+                    <td style="font-family: monospace; font-size: 0.75rem;">${r.match_value}</td>
+                    <td><button class="btn btn-red btn-sm" onclick="deleteRule('${r.id}')">Delete</button></td>
+                </tr>
+            `).join('');
+
+            document.getElementById('rules-table').innerHTML = `
+                <table>
+                    <thead><tr><th>Class</th><th>Match</th><th>Value</th><th>Action</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            `;
+        }
+
+        async function loadStats() {
+            const data = await api('/stats') || {};
+            const stats = data.stats || [];
+
+            if (stats.length === 0) {
+                document.getElementById('stats-table').innerHTML = '<div class="empty">No statistics available</div>';
+                return;
+            }
+
+            const rows = stats.map(s => `
+                <tr>
+                    <td>${s.class}</td>
+                    <td>${s.packets.toLocaleString()}</td>
+                    <td>${formatBytes(s.bytes)}</td>
+                    <td style="color: var(--red);">${s.drops}</td>
+                </tr>
+            `).join('');
+
+            document.getElementById('stats-table').innerHTML = `
+                <table>
+                    <thead><tr><th>Class</th><th>Packets</th><th>Bytes</th><th>Drops</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            `;
+        }
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function updateRuleClassOptions() {
+            const select = document.getElementById('rule-class');
+            select.innerHTML = classesData.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+        }
+
+        async function addClass(e) {
+            e.preventDefault();
+            const data = {
+                name: document.getElementById('class-name').value,
+                priority: parseInt(document.getElementById('class-priority').value),
+                rate: document.getElementById('class-rate').value,
+                ceil: document.getElementById('class-ceil').value,
+                interface: document.getElementById('class-interface').value
+            };
+
+            const res = await api('/class/add', { method: 'POST', body: JSON.stringify(data) });
+            if (res && res.success) {
+                showToast('Class created');
+                closeModal('class-modal');
+                refresh();
+            } else {
+                showToast(res?.message || 'Failed', 'error');
+            }
+        }
+
+        async function addRule(e) {
+            e.preventDefault();
+            const data = {
+                class_id: document.getElementById('rule-class').value,
+                match_type: document.getElementById('rule-type').value,
+                match_value: document.getElementById('rule-value').value
+            };
+
+            const res = await api('/rule/add', { method: 'POST', body: JSON.stringify(data) });
+            if (res && res.success) {
+                showToast('Rule created');
+                closeModal('rule-modal');
+                refresh();
+            } else {
+                showToast(res?.message || 'Failed', 'error');
+            }
+        }
+
+        async function deleteClass(id) {
+            if (!confirm('Delete this class?')) return;
+            const res = await api('/class/delete', { method: 'POST', body: JSON.stringify({ id }) });
+            showToast(res?.success ? 'Class deleted' : 'Failed', res?.success ? 'success' : 'error');
+            refresh();
+        }
+
+        async function deleteRule(id) {
+            if (!confirm('Delete this rule?')) return;
+            const res = await api('/rule/delete', { method: 'POST', body: JSON.stringify({ id }) });
+            showToast(res?.success ? 'Rule deleted' : 'Failed', res?.success ? 'success' : 'error');
+            refresh();
+        }
+
+        async function applyPreset(preset) {
+            if (!confirm(`Apply the "${preset}" preset? This will replace current configuration.`)) return;
+            const res = await api('/preset/apply', { method: 'POST', body: JSON.stringify({ preset }) });
+            showToast(res?.success ? `Preset "${preset}" applied` : 'Failed', res?.success ? 'success' : 'error');
+            refresh();
+        }
+
+        async function applyConfig() {
+            const res = await api('/apply', { method: 'POST' });
+            showToast(res?.success ? 'Configuration applied' : 'Failed', res?.success ? 'success' : 'error');
+            refresh();
+        }
+
+        async function clearShaping() {
+            if (!confirm('Clear all traffic shaping?')) return;
+            const res = await api('/clear', { method: 'POST' });
+            showToast(res?.success ? 'Shaping cleared' : 'Failed', res?.success ? 'success' : 'error');
+            refresh();
+        }
+
+        async function refresh() {
+            await Promise.all([loadStatus(), loadClasses(), loadRules()]);
+        }
+
+        refresh();
+    </script>
+</body>
+</html>

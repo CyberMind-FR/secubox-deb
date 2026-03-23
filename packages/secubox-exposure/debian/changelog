@@ -1,0 +1,12 @@
+secubox-exposure (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release
+  * Service exposure management for SecuBox
+  * Tor hidden service creation and management
+  * SSL backend configuration
+  * DNS and mesh network exposure
+  * Emancipate/revoke service controls
+  * Real-time service scanning
+  * Dashboard with exposure status
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 23 Mar 2026 14:30:00 +0100

@@ -1,0 +1,9 @@
+{
+  "id": "watchdog",
+  "name": "Watchdog",
+  "category": "system",
+  "icon": "🔍",
+  "path": "/watchdog/",
+  "order": 555,
+  "description": "Service and container health monitoring"
+}
