@@ -5,6 +5,17 @@
 
 ## ✅ Terminé cette session
 
+### secubox-mail Enhancement (v2.1.0) ✅
+- **Security features dashboard** — Visual grid with toggle switches
+  - DKIM, SpamAssassin, Greylisting, ClamAV controls
+  - Security score indicator (0-4)
+  - Real-time status for each feature
+- **Mail logs viewer** — New tab with configurable line count
+- **Mailbox repair** — Per-user repair action
+- **DKIM record display** — DNS setup modal shows DKIM record
+- **LXC path fix** — Added `-P /srv/lxc` to lxc-info/lxc-attach commands
+- **Service permissions** — Run as root for LXC access, removed sandboxing
+
 ### secubox-users Enhancement (v1.1.0) ✅
 - **usersctl CLI v1.1.0** — Full user management controller
   - Commands: status, list, add, delete, get, enable, disable, passwd, sync, export, import
