@@ -1,3 +1,14 @@
+secubox-full (1.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Update to include all 39 modules
+  * Add new modules: backup, watchdog, tor, exposure, mitmproxy, traffic
+  * Add modules: portal, haproxy, dns, mail, webmail, users, gitea, nextcloud
+  * Add modules: droplet, streamlit, streamforge, metablogizer, publish, c3box
+  * Add modules: waf, repo, hardening, mail-lxc, webmail-lxc
+  * Update homepage to secubox.in
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 23 Mar 2026 12:00:00 +0100
+
 secubox-full (1.0.3-1~bookworm1) bookworm; urgency=medium
 
   * Add UMask=0000 for world-accessible sockets

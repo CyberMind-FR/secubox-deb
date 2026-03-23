@@ -4,7 +4,7 @@ Priority: optional
 Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.6.2
-Homepage: https://secubox.gondwana.systems
+Homepage: https://secubox.in
 Rules-Requires-Root: no
 
 Package: secubox-full
@@ -12,22 +12,52 @@ Architecture: all
 Depends: ${misc:Depends},
  secubox-core (>= 1.0),
  secubox-hub (>= 1.0),
+ secubox-portal (>= 1.0),
+ secubox-system (>= 1.0),
  secubox-crowdsec (>= 1.0),
- secubox-netdata (>= 1.0),
- secubox-wireguard (>= 1.0),
- secubox-dpi (>= 1.0),
- secubox-netmodes (>= 1.0),
- secubox-nac (>= 1.0),
+ secubox-waf (>= 1.0),
  secubox-auth (>= 1.0),
+ secubox-nac (>= 1.0),
+ secubox-wireguard (>= 1.0),
+ secubox-netmodes (>= 1.0),
+ secubox-dpi (>= 1.0),
  secubox-qos (>= 1.0),
- secubox-mediaflow (>= 1.0),
- secubox-cdn (>= 1.0),
+ secubox-traffic (>= 1.0),
  secubox-vhost (>= 1.0),
- secubox-system (>= 1.0)
-Recommends: crowdsec, netdata, wireguard-tools, netifyd
-Description: SecuBox Full — All modules
+ secubox-haproxy (>= 1.0),
+ secubox-cdn (>= 1.0),
+ secubox-netdata (>= 1.0),
+ secubox-mediaflow (>= 1.0),
+ secubox-dns (>= 1.0),
+ secubox-mail (>= 1.0),
+ secubox-mail-lxc (>= 1.0),
+ secubox-webmail (>= 1.0),
+ secubox-webmail-lxc (>= 1.0),
+ secubox-users (>= 1.0),
+ secubox-gitea (>= 1.0),
+ secubox-nextcloud (>= 1.0),
+ secubox-droplet (>= 1.0),
+ secubox-streamlit (>= 1.0),
+ secubox-streamforge (>= 1.0),
+ secubox-metablogizer (>= 1.0),
+ secubox-publish (>= 1.0),
+ secubox-c3box (>= 1.0),
+ secubox-backup (>= 1.0),
+ secubox-watchdog (>= 1.0),
+ secubox-tor (>= 1.0),
+ secubox-exposure (>= 1.0),
+ secubox-mitmproxy (>= 1.0),
+ secubox-repo (>= 1.0),
+ secubox-hardening (>= 1.0)
+Recommends: crowdsec, netdata, wireguard-tools, netifyd, tor, mitmproxy
+Description: SecuBox Full — All 39 modules
  Metapackage installing all SecuBox modules for full functionality.
  Recommended for MOCHAbin and other devices with 4GB+ RAM.
  .
- Includes: Hub, CrowdSec, Netdata, WireGuard, DPI, Network Modes,
- NAC, Auth, QoS, MediaFlow, CDN, VHost, and System modules.
+ Core: hub, portal, system
+ Security: crowdsec, waf, auth, nac, hardening, mitmproxy
+ Network: wireguard, netmodes, dpi, qos, traffic, vhost, haproxy, cdn, tor, exposure
+ Monitoring: netdata, mediaflow, watchdog
+ Services: dns, mail, webmail, users, gitea, nextcloud
+ Publishing: droplet, streamlit, streamforge, metablogizer, publish, c3box
+ Infrastructure: backup, repo
