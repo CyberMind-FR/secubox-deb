@@ -45,7 +45,7 @@ def run_cmd(cmd: list, timeout: int = 30) -> tuple:
 
 def lxc_running(name: str) -> bool:
     """Check if LXC container is running"""
-    success, out, _ = run_cmd(["lxc-info", "-n", name, "-s"])
+    success, out, _ = run_cmd(["lxc-info", "-P", str(LXC_PATH), "-n", name, "-s"])
     return success and "RUNNING" in out
 
 
@@ -56,7 +56,7 @@ def lxc_exists(name: str) -> bool:
 
 def lxc_attach(name: str, command: str, timeout: int = 30) -> tuple:
     """Execute command inside LXC container"""
-    cmd = ["lxc-attach", "-n", name, "--", "sh", "-c", command]
+    cmd = ["lxc-attach", "-P", str(LXC_PATH), "-n", name, "--", "sh", "-c", command]
     return run_cmd(cmd, timeout)
 
 
