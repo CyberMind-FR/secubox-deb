@@ -54,13 +54,6 @@ class UserCreate(BaseModel):
             raise ValueError('Username can only contain letters, numbers, _ and -')
         return v.lower()
 
-    @field_validator('password')
-    @classmethod
-    def validate_password(cls, v):
-        if len(v) < 8:
-            raise ValueError('Password must be at least 8 characters')
-        return v
-
 class UserUpdate(BaseModel):
     email: Optional[str] = None
     enabled: Optional[bool] = None
@@ -68,13 +61,6 @@ class UserUpdate(BaseModel):
 
 class PasswordChange(BaseModel):
     password: str
-
-    @field_validator('password')
-    @classmethod
-    def validate_password(cls, v):
-        if len(v) < 8:
-            raise ValueError('Password must be at least 8 characters')
-        return v
 
 class GroupCreate(BaseModel):
     name: str

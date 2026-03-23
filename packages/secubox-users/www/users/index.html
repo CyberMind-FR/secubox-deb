@@ -167,7 +167,7 @@
                 </div>
                 <div class="form-group">
                     <label>Password</label>
-                    <input type="password" id="new-password" placeholder="Minimum 8 characters" required minlength="8">
+                    <input type="password" id="new-password" placeholder="Password" required>
                 </div>
                 <div class="form-group">
                     <label>Provision to Services</label>
@@ -203,7 +203,7 @@
                 </div>
                 <div class="form-group">
                     <label>New Password (leave empty to keep current)</label>
-                    <input type="password" id="edit-password" placeholder="New password" minlength="8">
+                    <input type="password" id="edit-password" placeholder="New password">
                 </div>
                 <div class="form-actions">
                     <button type="button" class="btn" onclick="hideModal('edit-user-modal')">Cancel</button>
@@ -406,7 +406,7 @@
                 body: JSON.stringify({ email, enabled })
             });
 
-            if (password && password.length >= 8) {
+            if (password) {
                 await api(`/user/${encodeURIComponent(username)}/password`, {
                     method: 'POST',
                     body: JSON.stringify({ password })
