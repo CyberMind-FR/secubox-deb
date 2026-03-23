@@ -6,27 +6,45 @@
     <title>SecuBox - Services Portal</title>
     <style>
         :root {
-            --bg-dark: #0d1117;
-            --bg-card: #161b22;
-            --bg-sidebar: #0d1117;
-            --border: #30363d;
-            --text: #c9d1d9;
-            --text-dim: #8b949e;
-            --primary: #58a6ff;
-            --cyan: #00d4ff;
-            --green: #3fb950;
-            --red: #f85149;
-            --yellow: #d29922;
+            /* P31 Phosphor spectrum */
+            --p31-peak: #33ff66;
+            --p31-hot: #66ffaa;
+            --p31-mid: #22cc44;
+            --p31-dim: #0f8822;
+            --p31-ghost: #052210;
+            --p31-decay: #ffb347;
+            --p31-decay-dim: #cc7722;
+            /* Tube glass */
+            --tube-black: #050803;
+            --tube-deep: #080d05;
+            --tube-bezel: #0d1208;
+            /* Legacy mappings */
+            --bg-dark: var(--tube-black);
+            --bg-card: var(--tube-deep);
+            --bg-sidebar: var(--tube-black);
+            --border: var(--p31-ghost);
+            --text: var(--p31-mid);
+            --text-dim: var(--p31-dim);
+            --primary: var(--p31-peak);
+            --cyan: var(--p31-peak);
+            --green: var(--p31-peak);
+            --red: #ff4466;
+            --yellow: var(--p31-decay);
+            --orange: var(--p31-decay-dim);
             --purple: #a371f7;
-            --orange: #f0883e;
+            /* Bloom effects */
+            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: var(--bg-dark);
-            color: var(--text);
+            font-family: 'Courier Prime', 'Courier New', monospace;
+            background: var(--tube-black);
+            background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
+            color: var(--p31-mid);
+            display: flex;
             min-height: 100vh;
-            padding: 2rem;
         }
         body::before {
             content: "";
@@ -156,9 +174,197 @@
             border-color: var(--primary);
             color: var(--primary);
         }
+    
+        /* CRT Enhancements */
+        .main { margin-left: 220px; padding: 1.5rem; }
+
+        .header h1 {
+            color: var(--p31-hot);
+            text-shadow: var(--bloom-text);
+            font-weight: 700;
+            letter-spacing: 0.05em;
+        }
+
+        .badge {
+            font-family: 'Courier Prime', monospace;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            border: 1px solid;
+        }
+        .badge-blue, .badge-primary { background: rgba(51,255,102,0.1); border-color: var(--p31-peak); color: var(--p31-peak); }
+        .badge-green { background: rgba(51,255,102,0.15); border-color: var(--p31-peak); color: var(--p31-peak); text-shadow: var(--bloom-soft); }
+        .badge-cyan { background: rgba(51,255,102,0.1); border-color: var(--p31-mid); color: var(--p31-mid); }
+        .badge-purple { background: rgba(163,113,247,0.1); border-color: #a371f7; color: #a371f7; }
+        .badge-yellow, .badge-amber { background: rgba(255,179,71,0.1); border-color: var(--p31-decay); color: var(--p31-decay); }
+        .badge-red { background: rgba(255,68,102,0.1); border-color: #ff4466; color: #ff4466; }
+
+        .btn {
+            font-family: 'Courier Prime', monospace;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            border: 1px solid var(--p31-ghost);
+            background: var(--tube-deep);
+            color: var(--p31-mid);
+            transition: all 0.2s;
+        }
+        .btn:hover {
+            border-color: var(--p31-dim);
+            color: var(--p31-peak);
+            text-shadow: var(--bloom-soft);
+            box-shadow: 0 0 12px rgba(51,255,102,0.1);
+        }
+        .btn-green, .btn-primary, .btn.primary, .btn.success {
+            border-color: var(--p31-peak);
+            color: var(--p31-peak);
+            background: rgba(51,255,102,0.1);
+        }
+        .btn-green:hover, .btn-primary:hover, .btn.primary:hover, .btn.success:hover {
+            background: rgba(51,255,102,0.2);
+            box-shadow: 0 0 16px rgba(51,255,102,0.2);
+        }
+        .btn-red, .btn.danger {
+            border-color: #ff4466;
+            color: #ff4466;
+            background: rgba(255,68,102,0.1);
+        }
+        .btn-red:hover, .btn.danger:hover {
+            background: rgba(255,68,102,0.2);
+        }
+        .btn-blue {
+            border-color: var(--p31-mid);
+            color: var(--p31-mid);
+            background: rgba(51,255,102,0.05);
+        }
+        .btn-blue:hover {
+            border-color: var(--p31-peak);
+            color: var(--p31-peak);
+        }
+
+        .card {
+            background: var(--tube-deep);
+            border: 1px solid var(--p31-ghost);
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
+        }
+        .card:hover {
+            border-color: var(--p31-dim);
+            box-shadow: 0 0 8px rgba(51,255,102,0.05), inset 0 0 20px rgba(0,0,0,0.3);
+        }
+        .card-title, .card-header h2 {
+            color: var(--p31-decay);
+            text-shadow: var(--bloom-amber);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+        }
+
+        .stat-card {
+            background: var(--tube-deep);
+            border: 1px solid var(--p31-ghost);
+        }
+        .stat-value, .stat-card .value {
+            text-shadow: 0 0 10px currentColor;
+        }
+        .stat-label, .stat-card .label {
+            color: var(--p31-dim);
+            letter-spacing: 0.15em;
+        }
+        .stat-card.cyan .value, .stat-card.green .value { color: var(--p31-peak); }
+        .stat-card.yellow .value { color: var(--p31-decay); }
+        .stat-card.red .value { color: #ff4466; }
+
+        table, .table {
+            font-family: 'Courier Prime', monospace;
+        }
+        th, .table th {
+            color: var(--p31-decay);
+            text-shadow: var(--bloom-amber);
+            letter-spacing: 0.15em;
+            border-bottom: 1px solid var(--p31-ghost);
+        }
+        td, .table td {
+            border-bottom: 1px solid var(--p31-ghost);
+            color: var(--p31-mid);
+        }
+        tr:hover, .table tr:hover {
+            background: rgba(51,255,102,0.03);
+        }
+
+        .status-dot.active, .status-running {
+            color: var(--p31-peak);
+            text-shadow: var(--bloom-soft);
+        }
+        .status-dot.active {
+            background: var(--p31-peak);
+            box-shadow: 0 0 8px var(--p31-peak);
+        }
+
+        .toast {
+            background: var(--tube-deep);
+            border: 1px solid var(--p31-dim);
+            font-family: 'Courier Prime', monospace;
+        }
+        .toast-success { border-color: var(--p31-peak); }
+        .toast-error { border-color: #ff4466; }
+
+        .modal {
+            background: rgba(0,0,0,0.85);
+        }
+        .modal-content {
+            background: var(--tube-deep);
+            border: 1px solid var(--p31-dim);
+            box-shadow: 0 0 30px rgba(51,255,102,0.1);
+        }
+        .modal-title {
+            color: var(--p31-decay);
+            text-shadow: var(--bloom-amber);
+            letter-spacing: 0.1em;
+        }
+
+        .tabs {
+            background: var(--tube-deep);
+            border-bottom: 1px solid var(--p31-ghost);
+        }
+        .tab {
+            color: var(--p31-dim);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+        }
+        .tab:hover { color: var(--p31-mid); }
+        .tab.active {
+            color: var(--p31-peak);
+            text-shadow: var(--bloom-soft);
+            border-bottom-color: var(--p31-peak);
+        }
+
+        input, select, textarea {
+            font-family: 'Courier Prime', monospace;
+            background: var(--tube-black);
+            border: 1px solid var(--p31-ghost);
+            color: var(--p31-mid);
+            padding: 0.5rem;
+        }
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--p31-dim);
+            box-shadow: 0 0 8px rgba(51,255,102,0.1);
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: var(--tube-black); }
+        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
+        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
+
+        /* Empty states */
+        .empty { color: var(--p31-dim); }
+
+        @media (max-width: 768px) {
+            .main { margin-left: 0; }
+        }
     </style>
 </head>
-<body>
+<body class="crt-body crt-scanlines crt-body crt-scanlines">
     <div class="container">
         <header class="header">
             <div class="logo-icon">🔐</div>
@@ -275,5 +481,6 @@
 
         render();
     </script>
+    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>
