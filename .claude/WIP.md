@@ -1,11 +1,34 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-03-22 (Session 7)*
+*Mis à jour : 2026-03-23 (Session 8)*
 
 ---
 
 ## ✅ Terminé cette session
 
-### New Modules (2) ✅
+### secubox-users Enhancement (v1.1.0) ✅
+- **usersctl CLI v1.1.0** — Full user management controller
+  - Commands: status, list, add, delete, get, enable, disable, passwd, sync, export, import
+  - Service provisioning: Nextcloud, Gitea, Email, Matrix, Jellyfin, PeerTube, Jabber
+  - Three-fold commands: components, access (JSON output)
+  - Consistent v1.1.0 versioning
+- **Enhanced API** — Groups, validation, import/export
+  - Pydantic models with validation (username 3+ chars, password 8+ chars)
+  - Group endpoints with permissions
+  - Import/export for bulk user management
+  - Service status per user
+- **Modern Frontend** — Catppuccin-styled UI
+  - User/group tables with action buttons
+  - Modal dialogs for create/edit
+  - Toast notifications
+  - Service status chips with icons
+  - Import/export functionality
+- **Nginx config** — Frontend + API locations
+
+---
+
+## ✅ Previously Done (Session 7)
+
+### New Modules (2 in Session 7) ✅
 - **secubox-repo** (v1.0.0) — APT repository management module
   - repoctl CLI for package management
   - GPG key generation and signing

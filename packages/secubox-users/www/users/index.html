@@ -3,245 +3,700 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - User Management</title>
-    <link rel="stylesheet" href="/shared/sidebar.css">
+    <title>User Management - SecuBox</title>
+    <link rel="stylesheet" href="/portal/css/style.css">
     <style>
-        :root { --bg-dark: #0d1117; --bg-card: #161b22; --bg-sidebar: #0d1117; --border: #30363d; --text: #c9d1d9; --text-dim: #8b949e; --primary: #58a6ff; --cyan: #00d4ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; --purple: #a371f7; }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: -apple-system, sans-serif; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
-        .sidebar { width: 220px; background: var(--bg-sidebar); border-right: 1px solid var(--border); position: fixed; height: 100vh; overflow-y: auto; }
-        .sidebar-header { padding: 1rem; border-bottom: 1px solid var(--border); }
-        .logo { font-weight: bold; font-size: 1.2rem; }
-        .logo span:nth-child(1) { color: var(--cyan); } .logo span:nth-child(2) { color: var(--red); } .logo span:nth-child(3) { color: var(--green); } .logo span:nth-child(4) { color: var(--yellow); }
-        .nav-section { padding: 0.5rem 0; }
-        .nav-section-title { padding: 0.5rem 1rem; font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
-        .nav-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 1rem; color: var(--text-dim); text-decoration: none; font-size: 0.9rem; border-left: 3px solid transparent; }
-        .nav-item:hover { background: rgba(255,255,255,0.05); color: var(--text); }
-        .nav-item.active { background: rgba(88,166,255,0.1); color: var(--primary); border-left-color: var(--primary); }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-        .header h1 { font-size: 1.5rem; }
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; margin-left: 0.5rem; }
-        .btn:hover { background: var(--bg-dark); }
-        .btn.primary { background: rgba(88,166,255,0.1); border-color: var(--primary); color: var(--primary); }
-        .btn.success { background: rgba(63,185,80,0.1); border-color: var(--green); color: var(--green); }
-        .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
-        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
-        .stat-card .value { font-size: 2rem; font-weight: bold; color: var(--purple); }
-        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); }
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
-        .card h2 { font-size: 1rem; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; }
-        .services-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-        .service-card { background: var(--bg-dark); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
-        .service-card .icon { font-size: 2rem; margin-bottom: 0.5rem; }
-        .service-card .name { font-weight: 600; }
-        .service-card .status { font-size: 0.75rem; margin-top: 0.25rem; }
-        .service-card.running .status { color: var(--green); }
-        .service-card.stopped .status { color: var(--red); }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 0.6rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.875rem; }
-        th { color: var(--text-dim); font-size: 0.75rem; text-transform: uppercase; }
-        .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 0.7rem; }
-        .badge.enabled { background: rgba(63,185,80,0.2); color: var(--green); }
-        .badge.disabled { background: rgba(248,81,73,0.2); color: var(--red); }
-        .service-badges { display: flex; gap: 4px; flex-wrap: wrap; }
-        .service-badge { padding: 2px 6px; border-radius: 4px; font-size: 0.65rem; background: rgba(88,166,255,0.15); color: var(--primary); }
-        .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: center; justify-content: center; }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        .stat-card {
+            background: var(--surface0);
+            border-radius: 8px;
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .stat-card .value {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: var(--mauve);
+        }
+        .stat-card .label {
+            font-size: 0.8rem;
+            color: var(--subtext0);
+            margin-top: 0.25rem;
+        }
+        .services-row {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-bottom: 2rem;
+        }
+        .service-chip {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: var(--surface0);
+            border-radius: 20px;
+            font-size: 0.875rem;
+        }
+        .service-chip .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+        .service-chip .dot.active { background: var(--green); }
+        .service-chip .dot.inactive { background: var(--surface2); }
+        .service-chip.active { border: 1px solid var(--green); }
+        .service-chip.inactive { opacity: 0.6; }
+        .users-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: var(--surface0);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .users-table th,
+        .users-table td {
+            padding: 0.875rem 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--surface1);
+        }
+        .users-table th {
+            background: var(--surface1);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            color: var(--subtext0);
+            font-weight: 500;
+        }
+        .users-table tr:hover {
+            background: var(--surface1);
+        }
+        .users-table tr:last-child td {
+            border-bottom: none;
+        }
+        .user-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--mauve);
+            color: var(--base);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.875rem;
+        }
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        .user-info .name {
+            font-weight: 500;
+        }
+        .user-info .email {
+            font-size: 0.8rem;
+            color: var(--subtext0);
+        }
+        .badge {
+            padding: 0.25rem 0.6rem;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: 500;
+        }
+        .badge.enabled { background: rgba(166, 227, 161, 0.2); color: var(--green); }
+        .badge.disabled { background: rgba(243, 139, 168, 0.2); color: var(--red); }
+        .service-tags {
+            display: flex;
+            gap: 0.25rem;
+            flex-wrap: wrap;
+        }
+        .service-tag {
+            padding: 0.15rem 0.5rem;
+            background: var(--surface1);
+            border-radius: 4px;
+            font-size: 0.7rem;
+            color: var(--subtext1);
+        }
+        .action-btns {
+            display: flex;
+            gap: 0.5rem;
+        }
+        .btn-sm {
+            padding: 0.35rem 0.75rem;
+            font-size: 0.75rem;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+        }
+        .btn-sm.edit { background: var(--surface1); color: var(--text); }
+        .btn-sm.sync { background: rgba(137, 180, 250, 0.2); color: var(--blue); }
+        .btn-sm.delete { background: rgba(243, 139, 168, 0.2); color: var(--red); }
+        .btn-sm:hover { opacity: 0.8; }
+        .header-actions {
+            display: flex;
+            gap: 0.75rem;
+        }
+        .btn {
+            padding: 0.6rem 1.25rem;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .btn.primary { background: var(--blue); color: var(--base); }
+        .btn.secondary { background: var(--surface1); color: var(--text); }
+        .btn:hover { opacity: 0.9; }
+        .modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+        }
         .modal.show { display: flex; }
-        .modal-content { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; min-width: 450px; }
-        .modal-content h3 { margin-bottom: 1rem; }
-        .form-group { margin-bottom: 1rem; }
-        .form-group label { display: block; margin-bottom: 0.25rem; font-size: 0.8rem; color: var(--text-dim); }
-        .form-group input { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-dark); color: var(--text); }
-        .form-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
-        .checkbox-group { display: flex; flex-wrap: wrap; gap: 0.75rem; }
-        .checkbox-item { display: flex; align-items: center; gap: 0.5rem; }
-        .checkbox-item input { width: auto; }
+        .modal-content {
+            background: var(--surface0);
+            border-radius: 12px;
+            padding: 1.5rem;
+            min-width: 450px;
+            max-width: 90vw;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+        .modal-header h3 { margin: 0; }
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--subtext0);
+            cursor: pointer;
+            font-size: 1.5rem;
+        }
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 0.35rem;
+            font-size: 0.8rem;
+            color: var(--subtext1);
+        }
+        .form-group input {
+            width: 100%;
+            padding: 0.6rem 0.75rem;
+            border: 1px solid var(--surface2);
+            border-radius: 6px;
+            background: var(--base);
+            color: var(--text);
+            font-size: 0.9rem;
+        }
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--blue);
+        }
+        .checkbox-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.5rem;
+        }
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            background: var(--base);
+            border-radius: 4px;
+        }
+        .checkbox-item input {
+            width: auto;
+        }
+        .checkbox-item.disabled {
+            opacity: 0.5;
+        }
+        .form-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.75rem;
+            margin-top: 1.5rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--surface1);
+        }
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: var(--subtext0);
+        }
+        .empty-state .icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+        .toast {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            color: var(--base);
+            font-weight: 500;
+            z-index: 200;
+            animation: slideIn 0.3s ease;
+        }
+        .toast.success { background: var(--green); }
+        .toast.error { background: var(--red); }
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
     </style>
 </head>
 <body>
-    <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-    <main class="main">
-        <header class="header">
-            <h1>👥 User Management</h1>
-            <div>
-                <button class="btn success" onclick="showAddUser()">+ Add User</button>
-                <button class="btn" onclick="refresh()">Refresh</button>
+    <div class="app-container">
+        <nav class="sidebar" id="sidebar"></nav>
+
+        <main class="main-content">
+            <header class="content-header">
+                <div>
+                    <h1>User Management</h1>
+                    <p class="subtitle">Unified identity across all services</p>
+                </div>
+                <div class="header-actions">
+                    <button class="btn secondary" onclick="showImportModal()">Import</button>
+                    <button class="btn secondary" onclick="exportUsers()">Export</button>
+                    <button class="btn primary" onclick="showAddUserModal()">+ Add User</button>
+                </div>
+            </header>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="value" id="user-count">-</div>
+                    <div class="label">Total Users</div>
+                </div>
+                <div class="stat-card">
+                    <div class="value" id="active-services">-</div>
+                    <div class="label">Active Services</div>
+                </div>
+                <div class="stat-card">
+                    <div class="value" id="domain">-</div>
+                    <div class="label">Domain</div>
+                </div>
+                <div class="stat-card">
+                    <div class="value" id="group-count">0</div>
+                    <div class="label">Groups</div>
+                </div>
             </div>
-        </header>
 
-        <div class="stats-row">
-            <div class="stat-card"><div class="value" id="user-count">-</div><div class="label">Total Users</div></div>
-            <div class="stat-card"><div class="value" id="active-services">-</div><div class="label">Active Services</div></div>
-            <div class="stat-card"><div class="value" id="domain">-</div><div class="label">Domain</div></div>
-            <div class="stat-card"><div class="value" id="status">-</div><div class="label">Status</div></div>
-        </div>
+            <div class="section">
+                <h2 style="margin-bottom: 1rem;">Connected Services</h2>
+                <div class="services-row" id="services-row">Loading...</div>
+            </div>
 
-        <div class="card">
-            <h2>Connected Services</h2>
-            <div class="services-grid" id="services-grid">Loading...</div>
-        </div>
-
-        <div class="card">
-            <h2>Users</h2>
-            <table>
-                <thead><tr><th>Username</th><th>Email</th><th>Status</th><th>Services</th><th>Created</th><th></th></tr></thead>
-                <tbody id="user-list"><tr><td colspan="6">Loading...</td></tr></tbody>
-            </table>
-        </div>
-    </main>
+            <div class="section">
+                <h2 style="margin-bottom: 1rem;">Users</h2>
+                <table class="users-table">
+                    <thead>
+                        <tr>
+                            <th>User</th>
+                            <th>Status</th>
+                            <th>Services</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="users-list">
+                        <tr><td colspan="5" class="empty-state">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </main>
+    </div>
 
     <!-- Add User Modal -->
-    <div class="modal" id="user-modal">
+    <div class="modal" id="add-user-modal">
         <div class="modal-content">
-            <h3>Add User</h3>
-            <div class="form-group">
-                <label>Username</label>
-                <input type="text" id="new-username" placeholder="johndoe">
+            <div class="modal-header">
+                <h3>Add New User</h3>
+                <button class="modal-close" onclick="hideModal('add-user-modal')">&times;</button>
             </div>
-            <div class="form-group">
-                <label>Email</label>
-                <input type="email" id="new-email" placeholder="john@example.com">
-            </div>
-            <div class="form-group">
-                <label>Password</label>
-                <input type="password" id="new-password" placeholder="Strong password">
-            </div>
-            <div class="form-group">
-                <label>Provision to Services</label>
-                <div class="checkbox-group" id="service-checkboxes"></div>
-            </div>
-            <div class="form-actions">
-                <button class="btn" onclick="hideModal('user-modal')">Cancel</button>
-                <button class="btn success" onclick="addUser()">Create User</button>
-            </div>
+            <form id="add-user-form" onsubmit="addUser(event)">
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="new-username" placeholder="johndoe" required minlength="3">
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="new-email" placeholder="john@example.com" required>
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="new-password" placeholder="Minimum 8 characters" required minlength="8">
+                </div>
+                <div class="form-group">
+                    <label>Provision to Services</label>
+                    <div class="checkbox-grid" id="service-checkboxes"></div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn secondary" onclick="hideModal('add-user-modal')">Cancel</button>
+                    <button type="submit" class="btn primary">Create User</button>
+                </div>
+            </form>
         </div>
     </div>
 
+    <!-- Edit User Modal -->
+    <div class="modal" id="edit-user-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit User: <span id="edit-username-title"></span></h3>
+                <button class="modal-close" onclick="hideModal('edit-user-modal')">&times;</button>
+            </div>
+            <form id="edit-user-form" onsubmit="updateUser(event)">
+                <input type="hidden" id="edit-username">
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="edit-email" required>
+                </div>
+                <div class="form-group">
+                    <label>Status</label>
+                    <select id="edit-enabled" style="width:100%;padding:0.6rem;border-radius:6px;border:1px solid var(--surface2);background:var(--base);color:var(--text);">
+                        <option value="true">Enabled</option>
+                        <option value="false">Disabled</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>New Password (leave empty to keep current)</label>
+                    <input type="password" id="edit-password" placeholder="New password" minlength="8">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn secondary" onclick="hideModal('edit-user-modal')">Cancel</button>
+                    <button type="submit" class="btn primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Import Modal -->
+    <div class="modal" id="import-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Import Users</h3>
+                <button class="modal-close" onclick="hideModal('import-modal')">&times;</button>
+            </div>
+            <form id="import-form" onsubmit="importUsers(event)">
+                <div class="form-group">
+                    <label>JSON File</label>
+                    <input type="file" id="import-file" accept=".json" required>
+                </div>
+                <p style="font-size:0.8rem;color:var(--subtext0);margin-bottom:1rem;">
+                    Import users from a previously exported JSON file. Existing users will be skipped.
+                </p>
+                <div class="form-actions">
+                    <button type="button" class="btn secondary" onclick="hideModal('import-modal')">Cancel</button>
+                    <button type="submit" class="btn primary">Import</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/portal/js/sidebar.js"></script>
     <script>
         const API = '/api/v1/users';
-        const token = () => localStorage.getItem('sbx_token');
-        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+        const getToken = () => localStorage.getItem('jwt_token') || localStorage.getItem('sbx_token');
+        const headers = () => ({
+            'Content-Type': 'application/json',
+            ...(getToken() ? { 'Authorization': 'Bearer ' + getToken() } : {})
+        });
 
         const SERVICE_ICONS = {
-            nextcloud: '☁️', matrix: '💬', gitea: '🐙', email: '📧',
+            nextcloud: '☁️', matrix: '💬', gitea: '🦊', email: '📧',
             jellyfin: '🎬', peertube: '📹', jabber: '💭'
         };
 
-        let services = {};
+        let servicesData = {};
 
+        // Toast notification
+        function showToast(message, type = 'success') {
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        // API helper
         async function api(path, opts = {}) {
             try {
                 const res = await fetch(API + path, { ...opts, headers: headers() });
-                if (res.status === 401) { window.location = '/login.html'; return {}; }
+                if (res.status === 401) {
+                    window.location = '/portal/login.html';
+                    return null;
+                }
                 return res.json();
-            } catch { return {}; }
+            } catch (e) {
+                showToast('API error: ' + e.message, 'error');
+                return null;
+            }
         }
 
+        // Modal helpers
+        function showModal(id) { document.getElementById(id).classList.add('show'); }
+        function hideModal(id) { document.getElementById(id).classList.remove('show'); }
+        function showAddUserModal() { showModal('add-user-modal'); }
+        function showImportModal() { showModal('import-modal'); }
+
+        // Load status
         async function loadStatus() {
-            const d = await api('/status');
-            document.getElementById('user-count').textContent = d.user_count || 0;
-            document.getElementById('domain').textContent = d.domain || '-';
-            document.getElementById('status').textContent = 'Online';
-            document.getElementById('status').style.color = 'var(--green)';
+            const data = await api('/status');
+            if (!data) return;
 
-            services = d.services || {};
-            const activeCount = Object.values(services).filter(v => v).length;
-            document.getElementById('active-services').textContent = activeCount;
+            document.getElementById('user-count').textContent = data.user_count || 0;
+            document.getElementById('domain').textContent = data.domain || 'secubox.local';
+            document.getElementById('active-services').textContent = data.active_services || 0;
+            document.getElementById('group-count').textContent = data.group_count || 0;
+
+            servicesData = data.services || {};
         }
 
+        // Load services
         async function loadServices() {
-            const d = await api('/services');
-            const grid = document.getElementById('services-grid');
-            const svcData = d.services || {};
+            const data = await api('/services');
+            if (!data) return;
 
-            grid.innerHTML = Object.entries(svcData).map(([name, info]) => `
-                <div class="service-card ${info.running ? 'running' : 'stopped'}">
-                    <div class="icon">${SERVICE_ICONS[name] || '📦'}</div>
-                    <div class="name">${name}</div>
-                    <div class="status">${info.running ? 'Running' : 'Stopped'}</div>
+            const container = document.getElementById('services-row');
+            const services = data.services || {};
+
+            container.innerHTML = Object.entries(services).map(([name, info]) => `
+                <div class="service-chip ${info.running ? 'active' : 'inactive'}">
+                    <span class="dot ${info.running ? 'active' : 'inactive'}"></span>
+                    ${SERVICE_ICONS[name] || '📦'} ${name}
                 </div>
             `).join('');
 
-            // Update service checkboxes
+            // Update service checkboxes in add modal
             const checkboxes = document.getElementById('service-checkboxes');
-            checkboxes.innerHTML = Object.entries(svcData).map(([name, info]) => `
-                <label class="checkbox-item">
+            checkboxes.innerHTML = Object.entries(services).map(([name, info]) => `
+                <label class="checkbox-item ${info.running ? '' : 'disabled'}">
                     <input type="checkbox" name="services" value="${name}" ${info.running ? '' : 'disabled'}>
                     ${SERVICE_ICONS[name] || '📦'} ${name}
                 </label>
             `).join('');
+
+            servicesData = services;
         }
 
+        // Load users
         async function loadUsers() {
-            const d = await api('/users');
-            const list = document.getElementById('user-list');
-            const users = d.users || [];
+            const data = await api('/users');
+            if (!data) return;
+
+            const tbody = document.getElementById('users-list');
+            const users = data.users || [];
+
             if (!users.length) {
-                list.innerHTML = '<tr><td colspan="6" style="color:var(--text-dim)">No users</td></tr>';
+                tbody.innerHTML = `
+                    <tr><td colspan="5">
+                        <div class="empty-state">
+                            <div class="icon">👥</div>
+                            <div>No users yet</div>
+                            <button class="btn primary" style="margin-top:1rem" onclick="showAddUserModal()">Add First User</button>
+                        </div>
+                    </td></tr>
+                `;
                 return;
             }
-            list.innerHTML = users.map(u => `<tr>
-                <td><strong>${u.username}</strong></td>
-                <td>${u.email}</td>
-                <td><span class="badge ${u.enabled ? 'enabled' : 'disabled'}">${u.enabled ? 'Enabled' : 'Disabled'}</span></td>
-                <td><div class="service-badges">${(u.services || []).map(s => `<span class="service-badge">${SERVICE_ICONS[s] || ''} ${s}</span>`).join('')}</div></td>
-                <td style="font-size:0.75rem;color:var(--text-dim)">${u.created ? new Date(u.created).toLocaleDateString() : '-'}</td>
-                <td>
-                    <button class="btn" style="padding:0.25rem 0.5rem;font-size:0.75rem" onclick="syncUser('${u.username}')">Sync</button>
-                    <button class="btn danger" style="padding:0.25rem 0.5rem;font-size:0.75rem" onclick="deleteUser('${u.username}')">Delete</button>
-                </td>
-            </tr>`).join('');
+
+            tbody.innerHTML = users.map(u => `
+                <tr>
+                    <td>
+                        <div class="user-info">
+                            <div class="user-avatar">${(u.username || '?')[0].toUpperCase()}</div>
+                            <div>
+                                <div class="name">${u.username}</div>
+                                <div class="email">${u.email}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td><span class="badge ${u.enabled !== false ? 'enabled' : 'disabled'}">${u.enabled !== false ? 'Active' : 'Disabled'}</span></td>
+                    <td>
+                        <div class="service-tags">
+                            ${(u.services || []).map(s => `<span class="service-tag">${SERVICE_ICONS[s] || ''} ${s}</span>`).join('')}
+                        </div>
+                    </td>
+                    <td style="font-size:0.8rem;color:var(--subtext0)">${u.created ? new Date(u.created).toLocaleDateString() : '-'}</td>
+                    <td>
+                        <div class="action-btns">
+                            <button class="btn-sm edit" onclick="showEditUser('${u.username}')">Edit</button>
+                            <button class="btn-sm sync" onclick="syncUser('${u.username}')">Sync</button>
+                            <button class="btn-sm delete" onclick="deleteUser('${u.username}')">Delete</button>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
         }
 
-        function showModal(id) { document.getElementById(id).classList.add('show'); }
-        function hideModal(id) { document.getElementById(id).classList.remove('show'); }
-        function showAddUser() { showModal('user-modal'); }
+        // Add user
+        async function addUser(e) {
+            e.preventDefault();
 
-        async function addUser() {
             const username = document.getElementById('new-username').value.trim();
             const email = document.getElementById('new-email').value.trim();
             const password = document.getElementById('new-password').value;
-            const serviceBoxes = document.querySelectorAll('input[name="services"]:checked');
-            const selectedServices = Array.from(serviceBoxes).map(cb => cb.value);
+            const serviceBoxes = document.querySelectorAll('#service-checkboxes input:checked');
+            const services = Array.from(serviceBoxes).map(cb => cb.value);
 
-            if (!username || !email || !password) {
-                alert('All fields required');
-                return;
-            }
-
-            const r = await api('/user', {
+            const result = await api('/user', {
                 method: 'POST',
-                body: JSON.stringify({ username, email, password, services: selectedServices })
+                body: JSON.stringify({ username, email, password, services })
             });
 
-            if (r.success) {
-                hideModal('user-modal');
-                document.getElementById('new-username').value = '';
-                document.getElementById('new-email').value = '';
-                document.getElementById('new-password').value = '';
+            if (result?.success) {
+                showToast('User created successfully');
+                hideModal('add-user-modal');
+                document.getElementById('add-user-form').reset();
                 refresh();
             } else {
-                alert('Error: ' + (r.detail || 'Failed'));
+                showToast(result?.detail || 'Failed to create user', 'error');
             }
         }
 
+        // Show edit modal
+        async function showEditUser(username) {
+            const user = await api(`/user/${encodeURIComponent(username)}`);
+            if (!user) return;
+
+            document.getElementById('edit-username').value = user.username;
+            document.getElementById('edit-username-title').textContent = user.username;
+            document.getElementById('edit-email').value = user.email;
+            document.getElementById('edit-enabled').value = user.enabled !== false ? 'true' : 'false';
+            document.getElementById('edit-password').value = '';
+
+            showModal('edit-user-modal');
+        }
+
+        // Update user
+        async function updateUser(e) {
+            e.preventDefault();
+
+            const username = document.getElementById('edit-username').value;
+            const email = document.getElementById('edit-email').value;
+            const enabled = document.getElementById('edit-enabled').value === 'true';
+            const password = document.getElementById('edit-password').value;
+
+            // Update user
+            const result = await api(`/user/${encodeURIComponent(username)}`, {
+                method: 'PUT',
+                body: JSON.stringify({ email, enabled })
+            });
+
+            // Change password if provided
+            if (password && password.length >= 8) {
+                await api(`/user/${encodeURIComponent(username)}/password`, {
+                    method: 'POST',
+                    body: JSON.stringify({ password })
+                });
+            }
+
+            if (result?.success) {
+                showToast('User updated');
+                hideModal('edit-user-modal');
+                refresh();
+            } else {
+                showToast(result?.detail || 'Failed to update', 'error');
+            }
+        }
+
+        // Sync user
+        async function syncUser(username) {
+            const result = await api(`/user/${encodeURIComponent(username)}/sync`, { method: 'POST' });
+            if (result?.success) {
+                showToast('User synced to services');
+            } else {
+                showToast('Sync failed', 'error');
+            }
+        }
+
+        // Delete user
         async function deleteUser(username) {
             if (!confirm(`Delete user "${username}" and remove from all services?`)) return;
-            const r = await api(`/user/${encodeURIComponent(username)}`, { method: 'DELETE' });
-            if (r.success) refresh();
-            else alert('Error: ' + (r.detail || 'Failed'));
+
+            const result = await api(`/user/${encodeURIComponent(username)}`, { method: 'DELETE' });
+            if (result?.success) {
+                showToast('User deleted');
+                refresh();
+            } else {
+                showToast(result?.detail || 'Failed to delete', 'error');
+            }
         }
 
-        async function syncUser(username) {
-            const r = await api(`/user/${encodeURIComponent(username)}/sync`, { method: 'POST' });
-            alert(r.success ? 'User synced to services' : 'Sync failed');
+        // Export users
+        async function exportUsers() {
+            const data = await api('/export');
+            if (!data) return;
+
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `secubox-users-${new Date().toISOString().split('T')[0]}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('Users exported');
         }
 
-        function refresh() { loadStatus(); loadServices(); loadUsers(); }
-        refresh();
+        // Import users
+        async function importUsers(e) {
+            e.preventDefault();
+
+            const file = document.getElementById('import-file').files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const res = await fetch(API + '/import', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + getToken() },
+                    body: formData
+                });
+                const result = await res.json();
+
+                if (result.success) {
+                    showToast(`Imported ${result.imported} users, ${result.skipped} skipped`);
+                    hideModal('import-modal');
+                    refresh();
+                } else {
+                    showToast(result.detail || 'Import failed', 'error');
+                }
+            } catch (e) {
+                showToast('Import failed: ' + e.message, 'error');
+            }
+        }
+
+        // Refresh all
+        function refresh() {
+            loadStatus();
+            loadServices();
+            loadUsers();
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', refresh);
     </script>
 </body>
 </html>

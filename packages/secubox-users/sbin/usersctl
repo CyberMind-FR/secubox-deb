@@ -1,0 +1,516 @@
+#!/usr/bin/env bash
+# ══════════════════════════════════════════════════════════════════
+#  usersctl — SecuBox Unified User Management
+#  Usage: usersctl <command> [options]
+# ══════════════════════════════════════════════════════════════════
+set -euo pipefail
+
+VERSION="1.1.0"
+SCRIPT_NAME="$(basename "$0")"
+
+# Configuration
+USERS_FILE="${USERS_FILE:-/etc/secubox/users.json}"
+DOMAIN="${DOMAIN:-secubox.local}"
+
+# Available services for provisioning
+SERVICES=(nextcloud gitea email matrix jellyfin peertube jabber)
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+CYAN='\033[0;36m'
+GOLD='\033[0;33m'
+PURPLE='\033[0;35m'
+NC='\033[0m'
+
+log()  { echo -e "${CYAN}[users]${NC} $*"; }
+ok()   { echo -e "${GREEN}[OK]${NC} $*"; }
+warn() { echo -e "${GOLD}[WARN]${NC} $*"; }
+err()  { echo -e "${RED}[ERR]${NC} $*" >&2; exit 1; }
+
+# ══════════════════════════════════════════════════════════════════
+# JSON Helpers
+# ══════════════════════════════════════════════════════════════════
+
+init_users_file() {
+    if [[ ! -f "$USERS_FILE" ]]; then
+        mkdir -p "$(dirname "$USERS_FILE")"
+        echo '{"users":[],"groups":[]}' > "$USERS_FILE"
+    fi
+}
+
+get_user() {
+    local username="$1"
+    jq -r --arg u "$username" '.users[] | select(.username == $u)' "$USERS_FILE" 2>/dev/null
+}
+
+user_exists() {
+    local username="$1"
+    [[ -n "$(get_user "$username")" ]]
+}
+
+# ══════════════════════════════════════════════════════════════════
+# Service Integration
+# ══════════════════════════════════════════════════════════════════
+
+check_service() {
+    local svc="$1"
+    systemctl is-active "secubox-${svc}" &>/dev/null
+}
+
+get_service_ctl() {
+    local svc="$1"
+    local ctl="/usr/sbin/${svc}ctl"
+    [[ -x "$ctl" ]] && echo "$ctl" || echo ""
+}
+
+provision_to_service() {
+    local svc="$1"
+    local username="$2"
+    local email="$3"
+    local password="$4"
+
+    local ctl=$(get_service_ctl "$svc")
+    [[ -z "$ctl" ]] && return 1
+
+    case "$svc" in
+        nextcloud)
+            "$ctl" occ user:add --password-from-env "$username" --display-name "$username" <<< "$password" 2>/dev/null
+            "$ctl" occ user:setting "$username" settings email "$email" 2>/dev/null
+            ;;
+        gitea)
+            "$ctl" user add --username "$username" --email "$email" --password "$password" 2>/dev/null
+            ;;
+        email)
+            "$ctl" user add "$username" "$password" 2>/dev/null
+            ;;
+        *)
+            "$ctl" user-add "$username" "$email" "$password" 2>/dev/null
+            ;;
+    esac
+}
+
+deprovision_from_service() {
+    local svc="$1"
+    local username="$2"
+
+    local ctl=$(get_service_ctl "$svc")
+    [[ -z "$ctl" ]] && return 1
+
+    case "$svc" in
+        nextcloud)
+            "$ctl" occ user:delete "$username" 2>/dev/null
+            ;;
+        gitea)
+            "$ctl" user delete --username "$username" 2>/dev/null
+            ;;
+        email)
+            "$ctl" user del "$username" 2>/dev/null
+            ;;
+        *)
+            "$ctl" user-del "$username" 2>/dev/null
+            ;;
+    esac
+}
+
+# ══════════════════════════════════════════════════════════════════
+# Commands
+# ══════════════════════════════════════════════════════════════════
+
+cmd_status() {
+    local json="${1:-false}"
+    init_users_file
+
+    local user_count=$(jq '.users | length' "$USERS_FILE")
+    local group_count=$(jq '.groups | length // 0' "$USERS_FILE")
+
+    # Check services
+    local active_services=0
+    local service_status=""
+
+    for svc in "${SERVICES[@]}"; do
+        if check_service "$svc"; then
+            active_services=$((active_services + 1))
+            service_status="${service_status}\"${svc}\":true,"
+        else
+            service_status="${service_status}\"${svc}\":false,"
+        fi
+    done
+    service_status="${service_status%,}"
+
+    if [[ "$json" == "true" ]]; then
+        cat <<EOF
+{
+  "version": "${VERSION}",
+  "user_count": ${user_count},
+  "group_count": ${group_count},
+  "domain": "${DOMAIN}",
+  "active_services": ${active_services},
+  "total_services": ${#SERVICES[@]},
+  "services": {${service_status}}
+}
+EOF
+    else
+        echo "SecuBox User Management v${VERSION}"
+        echo "===================================="
+        echo "Users       : ${user_count}"
+        echo "Groups      : ${group_count}"
+        echo "Domain      : ${DOMAIN}"
+        echo "Services    : ${active_services}/${#SERVICES[@]} active"
+        echo ""
+        echo "Service Status:"
+        for svc in "${SERVICES[@]}"; do
+            if check_service "$svc"; then
+                echo -e "  ${GREEN}●${NC} ${svc}"
+            else
+                echo -e "  ${RED}○${NC} ${svc}"
+            fi
+        done
+    fi
+}
+
+cmd_list() {
+    local json="${1:-false}"
+    init_users_file
+
+    if [[ "$json" == "true" ]]; then
+        jq '.users' "$USERS_FILE"
+    else
+        echo "Users:"
+        jq -r '.users[] | "  \(.username)\t\(.email)\t\(.enabled // true | if . then "enabled" else "disabled" end)\t\(.services | join(","))"' "$USERS_FILE" 2>/dev/null | column -t -s $'\t' || echo "  (none)"
+    fi
+}
+
+cmd_add() {
+    local username="${1:-}"
+    local email="${2:-}"
+    local password="${3:-}"
+    shift 3 2>/dev/null || true
+    local services=("$@")
+
+    [[ -z "$username" ]] && err "Usage: usersctl add <username> <email> <password> [services...]"
+    [[ -z "$email" ]] && err "Email required"
+    [[ -z "$password" ]] && err "Password required"
+
+    init_users_file
+
+    if user_exists "$username"; then
+        err "User '$username' already exists"
+    fi
+
+    # Validate password
+    if [[ ${#password} -lt 8 ]]; then
+        err "Password must be at least 8 characters"
+    fi
+
+    log "Creating user '$username'..."
+
+    # Provision to services
+    local provision_results=""
+    for svc in "${services[@]}"; do
+        if [[ " ${SERVICES[*]} " =~ " ${svc} " ]]; then
+            if provision_to_service "$svc" "$username" "$email" "$password"; then
+                ok "Provisioned to $svc"
+                provision_results="${provision_results}\"${svc}\":true,"
+            else
+                warn "Failed to provision to $svc"
+                provision_results="${provision_results}\"${svc}\":false,"
+            fi
+        fi
+    done
+    provision_results="${provision_results%,}"
+
+    # Add to users file
+    local created=$(date -Iseconds)
+    local services_json=$(printf '%s\n' "${services[@]}" | jq -R . | jq -s .)
+
+    jq --arg u "$username" \
+       --arg e "$email" \
+       --arg c "$created" \
+       --argjson s "$services_json" \
+       '.users += [{"username":$u,"email":$e,"enabled":true,"services":$s,"created":$c}]' \
+       "$USERS_FILE" > "${USERS_FILE}.tmp" && mv "${USERS_FILE}.tmp" "$USERS_FILE"
+
+    ok "User '$username' created"
+}
+
+cmd_delete() {
+    local username="${1:-}"
+    [[ -z "$username" ]] && err "Usage: usersctl delete <username>"
+
+    init_users_file
+
+    if ! user_exists "$username"; then
+        err "User '$username' not found"
+    fi
+
+    log "Deleting user '$username'..."
+
+    # Get user's services
+    local user_services=$(get_user "$username" | jq -r '.services[]' 2>/dev/null)
+
+    # Deprovision from services
+    for svc in $user_services; do
+        if deprovision_from_service "$svc" "$username"; then
+            ok "Removed from $svc"
+        else
+            warn "Failed to remove from $svc"
+        fi
+    done
+
+    # Remove from users file
+    jq --arg u "$username" '.users = [.users[] | select(.username != $u)]' \
+       "$USERS_FILE" > "${USERS_FILE}.tmp" && mv "${USERS_FILE}.tmp" "$USERS_FILE"
+
+    ok "User '$username' deleted"
+}
+
+cmd_get() {
+    local username="${1:-}"
+    [[ -z "$username" ]] && err "Usage: usersctl get <username>"
+
+    init_users_file
+    local user=$(get_user "$username")
+
+    if [[ -z "$user" ]]; then
+        err "User '$username' not found"
+    fi
+
+    echo "$user" | jq .
+}
+
+cmd_enable() {
+    local username="${1:-}"
+    [[ -z "$username" ]] && err "Usage: usersctl enable <username>"
+
+    init_users_file
+
+    if ! user_exists "$username"; then
+        err "User '$username' not found"
+    fi
+
+    jq --arg u "$username" '(.users[] | select(.username == $u)).enabled = true' \
+       "$USERS_FILE" > "${USERS_FILE}.tmp" && mv "${USERS_FILE}.tmp" "$USERS_FILE"
+
+    ok "User '$username' enabled"
+}
+
+cmd_disable() {
+    local username="${1:-}"
+    [[ -z "$username" ]] && err "Usage: usersctl disable <username>"
+
+    init_users_file
+
+    if ! user_exists "$username"; then
+        err "User '$username' not found"
+    fi
+
+    jq --arg u "$username" '(.users[] | select(.username == $u)).enabled = false' \
+       "$USERS_FILE" > "${USERS_FILE}.tmp" && mv "${USERS_FILE}.tmp" "$USERS_FILE"
+
+    ok "User '$username' disabled"
+}
+
+cmd_passwd() {
+    local username="${1:-}"
+    local password="${2:-}"
+    [[ -z "$username" ]] && err "Usage: usersctl passwd <username> <newpassword>"
+    [[ -z "$password" ]] && err "Password required"
+
+    init_users_file
+
+    if ! user_exists "$username"; then
+        err "User '$username' not found"
+    fi
+
+    if [[ ${#password} -lt 8 ]]; then
+        err "Password must be at least 8 characters"
+    fi
+
+    log "Changing password for '$username'..."
+
+    local user_services=$(get_user "$username" | jq -r '.services[]' 2>/dev/null)
+    local email=$(get_user "$username" | jq -r '.email' 2>/dev/null)
+
+    for svc in $user_services; do
+        local ctl=$(get_service_ctl "$svc")
+        [[ -z "$ctl" ]] && continue
+
+        case "$svc" in
+            nextcloud)
+                echo "$password" | "$ctl" occ user:resetpassword --password-from-env "$username" 2>/dev/null && ok "Password changed in $svc" || warn "Failed for $svc"
+                ;;
+            gitea)
+                "$ctl" admin user change-password --username "$username" --password "$password" 2>/dev/null && ok "Password changed in $svc" || warn "Failed for $svc"
+                ;;
+            *)
+                "$ctl" user-passwd "$username" "$password" 2>/dev/null && ok "Password changed in $svc" || warn "Failed for $svc"
+                ;;
+        esac
+    done
+
+    ok "Password change completed"
+}
+
+cmd_sync() {
+    local username="${1:-}"
+    [[ -z "$username" ]] && err "Usage: usersctl sync <username>"
+
+    init_users_file
+
+    if ! user_exists "$username"; then
+        err "User '$username' not found"
+    fi
+
+    log "Syncing user '$username' to services..."
+
+    local user_data=$(get_user "$username")
+    local email=$(echo "$user_data" | jq -r '.email')
+    local user_services=$(echo "$user_data" | jq -r '.services[]' 2>/dev/null)
+
+    for svc in $user_services; do
+        if check_service "$svc"; then
+            ok "Synced to $svc"
+        else
+            warn "$svc not running"
+        fi
+    done
+}
+
+cmd_export() {
+    local output="${1:--}"
+    init_users_file
+
+    if [[ "$output" == "-" ]]; then
+        jq '.' "$USERS_FILE"
+    else
+        jq '.' "$USERS_FILE" > "$output"
+        ok "Exported to $output"
+    fi
+}
+
+cmd_import() {
+    local input="${1:-}"
+    [[ -z "$input" ]] && err "Usage: usersctl import <file.json>"
+    [[ ! -f "$input" ]] && err "File not found: $input"
+
+    init_users_file
+
+    local count=$(jq '.users | length' "$input" 2>/dev/null)
+    [[ -z "$count" ]] && err "Invalid JSON format"
+
+    log "Importing $count users..."
+
+    # Merge users
+    jq -s '.[0].users = (.[0].users + .[1].users | unique_by(.username)) | .[0]' \
+       "$USERS_FILE" "$input" > "${USERS_FILE}.tmp" && mv "${USERS_FILE}.tmp" "$USERS_FILE"
+
+    ok "Imported $count users"
+}
+
+cmd_components() {
+    cat <<EOF
+{
+  "components": [
+    {"name": "users-db", "description": "User database", "installed": $([ -f "$USERS_FILE" ] && echo "true" || echo "false")},
+    {"name": "nextcloud", "description": "Nextcloud integration", "installed": $([ -x "/usr/sbin/nextcloudctl" ] && echo "true" || echo "false"), "running": $(check_service nextcloud && echo "true" || echo "false")},
+    {"name": "gitea", "description": "Gitea integration", "installed": $([ -x "/usr/sbin/giteactl" ] && echo "true" || echo "false"), "running": $(check_service gitea && echo "true" || echo "false")},
+    {"name": "email", "description": "Email integration", "installed": $([ -x "/usr/sbin/mailserverctl" ] && echo "true" || echo "false"), "running": $(check_service mail && echo "true" || echo "false")}
+  ]
+}
+EOF
+}
+
+cmd_access() {
+    cat <<EOF
+{
+  "endpoints": [
+    {"path": "/status", "method": "GET", "auth": false, "description": "Get system status"},
+    {"path": "/services", "method": "GET", "auth": false, "description": "List available services"},
+    {"path": "/users", "method": "GET", "auth": true, "description": "List all users"},
+    {"path": "/user", "method": "POST", "auth": true, "description": "Create user"},
+    {"path": "/user/{username}", "method": "GET", "auth": true, "description": "Get user details"},
+    {"path": "/user/{username}", "method": "PUT", "auth": true, "description": "Update user"},
+    {"path": "/user/{username}", "method": "DELETE", "auth": true, "description": "Delete user"},
+    {"path": "/user/{username}/sync", "method": "POST", "auth": true, "description": "Sync user to services"},
+    {"path": "/user/{username}/password", "method": "POST", "auth": true, "description": "Change password"},
+    {"path": "/groups", "method": "GET", "auth": true, "description": "List groups"},
+    {"path": "/export", "method": "GET", "auth": true, "description": "Export users"},
+    {"path": "/import", "method": "POST", "auth": true, "description": "Import users"}
+  ]
+}
+EOF
+}
+
+cmd_help() {
+    cat <<EOF
+usersctl v${VERSION} — SecuBox Unified User Management
+
+Usage: ${SCRIPT_NAME} <command> [options]
+
+User Commands:
+  status [--json]                Show system status
+  list [--json]                  List all users
+  add <user> <email> <pass> [svcs...]  Create user
+  delete <username>              Delete user
+  get <username>                 Get user details
+  enable <username>              Enable user
+  disable <username>             Disable user
+  passwd <username> <newpass>    Change password
+  sync <username>                Sync user to services
+
+Data Commands:
+  export [file]                  Export users to JSON
+  import <file>                  Import users from JSON
+
+Info Commands:
+  components                     List components (JSON)
+  access                         List API endpoints (JSON)
+  help                           Show this help
+
+Services: ${SERVICES[*]}
+
+Examples:
+  ${SCRIPT_NAME} add johndoe john@example.com MyPass123 nextcloud gitea
+  ${SCRIPT_NAME} list
+  ${SCRIPT_NAME} passwd johndoe NewPass456
+  ${SCRIPT_NAME} delete johndoe
+
+EOF
+}
+
+# ══════════════════════════════════════════════════════════════════
+# Main
+# ══════════════════════════════════════════════════════════════════
+
+[[ $# -eq 0 ]] && { cmd_help; exit 0; }
+
+CMD="$1"
+shift
+
+case "$CMD" in
+    status)
+        json="false"
+        [[ "${1:-}" == "--json" ]] && json="true"
+        cmd_status "$json"
+        ;;
+    list)
+        json="false"
+        [[ "${1:-}" == "--json" ]] && json="true"
+        cmd_list "$json"
+        ;;
+    add)        cmd_add "$@" ;;
+    delete|del) cmd_delete "$@" ;;
+    get)        cmd_get "$@" ;;
+    enable)     cmd_enable "$@" ;;
+    disable)    cmd_disable "$@" ;;
+    passwd)     cmd_passwd "$@" ;;
+    sync)       cmd_sync "$@" ;;
+    export)     cmd_export "$@" ;;
+    import)     cmd_import "$@" ;;
+    components) cmd_components ;;
+    access)     cmd_access ;;
+    help|--help|-h) cmd_help ;;
+    version|--version|-v) echo "usersctl v${VERSION}" ;;
+    *)          err "Unknown command: $CMD. Use '${SCRIPT_NAME} help' for usage." ;;
+esac
