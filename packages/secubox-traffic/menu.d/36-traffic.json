@@ -1,0 +1,8 @@
+{
+  "id": "traffic",
+  "title": "Traffic Shaping",
+  "icon": "📊",
+  "path": "/traffic/",
+  "category": "network",
+  "order": 36
+}

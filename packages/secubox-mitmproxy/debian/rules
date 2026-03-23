@@ -12,3 +12,5 @@ override_dh_auto_install:
 	install -m 644 debian/secubox-mitmproxy.service $(CURDIR)/debian/secubox-mitmproxy/lib/systemd/system/
 	install -d $(CURDIR)/debian/secubox-mitmproxy/srv/mitmproxy
 	install -d $(CURDIR)/debian/secubox-mitmproxy/srv/mitmproxy-in
+	install -d $(CURDIR)/debian/secubox-mitmproxy/usr/share/secubox/menu.d
+	install -m 644 menu.d/*.json $(CURDIR)/debian/secubox-mitmproxy/usr/share/secubox/menu.d/

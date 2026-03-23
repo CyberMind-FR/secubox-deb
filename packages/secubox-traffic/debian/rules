@@ -10,3 +10,5 @@ override_dh_auto_install:
 	install -m 644 www/traffic/*.html $(CURDIR)/debian/secubox-traffic/usr/share/secubox/www/traffic/
 	install -d $(CURDIR)/debian/secubox-traffic/lib/systemd/system
 	install -m 644 debian/secubox-traffic.service $(CURDIR)/debian/secubox-traffic/lib/systemd/system/
+	install -d $(CURDIR)/debian/secubox-traffic/usr/share/secubox/menu.d
+	install -m 644 menu.d/*.json $(CURDIR)/debian/secubox-traffic/usr/share/secubox/menu.d/
