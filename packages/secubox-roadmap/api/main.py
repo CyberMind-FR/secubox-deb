@@ -81,14 +81,20 @@ OPENWRT_MODULES = {
     "secubox-mesh": {"deb": "secubox-mesh", "status": "complete", "category": "network", "new": True},
     "secubox-p2p": {"deb": "secubox-p2p", "status": "complete", "category": "network", "new": True},
 
-    # Planned
-    "luci-app-device-intel": {"deb": "secubox-device-intel", "status": "planned", "category": "monitoring"},
-    "luci-app-vortex-dns": {"deb": "secubox-vortex-dns", "status": "planned", "category": "network"},
-    "luci-app-vortex-firewall": {"deb": "secubox-vortex-firewall", "status": "planned", "category": "security"},
-    "luci-app-meshname-dns": {"deb": "secubox-meshname", "status": "planned", "category": "network"},
+    # Vortex Security Suite (Complete)
+    "luci-app-device-intel": {"deb": "secubox-device-intel", "status": "complete", "category": "monitoring"},
+    "luci-app-vortex-dns": {"deb": "secubox-vortex-dns", "status": "complete", "category": "network"},
+    "luci-app-vortex-firewall": {"deb": "secubox-vortex-firewall", "status": "complete", "category": "security"},
+    "luci-app-meshname-dns": {"deb": "secubox-meshname", "status": "complete", "category": "network"},
+
+    # Dashboard/SOC (New Debian modules)
+    "secubox-soc": {"deb": "secubox-soc", "status": "complete", "category": "dashboard", "new": True},
+    "secubox-roadmap": {"deb": "secubox-roadmap", "status": "complete", "category": "dashboard", "new": True},
+    "secubox-repo": {"deb": "secubox-repo", "status": "complete", "category": "system", "new": True},
 }
 
 CATEGORIES = {
+    "dashboard": {"icon": "🛡️", "name": "Dashboard"},
     "core": {"icon": "🏠", "name": "Core"},
     "security": {"icon": "🔒", "name": "Security"},
     "network": {"icon": "🌐", "name": "Network"},
