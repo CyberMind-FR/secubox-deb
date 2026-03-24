@@ -2,8 +2,8 @@
 Description=SecuBox Portal Authentication API
 After=network.target secubox-core.service
 Wants=secubox-core.service
-StartLimitIntervalSec=300
-StartLimitBurst=5
+StartLimitIntervalSec=600
+StartLimitBurst=10
 
 [Service]
 UMask=0000
@@ -25,10 +25,9 @@ ExecStart=/usr/bin/python3 -m uvicorn api.main:app \
     --uds /run/secubox/portal.sock \
     --log-level warning
 
-# Watchdog: restart always, with delay
-Restart=always
-RestartSec=3
-WatchdogSec=30
+# Restart on failure (no watchdog - uvicorn doesn't support sd_notify)
+Restart=on-failure
+RestartSec=5
 
 # Security
 PrivateTmp=true
