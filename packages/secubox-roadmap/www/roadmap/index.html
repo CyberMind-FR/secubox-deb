@@ -3,437 +3,133 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox Roadmap - Migration OpenWRT → Debian</title>
+    <title>SecuBox - Migration Roadmap</title>
     <link rel="stylesheet" href="/shared/sidebar.css">
     <style>
         :root {
-            --green: #33ff33;
-            --green-dim: #1a8c1a;
-            --cyan: #00ffff;
-            --yellow: #ffff33;
-            --red: #ff3333;
-            --bg-dark: #0a0f0a;
-            --bg-card: #0d120d;
-            --bg-panel: #111611;
-            --text: #33ff33;
-            --text-dim: #1a8c1a;
-            --border: #1a3a1a;
+            --bg-dark: #0d1117;
+            --bg-card: #161b22;
+            --bg-sidebar: #0d1117;
+            --border: #30363d;
+            --text: #c9d1d9;
+            --text-dim: #8b949e;
+            --primary: #58a6ff;
+            --cyan: #00d4ff;
+            --green: #3fb950;
+            --red: #f85149;
+            --yellow: #d29922;
+            --purple: #a371f7;
         }
-
         * { box-sizing: border-box; margin: 0; padding: 0; }
-
         body {
-            font-family: 'IBM Plex Mono', 'Courier New', monospace;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             background: var(--bg-dark);
             color: var(--text);
-            min-height: 100vh;
             display: flex;
-        }
-
-        /* Conditional sidebar visibility */
-        body.authenticated .main-content {
-            margin-left: 260px;
-        }
-
-        body.guest .main-content {
-            margin-left: 0;
-        }
-
-        body.guest #sidebar-container {
-            display: none;
-        }
-
-        .main-content {
-            flex: 1;
-            padding: 1.5rem;
             min-height: 100vh;
         }
+        .sidebar { width: 220px; background: var(--bg-sidebar); border-right: 1px solid var(--border); position: fixed; height: 100vh; overflow-y: auto; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
+        @media (max-width: 768px) { .main { margin-left: 0; } }
 
-        @media (max-width: 768px) {
-            .main-content { margin-left: 0 !important; padding: 1rem; }
-        }
-
-        /* Guest header bar */
-        .guest-header {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 60px;
-            background: var(--bg-card);
-            border-bottom: 1px solid var(--border);
-            padding: 0 1.5rem;
-            align-items: center;
-            justify-content: space-between;
-            z-index: 100;
-        }
-
-        body.guest .guest-header {
-            display: flex;
-        }
-
-        body.guest .main-content {
-            padding-top: 80px;
-        }
-
-        .guest-header .logo {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            color: var(--green);
-            text-decoration: none;
-            font-size: 1.2rem;
-            font-weight: bold;
-        }
-
-        .guest-header .logo-icon {
-            font-size: 1.5rem;
-        }
-
-        .guest-header .login-btn {
-            background: transparent;
-            border: 1px solid var(--green);
-            color: var(--green);
-            padding: 0.5rem 1.25rem;
-            border-radius: 4px;
-            font-family: inherit;
-            font-size: 0.9rem;
-            cursor: pointer;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-            transition: all 0.2s;
-        }
-
-        .guest-header .login-btn:hover {
-            background: var(--green);
-            color: var(--bg-dark);
-            box-shadow: 0 0 15px var(--green);
-        }
-
-        .page-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1.5rem;
-            padding-bottom: 1rem;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .page-header h1 {
-            font-size: 1.5rem;
-            font-weight: 400;
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-        }
-
-        .page-header .subtitle {
-            font-size: 0.8rem;
-            color: var(--text-dim);
-            margin-top: 0.25rem;
-        }
-
-        .source-link {
-            color: var(--cyan);
-            text-decoration: none;
-            font-size: 0.85rem;
-        }
-
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
+        .header h1 { font-size: 1.5rem; }
+        .header .subtitle { font-size: 0.85rem; color: var(--text-dim); }
+        .source-link { color: var(--cyan); text-decoration: none; font-size: 0.85rem; }
         .source-link:hover { text-decoration: underline; }
 
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.875rem; }
+        .btn:hover { background: var(--bg-dark); }
+
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
+        .card h2 { font-size: 1rem; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; }
+
         /* Progress Section */
-        .progress-section {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-        }
-
-        .progress-bar-container {
-            margin-bottom: 1rem;
-        }
-
-        .progress-bar {
-            height: 20px;
-            background: var(--bg-dark);
-            border-radius: 10px;
-            overflow: hidden;
-            position: relative;
-        }
-
-        .progress-bar .fill {
-            height: 100%;
-            background: linear-gradient(90deg, var(--green) 0%, var(--cyan) 100%);
-            border-radius: 10px;
-            transition: width 0.8s ease-out;
-            position: relative;
-        }
-
-        .progress-bar .fill::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
-            animation: shimmer 2s infinite;
-        }
-
-        @keyframes shimmer {
-            0% { transform: translateX(-100%); }
-            100% { transform: translateX(100%); }
-        }
-
-        .progress-stats {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 0.75rem;
-            font-size: 0.9rem;
-        }
-
-        .progress-stats .percent {
-            font-size: 1.5rem;
-            font-weight: bold;
-            color: var(--cyan);
-        }
+        .progress-bar { height: 20px; background: var(--bg-dark); border-radius: 10px; overflow: hidden; margin-bottom: 0.75rem; }
+        .progress-bar .fill { height: 100%; background: linear-gradient(90deg, var(--green) 0%, var(--cyan) 100%); border-radius: 10px; transition: width 0.8s ease-out; }
+        .progress-stats { display: flex; justify-content: space-between; font-size: 0.9rem; }
+        .progress-stats .percent { font-size: 1.5rem; font-weight: bold; color: var(--cyan); }
 
         /* Category Grid */
-        .category-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-            gap: 1rem;
-            margin-bottom: 1.5rem;
-        }
-
-        .category-card {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 1rem;
-            text-align: center;
-            transition: all 0.2s;
-            cursor: pointer;
-        }
-
-        .category-card:hover {
-            border-color: var(--green);
-            transform: translateY(-2px);
-        }
-
-        .category-card .cat-icon {
-            font-size: 2rem;
-            margin-bottom: 0.5rem;
-        }
-
-        .category-card .cat-name {
-            font-size: 0.75rem;
-            color: var(--text-dim);
-            text-transform: uppercase;
-            margin-bottom: 0.25rem;
-        }
-
-        .category-card .cat-count {
-            font-size: 1.3rem;
-            font-weight: bold;
-            color: var(--cyan);
-        }
-
-        .category-card .cat-progress {
-            font-size: 0.7rem;
-            color: var(--text-dim);
-            margin-top: 0.25rem;
-        }
+        .category-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .category-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; cursor: pointer; transition: all 0.2s; }
+        .category-card:hover { border-color: var(--primary); transform: translateY(-2px); }
+        .category-card .cat-icon { font-size: 2rem; margin-bottom: 0.5rem; }
+        .category-card .cat-name { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; margin-bottom: 0.25rem; }
+        .category-card .cat-count { font-size: 1.3rem; font-weight: bold; color: var(--cyan); }
+        .category-card .cat-progress { font-size: 0.7rem; color: var(--text-dim); margin-top: 0.25rem; }
 
         /* Module Lists */
-        .lists-section {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 1.5rem;
-        }
-
-        .module-list {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 1rem;
-        }
-
-        .module-list h3 {
-            font-size: 0.9rem;
-            margin-bottom: 1rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding-bottom: 0.5rem;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .module-list h3 .count {
-            background: var(--bg-dark);
-            padding: 0.2rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.75rem;
-            margin-left: auto;
-        }
-
+        .lists-section { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; }
+        .module-list { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; }
+        .module-list h3 { font-size: 0.9rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); }
+        .module-list h3 .count { background: var(--bg-dark); padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; margin-left: auto; }
         .module-list.complete h3 { color: var(--green); }
         .module-list.in-progress h3 { color: var(--yellow); }
         .module-list.planned h3 { color: var(--text-dim); }
         .module-list.new-modules h3 { color: var(--cyan); }
-
-        .module-list ul {
-            list-style: none;
-            max-height: 400px;
-            overflow-y: auto;
-        }
-
-        .module-list li {
-            padding: 0.5rem 0;
-            border-bottom: 1px solid var(--border);
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            font-size: 0.85rem;
-        }
-
+        .module-list ul { list-style: none; max-height: 400px; overflow-y: auto; }
+        .module-list li { padding: 0.5rem 0; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 0.75rem; font-size: 0.85rem; }
         .module-list li:last-child { border-bottom: none; }
-
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            flex-shrink: 0;
-        }
-
-        .complete .status-dot { background: var(--green); box-shadow: 0 0 6px var(--green); }
-        .in-progress .status-dot { background: var(--yellow); box-shadow: 0 0 6px var(--yellow); }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+        .complete .status-dot { background: var(--green); }
+        .in-progress .status-dot { background: var(--yellow); }
         .planned .status-dot { background: var(--text-dim); }
-        .new-modules .status-dot { background: var(--cyan); box-shadow: 0 0 6px var(--cyan); }
-
-        .module-info {
-            flex: 1;
-            min-width: 0;
-        }
-
-        .module-info .source {
-            color: var(--text-dim);
-            font-size: 0.75rem;
-        }
-
-        .module-info .target {
-            color: var(--text);
-        }
-
-        .installed-badge {
-            background: var(--green-dim);
-            color: var(--green);
-            padding: 0.15rem 0.4rem;
-            border-radius: 4px;
-            font-size: 0.65rem;
-            text-transform: uppercase;
-        }
-
-        .category-badge {
-            background: var(--bg-dark);
-            color: var(--text-dim);
-            padding: 0.15rem 0.4rem;
-            border-radius: 4px;
-            font-size: 0.65rem;
-        }
-
-        /* Loading state */
-        .loading {
-            text-align: center;
-            padding: 2rem;
-            color: var(--text-dim);
-        }
-
-        .loading::after {
-            content: '...';
-            animation: dots 1.5s infinite;
-        }
-
-        @keyframes dots {
-            0%, 20% { content: '.'; }
-            40% { content: '..'; }
-            60%, 100% { content: '...'; }
-        }
+        .new-modules .status-dot { background: var(--cyan); }
+        .module-info { flex: 1; min-width: 0; }
+        .module-info .source { color: var(--text-dim); font-size: 0.75rem; }
+        .module-info .target { color: var(--text); }
+        .installed-badge { background: rgba(63,185,80,0.2); color: var(--green); padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.65rem; text-transform: uppercase; }
+        .category-badge { background: var(--bg-dark); color: var(--text-dim); padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.65rem; }
+        .loading { text-align: center; padding: 2rem; color: var(--text-dim); }
     </style>
 </head>
 <body>
-    <!-- Guest header (shown when not authenticated) -->
-    <header class="guest-header">
-        <a href="/" class="logo">
-            <span class="logo-icon">🔒</span>
-            <span>SECUBOX</span>
-        </a>
-        <button class="login-btn" onclick="window.location.href='/portal/login.html'">Login</button>
-    </header>
-
-    <!-- Sidebar (shown when authenticated) -->
     <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
 
-    <main class="main-content">
-        <header class="page-header">
+    <main class="main">
+        <header class="header">
             <div>
-                <h1>Migration Roadmap: OpenWRT → Debian</h1>
-                <div class="subtitle">SecuBox package migration status tracking</div>
+                <h1>Migration Roadmap</h1>
+                <div class="subtitle">OpenWRT → Debian package migration status</div>
             </div>
-            <a href="https://github.com/gkerma/secubox-openwrt" target="_blank" class="source-link">Source Repository →</a>
+            <div>
+                <a href="https://github.com/gkerma/secubox-openwrt" target="_blank" class="source-link">Source Repository →</a>
+                <button class="btn" onclick="loadRoadmap()" style="margin-left: 1rem;">Refresh</button>
+            </div>
         </header>
 
-        <section class="progress-section" id="progress-section">
-            <div class="progress-bar-container">
-                <div class="progress-bar">
-                    <div class="fill" id="progress-fill" style="width: 0%"></div>
-                </div>
+        <div class="card">
+            <h2>Overall Progress</h2>
+            <div class="progress-bar">
+                <div class="fill" id="progress-fill" style="width: 0%"></div>
             </div>
             <div class="progress-stats">
                 <span id="complete-count">0 complete</span>
                 <span class="percent" id="progress-percent">0%</span>
                 <span id="total-count">0 total</span>
             </div>
-        </section>
+        </div>
 
         <section class="category-grid" id="category-grid">
-            <div class="loading">Loading categories</div>
+            <div class="loading">Loading categories...</div>
         </section>
 
         <section class="lists-section" id="lists-section">
-            <div class="loading">Loading modules</div>
+            <div class="loading">Loading modules...</div>
         </section>
     </main>
 
-    <script src="/shared/crt-engine.js"></script>
     <script>
         const API_BASE = '/api/v1/roadmap';
-
-        // Check authentication status
-        function isAuthenticated() {
-            return !!localStorage.getItem('sbx_token');
-        }
-
-        // Setup page based on auth status
-        function setupAuthState() {
-            if (isAuthenticated()) {
-                document.body.classList.add('authenticated');
-                document.body.classList.remove('guest');
-                // Load sidebar dynamically
-                const script = document.createElement('script');
-                script.src = '/shared/sidebar.js';
-                document.body.appendChild(script);
-            } else {
-                document.body.classList.add('guest');
-                document.body.classList.remove('authenticated');
-            }
-        }
+        const token = () => localStorage.getItem('sbx_token');
+        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
 
         async function api(endpoint) {
             try {
-                const res = await fetch(API_BASE + endpoint);
+                const res = await fetch(API_BASE + endpoint, { headers: headers() });
+                if (res.status === 401) { window.location = '/portal/login.html'; return null; }
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 return await res.json();
             } catch (e) {
@@ -504,15 +200,10 @@
 
         function filterCategory(cat) {
             console.log('Filter by category:', cat);
-            // Could implement filtering UI here
         }
 
-        // Initialize
-        document.addEventListener('DOMContentLoaded', () => {
-            setupAuthState();
-            loadRoadmap();
-            setInterval(loadRoadmap, 60000); // Refresh every minute
-        });
+        loadRoadmap();
+        setInterval(loadRoadmap, 60000);
     </script>
 </body>
 </html>
