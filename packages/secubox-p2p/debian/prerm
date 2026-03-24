@@ -1,0 +1,14 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    remove|upgrade|deconfigure)
+        # Stop the service
+        systemctl stop secubox-p2p.service || true
+        systemctl disable secubox-p2p.service || true
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

@@ -1,0 +1,26 @@
+[Unit]
+Description=SecuBox Roadmap API
+After=network.target
+Requires=secubox-core.service
+
+[Service]
+Type=simple
+User=secubox
+Group=secubox
+RuntimeDirectory=secubox
+WorkingDirectory=/usr/lib/secubox/roadmap
+ExecStart=/usr/bin/uvicorn api.main:app --uds /run/secubox/roadmap.sock --workers 1
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/run/secubox
+
+[Install]
+WantedBy=multi-user.target

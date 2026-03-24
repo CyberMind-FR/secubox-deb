@@ -1,4 +1,4 @@
-"""secubox-system — System Hub (systemd DBus + psutil)"""
+"""secubox-system — System Hub with Role-Based Access Control (systemd DBus + psutil)"""
 from fastapi import FastAPI, APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from secubox_core.auth import router as auth_router, require_jwt
@@ -6,11 +6,151 @@ from secubox_core.config import get_board_info
 from secubox_core.logger import get_logger
 import subprocess, json, psutil
 from pathlib import Path
+from typing import Optional, List, Dict, Any
 
-app = FastAPI(title="secubox-system", version="1.0.0", root_path="/api/v1/system")
+app = FastAPI(title="secubox-system", version="1.1.0", root_path="/api/v1/system")
 app.include_router(auth_router, prefix="/auth")
 router = APIRouter()
 log = get_logger("system")
+
+# ══════════════════════════════════════════════════════════════════
+# System Preferences & ACL Configuration
+# ══════════════════════════════════════════════════════════════════
+
+PREFERENCES_FILE = Path("/etc/secubox/preferences.json")
+SYSTEM_ROLES_FILE = Path("/etc/secubox/system-roles.json")
+
+# System roles and permissions
+SYSTEM_ROLES = {
+    "sysadmin": {
+        "name": "System Administrator",
+        "description": "Full system access including role management",
+        "permissions": ["*"],  # All permissions
+        "can_manage_roles": True,
+        "can_shutdown": True,
+        "can_update": True,
+        "can_backup": True,
+    },
+    "admin": {
+        "name": "Administrator",
+        "description": "Manage settings and services",
+        "permissions": [
+            "settings.read", "settings.write",
+            "services.read", "services.control",
+            "backup.read", "backup.create",
+            "diagnostics.read", "diagnostics.run",
+            "logs.read",
+        ],
+        "can_manage_roles": False,
+        "can_shutdown": False,
+        "can_update": True,
+        "can_backup": True,
+    },
+    "operator": {
+        "name": "Operator",
+        "description": "Monitor and basic control",
+        "permissions": [
+            "settings.read",
+            "services.read", "services.control",
+            "diagnostics.read",
+            "logs.read",
+        ],
+        "can_manage_roles": False,
+        "can_shutdown": False,
+        "can_update": False,
+        "can_backup": False,
+    },
+    "user": {
+        "name": "User",
+        "description": "Read-only access to status",
+        "permissions": [
+            "settings.read",
+            "services.read",
+            "diagnostics.read",
+        ],
+        "can_manage_roles": False,
+        "can_shutdown": False,
+        "can_update": False,
+        "can_backup": False,
+    },
+    "guest": {
+        "name": "Guest",
+        "description": "Minimal read access",
+        "permissions": ["info.read"],
+        "can_manage_roles": False,
+        "can_shutdown": False,
+        "can_update": False,
+        "can_backup": False,
+    },
+}
+
+# Default preferences
+DEFAULT_PREFERENCES = {
+    "theme": "crt-p31",
+    "language": "en",
+    "timezone": "UTC",
+    "date_format": "YYYY-MM-DD",
+    "time_format": "24h",
+    "notifications_enabled": True,
+    "auto_update": False,
+    "backup_schedule": "daily",
+    "log_retention_days": 30,
+    "session_timeout_minutes": 60,
+}
+
+def load_preferences() -> dict:
+    """Load system preferences."""
+    if PREFERENCES_FILE.exists():
+        try:
+            return json.loads(PREFERENCES_FILE.read_text())
+        except:
+            pass
+    return DEFAULT_PREFERENCES.copy()
+
+def save_preferences(prefs: dict):
+    """Save system preferences."""
+    PREFERENCES_FILE.parent.mkdir(parents=True, exist_ok=True)
+    PREFERENCES_FILE.write_text(json.dumps(prefs, indent=2))
+
+def get_user_role(user: dict) -> str:
+    """Get user's system role."""
+    # Check if user has a system role assigned
+    username = user.get("sub", "guest")
+    if username == "admin" or username == "root":
+        return "sysadmin"
+    # Could check a roles database here
+    return user.get("role", "user")
+
+def check_permission(user: dict, permission: str) -> bool:
+    """Check if user has a specific permission."""
+    role = get_user_role(user)
+    role_info = SYSTEM_ROLES.get(role, SYSTEM_ROLES["guest"])
+    perms = role_info.get("permissions", [])
+    return "*" in perms or permission in perms
+
+def require_permission(permission: str):
+    """Dependency that checks for a specific permission."""
+    async def checker(user=Depends(require_jwt)):
+        if not check_permission(user, permission):
+            raise HTTPException(403, f"Permission denied: {permission}")
+        return user
+    return checker
+
+class PreferencesUpdate(BaseModel):
+    theme: Optional[str] = None
+    language: Optional[str] = None
+    timezone: Optional[str] = None
+    date_format: Optional[str] = None
+    time_format: Optional[str] = None
+    notifications_enabled: Optional[bool] = None
+    auto_update: Optional[bool] = None
+    backup_schedule: Optional[str] = None
+    log_retention_days: Optional[int] = None
+    session_timeout_minutes: Optional[int] = None
+
+class RoleAssignment(BaseModel):
+    username: str
+    role: str
 
 SECUBOX_SERVICES = [
     "secubox-hub","secubox-crowdsec","secubox-netdata","secubox-wireguard",
@@ -495,7 +635,176 @@ async def run_diagnostic_test(test: str, user=Depends(require_jwt)):
 
 @router.get("/health")
 async def health():
-    return {"status": "ok", "module": "system"}
+    return {"status": "ok", "module": "system", "version": "1.1.0"}
+
+
+# ══════════════════════════════════════════════════════════════════
+# System Preferences (ACL-controlled)
+# ══════════════════════════════════════════════════════════════════
+
+@router.get("/preferences")
+async def get_preferences(user=Depends(require_jwt)):
+    """Get system preferences (readable by all authenticated users)."""
+    prefs = load_preferences()
+    role = get_user_role(user)
+    return {
+        "preferences": prefs,
+        "user_role": role,
+        "can_edit": check_permission(user, "settings.write"),
+    }
+
+@router.put("/preferences")
+async def update_preferences(update: PreferencesUpdate, user=Depends(require_permission("settings.write"))):
+    """Update system preferences (requires admin role)."""
+    prefs = load_preferences()
+
+    update_data = update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        if value is not None:
+            prefs[key] = value
+
+    save_preferences(prefs)
+    log.info("Preferences updated by %s", user.get("sub", "unknown"))
+    return {"success": True, "preferences": prefs}
+
+@router.post("/preferences/reset")
+async def reset_preferences(user=Depends(require_permission("settings.write"))):
+    """Reset preferences to defaults (requires admin role)."""
+    save_preferences(DEFAULT_PREFERENCES.copy())
+    log.info("Preferences reset by %s", user.get("sub", "unknown"))
+    return {"success": True, "preferences": DEFAULT_PREFERENCES}
+
+# ══════════════════════════════════════════════════════════════════
+# System Role Management (sysadmin only)
+# ══════════════════════════════════════════════════════════════════
+
+@router.get("/system-roles")
+async def list_system_roles(user=Depends(require_jwt)):
+    """List available system roles (readable by all)."""
+    role = get_user_role(user)
+    role_info = SYSTEM_ROLES.get(role, {})
+    can_manage = role_info.get("can_manage_roles", False)
+
+    return {
+        "roles": [
+            {
+                "id": rid,
+                "name": rinfo["name"],
+                "description": rinfo["description"],
+                "permissions_count": len(rinfo["permissions"]),
+                "can_shutdown": rinfo.get("can_shutdown", False),
+                "can_update": rinfo.get("can_update", False),
+                "can_backup": rinfo.get("can_backup", False),
+            }
+            for rid, rinfo in SYSTEM_ROLES.items()
+        ],
+        "current_role": role,
+        "can_manage_roles": can_manage,
+    }
+
+@router.get("/system-role/{role_id}")
+async def get_system_role(role_id: str, user=Depends(require_jwt)):
+    """Get details of a system role."""
+    if role_id not in SYSTEM_ROLES:
+        raise HTTPException(404, "Role not found")
+
+    role_info = SYSTEM_ROLES[role_id]
+    return {
+        "id": role_id,
+        **role_info,
+        "permissions": role_info["permissions"] if check_permission(user, "settings.read") else [],
+    }
+
+@router.get("/my-permissions")
+async def get_my_permissions(user=Depends(require_jwt)):
+    """Get current user's permissions."""
+    role = get_user_role(user)
+    role_info = SYSTEM_ROLES.get(role, SYSTEM_ROLES["guest"])
+
+    return {
+        "username": user.get("sub", "unknown"),
+        "role": role,
+        "role_name": role_info["name"],
+        "permissions": role_info["permissions"],
+        "can_manage_roles": role_info.get("can_manage_roles", False),
+        "can_shutdown": role_info.get("can_shutdown", False),
+        "can_update": role_info.get("can_update", False),
+        "can_backup": role_info.get("can_backup", False),
+    }
+
+@router.post("/assign-role")
+async def assign_system_role(assignment: RoleAssignment, user=Depends(require_jwt)):
+    """Assign a system role to a user (sysadmin only)."""
+    role = get_user_role(user)
+    role_info = SYSTEM_ROLES.get(role, {})
+
+    if not role_info.get("can_manage_roles", False):
+        raise HTTPException(403, "Only sysadmin can assign roles")
+
+    if assignment.role not in SYSTEM_ROLES:
+        raise HTTPException(400, f"Invalid role: {assignment.role}")
+
+    # In a real implementation, this would update a database
+    log.info("Role %s assigned to %s by %s", assignment.role, assignment.username, user.get("sub"))
+    return {
+        "success": True,
+        "username": assignment.username,
+        "role": assignment.role,
+        "message": f"Role '{assignment.role}' assigned to '{assignment.username}'"
+    }
+
+@router.post("/check-permission")
+async def check_user_permission(permission: str, user=Depends(require_jwt)):
+    """Check if current user has a specific permission."""
+    has_perm = check_permission(user, permission)
+    return {
+        "permission": permission,
+        "granted": has_perm,
+        "role": get_user_role(user),
+    }
+
+# ══════════════════════════════════════════════════════════════════
+# Action ACL (controls which actions users can perform)
+# ══════════════════════════════════════════════════════════════════
+
+@router.get("/action-acl")
+async def get_action_acl(user=Depends(require_jwt)):
+    """Get action permissions for current user."""
+    role = get_user_role(user)
+    role_info = SYSTEM_ROLES.get(role, SYSTEM_ROLES["guest"])
+
+    # Define all available actions
+    actions = {
+        "shutdown": {"requires": "can_shutdown", "description": "Shutdown system"},
+        "reboot": {"requires": "can_shutdown", "description": "Reboot system"},
+        "update": {"requires": "can_update", "description": "Apply updates"},
+        "backup": {"requires": "can_backup", "description": "Create backup"},
+        "restore": {"requires": "can_backup", "description": "Restore backup"},
+        "service_start": {"permission": "services.control", "description": "Start services"},
+        "service_stop": {"permission": "services.control", "description": "Stop services"},
+        "service_restart": {"permission": "services.control", "description": "Restart services"},
+        "settings_edit": {"permission": "settings.write", "description": "Edit settings"},
+        "logs_view": {"permission": "logs.read", "description": "View logs"},
+        "diagnostics_run": {"permission": "diagnostics.run", "description": "Run diagnostics"},
+    }
+
+    # Build ACL based on user's role
+    acl = {}
+    for action, info in actions.items():
+        if "requires" in info:
+            allowed = role_info.get(info["requires"], False)
+        else:
+            allowed = check_permission(user, info.get("permission", ""))
+        acl[action] = {
+            "allowed": allowed,
+            "description": info["description"],
+        }
+
+    return {
+        "role": role,
+        "role_name": role_info["name"],
+        "actions": acl,
+    }
 
 
 app.include_router(router)

@@ -1,0 +1,28 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+override_dh_auto_install:
+	# Install API module
+	install -d $(CURDIR)/debian/secubox-zkp/usr/lib/secubox/zkp
+	cp -r api $(CURDIR)/debian/secubox-zkp/usr/lib/secubox/zkp/
+
+	# Install web frontend
+	install -d $(CURDIR)/debian/secubox-zkp/var/www/secubox/zkp
+	cp -r www/zkp/* $(CURDIR)/debian/secubox-zkp/var/www/secubox/zkp/
+
+	# Install nginx config
+	install -d $(CURDIR)/debian/secubox-zkp/etc/nginx/secubox.d
+	install -m 644 nginx/zkp.conf $(CURDIR)/debian/secubox-zkp/etc/nginx/secubox.d/
+
+	# Install menu entry
+	install -d $(CURDIR)/debian/secubox-zkp/etc/secubox/menu.d
+	install -m 644 menu.d/570-zkp.json $(CURDIR)/debian/secubox-zkp/etc/secubox/menu.d/
+
+	# Install systemd service
+	install -d $(CURDIR)/debian/secubox-zkp/usr/lib/systemd/system
+	install -m 644 debian/secubox-zkp.service $(CURDIR)/debian/secubox-zkp/usr/lib/systemd/system/
+
+override_dh_installsystemd:
+	dh_installsystemd --name=secubox-zkp

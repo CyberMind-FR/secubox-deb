@@ -1,0 +1,28 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+override_dh_auto_install:
+	# Create directories
+	install -d $(CURDIR)/debian/secubox-mesh/usr/lib/secubox/mesh/api
+	install -d $(CURDIR)/debian/secubox-mesh/usr/share/secubox/www/mesh
+	install -d $(CURDIR)/debian/secubox-mesh/etc/nginx/secubox.d
+	install -d $(CURDIR)/debian/secubox-mesh/usr/share/secubox/menu.d
+	install -d $(CURDIR)/debian/secubox-mesh/etc/secubox
+
+	# Install API
+	install -m 644 api/__init__.py $(CURDIR)/debian/secubox-mesh/usr/lib/secubox/mesh/api/
+	install -m 644 api/main.py $(CURDIR)/debian/secubox-mesh/usr/lib/secubox/mesh/api/
+
+	# Install web frontend
+	cp -r www/mesh/* $(CURDIR)/debian/secubox-mesh/usr/share/secubox/www/mesh/
+
+	# Install nginx config
+	install -m 644 nginx/mesh.conf $(CURDIR)/debian/secubox-mesh/etc/nginx/secubox.d/
+
+	# Install menu entry
+	install -m 644 menu.d/580-mesh.json $(CURDIR)/debian/secubox-mesh/usr/share/secubox/menu.d/
+
+override_dh_installsystemd:
+	dh_installsystemd --name=secubox-mesh

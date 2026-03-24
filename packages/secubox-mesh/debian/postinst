@@ -1,0 +1,56 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    configure)
+        # Ensure secubox user exists
+        if ! getent passwd secubox >/dev/null; then
+            useradd --system --no-create-home --shell /usr/sbin/nologin secubox
+        fi
+
+        # Create data directory
+        mkdir -p /var/lib/secubox/mesh
+        chown -R secubox:secubox /var/lib/secubox/mesh
+
+        # Create config directory
+        mkdir -p /etc/secubox
+        if [ ! -f /etc/secubox/mesh.toml ]; then
+            cat > /etc/secubox/mesh.toml << 'EOF'
+# SecuBox Mesh DNS Configuration
+
+[mesh]
+# Enable mesh DNS service
+enabled = true
+
+# Yggdrasil socket path
+yggdrasil_socket = "/var/run/yggdrasil.sock"
+
+# Local DNS port for mesh resolution
+dns_port = 5354
+
+# Sync interval in seconds
+sync_interval = 300
+
+[services]
+# Local services to announce
+# Format: name = "service_type"
+# Example: webserver = "http"
+EOF
+            chown secubox:secubox /etc/secubox/mesh.toml
+        fi
+
+        # Reload nginx if present
+        if [ -x /usr/sbin/nginx ]; then
+            nginx -t 2>/dev/null && systemctl reload nginx || true
+        fi
+
+        # Enable and start service
+        systemctl daemon-reload
+        systemctl enable secubox-mesh.service
+        systemctl start secubox-mesh.service || true
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

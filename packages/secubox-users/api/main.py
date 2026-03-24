@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-SecuBox Users API v1.1.0 — Unified Identity Management
+SecuBox Users API v1.2.0 — Unified Identity Management with RBAC
+Roles, Permissions, and Access Control Lists
 """
 import subprocess
 import json
@@ -9,7 +10,7 @@ from datetime import datetime
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr, field_validator
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 
 import sys
 sys.path.insert(0, '/usr/lib/python3/dist-packages')
@@ -24,8 +25,8 @@ except ImportError:
 
 app = FastAPI(
     title="SecuBox Users API",
-    description="Unified Identity Management",
-    version="1.1.0",
+    description="Unified Identity Management with RBAC",
+    version="1.2.0",
     docs_url="/docs",
     redoc_url=None
 )
@@ -33,7 +34,94 @@ app = FastAPI(
 config = get_config("users") if callable(get_config) else {}
 USERSCTL = "/usr/sbin/usersctl"
 USERS_FILE = os.environ.get("USERS_FILE", "/etc/secubox/users.json")
+ROLES_FILE = os.environ.get("ROLES_FILE", "/etc/secubox/roles.json")
 SERVICES = ["nextcloud", "gitea", "email", "matrix", "jellyfin", "peertube", "jabber"]
+
+# ══════════════════════════════════════════════════════════════════
+# Default Permissions & Roles
+# ══════════════════════════════════════════════════════════════════
+
+# Available permissions in the system
+PERMISSIONS = {
+    # User management
+    "users.view": "View user list",
+    "users.create": "Create new users",
+    "users.edit": "Edit existing users",
+    "users.delete": "Delete users",
+    "users.password": "Reset user passwords",
+    # Role management
+    "roles.view": "View roles",
+    "roles.create": "Create roles",
+    "roles.edit": "Edit roles",
+    "roles.delete": "Delete roles",
+    "roles.assign": "Assign roles to users",
+    # Group management
+    "groups.view": "View groups",
+    "groups.create": "Create groups",
+    "groups.edit": "Edit groups",
+    "groups.delete": "Delete groups",
+    "groups.members": "Manage group members",
+    # Service access
+    "services.view": "View services status",
+    "services.manage": "Manage service access",
+    "services.provision": "Provision users to services",
+    # System
+    "system.view": "View system status",
+    "system.config": "Modify system configuration",
+    "system.audit": "View audit logs",
+    "system.export": "Export data",
+    "system.import": "Import data",
+    # Module-specific
+    "dashboard.view": "Access dashboard",
+    "security.view": "View security modules",
+    "security.manage": "Manage security settings",
+    "network.view": "View network modules",
+    "network.manage": "Manage network settings",
+}
+
+# Default roles
+DEFAULT_ROLES = [
+    {
+        "id": "admin",
+        "name": "Administrator",
+        "description": "Full system access",
+        "permissions": list(PERMISSIONS.keys()),
+        "builtin": True,
+        "color": "#ff4466"
+    },
+    {
+        "id": "operator",
+        "name": "Operator",
+        "description": "Manage users and services",
+        "permissions": [
+            "users.view", "users.create", "users.edit", "users.password",
+            "groups.view", "groups.members",
+            "services.view", "services.manage",
+            "system.view", "dashboard.view",
+            "security.view", "network.view"
+        ],
+        "builtin": True,
+        "color": "#ffaa33"
+    },
+    {
+        "id": "user",
+        "name": "User",
+        "description": "Basic user access",
+        "permissions": [
+            "dashboard.view", "services.view", "system.view"
+        ],
+        "builtin": True,
+        "color": "#33ff66"
+    },
+    {
+        "id": "guest",
+        "name": "Guest",
+        "description": "Read-only access",
+        "permissions": ["dashboard.view"],
+        "builtin": True,
+        "color": "#888888"
+    }
+]
 
 # ══════════════════════════════════════════════════════════════════
 # Models
@@ -66,6 +154,26 @@ class GroupCreate(BaseModel):
     name: str
     description: Optional[str] = ""
     permissions: List[str] = []
+
+class RoleCreate(BaseModel):
+    id: str
+    name: str
+    description: Optional[str] = ""
+    permissions: List[str] = []
+    color: Optional[str] = "#33ff66"
+
+class RoleUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    permissions: Optional[List[str]] = None
+    color: Optional[str] = None
+
+class UserRoleAssign(BaseModel):
+    roles: List[str]
+
+class ACLEntry(BaseModel):
+    resource: str
+    permissions: List[str]
 
 # ══════════════════════════════════════════════════════════════════
 # Helpers
@@ -119,6 +227,44 @@ def get_service_ctl(name: str) -> Optional[str]:
     """Get service controller path."""
     ctl = f"/usr/sbin/{name}ctl"
     return ctl if os.path.exists(ctl) else None
+
+def load_roles() -> List[dict]:
+    """Load roles from JSON file or return defaults."""
+    if os.path.exists(ROLES_FILE):
+        try:
+            with open(ROLES_FILE) as f:
+                data = json.load(f)
+                return data.get("roles", DEFAULT_ROLES)
+        except:
+            pass
+    return DEFAULT_ROLES.copy()
+
+def save_roles(roles: List[dict]):
+    """Save roles to JSON file."""
+    os.makedirs(os.path.dirname(ROLES_FILE), exist_ok=True)
+    with open(ROLES_FILE, "w") as f:
+        json.dump({"roles": roles, "permissions": PERMISSIONS}, f, indent=2)
+
+def get_user_permissions(username: str) -> List[str]:
+    """Get all permissions for a user based on their roles."""
+    data = load_users()
+    roles = load_roles()
+    role_map = {r["id"]: r for r in roles}
+
+    for user in data.get("users", []):
+        if user.get("username") == username:
+            user_roles = user.get("roles", ["user"])
+            all_perms = set()
+            for role_id in user_roles:
+                if role_id in role_map:
+                    all_perms.update(role_map[role_id].get("permissions", []))
+            return list(all_perms)
+    return []
+
+def user_has_permission(username: str, permission: str) -> bool:
+    """Check if user has a specific permission."""
+    perms = get_user_permissions(username)
+    return permission in perms or "admin" in perms
 
 # ══════════════════════════════════════════════════════════════════
 # Public Endpoints
@@ -395,6 +541,226 @@ async def delete_group(name: str):
     raise HTTPException(status_code=404, detail="Group not found")
 
 # ══════════════════════════════════════════════════════════════════
+# Role & Permission Endpoints (RBAC)
+# ══════════════════════════════════════════════════════════════════
+
+@app.get("/permissions")
+async def list_permissions():
+    """List all available permissions in the system."""
+    return {
+        "permissions": [
+            {"id": k, "description": v}
+            for k, v in PERMISSIONS.items()
+        ],
+        "categories": {
+            "users": [p for p in PERMISSIONS if p.startswith("users.")],
+            "roles": [p for p in PERMISSIONS if p.startswith("roles.")],
+            "groups": [p for p in PERMISSIONS if p.startswith("groups.")],
+            "services": [p for p in PERMISSIONS if p.startswith("services.")],
+            "system": [p for p in PERMISSIONS if p.startswith("system.")],
+            "modules": [p for p in PERMISSIONS if p.startswith(("dashboard.", "security.", "network."))],
+        }
+    }
+
+@app.get("/roles")
+async def list_roles():
+    """List all roles."""
+    roles = load_roles()
+    return {"roles": roles, "total": len(roles)}
+
+@app.get("/role/{role_id}")
+async def get_role(role_id: str):
+    """Get role details."""
+    roles = load_roles()
+    for role in roles:
+        if role.get("id") == role_id:
+            return role
+    raise HTTPException(status_code=404, detail="Role not found")
+
+@app.post("/role", dependencies=[Depends(require_jwt)])
+async def create_role(role: RoleCreate):
+    """Create a new role."""
+    roles = load_roles()
+
+    # Check if role exists
+    for r in roles:
+        if r.get("id") == role.id:
+            raise HTTPException(status_code=400, detail="Role already exists")
+
+    # Validate permissions
+    invalid_perms = [p for p in role.permissions if p not in PERMISSIONS]
+    if invalid_perms:
+        raise HTTPException(status_code=400, detail=f"Invalid permissions: {invalid_perms}")
+
+    new_role = {
+        "id": role.id,
+        "name": role.name,
+        "description": role.description,
+        "permissions": role.permissions,
+        "color": role.color,
+        "builtin": False,
+        "created": datetime.now().isoformat()
+    }
+    roles.append(new_role)
+    save_roles(roles)
+
+    return {"success": True, "role": new_role}
+
+@app.put("/role/{role_id}", dependencies=[Depends(require_jwt)])
+async def update_role(role_id: str, update: RoleUpdate):
+    """Update a role."""
+    roles = load_roles()
+
+    for role in roles:
+        if role.get("id") == role_id:
+            if role.get("builtin"):
+                raise HTTPException(status_code=403, detail="Cannot modify built-in role")
+
+            if update.name is not None:
+                role["name"] = update.name
+            if update.description is not None:
+                role["description"] = update.description
+            if update.permissions is not None:
+                # Validate permissions
+                invalid_perms = [p for p in update.permissions if p not in PERMISSIONS]
+                if invalid_perms:
+                    raise HTTPException(status_code=400, detail=f"Invalid permissions: {invalid_perms}")
+                role["permissions"] = update.permissions
+            if update.color is not None:
+                role["color"] = update.color
+
+            role["updated"] = datetime.now().isoformat()
+            save_roles(roles)
+            return {"success": True, "role": role}
+
+    raise HTTPException(status_code=404, detail="Role not found")
+
+@app.delete("/role/{role_id}", dependencies=[Depends(require_jwt)])
+async def delete_role(role_id: str):
+    """Delete a role."""
+    roles = load_roles()
+
+    for i, role in enumerate(roles):
+        if role.get("id") == role_id:
+            if role.get("builtin"):
+                raise HTTPException(status_code=403, detail="Cannot delete built-in role")
+            roles.pop(i)
+            save_roles(roles)
+            return {"success": True}
+
+    raise HTTPException(status_code=404, detail="Role not found")
+
+@app.get("/user/{username}/roles", dependencies=[Depends(require_jwt)])
+async def get_user_roles(username: str):
+    """Get roles assigned to a user."""
+    data = load_users()
+    roles = load_roles()
+    role_map = {r["id"]: r for r in roles}
+
+    for user in data.get("users", []):
+        if user.get("username") == username:
+            user_roles = user.get("roles", ["user"])
+            return {
+                "username": username,
+                "roles": [role_map.get(r, {"id": r, "name": r}) for r in user_roles],
+                "role_ids": user_roles
+            }
+    raise HTTPException(status_code=404, detail="User not found")
+
+@app.put("/user/{username}/roles", dependencies=[Depends(require_jwt)])
+async def assign_user_roles(username: str, assignment: UserRoleAssign):
+    """Assign roles to a user."""
+    data = load_users()
+    roles = load_roles()
+    valid_role_ids = {r["id"] for r in roles}
+
+    # Validate role IDs
+    invalid_roles = [r for r in assignment.roles if r not in valid_role_ids]
+    if invalid_roles:
+        raise HTTPException(status_code=400, detail=f"Invalid roles: {invalid_roles}")
+
+    for user in data.get("users", []):
+        if user.get("username") == username:
+            user["roles"] = assignment.roles
+            user["roles_updated"] = datetime.now().isoformat()
+            save_users(data)
+            return {"success": True, "roles": assignment.roles}
+
+    raise HTTPException(status_code=404, detail="User not found")
+
+@app.get("/user/{username}/permissions", dependencies=[Depends(require_jwt)])
+async def get_user_permissions_endpoint(username: str):
+    """Get all effective permissions for a user."""
+    perms = get_user_permissions(username)
+    if not perms:
+        # Check if user exists
+        data = load_users()
+        if not any(u.get("username") == username for u in data.get("users", [])):
+            raise HTTPException(status_code=404, detail="User not found")
+
+    return {
+        "username": username,
+        "permissions": perms,
+        "permission_details": [
+            {"id": p, "description": PERMISSIONS.get(p, "Unknown")}
+            for p in perms
+        ]
+    }
+
+@app.post("/user/{username}/check-permission", dependencies=[Depends(require_jwt)])
+async def check_user_permission(username: str, permission: str):
+    """Check if a user has a specific permission."""
+    has_perm = user_has_permission(username, permission)
+    return {
+        "username": username,
+        "permission": permission,
+        "granted": has_perm
+    }
+
+# ══════════════════════════════════════════════════════════════════
+# ACL Endpoints
+# ══════════════════════════════════════════════════════════════════
+
+@app.get("/acl")
+async def get_acl():
+    """Get the full Access Control List matrix."""
+    data = load_users()
+    roles = load_roles()
+
+    acl_matrix = []
+    for user in data.get("users", []):
+        user_roles = user.get("roles", ["user"])
+        user_perms = get_user_permissions(user.get("username", ""))
+
+        acl_matrix.append({
+            "username": user.get("username"),
+            "email": user.get("email"),
+            "enabled": user.get("enabled", True),
+            "roles": user_roles,
+            "permissions_count": len(user_perms),
+            "is_admin": "admin" in user_roles or all(p in user_perms for p in PERMISSIONS.keys())
+        })
+
+    return {
+        "users": acl_matrix,
+        "roles": roles,
+        "total_permissions": len(PERMISSIONS)
+    }
+
+@app.post("/acl/validate", dependencies=[Depends(require_jwt)])
+async def validate_acl(entries: List[ACLEntry]):
+    """Validate a list of ACL entries."""
+    results = []
+    for entry in entries:
+        invalid_perms = [p for p in entry.permissions if p not in PERMISSIONS]
+        results.append({
+            "resource": entry.resource,
+            "valid": len(invalid_perms) == 0,
+            "invalid_permissions": invalid_perms
+        })
+    return {"results": results}
+
+# ══════════════════════════════════════════════════════════════════
 # Import/Export
 # ══════════════════════════════════════════════════════════════════
 
@@ -445,7 +811,7 @@ async def import_users(file: UploadFile = File(...)):
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "service": "secubox-users", "version": "1.1.0"}
+    return {"status": "ok", "service": "secubox-users", "version": "1.2.0"}
 
 if __name__ == "__main__":
     import uvicorn

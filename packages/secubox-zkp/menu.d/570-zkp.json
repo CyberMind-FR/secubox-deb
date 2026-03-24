@@ -1,0 +1,11 @@
+{
+    "id": "zkp",
+    "name": "ZKP",
+    "title": "Zero-Knowledge Proof",
+    "icon": "🔐",
+    "url": "/zkp/",
+    "category": "security",
+    "order": 570,
+    "description": "Zero-Knowledge Proof Hamiltonian management",
+    "requires": ["secubox-zkp"]
+}

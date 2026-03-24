@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox Roadmap - Migration OpenWRT → Debian</title>
+    <link rel="stylesheet" href="/shared/sidebar.css">
+    <style>
+        :root {
+            --green: #33ff33;
+            --green-dim: #1a8c1a;
+            --cyan: #00ffff;
+            --yellow: #ffff33;
+            --red: #ff3333;
+            --bg-dark: #0a0f0a;
+            --bg-card: #0d120d;
+            --bg-panel: #111611;
+            --text: #33ff33;
+            --text-dim: #1a8c1a;
+            --border: #1a3a1a;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'IBM Plex Mono', 'Courier New', monospace;
+            background: var(--bg-dark);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+        }
+
+        .main-content {
+            flex: 1;
+            padding: 1.5rem;
+            margin-left: 260px;
+            min-height: 100vh;
+        }
+
+        @media (max-width: 768px) {
+            .main-content { margin-left: 0; padding: 1rem; }
+        }
+
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .page-header h1 {
+            font-size: 1.5rem;
+            font-weight: 400;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .page-header .subtitle {
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            margin-top: 0.25rem;
+        }
+
+        .source-link {
+            color: var(--cyan);
+            text-decoration: none;
+            font-size: 0.85rem;
+        }
+
+        .source-link:hover { text-decoration: underline; }
+
+        /* Progress Section */
+        .progress-section {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .progress-bar-container {
+            margin-bottom: 1rem;
+        }
+
+        .progress-bar {
+            height: 20px;
+            background: var(--bg-dark);
+            border-radius: 10px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-bar .fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--green) 0%, var(--cyan) 100%);
+            border-radius: 10px;
+            transition: width 0.8s ease-out;
+            position: relative;
+        }
+
+        .progress-bar .fill::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+            animation: shimmer 2s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+
+        .progress-stats {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 0.75rem;
+            font-size: 0.9rem;
+        }
+
+        .progress-stats .percent {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--cyan);
+        }
+
+        /* Category Grid */
+        .category-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .category-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .category-card:hover {
+            border-color: var(--green);
+            transform: translateY(-2px);
+        }
+
+        .category-card .cat-icon {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .category-card .cat-name {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            margin-bottom: 0.25rem;
+        }
+
+        .category-card .cat-count {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: var(--cyan);
+        }
+
+        .category-card .cat-progress {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            margin-top: 0.25rem;
+        }
+
+        /* Module Lists */
+        .lists-section {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .module-list {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+
+        .module-list h3 {
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .module-list h3 .count {
+            background: var(--bg-dark);
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            margin-left: auto;
+        }
+
+        .module-list.complete h3 { color: var(--green); }
+        .module-list.in-progress h3 { color: var(--yellow); }
+        .module-list.planned h3 { color: var(--text-dim); }
+        .module-list.new-modules h3 { color: var(--cyan); }
+
+        .module-list ul {
+            list-style: none;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .module-list li {
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 0.85rem;
+        }
+
+        .module-list li:last-child { border-bottom: none; }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .complete .status-dot { background: var(--green); box-shadow: 0 0 6px var(--green); }
+        .in-progress .status-dot { background: var(--yellow); box-shadow: 0 0 6px var(--yellow); }
+        .planned .status-dot { background: var(--text-dim); }
+        .new-modules .status-dot { background: var(--cyan); box-shadow: 0 0 6px var(--cyan); }
+
+        .module-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .module-info .source {
+            color: var(--text-dim);
+            font-size: 0.75rem;
+        }
+
+        .module-info .target {
+            color: var(--text);
+        }
+
+        .installed-badge {
+            background: var(--green-dim);
+            color: var(--green);
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+            font-size: 0.65rem;
+            text-transform: uppercase;
+        }
+
+        .category-badge {
+            background: var(--bg-dark);
+            color: var(--text-dim);
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+            font-size: 0.65rem;
+        }
+
+        /* Loading state */
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-dim);
+        }
+
+        .loading::after {
+            content: '...';
+            animation: dots 1.5s infinite;
+        }
+
+        @keyframes dots {
+            0%, 20% { content: '.'; }
+            40% { content: '..'; }
+            60%, 100% { content: '...'; }
+        }
+    </style>
+</head>
+<body>
+    <div id="sidebar-container"></div>
+
+    <main class="main-content">
+        <header class="page-header">
+            <div>
+                <h1>Migration Roadmap: OpenWRT → Debian</h1>
+                <div class="subtitle">SecuBox package migration status tracking</div>
+            </div>
+            <a href="https://github.com/gkerma/secubox-openwrt" target="_blank" class="source-link">Source Repository →</a>
+        </header>
+
+        <section class="progress-section" id="progress-section">
+            <div class="progress-bar-container">
+                <div class="progress-bar">
+                    <div class="fill" id="progress-fill" style="width: 0%"></div>
+                </div>
+            </div>
+            <div class="progress-stats">
+                <span id="complete-count">0 complete</span>
+                <span class="percent" id="progress-percent">0%</span>
+                <span id="total-count">0 total</span>
+            </div>
+        </section>
+
+        <section class="category-grid" id="category-grid">
+            <div class="loading">Loading categories</div>
+        </section>
+
+        <section class="lists-section" id="lists-section">
+            <div class="loading">Loading modules</div>
+        </section>
+    </main>
+
+    <script src="/shared/sidebar.js"></script>
+    <script src="/shared/crt-engine.js"></script>
+    <script>
+        const API_BASE = '/api/v1/roadmap';
+
+        async function api(endpoint) {
+            try {
+                const res = await fetch(API_BASE + endpoint);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                return await res.json();
+            } catch (e) {
+                console.error('API Error:', e);
+                return null;
+            }
+        }
+
+        async function loadRoadmap() {
+            const data = await api('/roadmap');
+            if (!data) {
+                document.getElementById('lists-section').innerHTML = '<div class="loading" style="color: var(--red)">Failed to load roadmap data</div>';
+                return;
+            }
+
+            // Update progress bar
+            const pct = data.summary.progress_percent;
+            document.getElementById('progress-fill').style.width = pct + '%';
+            document.getElementById('progress-percent').textContent = pct + '%';
+            document.getElementById('complete-count').textContent = data.summary.complete + ' complete';
+            document.getElementById('total-count').textContent = data.summary.total + ' total';
+
+            // Render categories
+            const catGrid = document.getElementById('category-grid');
+            catGrid.innerHTML = Object.entries(data.by_category)
+                .sort((a, b) => b[1].total - a[1].total)
+                .map(([cat, info]) => `
+                    <div class="category-card" onclick="filterCategory('${cat}')">
+                        <div class="cat-icon">${info.info.icon}</div>
+                        <div class="cat-name">${info.info.name}</div>
+                        <div class="cat-count">${info.complete}/${info.total}</div>
+                        <div class="cat-progress">${Math.round(info.complete/info.total*100) || 0}% done</div>
+                    </div>
+                `).join('');
+
+            // Render module lists
+            const listsSection = document.getElementById('lists-section');
+            listsSection.innerHTML = `
+                <div class="module-list complete">
+                    <h3>Complete <span class="count">${data.complete.length}</span></h3>
+                    <ul>${renderModules(data.complete)}</ul>
+                </div>
+                <div class="module-list new-modules">
+                    <h3>New Debian Modules <span class="count">${data.new_modules.length}</span></h3>
+                    <ul>${renderModules(data.new_modules)}</ul>
+                </div>
+                <div class="module-list planned">
+                    <h3>Planned <span class="count">${data.planned.length}</span></h3>
+                    <ul>${renderModules(data.planned)}</ul>
+                </div>
+            `;
+        }
+
+        function renderModules(modules) {
+            if (!modules.length) return '<li style="color: var(--text-dim)">No modules</li>';
+            return modules.map(m => `
+                <li>
+                    <span class="status-dot"></span>
+                    <div class="module-info">
+                        <div class="source">${m.source}</div>
+                        <div class="target">${m.target}</div>
+                    </div>
+                    <span class="category-badge">${m.category_info?.icon || ''} ${m.category}</span>
+                    ${m.installed ? '<span class="installed-badge">Installed</span>' : ''}
+                </li>
+            `).join('');
+        }
+
+        function filterCategory(cat) {
+            console.log('Filter by category:', cat);
+            // Could implement filtering UI here
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadRoadmap();
+            setInterval(loadRoadmap, 60000); // Refresh every minute
+        });
+    </script>
+</body>
+</html>

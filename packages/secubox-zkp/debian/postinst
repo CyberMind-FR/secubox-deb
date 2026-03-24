@@ -1,0 +1,29 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+    configure)
+        # Create data directory
+        mkdir -p /var/lib/secubox/zkp/keys
+        chown -R www-data:www-data /var/lib/secubox/zkp
+
+        # Reload nginx if running
+        if systemctl is-active --quiet nginx; then
+            systemctl reload nginx || true
+        fi
+
+        # Enable and start the service
+        systemctl daemon-reload
+        systemctl enable --now secubox-zkp.service
+        ;;
+    abort-upgrade|abort-remove|abort-deconfigure)
+        ;;
+    *)
+        echo "postinst called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

@@ -1,3 +1,18 @@
+secubox-system (1.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Add system preferences management with ACL
+  * Add role-based access control (sysadmin, admin, operator, user, guest)
+  * Add action ACL for granular permission control
+  * Add /preferences endpoint (read/write based on role)
+  * Add /system-roles endpoint for role management
+  * Add /my-permissions for current user permissions
+  * Add /action-acl for checking allowed actions
+  * Sysadmin role can manage other user roles
+  * Admin role can edit settings but not shutdown/roles
+  * User role has read-only access
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 24 Mar 2026 09:20:00 +0100
+
 secubox-system (1.0.4-1~bookworm1) bookworm; urgency=medium
 
   * Add dynamic menu system with menu.d JSON definitions

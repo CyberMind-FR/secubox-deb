@@ -1,0 +1,26 @@
+[Unit]
+Description=SecuBox P2P Network Hub API
+After=network.target secubox-core.service
+Requires=secubox-core.service
+
+[Service]
+Type=simple
+User=secubox
+Group=secubox
+RuntimeDirectory=secubox
+ExecStart=/usr/bin/uvicorn api.main:app --uds /run/secubox/p2p.sock --workers 1
+WorkingDirectory=/usr/lib/secubox/p2p
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/run/secubox /var/log/secubox
+
+[Install]
+WantedBy=multi-user.target
