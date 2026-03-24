@@ -38,6 +38,13 @@ Total modules: **45** (was 41)
 - **VM RAM** — Increased to 4GB for 47 services (was 2GB, causing timeouts)
 - **vortex-firewall** — Fixed permission error creating /etc/nftables.d (try/except + postinst)
 
+### Frontend Fixes ✅
+- **Login redirect** — Fixed path `/login/` → `/portal/login.html` in 4 new modules
+- **JSON error handling** — Improved API function to handle non-JSON responses gracefully
+- **Sidebar CSS** — Added missing `sidebar.css` link to 4 new modules + roadmap
+- **CSS conflicts** — Removed local `.sidebar` overrides to allow shared CRT P31 theme
+- All 5 pages tested: device-intel, vortex-dns, vortex-firewall, meshname, roadmap
+
 ### Menu Fix ✅
 - Removed duplicate WireGuard menu entry (21-wireguard.json)
 
