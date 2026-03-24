@@ -1,0 +1,25 @@
+[Unit]
+Description=SecuBox Metrics Dashboard API
+After=network.target secubox-core.service
+Wants=secubox-core.service
+
+[Service]
+Type=simple
+User=secubox
+Group=secubox
+WorkingDirectory=/usr/lib/secubox/metrics
+RuntimeDirectory=secubox
+RuntimeDirectoryMode=0755
+RuntimeDirectoryPreserve=yes
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app \
+    --uds /run/secubox/metrics.sock \
+    --log-level warning
+Restart=on-failure
+RestartSec=5
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/run/secubox /tmp/secubox
+
+[Install]
+WantedBy=multi-user.target

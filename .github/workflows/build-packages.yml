@@ -75,7 +75,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq \
-            dpkg-dev debhelper devscripts \
+            build-essential dpkg-dev debhelper devscripts fakeroot \
             qemu-user-static binfmt-support
           if [[ "${{ matrix.arch }}" == "arm64" ]]; then
             sudo apt-get install -y -qq crossbuild-essential-arm64

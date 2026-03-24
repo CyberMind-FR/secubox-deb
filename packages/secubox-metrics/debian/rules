@@ -1,0 +1,15 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d $(CURDIR)/debian/secubox-metrics/usr/lib/secubox/metrics
+	install -d $(CURDIR)/debian/secubox-metrics/usr/share/secubox/www/metrics
+	install -d $(CURDIR)/debian/secubox-metrics/usr/share/secubox/menu.d
+
+	cp -r api/* $(CURDIR)/debian/secubox-metrics/usr/lib/secubox/metrics/
+	cp -r www/metrics/* $(CURDIR)/debian/secubox-metrics/usr/share/secubox/www/metrics/
+
+	if [ -d menu.d ]; then \
+		cp menu.d/*.json $(CURDIR)/debian/secubox-metrics/usr/share/secubox/menu.d/ 2>/dev/null || true; \
+	fi

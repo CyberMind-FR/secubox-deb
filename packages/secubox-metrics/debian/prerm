@@ -1,0 +1,13 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+    remove|upgrade|deconfigure)
+        systemctl stop secubox-metrics.service || true
+        systemctl disable secubox-metrics.service || true
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0
