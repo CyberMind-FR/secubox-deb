@@ -76,7 +76,8 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq \
             build-essential dpkg-dev debhelper devscripts fakeroot \
-            qemu-user-static binfmt-support
+            qemu-user-static binfmt-support \
+            dh-python python3-all python3-setuptools
           if [[ "${{ matrix.arch }}" == "arm64" ]]; then
             sudo apt-get install -y -qq crossbuild-essential-arm64
           fi
