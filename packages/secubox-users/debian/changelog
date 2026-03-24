@@ -1,3 +1,15 @@
+secubox-users (1.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * Add Role-Based Access Control (RBAC)
+  * Add permissions management system
+  * Add role creation, editing, and assignment
+  * Add user permission checking endpoints
+  * Add ACL matrix view
+  * Default roles: admin, operator, user, guest
+  * 35+ granular permissions across users, roles, groups, services, system
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 24 Mar 2026 09:15:00 +0100
+
 secubox-users (1.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Add usersctl CLI controller for unified user management

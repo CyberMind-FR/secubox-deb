@@ -1,0 +1,28 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+override_dh_auto_install:
+	# Install API module (as api/ subdirectory for uvicorn api.main:app)
+	install -d $(CURDIR)/debian/secubox-p2p/usr/lib/secubox/p2p/api
+	cp -r $(CURDIR)/api/* $(CURDIR)/debian/secubox-p2p/usr/lib/secubox/p2p/api/
+
+	# Install web interface
+	install -d $(CURDIR)/debian/secubox-p2p/var/www/secubox/p2p
+	cp -r $(CURDIR)/www/p2p/* $(CURDIR)/debian/secubox-p2p/var/www/secubox/p2p/
+
+	# Install nginx configuration
+	install -d $(CURDIR)/debian/secubox-p2p/etc/nginx/secubox.d
+	install -m 644 $(CURDIR)/nginx/p2p.conf $(CURDIR)/debian/secubox-p2p/etc/nginx/secubox.d/
+
+	# Install menu entry
+	install -d $(CURDIR)/debian/secubox-p2p/etc/secubox/menu.d
+	install -m 644 $(CURDIR)/menu.d/590-p2p.json $(CURDIR)/debian/secubox-p2p/etc/secubox/menu.d/
+
+	# Install systemd service
+	install -d $(CURDIR)/debian/secubox-p2p/usr/lib/systemd/system
+	install -m 644 $(CURDIR)/debian/secubox-p2p.service $(CURDIR)/debian/secubox-p2p/usr/lib/systemd/system/
+
+	# Create runtime directory
+	install -d $(CURDIR)/debian/secubox-p2p/run/secubox

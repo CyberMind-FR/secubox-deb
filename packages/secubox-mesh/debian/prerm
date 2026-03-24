@@ -1,0 +1,14 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    remove|upgrade|deconfigure)
+        # Stop service
+        systemctl stop secubox-mesh.service || true
+        systemctl disable secubox-mesh.service || true
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

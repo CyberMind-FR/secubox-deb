@@ -1,0 +1,27 @@
+[Unit]
+Description=SecuBox ZKP API Service
+After=network.target
+Requires=secubox-core.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/usr/lib/secubox/zkp
+RuntimeDirectory=secubox
+RuntimeDirectoryMode=0755
+ExecStart=/usr/bin/uvicorn api.main:app --uds /run/secubox/zkp.sock
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/run/secubox /var/lib/secubox/zkp
+
+[Install]
+WantedBy=multi-user.target

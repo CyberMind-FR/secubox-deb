@@ -1,0 +1,12 @@
+Source: secubox-zkp
+Section: admin
+Priority: optional
+Maintainer: CyberMind <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+
+Package: secubox-zkp
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3, python3-fastapi, python3-uvicorn
+Description: SecuBox ZKP - Zero-Knowledge Proof Dashboard
+ Zero-Knowledge Proof Hamiltonian management for SecuBox.

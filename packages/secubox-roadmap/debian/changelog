@@ -1,0 +1,8 @@
+secubox-roadmap (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release
+  * Migration roadmap dashboard: OpenWRT → Debian
+  * Category-based module tracking
+  * CRT P31 Phosphor Design System theme
+
+ -- CyberMind <devel@cybermind.fr>  Mon, 24 Mar 2026 09:00:00 +0000

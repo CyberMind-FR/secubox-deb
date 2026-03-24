@@ -1,0 +1,10 @@
+{
+    "id": "p2p",
+    "name": "P2P Hub",
+    "icon": "🔗",
+    "path": "/p2p/",
+    "category": "network",
+    "order": 590,
+    "description": "Peer-to-Peer Network Hub",
+    "requires": ["secubox-p2p"]
+}

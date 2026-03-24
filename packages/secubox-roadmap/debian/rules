@@ -1,0 +1,29 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+override_dh_auto_install:
+	# Install API module
+	install -d $(CURDIR)/debian/secubox-roadmap/usr/lib/secubox/roadmap/api
+	install -m 644 api/__init__.py $(CURDIR)/debian/secubox-roadmap/usr/lib/secubox/roadmap/api/
+	install -m 644 api/main.py $(CURDIR)/debian/secubox-roadmap/usr/lib/secubox/roadmap/api/
+
+	# Install web frontend
+	install -d $(CURDIR)/debian/secubox-roadmap/usr/share/secubox/www/roadmap
+	cp -r www/roadmap/* $(CURDIR)/debian/secubox-roadmap/usr/share/secubox/www/roadmap/
+
+	# Install nginx config
+	install -d $(CURDIR)/debian/secubox-roadmap/etc/nginx/secubox.d
+	install -m 644 nginx/roadmap.conf $(CURDIR)/debian/secubox-roadmap/etc/nginx/secubox.d/
+
+	# Install menu entry
+	install -d $(CURDIR)/debian/secubox-roadmap/usr/share/secubox/menu.d
+	install -m 644 menu.d/900-roadmap.json $(CURDIR)/debian/secubox-roadmap/usr/share/secubox/menu.d/
+
+	# Install systemd service
+	install -d $(CURDIR)/debian/secubox-roadmap/usr/lib/systemd/system
+	install -m 644 debian/secubox-roadmap.service $(CURDIR)/debian/secubox-roadmap/usr/lib/systemd/system/
+
+override_dh_installsystemd:
+	dh_installsystemd --name=secubox-roadmap

@@ -1,0 +1,10 @@
+secubox-p2p (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release
+  * P2P network management dashboard
+  * Peer discovery and management
+  * Service registration and discovery
+  * Mesh network visualization
+  * Threat intelligence integration
+
+ -- CyberMind <devel@cybermind.fr>  Mon, 24 Mar 2026 12:00:00 +0100
