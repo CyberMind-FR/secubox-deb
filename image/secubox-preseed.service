@@ -1,0 +1,16 @@
+[Unit]
+Description=SecuBox Preseed Configuration Apply
+After=network-pre.target
+Before=network.target
+ConditionPathExists=/usr/share/secubox/preseed.tar.gz
+ConditionPathExists=!/var/lib/secubox/.preseed-applied
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/secubox/preseed-apply.sh
+RemainAfterExit=yes
+StandardOutput=journal+console
+StandardError=journal+console
+
+[Install]
+WantedBy=multi-user.target

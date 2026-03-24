@@ -19,6 +19,7 @@ USE_LOCAL_CACHE=0
 SLIPSTREAM_DEBS=1              # Enabled by default - include local .deb packages
 PERSISTENCE_SIZE="2G"
 INCLUDE_PERSISTENCE=1
+PRESEED_FILE=""
 
 RED='\033[0;31m'; CYAN='\033[0;36m'; GOLD='\033[0;33m'
 GREEN='\033[0;32m'; NC='\033[0m'; BOLD='\033[1m'
@@ -40,6 +41,7 @@ Usage: sudo bash build-live-usb.sh [OPTIONS]
   --slipstream       Include .deb from output/debs/ in the image (default: enabled)
   --no-slipstream    Don't include local .deb packages
   --no-persistence   Don't include persistent storage partition
+  --preseed FILE     Include preseed config archive (from export-preseed.sh)
   --help             Show this help
 
 This script builds a live USB image for amd64 systems with:
@@ -69,6 +71,7 @@ while [[ $# -gt 0 ]]; do
     --slipstream)     SLIPSTREAM_DEBS=1;    shift   ;;
     --no-slipstream)  SLIPSTREAM_DEBS=0;    shift   ;;
     --no-persistence) INCLUDE_PERSISTENCE=0; shift   ;;
+    --preseed)        PRESEED_FILE="$2";      shift 2 ;;
     --help|-h)        usage ;;
     *) err "Unknown argument: $1" ;;
   esac
@@ -364,6 +367,24 @@ WantedBy=multi-user.target
 EOF
 
 chroot "${ROOTFS}" systemctl enable secubox-live-init.service
+
+# ── Install preseed system ──────────────────────────────────────
+# Install preseed-apply script
+mkdir -p "${ROOTFS}/usr/lib/secubox"
+cp "${SCRIPT_DIR}/preseed-apply.sh" "${ROOTFS}/usr/lib/secubox/"
+chmod +x "${ROOTFS}/usr/lib/secubox/preseed-apply.sh"
+
+# Install preseed systemd service
+cp "${SCRIPT_DIR}/secubox-preseed.service" "${ROOTFS}/etc/systemd/system/"
+chroot "${ROOTFS}" systemctl enable secubox-preseed.service 2>/dev/null || true
+
+# If preseed file provided, include it
+if [ -n "$PRESEED_FILE" ] && [ -f "$PRESEED_FILE" ]; then
+    log "Installing preseed configuration from: ${PRESEED_FILE}"
+    mkdir -p "${ROOTFS}/usr/share/secubox"
+    cp "$PRESEED_FILE" "${ROOTFS}/usr/share/secubox/preseed.tar.gz"
+    ok "Preseed configuration included"
+fi
 
 # Welcome message
 cat > "${ROOTFS}/etc/motd" <<'EOF'
