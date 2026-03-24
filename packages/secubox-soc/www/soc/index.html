@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - Security Operations Center</title>
+    <link rel="stylesheet" href="/shared/crt-system.css">
+    <link rel="stylesheet" href="/shared/sidebar.css">
+    <style>
+        :root {
+            --p31-peak: #33ff66; --p31-hot: #66ffaa; --p31-mid: #22cc44; --p31-dim: #0f8822; --p31-ghost: #052210;
+            --p31-decay: #ffb347; --p31-decay-dim: #cc7722;
+            --tube-black: #050803; --tube-deep: #080d05; --tube-bezel: #0d1208;
+            --bg-dark: var(--tube-black); --bg-card: var(--tube-deep); --border: var(--p31-ghost);
+            --text: var(--p31-mid); --text-dim: var(--p31-dim);
+            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Courier Prime', monospace; background: var(--tube-black); color: var(--p31-mid); display: flex; min-height: 100vh; }
+        .main { flex: 1; margin-left: 220px; padding: 1rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .header h1 { font-size: 1.3rem; color: var(--p31-peak); text-shadow: var(--bloom-text); }
+        .btn { padding: 0.4rem 0.8rem; border-radius: 4px; border: 1px solid var(--p31-dim); background: var(--tube-deep); color: var(--p31-mid); cursor: pointer; font-family: inherit; font-size: 0.8rem; }
+        .btn:hover { color: var(--p31-peak); border-color: var(--p31-mid); }
+        .btn.primary { border-color: var(--p31-mid); color: var(--p31-peak); }
+        .btn.danger { border-color: var(--p31-decay); color: var(--p31-decay); }
+
+        /* Grid Layout */
+        .soc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+        .soc-grid.full { grid-template-columns: 1fr; }
+        @media (max-width: 1200px) { .soc-grid { grid-template-columns: 1fr; } }
+
+        .card { background: var(--tube-deep); border: 1px solid var(--p31-ghost); border-radius: 6px; padding: 1rem; }
+        .card h2 { font-size: 0.9rem; color: var(--p31-peak); text-shadow: var(--bloom-soft); margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center; }
+        .card h2 .count { font-size: 0.75rem; background: var(--tube-black); padding: 0.2rem 0.5rem; border-radius: 4px; }
+
+        /* World Clock */
+        .clock-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 0.5rem; }
+        .clock-item { background: var(--tube-black); border: 1px solid var(--p31-ghost); border-radius: 4px; padding: 0.5rem; text-align: center; }
+        .clock-item .city { font-size: 0.65rem; color: var(--p31-dim); text-transform: uppercase; }
+        .clock-item .time { font-size: 1.1rem; color: var(--p31-peak); text-shadow: var(--bloom-soft); font-weight: bold; }
+        .clock-item .date { font-size: 0.6rem; color: var(--p31-dim); }
+        .clock-item.utc { border-color: var(--p31-mid); }
+        .clock-item.utc .time { color: var(--p31-hot); }
+
+        /* World Map */
+        .world-map { width: 100%; height: 250px; background: var(--tube-black); border: 1px solid var(--p31-ghost); border-radius: 4px; position: relative; overflow: hidden; }
+        .world-map svg { width: 100%; height: 100%; }
+        .world-map .threat-dot { fill: var(--p31-decay); animation: pulse 2s infinite; }
+        .world-map .threat-dot.high { fill: #ff4466; }
+        @keyframes pulse { 0%, 100% { opacity: 1; r: 4; } 50% { opacity: 0.5; r: 8; } }
+        .map-legend { display: flex; gap: 1rem; margin-top: 0.5rem; font-size: 0.7rem; }
+        .map-legend span { display: flex; align-items: center; gap: 0.3rem; }
+        .map-legend .dot { width: 8px; height: 8px; border-radius: 50%; }
+        .map-legend .dot.low { background: var(--p31-decay); }
+        .map-legend .dot.high { background: #ff4466; }
+
+        /* Stats Row */
+        .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
+        .stat-card { background: var(--tube-deep); border: 1px solid var(--p31-ghost); border-radius: 6px; padding: 0.75rem; text-align: center; }
+        .stat-card .value { font-size: 1.5rem; font-weight: bold; color: var(--p31-peak); text-shadow: var(--bloom-soft); }
+        .stat-card .label { font-size: 0.65rem; color: var(--p31-dim); text-transform: uppercase; }
+        .stat-card.critical .value { color: var(--p31-decay); text-shadow: 0 0 6px var(--p31-decay); }
+        .stat-card.warning .value { color: var(--p31-decay-dim); }
+
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; font-size: 0.75rem; }
+        th, td { padding: 0.5rem; text-align: left; border-bottom: 1px solid var(--p31-ghost); }
+        th { color: var(--p31-dim); font-weight: normal; text-transform: uppercase; font-size: 0.65rem; }
+        tr:hover { background: rgba(51,255,102,0.03); }
+        .badge { padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.65rem; }
+        .badge.critical { background: rgba(255,68,102,0.2); color: #ff4466; }
+        .badge.high { background: rgba(255,179,71,0.2); color: var(--p31-decay); }
+        .badge.medium { background: rgba(51,255,102,0.15); color: var(--p31-mid); }
+        .badge.low { background: rgba(15,136,34,0.2); color: var(--p31-dim); }
+        .badge.open { background: rgba(51,255,102,0.2); color: var(--p31-peak); }
+        .badge.investigating { background: rgba(255,179,71,0.2); color: var(--p31-decay); }
+        .badge.resolved { background: rgba(15,136,34,0.2); color: var(--p31-dim); }
+        .badge.connected { background: rgba(51,255,102,0.2); color: var(--p31-peak); }
+        .badge.pending { background: rgba(255,179,71,0.15); color: var(--p31-decay-dim); }
+
+        /* Tabs */
+        .tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; border-bottom: 1px solid var(--p31-ghost); padding-bottom: 0.5rem; }
+        .tab { padding: 0.4rem 0.8rem; border: 1px solid transparent; border-radius: 4px 4px 0 0; cursor: pointer; font-size: 0.75rem; color: var(--p31-dim); background: transparent; }
+        .tab:hover { color: var(--p31-mid); }
+        .tab.active { color: var(--p31-peak); border-color: var(--p31-ghost); border-bottom-color: var(--tube-deep); background: var(--tube-deep); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Forms */
+        .form-row { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
+        .form-row input, .form-row select { flex: 1; padding: 0.4rem; border: 1px solid var(--p31-ghost); background: var(--tube-black); color: var(--p31-mid); border-radius: 4px; font-family: inherit; font-size: 0.75rem; }
+        .form-row input:focus, .form-row select:focus { outline: none; border-color: var(--p31-mid); }
+
+        /* Alerts Feed */
+        .alerts-feed { max-height: 200px; overflow-y: auto; }
+        .alert-item { display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem; border-bottom: 1px solid var(--p31-ghost); font-size: 0.7rem; }
+        .alert-item .time { color: var(--p31-dim); min-width: 60px; }
+        .alert-item .source { color: var(--p31-mid); min-width: 80px; }
+        .alert-item .message { flex: 1; color: var(--p31-mid); }
+        .alert-item.critical { background: rgba(255,68,102,0.05); }
+        .alert-item.critical .message { color: #ff4466; }
+
+        /* Actions */
+        .actions { display: flex; gap: 0.3rem; }
+        .btn-sm { padding: 0.2rem 0.4rem; font-size: 0.65rem; }
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+
+    <main class="main">
+        <header class="header">
+            <h1>🛡️ Security Operations Center</h1>
+            <div style="display:flex;gap:0.5rem;">
+                <span id="utcClock" style="color:var(--p31-peak);font-size:0.9rem;"></span>
+                <button class="btn" onclick="refresh()">↻ Refresh</button>
+            </div>
+        </header>
+
+        <!-- Stats Row -->
+        <div class="stats-row">
+            <div class="stat-card"><div class="value" id="statTickets">-</div><div class="label">Open Tickets</div></div>
+            <div class="stat-card critical"><div class="value" id="statCritical">-</div><div class="label">Critical</div></div>
+            <div class="stat-card"><div class="value" id="statAlerts">-</div><div class="label">Unack Alerts</div></div>
+            <div class="stat-card"><div class="value" id="statIntel">-</div><div class="label">Intel IOCs</div></div>
+            <div class="stat-card"><div class="value" id="statPeers">-</div><div class="label">P2P Peers</div></div>
+        </div>
+
+        <!-- World Clock & Map -->
+        <div class="soc-grid">
+            <div class="card">
+                <h2>🕐 World Clock</h2>
+                <div class="clock-grid" id="clockGrid"></div>
+            </div>
+            <div class="card">
+                <h2>🌍 Threat Map <span class="count" id="threatCount">0 threats</span></h2>
+                <div class="world-map" id="worldMap">
+                    <svg viewBox="0 0 800 400" id="mapSvg">
+                        <!-- Simplified world map paths -->
+                        <path d="M150,120 L200,100 L250,110 L280,130 L260,160 L220,170 L180,150 Z" fill="var(--p31-ghost)" stroke="var(--p31-dim)" stroke-width="0.5"/>
+                        <path d="M300,80 L380,70 L420,90 L450,120 L440,160 L400,180 L350,170 L320,140 Z" fill="var(--p31-ghost)" stroke="var(--p31-dim)" stroke-width="0.5"/>
+                        <path d="M460,100 L550,80 L620,100 L680,130 L700,180 L650,220 L580,210 L520,180 L480,140 Z" fill="var(--p31-ghost)" stroke="var(--p31-dim)" stroke-width="0.5"/>
+                        <path d="M200,200 L280,190 L320,220 L300,280 L240,300 L200,260 Z" fill="var(--p31-ghost)" stroke="var(--p31-dim)" stroke-width="0.5"/>
+                        <path d="M340,220 L400,200 L440,230 L420,280 L370,290 L340,260 Z" fill="var(--p31-ghost)" stroke="var(--p31-dim)" stroke-width="0.5"/>
+                        <path d="M620,250 L680,240 L720,280 L700,320 L650,330 L620,300 Z" fill="var(--p31-ghost)" stroke="var(--p31-dim)" stroke-width="0.5"/>
+                        <g id="threatDots"></g>
+                    </svg>
+                </div>
+                <div class="map-legend">
+                    <span><span class="dot low"></span> Low/Med</span>
+                    <span><span class="dot high"></span> High/Critical</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabs Section -->
+        <div class="card">
+            <div class="tabs">
+                <button class="tab active" onclick="showTab('tickets')">📋 Tickets</button>
+                <button class="tab" onclick="showTab('intel')">🔍 Threat Intel</button>
+                <button class="tab" onclick="showTab('peers')">🔗 P2P Peers</button>
+                <button class="tab" onclick="showTab('alerts')">⚠️ Alerts</button>
+            </div>
+
+            <!-- Tickets Tab -->
+            <div class="tab-content active" id="tab-tickets">
+                <div class="form-row">
+                    <input type="text" id="ticketTitle" placeholder="Ticket title...">
+                    <select id="ticketSeverity">
+                        <option value="low">Low</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="high">High</option>
+                        <option value="critical">Critical</option>
+                    </select>
+                    <button class="btn primary" onclick="createTicket()">+ Add</button>
+                </div>
+                <table>
+                    <thead><tr><th>ID</th><th>Title</th><th>Severity</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
+                    <tbody id="ticketsTable"></tbody>
+                </table>
+            </div>
+
+            <!-- Intel Tab -->
+            <div class="tab-content" id="tab-intel">
+                <div class="form-row">
+                    <input type="text" id="intelIndicator" placeholder="IP, domain, or hash...">
+                    <select id="intelType">
+                        <option value="ip">IP</option>
+                        <option value="domain">Domain</option>
+                        <option value="hash">Hash</option>
+                        <option value="url">URL</option>
+                    </select>
+                    <select id="intelThreat">
+                        <option value="malware">Malware</option>
+                        <option value="phishing">Phishing</option>
+                        <option value="c2">C2</option>
+                        <option value="scanner">Scanner</option>
+                    </select>
+                    <button class="btn primary" onclick="addIntel()">+ Add</button>
+                </div>
+                <table>
+                    <thead><tr><th>Indicator</th><th>Type</th><th>Threat</th><th>Confidence</th><th>Added</th><th>Actions</th></tr></thead>
+                    <tbody id="intelTable"></tbody>
+                </table>
+            </div>
+
+            <!-- Peers Tab -->
+            <div class="tab-content" id="tab-peers">
+                <div class="form-row">
+                    <input type="text" id="peerName" placeholder="Peer name...">
+                    <input type="text" id="peerEndpoint" placeholder="IP:port or hostname...">
+                    <button class="btn primary" onclick="addPeer()">+ Add Peer</button>
+                </div>
+                <table>
+                    <thead><tr><th>Name</th><th>Endpoint</th><th>Status</th><th>Last Seen</th><th>Actions</th></tr></thead>
+                    <tbody id="peersTable"></tbody>
+                </table>
+            </div>
+
+            <!-- Alerts Tab -->
+            <div class="tab-content" id="tab-alerts">
+                <div class="alerts-feed" id="alertsFeed"></div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const API = '/api/v1/soc';
+        const token = () => localStorage.getItem('sbx_token');
+        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+
+        async function api(path, opts = {}) {
+            try {
+                const res = await fetch(API + path, { ...opts, headers: headers() });
+                if (res.status === 401) { window.location = '/portal/login.html'; return {}; }
+                if (!res.ok) return {};
+                const text = await res.text();
+                return text ? JSON.parse(text) : {};
+            } catch { return {}; }
+        }
+
+        // Tabs
+        function showTab(name) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelector(`[onclick="showTab('${name}')"]`).classList.add('active');
+            document.getElementById('tab-' + name).classList.add('active');
+        }
+
+        // Clock
+        async function loadClock() {
+            const d = await api('/clock');
+            if (!d.clocks) return;
+            document.getElementById('utcClock').textContent = d.clocks[0]?.time || '';
+            const grid = document.getElementById('clockGrid');
+            grid.innerHTML = d.clocks.map(c => `
+                <div class="clock-item ${c.name === 'UTC' ? 'utc' : ''}">
+                    <div class="city">${c.city}</div>
+                    <div class="time">${c.time}</div>
+                    <div class="date">${c.day} ${c.offset}</div>
+                </div>
+            `).join('');
+        }
+
+        // Map
+        const regionCoords = {
+            US: [180, 140], RU: [580, 100], CN: [620, 150], DE: [400, 110], FR: [380, 130],
+            GB: [370, 100], BR: [260, 260], IN: [560, 180], JP: [700, 140], AU: [680, 300],
+            KR: [680, 150], IR: [520, 160], UA: [460, 120], NL: [390, 105]
+        };
+
+        async function loadMap() {
+            const d = await api('/map/threats');
+            if (!d.regions) return;
+            document.getElementById('threatCount').textContent = `${d.total_threats} threats`;
+            const dots = document.getElementById('threatDots');
+            dots.innerHTML = '';
+            for (const [region, data] of Object.entries(d.regions)) {
+                const coords = regionCoords[region];
+                if (!coords) continue;
+                const isHigh = data.count > 5;
+                dots.innerHTML += `<circle class="threat-dot ${isHigh ? 'high' : ''}" cx="${coords[0]}" cy="${coords[1]}" r="4"><title>${region}: ${data.count} threats</title></circle>`;
+            }
+        }
+
+        // Stats
+        async function loadStats() {
+            const d = await api('/stats');
+            if (!d.tickets) return;
+            document.getElementById('statTickets').textContent = d.tickets.open + d.tickets.investigating;
+            document.getElementById('statCritical').textContent = d.tickets.critical + d.alerts.critical;
+            document.getElementById('statAlerts').textContent = d.alerts.unacknowledged;
+            document.getElementById('statIntel').textContent = d.intel.total;
+            document.getElementById('statPeers').textContent = `${d.peers.connected}/${d.peers.total}`;
+        }
+
+        // Tickets
+        async function loadTickets() {
+            const d = await api('/tickets');
+            const tbody = document.getElementById('ticketsTable');
+            tbody.innerHTML = (d.tickets || []).slice(0, 20).map(t => `
+                <tr>
+                    <td><code>${t.id.slice(0,8)}</code></td>
+                    <td>${t.title}</td>
+                    <td><span class="badge ${t.severity}">${t.severity}</span></td>
+                    <td><span class="badge ${t.status}">${t.status}</span></td>
+                    <td>${new Date(t.created_at).toLocaleDateString()}</td>
+                    <td class="actions">
+                        <button class="btn btn-sm" onclick="updateTicketStatus('${t.id}', 'investigating')">🔍</button>
+                        <button class="btn btn-sm" onclick="updateTicketStatus('${t.id}', 'resolved')">✓</button>
+                        <button class="btn btn-sm danger" onclick="deleteTicket('${t.id}')">✕</button>
+                    </td>
+                </tr>
+            `).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--p31-dim)">No tickets</td></tr>';
+        }
+
+        async function createTicket() {
+            const title = document.getElementById('ticketTitle').value;
+            const severity = document.getElementById('ticketSeverity').value;
+            if (!title) return;
+            await api('/tickets', { method: 'POST', body: JSON.stringify({ title, description: '', severity, status: 'open' }) });
+            document.getElementById('ticketTitle').value = '';
+            loadTickets(); loadStats();
+        }
+
+        async function updateTicketStatus(id, status) {
+            const d = await api('/tickets');
+            const ticket = d.tickets?.find(t => t.id === id);
+            if (ticket) {
+                await api('/tickets/' + id, { method: 'PUT', body: JSON.stringify({ ...ticket, status }) });
+                loadTickets(); loadStats();
+            }
+        }
+
+        async function deleteTicket(id) {
+            await api('/tickets/' + id, { method: 'DELETE' });
+            loadTickets(); loadStats();
+        }
+
+        // Intel
+        async function loadIntel() {
+            const d = await api('/intel?limit=20');
+            const tbody = document.getElementById('intelTable');
+            tbody.innerHTML = (d.intel || []).map(i => `
+                <tr>
+                    <td><code>${i.indicator.slice(0,30)}${i.indicator.length > 30 ? '...' : ''}</code></td>
+                    <td><span class="badge">${i.type}</span></td>
+                    <td><span class="badge ${i.threat_type === 'malware' ? 'critical' : 'medium'}">${i.threat_type}</span></td>
+                    <td>${i.confidence}%</td>
+                    <td>${new Date(i.added_at).toLocaleDateString()}</td>
+                    <td><button class="btn btn-sm danger" onclick="deleteIntel('${i.id}')">✕</button></td>
+                </tr>
+            `).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--p31-dim)">No intel</td></tr>';
+        }
+
+        async function addIntel() {
+            const indicator = document.getElementById('intelIndicator').value;
+            const type = document.getElementById('intelType').value;
+            const threat_type = document.getElementById('intelThreat').value;
+            if (!indicator) return;
+            await api('/intel', { method: 'POST', body: JSON.stringify({ indicator, type, threat_type, source: 'manual', confidence: 80 }) });
+            document.getElementById('intelIndicator').value = '';
+            loadIntel(); loadStats(); loadMap();
+        }
+
+        async function deleteIntel(id) {
+            await api('/intel/' + id, { method: 'DELETE' });
+            loadIntel(); loadStats(); loadMap();
+        }
+
+        // Peers
+        async function loadPeers() {
+            const d = await api('/peers');
+            const tbody = document.getElementById('peersTable');
+            tbody.innerHTML = (d.peers || []).map(p => `
+                <tr>
+                    <td>${p.name}</td>
+                    <td><code>${p.endpoint}</code></td>
+                    <td><span class="badge ${p.status}">${p.status}</span></td>
+                    <td>${p.last_seen ? new Date(p.last_seen).toLocaleString() : '-'}</td>
+                    <td class="actions">
+                        <button class="btn btn-sm primary" onclick="syncPeer('${p.id}')">Sync</button>
+                        <button class="btn btn-sm danger" onclick="deletePeer('${p.id}')">✕</button>
+                    </td>
+                </tr>
+            `).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--p31-dim)">No peers</td></tr>';
+        }
+
+        async function addPeer() {
+            const name = document.getElementById('peerName').value;
+            const endpoint = document.getElementById('peerEndpoint').value;
+            if (!name || !endpoint) return;
+            await api('/peers', { method: 'POST', body: JSON.stringify({ name, endpoint }) });
+            document.getElementById('peerName').value = '';
+            document.getElementById('peerEndpoint').value = '';
+            loadPeers(); loadStats();
+        }
+
+        async function syncPeer(id) {
+            await api('/peers/' + id + '/sync', { method: 'POST' });
+            loadPeers();
+        }
+
+        async function deletePeer(id) {
+            await api('/peers/' + id, { method: 'DELETE' });
+            loadPeers(); loadStats();
+        }
+
+        // Alerts
+        async function loadAlerts() {
+            const d = await api('/alerts?limit=30');
+            const feed = document.getElementById('alertsFeed');
+            feed.innerHTML = (d.alerts || []).map(a => `
+                <div class="alert-item ${a.severity}">
+                    <span class="time">${new Date(a.timestamp).toLocaleTimeString()}</span>
+                    <span class="badge ${a.severity}">${a.severity}</span>
+                    <span class="source">${a.source}</span>
+                    <span class="message">${a.message}</span>
+                    ${!a.acknowledged ? `<button class="btn btn-sm" onclick="ackAlert('${a.id}')">ACK</button>` : ''}
+                </div>
+            `).join('') || '<div style="text-align:center;color:var(--p31-dim);padding:1rem;">No alerts</div>';
+        }
+
+        async function ackAlert(id) {
+            await api('/alerts/' + id + '/ack', { method: 'POST' });
+            loadAlerts(); loadStats();
+        }
+
+        // Refresh
+        function refresh() {
+            loadClock();
+            loadMap();
+            loadStats();
+            loadTickets();
+            loadIntel();
+            loadPeers();
+            loadAlerts();
+        }
+
+        refresh();
+        setInterval(loadClock, 1000);
+        setInterval(() => { loadStats(); loadAlerts(); }, 30000);
+    </script>
+</body>
+</html>

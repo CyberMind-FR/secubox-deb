@@ -1,0 +1,5 @@
+secubox-soc (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release
+
+ -- SecuBox <dev@secubox.local>  Tue, 24 Mar 2026 12:15:18 +0100
