@@ -1,0 +1,179 @@
+name: Build SecuBox Live USB
+
+on:
+  workflow_dispatch:
+    inputs:
+      size:
+        description: 'Image size'
+        required: false
+        default: '8G'
+      persistence:
+        description: 'Include persistence partition'
+        required: false
+        default: 'true'
+        type: boolean
+  workflow_run:
+    workflows: ["Build SecuBox .deb packages"]
+    types: [completed]
+    branches: [main, master]
+  push:
+    tags:
+      - 'v*'
+
+env:
+  DEBIAN_SUITE: bookworm
+
+jobs:
+  # Wait for packages to be available
+  build-live:
+    runs-on: ubuntu-24.04
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'push' || github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost
+          sudo apt-get clean
+          df -h
+
+      - name: Download package artifacts
+        if: github.event_name == 'workflow_run'
+        uses: actions/download-artifact@v4
+        with:
+          name: secubox-debs-all
+          path: output/debs/
+          run-id: ${{ github.event.workflow_run.id }}
+        continue-on-error: true
+
+      - name: Download packages from latest build
+        if: github.event_name != 'workflow_run'
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          workflow: build-packages.yml
+          name: secubox-debs-all
+          path: output/debs/
+          if_no_artifact_found: warn
+        continue-on-error: true
+
+      - name: List available packages
+        run: |
+          echo "=== Available .deb packages ==="
+          ls -lh output/debs/*.deb 2>/dev/null || echo "No packages found - will build without slipstream"
+          echo "=== Package count ==="
+          ls output/debs/*.deb 2>/dev/null | wc -l || echo "0"
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            debootstrap parted dosfstools e2fsprogs \
+            squashfs-tools grub-efi-amd64-bin grub-pc-bin \
+            xorriso mtools rsync curl wget
+
+      - name: Build Live USB image
+        run: |
+          SLIPSTREAM_OPT=""
+          if ls output/debs/*.deb >/dev/null 2>&1; then
+            SLIPSTREAM_OPT="--slipstream"
+            echo "Slipstream enabled: $(ls output/debs/*.deb | wc -l) packages"
+          fi
+
+          PERSIST_OPT=""
+          if [[ "${{ github.event.inputs.persistence }}" == "false" ]]; then
+            PERSIST_OPT="--no-persistence"
+          fi
+
+          sudo bash image/build-live-usb.sh \
+            --size ${{ github.event.inputs.size || '8G' }} \
+            $SLIPSTREAM_OPT \
+            $PERSIST_OPT
+        timeout-minutes: 60
+
+      - name: List output
+        run: |
+          ls -lh output/
+          echo "=== Checksums ==="
+          cat output/*.sha256 || true
+
+      - name: Upload Live USB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: secubox-live-usb-amd64
+          path: |
+            output/secubox-live-*.img.gz
+            output/secubox-live-*.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+  # Create release on tag
+  release:
+    needs: build-live
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Download Live USB artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: secubox-live-usb-amd64
+          path: live/
+
+      - name: Generate checksums
+        run: |
+          cd live/
+          sha256sum *.img.gz > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Sign checksums
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          if [ -n "$GPG_PRIVATE_KEY" ]; then
+            echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+            cd live/
+            gpg --clearsign SHA256SUMS
+            mv SHA256SUMS.asc SHA256SUMS.gpg
+          fi
+
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            live/*.img.gz
+            live/SHA256SUMS
+            live/SHA256SUMS.gpg
+          body: |
+            ## SecuBox Live USB ${{ github.ref_name }}
+
+            Bootable live USB image for amd64 systems.
+
+            ### Features
+            - UEFI boot with GRUB
+            - SquashFS compressed root filesystem
+            - Persistent storage partition
+            - All SecuBox packages pre-installed
+
+            ### Flash to USB
+            ```bash
+            zcat secubox-live-amd64-bookworm.img.gz | sudo dd of=/dev/sdX bs=4M status=progress
+            sync
+            ```
+
+            ### Boot Options
+            - **SecuBox Live** - Normal boot with persistence
+            - **Safe Mode** - Minimal drivers for troubleshooting
+            - **No Persistence** - Fresh start, no saved changes
+            - **To RAM** - Load entire system to memory
+
+            ### Credentials
+            - **Web UI:** https://<IP>:8443 (admin / admin)
+            - **SSH:** root / secubox | secubox / secubox
+
+            ### Verification
+            ```bash
+            sha256sum -c SHA256SUMS
+            gpg --verify SHA256SUMS.gpg
+            ```
