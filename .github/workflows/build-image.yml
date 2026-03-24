@@ -20,7 +20,8 @@ on:
         required: false
         default: '8G'
   push:
-    tags: ['v*']
+    tags:
+      - 'v*'
 
 env:
   DEBIAN_SUITE: bookworm
@@ -32,11 +33,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        board: ${{ fromJson(
-          github.event.inputs.board == 'all'
-          && '["mochabin","espressobin-v7","espressobin-ultra","vm-x64"]'
-          || format('["{0}"]', github.event.inputs.board || 'vm-x64')
-        ) }}
+        board: ${{ github.event_name == 'push' && fromJson('["mochabin","espressobin-v7","espressobin-ultra","vm-x64"]') || (github.event.inputs.board == 'all' && fromJson('["mochabin","espressobin-v7","espressobin-ultra","vm-x64"]') || fromJson(format('["{0}"]', github.event.inputs.board))) }}
 
     steps:
       - name: Checkout
