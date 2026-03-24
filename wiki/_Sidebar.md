@@ -1,21 +1,15 @@
-### Getting Started
-* [[Home]]
-* [[Live USB]]
-* [[Installation]]
-* [[First Boot]]
+**[Home](Home)** | [FR](Home-FR) | [中文](Home-ZH)
 
-### User Guides
-* [[Dashboard]]
-* [[Security]]
-* [[Networking]]
-* [[Email]]
+### Getting Started
+* [[Live-USB]]
+* [[Installation]]
+* [[Modules]]
 
 ### Reference
-* [[API Reference]]
+* [[API-Reference]]
 * [[Configuration]]
 * [[Troubleshooting]]
 
-### Development
-* [[Building Packages]]
-* [[Building Images]]
-* [[Contributing]]
+### Links
+* [Releases](https://github.com/CyberMind-FR/secubox-deb/releases)
+* [Issues](https://github.com/CyberMind-FR/secubox-deb/issues)

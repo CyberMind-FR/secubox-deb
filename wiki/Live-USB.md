@@ -1,6 +1,12 @@
-# SecuBox Live USB
+# Live USB Guide
 
-Boot SecuBox directly from a USB drive - no installation required.
+[Francais](Live-USB-FR) | [中文](Live-USB-ZH)
+
+Boot SecuBox directly from a USB drive with all packages pre-installed.
+
+## Download
+
+**Latest Release:** [secubox-live-amd64-bookworm.img.gz](https://github.com/CyberMind-FR/secubox-deb/releases/latest)
 
 ## Features
 
@@ -9,11 +15,7 @@ Boot SecuBox directly from a USB drive - no installation required.
 | UEFI Boot | Modern GRUB bootloader |
 | SquashFS | Compressed root (~250MB) |
 | Persistence | Save changes across reboots |
-| Slipstream | All SecuBox packages included |
-
-## Download
-
-**Latest Release:** [secubox-live-amd64-bookworm.img.gz](https://github.com/CyberMind-FR/secubox-deb/releases/latest/download/secubox-live-amd64-bookworm.img.gz)
+| Slipstream | All 30+ SecuBox packages included |
 
 ## Flash to USB
 
@@ -30,21 +32,20 @@ sync
 
 ### Windows
 
-Use [Rufus](https://rufus.ie/) or [balenaEtcher](https://etcher.balena.io/):
+1. Download [Rufus](https://rufus.ie/) or [balenaEtcher](https://etcher.balena.io/)
+2. Extract the `.img.gz` file to get `.img`
+3. Select the `.img` file
+4. Select your USB drive
+5. Click Write/Flash
 
-1. Download and extract the `.img.gz` file
-2. Select the `.img` file in Rufus/Etcher
-3. Select your USB drive
-4. Click Write/Flash
+## Boot Menu Options
 
-## Boot Menu
-
-| Option | Use Case |
-|--------|----------|
+| Option | Description |
+|--------|-------------|
 | **SecuBox Live** | Normal boot with persistence |
-| **Safe Mode** | Hardware compatibility issues |
-| **No Persistence** | Fresh start, no saved changes |
-| **To RAM** | Run entirely from memory |
+| **Safe Mode** | Minimal drivers for troubleshooting |
+| **No Persistence** | Fresh start, changes not saved |
+| **To RAM** | Load entire system to memory |
 
 ## Default Credentials
 
@@ -54,25 +55,23 @@ Use [Rufus](https://rufus.ie/) or [balenaEtcher](https://etcher.balena.io/):
 | SSH | root | secubox |
 | SSH | secubox | secubox |
 
-> **Security:** Change passwords immediately after first boot!
+**Important:** Change passwords after first boot!
 
 ## Network Access
 
 After booting:
 
-1. Find IP address: `ip addr` or check your router's DHCP leases
+1. Find IP: `ip addr` or check router DHCP leases
 2. Web UI: `https://<IP>:8443`
 3. SSH: `ssh root@<IP>`
 
-### Default Network
-
+Default network configuration:
 - DHCP client on all interfaces
-- Fallback: 192.168.1.1/24 on first interface
+- Fallback: 192.168.1.1/24
 
 ## Persistence
 
-Changes are automatically saved to the persistence partition:
-
+Changes saved automatically:
 - `/home/*` - User files
 - `/etc/*` - Configuration
 - `/var/log/*` - Logs
@@ -81,14 +80,22 @@ Changes are automatically saved to the persistence partition:
 ### Reset Persistence
 
 ```bash
-# Boot with "No Persistence" option, then:
+# Boot with "No Persistence", then:
 sudo mkfs.ext4 -L persistence /dev/sdX3
 ```
+
+## Partition Layout
+
+| Partition | Size | Type | Purpose |
+|-----------|------|------|---------|
+| p1 | 512MB | EFI | GRUB bootloader |
+| p2 | 2GB | FAT32 | Live system (SquashFS) |
+| p3 | Remaining | ext4 | Persistence |
 
 ## Verification
 
 ```bash
-# Download checksum
+# Download checksums
 wget https://github.com/CyberMind-FR/secubox-deb/releases/latest/download/SHA256SUMS
 
 # Verify
@@ -99,7 +106,7 @@ sha256sum -c SHA256SUMS --ignore-missing
 
 ### USB Not Booting
 
-1. Enter BIOS/UEFI setup (F2, F12, Del, or Esc at boot)
+1. Enter BIOS/UEFI (F2, F12, Del, Esc)
 2. Enable USB boot
 3. Disable Secure Boot
 4. Set USB as first boot device
@@ -108,20 +115,15 @@ sha256sum -c SHA256SUMS --ignore-missing
 
 1. Try "Safe Mode" from boot menu
 2. Add `nomodeset` to kernel parameters:
-   - Press `e` at GRUB menu
-   - Add `nomodeset` to the `linux` line
-   - Press Ctrl+X to boot
+   - Press `e` at GRUB
+   - Add `nomodeset` to `linux` line
+   - Press Ctrl+X
 
 ### No Network
 
 ```bash
-# Check interfaces
 ip link show
-
-# Restart networking
 sudo systemctl restart networking
-
-# Manual DHCP
 sudo dhclient eth0
 ```
 
@@ -130,15 +132,11 @@ sudo dhclient eth0
 ```bash
 git clone https://github.com/CyberMind-FR/secubox-deb
 cd secubox-deb
-
-# Build live USB image
 sudo bash image/build-live-usb.sh --size 8G --slipstream
 ```
-
-See [[Building Images]] for more options.
 
 ## See Also
 
 - [[Installation]] - Permanent installation
-- [[First Boot]] - Initial configuration
+- [[Configuration]] - System setup
 - [[Troubleshooting]] - More solutions
