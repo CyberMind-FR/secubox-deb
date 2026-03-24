@@ -1,0 +1,27 @@
+#!/bin/sh
+set -e
+if [ "$1" = "configure" ]; then
+    # Create required directories
+    mkdir -p /etc/secubox/vortex-firewall
+    mkdir -p /var/lib/secubox/vortex-firewall/ipsets
+    mkdir -p /etc/nftables.d
+    chown -R secubox:secubox /var/lib/secubox/vortex-firewall 2>/dev/null || true
+
+    # Install nginx config
+    if [ -d /etc/nginx/secubox.d ]; then
+        cat > /etc/nginx/secubox.d/vortex-firewall.conf << 'EOF'
+# /etc/nginx/secubox.d/vortex-firewall.conf
+location /api/v1/vortex-firewall/ {
+    proxy_pass http://unix:/run/secubox/vortex-firewall.sock:/;
+    include /etc/nginx/snippets/secubox-proxy.conf;
+}
+EOF
+        nginx -t 2>/dev/null && systemctl reload nginx 2>/dev/null || true
+    fi
+
+    systemctl daemon-reload
+    systemctl enable secubox-vortex-firewall.service || true
+    systemctl start secubox-vortex-firewall.service || true
+fi
+#DEBHELPER#
+exit 0

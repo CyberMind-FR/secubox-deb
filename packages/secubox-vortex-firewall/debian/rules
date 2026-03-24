@@ -1,0 +1,11 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-vortex-firewall/usr/lib/secubox/vortex-firewall
+	cp -r api debian/secubox-vortex-firewall/usr/lib/secubox/vortex-firewall/
+	install -d debian/secubox-vortex-firewall/usr/share/secubox/www/vortex-firewall
+	cp -r www/vortex-firewall/. debian/secubox-vortex-firewall/usr/share/secubox/www/vortex-firewall/
+	install -d debian/secubox-vortex-firewall/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-vortex-firewall/usr/share/secubox/menu.d/ || true

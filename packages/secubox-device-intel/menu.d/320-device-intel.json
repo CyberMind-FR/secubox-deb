@@ -1,0 +1,9 @@
+{
+  "id": "device-intel",
+  "name": "Device Intel",
+  "category": "monitoring",
+  "icon": "🔬",
+  "path": "/device-intel/",
+  "order": 320,
+  "description": "Asset discovery and network fingerprinting"
+}

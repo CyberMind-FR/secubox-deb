@@ -1,0 +1,11 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-meshname/usr/lib/secubox/meshname
+	cp -r api debian/secubox-meshname/usr/lib/secubox/meshname/
+	install -d debian/secubox-meshname/usr/share/secubox/www/meshname
+	cp -r www/meshname/. debian/secubox-meshname/usr/share/secubox/www/meshname/
+	install -d debian/secubox-meshname/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-meshname/usr/share/secubox/menu.d/ || true

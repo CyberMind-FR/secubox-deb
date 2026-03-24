@@ -1,0 +1,9 @@
+{
+  "id": "meshname",
+  "name": "Mesh DNS",
+  "category": "network",
+  "icon": "🌐",
+  "path": "/meshname/",
+  "order": 585,
+  "description": "Mesh network domain resolution"
+}
