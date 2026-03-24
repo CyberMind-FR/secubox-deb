@@ -1,9 +1,22 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-03-24 (Session 11)*
+*Mis à jour : 2026-03-24 (Session 12)*
 
 ---
 
 ## ✅ Terminé cette session
+
+### secubox-metrics Module ✅
+- **Metrics Dashboard** — Migrated from OpenWRT luci-app-metrics-dashboard
+  - FastAPI backend with caching (30s TTL)
+  - System overview: uptime, load, memory, vhosts, certs, LXC count
+  - Service status: HAProxy, WAF, CrowdSec
+  - WAF stats: active bans, alerts (24h), blocked requests
+  - Connections: TCP by port (HTTPS/HTTP/SSH)
+  - P31 Phosphor CRT theme (#33ff66 green glow)
+- **API endpoints**: /status, /health, /overview, /waf_stats, /connections, /all, /refresh, /certs, /vhosts
+- **CI Fix**: Added build-essential to build dependencies
+- **Nginx config**: Modular /etc/nginx/secubox.d/metrics.conf
+- **Total modules: 47** (was 46)
 
 ### secubox-soc Module ✅
 - **Security Operations Center** — New SOC dashboard module
