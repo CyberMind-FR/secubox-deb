@@ -81,22 +81,15 @@ jobs:
             --size ${{ github.event.inputs.size || '8G' }}
         timeout-minutes: 90
 
-      - name: Compress image
+      - name: List output
         run: |
           cd output/
-          for img in *.img; do
-            [ -f "$img" ] || continue
-            echo "Compressing $img..."
-            pigz -9 -k "$img"
-            # Also create xz for smaller size
-            xz -9 -k "$img"
-          done
           ls -lh
 
       - name: Generate checksums
         run: |
           cd output/
-          sha256sum *.img.gz *.img.xz 2>/dev/null > SHA256SUMS || true
+          sha256sum *.img.gz 2>/dev/null > SHA256SUMS || echo "No images found" > SHA256SUMS
           cat SHA256SUMS
 
       - name: Upload image artifact
@@ -105,7 +98,6 @@ jobs:
           name: secubox-${{ matrix.board }}-${{ env.DEBIAN_SUITE }}
           path: |
             output/*.img.gz
-            output/*.img.xz
             output/SHA256SUMS
           if-no-files-found: error
           retention-days: 30
@@ -129,7 +121,7 @@ jobs:
           # Remove individual SHA256SUMS files
           rm -f SHA256SUMS
           # Generate combined checksums
-          sha256sum *.img.gz *.img.xz 2>/dev/null | sort > SHA256SUMS
+          sha256sum *.img.gz 2>/dev/null | sort > SHA256SUMS || echo "No images" > SHA256SUMS
           cat SHA256SUMS
 
       - name: Sign checksums
@@ -148,7 +140,6 @@ jobs:
         with:
           files: |
             images/*.img.gz
-            images/*.img.xz
             images/SHA256SUMS
             images/SHA256SUMS.gpg
           body: |
