@@ -79,17 +79,17 @@ jobs:
             --suite ${{ env.DEBIAN_SUITE }} \
             --out output/ \
             --size ${{ github.event.inputs.size || '8G' }}
+          sudo chown -R $(id -u):$(id -g) output/
         timeout-minutes: 90
 
       - name: List output
         run: |
-          cd output/
-          ls -lh
+          ls -lh output/
 
       - name: Generate checksums
         run: |
           cd output/
-          sha256sum *.img.gz 2>/dev/null > SHA256SUMS || echo "No images found" > SHA256SUMS
+          sha256sum *.img.gz > SHA256SUMS 2>/dev/null || echo "No images found" > SHA256SUMS
           cat SHA256SUMS
 
       - name: Upload image artifact

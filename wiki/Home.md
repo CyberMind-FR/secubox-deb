@@ -1,37 +1,68 @@
-# SecuBox Wiki
+# SecuBox-DEB
 
-Welcome to the SecuBox documentation wiki.
+**Security Appliance for Debian** | [Francais](Home-FR) | [中文](Home-ZH)
 
-## Getting Started
+SecuBox is a complete security appliance solution ported from OpenWrt to Debian bookworm, designed for GlobalScale ARM64 boards (MOCHAbin, ESPRESSObin) and x86_64 systems.
 
-- [[Live USB]] - Boot SecuBox directly from USB (recommended for testing)
-- [[Installation]] - Install on dedicated hardware or VM
-- [[First Boot]] - Initial configuration guide
+## Quick Start
 
-## User Guides
+### Live USB (Fastest)
 
-- [[Dashboard]] - Using the web dashboard
-- [[Security]] - CrowdSec, WAF, NAC configuration
-- [[Networking]] - Network modes, VPN, QoS setup
-- [[Email]] - Mail server configuration
+Boot directly from USB - no installation required:
 
-## Administration
+```bash
+# Download
+wget https://github.com/CyberMind-FR/secubox-deb/releases/latest/download/secubox-live-amd64-bookworm.img.gz
 
-- [[API Reference]] - REST API documentation
-- [[Configuration]] - TOML configuration files
-- [[Troubleshooting]] - Common issues and solutions
+# Flash to USB drive
+zcat secubox-live-amd64-bookworm.img.gz | sudo dd of=/dev/sdX bs=4M status=progress
+```
 
-## Development
+See [[Live-USB]] for complete guide.
 
-- [[Building Packages]] - How to build .deb packages
-- [[Building Images]] - Creating system images
-- [[Contributing]] - How to contribute to SecuBox
+### APT Installation
 
-## Quick Links
+```bash
+curl -fsSL https://apt.secubox.in/install.sh | sudo bash
+sudo apt install secubox-full
+```
 
-| Resource | Link |
-|----------|------|
-| GitHub | https://github.com/CyberMind-FR/secubox-deb |
-| Releases | https://github.com/CyberMind-FR/secubox-deb/releases |
-| Issues | https://github.com/CyberMind-FR/secubox-deb/issues |
-| APT Repo | https://apt.secubox.in |
+## Features
+
+| Category | Modules |
+|----------|---------|
+| **Security** | CrowdSec IDS/IPS, WAF, NAC, Auth |
+| **Networking** | WireGuard VPN, HAProxy, DPI, QoS |
+| **Monitoring** | Netdata, MediaFlow, Metrics |
+| **Email** | Postfix/Dovecot, Webmail |
+| **Publishing** | Droplet, Streamlit, MetaBlogizer |
+
+## Supported Hardware
+
+| Board | SoC | Use Case |
+|-------|-----|----------|
+| MOCHAbin | Armada 7040 | SecuBox Pro |
+| ESPRESSObin v7 | Armada 3720 | SecuBox Lite |
+| ESPRESSObin Ultra | Armada 3720 | SecuBox Lite+ |
+| VM x86_64 | Any | Testing/Development |
+
+## Documentation
+
+- [[Live-USB]] - Bootable USB guide
+- [[Installation]] - Full installation
+- [[Configuration]] - System configuration
+- [[API-Reference]] - REST API documentation
+- [[Troubleshooting]] - Common issues
+
+## Default Credentials
+
+| Service | Username | Password |
+|---------|----------|----------|
+| Web UI | admin | admin |
+| SSH | root | secubox |
+
+## Links
+
+- [GitHub Repository](https://github.com/CyberMind-FR/secubox-deb)
+- [Releases](https://github.com/CyberMind-FR/secubox-deb/releases)
+- [Issues](https://github.com/CyberMind-FR/secubox-deb/issues)
