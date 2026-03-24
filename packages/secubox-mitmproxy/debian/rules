@@ -8,9 +8,13 @@ override_dh_auto_install:
 	install -m 644 api/*.py $(CURDIR)/debian/secubox-mitmproxy/usr/lib/secubox/mitmproxy/api/
 	install -d $(CURDIR)/debian/secubox-mitmproxy/usr/share/secubox/www/mitmproxy
 	install -m 644 www/mitmproxy/*.html $(CURDIR)/debian/secubox-mitmproxy/usr/share/secubox/www/mitmproxy/
-	install -d $(CURDIR)/debian/secubox-mitmproxy/lib/systemd/system
-	install -m 644 debian/secubox-mitmproxy.service $(CURDIR)/debian/secubox-mitmproxy/lib/systemd/system/
+	install -d $(CURDIR)/debian/secubox-mitmproxy/usr/lib/systemd/system
+	install -m 644 debian/secubox-mitmproxy.service $(CURDIR)/debian/secubox-mitmproxy/usr/lib/systemd/system/
 	install -d $(CURDIR)/debian/secubox-mitmproxy/srv/mitmproxy
 	install -d $(CURDIR)/debian/secubox-mitmproxy/srv/mitmproxy-in
 	install -d $(CURDIR)/debian/secubox-mitmproxy/usr/share/secubox/menu.d
 	install -m 644 menu.d/*.json $(CURDIR)/debian/secubox-mitmproxy/usr/share/secubox/menu.d/
+
+	# Install nginx config
+	install -d $(CURDIR)/debian/secubox-mitmproxy/etc/nginx/secubox.d
+	install -m 644 nginx/mitmproxy.conf $(CURDIR)/debian/secubox-mitmproxy/etc/nginx/secubox.d/mitmproxy.conf

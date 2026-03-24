@@ -8,7 +8,11 @@ override_dh_auto_install:
 	install -m 644 api/*.py $(CURDIR)/debian/secubox-traffic/usr/lib/secubox/traffic/api/
 	install -d $(CURDIR)/debian/secubox-traffic/usr/share/secubox/www/traffic
 	install -m 644 www/traffic/*.html $(CURDIR)/debian/secubox-traffic/usr/share/secubox/www/traffic/
-	install -d $(CURDIR)/debian/secubox-traffic/lib/systemd/system
-	install -m 644 debian/secubox-traffic.service $(CURDIR)/debian/secubox-traffic/lib/systemd/system/
+	install -d $(CURDIR)/debian/secubox-traffic/usr/lib/systemd/system
+	install -m 644 debian/secubox-traffic.service $(CURDIR)/debian/secubox-traffic/usr/lib/systemd/system/
 	install -d $(CURDIR)/debian/secubox-traffic/usr/share/secubox/menu.d
 	install -m 644 menu.d/*.json $(CURDIR)/debian/secubox-traffic/usr/share/secubox/menu.d/
+
+	# Install nginx config
+	install -d $(CURDIR)/debian/secubox-traffic/etc/nginx/secubox.d
+	install -m 644 nginx/traffic.conf $(CURDIR)/debian/secubox-traffic/etc/nginx/secubox.d/traffic.conf

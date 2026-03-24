@@ -9,3 +9,7 @@ override_dh_auto_install:
 	cp -r www/backup/. debian/secubox-backup/usr/share/secubox/www/backup/
 	install -d debian/secubox-backup/usr/share/secubox/menu.d
 	[ -d menu.d ] && cp -r menu.d/. debian/secubox-backup/usr/share/secubox/menu.d/ || true
+
+	# Install nginx config
+	install -d $(CURDIR)/debian/secubox-backup/etc/nginx/secubox.d
+	install -m 644 nginx/backup.conf $(CURDIR)/debian/secubox-backup/etc/nginx/secubox.d/backup.conf
