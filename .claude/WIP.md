@@ -5,6 +5,31 @@
 
 ## ✅ Terminé cette session
 
+### secubox-soc Module ✅
+- **Security Operations Center** — New SOC dashboard module
+  - World Clock: 10 timezone display (UTC, EST, PST, GMT, CET, MSK, GST, SGT, JST, AEST)
+  - World Threat Map: SVG with 30 country coordinates, threat heatmap
+  - Ticket System: Create, assign, track security incidents
+  - Threat Intel: IOC management (IPs, domains, hashes)
+  - P2P Intel: Peer-to-peer threat sharing network
+  - Alerts: Real-time security alert feed
+  - WebSocket: Live updates for all components
+  - CRT P31 theme: Full green phosphor aesthetic
+- **API endpoints**: 20+ (clock, map, tickets, intel, peers, alerts, stats, ws)
+- **Total modules: 46** (was 45)
+
+### Documentation ✅
+- **docs/MODULES.md** — Comprehensive module documentation
+  - 46 modules cataloged by category
+  - API endpoint counts per module
+  - CRT P31 theme documentation
+  - Screenshot checklist for all modules
+  - Module architecture diagram
+  - Build and deploy instructions
+- **docs/screenshots/.gitkeep** — Created screenshots directory
+
+### CRT Theme Fixes ✅
+
 ### 4 New Modules Ported ✅
 From OpenWRT planned modules to Debian:
 - **secubox-device-intel** v1.0.0 — Asset discovery and fingerprinting

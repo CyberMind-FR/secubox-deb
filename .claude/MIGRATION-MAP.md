@@ -80,8 +80,10 @@ Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 | **secubox-vortex-dns** | ✅ | ✅ | ✅ | DNS firewall, RPZ, threat feeds | ✅ |
 | **secubox-vortex-firewall** | ✅ | ✅ | ✅ | nftables threat enforcement | ✅ |
 | **secubox-meshname** | ✅ | ✅ | ✅ | mesh DNS, mDNS, Avahi | ✅ |
+| **secubox-soc** | ✅ | ✅ | ✅ | SOC dashboard, clock, map, tickets | ✅ |
+| **secubox-roadmap** | ✅ | ✅ | ✅ | migration roadmap tracker | ✅ |
 
-**Total : 45 modules | ~900+ endpoints API**
+**Total : 46 modules | ~920+ endpoints API**
 
 *Note: mail-lxc and webmail-lxc are backend components integrated into secubox-mail*
 
