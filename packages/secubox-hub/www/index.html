@@ -479,10 +479,21 @@
         let menuData = null;
 
         async function api(endpoint, method = 'GET', data = null) {
-            const opts = { method, headers: { 'Content-Type': 'application/json' } };
+            const token = localStorage.getItem('sbx_token');
+            const opts = {
+                method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': 'Bearer ' + token } : {})
+                }
+            };
             if (data) opts.body = JSON.stringify(data);
             try {
                 const res = await fetch(API + endpoint, opts);
+                if (res.status === 401) {
+                    window.location.href = '/portal/login.html';
+                    return {};
+                }
                 return res.json();
             } catch (e) { return {}; }
         }
