@@ -1,7 +1,9 @@
 [Unit]
 Description=SecuBox Portal Authentication API
 After=network.target secubox-core.service
-Requires=secubox-core.service
+Wants=secubox-core.service
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
 UMask=0000
@@ -9,11 +11,26 @@ Type=simple
 User=secubox
 Group=secubox
 WorkingDirectory=/usr/lib/secubox/portal
+
+# Ensure runtime directory exists with proper permissions
+RuntimeDirectory=secubox
+RuntimeDirectoryMode=0755
+RuntimeDirectoryPreserve=yes
+
+# Ensure config directory is writable
+ExecStartPre=/bin/mkdir -p /etc/secubox
+ExecStartPre=/bin/chown secubox:secubox /etc/secubox
+
 ExecStart=/usr/bin/python3 -m uvicorn api.main:app \
     --uds /run/secubox/portal.sock \
     --log-level warning
-Restart=on-failure
-RestartSec=5
+
+# Watchdog: restart always, with delay
+Restart=always
+RestartSec=3
+WatchdogSec=30
+
+# Security
 PrivateTmp=true
 NoNewPrivileges=true
 ProtectSystem=strict

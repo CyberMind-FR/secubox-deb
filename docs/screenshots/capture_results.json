@@ -1,0 +1,418 @@
+{
+  "vm": {
+    "host": {
+      "name": "SecuBox VM (VirtualBox)",
+      "url": "https://localhost:9443",
+      "description": "Development/testing virtual machine"
+    },
+    "modules": [
+      {
+        "module": "hub",
+        "name": "Dashboard",
+        "category": "Dashboard",
+        "success": true,
+        "screenshot": "docs/screenshots/vm/hub.png",
+        "error": null,
+        "status_code": 200
+      },
+      {
+        "module": "soc",
+        "name": "Security Operations Center",
+        "category": "Dashboard",
+        "success": true,
+        "screenshot": "docs/screenshots/vm/soc.png",
+        "error": null,
+        "status_code": 200
+      },
+      {
+        "module": "roadmap",
+        "name": "Migration Roadmap",
+        "category": "Dashboard",
+        "success": true,
+        "screenshot": "docs/screenshots/vm/roadmap.png",
+        "error": null,
+        "status_code": 200
+      },
+      {
+        "module": "crowdsec",
+        "name": "CrowdSec",
+        "category": "Security",
+        "success": true,
+        "screenshot": "docs/screenshots/vm/crowdsec.png",
+        "error": null,
+        "status_code": 200
+      },
+      {
+        "module": "waf",
+        "name": "Web Application Firewall",
+        "category": "Security",
+        "success": true,
+        "screenshot": "docs/screenshots/vm/waf.png",
+        "error": null,
+        "status_code": 200
+      },
+      {
+        "module": "vortex-firewall",
+        "name": "Vortex Firewall",
+        "category": "Security",
+        "success": true,
+        "screenshot": "docs/screenshots/vm/vortex-firewall.png",
+        "error": null,
+        "status_code": 200
+      },
+      {
+        "module": "hardening",
+        "name": "System Hardening",
+        "category": "Security",
+        "success": true,
+        "screenshot": "docs/screenshots/vm/hardening.png",
+        "error": null,
+        "status_code": 200
+      },
+      {
+        "module": "mitmproxy",
+        "name": "MITM Proxy",
+        "category": "Security",
+        "success": true,
+        "screenshot": "docs/screenshots/vm/mitmproxy.png",
+        "error": null,
+        "status_code": 200
+      },
+      {
+        "module": "netmodes",
+        "name": "Network Modes",
+        "category": "Network",
+        "success": true,
+        "screenshot": "docs/screenshots/vm/netmodes.png",
+        "error": null,
+        "status_code": 200
+      },
+      {
+        "module": "qos",
+        "name": "QoS Manager",
+        "category": "Network",
+        "success": true,
+        "screenshot": "docs/screenshots/vm/qos.png",
+        "error": null,
+        "status_code": 200
+      },
+      {
+        "module": "traffic",
+        "name": "Traffic Shaping",
+        "category": "Network",
+        "success": true,
+        "screenshot": "docs/screenshots/vm/traffic.png",
+        "error": null,
+        "status_code": 200
+      },
+      {
+        "module": "haproxy",
+        "name": "HAProxy",
+        "category": "Network",
+        "success": true,
+        "screenshot": "docs/screenshots/vm/haproxy.png",
+        "error": null,
+        "status_code": 200
+      },
+      {
+        "module": "cdn",
+        "name": "CDN Cache",
+        "category": "Network",
+        "success": true,
+        "screenshot": "docs/screenshots/vm/cdn.png",
+        "error": null,
+        "status_code": 200
+      },
+      {
+        "module": "vhost",
+        "name": "Virtual Hosts",
+        "category": "Network",
+        "success": true,
+        "screenshot": "docs/screenshots/vm/vhost.png",
+        "error": null,
+        "status_code": 200
+      },
+      {
+        "module": "dns",
+        "name": "DNS Server",
+        "category": "DNS",
+        "success": true,
+        "screenshot": "docs/screenshots/vm/dns.png",
+        "error": null,
+        "status_code": 200
+      },
+      {
+        "module": "vortex-dns",
+        "name": "Vortex DNS",
+        "category": "DNS",
+        "success": true,
+        "screenshot": "docs/screenshots/vm/vortex-dns.png",
+        "error": null,
+        "status_code": 200
+      },
+      {
+        "module": "meshname",
+        "name": "Mesh DNS",
+        "category": "DNS",
+        "success": true,
+        "screenshot": "docs/screenshots/vm/meshname.png",
+        "error": null,
+        "status_code": 200
+      },
+      {
+        "module": "wireguard",
+        "name": "WireGuard VPN",
+        "category": "VPN",
+        "success": true,
+        "screenshot": "docs/screenshots/vm/wireguard.png",
+        "error": null,
+        "status_code": 200
+      },
+      {
+        "module": "mesh",
+        "name": "Mesh Network",
+        "category": "VPN",
+        "success": true,
+        "screenshot": "docs/screenshots/vm/mesh.png",
+        "error": null,
+        "status_code": 200
+      },
+      {
+        "module": "p2p",
+        "name": "P2P Network",
+        "category": "VPN",
+        "success": true,
+        "screenshot": "docs/screenshots/vm/p2p.png",
+        "error": null,
+        "status_code": 200
+      },
+      {
+        "module": "tor",
+        "name": "Tor Network",
+        "category": "Privacy",
+        "success": true,
+        "screenshot": "docs/screenshots/vm/tor.png",
+        "error": null,
+        "status_code": 200
+      },
+      {
+        "module": "exposure",
+        "name": "Exposure Settings",
+        "category": "Privacy",
+        "success": true,
+        "screenshot": "docs/screenshots/vm/exposure.png",
+        "error": null,
+        "status_code": 200
+      },
+      {
+        "module": "zkp",
+        "name": "Zero-Knowledge Proofs",
+        "category": "Privacy",
+        "success": true,
+        "screenshot": "docs/screenshots/vm/zkp.png",
+        "error": null,
+        "status_code": 200
+      },
+      {
+        "module": "netdata",
+        "name": "Netdata",
+        "category": "Monitoring",
+        "success": true,
+        "screenshot": "docs/screenshots/vm/netdata.png",
+        "error": null,
+        "status_code": 200
+      },
+      {
+        "module": "dpi",
+        "name": "Deep Packet Inspection",
+        "category": "Monitoring",
+        "success": true,
+        "screenshot": "docs/screenshots/vm/dpi.png",
+        "error": null,
+        "status_code": 200
+      },
+      {
+        "module": "device-intel",
+        "name": "Device Intelligence",
+        "category": "Monitoring",
+        "success": true,
+        "screenshot": "docs/screenshots/vm/device-intel.png",
+        "error": null,
+        "status_code": 200
+      },
+      {
+        "module": "watchdog",
+        "name": "Watchdog",
+        "category": "Monitoring",
+        "success": true,
+        "screenshot": "docs/screenshots/vm/watchdog.png",
+        "error": null,
+        "status_code": 200
+      },
+      {
+        "module": "mediaflow",
+        "name": "Media Flow",
+        "category": "Monitoring",
+        "success": true,
+        "screenshot": "docs/screenshots/vm/mediaflow.png",
+        "error": null,
+        "status_code": 200
+      },
+      {
+        "module": "auth",
+        "name": "Authentication",
+        "category": "Access",
+        "success": true,
+        "screenshot": "docs/screenshots/vm/auth.png",
+        "error": null,
+        "status_code": 200
+      },
+      {
+        "module": "nac",
+        "name": "Network Access Control",
+        "category": "Access",
+        "success": true,
+        "screenshot": "docs/screenshots/vm/nac.png",
+        "error": null,
+        "status_code": 200
+      },
+      {
+        "module": "users",
+        "name": "User Management",
+        "category": "Access",
+        "success": true,
+        "screenshot": "docs/screenshots/vm/users.png",
+        "error": null,
+        "status_code": 200
+      },
+      {
+        "module": "portal",
+        "name": "Login Portal",
+        "category": "Access",
+        "success": true,
+        "screenshot": "docs/screenshots/vm/portal.png",
+        "error": "requires_auth",
+        "status_code": 200
+      },
+      {
+        "module": "c3box",
+        "name": "Services Portal",
+        "category": "Services",
+        "success": true,
+        "screenshot": "docs/screenshots/vm/c3box.png",
+        "error": null,
+        "status_code": 200
+      },
+      {
+        "module": "gitea",
+        "name": "Gitea",
+        "category": "Services",
+        "success": true,
+        "screenshot": "docs/screenshots/vm/gitea.png",
+        "error": null,
+        "status_code": 200
+      },
+      {
+        "module": "nextcloud",
+        "name": "Nextcloud",
+        "category": "Services",
+        "success": true,
+        "screenshot": "docs/screenshots/vm/nextcloud.png",
+        "error": null,
+        "status_code": 200
+      },
+      {
+        "module": "mail",
+        "name": "Mail Server",
+        "category": "Email",
+        "success": true,
+        "screenshot": "docs/screenshots/vm/mail.png",
+        "error": null,
+        "status_code": 200
+      },
+      {
+        "module": "webmail",
+        "name": "Webmail",
+        "category": "Email",
+        "success": true,
+        "screenshot": "docs/screenshots/vm/webmail.png",
+        "error": null,
+        "status_code": 200
+      },
+      {
+        "module": "publish",
+        "name": "Publishing",
+        "category": "Publishing",
+        "success": true,
+        "screenshot": "docs/screenshots/vm/publish.png",
+        "error": null,
+        "status_code": 200
+      },
+      {
+        "module": "droplet",
+        "name": "Droplet",
+        "category": "Publishing",
+        "success": true,
+        "screenshot": "docs/screenshots/vm/droplet.png",
+        "error": null,
+        "status_code": 200
+      },
+      {
+        "module": "metablogizer",
+        "name": "Metablogizer",
+        "category": "Publishing",
+        "success": true,
+        "screenshot": "docs/screenshots/vm/metablogizer.png",
+        "error": null,
+        "status_code": 200
+      },
+      {
+        "module": "streamlit",
+        "name": "Streamlit",
+        "category": "Apps",
+        "success": true,
+        "screenshot": "docs/screenshots/vm/streamlit.png",
+        "error": null,
+        "status_code": 200
+      },
+      {
+        "module": "streamforge",
+        "name": "StreamForge",
+        "category": "Apps",
+        "success": true,
+        "screenshot": "docs/screenshots/vm/streamforge.png",
+        "error": null,
+        "status_code": 200
+      },
+      {
+        "module": "repo",
+        "name": "Repository",
+        "category": "Apps",
+        "success": true,
+        "screenshot": "docs/screenshots/vm/repo.png",
+        "error": null,
+        "status_code": 200
+      },
+      {
+        "module": "system",
+        "name": "System",
+        "category": "System",
+        "success": true,
+        "screenshot": "docs/screenshots/vm/system.png",
+        "error": null,
+        "status_code": 200
+      },
+      {
+        "module": "backup",
+        "name": "Backup",
+        "category": "System",
+        "success": true,
+        "screenshot": "docs/screenshots/vm/backup.png",
+        "error": null,
+        "status_code": 200
+      }
+    ],
+    "timestamp": "2026-03-24T12:50:43.368172"
+  },
+  "device": {}
+}

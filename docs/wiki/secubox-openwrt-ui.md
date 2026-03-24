@@ -1,6 +1,6 @@
 # SecuBox OpenWRT - UI Documentation
 
-*Original OpenWRT LuCI interface documentation*
+*This documentation shows the original OpenWRT LuCI interface.*
 
 ## About SecuBox OpenWRT
 
@@ -15,45 +15,13 @@ The OpenWRT version uses the standard LuCI theme with SecuBox customizations:
 - Responsive sidebar navigation
 - Module-based organization
 
-## Original Modules (LuCI Apps)
+## Module Screenshots
 
-| Module | Package | Description |
-|--------|---------|-------------|
-| Dashboard | luci-app-secubox | Main control center |
-| CrowdSec | luci-app-crowdsec-dashboard | Collaborative security |
-| WireGuard | luci-app-wireguard-dashboard | VPN management |
-| Auth Guardian | luci-app-auth-guardian | Authentication |
-| Client Guardian | luci-app-client-guardian | NAC |
-| Network Modes | luci-app-network-modes | Network configuration |
-| DPI | luci-app-netifyd-dashboard | Deep packet inspection |
-| QoS | luci-app-bandwidth-manager | Bandwidth management |
-| VHost | luci-app-vhost-manager | Virtual hosts |
-| CDN Cache | luci-app-cdn-cache | CDN management |
-| Netdata | luci-app-netdata-dashboard | Monitoring |
-| Media Flow | luci-app-media-flow | Media analytics |
-| System Hub | luci-app-system-hub | System administration |
-| Droplet | luci-app-droplet | File upload |
-| Metablogizer | luci-app-metablogizer | Blog publishing |
-| Streamlit | luci-app-streamlit | App hosting |
-| StreamForge | luci-app-streamlit-forge | App templates |
-
-## Architecture
-
-### Backend
-- **LuCI** - Lua web framework
-- **ubus** - IPC message bus
-- **RPCD** - Remote procedure call daemon
-- **UCI** - Unified Configuration Interface
-- **procd** - Process management
-
-### Frontend
-- **LuCI Views** - Lua templates
-- **JavaScript** - RPCD client library
-- **CSS** - LuCI theme system
+See the [Module Gallery](Module-Gallery) for screenshots of each module.
 
 ## Migration to Debian
 
-SecuBox is being migrated from OpenWRT to Debian. See [secubox-deb](https://github.com/CyberMind-FR/secubox-deb).
+SecuBox is being migrated from OpenWRT to Debian. See [secubox-deb](https://github.com/CyberMind-FR/secubox-deb) for the Debian version.
 
 ### Key Differences
 
@@ -64,16 +32,6 @@ SecuBox is being migrated from OpenWRT to Debian. See [secubox-deb](https://gith
 | Theme | LuCI Dark | CRT P31 Phosphor |
 | Config | UCI | TOML |
 | Init System | procd | systemd |
-| IPC | ubus/RPCD | Unix sockets |
-| Package Manager | opkg | apt |
-
-### Migration Benefits
-
-1. **Larger ecosystem** - Access to full Debian package repository
-2. **Modern Python** - FastAPI async framework
-3. **Better security** - AppArmor, audit rules, CrowdSec
-4. **Container support** - LXC for isolated services
-5. **Easier development** - Standard Python tooling
 
 ---
 

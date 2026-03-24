@@ -27,6 +27,17 @@ app = FastAPI(title="secubox-portal", version="1.0.0", root_path="/api/v1/portal
 router = APIRouter()
 log = get_logger("portal")
 
+
+@app.on_event("startup")
+async def startup_init():
+    """Initialize portal on startup - ensure users exist."""
+    # Ensure /etc/secubox directory exists
+    USERS_FILE.parent.mkdir(parents=True, exist_ok=True)
+
+    # Load/create users (this will create default if missing)
+    users = _load_users()
+    log.info("Portal started with %d users", len(users))
+
 # Configuration - use same secret as secubox_core.auth
 def _get_jwt_secret() -> str:
     """Get JWT secret - must match secubox_core.auth._secret()"""
@@ -45,12 +56,16 @@ _sessions: dict = {}
 
 
 def _load_users() -> dict:
-    """Load users from config file."""
+    """Load users from config file, creating default if missing."""
     import json
     if USERS_FILE.exists():
-        return json.loads(USERS_FILE.read_text())
+        try:
+            return json.loads(USERS_FILE.read_text())
+        except (json.JSONDecodeError, IOError) as e:
+            log.error("Failed to load users.json: %s", e)
+
     # Default admin user (password: secubox)
-    return {
+    default_users = {
         "admin": {
             "password_hash": hashlib.sha256("secubox".encode()).hexdigest(),
             "email": "admin@secubox.local",
@@ -58,6 +73,10 @@ def _load_users() -> dict:
             "created": datetime.now().isoformat()
         }
     }
+    # Persist default users immediately
+    _save_users(default_users)
+    log.info("Created default admin user (password: secubox)")
+    return default_users
 
 
 def _save_users(users: dict):
