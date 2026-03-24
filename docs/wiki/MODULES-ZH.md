@@ -2,7 +2,7 @@
 
 *完整的模块文档*
 
-**模块总数:** 47
+**模块总数:** 48
 
 [🇬🇧 English](MODULES-EN.md) | [🇫🇷 Français](MODULES-FR.md) | [🇩🇪 Deutsch](MODULES-DE.md) | [🇨🇳 中文](MODULES-ZH.md)
 
@@ -42,6 +42,7 @@
 | 📱 **Device Intelligence** | Monitoring | 资产发现和指纹识别 |
 | 👁️ **Watchdog** | Monitoring | 服务和容器监控 |
 | 🎬 **Media Flow** | Monitoring | 媒体流量分析 |
+| 📊 **Metrics Dashboard** | Monitoring | 实时系统指标 |
 | 🔐 **Login Portal** | Access | JWT认证门户 |
 | 👥 **User Management** | Access | 统一身份管理 |
 | 📦 **Services Portal** | Services | C3Box服务门户 |
@@ -518,6 +519,23 @@ ZKP哈密顿管理
 - 协议分析
 
 ![Media Flow](screenshots/vm/mediaflow.png)
+
+---
+
+### 📊 Metrics Dashboard
+
+**类别:** Monitoring
+
+实时系统指标仪表板
+
+**Features:**
+- 系统概览
+- 服务状态
+- WAF/CrowdSec统计
+- 连接监控
+- 实时更新
+
+![Metrics Dashboard](screenshots/vm/metrics.png)
 
 ---
 
