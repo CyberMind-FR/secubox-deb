@@ -1,11 +1,11 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-03-24 (Session 10)*
+*Mis à jour : 2026-03-24 (Session 11)*
 
 ---
 
 ## ✅ Terminé cette session
 
-### 4 New Modules Ported (Session 11) ✅
+### 4 New Modules Ported ✅
 From OpenWRT planned modules to Debian:
 - **secubox-device-intel** v1.0.0 — Asset discovery and fingerprinting
   - ARP table scanning, MAC vendor lookup (OUI database)
@@ -30,6 +30,13 @@ From OpenWRT planned modules to Debian:
 
 All modules include FastAPI backend, Catppuccin frontend, Debian packaging.
 Total modules: **45** (was 41)
+
+### VM Fixes ✅
+- **Hub socket fix** — Fixed /run/secubox permissions for socket creation
+- **Roadmap navbar** — Standardized to use shared sidebar.js like all other modules
+- **Login credentials** — Recreated /etc/secubox/users.json with admin user
+- **VM RAM** — Increased to 4GB for 47 services (was 2GB, causing timeouts)
+- **vortex-firewall** — Fixed permission error creating /etc/nftables.d (try/except + postinst)
 
 ### Menu Fix ✅
 - Removed duplicate WireGuard menu entry (21-wireguard.json)
