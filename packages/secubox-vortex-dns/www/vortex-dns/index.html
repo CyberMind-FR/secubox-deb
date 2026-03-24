@@ -212,8 +212,10 @@
         async function api(path, opts = {}) {
             try {
                 const res = await fetch(API + path, { ...opts, headers: headers() });
-                if (res.status === 401) { window.location = '/login/'; return {}; }
-                return res.json();
+                if (res.status === 401) { window.location = '/portal/login.html'; return {}; }
+                if (!res.ok) return {};
+                const text = await res.text();
+                return text ? JSON.parse(text) : {};
             } catch { return {}; }
         }
 
