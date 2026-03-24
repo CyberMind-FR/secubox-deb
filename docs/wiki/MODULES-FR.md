@@ -2,7 +2,7 @@
 
 *Documentation complète des modules*
 
-**Total des modules:** 47
+**Total des modules:** 48
 
 [🇬🇧 English](MODULES-EN.md) | [🇫🇷 Français](MODULES-FR.md) | [🇩🇪 Deutsch](MODULES-DE.md) | [🇨🇳 中文](MODULES-ZH.md)
 
@@ -42,6 +42,7 @@
 | 📱 **Device Intelligence** | Monitoring | Découverte actifs et empreintes |
 | 👁️ **Watchdog** | Monitoring | Surveillance services et conteneurs |
 | 🎬 **Media Flow** | Monitoring | Analyse trafic média |
+| 📊 **Metrics Dashboard** | Monitoring | Métriques système temps réel |
 | 🔐 **Login Portal** | Access | Portail authentification avec JWT |
 | 👥 **User Management** | Access | Gestion identité unifiée |
 | 📦 **Services Portal** | Services | Portail services C3Box |
@@ -518,6 +519,23 @@ Analyse trafic média
 - Analyse protocoles
 
 ![Media Flow](screenshots/vm/mediaflow.png)
+
+---
+
+### 📊 Metrics Dashboard
+
+**Catégorie:** Monitoring
+
+Tableau de bord métriques temps réel
+
+**Features:**
+- Vue système
+- État services
+- Stats WAF/CrowdSec
+- Surveillance connexions
+- Mises à jour live
+
+![Metrics Dashboard](screenshots/vm/metrics.png)
 
 ---
 

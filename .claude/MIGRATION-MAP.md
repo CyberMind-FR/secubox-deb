@@ -82,8 +82,14 @@ Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 | **secubox-meshname** | ✅ | ✅ | ✅ | mesh DNS, mDNS, Avahi | ✅ |
 | **secubox-soc** | ✅ | ✅ | ✅ | SOC dashboard, clock, map, tickets | ✅ |
 | **secubox-roadmap** | ✅ | ✅ | ✅ | migration roadmap tracker | ✅ |
+| **secubox-metrics** | ✅ | ✅ | ✅ | real-time metrics dashboard | ✅ |
+| **secubox-mesh** | ✅ | ✅ | ✅ | Yggdrasil mesh network | ✅ |
+| **secubox-p2p** | ✅ | ✅ | ✅ | P2P networking | ✅ |
+| **secubox-zkp** | ✅ | ✅ | ✅ | ZKP Hamiltonian proofs | ✅ |
+| **secubox-hardening** | ✅ | ✅ | ✅ | sysctl + module blacklist | ✅ |
+| **secubox-repo** | ✅ | ✅ | ✅ | APT repository management | ✅ |
 
-**Total : 46 modules | ~920+ endpoints API**
+**Total : 52 modules | ~1000+ endpoints API**
 
 *Note: mail-lxc and webmail-lxc are backend components integrated into secubox-mail*
 
