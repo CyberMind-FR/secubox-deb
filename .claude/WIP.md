@@ -1,9 +1,29 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-03-23 (Session 9)*
+*Mis à jour : 2026-03-24 (Session 10)*
 
 ---
 
 ## ✅ Terminé cette session
+
+### secubox-qos v1.1.0 — Per-VLAN QoS Support ✅
+- **Multi-interface support** — Manage QoS on eth0, eth0.100, eth0.200, etc.
+- **VLAN discovery** — Auto-detect existing VLAN interfaces
+- **Per-VLAN policies** — Independent bandwidth limits per VLAN
+- **802.1p PCP marking** — Map tc classes to VLAN priority (0-7)
+- **VLAN creation/deletion** — Create VLAN interfaces with QoS from UI
+- **VLAN-aware rules** — Traffic classification by VLAN ID
+- **Per-interface statistics** — RX/TX bytes, tc class stats
+- **Apply-all function** — Apply QoS to all managed interfaces at once
+- **Frontend updated** — VLAN policies table, PCP settings, interface stats
+
+New API endpoints:
+- `GET /vlans` — List VLAN interfaces with policies
+- `GET/POST/DELETE /vlan/{interface}` — VLAN policy management
+- `POST /vlan/create` — Create new VLAN with QoS
+- `POST /vlan/apply_all` — Apply QoS to all interfaces
+- `GET/POST /pcp/mappings` — 802.1p priority mappings
+- `GET/POST/DELETE /interfaces` — Interface management
+- `GET/POST/DELETE /vlan/rules` — VLAN classification rules
 
 ### 6 New Modules Committed (Session 9) ✅
 - **secubox-backup** v1.0.0 — System config and LXC container backup/restore

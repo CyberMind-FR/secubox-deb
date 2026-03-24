@@ -1,8 +1,9 @@
 {
   "id": "exposure",
-  "title": "Exposure",
+  "name": "Exposure",
   "icon": "🌐",
   "path": "/exposure/",
   "category": "network",
-  "order": 565
+  "order": 565,
+  "description": "Unified exposure settings (Tor, SSL, DNS, Mesh)"
 }

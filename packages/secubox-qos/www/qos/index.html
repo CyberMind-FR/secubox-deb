@@ -308,6 +308,91 @@
                 <tbody id="rulesTable"><tr><td colspan="5">Loading...</td></tr></tbody>
             </table>
         </div>
+
+        <!-- VLAN QoS Section -->
+        <div class="card">
+            <h2>🏷️ VLAN QoS Policies</h2>
+            <div style="margin-bottom: 1rem;">
+                <button class="btn primary" onclick="showAddVlan()">Add VLAN Policy</button>
+                <button class="btn" onclick="applyAllVlans()">Apply All</button>
+                <button class="btn" onclick="refreshVlans()">Refresh</button>
+            </div>
+            <table>
+                <thead><tr><th>Interface</th><th>VLAN ID</th><th>Upload</th><th>Download</th><th>PCP</th><th>Status</th><th>Actions</th></tr></thead>
+                <tbody id="vlansTable"><tr><td colspan="7">Loading...</td></tr></tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h2>📊 Per-Interface Statistics</h2>
+            <table>
+                <thead><tr><th>Interface</th><th>Type</th><th>RX Bytes</th><th>TX Bytes</th><th>QoS Active</th></tr></thead>
+                <tbody id="interfacesTable"><tr><td colspan="5">Loading...</td></tr></tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h2>🔢 802.1p PCP Mappings</h2>
+            <div style="margin-bottom: 1rem;">
+                <label style="margin-right: 1rem;">
+                    <input type="checkbox" id="pcpEnabled" onchange="togglePcp()"> Enable 802.1p PCP Marking
+                </label>
+            </div>
+            <table>
+                <thead><tr><th>Traffic Type</th><th>PCP Value</th><th>Description</th></tr></thead>
+                <tbody id="pcpTable">
+                    <tr><td>Network Control</td><td>7</td><td>Highest priority, routing protocols</td></tr>
+                    <tr><td>Voice (VoIP)</td><td>6</td><td>Real-time voice traffic</td></tr>
+                    <tr><td>Video</td><td>5</td><td>Real-time video streaming</td></tr>
+                    <tr><td>Controlled Load</td><td>4</td><td>Important business traffic</td></tr>
+                    <tr><td>Excellent Effort</td><td>3</td><td>Business critical applications</td></tr>
+                    <tr><td>Spare/Bulk</td><td>2</td><td>Bulk data transfers</td></tr>
+                    <tr><td>Background</td><td>1</td><td>Background traffic</td></tr>
+                    <tr><td>Best Effort</td><td>0</td><td>Default traffic (no priority)</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Add VLAN Modal -->
+        <div id="vlanModal" class="modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:1000;">
+            <div class="modal-content" style="background:var(--tube-deep); border:1px solid var(--p31-dim); max-width:500px; margin:10% auto; padding:1.5rem; border-radius:8px;">
+                <h3 class="modal-title" style="color:var(--p31-decay); margin-bottom:1rem;">Add VLAN QoS Policy</h3>
+                <form id="vlanForm">
+                    <div style="margin-bottom:1rem;">
+                        <label>Parent Interface:</label>
+                        <select id="vlanParent" style="width:100%;">
+                            <option value="eth0">eth0</option>
+                            <option value="eth1">eth1</option>
+                            <option value="br0">br0</option>
+                        </select>
+                    </div>
+                    <div style="margin-bottom:1rem;">
+                        <label>VLAN ID (1-4094):</label>
+                        <input type="number" id="vlanId" min="1" max="4094" style="width:100%;" required>
+                    </div>
+                    <div style="margin-bottom:1rem;">
+                        <label>Upload (Mbps):</label>
+                        <input type="number" id="vlanUpload" value="100" style="width:100%;">
+                    </div>
+                    <div style="margin-bottom:1rem;">
+                        <label>Download (Mbps):</label>
+                        <input type="number" id="vlanDownload" value="200" style="width:100%;">
+                    </div>
+                    <div style="margin-bottom:1rem;">
+                        <label>802.1p Priority (0-7):</label>
+                        <input type="number" id="vlanPriority" min="0" max="7" value="0" style="width:100%;">
+                    </div>
+                    <div style="margin-bottom:1rem;">
+                        <label>Description:</label>
+                        <input type="text" id="vlanDesc" placeholder="e.g., Management VLAN" style="width:100%;">
+                    </div>
+                    <div style="display:flex; gap:1rem; justify-content:flex-end;">
+                        <button type="button" class="btn" onclick="hideVlanModal()">Cancel</button>
+                        <button type="submit" class="btn primary">Create VLAN</button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </main>
 
     <script>
@@ -369,8 +454,177 @@
         function showAddRule() { alert('Rule configuration coming soon'); }
         function toggleRule(id) { alert('Toggle rule: ' + id); }
 
+        // VLAN QoS Functions
+        async function refreshVlans() {
+            // Load VLANs
+            const vlans = await api('/vlans');
+            const vlansBody = document.getElementById('vlansTable');
+            if (vlans.vlans && vlans.vlans.length > 0) {
+                vlansBody.innerHTML = vlans.vlans.map(v => `
+                    <tr>
+                        <td><code>${v.interface}</code></td>
+                        <td>${v.vlan_id || '-'}</td>
+                        <td>${v.policy?.upload_mbps || '-'} Mbps</td>
+                        <td>${v.policy?.download_mbps || '-'} Mbps</td>
+                        <td><span class="badge badge-cyan">PCP ${v.policy?.priority || 0}</span></td>
+                        <td><span class="badge ${v.qos_enabled ? 'badge-green' : 'badge-yellow'}">${v.qos_enabled ? 'Active' : 'Inactive'}</span></td>
+                        <td>
+                            <button class="btn btn-blue" onclick="editVlan('${v.interface}')">Edit</button>
+                            <button class="btn btn-red" onclick="deleteVlan('${v.interface}')">Delete</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } else {
+                vlansBody.innerHTML = '<tr><td colspan="7" class="empty">No VLAN interfaces detected. Create one to enable per-VLAN QoS.</td></tr>';
+            }
+
+            // Load managed interfaces
+            const ifaces = await api('/interfaces');
+            const ifaceBody = document.getElementById('interfacesTable');
+            if (ifaces.interfaces && ifaces.interfaces.length > 0) {
+                ifaceBody.innerHTML = ifaces.interfaces.map(i => `
+                    <tr>
+                        <td><code>${i.interface}</code></td>
+                        <td><span class="badge ${i.is_vlan ? 'badge-purple' : 'badge-cyan'}">${i.is_vlan ? 'VLAN' : 'Physical'}</span></td>
+                        <td>${formatBytes(i.stats?.rx_bytes || 0)}</td>
+                        <td>${formatBytes(i.stats?.tx_bytes || 0)}</td>
+                        <td><span class="badge ${i.qos_active ? 'badge-green' : 'badge-yellow'}">${i.qos_active ? 'HTB Active' : 'No QoS'}</span></td>
+                    </tr>
+                `).join('');
+            } else {
+                ifaceBody.innerHTML = '<tr><td colspan="5" class="empty">No managed interfaces</td></tr>';
+            }
+
+            // Load PCP status
+            const pcp = await api('/pcp/mappings');
+            document.getElementById('pcpEnabled').checked = pcp.pcp_enabled || false;
+        }
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function showAddVlan() {
+            document.getElementById('vlanModal').style.display = 'block';
+        }
+
+        function hideVlanModal() {
+            document.getElementById('vlanModal').style.display = 'none';
+        }
+
+        document.getElementById('vlanForm').onsubmit = async function(e) {
+            e.preventDefault();
+            const data = {
+                parent: document.getElementById('vlanParent').value,
+                vlan_id: parseInt(document.getElementById('vlanId').value),
+                upload_mbps: parseInt(document.getElementById('vlanUpload').value),
+                download_mbps: parseInt(document.getElementById('vlanDownload').value),
+                priority: parseInt(document.getElementById('vlanPriority').value),
+                description: document.getElementById('vlanDesc').value
+            };
+            try {
+                const res = await fetch(API + '/vlan/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify(data)
+                });
+                const result = await res.json();
+                if (result.success) {
+                    hideVlanModal();
+                    refreshVlans();
+                    alert('VLAN ' + data.vlan_id + ' created successfully!');
+                } else {
+                    alert('Error: ' + (result.detail || result.error || 'Unknown error'));
+                }
+            } catch (err) {
+                alert('Error: ' + err.message);
+            }
+        };
+
+        async function deleteVlan(iface) {
+            if (!confirm('Delete VLAN interface ' + iface + '?')) return;
+            try {
+                const res = await fetch(API + '/vlan/' + iface, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+                const result = await res.json();
+                if (result.success) {
+                    refreshVlans();
+                } else {
+                    alert('Error: ' + (result.detail || 'Failed to delete'));
+                }
+            } catch (err) {
+                alert('Error: ' + err.message);
+            }
+        }
+
+        async function editVlan(iface) {
+            const policy = await api('/vlan/' + iface);
+            if (policy.policy) {
+                const p = policy.policy;
+                const newUp = prompt('Upload (Mbps):', p.upload_mbps);
+                const newDown = prompt('Download (Mbps):', p.download_mbps);
+                const newPrio = prompt('802.1p Priority (0-7):', p.priority);
+                if (newUp && newDown && newPrio !== null) {
+                    const res = await fetch(API + '/vlan/' + iface + '/policy', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({
+                            upload_mbps: parseInt(newUp),
+                            download_mbps: parseInt(newDown),
+                            priority: parseInt(newPrio),
+                            enabled: true,
+                            description: p.description || ''
+                        })
+                    });
+                    refreshVlans();
+                }
+            } else {
+                alert('No policy found for ' + iface);
+            }
+        }
+
+        async function applyAllVlans() {
+            try {
+                const res = await fetch(API + '/vlan/apply_all', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                const result = await res.json();
+                if (result.success) {
+                    alert('QoS applied to ' + result.count + ' interfaces');
+                    refreshVlans();
+                } else {
+                    alert('Error: ' + (result.error || 'Failed to apply'));
+                }
+            } catch (err) {
+                alert('Error: ' + err.message);
+            }
+        }
+
+        async function togglePcp() {
+            const enabled = document.getElementById('pcpEnabled').checked;
+            try {
+                await fetch(API + '/pcp/enable?enabled=' + enabled, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+            } catch (err) {
+                console.error('PCP toggle error:', err);
+            }
+        }
+
         refresh();
+        refreshVlans();
         setInterval(refresh, 10000);
+        setInterval(refreshVlans, 15000);
     </script>
     <script src="/shared/crt-engine.js"></script>
 </body>

@@ -1,8 +1,9 @@
 {
   "id": "traffic",
-  "title": "Traffic Shaping",
+  "name": "Traffic Shaping",
   "icon": "📊",
   "path": "/traffic/",
   "category": "network",
-  "order": 36
+  "order": 36,
+  "description": "TC/CAKE QoS traffic shaping per interface"
 }
