@@ -94,6 +94,25 @@ opkg                             →    apt + repo apt.secubox.in
 
 ## Quick Start
 
+### Live USB (Recommended)
+
+The fastest way to try SecuBox - boot directly from USB with all packages pre-installed.
+
+```bash
+# Download latest release
+wget https://github.com/CyberMind-FR/secubox-deb/releases/latest/download/secubox-live-amd64-bookworm.img.gz
+
+# Flash to USB (replace /dev/sdX with your device)
+zcat secubox-live-amd64-bookworm.img.gz | sudo dd of=/dev/sdX bs=4M status=progress
+sync
+
+# Boot from USB and access:
+# Web UI: https://<IP>:8443 (admin / admin)
+# SSH: root / secubox
+```
+
+See [docs/LIVE-USB.md](docs/LIVE-USB.md) for full documentation.
+
 ### Installation (from APT repo)
 
 ```bash
@@ -239,6 +258,7 @@ ssh -p 2222 root@localhost "dpkg -i /tmp/*.deb"
 
 ## Documentation
 
+- [Live USB Guide](docs/LIVE-USB.md) — Bootable USB image, quick start
 - [User Guide](docs/USER-GUIDE.md) — Installation, configuration, usage
 - [API Reference](docs/API-REFERENCE.md) — Complete REST API documentation
 - [Migration Map](.claude/MIGRATION-MAP.md) — Module status tracking
