@@ -21,7 +21,7 @@
         "category": "Dashboard",
         "success": true,
         "screenshot": "docs/screenshots/vm/soc.png",
-        "error": null,
+        "error": "requires_auth",
         "status_code": 200
       },
       {
@@ -57,7 +57,7 @@
         "category": "Security",
         "success": true,
         "screenshot": "docs/screenshots/vm/vortex-firewall.png",
-        "error": null,
+        "error": "requires_auth",
         "status_code": 200
       },
       {
@@ -129,7 +129,7 @@
         "category": "Network",
         "success": true,
         "screenshot": "docs/screenshots/vm/vhost.png",
-        "error": null,
+        "error": "requires_auth",
         "status_code": 200
       },
       {
@@ -147,7 +147,7 @@
         "category": "DNS",
         "success": true,
         "screenshot": "docs/screenshots/vm/vortex-dns.png",
-        "error": null,
+        "error": "requires_auth",
         "status_code": 200
       },
       {
@@ -156,7 +156,7 @@
         "category": "DNS",
         "success": true,
         "screenshot": "docs/screenshots/vm/meshname.png",
-        "error": null,
+        "error": "requires_auth",
         "status_code": 200
       },
       {
@@ -237,7 +237,7 @@
         "category": "Monitoring",
         "success": true,
         "screenshot": "docs/screenshots/vm/device-intel.png",
-        "error": null,
+        "error": "requires_auth",
         "status_code": 200
       },
       {
@@ -282,7 +282,7 @@
         "category": "Access",
         "success": true,
         "screenshot": "docs/screenshots/vm/users.png",
-        "error": null,
+        "error": "requires_auth",
         "status_code": 200
       },
       {
@@ -318,7 +318,7 @@
         "category": "Services",
         "success": true,
         "screenshot": "docs/screenshots/vm/nextcloud.png",
-        "error": null,
+        "error": "requires_auth",
         "status_code": 200
       },
       {
@@ -327,7 +327,7 @@
         "category": "Email",
         "success": true,
         "screenshot": "docs/screenshots/vm/mail.png",
-        "error": null,
+        "error": "requires_auth",
         "status_code": 200
       },
       {
@@ -336,7 +336,7 @@
         "category": "Email",
         "success": true,
         "screenshot": "docs/screenshots/vm/webmail.png",
-        "error": null,
+        "error": "requires_auth",
         "status_code": 200
       },
       {
@@ -345,7 +345,7 @@
         "category": "Publishing",
         "success": true,
         "screenshot": "docs/screenshots/vm/publish.png",
-        "error": null,
+        "error": "requires_auth",
         "status_code": 200
       },
       {
@@ -372,7 +372,7 @@
         "category": "Apps",
         "success": true,
         "screenshot": "docs/screenshots/vm/streamlit.png",
-        "error": null,
+        "error": "requires_auth",
         "status_code": 200
       },
       {
@@ -412,7 +412,7 @@
         "status_code": 200
       }
     ],
-    "timestamp": "2026-03-24T12:50:43.368172"
+    "timestamp": "2026-03-24T13:01:33.066714"
   },
   "device": {}
 }
