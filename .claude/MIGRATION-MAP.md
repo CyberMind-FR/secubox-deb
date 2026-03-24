@@ -1,5 +1,5 @@
 # MIGRATION MAP — SecuBox OpenWrt → Debian
-*Mis à jour : 2026-03-23*
+*Mis à jour : 2026-03-24*
 
 Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 
@@ -48,7 +48,7 @@ Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 | **secubox-vhost** | ✅ | ✅ | ✅ | vhosts, ssl, certs | ✅ |
 | **secubox-mediaflow** | ✅ (20) | ✅ | ✅ | streams, alerts... | ✅ |
 | **secubox-dpi** | ✅ | ✅ | ✅ | 40+ endpoints netifyd | ✅ |
-| **secubox-qos** | ✅ (80) | ✅ | ✅ | 60+ endpoints HTB | ✅ |
+| **secubox-qos** | ✅ (80) | ✅ | ✅ | 80+ endpoints HTB + VLAN v1.1.0 | ✅ |
 | **secubox-auth** | ✅ (11) | ✅ | ✅ | 20+ endpoints | ✅ |
 | **secubox-cdn** | ✅ (36) | ✅ | ✅ | 25+ endpoints | ✅ |
 | **secubox-system** | ✅ (42) | ✅ | ✅ | 35+ endpoints | ✅ |

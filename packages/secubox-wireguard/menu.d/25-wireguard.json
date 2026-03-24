@@ -1,10 +1,9 @@
 {
   "id": "wireguard",
-  "title": "WireGuard VPN",
-  "icon": "shield",
+  "name": "WireGuard VPN",
+  "icon": "🔐",
   "path": "/wireguard/",
-  "section": "security",
+  "category": "security",
   "order": 25,
-  "api": "/api/v1/wireguard/",
   "description": "WireGuard VPN tunnel management"
 }

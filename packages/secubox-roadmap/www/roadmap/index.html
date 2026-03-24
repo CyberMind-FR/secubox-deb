@@ -30,15 +30,85 @@
             display: flex;
         }
 
+        /* Conditional sidebar visibility */
+        body.authenticated .main-content {
+            margin-left: 260px;
+        }
+
+        body.guest .main-content {
+            margin-left: 0;
+        }
+
+        body.guest #sidebar-container {
+            display: none;
+        }
+
         .main-content {
             flex: 1;
             padding: 1.5rem;
-            margin-left: 260px;
             min-height: 100vh;
         }
 
         @media (max-width: 768px) {
-            .main-content { margin-left: 0; padding: 1rem; }
+            .main-content { margin-left: 0 !important; padding: 1rem; }
+        }
+
+        /* Guest header bar */
+        .guest-header {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border);
+            padding: 0 1.5rem;
+            align-items: center;
+            justify-content: space-between;
+            z-index: 100;
+        }
+
+        body.guest .guest-header {
+            display: flex;
+        }
+
+        body.guest .main-content {
+            padding-top: 80px;
+        }
+
+        .guest-header .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            color: var(--green);
+            text-decoration: none;
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+
+        .guest-header .logo-icon {
+            font-size: 1.5rem;
+        }
+
+        .guest-header .login-btn {
+            background: transparent;
+            border: 1px solid var(--green);
+            color: var(--green);
+            padding: 0.5rem 1.25rem;
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 0.9rem;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            transition: all 0.2s;
+        }
+
+        .guest-header .login-btn:hover {
+            background: var(--green);
+            color: var(--bg-dark);
+            box-shadow: 0 0 15px var(--green);
         }
 
         .page-header {
@@ -294,7 +364,17 @@
     </style>
 </head>
 <body>
-    <div id="sidebar-container"></div>
+    <!-- Guest header (shown when not authenticated) -->
+    <header class="guest-header">
+        <a href="/" class="logo">
+            <span class="logo-icon">🔒</span>
+            <span>SECUBOX</span>
+        </a>
+        <button class="login-btn" onclick="window.location.href='/portal/login.html'">Login</button>
+    </header>
+
+    <!-- Sidebar (shown when authenticated) -->
+    <nav class="sidebar" id="sidebar"></nav>
 
     <main class="main-content">
         <header class="page-header">
@@ -327,10 +407,29 @@
         </section>
     </main>
 
-    <script src="/shared/sidebar.js"></script>
     <script src="/shared/crt-engine.js"></script>
     <script>
         const API_BASE = '/api/v1/roadmap';
+
+        // Check authentication status
+        function isAuthenticated() {
+            return !!localStorage.getItem('sbx_token');
+        }
+
+        // Setup page based on auth status
+        function setupAuthState() {
+            if (isAuthenticated()) {
+                document.body.classList.add('authenticated');
+                document.body.classList.remove('guest');
+                // Load sidebar dynamically
+                const script = document.createElement('script');
+                script.src = '/shared/sidebar.js';
+                document.body.appendChild(script);
+            } else {
+                document.body.classList.add('guest');
+                document.body.classList.remove('authenticated');
+            }
+        }
 
         async function api(endpoint) {
             try {
@@ -410,6 +509,7 @@
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
+            setupAuthState();
             loadRoadmap();
             setInterval(loadRoadmap, 60000); // Refresh every minute
         });

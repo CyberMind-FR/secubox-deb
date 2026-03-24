@@ -1,3 +1,18 @@
+secubox-qos (1.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Add per-VLAN QoS support
+  * Add multi-interface management (eth0, eth0.100, eth0.200, etc.)
+  * Add VLAN discovery and listing (/vlans endpoint)
+  * Add per-VLAN bandwidth policies with priority settings
+  * Add 802.1p PCP (Priority Code Point) marking support
+  * Add VLAN creation/deletion endpoints
+  * Add VLAN-aware traffic classification rules
+  * Add per-interface statistics and tc class stats
+  * Support applying QoS to all managed interfaces at once
+  * Backward compatible with single-interface configuration
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 24 Mar 2026 12:30:00 +0100
+
 secubox-qos (1.0.4-1~bookworm1) bookworm; urgency=medium
 
   * Add dynamic menu system with menu.d JSON definitions
