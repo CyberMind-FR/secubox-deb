@@ -145,19 +145,21 @@ class ScreenshotTool:
         """Login to SecuBox and get JWT token."""
         try:
             # Go to login page
-            await page.goto(f"{base_url}/portal/login.html", wait_until="networkidle", timeout=10000)
-            await asyncio.sleep(1)
+            await page.goto(f"{base_url}/portal/login.html", wait_until="networkidle", timeout=15000)
+            await asyncio.sleep(2)
 
-            # Fill credentials
-            await page.fill('input[name="username"], input[type="text"]', username)
-            await page.fill('input[name="password"], input[type="password"]', password)
+            # Fill credentials using specific IDs
+            await page.fill('#username', username)
+            await page.fill('#password', password)
 
             # Click login button
-            await page.click('button[type="submit"], .btn-login, button:has-text("Login")')
-            await asyncio.sleep(2)
+            await page.click('button[type="submit"]')
+            await asyncio.sleep(3)
 
             # Check if login succeeded by looking for token
             self.token = await page.evaluate("localStorage.getItem('sbx_token')")
+            if self.token:
+                print(f"  Token acquired: {self.token[:20]}...")
             return self.token is not None
         except Exception as e:
             print(f"  Login failed: {e}")
