@@ -142,25 +142,45 @@ class ScreenshotTool:
         self.token = None
 
     async def login(self, page: Page, base_url: str, username: str = "admin", password: str = "secubox") -> bool:
-        """Login to SecuBox and get JWT token."""
+        """Login to SecuBox via API (using aiohttp) and inject token into browser."""
         try:
-            # Go to login page
-            await page.goto(f"{base_url}/portal/login.html", wait_until="networkidle", timeout=15000)
-            await asyncio.sleep(2)
+            import ssl
+            import aiohttp
 
-            # Fill credentials using specific IDs
-            await page.fill('#username', username)
-            await page.fill('#password', password)
+            # Create SSL context that ignores certificate errors
+            ssl_ctx = ssl.create_default_context()
+            ssl_ctx.check_hostname = False
+            ssl_ctx.verify_mode = ssl.CERT_NONE
 
-            # Click login button
-            await page.click('button[type="submit"]')
-            await asyncio.sleep(3)
+            # Login via aiohttp (bypasses browser SSL issues)
+            connector = aiohttp.TCPConnector(ssl=ssl_ctx)
+            async with aiohttp.ClientSession(connector=connector) as session:
+                async with session.post(
+                    f"{base_url}/api/v1/portal/login",
+                    json={"username": username, "password": password},
+                    timeout=aiohttp.ClientTimeout(total=10)
+                ) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        if data.get("token"):
+                            self.token = data["token"]
+                            print(f"  Token acquired: {self.token[:40]}...")
+                        else:
+                            print(f"  Login response: {data}")
+                            return False
+                    else:
+                        text = await resp.text()
+                        print(f"  Login failed: HTTP {resp.status} - {text[:100]}")
+                        return False
 
-            # Check if login succeeded by looking for token
-            self.token = await page.evaluate("localStorage.getItem('sbx_token')")
-            if self.token:
-                print(f"  Token acquired: {self.token[:20]}...")
-            return self.token is not None
+            # Go to the main page and inject the token
+            await page.goto(base_url, wait_until="domcontentloaded", timeout=10000)
+            await page.evaluate(f"""
+                localStorage.setItem('sbx_token', '{self.token}');
+                localStorage.setItem('secubox_token', '{self.token}');
+            """)
+
+            return True
         except Exception as e:
             print(f"  Login failed: {e}")
             return False
