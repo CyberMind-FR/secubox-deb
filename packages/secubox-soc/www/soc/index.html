@@ -138,15 +138,48 @@
             <div class="card">
                 <h2>🌍 Threat Map <span class="count" id="threatCount">0 threats</span></h2>
                 <div class="world-map" id="worldMap">
-                    <svg viewBox="0 0 800 400" id="mapSvg">
-                        <!-- Simplified world map paths -->
-                        <path d="M150,120 L200,100 L250,110 L280,130 L260,160 L220,170 L180,150 Z" fill="var(--p31-ghost)" stroke="var(--p31-dim)" stroke-width="0.5"/>
-                        <path d="M300,80 L380,70 L420,90 L450,120 L440,160 L400,180 L350,170 L320,140 Z" fill="var(--p31-ghost)" stroke="var(--p31-dim)" stroke-width="0.5"/>
-                        <path d="M460,100 L550,80 L620,100 L680,130 L700,180 L650,220 L580,210 L520,180 L480,140 Z" fill="var(--p31-ghost)" stroke="var(--p31-dim)" stroke-width="0.5"/>
-                        <path d="M200,200 L280,190 L320,220 L300,280 L240,300 L200,260 Z" fill="var(--p31-ghost)" stroke="var(--p31-dim)" stroke-width="0.5"/>
-                        <path d="M340,220 L400,200 L440,230 L420,280 L370,290 L340,260 Z" fill="var(--p31-ghost)" stroke="var(--p31-dim)" stroke-width="0.5"/>
-                        <path d="M620,250 L680,240 L720,280 L700,320 L650,330 L620,300 Z" fill="var(--p31-ghost)" stroke="var(--p31-dim)" stroke-width="0.5"/>
-                        <g id="threatDots"></g>
+                    <svg viewBox="0 0 1000 500" id="mapSvg" preserveAspectRatio="xMidYMid meet">
+                        <defs>
+                            <filter id="glow"><feGaussianBlur stdDeviation="2" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                        </defs>
+                        <!-- Grid lines -->
+                        <g stroke="var(--p31-ghost)" stroke-width="0.3" opacity="0.3">
+                            <line x1="0" y1="250" x2="1000" y2="250"/><line x1="500" y1="0" x2="500" y2="500"/>
+                            <line x1="0" y1="125" x2="1000" y2="125"/><line x1="0" y1="375" x2="1000" y2="375"/>
+                            <line x1="250" y1="0" x2="250" y2="500"/><line x1="750" y1="0" x2="750" y2="500"/>
+                        </g>
+                        <!-- North America -->
+                        <path d="M45,85 L85,55 L140,50 L185,65 L210,55 L240,70 L225,95 L250,100 L245,125 L220,140 L195,130 L180,155 L195,175 L175,200 L145,195 L120,210 L95,190 L85,160 L60,155 L45,130 L55,105 Z" fill="var(--p31-ghost)" stroke="var(--p31-dim)" stroke-width="0.5"/>
+                        <!-- Greenland -->
+                        <path d="M290,35 L340,30 L365,50 L350,80 L315,85 L290,65 Z" fill="var(--p31-ghost)" stroke="var(--p31-dim)" stroke-width="0.5"/>
+                        <!-- South America -->
+                        <path d="M175,235 L205,225 L230,235 L245,260 L255,295 L245,340 L220,380 L195,395 L175,370 L165,320 L175,280 L165,250 Z" fill="var(--p31-ghost)" stroke="var(--p31-dim)" stroke-width="0.5"/>
+                        <!-- Europe -->
+                        <path d="M420,75 L480,55 L520,65 L535,85 L520,110 L540,120 L525,145 L495,140 L475,155 L445,145 L430,125 L445,100 L425,90 Z" fill="var(--p31-ghost)" stroke="var(--p31-dim)" stroke-width="0.5"/>
+                        <!-- UK/Ireland -->
+                        <path d="M395,85 L415,80 L420,100 L405,110 L395,95 Z" fill="var(--p31-ghost)" stroke="var(--p31-dim)" stroke-width="0.5"/>
+                        <!-- Africa -->
+                        <path d="M430,175 L485,165 L530,175 L555,200 L565,250 L555,310 L530,355 L495,370 L455,355 L435,310 L425,260 L435,215 L420,190 Z" fill="var(--p31-ghost)" stroke="var(--p31-dim)" stroke-width="0.5"/>
+                        <!-- Russia/Northern Asia -->
+                        <path d="M540,50 L620,35 L720,45 L820,55 L880,75 L900,95 L880,120 L820,130 L750,125 L680,135 L620,125 L560,120 L540,100 L555,75 Z" fill="var(--p31-ghost)" stroke="var(--p31-dim)" stroke-width="0.5"/>
+                        <!-- Middle East -->
+                        <path d="M545,155 L590,145 L620,160 L615,190 L590,200 L560,195 L545,175 Z" fill="var(--p31-ghost)" stroke="var(--p31-dim)" stroke-width="0.5"/>
+                        <!-- India -->
+                        <path d="M635,175 L675,165 L695,190 L685,235 L655,260 L625,245 L620,210 L630,190 Z" fill="var(--p31-ghost)" stroke="var(--p31-dim)" stroke-width="0.5"/>
+                        <!-- China/East Asia -->
+                        <path d="M700,115 L780,105 L830,125 L845,160 L820,195 L770,200 L730,185 L695,165 L700,140 Z" fill="var(--p31-ghost)" stroke="var(--p31-dim)" stroke-width="0.5"/>
+                        <!-- Southeast Asia -->
+                        <path d="M735,210 L780,205 L810,230 L795,270 L755,280 L725,260 L720,230 Z" fill="var(--p31-ghost)" stroke="var(--p31-dim)" stroke-width="0.5"/>
+                        <!-- Japan -->
+                        <path d="M855,130 L875,120 L890,140 L880,165 L860,170 L850,150 Z" fill="var(--p31-ghost)" stroke="var(--p31-dim)" stroke-width="0.5"/>
+                        <!-- Indonesia -->
+                        <path d="M755,295 L830,290 L870,305 L855,325 L800,330 L755,320 Z" fill="var(--p31-ghost)" stroke="var(--p31-dim)" stroke-width="0.5"/>
+                        <!-- Australia -->
+                        <path d="M820,345 L890,335 L940,355 L955,395 L935,435 L885,445 L835,430 L810,395 L815,365 Z" fill="var(--p31-ghost)" stroke="var(--p31-dim)" stroke-width="0.5"/>
+                        <!-- New Zealand -->
+                        <path d="M960,420 L975,415 L985,440 L970,455 L955,445 Z" fill="var(--p31-ghost)" stroke="var(--p31-dim)" stroke-width="0.5"/>
+                        <!-- Threat dots layer -->
+                        <g id="threatDots" filter="url(#glow)"></g>
                     </svg>
                 </div>
                 <div class="map-legend">
@@ -265,11 +298,16 @@
             `).join('');
         }
 
-        // Map
+        // Map coordinates (matching new 1000x500 SVG)
         const regionCoords = {
-            US: [180, 140], RU: [580, 100], CN: [620, 150], DE: [400, 110], FR: [380, 130],
-            GB: [370, 100], BR: [260, 260], IN: [560, 180], JP: [700, 140], AU: [680, 300],
-            KR: [680, 150], IR: [520, 160], UA: [460, 120], NL: [390, 105]
+            US: [150, 130], CA: [120, 90], MX: [130, 180],
+            BR: [220, 320], AR: [200, 380], CO: [195, 260],
+            GB: [405, 95], FR: [460, 130], DE: [485, 110], NL: [470, 100],
+            ES: [430, 145], IT: [490, 140], PL: [510, 105], UA: [540, 110],
+            RU: [720, 85], CN: [765, 155], JP: [870, 145], KR: [840, 160],
+            IN: [655, 210], PK: [630, 185], IR: [590, 175], SA: [570, 195],
+            AU: [880, 390], NZ: [965, 435], ID: [790, 305], SG: [755, 270],
+            ZA: [510, 355], NG: [470, 250], EG: [530, 195], KE: [545, 285]
         };
 
         async function loadMap() {
