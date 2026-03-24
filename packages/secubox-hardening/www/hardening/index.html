@@ -4,35 +4,125 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hardening - SecuBox</title>
-    <link rel="stylesheet" href="/portal/css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/crt-system.css">
+    <link rel="stylesheet" href="/shared/sidebar.css">
     <style>
+        :root {
+            --p31-peak: #33ff66;
+            --p31-hot: #66ffaa;
+            --p31-mid: #22cc44;
+            --p31-dim: #0f8822;
+            --p31-ghost: #052210;
+            --p31-decay: #ffb347;
+            --p31-decay-dim: #cc7722;
+            --tube-black: #050803;
+            --tube-deep: #080d05;
+            --tube-bezel: #0d1208;
+            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Courier Prime', 'Courier New', monospace;
+            background: var(--tube-black);
+            background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
+            color: var(--p31-mid);
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .main {
+            margin-left: 220px;
+            padding: 2rem;
+            flex: 1;
+        }
+
+        .header {
+            margin-bottom: 2rem;
+        }
+
+        .header h1 {
+            color: var(--p31-hot);
+            text-shadow: var(--bloom-text);
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .header .subtitle {
+            color: var(--p31-dim);
+            font-size: 0.85rem;
+            letter-spacing: 0.05em;
+        }
+
         .score-card {
-            background: var(--surface0);
-            border-radius: 8px;
+            background: var(--tube-deep);
+            border: 1px solid var(--p31-ghost);
+            border-radius: 4px;
             padding: 2rem;
             text-align: center;
             margin-bottom: 2rem;
+            box-shadow: inset 0 0 30px rgba(0,0,0,0.3);
         }
+
         .score-value {
             font-size: 4rem;
             font-weight: bold;
+            text-shadow: 0 0 20px currentColor;
         }
-        .score-value.good { color: var(--green); }
-        .score-value.medium { color: var(--yellow); }
-        .score-value.bad { color: var(--red); }
+
+        .score-value.good { color: var(--p31-peak); }
+        .score-value.medium { color: var(--p31-decay); }
+        .score-value.bad { color: #ff4466; }
+
+        .score-label {
+            color: var(--p31-dim);
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            margin-top: 0.5rem;
+        }
+
+        .section-title {
+            color: var(--p31-decay);
+            text-shadow: var(--bloom-amber);
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--p31-ghost);
+        }
+
         .checks-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
             gap: 1rem;
+            margin-bottom: 2rem;
         }
+
         .check-item {
-            background: var(--surface0);
-            border-radius: 8px;
+            background: var(--tube-deep);
+            border: 1px solid var(--p31-ghost);
+            border-radius: 4px;
             padding: 1rem;
             display: flex;
             align-items: center;
             gap: 1rem;
+            transition: all 0.2s;
         }
+
+        .check-item:hover {
+            border-color: var(--p31-dim);
+            box-shadow: 0 0 10px rgba(51,255,102,0.05);
+        }
+
         .check-icon {
             width: 32px;
             height: 32px;
@@ -41,248 +131,135 @@
             align-items: center;
             justify-content: center;
             font-weight: bold;
+            font-size: 1rem;
         }
-        .check-icon.pass { background: var(--green); color: var(--base); }
-        .check-icon.fail { background: var(--red); color: var(--base); }
-        .check-details h4 { margin: 0 0 0.25rem 0; }
-        .check-details .status { font-size: 0.875rem; color: var(--subtext0); }
+
+        .check-icon.pass {
+            background: rgba(51,255,102,0.2);
+            color: var(--p31-peak);
+            border: 1px solid var(--p31-peak);
+            box-shadow: 0 0 10px rgba(51,255,102,0.3);
+        }
+
+        .check-icon.fail {
+            background: rgba(255,68,102,0.2);
+            color: #ff4466;
+            border: 1px solid #ff4466;
+            box-shadow: 0 0 10px rgba(255,68,102,0.3);
+        }
+
+        .check-details {
+            flex: 1;
+        }
+
+        .check-details h4 {
+            margin: 0 0 0.25rem 0;
+            color: var(--p31-mid);
+            font-size: 0.9rem;
+        }
+
+        .check-details .status {
+            font-size: 0.75rem;
+            color: var(--p31-dim);
+            letter-spacing: 0.05em;
+        }
+
         .action-section {
-            margin-top: 2rem;
             display: flex;
             gap: 1rem;
             flex-wrap: wrap;
         }
-        .action-btn {
-            padding: 0.75rem 1.5rem;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: 500;
-        }
-        .action-btn.primary { background: var(--blue); color: var(--base); }
-        .action-btn.secondary { background: var(--surface1); color: var(--text); }
-    
-        /* CRT Enhancements */
-        .main { margin-left: 220px; padding: 1.5rem; }
-
-        .header h1 {
-            color: var(--p31-hot);
-            text-shadow: var(--bloom-text);
-            font-weight: 700;
-            letter-spacing: 0.05em;
-        }
-
-        .badge {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            border: 1px solid;
-        }
-        .badge-blue, .badge-primary { background: rgba(51,255,102,0.1); border-color: var(--p31-peak); color: var(--p31-peak); }
-        .badge-green { background: rgba(51,255,102,0.15); border-color: var(--p31-peak); color: var(--p31-peak); text-shadow: var(--bloom-soft); }
-        .badge-cyan { background: rgba(51,255,102,0.1); border-color: var(--p31-mid); color: var(--p31-mid); }
-        .badge-purple { background: rgba(163,113,247,0.1); border-color: #a371f7; color: #a371f7; }
-        .badge-yellow, .badge-amber { background: rgba(255,179,71,0.1); border-color: var(--p31-decay); color: var(--p31-decay); }
-        .badge-red { background: rgba(255,68,102,0.1); border-color: #ff4466; color: #ff4466; }
 
         .btn {
             font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
+            padding: 0.75rem 1.5rem;
             border: 1px solid var(--p31-ghost);
+            border-radius: 4px;
             background: var(--tube-deep);
             color: var(--p31-mid);
+            cursor: pointer;
+            font-size: 0.8rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
             transition: all 0.2s;
         }
+
         .btn:hover {
             border-color: var(--p31-dim);
             color: var(--p31-peak);
             text-shadow: var(--bloom-soft);
-            box-shadow: 0 0 12px rgba(51,255,102,0.1);
         }
-        .btn-green, .btn-primary, .btn.primary, .btn.success {
+
+        .btn-primary {
             border-color: var(--p31-peak);
             color: var(--p31-peak);
             background: rgba(51,255,102,0.1);
         }
-        .btn-green:hover, .btn-primary:hover, .btn.primary:hover, .btn.success:hover {
+
+        .btn-primary:hover {
             background: rgba(51,255,102,0.2);
-            box-shadow: 0 0 16px rgba(51,255,102,0.2);
-        }
-        .btn-red, .btn.danger {
-            border-color: #ff4466;
-            color: #ff4466;
-            background: rgba(255,68,102,0.1);
-        }
-        .btn-red:hover, .btn.danger:hover {
-            background: rgba(255,68,102,0.2);
-        }
-        .btn-blue {
-            border-color: var(--p31-mid);
-            color: var(--p31-mid);
-            background: rgba(51,255,102,0.05);
-        }
-        .btn-blue:hover {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
+            box-shadow: 0 0 15px rgba(51,255,102,0.2);
         }
 
-        .card {
-            background: var(--tube-deep);
-            border: 1px solid var(--p31-ghost);
-            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card:hover {
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.05), inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card-title, .card-header h2 {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.85rem;
-        }
-
-        .stat-card {
-            background: var(--tube-deep);
-            border: 1px solid var(--p31-ghost);
-        }
-        .stat-value, .stat-card .value {
-            text-shadow: 0 0 10px currentColor;
-        }
-        .stat-label, .stat-card .label {
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
             color: var(--p31-dim);
-            letter-spacing: 0.15em;
-        }
-        .stat-card.cyan .value, .stat-card.green .value { color: var(--p31-peak); }
-        .stat-card.yellow .value { color: var(--p31-decay); }
-        .stat-card.red .value { color: #ff4466; }
-
-        table, .table {
-            font-family: 'Courier Prime', monospace;
-        }
-        th, .table th {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.15em;
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        td, .table td {
-            border-bottom: 1px solid var(--p31-ghost);
-            color: var(--p31-mid);
-        }
-        tr:hover, .table tr:hover {
-            background: rgba(51,255,102,0.03);
         }
 
-        .status-dot.active, .status-running {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-        }
-        .status-dot.active {
-            background: var(--p31-peak);
-            box-shadow: 0 0 8px var(--p31-peak);
+        .loading::after {
+            content: '...';
+            animation: dots 1.5s steps(4, end) infinite;
         }
 
-        .toast {
-            background: var(--tube-deep);
-            border: 1px solid var(--p31-dim);
-            font-family: 'Courier Prime', monospace;
+        @keyframes dots {
+            0%, 20% { content: ''; }
+            40% { content: '.'; }
+            60% { content: '..'; }
+            80%, 100% { content: '...'; }
         }
-        .toast-success { border-color: var(--p31-peak); }
-        .toast-error { border-color: #ff4466; }
-
-        .modal {
-            background: rgba(0,0,0,0.85);
-        }
-        .modal-content {
-            background: var(--tube-deep);
-            border: 1px solid var(--p31-dim);
-            box-shadow: 0 0 30px rgba(51,255,102,0.1);
-        }
-        .modal-title {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-        }
-
-        .tabs {
-            background: var(--tube-deep);
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        .tab {
-            color: var(--p31-dim);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.8rem;
-        }
-        .tab:hover { color: var(--p31-mid); }
-        .tab.active {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            border-bottom-color: var(--p31-peak);
-        }
-
-        input, select, textarea {
-            font-family: 'Courier Prime', monospace;
-            background: var(--tube-black);
-            border: 1px solid var(--p31-ghost);
-            color: var(--p31-mid);
-            padding: 0.5rem;
-        }
-        input:focus, select:focus, textarea:focus {
-            outline: none;
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.1);
-        }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: var(--tube-black); }
-        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
-        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
-
-        /* Empty states */
-        .empty { color: var(--p31-dim); }
 
         @media (max-width: 768px) {
-            .main { margin-left: 0; }
+            .main { margin-left: 0; padding: 1rem; }
+            .checks-grid { grid-template-columns: 1fr; }
         }
     </style>
 </head>
-<body class="crt-body crt-scanlines crt-body crt-scanlines">
-    <div class="app-container">
-        <nav class="sidebar" id="sidebar"></nav>
+<body class="crt-body crt-scanlines">
+    <nav class="sidebar" id="sidebar"></nav>
 
-        <main class="main-content">
-            <header class="content-header">
-                <h1>System Hardening</h1>
-                <p class="subtitle">Kernel and network security configuration</p>
-            </header>
+    <main class="main">
+        <header class="header">
+            <h1>System Hardening</h1>
+            <p class="subtitle">Kernel and network security configuration</p>
+        </header>
 
-            <div class="score-card">
-                <div class="score-value" id="score">--</div>
-                <div>Security Score</div>
-            </div>
+        <div class="score-card">
+            <div class="score-value" id="score">--</div>
+            <div class="score-label">Security Score</div>
+        </div>
 
-            <h2>Security Checks</h2>
-            <div class="checks-grid" id="checks"></div>
+        <h2 class="section-title">Security Checks</h2>
+        <div class="checks-grid" id="checks">
+            <div class="loading">Loading security checks</div>
+        </div>
 
-            <div class="action-section">
-                <button class="action-btn primary" onclick="applyHardening()">Apply Hardening</button>
-                <button class="action-btn secondary" onclick="runBenchmark()">Run Benchmark</button>
-                <button class="action-btn secondary" onclick="refreshStatus()">Refresh Status</button>
-            </div>
-        </main>
-    </div>
+        <div class="action-section">
+            <button class="btn btn-primary" onclick="applyHardening()">Apply Hardening</button>
+            <button class="btn" onclick="runBenchmark()">Run Benchmark</button>
+            <button class="btn" onclick="refreshStatus()">Refresh Status</button>
+        </div>
+    </main>
 
-    <script src="/portal/js/sidebar.js"></script>
+    <script src="/shared/sidebar.js"></script>
+    <script src="/shared/crt-engine.js"></script>
     <script>
         const API_BASE = '/api/v1/hardening';
 
         async function fetchAPI(endpoint, options = {}) {
-            const token = localStorage.getItem('jwt_token');
+            const token = localStorage.getItem('sbx_token');
             const headers = {
                 'Content-Type': 'application/json',
                 ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
@@ -319,42 +296,43 @@
                         </div>
                     `).join('');
                 } else {
-                    checksEl.innerHTML = '<div class="check-item">No checks available</div>';
+                    checksEl.innerHTML = '<div class="check-item"><div class="check-details"><h4>No checks available</h4><div class="status">Run benchmark to scan system</div></div></div>';
                 }
             } catch (e) {
                 console.error('Failed to load status:', e);
-                document.getElementById('score').textContent = 'Error';
+                document.getElementById('score').textContent = 'N/A';
+                document.getElementById('score').className = 'score-value';
+                document.getElementById('checks').innerHTML = '<div class="check-item"><div class="check-details"><h4>Unable to load status</h4><div class="status">Check API connection</div></div></div>';
             }
         }
 
         async function applyHardening() {
             try {
                 await fetchAPI('/apply', { method: 'POST' });
-                alert('Hardening applied');
+                CRT.toast('Hardening applied successfully', 'success');
                 loadStatus();
             } catch (e) {
-                alert('Failed to apply: ' + e.message);
+                CRT.toast('Failed to apply: ' + e.message, 'error');
             }
         }
 
         async function runBenchmark() {
             try {
-                const result = await fetchAPI('/benchmark');
-                if (result.output) {
-                    alert(result.output);
-                }
+                CRT.toast('Running benchmark...', 'info');
+                const result = await fetchAPI('/benchmark', { method: 'POST' });
+                CRT.toast('Benchmark completed', 'success');
                 loadStatus();
             } catch (e) {
-                alert('Benchmark failed: ' + e.message);
+                CRT.toast('Benchmark failed: ' + e.message, 'error');
             }
         }
 
         function refreshStatus() {
+            CRT.toast('Refreshing...', 'info');
             loadStatus();
         }
 
         document.addEventListener('DOMContentLoaded', loadStatus);
     </script>
-    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>

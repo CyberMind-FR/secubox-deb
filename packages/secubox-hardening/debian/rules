@@ -10,6 +10,7 @@ override_dh_auto_install:
 	install -d $(CURDIR)/debian/secubox-hardening/usr/share/secubox/www/hardening
 	install -d $(CURDIR)/debian/secubox-hardening/etc/secubox/hardening
 	install -d $(CURDIR)/debian/secubox-hardening/usr/share/secubox/menu.d
+	install -d $(CURDIR)/debian/secubox-hardening/etc/nginx/secubox.d
 
 	# Install hardeningctl
 	install -m 755 sbin/hardeningctl $(CURDIR)/debian/secubox-hardening/usr/sbin/
@@ -25,7 +26,10 @@ override_dh_auto_install:
 	cp -r www/hardening/* $(CURDIR)/debian/secubox-hardening/usr/share/secubox/www/hardening/ || true
 
 	# Install menu entry
-	install -m 644 debian/menu.json $(CURDIR)/debian/secubox-hardening/usr/share/secubox/menu.d/hardening.json || true
+	install -m 644 debian/menu.json $(CURDIR)/debian/secubox-hardening/usr/share/secubox/menu.d/120-hardening.json || true
+
+	# Install nginx config
+	install -m 644 nginx/hardening.conf $(CURDIR)/debian/secubox-hardening/etc/nginx/secubox.d/hardening.conf
 
 override_dh_installsystemd:
 	dh_installsystemd --name=secubox-hardening

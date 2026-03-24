@@ -8,7 +8,11 @@ override_dh_auto_install:
 	install -m 644 api/*.py $(CURDIR)/debian/secubox-exposure/usr/lib/secubox/exposure/api/
 	install -d $(CURDIR)/debian/secubox-exposure/usr/share/secubox/www/exposure
 	install -m 644 www/exposure/*.html $(CURDIR)/debian/secubox-exposure/usr/share/secubox/www/exposure/
-	install -d $(CURDIR)/debian/secubox-exposure/lib/systemd/system
-	install -m 644 debian/secubox-exposure.service $(CURDIR)/debian/secubox-exposure/lib/systemd/system/
+	install -d $(CURDIR)/debian/secubox-exposure/usr/lib/systemd/system
+	install -m 644 debian/secubox-exposure.service $(CURDIR)/debian/secubox-exposure/usr/lib/systemd/system/
 	install -d $(CURDIR)/debian/secubox-exposure/usr/share/secubox/menu.d
 	install -m 644 menu.d/*.json $(CURDIR)/debian/secubox-exposure/usr/share/secubox/menu.d/
+
+	# Install nginx config
+	install -d $(CURDIR)/debian/secubox-exposure/etc/nginx/secubox.d
+	install -m 644 nginx/exposure.conf $(CURDIR)/debian/secubox-exposure/etc/nginx/secubox.d/exposure.conf

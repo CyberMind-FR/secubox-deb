@@ -11,3 +11,7 @@ override_dh_auto_install:
 	[ -d menu.d ] && cp -r menu.d/. debian/secubox-gitea/usr/share/secubox/menu.d/ || true
 	install -d debian/secubox-gitea/usr/sbin
 	[ -d sbin ] && install -m 755 sbin/* debian/secubox-gitea/usr/sbin/ || true
+
+	# Install nginx config
+	install -d $(CURDIR)/debian/secubox-gitea/etc/nginx/secubox.d
+	install -m 644 nginx/gitea.conf $(CURDIR)/debian/secubox-gitea/etc/nginx/secubox.d/gitea.conf
