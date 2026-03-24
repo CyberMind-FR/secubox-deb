@@ -20,6 +20,11 @@ case "$1" in
         systemctl daemon-reload
         systemctl enable secubox-metrics.service
         systemctl start secubox-metrics.service || true
+
+        # Reload nginx if running
+        if systemctl is-active --quiet nginx; then
+            nginx -t && systemctl reload nginx || true
+        fi
         ;;
 esac
 

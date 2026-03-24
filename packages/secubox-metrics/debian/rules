@@ -3,13 +3,30 @@
 	dh $@
 
 override_dh_auto_install:
-	install -d $(CURDIR)/debian/secubox-metrics/usr/lib/secubox/metrics
+	install -d $(CURDIR)/debian/secubox-metrics/usr/lib/secubox/metrics/api
 	install -d $(CURDIR)/debian/secubox-metrics/usr/share/secubox/www/metrics
 	install -d $(CURDIR)/debian/secubox-metrics/usr/share/secubox/menu.d
+	install -d $(CURDIR)/debian/secubox-metrics/etc/nginx/secubox.d
 
-	cp -r api/* $(CURDIR)/debian/secubox-metrics/usr/lib/secubox/metrics/
+	cp -r api/* $(CURDIR)/debian/secubox-metrics/usr/lib/secubox/metrics/api/
 	cp -r www/metrics/* $(CURDIR)/debian/secubox-metrics/usr/share/secubox/www/metrics/
 
 	if [ -d menu.d ]; then \
 		cp menu.d/*.json $(CURDIR)/debian/secubox-metrics/usr/share/secubox/menu.d/ 2>/dev/null || true; \
 	fi
+
+	# Install nginx config
+	echo '# Metrics Dashboard' > $(CURDIR)/debian/secubox-metrics/etc/nginx/secubox.d/metrics.conf
+	echo 'location /metrics/ {' >> $(CURDIR)/debian/secubox-metrics/etc/nginx/secubox.d/metrics.conf
+	echo '    alias /usr/share/secubox/www/metrics/;' >> $(CURDIR)/debian/secubox-metrics/etc/nginx/secubox.d/metrics.conf
+	echo '    try_files $$uri $$uri/ /metrics/index.html;' >> $(CURDIR)/debian/secubox-metrics/etc/nginx/secubox.d/metrics.conf
+	echo '}' >> $(CURDIR)/debian/secubox-metrics/etc/nginx/secubox.d/metrics.conf
+	echo '' >> $(CURDIR)/debian/secubox-metrics/etc/nginx/secubox.d/metrics.conf
+	echo 'location /api/v1/metrics/ {' >> $(CURDIR)/debian/secubox-metrics/etc/nginx/secubox.d/metrics.conf
+	echo '    proxy_pass http://unix:/run/secubox/metrics.sock:/api/v1/metrics/;' >> $(CURDIR)/debian/secubox-metrics/etc/nginx/secubox.d/metrics.conf
+	echo '    proxy_http_version 1.1;' >> $(CURDIR)/debian/secubox-metrics/etc/nginx/secubox.d/metrics.conf
+	echo '    proxy_set_header Host $$host;' >> $(CURDIR)/debian/secubox-metrics/etc/nginx/secubox.d/metrics.conf
+	echo '    proxy_set_header X-Real-IP $$remote_addr;' >> $(CURDIR)/debian/secubox-metrics/etc/nginx/secubox.d/metrics.conf
+	echo '    proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;' >> $(CURDIR)/debian/secubox-metrics/etc/nginx/secubox.d/metrics.conf
+	echo '    proxy_set_header X-Forwarded-Proto $$scheme;' >> $(CURDIR)/debian/secubox-metrics/etc/nginx/secubox.d/metrics.conf
+	echo '}' >> $(CURDIR)/debian/secubox-metrics/etc/nginx/secubox.d/metrics.conf
