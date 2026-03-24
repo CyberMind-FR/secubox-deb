@@ -57,7 +57,7 @@ async def get_access():
     """Get access information."""
     return run_ctl("access", parse_json=True)
 
-@app.get("/benchmark")
+@app.post("/benchmark")
 async def run_benchmark(user: dict = Depends(require_jwt)):
     """Run security benchmark."""
     return run_ctl("benchmark")
