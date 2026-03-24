@@ -1,0 +1,4 @@
+# Requirements for screenshot-tool.py
+playwright>=1.40.0
+aiohttp>=3.9.0
+Pillow>=10.0.0
