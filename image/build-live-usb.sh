@@ -16,7 +16,7 @@ OUT_DIR="${REPO_DIR}/output"
 APT_MIRROR="http://deb.debian.org/debian"
 APT_SECUBOX="https://apt.secubox.in"
 USE_LOCAL_CACHE=0
-SLIPSTREAM_DEBS=0
+SLIPSTREAM_DEBS=1              # Enabled by default - include local .deb packages
 PERSISTENCE_SIZE="2G"
 INCLUDE_PERSISTENCE=1
 
@@ -37,7 +37,8 @@ Usage: sudo bash build-live-usb.sh [OPTIONS]
   --out     DIR      Output directory (default: ./output)
   --size    SIZE     Total image size (default: 8G)
   --local-cache      Use local APT cache (apt-cacher-ng + local repo)
-  --slipstream       Include .deb from output/debs/ in the image
+  --slipstream       Include .deb from output/debs/ in the image (default: enabled)
+  --no-slipstream    Don't include local .deb packages
   --no-persistence   Don't include persistent storage partition
   --help             Show this help
 
@@ -66,6 +67,7 @@ while [[ $# -gt 0 ]]; do
     --size)           IMG_SIZE="$2";        shift 2 ;;
     --local-cache)    USE_LOCAL_CACHE=1;    shift   ;;
     --slipstream)     SLIPSTREAM_DEBS=1;    shift   ;;
+    --no-slipstream)  SLIPSTREAM_DEBS=0;    shift   ;;
     --no-persistence) INCLUDE_PERSISTENCE=0; shift   ;;
     --help|-h)        usage ;;
     *) err "Unknown argument: $1" ;;
