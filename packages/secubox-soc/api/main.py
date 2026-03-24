@@ -152,7 +152,7 @@ async def get_clock():
 async def get_map_threats():
     intel = _load_json(INTEL_FILE)
     threat_regions = {}
-    regions = ["US", "RU", "CN", "DE", "FR", "GB", "BR", "IN", "JP", "AU", "KR", "IR", "UA", "NL"]
+    regions = ["US", "CA", "MX", "BR", "AR", "CO", "GB", "FR", "DE", "NL", "ES", "IT", "PL", "UA", "RU", "CN", "JP", "KR", "IN", "PK", "IR", "SA", "AU", "NZ", "ID", "SG", "ZA", "NG", "EG", "KE"]
     for item in intel[-100:]:
         region = regions[hash(item.get('indicator', '')) % len(regions)]
         if region not in threat_regions:
