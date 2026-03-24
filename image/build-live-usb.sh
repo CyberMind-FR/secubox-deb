@@ -472,7 +472,7 @@ mount "${LOOP}p2" "${MNT}/live"
 cp -r "${LIVE_DIR}/live" "${MNT}/live/"
 
 # Setup GRUB EFI
-mkdir -p "${MNT}/esp/EFI/BOOT" "${MNT}/esp/boot/grub"
+mkdir -p "${MNT}/esp/EFI/BOOT" "${MNT}/esp/boot/grub" "${MNT}/esp/live"
 
 # GRUB configuration
 cat > "${MNT}/esp/boot/grub/grub.cfg" <<'EOF'
