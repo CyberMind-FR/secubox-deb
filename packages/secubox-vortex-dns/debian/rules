@@ -1,0 +1,11 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-vortex-dns/usr/lib/secubox/vortex-dns
+	cp -r api debian/secubox-vortex-dns/usr/lib/secubox/vortex-dns/
+	install -d debian/secubox-vortex-dns/usr/share/secubox/www/vortex-dns
+	cp -r www/vortex-dns/. debian/secubox-vortex-dns/usr/share/secubox/www/vortex-dns/
+	install -d debian/secubox-vortex-dns/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-vortex-dns/usr/share/secubox/menu.d/ || true

@@ -1,0 +1,5 @@
+secubox-meshname (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release
+
+ -- SecuBox <dev@secubox.local>  Tue, 24 Mar 2026 10:26:24 +0100

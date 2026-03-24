@@ -1,0 +1,12 @@
+Source: secubox-device-intel
+Section: admin
+Priority: optional
+Maintainer: SecuBox <dev@secubox.local>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+
+Package: secubox-device-intel
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0.0)
+Description: SecuBox Device-intel Module
+ Device Intelligence - Asset discovery and fingerprinting

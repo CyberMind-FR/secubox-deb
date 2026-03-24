@@ -5,6 +5,35 @@
 
 ## ✅ Terminé cette session
 
+### 4 New Modules Ported (Session 11) ✅
+From OpenWRT planned modules to Debian:
+- **secubox-device-intel** v1.0.0 — Asset discovery and fingerprinting
+  - ARP table scanning, MAC vendor lookup (OUI database)
+  - DHCP lease tracking, hostname detection
+  - Device tagging and notes, trusted device marking
+  - Network interface listing, active scan capability
+- **secubox-vortex-dns** v1.0.0 — DNS firewall with RPZ and threat feeds
+  - Blocklist management (hosts/domains format)
+  - Custom domain rules (block/allow/redirect)
+  - Unbound and dnsmasq support
+  - Threat feed integration (Steven Black, OISD, URLhaus, etc.)
+- **secubox-vortex-firewall** v1.0.0 — nftables threat enforcement
+  - IP blocklist management (plain/CIDR/CSV formats)
+  - nftables sets for IPv4/IPv6 blocking
+  - Custom IP rules (drop/reject/log)
+  - Threat feed integration (Spamhaus, Feodo, SSL Blacklist, etc.)
+- **secubox-meshname** v1.0.0 — Mesh network domain resolution
+  - Mesh node registration with custom domain
+  - mDNS host discovery via Avahi
+  - dnsmasq integration for local DNS
+  - DNS resolver test endpoint
+
+All modules include FastAPI backend, Catppuccin frontend, Debian packaging.
+Total modules: **45** (was 41)
+
+### Menu Fix ✅
+- Removed duplicate WireGuard menu entry (21-wireguard.json)
+
 ### secubox-qos v1.1.0 — Per-VLAN QoS Support ✅
 - **Multi-interface support** — Manage QoS on eth0, eth0.100, eth0.200, etc.
 - **VLAN discovery** — Auto-detect existing VLAN interfaces

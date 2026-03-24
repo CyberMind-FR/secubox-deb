@@ -1,0 +1,8 @@
+#!/bin/sh
+set -e
+if [ "$1" = "remove" ]; then
+    systemctl stop secubox-vortex-dns.service || true
+    systemctl disable secubox-vortex-dns.service || true
+fi
+#DEBHELPER#
+exit 0

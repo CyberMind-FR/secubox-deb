@@ -1,0 +1,9 @@
+{
+  "id": "vortex-dns",
+  "name": "Vortex DNS",
+  "category": "network",
+  "icon": "🌀",
+  "path": "/vortex-dns/",
+  "order": 33,
+  "description": "DNS firewall with RPZ and threat feeds"
+}

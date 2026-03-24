@@ -1,0 +1,9 @@
+{
+  "id": "vortex-firewall",
+  "name": "Vortex Firewall",
+  "category": "security",
+  "icon": "🔥",
+  "path": "/vortex-firewall/",
+  "order": 125,
+  "description": "nftables threat enforcement with IP blocklists"
+}

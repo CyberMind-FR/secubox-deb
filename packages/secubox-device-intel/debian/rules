@@ -1,0 +1,11 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-device-intel/usr/lib/secubox/device-intel
+	cp -r api debian/secubox-device-intel/usr/lib/secubox/device-intel/
+	install -d debian/secubox-device-intel/usr/share/secubox/www/device-intel
+	cp -r www/device-intel/. debian/secubox-device-intel/usr/share/secubox/www/device-intel/
+	install -d debian/secubox-device-intel/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-device-intel/usr/share/secubox/menu.d/ || true

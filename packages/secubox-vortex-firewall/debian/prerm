@@ -1,0 +1,8 @@
+#!/bin/sh
+set -e
+if [ "$1" = "remove" ]; then
+    systemctl stop secubox-vortex-firewall.service || true
+    systemctl disable secubox-vortex-firewall.service || true
+fi
+#DEBHELPER#
+exit 0

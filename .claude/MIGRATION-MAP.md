@@ -76,8 +76,12 @@ Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 | **secubox-exposure** | ✅ | ✅ | ✅ | Tor, SSL, DNS, Mesh | ✅ |
 | **secubox-mitmproxy** | ✅ | ✅ | ✅ | WAF, alerts, bans | ✅ |
 | **secubox-traffic** | ✅ | ✅ | ✅ | TC/CAKE QoS | ✅ |
+| **secubox-device-intel** | ✅ | ✅ | ✅ | asset discovery, fingerprinting | ✅ |
+| **secubox-vortex-dns** | ✅ | ✅ | ✅ | DNS firewall, RPZ, threat feeds | ✅ |
+| **secubox-vortex-firewall** | ✅ | ✅ | ✅ | nftables threat enforcement | ✅ |
+| **secubox-meshname** | ✅ | ✅ | ✅ | mesh DNS, mDNS, Avahi | ✅ |
 
-**Total : 41 modules | ~800+ endpoints API**
+**Total : 45 modules | ~900+ endpoints API**
 
 *Note: mail-lxc and webmail-lxc are backend components integrated into secubox-mail*
 

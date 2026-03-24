@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - Vortex Firewall</title>
+    <style>
+        :root { --bg-dark: #0d1117; --bg-card: #161b22; --bg-sidebar: #0d1117; --border: #30363d; --text: #c9d1d9; --text-dim: #8b949e; --primary: #58a6ff; --cyan: #00d4ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; --purple: #a371f7; --orange: #f0883e; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
+        .sidebar { width: 220px; background: var(--bg-sidebar); border-right: 1px solid var(--border); position: fixed; height: 100vh; overflow-y: auto; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
+        .header h1 { font-size: 1.5rem; }
+        .header-actions { display: flex; gap: 0.5rem; align-items: center; }
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.875rem; }
+        .btn:hover { background: var(--bg-dark); }
+        .btn.primary { background: rgba(88,166,255,0.1); border-color: var(--primary); color: var(--primary); }
+        .btn.success { background: rgba(63,185,80,0.1); border-color: var(--green); color: var(--green); }
+        .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
+        .card h2 { font-size: 1rem; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
+        .stat-card .value { font-size: 2rem; font-weight: bold; }
+        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; }
+        .stat-card.blocked .value { color: var(--red); }
+        .stat-card.inbound .value { color: var(--orange); }
+        .stat-card.outbound .value { color: var(--purple); }
+        .stat-card.lists .value { color: var(--cyan); }
+        table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+        th { color: var(--text-dim); font-weight: 500; }
+        tr:hover { background: rgba(255,255,255,0.02); }
+        .badge { padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; }
+        .badge.enabled { background: rgba(63,185,80,0.2); color: var(--green); }
+        .badge.disabled { background: rgba(139,148,158,0.2); color: var(--text-dim); }
+        .badge.drop { background: rgba(248,81,73,0.2); color: var(--red); }
+        .badge.reject { background: rgba(240,136,62,0.2); color: var(--orange); }
+        .badge.log { background: rgba(88,166,255,0.2); color: var(--primary); }
+        .toggle { position: relative; display: inline-block; width: 50px; height: 26px; }
+        .toggle input { opacity: 0; width: 0; height: 0; }
+        .toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: var(--border); border-radius: 26px; transition: 0.3s; }
+        .toggle-slider:before { position: absolute; content: ""; height: 20px; width: 20px; left: 3px; bottom: 3px; background: var(--text); border-radius: 50%; transition: 0.3s; }
+        .toggle input:checked + .toggle-slider { background: var(--green); }
+        .toggle input:checked + .toggle-slider:before { transform: translateX(24px); }
+        .status-indicator { display: flex; align-items: center; gap: 0.5rem; }
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; }
+        .status-dot.active { background: var(--green); }
+        .status-dot.inactive { background: var(--red); }
+        .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center; }
+        .modal.active { display: flex; }
+        .modal-content { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; width: 90%; max-width: 500px; max-height: 80vh; overflow-y: auto; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .modal-header h3 { font-size: 1.1rem; }
+        .close-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.5rem; }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; color: var(--text-dim); font-size: 0.875rem; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-dark); color: var(--text); }
+        .feed-item { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 0.5rem; }
+        .feed-item .name { font-weight: 500; }
+        .feed-item .category { font-size: 0.75rem; color: var(--text-dim); }
+        .actions { display: flex; gap: 0.5rem; }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+        .nft-status { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; border-radius: 6px; font-size: 0.875rem; }
+        .nft-status.available { background: rgba(63,185,80,0.1); border: 1px solid var(--green); color: var(--green); }
+        .nft-status.unavailable { background: rgba(248,81,73,0.1); border: 1px solid var(--red); color: var(--red); }
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+    <main class="main">
+        <header class="header">
+            <h1>Vortex Firewall</h1>
+            <div class="header-actions">
+                <div id="nftStatus" class="nft-status">Checking nftables...</div>
+                <div class="status-indicator">
+                    <span class="status-dot" id="statusDot"></span>
+                    <span id="statusText">Loading...</span>
+                </div>
+                <label class="toggle">
+                    <input type="checkbox" id="enableToggle" onchange="toggleEnable()">
+                    <span class="toggle-slider"></span>
+                </label>
+                <button class="btn" onclick="refresh()">Refresh</button>
+            </div>
+        </header>
+
+        <div class="stats-grid">
+            <div class="stat-card blocked">
+                <div class="value" id="statBlocked">-</div>
+                <div class="label">Blocked IPs</div>
+            </div>
+            <div class="stat-card inbound">
+                <div class="value" id="statInbound">-</div>
+                <div class="label">Inbound Blocked</div>
+            </div>
+            <div class="stat-card outbound">
+                <div class="value" id="statOutbound">-</div>
+                <div class="label">Outbound Blocked</div>
+            </div>
+            <div class="stat-card lists">
+                <div class="value" id="statLists">-</div>
+                <div class="label">Active Lists</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>
+                IP Blocklists
+                <div>
+                    <button class="btn btn-sm" onclick="updateAllBlocklists()">Update All</button>
+                    <button class="btn btn-sm primary" onclick="showAddBlocklist()">Add Blocklist</button>
+                    <button class="btn btn-sm success" onclick="applyBlocklists()">Apply</button>
+                </div>
+            </h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Format</th>
+                        <th>IPs</th>
+                        <th>Last Updated</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="blocklistsTable"></tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h2>
+                Custom IP Rules
+                <button class="btn btn-sm primary" onclick="showAddRule()">Add Rule</button>
+            </h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>IP/CIDR</th>
+                        <th>Action</th>
+                        <th>Direction</th>
+                        <th>Comment</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="rulesTable"></tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h2>Available Threat Feeds</h2>
+            <div id="feedsList"></div>
+        </div>
+
+        <!-- Add Blocklist Modal -->
+        <div class="modal" id="addBlocklistModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Add IP Blocklist</h3>
+                    <button class="close-btn" onclick="closeModal('addBlocklistModal')">&times;</button>
+                </div>
+                <div class="form-group">
+                    <label>Name</label>
+                    <input type="text" id="blName" placeholder="e.g., spamhaus-drop">
+                </div>
+                <div class="form-group">
+                    <label>URL</label>
+                    <input type="text" id="blUrl" placeholder="https://...">
+                </div>
+                <div class="form-group">
+                    <label>Format</label>
+                    <select id="blFormat">
+                        <option value="plain">Plain (one IP per line)</option>
+                        <option value="cidr">CIDR notation</option>
+                        <option value="csv">CSV (IP in first column)</option>
+                    </select>
+                </div>
+                <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                    <button class="btn" onclick="closeModal('addBlocklistModal')">Cancel</button>
+                    <button class="btn primary" onclick="addBlocklist()">Add</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add Rule Modal -->
+        <div class="modal" id="addRuleModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Add IP Rule</h3>
+                    <button class="close-btn" onclick="closeModal('addRuleModal')">&times;</button>
+                </div>
+                <div class="form-group">
+                    <label>IP or CIDR</label>
+                    <input type="text" id="ruleIp" placeholder="192.168.1.100 or 10.0.0.0/8">
+                </div>
+                <div class="form-group">
+                    <label>Action</label>
+                    <select id="ruleAction">
+                        <option value="drop">Drop (silent)</option>
+                        <option value="reject">Reject (with ICMP)</option>
+                        <option value="log">Log only</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Direction</label>
+                    <select id="ruleDirection">
+                        <option value="both">Both (in + out)</option>
+                        <option value="in">Inbound only</option>
+                        <option value="out">Outbound only</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Comment (optional)</label>
+                    <input type="text" id="ruleComment" placeholder="e.g., Known attacker">
+                </div>
+                <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                    <button class="btn" onclick="closeModal('addRuleModal')">Cancel</button>
+                    <button class="btn primary" onclick="addRule()">Add</button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const API = '/api/v1/vortex-firewall';
+        const token = () => localStorage.getItem('sbx_token');
+        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+
+        async function api(path, opts = {}) {
+            try {
+                const res = await fetch(API + path, { ...opts, headers: headers() });
+                if (res.status === 401) { window.location = '/login/'; return {}; }
+                return res.json();
+            } catch { return {}; }
+        }
+
+        async function loadStatus() {
+            const d = await api('/service');
+            const enabled = d.enabled || false;
+            const nftAvailable = d.nftables_available || false;
+
+            document.getElementById('enableToggle').checked = enabled;
+            document.getElementById('statusDot').className = 'status-dot ' + (enabled ? 'active' : 'inactive');
+            document.getElementById('statusText').textContent = enabled ? 'Active' : 'Disabled';
+
+            const nftEl = document.getElementById('nftStatus');
+            if (nftAvailable) {
+                nftEl.className = 'nft-status available';
+                nftEl.textContent = 'nftables OK';
+            } else {
+                nftEl.className = 'nft-status unavailable';
+                nftEl.textContent = 'nftables unavailable';
+            }
+        }
+
+        async function loadStats() {
+            const d = await api('/stats');
+            document.getElementById('statBlocked').textContent = (d.total_blocked_ips || 0).toLocaleString();
+            document.getElementById('statInbound').textContent = (d.packets_blocked_inbound || 0).toLocaleString();
+            document.getElementById('statOutbound').textContent = (d.packets_blocked_outbound || 0).toLocaleString();
+            document.getElementById('statLists').textContent = d.blocklists_count || 0;
+        }
+
+        async function loadBlocklists() {
+            const d = await api('/blocklists');
+            const tbody = document.getElementById('blocklistsTable');
+            tbody.innerHTML = (d.blocklists || []).map(bl => `<tr>
+                <td>${bl.name}</td>
+                <td>${bl.format}</td>
+                <td>${(bl.ips_count || 0).toLocaleString()}</td>
+                <td>${bl.last_updated ? new Date(bl.last_updated).toLocaleDateString() : '-'}</td>
+                <td><span class="badge ${bl.enabled ? 'enabled' : 'disabled'}">${bl.enabled ? 'Enabled' : 'Disabled'}</span></td>
+                <td class="actions">
+                    <button class="btn btn-sm danger" onclick="removeBlocklist('${bl.name}')">Remove</button>
+                </td>
+            </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--text-dim)">No blocklists configured</td></tr>';
+        }
+
+        async function loadRules() {
+            const d = await api('/rules');
+            const tbody = document.getElementById('rulesTable');
+            tbody.innerHTML = (d.rules || []).map(r => `<tr>
+                <td><code>${r.ip}</code></td>
+                <td><span class="badge ${r.action}">${r.action}</span></td>
+                <td>${r.direction}</td>
+                <td>${r.comment || '-'}</td>
+                <td>${r.created ? new Date(r.created).toLocaleDateString() : '-'}</td>
+                <td class="actions">
+                    <button class="btn btn-sm danger" onclick="removeRule('${r.ip}')">Remove</button>
+                </td>
+            </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--text-dim)">No custom rules</td></tr>';
+        }
+
+        async function loadFeeds() {
+            const d = await api('/feeds');
+            const div = document.getElementById('feedsList');
+            div.innerHTML = (d.feeds || []).map(f => `<div class="feed-item">
+                <div>
+                    <div class="name">${f.name}</div>
+                    <div class="category">${f.category}</div>
+                </div>
+                <button class="btn btn-sm primary" onclick="addFeed('${f.name}', '${f.url}', '${f.format}')">Add</button>
+            </div>`).join('');
+        }
+
+        async function toggleEnable() {
+            const enabled = document.getElementById('enableToggle').checked;
+            const d = await api('/enable?enabled=' + enabled, { method: 'POST' });
+            if (!d.success && d.detail) {
+                alert('Error: ' + d.detail);
+                document.getElementById('enableToggle').checked = !enabled;
+            }
+            loadStatus();
+        }
+
+        function showAddBlocklist() {
+            document.getElementById('addBlocklistModal').classList.add('active');
+        }
+
+        function showAddRule() {
+            document.getElementById('addRuleModal').classList.add('active');
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('active');
+        }
+
+        async function addBlocklist() {
+            const name = document.getElementById('blName').value.trim();
+            const url = document.getElementById('blUrl').value.trim();
+            const format = document.getElementById('blFormat').value;
+            if (!name || !url) return alert('Name and URL required');
+            await api('/blocklists', { method: 'POST', body: JSON.stringify({ name, url, format, enabled: true }) });
+            closeModal('addBlocklistModal');
+            refresh();
+        }
+
+        async function addRule() {
+            const ip = document.getElementById('ruleIp').value.trim();
+            const action = document.getElementById('ruleAction').value;
+            const direction = document.getElementById('ruleDirection').value;
+            const comment = document.getElementById('ruleComment').value.trim() || null;
+            if (!ip) return alert('IP required');
+            await api('/rules', { method: 'POST', body: JSON.stringify({ ip, action, direction, comment }) });
+            closeModal('addRuleModal');
+            refresh();
+        }
+
+        async function addFeed(name, url, format) {
+            await api('/blocklists', { method: 'POST', body: JSON.stringify({ name, url, format, enabled: true }) });
+            refresh();
+        }
+
+        async function removeBlocklist(name) {
+            if (!confirm('Remove blocklist ' + name + '?')) return;
+            await api('/blocklists/' + encodeURIComponent(name), { method: 'DELETE' });
+            refresh();
+        }
+
+        async function removeRule(ip) {
+            if (!confirm('Remove rule for ' + ip + '?')) return;
+            await api('/rules/' + encodeURIComponent(ip), { method: 'DELETE' });
+            refresh();
+        }
+
+        async function updateAllBlocklists() {
+            const d = await api('/blocklists/update', { method: 'POST' });
+            alert('Updated ' + (d.results || []).length + ' blocklists');
+            refresh();
+        }
+
+        async function applyBlocklists() {
+            const d = await api('/blocklists/apply', { method: 'POST' });
+            if (d.success) {
+                alert('Applied! IPv4: ' + d.ipv4_blocked + ', IPv6: ' + d.ipv6_blocked);
+            } else {
+                alert('Error: ' + (d.error || 'Unknown'));
+            }
+            refresh();
+        }
+
+        function refresh() {
+            loadStatus();
+            loadStats();
+            loadBlocklists();
+            loadRules();
+            loadFeeds();
+        }
+
+        refresh();
+    </script>
+</body>
+</html>
