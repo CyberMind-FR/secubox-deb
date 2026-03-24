@@ -1,0 +1,8 @@
+secubox-metrics (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release
+  * Port from luci-app-metrics-dashboard
+  * FastAPI backend with caching
+  * Real-time dashboard with live updates
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 24 Mar 2026 15:00:00 +0100

@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Metrics Dashboard - SecuBox</title>
+    <link rel="stylesheet" href="/assets/css/theme.css">
+    <style>
+        .mx-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+        .mx-title {
+            font-size: 22px;
+            font-weight: 600;
+        }
+        .mx-live {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+        .mx-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--green);
+            border-radius: 50%;
+            animation: blink 1.5s infinite;
+        }
+        @keyframes blink {
+            50% { opacity: 0.4; }
+        }
+        @keyframes flash {
+            0% { background: rgba(0, 200, 83, 0.3); }
+            100% { background: transparent; }
+        }
+        .mx-changed {
+            animation: flash 0.5s ease-out;
+        }
+
+        /* Freshness indicators */
+        .mx-freshness {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            padding: 4px 10px;
+            border-radius: 12px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+        }
+        .mx-freshness-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            transition: background 0.3s, box-shadow 0.3s;
+        }
+        .mx-freshness-dot.fresh {
+            background: var(--green);
+            box-shadow: 0 0 6px var(--green);
+        }
+        .mx-freshness-dot.recent {
+            background: var(--orange);
+            box-shadow: 0 0 4px var(--orange);
+        }
+        .mx-freshness-dot.stale {
+            background: var(--red);
+            box-shadow: 0 0 4px var(--red);
+        }
+        .mx-age {
+            color: var(--text-muted);
+            transition: color 0.3s;
+        }
+        .mx-age.fresh { color: var(--green); }
+        .mx-age.recent { color: var(--orange); }
+        .mx-age.stale { color: var(--red); }
+
+        /* Stats Grid */
+        .mx-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .mx-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px;
+            text-align: center;
+            transition: border-color 0.2s;
+        }
+        .mx-card:hover {
+            border-color: var(--green);
+        }
+        .mx-icon {
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+        .mx-val {
+            font-size: 28px;
+            font-weight: 700;
+            line-height: 1;
+        }
+        .mx-val.green { color: var(--green); }
+        .mx-val.cyan { color: var(--cyan); }
+        .mx-val.orange { color: var(--orange); }
+        .mx-val.red { color: var(--red); }
+        .mx-val.purple { color: var(--purple); }
+        .mx-lbl {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            margin-top: 4px;
+        }
+        .mx-sub {
+            font-size: 10px;
+            color: var(--text-muted);
+            margin-top: 4px;
+            opacity: 0.7;
+        }
+
+        /* Services bar */
+        .mx-svc {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            padding: 12px 16px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .mx-svc-title {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+        .mx-svc-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+        }
+        .mx-svc-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+        .mx-svc-dot.on {
+            background: var(--green);
+            box-shadow: 0 0 6px var(--green);
+        }
+        .mx-svc-dot.off {
+            background: var(--red);
+        }
+
+        /* Panels */
+        .mx-panels {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+        @media (max-width: 768px) {
+            .mx-panels { grid-template-columns: 1fr; }
+        }
+        .mx-panel {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px;
+        }
+        .mx-panel-title {
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .mx-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border);
+        }
+        .mx-row:last-child { border-bottom: none; }
+        .mx-row-label {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+        .mx-row-val {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--cyan);
+        }
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+
+    <main class="main-content">
+        <header class="top-bar">
+            <button class="menu-toggle" onclick="toggleSidebar()">
+                <span></span><span></span><span></span>
+            </button>
+            <div class="breadcrumb">
+                <a href="/">SecuBox</a> / <span>Metrics Dashboard</span>
+            </div>
+        </header>
+
+        <div class="content">
+            <!-- Header with freshness indicator -->
+            <div class="mx-header">
+                <div class="mx-title">Metrics Dashboard</div>
+                <div style="display:flex; align-items:center; gap:16px;">
+                    <div class="mx-freshness" id="mx-freshness">
+                        <span class="mx-freshness-dot fresh" id="mx-fresh-dot"></span>
+                        <span class="mx-age fresh" id="mx-age">just now</span>
+                    </div>
+                    <div class="mx-live">
+                        <span class="mx-dot"></span>
+                        <span id="mx-time">--:--:--</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main stats grid -->
+            <div class="mx-grid">
+                <div class="mx-card">
+                    <div class="mx-icon">⏱</div>
+                    <div class="mx-val green" id="s-up">--</div>
+                    <div class="mx-lbl">Uptime</div>
+                    <div class="mx-sub" id="s-load">Load: --</div>
+                </div>
+                <div class="mx-card">
+                    <div class="mx-icon">🧠</div>
+                    <div class="mx-val green" id="s-mem">--%</div>
+                    <div class="mx-lbl">Memory</div>
+                    <div class="mx-sub" id="s-mem-detail">-- / --</div>
+                </div>
+                <div class="mx-card">
+                    <div class="mx-icon">🌐</div>
+                    <div class="mx-val cyan" id="s-vh">0</div>
+                    <div class="mx-lbl">vHosts</div>
+                </div>
+                <div class="mx-card">
+                    <div class="mx-icon">🔒</div>
+                    <div class="mx-val purple" id="s-cert">0</div>
+                    <div class="mx-lbl">SSL Certs</div>
+                </div>
+                <div class="mx-card">
+                    <div class="mx-icon">📄</div>
+                    <div class="mx-val cyan" id="s-meta">0</div>
+                    <div class="mx-lbl">MetaBlogs</div>
+                </div>
+                <div class="mx-card">
+                    <div class="mx-icon">🐍</div>
+                    <div class="mx-val green" id="s-stream">0</div>
+                    <div class="mx-lbl">Streamlits</div>
+                </div>
+                <div class="mx-card">
+                    <div class="mx-icon">📦</div>
+                    <div class="mx-val purple" id="s-lxc">0</div>
+                    <div class="mx-lbl">LXC</div>
+                </div>
+                <div class="mx-card">
+                    <div class="mx-icon">🔗</div>
+                    <div class="mx-val cyan" id="s-tcp">0</div>
+                    <div class="mx-lbl">TCP Conns</div>
+                </div>
+            </div>
+
+            <!-- Services bar -->
+            <div class="mx-svc">
+                <span class="mx-svc-title">Services</span>
+                <div class="mx-svc-item">
+                    <span class="mx-svc-dot off" id="sv-ha"></span>
+                    HAProxy
+                </div>
+                <div class="mx-svc-item">
+                    <span class="mx-svc-dot off" id="sv-waf"></span>
+                    WAF
+                </div>
+                <div class="mx-svc-item">
+                    <span class="mx-svc-dot off" id="sv-cs"></span>
+                    CrowdSec
+                </div>
+            </div>
+
+            <!-- Panels -->
+            <div class="mx-panels">
+                <!-- WAF Panel -->
+                <div class="mx-panel">
+                    <div class="mx-panel-title">
+                        <span>🛡</span>
+                        WAF & Security
+                    </div>
+                    <div class="mx-row">
+                        <span class="mx-row-label">Active Bans</span>
+                        <span class="mx-row-val" id="w-bans">0</span>
+                    </div>
+                    <div class="mx-row">
+                        <span class="mx-row-label">Alerts (24h)</span>
+                        <span class="mx-row-val" id="w-alerts">0</span>
+                    </div>
+                    <div class="mx-row">
+                        <span class="mx-row-label">WAF Blocked</span>
+                        <span class="mx-row-val" id="w-blocked">0</span>
+                    </div>
+                </div>
+
+                <!-- Connections Panel -->
+                <div class="mx-panel">
+                    <div class="mx-panel-title">
+                        <span>🔗</span>
+                        Connections
+                    </div>
+                    <div class="mx-row">
+                        <span class="mx-row-label">HTTPS (443)</span>
+                        <span class="mx-row-val" id="c-https">0</span>
+                    </div>
+                    <div class="mx-row">
+                        <span class="mx-row-label">HTTP (80)</span>
+                        <span class="mx-row-val" id="c-http">0</span>
+                    </div>
+                    <div class="mx-row">
+                        <span class="mx-row-label">SSH (22)</span>
+                        <span class="mx-row-val" id="c-ssh">0</span>
+                    </div>
+                    <div class="mx-row">
+                        <span class="mx-row-label">Total TCP</span>
+                        <span class="mx-row-val" id="c-total" style="color:var(--purple)">0</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="/assets/js/sidebar.js"></script>
+    <script>
+        const API = '/api/v1/metrics';
+        let prevValues = {};
+
+        function formatUptime(seconds) {
+            const d = Math.floor(seconds / 86400);
+            const h = Math.floor((seconds % 86400) / 3600);
+            const m = Math.floor((seconds % 3600) / 60);
+            if (d > 0) return d + 'd ' + h + 'h';
+            if (h > 0) return h + 'h ' + m + 'm';
+            return m + 'm';
+        }
+
+        function formatMem(kb) {
+            return (kb / 1048576).toFixed(1) + ' GB';
+        }
+
+        function formatAge(seconds) {
+            if (seconds < 60) return seconds + 's ago';
+            if (seconds < 3600) return Math.floor(seconds / 60) + 'm ago';
+            return Math.floor(seconds / 3600) + 'h ago';
+        }
+
+        function getFreshnessClass(age) {
+            if (age < 15) return 'fresh';
+            if (age < 45) return 'recent';
+            return 'stale';
+        }
+
+        async function api(endpoint) {
+            const token = localStorage.getItem('sbx_token');
+            try {
+                const res = await fetch(API + endpoint, {
+                    headers: token ? { 'Authorization': 'Bearer ' + token } : {}
+                });
+                if (res.status === 401) {
+                    window.location.href = '/portal/login.html';
+                    return {};
+                }
+                return res.json();
+            } catch (e) {
+                console.error('API error:', e);
+                return {};
+            }
+        }
+
+        function updateElement(id, value) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            const newVal = String(value);
+            if (prevValues[id] !== undefined && prevValues[id] !== newVal) {
+                el.classList.remove('mx-changed');
+                void el.offsetWidth;
+                el.classList.add('mx-changed');
+            }
+            el.textContent = newVal;
+            prevValues[id] = newVal;
+        }
+
+        async function loadMetrics() {
+            const [overview, waf, conns] = await Promise.all([
+                api('/overview'),
+                api('/waf_stats'),
+                api('/connections')
+            ]);
+
+            // Overview
+            if (overview.uptime !== undefined) {
+                updateElement('s-up', formatUptime(overview.uptime));
+                updateElement('s-load', 'Load: ' + (overview.load || '0'));
+
+                const memPct = overview.mem_pct || 0;
+                const memEl = document.getElementById('s-mem');
+                if (memEl) {
+                    memEl.textContent = memPct + '%';
+                    memEl.className = 'mx-val ' + (memPct > 85 ? 'red' : memPct > 70 ? 'orange' : 'green');
+                }
+                document.getElementById('s-mem-detail').textContent =
+                    formatMem(overview.mem_used_kb || 0) + ' / ' + formatMem(overview.mem_total_kb || 0);
+
+                updateElement('s-vh', overview.vhosts || 0);
+                updateElement('s-cert', overview.certificates || 0);
+                updateElement('s-meta', overview.metablogs || 0);
+                updateElement('s-stream', overview.streamlits || 0);
+                updateElement('s-lxc', overview.lxc_containers || 0);
+
+                // Service dots
+                document.getElementById('sv-ha').className = 'mx-svc-dot ' + (overview.haproxy ? 'on' : 'off');
+                document.getElementById('sv-waf').className = 'mx-svc-dot ' + (overview.mitmproxy ? 'on' : 'off');
+                document.getElementById('sv-cs').className = 'mx-svc-dot ' + (overview.crowdsec ? 'on' : 'off');
+
+                // Freshness
+                if (overview._freshness) {
+                    const age = overview._freshness.age || 0;
+                    const freshClass = getFreshnessClass(age);
+                    document.getElementById('mx-fresh-dot').className = 'mx-freshness-dot ' + freshClass;
+                    const ageEl = document.getElementById('mx-age');
+                    ageEl.textContent = age < 5 ? 'just now' : formatAge(age);
+                    ageEl.className = 'mx-age ' + freshClass;
+                }
+            }
+
+            // WAF stats
+            if (waf.active_bans !== undefined) {
+                const bansEl = document.getElementById('w-bans');
+                bansEl.textContent = waf.active_bans;
+                bansEl.style.color = waf.active_bans > 0 ? 'var(--orange)' : '';
+
+                updateElement('w-alerts', waf.alerts_today || 0);
+
+                const blockedEl = document.getElementById('w-blocked');
+                blockedEl.textContent = waf.waf_blocked || 0;
+                blockedEl.style.color = waf.waf_blocked > 0 ? 'var(--orange)' : '';
+            }
+
+            // Connections
+            if (conns.total_tcp !== undefined) {
+                updateElement('c-https', conns.https || 0);
+                updateElement('c-http', conns.http || 0);
+                updateElement('c-ssh', conns.ssh || 0);
+                updateElement('c-total', conns.total_tcp || 0);
+                updateElement('s-tcp', conns.total_tcp || 0);
+            }
+        }
+
+        // Clock update
+        function updateClock() {
+            document.getElementById('mx-time').textContent = new Date().toLocaleTimeString();
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadMetrics();
+            setInterval(loadMetrics, 5000);  // Poll every 5 seconds
+            setInterval(updateClock, 1000);
+            updateClock();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+Source: secubox-metrics
+Section: admin
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://secubox.in
+
+Package: secubox-metrics
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-core,
+         python3,
+         python3-fastapi,
+         python3-uvicorn
+Description: SecuBox Metrics Dashboard
+ Real-time system metrics dashboard with caching.
+ Provides overview stats, WAF metrics, connection counts,
+ and service status monitoring.

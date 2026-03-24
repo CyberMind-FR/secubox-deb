@@ -1,0 +1,28 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+    configure)
+        # Create secubox user if not exists
+        if ! getent passwd secubox > /dev/null; then
+            useradd -r -s /usr/sbin/nologin -d /var/lib/secubox secubox
+        fi
+
+        # Create runtime directory
+        mkdir -p /run/secubox
+        chown secubox:secubox /run/secubox
+
+        # Create cache directory
+        mkdir -p /tmp/secubox
+        chown secubox:secubox /tmp/secubox
+
+        # Enable and start service
+        systemctl daemon-reload
+        systemctl enable secubox-metrics.service
+        systemctl start secubox-metrics.service || true
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0
