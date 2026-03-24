@@ -1,0 +1,11 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-soc/usr/lib/secubox/soc
+	cp -r api debian/secubox-soc/usr/lib/secubox/soc/
+	install -d debian/secubox-soc/usr/share/secubox/www/soc
+	cp -r www/soc/. debian/secubox-soc/usr/share/secubox/www/soc/
+	install -d debian/secubox-soc/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-soc/usr/share/secubox/menu.d/ || true
