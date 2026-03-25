@@ -1,3 +1,15 @@
+secubox-full (1.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * Update to include all 49 modules
+  * Add DNS modules: vortex-dns, meshname
+  * Add Security modules: vortex-firewall
+  * Add Network modules: mesh, p2p
+  * Add Monitoring modules: device-intel, metrics
+  * Add Dashboard modules: soc, roadmap
+  * Add Privacy modules: zkp
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 25 Mar 2026 10:00:00 +0100
+
 secubox-full (1.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Update to include all 39 modules
