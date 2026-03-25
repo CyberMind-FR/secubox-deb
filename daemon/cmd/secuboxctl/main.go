@@ -38,7 +38,19 @@ func main() {
 		RunE:  meshPeers,
 	}
 
-	meshCmd.AddCommand(meshStatusCmd, meshPeersCmd)
+	meshTopologyCmd := &cobra.Command{
+		Use:   "topology",
+		Short: "Show mesh topology",
+		RunE:  meshTopology,
+	}
+
+	meshNodesCmd := &cobra.Command{
+		Use:   "nodes",
+		Short: "List mesh nodes",
+		RunE:  meshNodes,
+	}
+
+	meshCmd.AddCommand(meshStatusCmd, meshPeersCmd, meshTopologyCmd, meshNodesCmd)
 
 	// node subcommand
 	nodeCmd := &cobra.Command{
@@ -60,6 +72,20 @@ func main() {
 
 	nodeCmd.AddCommand(nodeInfoCmd, nodeRotateCmd)
 
+	// telemetry subcommand
+	telemetryCmd := &cobra.Command{
+		Use:   "telemetry",
+		Short: "Telemetry operations",
+	}
+
+	telemetryLatestCmd := &cobra.Command{
+		Use:   "latest",
+		Short: "Show latest telemetry data",
+		RunE:  telemetryLatest,
+	}
+
+	telemetryCmd.AddCommand(telemetryLatestCmd)
+
 	// version command
 	versionCmd := &cobra.Command{
 		Use:   "version",
@@ -70,7 +96,7 @@ func main() {
 		},
 	}
 
-	rootCmd.AddCommand(meshCmd, nodeCmd, versionCmd)
+	rootCmd.AddCommand(meshCmd, nodeCmd, telemetryCmd, versionCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
@@ -180,6 +206,98 @@ func nodeRotate(cmd *cobra.Command, args []string) error {
 	} else {
 		fmt.Printf("Failed to rotate keys: %v\n", result["error"])
 	}
+
+	return nil
+}
+
+func meshTopology(cmd *cobra.Command, args []string) error {
+	resp, err := sendCommand("mesh.topology")
+	if err != nil {
+		return err
+	}
+
+	var topo map[string]interface{}
+	if err := json.Unmarshal(resp, &topo); err != nil {
+		return fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	fmt.Println("Mesh Topology:")
+	fmt.Printf("  Mesh Gate: %v\n", topo["mesh_gate"])
+
+	if nodes, ok := topo["nodes"].([]interface{}); ok {
+		fmt.Printf("\nNodes (%d):\n", len(nodes))
+		fmt.Printf("  %-45s %-10s\n", "DID", "ROLE")
+		fmt.Println("  " + "─────────────────────────────────────────────────────────")
+		for _, n := range nodes {
+			if node, ok := n.(map[string]interface{}); ok {
+				fmt.Printf("  %-45v %-10v\n", node["id"], node["role"])
+			}
+		}
+	}
+
+	if edges, ok := topo["edges"].([]interface{}); ok && len(edges) > 0 {
+		fmt.Printf("\nEdges (%d):\n", len(edges))
+		for _, e := range edges {
+			if edge, ok := e.(map[string]interface{}); ok {
+				fmt.Printf("  %v -> %v\n", edge["from"], edge["to"])
+			}
+		}
+	}
+
+	return nil
+}
+
+func meshNodes(cmd *cobra.Command, args []string) error {
+	resp, err := sendCommand("mesh.nodes")
+	if err != nil {
+		return err
+	}
+
+	var nodes []map[string]interface{}
+	if err := json.Unmarshal(resp, &nodes); err != nil {
+		return fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	fmt.Println("Mesh Nodes:")
+	fmt.Printf("%-45s %-15s %-10s %-8s %s\n", "DID", "ADDRESS", "ROLE", "ZKP", "LAST SEEN")
+	fmt.Println("─────────────────────────────────────────────────────────────────────────────────────────")
+
+	for _, node := range nodes {
+		zkp := "✗"
+		if node["zkp_valid"] == true {
+			zkp = "✓"
+		}
+		fmt.Printf("%-45v %-15v %-10v %-8s %v\n",
+			node["did"], node["address"], node["role"], zkp, node["last_seen"])
+	}
+
+	return nil
+}
+
+func telemetryLatest(cmd *cobra.Command, args []string) error {
+	resp, err := sendCommand("telemetry.latest")
+	if err != nil {
+		return err
+	}
+
+	var data map[string]interface{}
+	if err := json.Unmarshal(resp, &data); err != nil {
+		return fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	if errMsg, ok := data["error"]; ok {
+		return fmt.Errorf("%v", errMsg)
+	}
+
+	fmt.Println("Latest Telemetry:")
+	fmt.Printf("  Timestamp:      %v\n", data["timestamp"])
+	fmt.Printf("  Uptime:         %v seconds\n", data["uptime"])
+	fmt.Printf("  Peer Count:     %v\n", data["peer_count"])
+	fmt.Printf("  nftables Rules: %v\n", data["nftables_rules"])
+	fmt.Printf("  CrowdSec Bans:  %v\n", data["crowdsec_bans"])
+	fmt.Printf("  CPU Usage:      %.1f%%\n", data["cpu_percent"])
+	fmt.Printf("  Memory Usage:   %.1f%%\n", data["memory_percent"])
+	fmt.Printf("  Disk Usage:     %.1f%%\n", data["disk_percent"])
 
 	return nil
 }
