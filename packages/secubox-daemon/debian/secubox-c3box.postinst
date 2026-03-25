@@ -1,0 +1,11 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+  configure)
+    systemctl daemon-reload
+    systemctl enable c3box.service
+    systemctl start c3box.service || true
+    ;;
+esac
+#DEBHELPER#

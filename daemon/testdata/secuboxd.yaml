@@ -1,0 +1,28 @@
+# SecuBox Mesh Daemon Test Configuration
+# CyberMind — SecuBox-Deb — 2026
+
+node:
+  role: edge                    # edge | relay | air-gapped
+  did: "did:plc:test1234567890"
+  keypair: ./testdata/node.key
+
+mesh:
+  transport: wireguard
+  subnet: 10.42.0.0/16
+  mdns_service: _secubox._udp
+  beacon_interval: 30           # seconds
+  peer_timeout: 120             # seconds
+
+tailscale:
+  enabled: false
+  authkey: ""
+
+telemetry:
+  interval: 60                  # seconds
+  c3box_socket: /tmp/c3box/telemetry.sock
+  db: /tmp/secuboxd/telemetry.db
+
+zkp:
+  enabled: true
+  rotation_hours: 24
+  hamiltonian_graph: ./testdata/hamgraph.json

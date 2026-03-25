@@ -1,0 +1,46 @@
+# SecuBox Mesh Daemon
+# CyberMind — SecuBox-Deb — 2026
+[Unit]
+Description=SecuBox Mesh Daemon
+Documentation=https://secubox.in/docs/secuboxd
+After=network-online.target
+Wants=network-online.target
+Before=crowdsec.service
+
+[Service]
+Type=notify
+ExecStart=/usr/bin/secuboxd --config /etc/secubox/secuboxd.yaml
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5
+
+# Security hardening (CSPN compliant)
+DynamicUser=yes
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+
+# Runtime directories
+RuntimeDirectory=secuboxd
+StateDirectory=secuboxd
+ConfigurationDirectory=secubox
+LogsDirectory=secuboxd
+
+# Socket permissions
+RuntimeDirectoryMode=0750
+
+[Install]
+WantedBy=multi-user.target

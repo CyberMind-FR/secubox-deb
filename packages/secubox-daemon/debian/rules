@@ -1,0 +1,31 @@
+#!/usr/bin/make -f
+
+export DH_VERBOSE=1
+export GOFLAGS=-mod=readonly
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	cd ../../daemon && make build
+
+override_dh_auto_install:
+	# secubox-daemon package
+	install -d debian/secubox-daemon/usr/bin
+	install -m 755 ../../daemon/build/secuboxd debian/secubox-daemon/usr/bin/
+	install -m 755 ../../daemon/build/secuboxctl debian/secubox-daemon/usr/bin/
+	install -d debian/secubox-daemon/lib/systemd/system
+	install -m 644 ../../daemon/systemd/secuboxd.service debian/secubox-daemon/lib/systemd/system/
+	install -d debian/secubox-daemon/etc/secubox
+	install -m 640 ../../daemon/testdata/secuboxd.yaml debian/secubox-daemon/etc/secubox/secuboxd.yaml.example
+	install -m 644 ../../daemon/testdata/hamgraph.json debian/secubox-daemon/etc/secubox/
+	# secubox-c3box package
+	install -d debian/secubox-c3box/usr/bin
+	install -m 755 ../../daemon/build/c3box debian/secubox-c3box/usr/bin/
+	install -d debian/secubox-c3box/lib/systemd/system
+	install -m 644 ../../daemon/systemd/c3box.service debian/secubox-c3box/lib/systemd/system/
+	install -d debian/secubox-c3box/usr/share/c3box/www
+	cp -r ../../daemon/c3box/frontend/* debian/secubox-c3box/usr/share/c3box/www/ 2>/dev/null || true
+
+override_dh_auto_clean:
+	cd ../../daemon && make clean || true

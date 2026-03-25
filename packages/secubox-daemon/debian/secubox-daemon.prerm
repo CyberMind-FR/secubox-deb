@@ -1,0 +1,10 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+  remove|purge)
+    systemctl stop secuboxd.service || true
+    systemctl disable secuboxd.service || true
+    ;;
+esac
+#DEBHELPER#

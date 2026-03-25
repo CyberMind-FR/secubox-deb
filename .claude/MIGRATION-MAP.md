@@ -88,8 +88,10 @@ Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 | **secubox-zkp** | ✅ | ✅ | ✅ | ZKP Hamiltonian proofs | ✅ |
 | **secubox-hardening** | ✅ | ✅ | ✅ | sysctl + module blacklist | ✅ |
 | **secubox-repo** | ✅ | ✅ | ✅ | APT repository management | ✅ |
+| **secubox-daemon** | — | Go | ✅ | Mesh daemon (secuboxd, secuboxctl) | ✅ |
+| **secubox-c3box** | ✅ | Go | ✅ | C3BOX situational awareness dashboard | ✅ |
 
-**Total : 52 modules | ~1000+ endpoints API**
+**Total : 54 modules | ~1000+ endpoints API + Go mesh daemon**
 
 *Note: mail-lxc and webmail-lxc are backend components integrated into secubox-mail*
 
