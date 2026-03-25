@@ -1,9 +1,28 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-03-25 (Session 13)*
+*Mis à jour : 2026-03-25 (Session 14)*
 
 ---
 
 ## ✅ Terminé cette session
+
+### API Documentation Expansion ✅
+- **wiki/API-Reference.md** — Comprehensive API docs for all 48 modules
+  - Core modules: hub, portal, system (70+ endpoints)
+  - Security modules: crowdsec, waf, mitmproxy, hardening, nac, auth (150+ endpoints)
+  - Network modules: netmodes, wireguard, qos, dpi, traffic, vhost, cdn (200+ endpoints)
+  - Services modules: haproxy, netdata, mediaflow (80+ endpoints)
+  - Application modules: mail, dns, users, gitea, nextcloud (100+ endpoints)
+  - Container modules: backup, watchdog, tor, exposure (60+ endpoints)
+  - Intel modules: device-intel, vortex-dns, vortex-firewall, soc, metrics, meshname (100+ endpoints)
+  - Other modules: mesh, p2p, zkp, repo, roadmap (40+ endpoints)
+  - Total: ~1000+ documented API endpoints
+  - Code examples for common operations (login, ban IP, add peer)
+  - Error response format and rate limiting info
+  - WebSocket documentation for real-time updates
+
+---
+
+## ✅ Terminé session précédente (Session 13)
 
 ### Multilingual Module Documentation ✅
 - **wiki/MODULES-EN.md** — English module docs (48 modules, 771 lines)
