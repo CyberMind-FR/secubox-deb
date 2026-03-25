@@ -1,0 +1,9 @@
+secubox-daemon (0.1.0-1) bookworm; urgency=medium
+
+  * Initial release
+  * secuboxd mesh daemon with mDNS discovery
+  * secuboxctl CLI management tool
+  * c3box situational awareness dashboard
+  * GK-HAM-2025 ZKP authentication
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 25 Mar 2026 07:30:00 +0100

@@ -1,0 +1,37 @@
+# C3BOX Situational Awareness Dashboard
+# CyberMind — SecuBox-Deb — 2026
+[Unit]
+Description=C3BOX Dashboard
+Documentation=https://secubox.in/docs/c3box
+After=secuboxd.service
+Requires=secuboxd.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/c3box --config /etc/secubox/c3box.yaml
+Restart=on-failure
+RestartSec=5
+
+# Security hardening (CSPN compliant)
+DynamicUser=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+
+# Runtime directories
+RuntimeDirectory=c3box
+StateDirectory=c3box
+
+[Install]
+WantedBy=multi-user.target

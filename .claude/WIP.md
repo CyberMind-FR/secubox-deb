@@ -1,9 +1,40 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-03-25 (Session 14)*
+*Mis à jour : 2026-03-25 (Session 15)*
 
 ---
 
 ## ✅ Terminé cette session
+
+### Module Compliance Fixes ✅
+- **Maintainer standardization** — All 51 packages now use `Gerald KERMA <devel@cybermind.fr>`
+  - Fixed 12 control files with wrong maintainer
+  - Fixed 9 changelog files with wrong maintainer
+- **JWT Authentication** — Added to secubox-mesh API (was missing)
+  - All endpoints now require JWT auth except /health
+  - secubox-roadmap is intentionally public (read-only migration status)
+
+### Go Daemon Organization ✅
+- **Moved Go code to `daemon/` directory** — Proper structure for mesh daemon
+  - `daemon/cmd/secuboxd/` — Mesh daemon main
+  - `daemon/cmd/secuboxctl/` — CLI tool
+  - `daemon/c3box/` — Situational awareness dashboard
+  - `daemon/internal/` — Internal packages (discovery, identity, telemetry, topology)
+  - `daemon/pkg/` — Shared packages (config, hamiltonian)
+  - `daemon/systemd/` — systemd service units
+  - `daemon/testdata/` — Test configuration files
+- **Added `daemon/Makefile`** — Build targets for all binaries
+- **Added `daemon/README.md`** — Documentation for mesh daemon architecture
+
+### Debian Packaging for Go Daemon ✅
+- **packages/secubox-daemon/** — New package for mesh daemon
+  - `secubox-daemon` — Contains secuboxd + secuboxctl
+  - `secubox-c3box` — Situational awareness dashboard (separate package)
+  - Full debian packaging (control, changelog, rules, postinst, prerm)
+  - Systemd integration with socket activation
+
+---
+
+## ✅ Terminé session précédente (Session 14)
 
 ### API Documentation Expansion ✅
 - **wiki/API-Reference.md** — Comprehensive API docs for all 48 modules

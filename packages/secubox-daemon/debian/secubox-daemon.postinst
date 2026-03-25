@@ -1,0 +1,28 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+  configure)
+    # Create secubox user if absent
+    if ! id -u secubox >/dev/null 2>&1; then
+      adduser --system --group --no-create-home --home /var/lib/secubox secubox
+    fi
+
+    # Create runtime directories
+    install -d -o secubox -g secubox -m 750 /run/secuboxd
+    install -d -o secubox -g secubox -m 750 /var/lib/secuboxd
+
+    # Create config from example if not exists
+    if [ ! -f /etc/secubox/secuboxd.yaml ]; then
+      cp /etc/secubox/secuboxd.yaml.example /etc/secubox/secuboxd.yaml
+      chmod 640 /etc/secubox/secuboxd.yaml
+      chown root:secubox /etc/secubox/secuboxd.yaml
+    fi
+
+    # Enable and start service
+    systemctl daemon-reload
+    systemctl enable secuboxd.service
+    systemctl start secuboxd.service || true
+    ;;
+esac
+#DEBHELPER#

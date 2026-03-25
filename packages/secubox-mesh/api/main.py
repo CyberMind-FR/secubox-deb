@@ -10,8 +10,15 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Depends
 from pydantic import BaseModel
+
+try:
+    from secubox_core.auth import require_jwt
+except ImportError:
+    # Fallback for development
+    async def require_jwt():
+        return {"user": "dev"}
 
 app = FastAPI(
     title="SecuBox Mesh DNS API",
@@ -101,7 +108,7 @@ def ipv6_to_meshname(ipv6: str) -> str:
 
 
 @app.get("/status")
-async def get_status():
+async def get_status(user=Depends(require_jwt)):
     """Get mesh DNS status."""
     ygg_info = get_yggdrasil_info()
     services = load_json(SERVICES_FILE, {"services": []})
@@ -131,7 +138,7 @@ async def get_status():
 
 
 @app.get("/services")
-async def get_services():
+async def get_services(user=Depends(require_jwt)):
     """Get local announced services."""
     data = load_json(SERVICES_FILE, {"services": []})
     ygg_info = get_yggdrasil_info()
@@ -147,7 +154,7 @@ async def get_services():
 
 
 @app.post("/announce")
-async def announce_service(service: ServiceAnnounce):
+async def announce_service(service: ServiceAnnounce, user=Depends(require_jwt)):
     """Announce a service to the mesh network."""
     data = load_json(SERVICES_FILE, {"services": []})
 
@@ -171,7 +178,7 @@ async def announce_service(service: ServiceAnnounce):
 
 
 @app.post("/revoke")
-async def revoke_service(service: ServiceRevoke):
+async def revoke_service(service: ServiceRevoke, user=Depends(require_jwt)):
     """Revoke a service from the mesh network."""
     data = load_json(SERVICES_FILE, {"services": []})
 
@@ -187,14 +194,14 @@ async def revoke_service(service: ServiceRevoke):
 
 
 @app.get("/domains")
-async def get_domains():
+async def get_domains(user=Depends(require_jwt)):
     """Get discovered remote domains."""
     data = load_json(DOMAINS_FILE, {"domains": [], "last_sync": None})
     return data
 
 
 @app.post("/sync")
-async def sync_domains():
+async def sync_domains(user=Depends(require_jwt)):
     """Sync domains from the mesh network."""
     # In a real implementation, this would query peers for their services
     # For now, we just update the timestamp
@@ -206,7 +213,7 @@ async def sync_domains():
 
 
 @app.get("/resolve")
-async def resolve_domain(domain: str = Query(..., description="Meshname domain to resolve")):
+async def resolve_domain(domain: str = Query(..., description="Meshname domain to resolve"), user=Depends(require_jwt)):
     """Resolve a meshname domain to IPv6."""
     if not domain:
         raise HTTPException(status_code=400, detail="Domain is required")

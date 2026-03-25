@@ -1,0 +1,10 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+  remove|purge)
+    systemctl stop c3box.service || true
+    systemctl disable c3box.service || true
+    ;;
+esac
+#DEBHELPER#

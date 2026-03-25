@@ -1,0 +1,27 @@
+Source: secubox-daemon
+Section: net
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13), golang-go (>= 1.22)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+
+Package: secubox-daemon
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, wireguard-tools
+Recommends: secubox-core
+Description: SecuBox Mesh Daemon - WireGuard mesh with ZKP authentication
+ Go-based mesh networking daemon for SecuBox featuring:
+ - mDNS peer discovery
+ - WireGuard mesh topology with automatic mesh gate election
+ - GK-HAM-2025 Zero-Knowledge Proof authentication with 24h PFS
+ - SQLite telemetry with metrics collection
+ Includes secuboxd daemon, secuboxctl CLI, and c3box dashboard.
+
+Package: secubox-c3box
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, secubox-daemon
+Description: SecuBox C3BOX - Situational Awareness Dashboard
+ Web-based situational awareness dashboard for SecuBox mesh networks.
+ Visualizes mesh topology, node status, and ZKP credentials.
+ Connects to secuboxd via Unix socket.

@@ -8,4 +8,4 @@ secubox-mesh (1.0.0-1~bookworm1) bookworm; urgency=medium
   * Remote domain resolution
   * Sync functionality
 
- -- CyberMind <devel@cybermind.fr>  Mon, 24 Mar 2026 12:00:00 +0100
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 24 Mar 2026 12:00:00 +0100
