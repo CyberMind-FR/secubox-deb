@@ -6,28 +6,28 @@
     <title>SecuBox - Web Application Firewall</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-system.css">
-    <link rel="stylesheet" href="/shared/sidebar.css">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
         :root {
             /* P31 Phosphor spectrum */
-            --p31-peak: #33ff66;
-            --p31-hot: #66ffaa;
-            --p31-mid: #22cc44;
-            --p31-dim: #0f8822;
-            --p31-ghost: #052210;
+            --p31-peak: #00dd44;
+            --p31-hot: #00ff55;
+            --p31-mid: #009933;
+            --p31-dim: #006622;
+            --p31-ghost: #003311;
             --p31-decay: #ffb347;
             --p31-decay-dim: #cc7722;
             /* Tube glass */
-            --tube-black: #050803;
-            --tube-deep: #080d05;
-            --tube-bezel: #0d1208;
+            --tube-light: #e8f5e9;
+            --tube-pale: #c8e6c9;
+            --tube-soft: #a5d6a7;
             /* Legacy mappings */
-            --bg-dark: var(--tube-black);
-            --bg-card: var(--tube-deep);
+            --bg-dark: var(--tube-light);
+            --bg-card: var(--tube-pale);
             --bg-sidebar: var(--tube-black);
-            --border: var(--p31-ghost);
-            --text: var(--p31-mid);
+            --border: var(--tube-soft);
+            --text: var(--tube-dark);
             --text-dim: var(--p31-dim);
             --primary: var(--p31-peak);
             --cyan: var(--p31-peak);
@@ -44,9 +44,9 @@
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: 'Courier Prime', 'Courier New', monospace;
-            background: var(--tube-black);
+            background: var(--tube-light);
             background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
-            color: var(--p31-mid);
+            color: var(--tube-dark);
             display: flex;
             min-height: 100vh;
         }
@@ -135,8 +135,8 @@
             font-family: 'Courier Prime', monospace;
             letter-spacing: 0.08em;
             text-transform: uppercase;
-            border: 1px solid var(--p31-ghost);
-            background: var(--tube-deep);
+            border: 1px solid var(--tube-soft);
+            background: var(--tube-pale);
             color: var(--p31-mid);
             transition: all 0.2s;
         }
@@ -174,8 +174,8 @@
         }
 
         .card {
-            background: var(--tube-deep);
-            border: 1px solid var(--p31-ghost);
+            background: var(--tube-pale);
+            border: 1px solid var(--tube-soft);
             box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
         }
         .card:hover {
@@ -191,8 +191,8 @@
         }
 
         .stat-card {
-            background: var(--tube-deep);
-            border: 1px solid var(--p31-ghost);
+            background: var(--tube-pale);
+            border: 1px solid var(--tube-soft);
         }
         .stat-value, .stat-card .value {
             text-shadow: 0 0 10px currentColor;
@@ -232,7 +232,7 @@
         }
 
         .toast {
-            background: var(--tube-deep);
+            background: var(--tube-pale);
             border: 1px solid var(--p31-dim);
             font-family: 'Courier Prime', monospace;
         }
@@ -243,7 +243,7 @@
             background: rgba(0,0,0,0.85);
         }
         .modal-content {
-            background: var(--tube-deep);
+            background: var(--tube-pale);
             border: 1px solid var(--p31-dim);
             box-shadow: 0 0 30px rgba(51,255,102,0.1);
         }
@@ -254,7 +254,7 @@
         }
 
         .tabs {
-            background: var(--tube-deep);
+            background: var(--tube-pale);
             border-bottom: 1px solid var(--p31-ghost);
         }
         .tab {
@@ -272,8 +272,8 @@
 
         input, select, textarea {
             font-family: 'Courier Prime', monospace;
-            background: var(--tube-black);
-            border: 1px solid var(--p31-ghost);
+            background: var(--tube-light);
+            border: 1px solid var(--tube-soft);
             color: var(--p31-mid);
             padding: 0.5rem;
         }
@@ -285,7 +285,7 @@
 
         /* Scrollbar */
         ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: var(--tube-black); }
+        ::-webkit-scrollbar-track { background: var(--tube-light); }
         ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
         ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
 

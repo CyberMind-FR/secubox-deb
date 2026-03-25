@@ -4,24 +4,24 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SecuBox - Vortex Firewall</title>
-    <link rel="stylesheet" href="/shared/crt-system.css">
-    <link rel="stylesheet" href="/shared/sidebar.css">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Courier Prime', monospace; background: var(--tube-black); color: var(--p31-mid); display: flex; min-height: 100vh; }
+        body { font-family: 'Courier Prime', monospace; background: var(--tube-light); color: var(--tube-dark); display: flex; min-height: 100vh; }
         .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
         .header h1 { font-size: 1.5rem; color: var(--p31-peak); text-shadow: var(--bloom-text); }
         .header-actions { display: flex; gap: 0.5rem; align-items: center; }
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--p31-dim); background: var(--tube-deep); color: var(--p31-mid); cursor: pointer; font-size: 0.875rem; font-family: 'Courier Prime', monospace; }
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--p31-dim); background: var(--tube-pale); color: var(--p31-mid); cursor: pointer; font-size: 0.875rem; font-family: 'Courier Prime', monospace; }
         .btn:hover { background: var(--tube-bezel); color: var(--p31-peak); text-shadow: var(--bloom-soft); }
         .btn.primary { background: rgba(51,255,102,0.1); border-color: var(--p31-mid); color: var(--p31-peak); }
         .btn.success { background: rgba(51,255,102,0.15); border-color: var(--p31-peak); color: var(--p31-hot); }
         .btn.danger { background: rgba(255,179,71,0.1); border-color: var(--p31-decay); color: var(--p31-decay); }
-        .card { background: var(--tube-deep); border: 1px solid var(--p31-dim); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
+        .card { background: var(--tube-pale); border: 1px solid var(--p31-dim); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
         .card h2 { font-size: 1rem; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; color: var(--p31-peak); text-shadow: var(--bloom-soft); }
         .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--tube-deep); border: 1px solid var(--p31-dim); border-radius: 8px; padding: 1rem; text-align: center; }
+        .stat-card { background: var(--tube-pale); border: 1px solid var(--p31-dim); border-radius: 8px; padding: 1rem; text-align: center; }
         .stat-card .value { font-size: 2rem; font-weight: bold; color: var(--p31-peak); text-shadow: var(--bloom-text); }
         .stat-card .label { font-size: 0.75rem; color: var(--p31-dim); margin-top: 0.25rem; }
         .stat-card.blocked .value { color: var(--p31-decay); text-shadow: var(--bloom-amber); }
@@ -50,16 +50,16 @@
         .status-dot.inactive { background: var(--p31-decay); }
         .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 1000; align-items: center; justify-content: center; }
         .modal.active { display: flex; }
-        .modal-content { background: var(--tube-deep); border: 1px solid var(--p31-dim); border-radius: 8px; padding: 1.5rem; width: 90%; max-width: 500px; max-height: 80vh; overflow-y: auto; }
+        .modal-content { background: var(--tube-pale); border: 1px solid var(--p31-dim); border-radius: 8px; padding: 1.5rem; width: 90%; max-width: 500px; max-height: 80vh; overflow-y: auto; }
         .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
         .modal-header h3 { font-size: 1.1rem; color: var(--p31-peak); text-shadow: var(--bloom-soft); }
         .close-btn { background: none; border: none; color: var(--p31-dim); cursor: pointer; font-size: 1.5rem; }
         .close-btn:hover { color: var(--p31-decay); }
         .form-group { margin-bottom: 1rem; }
         .form-group label { display: block; margin-bottom: 0.5rem; color: var(--p31-dim); font-size: 0.875rem; }
-        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 0.5rem; border-radius: 4px; border: 1px solid var(--p31-ghost); background: var(--tube-black); color: var(--p31-mid); font-family: 'Courier Prime', monospace; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 0.5rem; border-radius: 4px; border: 1px solid var(--tube-soft); background: var(--tube-light); color: var(--p31-mid); font-family: 'Courier Prime', monospace; }
         .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: var(--p31-mid); box-shadow: 0 0 8px rgba(51,255,102,0.3); }
-        .feed-item { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; border: 1px solid var(--p31-ghost); border-radius: 6px; margin-bottom: 0.5rem; }
+        .feed-item { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; border: 1px solid var(--tube-soft); border-radius: 6px; margin-bottom: 0.5rem; }
         .feed-item .name { font-weight: 500; color: var(--p31-mid); }
         .feed-item .category { font-size: 0.75rem; color: var(--p31-dim); }
         .actions { display: flex; gap: 0.5rem; }

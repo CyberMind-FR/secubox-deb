@@ -4,22 +4,22 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>C3BOX — SecuBox Mesh Dashboard</title>
-    <link rel="stylesheet" href="/shared/sidebar.css">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
         :root {
-            --bg: #0a0e14;
-            --fg: #33ff66;
-            --dim: #1a1f2e;
-            --accent: #00ff88;
-            --p31-peak: #33ff66;
-            --p31-dim: #0f8822;
-            --p31-ghost: #052210;
+            --bg: #e8f5e9;
+            --fg: #009933;
+            --dim: #c8e6c9;
+            --accent: #00dd44;
+            --border: #a5d6a7;
+            --text-dark: #1b3d1c;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            font-family: 'Courier New', monospace;
+            font-family: 'JetBrains Mono', 'Courier New', monospace;
             background: var(--bg);
-            color: var(--fg);
+            color: var(--text-dark);
             min-height: 100vh;
             display: flex;
         }
@@ -30,24 +30,27 @@
         }
         header {
             padding: 1rem;
-            border-bottom: 1px solid var(--dim);
+            border-bottom: 1px solid var(--border);
             display: flex;
             justify-content: space-between;
             align-items: center;
+            background: var(--dim);
+            border-radius: 6px;
+            margin-bottom: 1rem;
         }
         h1 {
-            font-size: 1.5rem;
-            text-shadow: 0 0 10px var(--fg);
+            font-size: 1.3rem;
+            color: var(--fg);
+            text-shadow: 0 0 4px rgba(0,153,51,0.3);
         }
-        .status { font-size: 0.9rem; }
+        .status { font-size: 0.9rem; font-weight: 600; }
         .status.ok { color: var(--accent); }
-        .status.error { color: #ff3366; }
+        .status.error { color: #cc2244; }
         .content-grid {
             display: grid;
             grid-template-columns: 1fr 300px;
             gap: 1rem;
-            padding: 1rem 0;
-            min-height: calc(100vh - 120px);
+            min-height: calc(100vh - 160px);
         }
         @media (max-width: 900px) {
             .main-content { margin-left: 0; }
@@ -55,43 +58,56 @@
         }
         .panel {
             background: var(--dim);
-            border: 1px solid var(--fg);
-            border-radius: 4px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
             padding: 1rem;
         }
         .panel h2 {
-            font-size: 1rem;
+            font-size: 0.95rem;
             margin-bottom: 1rem;
             padding-bottom: 0.5rem;
-            border-bottom: 1px solid var(--fg);
+            border-bottom: 1px solid var(--border);
+            color: var(--fg);
         }
         #topology {
             width: 100%;
             height: 100%;
             min-height: 400px;
+            background: #fff;
+            border-radius: 4px;
         }
         .node-list {
             list-style: none;
         }
         .node-list li {
             padding: 0.5rem;
-            border-bottom: 1px solid var(--dim);
+            border-bottom: 1px solid var(--border);
             font-size: 0.85rem;
         }
         .node-list li:hover {
-            background: rgba(51, 255, 102, 0.1);
+            background: rgba(0, 153, 51, 0.08);
         }
         .role {
             display: inline-block;
             padding: 0.1rem 0.4rem;
-            border-radius: 2px;
-            font-size: 0.75rem;
+            border-radius: 3px;
+            font-size: 0.7rem;
             margin-left: 0.5rem;
+            font-weight: 600;
         }
-        .role.edge { background: #336699; }
-        .role.relay { background: #996633; }
-        .role.mesh-gate { background: var(--accent); color: #000; }
-        .role.air-gapped { background: #663366; }
+        .role.edge { background: rgba(51, 102, 153, 0.15); color: #336699; }
+        .role.relay { background: rgba(153, 102, 51, 0.15); color: #996633; }
+        .role.mesh-gate { background: rgba(0, 221, 68, 0.2); color: #006622; }
+        .role.air-gapped { background: rgba(102, 51, 102, 0.15); color: #663366; }
+        footer {
+            margin-top: 1rem;
+            padding: 0.5rem 1rem;
+            border-top: 1px solid var(--border);
+            font-size: 0.75rem;
+            display: flex;
+            justify-content: space-between;
+            color: var(--fg);
+        }
     </style>
 </head>
 <body>
@@ -100,7 +116,7 @@
 
     <div class="main-content">
         <header>
-            <h1>🌐 C3BOX — Mesh Topology</h1>
+            <h1>C3BOX — Mesh Topology</h1>
             <div class="status" id="status">Connecting...</div>
         </header>
         <div class="content-grid">
@@ -117,7 +133,7 @@
             </ul>
         </div>
         </div>
-        <footer style="padding: 0.5rem 1rem; border-top: 1px solid var(--dim); font-size: 0.75rem; display: flex; justify-content: space-between;">
+        <footer>
             <span>CyberMind — SecuBox-Deb — 2026</span>
             <span id="meshGate">Mesh Gate: —</span>
         </footer>
@@ -167,9 +183,9 @@
                     line.setAttribute('y1', source.y);
                     line.setAttribute('x2', target.x);
                     line.setAttribute('y2', target.y);
-                    line.setAttribute('stroke', '#33ff66');
+                    line.setAttribute('stroke', '#009933');
                     line.setAttribute('stroke-width', '2');
-                    line.setAttribute('opacity', '0.5');
+                    line.setAttribute('opacity', '0.6');
                     svg.appendChild(line);
                 }
             }
@@ -182,14 +198,15 @@
                 const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
                 circle.setAttribute('r', node.id === data.mesh_gate ? '15' : '10');
                 circle.setAttribute('fill', node.role === 'relay' ? '#996633' : '#336699');
-                circle.setAttribute('stroke', node.id === data.mesh_gate ? '#00ff88' : '#33ff66');
+                circle.setAttribute('stroke', node.id === data.mesh_gate ? '#00dd44' : '#009933');
                 circle.setAttribute('stroke-width', '2');
 
                 const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
                 text.setAttribute('y', '25');
                 text.setAttribute('text-anchor', 'middle');
-                text.setAttribute('fill', '#33ff66');
+                text.setAttribute('fill', '#1b3d1c');
                 text.setAttribute('font-size', '10');
+                text.setAttribute('font-family', 'JetBrains Mono, Courier New, monospace');
                 text.textContent = node.id.split(':').pop().slice(0, 8);
 
                 g.appendChild(circle);
