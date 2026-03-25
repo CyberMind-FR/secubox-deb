@@ -8,14 +8,14 @@ Wants=network-online.target
 Before=crowdsec.service
 
 [Service]
-Type=notify
+Type=simple
 ExecStart=/usr/bin/secuboxd --config /etc/secubox/secuboxd.yaml
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
 RestartSec=5
 
 # Security hardening (CSPN compliant)
-DynamicUser=yes
+User=root
 CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW
 AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW
 NoNewPrivileges=yes
@@ -36,7 +36,6 @@ RestrictSUIDSGID=yes
 # Runtime directories
 RuntimeDirectory=secuboxd
 StateDirectory=secuboxd
-ConfigurationDirectory=secubox
 LogsDirectory=secuboxd
 
 # Socket permissions
