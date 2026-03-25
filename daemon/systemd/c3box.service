@@ -8,12 +8,12 @@ Requires=secuboxd.service
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/c3box --config /etc/secubox/c3box.yaml
+ExecStart=/usr/bin/c3box --listen :8180 --static /usr/share/c3box/www --secuboxd /run/secuboxd/topo.sock
 Restart=on-failure
 RestartSec=5
 
 # Security hardening (CSPN compliant)
-DynamicUser=yes
+User=root
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
