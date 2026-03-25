@@ -1,9 +1,22 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-03-24 (Session 12)*
+*Mis à jour : 2026-03-25 (Session 13)*
 
 ---
 
 ## ✅ Terminé cette session
+
+### Multilingual Module Documentation ✅
+- **wiki/MODULES-EN.md** — English module docs (48 modules, 771 lines)
+- **wiki/MODULES-FR.md** — French module docs
+- **wiki/MODULES-DE.md** — German module docs
+- **wiki/MODULES-ZH.md** — Chinese module docs
+- **wiki/_Sidebar.md** — Updated with multilingual module links
+- **docs/SCREENSHOTS-VM.md** — Added missing Metrics Dashboard entry (47 screenshots)
+- All screenshots captured and linked to GitHub raw URLs
+
+---
+
+## ✅ Terminé session précédente (Session 12)
 
 ### secubox-metrics Module ✅
 - **Metrics Dashboard** — Migrated from OpenWRT luci-app-metrics-dashboard

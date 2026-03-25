@@ -58,6 +58,7 @@
 | 📱 **Device Intelligence** | ![Device Intelligence](screenshots/vm/device-intel.png) | ✅ Captured |
 | 👁️ **Watchdog** | ![Watchdog](screenshots/vm/watchdog.png) | ✅ Captured |
 | 🎬 **Media Flow** | ![Media Flow](screenshots/vm/mediaflow.png) | ✅ Captured |
+| 📊 **Metrics Dashboard** | ![Metrics Dashboard](screenshots/vm/metrics.png) | ✅ Captured |
 
 ### Network
 
