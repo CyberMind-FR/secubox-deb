@@ -1,5 +1,5 @@
 # MIGRATION MAP — SecuBox OpenWrt → Debian
-*Mis à jour : 2026-03-24*
+*Mis à jour : 2026-03-25*
 
 Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 
@@ -159,7 +159,11 @@ bash scripts/build-add-local.sh secubox-crowdsec bookworm
 2. ~~Phase 2 : Infrastructure~~ ✅ Fait
 3. ~~Phase 3 : Modules~~ ✅ Fait
 4. ~~Phase 4 : APT repo (apt.secubox.in)~~ ✅ Fait
-5. Tests d'intégration sur VM et hardware réel
+5. ~~Phase 5 : CSPN Hardening~~ ✅ Fait (partiel)
+6. ~~Phase 6 : CI/CD~~ ✅ Fait
+7. ~~Phase 7 : Documentation~~ ✅ Fait
+8. Tests d'intégration sur VM et hardware réel
+9. Déployer apt.secubox.in sur serveur production
 
 ---
 
