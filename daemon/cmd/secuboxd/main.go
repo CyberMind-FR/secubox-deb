@@ -80,6 +80,9 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Set discovery identity from the identity module
+	disco.SetIdentity(ident.GetDID(), cfg.Node.Role)
+
 	if err := disco.Start(ctx); err != nil {
 		slog.Error("failed to start discovery", "error", err)
 		os.Exit(1)
