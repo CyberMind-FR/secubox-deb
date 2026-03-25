@@ -4,8 +4,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>APT Repository - SecuBox</title>
-    <link rel="stylesheet" href="/portal/css/style.css">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
+        :root {
+            --tube-light: #e8f5e9; --tube-pale: #c8e6c9; --tube-soft: #a5d6a7; --tube-mist: #81c784; --tube-dark: #1b3d1c;
+            --p31-peak: #00dd44; --p31-hot: #00ff55; --p31-mid: #009933; --p31-dim: #006622; --p31-ghost: #003311;
+            --p31-decay: #dd8800; --p31-decay-dim: #aa6600;
+            --bloom-text: 0 0 2px #00dd44, 0 0 4px rgba(0,221,68,0.4);
+            --bloom-soft: 0 0 3px rgba(0,221,68,0.3);
+            --bloom-amber: 0 0 2px #dd8800, 0 0 5px rgba(221,136,0,0.3);
+        }
+        body { background: var(--tube-light); color: var(--tube-dark); font-family: 'JetBrains Mono', monospace; display: flex; min-height: 100vh; }
         .repo-stats {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -303,7 +313,7 @@
         }
     </style>
 </head>
-<body class="crt-body crt-scanlines crt-body crt-scanlines">
+<body class="crt-light">
     <div class="app-container">
         <nav class="sidebar" id="sidebar"></nav>
 
@@ -369,7 +379,7 @@ sudo apt install secubox-full</code></pre>
         </main>
     </div>
 
-    <script src="/portal/js/sidebar.js"></script>
+    <script src="/shared/sidebar.js"></script>
     <script>
         const API_BASE = '/api/v1/repo';
         let currentDist = 'bookworm';
