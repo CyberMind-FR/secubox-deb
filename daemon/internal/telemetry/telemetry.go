@@ -3,13 +3,18 @@
 package telemetry
 
 import (
+	"bufio"
 	"context"
 	"database/sql"
 	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -237,8 +242,30 @@ func (t *Telemetry) persist(m *Metrics) {
 
 // getCPUPercent returns current CPU usage percentage
 func (t *Telemetry) getCPUPercent() float64 {
-	// Simplified - read from /proc/stat
-	// TODO: Implement proper CPU calculation
+	file, err := os.Open("/proc/stat")
+	if err != nil {
+		return 0.0
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	if scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "cpu ") {
+			fields := strings.Fields(line)
+			if len(fields) >= 5 {
+				user, _ := strconv.ParseFloat(fields[1], 64)
+				nice, _ := strconv.ParseFloat(fields[2], 64)
+				system, _ := strconv.ParseFloat(fields[3], 64)
+				idle, _ := strconv.ParseFloat(fields[4], 64)
+
+				total := user + nice + system + idle
+				if total > 0 {
+					return 100.0 * (user + nice + system) / total
+				}
+			}
+		}
+	}
 	return 0.0
 }
 
@@ -261,20 +288,53 @@ func (t *Telemetry) getMemoryPercent() float64 {
 
 // getDiskPercent returns root filesystem usage percentage
 func (t *Telemetry) getDiskPercent() float64 {
-	// TODO: Implement via syscall.Statfs
-	return 0.0
+	var stat syscall.Statfs_t
+	if err := syscall.Statfs("/", &stat); err != nil {
+		return 0.0
+	}
+
+	total := stat.Blocks * uint64(stat.Bsize)
+	free := stat.Bfree * uint64(stat.Bsize)
+	if total == 0 {
+		return 0.0
+	}
+
+	used := total - free
+	return 100.0 * float64(used) / float64(total)
 }
 
 // getNFTablesRuleCount returns the number of nftables rules
 func (t *Telemetry) getNFTablesRuleCount() int {
-	// TODO: Parse output of `nft list ruleset`
-	return 0
+	cmd := exec.Command("nft", "-a", "list", "ruleset")
+	output, err := cmd.Output()
+	if err != nil {
+		return 0
+	}
+
+	// Count lines containing "handle" (each rule has a handle)
+	count := 0
+	for _, line := range strings.Split(string(output), "\n") {
+		if strings.Contains(line, "handle") && !strings.Contains(line, "table") && !strings.Contains(line, "chain") {
+			count++
+		}
+	}
+	return count
 }
 
 // getCrowdSecBans returns the number of active CrowdSec bans
 func (t *Telemetry) getCrowdSecBans() int {
-	// TODO: Query CrowdSec LAPI
-	return 0
+	cmd := exec.Command("cscli", "decisions", "list", "-o", "raw")
+	output, err := cmd.Output()
+	if err != nil {
+		return 0
+	}
+
+	// Count non-empty lines (excluding header)
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	if len(lines) <= 1 {
+		return 0
+	}
+	return len(lines) - 1 // Subtract header line
 }
 
 // Status returns telemetry module status

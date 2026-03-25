@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"time"
 )
 
 // Graph represents an adjacency matrix for Hamiltonian cycle ZKP
@@ -260,5 +261,5 @@ func permuteGraph(edges [][]int, perm []int) [][]int {
 }
 
 func currentTimestamp() int64 {
-	return int64(0) // TODO: Use time.Now().Unix()
+	return time.Now().Unix()
 }
