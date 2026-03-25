@@ -4,22 +4,22 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SecuBox - Device Intelligence</title>
-    <link rel="stylesheet" href="/shared/crt-system.css">
-    <link rel="stylesheet" href="/shared/sidebar.css">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
         :root {
-            --p31-peak: #33ff66; --p31-hot: #66ffaa; --p31-mid: #22cc44; --p31-dim: #0f8822; --p31-ghost: #052210;
+            --p31-peak: #00dd44; --p31-hot: #00ff55; --p31-mid: #009933; --p31-dim: #006622; --p31-ghost: #003311;
             --p31-decay: #ffb347; --p31-decay-dim: #cc7722;
-            --tube-black: #050803; --tube-deep: #080d05; --tube-bezel: #0d1208;
-            --bg-dark: var(--tube-black); --bg-card: var(--tube-deep); --bg-sidebar: var(--tube-black);
-            --border: var(--p31-ghost); --text: var(--p31-mid); --text-dim: var(--p31-dim);
+            --tube-light: #e8f5e9; --tube-pale: #c8e6c9; --tube-soft: #a5d6a7;
+            --bg-dark: var(--tube-light); --bg-card: var(--tube-pale); --bg-sidebar: var(--tube-black);
+            --border: var(--tube-soft); --text: var(--tube-dark); --text-dim: var(--p31-dim);
             --primary: var(--p31-peak); --cyan: var(--p31-peak); --green: var(--p31-peak);
             --red: var(--p31-decay); --yellow: var(--p31-decay); --purple: var(--p31-hot);
             --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
             --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Courier Prime', monospace; background: var(--tube-black); color: var(--p31-mid); display: flex; min-height: 100vh; }
+        body { font-family: 'Courier Prime', monospace; background: var(--tube-light); color: var(--tube-dark); display: flex; min-height: 100vh; }
         .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
         .header h1 { font-size: 1.5rem; }

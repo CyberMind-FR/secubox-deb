@@ -6,20 +6,20 @@
     <title>Hardening - SecuBox</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-system.css">
-    <link rel="stylesheet" href="/shared/sidebar.css">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
         :root {
-            --p31-peak: #33ff66;
-            --p31-hot: #66ffaa;
-            --p31-mid: #22cc44;
-            --p31-dim: #0f8822;
-            --p31-ghost: #052210;
+            --p31-peak: #00dd44;
+            --p31-hot: #00ff55;
+            --p31-mid: #009933;
+            --p31-dim: #006622;
+            --p31-ghost: #003311;
             --p31-decay: #ffb347;
             --p31-decay-dim: #cc7722;
-            --tube-black: #050803;
-            --tube-deep: #080d05;
-            --tube-bezel: #0d1208;
+            --tube-light: #e8f5e9;
+            --tube-pale: #c8e6c9;
+            --tube-soft: #a5d6a7;
             --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
             --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
             --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
@@ -29,9 +29,9 @@
 
         body {
             font-family: 'Courier Prime', 'Courier New', monospace;
-            background: var(--tube-black);
+            background: var(--tube-light);
             background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
-            color: var(--p31-mid);
+            color: var(--tube-dark);
             display: flex;
             min-height: 100vh;
         }
@@ -62,8 +62,8 @@
         }
 
         .score-card {
-            background: var(--tube-deep);
-            border: 1px solid var(--p31-ghost);
+            background: var(--tube-pale);
+            border: 1px solid var(--tube-soft);
             border-radius: 4px;
             padding: 2rem;
             text-align: center;
@@ -108,8 +108,8 @@
         }
 
         .check-item {
-            background: var(--tube-deep);
-            border: 1px solid var(--p31-ghost);
+            background: var(--tube-pale);
+            border: 1px solid var(--tube-soft);
             border-radius: 4px;
             padding: 1rem;
             display: flex;
@@ -173,9 +173,9 @@
         .btn {
             font-family: 'Courier Prime', monospace;
             padding: 0.75rem 1.5rem;
-            border: 1px solid var(--p31-ghost);
+            border: 1px solid var(--tube-soft);
             border-radius: 4px;
-            background: var(--tube-deep);
+            background: var(--tube-pale);
             color: var(--p31-mid);
             cursor: pointer;
             font-size: 0.8rem;
