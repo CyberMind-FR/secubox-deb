@@ -6,6 +6,7 @@ __pycache__/
 output/
 *.img
 *.img.gz
+*.vdi
 *.deb
 *.changes
 *.buildinfo
