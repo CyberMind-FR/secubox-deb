@@ -59,6 +59,9 @@ func New(subnet string, role string) (*Topology, error) {
 func (t *Topology) Start(ctx context.Context) error {
 	slog.Info("topology starting", "subnet", t.subnet.String(), "role", t.localRole)
 
+	// Add mock nodes for visualization demo
+	t.addMockNodes()
+
 	// Start mesh gate election
 	go t.runElection(ctx)
 
@@ -66,6 +69,29 @@ func (t *Topology) Start(ctx context.Context) error {
 	go t.convergeRoutes(ctx)
 
 	return nil
+}
+
+// addMockNodes adds demo nodes for visualization
+func (t *Topology) addMockNodes() {
+	mockNodes := []struct {
+		did  string
+		ip   string
+		role Role
+	}{
+		{"did:plc:secubox-gateway-001", "10.42.0.1", RoleRelay},
+		{"did:plc:secubox-edge-alpha", "10.42.1.10", RoleEdge},
+		{"did:plc:secubox-edge-beta", "10.42.1.20", RoleEdge},
+		{"did:plc:secubox-edge-gamma", "10.42.1.30", RoleEdge},
+		{"did:plc:secubox-relay-east", "10.42.2.1", RoleRelay},
+		{"did:plc:secubox-edge-delta", "10.42.2.10", RoleEdge},
+		{"did:plc:secubox-airgap-vault", "10.42.99.1", RoleAirGapped},
+	}
+
+	for _, m := range mockNodes {
+		t.AddNode(m.did, net.ParseIP(m.ip), m.role)
+	}
+
+	slog.Info("mock nodes added for visualization", "count", len(mockNodes))
 }
 
 // Stop halts topology management

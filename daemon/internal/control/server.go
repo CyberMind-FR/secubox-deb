@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math"
 	"net"
 	"os"
 	"strings"
@@ -203,13 +204,77 @@ func (s *Server) meshTopology() []byte {
 	nodeList := make([]map[string]interface{}, 0, len(nodes))
 	edges := make([]map[string]interface{}, 0)
 
+	// Layout nodes in a force-directed style
+	// Center relay nodes, edge nodes around them
+	relayCount := 0
+	edgeCount := 0
+	airGapCount := 0
+
 	for _, n := range nodes {
+		var x, y int
+		switch n.Role {
+		case "relay":
+			// Relays in center area
+			x = 200 + (relayCount%2)*200
+			y = 150 + (relayCount/2)*100
+			relayCount++
+		case "edge":
+			// Edges around the perimeter
+			angle := float64(edgeCount) * 0.8
+			x = 300 + int(180*math.Cos(angle))
+			y = 200 + int(120*math.Sin(angle))
+			edgeCount++
+		case "air-gapped":
+			// Air-gapped nodes isolated
+			x = 520
+			y = 80 + airGapCount*60
+			airGapCount++
+		default:
+			x = 100 + (len(nodeList)%4)*120
+			y = 100 + (len(nodeList)/4)*80
+		}
+
 		nodeList = append(nodeList, map[string]interface{}{
 			"id":   n.DID,
 			"role": string(n.Role),
-			"x":    100, // placeholder
-			"y":    100, // placeholder
+			"ip":   n.Address.String(),
+			"x":    x,
+			"y":    y,
 		})
+	}
+
+	// Generate edges: connect edges to nearest relay, relays to each other
+	var relays []string
+	var edgeNodes []string
+	for _, n := range nodes {
+		if n.Role == "relay" {
+			relays = append(relays, n.DID)
+		} else if n.Role == "edge" {
+			edgeNodes = append(edgeNodes, n.DID)
+		}
+	}
+
+	// Connect relays to each other (full mesh between relays)
+	for i := 0; i < len(relays); i++ {
+		for j := i + 1; j < len(relays); j++ {
+			edges = append(edges, map[string]interface{}{
+				"source": relays[i],
+				"target": relays[j],
+				"type":   "relay-link",
+			})
+		}
+	}
+
+	// Connect edge nodes to first relay (simplified)
+	if len(relays) > 0 {
+		for i, e := range edgeNodes {
+			targetRelay := relays[i%len(relays)]
+			edges = append(edges, map[string]interface{}{
+				"source": e,
+				"target": targetRelay,
+				"type":   "edge-link",
+			})
+		}
 	}
 
 	resp := map[string]interface{}{

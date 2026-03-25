@@ -4,12 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>C3BOX — SecuBox Mesh Dashboard</title>
+    <link rel="stylesheet" href="/shared/sidebar.css">
     <style>
         :root {
             --bg: #0a0e14;
             --fg: #33ff66;
             --dim: #1a1f2e;
             --accent: #00ff88;
+            --p31-peak: #33ff66;
+            --p31-dim: #0f8822;
+            --p31-ghost: #052210;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -17,9 +21,15 @@
             background: var(--bg);
             color: var(--fg);
             min-height: 100vh;
+            display: flex;
+        }
+        .main-content {
+            flex: 1;
+            margin-left: 220px;
+            padding: 1rem;
         }
         header {
-            padding: 1rem 2rem;
+            padding: 1rem;
             border-bottom: 1px solid var(--dim);
             display: flex;
             justify-content: space-between;
@@ -32,12 +42,16 @@
         .status { font-size: 0.9rem; }
         .status.ok { color: var(--accent); }
         .status.error { color: #ff3366; }
-        main {
+        .content-grid {
             display: grid;
             grid-template-columns: 1fr 300px;
             gap: 1rem;
-            padding: 1rem;
-            height: calc(100vh - 60px);
+            padding: 1rem 0;
+            min-height: calc(100vh - 120px);
+        }
+        @media (max-width: 900px) {
+            .main-content { margin-left: 0; }
+            .content-grid { grid-template-columns: 1fr; }
         }
         .panel {
             background: var(--dim);
@@ -77,25 +91,19 @@
         .role.edge { background: #336699; }
         .role.relay { background: #996633; }
         .role.mesh-gate { background: var(--accent); color: #000; }
-        footer {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            padding: 0.5rem 2rem;
-            background: var(--dim);
-            font-size: 0.75rem;
-            display: flex;
-            justify-content: space-between;
-        }
+        .role.air-gapped { background: #663366; }
     </style>
 </head>
 <body>
-    <header>
-        <h1>C3BOX</h1>
-        <div class="status" id="status">Connecting...</div>
-    </header>
-    <main>
+    <!-- Sidebar Navigation -->
+    <nav class="sidebar" id="sidebar"></nav>
+
+    <div class="main-content">
+        <header>
+            <h1>🌐 C3BOX — Mesh Topology</h1>
+            <div class="status" id="status">Connecting...</div>
+        </header>
+        <div class="content-grid">
         <div class="panel">
             <h2>Mesh Topology</h2>
             <svg id="topology" viewBox="0 0 600 400">
@@ -108,12 +116,14 @@
                 <li>Loading...</li>
             </ul>
         </div>
-    </main>
-    <footer>
-        <span>CyberMind — SecuBox-Deb</span>
-        <span id="meshGate">Mesh Gate: —</span>
-    </footer>
+        </div>
+        <footer style="padding: 0.5rem 1rem; border-top: 1px solid var(--dim); font-size: 0.75rem; display: flex; justify-content: space-between;">
+            <span>CyberMind — SecuBox-Deb — 2026</span>
+            <span id="meshGate">Mesh Gate: —</span>
+        </footer>
+    </div>
 
+    <script src="/shared/sidebar.js"></script>
     <script>
         const API = '/api';
 

@@ -7,8 +7,11 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"os"
 	"sync"
 	"time"
+
+	"github.com/grandcat/zeroconf"
 )
 
 // Peer represents a discovered mesh peer
@@ -27,6 +30,10 @@ type Discovery struct {
 	beaconInterval time.Duration
 	peers          map[string]*Peer
 	stopCh         chan struct{}
+	mdnsServer     *zeroconf.Server
+	localDID       string
+	localRole      string
+	port           int
 }
 
 // New creates a new Discovery instance
@@ -35,12 +42,25 @@ func New(service string, beaconInterval int) (*Discovery, error) {
 		service = "_secubox._udp"
 	}
 
+	hostname, _ := os.Hostname()
+
 	return &Discovery{
 		service:        service,
 		beaconInterval: time.Duration(beaconInterval) * time.Second,
 		peers:          make(map[string]*Peer),
 		stopCh:         make(chan struct{}),
+		localDID:       hostname,
+		localRole:      "edge",
+		port:           51820,
 	}, nil
+}
+
+// SetIdentity sets the local node identity for mDNS advertisement
+func (d *Discovery) SetIdentity(did, role string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.localDID = did
+	d.localRole = role
 }
 
 // Start begins mDNS service advertisement and peer discovery
@@ -104,21 +124,125 @@ func (d *Discovery) AddPeer(did string, addr net.IP, port int, role string) {
 
 // registerService advertises this node via mDNS
 func (d *Discovery) registerService(ctx context.Context) {
-	// TODO: Implement zeroconf service registration
-	// server, err := zeroconf.Register("secubox", d.service, "local.", 51820, nil, nil)
-	slog.Debug("mDNS service registration placeholder")
+	d.mu.RLock()
+	did := d.localDID
+	role := d.localRole
+	port := d.port
+	d.mu.RUnlock()
 
+	// TXT records for node metadata
+	txt := []string{
+		fmt.Sprintf("did=%s", did),
+		fmt.Sprintf("role=%s", role),
+		"version=0.1.0",
+	}
+
+	// Register mDNS service
+	server, err := zeroconf.Register(
+		"secubox-"+did[:8], // Instance name (shortened DID)
+		d.service,          // Service type: _secubox._udp
+		"local.",           // Domain
+		port,               // Port (WireGuard)
+		txt,                // TXT records
+		nil,                // Interfaces (nil = all)
+	)
+	if err != nil {
+		slog.Error("failed to register mDNS service", "error", err)
+		return
+	}
+
+	d.mu.Lock()
+	d.mdnsServer = server
+	d.mu.Unlock()
+
+	slog.Info("mDNS service registered", "service", d.service, "did", did, "port", port)
+
+	// Wait for context cancellation
 	<-ctx.Done()
+	server.Shutdown()
+	slog.Info("mDNS service unregistered")
 }
 
 // discoverPeers listens for mDNS announcements from other nodes
 func (d *Discovery) discoverPeers(ctx context.Context) {
-	// TODO: Implement zeroconf service browsing
-	// resolver, err := zeroconf.NewResolver(nil)
-	// entries := make(chan *zeroconf.ServiceEntry)
-	slog.Debug("mDNS peer discovery placeholder")
+	resolver, err := zeroconf.NewResolver(nil)
+	if err != nil {
+		slog.Error("failed to create mDNS resolver", "error", err)
+		return
+	}
 
-	<-ctx.Done()
+	entries := make(chan *zeroconf.ServiceEntry)
+
+	go func() {
+		for entry := range entries {
+			d.handleServiceEntry(entry)
+		}
+	}()
+
+	// Browse for SecuBox services
+	slog.Info("mDNS discovery started", "service", d.service)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-d.stopCh:
+			return
+		default:
+			// Browse with 10 second timeout, then repeat
+			browseCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			err := resolver.Browse(browseCtx, d.service, "local.", entries)
+			cancel()
+			if err != nil {
+				slog.Debug("mDNS browse error", "error", err)
+			}
+			time.Sleep(5 * time.Second)
+		}
+	}
+}
+
+// handleServiceEntry processes a discovered mDNS service
+func (d *Discovery) handleServiceEntry(entry *zeroconf.ServiceEntry) {
+	if entry == nil {
+		return
+	}
+
+	// Parse TXT records
+	var did, role string
+	for _, txt := range entry.Text {
+		if len(txt) > 4 && txt[:4] == "did=" {
+			did = txt[4:]
+		}
+		if len(txt) > 5 && txt[:5] == "role=" {
+			role = txt[5:]
+		}
+	}
+
+	if did == "" {
+		did = entry.Instance
+	}
+
+	// Skip self
+	d.mu.RLock()
+	localDID := d.localDID
+	d.mu.RUnlock()
+	if did == localDID {
+		return
+	}
+
+	// Get IP address (prefer IPv4)
+	var addr net.IP
+	if len(entry.AddrIPv4) > 0 {
+		addr = entry.AddrIPv4[0]
+	} else if len(entry.AddrIPv6) > 0 {
+		addr = entry.AddrIPv6[0]
+	}
+
+	if addr == nil {
+		return
+	}
+
+	d.AddPeer(did, addr, entry.Port, role)
 }
 
 // sendBeacons sends encrypted WireGuard beacons to known peers
