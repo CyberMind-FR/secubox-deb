@@ -124,12 +124,12 @@ ssh-keyscan -H apt.secubox.in
 # Copy output to GitHub secret: DEPLOY_KNOWN_HOSTS
 ```
 
-## Packages disponibles (41 packages)
+## Packages disponibles (51 packages)
 
 ### Metapackages
 | Package | Description |
 |---------|-------------|
-| `secubox-full` | All 39 modules (4GB+ RAM recommended) |
+| `secubox-full` | All 49 modules (4GB+ RAM recommended) |
 | `secubox-lite` | Essential modules only (1-2GB RAM) |
 
 ### Core Infrastructure
@@ -145,6 +145,7 @@ ssh-keyscan -H apt.secubox.in
 |---------|-------------|
 | `secubox-crowdsec` | CrowdSec integration |
 | `secubox-waf` | Web Application Firewall (300+ rules) |
+| `secubox-vortex-firewall` | nftables threat enforcement |
 | `secubox-mitmproxy` | MITM proxy with WAF inspection |
 | `secubox-auth` | Authentication |
 | `secubox-nac` | Network Access Control |
@@ -154,15 +155,24 @@ ssh-keyscan -H apt.secubox.in
 | Package | Description |
 |---------|-------------|
 | `secubox-wireguard` | WireGuard VPN |
+| `secubox-mesh` | Yggdrasil mesh network |
+| `secubox-p2p` | P2P networking |
 | `secubox-netmodes` | Network modes |
 | `secubox-dpi` | Deep Packet Inspection |
-| `secubox-qos` | Quality of Service |
+| `secubox-qos` | Quality of Service with HTB/VLAN |
 | `secubox-traffic` | TC/CAKE traffic shaping |
 | `secubox-vhost` | Virtual hosts |
 | `secubox-haproxy` | HAProxy management |
 | `secubox-cdn` | CDN cache |
 | `secubox-tor` | Tor circuits and hidden services |
 | `secubox-exposure` | Unified exposure (Tor, SSL, DNS, Mesh) |
+
+### DNS
+| Package | Description |
+|---------|-------------|
+| `secubox-dns` | BIND DNS zone management |
+| `secubox-vortex-dns` | DNS firewall with RPZ |
+| `secubox-meshname` | Mesh network DNS resolution |
 
 ### Applications
 | Package | Description |
@@ -173,7 +183,6 @@ ssh-keyscan -H apt.secubox.in
 | `secubox-webmail-lxc` | Webmail LXC container |
 | `secubox-gitea` | Gitea Git server (LXC) |
 | `secubox-nextcloud` | Nextcloud file sync (LXC) |
-| `secubox-dns` | DNS/BIND management |
 | `secubox-users` | Unified identity (7 services) |
 
 ### Publishing
@@ -185,12 +194,29 @@ ssh-keyscan -H apt.secubox.in
 | `secubox-metablogizer` | Static site generator |
 | `secubox-publish` | Unified publishing |
 
-### Monitoring & Infrastructure
+### Monitoring
 | Package | Description |
 |---------|-------------|
 | `secubox-netdata` | Netdata integration |
 | `secubox-mediaflow` | Media flow analysis |
-| `secubox-c3box` | Services portal |
+| `secubox-device-intel` | Asset discovery and fingerprinting |
 | `secubox-watchdog` | Container/service/endpoint monitoring |
+| `secubox-metrics` | Real-time metrics dashboard |
+
+### Dashboard
+| Package | Description |
+|---------|-------------|
+| `secubox-soc` | Security Operations Center |
+| `secubox-roadmap` | Migration roadmap tracker |
+
+### Privacy
+| Package | Description |
+|---------|-------------|
+| `secubox-zkp` | Zero-knowledge proofs (Hamiltonian) |
+
+### Infrastructure
+| Package | Description |
+|---------|-------------|
+| `secubox-c3box` | Services portal |
 | `secubox-backup` | System and container backups |
 | `secubox-repo` | APT repository management |
