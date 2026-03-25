@@ -32,6 +32,22 @@
   - Full debian packaging (control, changelog, rules, postinst, prerm)
   - Systemd integration with socket activation
 
+### Unix Socket Control Server ✅
+- **daemon/internal/control/server.go** — Control server implementation
+  - Unix socket at `/run/secuboxd/topo.sock`
+  - Commands: mesh.status, mesh.peers, mesh.topology, mesh.nodes
+  - Commands: node.info, node.rotate, telemetry.latest, ping
+  - JSON responses with proper error handling
+  - Graceful shutdown and socket cleanup
+- **daemon/cmd/secuboxctl/main.go** — CLI expanded with new commands
+  - `secuboxctl mesh topology` — Show mesh topology
+  - `secuboxctl mesh nodes` — List mesh nodes with ZKP status
+  - `secuboxctl telemetry latest` — Show telemetry metrics
+- **Tested on VM** — All commands working:
+  - Node info shows DID, role, ZKP expiry
+  - Mesh status shows running state, uptime
+  - Telemetry shows CPU/memory/disk, nftables rules, CrowdSec bans
+
 ### Go Daemon Telemetry Implementation ✅
 - **pkg/hamiltonian/hamiltonian.go** — Fixed `currentTimestamp()` to use `time.Now().Unix()`
 - **internal/telemetry/telemetry.go** — Implemented metrics collection:

@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/cybermind/secubox-deb/internal/control"
 	"github.com/cybermind/secubox-deb/internal/discovery"
 	"github.com/cybermind/secubox-deb/internal/identity"
 	"github.com/cybermind/secubox-deb/internal/telemetry"
@@ -94,6 +95,14 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Start control server
+	ctrlSock := "/run/secuboxd/topo.sock"
+	ctrl := control.New(ctrlSock, ident, disco, topo, telem)
+	if err := ctrl.Start(ctx); err != nil {
+		slog.Error("failed to start control server", "error", err)
+		os.Exit(1)
+	}
+
 	slog.Info("secuboxd started", "role", cfg.Node.Role, "did", cfg.Node.DID)
 
 	// Wait for shutdown signal
@@ -116,6 +125,7 @@ func main() {
 			slog.Info("shutting down")
 			cancel()
 			// Graceful shutdown
+			ctrl.Stop()
 			telem.Stop()
 			topo.Stop()
 			disco.Stop()
