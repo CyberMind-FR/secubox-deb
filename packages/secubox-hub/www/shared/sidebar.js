@@ -2,6 +2,7 @@
  * ═══════════════════════════════════════════════════════════════
  *  SECUBOX SIDEBAR — CRT P31 Phosphor Theme
  *  Dynamic menu with VT100 aesthetic
+ *  Includes light/dark theme toggle
  *
  *  Usage:
  *    <nav class="sidebar" id="sidebar"></nav>
@@ -11,12 +12,140 @@
 
 (function() {
     const MENU_API = '/api/v1/hub/menu';
-    const VERSION = 'v1.1.0';
+    const VERSION = 'v1.2.0';
+    const THEME_KEY = 'sbx_theme';
+
+    // Theme configuration
+    const THEMES = {
+        light: {
+            css: '/shared/crt-light.css',
+            sidebar: '/shared/sidebar-light.css',
+            icon: '☀️',
+            label: 'LIGHT'
+        },
+        dark: {
+            css: '/shared/crt-system.css',
+            sidebar: '/shared/sidebar.css',
+            icon: '🌙',
+            label: 'DARK'
+        }
+    };
+
+    // Get current theme from localStorage or default to light
+    function getCurrentTheme() {
+        return localStorage.getItem(THEME_KEY) || 'light';
+    }
+
+    // Set theme and update CSS links
+    function setTheme(theme) {
+        localStorage.setItem(THEME_KEY, theme);
+        const config = THEMES[theme];
+
+        // Find and update CSS links
+        const links = document.querySelectorAll('link[rel="stylesheet"]');
+        links.forEach(link => {
+            const href = link.getAttribute('href');
+            if (href.includes('crt-light.css') || href.includes('crt-system.css')) {
+                link.setAttribute('href', config.css);
+            }
+            if (href.includes('sidebar-light.css') || href.includes('sidebar.css')) {
+                // Only update if it's a sidebar CSS (not the main sidebar.js)
+                if (href.endsWith('.css')) {
+                    link.setAttribute('href', config.sidebar);
+                }
+            }
+        });
+
+        // Update body class
+        document.body.classList.remove('crt-light', 'crt-body', 'crt-scanlines');
+        if (theme === 'light') {
+            document.body.classList.add('crt-light');
+        } else {
+            document.body.classList.add('crt-body', 'crt-scanlines');
+        }
+
+        // Update toggle button if exists
+        const toggleBtn = document.getElementById('theme-toggle');
+        if (toggleBtn) {
+            const otherTheme = theme === 'light' ? 'dark' : 'light';
+            toggleBtn.innerHTML = `<span class="theme-icon">${THEMES[otherTheme].icon}</span>`;
+            toggleBtn.title = `Switch to ${otherTheme} mode`;
+        }
+
+        // Update inline CSS variables for pages with inline styles
+        updateInlineThemeVars(theme);
+    }
+
+    // Update CSS variables for inline styles
+    function updateInlineThemeVars(theme) {
+        const root = document.documentElement;
+        if (theme === 'light') {
+            root.style.setProperty('--tube-light', '#e8f5e9');
+            root.style.setProperty('--tube-pale', '#c8e6c9');
+            root.style.setProperty('--tube-soft', '#a5d6a7');
+            root.style.setProperty('--tube-mist', '#81c784');
+            root.style.setProperty('--tube-dark', '#1b3d1c');
+            root.style.setProperty('--tube-black', '#e8f5e9');
+            root.style.setProperty('--tube-deep', '#c8e6c9');
+            root.style.setProperty('--p31-peak', '#00dd44');
+            root.style.setProperty('--p31-hot', '#00ff55');
+            root.style.setProperty('--p31-mid', '#009933');
+            root.style.setProperty('--p31-dim', '#006622');
+            root.style.setProperty('--p31-ghost', '#003311');
+        } else {
+            root.style.setProperty('--tube-light', '#080d05');
+            root.style.setProperty('--tube-pale', '#080d05');
+            root.style.setProperty('--tube-soft', '#052210');
+            root.style.setProperty('--tube-mist', '#0f8822');
+            root.style.setProperty('--tube-dark', '#22cc44');
+            root.style.setProperty('--tube-black', '#050803');
+            root.style.setProperty('--tube-deep', '#080d05');
+            root.style.setProperty('--p31-peak', '#33ff66');
+            root.style.setProperty('--p31-hot', '#66ffaa');
+            root.style.setProperty('--p31-mid', '#22cc44');
+            root.style.setProperty('--p31-dim', '#0f8822');
+            root.style.setProperty('--p31-ghost', '#052210');
+        }
+    }
+
+    // Toggle between themes
+    function toggleTheme() {
+        const current = getCurrentTheme();
+        const next = current === 'light' ? 'dark' : 'light';
+        setTheme(next);
+    }
 
     // Inject additional CRT styles
     const style = document.createElement('style');
     style.textContent = `
-        @import url('https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+        .theme-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            margin: 0.5rem 0;
+            border: 1px solid var(--p31-dim, #006622);
+            border-radius: 4px;
+            background: transparent;
+            color: var(--p31-mid, #009933);
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.75rem;
+            letter-spacing: 0.1em;
+            transition: all 0.2s;
+            width: 100%;
+        }
+        .theme-toggle:hover {
+            border-color: var(--p31-peak, #00dd44);
+            color: var(--p31-peak, #00dd44);
+            background: rgba(0, 221, 68, 0.1);
+        }
+        .theme-icon {
+            font-size: 1.1rem;
+        }
     `;
     document.head.appendChild(style);
 
@@ -75,6 +204,9 @@
     async function loadSidebar() {
         const sidebar = document.getElementById('sidebar');
         if (!sidebar) return;
+
+        const currentTheme = getCurrentTheme();
+        const otherTheme = currentTheme === 'light' ? 'dark' : 'light';
 
         // Show loading state with CRT effect
         sidebar.innerHTML = `
@@ -143,6 +275,9 @@
                     ${menuHTML}
                 </div>
                 <div class="sidebar-footer">
+                    <button class="theme-toggle" id="theme-toggle" onclick="window.SecuBoxSidebar.toggleTheme()" title="Switch to ${otherTheme} mode">
+                        <span class="theme-icon">${THEMES[otherTheme].icon}</span>
+                    </button>
                     <div class="sidebar-clock" id="sidebar-clock">00:00:00</div>
                     <div class="sidebar-user">
                         <span class="sidebar-user-avatar">👤</span>
@@ -207,6 +342,9 @@
                     </div>
                 </div>
                 <div class="sidebar-footer">
+                    <button class="theme-toggle" id="theme-toggle" onclick="window.SecuBoxSidebar.toggleTheme()" title="Switch to ${otherTheme} mode">
+                        <span class="theme-icon">${THEMES[otherTheme].icon}</span>
+                    </button>
                     <div class="sidebar-clock" id="sidebar-clock">00:00:00</div>
                 </div>
             `;
@@ -223,6 +361,9 @@
             toggle.onclick = () => sidebar.classList.toggle('open');
             document.body.appendChild(toggle);
         }
+
+        // Apply current theme
+        setTheme(currentTheme);
     }
 
     // Load sidebar when DOM is ready
@@ -232,6 +373,11 @@
         loadSidebar();
     }
 
-    // Export for manual refresh
-    window.SecuBoxSidebar = { reload: loadSidebar };
+    // Export for manual use
+    window.SecuBoxSidebar = {
+        reload: loadSidebar,
+        toggleTheme: toggleTheme,
+        setTheme: setTheme,
+        getTheme: getCurrentTheme
+    };
 })();
