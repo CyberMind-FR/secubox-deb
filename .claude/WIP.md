@@ -32,6 +32,14 @@
   - Full debian packaging (control, changelog, rules, postinst, prerm)
   - Systemd integration with socket activation
 
+### Go Daemon Telemetry Implementation ✅
+- **pkg/hamiltonian/hamiltonian.go** — Fixed `currentTimestamp()` to use `time.Now().Unix()`
+- **internal/telemetry/telemetry.go** — Implemented metrics collection:
+  - `getCPUPercent()` — Reads from /proc/stat
+  - `getDiskPercent()` — Uses syscall.Statfs for root filesystem
+  - `getNFTablesRuleCount()` — Parses `nft list ruleset` output
+  - `getCrowdSecBans()` — Queries `cscli decisions list`
+
 ---
 
 ## ✅ Terminé session précédente (Session 14)
