@@ -712,22 +712,22 @@ set menu_color_normal=cyan/black
 set menu_color_highlight=white/blue
 
 menuentry "SecuBox Live (Default)" {
-    linux /live/vmlinuz boot=live components persistence quiet splash
+    linux /live/vmlinuz boot=live components persistence quiet splash loglevel=3 usbcore.autosuspend=-1
     initrd /live/initrd.img
 }
 
 menuentry "SecuBox Install (Headless Auto-Install)" {
-    linux /live/vmlinuz boot=live components toram systemd.unit=secubox-installer.target quiet
+    linux /live/vmlinuz boot=live components toram systemd.unit=secubox-installer.target quiet loglevel=3 usbcore.autosuspend=-1
     initrd /live/initrd.img
 }
 
 menuentry "SecuBox Live (No Persistence)" {
-    linux /live/vmlinuz boot=live components nopersistence quiet splash
+    linux /live/vmlinuz boot=live components nopersistence quiet splash loglevel=3 usbcore.autosuspend=-1
     initrd /live/initrd.img
 }
 
 menuentry "SecuBox Live (To RAM)" {
-    linux /live/vmlinuz boot=live components toram quiet splash
+    linux /live/vmlinuz boot=live components toram quiet splash loglevel=3 usbcore.autosuspend=-1
     initrd /live/initrd.img
 }
 
@@ -760,17 +760,17 @@ set menu_color_normal=cyan/black
 set menu_color_highlight=white/blue
 
 menuentry "SecuBox Live (Default)" {
-    linux /live/vmlinuz boot=live components persistence quiet splash
+    linux /live/vmlinuz boot=live components persistence quiet splash loglevel=3 usbcore.autosuspend=-1
     initrd /live/initrd.img
 }
 
 menuentry "SecuBox Live (No Persistence)" {
-    linux /live/vmlinuz boot=live components nopersistence quiet splash
+    linux /live/vmlinuz boot=live components nopersistence quiet splash loglevel=3 usbcore.autosuspend=-1
     initrd /live/initrd.img
 }
 
 menuentry "SecuBox Live (To RAM)" {
-    linux /live/vmlinuz boot=live components toram quiet splash
+    linux /live/vmlinuz boot=live components toram quiet splash loglevel=3 usbcore.autosuspend=-1
     initrd /live/initrd.img
 }
 
