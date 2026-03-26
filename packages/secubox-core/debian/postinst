@@ -41,6 +41,9 @@ case "$1" in
     fi
 
     systemctl daemon-reload
+
+    # Enable runtime directory service (ensures /run/secubox exists before other services)
+    systemctl enable --now secubox-runtime.service 2>/dev/null || true
     ;;
 esac
 

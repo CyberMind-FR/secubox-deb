@@ -26,9 +26,11 @@ override_dh_auto_install:
 	install -m 755 ../../image/firstboot.sh \
 	               debian/secubox-core/usr/bin/secubox-firstboot
 
-	# Systemd service
+	# Systemd services
 	install -d debian/secubox-core/usr/lib/systemd/system
 	install -m 644 debian/secubox-core.service \
+	               debian/secubox-core/usr/lib/systemd/system/
+	install -m 644 systemd/secubox-runtime.service \
 	               debian/secubox-core/usr/lib/systemd/system/
 	# Create modular nginx directory (modules install their snippets here)
 	install -d debian/secubox-core/etc/nginx/secubox.d
