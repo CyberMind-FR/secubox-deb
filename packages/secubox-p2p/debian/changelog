@@ -1,3 +1,25 @@
+secubox-p2p (1.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * Master-Link enrollment system (token-based mesh onboarding)
+  * New endpoints: /master-link/status, /token, /join, /approve, /peers, /tree
+  * Peer approval workflow: approve, reject, promote to sub-master
+  * Automatic depth-based mesh hierarchy (max_depth configurable)
+  * Master-Link join page at /master-link/ for new node onboarding
+  * WireGuard mesh configuration endpoints
+  * Remote announcer support for multi-site peer discovery
+  * Bridge discovery for multi-hop peer connections
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Mar 2026 16:00:00 +0100
+
+secubox-p2p (1.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Enhanced peer discovery with mDNS and network scan
+  * WireGuard mesh networking integration
+  * Remote announcer support
+  * Bridge discovery for multi-hop peers
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Mar 2026 14:00:00 +0100
+
 secubox-p2p (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial release
