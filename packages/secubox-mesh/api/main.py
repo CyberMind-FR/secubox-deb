@@ -257,8 +257,8 @@ async def probe_secubox_peer(ipv6: str, timeout: float = 3.0) -> dict:
 
 
 @app.get("/status")
-async def get_status(user=Depends(require_jwt)):
-    """Get mesh network status."""
+async def get_status():
+    """Get mesh network status (public)."""
     ygg_info = get_yggdrasil_info()
     peers = get_yggdrasil_peers()
     services = load_json(SERVICES_FILE, {"services": []})
@@ -308,8 +308,8 @@ async def get_sessions(user=Depends(require_jwt)):
 
 
 @app.get("/services")
-async def get_services(user=Depends(require_jwt)):
-    """Get local announced services."""
+async def get_services():
+    """Get local announced services (public read)."""
     data = load_json(SERVICES_FILE, {"services": []})
     ygg_info = get_yggdrasil_info()
 
@@ -360,8 +360,8 @@ async def revoke_service(service: ServiceRevoke, user=Depends(require_jwt)):
 
 
 @app.get("/domains")
-async def get_domains(user=Depends(require_jwt)):
-    """Get discovered remote domains."""
+async def get_domains():
+    """Get discovered remote domains (public read)."""
     data = load_json(DOMAINS_FILE, {"domains": [], "last_sync": None})
     return data
 
