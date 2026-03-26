@@ -3,785 +3,307 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mesh DNS - SecuBox</title>
+    <title>SecuBox - Mesh Network</title>
     <link rel="stylesheet" href="/shared/crt-light.css">
     <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
         :root {
-            --crt-green: #33ff33;
-            --crt-dark-green: #0a2f0a;
-            --crt-bg: #0a0a0a;
-            --crt-border: #1a4a1a;
-            --crt-dim: #1a8a1a;
-            --crt-highlight: #44ff44;
-            --crt-red: #ff3333;
-            --crt-yellow: #ffff33;
-            --crt-cyan: #33ffff;
+            --p31-peak: #00dd44; --p31-hot: #00ff55; --p31-mid: #009933; --p31-dim: #006622; --p31-ghost: #003311;
+            --p31-decay: #ffb347; --p31-decay-dim: #cc7722;
+            --tube-light: #e8f5e9; --tube-pale: #c8e6c9; --tube-soft: #a5d6a7;
+            --bg-dark: var(--tube-light); --bg-card: var(--tube-pale); --bg-sidebar: var(--tube-black);
+            --border: var(--tube-soft); --text: #1a1a1a; --text-dim: var(--p31-dim);
+            --primary: var(--p31-peak); --cyan: var(--p31-peak); --green: var(--p31-peak);
+            --red: var(--p31-decay); --yellow: var(--p31-decay); --purple: var(--p31-hot);
         }
-
-        * {
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Courier New', 'Lucida Console', monospace;
-            background-color: var(--crt-bg);
-            color: var(--crt-green);
-            margin: 0;
-            padding: 0;
-            min-height: 100vh;
-            text-shadow: 0 0 5px var(--crt-green);
-        }
-
-        .main-content {
-            margin-left: 280px;
-            padding: 20px;
-            min-height: 100vh;
-        }
-
-        @media (max-width: 768px) {
-            .main-content {
-                margin-left: 0;
-                padding: 10px;
-            }
-        }
-
-        .page-header {
-            border-bottom: 2px solid var(--crt-border);
-            padding-bottom: 15px;
-            margin-bottom: 25px;
-        }
-
-        .page-header h1 {
-            margin: 0;
-            font-size: 24px;
-            text-transform: uppercase;
-            letter-spacing: 3px;
-        }
-
-        .page-header p {
-            margin: 10px 0 0 0;
-            color: var(--crt-dim);
-            font-size: 14px;
-        }
-
-        .status-panel {
-            background: var(--crt-dark-green);
-            border: 1px solid var(--crt-border);
-            padding: 20px;
-            margin-bottom: 25px;
-        }
-
-        .status-panel h2 {
-            margin: 0 0 15px 0;
-            font-size: 16px;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            border-bottom: 1px solid var(--crt-border);
-            padding-bottom: 10px;
-        }
-
-        .status-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-        }
-
-        .status-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 10px;
-            background: rgba(0, 0, 0, 0.3);
-            border: 1px solid var(--crt-border);
-        }
-
-        .status-label {
-            color: var(--crt-dim);
-            font-size: 12px;
-            text-transform: uppercase;
-        }
-
-        .status-value {
-            font-size: 14px;
-            font-weight: bold;
-        }
-
-        .status-value.online {
-            color: var(--crt-green);
-        }
-
-        .status-value.offline {
-            color: var(--crt-red);
-        }
-
-        .status-value.syncing {
-            color: var(--crt-yellow);
-            animation: blink 1s infinite;
-        }
-
-        @keyframes blink {
-            0%, 50% { opacity: 1; }
-            51%, 100% { opacity: 0.5; }
-        }
-
-        .ipv6-display {
-            font-family: monospace;
-            font-size: 12px;
-            word-break: break-all;
-            background: rgba(0, 0, 0, 0.5);
-            padding: 8px;
-            border: 1px solid var(--crt-border);
-            margin-top: 10px;
-        }
-
-        .section {
-            background: var(--crt-dark-green);
-            border: 1px solid var(--crt-border);
-            padding: 20px;
-            margin-bottom: 25px;
-        }
-
-        .section h2 {
-            margin: 0 0 15px 0;
-            font-size: 16px;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            border-bottom: 1px solid var(--crt-border);
-            padding-bottom: 10px;
-        }
-
-        .services-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        .services-table th,
-        .services-table td {
-            padding: 10px;
-            text-align: left;
-            border-bottom: 1px solid var(--crt-border);
-        }
-
-        .services-table th {
-            color: var(--crt-dim);
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        .services-table tr:hover {
-            background: rgba(51, 255, 51, 0.1);
-        }
-
-        .btn {
-            background: transparent;
-            border: 1px solid var(--crt-green);
-            color: var(--crt-green);
-            padding: 8px 16px;
-            cursor: pointer;
-            font-family: inherit;
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            transition: all 0.3s ease;
-        }
-
-        .btn:hover {
-            background: var(--crt-green);
-            color: var(--crt-bg);
-            text-shadow: none;
-        }
-
-        .btn.danger {
-            border-color: var(--crt-red);
-            color: var(--crt-red);
-        }
-
-        .btn.danger:hover {
-            background: var(--crt-red);
-            color: var(--crt-bg);
-        }
-
-        .btn.primary {
-            border-color: var(--crt-cyan);
-            color: var(--crt-cyan);
-        }
-
-        .btn.primary:hover {
-            background: var(--crt-cyan);
-            color: var(--crt-bg);
-        }
-
-        .btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .form-group {
-            margin-bottom: 15px;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-            color: var(--crt-dim);
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        .form-group input,
-        .form-group select {
-            width: 100%;
-            padding: 10px;
-            background: rgba(0, 0, 0, 0.5);
-            border: 1px solid var(--crt-border);
-            color: var(--crt-green);
-            font-family: inherit;
-            font-size: 14px;
-        }
-
-        .form-group input:focus,
-        .form-group select:focus {
-            outline: none;
-            border-color: var(--crt-green);
-            box-shadow: 0 0 5px var(--crt-green);
-        }
-
-        .form-row {
-            display: flex;
-            gap: 15px;
-            align-items: flex-end;
-        }
-
-        .form-row .form-group {
-            flex: 1;
-        }
-
-        .form-row .btn {
-            margin-bottom: 15px;
-        }
-
-        .resolve-result {
-            margin-top: 15px;
-            padding: 15px;
-            background: rgba(0, 0, 0, 0.5);
-            border: 1px solid var(--crt-border);
-            display: none;
-        }
-
-        .resolve-result.show {
-            display: block;
-        }
-
-        .resolve-result.success {
-            border-color: var(--crt-green);
-        }
-
-        .resolve-result.error {
-            border-color: var(--crt-red);
-            color: var(--crt-red);
-        }
-
-        .actions-bar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-        }
-
-        .empty-state {
-            text-align: center;
-            padding: 40px;
-            color: var(--crt-dim);
-        }
-
-        .empty-state p {
-            margin: 0;
-        }
-
-        .badge {
-            display: inline-block;
-            padding: 2px 8px;
-            font-size: 10px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            border: 1px solid;
-        }
-
-        .badge.active {
-            border-color: var(--crt-green);
-            color: var(--crt-green);
-        }
-
-        .badge.inactive {
-            border-color: var(--crt-red);
-            color: var(--crt-red);
-        }
-
-        .loading-spinner {
-            display: inline-block;
-            width: 16px;
-            height: 16px;
-            border: 2px solid var(--crt-border);
-            border-top-color: var(--crt-green);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        .scanlines {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            background: repeating-linear-gradient(
-                0deg,
-                rgba(0, 0, 0, 0.1),
-                rgba(0, 0, 0, 0.1) 1px,
-                transparent 1px,
-                transparent 2px
-            );
-            z-index: 9999;
-        }
-
-        .crt-flicker {
-            animation: flicker 0.15s infinite;
-        }
-
-        @keyframes flicker {
-            0% { opacity: 0.97; }
-            50% { opacity: 1; }
-            100% { opacity: 0.98; }
-        }
-
-        .toast {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            padding: 15px 25px;
-            background: var(--crt-dark-green);
-            border: 1px solid var(--crt-green);
-            color: var(--crt-green);
-            z-index: 10000;
-            transform: translateY(100px);
-            opacity: 0;
-            transition: all 0.3s ease;
-        }
-
-        .toast.show {
-            transform: translateY(0);
-            opacity: 1;
-        }
-
-        .toast.error {
-            border-color: var(--crt-red);
-            color: var(--crt-red);
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Courier Prime', monospace; background: var(--tube-light); color: var(--text); display: flex; min-height: 100vh; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
+        .header h1 { font-size: 1.5rem; color: var(--p31-dim); }
+        .header-actions { display: flex; gap: 0.5rem; align-items: center; }
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.875rem; }
+        .btn:hover { background: var(--bg-dark); }
+        .btn.primary { background: rgba(0,221,68,0.1); border-color: var(--primary); color: var(--primary); }
+        .btn.danger { background: rgba(255,179,71,0.1); border-color: var(--red); color: var(--red); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
+        .card h2 { font-size: 1rem; margin-bottom: 1rem; color: var(--p31-dim); display: flex; justify-content: space-between; align-items: center; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
+        .stat-card .value { font-size: 1.5rem; font-weight: bold; }
+        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; }
+        .stat-card.online .value { color: var(--green); }
+        .stat-card.offline .value { color: var(--red); }
+        .stat-card.syncing .value { color: var(--yellow); animation: pulse 1s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+        th { color: var(--text-dim); font-weight: 500; }
+        tr:hover { background: rgba(0,221,68,0.05); }
+        .badge { padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; }
+        .badge.online { background: rgba(0,221,68,0.2); color: var(--green); }
+        .badge.offline { background: rgba(255,179,71,0.2); color: var(--red); }
+        .badge.active { background: rgba(0,221,68,0.2); color: var(--green); }
+        .badge.inactive { background: rgba(255,179,71,0.2); color: var(--red); }
+        .ipv6-box { font-family: monospace; font-size: 0.8rem; background: var(--bg-dark); padding: 0.75rem; border-radius: 4px; border: 1px solid var(--border); word-break: break-all; margin-top: 1rem; }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; color: var(--text-dim); font-size: 0.875rem; }
+        .form-group input, .form-group select { width: 100%; padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-dark); color: var(--text); }
+        .form-row { display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap; }
+        .form-row .form-group { flex: 1; min-width: 120px; }
+        .announce-form { display: none; padding: 1rem; border: 1px dashed var(--border); border-radius: 6px; margin-bottom: 1rem; background: var(--bg-dark); }
+        .announce-form.show { display: block; }
+        .resolve-result { margin-top: 1rem; padding: 1rem; background: var(--bg-dark); border-radius: 6px; font-family: monospace; font-size: 0.875rem; display: none; }
+        .resolve-result.show { display: block; }
+        .resolve-result.success { border-left: 3px solid var(--green); }
+        .resolve-result.error { border-left: 3px solid var(--red); color: var(--red); }
+        .empty-state { text-align: center; padding: 2rem; color: var(--text-dim); }
+        .status-indicator { display: flex; align-items: center; gap: 0.5rem; }
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; }
+        .status-dot.online { background: var(--green); }
+        .status-dot.offline { background: var(--red); }
+        .toast { position: fixed; bottom: 20px; right: 20px; padding: 1rem 1.5rem; background: var(--bg-card); border: 1px solid var(--green); border-radius: 6px; transform: translateY(100px); opacity: 0; transition: all 0.3s ease; z-index: 1000; }
+        .toast.show { transform: translateY(0); opacity: 1; }
+        .toast.error { border-color: var(--red); color: var(--red); }
+        .loading-spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--green); border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
-<body class="crt-flicker">
-    <div class="scanlines"></div>
-
-    <!-- Sidebar -->
-    <div id="sidebar"></div>
-
-    <!-- Main Content -->
-    <div class="main-content">
-        <div class="page-header">
-            <h1>[ Mesh DNS ]</h1>
-            <p>Meshname DNS management for Yggdrasil mesh networks</p>
-        </div>
-
-        <!-- Status Panel -->
-        <div class="status-panel">
-            <h2>[ System Status ]</h2>
-            <div class="status-grid">
-                <div class="status-item">
-                    <span class="status-label">Yggdrasil</span>
-                    <span class="status-value" id="yggdrasil-status">--</span>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+    <main class="main">
+        <header class="header">
+            <h1>Mesh Network</h1>
+            <div class="header-actions">
+                <div class="status-indicator">
+                    <span class="status-dot" id="statusDot"></span>
+                    <span id="statusText">Loading...</span>
                 </div>
-                <div class="status-item">
-                    <span class="status-label">Mesh DNS</span>
-                    <span class="status-value" id="mesh-status">--</span>
-                </div>
-                <div class="status-item">
-                    <span class="status-label">Sync Status</span>
-                    <span class="status-value" id="sync-status">--</span>
-                </div>
-                <div class="status-item">
-                    <span class="status-label">Local Services</span>
-                    <span class="status-value" id="local-count">0</span>
-                </div>
-                <div class="status-item">
-                    <span class="status-label">Remote Domains</span>
-                    <span class="status-value" id="remote-count">0</span>
-                </div>
-                <div class="status-item">
-                    <span class="status-label">Last Sync</span>
-                    <span class="status-value" id="last-sync">Never</span>
-                </div>
+                <button class="btn" onclick="loadAll()">Refresh</button>
             </div>
-            <div class="ipv6-display">
-                <strong>Yggdrasil IPv6:</strong> <span id="yggdrasil-ipv6">Loading...</span>
+        </header>
+
+        <div class="stats-grid">
+            <div class="stat-card" id="yggCard">
+                <div class="value" id="yggStatus">--</div>
+                <div class="label">Yggdrasil</div>
+            </div>
+            <div class="stat-card" id="meshCard">
+                <div class="value" id="meshStatus">--</div>
+                <div class="label">Mesh DNS</div>
+            </div>
+            <div class="stat-card">
+                <div class="value" id="localCount">0</div>
+                <div class="label">Local Services</div>
+            </div>
+            <div class="stat-card">
+                <div class="value" id="remoteCount">0</div>
+                <div class="label">Remote Domains</div>
+            </div>
+            <div class="stat-card" id="syncCard">
+                <div class="value" id="syncStatus">Idle</div>
+                <div class="label">Sync Status</div>
             </div>
         </div>
 
-        <!-- Local Services -->
-        <div class="section">
-            <h2>[ Local Services ]</h2>
-            <div class="actions-bar">
-                <p style="margin: 0; color: var(--crt-dim); font-size: 12px;">Services announced to the mesh network</p>
-                <button class="btn primary" onclick="showAnnounceForm()">+ Announce Service</button>
+        <div class="card">
+            <div class="ipv6-box">
+                <strong>Yggdrasil IPv6:</strong> <span id="yggIPv6">Not available</span>
             </div>
+        </div>
 
-            <!-- Announce Form (hidden by default) -->
-            <div id="announce-form" style="display: none; margin-bottom: 20px; padding: 15px; border: 1px solid var(--crt-border);">
+        <div class="card">
+            <h2>Local Services <button class="btn primary" style="font-size:0.75rem;padding:0.25rem 0.75rem" onclick="toggleAnnounce()">+ Announce</button></h2>
+            <div class="announce-form" id="announceForm">
                 <div class="form-row">
                     <div class="form-group">
                         <label>Service Name</label>
-                        <input type="text" id="new-service-name" placeholder="myservice">
+                        <input type="text" id="newName" placeholder="myservice">
                     </div>
                     <div class="form-group">
-                        <label>Service Type</label>
-                        <select id="new-service-type">
+                        <label>Type</label>
+                        <select id="newType">
                             <option value="http">HTTP</option>
                             <option value="https">HTTPS</option>
                             <option value="ssh">SSH</option>
-                            <option value="ftp">FTP</option>
-                            <option value="smtp">SMTP</option>
                             <option value="custom">Custom</option>
                         </select>
                     </div>
                     <div class="form-group">
                         <label>Port</label>
-                        <input type="number" id="new-service-port" placeholder="80">
+                        <input type="number" id="newPort" placeholder="80">
                     </div>
                 </div>
-                <div style="display: flex; gap: 10px;">
-                    <button class="btn" onclick="announceService()">Announce</button>
-                    <button class="btn danger" onclick="hideAnnounceForm()">Cancel</button>
+                <div style="display:flex;gap:0.5rem;margin-top:0.5rem">
+                    <button class="btn primary" onclick="announceService()">Announce</button>
+                    <button class="btn" onclick="toggleAnnounce()">Cancel</button>
                 </div>
             </div>
-
-            <table class="services-table" id="local-services-table">
-                <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>Type</th>
-                        <th>Port</th>
-                        <th>Meshname</th>
-                        <th>Status</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody id="local-services-body">
-                    <tr>
-                        <td colspan="6" class="empty-state">
-                            <p>Loading services...</p>
-                        </td>
-                    </tr>
-                </tbody>
+            <table>
+                <thead><tr><th>Name</th><th>Type</th><th>Port</th><th>Meshname</th><th>Status</th><th>Actions</th></tr></thead>
+                <tbody id="localServices"><tr><td colspan="6" class="empty-state">Loading...</td></tr></tbody>
             </table>
         </div>
 
-        <!-- Remote Domains -->
-        <div class="section">
-            <h2>[ Remote Domains ]</h2>
-            <div class="actions-bar">
-                <p style="margin: 0; color: var(--crt-dim); font-size: 12px;">Domains discovered from the mesh network</p>
-                <button class="btn" onclick="syncDomains()" id="sync-btn">Sync Now</button>
-            </div>
-            <table class="services-table" id="remote-domains-table">
-                <thead>
-                    <tr>
-                        <th>Domain</th>
-                        <th>IPv6 Address</th>
-                        <th>Type</th>
-                        <th>Last Seen</th>
-                    </tr>
-                </thead>
-                <tbody id="remote-domains-body">
-                    <tr>
-                        <td colspan="4" class="empty-state">
-                            <p>Loading domains...</p>
-                        </td>
-                    </tr>
-                </tbody>
+        <div class="card">
+            <h2>Remote Domains <button class="btn" style="font-size:0.75rem;padding:0.25rem 0.75rem" id="syncBtn" onclick="syncDomains()">Sync Now</button></h2>
+            <table>
+                <thead><tr><th>Domain</th><th>IPv6 Address</th><th>Type</th><th>Last Seen</th></tr></thead>
+                <tbody id="remoteDomains"><tr><td colspan="4" class="empty-state">Loading...</td></tr></tbody>
             </table>
         </div>
 
-        <!-- Resolve Domain -->
-        <div class="section">
-            <h2>[ Resolve Domain ]</h2>
+        <div class="card">
+            <h2>Resolve Domain</h2>
             <div class="form-row">
-                <div class="form-group">
-                    <label>Meshname Domain</label>
-                    <input type="text" id="resolve-domain" placeholder="example.meshname">
+                <div class="form-group" style="flex:3">
+                    <input type="text" id="resolveDomain" placeholder="example.meshname" onkeypress="if(event.key==='Enter')resolveDomain()">
                 </div>
-                <button class="btn" onclick="resolveDomain()">Resolve</button>
+                <button class="btn primary" onclick="resolveDomain()">Resolve</button>
             </div>
-            <div class="resolve-result" id="resolve-result">
-                <strong>Result:</strong>
-                <pre id="resolve-output"></pre>
+            <div class="resolve-result" id="resolveResult">
+                <pre id="resolveOutput"></pre>
             </div>
         </div>
-    </div>
+    </main>
 
     <div class="toast" id="toast"></div>
 
-    <script src="/shared/sidebar.js"></script>
-    <script src="/shared/crt-engine.js"></script>
     <script>
-        const API_BASE = '/api/v1/mesh';
+        const API = '/api/v1/mesh';
+        const token = () => localStorage.getItem('sbx_token');
+        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
 
-        // Initialize
-        document.addEventListener('DOMContentLoaded', function() {
-            loadStatus();
-            loadLocalServices();
-            loadRemoteDomains();
-
-            // Auto-refresh every 30 seconds
-            setInterval(loadStatus, 30000);
-            setInterval(loadRemoteDomains, 60000);
-        });
-
-        // Toast notification
-        function showToast(message, isError = false) {
-            const toast = document.getElementById('toast');
-            toast.textContent = message;
-            toast.className = 'toast show' + (isError ? ' error' : '');
-            setTimeout(() => {
-                toast.className = 'toast';
-            }, 3000);
+        async function api(path, opts = {}) {
+            try {
+                const res = await fetch(API + path, { ...opts, headers: headers() });
+                if (res.status === 401) { window.location = '/portal/login.html'; return {}; }
+                if (!res.ok) throw new Error(res.statusText);
+                return await res.json();
+            } catch (e) { console.error(e); return { error: e.message }; }
         }
 
-        // API helper
-        async function apiCall(endpoint, method = 'GET', data = null) {
-            const options = {
-                method: method,
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            };
-            if (data) {
-                options.body = JSON.stringify(data);
-            }
-            const response = await fetch(`${API_BASE}${endpoint}`, options);
-            if (!response.ok) {
-                throw new Error(`API error: ${response.statusText}`);
-            }
-            return response.json();
+        function toast(msg, error = false) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.className = 'toast show' + (error ? ' error' : '');
+            setTimeout(() => t.className = 'toast', 3000);
         }
 
-        // Load status
         async function loadStatus() {
-            try {
-                const status = await apiCall('/status');
+            const d = await api('/status');
+            const yggOn = d.yggdrasil_running;
+            const meshOn = d.mesh_dns_running;
 
-                document.getElementById('yggdrasil-status').textContent = status.yggdrasil_running ? 'Online' : 'Offline';
-                document.getElementById('yggdrasil-status').className = 'status-value ' + (status.yggdrasil_running ? 'online' : 'offline');
+            document.getElementById('yggStatus').textContent = yggOn ? 'Online' : 'Offline';
+            document.getElementById('yggCard').className = 'stat-card ' + (yggOn ? 'online' : 'offline');
+            document.getElementById('meshStatus').textContent = meshOn ? 'Online' : 'Offline';
+            document.getElementById('meshCard').className = 'stat-card ' + (meshOn ? 'online' : 'offline');
+            document.getElementById('localCount').textContent = d.local_services_count || 0;
+            document.getElementById('remoteCount').textContent = d.remote_domains_count || 0;
+            document.getElementById('syncStatus').textContent = d.sync_status || 'Idle';
+            document.getElementById('yggIPv6').textContent = d.yggdrasil_ipv6 || 'Not available';
 
-                document.getElementById('mesh-status').textContent = status.mesh_dns_running ? 'Online' : 'Offline';
-                document.getElementById('mesh-status').className = 'status-value ' + (status.mesh_dns_running ? 'online' : 'offline');
-
-                document.getElementById('sync-status').textContent = status.sync_status || 'Idle';
-                document.getElementById('sync-status').className = 'status-value ' + (status.sync_status === 'Syncing' ? 'syncing' : 'online');
-
-                document.getElementById('local-count').textContent = status.local_services_count || 0;
-                document.getElementById('remote-count').textContent = status.remote_domains_count || 0;
-
-                document.getElementById('yggdrasil-ipv6').textContent = status.yggdrasil_ipv6 || 'Not available';
-
-                if (status.last_sync) {
-                    const lastSync = new Date(status.last_sync * 1000);
-                    document.getElementById('last-sync').textContent = lastSync.toLocaleString();
-                }
-            } catch (error) {
-                console.error('Failed to load status:', error);
-                document.getElementById('yggdrasil-status').textContent = 'Error';
-                document.getElementById('yggdrasil-status').className = 'status-value offline';
-            }
+            document.getElementById('statusDot').className = 'status-dot ' + (yggOn && meshOn ? 'online' : 'offline');
+            document.getElementById('statusText').textContent = yggOn && meshOn ? 'Connected' : 'Disconnected';
         }
 
-        // Load local services
         async function loadLocalServices() {
-            try {
-                const data = await apiCall('/services');
-                const tbody = document.getElementById('local-services-body');
-
-                if (!data.services || data.services.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="6" class="empty-state"><p>No local services announced</p></td></tr>';
-                    return;
-                }
-
-                tbody.innerHTML = data.services.map(service => `
-                    <tr>
-                        <td>${escapeHtml(service.name)}</td>
-                        <td>${escapeHtml(service.type)}</td>
-                        <td>${service.port}</td>
-                        <td style="font-family: monospace; font-size: 11px;">${escapeHtml(service.meshname || '--')}</td>
-                        <td><span class="badge ${service.active ? 'active' : 'inactive'}">${service.active ? 'Active' : 'Inactive'}</span></td>
-                        <td>
-                            <button class="btn danger" onclick="revokeService('${escapeHtml(service.name)}')">Revoke</button>
-                        </td>
-                    </tr>
-                `).join('');
-            } catch (error) {
-                console.error('Failed to load local services:', error);
-                document.getElementById('local-services-body').innerHTML = '<tr><td colspan="6" class="empty-state"><p style="color: var(--crt-red);">Failed to load services</p></td></tr>';
+            const d = await api('/services');
+            const tbody = document.getElementById('localServices');
+            if (!d.services || d.services.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No local services announced</td></tr>';
+                return;
             }
+            tbody.innerHTML = d.services.map(s => `<tr>
+                <td>${esc(s.name)}</td>
+                <td>${esc(s.type)}</td>
+                <td>${s.port}</td>
+                <td style="font-family:monospace;font-size:0.8rem">${esc(s.meshname || '--')}</td>
+                <td><span class="badge ${s.active ? 'active' : 'inactive'}">${s.active ? 'Active' : 'Inactive'}</span></td>
+                <td><button class="btn danger" style="padding:0.25rem 0.5rem;font-size:0.75rem" onclick="revokeService('${esc(s.name)}')">Revoke</button></td>
+            </tr>`).join('');
         }
 
-        // Load remote domains
         async function loadRemoteDomains() {
-            try {
-                const data = await apiCall('/domains');
-                const tbody = document.getElementById('remote-domains-body');
-
-                if (!data.domains || data.domains.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="4" class="empty-state"><p>No remote domains discovered</p></td></tr>';
-                    return;
-                }
-
-                tbody.innerHTML = data.domains.map(domain => `
-                    <tr>
-                        <td style="font-family: monospace;">${escapeHtml(domain.name)}</td>
-                        <td style="font-family: monospace; font-size: 11px;">${escapeHtml(domain.ipv6)}</td>
-                        <td>${escapeHtml(domain.type || 'unknown')}</td>
-                        <td>${domain.last_seen ? new Date(domain.last_seen * 1000).toLocaleString() : '--'}</td>
-                    </tr>
-                `).join('');
-            } catch (error) {
-                console.error('Failed to load remote domains:', error);
-                document.getElementById('remote-domains-body').innerHTML = '<tr><td colspan="4" class="empty-state"><p style="color: var(--crt-red);">Failed to load domains</p></td></tr>';
+            const d = await api('/domains');
+            const tbody = document.getElementById('remoteDomains');
+            if (!d.domains || d.domains.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No remote domains discovered</td></tr>';
+                return;
             }
+            tbody.innerHTML = d.domains.map(r => `<tr>
+                <td style="font-family:monospace">${esc(r.name)}</td>
+                <td style="font-family:monospace;font-size:0.8rem">${esc(r.ipv6)}</td>
+                <td>${esc(r.type || 'unknown')}</td>
+                <td>${r.last_seen ? new Date(r.last_seen * 1000).toLocaleString() : '--'}</td>
+            </tr>`).join('');
         }
 
-        // Show announce form
-        function showAnnounceForm() {
-            document.getElementById('announce-form').style.display = 'block';
-            document.getElementById('new-service-name').focus();
+        function toggleAnnounce() {
+            document.getElementById('announceForm').classList.toggle('show');
         }
 
-        // Hide announce form
-        function hideAnnounceForm() {
-            document.getElementById('announce-form').style.display = 'none';
-            document.getElementById('new-service-name').value = '';
-            document.getElementById('new-service-port').value = '';
-        }
-
-        // Announce service
         async function announceService() {
-            const name = document.getElementById('new-service-name').value.trim();
-            const type = document.getElementById('new-service-type').value;
-            const port = document.getElementById('new-service-port').value;
-
-            if (!name) {
-                showToast('Service name is required', true);
-                return;
-            }
-            if (!port) {
-                showToast('Port is required', true);
-                return;
-            }
-
-            try {
-                await apiCall('/announce', 'POST', {
-                    name: name,
-                    type: type,
-                    port: parseInt(port)
-                });
-                showToast('Service announced successfully');
-                hideAnnounceForm();
-                loadLocalServices();
-                loadStatus();
-            } catch (error) {
-                console.error('Failed to announce service:', error);
-                showToast('Failed to announce service', true);
-            }
+            const name = document.getElementById('newName').value.trim();
+            const type = document.getElementById('newType').value;
+            const port = document.getElementById('newPort').value;
+            if (!name || !port) { toast('Name and port required', true); return; }
+            const r = await api('/announce', { method: 'POST', body: JSON.stringify({ name, type, port: parseInt(port) }) });
+            if (r.error) { toast('Failed: ' + r.error, true); return; }
+            toast('Service announced');
+            toggleAnnounce();
+            document.getElementById('newName').value = '';
+            document.getElementById('newPort').value = '';
+            loadLocalServices();
+            loadStatus();
         }
 
-        // Revoke service
         async function revokeService(name) {
-            if (!confirm(`Revoke service "${name}" from the mesh network?`)) {
-                return;
-            }
-
-            try {
-                await apiCall('/revoke', 'POST', { name: name });
-                showToast('Service revoked successfully');
-                loadLocalServices();
-                loadStatus();
-            } catch (error) {
-                console.error('Failed to revoke service:', error);
-                showToast('Failed to revoke service', true);
-            }
+            if (!confirm('Revoke service "' + name + '"?')) return;
+            await api('/revoke', { method: 'POST', body: JSON.stringify({ name }) });
+            toast('Service revoked');
+            loadLocalServices();
+            loadStatus();
         }
 
-        // Sync domains
         async function syncDomains() {
-            const btn = document.getElementById('sync-btn');
+            const btn = document.getElementById('syncBtn');
             btn.disabled = true;
-            btn.innerHTML = '<span class="loading-spinner"></span> Syncing...';
-
-            try {
-                await apiCall('/sync', 'POST');
-                showToast('Sync completed');
-                loadRemoteDomains();
-                loadStatus();
-            } catch (error) {
-                console.error('Failed to sync:', error);
-                showToast('Sync failed', true);
-            } finally {
-                btn.disabled = false;
-                btn.textContent = 'Sync Now';
-            }
+            btn.innerHTML = '<span class="loading-spinner"></span> Syncing';
+            await api('/sync', { method: 'POST' });
+            btn.disabled = false;
+            btn.textContent = 'Sync Now';
+            toast('Sync complete');
+            loadRemoteDomains();
+            loadStatus();
         }
 
-        // Resolve domain
         async function resolveDomain() {
-            const domain = document.getElementById('resolve-domain').value.trim();
-            const resultDiv = document.getElementById('resolve-result');
-            const output = document.getElementById('resolve-output');
-
-            if (!domain) {
-                showToast('Please enter a domain to resolve', true);
-                return;
-            }
-
-            try {
-                const data = await apiCall(`/resolve?domain=${encodeURIComponent(domain)}`);
-                resultDiv.className = 'resolve-result show success';
-                output.textContent = JSON.stringify(data, null, 2);
-            } catch (error) {
-                console.error('Failed to resolve domain:', error);
-                resultDiv.className = 'resolve-result show error';
-                output.textContent = 'Failed to resolve domain: ' + error.message;
+            const domain = document.getElementById('resolveDomain').value.trim();
+            if (!domain) { toast('Enter a domain', true); return; }
+            const d = await api('/resolve?domain=' + encodeURIComponent(domain));
+            const div = document.getElementById('resolveResult');
+            const out = document.getElementById('resolveOutput');
+            div.classList.add('show');
+            if (d.error) {
+                div.className = 'resolve-result show error';
+                out.textContent = 'Error: ' + d.error;
+            } else {
+                div.className = 'resolve-result show success';
+                out.textContent = JSON.stringify(d, null, 2);
             }
         }
 
-        // Escape HTML
-        function escapeHtml(text) {
-            if (!text) return '';
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
+        function esc(t) { if (!t) return ''; const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
 
-        // Enter key handlers
-        document.getElementById('resolve-domain').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') resolveDomain();
-        });
+        function loadAll() { loadStatus(); loadLocalServices(); loadRemoteDomains(); }
 
-        document.getElementById('new-service-name').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') announceService();
+        document.addEventListener('DOMContentLoaded', () => {
+            loadAll();
+            setInterval(loadStatus, 30000);
         });
     </script>
 </body>
