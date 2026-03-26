@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SecuBox - Services Portal</title>
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
         :root {
             /* P31 Phosphor spectrum */
@@ -364,7 +366,9 @@
         }
     </style>
 </head>
-<body class="crt-body crt-scanlines crt-body crt-scanlines">
+<body class="crt-light">
+    <nav class="sidebar" id="sidebar"></nav>
+    <div class="main-content" style="margin-left: 220px; padding: 1.5rem;">
     <div class="container">
         <header class="header">
             <div class="logo-icon">🔐</div>
@@ -481,6 +485,7 @@
 
         render();
     </script>
-    <script src="/shared/crt-engine.js"></script>
+    </div>
+    <script src="/shared/sidebar.js"></script>
 </body>
 </html>
