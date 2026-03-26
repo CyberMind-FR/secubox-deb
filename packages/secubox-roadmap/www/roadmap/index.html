@@ -41,47 +41,67 @@
         .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
         .card h2 { font-size: 1rem; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; }
 
+        /* Summary Stats */
+        .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .summary-stat { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
+        .summary-stat .value { font-size: 2rem; font-weight: bold; color: var(--cyan); }
+        .summary-stat .label { font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; margin-top: 0.25rem; }
+        .summary-stat.highlight { border-color: var(--cyan); }
+        .summary-stat.pending .value { color: var(--yellow); }
+
         /* Progress Section */
-        .progress-bar { height: 20px; background: var(--bg-dark); border-radius: 10px; overflow: hidden; margin-bottom: 0.75rem; }
-        .progress-bar .fill { height: 100%; background: linear-gradient(90deg, var(--green) 0%, var(--cyan) 100%); border-radius: 10px; transition: width 0.8s ease-out; }
-        .progress-stats { display: flex; justify-content: space-between; font-size: 0.9rem; }
-        .progress-stats .percent { font-size: 1.5rem; font-weight: bold; color: var(--cyan); }
+        .progress-bar { height: 24px; background: var(--bg-dark); border-radius: 12px; overflow: hidden; margin-bottom: 0.75rem; position: relative; }
+        .progress-bar .fill { height: 100%; background: linear-gradient(90deg, var(--green) 0%, var(--cyan) 100%); border-radius: 12px; transition: width 0.8s ease-out; }
+        .progress-bar .label { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 0.8rem; font-weight: bold; }
+        .progress-stats { display: flex; justify-content: space-between; font-size: 0.85rem; color: var(--text-dim); }
 
         /* Category Grid */
         .category-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
         .category-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; cursor: pointer; transition: all 0.2s; }
         .category-card:hover { border-color: var(--primary); transform: translateY(-2px); }
+        .category-card.active { border-color: var(--cyan); background: rgba(0,221,68,0.1); }
         .category-card .cat-icon { font-size: 2rem; margin-bottom: 0.5rem; }
         .category-card .cat-name { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; margin-bottom: 0.25rem; }
         .category-card .cat-count { font-size: 1.3rem; font-weight: bold; color: var(--cyan); }
         .category-card .cat-progress { font-size: 0.7rem; color: var(--text-dim); margin-top: 0.25rem; }
+        .category-card .cat-pending { font-size: 0.65rem; color: var(--yellow); margin-top: 0.15rem; }
 
         /* Module Lists */
-        .lists-section { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; }
+        .lists-section { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem; }
         .module-list { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; }
         .module-list h3 { font-size: 0.9rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); }
         .module-list h3 .count { background: var(--bg-dark); padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; margin-left: auto; }
         .module-list.complete h3 { color: var(--green); }
-        .module-list.in-progress h3 { color: var(--yellow); }
-        .module-list.planned h3 { color: var(--text-dim); }
-        .module-list.new-modules h3 { color: var(--cyan); }
+        .module-list.planned h3 { color: var(--yellow); }
+        .module-list.debian-only h3 { color: var(--cyan); }
         .module-list ul { list-style: none; max-height: 400px; overflow-y: auto; }
         .module-list li { padding: 0.5rem 0; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 0.75rem; font-size: 0.85rem; }
         .module-list li:last-child { border-bottom: none; }
         .status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
         .complete .status-dot { background: var(--green); }
-        .in-progress .status-dot { background: var(--yellow); }
-        .planned .status-dot { background: var(--text-dim); }
-        .new-modules .status-dot { background: var(--cyan); }
+        .planned .status-dot { background: var(--yellow); }
+        .debian-only .status-dot { background: var(--cyan); }
         .module-info { flex: 1; min-width: 0; }
-        .module-info .source { color: var(--text-dim); font-size: 0.75rem; }
+        .module-info .source { color: var(--text-dim); font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .module-info .target { color: var(--text); }
+        .module-info .description { color: var(--text-dim); font-size: 0.7rem; font-style: italic; }
         .installed-badge { background: rgba(63,185,80,0.2); color: var(--green); padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.65rem; text-transform: uppercase; }
         .category-badge { background: var(--bg-dark); color: var(--text-dim); padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.65rem; }
         .loading { text-align: center; padding: 2rem; color: var(--text-dim); }
+
+        /* Comparison Table */
+        .comparison { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
+        .comparison-col { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; }
+        .comparison-col h3 { font-size: 0.9rem; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 0.5rem; }
+        .comparison-col.openwrt h3 { color: var(--yellow); }
+        .comparison-col.debian h3 { color: var(--cyan); }
+        .comparison-row { display: flex; justify-content: space-between; padding: 0.4rem 0; font-size: 0.8rem; }
+        .comparison-row .label { color: var(--text-dim); }
+        .comparison-row .value { color: var(--text); font-weight: 500; }
+        @media (max-width: 600px) { .comparison { grid-template-columns: 1fr; } }
     </style>
 </head>
-<body>
+<body class="crt-light">
     <nav class="sidebar" id="sidebar"></nav>
     <script src="/shared/sidebar.js"></script>
 
@@ -97,22 +117,55 @@
             </div>
         </header>
 
+        <!-- Summary Stats -->
+        <section class="summary-grid" id="summary-grid">
+            <div class="loading">Loading...</div>
+        </section>
+
+        <!-- Progress Bar -->
         <div class="card">
-            <h2>Overall Progress</h2>
+            <h2>Migration Progress</h2>
             <div class="progress-bar">
                 <div class="fill" id="progress-fill" style="width: 0%"></div>
+                <span class="label" id="progress-label">0%</span>
             </div>
             <div class="progress-stats">
-                <span id="complete-count">0 complete</span>
-                <span class="percent" id="progress-percent">0%</span>
-                <span id="total-count">0 total</span>
+                <span id="migrated-count">0 migrated</span>
+                <span id="pending-count">0 pending</span>
             </div>
         </div>
 
-        <section class="category-grid" id="category-grid">
-            <div class="loading">Loading categories...</div>
+        <!-- Platform Comparison -->
+        <section class="comparison" id="comparison">
+            <div class="comparison-col openwrt">
+                <h3>🔶 OpenWRT</h3>
+                <div class="comparison-row"><span class="label">Platform</span><span class="value">OpenWRT 23.05</span></div>
+                <div class="comparison-row"><span class="label">Architecture</span><span class="value">MIPS/ARM</span></div>
+                <div class="comparison-row"><span class="label">Backend</span><span class="value">Shell + RPCD</span></div>
+                <div class="comparison-row"><span class="label">API Style</span><span class="value">ubus JSON-RPC</span></div>
+                <div class="comparison-row"><span class="label">Config</span><span class="value">UCI (/etc/config)</span></div>
+                <div class="comparison-row"><span class="label">Firewall</span><span class="value">fw3 (iptables)</span></div>
+            </div>
+            <div class="comparison-col debian">
+                <h3>🟢 Debian</h3>
+                <div class="comparison-row"><span class="label">Platform</span><span class="value">Debian Bookworm 12</span></div>
+                <div class="comparison-row"><span class="label">Architecture</span><span class="value">ARM64/AMD64</span></div>
+                <div class="comparison-row"><span class="label">Backend</span><span class="value">FastAPI + Python</span></div>
+                <div class="comparison-row"><span class="label">API Style</span><span class="value">REST API</span></div>
+                <div class="comparison-row"><span class="label">Config</span><span class="value">TOML/YAML</span></div>
+                <div class="comparison-row"><span class="label">Firewall</span><span class="value">nftables</span></div>
+            </div>
         </section>
 
+        <!-- Category Grid -->
+        <div class="card">
+            <h2>Categories</h2>
+            <section class="category-grid" id="category-grid">
+                <div class="loading">Loading categories...</div>
+            </section>
+        </div>
+
+        <!-- Module Lists -->
         <section class="lists-section" id="lists-section">
             <div class="loading">Loading modules...</div>
         </section>
@@ -120,13 +173,11 @@
 
     <script>
         const API_BASE = '/api/v1/roadmap';
-        const token = () => localStorage.getItem('sbx_token');
-        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+        const headers = () => ({ 'Content-Type': 'application/json' });
 
         async function api(endpoint) {
             try {
                 const res = await fetch(API_BASE + endpoint, { headers: headers() });
-                if (res.status === 401) { window.location = '/portal/login.html'; return null; }
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 return await res.json();
             } catch (e) {
@@ -142,39 +193,77 @@
                 return;
             }
 
+            const s = data.summary;
+
+            // Update summary stats
+            document.getElementById('summary-grid').innerHTML = `
+                <div class="summary-stat">
+                    <div class="value">${s.openwrt_total}</div>
+                    <div class="label">OpenWRT Modules</div>
+                </div>
+                <div class="summary-stat highlight">
+                    <div class="value">${s.migrated}</div>
+                    <div class="label">Migrated</div>
+                </div>
+                <div class="summary-stat pending">
+                    <div class="value">${s.pending}</div>
+                    <div class="label">Pending</div>
+                </div>
+                <div class="summary-stat">
+                    <div class="value">${s.debian_only}</div>
+                    <div class="label">Debian Only</div>
+                </div>
+                <div class="summary-stat highlight">
+                    <div class="value">${s.total_debian_packages}</div>
+                    <div class="label">Total Packages</div>
+                </div>
+                <div class="summary-stat">
+                    <div class="value">~1000+</div>
+                    <div class="label">API Endpoints</div>
+                </div>
+            `;
+
             // Update progress bar
-            const pct = data.summary.progress_percent;
+            const pct = s.progress_percent;
             document.getElementById('progress-fill').style.width = pct + '%';
-            document.getElementById('progress-percent').textContent = pct + '%';
-            document.getElementById('complete-count').textContent = data.summary.complete + ' complete';
-            document.getElementById('total-count').textContent = data.summary.total + ' total';
+            document.getElementById('progress-label').textContent = pct + '%';
+            document.getElementById('migrated-count').textContent = s.migrated + ' migrated from OpenWRT';
+            document.getElementById('pending-count').textContent = s.pending + ' modules remaining';
 
             // Render categories
             const catGrid = document.getElementById('category-grid');
             catGrid.innerHTML = Object.entries(data.by_category)
-                .sort((a, b) => b[1].total - a[1].total)
-                .map(([cat, info]) => `
+                .sort((a, b) => a[1].info.order - b[1].info.order)
+                .map(([cat, info]) => {
+                    const total = info.openwrt_total;
+                    const done = info.migrated;
+                    const debOnly = info.debian_only;
+                    const pending = total - done;
+                    return `
                     <div class="category-card" onclick="filterCategory('${cat}')">
                         <div class="cat-icon">${info.info.icon}</div>
                         <div class="cat-name">${info.info.name}</div>
-                        <div class="cat-count">${info.complete}/${info.total}</div>
-                        <div class="cat-progress">${Math.round(info.complete/info.total*100) || 0}% done</div>
+                        <div class="cat-count">${done}/${total}</div>
+                        <div class="cat-progress">${Math.round(done/total*100) || 0}% migrated</div>
+                        ${pending > 0 ? `<div class="cat-pending">${pending} pending</div>` : ''}
+                        ${debOnly > 0 ? `<div class="cat-progress">+${debOnly} new</div>` : ''}
                     </div>
-                `).join('');
+                `;
+                }).join('');
 
             // Render module lists
             const listsSection = document.getElementById('lists-section');
             listsSection.innerHTML = `
                 <div class="module-list complete">
-                    <h3>Complete <span class="count">${data.complete.length}</span></h3>
+                    <h3>✅ Migrated <span class="count">${data.complete.length}</span></h3>
                     <ul>${renderModules(data.complete)}</ul>
                 </div>
-                <div class="module-list new-modules">
-                    <h3>New Debian Modules <span class="count">${data.new_modules.length}</span></h3>
-                    <ul>${renderModules(data.new_modules)}</ul>
+                <div class="module-list debian-only">
+                    <h3>🆕 Debian Only <span class="count">${data.debian_only.length}</span></h3>
+                    <ul>${renderDebianOnly(data.debian_only)}</ul>
                 </div>
                 <div class="module-list planned">
-                    <h3>Planned <span class="count">${data.planned.length}</span></h3>
+                    <h3>⏳ Pending <span class="count">${data.planned.length}</span></h3>
                     <ul>${renderModules(data.planned)}</ul>
                 </div>
             `;
@@ -189,14 +278,30 @@
                         <div class="source">${m.source}</div>
                         <div class="target">${m.target}</div>
                     </div>
-                    <span class="category-badge">${m.category_info?.icon || ''} ${m.category}</span>
-                    ${m.installed ? '<span class="installed-badge">Installed</span>' : ''}
+                    <span class="category-badge">${m.category_info?.icon || ''}</span>
+                    ${m.installed ? '<span class="installed-badge">Running</span>' : ''}
+                </li>
+            `).join('');
+        }
+
+        function renderDebianOnly(modules) {
+            if (!modules.length) return '<li style="color: var(--text-dim)">No modules</li>';
+            return modules.map(m => `
+                <li>
+                    <span class="status-dot"></span>
+                    <div class="module-info">
+                        <div class="target">${m.target}</div>
+                        <div class="description">${m.description || ''}</div>
+                    </div>
+                    <span class="category-badge">${m.category_info?.icon || ''}</span>
+                    ${m.installed ? '<span class="installed-badge">Running</span>' : ''}
                 </li>
             `).join('');
         }
 
         function filterCategory(cat) {
             console.log('Filter by category:', cat);
+            // Future: implement category filtering
         }
 
         loadRoadmap();
