@@ -5,6 +5,21 @@
 
 ## ✅ Terminé cette session
 
+### Mesh Invite CLI (v1.5.0) ✅
+- **sbx-mesh-invite v1.0.0** — CLI tool to generate mesh invite tokens
+  - Options: `--auto-approve`, `--manual-approve`, `--ttl`, `--ip`
+  - Auto-detects local LAN IP (prefers 192.168.x.x addresses)
+  - Stores tokens in `/var/lib/secubox/p2p/master-link/tokens.json`
+  - ASCII box formatted output for easy copy-paste
+  - Works on Debian and OpenWRT (openssl, sha256sum, or fallbacks)
+- **Commit pushed**: `9b6f7fd Add sbx-mesh-invite CLI tool (v1.5.0)`
+
+### VM Socket Fix ✅
+- **Issue**: All 46 secubox API sockets disappeared from `/run/secubox/`
+- **Cause**: Directory permissions reset after service restarts
+- **Fix**: Created `/etc/tmpfiles.d/secubox.conf` with `d /run/secubox 0775 secubox secubox -`
+- **Result**: All 46 sockets now persist across restarts
+
 ### Multi-Master Support (v1.4.0) ✅
 - **sbx-mesh-join v1.4.0** — Auto-detect master type
   - `detect_master_type()` — Probe endpoints to identify master type
@@ -53,8 +68,11 @@
 - **P2P Hub page** — Deployed and tested at /p2p/
 - **Master-Link page** — Tested at /master-link/
   - All endpoints working (status, peers, tree, token validation)
-  - 2 peers approved via master-link (test-peer, c3box)
-  - Mesh hierarchy: master (depth 0) → 2 children (depth 1)
+  - 3 peers approved via master-link (test-peer, c3box, C3BOX/OpenWRT)
+  - Mesh hierarchy: master (depth 0) → 3 children (depth 1)
+- **CLI tools tested**:
+  - `sbx-mesh-invite` — Generates tokens with auto-detected IP (192.168.100.1)
+  - `sbx-mesh-join` — Joins mesh with multi-master support
 
 ---
 
