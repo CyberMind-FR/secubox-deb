@@ -3,63 +3,177 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - Master-Link Admin</title>
+    <title>Master-Link Admin - SecuBox</title>
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
+        /* CRT P31 Phosphor Light Theme */
         :root {
-            --bg: #0a0f0a; --card: #0f1a0f; --text: #e0ffe0; --muted: #5a8a5a;
-            --accent: #00ff41; --accent-dim: rgba(0,255,65,0.15);
-            --success: #22c55e; --warn: #f59e0b; --danger: #ef4444;
-            --border: #1a3a1a;
+            --bg: #e8f5e9;
+            --bg-card: #f1f8f2;
+            --bg-input: #ffffff;
+            --text: #1b4332;
+            --text-dim: #2d6a4f;
+            --text-muted: #52796f;
+            --border: #a7c4a0;
+            --accent: #006622;
+            --accent-light: #40916c;
+            --success: #2d6a4f;
+            --danger: #c1121f;
+            --warning: #e07b00;
+            --glow: rgba(0, 102, 34, 0.15);
         }
+
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Courier New', monospace; background: var(--bg); color: var(--text); min-height: 100vh; padding: 1.5rem; }
-        .container { max-width: 1200px; margin: 0 auto; }
 
-        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
-        h1 { font-size: 1.5rem; color: var(--accent); display: flex; align-items: center; gap: 0.5rem; }
-        h1 svg { width: 24px; height: 24px; }
-        .header-actions { display: flex; gap: 0.5rem; }
+        body {
+            font-family: 'Courier New', monospace;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+        }
 
-        .btn { padding: 0.5rem 1rem; border: 1px solid var(--border); border-radius: 4px; background: var(--card); color: var(--text); cursor: pointer; font-family: inherit; font-size: 0.85rem; transition: all 0.2s; }
-        .btn:hover { border-color: var(--accent); background: var(--accent-dim); }
-        .btn.primary { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+        .main-content {
+            flex: 1;
+            margin-left: 250px;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .page-header {
+            border-bottom: 2px solid var(--border);
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .page-header h1 {
+            font-size: 24px;
+            color: var(--accent);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .page-header h1 svg {
+            width: 28px;
+            height: 28px;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background: var(--bg-card);
+            color: var(--text);
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+        .btn:hover { border-color: var(--accent); background: var(--glow); }
+        .btn.primary { background: var(--glow); border-color: var(--accent); color: var(--accent); }
         .btn.danger { border-color: var(--danger); color: var(--danger); }
         .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 1rem; text-align: center; }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .stat {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 1rem;
+            text-align: center;
+        }
         .stat .value { font-size: 2rem; font-weight: bold; color: var(--accent); }
-        .stat .label { font-size: 0.75rem; color: var(--muted); margin-top: 0.25rem; text-transform: uppercase; }
-        .stat.warning .value { color: var(--warn); }
+        .stat .label { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem; text-transform: uppercase; }
+        .stat.warning .value { color: var(--warning); }
 
-        .card { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 1.25rem; margin-bottom: 1.5rem; }
-        .card h2 { font-size: 1rem; color: var(--accent); margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; }
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 1.25rem;
+            margin-bottom: 1.5rem;
+        }
+        .card h2 {
+            font-size: 1rem;
+            color: var(--accent);
+            margin-bottom: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
 
-        .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
-        .tab { padding: 0.75rem 1.25rem; background: none; border: none; color: var(--muted); cursor: pointer; font-family: inherit; font-size: 0.9rem; border-bottom: 2px solid transparent; transition: all 0.2s; }
+        .tabs {
+            display: flex;
+            gap: 0;
+            border-bottom: 2px solid var(--border);
+            margin-bottom: 1rem;
+        }
+        .tab {
+            padding: 0.75rem 1.25rem;
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.9rem;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+            margin-bottom: -2px;
+        }
         .tab:hover { color: var(--text); }
-        .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+        .tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: bold; }
 
         .tab-content { display: none; }
         .tab-content.active { display: block; }
 
         table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
         th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
-        th { color: var(--muted); font-weight: normal; text-transform: uppercase; font-size: 0.7rem; }
-        tr:hover { background: var(--accent-dim); }
+        th { color: var(--text-muted); font-weight: normal; text-transform: uppercase; font-size: 0.7rem; }
+        tr:hover { background: var(--glow); }
 
-        .badge { padding: 0.2rem 0.5rem; border-radius: 3px; font-size: 0.7rem; font-weight: bold; text-transform: uppercase; }
-        .badge.master { background: var(--accent-dim); color: var(--accent); }
-        .badge.peer { background: rgba(99,102,241,0.2); color: #818cf8; }
-        .badge.approved { background: rgba(34,197,94,0.2); color: var(--success); }
-        .badge.pending { background: rgba(245,158,11,0.2); color: var(--warn); }
-        .badge.online { background: rgba(34,197,94,0.2); color: var(--success); }
-        .badge.offline { background: rgba(239,68,68,0.2); color: var(--danger); }
+        .badge {
+            padding: 0.2rem 0.5rem;
+            border-radius: 3px;
+            font-size: 0.7rem;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .badge.master { background: var(--glow); color: var(--accent); }
+        .badge.peer { background: rgba(99,102,241,0.2); color: #6366f1; }
+        .badge.approved { background: rgba(45,106,79,0.2); color: var(--success); }
+        .badge.pending { background: rgba(224,123,0,0.2); color: var(--warning); }
+        .badge.online { background: rgba(45,106,79,0.2); color: var(--success); }
+        .badge.offline { background: rgba(193,18,31,0.2); color: var(--danger); }
 
-        .token-box { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 1rem; margin: 1rem 0; font-family: monospace; }
+        .token-box {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 1rem;
+            margin: 1rem 0;
+            font-family: monospace;
+        }
         .token-box .token { font-size: 0.9rem; word-break: break-all; color: var(--accent); margin-bottom: 0.5rem; }
-        .token-box .url { font-size: 0.75rem; color: var(--muted); word-break: break-all; }
-        .token-box .cmd { font-size: 0.8rem; color: var(--text); margin-top: 0.5rem; padding: 0.5rem; background: var(--card); border-radius: 3px; }
+        .token-box .url { font-size: 0.75rem; color: var(--text-muted); word-break: break-all; }
+        .token-box .cmd { font-size: 0.8rem; color: var(--text); margin-top: 0.5rem; padding: 0.5rem; background: var(--bg-card); border-radius: 3px; }
 
         .tree { font-family: monospace; font-size: 0.85rem; }
         .tree-node { padding: 0.25rem 0; padding-left: 1.5rem; border-left: 1px dashed var(--border); margin-left: 0.5rem; }
@@ -67,30 +181,47 @@
         .tree-node .node-info { display: flex; align-items: center; gap: 0.5rem; }
         .tree-node .fp { color: var(--accent); }
         .tree-node .hostname { color: var(--text); }
-        .tree-node .addr { color: var(--muted); font-size: 0.75rem; }
+        .tree-node .addr { color: var(--text-muted); font-size: 0.75rem; }
 
-        .empty { text-align: center; padding: 2rem; color: var(--muted); }
+        .empty { text-align: center; padding: 2rem; color: var(--text-muted); }
         .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        .copy-btn { background: none; border: none; color: var(--muted); cursor: pointer; padding: 0.25rem; }
+        .copy-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 0.25rem; }
         .copy-btn:hover { color: var(--accent); }
 
-        .toast { position: fixed; bottom: 1rem; right: 1rem; padding: 0.75rem 1rem; background: var(--card); border: 1px solid var(--accent); border-radius: 4px; transform: translateY(100px); opacity: 0; transition: all 0.3s; z-index: 100; }
+        .toast {
+            position: fixed;
+            bottom: 1rem;
+            right: 1rem;
+            padding: 0.75rem 1rem;
+            background: var(--bg-card);
+            border: 1px solid var(--accent);
+            border-radius: 4px;
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s;
+            z-index: 100;
+        }
         .toast.show { transform: translateY(0); opacity: 1; }
         .toast.error { border-color: var(--danger); color: var(--danger); }
+
+        @media (max-width: 768px) {
+            .main-content { margin-left: 0; padding: 15px; }
+        }
     </style>
 </head>
-<body>
-    <div class="container">
-        <header>
+<body class="crt-light">
+    <nav class="sidebar" id="sidebar"></nav>
+
+    <div class="main-content">
+        <header class="page-header">
             <h1>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
                 Master-Link Admin
             </h1>
             <div class="header-actions">
-                <button class="btn" onclick="loadAll()">↻ Refresh</button>
-                <a href="/" class="btn">← Back</a>
+                <button class="btn" onclick="loadAll()">Refresh</button>
             </div>
         </header>
 
@@ -142,13 +273,13 @@
             </div>
 
             <div id="tab-invite" class="tab-content">
-                <p style="color:var(--muted);margin-bottom:1rem;">Generate an invite token for new nodes to join the mesh.</p>
-                <div style="display:flex;gap:0.5rem;margin-bottom:1rem;">
+                <p style="color:var(--text-muted);margin-bottom:1rem;">Generate an invite token for new nodes to join the mesh.</p>
+                <div style="display:flex;gap:0.5rem;margin-bottom:1rem;flex-wrap:wrap;">
                     <label style="display:flex;align-items:center;gap:0.5rem;">
                         <input type="checkbox" id="auto-approve" checked> Auto-approve
                     </label>
                     <label style="display:flex;align-items:center;gap:0.5rem;margin-left:1rem;">
-                        TTL: <input type="number" id="ttl" value="3600" style="width:80px;padding:0.25rem;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:3px;">s
+                        TTL: <input type="number" id="ttl" value="3600" style="width:80px;padding:0.25rem;background:var(--bg-input);border:1px solid var(--border);color:var(--text);border-radius:3px;">s
                     </label>
                 </div>
                 <button class="btn primary" onclick="generateToken()">Generate Invite Token</button>
@@ -159,6 +290,7 @@
 
     <div class="toast" id="toast"></div>
 
+    <script src="/shared/sidebar.js"></script>
     <script>
     const API = '/api/v1/p2p';
 
@@ -210,9 +342,9 @@
                 html += '<tr>' +
                     '<td style="font-family:monospace;color:var(--accent)">' + (p.fingerprint || '-') + '</td>' +
                     '<td>' + (p.hostname || '-') + '</td>' +
-                    '<td style="color:var(--muted)">' + (p.address || '-') + '</td>' +
+                    '<td style="color:var(--text-muted)">' + (p.address || '-') + '</td>' +
                     '<td><span class="badge ' + statusClass + '">' + (p.status || 'unknown') + '</span></td>' +
-                    '<td style="font-size:0.75rem;color:var(--muted)">' + (p.approved_at || p.joined_at || '-') + '</td>' +
+                    '<td style="font-size:0.75rem;color:var(--text-muted)">' + (p.approved_at || p.joined_at || '-') + '</td>' +
                     '<td>' + (p.status === 'pending' ? '<button class="btn" onclick="approvePeer(\'' + p.fingerprint + '\')">Approve</button>' : '') + '</td>' +
                     '</tr>';
             });
@@ -245,7 +377,7 @@
             '<span class="fp">' + (node.fingerprint || '-').substring(0, 12) + '</span> ' +
             '<span class="hostname">' + (node.hostname || 'unknown') + '</span> ' +
             (node.address ? '<span class="addr">(' + node.address + ')</span>' : '') +
-            (online ? ' <span class="badge online">●</span>' : ' <span class="badge offline">●</span>') +
+            (online ? ' <span class="badge online">ON</span>' : ' <span class="badge offline">OFF</span>') +
             '</div></div>';
 
         if (node.children && node.children.length > 0) {
@@ -275,12 +407,12 @@
             document.getElementById('token-result').innerHTML =
                 '<div class="token-box">' +
                 '<div><strong>Token:</strong></div>' +
-                '<div class="token">' + data.token + ' <button class="copy-btn" onclick="copy(\'' + data.token + '\')">📋</button></div>' +
+                '<div class="token">' + data.token + ' <button class="copy-btn" onclick="copy(\'' + data.token + '\')">Copy</button></div>' +
                 '<div><strong>Join URL:</strong></div>' +
-                '<div class="url">' + joinUrl + ' <button class="copy-btn" onclick="copy(\'' + joinUrl + '\')">📋</button></div>' +
+                '<div class="url">' + joinUrl + ' <button class="copy-btn" onclick="copy(\'' + joinUrl + '\')">Copy</button></div>' +
                 '<div><strong>CLI Command:</strong></div>' +
-                '<div class="cmd">' + joinCmd + ' <button class="copy-btn" onclick="copy(\'' + joinCmd + '\')">📋</button></div>' +
-                '<div style="margin-top:0.5rem;font-size:0.75rem;color:var(--muted)">Expires: ' + (data.expires_ts ? new Date(data.expires_ts * 1000).toLocaleString() : data.expires) + '</div>' +
+                '<div class="cmd">' + joinCmd + ' <button class="copy-btn" onclick="copy(\'' + joinCmd + '\')">Copy</button></div>' +
+                '<div style="margin-top:0.5rem;font-size:0.75rem;color:var(--text-muted)">Expires: ' + (data.expires_ts ? new Date(data.expires_ts * 1000).toLocaleString() : data.expires) + '</div>' +
                 '</div>';
 
             toast('Token generated');
