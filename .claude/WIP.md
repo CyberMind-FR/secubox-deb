@@ -1,9 +1,50 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-03-26 (Session 16)*
+*Mis à jour : 2026-03-26 (Session 17)*
 
 ---
 
 ## ✅ Terminé cette session
+
+### Master-Link Enrollment System ✅
+- **secubox-p2p v1.2.0** — Token-based mesh node enrollment (ported from secubox-openwrt)
+  - Token generation with TTL and auto-approve options
+  - Join request handling with token validation
+  - Peer approval workflow: approve, reject, promote to sub-master
+  - Depth-based mesh hierarchy (max_depth configurable)
+  - Master/sub-master/peer role management
+  - Mesh tree visualization endpoint
+  - Upstream join capability for peer-side enrollment
+- **Master-Link join page** — `/master-link/?token=xxx`
+  - P31 Phosphor light theme (consistent with other modules)
+  - 3-step wizard: Review master → Enter details → Join mesh
+  - Shows master fingerprint, role, depth for verification
+  - Auto-approval status display
+- **New API endpoints**:
+  - `GET /master-link/status` — Status and peer counts (public)
+  - `POST /master-link/token` — Generate join token
+  - `POST /master-link/join` — Handle join request
+  - `POST /master-link/approve` — Approve/reject/promote peer
+  - `GET /master-link/peers` — List all join requests
+  - `GET /master-link/tree` — Mesh hierarchy tree
+  - `GET/POST /master-link/config` — Configuration management
+  - `POST /master-link/join-with-token` — Join upstream mesh
+- **nginx config** — Added `/master-link/` route
+- **debian/rules** — Installs master-link www directory
+
+### Device Intel Enhancement ✅
+- **secubox-device-intel v1.2.1** — Enhanced SecuBox/OpenWRT detection
+  - Specific SecuBox markers (no false positives)
+  - GL.iNet custom UI detection
+  - SecuBox theme extraction (crt-p31, etc.)
+  - Single IP probe endpoint
+
+### Mesh UI Fix ✅
+- **secubox-mesh www/mesh/index.html** — P31 light theme (was dark CRT conflict)
+- **secubox-mesh API** — Made /status, /services, /domains public endpoints
+
+---
+
+## ✅ Terminé cette session (Session 16)
 
 ### UI Theme & Navbar Consistency ✅
 - **Theme toggle system** — Light/dark P31 phosphor themes working across all modules
