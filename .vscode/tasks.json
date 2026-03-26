@@ -311,6 +311,58 @@
       "command": "sudo bash ${workspaceFolder}/redroid/redroid-lxc-setup.sh --auto --instances 3 --port 5555",
       "presentation": { "reveal": "always", "panel": "new", "title": "ReDroid Multi" },
       "problemMatcher": []
+    },
+
+    // ──────────────────────────────────────────────────────
+    // GROUPE : C3BOX CLONE / INSTALLER ISO
+    // ──────────────────────────────────────────────────────
+    {
+      "label": "💿 Build C3Box Clone ISO (from VM)",
+      "type": "shell",
+      "command": "sudo bash ${workspaceFolder}/image/build-c3box-clone.sh --host localhost --port 2222 --slipstream",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "new", "title": "C3Box Clone" },
+      "problemMatcher": []
+    },
+    {
+      "label": "💿 Build C3Box Clone ISO (custom host)",
+      "type": "shell",
+      "command": "sudo bash ${workspaceFolder}/image/build-c3box-clone.sh --host ${input:c3boxHost} --port ${input:c3boxPort} --slipstream",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "new", "title": "C3Box Clone" },
+      "problemMatcher": []
+    },
+    {
+      "label": "📤 Export C3Box Config Only",
+      "type": "shell",
+      "command": "sudo bash ${workspaceFolder}/image/export-c3box-clone.sh --host ${input:c3boxHost} --port ${input:c3boxPort}",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "dedicated", "title": "C3Box Export" },
+      "problemMatcher": []
+    },
+    {
+      "label": "💿 Build Installer ISO (x64)",
+      "type": "shell",
+      "command": "sudo bash ${workspaceFolder}/image/build-installer-iso.sh --slipstream",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "new", "title": "Installer ISO" },
+      "problemMatcher": []
+    },
+    {
+      "label": "💿 Build Live USB (x64)",
+      "type": "shell",
+      "command": "sudo bash ${workspaceFolder}/image/build-live-usb.sh --slipstream",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "new", "title": "Live USB" },
+      "problemMatcher": []
+    },
+    {
+      "label": "💿 Build Installer ISO with Preseed",
+      "type": "shell",
+      "command": "sudo bash ${workspaceFolder}/image/build-installer-iso.sh --preseed ${input:preseedFile} --slipstream",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "new", "title": "Preseeded ISO" },
+      "problemMatcher": []
     }
   ],
 
@@ -377,6 +429,24 @@
       "description": "Instance ReDroid cible",
       "options": ["0", "1", "2", "3"],
       "default": "0"
+    },
+    {
+      "id": "c3boxHost",
+      "type": "promptString",
+      "description": "C3Box/VM hostname or IP",
+      "default": "localhost"
+    },
+    {
+      "id": "c3boxPort",
+      "type": "promptString",
+      "description": "C3Box/VM SSH port",
+      "default": "2222"
+    },
+    {
+      "id": "preseedFile",
+      "type": "promptString",
+      "description": "Path to preseed archive",
+      "default": "${workspaceFolder}/output/c3box-clone-preseed.tar.gz"
     }
   ]
 }

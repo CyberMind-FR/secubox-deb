@@ -1,0 +1,521 @@
+#!/bin/bash
+# ═══════════════════════════════════════════════════════════════════════════
+# SecuBox Streamlit LXC Controller
+# Python Streamlit apps in Debian LXC container
+# ═══════════════════════════════════════════════════════════════════════════
+
+VERSION="1.0.0"
+CONFIG_FILE="/etc/secubox/streamlit.toml"
+CONTAINER="streamlit"
+LXC_BASE="/srv/lxc"
+LXC_PATH="$LXC_BASE/streamlit"
+DATA_PATH="/srv/streamlit"
+APPS_PATH="$DATA_PATH/apps"
+PORT=8501
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+log() { echo -e "${GREEN}[STREAMLIT]${NC} $1"; }
+warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
+error() { echo -e "${RED}[ERROR]${NC} $1" >&2; }
+info() { echo -e "${CYAN}[INFO]${NC} $1"; }
+
+config_get() {
+    local key="$1" default="$2"
+    [ -f "$CONFIG_FILE" ] && grep "^${key} *=" "$CONFIG_FILE" 2>/dev/null | head -1 | cut -d= -f2- | tr -d ' "' || echo "$default"
+}
+
+PORT=$(config_get "port" "8501")
+
+require_root() {
+    [ "$(id -u)" -eq 0 ] || { error "Root required"; exit 1; }
+}
+
+lxc_running() { lxc-info -n "$CONTAINER" -P "$LXC_BASE" 2>/dev/null | grep -q "State:.*RUNNING"; }
+lxc_exists() { [ -d "$LXC_PATH/rootfs" ]; }
+
+# ═══════════════════════════════════════════════════════════════════════════
+# LXC Configuration
+# ═══════════════════════════════════════════════════════════════════════════
+
+create_lxc_config() {
+    mkdir -p "$LXC_PATH"
+    cat > "$LXC_PATH/config" << EOF
+lxc.uts.name = streamlit
+lxc.rootfs.path = dir:${LXC_PATH}/rootfs
+lxc.net.0.type = none
+lxc.mount.auto = proc:mixed sys:ro cgroup:mixed
+lxc.cap.drop = sys_module mac_admin mac_override sys_time
+lxc.tty.max = 4
+lxc.pty.max = 256
+lxc.cgroup2.memory.max = 1G
+lxc.init.cmd = /opt/start-streamlit.sh
+
+# Bind mounts for persistent data
+lxc.mount.entry = ${APPS_PATH} opt/apps none bind,create=dir 0 0
+EOF
+}
+
+create_startup_script() {
+    mkdir -p "$LXC_PATH/rootfs/opt"
+    cat > "$LXC_PATH/rootfs/opt/start-streamlit.sh" << 'STARTEOF'
+#!/bin/bash
+# Streamlit LXC startup script
+exec > /var/log/streamlit-start.log 2>&1
+echo "Starting Streamlit at $(date)"
+
+APPS_DIR="/opt/apps"
+PORT=8501
+
+# Create default app if none exists
+if [ ! -f "$APPS_DIR/main.py" ]; then
+    mkdir -p "$APPS_DIR"
+    cat > "$APPS_DIR/main.py" << 'APPEOF'
+import streamlit as st
+
+st.set_page_config(page_title="SecuBox Streamlit", page_icon="🚀", layout="wide")
+
+st.title("🚀 SecuBox Streamlit Platform")
+st.markdown("---")
+
+st.markdown("""
+## Welcome to SecuBox Streamlit
+
+This is the default Streamlit application. You can:
+
+1. **Upload your own apps** to `/srv/streamlit/apps/`
+2. **Create new apps** using `streamlitctl app create <name>`
+3. **List running apps** with `streamlitctl apps`
+
+### Quick Start
+
+```bash
+# Create a new app
+streamlitctl app create myapp
+
+# Edit the app
+nano /srv/streamlit/apps/myapp/app.py
+
+# Restart to load changes
+streamlitctl restart
+```
+""")
+
+st.sidebar.title("Navigation")
+st.sidebar.info("SecuBox Streamlit v1.0.0")
+
+# System info
+import os
+st.sidebar.markdown("---")
+st.sidebar.markdown("**System Info**")
+st.sidebar.text(f"Python: {os.popen('python3 --version').read().strip()}")
+st.sidebar.text(f"Streamlit: {st.__version__}")
+APPEOF
+fi
+
+# Start Streamlit
+cd "$APPS_DIR"
+exec streamlit run main.py \
+    --server.port=$PORT \
+    --server.address=0.0.0.0 \
+    --server.headless=true \
+    --browser.gatherUsageStats=false \
+    --server.enableCORS=false \
+    --server.enableXsrfProtection=false
+STARTEOF
+    chmod +x "$LXC_PATH/rootfs/opt/start-streamlit.sh"
+}
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Debian Bootstrap
+# ═══════════════════════════════════════════════════════════════════════════
+
+bootstrap_debian() {
+    require_root
+    log "Bootstrapping Debian bookworm for Streamlit..."
+
+    mkdir -p "$LXC_PATH" "$APPS_PATH"
+
+    if ! command -v debootstrap &>/dev/null; then
+        error "debootstrap not installed. Run: apt install debootstrap"
+        exit 1
+    fi
+
+    log "Running debootstrap (this takes a few minutes)..."
+    debootstrap --variant=minbase bookworm "$LXC_PATH/rootfs" http://deb.debian.org/debian
+
+    # Configure basic system
+    echo "streamlit" > "$LXC_PATH/rootfs/etc/hostname"
+
+    cat > "$LXC_PATH/rootfs/etc/resolv.conf" << 'EOF'
+nameserver 8.8.8.8
+nameserver 1.1.1.1
+EOF
+
+    log "Debian base system installed"
+}
+
+install_streamlit_packages() {
+    require_root
+    local rootfs="$LXC_PATH/rootfs"
+
+    log "Installing Python and Streamlit packages..."
+
+    # Install via chroot
+    chroot "$rootfs" /bin/bash << 'CHROOT_EOF'
+export DEBIAN_FRONTEND=noninteractive
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+# Update and install Python (minimal)
+apt-get update -qq
+apt-get install -y -qq --no-install-recommends \
+    python3 \
+    python3-pip \
+    ca-certificates
+apt-get clean
+rm -rf /var/lib/apt/lists/*
+
+# Install Streamlit (minimal)
+pip3 install --break-system-packages --no-cache-dir streamlit
+
+# Cleanup
+apt-get clean
+rm -rf /var/lib/apt/lists/*
+CHROOT_EOF
+
+    log "Streamlit packages installed"
+}
+
+configure_streamlit() {
+    require_root
+    local rootfs="$LXC_PATH/rootfs"
+
+    log "Configuring Streamlit..."
+
+    # Create Streamlit config directory
+    mkdir -p "$rootfs/root/.streamlit"
+
+    # Streamlit config
+    cat > "$rootfs/root/.streamlit/config.toml" << 'EOF'
+[server]
+headless = true
+enableCORS = false
+enableXsrfProtection = false
+port = 8501
+address = "0.0.0.0"
+
+[browser]
+gatherUsageStats = false
+
+[theme]
+primaryColor = "#006622"
+backgroundColor = "#e8f5e9"
+secondaryBackgroundColor = "#f1f8f2"
+textColor = "#1b4332"
+EOF
+
+    # Create log file
+    touch "$rootfs/var/log/streamlit-start.log"
+
+    log "Streamlit configured"
+}
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Commands
+# ═══════════════════════════════════════════════════════════════════════════
+
+cmd_install() {
+    require_root
+
+    if lxc_exists; then
+        warn "Streamlit LXC already exists"
+        read -p "Reinstall? [y/N] " -n 1 -r
+        echo
+        [[ $REPLY =~ ^[Yy]$ ]] || exit 0
+        cmd_destroy
+    fi
+
+    log "Installing Streamlit LXC (Debian bookworm)..."
+
+    bootstrap_debian
+    create_lxc_config
+    install_streamlit_packages
+    configure_streamlit
+    create_startup_script
+
+    log "Streamlit installed!"
+    log "Start with: streamlitctl start"
+}
+
+cmd_start() {
+    require_root
+
+    if ! lxc_exists; then
+        error "Streamlit not installed. Run: streamlitctl install"
+        exit 1
+    fi
+
+    if lxc_running; then
+        warn "Streamlit already running"
+        exit 0
+    fi
+
+    log "Starting Streamlit..."
+
+    # Ensure log file exists
+    touch "$LXC_PATH/rootfs/var/log/streamlit-start.log"
+
+    lxc-start -n "$CONTAINER" -P "$LXC_BASE" -d
+    sleep 3
+
+    if lxc_running; then
+        log "Streamlit started at http://localhost:$PORT"
+    else
+        error "Failed to start"
+        exit 1
+    fi
+}
+
+cmd_stop() {
+    require_root
+
+    if ! lxc_running; then
+        warn "Streamlit not running"
+        exit 0
+    fi
+
+    log "Stopping Streamlit..."
+    lxc-stop -n "$CONTAINER" -P "$LXC_BASE"
+    log "Streamlit stopped"
+}
+
+cmd_restart() {
+    cmd_stop
+    sleep 2
+    cmd_start
+}
+
+cmd_status() {
+    echo ""
+    echo -e "${CYAN}Streamlit LXC v${VERSION}${NC}"
+    echo "================================"
+    echo ""
+    echo "Container: $CONTAINER"
+    echo "Base OS: Debian bookworm"
+
+    if ! lxc_exists; then
+        echo -e "Status: ${RED}Not installed${NC}"
+        return
+    fi
+
+    if lxc_running; then
+        echo -e "Status: ${GREEN}Running${NC}"
+        echo "Port: $PORT"
+        echo "URL: http://localhost:$PORT"
+
+        # Get IP if available
+        local ip=$(lxc-info -n "$CONTAINER" -P "$LXC_BASE" 2>/dev/null | grep "IP:" | head -1 | awk '{print $2}')
+        [ -n "$ip" ] && echo "IP: $ip"
+    else
+        echo -e "Status: ${YELLOW}Stopped${NC}"
+    fi
+
+    echo ""
+}
+
+cmd_destroy() {
+    require_root
+
+    if lxc_running; then
+        cmd_stop
+    fi
+
+    if lxc_exists; then
+        log "Removing Streamlit LXC..."
+        rm -rf "$LXC_PATH"
+        log "Streamlit removed"
+    else
+        warn "Streamlit not installed"
+    fi
+}
+
+cmd_logs() {
+    if ! lxc_exists; then
+        error "Streamlit not installed"
+        exit 1
+    fi
+
+    local logfile="$LXC_PATH/rootfs/var/log/streamlit-start.log"
+    if [ -f "$logfile" ]; then
+        tail -f "$logfile"
+    else
+        error "No log file found"
+    fi
+}
+
+cmd_shell() {
+    require_root
+
+    if ! lxc_running; then
+        error "Streamlit not running"
+        exit 1
+    fi
+
+    lxc-attach -n "$CONTAINER" -P "$LXC_BASE" -- /bin/bash
+}
+
+cmd_app_create() {
+    local name="$1"
+
+    if [ -z "$name" ]; then
+        error "Usage: streamlitctl app create <name>"
+        exit 1
+    fi
+
+    local app_dir="$APPS_PATH/$name"
+
+    if [ -d "$app_dir" ]; then
+        error "App '$name' already exists"
+        exit 1
+    fi
+
+    mkdir -p "$app_dir"
+
+    cat > "$app_dir/app.py" << EOF
+import streamlit as st
+
+st.set_page_config(page_title="$name", page_icon="🎯")
+
+st.title("$name")
+st.write("Welcome to your new Streamlit app!")
+
+# Add your code here
+EOF
+
+    log "App '$name' created at $app_dir/app.py"
+    log "Edit the app and restart Streamlit to see changes"
+}
+
+cmd_app_list() {
+    echo ""
+    echo -e "${CYAN}Streamlit Apps${NC}"
+    echo "==============="
+    echo ""
+
+    if [ ! -d "$APPS_PATH" ]; then
+        echo "No apps directory found"
+        return
+    fi
+
+    for app in "$APPS_PATH"/*; do
+        if [ -d "$app" ]; then
+            local name=$(basename "$app")
+            echo "  - $name"
+        fi
+    done
+
+    if [ -f "$APPS_PATH/main.py" ]; then
+        echo "  - main (default)"
+    fi
+
+    echo ""
+}
+
+cmd_components() {
+    # JSON output for three-fold architecture
+    cat << EOF
+{
+    "streamlit": {
+        "name": "Streamlit LXC",
+        "version": "$VERSION",
+        "installed": $(lxc_exists && echo "true" || echo "false"),
+        "running": $(lxc_running && echo "true" || echo "false"),
+        "port": $PORT
+    }
+}
+EOF
+}
+
+cmd_access() {
+    # JSON output for three-fold architecture
+    cat << EOF
+{
+    "web": {
+        "url": "http://localhost:$PORT",
+        "description": "Streamlit Web Interface"
+    },
+    "cli": {
+        "command": "streamlitctl",
+        "description": "Streamlit LXC Controller"
+    }
+}
+EOF
+}
+
+cmd_help() {
+    cat << EOF
+Streamlit LXC Controller v$VERSION
+
+Usage: streamlitctl <command> [options]
+
+Commands:
+  install       Install Streamlit in Debian LXC container
+  start         Start the Streamlit container
+  stop          Stop the Streamlit container
+  restart       Restart the Streamlit container
+  status        Show container status
+  destroy       Remove the Streamlit container
+  logs          Follow Streamlit logs
+  shell         Open shell in container
+
+App Management:
+  app create <name>   Create a new Streamlit app
+  app list            List installed apps
+  apps                Alias for 'app list'
+
+Three-fold:
+  components    JSON output of components
+  access        JSON output of access methods
+
+Examples:
+  streamlitctl install          # Install Streamlit LXC
+  streamlitctl start            # Start Streamlit
+  streamlitctl app create demo  # Create new app
+
+EOF
+}
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Main
+# ═══════════════════════════════════════════════════════════════════════════
+
+case "${1:-help}" in
+    install)    cmd_install ;;
+    start)      cmd_start ;;
+    stop)       cmd_stop ;;
+    restart)    cmd_restart ;;
+    status)     cmd_status ;;
+    destroy)    cmd_destroy ;;
+    logs)       cmd_logs ;;
+    shell)      cmd_shell ;;
+    app)
+        case "${2:-list}" in
+            create) cmd_app_create "$3" ;;
+            list)   cmd_app_list ;;
+            *)      cmd_app_list ;;
+        esac
+        ;;
+    apps)       cmd_app_list ;;
+    components) cmd_components ;;
+    access)     cmd_access ;;
+    help|--help|-h) cmd_help ;;
+    *)
+        error "Unknown command: $1"
+        cmd_help
+        exit 1
+        ;;
+esac
