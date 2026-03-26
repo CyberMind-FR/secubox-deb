@@ -1,11 +1,38 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-03-25 (Session 15)*
+*Mis à jour : 2026-03-26 (Session 16)*
 
 ---
 
 ## ✅ Terminé cette session
 
-### Module Compliance Fixes ✅
+### UI Theme & Navbar Consistency ✅
+- **Theme toggle system** — Light/dark P31 phosphor themes working across all modules
+  - Light theme: mint green palette (#e8f5e9, #006622)
+  - Dark theme: blue-tinted palette (#0a0e14, #33ff66)
+  - Toggle persists via localStorage (`sbx_theme` key)
+- **Fixed 35+ pages** — Body class standardized to `crt-light`
+- **Fixed inline CSS variables** — Added `updateInlineThemeVars()` for modules using `--bg`/`--fg`/`--dim`
+- **Collapsed sidebar categories** — Categories collapse by default, only active category expanded
+- **Fixed navbar integration issues**:
+  - Portal: Changed path from `/c3box/` to `/portal/`
+  - Metrics: Fixed `title` → `name` in menu JSON
+  - Mesh DNS: Removed duplicate 580-mesh.json
+  - WireGuard: Removed duplicate 21-wireguard.json
+  - Metrics: Fixed sidebar.js path `/assets/js/` → `/shared/`
+  - p2p, zkp, mesh: Added missing crt-light.css link
+
+### Documentation & Screenshots ✅
+- **45 module screenshots captured** — Using Playwright screenshot-tool.py
+- **docs/UI-GUIDE.md** — CRT theme documentation with color palette and module list
+- **scripts/fix-navbar.sh** — Automated navbar integration checker
+- **docs/OPENWRT-DEBIAN-COMPARISON.md** — Full comparison:
+  - OpenWRT: 103 luci-app modules
+  - Debian: 52 packages (49 UI + 3 backend)
+  - Migration status by category
+  - ~1000+ API endpoints documented
+  - Roadmap for remaining 68 modules
+
+### Previous Session (15) — Module Compliance Fixes ✅
 - **Maintainer standardization** — All 51 packages now use `Gerald KERMA <devel@cybermind.fr>`
   - Fixed 12 control files with wrong maintainer
   - Fixed 9 changelog files with wrong maintainer
@@ -549,6 +576,21 @@ curl -sk https://localhost:8443/api/v1/hub/menu | jq '.total_modules'
 ---
 
 ## 🗓️ Historique récent
+
+- **2026-03-26** (Session 16):
+  - UI theme toggle fixed (light/dark P31 phosphor)
+  - Collapsed sidebar categories by default
+  - Fixed 35+ pages with wrong body class
+  - 45 module screenshots captured
+  - docs/UI-GUIDE.md created
+  - docs/OPENWRT-DEBIAN-COMPARISON.md created (103 vs 52 modules)
+  - scripts/fix-navbar.sh created
+
+- **2026-03-25** (Session 15):
+  - Maintainer standardized to Gerald KERMA on all 51 packages
+  - JWT auth added to secubox-mesh
+  - Go daemon reorganized to daemon/ directory
+  - Unix socket control server implemented
 
 - **2026-03-21** (Session 2):
   - WAF module created (300+ rules, CrowdSec integration)
