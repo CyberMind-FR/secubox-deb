@@ -31,6 +31,7 @@ override_dh_auto_install:
 	# Install CLI tools
 	install -d $(CURDIR)/debian/secubox-p2p/usr/bin
 	install -m 755 $(CURDIR)/scripts/sbx-mesh-join $(CURDIR)/debian/secubox-p2p/usr/bin/
+	install -m 755 $(CURDIR)/scripts/sbx-mesh-invite $(CURDIR)/debian/secubox-p2p/usr/bin/
 
 	# Create runtime directory
 	install -d $(CURDIR)/debian/secubox-p2p/run/secubox
