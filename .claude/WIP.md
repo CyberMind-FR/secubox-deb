@@ -5,6 +5,21 @@
 
 ## ✅ Terminé cette session
 
+### Master-Link Admin Dashboard (v1.6.0) ✅
+- **Admin Dashboard** — `/master-link/admin.html`
+  - Dark CRT theme matching SecuBox aesthetics
+  - Stats cards: role, peers, pending, active tokens
+  - Tabs: Overview, Peers list, Mesh Tree, Generate Invite
+  - Token generation with copy buttons (token, URL, CLI)
+  - Peer approval workflow from dashboard
+- **Localhost-only API endpoints**:
+  - `POST /master-link/invite-local` — Generate tokens without JWT auth
+  - `POST /master-link/cleanup-local` — Cleanup expired tokens
+  - `is_local_request()` helper checks X-Real-IP, X-Forwarded-For headers
+- **IP prioritization**: `get_lan_ip()` now prefers 192.168.255.x mesh addresses
+- **Dependencies**: Added `avahi-daemon`, `avahi-utils` for mDNS discovery
+- **Commit pushed**: `0ecdb98 Add Master-Link Admin Dashboard (v1.6.0)`
+
 ### Mesh Invite CLI (v1.5.0) ✅
 - **sbx-mesh-invite v1.0.0** — CLI tool to generate mesh invite tokens
   - Options: `--auto-approve`, `--manual-approve`, `--ttl`, `--ip`
