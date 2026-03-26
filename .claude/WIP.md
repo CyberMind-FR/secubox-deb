@@ -1,9 +1,70 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-03-26 (Session 19)*
+*Mis à jour : 2026-03-26 (Session 20)*
+
+---
+
+## 🔄 En cours
+
+### x64 Installer ISO Build 🔄
+- **Building**: `secubox-c3box-clone-amd64-bookworm.iso`
+- Debootstrap Debian bookworm amd64
+- Installing 50 SecuBox packages via slipstream
+- Creating hybrid live/installer ISO
 
 ---
 
 ## ✅ Terminé cette session
+
+### x64 Installer ISO Build System ✅
+- **image/build-installer-iso.sh** (886 lines) — Hybrid Live USB / Headless Installer
+  - UEFI boot with GRUB (x86_64-efi)
+  - Live boot mode with SquashFS + persistence partition
+  - Headless auto-install to first available disk
+  - Preseed system for configuration restoration
+  - Boot menu: Live, Install (headless), Safe Mode, To RAM
+- **image/export-c3box-clone.sh** (340 lines) — Export device configuration
+  - Exports: /etc/secubox/, netplan, WireGuard, users, nginx, SSL certs
+  - LXC container configs, /data partition
+  - Creates preseed.tar.gz for cloning
+- **image/build-c3box-clone.sh** (174 lines) — Combined export + ISO workflow
+  - Single command to clone any C3Box device
+  - `--skip-export` option to rebuild ISO from existing preseed
+- **Commit pushed**: `141b0c0 Add x64 installer ISO and C3Box clone build system`
+
+### C3Box Configuration Export ✅
+- **Exported from VM** (localhost:2222)
+- **50 SecuBox packages** captured in manifest
+- **Configuration**: secubox.conf, mesh.toml, users.json, traffic-shaper.json, etc.
+- **Network**: netplan + WireGuard configs
+- **Services**: nginx sites, CrowdSec, nftables rules
+- **LXC containers**: mailserver, roundcube, streamlit
+- **Output**: `output/c3box-clone-preseed.tar.gz` (36KB)
+
+### streamlitctl v1.0.0 ✅
+- **packages/secubox-streamlit/scripts/streamlitctl** (521 lines)
+- Full Streamlit LXC controller for Debian bookworm
+- **Commands**: install, start, stop, restart, status, destroy, logs, shell
+- **App management**: app create, app list
+- **Features**:
+  - Debootstrap-based minimal Debian container
+  - Python 3.11 + Streamlit installation
+  - Persistent apps directory at /srv/streamlit/apps
+  - Memory limit 1GB per container
+  - Three-fold commands: components, access (JSON output)
+- **Debian packaging** updated (control, rules, changelog v1.2.0)
+
+### VSCode Tasks ✅
+- **Build C3Box Clone ISO (from VM)** — Clone localhost:2222
+- **Build C3Box Clone ISO (custom host)** — Clone any device
+- **Export C3Box Config Only** — Export without building ISO
+- **Build Installer ISO (x64)** — Fresh install ISO
+- **Build Live USB (x64)** — Live-only USB
+- **Build Installer ISO with Preseed** — ISO with custom preseed
+- **New inputs**: c3boxHost, c3boxPort, preseedFile
+
+---
+
+## ✅ Terminé session précédente (Session 19)
 
 ### Socket Directory Fix (Permanent) ✅
 - **Issue**: `/run/secubox/` sockets disappearing, causing 502 errors and navbar showing only 2 categories
@@ -760,6 +821,14 @@ curl -sk https://localhost:8443/api/v1/hub/menu | jq '.total_modules'
 ---
 
 ## 🗓️ Historique récent
+
+- **2026-03-26** (Session 20):
+  - x64 Installer ISO build system: build-installer-iso.sh (hybrid live/installer)
+  - C3Box clone scripts: export-c3box-clone.sh, build-c3box-clone.sh
+  - streamlitctl v1.0.0: Streamlit LXC controller (521 lines)
+  - Exported C3Box config: 50 packages, 3 LXC containers, full settings
+  - VSCode tasks for ISO building added
+  - Commit pushed: `141b0c0 Add x64 installer ISO and C3Box clone build system`
 
 - **2026-03-26** (Session 19):
   - Socket directory fix: secubox-runtime.service ensures /run/secubox exists
