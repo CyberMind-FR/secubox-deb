@@ -1,6 +1,6 @@
 # SecuBox Module Screenshots - SecuBox VM (VirtualBox)
 
-*Generated: 2026-03-24 15:26:46*
+*Generated: 2026-03-26 07:22:29*
 
 **Host:** https://localhost:9443
 **Description:** Development/testing virtual machine
@@ -58,7 +58,6 @@
 | 📱 **Device Intelligence** | ![Device Intelligence](screenshots/vm/device-intel.png) | ✅ Captured |
 | 👁️ **Watchdog** | ![Watchdog](screenshots/vm/watchdog.png) | ✅ Captured |
 | 🎬 **Media Flow** | ![Media Flow](screenshots/vm/mediaflow.png) | ✅ Captured |
-| 📊 **Metrics Dashboard** | ![Metrics Dashboard](screenshots/vm/metrics.png) | ✅ Captured |
 
 ### Network
 
