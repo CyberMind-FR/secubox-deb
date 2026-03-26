@@ -118,17 +118,31 @@ def get_hostname() -> str:
 
 
 def get_lan_ip() -> Optional[str]:
-    """Get LAN IP address."""
+    """Get LAN IP address, preferring 192.168.255.x (mesh) addresses."""
+    candidates = []
     try:
-        # Try common interfaces
-        for iface in ['br-lan', 'eth0', 'enp0s3', 'enp0s8']:
-            result = subprocess.run(
-                ["ip", "-4", "addr", "show", iface],
-                capture_output=True, text=True, timeout=5
-            )
-            match = re.search(r'inet (\d+\.\d+\.\d+\.\d+)', result.stdout)
-            if match:
-                return match.group(1)
+        # Get all IPs from interfaces
+        result = subprocess.run(
+            ["ip", "-4", "addr"],
+            capture_output=True, text=True, timeout=5
+        )
+        all_ips = re.findall(r'inet (\d+\.\d+\.\d+\.\d+)', result.stdout)
+
+        # Priority order: 192.168.255.x > 192.168.x.x > other private > rest
+        mesh_ips = [ip for ip in all_ips if ip.startswith("192.168.255.")]
+        if mesh_ips:
+            return mesh_ips[0]
+
+        private_ips = [ip for ip in all_ips if ip.startswith("192.168.") and not ip.startswith("192.168.255.")]
+        if private_ips:
+            return private_ips[0]
+
+        non_local = [ip for ip in all_ips if not ip.startswith("127.") and not ip.startswith("10.")]
+        if non_local:
+            return non_local[0]
+
+        if all_ips:
+            return all_ips[0]
 
         # Fallback: get default route interface
         result = subprocess.run(
@@ -1457,6 +1471,83 @@ Expires: {result['expires']}
     }
 
 
+def is_local_request(request: Request) -> bool:
+    """Check if request originates from localhost (direct or via proxy)."""
+    # Check X-Real-IP header (set by nginx)
+    real_ip = request.headers.get("X-Real-IP", "")
+    if real_ip in ("127.0.0.1", "::1"):
+        return True
+
+    # Check X-Forwarded-For header
+    forwarded_for = request.headers.get("X-Forwarded-For", "")
+    if forwarded_for:
+        first_ip = forwarded_for.split(",")[0].strip()
+        if first_ip in ("127.0.0.1", "::1"):
+            return True
+
+    # Check direct client IP (for Unix socket connections)
+    client_host = request.client.host if request.client else None
+    if client_host in ("127.0.0.1", "::1", "localhost", None):
+        # None can happen with Unix socket connections
+        return True
+
+    return False
+
+
+@app.post("/master-link/invite-local")
+async def ml_generate_invite_local(
+    request: Request,
+    ttl: int = 3600,
+    auto_approve: bool = True
+):
+    """Generate invite from localhost only (no auth required).
+
+    This endpoint is for local admin dashboard access only.
+    It rejects requests that don't originate from localhost.
+    """
+    # Check if request is from localhost
+    if not is_local_request(request):
+        raise HTTPException(status_code=403, detail="This endpoint only accepts local requests")
+
+    config = get_ml_config()
+    role = config.get("role", "master")
+    if role not in ["master", "sub-master"]:
+        raise HTTPException(status_code=403, detail="Only master or sub-master can invite")
+
+    # Generate token
+    result = ml_token_generate(ttl=ttl, auto_approve=auto_approve)
+    token = result["token"]
+
+    # Build URLs
+    lan_ip = get_lan_ip()
+    wan_ip = get_wan_ip()
+    hostname = get_hostname()
+    fingerprint = config.get("fingerprint", get_node_id())
+
+    # Web URL for browser
+    web_url = f"https://{lan_ip}/master-link/?token={token}"
+
+    # CLI for OpenWRT
+    cli_cmd = f"sbx-mesh-join {lan_ip} {token}"
+
+    return {
+        "token": token,
+        "hash": result["token_hash"],
+        "expires": result["expires"],
+        "expires_ts": result.get("ttl", 3600) + int(datetime.utcnow().timestamp()),
+        "ttl": ttl,
+        "auto_approve": auto_approve,
+        "url": web_url,
+        "master": {
+            "fingerprint": fingerprint,
+            "hostname": hostname,
+            "lan_ip": lan_ip,
+            "wan_ip": wan_ip
+        },
+        "cli": cli_cmd
+    }
+
+
 @app.get("/master-link/join-script")
 async def ml_join_script(token: str, request: Request):
     """Return a shell script for joining (OpenWRT compatible)."""
@@ -1581,6 +1672,14 @@ async def ml_revoke_token(token: str, user: dict = Depends(require_jwt)):
 @app.post("/master-link/token/cleanup")
 async def ml_cleanup(user: dict = Depends(require_jwt)):
     """Cleanup expired tokens."""
+    return ml_cleanup_tokens()
+
+
+@app.post("/master-link/cleanup-local")
+async def ml_cleanup_local(request: Request):
+    """Cleanup expired tokens from localhost only (no auth required)."""
+    if not is_local_request(request):
+        raise HTTPException(status_code=403, detail="This endpoint only accepts local requests")
     return ml_cleanup_tokens()
 
 
