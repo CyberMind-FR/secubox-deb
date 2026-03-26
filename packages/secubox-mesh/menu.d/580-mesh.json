@@ -1,10 +1,9 @@
 {
     "id": "mesh",
-    "name": "Mesh DNS",
-    "icon": "\ud83c\udf10",
-    "url": "/mesh/",
+    "name": "Yggdrasil Mesh",
+    "icon": "🌐",
+    "path": "/mesh/",
     "category": "network",
     "order": 580,
-    "description": "Meshname DNS for Yggdrasil mesh networks",
-    "requires": ["secubox-mesh"]
+    "description": "Yggdrasil mesh network management"
 }

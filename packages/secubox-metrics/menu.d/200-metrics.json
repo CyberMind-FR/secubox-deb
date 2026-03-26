@@ -1,9 +1,9 @@
 {
     "id": "metrics",
-    "title": "Metrics Dashboard",
+    "name": "Metrics",
     "icon": "📊",
     "path": "/metrics/",
     "order": 200,
     "category": "monitoring",
-    "acl": ["admin"]
+    "description": "Metrics Dashboard"
 }
