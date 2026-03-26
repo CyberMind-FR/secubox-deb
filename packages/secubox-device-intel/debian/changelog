@@ -1,3 +1,13 @@
+secubox-device-intel (1.2.1-1~bookworm1) bookworm; urgency=medium
+
+  * Enhanced SecuBox detection with OpenWRT theme markers
+  * Detect data-secubox-theme, luci-static/secubox, secubox-portal
+  * Extract SecuBox theme (crt-p31, etc.) from probed devices
+  * Support for newer LuCI version format (luci.js?v=...)
+  * Tested against C3BOX (SecuBox OpenWRT) and GL-MT3000
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Mar 2026 15:00:00 +0100
+
 secubox-device-intel (1.2.0-1~bookworm1) bookworm; urgency=medium
 
   * Enhanced OpenWRT/LuCI detection with version and model extraction
