@@ -1,3 +1,13 @@
+secubox-p2p (1.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * sbx-mesh-invite v1.0.0: CLI tool to generate mesh invite tokens
+  * Supports --auto-approve, --manual-approve, --ttl, --ip options
+  * Auto-detects local LAN IP for invite URL
+  * Stores tokens in /var/lib/secubox/p2p/master-link/tokens.json
+  * ASCII box formatted output for easy copy-paste
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Mar 2026 21:00:00 +0100
+
 secubox-p2p (1.4.0-1~bookworm1) bookworm; urgency=medium
 
   * sbx-mesh-join v1.4.0: Auto-detect master type (Debian API or OpenWRT CGI)
