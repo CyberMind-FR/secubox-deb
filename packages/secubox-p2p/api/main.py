@@ -29,7 +29,7 @@ except ImportError:
 app = FastAPI(
     title="SecuBox P2P API",
     description="P2P network hub with peer discovery and master-link enrollment",
-    version="1.2.0",
+    version="1.3.0",
     docs_url="/docs",
     redoc_url=None
 )
@@ -634,7 +634,7 @@ async def get_status():
             "depth": ml_config.get("depth", 0),
             "upstream": ml_config.get("upstream")
         },
-        "version": "1.2.0"
+        "version": "1.3.0"
     }
 
 
@@ -1390,6 +1390,173 @@ async def ml_generate_token(req: TokenGenerateRequest, user: dict = Depends(requ
     return result
 
 
+@app.post("/master-link/invite")
+async def ml_generate_invite(
+    ttl: int = 3600,
+    auto_approve: bool = True,
+    user: dict = Depends(require_jwt)
+):
+    """Generate a shareable invite URL (simplified flow)."""
+    config = get_ml_config()
+    role = config.get("role", "master")
+    if role not in ["master", "sub-master"]:
+        raise HTTPException(status_code=403, detail="Only master or sub-master can invite")
+
+    # Generate token
+    result = ml_token_generate(ttl=ttl, auto_approve=auto_approve)
+    token = result["token"]
+
+    # Build URLs
+    lan_ip = get_lan_ip()
+    wan_ip = get_wan_ip()
+    hostname = get_hostname()
+    fingerprint = config.get("fingerprint", get_node_id())
+
+    # Web URL for browser
+    web_url = f"https://{lan_ip}/master-link/?token={token}"
+
+    # CLI one-liner for OpenWRT/Linux
+    cli_cmd = f"wget -qO- 'http://{lan_ip}:{API_PORT}/api/v1/p2p/master-link/join-script?token={token}' | sh"
+
+    return {
+        "token": token,
+        "expires": result["expires"],
+        "auto_approve": auto_approve,
+        "master": {
+            "fingerprint": fingerprint,
+            "hostname": hostname,
+            "lan_ip": lan_ip,
+            "wan_ip": wan_ip,
+            "role": role,
+            "depth": config.get("depth", 0)
+        },
+        "urls": {
+            "web": web_url,
+            "web_wan": f"https://{wan_ip}/master-link/?token={token}" if wan_ip else None,
+            "api": f"http://{lan_ip}:{API_PORT}/api/v1/p2p/master-link/join"
+        },
+        "cli": {
+            "command": cli_cmd,
+            "curl": f"curl -s 'http://{lan_ip}:{API_PORT}/api/v1/p2p/master-link/join-script?token={token}' | sh"
+        },
+        "copy_paste": f"""
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SecuBox Mesh Invite - {hostname}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Option 1 - Web Browser:
+  {web_url}
+
+Option 2 - Command Line (OpenWRT/Linux):
+  {cli_cmd}
+
+Token: {token}
+Expires: {result['expires']}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"""
+    }
+
+
+@app.get("/master-link/join-script")
+async def ml_join_script(token: str, request: Request):
+    """Return a shell script for joining (OpenWRT compatible)."""
+    from fastapi.responses import PlainTextResponse
+
+    # Get master info
+    config = get_ml_config()
+    master_ip = get_lan_ip()
+    master_fp = config.get("fingerprint", get_node_id())
+    master_hostname = get_hostname()
+
+    script = f'''#!/bin/sh
+# SecuBox Mesh Join Script
+# Master: {master_hostname} ({master_fp})
+# Generated: {datetime.utcnow().isoformat()}
+
+set -e
+
+MASTER_IP="{master_ip}"
+MASTER_PORT="{API_PORT}"
+TOKEN="{token}"
+
+# Detect system type
+if [ -f /etc/openwrt_release ]; then
+    SYSTEM="openwrt"
+    # Get fingerprint from OpenWRT
+    if [ -f /etc/secubox/node.id ]; then
+        FINGERPRINT=$(cat /etc/secubox/node.id)
+    else
+        FINGERPRINT="owrt-$(cat /sys/class/net/br-lan/address 2>/dev/null | tr -d ':' || echo $RANDOM)"
+        mkdir -p /etc/secubox
+        echo "$FINGERPRINT" > /etc/secubox/node.id
+    fi
+    HOSTNAME=$(uci get system.@system[0].hostname 2>/dev/null || hostname)
+    ADDRESS=$(ip -4 addr show br-lan 2>/dev/null | grep -oP 'inet \\K[\\d.]+' | head -1)
+    [ -z "$ADDRESS" ] && ADDRESS=$(ip route get 1 | grep -oP 'src \\K[\\d.]+')
+else
+    SYSTEM="linux"
+    if [ -f /var/lib/secubox/p2p/node.id ]; then
+        FINGERPRINT=$(cat /var/lib/secubox/p2p/node.id)
+    else
+        FINGERPRINT="sbx-$(cat /sys/class/net/eth0/address 2>/dev/null | tr -d ':' || hostname | md5sum | cut -c1-12)"
+    fi
+    HOSTNAME=$(hostname)
+    ADDRESS=$(ip route get 1 2>/dev/null | grep -oP 'src \\K[\\d.]+' || echo "unknown")
+fi
+
+echo "╔══════════════════════════════════════════╗"
+echo "║     SecuBox Mesh - Joining Network       ║"
+echo "╠══════════════════════════════════════════╣"
+echo "║ System:      $SYSTEM"
+echo "║ Fingerprint: $FINGERPRINT"
+echo "║ Hostname:    $HOSTNAME"
+echo "║ Address:     $ADDRESS"
+echo "║ Master:      $MASTER_IP"
+echo "╚══════════════════════════════════════════╝"
+echo ""
+
+# Use wget (OpenWRT) or curl (Debian)
+if command -v curl >/dev/null 2>&1; then
+    RESPONSE=$(curl -s -X POST \\
+        -H "Content-Type: application/json" \\
+        -d "{{\\"token\\":\\"$TOKEN\\",\\"fingerprint\\":\\"$FINGERPRINT\\",\\"hostname\\":\\"$HOSTNAME\\",\\"address\\":\\"$ADDRESS\\"}}" \\
+        "http://$MASTER_IP:$MASTER_PORT/api/v1/p2p/master-link/join")
+elif command -v wget >/dev/null 2>&1; then
+    RESPONSE=$(wget -qO- --post-data="{{\\"token\\":\\"$TOKEN\\",\\"fingerprint\\":\\"$FINGERPRINT\\",\\"hostname\\":\\"$HOSTNAME\\",\\"address\\":\\"$ADDRESS\\"}}" \\
+        --header="Content-Type: application/json" \\
+        "http://$MASTER_IP:$MASTER_PORT/api/v1/p2p/master-link/join" 2>/dev/null)
+else
+    echo "ERROR: Neither curl nor wget available"
+    exit 1
+fi
+
+# Parse response
+STATUS=$(echo "$RESPONSE" | grep -o '"status":"[^"]*"' | cut -d'"' -f4)
+
+if [ "$STATUS" = "approved" ]; then
+    echo "✓ SUCCESS: Joined mesh network!"
+    echo "  Status: APPROVED"
+    DEPTH=$(echo "$RESPONSE" | grep -o '"depth":[0-9]*' | cut -d':' -f2)
+    [ -n "$DEPTH" ] && echo "  Depth: $DEPTH"
+
+    # Save master info for OpenWRT
+    if [ "$SYSTEM" = "openwrt" ]; then
+        mkdir -p /etc/secubox
+        echo "$MASTER_IP" > /etc/secubox/master.ip
+        echo "$FINGERPRINT" > /etc/secubox/node.id
+    fi
+elif [ "$STATUS" = "pending" ]; then
+    echo "⏳ PENDING: Waiting for master approval"
+    echo "  Your fingerprint: $FINGERPRINT"
+    echo "  Check back later or ask the master admin to approve."
+else
+    echo "✗ FAILED: $RESPONSE"
+    exit 1
+fi
+'''
+    return PlainTextResponse(content=script, media_type="text/plain")
+
+
 @app.post("/master-link/token/validate")
 async def ml_validate_token(token: str):
     """Validate a token (public)."""
@@ -1777,7 +1944,7 @@ async def ml_join_upstream(
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "service": "secubox-p2p", "version": "1.2.0"}
+    return {"status": "ok", "service": "secubox-p2p", "version": "1.3.0"}
 
 
 if __name__ == "__main__":

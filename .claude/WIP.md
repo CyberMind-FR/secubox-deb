@@ -1,9 +1,32 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-03-26 (Session 17)*
+*Mis à jour : 2026-03-26 (Session 18)*
 
 ---
 
 ## ✅ Terminé cette session
+
+### P2P Hub Light Theme ✅
+- **secubox-p2p www/p2p/index.html** — Full P31 Phosphor light theme applied
+  - Updated CSS root variables from dark (#0a0a0a, #33ff33) to light palette (#e8f5e9, #006622)
+  - Fixed all components: buttons, forms, tables, modals, status cards, status badges
+  - Updated mesh visualization canvas colors to light theme
+  - Added border-radius and improved shadows for modern look
+  - Consistent with master-link page and other SecuBox modules
+- **Commit pushed** — `91d6550 Apply P31 Phosphor light theme to P2P Hub page`
+
+### VM Testing ✅
+- **VirtualBox SecuBox-Dev** — Running and accessible
+  - SSH: `ssh -p 2222 root@localhost`
+  - HTTPS: https://localhost:9443
+- **P2P Hub page** — Deployed and tested at /p2p/
+- **Master-Link page** — Tested at /master-link/
+  - All endpoints working (status, peers, tree, token validation)
+  - 2 peers approved via master-link (test-peer, c3box)
+  - Mesh hierarchy: master (depth 0) → 2 children (depth 1)
+
+---
+
+## ✅ Terminé session précédente (Session 17)
 
 ### Master-Link Enrollment System ✅
 - **secubox-p2p v1.2.0** — Token-based mesh node enrollment (ported from secubox-openwrt)
