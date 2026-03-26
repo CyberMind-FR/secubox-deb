@@ -151,6 +151,8 @@ INCLUDE_PKGS+=",iproute2,iputils-ping,ethtool,net-tools,wireguard-tools"
 INCLUDE_PKGS+=",sudo,less,vim-tiny,logrotate,cron,rsync,jq,dnsmasq"
 INCLUDE_PKGS+=",linux-image-amd64,live-boot,live-config,live-config-systemd"
 INCLUDE_PKGS+=",grub-efi-amd64,grub-pc-bin,efibootmgr,pciutils,usbutils,parted,dosfstools"
+# Firmware for real hardware support
+INCLUDE_PKGS+=",firmware-linux-free"
 
 debootstrap --arch=amd64 \
   --include="${INCLUDE_PKGS}" \
@@ -226,6 +228,35 @@ network:
 EOF
 
 ok "Base configuration complete"
+
+# ── Step 2b: Install firmware for real hardware ───────────────────
+log "2b/9 Installing firmware for hardware support..."
+
+# Add non-free and non-free-firmware repos
+cat > "${ROOTFS}/etc/apt/sources.list" <<EOF
+deb ${APT_MIRROR} ${SUITE} main contrib non-free non-free-firmware
+deb ${APT_MIRROR} ${SUITE}-updates main contrib non-free non-free-firmware
+deb http://security.debian.org/debian-security ${SUITE}-security main contrib non-free non-free-firmware
+EOF
+
+chroot "${ROOTFS}" apt-get update -q
+
+# Install firmware packages for real hardware
+chroot "${ROOTFS}" apt-get install -y -q --no-install-recommends \
+  firmware-linux-free \
+  firmware-linux-nonfree \
+  firmware-misc-nonfree \
+  firmware-realtek \
+  firmware-iwlwifi \
+  firmware-atheros \
+  firmware-brcm80211 \
+  firmware-intel-sound \
+  firmware-amd-graphics \
+  amd64-microcode \
+  intel-microcode \
+  2>/dev/null || warn "Some firmware packages not available"
+
+ok "Firmware installed"
 
 # ── Step 3: SecuBox packages ──────────────────────────────────────
 log "3/9 Installing SecuBox packages..."
