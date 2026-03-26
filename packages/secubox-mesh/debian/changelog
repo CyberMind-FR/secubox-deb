@@ -1,3 +1,15 @@
+secubox-mesh (1.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Add SecuBox peer discovery on Yggdrasil mesh
+  * Probe mesh sessions for SecuBox/OpenWRT nodes
+  * Auto-detect platform (debian/openwrt) and version
+  * Peer registration and management
+  * New endpoints: /secubox/peers, /secubox/discover, /secubox/register
+  * Get Yggdrasil sessions and detailed peer info
+  * /secubox/self endpoint for mesh announcement
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Mar 2026 10:00:00 +0100
+
 secubox-mesh (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial release

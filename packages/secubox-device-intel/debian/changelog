@@ -1,3 +1,15 @@
+secubox-device-intel (1.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Add OpenWRT/SecuBox device detection
+  * MAC vendor fingerprinting for router manufacturers
+  * HTTP probe for LuCI interface detection
+  * DHCP hostname pattern matching (openwrt, lede, gl-, etc.)
+  * mDNS/Avahi service discovery
+  * New endpoints: /probe/openwrt, /openwrt, /mdns
+  * Device tagging: is_router, router_vendor, is_openwrt, is_secubox
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Mar 2026 10:00:00 +0100
+
 secubox-device-intel (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial release
