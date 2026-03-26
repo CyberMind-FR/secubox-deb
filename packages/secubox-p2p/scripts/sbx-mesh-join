@@ -1,6 +1,8 @@
 #!/bin/sh
 # SecuBox Mesh Join Script
 # Compatible with OpenWRT and Debian/Ubuntu
+# Supports both Debian API and OpenWRT CGI masters
+#
 # Usage: sbx-mesh-join <master-ip> <token>
 #    OR: sbx-mesh-join <invite-url>
 #
@@ -8,7 +10,7 @@
 #   sbx-mesh-join 192.168.1.1 abc123def456
 #   sbx-mesh-join "http://192.168.1.1:7331/master-link/?token=abc123"
 
-VERSION="1.3.0"
+VERSION="1.4.0"
 API_PORT="7331"
 
 usage() {
@@ -21,6 +23,10 @@ usage() {
     echo "Examples:"
     echo "  $0 192.168.1.1 abc123def456"
     echo "  $0 'http://192.168.1.1:7331/master-link/?token=abc123'"
+    echo ""
+    echo "Supports:"
+    echo "  - SecuBox Debian masters (API on port $API_PORT)"
+    echo "  - SecuBox OpenWRT masters (CGI on port 80)"
     exit 1
 }
 
@@ -117,13 +123,88 @@ http_post() {
     local data="$2"
 
     if command -v curl >/dev/null 2>&1; then
-        curl -s -X POST -H "Content-Type: application/json" -d "$data" "$url"
+        curl -s --connect-timeout 5 -X POST -H "Content-Type: application/json" -d "$data" "$url" 2>/dev/null
     elif command -v wget >/dev/null 2>&1; then
-        wget -qO- --post-data="$data" --header="Content-Type: application/json" "$url" 2>/dev/null
+        wget -qO- --timeout=5 --post-data="$data" --header="Content-Type: application/json" "$url" 2>/dev/null
     else
         echo '{"error":"no http client"}'
         return 1
     fi
+}
+
+# HTTP GET using wget or curl
+http_get() {
+    local url="$1"
+
+    if command -v curl >/dev/null 2>&1; then
+        curl -s --connect-timeout 3 "$url" 2>/dev/null
+    elif command -v wget >/dev/null 2>&1; then
+        wget -qO- --timeout=3 "$url" 2>/dev/null
+    else
+        echo ""
+        return 1
+    fi
+}
+
+# Detect master type (Debian API or OpenWRT CGI)
+detect_master_type() {
+    local ip="$1"
+
+    # Try Debian API first
+    local resp=$(http_get "http://$ip:$API_PORT/api/v1/p2p/master-link/status")
+    if echo "$resp" | grep -q '"role"'; then
+        echo "debian"
+        return 0
+    fi
+
+    # Try OpenWRT CGI
+    resp=$(http_get "http://$ip/cgi-bin/masterlink/status")
+    if echo "$resp" | grep -q '"role"'; then
+        echo "openwrt-cgi"
+        return 0
+    fi
+
+    # Try OpenWRT on custom port
+    resp=$(http_get "http://$ip:$API_PORT/cgi-bin/masterlink/status")
+    if echo "$resp" | grep -q '"role"'; then
+        echo "openwrt-cgi-port"
+        return 0
+    fi
+
+    echo "unknown"
+}
+
+# Join via Debian API
+join_debian_api() {
+    http_post "http://$MASTER_IP:$API_PORT/api/v1/p2p/master-link/join" "$JSON_DATA"
+}
+
+# Join via OpenWRT CGI (port 80)
+join_openwrt_cgi() {
+    http_post "http://$MASTER_IP/cgi-bin/masterlink/join" "$JSON_DATA"
+}
+
+# Join via OpenWRT CGI (custom port)
+join_openwrt_cgi_port() {
+    http_post "http://$MASTER_IP:$API_PORT/cgi-bin/masterlink/join" "$JSON_DATA"
+}
+
+# Save success config
+save_config() {
+    case "$SYSTEM" in
+        openwrt)
+            mkdir -p /etc/secubox
+            echo "$MASTER_IP" > /etc/secubox/master.ip
+            echo "master-link" > /etc/secubox/mesh.mode
+            echo "$MASTER_TYPE" > /etc/secubox/master.type
+            ;;
+        *)
+            mkdir -p /var/lib/secubox/p2p
+            cat > /var/lib/secubox/p2p/mesh.json << CONF
+{"upstream":"$MASTER_IP","role":"peer","master_type":"$MASTER_TYPE"}
+CONF
+            ;;
+    esac
 }
 
 # Main
@@ -149,30 +230,62 @@ JSON_DATA=$(cat <<EOF
 EOF
 )
 
+# Detect master type
+echo "Detecting master type..."
+MASTER_TYPE=$(detect_master_type "$MASTER_IP")
+echo "  Master type: $MASTER_TYPE"
+echo ""
+
+# Try to join based on master type
 echo "Joining mesh network..."
-RESPONSE=$(http_post "http://$MASTER_IP:$API_PORT/api/v1/p2p/master-link/join" "$JSON_DATA")
+RESPONSE=""
+
+case "$MASTER_TYPE" in
+    debian)
+        echo "  → Trying Debian API (port $API_PORT)..."
+        RESPONSE=$(join_debian_api)
+        ;;
+    openwrt-cgi)
+        echo "  → Trying OpenWRT CGI (port 80)..."
+        RESPONSE=$(join_openwrt_cgi)
+        ;;
+    openwrt-cgi-port)
+        echo "  → Trying OpenWRT CGI (port $API_PORT)..."
+        RESPONSE=$(join_openwrt_cgi_port)
+        ;;
+    unknown)
+        echo "  → Master type unknown, trying all methods..."
+        # Try Debian API first
+        RESPONSE=$(join_debian_api)
+        if echo "$RESPONSE" | grep -q '"status"'; then
+            MASTER_TYPE="debian"
+        else
+            # Try OpenWRT CGI port 80
+            RESPONSE=$(join_openwrt_cgi)
+            if echo "$RESPONSE" | grep -q '"status"'; then
+                MASTER_TYPE="openwrt-cgi"
+            else
+                # Try OpenWRT CGI custom port
+                RESPONSE=$(join_openwrt_cgi_port)
+                if echo "$RESPONSE" | grep -q '"status"'; then
+                    MASTER_TYPE="openwrt-cgi-port"
+                fi
+            fi
+        fi
+        ;;
+esac
 
 # Parse response
-if echo "$RESPONSE" | grep -q '"status":"approved"'; then
+if echo "$RESPONSE" | grep -q '"status":"approved"' || echo "$RESPONSE" | grep -q '"success":true'; then
     echo ""
     echo "✓ SUCCESS: Joined mesh network!"
     echo "  Status: APPROVED"
     DEPTH=$(echo "$RESPONSE" | grep -o '"depth":[0-9]*' | cut -d':' -f2)
     [ -n "$DEPTH" ] && echo "  Depth: $DEPTH"
+    echo "  Master type: $MASTER_TYPE"
 
     # Save config
-    case "$SYSTEM" in
-        openwrt)
-            mkdir -p /etc/secubox
-            echo "$MASTER_IP" > /etc/secubox/master.ip
-            echo "master-link" > /etc/secubox/mesh.mode
-            # Optional: configure firewall/WireGuard here
-            ;;
-        *)
-            mkdir -p /var/lib/secubox/p2p
-            echo '{"upstream":"'"$MASTER_IP"'","role":"peer"}' > /var/lib/secubox/p2p/mesh.json
-            ;;
-    esac
+    save_config
 
     echo ""
     echo "Master IP saved. You are now part of the mesh."
@@ -183,13 +296,18 @@ elif echo "$RESPONSE" | grep -q '"status":"pending"'; then
     echo "⏳ PENDING: Waiting for master approval"
     echo "  Your fingerprint: $FINGERPRINT"
     echo ""
-    echo "  Ask the master admin to approve your request:"
-    echo "  https://$MASTER_IP/p2p/ → Master-Link → Approve"
+    echo "  Ask the master admin to approve your request."
     exit 0
 
 else
     echo ""
     echo "✗ FAILED to join mesh"
     echo "  Response: $RESPONSE"
+    echo ""
+    echo "Troubleshooting:"
+    echo "  1. Check if master is reachable: ping $MASTER_IP"
+    echo "  2. For Debian master: curl http://$MASTER_IP:$API_PORT/api/v1/p2p/master-link/status"
+    echo "  3. For OpenWRT master: curl http://$MASTER_IP/cgi-bin/masterlink/status"
+    echo "  4. Ensure master-link is installed on the master device"
     exit 1
 fi
