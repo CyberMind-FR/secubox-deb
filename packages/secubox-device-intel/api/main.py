@@ -20,7 +20,7 @@ from pydantic import BaseModel
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
 
-app = FastAPI(title="SecuBox Device-Intel", version="1.2.0")
+app = FastAPI(title="SecuBox Device-Intel", version="1.2.1")
 config = get_config("device-intel")
 
 # OUI database path (install via apt: ieee-data)
@@ -227,7 +227,8 @@ async def _probe_luci(ip: str, timeout: float = 2.0) -> dict:
         "secubox_detected": False,
         "version": None,
         "model": None,
-        "gl_inet": False
+        "gl_inet": False,
+        "secubox_theme": None
     }
 
     async def curl_get(url: str, return_body: bool = False) -> tuple[str, str]:
@@ -272,15 +273,30 @@ async def _probe_luci(ip: str, timeout: float = 2.0) -> dict:
 
                 # Check for SecuBox - look for specific markers
                 secubox_markers = [
+                    "data-secubox-theme",
+                    "luci-static/secubox",
+                    "secubox-auth-hook",
+                    "secubox-portal",
+                    "secubox-public",
                     "luci-app-secubox",
                     "/luci/admin/secubox",
                     "secubox-dashboard",
-                    "secubox.in"
                 ]
                 for marker in secubox_markers:
                     if marker in body_lower:
                         result["secubox_detected"] = True
                         break
+
+                # Extract SecuBox theme if present
+                theme_match = re.search(r'data-secubox-theme="([^"]+)"', body)
+                if theme_match:
+                    result["secubox_theme"] = theme_match.group(1)
+
+                # Try alternative LuCI version format (e.g., luci.js?v=26.021.66732~...)
+                if not result["version"]:
+                    alt_ver_match = re.search(r'luci\.js\?v=([\d.~a-f0-9-]+)', body)
+                    if alt_ver_match:
+                        result["version"] = alt_ver_match.group(1)
 
         except (asyncio.TimeoutError, Exception):
             pass
@@ -655,7 +671,8 @@ async def probe_single_openwrt(ip: str):
         "is_secubox": probe_result["secubox_detected"],
         "is_gl_inet": probe_result.get("gl_inet", False),
         "model": probe_result.get("model"),
-        "version": probe_result.get("version")
+        "version": probe_result.get("version"),
+        "secubox_theme": probe_result.get("secubox_theme")
     }
 
 
