@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - Master-Link Admin</title>
+    <style>
+        :root {
+            --bg: #0a0f0a; --card: #0f1a0f; --text: #e0ffe0; --muted: #5a8a5a;
+            --accent: #00ff41; --accent-dim: rgba(0,255,65,0.15);
+            --success: #22c55e; --warn: #f59e0b; --danger: #ef4444;
+            --border: #1a3a1a;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Courier New', monospace; background: var(--bg); color: var(--text); min-height: 100vh; padding: 1.5rem; }
+        .container { max-width: 1200px; margin: 0 auto; }
+
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
+        h1 { font-size: 1.5rem; color: var(--accent); display: flex; align-items: center; gap: 0.5rem; }
+        h1 svg { width: 24px; height: 24px; }
+        .header-actions { display: flex; gap: 0.5rem; }
+
+        .btn { padding: 0.5rem 1rem; border: 1px solid var(--border); border-radius: 4px; background: var(--card); color: var(--text); cursor: pointer; font-family: inherit; font-size: 0.85rem; transition: all 0.2s; }
+        .btn:hover { border-color: var(--accent); background: var(--accent-dim); }
+        .btn.primary { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+        .btn.danger { border-color: var(--danger); color: var(--danger); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 1rem; text-align: center; }
+        .stat .value { font-size: 2rem; font-weight: bold; color: var(--accent); }
+        .stat .label { font-size: 0.75rem; color: var(--muted); margin-top: 0.25rem; text-transform: uppercase; }
+        .stat.warning .value { color: var(--warn); }
+
+        .card { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 1.25rem; margin-bottom: 1.5rem; }
+        .card h2 { font-size: 1rem; color: var(--accent); margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; }
+
+        .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
+        .tab { padding: 0.75rem 1.25rem; background: none; border: none; color: var(--muted); cursor: pointer; font-family: inherit; font-size: 0.9rem; border-bottom: 2px solid transparent; transition: all 0.2s; }
+        .tab:hover { color: var(--text); }
+        .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+        th { color: var(--muted); font-weight: normal; text-transform: uppercase; font-size: 0.7rem; }
+        tr:hover { background: var(--accent-dim); }
+
+        .badge { padding: 0.2rem 0.5rem; border-radius: 3px; font-size: 0.7rem; font-weight: bold; text-transform: uppercase; }
+        .badge.master { background: var(--accent-dim); color: var(--accent); }
+        .badge.peer { background: rgba(99,102,241,0.2); color: #818cf8; }
+        .badge.approved { background: rgba(34,197,94,0.2); color: var(--success); }
+        .badge.pending { background: rgba(245,158,11,0.2); color: var(--warn); }
+        .badge.online { background: rgba(34,197,94,0.2); color: var(--success); }
+        .badge.offline { background: rgba(239,68,68,0.2); color: var(--danger); }
+
+        .token-box { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 1rem; margin: 1rem 0; font-family: monospace; }
+        .token-box .token { font-size: 0.9rem; word-break: break-all; color: var(--accent); margin-bottom: 0.5rem; }
+        .token-box .url { font-size: 0.75rem; color: var(--muted); word-break: break-all; }
+        .token-box .cmd { font-size: 0.8rem; color: var(--text); margin-top: 0.5rem; padding: 0.5rem; background: var(--card); border-radius: 3px; }
+
+        .tree { font-family: monospace; font-size: 0.85rem; }
+        .tree-node { padding: 0.25rem 0; padding-left: 1.5rem; border-left: 1px dashed var(--border); margin-left: 0.5rem; }
+        .tree-node:first-child { border-left: none; padding-left: 0; margin-left: 0; }
+        .tree-node .node-info { display: flex; align-items: center; gap: 0.5rem; }
+        .tree-node .fp { color: var(--accent); }
+        .tree-node .hostname { color: var(--text); }
+        .tree-node .addr { color: var(--muted); font-size: 0.75rem; }
+
+        .empty { text-align: center; padding: 2rem; color: var(--muted); }
+        .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .copy-btn { background: none; border: none; color: var(--muted); cursor: pointer; padding: 0.25rem; }
+        .copy-btn:hover { color: var(--accent); }
+
+        .toast { position: fixed; bottom: 1rem; right: 1rem; padding: 0.75rem 1rem; background: var(--card); border: 1px solid var(--accent); border-radius: 4px; transform: translateY(100px); opacity: 0; transition: all 0.3s; z-index: 100; }
+        .toast.show { transform: translateY(0); opacity: 1; }
+        .toast.error { border-color: var(--danger); color: var(--danger); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                Master-Link Admin
+            </h1>
+            <div class="header-actions">
+                <button class="btn" onclick="loadAll()">↻ Refresh</button>
+                <a href="/" class="btn">← Back</a>
+            </div>
+        </header>
+
+        <div class="grid" id="stats">
+            <div class="stat">
+                <div class="value" id="stat-role">--</div>
+                <div class="label">Role</div>
+            </div>
+            <div class="stat">
+                <div class="value" id="stat-peers">--</div>
+                <div class="label">Peers</div>
+            </div>
+            <div class="stat">
+                <div class="value" id="stat-pending">--</div>
+                <div class="label">Pending</div>
+            </div>
+            <div class="stat">
+                <div class="value" id="stat-tokens">--</div>
+                <div class="label">Active Tokens</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="tabs">
+                <button class="tab active" onclick="showTab('overview')">Overview</button>
+                <button class="tab" onclick="showTab('peers')">Peers</button>
+                <button class="tab" onclick="showTab('tree')">Mesh Tree</button>
+                <button class="tab" onclick="showTab('invite')">Generate Invite</button>
+            </div>
+
+            <div id="tab-overview" class="tab-content active">
+                <table>
+                    <tr><th>Property</th><th>Value</th></tr>
+                    <tr><td>Fingerprint</td><td id="info-fp" style="font-family:monospace;color:var(--accent)">--</td></tr>
+                    <tr><td>Hostname</td><td id="info-hostname">--</td></tr>
+                    <tr><td>Role</td><td id="info-role">--</td></tr>
+                    <tr><td>Depth</td><td id="info-depth">--</td></tr>
+                    <tr><td>Upstream</td><td id="info-upstream">--</td></tr>
+                    <tr><td>Auto-Approve</td><td id="info-auto">--</td></tr>
+                </table>
+            </div>
+
+            <div id="tab-peers" class="tab-content">
+                <div id="peers-list"><div class="empty"><span class="spinner"></span> Loading...</div></div>
+            </div>
+
+            <div id="tab-tree" class="tab-content">
+                <div id="tree-view"><div class="empty"><span class="spinner"></span> Loading...</div></div>
+            </div>
+
+            <div id="tab-invite" class="tab-content">
+                <p style="color:var(--muted);margin-bottom:1rem;">Generate an invite token for new nodes to join the mesh.</p>
+                <div style="display:flex;gap:0.5rem;margin-bottom:1rem;">
+                    <label style="display:flex;align-items:center;gap:0.5rem;">
+                        <input type="checkbox" id="auto-approve" checked> Auto-approve
+                    </label>
+                    <label style="display:flex;align-items:center;gap:0.5rem;margin-left:1rem;">
+                        TTL: <input type="number" id="ttl" value="3600" style="width:80px;padding:0.25rem;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:3px;">s
+                    </label>
+                </div>
+                <button class="btn primary" onclick="generateToken()">Generate Invite Token</button>
+                <div id="token-result"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+    const API = '/api/v1/p2p';
+
+    async function api(endpoint, options = {}) {
+        const r = await fetch(API + endpoint, options);
+        return r.json();
+    }
+
+    async function loadAll() {
+        await Promise.all([loadStatus(), loadPeers(), loadTree()]);
+    }
+
+    async function loadStatus() {
+        try {
+            const data = await api('/master-link/status');
+            document.getElementById('stat-role').textContent = data.role || 'master';
+            document.getElementById('stat-peers').textContent = data.peers?.approved || 0;
+            document.getElementById('stat-pending').textContent = data.peers?.pending || 0;
+            document.getElementById('stat-tokens').textContent = data.active_tokens || 0;
+
+            if (data.peers?.pending > 0) {
+                document.getElementById('stat-pending').parentElement.classList.add('warning');
+            }
+
+            document.getElementById('info-fp').textContent = data.fingerprint || '-';
+            document.getElementById('info-hostname').textContent = data.hostname || '-';
+            document.getElementById('info-role').innerHTML = '<span class="badge ' + (data.role || 'master') + '">' + (data.role || 'master') + '</span>';
+            document.getElementById('info-depth').textContent = data.depth ?? 0;
+            document.getElementById('info-upstream').textContent = data.upstream || '(none - root master)';
+            document.getElementById('info-auto').textContent = data.auto_approve ? 'Yes' : 'No';
+        } catch (e) {
+            toast('Failed to load status: ' + e.message, true);
+        }
+    }
+
+    async function loadPeers() {
+        try {
+            const data = await api('/master-link/peers');
+            const peers = data.peers || [];
+
+            if (peers.length === 0) {
+                document.getElementById('peers-list').innerHTML = '<div class="empty">No peers yet</div>';
+                return;
+            }
+
+            let html = '<table><tr><th>Fingerprint</th><th>Hostname</th><th>Address</th><th>Status</th><th>Joined</th><th>Actions</th></tr>';
+            peers.forEach(p => {
+                const statusClass = p.status === 'approved' ? 'approved' : 'pending';
+                html += '<tr>' +
+                    '<td style="font-family:monospace;color:var(--accent)">' + (p.fingerprint || '-') + '</td>' +
+                    '<td>' + (p.hostname || '-') + '</td>' +
+                    '<td style="color:var(--muted)">' + (p.address || '-') + '</td>' +
+                    '<td><span class="badge ' + statusClass + '">' + (p.status || 'unknown') + '</span></td>' +
+                    '<td style="font-size:0.75rem;color:var(--muted)">' + (p.approved_at || p.joined_at || '-') + '</td>' +
+                    '<td>' + (p.status === 'pending' ? '<button class="btn" onclick="approvePeer(\'' + p.fingerprint + '\')">Approve</button>' : '') + '</td>' +
+                    '</tr>';
+            });
+            html += '</table>';
+            document.getElementById('peers-list').innerHTML = html;
+        } catch (e) {
+            document.getElementById('peers-list').innerHTML = '<div class="empty" style="color:var(--danger)">Error: ' + e.message + '</div>';
+        }
+    }
+
+    async function loadTree() {
+        try {
+            const data = await api('/master-link/tree');
+            const tree = data.tree;
+            if (!tree) {
+                document.getElementById('tree-view').innerHTML = '<div class="empty">No tree data</div>';
+                return;
+            }
+            document.getElementById('tree-view').innerHTML = '<div class="tree">' + renderNode(tree, 0) + '</div>';
+        } catch (e) {
+            document.getElementById('tree-view').innerHTML = '<div class="empty" style="color:var(--danger)">Error: ' + e.message + '</div>';
+        }
+    }
+
+    function renderNode(node, depth) {
+        const online = node.online !== false;
+        let html = '<div class="tree-node" style="margin-left:' + (depth * 20) + 'px">' +
+            '<div class="node-info">' +
+            '<span class="badge ' + (node.role || 'peer') + '">' + (node.role || 'peer') + '</span> ' +
+            '<span class="fp">' + (node.fingerprint || '-').substring(0, 12) + '</span> ' +
+            '<span class="hostname">' + (node.hostname || 'unknown') + '</span> ' +
+            (node.address ? '<span class="addr">(' + node.address + ')</span>' : '') +
+            (online ? ' <span class="badge online">●</span>' : ' <span class="badge offline">●</span>') +
+            '</div></div>';
+
+        if (node.children && node.children.length > 0) {
+            node.children.forEach(child => {
+                html += renderNode(child, depth + 1);
+            });
+        }
+        return html;
+    }
+
+    async function generateToken() {
+        const autoApprove = document.getElementById('auto-approve').checked;
+        const ttl = parseInt(document.getElementById('ttl').value) || 3600;
+
+        try {
+            const data = await api('/master-link/invite-local?auto_approve=' + autoApprove + '&ttl=' + ttl, {
+                method: 'POST'
+            });
+
+            if (data.error || data.detail) {
+                throw new Error(data.error || data.detail);
+            }
+
+            const joinUrl = data.url || 'https://' + location.hostname + '/master-link/?token=' + data.token;
+            const joinCmd = data.cli || 'sbx-mesh-join ' + location.hostname + ' ' + data.token;
+
+            document.getElementById('token-result').innerHTML =
+                '<div class="token-box">' +
+                '<div><strong>Token:</strong></div>' +
+                '<div class="token">' + data.token + ' <button class="copy-btn" onclick="copy(\'' + data.token + '\')">📋</button></div>' +
+                '<div><strong>Join URL:</strong></div>' +
+                '<div class="url">' + joinUrl + ' <button class="copy-btn" onclick="copy(\'' + joinUrl + '\')">📋</button></div>' +
+                '<div><strong>CLI Command:</strong></div>' +
+                '<div class="cmd">' + joinCmd + ' <button class="copy-btn" onclick="copy(\'' + joinCmd + '\')">📋</button></div>' +
+                '<div style="margin-top:0.5rem;font-size:0.75rem;color:var(--muted)">Expires: ' + (data.expires_ts ? new Date(data.expires_ts * 1000).toLocaleString() : data.expires) + '</div>' +
+                '</div>';
+
+            toast('Token generated');
+            loadStatus();
+        } catch (e) {
+            toast('Failed: ' + e.message, true);
+        }
+    }
+
+    async function approvePeer(fp) {
+        try {
+            await api('/master-link/approve', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fingerprint: fp, action: 'approve' })
+            });
+            toast('Peer approved');
+            loadAll();
+        } catch (e) {
+            toast('Failed: ' + e.message, true);
+        }
+    }
+
+    function showTab(name) {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        document.querySelector('.tab[onclick*="' + name + '"]').classList.add('active');
+        document.getElementById('tab-' + name).classList.add('active');
+    }
+
+    function copy(text) {
+        navigator.clipboard.writeText(text).then(() => toast('Copied!'));
+    }
+
+    function toast(msg, isError = false) {
+        const t = document.getElementById('toast');
+        t.textContent = msg;
+        t.className = 'toast show' + (isError ? ' error' : '');
+        setTimeout(() => t.classList.remove('show'), 3000);
+    }
+
+    // Initial load
+    loadAll();
+    </script>
+</body>
+</html>

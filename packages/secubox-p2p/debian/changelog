@@ -1,3 +1,14 @@
+secubox-p2p (1.6.0-1~bookworm1) bookworm; urgency=medium
+
+  * Add Master-Link Admin Dashboard (/master-link/admin.html)
+  * Add /master-link/invite-local endpoint (localhost-only, no JWT required)
+  * Add /master-link/cleanup-local endpoint (localhost-only token cleanup)
+  * Add is_local_request() helper for secure localhost-only endpoints
+  * Update get_lan_ip() to prioritize 192.168.255.x mesh network addresses
+  * Dark CRT theme for admin dashboard with stats, peers, tree, and invite tabs
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Mar 2026 22:00:00 +0100
+
 secubox-p2p (1.5.0-1~bookworm1) bookworm; urgency=medium
 
   * sbx-mesh-invite v1.0.0: CLI tool to generate mesh invite tokens
