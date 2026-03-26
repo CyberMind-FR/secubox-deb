@@ -7,18 +7,21 @@
     <link rel="stylesheet" href="/shared/crt-light.css">
     <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
-        /* CRT P31 Phosphor Theme */
+        /* CRT P31 Phosphor Light Theme */
         :root {
-            --p31-green: #33ff33;
-            --p31-green-dim: #1a991a;
-            --p31-green-glow: rgba(51, 255, 51, 0.4);
-            --p31-bg: #0a0a0a;
-            --p31-bg-light: #111111;
-            --p31-border: #1a3a1a;
-            --p31-text: #33ff33;
-            --p31-text-dim: #229922;
-            --p31-danger: #ff3333;
-            --p31-warning: #ffaa33;
+            --bg: #e8f5e9;
+            --bg-card: #f1f8f2;
+            --bg-input: #ffffff;
+            --text: #1b4332;
+            --text-dim: #2d6a4f;
+            --text-muted: #52796f;
+            --border: #a7c4a0;
+            --accent: #006622;
+            --accent-light: #40916c;
+            --success: #2d6a4f;
+            --danger: #c1121f;
+            --warning: #e07b00;
+            --glow: rgba(0, 102, 34, 0.15);
         }
 
         * {
@@ -29,8 +32,8 @@
 
         body {
             font-family: 'Courier New', monospace;
-            background: var(--p31-bg);
-            color: var(--p31-text);
+            background: var(--bg);
+            color: var(--text);
             min-height: 100vh;
             display: flex;
         }
@@ -43,14 +46,14 @@
         }
 
         .page-header {
-            border-bottom: 1px solid var(--p31-border);
+            border-bottom: 2px solid var(--border);
             padding-bottom: 15px;
             margin-bottom: 20px;
         }
 
         .page-header h1 {
             font-size: 24px;
-            text-shadow: 0 0 10px var(--p31-green-glow);
+            color: var(--accent);
             display: flex;
             align-items: center;
             gap: 10px;
@@ -64,16 +67,16 @@
         .tab-nav {
             display: flex;
             gap: 5px;
-            border-bottom: 1px solid var(--p31-border);
+            border-bottom: 2px solid var(--border);
             margin-bottom: 20px;
             flex-wrap: wrap;
         }
 
         .tab-btn {
             background: transparent;
-            border: 1px solid var(--p31-border);
+            border: 1px solid var(--border);
             border-bottom: none;
-            color: var(--p31-text-dim);
+            color: var(--text-muted);
             padding: 10px 20px;
             cursor: pointer;
             font-family: inherit;
@@ -81,18 +84,19 @@
             transition: all 0.2s;
             position: relative;
             top: 1px;
+            border-radius: 4px 4px 0 0;
         }
 
         .tab-btn:hover {
-            color: var(--p31-text);
-            background: var(--p31-bg-light);
+            color: var(--text);
+            background: var(--bg-card);
         }
 
         .tab-btn.active {
-            color: var(--p31-text);
-            background: var(--p31-bg);
-            border-color: var(--p31-green-dim);
-            text-shadow: 0 0 5px var(--p31-green-glow);
+            color: var(--accent);
+            background: var(--bg-card);
+            border-color: var(--accent);
+            font-weight: bold;
         }
 
         .tab-content {
@@ -118,35 +122,38 @@
         }
 
         .status-card {
-            background: var(--p31-bg-light);
-            border: 1px solid var(--p31-border);
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
             padding: 20px;
             text-align: center;
+            box-shadow: 0 2px 4px var(--glow);
         }
 
         .status-card .label {
             font-size: 12px;
-            color: var(--p31-text-dim);
+            color: var(--text-muted);
             margin-bottom: 10px;
             text-transform: uppercase;
+            letter-spacing: 1px;
         }
 
         .status-card .value {
             font-size: 32px;
             font-weight: bold;
-            text-shadow: 0 0 10px var(--p31-green-glow);
+            color: var(--accent);
         }
 
         .status-card .value.online {
-            color: var(--p31-green);
+            color: var(--success);
         }
 
         .status-card .value.offline {
-            color: var(--p31-danger);
+            color: var(--danger);
         }
 
         .status-card .value.warning {
-            color: var(--p31-warning);
+            color: var(--warning);
         }
 
         /* Data Tables */
@@ -154,78 +161,86 @@
             width: 100%;
             border-collapse: collapse;
             margin-bottom: 20px;
+            background: var(--bg-card);
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid var(--border);
         }
 
         .data-table th,
         .data-table td {
             padding: 12px;
             text-align: left;
-            border-bottom: 1px solid var(--p31-border);
+            border-bottom: 1px solid var(--border);
         }
 
         .data-table th {
-            background: var(--p31-bg-light);
-            color: var(--p31-text-dim);
+            background: var(--bg);
+            color: var(--text-muted);
             font-size: 12px;
             text-transform: uppercase;
             letter-spacing: 1px;
         }
 
         .data-table tr:hover {
-            background: rgba(51, 255, 51, 0.05);
+            background: var(--glow);
         }
 
         .status-badge {
             display: inline-block;
-            padding: 4px 8px;
+            padding: 4px 10px;
             font-size: 11px;
-            border-radius: 2px;
+            border-radius: 12px;
             text-transform: uppercase;
+            font-weight: bold;
         }
 
         .status-badge.online {
-            background: rgba(51, 255, 51, 0.2);
-            color: var(--p31-green);
-            border: 1px solid var(--p31-green-dim);
+            background: rgba(45, 106, 79, 0.15);
+            color: var(--success);
+            border: 1px solid var(--success);
         }
 
         .status-badge.offline {
-            background: rgba(255, 51, 51, 0.2);
-            color: var(--p31-danger);
-            border: 1px solid #992222;
+            background: rgba(193, 18, 31, 0.1);
+            color: var(--danger);
+            border: 1px solid var(--danger);
         }
 
         .status-badge.pending {
-            background: rgba(255, 170, 51, 0.2);
-            color: var(--p31-warning);
-            border: 1px solid #996622;
+            background: rgba(224, 123, 0, 0.1);
+            color: var(--warning);
+            border: 1px solid var(--warning);
         }
 
         /* Action Buttons */
         .btn {
-            background: transparent;
-            border: 1px solid var(--p31-green-dim);
-            color: var(--p31-text);
+            background: var(--bg-card);
+            border: 1px solid var(--accent);
+            color: var(--accent);
             padding: 8px 16px;
             cursor: pointer;
             font-family: inherit;
             font-size: 13px;
             transition: all 0.2s;
+            border-radius: 4px;
         }
 
         .btn:hover {
-            background: rgba(51, 255, 51, 0.1);
-            box-shadow: 0 0 10px var(--p31-green-glow);
+            background: var(--accent);
+            color: #ffffff;
+            box-shadow: 0 2px 4px var(--glow);
         }
 
         .btn-danger {
-            border-color: #992222;
-            color: var(--p31-danger);
+            border-color: var(--danger);
+            color: var(--danger);
         }
 
         .btn-danger:hover {
-            background: rgba(255, 51, 51, 0.1);
-            box-shadow: 0 0 10px rgba(255, 51, 51, 0.4);
+            background: var(--danger);
+            color: #ffffff;
+            box-shadow: 0 2px 4px rgba(193, 18, 31, 0.3);
         }
 
         .btn-small {
@@ -241,7 +256,7 @@
         .form-group label {
             display: block;
             margin-bottom: 5px;
-            color: var(--p31-text-dim);
+            color: var(--text-dim);
             font-size: 12px;
             text-transform: uppercase;
         }
@@ -250,18 +265,19 @@
         .form-group select {
             width: 100%;
             padding: 10px;
-            background: var(--p31-bg);
-            border: 1px solid var(--p31-border);
-            color: var(--p31-text);
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            color: var(--text);
             font-family: inherit;
             font-size: 14px;
+            border-radius: 4px;
         }
 
         .form-group input:focus,
         .form-group select:focus {
             outline: none;
-            border-color: var(--p31-green-dim);
-            box-shadow: 0 0 5px var(--p31-green-glow);
+            border-color: var(--accent);
+            box-shadow: 0 0 5px var(--glow);
         }
 
         .form-row {
@@ -277,18 +293,19 @@
             align-items: center;
             margin-bottom: 15px;
             padding-bottom: 10px;
-            border-bottom: 1px solid var(--p31-border);
+            border-bottom: 1px solid var(--border);
         }
 
         .section-header h2 {
             font-size: 16px;
-            color: var(--p31-text);
+            color: var(--text);
         }
 
         /* Mesh Visualization Placeholder */
         .mesh-container {
-            background: var(--p31-bg-light);
-            border: 1px solid var(--p31-border);
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
             height: 400px;
             display: flex;
             align-items: center;
@@ -298,7 +315,7 @@
         }
 
         .mesh-placeholder {
-            color: var(--p31-text-dim);
+            color: var(--text-dim);
             font-size: 14px;
         }
 
@@ -309,22 +326,23 @@
 
         /* Threat List */
         .threat-item {
-            background: var(--p31-bg-light);
-            border: 1px solid var(--p31-border);
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
             padding: 15px;
             margin-bottom: 10px;
         }
 
         .threat-item.high {
-            border-left: 3px solid var(--p31-danger);
+            border-left: 3px solid var(--danger);
         }
 
         .threat-item.medium {
-            border-left: 3px solid var(--p31-warning);
+            border-left: 3px solid var(--warning);
         }
 
         .threat-item.low {
-            border-left: 3px solid var(--p31-green-dim);
+            border-left: 3px solid var(--success);
         }
 
         .threat-header {
@@ -336,6 +354,7 @@
 
         .threat-type {
             font-weight: bold;
+            color: var(--text);
         }
 
         .threat-severity {
@@ -345,14 +364,14 @@
 
         .threat-details {
             font-size: 13px;
-            color: var(--p31-text-dim);
+            color: var(--text-dim);
         }
 
         /* Loading State */
         .loading {
             text-align: center;
             padding: 40px;
-            color: var(--p31-text-dim);
+            color: var(--text-muted);
         }
 
         .loading::after {
@@ -374,7 +393,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.8);
+            background: rgba(0, 0, 0, 0.5);
             z-index: 1000;
             align-items: center;
             justify-content: center;
@@ -385,12 +404,13 @@
         }
 
         .modal {
-            background: var(--p31-bg);
-            border: 1px solid var(--p31-green-dim);
+            background: var(--bg-card);
+            border: 1px solid var(--accent);
+            border-radius: 8px;
             padding: 20px;
             min-width: 400px;
             max-width: 90%;
-            box-shadow: 0 0 20px var(--p31-green-glow);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
         }
 
         .modal-header {
@@ -399,23 +419,24 @@
             align-items: center;
             margin-bottom: 20px;
             padding-bottom: 10px;
-            border-bottom: 1px solid var(--p31-border);
+            border-bottom: 1px solid var(--border);
         }
 
         .modal-header h3 {
             font-size: 16px;
+            color: var(--text);
         }
 
         .modal-close {
             background: none;
             border: none;
-            color: var(--p31-text-dim);
+            color: var(--text-muted);
             font-size: 20px;
             cursor: pointer;
         }
 
         .modal-close:hover {
-            color: var(--p31-text);
+            color: var(--text);
         }
 
         .modal-footer {
@@ -812,12 +833,18 @@
             canvas.width = canvas.parentElement.clientWidth;
             canvas.height = canvas.parentElement.clientHeight;
 
+            // Light theme colors
+            const bgColor = '#f1f8f2';
+            const nodeColor = '#006622';
+            const lineColor = '#a7c4a0';
+            const textColor = '#1b4332';
+
             // Draw placeholder mesh
-            ctx.fillStyle = '#0a0a0a';
+            ctx.fillStyle = bgColor;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            ctx.strokeStyle = '#1a3a1a';
-            ctx.fillStyle = '#33ff33';
+            ctx.strokeStyle = lineColor;
+            ctx.fillStyle = nodeColor;
             ctx.font = '14px Courier New';
             ctx.textAlign = 'center';
 
@@ -825,7 +852,7 @@
             const centerX = canvas.width / 2;
             const centerY = canvas.height / 2;
 
-            drawNode(ctx, centerX, centerY, 'LOCAL', true);
+            drawNode(ctx, centerX, centerY, 'LOCAL', true, nodeColor, textColor);
 
             // Placeholder peer nodes
             const peers = [
@@ -836,32 +863,32 @@
             ];
 
             peers.forEach(peer => {
-                drawConnection(ctx, centerX, centerY, peer.x, peer.y);
-                drawNode(ctx, peer.x, peer.y, peer.name, false);
+                drawConnection(ctx, centerX, centerY, peer.x, peer.y, lineColor);
+                drawNode(ctx, peer.x, peer.y, peer.name, false, nodeColor, textColor);
             });
         }
 
-        function drawNode(ctx, x, y, label, isCenter) {
+        function drawNode(ctx, x, y, label, isCenter, nodeColor, textColor) {
             ctx.beginPath();
             ctx.arc(x, y, isCenter ? 25 : 15, 0, Math.PI * 2);
-            ctx.strokeStyle = '#33ff33';
+            ctx.strokeStyle = nodeColor;
             ctx.lineWidth = isCenter ? 2 : 1;
             ctx.stroke();
 
             if (isCenter) {
-                ctx.fillStyle = 'rgba(51, 255, 51, 0.2)';
+                ctx.fillStyle = 'rgba(0, 102, 34, 0.15)';
                 ctx.fill();
             }
 
-            ctx.fillStyle = '#33ff33';
+            ctx.fillStyle = textColor;
             ctx.fillText(label, x, y + (isCenter ? 40 : 30));
         }
 
-        function drawConnection(ctx, x1, y1, x2, y2) {
+        function drawConnection(ctx, x1, y1, x2, y2, lineColor) {
             ctx.beginPath();
             ctx.moveTo(x1, y1);
             ctx.lineTo(x2, y2);
-            ctx.strokeStyle = '#1a3a1a';
+            ctx.strokeStyle = lineColor;
             ctx.lineWidth = 1;
             ctx.stroke();
         }
