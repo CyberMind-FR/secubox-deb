@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SecuBox Control Center</title>
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
         :root {
             /* P31 Phosphor spectrum */
@@ -46,25 +48,6 @@
             display: flex;
             min-height: 100vh;
         }
-
-        /* Sidebar */
-        .sidebar { width: 220px; background: var(--bg-sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; position: fixed; height: 100vh; overflow-y: auto; }
-        .sidebar-header { padding: 1rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 0.5rem; }
-        .logo { font-weight: bold; font-size: 1.2rem; }
-        .logo span:nth-child(1) { color: var(--cyan); }
-        .logo span:nth-child(2) { color: var(--red); }
-        .logo span:nth-child(3) { color: var(--green); }
-        .logo span:nth-child(4) { color: var(--yellow); }
-        .nav-section { padding: 0.5rem 0; }
-        .nav-section-title { padding: 0.5rem 1rem; font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
-        .nav-section-title:hover { color: var(--text); }
-        .nav-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 1rem; color: var(--text-dim); text-decoration: none; font-size: 0.9rem; border-left: 3px solid transparent; transition: all 0.2s; }
-        .nav-item:hover { background: rgba(255,255,255,0.05); color: var(--text); }
-        .nav-item.active { background: rgba(88,166,255,0.1); color: var(--primary); border-left-color: var(--primary); }
-        .nav-item .icon { width: 20px; text-align: center; }
-        .nav-item .arrow { margin-left: auto; font-size: 0.7rem; }
-        .status-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--red); margin-left: auto; }
-        .status-dot.active { background: var(--green); box-shadow: 0 0 6px var(--green); }
 
         /* Main content */
         .main { flex: 1; margin-left: 220px; }
@@ -329,17 +312,8 @@
         }
     </style>
 </head>
-<body class="crt-body crt-scanlines crt-body crt-scanlines">
-    <nav class="sidebar" id="sidebar">
-        <div class="sidebar-header">
-            <div class="logo"><span>S</span><span>E</span><span>C</span><span>U</span>BOX</div>
-        </div>
-        <div id="nav-menu">
-            <div class="nav-section">
-                <div class="nav-section-title">Loading...</div>
-            </div>
-        </div>
-    </nav>
+<body class="crt-light">
+    <nav class="sidebar" id="sidebar"></nav>
 
     <main class="main">
         <header class="header">
@@ -505,36 +479,15 @@
             return (b / Math.pow(k, i)).toFixed(1) + ' ' + s[i];
         }
 
-        // ── Dynamic Menu ────────────────────────────────────────────
+        // ── Dynamic Menu (handled by sidebar.js) ────────────────────
         async function loadMenu() {
             try {
                 const data = await api('/menu');
                 if (!data || !data.categories) return;
-
                 menuData = data;
-                const container = document.getElementById('nav-menu');
-                const currentPath = window.location.pathname;
-
-                container.innerHTML = data.categories.map(cat => `
-                    <div class="nav-section">
-                        <div class="nav-section-title">${cat.icon} ${cat.name.toUpperCase()} <span>▼</span></div>
-                        ${cat.items.map(item => {
-                            const isActive = currentPath === item.path ||
-                                (item.path !== '/' && currentPath.startsWith(item.path));
-                            const statusDot = item.active
-                                ? '<span class="status-dot active"></span>'
-                                : '<span class="status-dot"></span>';
-                            return `<a href="${item.path}" class="nav-item${isActive ? ' active' : ''}">
-                                <span class="icon">${item.icon}</span> ${item.name} ${statusDot}
-                            </a>`;
-                        }).join('')}
-                    </div>
-                `).join('');
-
                 // Update header badge
                 document.getElementById('status-badge').textContent =
                     `${data.total_active}/${data.total_installed} Active`;
-
             } catch (e) {
                 console.error('Failed to load menu:', e);
             }
@@ -644,6 +597,7 @@
         refresh();
         setInterval(refresh, 30000);
     </script>
+    <script src="/shared/sidebar.js"></script>
     <script src="/shared/crt-engine.js"></script>
 </body>
 </html>
