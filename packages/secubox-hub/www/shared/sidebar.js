@@ -80,6 +80,7 @@
     function updateInlineThemeVars(theme) {
         const root = document.documentElement;
         if (theme === 'light') {
+            // Light theme - mint green palette
             root.style.setProperty('--tube-light', '#e8f5e9');
             root.style.setProperty('--tube-pale', '#c8e6c9');
             root.style.setProperty('--tube-soft', '#a5d6a7');
@@ -87,24 +88,55 @@
             root.style.setProperty('--tube-dark', '#1b3d1c');
             root.style.setProperty('--tube-black', '#e8f5e9');
             root.style.setProperty('--tube-deep', '#c8e6c9');
+            root.style.setProperty('--tube-bezel', '#a5d6a7');
+            root.style.setProperty('--tube-muted', '#81c784');
             root.style.setProperty('--p31-peak', '#00dd44');
             root.style.setProperty('--p31-hot', '#00ff55');
             root.style.setProperty('--p31-mid', '#009933');
             root.style.setProperty('--p31-dim', '#006622');
             root.style.setProperty('--p31-ghost', '#003311');
+            root.style.setProperty('--p31-decay', '#cc7722');
+            root.style.setProperty('--p31-decay-dim', '#996611');
+            root.style.setProperty('--accent', '#00dd44');
+            // Legacy mappings
+            root.style.setProperty('--bg-dark', '#e8f5e9');
+            root.style.setProperty('--bg-card', '#c8e6c9');
+            root.style.setProperty('--bg-sidebar', '#e8f5e9');
+            root.style.setProperty('--border', '#a5d6a7');
+            root.style.setProperty('--text', '#1b3d1c');
+            root.style.setProperty('--text-dim', '#006622');
+            root.style.setProperty('--primary', '#00dd44');
+            root.style.setProperty('--cyan', '#00dd44');
+            root.style.setProperty('--green', '#00dd44');
         } else {
-            root.style.setProperty('--tube-light', '#080d05');
-            root.style.setProperty('--tube-pale', '#080d05');
-            root.style.setProperty('--tube-soft', '#052210');
-            root.style.setProperty('--tube-mist', '#0f8822');
-            root.style.setProperty('--tube-dark', '#22cc44');
-            root.style.setProperty('--tube-black', '#050803');
-            root.style.setProperty('--tube-deep', '#080d05');
+            // Dark theme - blue-tinted palette (matching crt-system.css)
+            root.style.setProperty('--tube-light', '#0a0e14');
+            root.style.setProperty('--tube-pale', '#1a1f2e');
+            root.style.setProperty('--tube-soft', '#252a3a');
+            root.style.setProperty('--tube-mist', '#3a4050');
+            root.style.setProperty('--tube-dark', '#66ffaa');
+            root.style.setProperty('--tube-black', '#0a0e14');
+            root.style.setProperty('--tube-deep', '#1a1f2e');
+            root.style.setProperty('--tube-bezel', '#252a3a');
+            root.style.setProperty('--tube-muted', '#3a4050');
             root.style.setProperty('--p31-peak', '#33ff66');
             root.style.setProperty('--p31-hot', '#66ffaa');
             root.style.setProperty('--p31-mid', '#22cc44');
             root.style.setProperty('--p31-dim', '#0f8822');
-            root.style.setProperty('--p31-ghost', '#052210');
+            root.style.setProperty('--p31-ghost', '#0a4420');
+            root.style.setProperty('--p31-decay', '#ffb347');
+            root.style.setProperty('--p31-decay-dim', '#cc7722');
+            root.style.setProperty('--accent', '#00ff88');
+            // Legacy mappings
+            root.style.setProperty('--bg-dark', '#0a0e14');
+            root.style.setProperty('--bg-card', '#1a1f2e');
+            root.style.setProperty('--bg-sidebar', '#0a0e14');
+            root.style.setProperty('--border', '#252a3a');
+            root.style.setProperty('--text', '#66ffaa');
+            root.style.setProperty('--text-dim', '#22cc44');
+            root.style.setProperty('--primary', '#33ff66');
+            root.style.setProperty('--cyan', '#33ff66');
+            root.style.setProperty('--green', '#33ff66');
         }
     }
 
