@@ -1,3 +1,12 @@
+secubox-p2p (1.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * sbx-mesh-join v1.4.0: Auto-detect master type (Debian API or OpenWRT CGI)
+  * Support joining OpenWRT masters via /cgi-bin/masterlink/join
+  * Try multiple endpoints: Debian API port 7331, OpenWRT CGI port 80/7331
+  * Better error messages with troubleshooting hints
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Mar 2026 20:00:00 +0100
+
 secubox-p2p (1.3.0-1~bookworm1) bookworm; urgency=medium
 
   * Simplified invite flow: POST /master-link/invite generates shareable URL
