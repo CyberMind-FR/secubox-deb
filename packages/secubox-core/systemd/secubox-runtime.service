@@ -1,0 +1,15 @@
+[Unit]
+Description=SecuBox Runtime Directory Setup
+DefaultDependencies=no
+Before=secubox-hub.service secubox-portal.service secubox-p2p.service
+After=local-fs.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/mkdir -p /run/secubox
+ExecStart=/bin/chown secubox:secubox /run/secubox
+ExecStart=/bin/chmod 775 /run/secubox
+
+[Install]
+WantedBy=multi-user.target
