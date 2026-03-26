@@ -5,13 +5,35 @@
 
 ## ✅ Terminé cette session
 
+### Simplified Invite Flow (v1.3.0) ✅
+- **secubox-p2p v1.3.0** — Simplified mesh join workflow
+  - `POST /master-link/invite` — Generate shareable invite with URLs + CLI commands
+  - `GET /master-link/join-script?token=xxx` — Returns executable shell script
+  - Copy-paste friendly ASCII box output for invites
+  - One-liner join: `wget -qO- '<url>' | sh`
+- **sbx-mesh-join CLI tool** — `/usr/bin/sbx-mesh-join`
+  - Works on OpenWRT (wget, uci, br-lan) and Debian (curl)
+  - Accepts URL or IP+token arguments
+  - Auto-detects system type and configures accordingly
+- **Commits pushed**:
+  - `aa8493a Add simplified invite flow and OpenWRT join script (v1.3.0)`
+  - `066ed94 Add OpenWRT Master-Link client implementation guide`
+
+### OpenWRT Documentation ✅
+- **docs/OPENWRT-MASTERLINK.md** — Complete implementation guide (487 lines)
+  - RPCD backend script (luci.masterlink)
+  - LuCI JavaScript view for join/leave UI
+  - UCI config template
+  - OpenWRT package Makefile
+  - ACL permissions file
+  - Testing commands and directory structure
+
 ### P2P Hub Light Theme ✅
 - **secubox-p2p www/p2p/index.html** — Full P31 Phosphor light theme applied
   - Updated CSS root variables from dark (#0a0a0a, #33ff33) to light palette (#e8f5e9, #006622)
   - Fixed all components: buttons, forms, tables, modals, status cards, status badges
   - Updated mesh visualization canvas colors to light theme
   - Added border-radius and improved shadows for modern look
-  - Consistent with master-link page and other SecuBox modules
 - **Commit pushed** — `91d6550 Apply P31 Phosphor light theme to P2P Hub page`
 
 ### VM Testing ✅
