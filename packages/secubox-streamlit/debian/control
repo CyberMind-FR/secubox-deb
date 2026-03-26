@@ -7,8 +7,8 @@ Standards-Version: 4.6.2
 
 Package: secubox-streamlit
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn, python3-psutil
-Recommends: streamlit, lxc
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn, python3-psutil, lxc, debootstrap
+Recommends: streamlit
 Description: SecuBox Streamlit Platform
  Plateforme d'applications Streamlit avec support LXC.
  Port Debian bookworm de luci-app-streamlit (SecuBox OpenWrt).

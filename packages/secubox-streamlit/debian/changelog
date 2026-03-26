@@ -1,3 +1,16 @@
+secubox-streamlit (1.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * streamlitctl v1.0.0: Full Debian LXC installation support
+  * Commands: install, start, stop, restart, status, destroy, logs, shell
+  * App management: app create, app list
+  * Debian bookworm LXC with Python 3.11, Streamlit, pandas, numpy, plotly
+  * Persistent apps directory at /srv/streamlit/apps
+  * Default welcome app with SecuBox branding
+  * Memory limit: 1GB per container
+  * Three-fold commands: components, access (JSON output)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Mar 2026 16:00:00 +0100
+
 secubox-streamlit (1.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Add streamlitctl three-fold commands: components, access (JSON output)
