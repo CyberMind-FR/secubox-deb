@@ -5,6 +5,16 @@
 
 ## ✅ Terminé cette session
 
+### Multi-Master Support (v1.4.0) ✅
+- **sbx-mesh-join v1.4.0** — Auto-detect master type
+  - `detect_master_type()` — Probe endpoints to identify master type
+  - Debian API support: `/api/v1/p2p/master-link/join` (port 7331)
+  - OpenWRT CGI support: `/cgi-bin/masterlink/join` (port 80 or 7331)
+  - Fallback: Try all methods when master type unknown
+  - Save `master_type` in local config for future reference
+  - Better troubleshooting hints for both master types
+- **Commit pushed**: `aadbe17 sbx-mesh-join v1.4.0: Auto-detect master type`
+
 ### Simplified Invite Flow (v1.3.0) ✅
 - **secubox-p2p v1.3.0** — Simplified mesh join workflow
   - `POST /master-link/invite` — Generate shareable invite with URLs + CLI commands
