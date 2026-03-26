@@ -280,11 +280,22 @@
             const currentPath = window.location.pathname;
             const user = getCurrentUser();
 
-            const menuHTML = data.categories.map(cat => `
-                <div class="nav-section">
+            const menuHTML = data.categories.map(cat => {
+                // Check if this category has an active item
+                const hasActiveItem = cat.items.some(item =>
+                    currentPath === item.path ||
+                    (item.path !== '/' && currentPath.startsWith(item.path))
+                );
+                // Collapse all categories except the one with active item
+                const isCollapsed = !hasActiveItem;
+                const collapsedClass = isCollapsed ? ' collapsed' : '';
+                const toggleIcon = isCollapsed ? '▶' : '▼';
+
+                return `
+                <div class="nav-section${collapsedClass}">
                     <div class="nav-section-title" onclick="this.closest('.nav-section').classList.toggle('collapsed'); this.querySelector('.toggle-icon').textContent = this.closest('.nav-section').classList.contains('collapsed') ? '▶' : '▼';">
                         <span>${cat.icon} ${cat.name.toUpperCase()}</span>
-                        <span class="toggle-icon">▼</span>
+                        <span class="toggle-icon">${toggleIcon}</span>
                     </div>
                     <div class="nav-items">
                         ${cat.items.map(item => {
@@ -298,8 +309,8 @@
                             </a>`;
                         }).join('')}
                     </div>
-                </div>
-            `).join('');
+                </div>`;
+            }).join('');
 
             sidebar.innerHTML = `
                 <div class="sidebar-header">
@@ -336,7 +347,10 @@
 
         } catch (e) {
             console.error('Failed to load menu:', e);
-            // Fallback minimal menu
+            // Fallback minimal menu - collapse sections without active items
+            const currentPath = window.location.pathname;
+            const dashboardActive = currentPath === '/' || currentPath.startsWith('/system');
+            const securityActive = currentPath.startsWith('/crowdsec') || currentPath.startsWith('/wireguard');
             sidebar.innerHTML = `
                 <div class="sidebar-header">
                     <a href="/">
@@ -348,33 +362,33 @@
                     </a>
                 </div>
                 <div class="sidebar-nav">
-                    <div class="nav-section">
-                        <div class="nav-section-title">
+                    <div class="nav-section${dashboardActive ? '' : ' collapsed'}">
+                        <div class="nav-section-title" onclick="this.closest('.nav-section').classList.toggle('collapsed'); this.querySelector('.toggle-icon').textContent = this.closest('.nav-section').classList.contains('collapsed') ? '▶' : '▼';">
                             <span>📊 DASHBOARD</span>
-                            <span class="toggle-icon">▼</span>
+                            <span class="toggle-icon">${dashboardActive ? '▼' : '▶'}</span>
                         </div>
                         <div class="nav-items">
-                            <a href="/" class="nav-item">
+                            <a href="/" class="nav-item${currentPath === '/' ? ' active' : ''}">
                                 <span class="icon">🏠</span>
                                 <span>Dashboard</span>
                             </a>
-                            <a href="/system/" class="nav-item">
+                            <a href="/system/" class="nav-item${currentPath.startsWith('/system') ? ' active' : ''}">
                                 <span class="icon">⚙️</span>
                                 <span>System</span>
                             </a>
                         </div>
                     </div>
-                    <div class="nav-section">
-                        <div class="nav-section-title">
+                    <div class="nav-section${securityActive ? '' : ' collapsed'}">
+                        <div class="nav-section-title" onclick="this.closest('.nav-section').classList.toggle('collapsed'); this.querySelector('.toggle-icon').textContent = this.closest('.nav-section').classList.contains('collapsed') ? '▶' : '▼';">
                             <span>🛡️ SECURITY</span>
-                            <span class="toggle-icon">▼</span>
+                            <span class="toggle-icon">${securityActive ? '▼' : '▶'}</span>
                         </div>
                         <div class="nav-items">
-                            <a href="/crowdsec/" class="nav-item">
+                            <a href="/crowdsec/" class="nav-item${currentPath.startsWith('/crowdsec') ? ' active' : ''}">
                                 <span class="icon">🛡️</span>
                                 <span>CrowdSec</span>
                             </a>
-                            <a href="/wireguard/" class="nav-item">
+                            <a href="/wireguard/" class="nav-item${currentPath.startsWith('/wireguard') ? ' active' : ''}">
                                 <span class="icon">🔐</span>
                                 <span>WireGuard</span>
                             </a>
