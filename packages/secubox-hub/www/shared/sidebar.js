@@ -108,6 +108,10 @@
             root.style.setProperty('--primary', '#00dd44');
             root.style.setProperty('--cyan', '#00dd44');
             root.style.setProperty('--green', '#00dd44');
+            // C3BOX mesh dashboard variables
+            root.style.setProperty('--bg', '#e8f5e9');
+            root.style.setProperty('--fg', '#006622');
+            root.style.setProperty('--dim', '#c8e6c9');
         } else {
             // Dark theme - blue-tinted palette (matching crt-system.css)
             root.style.setProperty('--tube-light', '#0a0e14');
@@ -137,6 +141,10 @@
             root.style.setProperty('--primary', '#33ff66');
             root.style.setProperty('--cyan', '#33ff66');
             root.style.setProperty('--green', '#33ff66');
+            // C3BOX mesh dashboard variables
+            root.style.setProperty('--bg', '#0a0e14');
+            root.style.setProperty('--fg', '#33ff66');
+            root.style.setProperty('--dim', '#1a1f2e');
         }
     }
 
