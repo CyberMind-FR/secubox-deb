@@ -1,3 +1,13 @@
+secubox-p2p (1.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * Simplified invite flow: POST /master-link/invite generates shareable URL
+  * OpenWRT-compatible join script: sbx-mesh-join CLI tool
+  * Dynamic join script endpoint: GET /master-link/join-script?token=xxx
+  * One-liner join: wget -qO- '<url>' | sh (works on OpenWRT and Debian)
+  * Copy-paste friendly invite output with ASCII box formatting
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Mar 2026 19:00:00 +0100
+
 secubox-p2p (1.2.0-1~bookworm1) bookworm; urgency=medium
 
   * Master-Link enrollment system (token-based mesh onboarding)
