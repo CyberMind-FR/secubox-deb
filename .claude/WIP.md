@@ -18,6 +18,23 @@
   - Updated `packages/secubox-core/debian/postinst` to enable the service
 - **Commit pushed**: `ba6b5da Add secubox-runtime.service to ensure /run/secubox exists`
 
+### Master-Link Admin Navbar Integration ✅
+- **Updated `/master-link/admin.html`** with standard SecuBox UI
+  - Added sidebar navbar using shared `sidebar.js`
+  - Changed from dark CRT to P31 Phosphor light theme
+  - Removed back button (navigate via sidebar instead)
+  - Consistent styling with other SecuBox modules
+  - Fixed sidebar element: `<nav class="sidebar" id="sidebar">` (was wrong div)
+- **Commit pushed**: `5834115 Update Master-Link Admin with navbar integration`
+
+### VM Restart & Verification ✅
+- Restarted frozen VirtualBox VM
+- Applied `secubox-runtime.service` fix on VM
+- Verified all **46 sockets** restored in `/run/secubox/`
+- Verified all **46 services** running
+- Verified navbar API: **7 categories**, **45 modules**
+- Tested Master-Link: status, peers, tree, invite-local all working
+
 ### ReDroid (Android in Container) Integration ✅
 - **redroid/redroid-lxc-setup.sh** — Interactive wizard for ReDroid deployment
   - Docker installation, ADB/scrcpy setup
