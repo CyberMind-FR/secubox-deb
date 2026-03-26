@@ -1,3 +1,16 @@
+secubox-roadmap (1.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Add full OpenWRT vs Debian comparison (103 vs 52 modules)
+  * Track all 103 OpenWRT luci-app modules
+  * Show pending modules (68 remaining)
+  * Add 14 Debian-only modules list
+  * Add platform comparison section
+  * Add summary statistics dashboard
+  * Improved progress tracking by category
+  * Add /comparison API endpoint
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Mar 2026 10:00:00 +0000
+
 secubox-roadmap (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial release
