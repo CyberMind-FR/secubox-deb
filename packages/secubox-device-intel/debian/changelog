@@ -1,3 +1,14 @@
+secubox-device-intel (1.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * Enhanced OpenWRT/LuCI detection with version and model extraction
+  * GL.iNet custom UI detection (gl-ui)
+  * Improved SecuBox detection with specific markers (no false positives)
+  * New endpoint: /probe/openwrt/{ip} for single IP probing
+  * Return model, version, is_gl_inet in probe results
+  * Added gl_inet_devices count to stats
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Mar 2026 14:00:00 +0100
+
 secubox-device-intel (1.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Add OpenWRT/SecuBox device detection
