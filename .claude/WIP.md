@@ -1,9 +1,47 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-03-26 (Session 18)*
+*Mis à jour : 2026-03-26 (Session 19)*
 
 ---
 
 ## ✅ Terminé cette session
+
+### Socket Directory Fix (Permanent) ✅
+- **Issue**: `/run/secubox/` sockets disappearing, causing 502 errors and navbar showing only 2 categories
+- **Root cause**: Directory permissions reset after service restarts
+- **Solution**: Created `secubox-runtime.service` — oneshot service that runs before all secubox services
+  - Creates `/run/secubox` with correct ownership (secubox:secubox)
+  - Sets permissions to 775
+  - Runs after local-fs.target, before hub/portal/p2p services
+- **Files added**:
+  - `packages/secubox-core/systemd/secubox-runtime.service`
+  - Updated `packages/secubox-core/debian/rules` to install the service
+  - Updated `packages/secubox-core/debian/postinst` to enable the service
+- **Commit pushed**: `ba6b5da Add secubox-runtime.service to ensure /run/secubox exists`
+
+### ReDroid (Android in Container) Integration ✅
+- **redroid/redroid-lxc-setup.sh** — Interactive wizard for ReDroid deployment
+  - Docker installation, ADB/scrcpy setup
+  - Automatic architecture detection (ARM64/x86_64)
+  - LXC binder device configuration
+  - Multi-instance support with docker-compose
+  - NDK translation for ARM apps on x86 hosts
+  - Android versions: 9, 10, 11, 12, 13, 15
+- **redroid/proxmox-host-config.sh** — Proxmox host configuration helper
+  - Binder kernel module loading (binder_linux, ashmem_linux)
+  - LXC config snippets for device passthrough
+  - Instructions for MOCHAbin/ESPRESSObin ARM64 and x86_64
+- **VSCode tasks for ReDroid management**:
+  - Setup wizard, auto-setup Android 12
+  - Start/stop/status commands
+  - Screen mirroring (scrcpy), ADB shell
+  - APK installation, live logs
+  - Binder device diagnostics
+  - Multi-instance support (up to 3 instances)
+- **Commit pushed**: `5340ebc Add ReDroid (Android in Container) LXC setup scripts`
+
+---
+
+## ✅ Terminé session précédente (Session 18)
 
 ### Master-Link Admin Dashboard (v1.6.0) ✅
 - **Admin Dashboard** — `/master-link/admin.html`
@@ -705,6 +743,18 @@ curl -sk https://localhost:8443/api/v1/hub/menu | jq '.total_modules'
 ---
 
 ## 🗓️ Historique récent
+
+- **2026-03-26** (Session 19):
+  - Socket directory fix: secubox-runtime.service ensures /run/secubox exists
+  - ReDroid integration: Android in Container LXC setup scripts
+  - VSCode tasks for ReDroid management added
+  - Both commits pushed to GitHub
+
+- **2026-03-26** (Session 18):
+  - Master-Link Admin Dashboard v1.6.0
+  - Localhost-only API endpoints
+  - sbx-mesh-invite CLI tool v1.5.0
+  - Multi-master support v1.4.0
 
 - **2026-03-26** (Session 16):
   - UI theme toggle fixed (light/dark P31 phosphor)
