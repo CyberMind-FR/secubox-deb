@@ -20,7 +20,7 @@ from pydantic import BaseModel
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
 
-app = FastAPI(title="SecuBox Device-Intel", version="1.1.0")
+app = FastAPI(title="SecuBox Device-Intel", version="1.2.0")
 config = get_config("device-intel")
 
 # OUI database path (install via apt: ieee-data)
@@ -225,56 +225,73 @@ async def _probe_luci(ip: str, timeout: float = 2.0) -> dict:
     result = {
         "luci_detected": False,
         "secubox_detected": False,
-        "version": None
+        "version": None,
+        "model": None,
+        "gl_inet": False
     }
 
-    try:
-        # Try HTTP probe for LuCI
+    async def curl_get(url: str, return_body: bool = False) -> tuple[str, str]:
+        """Helper to run curl and return status code and optionally body."""
+        args = ["curl", "-s", "--connect-timeout", str(timeout), "-k"]
+        if not return_body:
+            args.extend(["-o", "/dev/null", "-w", "%{http_code}"])
+        args.append(url)
         proc = await asyncio.create_subprocess_exec(
-            "curl", "-s", "-o", "/dev/null", "-w", "%{http_code}",
-            "--connect-timeout", str(timeout),
-            "-k",  # Allow self-signed certs
-            f"http://{ip}/cgi-bin/luci",
+            *args,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
         stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout + 1)
-        http_code = stdout.decode().strip()
+        return stdout.decode().strip(), stdout.decode() if return_body else ""
 
-        if http_code in ["200", "301", "302", "401", "403"]:
-            result["luci_detected"] = True
+    # Try HTTP probe for LuCI
+    for scheme in ["http", "https"]:
+        if result["luci_detected"]:
+            break
+        try:
+            code, _ = await curl_get(f"{scheme}://{ip}/cgi-bin/luci")
+            if code in ["200", "301", "302", "401", "403"]:
+                result["luci_detected"] = True
 
-            # Check for SecuBox specifically
-            proc2 = await asyncio.create_subprocess_exec(
-                "curl", "-s", "--connect-timeout", str(timeout), "-k",
-                f"http://{ip}/",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            stdout2, _ = await asyncio.wait_for(proc2.communicate(), timeout=timeout + 1)
-            body = stdout2.decode().lower()
+                # Get LuCI page to extract version/model
+                _, body = await curl_get(f"{scheme}://{ip}/cgi-bin/luci", return_body=True)
+                body_lower = body.lower()
 
-            if "secubox" in body:
-                result["secubox_detected"] = True
+                # Extract model from title (e.g., "GL-MT3000 - Dashboard - LuCI")
+                import re
+                model_match = re.search(r'<title>([^<]+)</title>', body, re.IGNORECASE)
+                if model_match:
+                    title = model_match.group(1)
+                    if " - " in title:
+                        result["model"] = title.split(" - ")[0].strip()
 
-    except (asyncio.TimeoutError, Exception):
-        pass
+                # Extract LuCI version
+                ver_match = re.search(r'git-[\d.]+-[a-f0-9]+', body)
+                if ver_match:
+                    result["version"] = ver_match.group(0)
 
-    # Try HTTPS as well
+                # Check for SecuBox - look for specific markers
+                secubox_markers = [
+                    "luci-app-secubox",
+                    "/luci/admin/secubox",
+                    "secubox-dashboard",
+                    "secubox.in"
+                ]
+                for marker in secubox_markers:
+                    if marker in body_lower:
+                        result["secubox_detected"] = True
+                        break
+
+        except (asyncio.TimeoutError, Exception):
+            pass
+
+    # Check for GL.iNet custom UI
     if not result["luci_detected"]:
         try:
-            proc = await asyncio.create_subprocess_exec(
-                "curl", "-s", "-o", "/dev/null", "-w", "%{http_code}",
-                "--connect-timeout", str(timeout),
-                "-k",
-                f"https://{ip}/cgi-bin/luci",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout + 1)
-            http_code = stdout.decode().strip()
-
-            if http_code in ["200", "301", "302", "401", "403"]:
+            _, body = await curl_get(f"http://{ip}/", return_body=True)
+            if "gl-ui" in body.lower() or "gl.inet" in body.lower():
+                result["gl_inet"] = True
+                # GL.iNet routers have LuCI at /cgi-bin/luci
                 result["luci_detected"] = True
         except (asyncio.TimeoutError, Exception):
             pass
@@ -569,6 +586,9 @@ async def probe_openwrt_devices():
                     known_devices[mac] = {"first_seen": datetime.now().isoformat()}
                 known_devices[mac]["is_openwrt"] = True
                 known_devices[mac]["is_secubox"] = probe_result["secubox_detected"]
+                known_devices[mac]["is_gl_inet"] = probe_result.get("gl_inet", False)
+                known_devices[mac]["model"] = probe_result.get("model")
+                known_devices[mac]["luci_version"] = probe_result.get("version")
                 known_devices[mac]["ip"] = ip
                 known_devices[mac]["last_probed"] = datetime.now().isoformat()
 
@@ -576,7 +596,10 @@ async def probe_openwrt_devices():
                 "ip": ip,
                 "mac": mac,
                 "is_openwrt": probe_result["luci_detected"],
-                "is_secubox": probe_result["secubox_detected"]
+                "is_secubox": probe_result["secubox_detected"],
+                "is_gl_inet": probe_result.get("gl_inet", False),
+                "model": probe_result.get("model"),
+                "version": probe_result.get("version")
             }
 
     tasks = [probe_with_semaphore(dev) for dev in arp_devices]
@@ -594,6 +617,45 @@ async def probe_openwrt_devices():
         "openwrt_detected": openwrt_count,
         "secubox_detected": secubox_count,
         "results": results
+    }
+
+
+@app.post("/probe/openwrt/{ip}", dependencies=[Depends(require_jwt)])
+async def probe_single_openwrt(ip: str):
+    """Probe a single IP for OpenWRT/LuCI interface."""
+    probe_result = await _probe_luci(ip, timeout=5.0)
+
+    # Get MAC from ARP if available
+    mac = None
+    for dev in _get_arp_table():
+        if dev["ip"] == ip:
+            mac = dev["mac"]
+            break
+
+    # Check MAC vendor
+    vendor = None
+    is_router = False
+    if mac:
+        mac_prefix = mac[:8].upper()
+        for vendor_name, prefixes in ROUTER_VENDORS.items():
+            if mac_prefix in prefixes:
+                vendor = vendor_name
+                is_router = True
+                break
+        if not vendor:
+            oui_db = _load_oui_db()
+            vendor = _get_vendor(mac, oui_db)
+
+    return {
+        "ip": ip,
+        "mac": mac,
+        "vendor": vendor,
+        "is_router": is_router,
+        "is_openwrt": probe_result["luci_detected"],
+        "is_secubox": probe_result["secubox_detected"],
+        "is_gl_inet": probe_result.get("gl_inet", False),
+        "model": probe_result.get("model"),
+        "version": probe_result.get("version")
     }
 
 
@@ -619,6 +681,9 @@ async def get_openwrt_devices():
                 "vendor": _get_vendor(mac, oui_db),
                 "is_openwrt": info.get("is_openwrt", False),
                 "is_secubox": info.get("is_secubox", False),
+                "is_gl_inet": info.get("is_gl_inet", False),
+                "model": info.get("model"),
+                "luci_version": info.get("luci_version"),
                 "secubox_version": info.get("secubox_version"),
                 "online": bool(arp_info),
                 "last_probed": info.get("last_probed"),
@@ -658,6 +723,7 @@ async def get_stats():
     tagged = sum(1 for d in known_devices.values() if d.get("tags", []))
     openwrt = sum(1 for d in known_devices.values() if d.get("is_openwrt", False))
     secubox = sum(1 for d in known_devices.values() if d.get("is_secubox", False))
+    gl_inet = sum(1 for d in known_devices.values() if d.get("is_gl_inet", False))
 
     return {
         "total_known": len(known_devices),
@@ -665,7 +731,8 @@ async def get_stats():
         "trusted_devices": trusted,
         "tagged_devices": tagged,
         "openwrt_devices": openwrt,
-        "secubox_devices": secubox
+        "secubox_devices": secubox,
+        "gl_inet_devices": gl_inet
     }
 
 
