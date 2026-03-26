@@ -211,6 +211,106 @@
       "group": "build",
       "presentation": { "reveal": "always" },
       "problemMatcher": []
+    },
+
+    // ──────────────────────────────────────────────────────
+    // GROUPE : REDROID (Android in Container)
+    // ──────────────────────────────────────────────────────
+    {
+      "label": "🤖 ReDroid: Setup Wizard (interactif)",
+      "type": "shell",
+      "command": "sudo bash ${workspaceFolder}/redroid/redroid-lxc-setup.sh",
+      "group": { "kind": "build", "isDefault": false },
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "title": "ReDroid LXC Wizard",
+        "echo": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "🤖 ReDroid: Auto-setup Android 12 x64",
+      "type": "shell",
+      "command": "sudo bash ${workspaceFolder}/redroid/redroid-lxc-setup.sh --auto --android-ver 12",
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "title": "ReDroid Auto-Setup"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "▶ ReDroid: Start",
+      "type": "shell",
+      "command": "sudo redroid-ctl start",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared", "title": "ReDroid" },
+      "problemMatcher": []
+    },
+    {
+      "label": "⏹ ReDroid: Stop",
+      "type": "shell",
+      "command": "sudo redroid-ctl stop",
+      "presentation": { "reveal": "always", "panel": "shared", "title": "ReDroid" },
+      "problemMatcher": []
+    },
+    {
+      "label": "📊 ReDroid: Status",
+      "type": "shell",
+      "command": "sudo redroid-ctl status",
+      "presentation": { "reveal": "always", "panel": "shared", "title": "ReDroid Status" },
+      "problemMatcher": []
+    },
+    {
+      "label": "📱 ReDroid: Ouvrir écran (scrcpy inst.0)",
+      "type": "shell",
+      "command": "redroid-ctl screen 0",
+      "presentation": { "reveal": "silent", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "🐚 ReDroid: ADB Shell (inst.0)",
+      "type": "shell",
+      "command": "redroid-ctl shell 0",
+      "presentation": { "reveal": "always", "panel": "new", "title": "ADB Shell" },
+      "problemMatcher": []
+    },
+    {
+      "label": "📦 ReDroid: Installer APK...",
+      "type": "shell",
+      "command": "redroid-ctl install ${input:apkPath} ${input:instanceIdx}",
+      "presentation": { "reveal": "always", "panel": "shared", "title": "APK Install" },
+      "problemMatcher": []
+    },
+    {
+      "label": "📋 ReDroid: Logs live (inst.0)",
+      "type": "shell",
+      "command": "sudo redroid-ctl logs 0",
+      "presentation": { "reveal": "always", "panel": "new", "title": "ReDroid Logs" },
+      "problemMatcher": []
+    },
+    {
+      "label": "🔍 ReDroid: Vérifier binder devices",
+      "type": "shell",
+      "command": "ls -la /dev/binder /dev/hwbinder /dev/vndbinder 2>/dev/null || (ls /dev/binderfs/ 2>/dev/null && echo 'binderfs OK') || echo '⚠ Binder absent — configurer hôte LXC'",
+      "presentation": { "reveal": "always", "panel": "shared", "title": "Diagnostic Binder" },
+      "problemMatcher": []
+    },
+    {
+      "label": "🖥 Proxmox Host: Charger modules binder",
+      "type": "shell",
+      "command": "bash -c 'echo \"=== À exécuter sur l hôte Proxmox ===\"; echo \"apt install linux-modules-extra-$(uname -r)\"; echo \"modprobe binder_linux devices=binder,hwbinder,vndbinder\"; echo \"modprobe ashmem_linux\"'",
+      "presentation": { "reveal": "always", "panel": "shared", "title": "Host Config Help" },
+      "problemMatcher": []
+    },
+    {
+      "label": "🔁 ReDroid: Démarrer 3 instances",
+      "type": "shell",
+      "command": "sudo bash ${workspaceFolder}/redroid/redroid-lxc-setup.sh --auto --instances 3 --port 5555",
+      "presentation": { "reveal": "always", "panel": "new", "title": "ReDroid Multi" },
+      "problemMatcher": []
     }
   ],
 
@@ -264,6 +364,19 @@
       "description": "Port dev (80XX)",
       "options": ["001", "002", "003", "004", "005", "006", "007", "008"],
       "default": "001"
+    },
+    {
+      "id": "apkPath",
+      "type": "promptString",
+      "description": "Chemin complet vers l'APK",
+      "default": "/tmp/app.apk"
+    },
+    {
+      "id": "instanceIdx",
+      "type": "pickString",
+      "description": "Instance ReDroid cible",
+      "options": ["0", "1", "2", "3"],
+      "default": "0"
     }
   ]
 }
