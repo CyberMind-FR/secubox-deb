@@ -234,8 +234,10 @@
 
         @media (max-width: 900px) { .sidebar { display: none; } .main-content { margin-left: 0; } }
     </style>
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
 </head>
-<body>
+<body class="crt-light">
     <nav class="sidebar" id="sidebar"></nav>
 
     <main class="main-content">
@@ -367,7 +369,7 @@
         </div>
     </main>
 
-    <script src="/assets/js/sidebar.js"></script>
+    <script src="/shared/sidebar.js"></script>
     <script>
         const API = '/api/v1/metrics';
         let prevValues = {};
