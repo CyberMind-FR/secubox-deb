@@ -1,7 +1,9 @@
 # MIGRATION MAP — SecuBox OpenWrt → Debian
-*Mis à jour : 2026-03-25*
+*Mis à jour : 2026-03-26*
 
 Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
+
+> **Voir aussi**: [OPENWRT-DEBIAN-COMPARISON.md](../docs/OPENWRT-DEBIAN-COMPARISON.md) pour la comparaison complète des 103 modules OpenWRT vs 52 paquets Debian.
 
 ---
 
@@ -35,7 +37,7 @@ Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 
 ---
 
-## Paquets Debian — 33 modules
+## Paquets Debian — 52 modules (49 UI + 3 backend)
 
 | Module | www/ | API | deb/ | Endpoints | Statut |
 |--------|------|-----|------|-----------|--------|
@@ -159,13 +161,16 @@ bash scripts/build-add-local.sh secubox-crowdsec bookworm
 
 1. ~~Phase 1 : build-image.sh + board configs~~ ✅ Fait
 2. ~~Phase 2 : Infrastructure~~ ✅ Fait
-3. ~~Phase 3 : Modules~~ ✅ Fait
+3. ~~Phase 3 : Core Modules (52/103)~~ ✅ Fait
 4. ~~Phase 4 : APT repo (apt.secubox.in)~~ ✅ Fait
 5. ~~Phase 5 : CSPN Hardening~~ ✅ Fait (partiel)
 6. ~~Phase 6 : CI/CD~~ ✅ Fait
-7. ~~Phase 7 : Documentation~~ ✅ Fait
-8. Tests d'intégration sur VM et hardware réel
-9. Déployer apt.secubox.in sur serveur production
+7. ~~Phase 7 : Documentation + UI Theme~~ ✅ Fait
+8. Phase 8 : Applications (ollama, jellyfin, zigbee...) — 21 modules
+9. Phase 9 : System Tools (vault, cloner, vm...) — 22 modules
+10. Phase 10 : Security Extensions (wazuh, cve...) — 6 modules
+11. Tests d'intégration sur VM et hardware réel
+12. Déployer apt.secubox.in sur serveur production
 
 ---
 
