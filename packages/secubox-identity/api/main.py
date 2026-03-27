@@ -850,13 +850,18 @@ async def receive_federation(federation: TrustFederation):
     return {"status": "accepted"}
 
 
-@app.post("/federation/create", dependencies=[Depends(require_jwt)])
-async def create_federation(for_did: str, score: int = Field(ge=0, le=100), reason: Optional[str] = None):
-    """Create a signed trust federation to share with peers."""
-    if score < 0 or score > 100:
-        raise HTTPException(status_code=400, detail="Score must be 0-100")
+class CreateFederationRequest(BaseModel):
+    for_did: str
+    score: int = Field(ge=0, le=100)
+    reason: Optional[str] = None
 
-    federation = identity_manager.create_trust_federation(for_did, score, reason)
+
+@app.post("/federation/create", dependencies=[Depends(require_jwt)])
+async def create_federation(request: CreateFederationRequest):
+    """Create a signed trust federation to share with peers."""
+    federation = identity_manager.create_trust_federation(
+        request.for_did, request.score, request.reason
+    )
     return federation
 
 
