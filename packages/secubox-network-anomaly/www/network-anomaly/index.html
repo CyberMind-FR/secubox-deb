@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SecuBox - Network-anomaly</title>
     <style>
-        :root { --bg-dark: #0d1117; --bg-card: #161b22; --bg-sidebar: #0d1117; --border: #30363d; --text: #c9d1d9; --text-dim: #8b949e; --primary: #58a6ff; --cyan: #00d4ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; --purple: #a371f7; }
+        :root { --bg-dark: #e8f5e9; --bg-card: #c8e6c9; --bg-sidebar: #e8f5e9; --border: #a5d6a7; --text: #1b3d1c; --text-dim: #006622; --primary: #00dd44; --cyan: #00d4ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; --purple: #a371f7; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: -apple-system, sans-serif; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
+        body { font-family: 'Courier Prime', monospace; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
         .sidebar { width: 220px; background: var(--bg-sidebar); border-right: 1px solid var(--border); position: fixed; height: 100vh; overflow-y: auto; }
         .sidebar-header { padding: 1rem; border-bottom: 1px solid var(--border); }
         .logo { font-weight: bold; font-size: 1.2rem; }
@@ -15,21 +15,23 @@
         .nav-section { padding: 0.5rem 0; }
         .nav-section-title { padding: 0.5rem 1rem; font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
         .nav-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 1rem; color: var(--text-dim); text-decoration: none; font-size: 0.9rem; border-left: 3px solid transparent; }
-        .nav-item:hover { background: rgba(255,255,255,0.05); color: var(--text); }
-        .nav-item.active { background: rgba(88,166,255,0.1); color: var(--primary); border-left-color: var(--primary); }
+        .nav-item:hover { background: rgba(0,221,68,0.05); color: var(--text); }
+        .nav-item.active { background: rgba(0,221,68,0.1); color: var(--primary); border-left-color: var(--primary); }
         .nav-item .icon { width: 20px; text-align: center; }
         .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
         .header h1 { font-size: 1.5rem; }
         .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; }
         .btn:hover { background: var(--bg-dark); }
-        .btn.primary { background: rgba(88,166,255,0.1); border-color: var(--primary); color: var(--primary); }
+        .btn.primary { background: rgba(0,221,68,0.1); border-color: var(--primary); color: var(--primary); }
         .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
         .card h2 { font-size: 1rem; margin-bottom: 1rem; }
         .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
         .stat-card .value { font-size: 2rem; font-weight: bold; color: var(--purple); }
         .stat-card .label { font-size: 0.75rem; color: var(--text-dim); }
     </style>
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
 </head>
 <body>
     <nav class="sidebar" id="sidebar"></nav>
