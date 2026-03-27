@@ -122,7 +122,7 @@ body::before {
 </div>
 
 <script>
-var API = '/api/v1/portal';
+var API = '/api/v1/hub/auth';
 
 function showMsg(text, type) {
   var msg = document.getElementById('msg');
@@ -139,7 +139,7 @@ function handleLogin(e) {
   btn.classList.add('loading');
   btn.textContent = 'Authenticating...';
 
-  fetch(API + '/login', {
+  fetch(API + '/auth/login', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({username: username, password: password}),
@@ -150,18 +150,18 @@ function handleLogin(e) {
     return r.json();
   })
   .then(function(data) {
-    if (data.success) {
+    if (data.access_token) {
       // Store JWT token for API authentication
-      localStorage.setItem('sbx_token', data.token);
-      localStorage.setItem('secubox_token', data.token);
-      localStorage.setItem('secubox_user', data.username);
-      localStorage.setItem('secubox_role', data.role);
+      localStorage.setItem('sbx_token', data.access_token);
+      localStorage.setItem('secubox_token', data.access_token);
+      localStorage.setItem('secubox_user', username);
+      localStorage.setItem('secubox_role', 'admin');
       showMsg('Login successful!', 'success');
       setTimeout(function() {
         window.location.href = '/';
       }, 500);
     } else {
-      throw new Error(data.error || 'Login failed');
+      throw new Error(data.detail || 'Login failed');
     }
   })
   .catch(function(err) {
@@ -174,14 +174,16 @@ function handleLogin(e) {
 }
 
 // Check if already authenticated
-fetch(API + '/verify', {credentials: 'include'})
-  .then(function(r) { return r.json(); })
-  .then(function(data) {
-    if (data.valid) {
-      window.location.href = '/';
-    }
+var token = localStorage.getItem('sbx_token');
+if (token) {
+  fetch('/api/v1/hub/status', {
+    headers: {'Authorization': 'Bearer ' + token}
+  })
+  .then(function(r) {
+    if (r.ok) window.location.href = '/';
   })
   .catch(function() {});
+}
 </script>
 </body>
 </html>
