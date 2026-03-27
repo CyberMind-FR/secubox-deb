@@ -6,6 +6,9 @@ Features:
 - Peer approval workflow
 - Depth-limited mesh hierarchy (gigogne)
 - ZKP challenge-response authentication
+- Peer heartbeat and health monitoring
+- WireGuard mesh integration
+- Bulk peer operations
 """
 import os
 import json
@@ -14,12 +17,13 @@ import hashlib
 import secrets
 import subprocess
 import logging
+import asyncio
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional, Dict, List, Any
 from enum import Enum
 
-from fastapi import FastAPI, Depends, HTTPException, Request
+from fastapi import FastAPI, Depends, HTTPException, Request, BackgroundTasks
 from pydantic import BaseModel, Field
 import httpx
 
@@ -32,6 +36,11 @@ DATA_DIR = Path("/var/lib/secubox/master-link")
 TOKENS_FILE = DATA_DIR / "tokens.json"
 PEERS_FILE = DATA_DIR / "peers.json"
 BLOCKCHAIN_FILE = DATA_DIR / "blockchain.jsonl"
+HEARTBEAT_FILE = DATA_DIR / "heartbeats.json"
+
+# Heartbeat settings
+HEARTBEAT_INTERVAL = 60  # seconds
+HEARTBEAT_TIMEOUT = 180  # seconds - peer considered offline after this
 
 app = FastAPI(title="SecuBox Master-Link", version="1.0.0")
 logger = logging.getLogger("secubox.master-link")
@@ -83,7 +92,12 @@ class Peer(BaseModel):
     approved_at: Optional[str] = None
     approved_by: Optional[str] = None
     last_seen: Optional[str] = None
+    last_heartbeat: Optional[str] = None
+    online: bool = False
     capabilities: List[str] = []
+    wireguard_pubkey: Optional[str] = None
+    wireguard_endpoint: Optional[str] = None
+    metadata: Dict[str, Any] = {}
 
 
 class JoinRequest(BaseModel):
@@ -402,6 +416,141 @@ class MasterLinkManager:
 
         return len(expired)
 
+    def record_heartbeat(self, peer_id: str, ip_address: Optional[str] = None) -> bool:
+        """Record heartbeat from peer."""
+        peer = self.peers.get(peer_id)
+        if not peer:
+            return False
+
+        now = datetime.utcnow().isoformat() + "Z"
+        peer.last_heartbeat = now
+        peer.last_seen = now
+        peer.online = True
+
+        if ip_address and ip_address != peer.ip_address:
+            peer.ip_address = ip_address
+
+        self._save_peers()
+        return True
+
+    def update_online_status(self):
+        """Update online status based on heartbeat timeout."""
+        now = datetime.utcnow()
+        updated = 0
+
+        for peer in self.peers.values():
+            if peer.last_heartbeat:
+                last_hb = datetime.fromisoformat(peer.last_heartbeat.rstrip("Z"))
+                was_online = peer.online
+                peer.online = (now - last_hb).total_seconds() < HEARTBEAT_TIMEOUT
+
+                if was_online != peer.online:
+                    updated += 1
+
+        if updated > 0:
+            self._save_peers()
+
+        return updated
+
+    def delete_peer(self, peer_id: str) -> bool:
+        """Delete a peer permanently."""
+        if peer_id not in self.peers:
+            return False
+
+        peer = self.peers[peer_id]
+        del self.peers[peer_id]
+        self._save_peers()
+
+        self._record_block("peer_deleted", {
+            "peer_id": peer_id,
+            "hostname": peer.hostname
+        })
+
+        return True
+
+    def bulk_delete_peers(self, status: Optional[PeerStatus] = None,
+                          offline_days: Optional[int] = None) -> int:
+        """Delete multiple peers by criteria."""
+        now = datetime.utcnow()
+        to_delete = []
+
+        for peer_id, peer in self.peers.items():
+            if status and peer.status != status:
+                continue
+
+            if offline_days and peer.last_seen:
+                last_seen = datetime.fromisoformat(peer.last_seen.rstrip("Z"))
+                if (now - last_seen).days < offline_days:
+                    continue
+            elif offline_days and not peer.last_seen:
+                # Never seen, include if filtering by offline
+                pass
+            elif offline_days:
+                continue
+
+            to_delete.append(peer_id)
+
+        for peer_id in to_delete:
+            del self.peers[peer_id]
+
+        if to_delete:
+            self._save_peers()
+            self._record_block("bulk_delete", {
+                "count": len(to_delete),
+                "criteria": {"status": status.value if status else None, "offline_days": offline_days}
+            })
+
+        return len(to_delete)
+
+    def set_wireguard_config(self, peer_id: str, pubkey: str, endpoint: Optional[str] = None) -> bool:
+        """Set WireGuard configuration for a peer."""
+        peer = self.peers.get(peer_id)
+        if not peer:
+            return False
+
+        peer.wireguard_pubkey = pubkey
+        if endpoint:
+            peer.wireguard_endpoint = endpoint
+
+        self._save_peers()
+        return True
+
+    def get_wireguard_peers(self) -> List[Dict[str, Any]]:
+        """Get WireGuard peer configuration for mesh."""
+        wg_peers = []
+        for peer in self.peers.values():
+            if peer.status == PeerStatus.APPROVED and peer.wireguard_pubkey:
+                wg_peers.append({
+                    "public_key": peer.wireguard_pubkey,
+                    "endpoint": peer.wireguard_endpoint or f"{peer.ip_address}:51820",
+                    "allowed_ips": f"10.100.0.{hash(peer.id) % 254 + 1}/32",
+                    "persistent_keepalive": 25
+                })
+        return wg_peers
+
+    def get_mesh_stats(self) -> Dict[str, Any]:
+        """Get mesh statistics."""
+        total = len(self.peers)
+        by_status = {s.value: 0 for s in PeerStatus}
+        online = 0
+        with_wg = 0
+
+        for peer in self.peers.values():
+            by_status[peer.status.value] += 1
+            if peer.online:
+                online += 1
+            if peer.wireguard_pubkey:
+                with_wg += 1
+
+        return {
+            "total_peers": total,
+            "by_status": by_status,
+            "online": online,
+            "offline": total - online,
+            "with_wireguard": with_wg,
+            "active_tokens": len(self.tokens)
+        }
+
 
 # Global instance
 manager = MasterLinkManager(DATA_DIR)
@@ -604,6 +753,91 @@ async def invite_local(request: Request, auto_approve: bool = True, ttl: int = 6
     }
 
 
+# Heartbeat endpoints
+@app.post("/heartbeat/{peer_id}")
+async def peer_heartbeat(peer_id: str, request: Request):
+    """Record heartbeat from a peer (public endpoint)."""
+    ip_address = request.client.host
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        ip_address = forwarded.split(",")[0].strip()
+
+    if manager.record_heartbeat(peer_id, ip_address):
+        return {"status": "ok", "peer_id": peer_id}
+    raise HTTPException(status_code=404, detail="Peer not found")
+
+
+@app.get("/stats", dependencies=[Depends(require_jwt)])
+async def get_mesh_stats():
+    """Get mesh statistics."""
+    manager.update_online_status()
+    return manager.get_mesh_stats()
+
+
+@app.delete("/peers/{peer_id}", dependencies=[Depends(require_jwt)])
+async def delete_peer(peer_id: str):
+    """Delete a peer permanently."""
+    if manager.delete_peer(peer_id):
+        return {"status": "deleted", "peer_id": peer_id}
+    raise HTTPException(status_code=404, detail="Peer not found")
+
+
+class BulkDeleteRequest(BaseModel):
+    status: Optional[str] = None
+    offline_days: Optional[int] = None
+
+
+@app.post("/peers/bulk-delete", dependencies=[Depends(require_jwt)])
+async def bulk_delete_peers(request: BulkDeleteRequest):
+    """Bulk delete peers by criteria."""
+    status = PeerStatus(request.status) if request.status else None
+    count = manager.bulk_delete_peers(status, request.offline_days)
+    return {"deleted": count}
+
+
+class WireGuardConfigRequest(BaseModel):
+    pubkey: str
+    endpoint: Optional[str] = None
+
+
+@app.put("/peers/{peer_id}/wireguard", dependencies=[Depends(require_jwt)])
+async def set_peer_wireguard(peer_id: str, config: WireGuardConfigRequest):
+    """Set WireGuard configuration for a peer."""
+    if manager.set_wireguard_config(peer_id, config.pubkey, config.endpoint):
+        return {"status": "updated", "peer_id": peer_id}
+    raise HTTPException(status_code=404, detail="Peer not found")
+
+
+@app.get("/wireguard/peers", dependencies=[Depends(require_jwt)])
+async def get_wireguard_peers():
+    """Get WireGuard peer configurations for mesh."""
+    return {"peers": manager.get_wireguard_peers()}
+
+
+@app.get("/wireguard/config", dependencies=[Depends(require_jwt)])
+async def get_wireguard_config():
+    """Generate WireGuard config snippet for mesh peers."""
+    peers = manager.get_wireguard_peers()
+    config_lines = ["# SecuBox Mesh WireGuard Peers", "# Auto-generated by Master-Link", ""]
+
+    for peer in peers:
+        config_lines.append(f"[Peer]")
+        config_lines.append(f"PublicKey = {peer['public_key']}")
+        config_lines.append(f"Endpoint = {peer['endpoint']}")
+        config_lines.append(f"AllowedIPs = {peer['allowed_ips']}")
+        config_lines.append(f"PersistentKeepalive = {peer['persistent_keepalive']}")
+        config_lines.append("")
+
+    return {"config": "\n".join(config_lines), "peer_count": len(peers)}
+
+
+@app.post("/update-online-status", dependencies=[Depends(require_jwt)])
+async def update_online_status():
+    """Manually trigger online status update."""
+    updated = manager.update_online_status()
+    return {"updated": updated}
+
+
 # ============================================================================
 # Startup
 # ============================================================================
@@ -613,4 +847,5 @@ async def startup():
     """Initialize on startup."""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     manager.cleanup_expired()
+    manager.update_online_status()
     logger.info("Master-Link started")

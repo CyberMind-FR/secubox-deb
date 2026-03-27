@@ -5,6 +5,13 @@ Classification tiers:
 - LOCAL_ONLY: Sensitive data stays on-device (LocalAI)
 - SANITIZED: PII scrubbed, EU providers only (Mistral)
 - CLOUD_DIRECT: Generic queries, any provider allowed
+
+Enhanced features:
+- Response caching for repeated queries
+- Rate limiting per classification tier
+- Provider health monitoring
+- Config persistence
+- Streaming response support
 """
 import os
 import re
@@ -12,10 +19,12 @@ import json
 import time
 import hashlib
 import logging
-from datetime import datetime
+import asyncio
+from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional, Dict, List, Any
+from typing import Optional, Dict, List, Any, AsyncIterator
 from enum import IntEnum
+from collections import defaultdict
 
 from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -30,6 +39,14 @@ CONFIG_PATH = Path("/etc/secubox/ai-gateway.toml")
 AUDIT_LOG = Path("/var/log/secubox/ai-gateway-audit.jsonl")
 STATE_DIR = Path("/var/lib/secubox/ai-gateway")
 CACHE_DIR = Path("/tmp/secubox/ai-gateway")
+PROVIDERS_FILE = STATE_DIR / "providers.json"
+
+# Rate limits per minute by classification
+RATE_LIMITS = {
+    "local_only": 100,
+    "sanitized": 30,
+    "cloud_direct": 20
+}
 
 app = FastAPI(title="SecuBox AI Gateway", version="1.0.0")
 logger = logging.getLogger("secubox.ai-gateway")
@@ -443,6 +460,139 @@ class AuditLogger:
 
 
 # ============================================================================
+# Rate Limiter
+# ============================================================================
+
+class RateLimiter:
+    """Simple in-memory rate limiter."""
+
+    def __init__(self, limits: Dict[str, int]):
+        self.limits = limits
+        self.requests: Dict[str, List[float]] = defaultdict(list)
+        self._lock = asyncio.Lock()
+
+    async def check(self, key: str, classification: str) -> bool:
+        """Check if request is allowed. Returns True if allowed."""
+        limit = self.limits.get(classification, 10)
+        now = time.time()
+        window = 60  # 1 minute window
+
+        async with self._lock:
+            # Clean old entries
+            self.requests[key] = [t for t in self.requests[key] if now - t < window]
+
+            if len(self.requests[key]) >= limit:
+                return False
+
+            self.requests[key].append(now)
+            return True
+
+    def get_remaining(self, key: str, classification: str) -> int:
+        """Get remaining requests in window."""
+        limit = self.limits.get(classification, 10)
+        now = time.time()
+        recent = [t for t in self.requests.get(key, []) if now - t < 60]
+        return max(0, limit - len(recent))
+
+
+# ============================================================================
+# Response Cache
+# ============================================================================
+
+class ResponseCache:
+    """Cache for AI responses to avoid duplicate queries."""
+
+    def __init__(self, cache_dir: Path, max_age: int = 3600):
+        self.cache_dir = cache_dir
+        self.max_age = max_age
+        self._memory: Dict[str, tuple] = {}  # hash -> (response, timestamp)
+        cache_dir.mkdir(parents=True, exist_ok=True)
+
+    def _hash_request(self, request_data: Dict) -> str:
+        """Generate hash for request."""
+        # Only hash model and messages for cache key
+        key_data = {
+            "model": request_data.get("model"),
+            "messages": request_data.get("messages", [])
+        }
+        return hashlib.sha256(json.dumps(key_data, sort_keys=True).encode()).hexdigest()[:32]
+
+    def get(self, request_data: Dict) -> Optional[Dict]:
+        """Get cached response if available."""
+        cache_key = self._hash_request(request_data)
+        now = time.time()
+
+        # Check memory cache
+        if cache_key in self._memory:
+            response, timestamp = self._memory[cache_key]
+            if now - timestamp < self.max_age:
+                return response
+
+        # Check file cache
+        cache_file = self.cache_dir / f"{cache_key}.json"
+        if cache_file.exists():
+            try:
+                if now - cache_file.stat().st_mtime < self.max_age:
+                    with open(cache_file) as f:
+                        response = json.load(f)
+                    self._memory[cache_key] = (response, cache_file.stat().st_mtime)
+                    return response
+            except Exception:
+                pass
+
+        return None
+
+    def set(self, request_data: Dict, response: Dict):
+        """Cache a response."""
+        cache_key = self._hash_request(request_data)
+        now = time.time()
+
+        # Memory cache
+        self._memory[cache_key] = (response, now)
+
+        # File cache
+        try:
+            cache_file = self.cache_dir / f"{cache_key}.json"
+            with open(cache_file, "w") as f:
+                json.dump(response, f)
+        except Exception:
+            pass
+
+    def clear(self):
+        """Clear all caches."""
+        self._memory.clear()
+        for f in self.cache_dir.glob("*.json"):
+            try:
+                f.unlink()
+            except Exception:
+                pass
+
+    def cleanup(self, max_age: int = None):
+        """Remove expired cache entries."""
+        if max_age is None:
+            max_age = self.max_age
+        now = time.time()
+        removed = 0
+
+        # Clean memory
+        expired = [k for k, (_, ts) in self._memory.items() if now - ts > max_age]
+        for k in expired:
+            del self._memory[k]
+            removed += 1
+
+        # Clean files
+        for f in self.cache_dir.glob("*.json"):
+            try:
+                if now - f.stat().st_mtime > max_age:
+                    f.unlink()
+                    removed += 1
+            except Exception:
+                pass
+
+        return removed
+
+
+# ============================================================================
 # Global instances
 # ============================================================================
 
@@ -471,6 +621,8 @@ classifier = DataClassifier(config.get("classifier", {}))
 sanitizer = PIISanitizer()
 router = ProviderRouter(config)
 audit = AuditLogger(AUDIT_LOG)
+rate_limiter = RateLimiter(RATE_LIMITS)
+response_cache = ResponseCache(CACHE_DIR)
 
 
 # ============================================================================
@@ -523,7 +675,7 @@ async def health():
 
 
 @app.post("/v1/chat/completions")
-async def chat_completions(request: ChatCompletionRequest):
+async def chat_completions(request: ChatCompletionRequest, req: Request):
     """OpenAI-compatible chat completions endpoint."""
     request_data = request.model_dump()
 
@@ -535,6 +687,37 @@ async def chat_completions(request: ChatCompletionRequest):
     # Classify request
     classification, reason = classifier.classify_request(request_data)
     classification_str = classification.name.lower()
+
+    # Get client identifier for rate limiting
+    client_id = req.headers.get("x-api-key", req.client.host if req.client else "unknown")
+
+    # Check rate limit
+    if not await rate_limiter.check(client_id, classification_str):
+        audit.log(
+            "request_rate_limited",
+            classification_str,
+            "none",
+            request_hash,
+            {"client": client_id}
+        )
+        raise HTTPException(
+            status_code=429,
+            detail=f"Rate limit exceeded for {classification_str} tier"
+        )
+
+    # Check cache (only for non-streaming, deterministic requests)
+    use_cache = not request.stream and request.temperature == 0
+    if use_cache:
+        cached = response_cache.get(request_data)
+        if cached:
+            audit.log(
+                "request_cached",
+                classification_str,
+                "cache",
+                request_hash,
+                {"model": request_data.get("model")}
+            )
+            return cached
 
     # Sanitize if needed
     if classification == Classification.SANITIZED:
@@ -557,6 +740,10 @@ async def chat_completions(request: ChatCompletionRequest):
 
     # Route request
     response = await router.route_request(request_data, provider)
+
+    # Cache successful responses
+    if use_cache and "error" not in response:
+        response_cache.set(request_data, response)
 
     # Audit log
     audit.log(
@@ -649,6 +836,104 @@ async def set_offline_mode(enabled: bool = True):
     return {"offline_mode": enabled}
 
 
+@app.get("/cache/stats", dependencies=[Depends(require_jwt)])
+async def cache_stats():
+    """Get cache statistics."""
+    memory_count = len(response_cache._memory)
+    file_count = len(list(CACHE_DIR.glob("*.json")))
+    return {
+        "memory_entries": memory_count,
+        "file_entries": file_count,
+        "max_age_seconds": response_cache.max_age
+    }
+
+
+@app.post("/cache/clear", dependencies=[Depends(require_jwt)])
+async def clear_cache():
+    """Clear response cache."""
+    response_cache.clear()
+    return {"status": "cleared"}
+
+
+@app.post("/cache/cleanup", dependencies=[Depends(require_jwt)])
+async def cleanup_cache():
+    """Remove expired cache entries."""
+    removed = response_cache.cleanup()
+    return {"removed": removed}
+
+
+@app.get("/rate-limits", dependencies=[Depends(require_jwt)])
+async def get_rate_limits():
+    """Get current rate limits."""
+    return {"limits": RATE_LIMITS}
+
+
+@app.get("/rate-limits/{client_id}", dependencies=[Depends(require_jwt)])
+async def get_client_rate_status(client_id: str):
+    """Get rate limit status for a client."""
+    remaining = {}
+    for classification in RATE_LIMITS:
+        remaining[classification] = rate_limiter.get_remaining(client_id, classification)
+    return {"client": client_id, "remaining": remaining}
+
+
+@app.post("/providers/save", dependencies=[Depends(require_jwt)])
+async def save_providers():
+    """Persist provider configuration to file."""
+    try:
+        providers_data = {
+            name: {
+                "enabled": p.enabled,
+                "api_key": p.api_key if p.api_key else None,
+                "model": p.model,
+                "priority": p.priority
+            }
+            for name, p in router.providers.items()
+        }
+        PROVIDERS_FILE.write_text(json.dumps(providers_data, indent=2))
+        return {"status": "saved"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/providers/load", dependencies=[Depends(require_jwt)])
+async def load_providers():
+    """Load provider configuration from file."""
+    if not PROVIDERS_FILE.exists():
+        raise HTTPException(status_code=404, detail="No saved configuration")
+
+    try:
+        data = json.loads(PROVIDERS_FILE.read_text())
+        for name, config in data.items():
+            if name in router.providers:
+                p = router.providers[name]
+                if config.get("enabled") is not None:
+                    p.enabled = config["enabled"]
+                if config.get("api_key"):
+                    p.api_key = config["api_key"]
+                if config.get("model"):
+                    p.model = config["model"]
+                if config.get("priority") is not None:
+                    p.priority = config["priority"]
+        return {"status": "loaded", "providers": len(data)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/providers/health", dependencies=[Depends(require_jwt)])
+async def check_providers_health():
+    """Check health of all providers."""
+    health = {}
+    for name, provider in router.providers.items():
+        available = await router.check_provider_available(provider)
+        health[name] = {
+            "available": available,
+            "enabled": provider.enabled,
+            "classification": provider.classification
+        }
+    return {"providers": health}
+
+
 # ============================================================================
 # Startup
 # ============================================================================
@@ -658,4 +943,24 @@ async def startup():
     """Initialize on startup."""
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     STATE_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Load saved provider config if exists
+    if PROVIDERS_FILE.exists():
+        try:
+            data = json.loads(PROVIDERS_FILE.read_text())
+            for name, config in data.items():
+                if name in router.providers:
+                    p = router.providers[name]
+                    if config.get("enabled") is not None:
+                        p.enabled = config["enabled"]
+                    if config.get("api_key"):
+                        p.api_key = config["api_key"]
+                    if config.get("model"):
+                        p.model = config["model"]
+                    if config.get("priority") is not None:
+                        p.priority = config["priority"]
+            logger.info(f"Loaded provider config: {len(data)} providers")
+        except Exception as e:
+            logger.warning(f"Failed to load provider config: {e}")
+
     logger.info("AI Gateway started")

@@ -8,6 +8,9 @@ Features:
 - Diagnostic collection and upload
 - Support provider configuration
 - Auto-upload for diagnostics
+- Status caching for performance
+- Metrics history tracking
+- Automatic diagnostics cleanup
 """
 import os
 import json
@@ -17,7 +20,8 @@ import tarfile
 import tempfile
 import platform
 import psutil
-from datetime import datetime
+import time
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional, Dict, List, Any
 from enum import Enum
@@ -35,6 +39,12 @@ CONFIG_PATH = Path("/etc/secubox/system-hub.toml")
 DATA_DIR = Path("/var/lib/secubox/system-hub")
 DIAG_DIR = DATA_DIR / "diagnostics"
 CACHE_FILE = DATA_DIR / "status-cache.json"
+METRICS_FILE = DATA_DIR / "metrics-history.jsonl"
+
+# Cache settings
+CACHE_TTL = 30  # seconds
+DIAG_MAX_AGE = 7  # days - auto-cleanup old diagnostics
+DIAG_MAX_COUNT = 20  # maximum diagnostics to keep
 
 app = FastAPI(title="SecuBox System Hub", version="1.0.0")
 logger = logging.getLogger("secubox.system-hub")
@@ -110,6 +120,9 @@ class SystemHub:
         self.data_dir = data_dir
         self.diag_dir = data_dir / "diagnostics"
         self.cache_file = data_dir / "status-cache.json"
+        self.metrics_file = data_dir / "metrics-history.jsonl"
+        self._status_cache: Dict[str, Any] = {}
+        self._cache_time: float = 0
         self._ensure_dirs()
         self._load_settings()
 
@@ -486,6 +499,190 @@ class SystemHub:
             "remote_enabled": self.settings.remote_enabled
         }
 
+    def get_cached_status(self) -> Dict[str, Any]:
+        """Get status with caching."""
+        now = time.time()
+        if now - self._cache_time < CACHE_TTL and self._status_cache:
+            return self._status_cache
+
+        # Refresh cache
+        self._status_cache = {
+            "system": self.get_system_info().model_dump(),
+            "health": self.get_health_summary(),
+            "timestamp": datetime.utcnow().isoformat() + "Z"
+        }
+        self._cache_time = now
+
+        # Also write to file for cron-based access
+        try:
+            self.cache_file.write_text(json.dumps(self._status_cache, indent=2))
+        except Exception:
+            pass
+
+        return self._status_cache
+
+    def record_metrics(self):
+        """Record current metrics to history."""
+        system = self.get_system_info()
+        health = self.get_health_summary()
+
+        metrics = {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "cpu_percent": psutil.cpu_percent(),
+            "memory_percent": health["memory_percent"],
+            "disk_percent": health["disk_percent"],
+            "load_avg": system.load_avg[0],
+            "services_running": health["services_running"],
+            "services_total": health["services_total"]
+        }
+
+        try:
+            with open(self.metrics_file, "a") as f:
+                f.write(json.dumps(metrics) + "\n")
+        except Exception as e:
+            logger.warning(f"Failed to record metrics: {e}")
+
+    def get_metrics_history(self, hours: int = 24) -> List[Dict]:
+        """Get metrics history for the last N hours."""
+        if not self.metrics_file.exists():
+            return []
+
+        cutoff = datetime.utcnow() - timedelta(hours=hours)
+        history = []
+
+        try:
+            with open(self.metrics_file) as f:
+                for line in f:
+                    try:
+                        entry = json.loads(line.strip())
+                        ts = datetime.fromisoformat(entry["timestamp"].rstrip("Z"))
+                        if ts >= cutoff:
+                            history.append(entry)
+                    except (json.JSONDecodeError, KeyError):
+                        continue
+        except Exception as e:
+            logger.warning(f"Failed to read metrics history: {e}")
+
+        return history
+
+    def cleanup_metrics(self, keep_hours: int = 168):
+        """Remove old metrics entries (default: keep 7 days)."""
+        if not self.metrics_file.exists():
+            return 0
+
+        cutoff = datetime.utcnow() - timedelta(hours=keep_hours)
+        kept = []
+        removed = 0
+
+        try:
+            with open(self.metrics_file) as f:
+                for line in f:
+                    try:
+                        entry = json.loads(line.strip())
+                        ts = datetime.fromisoformat(entry["timestamp"].rstrip("Z"))
+                        if ts >= cutoff:
+                            kept.append(line)
+                        else:
+                            removed += 1
+                    except (json.JSONDecodeError, KeyError):
+                        continue
+
+            with open(self.metrics_file, "w") as f:
+                f.writelines(kept)
+
+        except Exception as e:
+            logger.warning(f"Failed to cleanup metrics: {e}")
+
+        return removed
+
+    def cleanup_diagnostics(self, max_age_days: int = None, max_count: int = None):
+        """Remove old diagnostic bundles."""
+        if max_age_days is None:
+            max_age_days = DIAG_MAX_AGE
+        if max_count is None:
+            max_count = DIAG_MAX_COUNT
+
+        now = datetime.utcnow()
+        bundles = sorted(self.diag_dir.glob("diag-*.tar.gz"), key=lambda f: f.stat().st_mtime, reverse=True)
+        removed = 0
+
+        for i, bundle in enumerate(bundles):
+            should_remove = False
+
+            # Check age
+            age = now - datetime.fromtimestamp(bundle.stat().st_mtime)
+            if age.days > max_age_days:
+                should_remove = True
+
+            # Check count
+            if i >= max_count:
+                should_remove = True
+
+            if should_remove:
+                try:
+                    bundle.unlink()
+                    removed += 1
+                except Exception:
+                    pass
+
+        return removed
+
+    def get_service_logs(self, service: str, lines: int = 100) -> str:
+        """Get recent logs for a service."""
+        if service not in self.secubox_services + self.core_services:
+            return "Service not monitored"
+
+        try:
+            result = subprocess.run(
+                ["journalctl", "-u", service, "-n", str(lines), "--no-pager"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            return result.stdout or result.stderr or "No logs found"
+        except Exception as e:
+            return f"Error: {e}"
+
+    def restart_service(self, service: str) -> bool:
+        """Restart a service with dependency handling."""
+        return self.service_action(service, "restart")
+
+    def get_disk_usage(self) -> List[Dict[str, Any]]:
+        """Get disk usage for all mounted partitions."""
+        partitions = []
+        for part in psutil.disk_partitions():
+            try:
+                usage = psutil.disk_usage(part.mountpoint)
+                partitions.append({
+                    "device": part.device,
+                    "mountpoint": part.mountpoint,
+                    "fstype": part.fstype,
+                    "total": usage.total,
+                    "used": usage.used,
+                    "free": usage.free,
+                    "percent": usage.percent
+                })
+            except PermissionError:
+                continue
+        return partitions
+
+    def get_network_stats(self) -> Dict[str, Any]:
+        """Get network interface statistics."""
+        stats = {}
+        counters = psutil.net_io_counters(pernic=True)
+
+        for iface, data in counters.items():
+            stats[iface] = {
+                "bytes_sent": data.bytes_sent,
+                "bytes_recv": data.bytes_recv,
+                "packets_sent": data.packets_sent,
+                "packets_recv": data.packets_recv,
+                "errors_in": data.errin,
+                "errors_out": data.errout
+            }
+
+        return stats
+
 
 # Global instance
 hub = SystemHub(DATA_DIR)
@@ -636,6 +833,70 @@ async def delete_diagnostics(bundle_id: str):
     return {"status": "deleted"}
 
 
+@app.get("/cached-status")
+async def get_cached_status():
+    """Get cached system status (fast endpoint)."""
+    return hub.get_cached_status()
+
+
+@app.get("/metrics/history", dependencies=[Depends(require_jwt)])
+async def get_metrics_history(hours: int = 24):
+    """Get metrics history."""
+    history = hub.get_metrics_history(hours)
+    return {"history": history, "count": len(history)}
+
+
+@app.post("/metrics/record", dependencies=[Depends(require_jwt)])
+async def record_metrics():
+    """Manually record current metrics."""
+    hub.record_metrics()
+    return {"status": "recorded"}
+
+
+@app.post("/metrics/cleanup", dependencies=[Depends(require_jwt)])
+async def cleanup_metrics(keep_hours: int = 168):
+    """Cleanup old metrics entries."""
+    removed = hub.cleanup_metrics(keep_hours)
+    return {"removed": removed}
+
+
+@app.post("/diagnostics/cleanup", dependencies=[Depends(require_jwt)])
+async def cleanup_diagnostics(max_age_days: int = 7, max_count: int = 20):
+    """Cleanup old diagnostic bundles."""
+    removed = hub.cleanup_diagnostics(max_age_days, max_count)
+    return {"removed": removed}
+
+
+@app.get("/services/{service_name}/logs", dependencies=[Depends(require_jwt)])
+async def get_service_logs(service_name: str, lines: int = 100):
+    """Get recent logs for a service."""
+    logs = hub.get_service_logs(service_name, lines)
+    return {"service": service_name, "logs": logs}
+
+
+@app.get("/disk", dependencies=[Depends(require_jwt)])
+async def get_disk_usage():
+    """Get disk usage for all partitions."""
+    return {"partitions": hub.get_disk_usage()}
+
+
+@app.get("/network/stats", dependencies=[Depends(require_jwt)])
+async def get_network_stats():
+    """Get network interface statistics."""
+    return {"interfaces": hub.get_network_stats()}
+
+
+@app.post("/services/restart-all", dependencies=[Depends(require_jwt)])
+async def restart_all_secubox_services(background_tasks: BackgroundTasks):
+    """Restart all SecuBox services."""
+    def restart_services():
+        for service in hub.secubox_services:
+            hub.service_action(service, "restart")
+
+    background_tasks.add_task(restart_services)
+    return {"status": "restarting", "services": len(hub.secubox_services)}
+
+
 # ============================================================================
 # Startup
 # ============================================================================
@@ -644,4 +905,14 @@ async def delete_diagnostics(bundle_id: str):
 async def startup():
     """Initialize on startup."""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+    DIAG_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Cleanup old diagnostics on startup
+    try:
+        removed = hub.cleanup_diagnostics()
+        if removed > 0:
+            logger.info(f"Cleaned up {removed} old diagnostic bundles")
+    except Exception as e:
+        logger.warning(f"Failed to cleanup diagnostics: {e}")
+
     logger.info("System Hub started")
