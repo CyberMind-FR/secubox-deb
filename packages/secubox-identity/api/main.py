@@ -103,7 +103,7 @@ class IdentityManager:
         public_key = private_key.public_key()
         public_bytes = public_key.public_bytes(
             encoding=serialization.Encoding.Raw,
-            format=serialization.PublicKeyFormat.Raw
+            format=serialization.PublicFormat.Raw
         )
         return private_key, public_bytes
 
@@ -130,7 +130,7 @@ class IdentityManager:
         public_key = private_key.public_key()
         public_bytes = public_key.public_bytes(
             encoding=serialization.Encoding.PEM,
-            format=serialization.PublicKeyFormat.SubjectPublicKeyInfo
+            format=serialization.PublicFormat.SubjectPublicKeyInfo
         )
         with open(public_path, "wb") as f:
             f.write(public_bytes)
