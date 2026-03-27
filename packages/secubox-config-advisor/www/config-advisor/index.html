@@ -3,69 +3,182 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - Config-advisor</title>
-    <style>
-        :root { --bg-dark: #e8f5e9; --bg-card: #c8e6c9; --bg-sidebar: #e8f5e9; --border: #a5d6a7; --text: #1b3d1c; --text-dim: #006622; --primary: #00dd44; --cyan: #00d4ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; --purple: #a371f7; }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Courier Prime', monospace; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
-        .sidebar { width: 220px; background: var(--bg-sidebar); border-right: 1px solid var(--border); position: fixed; height: 100vh; overflow-y: auto; }
-        .sidebar-header { padding: 1rem; border-bottom: 1px solid var(--border); }
-        .logo { font-weight: bold; font-size: 1.2rem; }
-        .logo span:nth-child(1) { color: var(--cyan); } .logo span:nth-child(2) { color: var(--red); } .logo span:nth-child(3) { color: var(--green); } .logo span:nth-child(4) { color: var(--yellow); }
-        .nav-section { padding: 0.5rem 0; }
-        .nav-section-title { padding: 0.5rem 1rem; font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
-        .nav-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 1rem; color: var(--text-dim); text-decoration: none; font-size: 0.9rem; border-left: 3px solid transparent; }
-        .nav-item:hover { background: rgba(0,221,68,0.05); color: var(--text); }
-        .nav-item.active { background: rgba(0,221,68,0.1); color: var(--primary); border-left-color: var(--primary); }
-        .nav-item .icon { width: 20px; text-align: center; }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-        .header h1 { font-size: 1.5rem; }
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; }
-        .btn:hover { background: var(--bg-dark); }
-        .btn.primary { background: rgba(0,221,68,0.1); border-color: var(--primary); color: var(--primary); }
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
-        .card h2 { font-size: 1rem; margin-bottom: 1rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
-        .stat-card .value { font-size: 2rem; font-weight: bold; color: var(--purple); }
-        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); }
-    </style>
+    <title>SecuBox - Config Advisor</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/shared/crt-light.css">
     <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root { --p31-peak: #00dd44; --p31-mid: #009933; --p31-dim: #006622; --tube-light: #e8f5e9; --tube-pale: #c8e6c9; --tube-soft: #a5d6a7; --bg-card: var(--tube-pale); --border: var(--tube-soft); --text: #1b3d1c; --text-dim: var(--p31-dim); --primary: var(--p31-peak); --danger: #ff4466; --warning: #ffb347; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Courier Prime', monospace; background: var(--tube-light); color: var(--text); display: flex; min-height: 100vh; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 2px solid var(--border); }
+        .header h1 { font-size: 1.5rem; display: flex; align-items: center; gap: 0.5rem; }
+        .badge { padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.75rem; background: var(--tube-light); border: 1px solid var(--border); }
+        .score-display { text-align: center; padding: 2rem; background: var(--bg-card); border-radius: 8px; margin-bottom: 1.5rem; }
+        .score-circle { width: 150px; height: 150px; border-radius: 50%; border: 8px solid var(--border); display: inline-flex; align-items: center; justify-content: center; font-size: 3rem; font-weight: bold; margin-bottom: 1rem; }
+        .score-circle.good { border-color: var(--primary); color: var(--primary); }
+        .score-circle.warning { border-color: var(--warning); color: var(--warning); }
+        .score-circle.danger { border-color: var(--danger); color: var(--danger); }
+        .score-label { font-size: 1.2rem; color: var(--text-dim); }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; text-align: center; }
+        .stat-icon { font-size: 1.5rem; margin-bottom: 0.5rem; }
+        .stat-value { font-size: 2rem; font-weight: bold; color: var(--primary); }
+        .stat-value.danger { color: var(--danger); }
+        .stat-value.warning { color: var(--warning); }
+        .stat-label { color: var(--text-dim); font-size: 0.85rem; margin-top: 0.25rem; }
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border); }
+        .card-header h2 { font-size: 1.1rem; display: flex; align-items: center; gap: 0.5rem; }
+        .btn { padding: 0.5rem 1rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text); cursor: pointer; font-family: inherit; font-size: 0.85rem; }
+        .btn:hover { background: var(--tube-light); }
+        .btn-primary { background: var(--primary); border-color: var(--primary); color: #000; }
+        .btn-sm { padding: 0.3rem 0.6rem; font-size: 0.8rem; }
+        .recommendation { background: var(--tube-light); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; border-left: 4px solid var(--warning); }
+        .recommendation.critical { border-left-color: var(--danger); }
+        .recommendation.info { border-left-color: var(--primary); }
+        .recommendation-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem; }
+        .recommendation-title { font-weight: 600; }
+        .recommendation-category { font-size: 0.75rem; color: var(--text-dim); }
+        .recommendation-actions { margin-top: 0.75rem; }
+        .empty-state { text-align: center; padding: 2rem; color: var(--text-dim); }
+        @media (max-width: 768px) { .main { margin-left: 0; padding: 1rem; } }
+    </style>
 </head>
 <body>
     <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-    <main class="main">
-        <header class="header">
-            <h1>Config-advisor</h1>
-            <button class="btn" onclick="refresh()">Refresh</button>
-        </header>
-        <div class="card">
-            <h2>Status</h2>
-            <p id="status">Loading...</p>
+    <div class="main">
+        <div class="header">
+            <h1>⚙️ Config Advisor</h1>
+            <span class="badge">v1.0.0</span>
         </div>
-        <script>
-            const API = '/api/v1/config-advisor';
-            const token = () => localStorage.getItem('sbx_token');
-            const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
 
-            async function api(path, opts = {}) {
-                try {
-                    const res = await fetch(API + path, { ...opts, headers: headers() });
-                    if (res.status === 401) { window.location = '/login/'; return {}; }
-                    return res.json();
-                } catch { return {}; }
+        <div class="score-display">
+            <div class="score-circle good" id="score-circle">-</div>
+            <div class="score-label">Security Score</div>
+            <div style="margin-top: 1rem;">
+                <button class="btn btn-primary" onclick="runAudit()">Run Security Audit</button>
+            </div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon">✅</div>
+                <div class="stat-value" id="passed">-</div>
+                <div class="stat-label">Checks Passed</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">⚠️</div>
+                <div class="stat-value warning" id="warnings">-</div>
+                <div class="stat-label">Warnings</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">🔴</div>
+                <div class="stat-value danger" id="critical">-</div>
+                <div class="stat-label">Critical Issues</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">📋</div>
+                <div class="stat-value" id="total-checks">-</div>
+                <div class="stat-label">Total Checks</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h2>🔧 Recommendations</h2>
+                <button class="btn btn-sm" onclick="loadRecommendations()">Refresh</button>
+            </div>
+            <div id="recommendations">
+                <div class="empty-state">Run a security audit to get recommendations</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h2>📊 Category Breakdown</h2>
+            </div>
+            <div id="categories">
+                <div class="empty-state">No audit data available</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/shared/sidebar.js"></script>
+    <script>
+        const API = '/api/v1/config-advisor';
+
+        async function api(path, method = 'GET', data = null) {
+            const token = localStorage.getItem('sbx_token');
+            const headers = { 'Content-Type': 'application/json', ...(token ? { 'Authorization': 'Bearer ' + token } : {}) };
+            try {
+                const res = await fetch(API + path, { method, headers, body: data ? JSON.stringify(data) : null });
+                if (res.status === 401) { window.location = '/portal/login.html'; return null; }
+                return res.json();
+            } catch { return null; }
+        }
+
+        async function loadStatus() {
+            const data = await api('/status');
+            if (!data) return;
+
+            const score = data.security_score || 0;
+            const scoreEl = document.getElementById('score-circle');
+            scoreEl.textContent = score;
+            scoreEl.className = 'score-circle ' + (score >= 80 ? 'good' : score >= 50 ? 'warning' : 'danger');
+
+            document.getElementById('passed').textContent = data.checks_passed || 0;
+            document.getElementById('warnings').textContent = data.warnings || 0;
+            document.getElementById('critical').textContent = data.critical_issues || 0;
+            document.getElementById('total-checks').textContent = data.total_checks || 0;
+        }
+
+        async function runAudit() {
+            const btn = event.target;
+            btn.disabled = true; btn.textContent = 'Running...';
+            await api('/audit', 'POST');
+            btn.disabled = false; btn.textContent = 'Run Security Audit';
+            loadStatus();
+            loadRecommendations();
+        }
+
+        async function loadRecommendations() {
+            const data = await api('/recommendations');
+            const container = document.getElementById('recommendations');
+            if (!data?.recommendations?.length) {
+                container.innerHTML = '<div class="empty-state">No recommendations. Your configuration looks good!</div>';
+                return;
             }
+            container.innerHTML = data.recommendations.map(r => `
+                <div class="recommendation ${r.severity?.toLowerCase()}">
+                    <div class="recommendation-header">
+                        <div>
+                            <div class="recommendation-title">${r.title}</div>
+                            <div class="recommendation-category">${r.category} | ${r.severity}</div>
+                        </div>
+                    </div>
+                    <div>${r.description}</div>
+                    ${r.fix_available ? `
+                        <div class="recommendation-actions">
+                            <button class="btn btn-primary btn-sm" onclick="applyFix('${r.id}')">Apply Fix</button>
+                        </div>
+                    ` : ''}
+                </div>
+            `).join('');
+        }
 
-            async function loadStatus() {
-                const d = await api('/status');
-                document.getElementById('status').textContent = JSON.stringify(d, null, 2);
-            }
+        async function applyFix(id) {
+            if (!confirm('Apply this fix?')) return;
+            await api(`/fix/${id}`, 'POST');
+            loadStatus();
+            loadRecommendations();
+        }
 
-            function refresh() { loadStatus(); }
-            refresh();
-        </script>
-    </main>
+        loadStatus();
+        loadRecommendations();
+    </script>
+    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>
