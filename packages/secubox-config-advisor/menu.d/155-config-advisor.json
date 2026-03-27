@@ -1,0 +1,9 @@
+{
+  "id": "config-advisor",
+  "name": "Config-advisor",
+  "category": "security",
+  "icon": "📋",
+  "path": "/config-advisor/",
+  "order": 155,
+  "description": "Security Configuration Advisor"
+}

@@ -1,0 +1,8 @@
+#!/bin/sh
+set -e
+if [ "$1" = "remove" ]; then
+    systemctl stop secubox-master-link.service || true
+    systemctl disable secubox-master-link.service || true
+fi
+#DEBHELPER#
+exit 0

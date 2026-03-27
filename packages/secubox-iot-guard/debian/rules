@@ -1,0 +1,11 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-iot-guard/usr/lib/secubox/iot-guard
+	cp -r api debian/secubox-iot-guard/usr/lib/secubox/iot-guard/
+	install -d debian/secubox-iot-guard/usr/share/secubox/www/iot-guard
+	cp -r www/iot-guard/. debian/secubox-iot-guard/usr/share/secubox/www/iot-guard/
+	install -d debian/secubox-iot-guard/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-iot-guard/usr/share/secubox/menu.d/ || true

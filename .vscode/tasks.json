@@ -1,452 +1,77 @@
 {
   "version": "2.0.0",
   "tasks": [
-
-    // ──────────────────────────────────────────────────────
-    // GROUPE : SETUP
-    // ──────────────────────────────────────────────────────
     {
-      "label": "🔧 Setup dev environment",
+      "label": "🔥 SecuBox :: Tests CSPN",
       "type": "shell",
-      "command": "bash setup-dev.sh",
-      "group": "build",
-      "presentation": { "reveal": "always", "panel": "new" },
-      "problemMatcher": []
-    },
-
-    // ──────────────────────────────────────────────────────
-    // GROUPE : FRONTEND PORTING
-    // ──────────────────────────────────────────────────────
-    {
-      "label": "📥 Port frontend — module unique",
-      "type": "shell",
-      "command": "bash scripts/port-frontend.sh ${input:luciModuleName}",
-      "group": "build",
+      "command": "pytest tests/cspn/ -v --tb=short --no-header",
+      "group": { "kind": "test", "isDefault": true },
       "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
-      "problemMatcher": []
+      "problemMatcher": ["$python"]
     },
     {
-      "label": "📥 Port frontend — TOUS les modules",
+      "label": "🧪 SecuBox :: Tests unitaires",
       "type": "shell",
-      "command": "bash scripts/port-frontend.sh --all",
-      "group": "build",
-      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
-      "problemMatcher": []
-    },
-    {
-      "label": "🔄 Réécrire XHR — module unique",
-      "type": "shell",
-      "command": "python3 scripts/rewrite-xhr.py --module ${input:debModuleName}",
-      "group": "build",
-      "presentation": { "reveal": "always", "panel": "dedicated" },
-      "problemMatcher": []
-    },
-    {
-      "label": "🔄 Réécrire XHR — dry-run tous modules",
-      "type": "shell",
-      "command": "python3 scripts/rewrite-xhr.py --all --dry-run",
-      "group": "build",
-      "presentation": { "reveal": "always", "panel": "dedicated" },
-      "problemMatcher": []
-    },
-
-    // ──────────────────────────────────────────────────────
-    // GROUPE : DEV API (lancer localement)
-    // ──────────────────────────────────────────────────────
-    {
-      "label": "🚀 Run API — module en dev",
-      "type": "shell",
-      "command": "cd packages/secubox-${input:debModuleName} && PYTHONPATH=${workspaceFolder}/common SECUBOX_DEBUG=1 uvicorn api.main:app --reload --host 127.0.0.1 --port 8${input:devPort}",
-      "group": "build",
-      "presentation": { "reveal": "always", "panel": "dedicated" },
-      "problemMatcher": [],
-      "isBackground": true
-    },
-    {
-      "label": "🚀 Run secubox-crowdsec en dev (port 8001)",
-      "type": "shell",
-      "command": "cd packages/secubox-crowdsec && PYTHONPATH=${workspaceFolder}/common SECUBOX_DEBUG=1 uvicorn api.main:app --reload --host 127.0.0.1 --port 8001",
-      "group": "build",
-      "presentation": { "reveal": "always", "panel": "dedicated" },
-      "problemMatcher": [],
-      "isBackground": true
-    },
-    {
-      "label": "🚀 Run secubox-wireguard en dev (port 8003)",
-      "type": "shell",
-      "command": "cd packages/secubox-wireguard && PYTHONPATH=${workspaceFolder}/common SECUBOX_DEBUG=1 uvicorn api.main:app --reload --host 127.0.0.1 --port 8003",
-      "group": "build",
-      "presentation": { "reveal": "always", "panel": "dedicated" },
-      "problemMatcher": [],
-      "isBackground": true
-    },
-
-    // ──────────────────────────────────────────────────────
-    // GROUPE : BUILD .DEB
-    // ──────────────────────────────────────────────────────
-    {
-      "label": "📦 Build .deb — module unique (arm64)",
-      "type": "shell",
-      "command": "cd packages/secubox-${input:debModuleName} && dpkg-buildpackage --host-arch arm64 --target-arch arm64 -us -uc -b 2>&1 | tail -20",
-      "group": { "kind": "build", "isDefault": true },
-      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
-      "problemMatcher": []
-    },
-    {
-      "label": "📦 Build .deb — secubox-core",
-      "type": "shell",
-      "command": "cd packages/secubox-core && dpkg-buildpackage --host-arch arm64 -us -uc -b 2>&1",
-      "group": "build",
-      "presentation": { "reveal": "always", "panel": "dedicated" },
-      "problemMatcher": []
-    },
-    {
-      "label": "📦 Build .deb — TOUS (séquentiel)",
-      "type": "shell",
-      "command": "for pkg in packages/secubox-*/; do echo \"=== $(basename $pkg) ===\"; cd $pkg && dpkg-buildpackage --host-arch arm64 -us -uc -b 2>&1 | tail -5; cd ${workspaceFolder}; done",
-      "group": "build",
-      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
-      "problemMatcher": []
-    },
-
-    // ──────────────────────────────────────────────────────
-    // GROUPE : DÉPLOIEMENT SSH
-    // ──────────────────────────────────────────────────────
-    {
-      "label": "🚢 Déployer — module unique",
-      "type": "shell",
-      "command": "bash scripts/deploy.sh secubox-${input:debModuleName} ${input:boardHost} --restart",
-      "group": "build",
-      "presentation": { "reveal": "always", "panel": "dedicated" },
-      "problemMatcher": []
-    },
-    {
-      "label": "🚢 Déployer — TOUT sur le board",
-      "type": "shell",
-      "command": "bash scripts/deploy.sh --all ${input:boardHost} --restart",
-      "group": "build",
-      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
-      "problemMatcher": []
-    },
-
-    // ──────────────────────────────────────────────────────
-    // GROUPE : IMAGE
-    // ──────────────────────────────────────────────────────
-    {
-      "label": "💿 Build image — MOCHAbin",
-      "type": "shell",
-      "command": "sudo bash image/build-image.sh --board mochabin --out output/",
-      "group": "build",
-      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
-      "problemMatcher": []
-    },
-    {
-      "label": "💿 Build image — ESPRESSObin v7",
-      "type": "shell",
-      "command": "sudo bash image/build-image.sh --board espressobin-v7 --out output/",
-      "group": "build",
-      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
-      "problemMatcher": []
-    },
-    {
-      "label": "💾 Flash image sur board (dd via SSH)",
-      "type": "shell",
-      "command": "zcat output/secubox-${input:boardName}-bookworm.img.gz | ssh ${input:boardHost} 'dd of=/dev/mmcblk0 bs=4M status=progress'",
-      "group": "build",
-      "presentation": { "reveal": "always", "panel": "dedicated" },
-      "problemMatcher": []
-    },
-
-    // ──────────────────────────────────────────────────────
-    // GROUPE : SCAFFOLD
-    // ──────────────────────────────────────────────────────
-    {
-      "label": "🆕 Créer nouveau paquet",
-      "type": "shell",
-      "command": "bash scripts/new-package.sh ${input:newPkgName} '${input:newPkgDesc}'",
-      "group": "build",
-      "presentation": { "reveal": "always", "panel": "dedicated" },
-      "problemMatcher": []
-    },
-
-    // ──────────────────────────────────────────────────────
-    // GROUPE : TESTS / VÉRIFICATION
-    // ──────────────────────────────────────────────────────
-    {
-      "label": "🔍 Tester API — health check (dev local)",
-      "type": "shell",
-      "command": "curl -s http://127.0.0.1:8001/health | python3 -m json.tool",
+      "command": "pytest tests/unit/ -v --tb=short --cov=. --cov-report=term-missing",
       "group": "test",
-      "presentation": { "reveal": "always", "panel": "shared" },
-      "problemMatcher": []
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+      "problemMatcher": ["$python"]
     },
     {
-      "label": "🔍 Tester API — login + token",
+      "label": "🛡️ SecuBox :: Lint + Ruff",
       "type": "shell",
-      "command": "curl -s -X POST http://127.0.0.1:8001/auth/login -H 'Content-Type: application/json' -d '{\"username\":\"admin\",\"password\":\"secubox\"}' | python3 -m json.tool",
-      "group": "test",
-      "presentation": { "reveal": "always", "panel": "shared" },
-      "problemMatcher": []
-    },
-    {
-      "label": "✅ Valider structure paquets",
-      "type": "shell",
-      "command": "python3 -c \"\nimport os, sys\nfrom pathlib import Path\nerrors = []\nfor d in sorted(Path('packages').iterdir()):\n    if not d.is_dir(): continue\n    for f in ['debian/control', 'api/main.py']:\n        if not (d/f).exists():\n            errors.append(f'{d.name}: manque {f}')\nif errors:\n    print('\\n'.join(errors))\n    sys.exit(1)\nelse:\n    print(f'OK — {len(list(Path(\\\"packages\\\").iterdir()))} paquets valides')\n\"",
-      "group": "test",
-      "presentation": { "reveal": "always", "panel": "shared" },
-      "problemMatcher": []
-    },
-
-    // ──────────────────────────────────────────────────────
-    // GROUPE : MIGRATION WORKFLOW COMPLET
-    // ──────────────────────────────────────────────────────
-    {
-      "label": "⚡ Workflow complet — un module",
-      "dependsOrder": "sequence",
-      "dependsOn": [
-        "📥 Port frontend — module unique",
-        "🔄 Réécrire XHR — module unique",
-        "📦 Build .deb — module unique (arm64)"
-      ],
+      "command": "ruff check . --fix && ruff format .",
       "group": "build",
-      "presentation": { "reveal": "always" },
-      "problemMatcher": []
-    },
-
-    // ──────────────────────────────────────────────────────
-    // GROUPE : REDROID (Android in Container)
-    // ──────────────────────────────────────────────────────
-    {
-      "label": "🤖 ReDroid: Setup Wizard (interactif)",
-      "type": "shell",
-      "command": "sudo bash ${workspaceFolder}/redroid/redroid-lxc-setup.sh",
-      "group": { "kind": "build", "isDefault": false },
-      "presentation": {
-        "reveal": "always",
-        "panel": "new",
-        "title": "ReDroid LXC Wizard",
-        "echo": true
-      },
-      "problemMatcher": []
+      "presentation": { "reveal": "always", "panel": "shared" }
     },
     {
-      "label": "🤖 ReDroid: Auto-setup Android 12 x64",
+      "label": "🔒 SecuBox :: nftables reload",
       "type": "shell",
-      "command": "sudo bash ${workspaceFolder}/redroid/redroid-lxc-setup.sh --auto --android-ver 12",
+      "command": "ssh secubox 'sudo nft -f /etc/secubox/firewall/active/rules.nft && echo OK'",
       "group": "build",
-      "presentation": {
-        "reveal": "always",
-        "panel": "new",
-        "title": "ReDroid Auto-Setup"
-      },
-      "problemMatcher": []
+      "presentation": { "reveal": "always", "panel": "shared" }
     },
     {
-      "label": "▶ ReDroid: Start",
+      "label": "🔄 SecuBox :: PARAMETERS swap",
       "type": "shell",
-      "command": "sudo redroid-ctl start",
+      "command": "ssh secubox 'sudo secubox-params swap --module ${input:moduleName} --validate-zkp'",
       "group": "build",
-      "presentation": { "reveal": "always", "panel": "shared", "title": "ReDroid" },
-      "problemMatcher": []
+      "presentation": { "reveal": "always", "panel": "shared" }
     },
     {
-      "label": "⏹ ReDroid: Stop",
+      "label": "📡 SecuBox :: Logs live",
       "type": "shell",
-      "command": "sudo redroid-ctl stop",
-      "presentation": { "reveal": "always", "panel": "shared", "title": "ReDroid" },
-      "problemMatcher": []
+      "command": "ssh secubox 'sudo journalctl -u secubox-* -f --output json' | jq -r '.MESSAGE'",
+      "isBackground": true,
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
     },
     {
-      "label": "📊 ReDroid: Status",
+      "label": "🚀 SecuBox :: Deploy module",
       "type": "shell",
-      "command": "sudo redroid-ctl status",
-      "presentation": { "reveal": "always", "panel": "shared", "title": "ReDroid Status" },
-      "problemMatcher": []
-    },
-    {
-      "label": "📱 ReDroid: Ouvrir écran (scrcpy inst.0)",
-      "type": "shell",
-      "command": "redroid-ctl screen 0",
-      "presentation": { "reveal": "silent", "panel": "shared" },
-      "problemMatcher": []
-    },
-    {
-      "label": "🐚 ReDroid: ADB Shell (inst.0)",
-      "type": "shell",
-      "command": "redroid-ctl shell 0",
-      "presentation": { "reveal": "always", "panel": "new", "title": "ADB Shell" },
-      "problemMatcher": []
-    },
-    {
-      "label": "📦 ReDroid: Installer APK...",
-      "type": "shell",
-      "command": "redroid-ctl install ${input:apkPath} ${input:instanceIdx}",
-      "presentation": { "reveal": "always", "panel": "shared", "title": "APK Install" },
-      "problemMatcher": []
-    },
-    {
-      "label": "📋 ReDroid: Logs live (inst.0)",
-      "type": "shell",
-      "command": "sudo redroid-ctl logs 0",
-      "presentation": { "reveal": "always", "panel": "new", "title": "ReDroid Logs" },
-      "problemMatcher": []
-    },
-    {
-      "label": "🔍 ReDroid: Vérifier binder devices",
-      "type": "shell",
-      "command": "ls -la /dev/binder /dev/hwbinder /dev/vndbinder 2>/dev/null || (ls /dev/binderfs/ 2>/dev/null && echo 'binderfs OK') || echo '⚠ Binder absent — configurer hôte LXC'",
-      "presentation": { "reveal": "always", "panel": "shared", "title": "Diagnostic Binder" },
-      "problemMatcher": []
-    },
-    {
-      "label": "🖥 Proxmox Host: Charger modules binder",
-      "type": "shell",
-      "command": "bash -c 'echo \"=== À exécuter sur l hôte Proxmox ===\"; echo \"apt install linux-modules-extra-$(uname -r)\"; echo \"modprobe binder_linux devices=binder,hwbinder,vndbinder\"; echo \"modprobe ashmem_linux\"'",
-      "presentation": { "reveal": "always", "panel": "shared", "title": "Host Config Help" },
-      "problemMatcher": []
-    },
-    {
-      "label": "🔁 ReDroid: Démarrer 3 instances",
-      "type": "shell",
-      "command": "sudo bash ${workspaceFolder}/redroid/redroid-lxc-setup.sh --auto --instances 3 --port 5555",
-      "presentation": { "reveal": "always", "panel": "new", "title": "ReDroid Multi" },
-      "problemMatcher": []
-    },
-
-    // ──────────────────────────────────────────────────────
-    // GROUPE : C3BOX CLONE / INSTALLER ISO
-    // ──────────────────────────────────────────────────────
-    {
-      "label": "💿 Build C3Box Clone ISO (from VM)",
-      "type": "shell",
-      "command": "sudo bash ${workspaceFolder}/image/build-c3box-clone.sh --host localhost --port 2222 --slipstream",
+      "command": "rsync -avz --exclude='*.pyc' --exclude='.venv' modules/${input:moduleName}/ secubox:/opt/secubox/modules/${input:moduleName}/",
       "group": "build",
-      "presentation": { "reveal": "always", "panel": "new", "title": "C3Box Clone" },
-      "problemMatcher": []
+      "presentation": { "reveal": "always", "panel": "shared" }
     },
     {
-      "label": "💿 Build C3Box Clone ISO (custom host)",
+      "label": "📋 SecuBox :: Status global",
       "type": "shell",
-      "command": "sudo bash ${workspaceFolder}/image/build-c3box-clone.sh --host ${input:c3boxHost} --port ${input:c3boxPort} --slipstream",
-      "group": "build",
-      "presentation": { "reveal": "always", "panel": "new", "title": "C3Box Clone" },
-      "problemMatcher": []
+      "command": "ssh secubox 'sudo systemctl status secubox-* --no-pager'",
+      "presentation": { "reveal": "always", "panel": "shared" }
     },
     {
-      "label": "📤 Export C3Box Config Only",
+      "label": "🔐 SecuBox :: Snyk scan",
       "type": "shell",
-      "command": "sudo bash ${workspaceFolder}/image/export-c3box-clone.sh --host ${input:c3boxHost} --port ${input:c3boxPort}",
-      "group": "build",
-      "presentation": { "reveal": "always", "panel": "dedicated", "title": "C3Box Export" },
-      "problemMatcher": []
-    },
-    {
-      "label": "💿 Build Installer ISO (x64)",
-      "type": "shell",
-      "command": "sudo bash ${workspaceFolder}/image/build-installer-iso.sh --slipstream",
-      "group": "build",
-      "presentation": { "reveal": "always", "panel": "new", "title": "Installer ISO" },
-      "problemMatcher": []
-    },
-    {
-      "label": "💿 Build Live USB (x64)",
-      "type": "shell",
-      "command": "sudo bash ${workspaceFolder}/image/build-live-usb.sh --slipstream",
-      "group": "build",
-      "presentation": { "reveal": "always", "panel": "new", "title": "Live USB" },
-      "problemMatcher": []
-    },
-    {
-      "label": "💿 Build Installer ISO with Preseed",
-      "type": "shell",
-      "command": "sudo bash ${workspaceFolder}/image/build-installer-iso.sh --preseed ${input:preseedFile} --slipstream",
-      "group": "build",
-      "presentation": { "reveal": "always", "panel": "new", "title": "Preseeded ISO" },
-      "problemMatcher": []
+      "command": "snyk test --severity-threshold=high",
+      "presentation": { "reveal": "always", "panel": "shared" }
     }
   ],
-
   "inputs": [
     {
-      "id": "luciModuleName",
+      "id": "moduleName",
+      "description": "Nom du module SecuBox",
       "type": "pickString",
-      "description": "Module luci-app source",
-      "options": [
-        "crowdsec-dashboard", "netdata-dashboard", "wireguard-dashboard",
-        "network-modes", "client-guardian", "auth-guardian",
-        "bandwidth-manager", "media-flow", "cdn-cache",
-        "vhost-manager", "system-hub", "netifyd-dashboard", "secubox"
-      ]
-    },
-    {
-      "id": "debModuleName",
-      "type": "pickString",
-      "description": "Nom du module Debian (sans secubox-)",
-      "options": [
-        "core", "hub", "crowdsec", "netdata", "wireguard",
-        "netmodes", "nac", "auth", "qos", "mediaflow",
-        "cdn", "vhost", "system", "dpi"
-      ]
-    },
-    {
-      "id": "boardHost",
-      "type": "promptString",
-      "description": "Adresse SSH du board (user@host)",
-      "default": "root@192.168.1.1"
-    },
-    {
-      "id": "boardName",
-      "type": "pickString",
-      "description": "Board cible",
-      "options": ["mochabin", "espressobin-v7", "espressobin-ultra"]
-    },
-    {
-      "id": "newPkgName",
-      "type": "promptString",
-      "description": "Nom du nouveau module (ex: mymodule)"
-    },
-    {
-      "id": "newPkgDesc",
-      "type": "promptString",
-      "description": "Description courte du module"
-    },
-    {
-      "id": "devPort",
-      "type": "pickString",
-      "description": "Port dev (80XX)",
-      "options": ["001", "002", "003", "004", "005", "006", "007", "008"],
-      "default": "001"
-    },
-    {
-      "id": "apkPath",
-      "type": "promptString",
-      "description": "Chemin complet vers l'APK",
-      "default": "/tmp/app.apk"
-    },
-    {
-      "id": "instanceIdx",
-      "type": "pickString",
-      "description": "Instance ReDroid cible",
-      "options": ["0", "1", "2", "3"],
-      "default": "0"
-    },
-    {
-      "id": "c3boxHost",
-      "type": "promptString",
-      "description": "C3Box/VM hostname or IP",
-      "default": "localhost"
-    },
-    {
-      "id": "c3boxPort",
-      "type": "promptString",
-      "description": "C3Box/VM SSH port",
-      "default": "2222"
-    },
-    {
-      "id": "preseedFile",
-      "type": "promptString",
-      "description": "Path to preseed archive",
-      "default": "${workspaceFolder}/output/c3box-clone-preseed.tar.gz"
+      "options": ["firewall", "dpi", "dns", "waf", "ids", "dashboard", "zkp", "mirrornet", "parameters"],
+      "default": "firewall"
     }
   ]
 }

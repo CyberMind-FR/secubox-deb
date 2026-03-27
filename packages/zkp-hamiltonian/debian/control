@@ -1,0 +1,53 @@
+Source: zkp-hamiltonian
+Section: libs
+Priority: optional
+Maintainer: SecuBox <contact@secubox.fr>
+Build-Depends: debhelper-compat (= 13),
+               cmake (>= 3.16),
+               libssl-dev,
+               pkg-config
+Standards-Version: 4.6.2
+Homepage: https://github.com/secubox/zkp-hamiltonian
+Vcs-Git: https://github.com/secubox/zkp-hamiltonian.git
+Rules-Requires-Root: no
+
+Package: libzkp-hamiltonian1
+Architecture: any
+Multi-Arch: same
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Zero-Knowledge Proof library based on Hamiltonian Cycle
+ A cryptographic library implementing Zero-Knowledge Proof (ZKP) based on
+ the Hamiltonian Cycle problem (Blum 1986) with NIZK (Non-Interactive
+ Zero-Knowledge) transformation via Fiat-Shamir heuristic.
+ .
+ This allows a Prover to convince a Verifier that they know a Hamiltonian
+ cycle in a graph without revealing the cycle itself.
+ .
+ This package contains the shared library.
+
+Package: libzkp-hamiltonian-dev
+Architecture: any
+Multi-Arch: same
+Section: libdevel
+Depends: libzkp-hamiltonian1 (= ${binary:Version}),
+         libssl-dev,
+         ${misc:Depends}
+Description: Zero-Knowledge Proof library - development files
+ A cryptographic library implementing Zero-Knowledge Proof (ZKP) based on
+ the Hamiltonian Cycle problem (Blum 1986) with NIZK transformation.
+ .
+ This package contains the development headers and static library.
+
+Package: zkp-hamiltonian-tools
+Architecture: any
+Depends: libzkp-hamiltonian1 (= ${binary:Version}),
+         ${shlibs:Depends},
+         ${misc:Depends}
+Description: Zero-Knowledge Proof CLI tools
+ Command-line utilities for ZKP Hamiltonian operations:
+ .
+  - zkp-keygen: Generate key pair (public graph + secret cycle)
+  - zkp-prover: Generate NIZK proof from graph and secret
+  - zkp-verifier: Verify proof against public graph
+ .
+ These tools are used for authentication between SecuBox nodes.

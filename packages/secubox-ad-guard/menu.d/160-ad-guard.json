@@ -1,0 +1,9 @@
+{
+  "id": "ad-guard",
+  "name": "Ad Guard",
+  "category": "network",
+  "icon": "🛡️",
+  "path": "/ad-guard/",
+  "order": 160,
+  "description": "Ad/Tracker Detection & Device Statistics"
+}

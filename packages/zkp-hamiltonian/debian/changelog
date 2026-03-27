@@ -1,0 +1,10 @@
+zkp-hamiltonian (1.0.0-1) bookworm; urgency=medium
+
+  * Initial Debian package release
+  * Zero-Knowledge Proof implementation based on Hamiltonian Cycle
+  * NIZK transformation via Fiat-Shamir heuristic
+  * SHA3-256 commitments via OpenSSL
+  * CLI tools: zkp-keygen, zkp-prover, zkp-verifier
+  * Binary serialization for network transmission
+
+ -- SecuBox <contact@secubox.fr>  Thu, 27 Mar 2025 10:00:00 +0100

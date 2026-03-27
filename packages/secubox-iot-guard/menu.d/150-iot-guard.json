@@ -1,0 +1,9 @@
+{
+  "id": "iot-guard",
+  "name": "Iot-guard",
+  "category": "security",
+  "icon": "📡",
+  "path": "/iot-guard/",
+  "order": 150,
+  "description": "IoT Device Security"
+}

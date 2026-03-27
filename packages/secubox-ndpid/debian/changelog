@@ -1,0 +1,11 @@
+secubox-ndpid (1.0.0-1) stable; urgency=medium
+
+  * Initial release
+  * nDPId daemon integration
+  * JA3/JA3S/JA4 TLS fingerprinting
+  * Protocol and application detection
+  * Risk scoring engine
+  * Flow database with SQLite
+  * TC mirred dual-stream DPI setup
+
+ -- SecuBox <dev@secubox.local>  Thu, 27 Mar 2026 11:00:00 +0100

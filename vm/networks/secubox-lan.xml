@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SecuBox LAN Network
+
+  LAN bridge for SecuBox VM - simulates the 4-port Topaz switch.
+  VMs eth3-eth6 (lan0-lan3) connect here.
+
+  This is an isolated network - no NAT, no forwarding.
+  SecuBox acts as the router/gateway for this network.
+-->
+<network>
+  <name>secubox-lan</name>
+  <uuid>22222222-2222-2222-2222-222222222222</uuid>
+
+  <!-- Isolated mode - no external connectivity -->
+  <bridge name="virbr-sblan" stp="on" delay="0"/>
+
+  <!--
+    No IP/DHCP configuration here - SecuBox provides DHCP/DNS
+    This just creates the bridge, SecuBox VM will be the gateway
+  -->
+
+  <!-- Optional: Uncomment for host access to LAN segment -->
+  <!--
+  <ip address="192.168.255.254" netmask="255.255.255.0"/>
+  -->
+</network>

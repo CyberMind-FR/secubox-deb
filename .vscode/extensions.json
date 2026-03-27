@@ -1,0 +1,45 @@
+{
+  "recommendations": [
+    // ── Claude ──────────────────────────────────────────────────────────────
+    "anthropic.claude-code",
+
+    // ── Python ──────────────────────────────────────────────────────────────
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "charliermarsh.ruff",
+    "ms-python.debugpy",
+
+    // ── Shell / Bash ────────────────────────────────────────────────────────
+    "timonwong.shellcheck",
+    "foxundermoon.shell-format",
+    "mads-hartmann.bash-ide-vscode",
+
+    // ── YAML / TOML / Config ────────────────────────────────────────────────
+    "redhat.vscode-yaml",
+    "tamasfe.even-better-toml",
+
+    // ── Git ─────────────────────────────────────────────────────────────────
+    "eamodio.gitlens",
+    "mhutchie.git-graph",
+
+    // ── Qualité / Sécurité ──────────────────────────────────────────────────
+    "ms-vscode.test-adapter-converter",
+    "hbenl.vscode-test-explorer",
+    "snyk-security.snyk-vulnerability-scanner",
+
+    // ── Réseau / Protocoles ─────────────────────────────────────────────────
+    "ms-vscode-remote.remote-ssh",
+    "ms-vscode-remote.remote-containers",
+
+    // ── UI / Thème ───────────────────────────────────────────────────────────
+    "zhuangtongfa.material-theme",
+    "PKief.material-icon-theme",
+
+    // ── Divers productivité ─────────────────────────────────────────────────
+    "christian-kohler.path-intellisense",
+    "streetsidesoftware.code-spell-checker",
+    "streetsidesoftware.code-spell-checker-french",
+    "usernamehw.errorlens",
+    "oderwat.indent-rainbow"
+  ]
+}

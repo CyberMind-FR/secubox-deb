@@ -1,0 +1,15 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-ad-guard/usr/lib/secubox/ad-guard
+	cp -r api debian/secubox-ad-guard/usr/lib/secubox/ad-guard/
+	install -d debian/secubox-ad-guard/usr/share/secubox/www/ad-guard
+	cp -r www/ad-guard/. debian/secubox-ad-guard/usr/share/secubox/www/ad-guard/
+	install -d debian/secubox-ad-guard/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-ad-guard/usr/share/secubox/menu.d/ || true
+	install -d debian/secubox-ad-guard/etc/secubox
+	[ -f config/ad-guard.toml ] && install -m 644 config/ad-guard.toml debian/secubox-ad-guard/etc/secubox/ || true
+	install -d debian/secubox-ad-guard/usr/bin
+	[ -f scripts/adguardctl ] && install -m 755 scripts/adguardctl debian/secubox-ad-guard/usr/bin/ || true

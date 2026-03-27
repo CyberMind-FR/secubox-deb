@@ -1,0 +1,11 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-identity/usr/lib/secubox/identity
+	cp -r api debian/secubox-identity/usr/lib/secubox/identity/
+	install -d debian/secubox-identity/usr/share/secubox/www/identity
+	cp -r www/identity/. debian/secubox-identity/usr/share/secubox/www/identity/
+	install -d debian/secubox-identity/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-identity/usr/share/secubox/menu.d/ || true

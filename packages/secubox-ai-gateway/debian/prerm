@@ -1,0 +1,8 @@
+#!/bin/sh
+set -e
+if [ "$1" = "remove" ]; then
+    systemctl stop secubox-ai-gateway.service || true
+    systemctl disable secubox-ai-gateway.service || true
+fi
+#DEBHELPER#
+exit 0

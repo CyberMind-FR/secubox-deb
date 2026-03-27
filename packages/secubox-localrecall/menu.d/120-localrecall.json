@@ -1,0 +1,9 @@
+{
+  "id": "localrecall",
+  "name": "Localrecall",
+  "category": "security",
+  "icon": "🧠",
+  "path": "/localrecall/",
+  "order": 120,
+  "description": "AI Memory System"
+}

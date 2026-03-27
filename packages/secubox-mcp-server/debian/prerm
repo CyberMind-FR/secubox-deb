@@ -1,0 +1,8 @@
+#!/bin/sh
+set -e
+if [ "$1" = "remove" ]; then
+    systemctl stop secubox-mcp-server.service || true
+    systemctl disable secubox-mcp-server.service || true
+fi
+#DEBHELPER#
+exit 0

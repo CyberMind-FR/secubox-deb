@@ -1,0 +1,4 @@
+usr/include/zkp_*.h
+usr/lib/*/libzkp_hamiltonian.so
+usr/lib/*/libzkp_hamiltonian.a
+usr/lib/*/pkgconfig/zkp-hamiltonian.pc

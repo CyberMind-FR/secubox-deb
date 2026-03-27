@@ -1,0 +1,11 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-localrecall/usr/lib/secubox/localrecall
+	cp -r api debian/secubox-localrecall/usr/lib/secubox/localrecall/
+	install -d debian/secubox-localrecall/usr/share/secubox/www/localrecall
+	cp -r www/localrecall/. debian/secubox-localrecall/usr/share/secubox/www/localrecall/
+	install -d debian/secubox-localrecall/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-localrecall/usr/share/secubox/menu.d/ || true

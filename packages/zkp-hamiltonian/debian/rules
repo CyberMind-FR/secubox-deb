@@ -1,0 +1,31 @@
+#!/usr/bin/make -f
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+	dh_auto_configure -- \
+		-DCMAKE_BUILD_TYPE=Release \
+		-DBUILD_SHARED_LIBS=ON \
+		-DBUILD_TESTS=OFF \
+		-DBUILD_TOOLS=ON \
+		-DZKP_MAX_N=128
+
+override_dh_auto_install:
+	dh_auto_install
+	# Rename tools to avoid conflicts
+	if [ -f debian/tmp/usr/bin/zkp_keygen ]; then \
+		mv debian/tmp/usr/bin/zkp_keygen debian/tmp/usr/bin/zkp-keygen; \
+	fi
+	if [ -f debian/tmp/usr/bin/zkp_prover ]; then \
+		mv debian/tmp/usr/bin/zkp_prover debian/tmp/usr/bin/zkp-prover; \
+	fi
+	if [ -f debian/tmp/usr/bin/zkp_verifier ]; then \
+		mv debian/tmp/usr/bin/zkp_verifier debian/tmp/usr/bin/zkp-verifier; \
+	fi
+
+override_dh_installman:
+	# Skip if no man pages exist
+	dh_installman || true

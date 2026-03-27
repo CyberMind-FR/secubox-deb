@@ -1,0 +1,11 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-threat-analyst/usr/lib/secubox/threat-analyst
+	cp -r api debian/secubox-threat-analyst/usr/lib/secubox/threat-analyst/
+	install -d debian/secubox-threat-analyst/usr/share/secubox/www/threat-analyst
+	cp -r www/threat-analyst/. debian/secubox-threat-analyst/usr/share/secubox/www/threat-analyst/
+	install -d debian/secubox-threat-analyst/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-threat-analyst/usr/share/secubox/menu.d/ || true

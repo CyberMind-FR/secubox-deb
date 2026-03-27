@@ -1,0 +1,8 @@
+#!/bin/sh
+set -e
+if [ "$1" = "remove" ]; then
+    systemctl stop secubox-ad-guard.service || true
+    systemctl disable secubox-ad-guard.service || true
+fi
+#DEBHELPER#
+exit 0

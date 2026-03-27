@@ -1,0 +1,31 @@
+# SecuBox Ad Guard Configuration
+
+[general]
+enabled = true
+log_level = "info"
+
+[blocklists]
+# Update interval in hours (0 = manual only)
+auto_update_hours = 24
+
+# Enabled blocklist sources
+sources = ["stevenblack", "oisd", "hagezi"]
+
+[delayed_blocking]
+# Default delay in hours before blocking queued domains
+default_delay_hours = 24
+
+# Require manual approval for delayed blocks
+require_approval = true
+
+[statistics]
+# Retention period for detection logs in days
+retention_days = 30
+
+# Enable per-device tracking
+track_devices = true
+
+[dns_integration]
+# Integration with Unbound/Vortex DNS
+enabled = false
+unbound_blocklist = "/var/lib/unbound/blocklist.conf"

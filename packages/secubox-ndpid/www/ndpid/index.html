@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox nDPId - Deep Packet Inspection</title>
+    <link rel="stylesheet" href="/static/css/secubox.css">
+    <style>
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        .stat-card {
+            background: var(--card-bg, #1e1e1e);
+            border-radius: 8px;
+            padding: 1.5rem;
+        }
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: var(--primary, #00d4aa);
+        }
+        .stat-label {
+            color: var(--text-muted, #888);
+            font-size: 0.9rem;
+        }
+        .section {
+            background: var(--card-bg, #1e1e1e);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .section h2 {
+            margin-top: 0;
+            border-bottom: 1px solid var(--border, #333);
+            padding-bottom: 0.5rem;
+        }
+        .tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            border-bottom: 1px solid var(--border, #333);
+        }
+        .tab {
+            padding: 0.75rem 1.5rem;
+            cursor: pointer;
+            border: none;
+            background: none;
+            color: var(--text-muted, #888);
+            border-bottom: 2px solid transparent;
+        }
+        .tab.active {
+            color: var(--primary, #00d4aa);
+            border-bottom-color: var(--primary, #00d4aa);
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            text-align: left;
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border, #333);
+        }
+        th {
+            color: var(--text-muted, #888);
+            font-weight: 500;
+        }
+        .flow-row {
+            cursor: pointer;
+        }
+        .flow-row:hover {
+            background: var(--bg-hover, #2a2a2a);
+        }
+        .risk-high {
+            color: #ff4444;
+        }
+        .risk-medium {
+            color: #ffaa00;
+        }
+        .risk-low {
+            color: #00d4aa;
+        }
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+        .badge-protocol {
+            background: #2a4a6a;
+            color: #6ab0ff;
+        }
+        .badge-app {
+            background: #4a2a6a;
+            color: #b06aff;
+        }
+        .fingerprint-code {
+            font-family: monospace;
+            font-size: 0.8rem;
+            background: var(--bg-secondary, #2a2a2a);
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            word-break: break-all;
+        }
+        .chart-container {
+            height: 200px;
+            display: flex;
+            align-items: flex-end;
+            gap: 4px;
+            padding: 1rem 0;
+        }
+        .bar {
+            flex: 1;
+            background: var(--primary, #00d4aa);
+            border-radius: 4px 4px 0 0;
+            min-height: 4px;
+            position: relative;
+        }
+        .bar:hover::after {
+            content: attr(data-label);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #333;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            white-space: nowrap;
+        }
+        .status-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 0.5rem;
+        }
+        .status-running {
+            background: #00d4aa;
+        }
+        .status-stopped {
+            background: #ff4444;
+        }
+        .mirred-status {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem;
+            background: var(--bg-secondary, #2a2a2a);
+            border-radius: 8px;
+        }
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        .btn-primary {
+            background: var(--primary, #00d4aa);
+            color: #000;
+        }
+        .btn-danger {
+            background: #ff4444;
+            color: white;
+        }
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>nDPId - Deep Packet Inspection</h1>
+        <p class="subtitle">JA3/JA4 Fingerprinting, Protocol Detection & Risk Analysis</p>
+
+        <!-- Status Cards -->
+        <div class="dashboard-grid">
+            <div class="stat-card">
+                <div id="daemon-status">
+                    <span class="status-dot status-stopped"></span>
+                    <span>Checking...</span>
+                </div>
+                <div class="stat-label">Daemon Status</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="flows-active">-</div>
+                <div class="stat-label">Active Flows</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="fingerprints-count">-</div>
+                <div class="stat-label">JA3/JA4 Fingerprints</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="risks-24h">-</div>
+                <div class="stat-label">Risks (24h)</div>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab active" data-tab="flows">Flows</button>
+            <button class="tab" data-tab="protocols">Protocols</button>
+            <button class="tab" data-tab="fingerprints">Fingerprints</button>
+            <button class="tab" data-tab="risks">Risks</button>
+            <button class="tab" data-tab="settings">Settings</button>
+        </div>
+
+        <!-- Flows Tab -->
+        <div id="flows" class="tab-content active">
+            <div class="section">
+                <h2>Active Network Flows</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Source</th>
+                            <th>Destination</th>
+                            <th>Protocol</th>
+                            <th>Application</th>
+                            <th>Bytes</th>
+                            <th>Risk</th>
+                        </tr>
+                    </thead>
+                    <tbody id="flows-table">
+                        <tr><td colspan="6">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Protocols Tab -->
+        <div id="protocols" class="tab-content">
+            <div class="section">
+                <h2>Top Protocols (24h)</h2>
+                <div class="chart-container" id="protocols-chart"></div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Protocol</th>
+                            <th>Flows</th>
+                            <th>Traffic</th>
+                        </tr>
+                    </thead>
+                    <tbody id="protocols-table">
+                        <tr><td colspan="3">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="section">
+                <h2>Top Applications (24h)</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Application</th>
+                            <th>Flows</th>
+                            <th>Traffic</th>
+                        </tr>
+                    </thead>
+                    <tbody id="apps-table">
+                        <tr><td colspan="3">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Fingerprints Tab -->
+        <div id="fingerprints" class="tab-content">
+            <div class="section">
+                <h2>JA3 Client Fingerprints</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Fingerprint</th>
+                            <th>Known App</th>
+                            <th>Hits</th>
+                            <th>Last Seen</th>
+                            <th>Threat Intel</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ja3-table">
+                        <tr><td colspan="5">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="section">
+                <h2>JA4 Fingerprints</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Fingerprint</th>
+                            <th>Known App</th>
+                            <th>Hits</th>
+                            <th>Last Seen</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ja4-table">
+                        <tr><td colspan="4">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Risks Tab -->
+        <div id="risks" class="tab-content">
+            <div class="section">
+                <h2>Risk Events (24h)</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Source IP</th>
+                            <th>Dest IP</th>
+                            <th>Risk Type</th>
+                            <th>Score</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody id="risks-table">
+                        <tr><td colspan="6">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Settings Tab -->
+        <div id="settings" class="tab-content">
+            <div class="section">
+                <h2>TC Mirred Status</h2>
+                <div class="mirred-status">
+                    <div>
+                        <strong>Interface:</strong> <span id="mirred-iface">eth0</span>
+                    </div>
+                    <div>
+                        <strong>Active:</strong> <span id="mirred-active">Checking...</span>
+                    </div>
+                    <button class="btn btn-primary" id="btn-setup-mirred">Setup Mirred</button>
+                    <button class="btn btn-danger" id="btn-remove-mirred">Remove Mirred</button>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>Service Control</h2>
+                <div style="display: flex; gap: 1rem;">
+                    <button class="btn btn-primary" onclick="controlService('start')">Start</button>
+                    <button class="btn btn-primary" onclick="controlService('restart')">Restart</button>
+                    <button class="btn btn-danger" onclick="controlService('stop')">Stop</button>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>Realtime Statistics</h2>
+                <div id="realtime-stats">Loading...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api/ndpid';
+
+        // Tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById(tab.dataset.tab).classList.add('active');
+            });
+        });
+
+        function formatBytes(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            if (bytes < 1024 * 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+            return (bytes / 1024 / 1024 / 1024).toFixed(2) + ' GB';
+        }
+
+        function riskClass(score) {
+            if (score >= 70) return 'risk-high';
+            if (score >= 40) return 'risk-medium';
+            return 'risk-low';
+        }
+
+        async function fetchStatus() {
+            try {
+                const res = await fetch(`${API_BASE}/status`);
+                const data = await res.json();
+
+                const daemonEl = document.getElementById('daemon-status');
+                if (data.daemon?.running) {
+                    daemonEl.innerHTML = '<span class="status-dot status-running"></span>Running';
+                } else {
+                    daemonEl.innerHTML = '<span class="status-dot status-stopped"></span>Stopped';
+                }
+
+                document.getElementById('fingerprints-count').textContent = data.database?.total_fingerprints || 0;
+                document.getElementById('risks-24h').textContent = data.database?.risks_24h || 0;
+            } catch (e) {
+                console.error('Status fetch failed:', e);
+            }
+        }
+
+        async function fetchFlows() {
+            try {
+                const res = await fetch(`${API_BASE}/flows?limit=50`);
+                const data = await res.json();
+                const tbody = document.getElementById('flows-table');
+
+                document.getElementById('flows-active').textContent = data.count || 0;
+
+                if (!data.flows?.length) {
+                    tbody.innerHTML = '<tr><td colspan="6">No active flows</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = data.flows.map(f => `
+                    <tr class="flow-row">
+                        <td>${f.src_ip || '-'}:${f.src_port || '-'}</td>
+                        <td>${f.dst_ip || '-'}:${f.dst_port || '-'}</td>
+                        <td><span class="badge badge-protocol">${f.l7_protocol || f.protocol || '-'}</span></td>
+                        <td><span class="badge badge-app">${f.application || '-'}</span></td>
+                        <td>${formatBytes((f.bytes_sent || 0) + (f.bytes_recv || 0))}</td>
+                        <td class="${riskClass(f.risk_score || 0)}">${f.risk_score || 0}</td>
+                    </tr>
+                `).join('');
+            } catch (e) {
+                console.error('Flows fetch failed:', e);
+            }
+        }
+
+        async function fetchProtocols() {
+            try {
+                const res = await fetch(`${API_BASE}/top/protocols?hours=24`);
+                const data = await res.json();
+                const tbody = document.getElementById('protocols-table');
+                const chart = document.getElementById('protocols-chart');
+
+                if (!data.protocols?.length) {
+                    tbody.innerHTML = '<tr><td colspan="3">No data</td></tr>';
+                    chart.innerHTML = '';
+                    return;
+                }
+
+                const maxBytes = Math.max(...data.protocols.map(p => p.bytes_total));
+
+                tbody.innerHTML = data.protocols.map(p => `
+                    <tr>
+                        <td><span class="badge badge-protocol">${p.protocol}</span></td>
+                        <td>${p.flow_count}</td>
+                        <td>${formatBytes(p.bytes_total)}</td>
+                    </tr>
+                `).join('');
+
+                chart.innerHTML = data.protocols.slice(0, 10).map(p => `
+                    <div class="bar" style="height: ${(p.bytes_total / maxBytes * 100)}%"
+                         data-label="${p.protocol}: ${formatBytes(p.bytes_total)}"></div>
+                `).join('');
+
+                // Fetch apps too
+                const appsRes = await fetch(`${API_BASE}/top/applications?hours=24`);
+                const appsData = await appsRes.json();
+                const appsTbody = document.getElementById('apps-table');
+
+                if (!appsData.applications?.length) {
+                    appsTbody.innerHTML = '<tr><td colspan="3">No data</td></tr>';
+                    return;
+                }
+
+                appsTbody.innerHTML = appsData.applications.map(a => `
+                    <tr>
+                        <td><span class="badge badge-app">${a.application}</span></td>
+                        <td>${a.flow_count}</td>
+                        <td>${formatBytes(a.bytes_total)}</td>
+                    </tr>
+                `).join('');
+            } catch (e) {
+                console.error('Protocols fetch failed:', e);
+            }
+        }
+
+        async function fetchFingerprints() {
+            try {
+                const [ja3Res, ja4Res] = await Promise.all([
+                    fetch(`${API_BASE}/fingerprints/ja3`),
+                    fetch(`${API_BASE}/fingerprints/ja4`)
+                ]);
+                const ja3Data = await ja3Res.json();
+                const ja4Data = await ja4Res.json();
+
+                const ja3Tbody = document.getElementById('ja3-table');
+                const ja4Tbody = document.getElementById('ja4-table');
+
+                if (!ja3Data.fingerprints?.length) {
+                    ja3Tbody.innerHTML = '<tr><td colspan="5">No JA3 fingerprints recorded</td></tr>';
+                } else {
+                    ja3Tbody.innerHTML = ja3Data.fingerprints.map(f => `
+                        <tr>
+                            <td><code class="fingerprint-code">${f.fingerprint}</code></td>
+                            <td>${f.known_app || '-'}</td>
+                            <td>${f.hit_count}</td>
+                            <td>${new Date(f.last_seen).toLocaleString()}</td>
+                            <td class="${f.threat_intel ? 'risk-high' : ''}">${f.threat_intel || '-'}</td>
+                        </tr>
+                    `).join('');
+                }
+
+                if (!ja4Data.fingerprints?.length) {
+                    ja4Tbody.innerHTML = '<tr><td colspan="4">No JA4 fingerprints recorded</td></tr>';
+                } else {
+                    ja4Tbody.innerHTML = ja4Data.fingerprints.map(f => `
+                        <tr>
+                            <td><code class="fingerprint-code">${f.fingerprint}</code></td>
+                            <td>${f.known_app || '-'}</td>
+                            <td>${f.hit_count}</td>
+                            <td>${new Date(f.last_seen).toLocaleString()}</td>
+                        </tr>
+                    `).join('');
+                }
+            } catch (e) {
+                console.error('Fingerprints fetch failed:', e);
+            }
+        }
+
+        async function fetchRisks() {
+            try {
+                const res = await fetch(`${API_BASE}/risks?hours=24`);
+                const data = await res.json();
+                const tbody = document.getElementById('risks-table');
+
+                if (!data.risks?.length) {
+                    tbody.innerHTML = '<tr><td colspan="6">No risk events in the last 24 hours</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = data.risks.map(r => `
+                    <tr>
+                        <td>${new Date(r.timestamp).toLocaleString()}</td>
+                        <td>${r.src_ip}</td>
+                        <td>${r.dst_ip}</td>
+                        <td>${r.risk_type}</td>
+                        <td class="${riskClass(r.risk_score)}">${r.risk_score}</td>
+                        <td>${r.description}</td>
+                    </tr>
+                `).join('');
+            } catch (e) {
+                console.error('Risks fetch failed:', e);
+            }
+        }
+
+        async function fetchMirredStatus() {
+            try {
+                const res = await fetch(`${API_BASE}/mirred/status`);
+                const data = await res.json();
+
+                document.getElementById('mirred-iface').textContent = data.interface || 'eth0';
+                document.getElementById('mirred-active').textContent = data.active ? 'Yes' : 'No';
+                document.getElementById('mirred-active').className = data.active ? 'risk-low' : 'risk-medium';
+            } catch (e) {
+                console.error('Mirred status fetch failed:', e);
+            }
+        }
+
+        async function fetchRealtimeStats() {
+            try {
+                const res = await fetch(`${API_BASE}/stats/realtime`);
+                const data = await res.json();
+
+                document.getElementById('realtime-stats').innerHTML = `
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem;">
+                        <div><strong>RX:</strong> ${formatBytes(data.rx_bytes)} (${data.rx_packets} pkts)</div>
+                        <div><strong>TX:</strong> ${formatBytes(data.tx_bytes)} (${data.tx_packets} pkts)</div>
+                        <div><strong>RX Errors:</strong> ${data.rx_errors}</div>
+                        <div><strong>TX Errors:</strong> ${data.tx_errors}</div>
+                    </div>
+                `;
+            } catch (e) {
+                document.getElementById('realtime-stats').textContent = 'Failed to load';
+            }
+        }
+
+        async function controlService(action) {
+            try {
+                await fetch(`${API_BASE}/control/${action}`, { method: 'POST' });
+                setTimeout(fetchStatus, 1000);
+            } catch (e) {
+                alert('Service control failed: ' + e.message);
+            }
+        }
+
+        document.getElementById('btn-setup-mirred').addEventListener('click', async () => {
+            try {
+                await fetch(`${API_BASE}/mirred/setup`, { method: 'POST' });
+                fetchMirredStatus();
+            } catch (e) {
+                alert('Setup failed: ' + e.message);
+            }
+        });
+
+        document.getElementById('btn-remove-mirred').addEventListener('click', async () => {
+            try {
+                await fetch(`${API_BASE}/mirred/remove`, { method: 'POST' });
+                fetchMirredStatus();
+            } catch (e) {
+                alert('Remove failed: ' + e.message);
+            }
+        });
+
+        // Initial load
+        fetchStatus();
+        fetchFlows();
+        fetchProtocols();
+        fetchFingerprints();
+        fetchRisks();
+        fetchMirredStatus();
+        fetchRealtimeStats();
+
+        // Auto-refresh
+        setInterval(() => {
+            fetchStatus();
+            fetchFlows();
+        }, 10000);
+
+        setInterval(fetchRealtimeStats, 5000);
+    </script>
+</body>
+</html>

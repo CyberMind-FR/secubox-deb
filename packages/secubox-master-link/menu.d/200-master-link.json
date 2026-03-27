@@ -1,0 +1,9 @@
+{
+  "id": "master-link",
+  "name": "Master-link",
+  "category": "network",
+  "icon": "🔗",
+  "path": "/master-link/",
+  "order": 200,
+  "description": "Mesh Node Enrollment"
+}

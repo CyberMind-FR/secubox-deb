@@ -1,0 +1,9 @@
+{
+  "id": "ai-gateway",
+  "name": "Ai-gateway",
+  "category": "security",
+  "icon": "🤖",
+  "path": "/ai-gateway/",
+  "order": 110,
+  "description": "AI Data Sovereignty Gateway"
+}

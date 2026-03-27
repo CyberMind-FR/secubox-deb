@@ -1,0 +1,22 @@
+[Unit]
+Description=SecuBox nDPId API
+After=network.target secubox-core.service ndpid.service
+Requires=secubox-core.service
+Wants=ndpid.service
+
+[Service]
+Type=simple
+User=secubox
+Group=secubox
+WorkingDirectory=/usr/lib/secubox/ndpid
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/ndpid.sock --log-level warning
+Restart=on-failure
+RestartSec=5
+UMask=0000
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox /run/ndpid
+
+[Install]
+WantedBy=multi-user.target

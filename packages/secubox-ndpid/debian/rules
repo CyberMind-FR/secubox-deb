@@ -1,0 +1,15 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-ndpid/usr/lib/secubox/ndpid
+	cp -r api debian/secubox-ndpid/usr/lib/secubox/ndpid/
+	install -d debian/secubox-ndpid/usr/share/secubox/www/ndpid
+	cp -r www/ndpid/. debian/secubox-ndpid/usr/share/secubox/www/ndpid/
+	install -d debian/secubox-ndpid/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-ndpid/usr/share/secubox/menu.d/ || true
+	install -d debian/secubox-ndpid/etc/secubox
+	[ -f config/ndpid.toml ] && install -m 644 config/ndpid.toml debian/secubox-ndpid/etc/secubox/ || true
+	install -d debian/secubox-ndpid/usr/bin
+	[ -f scripts/ndpidctl ] && install -m 755 scripts/ndpidctl debian/secubox-ndpid/usr/bin/ || true

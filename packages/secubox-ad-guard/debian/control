@@ -1,0 +1,14 @@
+Source: secubox-ad-guard
+Section: admin
+Priority: optional
+Maintainer: SecuBox <dev@secubox.local>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+
+Package: secubox-ad-guard
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0.0), python3-httpx
+Description: SecuBox Ad Guard Module
+ Ad and tracker detection with per-device statistics.
+ Features blocklist management, delayed blacklisting workflow,
+ and device-type classification (IoT, phones, smart TVs, etc.).

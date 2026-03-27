@@ -1,0 +1,12 @@
+Source: secubox-master-link
+Section: admin
+Priority: optional
+Maintainer: SecuBox <dev@secubox.local>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+
+Package: secubox-master-link
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0.0)
+Description: SecuBox Master-link Module
+ Mesh Node Enrollment
