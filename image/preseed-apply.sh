@@ -209,31 +209,45 @@ if [ -f "${PRESEED_DIR}/packages/secubox-packages.list" ]; then
 fi
 
 # ============================================
-# 7. Restart Services
+# 7. Restart Services (SKIP on live boot to prevent hang)
 # ============================================
-log "[7/7] Restarting services..."
+log "[7/7] Service activation..."
 
-# Apply netplan
-if command -v netplan &>/dev/null; then
-    netplan apply 2>/dev/null || true
-fi
+# On live boot, skip ALL service operations - they cause hangs
+# Services will be properly started after installation
+if [ -f /run/live/medium ] || [ -d /run/live ]; then
+    log "  - Live boot detected, skipping service restarts"
+    log "  - Services will be activated after installation"
+else
+    # Only on installed systems: apply network and restart services
+    log "  - Installed system detected, activating services..."
 
-# Restart affected services
-for svc in nginx haproxy crowdsec nftables; do
-    if systemctl is-enabled "$svc" &>/dev/null; then
-        systemctl restart "$svc" 2>/dev/null || true
-        log "  - Restarted: $svc"
+    # Apply netplan (background, don't wait)
+    if command -v netplan &>/dev/null; then
+        netplan apply &>/dev/null &
+        log "  - netplan apply triggered (background)"
     fi
-done
 
-# WireGuard interfaces
-for conf in /etc/wireguard/*.conf; do
-    [ -f "$conf" ] || continue
-    iface=$(basename "$conf" .conf)
-    systemctl enable "wg-quick@${iface}" 2>/dev/null || true
-    systemctl start "wg-quick@${iface}" 2>/dev/null || true
-    log "  - Started WireGuard: $iface"
-done
+    # Restart services in background to not block boot
+    for svc in nginx haproxy crowdsec nftables; do
+        if [ -f "/lib/systemd/system/${svc}.service" ] || [ -f "/etc/systemd/system/${svc}.service" ]; then
+            systemctl restart "$svc" &>/dev/null &
+            log "  - Restart triggered: $svc"
+        fi
+    done
+
+    # WireGuard interfaces
+    for conf in /etc/wireguard/*.conf; do
+        [ -f "$conf" ] || continue
+        iface=$(basename "$conf" .conf)
+        systemctl enable "wg-quick@${iface}" &>/dev/null || true
+        systemctl start "wg-quick@${iface}" &>/dev/null &
+        log "  - WireGuard triggered: $iface"
+    done
+
+    # Brief wait for background jobs, but don't block
+    sleep 2
+fi
 
 # ============================================
 # Cleanup

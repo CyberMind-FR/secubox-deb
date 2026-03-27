@@ -9,8 +9,8 @@ ConditionPathExists=!/var/lib/secubox/.preseed-applied
 Type=oneshot
 ExecStart=/usr/lib/secubox/preseed-apply.sh
 RemainAfterExit=yes
-StandardOutput=journal+console
-StandardError=journal+console
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
