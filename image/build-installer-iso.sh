@@ -229,6 +229,71 @@ EOF
 
 ok "Base configuration complete"
 
+# Disable network-wait-online to prevent boot hang
+chroot "${ROOTFS}" systemctl disable systemd-networkd-wait-online.service 2>/dev/null || true
+chroot "${ROOTFS}" systemctl mask systemd-networkd-wait-online.service 2>/dev/null || true
+# Also reduce timeout for NetworkManager if present
+mkdir -p "${ROOTFS}/etc/systemd/system/NetworkManager-wait-online.service.d"
+cat > "${ROOTFS}/etc/systemd/system/NetworkManager-wait-online.service.d/timeout.conf" <<EOF
+[Service]
+TimeoutStartSec=5
+EOF
+log "Disabled network-wait-online service"
+
+# Mask lxc-net (causes FAILED messages on console)
+chroot "${ROOTFS}" systemctl disable lxc-net.service 2>/dev/null || true
+chroot "${ROOTFS}" systemctl mask lxc-net.service 2>/dev/null || true
+chroot "${ROOTFS}" systemctl disable lxc.service 2>/dev/null || true
+chroot "${ROOTFS}" systemctl mask lxc.service 2>/dev/null || true
+
+# Configure systemd to not show status on console (quiet boot)
+mkdir -p "${ROOTFS}/etc/systemd/system.conf.d"
+cat > "${ROOTFS}/etc/systemd/system.conf.d/quiet-boot.conf" <<EOF
+[Manager]
+ShowStatus=no
+StatusUnitFormat=name
+EOF
+
+# Remove plymouth (causes console flickering)
+chroot "${ROOTFS}" apt-get remove --purge -y plymouth plymouth-label 2>/dev/null || true
+chroot "${ROOTFS}" apt-get autoremove -y 2>/dev/null || true
+
+# Disable console blanking and martian logging via kernel settings
+mkdir -p "${ROOTFS}/etc/sysctl.d"
+cat > "${ROOTFS}/etc/sysctl.d/99-secubox-console.conf" <<EOF
+# Disable console blanking
+kernel.consoleblank=0
+
+# Disable martian packet logging (floods console)
+net.ipv4.conf.all.log_martians=0
+net.ipv4.conf.default.log_martians=0
+
+# Lower kernel printk level to suppress non-critical messages
+kernel.printk=1 1 1 1
+EOF
+
+# Ensure getty autologin on tty1 for live (override live-config)
+mkdir -p "${ROOTFS}/etc/systemd/system/getty@tty1.service.d"
+cat > "${ROOTFS}/etc/systemd/system/getty@tty1.service.d/override.conf" <<EOF
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin root --noclear %I \$TERM
+Type=idle
+EOF
+
+# Disable live-config autologin (it tries to login as 'user' which doesn't exist)
+mkdir -p "${ROOTFS}/etc/live/config.conf.d"
+echo 'LIVE_CONFIG_NOAUTOLOGIN=true' > "${ROOTFS}/etc/live/config.conf.d/no-autologin.conf"
+
+# Also create a 'user' account as fallback (in case live-config still triggers)
+chroot "${ROOTFS}" useradd -m -s /bin/bash -G sudo user 2>/dev/null || true
+echo "user:secubox" | chroot "${ROOTFS}" chpasswd
+
+# Enable getty on tty1
+chroot "${ROOTFS}" systemctl enable getty@tty1.service 2>/dev/null || true
+
+log "Console configured (no blanking, autologin)"
+
 # ── Step 2b: Install firmware for real hardware ───────────────────
 log "2b/9 Installing firmware for hardware support..."
 
@@ -559,14 +624,14 @@ fi
 mkdir -p /run/secubox
 chmod 755 /run/secubox
 
-# Enable SecuBox services
-for svc in /etc/systemd/system/secubox-*.service /lib/systemd/system/secubox-*.service; do
-    [ -f "$svc" ] && systemctl enable "$(basename "$svc")" 2>/dev/null || true
-done
+# Skip enabling services on live boot - they are masked for stability
+# Services will be enabled after installation to disk
 
-# Start nginx
-systemctl enable nginx
-systemctl start nginx
+# Start nginx if not masked
+if ! systemctl is-enabled nginx 2>/dev/null | grep -q masked; then
+    systemctl enable nginx 2>/dev/null || true
+    systemctl start nginx 2>/dev/null || true
+fi
 
 # Get IP address
 IP=$(hostname -I | awk '{print $1}')
@@ -625,6 +690,34 @@ if [ -n "$PRESEED_FILE" ] && [ -f "$PRESEED_FILE" ]; then
     cp "$PRESEED_FILE" "${ROOTFS}/usr/share/secubox/preseed.tar.gz"
     ok "Preseed configuration included"
 fi
+
+# ── Disable services that cause restart loops on live boot ───────
+# These services require configs/dependencies that don't exist on live
+# They will be enabled after proper installation to disk
+log "Disabling services incompatible with live boot..."
+
+DISABLE_ON_LIVE=(
+    secubox-haproxy
+    secubox-zkp
+    secubox-nac
+    secubox-crowdsec
+    secubox-dpi
+    secubox-qos
+    secubox-mediaflow
+    secubox-cdn
+    secubox-vhost
+    secubox-netmodes
+    secubox-auth
+    secuboxd
+    lxc-net
+    lxc
+)
+
+for svc in "${DISABLE_ON_LIVE[@]}"; do
+    chroot "${ROOTFS}" systemctl disable "${svc}.service" 2>/dev/null || true
+    chroot "${ROOTFS}" systemctl mask "${svc}.service" 2>/dev/null || true
+done
+ok "Masked ${#DISABLE_ON_LIVE[@]} services for live boot stability"
 
 # Welcome message
 cat > "${ROOTFS}/etc/motd" <<'EOF'
@@ -712,27 +805,47 @@ set menu_color_normal=cyan/black
 set menu_color_highlight=white/blue
 
 menuentry "SecuBox Live (Default)" {
-    linux /live/vmlinuz boot=live components persistence quiet splash loglevel=3 usbcore.autosuspend=-1
+    linux /live/vmlinuz boot=live components persistence consoleblank=0 plymouth.enable=0 loglevel=1 usbcore.autosuspend=-1 libata.force=noncq
     initrd /live/initrd.img
 }
 
 menuentry "SecuBox Install (Headless Auto-Install)" {
-    linux /live/vmlinuz boot=live components toram systemd.unit=secubox-installer.target quiet loglevel=3 usbcore.autosuspend=-1
+    linux /live/vmlinuz boot=live components toram systemd.unit=secubox-installer.target consoleblank=0 plymouth.enable=0 loglevel=1 usbcore.autosuspend=-1 libata.force=noncq
     initrd /live/initrd.img
 }
 
 menuentry "SecuBox Live (No Persistence)" {
-    linux /live/vmlinuz boot=live components nopersistence quiet splash loglevel=3 usbcore.autosuspend=-1
+    linux /live/vmlinuz boot=live components nopersistence consoleblank=0 plymouth.enable=0 loglevel=1 usbcore.autosuspend=-1 libata.force=noncq
     initrd /live/initrd.img
 }
 
 menuentry "SecuBox Live (To RAM)" {
-    linux /live/vmlinuz boot=live components toram quiet splash loglevel=3 usbcore.autosuspend=-1
+    linux /live/vmlinuz boot=live components toram consoleblank=0 plymouth.enable=0 loglevel=1 usbcore.autosuspend=-1 libata.force=noncq
     initrd /live/initrd.img
 }
 
 menuentry "SecuBox Live (Safe Mode)" {
-    linux /live/vmlinuz boot=live components memtest noapic noapm nodma nomce nolapic nomodeset nosmp nosplash vga=normal
+    linux /live/vmlinuz boot=live components nomodeset nosplash consoleblank=0 plymouth.enable=0 loglevel=1 libata.force=noncq vga=normal
+    initrd /live/initrd.img
+}
+
+menuentry "SecuBox Debug (Rescue Shell)" {
+    linux /live/vmlinuz boot=live components systemd.unit=rescue.target consoleblank=0 plymouth.enable=0 loglevel=1 libata.force=noncq nomodeset
+    initrd /live/initrd.img
+}
+
+menuentry "SecuBox Debug (Emergency Shell)" {
+    linux /live/vmlinuz boot=live components systemd.unit=emergency.target consoleblank=0 plymouth.enable=0 loglevel=1 libata.force=noncq
+    initrd /live/initrd.img
+}
+
+menuentry "SecuBox Debug (No Preseed)" {
+    linux /live/vmlinuz boot=live components systemd.mask=secubox-preseed.service consoleblank=0 plymouth.enable=0 loglevel=1 libata.force=noncq
+    initrd /live/initrd.img
+}
+
+menuentry "SecuBox Minimal (No Services)" {
+    linux /live/vmlinuz boot=live components systemd.mask=secubox-preseed.service systemd.mask=secubox-live-init.service systemd.mask=nginx.service systemd.mask=haproxy.service consoleblank=0 plymouth.enable=0 loglevel=1 libata.force=noncq
     initrd /live/initrd.img
 }
 
@@ -760,17 +873,17 @@ set menu_color_normal=cyan/black
 set menu_color_highlight=white/blue
 
 menuentry "SecuBox Live (Default)" {
-    linux /live/vmlinuz boot=live components persistence quiet splash loglevel=3 usbcore.autosuspend=-1
+    linux /live/vmlinuz boot=live components persistence consoleblank=0 plymouth.enable=0 loglevel=1 usbcore.autosuspend=-1 libata.force=noncq
     initrd /live/initrd.img
 }
 
 menuentry "SecuBox Live (No Persistence)" {
-    linux /live/vmlinuz boot=live components nopersistence quiet splash loglevel=3 usbcore.autosuspend=-1
+    linux /live/vmlinuz boot=live components nopersistence consoleblank=0 plymouth.enable=0 loglevel=1 usbcore.autosuspend=-1 libata.force=noncq
     initrd /live/initrd.img
 }
 
 menuentry "SecuBox Live (To RAM)" {
-    linux /live/vmlinuz boot=live components toram quiet splash loglevel=3 usbcore.autosuspend=-1
+    linux /live/vmlinuz boot=live components toram consoleblank=0 plymouth.enable=0 loglevel=1 usbcore.autosuspend=-1 libata.force=noncq
     initrd /live/initrd.img
 }
 
