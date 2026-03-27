@@ -1,19 +1,40 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-03-26 (Session 20)*
-
----
-
-## 🔄 En cours
-
-### x64 Installer ISO Build 🔄
-- **Building**: `secubox-c3box-clone-amd64-bookworm.iso`
-- Debootstrap Debian bookworm amd64
-- Installing 50 SecuBox packages via slipstream
-- Creating hybrid live/installer ISO
+*Mis à jour : 2026-03-27 (Session 21)*
 
 ---
 
 ## ✅ Terminé cette session
+
+### Live ISO Boot Console Fixes ✅
+- **Issue**: Live ISO boot showed flickering console, login prompt disappearing
+- **Root causes identified and fixed**:
+  1. **Service restart loops** — 14 SecuBox services crashing on live boot (missing configs)
+  2. **Martian packet logging** — Network errors flooding console
+  3. **Getty autologin conflict** — live-config tried to login as 'user' (doesn't exist)
+  4. **Systemd status messages** — [FAILED] messages overwriting login prompt
+
+- **Fixes applied to `image/build-installer-iso.sh`**:
+  - Mask 14 services incompatible with live boot (secubox-haproxy, secuboxd, lxc-net, etc.)
+  - Disable martian packet logging via sysctl
+  - Configure systemd ShowStatus=no for quiet boot
+  - Fix getty autologin: disable live-config autologin, create 'user' fallback account
+  - Set kernel printk level to suppress non-critical messages
+  - Add debug boot menu entries (rescue, emergency, no-preseed)
+
+- **Fixes applied to `image/preseed-apply.sh`**:
+  - Skip service restarts on live boot entirely
+  - Use background processes for installed systems
+
+- **Output**:
+  - ISO: `secubox-c3box-clone-amd64-bookworm.iso` (457MB)
+  - IMG: `secubox-c3box-clone-amd64-bookworm.img` (969MB)
+  - Live boot working with stable console login
+
+- **Commit pushed**: `288b27a Fix live ISO boot console issues`
+
+---
+
+## ✅ Terminé session précédente (Session 20)
 
 ### x64 Installer ISO Build System ✅
 - **image/build-installer-iso.sh** (886 lines) — Hybrid Live USB / Headless Installer
@@ -821,6 +842,15 @@ curl -sk https://localhost:8443/api/v1/hub/menu | jq '.total_modules'
 ---
 
 ## 🗓️ Historique récent
+
+- **2026-03-27** (Session 21):
+  - Fixed live ISO boot console issues (flickering, no login prompt)
+  - Masked 14 services that cause restart loops on live boot
+  - Fixed getty autologin conflict with live-config
+  - Disabled martian packet logging and systemd status messages
+  - Added debug boot menu entries (rescue, emergency, no-preseed)
+  - Live ISO now boots with stable console login
+  - Commit pushed: `288b27a Fix live ISO boot console issues`
 
 - **2026-03-26** (Session 20):
   - x64 Installer ISO build system: build-installer-iso.sh (hybrid live/installer)
