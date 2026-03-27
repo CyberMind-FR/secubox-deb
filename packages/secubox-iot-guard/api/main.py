@@ -372,27 +372,47 @@ class IoTGuard:
             notes=row[17] or ""
         )
 
-    def list_devices(self, device_type: str = None, risk_level: str = None) -> List[Device]:
-        """List all devices with optional filtering."""
+    def list_devices(self, device_type: str = None, risk_level: str = None,
+                      quarantined: bool = None, limit: int = 100, offset: int = 0) -> Dict[str, Any]:
+        """List devices with filtering and pagination."""
         conn = sqlite3.connect(self.db_file)
         cursor = conn.cursor()
 
         query = "SELECT * FROM devices WHERE 1=1"
+        count_query = "SELECT COUNT(*) FROM devices WHERE 1=1"
         params = []
 
         if device_type:
             query += " AND device_type = ?"
+            count_query += " AND device_type = ?"
             params.append(device_type)
         if risk_level:
             query += " AND risk_level = ?"
+            count_query += " AND risk_level = ?"
             params.append(risk_level)
+        if quarantined is not None:
+            query += " AND is_quarantined = ?"
+            count_query += " AND is_quarantined = ?"
+            params.append(1 if quarantined else 0)
 
-        query += " ORDER BY last_seen DESC"
-        cursor.execute(query, params)
+        # Get total count
+        cursor.execute(count_query, params)
+        total = cursor.fetchone()[0]
+
+        # Get paginated results
+        query += " ORDER BY last_seen DESC LIMIT ? OFFSET ?"
+        cursor.execute(query, params + [limit, offset])
         rows = cursor.fetchall()
         conn.close()
 
-        return [self._row_to_device(row) for row in rows]
+        devices = [self._row_to_device(row) for row in rows]
+        return {
+            "devices": devices,
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            "has_more": offset + len(devices) < total
+        }
 
     def get_device(self, mac_address: str) -> Optional[Device]:
         """Get device by MAC address."""
@@ -494,53 +514,137 @@ class IoTGuard:
 
     def _apply_quarantine(self, mac_address: str):
         """Apply nftables rules to quarantine device."""
+        # Validate MAC address to prevent injection
+        if not self._validate_mac(mac_address):
+            logger.warning(f"Invalid MAC address format: {mac_address}")
+            return False
+
         try:
-            subprocess.run([
+            result = subprocess.run([
                 "nft", "add", "rule", "inet", "filter", "forward",
                 "ether", "saddr", mac_address, "drop"
             ], capture_output=True, timeout=5)
+            if result.returncode == 0:
+                logger.info(f"Applied quarantine rule for {mac_address}")
+                return True
+            else:
+                logger.warning(f"nft returned {result.returncode}: {result.stderr}")
+                return False
         except Exception as e:
             logger.warning(f"Failed to apply quarantine: {e}")
+            return False
+
+    def _validate_mac(self, mac_address: str) -> bool:
+        """Validate MAC address format to prevent injection."""
+        pattern = r'^([0-9a-f]{2}:){5}[0-9a-f]{2}$'
+        return bool(re.match(pattern, mac_address.lower()))
 
     def _remove_quarantine(self, mac_address: str):
-        """Remove nftables quarantine rules."""
+        """Remove nftables quarantine rules safely."""
+        # Validate MAC address to prevent shell injection
+        if not self._validate_mac(mac_address):
+            logger.warning(f"Invalid MAC address format: {mac_address}")
+            return
+
         try:
-            subprocess.run([
-                "nft", "delete", "rule", "inet", "filter", "forward",
-                "handle", "$(nft -a list chain inet filter forward | grep",
-                mac_address, "| awk '{print $NF}')"
-            ], shell=True, capture_output=True, timeout=5)
+            # Step 1: List rules with handles to find matching rule
+            result = subprocess.run(
+                ["nft", "-a", "list", "chain", "inet", "filter", "forward"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+
+            # Step 2: Find handle for this MAC address
+            handle = None
+            for line in result.stdout.split('\n'):
+                if mac_address.lower() in line.lower() and 'handle' in line:
+                    # Extract handle number from line like "... handle 42"
+                    match = re.search(r'handle\s+(\d+)', line)
+                    if match:
+                        handle = match.group(1)
+                        break
+
+            # Step 3: Delete rule by handle (safe, no shell interpolation)
+            if handle:
+                subprocess.run(
+                    ["nft", "delete", "rule", "inet", "filter", "forward", "handle", handle],
+                    capture_output=True,
+                    timeout=5
+                )
+                logger.info(f"Removed quarantine rule for {mac_address}")
+            else:
+                logger.warning(f"No quarantine rule found for {mac_address}")
+
         except Exception as e:
             logger.warning(f"Failed to remove quarantine: {e}")
 
-    def run_discovery(self, network: str = None) -> int:
+    def run_discovery(self, network: str = None, use_nmap: bool = False) -> Dict[str, Any]:
         """Run full device discovery."""
-        # ARP discovery (fast)
+        discovered = []
+        methods_used = []
+
+        # ARP discovery (fast, always runs)
         arp_devices = self.discover_arp()
+        methods_used.append("arp")
         for dev in arp_devices:
-            if dev.get("mac_address"):
-                self.register_device(
+            if dev.get("mac_address") and self._validate_mac(dev["mac_address"]):
+                device = self.register_device(
                     dev["mac_address"],
                     dev.get("ip_address"),
                     dev.get("hostname")
                 )
+                discovered.append(device.mac_address)
 
-        return len(arp_devices)
+        # nmap discovery (optional, slower but more thorough)
+        if use_nmap and network:
+            nmap_devices = self.discover_nmap(network)
+            methods_used.append("nmap")
+            for dev in nmap_devices:
+                mac = dev.get("mac_address")
+                if mac and self._validate_mac(mac) and mac not in discovered:
+                    device = self.register_device(
+                        mac,
+                        dev.get("ip_address"),
+                        dev.get("hostname")
+                    )
+                    discovered.append(device.mac_address)
+
+        return {
+            "discovered": len(discovered),
+            "methods": methods_used,
+            "devices": discovered
+        }
 
     def get_stats(self) -> Dict[str, Any]:
         """Get IoT guard statistics."""
-        devices = self.list_devices()
+        result = self.list_devices(limit=10000)  # Get all for stats
+        devices = result["devices"]
 
         by_type = {}
         by_risk = {}
+        recent_24h = 0
+        now = datetime.utcnow()
+
         for device in devices:
             by_type[device.device_type.value] = by_type.get(device.device_type.value, 0) + 1
             by_risk[device.risk_level.value] = by_risk.get(device.risk_level.value, 0) + 1
 
+            # Count devices seen in last 24h
+            try:
+                last_seen = datetime.fromisoformat(device.last_seen.replace('Z', '+00:00').replace('+00:00', ''))
+                if (now - last_seen).total_seconds() < 86400:
+                    recent_24h += 1
+            except Exception:
+                pass
+
         return {
             "total_devices": len(devices),
             "known_devices": sum(1 for d in devices if d.is_known),
+            "unknown_devices": sum(1 for d in devices if not d.is_known),
             "quarantined": sum(1 for d in devices if d.is_quarantined),
+            "active_24h": recent_24h,
+            "high_risk": sum(1 for d in devices if d.risk_level in [RiskLevel.HIGH, RiskLevel.CRITICAL]),
             "by_type": by_type,
             "by_risk": by_risk
         }
@@ -580,20 +684,27 @@ async def get_stats():
 
 
 @app.post("/discover", dependencies=[Depends(require_jwt)])
-async def run_discovery(network: Optional[str] = None):
-    """Run device discovery."""
-    count = guard.run_discovery(network)
-    return {"discovered": count}
+async def run_discovery(network: Optional[str] = None, use_nmap: bool = False):
+    """Run device discovery.
+
+    Args:
+        network: Network CIDR for nmap scan (e.g., 192.168.1.0/24)
+        use_nmap: Whether to use nmap for thorough scanning (slower)
+    """
+    result = guard.run_discovery(network, use_nmap)
+    return result
 
 
 @app.get("/devices", dependencies=[Depends(require_jwt)])
 async def list_devices(
     device_type: Optional[str] = None,
-    risk_level: Optional[str] = None
+    risk_level: Optional[str] = None,
+    quarantined: Optional[bool] = None,
+    limit: int = 100,
+    offset: int = 0
 ):
-    """List devices."""
-    devices = guard.list_devices(device_type, risk_level)
-    return {"devices": devices, "count": len(devices)}
+    """List devices with filtering and pagination."""
+    return guard.list_devices(device_type, risk_level, quarantined, limit, offset)
 
 
 @app.get("/devices/{mac_address}", dependencies=[Depends(require_jwt)])

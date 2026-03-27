@@ -273,16 +273,21 @@ labels:
   source: threat-analyst
 """
         elif rule_type == RuleType.MITMPROXY:
-            # Generate mitmproxy filter
-            rule_content = f"""# Auto-generated filter
+            # Generate mitmproxy filter - fix: use proper list syntax
+            ip_list = list(ips)[:20]
+            ip_set_str = ', '.join(f'"{ip}"' for ip in ip_list)
+            rule_content = f'''# Auto-generated filter
 # Alerts: {len(alerts)}
 # Types: {', '.join(types)}
 
+BLOCKED_IPS = {{{ip_set_str}}}
+
 def request(flow):
-    blocked_ips = {list(ips)[:20]}
-    if flow.client_conn.address[0] in blocked_ips:
-        flow.response = flow.error_response(403, "Blocked by threat-analyst")
-"""
+    client_ip = flow.client_conn.address[0]
+    if client_ip in BLOCKED_IPS:
+        from mitmproxy import http
+        flow.response = http.Response.make(403, b"Blocked by threat-analyst")
+'''
         elif rule_type == RuleType.NFTABLES:
             # Generate nftables rules
             ip_list = " ".join(list(ips)[:50])
@@ -322,19 +327,150 @@ add rule inet filter input ip saddr $THREAT_IPS drop
 
         return rule
 
-    def apply_rule(self, rule_id: str) -> bool:
-        """Apply an approved rule."""
+    def apply_rule(self, rule_id: str) -> Dict[str, Any]:
+        """Apply an approved rule to the appropriate system."""
         rule = self.rules.get(rule_id)
-        if not rule or rule.status != RuleStatus.APPROVED:
-            return False
+        if not rule:
+            return {"success": False, "error": "Rule not found"}
+        if rule.status != RuleStatus.APPROVED:
+            return {"success": False, "error": "Rule not approved"}
 
-        # Implementation depends on rule type
-        # For now, just mark as applied
-        rule.status = RuleStatus.APPLIED
-        rule.applied_at = datetime.utcnow().isoformat() + "Z"
-        self._save_rules()
+        result = {"success": False, "error": "Unknown rule type"}
 
-        return True
+        try:
+            if rule.type == RuleType.NFTABLES:
+                result = self._apply_nftables_rule(rule)
+            elif rule.type == RuleType.CROWDSEC:
+                result = self._apply_crowdsec_rule(rule)
+            elif rule.type == RuleType.MITMPROXY:
+                result = self._apply_mitmproxy_rule(rule)
+            else:
+                result = {"success": False, "error": f"Rule type {rule.type} not supported for auto-apply"}
+
+            if result["success"]:
+                rule.status = RuleStatus.APPLIED
+                rule.applied_at = datetime.utcnow().isoformat() + "Z"
+                self._save_rules()
+
+        except Exception as e:
+            result = {"success": False, "error": str(e)}
+
+        return result
+
+    def _apply_nftables_rule(self, rule: GeneratedRule) -> Dict[str, Any]:
+        """Apply nftables rule."""
+        try:
+            # Write rule to temp file and apply with nft -f
+            rule_file = self.data_dir / f"nft-{rule.id}.conf"
+            rule_file.write_text(rule.rule_content)
+
+            result = subprocess.run(
+                ["nft", "-f", str(rule_file)],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+
+            if result.returncode == 0:
+                logger.info(f"Applied nftables rule {rule.id}")
+                return {"success": True}
+            else:
+                return {"success": False, "error": result.stderr}
+
+        except subprocess.TimeoutExpired:
+            return {"success": False, "error": "nft command timed out"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def _apply_crowdsec_rule(self, rule: GeneratedRule) -> Dict[str, Any]:
+        """Apply CrowdSec scenario."""
+        try:
+            # Write scenario to CrowdSec scenarios directory
+            scenario_dir = Path("/etc/crowdsec/scenarios")
+            scenario_dir.mkdir(parents=True, exist_ok=True)
+            scenario_file = scenario_dir / f"{rule.id}.yaml"
+            scenario_file.write_text(rule.rule_content)
+
+            # Reload CrowdSec to pick up new scenario
+            result = subprocess.run(
+                ["systemctl", "reload", "crowdsec"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+
+            if result.returncode == 0:
+                logger.info(f"Applied CrowdSec scenario {rule.id}")
+                return {"success": True, "file": str(scenario_file)}
+            else:
+                # Rollback - remove the file
+                scenario_file.unlink(missing_ok=True)
+                return {"success": False, "error": result.stderr or "CrowdSec reload failed"}
+
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def _apply_mitmproxy_rule(self, rule: GeneratedRule) -> Dict[str, Any]:
+        """Apply mitmproxy addon."""
+        try:
+            # Write addon to mitmproxy addons directory
+            addon_dir = Path("/srv/mitmproxy/addons")
+            addon_dir.mkdir(parents=True, exist_ok=True)
+            addon_file = addon_dir / f"{rule.id}.py"
+            addon_file.write_text(rule.rule_content)
+
+            # Restart mitmproxy to load new addon
+            result = subprocess.run(
+                ["systemctl", "restart", "mitmproxy"],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+
+            if result.returncode == 0:
+                logger.info(f"Applied mitmproxy addon {rule.id}")
+                return {"success": True, "file": str(addon_file)}
+            else:
+                # Rollback - remove the file
+                addon_file.unlink(missing_ok=True)
+                return {"success": False, "error": result.stderr or "mitmproxy restart failed"}
+
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def rollback_rule(self, rule_id: str) -> Dict[str, Any]:
+        """Rollback an applied rule."""
+        rule = self.rules.get(rule_id)
+        if not rule:
+            return {"success": False, "error": "Rule not found"}
+        if rule.status != RuleStatus.APPLIED:
+            return {"success": False, "error": "Rule not applied"}
+
+        try:
+            if rule.type == RuleType.CROWDSEC:
+                scenario_file = Path(f"/etc/crowdsec/scenarios/{rule.id}.yaml")
+                scenario_file.unlink(missing_ok=True)
+                subprocess.run(["systemctl", "reload", "crowdsec"], timeout=10)
+
+            elif rule.type == RuleType.MITMPROXY:
+                addon_file = Path(f"/srv/mitmproxy/addons/{rule.id}.py")
+                addon_file.unlink(missing_ok=True)
+                subprocess.run(["systemctl", "restart", "mitmproxy"], timeout=30)
+
+            elif rule.type == RuleType.NFTABLES:
+                # nftables rules are harder to rollback - mark for manual review
+                rule_file = self.data_dir / f"nft-{rule.id}.conf"
+                rule_file.unlink(missing_ok=True)
+                logger.warning(f"nftables rule {rule.id} file removed, but active rules may need manual cleanup")
+
+            rule.status = RuleStatus.APPROVED  # Reset to approved
+            rule.applied_at = None
+            self._save_rules()
+
+            return {"success": True, "message": f"Rule {rule.id} rolled back"}
+
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
     def get_stats(self) -> Dict[str, Any]:
         """Get threat analysis statistics."""
@@ -491,10 +627,20 @@ async def reject_rule(rule_id: str):
 
 @app.post("/rules/{rule_id}/apply", dependencies=[Depends(require_jwt)])
 async def apply_rule(rule_id: str):
-    """Apply an approved rule."""
-    if not analyzer.apply_rule(rule_id):
-        raise HTTPException(status_code=400, detail="Rule not approved or not found")
-    return {"status": "applied"}
+    """Apply an approved rule to the target system."""
+    result = analyzer.apply_rule(rule_id)
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result.get("error", "Apply failed"))
+    return {"status": "applied", "result": result}
+
+
+@app.post("/rules/{rule_id}/rollback", dependencies=[Depends(require_jwt)])
+async def rollback_rule(rule_id: str):
+    """Rollback an applied rule."""
+    result = analyzer.rollback_rule(rule_id)
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result.get("error", "Rollback failed"))
+    return {"status": "rolled_back", "result": result}
 
 
 # ============================================================================

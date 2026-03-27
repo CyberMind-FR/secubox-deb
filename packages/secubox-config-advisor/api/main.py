@@ -502,6 +502,202 @@ class ConfigAdvisor:
                 reference="CIS 5.1.3"
             )
 
+    def check_sudo_nopasswd(self) -> CheckResult:
+        """Check for NOPASSWD in sudoers."""
+        code, output = self._run_cmd(["grep", "-r", "NOPASSWD", "/etc/sudoers", "/etc/sudoers.d/"])
+
+        if code == 0 and output.strip():
+            return CheckResult(
+                check_id="SUDO-01",
+                name="No NOPASSWD in sudoers",
+                category=Category.ACCESS_CONTROL,
+                severity=Severity.HIGH,
+                status=CheckStatus.WARNING,
+                description="NOPASSWD entries found in sudoers",
+                finding=output.strip()[:200],
+                remediation="Remove NOPASSWD entries from sudoers files",
+                reference="CIS 5.3"
+            )
+        else:
+            return CheckResult(
+                check_id="SUDO-01",
+                name="No NOPASSWD in sudoers",
+                category=Category.ACCESS_CONTROL,
+                severity=Severity.HIGH,
+                status=CheckStatus.PASS,
+                description="No NOPASSWD entries in sudoers",
+                reference="CIS 5.3"
+            )
+
+    def check_world_writable_files(self) -> CheckResult:
+        """Check for world-writable files in critical directories."""
+        code, output = self._run_cmd([
+            "find", "/etc", "-type", "f", "-perm", "-002",
+            "-not", "-path", "/etc/mtab", "-print"
+        ], timeout=30)
+
+        files = [f for f in output.strip().split("\n") if f]
+
+        if files:
+            return CheckResult(
+                check_id="FS-03",
+                name="No world-writable config files",
+                category=Category.FILESYSTEM,
+                severity=Severity.HIGH,
+                status=CheckStatus.FAIL,
+                description="World-writable files found in /etc",
+                finding=f"Found {len(files)} files: {', '.join(files[:5])}",
+                remediation="chmod o-w <files>",
+                reference="CIS 6.1.10"
+            )
+        else:
+            return CheckResult(
+                check_id="FS-03",
+                name="No world-writable config files",
+                category=Category.FILESYSTEM,
+                severity=Severity.HIGH,
+                status=CheckStatus.PASS,
+                description="No world-writable files in /etc",
+                reference="CIS 6.1.10"
+            )
+
+    def check_sysctl_hardening(self) -> CheckResult:
+        """Check kernel hardening sysctls."""
+        checks_passed = 0
+        checks_failed = []
+
+        sysctl_checks = {
+            "net.ipv4.conf.all.accept_redirects": "0",
+            "net.ipv4.conf.all.send_redirects": "0",
+            "net.ipv4.conf.all.accept_source_route": "0",
+            "net.ipv4.icmp_echo_ignore_broadcasts": "1",
+            "kernel.randomize_va_space": "2",
+        }
+
+        for key, expected in sysctl_checks.items():
+            try:
+                path = f"/proc/sys/{key.replace('.', '/')}"
+                actual = Path(path).read_text().strip()
+                if actual == expected:
+                    checks_passed += 1
+                else:
+                    checks_failed.append(f"{key}={actual} (expected {expected})")
+            except Exception:
+                checks_failed.append(f"{key}=unknown")
+
+        if checks_failed:
+            return CheckResult(
+                check_id="KERNEL-01",
+                name="Kernel hardening sysctls",
+                category=Category.KERNEL,
+                severity=Severity.MEDIUM,
+                status=CheckStatus.WARNING if len(checks_failed) < 3 else CheckStatus.FAIL,
+                description="Some kernel hardening sysctls not configured",
+                finding="; ".join(checks_failed),
+                remediation="Add recommended values to /etc/sysctl.conf",
+                reference="CIS 3.2"
+            )
+        else:
+            return CheckResult(
+                check_id="KERNEL-01",
+                name="Kernel hardening sysctls",
+                category=Category.KERNEL,
+                severity=Severity.MEDIUM,
+                status=CheckStatus.PASS,
+                description="Kernel hardening sysctls are properly configured",
+                reference="CIS 3.2"
+            )
+
+    # Auto-remediation methods
+    def apply_fix(self, check_id: str) -> Dict[str, Any]:
+        """Apply automatic fix for a check."""
+        fixes = {
+            "ANSSI-R28": self._fix_ssh_root_login,
+            "ANSSI-R29": self._fix_ssh_password_auth,
+            "ANSSI-R18": self._fix_kernel_aslr,
+            "FS-01": self._fix_shadow_permissions,
+            "FS-02": self._fix_cron_permissions,
+            "KERNEL-01": self._fix_sysctl_hardening,
+        }
+
+        if check_id not in fixes:
+            return {"success": False, "error": f"No auto-fix available for {check_id}"}
+
+        try:
+            result = fixes[check_id]()
+            return result
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def _fix_ssh_root_login(self) -> Dict[str, Any]:
+        """Fix SSH root login setting."""
+        sshd_config = Path("/etc/ssh/sshd_config")
+        if not sshd_config.exists():
+            return {"success": False, "error": "sshd_config not found"}
+
+        content = sshd_config.read_text()
+        if re.search(r'^PermitRootLogin', content, re.MULTILINE):
+            content = re.sub(r'^PermitRootLogin\s+.*$', 'PermitRootLogin no', content, flags=re.MULTILINE)
+        else:
+            content += "\nPermitRootLogin no\n"
+
+        sshd_config.write_text(content)
+        self._run_cmd(["systemctl", "reload", "sshd"])
+        return {"success": True, "action": "Set PermitRootLogin no"}
+
+    def _fix_ssh_password_auth(self) -> Dict[str, Any]:
+        """Fix SSH password auth setting."""
+        sshd_config = Path("/etc/ssh/sshd_config")
+        if not sshd_config.exists():
+            return {"success": False, "error": "sshd_config not found"}
+
+        content = sshd_config.read_text()
+        if re.search(r'^PasswordAuthentication', content, re.MULTILINE):
+            content = re.sub(r'^PasswordAuthentication\s+.*$', 'PasswordAuthentication no', content, flags=re.MULTILINE)
+        else:
+            content += "\nPasswordAuthentication no\n"
+
+        sshd_config.write_text(content)
+        self._run_cmd(["systemctl", "reload", "sshd"])
+        return {"success": True, "action": "Set PasswordAuthentication no"}
+
+    def _fix_kernel_aslr(self) -> Dict[str, Any]:
+        """Enable ASLR."""
+        Path("/proc/sys/kernel/randomize_va_space").write_text("2")
+
+        # Make persistent
+        sysctl_conf = Path("/etc/sysctl.d/99-secubox-aslr.conf")
+        sysctl_conf.write_text("kernel.randomize_va_space = 2\n")
+
+        return {"success": True, "action": "Enabled ASLR (persistent)"}
+
+    def _fix_shadow_permissions(self) -> Dict[str, Any]:
+        """Fix /etc/shadow permissions."""
+        self._run_cmd(["chmod", "640", "/etc/shadow"])
+        self._run_cmd(["chown", "root:shadow", "/etc/shadow"])
+        return {"success": True, "action": "Set /etc/shadow to 640"}
+
+    def _fix_cron_permissions(self) -> Dict[str, Any]:
+        """Fix cron directory permissions."""
+        for d in ["/etc/cron.d", "/etc/cron.daily", "/etc/cron.hourly", "/etc/cron.weekly", "/etc/cron.monthly"]:
+            if Path(d).exists():
+                self._run_cmd(["chmod", "700", d])
+        return {"success": True, "action": "Set cron directories to 700"}
+
+    def _fix_sysctl_hardening(self) -> Dict[str, Any]:
+        """Apply kernel hardening sysctls."""
+        sysctl_conf = Path("/etc/sysctl.d/99-secubox-hardening.conf")
+        content = """# SecuBox kernel hardening
+net.ipv4.conf.all.accept_redirects = 0
+net.ipv4.conf.all.send_redirects = 0
+net.ipv4.conf.all.accept_source_route = 0
+net.ipv4.icmp_echo_ignore_broadcasts = 1
+kernel.randomize_va_space = 2
+"""
+        sysctl_conf.write_text(content)
+        self._run_cmd(["sysctl", "-p", str(sysctl_conf)])
+        return {"success": True, "action": "Applied kernel hardening sysctls"}
+
     def run_audit(self) -> AuditReport:
         """Run full security audit."""
         import time
@@ -519,6 +715,9 @@ class ConfigAdvisor:
             self.check_unnecessary_services,
             self.check_permissions_shadow,
             self.check_cron_permissions,
+            self.check_sudo_nopasswd,
+            self.check_world_writable_files,
+            self.check_sysctl_hardening,
         ]
 
         results = []
@@ -670,6 +869,31 @@ async def get_history(limit: int = 10):
             except Exception:
                 continue
     return {"history": list(reversed(history))}
+
+
+@app.post("/fix/{check_id}", dependencies=[Depends(require_jwt)])
+async def apply_fix(check_id: str):
+    """Apply automatic fix for a failed check."""
+    result = advisor.apply_fix(check_id)
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("error", "Fix failed"))
+    return result
+
+
+@app.get("/fixable", dependencies=[Depends(require_jwt)])
+async def list_fixable():
+    """List checks that have auto-fix available."""
+    fixable_checks = ["ANSSI-R28", "ANSSI-R29", "ANSSI-R18", "FS-01", "FS-02", "KERNEL-01"]
+
+    if not advisor._last_report:
+        return {"fixable": []}
+
+    failed_fixable = [
+        r for r in advisor._last_report.results
+        if r.check_id in fixable_checks and r.status == CheckStatus.FAIL
+    ]
+
+    return {"fixable": failed_fixable}
 
 
 # ============================================================================

@@ -86,10 +86,13 @@ class DnsGuard:
     def __init__(self, data_dir: Path):
         self.data_dir = data_dir
         self.blocklist_file = data_dir / "blocklist.txt"
+        self.whitelist_file = data_dir / "whitelist.txt"
         self.pending_file = data_dir / "pending.json"
         self.alerts_file = data_dir / "alerts.jsonl"
+        self.feeds_dir = data_dir / "feeds"
         self._ensure_dirs()
         self._load_blocklist()
+        self._load_whitelist()
         self._load_pending()
 
         # Known suspicious TLDs
@@ -99,12 +102,20 @@ class DnsGuard:
             "bid", "loan", "download", "stream"
         }
 
-        # DGA detection thresholds
+        # DGA detection thresholds (configurable)
         self.dga_entropy_threshold = 3.5
         self.dga_consonant_threshold = 0.7
 
+        # Threat feed URLs
+        self.threat_feeds = {
+            "malware-domains": "https://malware-filter.gitlab.io/malware-filter/urlhaus-filter-hosts.txt",
+            "phishing": "https://phishing.army/download/phishing_army_blocklist.txt",
+            "abuse-ch": "https://urlhaus.abuse.ch/downloads/hostfile/"
+        }
+
     def _ensure_dirs(self):
         self.data_dir.mkdir(parents=True, exist_ok=True)
+        self.feeds_dir.mkdir(parents=True, exist_ok=True)
 
     def _load_blocklist(self):
         """Load blocked domains."""
@@ -123,6 +134,104 @@ class DnsGuard:
             f.write(f"# Updated: {datetime.utcnow().isoformat()}\n")
             for domain in sorted(self.blocklist):
                 f.write(f"{domain}\n")
+
+    def _load_whitelist(self):
+        """Load whitelisted domains (never block these)."""
+        self.whitelist: Set[str] = set()
+        if self.whitelist_file.exists():
+            self.whitelist = set(
+                line.strip()
+                for line in self.whitelist_file.read_text().split("\n")
+                if line.strip() and not line.startswith("#")
+            )
+
+        # Always whitelist common safe domains
+        self.whitelist.update([
+            "google.com", "googleapis.com", "gstatic.com",
+            "microsoft.com", "windows.com", "windowsupdate.com",
+            "apple.com", "icloud.com",
+            "github.com", "githubusercontent.com",
+            "cloudflare.com", "cloudflare-dns.com",
+            "amazon.com", "amazonaws.com", "aws.amazon.com"
+        ])
+
+    def _save_whitelist(self):
+        """Save whitelist to file."""
+        with open(self.whitelist_file, "w") as f:
+            f.write("# SecuBox DNS Guard Whitelist\n")
+            f.write(f"# Updated: {datetime.utcnow().isoformat()}\n")
+            for domain in sorted(self.whitelist):
+                f.write(f"{domain}\n")
+
+    def is_whitelisted(self, domain: str) -> bool:
+        """Check if domain is whitelisted."""
+        domain = domain.lower()
+
+        # Check exact match
+        if domain in self.whitelist:
+            return True
+
+        # Check parent domains
+        parts = domain.split(".")
+        for i in range(1, len(parts)):
+            parent = ".".join(parts[i:])
+            if parent in self.whitelist:
+                return True
+
+        return False
+
+    async def download_threat_feed(self, feed_name: str) -> Dict[str, Any]:
+        """Download and process a threat feed."""
+        if feed_name not in self.threat_feeds:
+            return {"success": False, "error": f"Unknown feed: {feed_name}"}
+
+        url = self.threat_feeds[feed_name]
+        feed_file = self.feeds_dir / f"{feed_name}.txt"
+
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(url, timeout=60.0, follow_redirects=True)
+                response.raise_for_status()
+
+            # Parse the feed (handle different formats)
+            domains = set()
+            for line in response.text.split("\n"):
+                line = line.strip()
+                if not line or line.startswith("#") or line.startswith("!"):
+                    continue
+
+                # Handle hosts file format (127.0.0.1 domain.com or 0.0.0.0 domain.com)
+                if line.startswith(("127.0.0.1", "0.0.0.0")):
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        domain = parts[1].lower()
+                        if domain and domain != "localhost":
+                            domains.add(domain)
+                # Plain domain format
+                elif re.match(r'^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', line):
+                    domains.add(line.lower())
+
+            # Save feed file
+            feed_file.write_text("\n".join(sorted(domains)))
+
+            # Add to blocklist (excluding whitelisted)
+            added = 0
+            for domain in domains:
+                if not self.is_whitelisted(domain) and domain not in self.blocklist:
+                    self.blocklist.add(domain)
+                    added += 1
+
+            self._save_blocklist()
+
+            return {
+                "success": True,
+                "feed": feed_name,
+                "total_domains": len(domains),
+                "added_to_blocklist": added
+            }
+
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
     def _load_pending(self):
         """Load pending blocks (awaiting approval)."""
@@ -377,8 +486,12 @@ class DnsGuard:
             logger.warning(f"Failed to sync dnsmasq: {e}")
 
     def is_blocked(self, domain: str) -> bool:
-        """Check if domain is blocked."""
+        """Check if domain is blocked (whitelist takes precedence)."""
         domain = domain.lower()
+
+        # Whitelist takes precedence
+        if self.is_whitelisted(domain):
+            return False
 
         # Check exact match
         if domain in self.blocklist:
@@ -396,6 +509,10 @@ class DnsGuard:
     def analyze_domain(self, domain: str) -> List[DnsAlert]:
         """Run all detection methods on a domain."""
         alerts = []
+
+        # Skip whitelisted domains
+        if self.is_whitelisted(domain):
+            return alerts
 
         # Check if already blocked
         if self.is_blocked(domain):
@@ -424,10 +541,20 @@ class DnsGuard:
         for alert in alerts:
             by_type[alert.type.value] = by_type.get(alert.type.value, 0) + 1
 
+        # Count feed domains
+        feed_domains = 0
+        for feed_file in self.feeds_dir.glob("*.txt"):
+            try:
+                feed_domains += len(feed_file.read_text().strip().split("\n"))
+            except Exception:
+                pass
+
         return {
             "blocklist_count": len(self.blocklist),
+            "whitelist_count": len(self.whitelist),
             "pending_count": len(self.pending),
             "alerts_24h": len(alerts),
+            "feed_domains": feed_domains,
             "by_type": by_type
         }
 
@@ -548,8 +675,71 @@ async def check_domain(domain: str):
     """Check if a domain is blocked (public endpoint)."""
     return {
         "domain": domain,
-        "blocked": guard.is_blocked(domain)
+        "blocked": guard.is_blocked(domain),
+        "whitelisted": guard.is_whitelisted(domain)
     }
+
+
+# Whitelist Management
+@app.get("/whitelist", dependencies=[Depends(require_jwt)])
+async def get_whitelist():
+    """Get current whitelist."""
+    return {"domains": sorted(guard.whitelist), "count": len(guard.whitelist)}
+
+
+@app.post("/whitelist", dependencies=[Depends(require_jwt)])
+async def add_to_whitelist(domain: str):
+    """Add domain to whitelist."""
+    guard.whitelist.add(domain.lower())
+    guard._save_whitelist()
+    return {"status": "whitelisted", "domain": domain}
+
+
+@app.delete("/whitelist/{domain}", dependencies=[Depends(require_jwt)])
+async def remove_from_whitelist(domain: str):
+    """Remove domain from whitelist."""
+    domain = domain.lower()
+    if domain not in guard.whitelist:
+        raise HTTPException(status_code=404, detail="Domain not in whitelist")
+    guard.whitelist.discard(domain)
+    guard._save_whitelist()
+    return {"status": "removed"}
+
+
+# Threat Feeds
+@app.get("/feeds", dependencies=[Depends(require_jwt)])
+async def list_feeds():
+    """List available threat feeds."""
+    feeds = []
+    for name, url in guard.threat_feeds.items():
+        feed_file = guard.feeds_dir / f"{name}.txt"
+        feeds.append({
+            "name": name,
+            "url": url,
+            "downloaded": feed_file.exists(),
+            "domains": len(feed_file.read_text().split("\n")) if feed_file.exists() else 0
+        })
+    return {"feeds": feeds}
+
+
+@app.post("/feeds/{feed_name}/download", dependencies=[Depends(require_jwt)])
+async def download_feed(feed_name: str):
+    """Download and import a threat feed."""
+    result = await guard.download_threat_feed(feed_name)
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result.get("error"))
+    return result
+
+
+@app.post("/feeds/download-all", dependencies=[Depends(require_jwt)])
+async def download_all_feeds():
+    """Download all available threat feeds."""
+    results = {}
+    for feed_name in guard.threat_feeds.keys():
+        results[feed_name] = await guard.download_threat_feed(feed_name)
+
+    total_added = sum(r.get("added_to_blocklist", 0) for r in results.values() if r.get("success"))
+    return {"results": results, "total_added": total_added}
 
 
 # ============================================================================

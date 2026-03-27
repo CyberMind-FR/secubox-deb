@@ -245,11 +245,9 @@ class AnomalyDetector:
 
         return None
 
-    def collect_metrics(self) -> Dict[str, float]:
-        """Collect current network metrics."""
-        metrics = {}
-
-        # TCP connections
+    def _get_tcp_connections(self) -> int:
+        """Get TCP connection count with fallbacks."""
+        # Try ss first
         try:
             result = subprocess.run(
                 ["ss", "-tun", "state", "established"],
@@ -257,37 +255,38 @@ class AnomalyDetector:
                 text=True,
                 timeout=5
             )
-            metrics["tcp_connections"] = len(result.stdout.strip().split("\n")) - 1
-        except Exception:
-            metrics["tcp_connections"] = 0
-
-        # Network interfaces - bytes in/out
-        try:
-            with open("/proc/net/dev") as f:
-                for line in f:
-                    if "eth0" in line or "ens" in line or "enp" in line:
-                        parts = line.split()
-                        if len(parts) >= 10:
-                            iface = parts[0].rstrip(":")
-                            metrics[f"{iface}_rx_bytes"] = int(parts[1])
-                            metrics[f"{iface}_tx_bytes"] = int(parts[9])
-                            break
+            if result.returncode == 0:
+                return max(0, len(result.stdout.strip().split("\n")) - 1)
         except Exception:
             pass
 
-        # DNS queries (from dnsmasq if available)
+        # Fallback to netstat
         try:
             result = subprocess.run(
-                ["grep", "-c", "query", "/var/log/dnsmasq.log"],
+                ["netstat", "-tn"],
                 capture_output=True,
                 text=True,
                 timeout=5
             )
-            metrics["dns_queries_total"] = int(result.stdout.strip())
+            if result.returncode == 0:
+                return sum(1 for line in result.stdout.split("\n") if "ESTABLISHED" in line)
         except Exception:
             pass
 
-        # Active ports
+        # Fallback to /proc/net/tcp
+        try:
+            count = 0
+            with open("/proc/net/tcp") as f:
+                for line in f:
+                    parts = line.split()
+                    if len(parts) > 3 and parts[3] == "01":  # 01 = ESTABLISHED
+                        count += 1
+            return count
+        except Exception:
+            return 0
+
+    def _get_listening_ports(self) -> int:
+        """Get listening port count with fallbacks."""
         try:
             result = subprocess.run(
                 ["ss", "-tuln"],
@@ -295,11 +294,119 @@ class AnomalyDetector:
                 text=True,
                 timeout=5
             )
-            metrics["listening_ports"] = len(result.stdout.strip().split("\n")) - 1
+            if result.returncode == 0:
+                return max(0, len(result.stdout.strip().split("\n")) - 1)
         except Exception:
             pass
 
+        # Fallback to netstat
+        try:
+            result = subprocess.run(
+                ["netstat", "-tuln"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode == 0:
+                return sum(1 for line in result.stdout.split("\n") if "LISTEN" in line)
+        except Exception:
+            return 0
+
+    def collect_metrics(self) -> Dict[str, float]:
+        """Collect current network metrics."""
+        metrics = {}
+        now = datetime.utcnow().isoformat() + "Z"
+
+        # TCP connections (with fallbacks)
+        metrics["tcp_connections"] = self._get_tcp_connections()
+
+        # Network interfaces - bytes in/out
+        try:
+            with open("/proc/net/dev") as f:
+                for line in f:
+                    # Match common interface names
+                    for prefix in ["eth", "ens", "enp", "wlan", "br-"]:
+                        if prefix in line:
+                            parts = line.split()
+                            if len(parts) >= 10:
+                                iface = parts[0].rstrip(":")
+                                metrics[f"{iface}_rx_bytes"] = int(parts[1])
+                                metrics[f"{iface}_tx_bytes"] = int(parts[9])
+                            break
+        except Exception:
+            pass
+
+        # DNS queries (from dnsmasq if available)
+        for log_path in ["/var/log/dnsmasq.log", "/var/log/syslog"]:
+            try:
+                result = subprocess.run(
+                    ["grep", "-c", "query", log_path],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                if result.returncode == 0:
+                    metrics["dns_queries_total"] = int(result.stdout.strip())
+                    break
+            except Exception:
+                pass
+
+        # Active listening ports (with fallbacks)
+        metrics["listening_ports"] = self._get_listening_ports()
+
+        # Store metrics in history for proper baseline calculation
+        self._store_metrics(metrics, now)
+
         return metrics
+
+    def _store_metrics(self, metrics: Dict[str, float], timestamp: str):
+        """Store metrics in history files for baseline calculation."""
+        for metric, value in metrics.items():
+            metric_file = self.metrics_dir / f"{metric}.jsonl"
+            entry = {"value": value, "timestamp": timestamp}
+            try:
+                with open(metric_file, "a") as f:
+                    f.write(json.dumps(entry) + "\n")
+
+                # Trim old entries (keep last 1000)
+                self._trim_metric_file(metric_file, 1000)
+            except Exception as e:
+                logger.warning(f"Failed to store metric {metric}: {e}")
+
+    def _trim_metric_file(self, filepath: Path, max_lines: int):
+        """Trim metric file to keep only recent entries."""
+        try:
+            with open(filepath) as f:
+                lines = f.readlines()
+            if len(lines) > max_lines:
+                with open(filepath, "w") as f:
+                    f.writelines(lines[-max_lines:])
+        except Exception:
+            pass
+
+    def _get_metric_history(self, metric: str, hours: int = 24) -> List[float]:
+        """Get metric values from history."""
+        metric_file = self.metrics_dir / f"{metric}.jsonl"
+        if not metric_file.exists():
+            return []
+
+        cutoff = datetime.utcnow() - timedelta(hours=hours)
+        values = []
+
+        try:
+            with open(metric_file) as f:
+                for line in f:
+                    try:
+                        data = json.loads(line)
+                        ts = datetime.fromisoformat(data["timestamp"].rstrip("Z"))
+                        if ts >= cutoff:
+                            values.append(data["value"])
+                    except Exception:
+                        continue
+        except Exception:
+            pass
+
+        return values
 
     def detect_port_scan(self, connection_log: List[Dict]) -> Optional[Alert]:
         """Detect port scanning behavior."""
@@ -332,6 +439,62 @@ class AnomalyDetector:
 
         return None
 
+    def _collect_connection_log(self) -> List[Dict]:
+        """Collect recent connections for port scan detection."""
+        connections = []
+
+        # Try conntrack first (best source)
+        try:
+            result = subprocess.run(
+                ["conntrack", "-L", "-o", "extended"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if result.returncode == 0:
+                for line in result.stdout.split("\n"):
+                    if "tcp" in line or "udp" in line:
+                        # Parse conntrack output
+                        parts = {}
+                        for item in line.split():
+                            if "=" in item:
+                                k, v = item.split("=", 1)
+                                parts[k] = v
+
+                        if "src" in parts and "dport" in parts:
+                            connections.append({
+                                "src_ip": parts.get("src"),
+                                "dst_ip": parts.get("dst"),
+                                "dst_port": int(parts.get("dport", 0)),
+                                "protocol": "tcp" if "tcp" in line else "udp"
+                            })
+                return connections
+        except Exception:
+            pass
+
+        # Fallback to /proc/net/nf_conntrack
+        try:
+            with open("/proc/net/nf_conntrack") as f:
+                for line in f:
+                    parts = line.split()
+                    conn = {}
+                    for p in parts:
+                        if "=" in p:
+                            k, v = p.split("=", 1)
+                            conn[k] = v
+
+                    if "src" in conn and "dport" in conn:
+                        connections.append({
+                            "src_ip": conn.get("src"),
+                            "dst_ip": conn.get("dst"),
+                            "dst_port": int(conn.get("dport", 0)),
+                            "protocol": parts[0] if parts else "unknown"
+                        })
+        except Exception:
+            pass
+
+        return connections
+
     def run_detection(self) -> List[Alert]:
         """Run all anomaly detections."""
         alerts = []
@@ -348,6 +511,13 @@ class AnomalyDetector:
 
             if alert:
                 alerts.append(alert)
+
+        # Port scan detection
+        connection_log = self._collect_connection_log()
+        if connection_log:
+            scan_alert = self.detect_port_scan(connection_log)
+            if scan_alert:
+                alerts.append(scan_alert)
 
         return alerts
 
@@ -445,40 +615,33 @@ async def list_baselines():
 
 @app.post("/baselines/update", dependencies=[Depends(require_jwt)])
 async def update_baselines(hours: int = 24):
-    """Update baselines from recent metrics."""
-    # Collect metrics over time (simplified - in production would use stored history)
-    metrics = detector.collect_metrics()
+    """Update baselines from metric history (proper statistical calculation)."""
+    # First collect current metrics to ensure we have recent data
+    detector.collect_metrics()
 
-    for metric, value in metrics.items():
-        # Simple baseline update with single value
-        # In production, this would aggregate historical data
-        existing = detector.baselines.get(metric)
-        if existing:
-            # Rolling average update
-            new_mean = (existing.mean * 0.9) + (value * 0.1)
-            detector.baselines[metric] = Baseline(
-                metric=metric,
-                mean=new_mean,
-                std_dev=existing.std_dev,
-                min_val=min(existing.min_val, value),
-                max_val=max(existing.max_val, value),
-                sample_count=existing.sample_count + 1,
-                last_updated=datetime.utcnow().isoformat() + "Z"
-            )
-        else:
-            detector.baselines[metric] = Baseline(
-                metric=metric,
-                mean=value,
-                std_dev=value * 0.2,  # Initial estimate
-                min_val=value,
-                max_val=value,
-                sample_count=1,
-                last_updated=datetime.utcnow().isoformat() + "Z"
-            )
+    updated = 0
+    metrics_updated = []
 
-    detector._save_baselines()
+    # Get all metric files
+    for metric_file in detector.metrics_dir.glob("*.jsonl"):
+        metric = metric_file.stem
+        values = detector._get_metric_history(metric, hours)
 
-    return {"updated": len(detector.baselines)}
+        if len(values) >= 5:  # Need at least 5 samples for meaningful stats
+            detector.update_baseline(metric, values)
+            updated += 1
+            metrics_updated.append({
+                "metric": metric,
+                "samples": len(values),
+                "mean": detector.baselines[metric].mean,
+                "std_dev": detector.baselines[metric].std_dev
+            })
+
+    return {
+        "updated": updated,
+        "metrics": metrics_updated,
+        "hours_analyzed": hours
+    }
 
 
 @app.post("/sample", dependencies=[Depends(require_jwt)])
