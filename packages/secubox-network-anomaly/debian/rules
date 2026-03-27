@@ -1,0 +1,11 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-network-anomaly/usr/lib/secubox/network-anomaly
+	cp -r api debian/secubox-network-anomaly/usr/lib/secubox/network-anomaly/
+	install -d debian/secubox-network-anomaly/usr/share/secubox/www/network-anomaly
+	cp -r www/network-anomaly/. debian/secubox-network-anomaly/usr/share/secubox/www/network-anomaly/
+	install -d debian/secubox-network-anomaly/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-network-anomaly/usr/share/secubox/menu.d/ || true

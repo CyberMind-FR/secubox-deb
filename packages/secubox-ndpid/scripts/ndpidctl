@@ -1,0 +1,178 @@
+#!/bin/bash
+# SecuBox nDPId CLI
+# Usage: ndpidctl <command> [args]
+
+set -e
+
+API_SOCKET="/run/secubox/ndpid.sock"
+API_BASE="http://localhost"
+
+api_call() {
+    local method="$1"
+    local endpoint="$2"
+    shift 2
+    curl -s --unix-socket "$API_SOCKET" -X "$method" "${API_BASE}${endpoint}" "$@"
+}
+
+case "${1:-help}" in
+    status)
+        api_call GET /status | python3 -m json.tool
+        ;;
+
+    flows)
+        limit="${2:-50}"
+        api_call GET "/flows?limit=$limit" -H "Authorization: Bearer $(cat /run/secubox/jwt 2>/dev/null || echo '')" | python3 -m json.tool
+        ;;
+
+    flow)
+        if [ -z "$2" ]; then
+            echo "Usage: ndpidctl flow <flow_id>"
+            exit 1
+        fi
+        api_call GET "/flows/$2" -H "Authorization: Bearer $(cat /run/secubox/jwt 2>/dev/null || echo '')" | python3 -m json.tool
+        ;;
+
+    protocols)
+        api_call GET /protocols -H "Authorization: Bearer $(cat /run/secubox/jwt 2>/dev/null || echo '')" | python3 -m json.tool
+        ;;
+
+    applications)
+        api_call GET /applications -H "Authorization: Bearer $(cat /run/secubox/jwt 2>/dev/null || echo '')" | python3 -m json.tool
+        ;;
+
+    top-protocols)
+        hours="${2:-24}"
+        api_call GET "/top/protocols?hours=$hours" -H "Authorization: Bearer $(cat /run/secubox/jwt 2>/dev/null || echo '')" | python3 -m json.tool
+        ;;
+
+    top-apps)
+        hours="${2:-24}"
+        api_call GET "/top/applications?hours=$hours" -H "Authorization: Bearer $(cat /run/secubox/jwt 2>/dev/null || echo '')" | python3 -m json.tool
+        ;;
+
+    fingerprints)
+        fp_type="${2:-}"
+        if [ -n "$fp_type" ]; then
+            api_call GET "/fingerprints?fp_type=$fp_type" -H "Authorization: Bearer $(cat /run/secubox/jwt 2>/dev/null || echo '')" | python3 -m json.tool
+        else
+            api_call GET /fingerprints -H "Authorization: Bearer $(cat /run/secubox/jwt 2>/dev/null || echo '')" | python3 -m json.tool
+        fi
+        ;;
+
+    ja3)
+        api_call GET /fingerprints/ja3 -H "Authorization: Bearer $(cat /run/secubox/jwt 2>/dev/null || echo '')" | python3 -m json.tool
+        ;;
+
+    ja4)
+        api_call GET /fingerprints/ja4 -H "Authorization: Bearer $(cat /run/secubox/jwt 2>/dev/null || echo '')" | python3 -m json.tool
+        ;;
+
+    risks)
+        hours="${2:-24}"
+        api_call GET "/risks?hours=$hours" -H "Authorization: Bearer $(cat /run/secubox/jwt 2>/dev/null || echo '')" | python3 -m json.tool
+        ;;
+
+    stats)
+        api_call GET /stats -H "Authorization: Bearer $(cat /run/secubox/jwt 2>/dev/null || echo '')" | python3 -m json.tool
+        ;;
+
+    realtime)
+        api_call GET /stats/realtime -H "Authorization: Bearer $(cat /run/secubox/jwt 2>/dev/null || echo '')" | python3 -m json.tool
+        ;;
+
+    mirred-status)
+        api_call GET /mirred/status -H "Authorization: Bearer $(cat /run/secubox/jwt 2>/dev/null || echo '')" | python3 -m json.tool
+        ;;
+
+    mirred-setup)
+        api_call POST /mirred/setup -H "Authorization: Bearer $(cat /run/secubox/jwt 2>/dev/null || echo '')" | python3 -m json.tool
+        ;;
+
+    mirred-remove)
+        api_call POST /mirred/remove -H "Authorization: Bearer $(cat /run/secubox/jwt 2>/dev/null || echo '')" | python3 -m json.tool
+        ;;
+
+    start)
+        api_call POST /control/start -H "Authorization: Bearer $(cat /run/secubox/jwt 2>/dev/null || echo '')" | python3 -m json.tool
+        ;;
+
+    stop)
+        api_call POST /control/stop -H "Authorization: Bearer $(cat /run/secubox/jwt 2>/dev/null || echo '')" | python3 -m json.tool
+        ;;
+
+    restart)
+        api_call POST /control/restart -H "Authorization: Bearer $(cat /run/secubox/jwt 2>/dev/null || echo '')" | python3 -m json.tool
+        ;;
+
+    logs)
+        lines="${2:-100}"
+        api_call GET "/logs?lines=$lines" -H "Authorization: Bearer $(cat /run/secubox/jwt 2>/dev/null || echo '')" | python3 -c "import sys,json; print('\n'.join(json.load(sys.stdin).get('lines',[])))"
+        ;;
+
+    interfaces)
+        api_call GET /interfaces -H "Authorization: Bearer $(cat /run/secubox/jwt 2>/dev/null || echo '')" | python3 -m json.tool
+        ;;
+
+    export-flows)
+        hours="${2:-24}"
+        format="${3:-json}"
+        api_call GET "/export/flows?hours=$hours&format=$format" -H "Authorization: Bearer $(cat /run/secubox/jwt 2>/dev/null || echo '')"
+        ;;
+
+    export-fingerprints)
+        format="${2:-json}"
+        api_call GET "/export/fingerprints?format=$format" -H "Authorization: Bearer $(cat /run/secubox/jwt 2>/dev/null || echo '')"
+        ;;
+
+    help|--help|-h|*)
+        cat <<EOF
+SecuBox nDPId CLI - Deep Packet Inspection
+
+Usage: ndpidctl <command> [args]
+
+Status & Info:
+  status              Show daemon and database status
+  stats               Show statistics
+  realtime            Show real-time interface statistics
+  interfaces          List available network interfaces
+
+Flow Analysis:
+  flows [limit]       List active flows (default: 50)
+  flow <id>           Get flow details
+  top-protocols [h]   Top protocols by traffic (default: 24h)
+  top-apps [h]        Top applications by traffic (default: 24h)
+
+Fingerprinting:
+  fingerprints [type] List fingerprints (ja3, ja3s, ja4)
+  ja3                 List JA3 client fingerprints
+  ja4                 List JA4 fingerprints
+
+Risk Detection:
+  risks [hours]       List risk events (default: 24h)
+
+TC Mirred (DPI dual-stream):
+  mirred-status       Show tc mirred configuration
+  mirred-setup        Setup tc mirred for DPI
+  mirred-remove       Remove tc mirred configuration
+
+Service Control:
+  start               Start nDPId daemon
+  stop                Stop nDPId daemon
+  restart             Restart nDPId daemon
+  logs [lines]        Show daemon logs
+
+Export:
+  export-flows [h] [fmt]
+                      Export flows (hours, format: json/csv)
+  export-fingerprints [fmt]
+                      Export fingerprints (format: json/csv)
+
+Examples:
+  ndpidctl flows 100
+  ndpidctl ja3
+  ndpidctl top-apps 48
+  ndpidctl mirred-setup
+  ndpidctl export-flows 24 csv > flows.csv
+EOF
+        ;;
+esac

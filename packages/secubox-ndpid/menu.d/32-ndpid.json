@@ -1,0 +1,9 @@
+{
+  "id": "ndpid",
+  "name": "nDPId",
+  "category": "network",
+  "icon": "🔬",
+  "path": "/ndpid/",
+  "order": 32,
+  "description": "Deep Packet Inspection & JA3 Fingerprinting"
+}

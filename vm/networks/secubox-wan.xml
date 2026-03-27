@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SecuBox WAN Network
+
+  Primary WAN bridge for SecuBox VM.
+  This network can be:
+  1. Bridged to a physical interface for production use
+  2. Isolated for development/testing
+  3. Connected to host's internet via NAT
+
+  The VM's eth0 connects here (equivalent to MOCHAbin's 10G SFP+)
+-->
+<network>
+  <name>secubox-wan</name>
+  <uuid>11111111-1111-1111-1111-111111111111</uuid>
+
+  <!-- NAT mode for development - change to bridge mode for production -->
+  <forward mode="nat">
+    <nat>
+      <port start="1024" end="65535"/>
+    </nat>
+  </forward>
+
+  <bridge name="virbr-sbwan" stp="on" delay="0"/>
+
+  <!-- WAN subnet (not typically used - DHCP from upstream) -->
+  <ip address="10.200.0.1" netmask="255.255.255.0">
+    <dhcp>
+      <range start="10.200.0.100" end="10.200.0.200"/>
+      <host mac="52:54:00:sb:00:00" name="secubox-wan" ip="10.200.0.10"/>
+    </dhcp>
+  </ip>
+
+  <!-- IPv6 support -->
+  <ip family="ipv6" address="fd00:200::1" prefix="64">
+    <dhcp>
+      <range start="fd00:200::100" end="fd00:200::1ff"/>
+    </dhcp>
+  </ip>
+</network>

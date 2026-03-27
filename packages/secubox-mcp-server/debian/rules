@@ -1,0 +1,11 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-mcp-server/usr/lib/secubox/mcp-server
+	cp -r api debian/secubox-mcp-server/usr/lib/secubox/mcp-server/
+	install -d debian/secubox-mcp-server/usr/share/secubox/www/mcp-server
+	cp -r www/mcp-server/. debian/secubox-mcp-server/usr/share/secubox/www/mcp-server/
+	install -d debian/secubox-mcp-server/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-mcp-server/usr/share/secubox/menu.d/ || true

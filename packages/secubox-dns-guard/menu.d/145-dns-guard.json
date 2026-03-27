@@ -1,0 +1,9 @@
+{
+  "id": "dns-guard",
+  "name": "Dns-guard",
+  "category": "security",
+  "icon": "🌐",
+  "path": "/dns-guard/",
+  "order": 145,
+  "description": "DNS Anomaly Detection"
+}

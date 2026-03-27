@@ -1,0 +1,13 @@
+#!/bin/sh
+set -e
+if [ "$1" = "configure" ]; then
+    # Ensure data directories exist
+    mkdir -p /var/lib/secubox/ad-guard/blocklists
+    chown -R secubox:secubox /var/lib/secubox/ad-guard
+
+    systemctl daemon-reload
+    systemctl enable secubox-ad-guard.service || true
+    systemctl start secubox-ad-guard.service || true
+fi
+#DEBHELPER#
+exit 0

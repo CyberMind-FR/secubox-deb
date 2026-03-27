@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SecuBox Switch Uplink Network
+
+  Internal bridge simulating the MOCHAbin's eth1 (2.5G switch uplink).
+  This is the internal connection between the switch ASIC and the SoC.
+
+  In the VM context, this is typically used for:
+  - Internal management traffic
+  - Switch-to-router communication
+  - Can be connected to other VMs for testing
+-->
+<network>
+  <name>secubox-switch</name>
+  <uuid>33333333-3333-3333-3333-333333333333</uuid>
+
+  <!-- Isolated bridge - internal only -->
+  <bridge name="virbr-sbsw" stp="off" delay="0"/>
+
+  <!-- No IP - pure L2 bridge -->
+</network>

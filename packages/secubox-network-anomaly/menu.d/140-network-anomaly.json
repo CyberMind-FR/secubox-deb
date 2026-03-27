@@ -1,0 +1,9 @@
+{
+  "id": "network-anomaly",
+  "name": "Network-anomaly",
+  "category": "security",
+  "icon": "📊",
+  "path": "/network-anomaly/",
+  "order": 140,
+  "description": "Network Anomaly Detection"
+}

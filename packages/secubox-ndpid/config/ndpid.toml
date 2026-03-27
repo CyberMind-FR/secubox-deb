@@ -1,0 +1,54 @@
+# SecuBox nDPId Configuration
+
+[general]
+enabled = true
+log_level = "info"
+
+[capture]
+# Network interface to monitor
+interface = "eth0"
+
+# Capture mode: pcap, dpdk, af_packet
+capture_mode = "pcap"
+
+# Enable promiscuous mode
+promisc = true
+
+# Packet capture length
+snaplen = 1600
+
+# Flow idle timeout (seconds)
+flow_timeout = 60
+
+[fingerprinting]
+# Enable JA3 client fingerprinting
+enable_ja3 = true
+
+# Enable JA3S server fingerprinting
+enable_ja3s = true
+
+# Enable JA4 fingerprinting
+enable_ja4 = true
+
+[risk_detection]
+# Enable nDPI risk detection
+enabled = true
+
+# Risk score threshold for alerts
+alert_threshold = 50
+
+[mirred]
+# Mirror interface for dual-stream DPI
+mirror_if = "ifb0"
+
+[zmq]
+# Enable ZeroMQ flow publisher
+enabled = true
+endpoint = "ipc:///run/ndpid/distributor.sock"
+
+[database]
+# Flow retention in days
+retention_days = 7
+
+# Maximum database size in MB (0 = unlimited)
+max_size_mb = 500

@@ -1,0 +1,9 @@
+{
+  "id": "mcp-server",
+  "name": "Mcp-server",
+  "category": "security",
+  "icon": "🔌",
+  "path": "/mcp-server/",
+  "order": 115,
+  "description": "Model Context Protocol Server"
+}

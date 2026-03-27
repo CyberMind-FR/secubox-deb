@@ -1,0 +1,286 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SecuBox VM - MOCHAbin-like network topology
+
+  Network Interface Mapping (matches MOCHAbin hardware):
+  - eth0: WAN primary (10G equivalent - attached to br-wan)
+  - eth1: Switch uplink (internal bridge - br-switch)
+  - eth2: WAN secondary (1G equivalent - attached to br-wan2 or NAT)
+  - eth3: LAN port 1 (swport1/lan0 - attached to br-lan)
+  - eth4: LAN port 2 (swport2/lan1 - attached to br-lan)
+  - eth5: LAN port 3 (swport3/lan2 - attached to br-lan)
+  - eth6: LAN port 4 (swport4/lan3 - attached to br-lan)
+
+  Total: 7 network interfaces to match MOCHAbin's topology
+-->
+<domain type="kvm">
+  <name>secubox-mochabin</name>
+  <uuid>a1b2c3d4-e5f6-7890-abcd-ef1234567890</uuid>
+  <title>SecuBox MOCHAbin VM</title>
+  <description>SecuBox development VM with MOCHAbin-like network topology</description>
+
+  <memory unit="GiB">4</memory>
+  <currentMemory unit="GiB">4</currentMemory>
+  <vcpu placement="static">4</vcpu>
+
+  <os>
+    <type arch="x86_64" machine="q35">hvm</type>
+    <boot dev="hd"/>
+    <bootmenu enable="yes"/>
+  </os>
+
+  <features>
+    <acpi/>
+    <apic/>
+    <vmport state="off"/>
+  </features>
+
+  <cpu mode="host-passthrough" check="none" migratable="on">
+    <topology sockets="1" dies="1" cores="4" threads="1"/>
+  </cpu>
+
+  <clock offset="utc">
+    <timer name="rtc" tickpolicy="catchup"/>
+    <timer name="pit" tickpolicy="delay"/>
+    <timer name="hpet" present="no"/>
+  </clock>
+
+  <on_poweroff>destroy</on_poweroff>
+  <on_reboot>restart</on_reboot>
+  <on_crash>destroy</on_crash>
+
+  <pm>
+    <suspend-to-mem enabled="no"/>
+    <suspend-to-disk enabled="no"/>
+  </pm>
+
+  <devices>
+    <emulator>/usr/bin/qemu-system-x86_64</emulator>
+
+    <!-- System disk -->
+    <disk type="file" device="disk">
+      <driver name="qemu" type="qcow2" cache="writeback" discard="unmap"/>
+      <source file="/var/lib/libvirt/images/secubox-mochabin.qcow2"/>
+      <target dev="vda" bus="virtio"/>
+      <address type="pci" domain="0x0000" bus="0x04" slot="0x00" function="0x0"/>
+    </disk>
+
+    <!-- Data disk (optional - for /var/lib/secubox) -->
+    <disk type="file" device="disk">
+      <driver name="qemu" type="qcow2" cache="writeback" discard="unmap"/>
+      <source file="/var/lib/libvirt/images/secubox-mochabin-data.qcow2"/>
+      <target dev="vdb" bus="virtio"/>
+      <address type="pci" domain="0x0000" bus="0x05" slot="0x00" function="0x0"/>
+    </disk>
+
+    <!-- CD-ROM for installation -->
+    <disk type="file" device="cdrom">
+      <driver name="qemu" type="raw"/>
+      <target dev="sda" bus="sata"/>
+      <readonly/>
+      <address type="drive" controller="0" bus="0" target="0" unit="0"/>
+    </disk>
+
+    <!-- SATA controller -->
+    <controller type="sata" index="0">
+      <address type="pci" domain="0x0000" bus="0x00" slot="0x1f" function="0x2"/>
+    </controller>
+
+    <!-- USB controller -->
+    <controller type="usb" index="0" model="qemu-xhci" ports="15">
+      <address type="pci" domain="0x0000" bus="0x02" slot="0x00" function="0x0"/>
+    </controller>
+
+    <!-- PCI controllers for virtio devices -->
+    <controller type="pci" index="0" model="pcie-root"/>
+    <controller type="pci" index="1" model="pcie-root-port">
+      <model name="pcie-root-port"/>
+      <target chassis="1" port="0x10"/>
+      <address type="pci" domain="0x0000" bus="0x00" slot="0x02" function="0x0" multifunction="on"/>
+    </controller>
+    <controller type="pci" index="2" model="pcie-root-port">
+      <model name="pcie-root-port"/>
+      <target chassis="2" port="0x11"/>
+      <address type="pci" domain="0x0000" bus="0x00" slot="0x02" function="0x1"/>
+    </controller>
+    <controller type="pci" index="3" model="pcie-root-port">
+      <model name="pcie-root-port"/>
+      <target chassis="3" port="0x12"/>
+      <address type="pci" domain="0x0000" bus="0x00" slot="0x02" function="0x2"/>
+    </controller>
+    <controller type="pci" index="4" model="pcie-root-port">
+      <model name="pcie-root-port"/>
+      <target chassis="4" port="0x13"/>
+      <address type="pci" domain="0x0000" bus="0x00" slot="0x02" function="0x3"/>
+    </controller>
+    <controller type="pci" index="5" model="pcie-root-port">
+      <model name="pcie-root-port"/>
+      <target chassis="5" port="0x14"/>
+      <address type="pci" domain="0x0000" bus="0x00" slot="0x02" function="0x4"/>
+    </controller>
+    <controller type="pci" index="6" model="pcie-root-port">
+      <model name="pcie-root-port"/>
+      <target chassis="6" port="0x15"/>
+      <address type="pci" domain="0x0000" bus="0x00" slot="0x02" function="0x5"/>
+    </controller>
+    <controller type="pci" index="7" model="pcie-root-port">
+      <model name="pcie-root-port"/>
+      <target chassis="7" port="0x16"/>
+      <address type="pci" domain="0x0000" bus="0x00" slot="0x02" function="0x6"/>
+    </controller>
+    <controller type="pci" index="8" model="pcie-root-port">
+      <model name="pcie-root-port"/>
+      <target chassis="8" port="0x17"/>
+      <address type="pci" domain="0x0000" bus="0x00" slot="0x02" function="0x7"/>
+    </controller>
+    <controller type="pci" index="9" model="pcie-root-port">
+      <model name="pcie-root-port"/>
+      <target chassis="9" port="0x18"/>
+      <address type="pci" domain="0x0000" bus="0x00" slot="0x03" function="0x0"/>
+    </controller>
+    <controller type="pci" index="10" model="pcie-root-port">
+      <model name="pcie-root-port"/>
+      <target chassis="10" port="0x19"/>
+      <address type="pci" domain="0x0000" bus="0x00" slot="0x03" function="0x1"/>
+    </controller>
+    <controller type="pci" index="11" model="pcie-root-port">
+      <model name="pcie-root-port"/>
+      <target chassis="11" port="0x1a"/>
+      <address type="pci" domain="0x0000" bus="0x00" slot="0x03" function="0x2"/>
+    </controller>
+
+    <!-- ================================================================== -->
+    <!-- NETWORK INTERFACES - MOCHAbin Topology                             -->
+    <!-- ================================================================== -->
+
+    <!-- eth0: WAN Primary (10G SFP+ equivalent) - Bridge to physical WAN -->
+    <interface type="network">
+      <mac address="52:54:00:sb:00:00"/>
+      <source network="secubox-wan"/>
+      <model type="virtio"/>
+      <driver name="vhost" queues="4"/>
+      <alias name="net-wan0"/>
+      <address type="pci" domain="0x0000" bus="0x01" slot="0x00" function="0x0"/>
+    </interface>
+
+    <!-- eth1: Switch Uplink (2.5G internal) - Connected to internal switch bridge -->
+    <interface type="network">
+      <mac address="52:54:00:sb:00:01"/>
+      <source network="secubox-switch"/>
+      <model type="virtio"/>
+      <driver name="vhost"/>
+      <alias name="net-switch"/>
+      <address type="pci" domain="0x0000" bus="0x06" slot="0x00" function="0x0"/>
+    </interface>
+
+    <!-- eth2: WAN Secondary (1G SFP/RJ45 equivalent) - NAT for development -->
+    <interface type="network">
+      <mac address="52:54:00:sb:00:02"/>
+      <source network="default"/>
+      <model type="virtio"/>
+      <driver name="vhost"/>
+      <alias name="net-wan1"/>
+      <address type="pci" domain="0x0000" bus="0x07" slot="0x00" function="0x0"/>
+    </interface>
+
+    <!-- eth3: LAN Port 1 (swport1/lan0) - Topaz switch port 1 -->
+    <interface type="network">
+      <mac address="52:54:00:sb:00:03"/>
+      <source network="secubox-lan"/>
+      <model type="virtio"/>
+      <driver name="vhost"/>
+      <alias name="net-lan0"/>
+      <address type="pci" domain="0x0000" bus="0x08" slot="0x00" function="0x0"/>
+    </interface>
+
+    <!-- eth4: LAN Port 2 (swport2/lan1) - Topaz switch port 2 -->
+    <interface type="network">
+      <mac address="52:54:00:sb:00:04"/>
+      <source network="secubox-lan"/>
+      <model type="virtio"/>
+      <driver name="vhost"/>
+      <alias name="net-lan1"/>
+      <address type="pci" domain="0x0000" bus="0x09" slot="0x00" function="0x0"/>
+    </interface>
+
+    <!-- eth5: LAN Port 3 (swport3/lan2) - Topaz switch port 3 -->
+    <interface type="network">
+      <mac address="52:54:00:sb:00:05"/>
+      <source network="secubox-lan"/>
+      <model type="virtio"/>
+      <driver name="vhost"/>
+      <alias name="net-lan2"/>
+      <address type="pci" domain="0x0000" bus="0x0a" slot="0x00" function="0x0"/>
+    </interface>
+
+    <!-- eth6: LAN Port 4 (swport4/lan3) - Topaz switch port 4 -->
+    <interface type="network">
+      <mac address="52:54:00:sb:00:06"/>
+      <source network="secubox-lan"/>
+      <model type="virtio"/>
+      <driver name="vhost"/>
+      <alias name="net-lan3"/>
+      <address type="pci" domain="0x0000" bus="0x0b" slot="0x00" function="0x0"/>
+    </interface>
+
+    <!-- ================================================================== -->
+    <!-- OTHER DEVICES                                                      -->
+    <!-- ================================================================== -->
+
+    <!-- Serial console -->
+    <serial type="pty">
+      <target type="isa-serial" port="0">
+        <model name="isa-serial"/>
+      </target>
+    </serial>
+    <console type="pty">
+      <target type="serial" port="0"/>
+    </console>
+
+    <!-- VirtIO console for agent communication -->
+    <channel type="unix">
+      <target type="virtio" name="org.qemu.guest_agent.0"/>
+      <address type="virtio-serial" controller="0" bus="0" port="1"/>
+    </channel>
+
+    <!-- VirtIO serial controller -->
+    <controller type="virtio-serial" index="0">
+      <address type="pci" domain="0x0000" bus="0x03" slot="0x00" function="0x0"/>
+    </controller>
+
+    <!-- VGA graphics (for console access) -->
+    <graphics type="vnc" port="-1" autoport="yes" listen="127.0.0.1">
+      <listen type="address" address="127.0.0.1"/>
+    </graphics>
+    <video>
+      <model type="virtio" heads="1" primary="yes"/>
+      <address type="pci" domain="0x0000" bus="0x00" slot="0x01" function="0x0"/>
+    </video>
+
+    <!-- Input devices -->
+    <input type="tablet" bus="usb">
+      <address type="usb" bus="0" port="1"/>
+    </input>
+    <input type="keyboard" bus="usb">
+      <address type="usb" bus="0" port="2"/>
+    </input>
+
+    <!-- RNG for entropy -->
+    <rng model="virtio">
+      <backend model="random">/dev/urandom</backend>
+      <address type="pci" domain="0x0000" bus="0x0c" slot="0x00" function="0x0"/>
+    </rng>
+
+    <!-- Watchdog -->
+    <watchdog model="i6300esb" action="reset">
+      <address type="pci" domain="0x0000" bus="0x00" slot="0x07" function="0x0"/>
+    </watchdog>
+
+    <!-- Memory balloon -->
+    <memballoon model="virtio">
+      <address type="pci" domain="0x0000" bus="0x0d" slot="0x00" function="0x0"/>
+    </memballoon>
+  </devices>
+
+  <seclabel type="dynamic" model="dac" relabel="yes"/>
+</domain>

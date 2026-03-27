@@ -1,0 +1,8 @@
+#!/bin/sh
+set -e
+if [ "$1" = "remove" ]; then
+    systemctl stop secubox-localrecall.service || true
+    systemctl disable secubox-localrecall.service || true
+fi
+#DEBHELPER#
+exit 0

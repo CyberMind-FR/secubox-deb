@@ -1,0 +1,11 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-config-advisor/usr/lib/secubox/config-advisor
+	cp -r api debian/secubox-config-advisor/usr/lib/secubox/config-advisor/
+	install -d debian/secubox-config-advisor/usr/share/secubox/www/config-advisor
+	cp -r www/config-advisor/. debian/secubox-config-advisor/usr/share/secubox/www/config-advisor/
+	install -d debian/secubox-config-advisor/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-config-advisor/usr/share/secubox/menu.d/ || true

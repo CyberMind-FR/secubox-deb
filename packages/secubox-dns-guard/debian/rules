@@ -1,0 +1,11 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-dns-guard/usr/lib/secubox/dns-guard
+	cp -r api debian/secubox-dns-guard/usr/lib/secubox/dns-guard/
+	install -d debian/secubox-dns-guard/usr/share/secubox/www/dns-guard
+	cp -r www/dns-guard/. debian/secubox-dns-guard/usr/share/secubox/www/dns-guard/
+	install -d debian/secubox-dns-guard/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-dns-guard/usr/share/secubox/menu.d/ || true

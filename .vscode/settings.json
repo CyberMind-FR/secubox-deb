@@ -1,34 +1,137 @@
 {
-  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
-  "python.analysis.extraPaths": ["${workspaceFolder}/common"],
-  "python.terminal.activateEnvironment": true,
+  // ─── SecuBox-Deb :: VSCode Workspace Settings ───────────────────────────────
+  // CyberMind — Gérald Kerma
 
-  "terminal.integrated.env.linux": {
-    "PYTHONPATH": "${workspaceFolder}/common",
-    "SECUBOX_DEBUG": "1"
-  },
-  "terminal.integrated.env.osx": {
-    "PYTHONPATH": "${workspaceFolder}/common",
-    "SECUBOX_DEBUG": "1"
-  },
-
+  // ── Editeur ──────────────────────────────────────────────────────────────────
+  "editor.fontSize": 14,
+  "editor.fontFamily": "'JetBrains Mono', 'Fira Code', monospace",
+  "editor.fontLigatures": true,
+  "editor.tabSize": 4,
+  "editor.insertSpaces": true,
+  "editor.rulers": [88, 120],
   "editor.formatOnSave": true,
-  "editor.rulers": [100],
-  "[python]": { "editor.defaultFormatter": "ms-python.black-formatter" },
+  "editor.codeActionsOnSave": {
+    "source.organizeImports": "explicit",
+    "source.fixAll": "explicit"
+  },
+  "editor.wordWrap": "off",
+  "editor.minimap.enabled": true,
+  "editor.bracketPairColorization.enabled": true,
+  "editor.guides.bracketPairs": "active",
+  "editor.inlayHints.enabled": "on",
+  "editor.suggest.preview": true,
+  "editor.linkedEditing": true,
 
+  // ── Python ───────────────────────────────────────────────────────────────────
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.tabSize": 4
+  },
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+  "python.analysis.typeCheckingMode": "basic",
+  "python.analysis.autoImportCompletions": true,
+  "python.analysis.diagnosticMode": "workspace",
+  "ruff.args": ["--line-length=88", "--target-version=py311"],
+
+  // ── Bash / Shell ─────────────────────────────────────────────────────────────
+  "[shellscript]": {
+    "editor.defaultFormatter": "foxundermoon.shell-format",
+    "editor.tabSize": 4
+  },
+  "shellcheck.enable": true,
+  "shellcheck.run": "onSave",
+  "shellcheck.arguments": ["-e", "SC1091"],
+
+  // ── YAML / TOML ───────────────────────────────────────────────────────────────
+  "[yaml]": {
+    "editor.defaultFormatter": "redhat.vscode-yaml",
+    "editor.tabSize": 2
+  },
+  "[toml]": {
+    "editor.tabSize": 2
+  },
+  "yaml.validate": true,
+  "yaml.format.enable": true,
+
+  // ── Markdown ──────────────────────────────────────────────────────────────────
+  "[markdown]": {
+    "editor.wordWrap": "on",
+    "editor.quickSuggestions": { "other": false }
+  },
+
+  // ── Fichiers ──────────────────────────────────────────────────────────────────
+  "files.associations": {
+    "*.nft": "shellscript",
+    "*.conf.j2": "jinja",
+    "*.rules": "plaintext",
+    "Makefile.*": "makefile",
+    "CLAUDE.md": "markdown"
+  },
   "files.exclude": {
     "**/__pycache__": true,
     "**/*.pyc": true,
-    "output/": false
+    "**/.pytest_cache": true,
+    "**/node_modules": true,
+    "**/.venv": true
+  },
+  "files.insertFinalNewline": true,
+  "files.trimTrailingWhitespace": true,
+
+  // ── Terminal ──────────────────────────────────────────────────────────────────
+  "terminal.integrated.fontFamily": "'JetBrains Mono', monospace",
+  "terminal.integrated.fontSize": 13,
+  "terminal.integrated.defaultProfile.linux": "bash",
+  "terminal.integrated.env.linux": {
+    "SECUBOX_ENV": "dev",
+    "PYTHONPATH": "${workspaceFolder}",
+    "SECUBOX_CONFIG": "${workspaceFolder}/core/parameters/active"
   },
 
-  "files.associations": {
-    "*.conf": "nginx",
-    "secubox.conf*": "toml"
+  // ── Git ───────────────────────────────────────────────────────────────────────
+  "git.enableSmartCommit": true,
+  "git.confirmSync": false,
+  "git.autofetch": true,
+  "gitlens.hovers.currentLine.over": "line",
+  "gitlens.codeLens.enabled": true,
+
+  // ── Tests ─────────────────────────────────────────────────────────────────────
+  "python.testing.pytestEnabled": true,
+  "python.testing.pytestArgs": [
+    "tests/",
+    "-v",
+    "--tb=short",
+    "--cov=.",
+    "--cov-report=term-missing"
+  ],
+  "python.testing.unittestEnabled": false,
+
+  // ── Claude (extension Anthropic) ─────────────────────────────────────────────
+  "claude.projectContext": ".claude/CLAUDE.md",
+
+  // ── Thème ─────────────────────────────────────────────────────────────────────
+  "workbench.colorTheme": "One Dark Pro Darker",
+  "workbench.iconTheme": "material-icon-theme",
+  "workbench.colorCustomizations": {
+    "activityBar.background": "#0a0a0f",
+    "sideBar.background": "#0d0d14",
+    "editor.background": "#0a0a0f",
+    "statusBar.background": "#1a0a2e",
+    "statusBar.foreground": "#c9a84c",
+    "titleBar.activeBackground": "#0a0a0f",
+    "titleBar.activeForeground": "#c9a84c",
+    "terminal.background": "#0a0a0f",
+    "terminal.foreground": "#e8e6d9",
+    "terminal.ansiGreen": "#00ff41",
+    "terminal.ansiCyan": "#00d4ff",
+    "terminal.ansiBrightYellow": "#c9a84c"
   },
 
-  "search.exclude": {
-    "output/**": true,
-    "**/__pycache__/**": true
-  }
+  // ── Explorer ──────────────────────────────────────────────────────────────────
+  "explorer.sortOrder": "type",
+  "explorer.compactFolders": false,
+  "breadcrumbs.enabled": true,
+
+  // ── Extensions recommandées à installer ──────────────────────────────────────
+  // Voir extensions.json
+  "extensions.ignoreRecommendations": false
 }

@@ -1,0 +1,9 @@
+#!/bin/sh
+set -e
+if [ "$1" = "configure" ]; then
+    systemctl daemon-reload
+    systemctl enable secubox-dns-guard.service || true
+    systemctl start secubox-dns-guard.service || true
+fi
+#DEBHELPER#
+exit 0

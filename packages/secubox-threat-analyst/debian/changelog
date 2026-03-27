@@ -1,0 +1,5 @@
+secubox-threat-analyst (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release
+
+ -- SecuBox <dev@secubox.local>  Fri, 27 Mar 2026 08:57:14 +0100

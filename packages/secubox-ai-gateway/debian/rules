@@ -1,0 +1,11 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-ai-gateway/usr/lib/secubox/ai-gateway
+	cp -r api debian/secubox-ai-gateway/usr/lib/secubox/ai-gateway/
+	install -d debian/secubox-ai-gateway/usr/share/secubox/www/ai-gateway
+	cp -r www/ai-gateway/. debian/secubox-ai-gateway/usr/share/secubox/www/ai-gateway/
+	install -d debian/secubox-ai-gateway/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-ai-gateway/usr/share/secubox/menu.d/ || true
