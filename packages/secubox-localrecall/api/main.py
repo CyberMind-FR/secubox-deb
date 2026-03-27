@@ -14,7 +14,7 @@ import json
 import time
 import hashlib
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional, Dict, List, Any
 from enum import Enum
@@ -238,10 +238,183 @@ class MemoryStore:
             reverse=True
         )[:10]
 
+        # Calculate storage size
+        storage_bytes = 0
+        if self.memories_file.exists():
+            storage_bytes = self.memories_file.stat().st_size
+
         return {
             "total_memories": total,
             "by_category": by_category,
-            "top_tags": dict(top_tags)
+            "top_tags": dict(top_tags),
+            "storage_bytes": storage_bytes
+        }
+
+    def cleanup_expired(self) -> int:
+        """Remove expired memories."""
+        now = datetime.utcnow()
+        expired_ids = []
+
+        # Find expired memories in index
+        for memory_id, meta in self.index.get("by_id", {}).items():
+            expires_at = meta.get("expires_at")
+            if expires_at:
+                try:
+                    exp_time = datetime.fromisoformat(expires_at.rstrip("Z"))
+                    if exp_time < now:
+                        expired_ids.append(memory_id)
+                except Exception:
+                    pass
+
+        # Delete expired memories
+        for memory_id in expired_ids:
+            self.delete(memory_id)
+
+        return len(expired_ids)
+
+    def export_all(self) -> List[Dict]:
+        """Export all memories as a list."""
+        memories = []
+        if not self.memories_file.exists():
+            return memories
+
+        with open(self.memories_file) as f:
+            for line in f:
+                try:
+                    data = json.loads(line)
+                    # Only include if still in index (not deleted)
+                    if data.get("id") in self.index.get("by_id", {}):
+                        memories.append(data)
+                except Exception:
+                    continue
+
+        return memories
+
+    def import_memories(self, memories: List[Dict]) -> Dict[str, int]:
+        """Import memories from a list."""
+        imported = 0
+        skipped = 0
+
+        for data in memories:
+            try:
+                memory = Memory(**data)
+                # Skip if already exists
+                if memory.id and memory.id in self.index.get("by_id", {}):
+                    skipped += 1
+                    continue
+
+                self.store(memory)
+                imported += 1
+            except Exception:
+                skipped += 1
+
+        return {"imported": imported, "skipped": skipped}
+
+    def bulk_delete(self, category: Optional[str] = None, older_than_days: Optional[int] = None) -> int:
+        """Delete multiple memories by criteria."""
+        deleted = 0
+        cutoff = None
+        if older_than_days:
+            cutoff = datetime.utcnow() - timedelta(days=older_than_days)
+
+        ids_to_delete = []
+
+        for memory_id, meta in list(self.index.get("by_id", {}).items()):
+            should_delete = False
+
+            # Category filter
+            if category and meta.get("category") == category:
+                should_delete = True
+
+            # Age filter
+            if cutoff:
+                ts = meta.get("timestamp")
+                if ts:
+                    try:
+                        mem_time = datetime.fromisoformat(ts.rstrip("Z"))
+                        if mem_time < cutoff:
+                            should_delete = True
+                    except Exception:
+                        pass
+
+            if should_delete:
+                ids_to_delete.append(memory_id)
+
+        for memory_id in ids_to_delete:
+            if self.delete(memory_id):
+                deleted += 1
+
+        return deleted
+
+    def list_paginated(
+        self,
+        category: Optional[str] = None,
+        limit: int = 50,
+        offset: int = 0
+    ) -> Dict[str, Any]:
+        """List memories with pagination."""
+        all_memories = []
+
+        if not self.memories_file.exists():
+            return {"memories": [], "total": 0, "limit": limit, "offset": offset}
+
+        with open(self.memories_file) as f:
+            for line in f:
+                try:
+                    data = json.loads(line)
+                    # Only include if still in index
+                    if data.get("id") not in self.index.get("by_id", {}):
+                        continue
+                    if category and data.get("category") != category:
+                        continue
+                    all_memories.append(data)
+                except Exception:
+                    continue
+
+        # Sort by timestamp descending
+        all_memories.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+
+        total = len(all_memories)
+        paginated = all_memories[offset:offset + limit]
+
+        return {
+            "memories": [Memory(**m) for m in paginated],
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            "has_more": offset + len(paginated) < total
+        }
+
+    def compact(self) -> Dict[str, Any]:
+        """Compact the memories file by removing deleted entries."""
+        if not self.memories_file.exists():
+            return {"before": 0, "after": 0}
+
+        # Read all valid memories
+        valid_memories = []
+        original_size = self.memories_file.stat().st_size
+
+        with open(self.memories_file) as f:
+            for line in f:
+                try:
+                    data = json.loads(line)
+                    if data.get("id") in self.index.get("by_id", {}):
+                        valid_memories.append(line)
+                except Exception:
+                    continue
+
+        # Rewrite file
+        with open(self.memories_file, "w") as f:
+            for line in valid_memories:
+                f.write(line)
+
+        new_size = self.memories_file.stat().st_size
+
+        return {
+            "before_bytes": original_size,
+            "after_bytes": new_size,
+            "saved_bytes": original_size - new_size,
+            "valid_memories": len(valid_memories)
         }
 
 
@@ -377,6 +550,72 @@ async def get_category_memories(
 async def get_stats():
     """Get memory statistics."""
     return store.get_stats()
+
+
+@app.get("/memories", dependencies=[Depends(require_jwt)])
+async def list_memories(
+    category: Optional[MemoryCategory] = None,
+    limit: int = Query(default=50, le=200),
+    offset: int = Query(default=0, ge=0)
+):
+    """List memories with pagination."""
+    return store.list_paginated(
+        category=category.value if category else None,
+        limit=limit,
+        offset=offset
+    )
+
+
+@app.post("/export", dependencies=[Depends(require_jwt)])
+async def export_memories():
+    """Export all memories for backup."""
+    memories = store.export_all()
+    return {
+        "memories": memories,
+        "count": len(memories),
+        "exported_at": datetime.utcnow().isoformat() + "Z"
+    }
+
+
+@app.post("/import", dependencies=[Depends(require_jwt)])
+async def import_memories(data: Dict[str, Any]):
+    """Import memories from backup."""
+    memories = data.get("memories", [])
+    if not memories:
+        raise HTTPException(status_code=400, detail="No memories to import")
+
+    result = store.import_memories(memories)
+    return result
+
+
+@app.post("/cleanup", dependencies=[Depends(require_jwt)])
+async def cleanup_expired():
+    """Remove expired memories."""
+    count = store.cleanup_expired()
+    return {"expired_removed": count}
+
+
+@app.post("/bulk-delete", dependencies=[Depends(require_jwt)])
+async def bulk_delete(
+    category: Optional[MemoryCategory] = None,
+    older_than_days: Optional[int] = None
+):
+    """Delete multiple memories by criteria."""
+    if not category and not older_than_days:
+        raise HTTPException(status_code=400, detail="Must specify category or older_than_days")
+
+    count = store.bulk_delete(
+        category=category.value if category else None,
+        older_than_days=older_than_days
+    )
+    return {"deleted": count}
+
+
+@app.post("/compact", dependencies=[Depends(require_jwt)])
+async def compact_storage():
+    """Compact storage by removing deleted entries."""
+    result = store.compact()
+    return result
 
 
 @app.post("/summarize", dependencies=[Depends(require_jwt)])

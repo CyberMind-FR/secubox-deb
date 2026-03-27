@@ -7,7 +7,8 @@ Features:
 - Resource exposure (logs, configs, alerts)
 - Tool registration (security actions)
 - Prompt templates for security analysis
-- Multi-module aggregation
+- Multi-module aggregation with caching
+- Configurable module port mapping
 """
 import os
 import json
@@ -16,8 +17,10 @@ import asyncio
 import subprocess
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional, Dict, List, Any, Callable
+from typing import Optional, Dict, List, Any, Callable, Tuple
 from enum import Enum
+from functools import lru_cache
+import time
 
 from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
@@ -31,9 +34,34 @@ CONFIG_PATH = Path("/etc/secubox/mcp-server.toml")
 DATA_DIR = Path("/var/lib/secubox/mcp-server")
 TOOLS_FILE = DATA_DIR / "tools.json"
 SESSIONS_FILE = DATA_DIR / "sessions.jsonl"
+CACHE_DIR = Path("/tmp/secubox/mcp-cache")
 
 # MCP Protocol Version
 MCP_VERSION = "2024-11-05"
+
+# Module port mapping - matches nginx internal backend config
+MODULE_PORTS = {
+    "ai-gateway": 9100,
+    "localrecall": 9101,
+    "master-link": 9102,
+    "threat-analyst": 9103,
+    "cve-triage": 9104,
+    "iot-guard": 9105,
+    "config-advisor": 9106,
+    "mcp-server": 9107,
+    "dns-guard": 9108,
+    "network-anomaly": 9109,
+    "identity": 9110,
+    "system-hub": 9111,
+}
+
+# Cache TTL in seconds
+CACHE_TTL = {
+    "status": 30,
+    "alerts": 60,
+    "config": 300,
+    "logs": 30,
+}
 
 app = FastAPI(title="SecuBox MCP Server", version="1.0.0")
 logger = logging.getLogger("secubox.mcp-server")
@@ -100,6 +128,62 @@ class MCPSession(BaseModel):
     last_activity: str
 
 
+class CacheManager:
+    """Simple in-memory cache with TTL."""
+
+    def __init__(self, cache_dir: Path):
+        self.cache_dir = cache_dir
+        self._memory_cache: Dict[str, Tuple[Any, float]] = {}
+        cache_dir.mkdir(parents=True, exist_ok=True)
+
+    def get(self, key: str, ttl: int = 60) -> Optional[Any]:
+        """Get cached value if not expired."""
+        if key in self._memory_cache:
+            value, timestamp = self._memory_cache[key]
+            if time.time() - timestamp < ttl:
+                return value
+
+        # Try file cache
+        cache_file = self.cache_dir / f"{key.replace('/', '_')}.json"
+        if cache_file.exists():
+            try:
+                stat = cache_file.stat()
+                if time.time() - stat.st_mtime < ttl:
+                    with open(cache_file) as f:
+                        return json.load(f)
+            except Exception:
+                pass
+        return None
+
+    def set(self, key: str, value: Any):
+        """Set cache value."""
+        self._memory_cache[key] = (value, time.time())
+
+        # Also persist to file for cross-request caching
+        try:
+            cache_file = self.cache_dir / f"{key.replace('/', '_')}.json"
+            with open(cache_file, "w") as f:
+                json.dump(value, f)
+        except Exception:
+            pass
+
+    def invalidate(self, key: str):
+        """Invalidate cache entry."""
+        self._memory_cache.pop(key, None)
+        cache_file = self.cache_dir / f"{key.replace('/', '_')}.json"
+        if cache_file.exists():
+            cache_file.unlink()
+
+    def clear(self):
+        """Clear all cache."""
+        self._memory_cache.clear()
+        for f in self.cache_dir.glob("*.json"):
+            try:
+                f.unlink()
+            except Exception:
+                pass
+
+
 class MCPServer:
     """MCP protocol server for SecuBox integration."""
 
@@ -107,14 +191,27 @@ class MCPServer:
         self.data_dir = data_dir
         self.tools_file = data_dir / "tools.json"
         self.sessions_file = data_dir / "sessions.jsonl"
+        self.cache = CacheManager(CACHE_DIR)
         self._ensure_dirs()
         self.sessions: Dict[str, MCPSession] = {}
+        self._http_client: Optional[httpx.AsyncClient] = None
         self._register_tools()
         self._register_resources()
         self._register_prompts()
 
     def _ensure_dirs(self):
         self.data_dir.mkdir(parents=True, exist_ok=True)
+
+    async def _get_client(self) -> httpx.AsyncClient:
+        """Get or create HTTP client."""
+        if self._http_client is None:
+            self._http_client = httpx.AsyncClient(timeout=10.0)
+        return self._http_client
+
+    def _get_module_url(self, module: str, path: str = "") -> str:
+        """Get URL for a module."""
+        port = MODULE_PORTS.get(module, 9100)
+        return f"http://127.0.0.1:{port}{path}"
 
     def _register_tools(self):
         """Register available tools."""
@@ -229,6 +326,43 @@ class MCPServer:
                     "type": "object",
                     "properties": {}
                 }
+            ),
+            "secubox.localrecall.search": MCPTool(
+                name="secubox.localrecall.search",
+                description="Search local recall memory for security context",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "Search query"},
+                        "category": {"type": "string", "description": "Optional category filter"}
+                    },
+                    "required": ["query"]
+                }
+            ),
+            "secubox.ai.query": MCPTool(
+                name="secubox.ai.query",
+                description="Query the AI gateway for security analysis",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "prompt": {"type": "string", "description": "Analysis prompt"},
+                        "context": {"type": "string", "description": "Additional context"}
+                    },
+                    "required": ["prompt"]
+                }
+            ),
+            "secubox.threat.generate_rule": MCPTool(
+                name="secubox.threat.generate_rule",
+                description="Generate a security rule from threat data",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "threat_type": {"type": "string", "enum": ["ip", "domain", "pattern"]},
+                        "indicator": {"type": "string", "description": "IOC value"},
+                        "rule_type": {"type": "string", "enum": ["nftables", "crowdsec", "waf"]}
+                    },
+                    "required": ["threat_type", "indicator"]
+                }
             )
         }
 
@@ -247,10 +381,22 @@ class MCPServer:
                 description="CrowdSec security logs",
                 mimeType="text/plain"
             ),
+            "secubox://logs/dns": MCPResource(
+                uri="secubox://logs/dns",
+                name="DNS Guard Logs",
+                description="DNS security and blocking logs",
+                mimeType="application/jsonl"
+            ),
             "secubox://config/haproxy": MCPResource(
                 uri="secubox://config/haproxy",
                 name="HAProxy Configuration",
                 description="Current HAProxy configuration",
+                mimeType="text/plain"
+            ),
+            "secubox://config/nginx": MCPResource(
+                uri="secubox://config/nginx",
+                name="Nginx Configuration",
+                description="Current nginx configuration",
                 mimeType="text/plain"
             ),
             "secubox://config/nftables": MCPResource(
@@ -403,48 +549,74 @@ class MCPServer:
 
     async def _execute_tool(self, tool_name: str, args: Dict) -> Any:
         """Execute tool and return result."""
-        # Call appropriate SecuBox module API
-        module_map = {
-            "secubox.waf.status": ("http://127.0.0.1:8010/status", "GET"),
-            "secubox.waf.threats": ("http://127.0.0.1:8010/alerts", "GET"),
-            "secubox.crowdsec.alerts": ("cscli alerts list -o json", "CMD"),
-            "secubox.crowdsec.decisions": ("cscli decisions list -o json", "CMD"),
-            "secubox.dns.analyze": ("http://127.0.0.1:8030/analyze", "POST"),
-            "secubox.dns.blocklist": ("http://127.0.0.1:8030/blocklist", "GET"),
-            "secubox.network.anomalies": ("http://127.0.0.1:8031/alerts", "GET"),
-            "secubox.iot.devices": ("http://127.0.0.1:8032/devices", "GET"),
-            "secubox.cve.scan": ("http://127.0.0.1:8033/cves", "GET"),
-            "secubox.audit.run": ("http://127.0.0.1:8034/audit", "POST"),
-            "secubox.identity.info": ("http://127.0.0.1:8035/identity", "GET"),
-            "secubox.mesh.peers": ("http://127.0.0.1:8036/peers", "GET"),
+        # Tool to module/endpoint mapping using correct ports
+        tool_mapping = {
+            "secubox.waf.status": ("threat-analyst", "/status", "GET", True),
+            "secubox.waf.threats": ("threat-analyst", "/alerts", "GET", True),
+            "secubox.crowdsec.alerts": (None, "cscli alerts list -o json", "CMD", False),
+            "secubox.crowdsec.decisions": (None, "cscli decisions list -o json", "CMD", False),
+            "secubox.dns.analyze": ("dns-guard", "/analyze", "POST", False),
+            "secubox.dns.blocklist": ("dns-guard", "/blocklist", "GET", True),
+            "secubox.network.anomalies": ("network-anomaly", "/alerts", "GET", True),
+            "secubox.iot.devices": ("iot-guard", "/devices", "GET", True),
+            "secubox.cve.scan": ("cve-triage", "/cves", "GET", True),
+            "secubox.audit.run": ("config-advisor", "/audit", "POST", False),
+            "secubox.identity.info": ("identity", "/identity", "GET", True),
+            "secubox.mesh.peers": ("master-link", "/peers", "GET", True),
+            "secubox.localrecall.search": ("localrecall", "/search", "POST", False),
+            "secubox.ai.query": ("ai-gateway", "/query", "POST", False),
         }
 
-        if tool_name not in module_map:
+        if tool_name not in tool_mapping:
             return {"error": f"Tool {tool_name} not implemented"}
 
-        endpoint, method = module_map[tool_name]
+        module, path, method, cacheable = tool_mapping[tool_name]
+
+        # Check cache for cacheable GET requests
+        cache_key = f"tool_{tool_name}_{hash(json.dumps(args, sort_keys=True))}"
+        if cacheable and method == "GET":
+            cached = self.cache.get(cache_key, ttl=CACHE_TTL.get("status", 30))
+            if cached is not None:
+                return cached
 
         if method == "CMD":
             # Execute shell command
             try:
                 result = subprocess.run(
-                    endpoint.split(),
+                    path.split(),
                     capture_output=True,
                     text=True,
                     timeout=30
                 )
-                return json.loads(result.stdout) if result.stdout else {"output": result.stderr}
+                output = json.loads(result.stdout) if result.stdout else {"output": result.stderr or "No output"}
+                return output
+            except json.JSONDecodeError:
+                return {"output": result.stdout if result.stdout else result.stderr}
+            except subprocess.TimeoutExpired:
+                return {"error": "Command timed out"}
             except Exception as e:
                 return {"error": str(e)}
         else:
-            # HTTP request
+            # HTTP request to module
+            endpoint = self._get_module_url(module, path)
             try:
-                async with httpx.AsyncClient() as client:
-                    if method == "GET":
-                        response = await client.get(endpoint, params=args, timeout=10.0)
-                    else:
-                        response = await client.post(endpoint, json=args, timeout=10.0)
-                    return response.json()
+                client = await self._get_client()
+                if method == "GET":
+                    response = await client.get(endpoint, params=args)
+                else:
+                    response = await client.post(endpoint, json=args)
+
+                if response.status_code == 200:
+                    result = response.json()
+                    if cacheable:
+                        self.cache.set(cache_key, result)
+                    return result
+                else:
+                    return {"error": f"HTTP {response.status_code}", "detail": response.text[:200]}
+            except httpx.TimeoutException:
+                return {"error": "Request timed out"}
+            except httpx.ConnectError:
+                return {"error": f"Cannot connect to {module} module"}
             except Exception as e:
                 return {"error": str(e)}
 
@@ -482,38 +654,97 @@ class MCPServer:
         resource_readers = {
             "secubox://logs/waf": self._read_waf_logs,
             "secubox://logs/crowdsec": self._read_crowdsec_logs,
+            "secubox://logs/dns": self._read_dns_logs,
             "secubox://config/haproxy": self._read_haproxy_config,
             "secubox://config/nftables": self._read_nftables,
+            "secubox://config/nginx": self._read_nginx_config,
             "secubox://alerts/all": self._read_all_alerts,
             "secubox://status/all": self._read_all_status,
         }
 
+        # Check cache for expensive resources
+        cache_key = f"resource_{uri.replace('://', '_').replace('/', '_')}"
+        cached = self.cache.get(cache_key, ttl=CACHE_TTL.get("logs", 30))
+        if cached is not None:
+            return cached
+
         reader = resource_readers.get(uri)
         if reader:
-            return await reader()
+            result = await reader()
+            self.cache.set(cache_key, result)
+            return result
         return ""
 
     async def _read_waf_logs(self) -> str:
-        log_file = Path("/var/log/mitmproxy/waf.jsonl")
-        if log_file.exists():
-            lines = log_file.read_text().strip().split("\n")
-            return "\n".join(lines[-100:])
+        """Read WAF (mitmproxy) logs."""
+        log_paths = [
+            Path("/var/log/mitmproxy/waf.jsonl"),
+            Path("/var/log/secubox/waf.jsonl"),
+            Path("/var/log/mitmproxy/access.log"),
+        ]
+        for log_file in log_paths:
+            if log_file.exists():
+                try:
+                    lines = log_file.read_text().strip().split("\n")
+                    return "\n".join(lines[-100:])
+                except Exception as e:
+                    continue
         return "No WAF logs found"
 
     async def _read_crowdsec_logs(self) -> str:
-        log_file = Path("/var/log/crowdsec.log")
-        if log_file.exists():
-            lines = log_file.read_text().strip().split("\n")
-            return "\n".join(lines[-100:])
+        """Read CrowdSec logs."""
+        log_paths = [
+            Path("/var/log/crowdsec.log"),
+            Path("/var/log/crowdsec/crowdsec.log"),
+        ]
+        for log_file in log_paths:
+            if log_file.exists():
+                try:
+                    lines = log_file.read_text().strip().split("\n")
+                    return "\n".join(lines[-100:])
+                except Exception:
+                    continue
+
+        # Try journalctl as fallback
+        try:
+            result = subprocess.run(
+                ["journalctl", "-u", "crowdsec", "-n", "100", "--no-pager"],
+                capture_output=True, text=True, timeout=5
+            )
+            if result.stdout:
+                return result.stdout
+        except Exception:
+            pass
+
         return "No CrowdSec logs found"
 
+    async def _read_dns_logs(self) -> str:
+        """Read DNS Guard logs."""
+        log_file = Path("/var/log/secubox/dns-guard.jsonl")
+        if log_file.exists():
+            try:
+                lines = log_file.read_text().strip().split("\n")
+                return "\n".join(lines[-100:])
+            except Exception:
+                pass
+        return "No DNS logs found"
+
     async def _read_haproxy_config(self) -> str:
+        """Read HAProxy configuration."""
         config_file = Path("/etc/haproxy/haproxy.cfg")
         if config_file.exists():
             return config_file.read_text()
         return "HAProxy config not found"
 
+    async def _read_nginx_config(self) -> str:
+        """Read nginx configuration."""
+        config_file = Path("/etc/nginx/nginx.conf")
+        if config_file.exists():
+            return config_file.read_text()
+        return "Nginx config not found"
+
     async def _read_nftables(self) -> str:
+        """Read nftables firewall rules."""
         try:
             result = subprocess.run(
                 ["nft", "list", "ruleset"],
@@ -521,26 +752,110 @@ class MCPServer:
                 text=True,
                 timeout=10
             )
-            return result.stdout
+            return result.stdout or "No rules found"
+        except FileNotFoundError:
+            # Try iptables as fallback
+            try:
+                result = subprocess.run(
+                    ["iptables", "-L", "-n", "-v"],
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+                return result.stdout or "No rules found"
+            except Exception:
+                pass
         except Exception as e:
-            return f"Error: {e}"
+            return f"Error reading firewall rules: {e}"
+        return "No firewall rules found"
 
     async def _read_all_alerts(self) -> str:
-        alerts = {"waf": [], "crowdsec": [], "dns": [], "anomaly": []}
-        # Aggregate from all modules
+        """Aggregate alerts from all security modules."""
+        alerts = {
+            "waf": [],
+            "crowdsec": [],
+            "dns": [],
+            "anomaly": [],
+            "iot": [],
+            "cve": [],
+            "timestamp": datetime.utcnow().isoformat() + "Z"
+        }
+
+        client = await self._get_client()
+
+        # Fetch from each module concurrently
+        async def fetch_alerts(module: str, path: str, key: str):
+            try:
+                url = self._get_module_url(module, path)
+                response = await client.get(url, timeout=5.0)
+                if response.status_code == 200:
+                    data = response.json()
+                    if isinstance(data, list):
+                        alerts[key] = data[:20]  # Limit to 20 per module
+                    elif isinstance(data, dict) and "alerts" in data:
+                        alerts[key] = data["alerts"][:20]
+            except Exception as e:
+                alerts[key] = [{"error": str(e)}]
+
+        await asyncio.gather(
+            fetch_alerts("threat-analyst", "/alerts", "waf"),
+            fetch_alerts("dns-guard", "/alerts", "dns"),
+            fetch_alerts("network-anomaly", "/alerts", "anomaly"),
+            fetch_alerts("iot-guard", "/alerts", "iot"),
+            fetch_alerts("cve-triage", "/cves?severity=critical,high", "cve"),
+            return_exceptions=True
+        )
+
+        # Also try CrowdSec CLI
+        try:
+            result = subprocess.run(
+                ["cscli", "alerts", "list", "-o", "json", "-l", "20"],
+                capture_output=True, text=True, timeout=10
+            )
+            if result.stdout:
+                alerts["crowdsec"] = json.loads(result.stdout)
+        except Exception:
+            pass
+
         return json.dumps(alerts, indent=2)
 
     async def _read_all_status(self) -> str:
-        modules = ["waf", "crowdsec", "dns-guard", "network-anomaly", "iot-guard"]
-        status = {}
-        for module in modules:
+        """Get status from all SecuBox modules."""
+        status = {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "modules": {}
+        }
+
+        client = await self._get_client()
+
+        async def fetch_status(module: str):
             try:
-                async with httpx.AsyncClient() as client:
-                    port = 8010 + modules.index(module)
-                    response = await client.get(f"http://127.0.0.1:{port}/status", timeout=2.0)
-                    status[module] = response.json()
-            except Exception:
-                status[module] = {"status": "unavailable"}
+                url = self._get_module_url(module, "/status")
+                response = await client.get(url, timeout=3.0)
+                if response.status_code == 200:
+                    status["modules"][module] = response.json()
+                else:
+                    status["modules"][module] = {"status": "error", "code": response.status_code}
+            except httpx.ConnectError:
+                status["modules"][module] = {"status": "unavailable"}
+            except Exception as e:
+                status["modules"][module] = {"status": "error", "error": str(e)}
+
+        # Fetch all module statuses concurrently
+        await asyncio.gather(
+            *[fetch_status(module) for module in MODULE_PORTS.keys()],
+            return_exceptions=True
+        )
+
+        # Count healthy/unhealthy
+        healthy = sum(1 for m in status["modules"].values()
+                      if isinstance(m, dict) and m.get("status") in ["ok", "healthy"])
+        status["summary"] = {
+            "total": len(MODULE_PORTS),
+            "healthy": healthy,
+            "unhealthy": len(MODULE_PORTS) - healthy
+        }
+
         return json.dumps(status, indent=2)
 
     async def _handle_prompts_list(self, request: MCPRequest) -> MCPResponse:
@@ -701,12 +1016,74 @@ async def websocket_endpoint(websocket: WebSocket):
         logger.error(f"WebSocket error: {e}")
 
 
+@app.post("/cache/clear", dependencies=[Depends(require_jwt)])
+async def clear_cache():
+    """Clear MCP server cache."""
+    mcp_server.cache.clear()
+    return {"status": "cleared"}
+
+
+@app.get("/cache/stats", dependencies=[Depends(require_jwt)])
+async def cache_stats():
+    """Get cache statistics."""
+    memory_entries = len(mcp_server.cache._memory_cache)
+    file_entries = len(list(CACHE_DIR.glob("*.json"))) if CACHE_DIR.exists() else 0
+    return {
+        "memory_entries": memory_entries,
+        "file_entries": file_entries,
+        "cache_dir": str(CACHE_DIR)
+    }
+
+
+@app.get("/modules", dependencies=[Depends(require_jwt)])
+async def list_modules():
+    """List all registered SecuBox modules and their ports."""
+    return {
+        "modules": MODULE_PORTS,
+        "count": len(MODULE_PORTS)
+    }
+
+
+@app.post("/tools/{tool_name}/call", dependencies=[Depends(require_jwt)])
+async def call_tool_direct(tool_name: str, arguments: Dict[str, Any] = {}):
+    """Directly call a tool without MCP protocol overhead."""
+    if tool_name not in mcp_server.tools:
+        raise HTTPException(status_code=404, detail=f"Tool not found: {tool_name}")
+
+    result = await mcp_server._execute_tool(tool_name, arguments)
+    return {"tool": tool_name, "result": result}
+
+
+@app.get("/resources/{uri:path}/read", dependencies=[Depends(require_jwt)])
+async def read_resource_direct(uri: str):
+    """Directly read a resource without MCP protocol overhead."""
+    full_uri = f"secubox://{uri}"
+    if full_uri not in mcp_server.resources:
+        raise HTTPException(status_code=404, detail=f"Resource not found: {full_uri}")
+
+    content = await mcp_server._read_resource(full_uri)
+    return {
+        "uri": full_uri,
+        "content": content,
+        "mimeType": mcp_server.resources[full_uri].mimeType
+    }
+
+
 # ============================================================================
-# Startup
+# Startup / Shutdown
 # ============================================================================
 
 @app.on_event("startup")
 async def startup():
     """Initialize on startup."""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    logger.info("MCP Server started")
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    logger.info(f"MCP Server started - {len(mcp_server.tools)} tools, {len(mcp_server.resources)} resources")
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    """Cleanup on shutdown."""
+    if mcp_server._http_client:
+        await mcp_server._http_client.aclose()
+    logger.info("MCP Server stopped")
