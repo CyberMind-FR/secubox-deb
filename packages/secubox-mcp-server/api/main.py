@@ -39,20 +39,20 @@ CACHE_DIR = Path("/tmp/secubox/mcp-cache")
 # MCP Protocol Version
 MCP_VERSION = "2024-11-05"
 
-# Module port mapping - matches nginx internal backend config
-MODULE_PORTS = {
-    "ai-gateway": 9100,
-    "localrecall": 9101,
-    "master-link": 9102,
-    "threat-analyst": 9103,
-    "cve-triage": 9104,
-    "iot-guard": 9105,
-    "config-advisor": 9106,
-    "mcp-server": 9107,
-    "dns-guard": 9108,
-    "network-anomaly": 9109,
-    "identity": 9110,
-    "system-hub": 9111,
+# Module socket mapping - Unix sockets in /run/secubox/
+MODULE_SOCKETS = {
+    "ai-gateway": "/run/secubox/ai-gateway.sock",
+    "localrecall": "/run/secubox/localrecall.sock",
+    "master-link": "/run/secubox/master-link.sock",
+    "threat-analyst": "/run/secubox/threat-analyst.sock",
+    "cve-triage": "/run/secubox/cve-triage.sock",
+    "iot-guard": "/run/secubox/iot-guard.sock",
+    "config-advisor": "/run/secubox/config-advisor.sock",
+    "mcp-server": "/run/secubox/mcp-server.sock",
+    "dns-guard": "/run/secubox/dns-guard.sock",
+    "network-anomaly": "/run/secubox/network-anomaly.sock",
+    "identity": "/run/secubox/identity.sock",
+    "system-hub": "/run/secubox/system-hub.sock",
 }
 
 # Cache TTL in seconds
@@ -194,7 +194,6 @@ class MCPServer:
         self.cache = CacheManager(CACHE_DIR)
         self._ensure_dirs()
         self.sessions: Dict[str, MCPSession] = {}
-        self._http_client: Optional[httpx.AsyncClient] = None
         self._register_tools()
         self._register_resources()
         self._register_prompts()
@@ -202,16 +201,35 @@ class MCPServer:
     def _ensure_dirs(self):
         self.data_dir.mkdir(parents=True, exist_ok=True)
 
-    async def _get_client(self) -> httpx.AsyncClient:
-        """Get or create HTTP client."""
-        if self._http_client is None:
-            self._http_client = httpx.AsyncClient(timeout=10.0)
-        return self._http_client
+    def _get_module_socket(self, module: str) -> str:
+        """Get Unix socket path for a module."""
+        return MODULE_SOCKETS.get(module, f"/run/secubox/{module}.sock")
 
-    def _get_module_url(self, module: str, path: str = "") -> str:
-        """Get URL for a module."""
-        port = MODULE_PORTS.get(module, 9100)
-        return f"http://127.0.0.1:{port}{path}"
+    async def _call_module(self, module: str, path: str, method: str = "GET",
+                           params: Dict = None, json_data: Dict = None) -> Dict:
+        """Call a module via its Unix socket."""
+        socket_path = self._get_module_socket(module)
+
+        if not Path(socket_path).exists():
+            return {"error": f"Module {module} socket not found"}
+
+        try:
+            transport = httpx.AsyncHTTPTransport(uds=socket_path)
+            async with httpx.AsyncClient(transport=transport, timeout=10.0) as client:
+                url = f"http://localhost{path}"
+                if method == "GET":
+                    response = await client.get(url, params=params)
+                else:
+                    response = await client.post(url, json=json_data or params)
+
+                if response.status_code == 200:
+                    return response.json()
+                else:
+                    return {"error": f"HTTP {response.status_code}", "detail": response.text[:200]}
+        except httpx.TimeoutException:
+            return {"error": f"Timeout connecting to {module}"}
+        except Exception as e:
+            return {"error": str(e)}
 
     def _register_tools(self):
         """Register available tools."""
@@ -549,7 +567,7 @@ class MCPServer:
 
     async def _execute_tool(self, tool_name: str, args: Dict) -> Any:
         """Execute tool and return result."""
-        # Tool to module/endpoint mapping using correct ports
+        # Tool to module/endpoint mapping
         tool_mapping = {
             "secubox.waf.status": ("threat-analyst", "/status", "GET", True),
             "secubox.waf.threats": ("threat-analyst", "/alerts", "GET", True),
@@ -597,28 +615,15 @@ class MCPServer:
             except Exception as e:
                 return {"error": str(e)}
         else:
-            # HTTP request to module
-            endpoint = self._get_module_url(module, path)
-            try:
-                client = await self._get_client()
-                if method == "GET":
-                    response = await client.get(endpoint, params=args)
-                else:
-                    response = await client.post(endpoint, json=args)
+            # Call module via Unix socket
+            if method == "GET":
+                result = await self._call_module(module, path, "GET", params=args)
+            else:
+                result = await self._call_module(module, path, "POST", json_data=args)
 
-                if response.status_code == 200:
-                    result = response.json()
-                    if cacheable:
-                        self.cache.set(cache_key, result)
-                    return result
-                else:
-                    return {"error": f"HTTP {response.status_code}", "detail": response.text[:200]}
-            except httpx.TimeoutException:
-                return {"error": "Request timed out"}
-            except httpx.ConnectError:
-                return {"error": f"Cannot connect to {module} module"}
-            except Exception as e:
-                return {"error": str(e)}
+            if cacheable and "error" not in result:
+                self.cache.set(cache_key, result)
+            return result
 
     async def _handle_resources_list(self, request: MCPRequest) -> MCPResponse:
         """List available resources."""
@@ -781,19 +786,17 @@ class MCPServer:
             "timestamp": datetime.utcnow().isoformat() + "Z"
         }
 
-        client = await self._get_client()
-
-        # Fetch from each module concurrently
+        # Fetch from each module concurrently via Unix sockets
         async def fetch_alerts(module: str, path: str, key: str):
             try:
-                url = self._get_module_url(module, path)
-                response = await client.get(url, timeout=5.0)
-                if response.status_code == 200:
-                    data = response.json()
+                data = await self._call_module(module, path, "GET")
+                if "error" not in data:
                     if isinstance(data, list):
-                        alerts[key] = data[:20]  # Limit to 20 per module
+                        alerts[key] = data[:20]
                     elif isinstance(data, dict) and "alerts" in data:
                         alerts[key] = data["alerts"][:20]
+                    else:
+                        alerts[key] = [data] if data else []
             except Exception as e:
                 alerts[key] = [{"error": str(e)}]
 
@@ -802,7 +805,7 @@ class MCPServer:
             fetch_alerts("dns-guard", "/alerts", "dns"),
             fetch_alerts("network-anomaly", "/alerts", "anomaly"),
             fetch_alerts("iot-guard", "/alerts", "iot"),
-            fetch_alerts("cve-triage", "/cves?severity=critical,high", "cve"),
+            fetch_alerts("cve-triage", "/cves", "cve"),
             return_exceptions=True
         )
 
@@ -826,24 +829,19 @@ class MCPServer:
             "modules": {}
         }
 
-        client = await self._get_client()
-
         async def fetch_status(module: str):
             try:
-                url = self._get_module_url(module, "/status")
-                response = await client.get(url, timeout=3.0)
-                if response.status_code == 200:
-                    status["modules"][module] = response.json()
+                data = await self._call_module(module, "/status", "GET")
+                if "error" not in data:
+                    status["modules"][module] = data
                 else:
-                    status["modules"][module] = {"status": "error", "code": response.status_code}
-            except httpx.ConnectError:
-                status["modules"][module] = {"status": "unavailable"}
+                    status["modules"][module] = {"status": "error", "error": data.get("error")}
             except Exception as e:
                 status["modules"][module] = {"status": "error", "error": str(e)}
 
         # Fetch all module statuses concurrently
         await asyncio.gather(
-            *[fetch_status(module) for module in MODULE_PORTS.keys()],
+            *[fetch_status(module) for module in MODULE_SOCKETS.keys()],
             return_exceptions=True
         )
 
@@ -851,9 +849,9 @@ class MCPServer:
         healthy = sum(1 for m in status["modules"].values()
                       if isinstance(m, dict) and m.get("status") in ["ok", "healthy"])
         status["summary"] = {
-            "total": len(MODULE_PORTS),
+            "total": len(MODULE_SOCKETS),
             "healthy": healthy,
-            "unhealthy": len(MODULE_PORTS) - healthy
+            "unhealthy": len(MODULE_SOCKETS) - healthy
         }
 
         return json.dumps(status, indent=2)
@@ -1037,10 +1035,10 @@ async def cache_stats():
 
 @app.get("/modules", dependencies=[Depends(require_jwt)])
 async def list_modules():
-    """List all registered SecuBox modules and their ports."""
+    """List all registered SecuBox modules and their sockets."""
     return {
-        "modules": MODULE_PORTS,
-        "count": len(MODULE_PORTS)
+        "modules": MODULE_SOCKETS,
+        "count": len(MODULE_SOCKETS)
     }
 
 
@@ -1084,6 +1082,4 @@ async def startup():
 @app.on_event("shutdown")
 async def shutdown():
     """Cleanup on shutdown."""
-    if mcp_server._http_client:
-        await mcp_server._http_client.aclose()
     logger.info("MCP Server stopped")
