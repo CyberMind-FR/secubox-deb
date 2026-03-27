@@ -1,0 +1,336 @@
+# SecuBox — Installer ISO Build Workflow
+# Builds hybrid live/installer ISO with wiki documentation
+name: Build Installer ISO
+
+on:
+  workflow_dispatch:
+    inputs:
+      preseed:
+        description: 'Include preseed config'
+        type: boolean
+        default: false
+      name:
+        description: 'ISO name prefix'
+        required: false
+        default: 'secubox-installer'
+  push:
+    tags:
+      - 'v*'
+  workflow_run:
+    workflows: ["Build SecuBox .deb packages"]
+    types: [completed]
+    branches: [main, master]
+
+env:
+  DEBIAN_SUITE: bookworm
+
+jobs:
+  build-iso:
+    runs-on: ubuntu-24.04
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'push' || github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost
+          sudo apt-get clean
+          df -h
+
+      - name: Download package artifacts
+        if: github.event_name == 'workflow_run'
+        uses: actions/download-artifact@v4
+        with:
+          name: secubox-debs-all
+          path: output/debs/
+          run-id: ${{ github.event.workflow_run.id }}
+        continue-on-error: true
+
+      - name: Download packages from latest build
+        if: github.event_name != 'workflow_run'
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          workflow: build-packages.yml
+          name: secubox-debs-all
+          path: output/debs/
+          if_no_artifact_found: warn
+        continue-on-error: true
+
+      - name: List available packages
+        run: |
+          echo "=== Available .deb packages ==="
+          ls -lh output/debs/*.deb 2>/dev/null || echo "No packages found"
+          echo "=== Package count ==="
+          ls output/debs/*.deb 2>/dev/null | wc -l || echo "0"
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            debootstrap parted dosfstools e2fsprogs \
+            squashfs-tools grub-efi-amd64-bin grub-pc-bin \
+            xorriso mtools rsync curl wget \
+            keyboard-configuration console-setup kbd locales
+
+      - name: Build Installer ISO
+        run: |
+          SLIPSTREAM_OPT=""
+          if ls output/debs/*.deb >/dev/null 2>&1; then
+            SLIPSTREAM_OPT="--slipstream"
+            echo "Slipstream enabled: $(ls output/debs/*.deb | wc -l) packages"
+          fi
+
+          ISO_NAME="${{ github.event.inputs.name || 'secubox-installer' }}"
+
+          sudo bash image/build-installer-iso.sh \
+            --name "$ISO_NAME" \
+            $SLIPSTREAM_OPT
+        timeout-minutes: 60
+
+      - name: Generate checksums
+        run: |
+          cd output/
+          sha256sum *.iso *.img 2>/dev/null > SHA256SUMS || true
+          cat SHA256SUMS
+
+      - name: List output
+        run: |
+          ls -lh output/
+          echo "=== ISO Info ==="
+          file output/*.iso 2>/dev/null || true
+
+      - name: Upload ISO artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: secubox-installer-iso-amd64
+          path: |
+            output/*.iso
+            output/*.img
+            output/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 30
+
+  # Build wiki documentation
+  build-wiki:
+    runs-on: ubuntu-latest
+    needs: build-iso
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Checkout wiki
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}.wiki
+          path: wiki-repo
+        continue-on-error: true
+
+      - name: Generate API documentation
+        run: |
+          mkdir -p wiki-output
+
+          # Copy existing wiki docs
+          if [ -d "wiki" ]; then
+            cp -r wiki/* wiki-output/
+          fi
+
+          # Copy docs
+          if [ -d "docs" ]; then
+            cp -r docs/*.md wiki-output/ 2>/dev/null || true
+          fi
+
+          # Generate module list
+          cat > wiki-output/Modules.md << 'EOF'
+          # SecuBox Modules
+
+          ## Core
+          | Module | Description | API Endpoints |
+          |--------|-------------|---------------|
+          | secubox-hub | Central dashboard | /api/v1/hub/* |
+          | secubox-core | Shared library | - |
+          | secubox-portal | Login portal | /api/v1/portal/* |
+          | secubox-system | System management | /api/v1/system/* |
+
+          ## Security
+          | Module | Description | API Endpoints |
+          |--------|-------------|---------------|
+          | secubox-crowdsec | Intrusion prevention | /api/v1/crowdsec/* |
+          | secubox-waf | Web application firewall | /api/v1/waf/* |
+          | secubox-auth | OAuth2/OIDC | /api/v1/auth/* |
+          | secubox-nac | Network access control | /api/v1/nac/* |
+
+          ## Network
+          | Module | Description | API Endpoints |
+          |--------|-------------|---------------|
+          | secubox-wireguard | VPN management | /api/v1/wireguard/* |
+          | secubox-haproxy | Load balancer | /api/v1/haproxy/* |
+          | secubox-netmodes | Network modes | /api/v1/netmodes/* |
+          | secubox-qos | Traffic shaping | /api/v1/qos/* |
+          | secubox-dpi | Deep packet inspection | /api/v1/dpi/* |
+          | secubox-vhost | Virtual hosts | /api/v1/vhost/* |
+          | secubox-cdn | CDN cache | /api/v1/cdn/* |
+
+          ## Applications
+          | Module | Description | API Endpoints |
+          |--------|-------------|---------------|
+          | secubox-mail | Email server | /api/v1/mail/* |
+          | secubox-dns | DNS management | /api/v1/dns/* |
+          | secubox-users | User management | /api/v1/users/* |
+          | secubox-gitea | Git server | /api/v1/gitea/* |
+          | secubox-nextcloud | File sync | /api/v1/nextcloud/* |
+
+          ## Monitoring
+          | Module | Description | API Endpoints |
+          |--------|-------------|---------------|
+          | secubox-netdata | Real-time metrics | /api/v1/netdata/* |
+          | secubox-metrics | Dashboard metrics | /api/v1/metrics/* |
+          | secubox-soc | Security operations | /api/v1/soc/* |
+
+          EOF
+
+      - name: Upload wiki artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: secubox-wiki
+          path: wiki-output/
+          retention-days: 30
+
+  # Create release on tag
+  release:
+    needs: [build-iso, build-wiki]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download ISO artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: secubox-installer-iso-amd64
+          path: release/
+
+      - name: Download wiki artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: secubox-wiki
+          path: wiki/
+
+      - name: Compress ISO
+        run: |
+          cd release/
+          for f in *.iso *.img; do
+            [ -f "$f" ] && gzip -9 "$f" && echo "Compressed: $f"
+          done
+          ls -lh
+
+      - name: Generate final checksums
+        run: |
+          cd release/
+          sha256sum *.gz 2>/dev/null > SHA256SUMS || true
+          cat SHA256SUMS
+
+      - name: Sign checksums
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          if [ -n "$GPG_PRIVATE_KEY" ]; then
+            echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+            cd release/
+            gpg --clearsign SHA256SUMS
+            mv SHA256SUMS.asc SHA256SUMS.gpg
+          fi
+
+      - name: Get version info
+        id: version
+        run: |
+          VERSION="${{ github.ref_name }}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "date=$(date -u +%Y-%m-%d)" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: SecuBox Installer ${{ steps.version.outputs.version }}
+          body: |
+            ## SecuBox Installer ISO ${{ steps.version.outputs.version }}
+
+            Release date: ${{ steps.version.outputs.date }}
+
+            ### Downloads
+
+            | File | Description |
+            |------|-------------|
+            | `secubox-installer-amd64-bookworm.iso.gz` | Bootable ISO (UEFI/BIOS) |
+            | `secubox-installer-amd64-bookworm.img.gz` | Raw USB image |
+
+            ### Features
+
+            - **Hybrid Boot**: Works as Live USB or Installer
+            - **UEFI + Legacy BIOS**: Compatible with all systems
+            - **French AZERTY keyboard**: Pre-configured
+            - **DHCP networking**: Auto-configured on boot
+            - **51 SecuBox packages**: Pre-installed
+            - **Preseed support**: Clone existing installations
+
+            ### Boot Options
+
+            | Option | Description |
+            |--------|-------------|
+            | SecuBox Live | Boot live system with persistence |
+            | SecuBox Install | Headless auto-install to first disk |
+            | SecuBox Live (To RAM) | Load entire system to memory |
+            | SecuBox Debug (Rescue) | Minimal rescue shell |
+
+            ### Flash to USB
+
+            ```bash
+            # Download and extract
+            gunzip secubox-installer-amd64-bookworm.img.gz
+
+            # Flash (replace sdX with your USB device)
+            sudo dd if=secubox-installer-amd64-bookworm.img of=/dev/sdX bs=4M status=progress conv=fsync
+            ```
+
+            ### Credentials
+
+            | Service | Username | Password |
+            |---------|----------|----------|
+            | SSH | root | secubox |
+            | SSH | secubox | secubox |
+            | Web UI | admin | admin |
+
+            ### Verification
+
+            ```bash
+            sha256sum -c SHA256SUMS
+            gpg --verify SHA256SUMS.gpg
+            ```
+
+            ### Documentation
+
+            - [Installation Guide](https://github.com/${{ github.repository }}/wiki/Installation)
+            - [API Reference](https://github.com/${{ github.repository }}/wiki/API-Reference)
+            - [Module Documentation](https://github.com/${{ github.repository }}/wiki/Modules)
+
+          files: |
+            release/*.iso.gz
+            release/*.img.gz
+            release/SHA256SUMS
+            release/SHA256SUMS.gpg
+          draft: false
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
+
+      - name: Update wiki
+        if: success()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Wiki artifacts ready for manual deployment"
+          ls -la wiki/
