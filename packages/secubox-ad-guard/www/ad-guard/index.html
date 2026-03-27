@@ -3,364 +3,116 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox Ad Guard - Adware & Tracker Detection</title>
-    <link rel="stylesheet" href="/static/css/secubox.css">
+    <title>SecuBox - Ad Guard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
         :root {
-            --primary: #00d4aa;
-            --danger: #ff4444;
-            --warning: #ffaa00;
-            --card-bg: #1e1e1e;
-            --bg-secondary: #2a2a2a;
-            --border: #333;
-            --text-muted: #888;
+            --p31-peak: #00dd44;
+            --p31-hot: #00ff55;
+            --p31-mid: #009933;
+            --p31-dim: #006622;
+            --p31-ghost: #003311;
+            --p31-decay: #ffb347;
+            --p31-decay-dim: #cc7722;
+            --tube-light: #e8f5e9;
+            --tube-pale: #c8e6c9;
+            --tube-soft: #a5d6a7;
+            --bg-dark: var(--tube-light);
+            --bg-card: var(--tube-pale);
+            --border: var(--tube-soft);
+            --text: #1b3d1c;
+            --text-dim: var(--p31-dim);
+            --primary: var(--p31-peak);
+            --danger: #ff4466;
+            --warning: var(--p31-decay);
         }
-        .dashboard-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-            margin-bottom: 2rem;
-        }
-        .stat-card {
-            background: var(--card-bg);
-            border-radius: 12px;
-            padding: 1.5rem;
-            text-align: center;
-            transition: transform 0.2s;
-        }
-        .stat-card:hover {
-            transform: translateY(-2px);
-        }
-        .stat-icon {
-            font-size: 2rem;
-            margin-bottom: 0.5rem;
-        }
-        .stat-value {
-            font-size: 2.5rem;
-            font-weight: bold;
-            color: var(--primary);
-        }
-        .stat-value.danger {
-            color: var(--danger);
-        }
-        .stat-label {
-            color: var(--text-muted);
-            font-size: 0.9rem;
-            margin-top: 0.5rem;
-        }
-        .section {
-            background: var(--card-bg);
-            border-radius: 12px;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-        }
-        .section-header {
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Courier Prime', 'Courier New', monospace;
+            background: var(--tube-light);
+            color: var(--text);
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1rem;
-            padding-bottom: 0.5rem;
-            border-bottom: 1px solid var(--border);
+            min-height: 100vh;
         }
-        .section-header h2 {
-            margin: 0;
-            font-size: 1.2rem;
-        }
-        .tabs {
-            display: flex;
-            gap: 0.25rem;
-            background: var(--bg-secondary);
-            padding: 0.25rem;
-            border-radius: 8px;
-            margin-bottom: 1.5rem;
-        }
-        .tab {
-            padding: 0.75rem 1.5rem;
-            cursor: pointer;
-            border: none;
-            background: none;
-            color: var(--text-muted);
-            border-radius: 6px;
-            font-size: 0.9rem;
-            transition: all 0.2s;
-        }
-        .tab:hover {
-            color: white;
-        }
-        .tab.active {
-            background: var(--primary);
-            color: #000;
-            font-weight: 500;
-        }
-        .tab-content {
-            display: none;
-        }
-        .tab-content.active {
-            display: block;
-        }
-        .device-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: 1rem;
-        }
-        .device-card {
-            background: var(--bg-secondary);
-            border-radius: 8px;
-            padding: 1rem;
-            border-left: 4px solid var(--primary);
-        }
-        .device-card.high-block {
-            border-left-color: var(--danger);
-        }
-        .device-header {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            margin-bottom: 0.75rem;
-        }
-        .device-icon {
-            font-size: 1.5rem;
-        }
-        .device-info h3 {
-            margin: 0;
-            font-size: 1rem;
-        }
-        .device-info .mac {
-            font-size: 0.8rem;
-            color: var(--text-muted);
-            font-family: monospace;
-        }
-        .device-stats {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 0.5rem;
-            margin-top: 0.75rem;
-        }
-        .device-stat {
-            text-align: center;
-            padding: 0.5rem;
-            background: var(--card-bg);
-            border-radius: 4px;
-        }
-        .device-stat .value {
-            font-size: 1.2rem;
-            font-weight: bold;
-        }
-        .device-stat .label {
-            font-size: 0.75rem;
-            color: var(--text-muted);
-        }
-        .progress-bar {
-            height: 6px;
-            background: var(--bg-secondary);
-            border-radius: 3px;
-            overflow: hidden;
-            margin-top: 0.5rem;
-        }
-        .progress-fill {
-            height: 100%;
-            background: var(--primary);
-            transition: width 0.3s;
-        }
-        .progress-fill.high {
-            background: var(--danger);
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        th, td {
-            text-align: left;
-            padding: 0.75rem;
-            border-bottom: 1px solid var(--border);
-        }
-        th {
-            color: var(--text-muted);
-            font-weight: 500;
-            font-size: 0.85rem;
-            text-transform: uppercase;
-        }
-        tr:hover {
-            background: var(--bg-secondary);
-        }
-        .badge {
-            display: inline-block;
-            padding: 0.25rem 0.75rem;
-            border-radius: 12px;
-            font-size: 0.8rem;
-            font-weight: 500;
-        }
-        .badge-advertising {
-            background: #ff444433;
-            color: #ff6666;
-        }
-        .badge-tracking {
-            background: #ffaa0033;
-            color: #ffcc00;
-        }
-        .badge-analytics {
-            background: #6666ff33;
-            color: #8888ff;
-        }
-        .badge-telemetry {
-            background: #ff66ff33;
-            color: #ff88ff;
-        }
-        .badge-social {
-            background: #00aaff33;
-            color: #44ccff;
-        }
-        .badge-malware {
-            background: #ff000033;
-            color: #ff4444;
-        }
-        .btn {
-            padding: 0.5rem 1rem;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 0.9rem;
-            transition: opacity 0.2s;
-        }
-        .btn:hover {
-            opacity: 0.9;
-        }
-        .btn-primary {
-            background: var(--primary);
-            color: #000;
-        }
-        .btn-success {
-            background: #28a745;
-            color: white;
-        }
-        .btn-danger {
-            background: var(--danger);
-            color: white;
-        }
-        .btn-outline {
-            background: transparent;
-            border: 1px solid var(--border);
-            color: white;
-        }
-        .btn-sm {
-            padding: 0.25rem 0.5rem;
-            font-size: 0.8rem;
-        }
-        .input-group {
-            display: flex;
-            gap: 0.5rem;
-            margin-bottom: 1rem;
-        }
-        .input-group input {
-            flex: 1;
-            padding: 0.75rem;
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            background: var(--bg-secondary);
-            color: white;
-        }
-        .input-group input:focus {
-            outline: none;
-            border-color: var(--primary);
-        }
-        .delayed-item {
-            background: var(--bg-secondary);
-            border-radius: 8px;
-            padding: 1rem;
-            margin-bottom: 0.75rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .delayed-info h4 {
-            margin: 0 0 0.25rem 0;
-        }
-        .delayed-info small {
-            color: var(--text-muted);
-        }
-        .delayed-actions {
-            display: flex;
-            gap: 0.5rem;
-        }
-        .chart-donut {
-            width: 150px;
-            height: 150px;
-            position: relative;
-            margin: 0 auto 1rem;
-        }
-        .category-legend {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.5rem;
-            justify-content: center;
-        }
-        .legend-item {
-            display: flex;
-            align-items: center;
-            gap: 0.25rem;
-            font-size: 0.85rem;
-        }
-        .legend-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-        }
-        .sources-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 1rem;
-        }
-        .source-card {
-            background: var(--bg-secondary);
-            border-radius: 8px;
-            padding: 1rem;
-            text-align: center;
-        }
-        .source-card h4 {
-            margin: 0 0 0.5rem 0;
-        }
-        .source-card .count {
-            font-size: 1.5rem;
-            font-weight: bold;
-            color: var(--primary);
-        }
-        .check-result {
-            padding: 1rem;
-            border-radius: 8px;
-            margin-top: 1rem;
-        }
-        .check-result.blocked {
-            background: #ff444433;
-            border: 1px solid var(--danger);
-        }
-        .check-result.safe {
-            background: #00d4aa33;
-            border: 1px solid var(--primary);
-        }
-        .loading {
-            text-align: center;
-            padding: 2rem;
-            color: var(--text-muted);
-        }
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-        .loading::after {
-            content: '...';
-            animation: pulse 1s infinite;
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 2px solid var(--border); }
+        .header h1 { font-size: 1.5rem; display: flex; align-items: center; gap: 0.5rem; }
+        .badge { padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.75rem; font-weight: 500; }
+        .badge.version { background: var(--bg-dark); border: 1px solid var(--border); }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; text-align: center; }
+        .stat-icon { font-size: 1.5rem; margin-bottom: 0.5rem; }
+        .stat-value { font-size: 2rem; font-weight: bold; color: var(--primary); }
+        .stat-value.danger { color: var(--danger); }
+        .stat-label { color: var(--text-dim); font-size: 0.85rem; margin-top: 0.25rem; }
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border); }
+        .card-header h2 { font-size: 1.1rem; display: flex; align-items: center; gap: 0.5rem; }
+        .tabs { display: flex; gap: 0.25rem; background: var(--bg-dark); padding: 0.25rem; border-radius: 8px; margin-bottom: 1.5rem; }
+        .tab { padding: 0.6rem 1.25rem; cursor: pointer; border: none; background: none; color: var(--text-dim); border-radius: 6px; font-size: 0.85rem; font-family: inherit; transition: all 0.2s; }
+        .tab:hover { color: var(--text); }
+        .tab.active { background: var(--primary); color: #000; font-weight: 600; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: 0.75rem; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+        th { color: var(--text-dim); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; background: var(--bg-dark); }
+        tr:hover { background: rgba(0,221,68,0.05); }
+        .badge-cat { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 12px; font-size: 0.75rem; font-weight: 500; }
+        .badge-advertising { background: #ff444433; color: #cc3333; }
+        .badge-tracking { background: #ffaa0033; color: #996600; }
+        .badge-analytics { background: #6666ff33; color: #4444aa; }
+        .badge-telemetry { background: #ff66ff33; color: #aa44aa; }
+        .badge-social { background: #00aaff33; color: #0077aa; }
+        .badge-malware { background: #ff000033; color: #cc0000; }
+        .btn { padding: 0.5rem 1rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text); cursor: pointer; font-family: inherit; font-size: 0.85rem; transition: all 0.2s; }
+        .btn:hover { background: var(--bg-dark); }
+        .btn-primary { background: var(--primary); border-color: var(--primary); color: #000; }
+        .btn-primary:hover { background: var(--p31-hot); }
+        .btn-danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+        .btn-sm { padding: 0.3rem 0.6rem; font-size: 0.8rem; }
+        .input-row { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+        .input-row input, .input-row select { flex: 1; padding: 0.6rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-dark); color: var(--text); font-family: inherit; }
+        .input-row input:focus, .input-row select:focus { outline: none; border-color: var(--primary); }
+        .device-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
+        .device-card { background: var(--bg-dark); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; border-left: 4px solid var(--primary); }
+        .device-card.high-block { border-left-color: var(--danger); }
+        .device-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem; }
+        .device-icon { font-size: 1.5rem; }
+        .device-info h3 { margin: 0; font-size: 1rem; }
+        .device-info .mac { font-size: 0.75rem; color: var(--text-dim); font-family: monospace; }
+        .device-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; margin-top: 0.75rem; }
+        .device-stat { text-align: center; padding: 0.5rem; background: var(--bg-card); border-radius: 4px; }
+        .device-stat .value { font-size: 1.1rem; font-weight: bold; }
+        .device-stat .label { font-size: 0.7rem; color: var(--text-dim); }
+        .progress-bar { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin-top: 0.5rem; }
+        .progress-fill { height: 100%; background: var(--primary); transition: width 0.3s; }
+        .progress-fill.high { background: var(--danger); }
+        .check-result { padding: 1rem; border-radius: 8px; margin-top: 1rem; }
+        .check-result.blocked { background: #ff444422; border: 1px solid var(--danger); }
+        .check-result.safe { background: #00dd4422; border: 1px solid var(--primary); }
+        .loading { text-align: center; padding: 2rem; color: var(--text-dim); }
+        @media (max-width: 768px) {
+            .main { margin-left: 0; padding: 1rem; }
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Ad Guard</h1>
-        <p class="subtitle">Adware & Tracker Detection with Device Statistics</p>
+    <nav class="sidebar" id="sidebar"></nav>
 
-        <!-- Stats Overview -->
-        <div class="dashboard-grid">
+    <div class="main">
+        <div class="header">
+            <h1>🛡️ Ad Guard</h1>
+            <span class="badge version">v1.0.0</span>
+        </div>
+
+        <div class="stats-grid">
             <div class="stat-card">
-                <div class="stat-icon">🛡️</div>
+                <div class="stat-icon">📋</div>
                 <div class="stat-value" id="blocklist-count">-</div>
                 <div class="stat-label">Blocked Domains</div>
             </div>
@@ -381,41 +133,19 @@
             </div>
         </div>
 
-        <!-- Tabs -->
         <div class="tabs">
             <button class="tab active" data-tab="overview">Overview</button>
             <button class="tab" data-tab="devices">Devices</button>
             <button class="tab" data-tab="blocklist">Blocklist</button>
-            <button class="tab" data-tab="delayed">Delayed Blocks</button>
-            <button class="tab" data-tab="settings">Settings</button>
+            <button class="tab" data-tab="delayed">Delayed</button>
         </div>
 
         <!-- Overview Tab -->
         <div id="overview" class="tab-content active">
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
-                <div class="section">
-                    <div class="section-header">
-                        <h2>Statistics by Device Type</h2>
-                    </div>
-                    <div id="device-type-stats">
-                        <div class="loading">Loading</div>
-                    </div>
-                </div>
-
-                <div class="section">
-                    <div class="section-header">
-                        <h2>Categories Blocked</h2>
-                    </div>
-                    <div id="category-chart">
-                        <div class="loading">Loading</div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="section">
-                <div class="section-header">
-                    <h2>Top Blocked Domains</h2>
-                    <button class="btn btn-outline btn-sm" onclick="refreshTopDomains()">Refresh</button>
+            <div class="card">
+                <div class="card-header">
+                    <h2>📊 Top Blocked Domains</h2>
+                    <button class="btn btn-sm" onclick="fetchTopDomains()">Refresh</button>
                 </div>
                 <table>
                     <thead>
@@ -428,17 +158,17 @@
                         </tr>
                     </thead>
                     <tbody id="top-domains-table">
-                        <tr><td colspan="5" class="loading">Loading</td></tr>
+                        <tr><td colspan="5" class="loading">Loading...</td></tr>
                     </tbody>
                 </table>
             </div>
 
-            <div class="section">
-                <div class="section-header">
-                    <h2>Check Domain</h2>
+            <div class="card">
+                <div class="card-header">
+                    <h2>🔍 Check Domain</h2>
                 </div>
-                <div class="input-group">
-                    <input type="text" id="check-domain-input" placeholder="Enter domain to check (e.g., doubleclick.net)">
+                <div class="input-row">
+                    <input type="text" id="check-domain-input" placeholder="Enter domain (e.g., doubleclick.net)">
                     <button class="btn btn-primary" onclick="checkDomain()">Check</button>
                 </div>
                 <div id="check-result"></div>
@@ -447,26 +177,26 @@
 
         <!-- Devices Tab -->
         <div id="devices" class="tab-content">
-            <div class="section">
-                <div class="section-header">
-                    <h2>Device Statistics</h2>
-                    <button class="btn btn-outline btn-sm" onclick="refreshDevices()">Refresh</button>
+            <div class="card">
+                <div class="card-header">
+                    <h2>📱 Device Statistics</h2>
+                    <button class="btn btn-sm" onclick="fetchDevices()">Refresh</button>
                 </div>
                 <div class="device-grid" id="device-grid">
-                    <div class="loading">Loading</div>
+                    <div class="loading">Loading...</div>
                 </div>
             </div>
         </div>
 
         <!-- Blocklist Tab -->
         <div id="blocklist" class="tab-content">
-            <div class="section">
-                <div class="section-header">
-                    <h2>Add to Blocklist</h2>
+            <div class="card">
+                <div class="card-header">
+                    <h2>➕ Add to Blocklist</h2>
                 </div>
-                <div class="input-group">
+                <div class="input-row">
                     <input type="text" id="block-domain-input" placeholder="Domain to block">
-                    <select id="block-category" style="padding: 0.75rem; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 6px; color: white;">
+                    <select id="block-category">
                         <option value="advertising">Advertising</option>
                         <option value="tracking">Tracking</option>
                         <option value="analytics">Analytics</option>
@@ -475,128 +205,42 @@
                         <option value="malware">Malware</option>
                     </select>
                     <button class="btn btn-danger" onclick="blockDomain()">Block Now</button>
-                    <button class="btn btn-outline" onclick="delayBlock()">Delay Block</button>
+                    <button class="btn" onclick="delayBlock()">Delay Block</button>
                 </div>
             </div>
 
-            <div class="section">
-                <div class="section-header">
-                    <h2>Blocklist Sources</h2>
+            <div class="card">
+                <div class="card-header">
+                    <h2>📋 Blocklist Sources</h2>
                     <button class="btn btn-primary" onclick="updateBlocklists()">Update All</button>
                 </div>
-                <div class="sources-grid" id="sources-grid">
-                    <div class="source-card">
-                        <h4>StevenBlack</h4>
-                        <div class="count">-</div>
-                        <small>Unified hosts</small>
-                    </div>
-                    <div class="source-card">
-                        <h4>OISD</h4>
-                        <div class="count">-</div>
-                        <small>Small list</small>
-                    </div>
-                    <div class="source-card">
-                        <h4>Hagezi</h4>
-                        <div class="count">-</div>
-                        <small>Pro list</small>
-                    </div>
-                    <div class="source-card">
-                        <h4>AdAway</h4>
-                        <div class="count">-</div>
-                        <small>Mobile ads</small>
-                    </div>
+                <div class="stats-grid" id="sources-grid">
+                    <div class="stat-card"><div class="stat-icon">📦</div><div class="stat-value">-</div><div class="stat-label">StevenBlack</div></div>
+                    <div class="stat-card"><div class="stat-icon">📦</div><div class="stat-value">-</div><div class="stat-label">OISD</div></div>
+                    <div class="stat-card"><div class="stat-icon">📦</div><div class="stat-value">-</div><div class="stat-label">Hagezi</div></div>
+                    <div class="stat-card"><div class="stat-icon">📦</div><div class="stat-value">-</div><div class="stat-label">AdAway</div></div>
                 </div>
-            </div>
-
-            <div class="section">
-                <div class="section-header">
-                    <h2>Recently Blocked</h2>
-                </div>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Domain</th>
-                            <th>Category</th>
-                            <th>Source</th>
-                            <th>Added</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="blocklist-table">
-                        <tr><td colspan="5" class="loading">Loading</td></tr>
-                    </tbody>
-                </table>
             </div>
         </div>
 
-        <!-- Delayed Blocks Tab -->
+        <!-- Delayed Tab -->
         <div id="delayed" class="tab-content">
-            <div class="section">
-                <div class="section-header">
-                    <h2>Pending Delayed Blocks</h2>
+            <div class="card">
+                <div class="card-header">
+                    <h2>⏳ Pending Delayed Blocks</h2>
                     <button class="btn btn-primary" onclick="processDelayed()">Process Due</button>
                 </div>
                 <div id="delayed-list">
-                    <div class="loading">Loading</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Settings Tab -->
-        <div id="settings" class="tab-content">
-            <div class="section">
-                <div class="section-header">
-                    <h2>Blocklist Settings</h2>
-                </div>
-                <div style="display: grid; gap: 1rem;">
-                    <label style="display: flex; align-items: center; gap: 0.5rem;">
-                        <input type="checkbox" id="auto-update" checked>
-                        Auto-update blocklists every 24 hours
-                    </label>
-                    <label style="display: flex; align-items: center; gap: 0.5rem;">
-                        <input type="checkbox" id="require-approval" checked>
-                        Require approval for delayed blocks
-                    </label>
-                    <div>
-                        <label>Default delay (hours):</label>
-                        <input type="number" id="default-delay" value="24" min="1" max="168"
-                               style="width: 80px; padding: 0.5rem; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 4px; color: white;">
-                    </div>
-                </div>
-            </div>
-
-            <div class="section">
-                <div class="section-header">
-                    <h2>Data Management</h2>
-                </div>
-                <div style="display: flex; gap: 1rem;">
-                    <button class="btn btn-outline" onclick="exportStats()">Export Statistics</button>
-                    <button class="btn btn-danger" onclick="clearStats()">Clear Statistics</button>
+                    <div class="loading">Loading...</div>
                 </div>
             </div>
         </div>
     </div>
 
+    <script src="/shared/sidebar.js"></script>
     <script>
-        const API_BASE = '/api/ad-guard';
-        const deviceIcons = {
-            'unknown': '❓',
-            'computer': '💻',
-            'phone': '📱',
-            'tablet': '📱',
-            'smart_tv': '📺',
-            'iot': '📡',
-            'game_console': '🎮',
-            'streaming': '📺'
-        };
-        const categoryColors = {
-            'advertising': '#ff6666',
-            'tracking': '#ffcc00',
-            'analytics': '#8888ff',
-            'telemetry': '#ff88ff',
-            'social': '#44ccff',
-            'malware': '#ff4444'
-        };
+        const API_BASE = '/api/v1/ad-guard';
+        const deviceIcons = { 'unknown': '❓', 'computer': '💻', 'phone': '📱', 'tablet': '📱', 'smart_tv': '📺', 'iot': '📡', 'game_console': '🎮', 'streaming': '📺' };
 
         // Tab switching
         document.querySelectorAll('.tab').forEach(tab => {
@@ -608,219 +252,106 @@
             });
         });
 
-        async function fetchStats() {
+        async function api(endpoint, method = 'GET', data = null) {
+            const token = localStorage.getItem('sbx_token');
+            const opts = { method, headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': 'Bearer ' + token } : {}) } };
+            if (data) opts.body = JSON.stringify(data);
             try {
-                const res = await fetch(`${API_BASE}/stats`);
-                const data = await res.json();
-                document.getElementById('blocklist-count').textContent = (data.blocklist_domains || 0).toLocaleString();
-                document.getElementById('devices-count').textContent = data.monitored_devices || 0;
-                document.getElementById('blocked-24h').textContent = (data.detections_24h || 0).toLocaleString();
-                document.getElementById('pending-count').textContent = data.pending_delayed_blocks || 0;
-            } catch (e) {
-                console.error('Stats fetch failed:', e);
-            }
+                const res = await fetch(API_BASE + endpoint, opts);
+                if (res.status === 401) { window.location = '/portal/login.html'; return null; }
+                return res.json();
+            } catch (e) { return null; }
         }
 
-        async function fetchDeviceTypeStats() {
-            try {
-                const res = await fetch(`${API_BASE}/stats/by-device-type`);
-                const data = await res.json();
-                const container = document.getElementById('device-type-stats');
-
-                if (!Object.keys(data).length) {
-                    container.innerHTML = '<p style="color: var(--text-muted); text-align: center;">No device data yet</p>';
-                    return;
-                }
-
-                container.innerHTML = Object.entries(data).map(([type, stats]) => `
-                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem; background: var(--bg-secondary); border-radius: 8px; margin-bottom: 0.5rem;">
-                        <div style="display: flex; align-items: center; gap: 0.75rem;">
-                            <span style="font-size: 1.5rem;">${deviceIcons[type] || '❓'}</span>
-                            <div>
-                                <strong>${type.replace('_', ' ')}</strong>
-                                <div style="font-size: 0.8rem; color: var(--text-muted);">${stats.device_count} device${stats.device_count !== 1 ? 's' : ''}</div>
-                            </div>
-                        </div>
-                        <div style="text-align: right;">
-                            <div style="font-weight: bold; color: var(--danger);">${stats.blocked_requests.toLocaleString()}</div>
-                            <div style="font-size: 0.8rem; color: var(--text-muted);">${stats.block_rate}% blocked</div>
-                        </div>
-                    </div>
-                `).join('');
-            } catch (e) {
-                console.error('Device type stats fetch failed:', e);
-            }
+        async function fetchStats() {
+            const data = await api('/stats');
+            if (!data) return;
+            document.getElementById('blocklist-count').textContent = (data.blocklist_domains || 0).toLocaleString();
+            document.getElementById('devices-count').textContent = data.monitored_devices || 0;
+            document.getElementById('blocked-24h').textContent = (data.detections_24h || 0).toLocaleString();
+            document.getElementById('pending-count').textContent = data.pending_delayed_blocks || 0;
         }
 
         async function fetchTopDomains() {
-            try {
-                const res = await fetch(`${API_BASE}/blocklist/top?limit=15`);
-                const data = await res.json();
-                const tbody = document.getElementById('top-domains-table');
-
-                if (!data.domains?.length) {
-                    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">No blocked domains yet</td></tr>';
-                    return;
-                }
-
-                tbody.innerHTML = data.domains.map(d => `
-                    <tr>
-                        <td><code style="font-size: 0.85rem;">${d.domain}</code></td>
-                        <td><span class="badge badge-${d.category}">${d.category}</span></td>
-                        <td>${d.hits.toLocaleString()}</td>
-                        <td>${d.last_hit ? new Date(d.last_hit).toLocaleString() : '-'}</td>
-                        <td>
-                            <button class="btn btn-outline btn-sm" onclick="unblockDomain('${d.domain}')">Unblock</button>
-                        </td>
-                    </tr>
-                `).join('');
-
-                // Update category chart
-                updateCategoryChart(data.domains);
-            } catch (e) {
-                console.error('Top domains fetch failed:', e);
+            const data = await api('/blocklist/top?limit=15');
+            const tbody = document.getElementById('top-domains-table');
+            if (!data?.domains?.length) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-dim);">No blocked domains yet</td></tr>';
+                return;
             }
-        }
-
-        function updateCategoryChart(domains) {
-            const counts = {};
-            domains.forEach(d => {
-                counts[d.category] = (counts[d.category] || 0) + d.hits;
-            });
-
-            const container = document.getElementById('category-chart');
-            const total = Object.values(counts).reduce((a, b) => a + b, 0) || 1;
-
-            container.innerHTML = `
-                <div style="display: flex; flex-wrap: wrap; gap: 1rem; justify-content: center;">
-                    ${Object.entries(counts).map(([cat, count]) => `
-                        <div style="text-align: center;">
-                            <div style="width: 60px; height: 60px; border-radius: 50%; background: ${categoryColors[cat] || '#666'}; display: flex; align-items: center; justify-content: center; margin: 0 auto 0.5rem;">
-                                <span style="font-weight: bold; color: #000;">${Math.round(count / total * 100)}%</span>
-                            </div>
-                            <div style="font-size: 0.85rem;">${cat}</div>
-                            <div style="font-size: 0.75rem; color: var(--text-muted);">${count.toLocaleString()} hits</div>
-                        </div>
-                    `).join('')}
-                </div>
-            `;
+            tbody.innerHTML = data.domains.map(d => `
+                <tr>
+                    <td><code>${d.domain}</code></td>
+                    <td><span class="badge-cat badge-${d.category}">${d.category}</span></td>
+                    <td>${d.hits.toLocaleString()}</td>
+                    <td>${d.last_hit ? new Date(d.last_hit).toLocaleString() : '-'}</td>
+                    <td><button class="btn btn-sm" onclick="unblockDomain('${d.domain}')">Unblock</button></td>
+                </tr>
+            `).join('');
         }
 
         async function fetchDevices() {
-            try {
-                const res = await fetch(`${API_BASE}/devices`);
-                const data = await res.json();
-                const container = document.getElementById('device-grid');
-
-                if (!data.devices?.length) {
-                    container.innerHTML = '<p style="color: var(--text-muted); text-align: center; grid-column: 1/-1;">No devices tracked yet</p>';
-                    return;
-                }
-
-                container.innerHTML = data.devices.map(d => `
-                    <div class="device-card ${d.block_rate > 30 ? 'high-block' : ''}">
-                        <div class="device-header">
-                            <span class="device-icon">${deviceIcons[d.device_type] || '❓'}</span>
-                            <div class="device-info">
-                                <h3>${d.hostname || d.ip_address || 'Unknown'}</h3>
-                                <div class="mac">${d.mac_address}</div>
-                            </div>
-                        </div>
-                        <div class="device-stats">
-                            <div class="device-stat">
-                                <div class="value">${d.total_requests.toLocaleString()}</div>
-                                <div class="label">Total</div>
-                            </div>
-                            <div class="device-stat">
-                                <div class="value" style="color: var(--danger);">${d.blocked_requests.toLocaleString()}</div>
-                                <div class="label">Blocked</div>
-                            </div>
-                            <div class="device-stat">
-                                <div class="value">${d.ad_requests.toLocaleString()}</div>
-                                <div class="label">Ads</div>
-                            </div>
-                            <div class="device-stat">
-                                <div class="value">${d.tracker_requests.toLocaleString()}</div>
-                                <div class="label">Trackers</div>
-                            </div>
-                        </div>
-                        <div class="progress-bar">
-                            <div class="progress-fill ${d.block_rate > 30 ? 'high' : ''}" style="width: ${d.block_rate}%"></div>
-                        </div>
-                        <div style="text-align: center; font-size: 0.8rem; color: var(--text-muted); margin-top: 0.5rem;">
-                            ${d.block_rate}% block rate
+            const data = await api('/devices');
+            const container = document.getElementById('device-grid');
+            if (!data?.devices?.length) {
+                container.innerHTML = '<p style="text-align:center;color:var(--text-dim);grid-column:1/-1;">No devices tracked yet</p>';
+                return;
+            }
+            container.innerHTML = data.devices.map(d => `
+                <div class="device-card ${d.block_rate > 30 ? 'high-block' : ''}">
+                    <div class="device-header">
+                        <span class="device-icon">${deviceIcons[d.device_type] || '❓'}</span>
+                        <div class="device-info">
+                            <h3>${d.hostname || d.ip_address || 'Unknown'}</h3>
+                            <div class="mac">${d.mac_address}</div>
                         </div>
                     </div>
-                `).join('');
-            } catch (e) {
-                console.error('Devices fetch failed:', e);
-            }
+                    <div class="device-stats">
+                        <div class="device-stat"><div class="value">${d.total_requests.toLocaleString()}</div><div class="label">Total</div></div>
+                        <div class="device-stat"><div class="value" style="color:var(--danger);">${d.blocked_requests.toLocaleString()}</div><div class="label">Blocked</div></div>
+                        <div class="device-stat"><div class="value">${d.ad_requests.toLocaleString()}</div><div class="label">Ads</div></div>
+                        <div class="device-stat"><div class="value">${d.tracker_requests.toLocaleString()}</div><div class="label">Trackers</div></div>
+                    </div>
+                    <div class="progress-bar"><div class="progress-fill ${d.block_rate > 30 ? 'high' : ''}" style="width:${d.block_rate}%"></div></div>
+                    <div style="text-align:center;font-size:0.75rem;color:var(--text-dim);margin-top:0.5rem;">${d.block_rate}% block rate</div>
+                </div>
+            `).join('');
         }
 
         async function fetchDelayed() {
-            try {
-                const res = await fetch(`${API_BASE}/delayed`);
-                const data = await res.json();
-                const container = document.getElementById('delayed-list');
-
-                if (!data.delayed?.length) {
-                    container.innerHTML = '<p style="color: var(--text-muted); text-align: center;">No pending delayed blocks</p>';
-                    return;
-                }
-
-                container.innerHTML = data.delayed.map(d => `
-                    <div class="delayed-item">
-                        <div class="delayed-info">
-                            <h4>${d.domain}</h4>
-                            <small>
-                                <span class="badge badge-${d.category}">${d.category}</span>
-                                ${d.reason}<br>
-                                Scheduled: ${new Date(d.scheduled_at).toLocaleString()}
-                            </small>
-                        </div>
-                        <div class="delayed-actions">
-                            ${d.approved
-                                ? '<span style="color: var(--primary);">Approved</span>'
-                                : `<button class="btn btn-success btn-sm" onclick="approveDelayed('${d.domain}')">Approve</button>`
-                            }
-                            <button class="btn btn-danger btn-sm" onclick="cancelDelayed('${d.domain}')">Cancel</button>
+            const data = await api('/delayed');
+            const container = document.getElementById('delayed-list');
+            if (!data?.delayed?.length) {
+                container.innerHTML = '<p style="text-align:center;color:var(--text-dim);">No pending delayed blocks</p>';
+                return;
+            }
+            container.innerHTML = data.delayed.map(d => `
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:1rem;background:var(--bg-dark);border-radius:8px;margin-bottom:0.75rem;">
+                    <div>
+                        <strong>${d.domain}</strong>
+                        <div style="font-size:0.8rem;color:var(--text-dim);">
+                            <span class="badge-cat badge-${d.category}">${d.category}</span> ${d.reason}<br>
+                            Scheduled: ${new Date(d.scheduled_at).toLocaleString()}
                         </div>
                     </div>
-                `).join('');
-            } catch (e) {
-                console.error('Delayed fetch failed:', e);
-            }
+                    <div style="display:flex;gap:0.5rem;">
+                        ${d.approved ? '<span style="color:var(--primary);">Approved</span>' : `<button class="btn btn-sm btn-primary" onclick="approveDelayed('${d.domain}')">Approve</button>`}
+                        <button class="btn btn-sm btn-danger" onclick="cancelDelayed('${d.domain}')">Cancel</button>
+                    </div>
+                </div>
+            `).join('');
         }
 
         async function checkDomain() {
             const domain = document.getElementById('check-domain-input').value.trim();
             if (!domain) return;
-
-            try {
-                const res = await fetch(`${API_BASE}/check/${encodeURIComponent(domain)}`);
-                const data = await res.json();
-                const container = document.getElementById('check-result');
-
-                if (data.blocked) {
-                    container.innerHTML = `
-                        <div class="check-result blocked">
-                            <strong>🚫 BLOCKED</strong><br>
-                            <span>Domain: ${data.domain}</span><br>
-                            <span>Category: <span class="badge badge-${data.category}">${data.category}</span></span><br>
-                            <span>Matched: ${data.matched_rule}</span>
-                        </div>
-                    `;
-                } else {
-                    container.innerHTML = `
-                        <div class="check-result safe">
-                            <strong>✅ NOT BLOCKED</strong><br>
-                            <span>Domain: ${data.domain}</span><br>
-                            <span>This domain is not in the blocklist</span>
-                        </div>
-                    `;
-                }
-            } catch (e) {
-                alert('Check failed: ' + e.message);
+            const data = await api(`/check/${encodeURIComponent(domain)}`);
+            const container = document.getElementById('check-result');
+            if (!data) { container.innerHTML = ''; return; }
+            if (data.blocked) {
+                container.innerHTML = `<div class="check-result blocked"><strong>🚫 BLOCKED</strong><br>Domain: ${data.domain}<br>Category: <span class="badge-cat badge-${data.category}">${data.category}</span><br>Matched: ${data.matched_rule}</div>`;
+            } else {
+                container.innerHTML = `<div class="check-result safe"><strong>✅ NOT BLOCKED</strong><br>Domain: ${data.domain}<br>This domain is not in the blocklist</div>`;
             }
         }
 
@@ -828,115 +359,62 @@
             const domain = document.getElementById('block-domain-input').value.trim();
             const category = document.getElementById('block-category').value;
             if (!domain) return;
-
-            try {
-                await fetch(`${API_BASE}/blocklist/add?domain=${encodeURIComponent(domain)}&category=${category}`, { method: 'POST' });
-                document.getElementById('block-domain-input').value = '';
-                fetchStats();
-                fetchTopDomains();
-                alert(`${domain} has been blocked`);
-            } catch (e) {
-                alert('Block failed: ' + e.message);
-            }
+            await api(`/blocklist/add?domain=${encodeURIComponent(domain)}&category=${category}`, 'POST');
+            document.getElementById('block-domain-input').value = '';
+            fetchStats(); fetchTopDomains();
         }
 
         async function delayBlock() {
             const domain = document.getElementById('block-domain-input').value.trim();
             if (!domain) return;
-
             const reason = prompt('Reason for blocking:');
             if (!reason) return;
-
-            const hours = parseInt(document.getElementById('default-delay')?.value || '24');
-
-            try {
-                await fetch(`${API_BASE}/delayed?domain=${encodeURIComponent(domain)}&reason=${encodeURIComponent(reason)}&delay_hours=${hours}`, { method: 'POST' });
-                document.getElementById('block-domain-input').value = '';
-                fetchDelayed();
-                fetchStats();
-                alert(`${domain} queued for blocking in ${hours} hours`);
-            } catch (e) {
-                alert('Delay block failed: ' + e.message);
-            }
+            await api(`/delayed?domain=${encodeURIComponent(domain)}&reason=${encodeURIComponent(reason)}&delay_hours=24`, 'POST');
+            document.getElementById('block-domain-input').value = '';
+            fetchDelayed(); fetchStats();
         }
 
         async function unblockDomain(domain) {
             if (!confirm(`Unblock ${domain}?`)) return;
-
-            try {
-                await fetch(`${API_BASE}/blocklist/${encodeURIComponent(domain)}`, { method: 'DELETE' });
-                fetchStats();
-                fetchTopDomains();
-            } catch (e) {
-                alert('Unblock failed: ' + e.message);
-            }
+            await api(`/blocklist/${encodeURIComponent(domain)}`, 'DELETE');
+            fetchStats(); fetchTopDomains();
         }
 
         async function approveDelayed(domain) {
-            try {
-                await fetch(`${API_BASE}/delayed/${encodeURIComponent(domain)}/approve`, { method: 'POST' });
-                fetchDelayed();
-            } catch (e) {
-                alert('Approve failed: ' + e.message);
-            }
+            await api(`/delayed/${encodeURIComponent(domain)}/approve`, 'POST');
+            fetchDelayed();
         }
 
         async function cancelDelayed(domain) {
             if (!confirm(`Cancel delayed block for ${domain}?`)) return;
-            // Would need a cancel endpoint - for now just refresh
             fetchDelayed();
         }
 
         async function processDelayed() {
-            try {
-                const res = await fetch(`${API_BASE}/delayed/process`, { method: 'POST' });
-                const data = await res.json();
-                alert(`Processed ${data.processed} delayed blocks`);
-                fetchDelayed();
-                fetchStats();
-            } catch (e) {
-                alert('Process failed: ' + e.message);
-            }
+            const data = await api('/delayed/process', 'POST');
+            if (data) alert(`Processed ${data.processed} delayed blocks`);
+            fetchDelayed(); fetchStats();
         }
 
         async function updateBlocklists() {
-            try {
-                const btn = event.target;
-                btn.disabled = true;
-                btn.textContent = 'Updating...';
-
-                const res = await fetch(`${API_BASE}/blocklist/update`, { method: 'POST' });
-                const data = await res.json();
-
-                btn.disabled = false;
-                btn.textContent = 'Update All';
-
+            const btn = event.target;
+            btn.disabled = true; btn.textContent = 'Updating...';
+            const data = await api('/blocklist/update', 'POST');
+            btn.disabled = false; btn.textContent = 'Update All';
+            if (data) {
                 let msg = 'Blocklists updated:\n';
                 for (const [source, count] of Object.entries(data.updated || {})) {
                     msg += `${source}: ${count >= 0 ? count + ' domains' : 'failed'}\n`;
                 }
                 alert(msg);
-                fetchStats();
-            } catch (e) {
-                alert('Update failed: ' + e.message);
             }
+            fetchStats();
         }
 
-        function refreshTopDomains() { fetchTopDomains(); }
-        function refreshDevices() { fetchDevices(); }
-
         // Initial load
-        fetchStats();
-        fetchDeviceTypeStats();
-        fetchTopDomains();
-        fetchDevices();
-        fetchDelayed();
-
-        // Auto-refresh
-        setInterval(() => {
-            fetchStats();
-            fetchDeviceTypeStats();
-        }, 30000);
+        fetchStats(); fetchTopDomains(); fetchDevices(); fetchDelayed();
+        setInterval(fetchStats, 30000);
     </script>
+    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>

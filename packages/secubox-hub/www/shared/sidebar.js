@@ -270,7 +270,16 @@
         `;
 
         try {
-            const res = await fetch(MENU_API);
+            const token = localStorage.getItem('sbx_token');
+            const headers = token ? { 'Authorization': 'Bearer ' + token } : {};
+            const res = await fetch(MENU_API, { headers });
+
+            // Redirect to login if not authenticated
+            if (res.status === 401) {
+                window.location.href = '/portal/login.html';
+                return;
+            }
+
             const data = await res.json();
 
             if (!data || !data.categories) {
