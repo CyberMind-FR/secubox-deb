@@ -71,19 +71,26 @@ fi
 # ============================================
 log "[2/7] Applying network configuration..."
 
-# Netplan
-if [ -d "${PRESEED_DIR}/network/netplan" ]; then
-    mkdir -p /etc/netplan
-    cp -a "${PRESEED_DIR}/network/netplan/"* /etc/netplan/ 2>/dev/null || true
-    log "  - Netplan configs restored"
-fi
+# Skip network config on live boot - use DHCP instead
+# Network config will be applied after installation to disk
+if [ -f /run/live/medium ] || [ -d /run/live ]; then
+    log "  - Live boot: skipping network config (using DHCP)"
+    log "  - Network config will be applied after installation"
+else
+    # Netplan - only on installed systems
+    if [ -d "${PRESEED_DIR}/network/netplan" ]; then
+        mkdir -p /etc/netplan
+        cp -a "${PRESEED_DIR}/network/netplan/"* /etc/netplan/ 2>/dev/null || true
+        log "  - Netplan configs restored"
+    fi
 
-# WireGuard
-if [ -d "${PRESEED_DIR}/network/wireguard" ]; then
-    mkdir -p /etc/wireguard
-    cp "${PRESEED_DIR}/network/wireguard/"*.conf /etc/wireguard/ 2>/dev/null || true
-    chmod 600 /etc/wireguard/*.conf 2>/dev/null || true
-    log "  - WireGuard configs restored"
+    # WireGuard - only on installed systems
+    if [ -d "${PRESEED_DIR}/network/wireguard" ]; then
+        mkdir -p /etc/wireguard
+        cp "${PRESEED_DIR}/network/wireguard/"*.conf /etc/wireguard/ 2>/dev/null || true
+        chmod 600 /etc/wireguard/*.conf 2>/dev/null || true
+        log "  - WireGuard configs restored"
+    fi
 fi
 
 # ============================================

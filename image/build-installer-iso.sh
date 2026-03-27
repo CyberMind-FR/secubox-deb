@@ -151,6 +151,7 @@ INCLUDE_PKGS+=",iproute2,iputils-ping,ethtool,net-tools,wireguard-tools"
 INCLUDE_PKGS+=",sudo,less,vim-tiny,logrotate,cron,rsync,jq,dnsmasq"
 INCLUDE_PKGS+=",linux-image-amd64,live-boot,live-config,live-config-systemd"
 INCLUDE_PKGS+=",grub-efi-amd64,grub-pc-bin,efibootmgr,pciutils,usbutils,parted,dosfstools"
+INCLUDE_PKGS+=",keyboard-configuration,console-setup,kbd,locales"
 # Firmware for real hardware support
 INCLUDE_PKGS+=",firmware-linux-free"
 
@@ -206,26 +207,65 @@ sed -i 's/PermitRootLogin prohibit-password/PermitRootLogin yes/' "${ROOTFS}/etc
 echo "Europe/Paris" > "${ROOTFS}/etc/timezone"
 chroot "${ROOTFS}" dpkg-reconfigure -f noninteractive tzdata 2>/dev/null || true
 
-# Locale
-chroot "${ROOTFS}" bash -c "locale-gen en_US.UTF-8 || true"
-chroot "${ROOTFS}" bash -c "update-locale LANG=en_US.UTF-8 || true"
+# Locale - French
+chroot "${ROOTFS}" bash -c "locale-gen en_US.UTF-8 fr_FR.UTF-8 || true"
+chroot "${ROOTFS}" bash -c "update-locale LANG=fr_FR.UTF-8 || true"
 
-# Netplan - DHCP by default
+# Keyboard - AZERTY French
+mkdir -p "${ROOTFS}/etc/default"
+cat > "${ROOTFS}/etc/default/keyboard" <<EOF
+XKBMODEL="pc105"
+XKBLAYOUT="fr"
+XKBVARIANT="latin9"
+XKBOPTIONS=""
+BACKSPACE="guess"
+EOF
+chroot "${ROOTFS}" setupcon --save-only 2>/dev/null || true
+
+# Console keymap for virtual terminals
+mkdir -p "${ROOTFS}/etc/console-setup"
+cat > "${ROOTFS}/etc/default/console-setup" <<EOF
+ACTIVE_CONSOLES="/dev/tty[1-6]"
+CHARMAP="UTF-8"
+CODESET="Lat15"
+FONTFACE="Fixed"
+FONTSIZE="8x16"
+EOF
+
+# Load French keymap on boot
+echo 'KEYMAP=fr' > "${ROOTFS}/etc/vconsole.conf"
+
+# Netplan - DHCP on ALL ethernet interfaces
 mkdir -p "${ROOTFS}/etc/netplan"
 cat > "${ROOTFS}/etc/netplan/00-live.yaml" <<EOF
 network:
   version: 2
   renderer: networkd
   ethernets:
-    all-ethernets:
+    all-en:
       match:
         name: "en*"
       dhcp4: true
       dhcp6: true
-    eth0:
+    all-eth:
+      match:
+        name: "eth*"
+      dhcp4: true
+      dhcp6: true
+    all-ens:
+      match:
+        name: "ens*"
+      dhcp4: true
+      dhcp6: true
+    all-enp:
+      match:
+        name: "enp*"
       dhcp4: true
       dhcp6: true
 EOF
+
+# Enable systemd-networkd
+chroot "${ROOTFS}" systemctl enable systemd-networkd.service 2>/dev/null || true
 
 ok "Base configuration complete"
 
@@ -587,6 +627,13 @@ cat > "${ROOTFS}/usr/bin/secubox-live-init" <<'LIVESCRIPT'
 #!/bin/bash
 # SecuBox Live System Initialization
 set -e
+
+# Load French AZERTY keyboard
+loadkeys fr 2>/dev/null || true
+setupcon 2>/dev/null || true
+
+# Apply network configuration
+netplan apply 2>/dev/null || true
 
 # Wait for network
 sleep 3
