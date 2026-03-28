@@ -1,0 +1,13 @@
+Source: secubox-simplex
+Section: net
+Priority: optional
+Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.0
+
+Package: secubox-simplex
+Architecture: all
+Depends: secubox-core, python3, python3-uvicorn, python3-fastapi, nginx, lxc
+Description: SecuBox SimpleX Chat Server
+ LXC-based SimpleX SMP server for SecuBox.
+ Privacy-focused messaging relay with no user identifiers.

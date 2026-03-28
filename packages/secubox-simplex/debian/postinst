@@ -1,0 +1,12 @@
+#!/bin/bash
+set -e
+case "$1" in
+  configure)
+    install -d -o secubox -g secubox -m 750 /var/lib/secubox/simplex
+    systemctl daemon-reload
+    systemctl enable secubox-simplex.service
+    systemctl start secubox-simplex.service || true
+    systemctl reload nginx 2>/dev/null || true
+    ;;
+esac
+#DEBHELPER#
