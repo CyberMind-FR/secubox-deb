@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VM Manager - SecuBox</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <style>
+        .main-content {
+            margin-left: 200px;
+            padding: 2rem;
+        }
+        .status-card {
+            background: var(--card-bg, #1a1a2e);
+            border: 1px solid var(--border-color, #333);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .status-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--border-color, #333);
+        }
+        .status-row:last-child { border-bottom: none; }
+        .badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+        .badge-success { background: #2d5a27; color: #7fff7f; }
+        .badge-warning { background: #5a5a27; color: #ffff7f; }
+        .badge-danger { background: #5a2727; color: #ff7f7f; }
+        .badge-info { background: #27455a; color: #7fd4ff; }
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            margin-right: 0.5rem;
+        }
+        .btn-primary { background: var(--accent-color, #4a9eff); color: #000; }
+        .btn-success { background: #27ae60; color: #fff; }
+        .btn-danger { background: #c0392b; color: #fff; }
+        .btn-secondary { background: #555; color: #fff; }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.8rem; }
+        .section-title {
+            margin: 2rem 0 1rem 0;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--accent-color, #4a9eff);
+        }
+        .vm-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1rem;
+        }
+        .vm-card {
+            background: var(--card-bg, #1a1a2e);
+            border: 1px solid var(--border-color, #333);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+        .vm-card h4 {
+            margin: 0 0 0.5rem 0;
+            color: var(--accent-color, #4a9eff);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .vm-card .type-badge {
+            font-size: 0.7rem;
+            padding: 0.1rem 0.4rem;
+            border-radius: 4px;
+            background: #333;
+            color: #aaa;
+            text-transform: uppercase;
+        }
+        .vm-card .state {
+            margin-bottom: 0.5rem;
+        }
+        .vm-card .meta {
+            font-size: 0.85rem;
+            color: #888;
+            margin-bottom: 0.75rem;
+        }
+        .vm-card .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.25rem;
+        }
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid var(--border-color, #333);
+            margin-bottom: 1rem;
+        }
+        .tab {
+            padding: 0.75rem 1.5rem;
+            cursor: pointer;
+            border: none;
+            background: transparent;
+            color: #888;
+            font-size: 1rem;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+        }
+        .tab.active {
+            color: var(--accent-color, #4a9eff);
+            border-bottom-color: var(--accent-color, #4a9eff);
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal.active { display: flex; }
+        .modal-content {
+            background: #1a1a2e;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 2rem;
+            max-width: 500px;
+            width: 90%;
+        }
+        .modal-content h3 { margin-top: 0; }
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #aaa;
+        }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #333;
+            border-radius: 4px;
+            background: #0a0a0a;
+            color: #fff;
+        }
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+        .stats-row {
+            display: flex;
+            gap: 2rem;
+        }
+        .stat-box {
+            text-align: center;
+        }
+        .stat-box .value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: var(--accent-color, #4a9eff);
+        }
+        .stat-box .label {
+            font-size: 0.85rem;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+    <div id="sidebar-container"></div>
+
+    <div class="main-content">
+        <h1>🖥️ VM Manager</h1>
+        <p>Virtual machines and containers</p>
+
+        <div class="status-card">
+            <h3>Virtualization Status</h3>
+            <div class="status-row">
+                <span>KVM/libvirt</span>
+                <span id="libvirt-status" class="badge badge-warning">Checking...</span>
+            </div>
+            <div class="status-row">
+                <span>LXC</span>
+                <span id="lxc-status" class="badge badge-warning">Checking...</span>
+            </div>
+            <div class="stats-row" style="margin-top: 1rem;">
+                <div class="stat-box">
+                    <div class="value" id="vm-count">-</div>
+                    <div class="label">VMs</div>
+                </div>
+                <div class="stat-box">
+                    <div class="value" id="vm-running">-</div>
+                    <div class="label">Running</div>
+                </div>
+                <div class="stat-box">
+                    <div class="value" id="container-count">-</div>
+                    <div class="label">Containers</div>
+                </div>
+                <div class="stat-box">
+                    <div class="value" id="container-running">-</div>
+                    <div class="label">Running</div>
+                </div>
+            </div>
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+            <button class="btn btn-primary" onclick="showCreateKVMModal()">New KVM VM</button>
+            <button class="btn btn-primary" onclick="showCreateLXCModal()">New LXC Container</button>
+            <button class="btn btn-secondary" onclick="loadVMs()">Refresh</button>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('all')">All</button>
+            <button class="tab" onclick="showTab('kvm')">KVM VMs</button>
+            <button class="tab" onclick="showTab('lxc')">LXC Containers</button>
+        </div>
+
+        <div id="tab-all" class="tab-content active">
+            <div id="all-vms" class="vm-grid">
+                <p>Loading...</p>
+            </div>
+        </div>
+
+        <div id="tab-kvm" class="tab-content">
+            <div id="kvm-vms" class="vm-grid">
+                <p>Loading...</p>
+            </div>
+        </div>
+
+        <div id="tab-lxc" class="tab-content">
+            <div id="lxc-containers" class="vm-grid">
+                <p>Loading...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create KVM Modal -->
+    <div id="kvm-modal" class="modal">
+        <div class="modal-content">
+            <h3>Create KVM Virtual Machine</h3>
+            <div class="form-group">
+                <label>Name</label>
+                <input type="text" id="kvm-name" placeholder="my-vm">
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Memory (MB)</label>
+                    <input type="number" id="kvm-memory" value="2048" min="512">
+                </div>
+                <div class="form-group">
+                    <label>vCPUs</label>
+                    <input type="number" id="kvm-vcpus" value="2" min="1">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Disk Size (GB)</label>
+                <input type="number" id="kvm-disk" value="20" min="5">
+            </div>
+            <div class="form-group">
+                <label>ISO Image (optional)</label>
+                <select id="kvm-iso">
+                    <option value="">No ISO (import existing disk)</option>
+                </select>
+            </div>
+            <div style="margin-top: 1rem;">
+                <button class="btn btn-success" onclick="createKVM()">Create</button>
+                <button class="btn btn-secondary" onclick="closeKVMModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create LXC Modal -->
+    <div id="lxc-modal" class="modal">
+        <div class="modal-content">
+            <h3>Create LXC Container</h3>
+            <div class="form-group">
+                <label>Name</label>
+                <input type="text" id="lxc-name" placeholder="my-container">
+            </div>
+            <div class="form-group">
+                <label>Template</label>
+                <select id="lxc-template" onchange="updateReleases()">
+                    <option value="debian">Debian</option>
+                    <option value="ubuntu">Ubuntu</option>
+                    <option value="alpine">Alpine</option>
+                    <option value="fedora">Fedora</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Release</label>
+                <select id="lxc-release">
+                    <option value="bookworm">bookworm</option>
+                </select>
+            </div>
+            <div style="margin-top: 1rem;">
+                <button class="btn btn-success" onclick="createLXC()">Create</button>
+                <button class="btn btn-secondary" onclick="closeLXCModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/shared/sidebar.js"></script>
+    <script>
+        const API = '/api/v1/vm';
+        let allVMs = [];
+
+        const releases = {
+            debian: ['bookworm', 'bullseye', 'buster'],
+            ubuntu: ['noble', 'jammy', 'focal'],
+            alpine: ['3.19', '3.18', 'edge'],
+            fedora: ['39', '38']
+        };
+
+        function showTab(tabName) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelector(`.tab-content#tab-${tabName}`).classList.add('active');
+            document.querySelector(`.tab[onclick="showTab('${tabName}')"]`).classList.add('active');
+        }
+
+        async function loadStatus() {
+            try {
+                const res = await fetch(`${API}/status`);
+                const data = await res.json();
+
+                const libvirtEl = document.getElementById('libvirt-status');
+                libvirtEl.textContent = data.libvirt?.available ?
+                    (data.libvirt.kvm_enabled ? 'KVM Enabled' : 'No KVM') : 'Not Available';
+                libvirtEl.className = 'badge ' + (data.libvirt?.available ? 'badge-success' : 'badge-danger');
+
+                const lxcEl = document.getElementById('lxc-status');
+                lxcEl.textContent = data.lxc?.available ? 'Available' : 'Not Available';
+                lxcEl.className = 'badge ' + (data.lxc?.available ? 'badge-success' : 'badge-danger');
+
+                document.getElementById('vm-count').textContent = data.vms?.total || 0;
+                document.getElementById('vm-running').textContent = data.vms?.running || 0;
+                document.getElementById('container-count').textContent = data.containers?.total || 0;
+                document.getElementById('container-running').textContent = data.containers?.running || 0;
+            } catch (e) {
+                console.error('Failed to load status:', e);
+            }
+        }
+
+        async function loadVMs() {
+            try {
+                const res = await fetch(`${API}/vms`);
+                const data = await res.json();
+                allVMs = data.vms || [];
+                renderVMs();
+            } catch (e) {
+                console.error('Failed to load VMs:', e);
+            }
+        }
+
+        function renderVMs() {
+            const allEl = document.getElementById('all-vms');
+            const kvmEl = document.getElementById('kvm-vms');
+            const lxcEl = document.getElementById('lxc-containers');
+
+            const kvmVMs = allVMs.filter(v => v.type === 'kvm');
+            const lxcContainers = allVMs.filter(v => v.type === 'lxc');
+
+            allEl.innerHTML = allVMs.length ? allVMs.map(renderVMCard).join('') : '<p>No VMs found</p>';
+            kvmEl.innerHTML = kvmVMs.length ? kvmVMs.map(renderVMCard).join('') : '<p>No KVM VMs</p>';
+            lxcEl.innerHTML = lxcContainers.length ? lxcContainers.map(renderVMCard).join('') : '<p>No LXC containers</p>';
+        }
+
+        function renderVMCard(vm) {
+            const isRunning = vm.state?.toLowerCase().includes('running');
+            const stateClass = isRunning ? 'badge-success' : 'badge-danger';
+
+            return `
+                <div class="vm-card">
+                    <h4>
+                        ${vm.name}
+                        <span class="type-badge">${vm.type}</span>
+                    </h4>
+                    <div class="state">
+                        <span class="badge ${stateClass}">${vm.state || 'unknown'}</span>
+                    </div>
+                    <div class="meta">
+                        ${vm.ip ? `IP: ${vm.ip}` : ''}
+                        ${vm.memory ? ` • ${vm.memory}` : ''}
+                    </div>
+                    <div class="actions">
+                        ${!isRunning ?
+                            `<button class="btn btn-sm btn-success" onclick="startVM('${vm.name}')">Start</button>` :
+                            `<button class="btn btn-sm btn-warning" onclick="stopVM('${vm.name}')">Stop</button>
+                             <button class="btn btn-sm btn-secondary" onclick="restartVM('${vm.name}')">Restart</button>`
+                        }
+                        <button class="btn btn-sm btn-danger" onclick="deleteVM('${vm.name}')">Delete</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function startVM(name) {
+            try {
+                await fetch(`${API}/vms/${name}/start`, { method: 'POST' });
+                loadVMs();
+                loadStatus();
+            } catch (e) {
+                alert('Failed to start VM');
+            }
+        }
+
+        async function stopVM(name) {
+            try {
+                await fetch(`${API}/vms/${name}/stop`, { method: 'POST' });
+                loadVMs();
+                loadStatus();
+            } catch (e) {
+                alert('Failed to stop VM');
+            }
+        }
+
+        async function restartVM(name) {
+            try {
+                await fetch(`${API}/vms/${name}/restart`, { method: 'POST' });
+                loadVMs();
+                loadStatus();
+            } catch (e) {
+                alert('Failed to restart VM');
+            }
+        }
+
+        async function deleteVM(name) {
+            if (!confirm(`Delete ${name}? This cannot be undone.`)) return;
+            try {
+                await fetch(`${API}/vms/${name}`, { method: 'DELETE' });
+                loadVMs();
+                loadStatus();
+            } catch (e) {
+                alert('Failed to delete VM');
+            }
+        }
+
+        function showCreateKVMModal() {
+            document.getElementById('kvm-name').value = '';
+            document.getElementById('kvm-memory').value = '2048';
+            document.getElementById('kvm-vcpus').value = '2';
+            document.getElementById('kvm-disk').value = '20';
+            loadISOs();
+            document.getElementById('kvm-modal').classList.add('active');
+        }
+
+        function closeKVMModal() {
+            document.getElementById('kvm-modal').classList.remove('active');
+        }
+
+        async function loadISOs() {
+            try {
+                const res = await fetch(`${API}/iso`);
+                const data = await res.json();
+                const select = document.getElementById('kvm-iso');
+                select.innerHTML = '<option value="">No ISO</option>';
+                (data.images || []).forEach(iso => {
+                    select.innerHTML += `<option value="${iso.name}">${iso.name} (${iso.size_human})</option>`;
+                });
+            } catch (e) {
+                console.error('Failed to load ISOs:', e);
+            }
+        }
+
+        async function createKVM() {
+            const name = document.getElementById('kvm-name').value.trim();
+            if (!name) {
+                alert('Name is required');
+                return;
+            }
+
+            const config = {
+                name,
+                memory: parseInt(document.getElementById('kvm-memory').value),
+                vcpus: parseInt(document.getElementById('kvm-vcpus').value),
+                disk_size: parseInt(document.getElementById('kvm-disk').value),
+                iso: document.getElementById('kvm-iso').value || null
+            };
+
+            try {
+                const res = await fetch(`${API}/vms/kvm`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.detail);
+                }
+
+                closeKVMModal();
+                loadVMs();
+                loadStatus();
+            } catch (e) {
+                alert('Failed to create VM: ' + e.message);
+            }
+        }
+
+        function showCreateLXCModal() {
+            document.getElementById('lxc-name').value = '';
+            document.getElementById('lxc-template').value = 'debian';
+            updateReleases();
+            document.getElementById('lxc-modal').classList.add('active');
+        }
+
+        function closeLXCModal() {
+            document.getElementById('lxc-modal').classList.remove('active');
+        }
+
+        function updateReleases() {
+            const template = document.getElementById('lxc-template').value;
+            const releaseSelect = document.getElementById('lxc-release');
+            const options = releases[template] || ['latest'];
+            releaseSelect.innerHTML = options.map(r => `<option value="${r}">${r}</option>`).join('');
+        }
+
+        async function createLXC() {
+            const name = document.getElementById('lxc-name').value.trim();
+            if (!name) {
+                alert('Name is required');
+                return;
+            }
+
+            const config = {
+                name,
+                template: document.getElementById('lxc-template').value,
+                release: document.getElementById('lxc-release').value
+            };
+
+            try {
+                const res = await fetch(`${API}/vms/lxc`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.detail);
+                }
+
+                closeLXCModal();
+                loadVMs();
+                loadStatus();
+            } catch (e) {
+                alert('Failed to create container: ' + e.message);
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadStatus();
+            loadVMs();
+        });
+
+        // Auto-refresh
+        setInterval(() => {
+            loadStatus();
+            loadVMs();
+        }, 15000);
+
+        // Close modals on escape
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeKVMModal();
+                closeLXCModal();
+            }
+        });
+    </script>
+</body>
+</html>

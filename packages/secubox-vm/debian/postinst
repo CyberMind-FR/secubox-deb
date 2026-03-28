@@ -1,0 +1,14 @@
+#!/bin/bash
+set -e
+case "$1" in
+  configure)
+    install -d -o root -g root -m 755 /var/lib/secubox/vm
+    install -d -o root -g root -m 755 /var/lib/secubox/vm/iso
+    install -d -o root -g root -m 755 /var/lib/secubox/vm/disks
+    systemctl daemon-reload
+    systemctl enable secubox-vm.service
+    systemctl start secubox-vm.service || true
+    systemctl reload nginx 2>/dev/null || true
+    ;;
+esac
+#DEBHELPER#
