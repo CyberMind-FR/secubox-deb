@@ -70,8 +70,8 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq \
             debootstrap parted dosfstools e2fsprogs \
-            squashfs-tools grub-efi-amd64-bin grub-pc-bin \
-            xorriso mtools rsync curl wget
+            squashfs-tools grub-efi-amd64-bin grub-efi-amd64-signed grub-pc-bin \
+            shim-signed xorriso mtools rsync curl wget
 
       - name: Build Live USB image
         run: |

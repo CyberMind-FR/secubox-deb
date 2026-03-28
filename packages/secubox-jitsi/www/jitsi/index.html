@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jitsi Meet - SecuBox</title>
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root {
+            --jitsi-blue: #246fe5;
+            --jitsi-light: #5090e8;
+            --jitsi-dark: #1a5cc4;
+        }
+
+        body.dark {
+            --jitsi-blue: #5090e8;
+            --jitsi-light: #7aabe8;
+            --jitsi-dark: #246fe5;
+        }
+
+        .accent { color: var(--jitsi-blue); }
+        .accent-bg { background-color: var(--jitsi-blue); }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 1rem;
+        }
+
+        .header h1 { margin: 0; font-size: 1.5rem; }
+
+        .status-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 1rem;
+            font-size: 0.875rem;
+        }
+
+        .status-badge.running { background: var(--success-bg); color: var(--success); }
+        .status-badge.stopped { background: var(--error-bg); color: var(--error); }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: var(--jitsi-blue);
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+
+        .services-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .service-badge {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 0.25rem;
+            font-size: 0.875rem;
+        }
+
+        .service-status {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .service-status.active { background: var(--success); }
+        .service-status.inactive { background: var(--error); }
+
+        .action-bar {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border: 1px solid var(--border);
+            border-radius: 0.25rem;
+            background: var(--surface);
+            color: var(--text);
+            cursor: pointer;
+            font-size: 0.875rem;
+        }
+
+        .btn:hover { background: var(--hover); }
+        .btn.primary { background: var(--jitsi-blue); color: white; border-color: var(--jitsi-blue); }
+        .btn.primary:hover { background: var(--jitsi-dark); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .tabs {
+            display: flex;
+            gap: 0.5rem;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 1rem;
+        }
+
+        .tab {
+            padding: 0.75rem 1rem;
+            border: none;
+            background: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+        }
+
+        .tab:hover { color: var(--text); }
+        .tab.active { color: var(--jitsi-blue); border-bottom-color: var(--jitsi-blue); }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .log-viewer {
+            background: var(--bg-dark, #1a1a2e);
+            color: var(--text-light, #e0e0e0);
+            font-family: monospace;
+            font-size: 0.75rem;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+
+        .settings-form {
+            display: grid;
+            gap: 1rem;
+            max-width: 500px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.25rem;
+            font-weight: 500;
+        }
+
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid var(--border);
+            border-radius: 0.25rem;
+            background: var(--surface);
+            color: var(--text);
+        }
+
+        .quick-join {
+            max-width: 400px;
+            margin: 1rem auto;
+            padding: 1.5rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            text-align: center;
+        }
+
+        .quick-join input {
+            width: 100%;
+            padding: 0.75rem;
+            font-size: 1rem;
+            border: 1px solid var(--border);
+            border-radius: 0.25rem;
+            margin-bottom: 1rem;
+        }
+
+        .open-app-btn {
+            position: fixed;
+            bottom: 1rem;
+            right: 1rem;
+            padding: 1rem 1.5rem;
+            background: var(--jitsi-blue);
+            color: white;
+            border: none;
+            border-radius: 2rem;
+            cursor: pointer;
+            font-size: 1rem;
+            box-shadow: 0 4px 12px rgba(36, 111, 229, 0.4);
+        }
+
+        .open-app-btn:hover { background: var(--jitsi-dark); }
+        .hidden { display: none !important; }
+
+        .install-form {
+            max-width: 400px;
+            margin: 2rem auto;
+            padding: 2rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+        }
+
+        .install-form h2 { margin-top: 0; text-align: center; }
+    </style>
+</head>
+<body class="crt-light">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="main-content">
+    <div class="container">
+        <div class="header">
+            <h1><span class="accent">Jitsi</span> Meet</h1>
+            <span id="status-badge" class="status-badge stopped">Stopped</span>
+        </div>
+
+        <div id="install-section" class="install-form hidden">
+            <h2>Install Jitsi Meet</h2>
+            <form onsubmit="installJitsi(event)">
+                <div class="form-group">
+                    <label>Domain</label>
+                    <input type="text" id="install-domain" placeholder="meet.example.com" required>
+                    <small style="color: var(--text-secondary);">Must resolve to this server</small>
+                </div>
+                <button type="submit" class="btn primary" style="width: 100%; margin-top: 1rem;">Install Jitsi</button>
+            </form>
+        </div>
+
+        <div id="main-section" class="hidden">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value" id="active-conferences">0</div>
+                    <div class="stat-label">Active Meetings</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="active-participants">0</div>
+                    <div class="stat-label">Participants</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="largest-conference">0</div>
+                    <div class="stat-label">Largest Meeting</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="total-conferences">0</div>
+                    <div class="stat-label">Total Created</div>
+                </div>
+            </div>
+
+            <div class="services-grid" id="services-grid"></div>
+
+            <div class="action-bar">
+                <button class="btn primary" id="btn-start" onclick="startService()">Start</button>
+                <button class="btn" id="btn-stop" onclick="stopService()" disabled>Stop</button>
+                <button class="btn" id="btn-restart" onclick="restartService()" disabled>Restart</button>
+            </div>
+
+            <div class="quick-join">
+                <h3 style="margin-top: 0;">Quick Join</h3>
+                <input type="text" id="room-name" placeholder="Enter room name...">
+                <button class="btn primary" onclick="joinRoom()" style="width: 100%;">Join Meeting</button>
+            </div>
+
+            <div class="tabs">
+                <button class="tab active" data-tab="overview">Overview</button>
+                <button class="tab" data-tab="auth">Authentication</button>
+                <button class="tab" data-tab="logs">Logs</button>
+                <button class="tab" data-tab="settings">Settings</button>
+            </div>
+
+            <div id="tab-overview" class="tab-content active">
+                <div class="info-grid" style="display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+                    <div class="info-card" style="background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem;">
+                        <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Domain</div>
+                        <div style="font-size: 1.25rem; font-weight: 500; margin-top: 0.25rem;" id="jitsi-domain">-</div>
+                    </div>
+                    <div class="info-card" style="background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem;">
+                        <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Container IP</div>
+                        <div style="font-size: 1.25rem; font-weight: 500; margin-top: 0.25rem;" id="container-ip">-</div>
+                    </div>
+                    <div class="info-card" style="background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem;">
+                        <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Disk Usage</div>
+                        <div style="font-size: 1.25rem; font-weight: 500; margin-top: 0.25rem;" id="disk-usage">-</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="tab-auth" class="tab-content">
+                <p style="margin-bottom: 1rem;">Enable authentication to require login for meeting moderators.</p>
+                <div class="action-bar">
+                    <button class="btn primary" onclick="enableAuth()">Enable Authentication</button>
+                </div>
+                <h4>Create Moderator User</h4>
+                <form class="settings-form" onsubmit="createUser(event)">
+                    <div class="form-group">
+                        <label>Username</label>
+                        <input type="text" id="auth-username" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" id="auth-password" minlength="8" required>
+                    </div>
+                    <button type="submit" class="btn primary">Create User</button>
+                </form>
+            </div>
+
+            <div id="tab-logs" class="tab-content">
+                <div class="action-bar">
+                    <select id="log-service">
+                        <option value="jicofo">Jicofo</option>
+                        <option value="prosody">Prosody</option>
+                        <option value="jitsi-videobridge2">JVB</option>
+                        <option value="nginx">Nginx</option>
+                    </select>
+                    <button class="btn" onclick="loadLogs()">Refresh</button>
+                </div>
+                <div id="log-viewer" class="log-viewer">Select a service and click Refresh</div>
+            </div>
+
+            <div id="tab-settings" class="tab-content">
+                <h4>SSL Certificate</h4>
+                <form class="settings-form" onsubmit="setupSSL(event)">
+                    <div class="form-group">
+                        <label>Email (for Let's Encrypt)</label>
+                        <input type="email" id="ssl-email" required>
+                    </div>
+                    <button type="submit" class="btn primary">Setup Let's Encrypt</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <button id="open-app-btn" class="open-app-btn hidden" onclick="openJitsi()">
+        Open Jitsi Meet
+    </button>
+    </main>
+
+    <script>
+        const API_BASE = '/api/v1/jitsi';
+        let containerIP = null;
+
+        async function apiCall(endpoint, options = {}) {
+            const token = localStorage.getItem('sbx_token');
+            const response = await fetch(API_BASE + endpoint, {
+                ...options,
+                headers: {
+                    'Authorization': 'Bearer ' + token,
+                    'Content-Type': 'application/json',
+                    ...options.headers
+                }
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return response.json();
+        }
+
+        async function loadStatus() {
+            try {
+                const data = await apiCall('/status');
+                const badge = document.getElementById('status-badge');
+                const btnStart = document.getElementById('btn-start');
+                const btnStop = document.getElementById('btn-stop');
+                const btnRestart = document.getElementById('btn-restart');
+                const openBtn = document.getElementById('open-app-btn');
+
+                if (!data.container_exists) {
+                    document.getElementById('install-section').classList.remove('hidden');
+                    document.getElementById('main-section').classList.add('hidden');
+                    badge.textContent = 'Not Installed';
+                    badge.className = 'status-badge stopped';
+                    return;
+                }
+
+                document.getElementById('install-section').classList.add('hidden');
+                document.getElementById('main-section').classList.remove('hidden');
+
+                if (data.running) {
+                    badge.textContent = 'Running';
+                    badge.className = 'status-badge running';
+                    btnStart.disabled = true;
+                    btnStop.disabled = false;
+                    btnRestart.disabled = false;
+                    containerIP = data.container_ip;
+                    openBtn.classList.remove('hidden');
+
+                    // Update stats
+                    document.getElementById('active-conferences').textContent = data.active_conferences || 0;
+                    document.getElementById('active-participants').textContent = data.active_participants || 0;
+                } else {
+                    badge.textContent = 'Stopped';
+                    badge.className = 'status-badge stopped';
+                    btnStart.disabled = false;
+                    btnStop.disabled = true;
+                    btnRestart.disabled = true;
+                    openBtn.classList.add('hidden');
+                }
+
+                document.getElementById('jitsi-domain').textContent = data.domain || '-';
+                document.getElementById('container-ip').textContent = data.container_ip || '-';
+                document.getElementById('disk-usage').textContent = data.disk_usage || '-';
+
+                // Services
+                const servicesGrid = document.getElementById('services-grid');
+                if (data.services) {
+                    servicesGrid.innerHTML = Object.entries(data.services).map(([name, active]) => `
+                        <div class="service-badge">
+                            <span class="service-status ${active ? 'active' : 'inactive'}"></span>
+                            ${name}
+                        </div>
+                    `).join('');
+                }
+
+                // Load conference stats
+                if (data.running) loadConferences();
+            } catch (e) {
+                console.error('Status load failed:', e);
+            }
+        }
+
+        async function loadConferences() {
+            try {
+                const data = await apiCall('/conferences');
+                document.getElementById('active-conferences').textContent = data.conferences || 0;
+                document.getElementById('active-participants').textContent = data.participants || 0;
+                document.getElementById('largest-conference').textContent = data.largest_conference || 0;
+                document.getElementById('total-conferences').textContent = data.total_conferences_created || 0;
+            } catch (e) {
+                console.error('Conferences load failed:', e);
+            }
+        }
+
+        async function installJitsi(e) {
+            e.preventDefault();
+            const domain = document.getElementById('install-domain').value;
+            if (!domain) return;
+
+            const btn = e.target.querySelector('button');
+            btn.disabled = true;
+            btn.textContent = 'Installing... (this takes several minutes)';
+
+            try {
+                await apiCall(`/install?domain=${encodeURIComponent(domain)}`, { method: 'POST' });
+                await loadStatus();
+            } catch (err) {
+                alert('Installation failed: ' + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Install Jitsi';
+            }
+        }
+
+        async function startService() {
+            document.getElementById('btn-start').disabled = true;
+            try {
+                await apiCall('/start', { method: 'POST' });
+                await loadStatus();
+            } catch (e) {
+                alert('Failed: ' + e.message);
+            }
+        }
+
+        async function stopService() {
+            document.getElementById('btn-stop').disabled = true;
+            try {
+                await apiCall('/stop', { method: 'POST' });
+                await loadStatus();
+            } catch (e) {
+                alert('Failed: ' + e.message);
+            }
+        }
+
+        async function restartService() {
+            document.getElementById('btn-restart').disabled = true;
+            try {
+                await apiCall('/restart', { method: 'POST' });
+                await loadStatus();
+            } catch (e) {
+                alert('Failed: ' + e.message);
+            }
+        }
+
+        function joinRoom() {
+            const roomName = document.getElementById('room-name').value.trim();
+            if (!roomName) {
+                alert('Enter a room name');
+                return;
+            }
+            if (containerIP) {
+                window.open(`https://${containerIP}/${roomName}`, '_blank');
+            }
+        }
+
+        async function enableAuth() {
+            if (!confirm('Enable authentication? This will require users to log in as moderators.')) return;
+            try {
+                await apiCall('/auth/enable', { method: 'POST' });
+                alert('Authentication enabled');
+            } catch (e) {
+                alert('Failed: ' + e.message);
+            }
+        }
+
+        async function createUser(e) {
+            e.preventDefault();
+            const username = document.getElementById('auth-username').value;
+            const password = document.getElementById('auth-password').value;
+            try {
+                const result = await apiCall(`/auth/users?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`, { method: 'POST' });
+                alert(`User created: ${result.username}`);
+                e.target.reset();
+            } catch (err) {
+                alert('Failed: ' + err.message);
+            }
+        }
+
+        async function loadLogs() {
+            const service = document.getElementById('log-service').value;
+            try {
+                const data = await apiCall(`/logs?service=${service}&lines=200`);
+                document.getElementById('log-viewer').textContent = data.logs?.join('\n') || 'No logs';
+            } catch (e) {
+                document.getElementById('log-viewer').textContent = 'Error: ' + e.message;
+            }
+        }
+
+        async function setupSSL(e) {
+            e.preventDefault();
+            const email = document.getElementById('ssl-email').value;
+            try {
+                await apiCall(`/ssl/letsencrypt?email=${encodeURIComponent(email)}`, { method: 'POST' });
+                alert('SSL certificate installed');
+            } catch (err) {
+                alert('Failed: ' + err.message);
+            }
+        }
+
+        function openJitsi() {
+            if (containerIP) window.open(`https://${containerIP}/`, '_blank');
+        }
+
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+                if (tab.dataset.tab === 'logs') loadLogs();
+            });
+        });
+
+        if (window.matchMedia?.('(prefers-color-scheme: dark)').matches) {
+            document.body.classList.add('dark');
+        }
+
+        loadStatus();
+        setInterval(loadStatus, 30000);
+    </script>
+    <script src="/shared/sidebar.js"></script>
+</body>
+</html>

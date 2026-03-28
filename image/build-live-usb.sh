@@ -544,18 +544,37 @@ cp "${LIVE_DIR}/live/initrd.img" "${MNT}/esp/live/"
 cp "${LIVE_DIR}/live/filesystem.squashfs" "${MNT}/live/live/"
 
 # Install GRUB EFI bootloader
-grub-mkimage -o "${MNT}/esp/EFI/BOOT/BOOTX64.EFI" \
+# Try grub-mkimage first for custom build
+if grub-mkimage -o "${MNT}/esp/EFI/BOOT/BOOTX64.EFI" \
   -O x86_64-efi \
   -p /boot/grub \
   part_gpt part_msdos fat ext2 normal linux boot configfile loopback \
   chain efifwsetup efi_gop efi_uga ls search search_label search_fs_uuid \
-  search_fs_file gfxterm gfxterm_background gfxterm_menu test all_video loadenv exfat
+  search_fs_file gfxterm gfxterm_background gfxterm_menu test all_video loadenv exfat 2>/dev/null; then
+  ok "GRUB EFI image built successfully"
+else
+  # Fallback: copy pre-built signed EFI from package
+  warn "grub-mkimage failed, using pre-built EFI"
+  if [[ -f /usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed ]]; then
+    cp /usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed "${MNT}/esp/EFI/BOOT/BOOTX64.EFI"
+  elif [[ -f /usr/lib/grub/x86_64-efi/grub.efi ]]; then
+    cp /usr/lib/grub/x86_64-efi/grub.efi "${MNT}/esp/EFI/BOOT/BOOTX64.EFI"
+  else
+    err "No GRUB EFI binary found!"
+  fi
+fi
+
+# Also copy as grubx64.efi for some UEFI implementations
+cp "${MNT}/esp/EFI/BOOT/BOOTX64.EFI" "${MNT}/esp/EFI/BOOT/grubx64.efi" 2>/dev/null || true
 
 # Copy GRUB modules
 if [[ -d /usr/lib/grub/x86_64-efi ]]; then
   mkdir -p "${MNT}/esp/boot/grub/x86_64-efi"
   cp -r /usr/lib/grub/x86_64-efi/*.mod "${MNT}/esp/boot/grub/x86_64-efi/" 2>/dev/null || true
 fi
+
+# Copy grub.cfg to ESP as well (some UEFI look here)
+cp "${MNT}/esp/boot/grub/grub.cfg" "${MNT}/esp/EFI/BOOT/grub.cfg" 2>/dev/null || true
 
 # Setup persistence partition
 if [[ $INCLUDE_PERSISTENCE -eq 1 ]]; then

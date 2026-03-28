@@ -1,0 +1,19 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+  configure)
+    # Create data directories
+    install -d -o secubox -g secubox -m 750 /var/lib/secubox/jitsi
+    install -d -o secubox -g secubox -m 750 /var/lib/secubox/jitsi/data
+
+    # Enable and start service
+    systemctl daemon-reload
+    systemctl enable secubox-jitsi.service
+    systemctl start secubox-jitsi.service || true
+
+    # Reload nginx if installed
+    systemctl reload nginx 2>/dev/null || true
+    ;;
+esac
+#DEBHELPER#
