@@ -409,22 +409,25 @@
             loadIntel(); loadStats(); loadMap();
         }
 
-        // Peers
+        // Peers - fetch from P2P mesh API
         async function loadPeers() {
-            const d = await api('/peers');
+            const d = await api('/mesh/peers');
             const tbody = document.getElementById('peersTable');
+            // Update stat counter
+            const statPeers = document.getElementById('statPeers');
+            if (statPeers) statPeers.textContent = `${d.online || 0}/${d.count || 0}`;
+
             tbody.innerHTML = (d.peers || []).map(p => `
                 <tr>
-                    <td>${p.name}</td>
-                    <td><code>${p.endpoint}</code></td>
-                    <td><span class="badge ${p.status}">${p.status}</span></td>
-                    <td>${p.last_seen ? new Date(p.last_seen).toLocaleString() : '-'}</td>
+                    <td>${p.peer_id ? p.peer_id.substring(0, 8) + '...' : p.name || 'Unknown'}</td>
+                    <td><code>${p.address || p.endpoint || '-'}</code></td>
+                    <td><span class="badge ${p.role || 'peer'}">${p.role || 'peer'}${p.is_local ? ' (local)' : ''}</span></td>
+                    <td>${p.added ? new Date(p.added).toLocaleString() : (p.last_seen ? new Date(p.last_seen).toLocaleString() : '-')}</td>
                     <td class="actions">
-                        <button class="btn btn-sm primary" onclick="syncPeer('${p.id}')">Sync</button>
-                        <button class="btn btn-sm danger" onclick="deletePeer('${p.id}')">✕</button>
+                        <span class="badge ${p.is_online !== false ? 'online' : 'offline'}">${p.is_online !== false ? '●' : '○'}</span>
                     </td>
                 </tr>
-            `).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--p31-dim)">No peers</td></tr>';
+            `).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--p31-dim)">No mesh peers</td></tr>';
         }
 
         async function addPeer() {
