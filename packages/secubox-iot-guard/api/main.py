@@ -16,6 +16,7 @@ import time
 import logging
 import subprocess
 import sqlite3
+import socket
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional, Dict, List, Any
@@ -23,9 +24,13 @@ from enum import Enum
 
 from fastapi import FastAPI, Depends, HTTPException
 from pydantic import BaseModel, Field
+import httpx
 
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
+
+# P2P API socket for mesh peer integration
+P2P_SOCKET = "/run/secubox/p2p.sock"
 
 # Configuration
 CONFIG_PATH = Path("/etc/secubox/iot-guard.toml")
@@ -655,6 +660,202 @@ guard = IoTGuard(DATA_DIR)
 
 
 # ============================================================================
+# P2P Mesh Integration
+# ============================================================================
+
+def fetch_p2p_peers() -> List[Dict[str, Any]]:
+    """Fetch peers from the P2P API via Unix socket."""
+    peers = []
+    try:
+        # Use httpx with Unix socket transport
+        import urllib.request
+        import http.client
+
+        class UnixHTTPConnection(http.client.HTTPConnection):
+            def __init__(self, socket_path):
+                super().__init__("localhost")
+                self.socket_path = socket_path
+
+            def connect(self):
+                self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                self.sock.connect(self.socket_path)
+
+        if os.path.exists(P2P_SOCKET):
+            conn = UnixHTTPConnection(P2P_SOCKET)
+            conn.request("GET", "/peers")
+            response = conn.getresponse()
+            if response.status == 200:
+                data = json.loads(response.read().decode())
+                peers = data.get("peers", [])
+            conn.close()
+    except Exception as e:
+        logger.warning(f"Failed to fetch P2P peers: {e}")
+
+    return peers
+
+
+def fetch_p2p_master_tree() -> Dict[str, Any]:
+    """Fetch master-link tree from P2P API."""
+    tree = {}
+    try:
+        import http.client
+
+        class UnixHTTPConnection(http.client.HTTPConnection):
+            def __init__(self, socket_path):
+                super().__init__("localhost")
+                self.socket_path = socket_path
+
+            def connect(self):
+                self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                self.sock.connect(self.socket_path)
+
+        if os.path.exists(P2P_SOCKET):
+            conn = UnixHTTPConnection(P2P_SOCKET)
+            conn.request("GET", "/master-link/tree")
+            response = conn.getresponse()
+            if response.status == 200:
+                data = json.loads(response.read().decode())
+                tree = data.get("tree", {})
+            conn.close()
+    except Exception as e:
+        logger.warning(f"Failed to fetch master-link tree: {e}")
+
+    return tree
+
+
+async def probe_secubox_device(ip_address: str, timeout: float = 5.0) -> Dict[str, Any]:
+    """Probe an IP to detect if it's a SecuBox device."""
+    result = {
+        "is_secubox": False,
+        "is_openwrt": False,
+        "hostname": None,
+        "model": None,
+        "version": None,
+        "theme": None
+    }
+
+    try:
+        async with httpx.AsyncClient(verify=False, timeout=timeout) as client:
+            # Try HTTPS first, then HTTP
+            for scheme in ["https", "http"]:
+                try:
+                    resp = await client.get(f"{scheme}://{ip_address}/cgi-bin/luci")
+                    if resp.status_code in [200, 301, 302, 401, 403]:
+                        body = resp.text
+
+                        # Check for SecuBox markers
+                        if "data-secubox-theme" in body or "secubox" in body.lower():
+                            result["is_secubox"] = True
+                            result["is_openwrt"] = True
+
+                            # Extract theme
+                            theme_match = re.search(r'data-secubox-theme="([^"]+)"', body)
+                            if theme_match:
+                                result["theme"] = theme_match.group(1)
+
+                            # Extract title/hostname
+                            title_match = re.search(r'<title>([^<]+)</title>', body)
+                            if title_match:
+                                result["hostname"] = title_match.group(1).split(" - ")[0]
+
+                        elif "LuCI" in body or "OpenWrt" in body:
+                            result["is_openwrt"] = True
+
+                        break
+                except Exception:
+                    continue
+    except Exception as e:
+        logger.debug(f"Failed to probe {ip_address}: {e}")
+
+    return result
+
+
+def sync_p2p_peers_to_devices() -> Dict[str, Any]:
+    """Sync P2P mesh peers to IoT Guard device database."""
+    peers = fetch_p2p_peers()
+    synced = []
+    skipped = []
+
+    now = datetime.utcnow().isoformat() + "Z"
+
+    for peer in peers:
+        peer_id = peer.get("id", "")
+        name = peer.get("name", "Unknown Peer")
+        address = peer.get("address", "unknown")
+        fingerprint = peer.get("fingerprint", "")
+        status = peer.get("status", "unknown")
+        is_local = peer.get("is_local", False)
+
+        # Skip local node
+        if is_local:
+            skipped.append({"id": peer_id, "reason": "local node"})
+            continue
+
+        # Skip if no valid address
+        if address in ["unknown", "", None]:
+            skipped.append({"id": peer_id, "reason": "no address"})
+            continue
+
+        # Generate synthetic MAC from peer ID (for database key)
+        # Format: sb:xx:xx:xx:xx:xx (SecuBox prefix + hash of peer_id)
+        import hashlib
+        peer_hash = hashlib.md5(peer_id.encode()).hexdigest()[:10]
+        synthetic_mac = f"sb:{peer_hash[0:2]}:{peer_hash[2:4]}:{peer_hash[4:6]}:{peer_hash[6:8]}:{peer_hash[8:10]}"
+
+        # Register or update device
+        conn = sqlite3.connect(guard.db_file)
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT * FROM devices WHERE mac_address = ?", (synthetic_mac,))
+        row = cursor.fetchone()
+
+        if row:
+            # Update existing
+            cursor.execute("""
+                UPDATE devices SET
+                    ip_address = ?,
+                    hostname = ?,
+                    last_seen = ?,
+                    device_type = ?,
+                    manufacturer = ?,
+                    is_known = 1
+                WHERE mac_address = ?
+            """, (address, name, now, "router", "SecuBox Mesh", synthetic_mac))
+        else:
+            # Insert new
+            cursor.execute("""
+                INSERT INTO devices (
+                    mac_address, ip_address, hostname, manufacturer, device_type,
+                    first_seen, last_seen, is_known, risk_level, risk_score,
+                    open_ports, services, tags, notes
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                synthetic_mac, address, name, "SecuBox Mesh", "router",
+                now, now, 1, "safe", 10,
+                "[]", '["secubox-mesh", "p2p"]', f'["mesh", "peer", "{status}"]',
+                f"P2P Peer ID: {peer_id}\nFingerprint: {fingerprint}"
+            ))
+
+        conn.commit()
+        conn.close()
+
+        synced.append({
+            "peer_id": peer_id,
+            "name": name,
+            "address": address,
+            "mac": synthetic_mac,
+            "status": status
+        })
+
+    return {
+        "synced": len(synced),
+        "skipped": len(skipped),
+        "peers": synced,
+        "skipped_details": skipped
+    }
+
+
+# ============================================================================
 # API Endpoints
 # ============================================================================
 
@@ -752,6 +953,167 @@ async def lookup_manufacturer(mac_address: str):
     """Lookup manufacturer by MAC address."""
     manufacturer = guard.lookup_manufacturer(mac_address)
     return {"mac_address": mac_address, "manufacturer": manufacturer}
+
+
+# ============================================================================
+# P2P Mesh Integration Endpoints
+# ============================================================================
+
+@app.get("/mesh/peers")
+async def get_mesh_peers():
+    """Get P2P mesh peers (raw data from P2P API)."""
+    peers = fetch_p2p_peers()
+    tree = fetch_p2p_master_tree()
+    return {
+        "peers": peers,
+        "count": len(peers),
+        "tree": tree,
+        "timestamp": datetime.utcnow().isoformat() + "Z"
+    }
+
+
+@app.post("/mesh/sync", dependencies=[Depends(require_jwt)])
+async def sync_mesh_peers():
+    """Sync P2P mesh peers to IoT Guard device database.
+
+    This imports all mesh peers as known devices with 'router' type
+    and 'safe' risk level since they are trusted SecuBox nodes.
+    """
+    result = sync_p2p_peers_to_devices()
+    return {
+        "status": "synced",
+        **result,
+        "timestamp": datetime.utcnow().isoformat() + "Z"
+    }
+
+
+@app.post("/mesh/probe/{ip_address}", dependencies=[Depends(require_jwt)])
+async def probe_mesh_device(ip_address: str):
+    """Probe an IP address to detect SecuBox/OpenWRT."""
+    result = await probe_secubox_device(ip_address)
+    return {
+        "ip_address": ip_address,
+        **result,
+        "timestamp": datetime.utcnow().isoformat() + "Z"
+    }
+
+
+@app.post("/discover/full", dependencies=[Depends(require_jwt)])
+async def full_discovery(
+    network: Optional[str] = None,
+    include_mesh: bool = True,
+    use_arping: bool = True,
+    use_nmap: bool = False
+):
+    """Run comprehensive device discovery.
+
+    Combines multiple discovery methods:
+    - ARP table scan (fast, passive)
+    - ARP ping scan (active, finds more devices)
+    - P2P mesh peers (SecuBox nodes)
+    - Optional nmap scan (thorough but slow)
+
+    Args:
+        network: Network CIDR for active scanning (auto-detected if not provided)
+        include_mesh: Include P2P mesh peers as devices
+        use_arping: Use arping for active discovery
+        use_nmap: Use nmap for thorough scanning (slower)
+    """
+    results = {
+        "arp_devices": 0,
+        "arping_devices": 0,
+        "mesh_peers": 0,
+        "nmap_devices": 0,
+        "total_discovered": 0,
+        "methods_used": []
+    }
+
+    discovered_macs = set()
+
+    # 1. ARP table (passive, fast)
+    arp_devices = guard.discover_arp()
+    results["methods_used"].append("arp")
+    for dev in arp_devices:
+        mac = dev.get("mac_address", "").lower()
+        if mac and guard._validate_mac(mac):
+            guard.register_device(mac, dev.get("ip_address"), dev.get("hostname"))
+            discovered_macs.add(mac)
+    results["arp_devices"] = len(arp_devices)
+
+    # 2. Active ARP ping scan (finds devices not in ARP table)
+    if use_arping:
+        try:
+            # Auto-detect network if not provided
+            if not network:
+                proc = subprocess.run(
+                    ["ip", "-4", "route", "show", "default"],
+                    capture_output=True, text=True, timeout=5
+                )
+                # Get the interface
+                parts = proc.stdout.split()
+                if "dev" in parts:
+                    iface = parts[parts.index("dev") + 1]
+                    # Get network from interface
+                    proc2 = subprocess.run(
+                        ["ip", "-4", "addr", "show", iface],
+                        capture_output=True, text=True, timeout=5
+                    )
+                    match = re.search(r'inet\s+(\d+\.\d+\.\d+)\.\d+/(\d+)', proc2.stdout)
+                    if match:
+                        network = f"{match.group(1)}.0/{match.group(2)}"
+
+            if network:
+                results["methods_used"].append("arping")
+                # Use nmap -sn for ARP ping (faster than arping loop)
+                base = network.rsplit('.', 1)[0]
+                for i in range(1, 255):
+                    ip = f"{base}.{i}"
+                    try:
+                        proc = subprocess.run(
+                            ["arping", "-c", "1", "-w", "1", ip],
+                            capture_output=True, text=True, timeout=3
+                        )
+                        if "reply from" in proc.stdout.lower():
+                            # Extract MAC from arping output
+                            match = re.search(r'\[([0-9A-Fa-f:]{17})\]', proc.stdout)
+                            if match:
+                                mac = match.group(1).lower()
+                                if mac not in discovered_macs and guard._validate_mac(mac):
+                                    guard.register_device(mac, ip)
+                                    discovered_macs.add(mac)
+                                    results["arping_devices"] += 1
+                    except Exception:
+                        continue
+                    # Stop early if we've found enough
+                    if results["arping_devices"] >= 50:
+                        break
+        except Exception as e:
+            logger.warning(f"ARP ping scan failed: {e}")
+
+    # 3. P2P Mesh peers
+    if include_mesh:
+        results["methods_used"].append("mesh")
+        mesh_result = sync_p2p_peers_to_devices()
+        results["mesh_peers"] = mesh_result["synced"]
+
+    # 4. Optional nmap scan
+    if use_nmap and network:
+        results["methods_used"].append("nmap")
+        nmap_devices = guard.discover_nmap(network)
+        for dev in nmap_devices:
+            mac = dev.get("mac_address", "").lower()
+            if mac and guard._validate_mac(mac) and mac not in discovered_macs:
+                guard.register_device(mac, dev.get("ip_address"), dev.get("hostname"))
+                discovered_macs.add(mac)
+                results["nmap_devices"] += 1
+
+    results["total_discovered"] = len(discovered_macs)
+
+    return {
+        **results,
+        "devices": list(discovered_macs),
+        "timestamp": datetime.utcnow().isoformat() + "Z"
+    }
 
 
 # ============================================================================
