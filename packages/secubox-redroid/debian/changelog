@@ -1,0 +1,8 @@
+secubox-redroid (1.0.0-1) stable; urgency=low
+
+  * Initial release
+  * Docker container management for Android
+  * ADB shell and package management
+  * Multiple Android version support
+
+ -- SecuBox Team <team@secubox.local>  Sat, 28 Mar 2026 10:45:00 +0000
