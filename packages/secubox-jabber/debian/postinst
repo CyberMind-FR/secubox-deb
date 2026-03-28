@@ -1,0 +1,12 @@
+#!/bin/bash
+set -e
+case "$1" in
+  configure)
+    install -d -o secubox -g secubox -m 750 /var/lib/secubox/jabber
+    systemctl daemon-reload
+    systemctl enable secubox-jabber.service
+    systemctl start secubox-jabber.service || true
+    systemctl reload nginx 2>/dev/null || true
+    ;;
+esac
+#DEBHELPER#

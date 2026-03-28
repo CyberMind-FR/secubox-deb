@@ -1,0 +1,16 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d $(CURDIR)/debian/secubox-jabber/usr/lib/secubox/jabber/api
+	install -m 644 api/main.py $(CURDIR)/debian/secubox-jabber/usr/lib/secubox/jabber/api/
+	touch $(CURDIR)/debian/secubox-jabber/usr/lib/secubox/jabber/api/__init__.py
+	install -d $(CURDIR)/debian/secubox-jabber/usr/share/secubox/www/jabber
+	install -m 644 www/jabber/index.html $(CURDIR)/debian/secubox-jabber/usr/share/secubox/www/jabber/
+	install -d $(CURDIR)/debian/secubox-jabber/etc/nginx/secubox.d
+	install -m 644 nginx/jabber.conf $(CURDIR)/debian/secubox-jabber/etc/nginx/secubox.d/
+	install -d $(CURDIR)/debian/secubox-jabber/usr/share/secubox/menu.d
+	install -m 644 menu.d/818-jabber.json $(CURDIR)/debian/secubox-jabber/usr/share/secubox/menu.d/
+	install -d $(CURDIR)/debian/secubox-jabber/usr/lib/systemd/system
+	install -m 644 debian/secubox-jabber.service $(CURDIR)/debian/secubox-jabber/usr/lib/systemd/system/
