@@ -137,6 +137,147 @@ Après chaque module complété :
 
 ---
 
+## 🔒 Security Policies — Héritées de secubox-openwrt, adaptées Debian
+
+### WAF Bypass — Interdiction absolue
+
+* **JAMAIS de `waf_bypass` dans une config HAProxy** — tout le trafic DOIT passer
+  par mitmproxy pour inspection
+* Quand tu ajoutes un nouveau vhost, route systématiquement via le backend
+  `mitmproxy_inspector` dans HAProxy
+* Si un service nécessite WebSocket ou long-polling, configure mitmproxy
+  pour forward correctement — ne pas bypasser le WAF
+* Après ajout d'un backend HAProxy, mettre à jour `/srv/mitmproxy/haproxy-routes.json`
+  ET `/srv/mitmproxy-in/haproxy-routes.json` :
+```json
+  "domain.example.com": ["127.0.0.1", PORT]
+```
+* Redémarrer : `systemctl restart mitmproxy`
+
+---
+
+## ⚡ Performance Patterns — Double Caching (porté depuis OpenWrt)
+
+Le pattern shell → cron + fichier statique se traduit en Debian par
+**background task FastAPI + fichier cache JSON** :
+
+### Pattern Debian (FastAPI + asyncio)
+```python
+# Dans api/main.py de chaque module stats-heavy
+import asyncio, json
+from pathlib import Path
+
+CACHE_FILE = Path("/var/cache/secubox/<module>/stats.json")
+_cache: dict = {}
+
+async def refresh_cache():
+    """Tourne en background, met à jour toutes les 60s."""
+    while True:
+        try:
+            data = await _compute_stats()  # logique métier
+            CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+            CACHE_FILE.write_text(json.dumps(data))
+            _cache.update(data)
+        except Exception as e:
+            logger.error(f"cache refresh failed: {e}")
+        await asyncio.sleep(60)
+
+@app.on_event("startup")
+async def startup():
+    asyncio.create_task(refresh_cache())
+
+@app.get("/stats")
+async def get_stats():
+    if _cache:
+        return _cache
+    if CACHE_FILE.exists():
+        return json.loads(CACHE_FILE.read_text())
+    return {"error": "cache not ready"}
+```
+
+### Règle d'application (identique OpenWrt)
+
+* **Toujours** pour les dashboards stats (WAF, CrowdSec, bandwidth, DPI…)
+* **Toujours** quand l'endpoint lit des logs ou calcule des agrégats
+* **Toujours** quand la donnée peut être périmée de 60s sans impact utilisateur
+* **Jamais** pour les actions temps-réel (start/stop/restart/ban)
+
+---
+
+## 🚀 Punk Exposure Engine — Directive Architecturale
+
+Héritée de `secubox-openwrt/package/secubox/PUNK-EXPOSURE.md`.
+Le modèle trois-verbes **Peek / Poke / Emancipate** s'applique identiquement
+sur base Debian — seuls les transports changent.
+
+### Trois canaux d'exposition
+
+| Canal    | OpenWrt              | Debian                          |
+|----------|----------------------|---------------------------------|
+| Tor      | secubox-app-tor      | tor.service + secubox-exposure  |
+| DNS/SSL  | HAProxy + ACME + UCI | HAProxy TLS1.3 + certbot + TOML |
+| Mesh     | secubox-p2p (à porter) | secubox-p2p-deb (à porter)    |
+
+### Règles invariantes (Debian = OpenWrt)
+
+* **Join par port, jamais par nom** — cross-référencer scan ↔ Tor/SSL/Mesh
+  via le numéro de port backend uniquement
+* **Jamais d'auto-exposition de 127.0.0.1** — seuls les services sur
+  `0.0.0.0` ou IP LAN spécifique sont éligibles à l'exposition externe
+* **Emancipate est multi-canal** — un service peut activer Tor + DNS + Mesh
+  dans un seul workflow ; chaque canal est indépendamment toggleable
+
+### CLI Debian (cible)
+```bash
+# Port depuis OpenWrt — même interface, backend Debian
+secubox-exposure emancipate <service> <port> <domain> --all
+secubox-exposure emancipate secret 8888 --tor
+secubox-exposure revoke myapp --all
+```
+
+---
+
+## 📝 Documentation Update Workflow (identique OpenWrt)
+
+Après chaque modification de code :
+
+1. **`.claude/HISTORY.md`** — ajouter entrée datée
+2. **`.claude/WIP.md`** — déplacer "fait", pointer le suivant
+3. **`.claude/MIGRATION-MAP.md`** — cocher `✅` si module complété
+4. **`packages/<module>/README.md`** — mettre à jour si CLI ou API change
+
+Format de commit :
+```
+git commit -m "docs: Update tracking files for <feature>"
+```
+
+Déclencheurs obligatoires de mise à jour README :
+* Nouvel endpoint FastAPI ajouté
+* Modèle Pydantic modifié (= contrat API changé)
+* Options TOML ajoutées ou renommées
+* Dépendance Debian ajoutée dans `debian/control`
+
+---
+
+## 🛡️ Règles CSPN / Sécurité formelle
+
+*(Critiques pour certification ANSSI)*
+
+* **Double-buffer PARAMETERS** : toute modification de config sensible passe
+  par un buffer shadow → validation → swap atomique. Rollback 4R obligatoire
+  (Read → Write → Validate → Rollback-or-Commit)
+* **Journalisation immuable** : chaque décision de sécurité (ban, unban,
+  changement de règle WAF) écrite dans `/var/log/secubox/audit.log`
+  (append-only, rotation sans truncate)
+* **Séparation de privilèges** : chaque daemon tourne sous `secubox-<module>`
+  (user/group dédié créé dans `debian/postinst`), jamais root
+* **Secrets hors code** : `/etc/secubox/secrets/` chmod 600, owner
+  `secubox-<module>`. Aucun secret dans le code ni dans TOML versionné
+* **AppArmor enforce** : profil obligatoire pour chaque service, livré dans
+  `debian/` et activé dans `postinst`
+
+---
+
 ## 🛠️ Commandes usuelles
 
 ```bash
