@@ -3,689 +3,440 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - ZKP Dashboard</title>
+    <title>SecuBox - Zero-Knowledge Proofs</title>
     <link rel="stylesheet" href="/shared/crt-light.css">
     <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
-        /* CRT P31 Phosphor Theme */
         :root {
-            --p31-green: #33ff33;
-            --p31-dark: #0a1a0a;
-            --p31-glow: rgba(51, 255, 51, 0.3);
-            --p31-dim: #1a331a;
-            --p31-bright: #66ff66;
-            --p31-border: #226622;
+            --p31-peak: #00dd44; --p31-hot: #00ff55; --p31-mid: #009933; --p31-dim: #006622; --p31-ghost: #003311;
+            --p31-decay: #ffb347; --p31-decay-dim: #cc7722;
+            --tube-light: #e8f5e9; --tube-pale: #c8e6c9; --tube-soft: #a5d6a7; --tube-dark: #1b3d1c;
+            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
         }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Courier Prime', monospace; background: var(--tube-light); color: var(--tube-dark); display: flex; min-height: 100vh; }
+        .main { flex: 1; margin-left: 220px; padding: 1rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .header h1 { font-size: 1.3rem; color: var(--p31-peak); text-shadow: var(--bloom-text); }
+        .btn { padding: 0.4rem 0.8rem; border-radius: 4px; border: 1px solid var(--p31-dim); background: var(--tube-pale); color: var(--p31-mid); cursor: pointer; font-family: inherit; font-size: 0.8rem; }
+        .btn:hover { color: var(--p31-peak); border-color: var(--p31-mid); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn.primary { border-color: var(--p31-mid); color: var(--p31-peak); background: rgba(0,221,68,0.1); }
+        .btn.danger { border-color: #ff4466; color: #ff4466; }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.7rem; }
 
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
+        /* Stats Row */
+        .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
+        .stat-card { background: var(--tube-pale); border: 1px solid var(--tube-soft); border-radius: 6px; padding: 0.75rem; text-align: center; }
+        .stat-card .value { font-size: 1.5rem; font-weight: bold; color: var(--p31-peak); text-shadow: var(--bloom-soft); }
+        .stat-card .label { font-size: 0.65rem; color: var(--p31-dim); text-transform: uppercase; }
+        .stat-card.success .value { color: var(--p31-hot); }
+        .stat-card.warning .value { color: var(--p31-decay); }
 
-        body {
-            font-family: 'Courier New', monospace;
-            background-color: var(--p31-dark);
-            color: var(--p31-green);
-            min-height: 100vh;
-            display: flex;
-        }
+        /* Grid */
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+        @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
 
-        .main-content {
-            flex: 1;
-            padding: 20px;
-            margin-left: 250px;
-            position: relative;
-            overflow-y: auto;
-        }
+        .card { background: var(--tube-pale); border: 1px solid var(--tube-soft); border-radius: 6px; padding: 1rem; margin-bottom: 1rem; }
+        .card h2 { font-size: 0.9rem; color: var(--p31-peak); text-shadow: var(--bloom-soft); margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center; }
+        .card h2 .count { font-size: 0.75rem; background: var(--tube-light); padding: 0.2rem 0.5rem; border-radius: 4px; }
 
-        /* CRT scanline effect */
-        .main-content::before {
-            content: '';
-            position: fixed;
-            top: 0;
-            left: 250px;
-            right: 0;
-            bottom: 0;
-            background: repeating-linear-gradient(
-                0deg,
-                transparent,
-                transparent 2px,
-                rgba(0, 0, 0, 0.1) 2px,
-                rgba(0, 0, 0, 0.1) 4px
-            );
-            pointer-events: none;
-            z-index: 1000;
-        }
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; font-size: 0.75rem; }
+        th, td { padding: 0.5rem; text-align: left; border-bottom: 1px solid var(--p31-ghost); }
+        th { color: var(--p31-dim); font-weight: normal; text-transform: uppercase; font-size: 0.65rem; }
+        tr:hover { background: rgba(51,255,102,0.03); }
 
-        .page-header {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            margin-bottom: 30px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid var(--p31-border);
-        }
+        /* Badges */
+        .badge { padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.65rem; }
+        .badge.success { background: rgba(51,255,102,0.2); color: var(--p31-peak); }
+        .badge.error { background: rgba(255,68,102,0.2); color: #ff4466; }
+        .badge.warning { background: rgba(255,179,71,0.2); color: var(--p31-decay); }
 
-        .page-header h1 {
-            font-size: 24px;
-            text-shadow: 0 0 10px var(--p31-glow);
-        }
+        /* Forms */
+        .form-row { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap; }
+        .form-group { display: flex; flex-direction: column; gap: 0.25rem; flex: 1; min-width: 120px; }
+        .form-group label { font-size: 0.7rem; color: var(--p31-dim); text-transform: uppercase; }
+        .form-group input, .form-group select { padding: 0.5rem; border: 1px solid var(--tube-soft); background: var(--tube-light); color: var(--p31-mid); border-radius: 4px; font-family: inherit; font-size: 0.8rem; }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--p31-mid); }
 
-        .header-icon {
-            font-size: 32px;
-        }
+        /* Result Box */
+        .result-box { background: var(--tube-light); border: 1px solid var(--tube-soft); border-radius: 4px; padding: 0.75rem; font-family: monospace; font-size: 0.7rem; max-height: 200px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; }
+        .result-box.success { border-color: var(--p31-mid); }
+        .result-box.error { border-color: #ff4466; color: #cc3355; }
 
-        /* Status Panel */
-        .status-panel {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-bottom: 30px;
-        }
-
-        .status-card {
-            background: linear-gradient(135deg, var(--p31-dim), var(--p31-dark));
-            border: 1px solid var(--p31-border);
-            border-radius: 8px;
-            padding: 20px;
-            text-align: center;
-        }
-
-        .status-card .label {
-            font-size: 12px;
-            color: var(--p31-bright);
-            margin-bottom: 8px;
-            text-transform: uppercase;
-        }
-
-        .status-card .value {
-            font-size: 28px;
-            font-weight: bold;
-            text-shadow: 0 0 10px var(--p31-glow);
-        }
-
-        .status-card .value.success {
-            color: var(--p31-bright);
-        }
-
-        .status-card .value.warning {
-            color: #ffaa33;
-        }
-
-        /* Section containers */
-        .section {
-            background: linear-gradient(135deg, var(--p31-dim), var(--p31-dark));
-            border: 1px solid var(--p31-border);
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
-        }
-
-        .section h2 {
-            font-size: 16px;
-            margin-bottom: 15px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid var(--p31-border);
-            text-shadow: 0 0 5px var(--p31-glow);
-        }
-
-        /* Keys Table */
-        .keys-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        .keys-table th,
-        .keys-table td {
-            padding: 12px;
-            text-align: left;
-            border-bottom: 1px solid var(--p31-border);
-        }
-
-        .keys-table th {
-            color: var(--p31-bright);
-            font-size: 12px;
-            text-transform: uppercase;
-        }
-
-        .keys-table tr:hover {
-            background: rgba(51, 255, 51, 0.05);
-        }
-
-        .keys-table .actions {
-            display: flex;
-            gap: 8px;
-        }
-
-        /* Form elements */
-        .form-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-
-        .form-group {
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-        }
-
-        .form-group label {
-            font-size: 12px;
-            color: var(--p31-bright);
-            text-transform: uppercase;
-        }
-
-        .form-group input,
-        .form-group select {
-            background: var(--p31-dark);
-            border: 1px solid var(--p31-border);
-            border-radius: 4px;
-            padding: 10px;
-            color: var(--p31-green);
-            font-family: 'Courier New', monospace;
-            font-size: 14px;
-        }
-
-        .form-group input:focus,
-        .form-group select:focus {
-            outline: none;
-            border-color: var(--p31-green);
-            box-shadow: 0 0 5px var(--p31-glow);
-        }
-
-        .form-group input::placeholder {
-            color: var(--p31-border);
-        }
-
-        /* Buttons */
-        .btn {
-            background: linear-gradient(135deg, var(--p31-border), var(--p31-dim));
-            border: 1px solid var(--p31-green);
-            border-radius: 4px;
-            padding: 10px 20px;
-            color: var(--p31-green);
-            font-family: 'Courier New', monospace;
-            font-size: 14px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .btn:hover {
-            background: var(--p31-green);
-            color: var(--p31-dark);
-            box-shadow: 0 0 15px var(--p31-glow);
-        }
-
-        .btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .btn-sm {
-            padding: 6px 12px;
-            font-size: 12px;
-        }
-
-        .btn-danger {
-            border-color: #ff3333;
-            color: #ff3333;
-        }
-
-        .btn-danger:hover {
-            background: #ff3333;
-            color: var(--p31-dark);
-        }
-
-        .btn-primary {
-            background: var(--p31-green);
-            color: var(--p31-dark);
-        }
-
-        .btn-primary:hover {
-            background: var(--p31-bright);
-            box-shadow: 0 0 20px var(--p31-glow);
-        }
-
-        .form-actions {
-            display: flex;
-            gap: 10px;
-            margin-top: 10px;
-        }
+        /* Actions */
+        .actions { display: flex; gap: 0.3rem; }
 
         /* Modal */
-        .modal-overlay {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.8);
-            z-index: 2000;
-            justify-content: center;
-            align-items: center;
-        }
+        .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; }
+        .modal.active { display: flex; justify-content: center; align-items: center; }
+        .modal-content { background: var(--tube-pale); border: 1px solid var(--tube-soft); border-radius: 8px; padding: 1.5rem; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .modal-header h3 { color: var(--p31-peak); font-size: 1rem; }
+        .modal-close { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--p31-dim); }
 
-        .modal-overlay.active {
-            display: flex;
-        }
+        /* Loading */
+        .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--p31-ghost); border-top-color: var(--p31-peak); border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
 
-        .modal {
-            background: var(--p31-dark);
-            border: 2px solid var(--p31-green);
-            border-radius: 8px;
-            padding: 20px;
-            max-width: 500px;
-            width: 90%;
-            box-shadow: 0 0 30px var(--p31-glow);
-        }
+        /* Proof Visualization */
+        .proof-viz { background: var(--tube-light); border: 1px solid var(--tube-soft); border-radius: 4px; padding: 1rem; text-align: center; }
+        .proof-viz .icon { font-size: 3rem; margin-bottom: 0.5rem; }
+        .proof-viz.valid .icon { color: var(--p31-peak); text-shadow: var(--bloom-soft); }
+        .proof-viz.invalid .icon { color: #ff4466; }
+        .proof-viz .status { font-size: 1.2rem; font-weight: bold; }
 
-        .modal h3 {
-            margin-bottom: 15px;
-            text-shadow: 0 0 5px var(--p31-glow);
-        }
+        /* Graph mini display */
+        .graph-mini { display: flex; flex-wrap: wrap; gap: 0.25rem; padding: 0.5rem; background: var(--tube-light); border-radius: 4px; }
+        .graph-mini .node { width: 8px; height: 8px; border-radius: 50%; background: var(--p31-mid); }
+        .graph-mini .node.active { background: var(--p31-peak); box-shadow: 0 0 4px var(--p31-peak); }
 
-        .modal-content {
-            margin-bottom: 20px;
-        }
-
-        .modal-actions {
-            display: flex;
-            gap: 10px;
-            justify-content: flex-end;
-        }
-
-        /* Result display */
-        .result-box {
-            background: var(--p31-dark);
-            border: 1px solid var(--p31-border);
-            border-radius: 4px;
-            padding: 15px;
-            font-family: 'Courier New', monospace;
-            font-size: 12px;
-            white-space: pre-wrap;
-            word-break: break-all;
-            max-height: 200px;
-            overflow-y: auto;
-        }
-
-        .result-success {
-            border-color: var(--p31-green);
-            color: var(--p31-bright);
-        }
-
-        .result-error {
-            border-color: #ff3333;
-            color: #ff6666;
-        }
-
-        /* Loading spinner */
-        .loading {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 2px solid var(--p31-border);
-            border-top-color: var(--p31-green);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        /* Empty state */
-        .empty-state {
-            text-align: center;
-            padding: 40px;
-            color: var(--p31-border);
-        }
-
-        .empty-state .icon {
-            font-size: 48px;
-            margin-bottom: 15px;
-        }
-
-        /* Responsive */
-        @media (max-width: 768px) {
-            .main-content {
-                margin-left: 0;
-                padding: 15px;
-            }
-
-            .main-content::before {
-                left: 0;
-            }
-        }
+        @media (max-width: 768px) { .main { margin-left: 0; padding: 0.75rem; } }
     </style>
 </head>
-<body class="crt-light">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
 
-    <main class="main-content">
-        <header class="page-header">
-            <span class="header-icon">🔐</span>
-            <h1>Zero-Knowledge Proof Dashboard</h1>
+    <main class="main">
+        <header class="header">
+            <h1>Zero-Knowledge Proofs</h1>
+            <button class="btn" onclick="refresh()">Refresh</button>
         </header>
 
-        <!-- Status Panel -->
-        <div class="status-panel">
-            <div class="status-card">
-                <div class="label">Tools Available</div>
-                <div class="value" id="tools-status">--</div>
-            </div>
-            <div class="status-card">
-                <div class="label">Version</div>
-                <div class="value" id="version-status">--</div>
-            </div>
-            <div class="status-card">
-                <div class="label">Keys Generated</div>
-                <div class="value" id="keys-count">--</div>
-            </div>
-            <div class="status-card">
-                <div class="label">Last Verification</div>
-                <div class="value" id="last-verify">--</div>
-            </div>
+        <!-- Stats Row -->
+        <div class="stats-row">
+            <div class="stat-card"><div class="value" id="statTools">-</div><div class="label">Tools Status</div></div>
+            <div class="stat-card"><div class="value" id="statVersion">-</div><div class="label">Version</div></div>
+            <div class="stat-card"><div class="value" id="statKeys">-</div><div class="label">Keys</div></div>
+            <div class="stat-card"><div class="value" id="statProofs">-</div><div class="label">Proofs</div></div>
         </div>
 
-        <!-- Key Generation -->
-        <section class="section">
-            <h2>Generate New Key</h2>
-            <form id="generate-form">
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label for="key-name">Key Name</label>
-                        <input type="text" id="key-name" placeholder="my-zkp-key" required>
+        <div class="grid">
+            <!-- Key Generation -->
+            <div class="card">
+                <h2>Generate New Key</h2>
+                <form id="keygenForm">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Key Name</label>
+                            <input type="text" id="keyName" placeholder="my-zkp-key" required pattern="[a-zA-Z0-9_-]+">
+                        </div>
+                        <div class="form-group">
+                            <label>Nodes (4-50)</label>
+                            <input type="number" id="keyNodes" min="4" max="50" value="10" required>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label for="node-count">Nodes (4-50)</label>
-                        <input type="number" id="node-count" min="4" max="50" value="10" required>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Edge Density</label>
+                            <select id="keyDensity">
+                                <option value="0.3">Low (0.3)</option>
+                                <option value="0.5" selected>Medium (0.5)</option>
+                                <option value="0.7">High (0.7)</option>
+                                <option value="0.9">Very High (0.9)</option>
+                            </select>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label for="density">Edge Density</label>
-                        <select id="density">
-                            <option value="0.3">Low (0.3)</option>
-                            <option value="0.5" selected>Medium (0.5)</option>
-                            <option value="0.7">High (0.7)</option>
-                            <option value="0.9">Very High (0.9)</option>
+                    <button type="submit" class="btn primary" id="btnKeygen">Generate Key</button>
+                </form>
+            </div>
+
+            <!-- Prove & Verify -->
+            <div class="card">
+                <h2>Prove & Verify</h2>
+                <div class="form-row">
+                    <div class="form-group" style="flex:2;">
+                        <label>Select Key</label>
+                        <select id="proveKey" onchange="onKeySelect()">
+                            <option value="">-- Select a key --</option>
                         </select>
                     </div>
                 </div>
-                <div class="form-actions">
-                    <button type="submit" class="btn btn-primary">Generate Key</button>
+                <div class="form-row">
+                    <button class="btn primary" id="btnProve" disabled onclick="generateProof()">Generate Proof</button>
+                    <button class="btn" id="btnVerify" disabled onclick="verifyProof()">Verify Proof</button>
                 </div>
-            </form>
-        </section>
+                <div id="proofResult" style="margin-top:0.75rem;display:none;"></div>
+            </div>
+        </div>
 
         <!-- Keys List -->
-        <section class="section">
-            <h2>Generated Keys</h2>
-            <div id="keys-container">
-                <div class="empty-state">
-                    <div class="icon">🔑</div>
-                    <p>No keys generated yet</p>
-                </div>
-            </div>
-        </section>
+        <div class="card">
+            <h2>Generated Keys <span class="count" id="keyCount">0</span></h2>
+            <table>
+                <thead><tr><th>Name</th><th>Nodes</th><th>Graph Size</th><th>Key Size</th><th>Created</th><th>Actions</th></tr></thead>
+                <tbody id="keysTable"><tr><td colspan="6" style="text-align:center;color:var(--p31-dim);padding:2rem;">No keys generated yet</td></tr></tbody>
+            </table>
+        </div>
 
-        <!-- Prove/Verify Section -->
-        <section class="section">
-            <h2>Prove & Verify</h2>
-            <div class="form-grid">
-                <div class="form-group">
-                    <label for="prove-key">Select Key</label>
-                    <select id="prove-key">
-                        <option value="">-- Select a key --</option>
-                    </select>
-                </div>
+        <!-- How It Works -->
+        <div class="card">
+            <h2>How ZKP Works</h2>
+            <div style="font-size:0.75rem;line-height:1.6;color:var(--p31-dim);">
+                <p><strong>Zero-Knowledge Proofs</strong> allow one party (the prover) to prove to another party (the verifier) that they know a value, without revealing any information about the value itself.</p>
+                <p style="margin-top:0.5rem;">SecuBox uses <strong>Hamiltonian path ZKP</strong>: proving knowledge of a path that visits every node in a graph exactly once, without revealing the path.</p>
+                <ol style="margin-top:0.5rem;padding-left:1.5rem;">
+                    <li><strong>Generate Key:</strong> Create a random graph with a known Hamiltonian path (the secret)</li>
+                    <li><strong>Generate Proof:</strong> Create a cryptographic proof of knowledge without revealing the path</li>
+                    <li><strong>Verify:</strong> Anyone can verify the proof is valid for the graph</li>
+                </ol>
+                <p style="margin-top:0.5rem;">Used in SecuBox for: mesh authentication, config validation, and secure parameter exchange.</p>
             </div>
-            <div class="form-actions">
-                <button type="button" class="btn" id="btn-prove" disabled>Generate Proof</button>
-                <button type="button" class="btn" id="btn-verify" disabled>Verify Proof</button>
-            </div>
-            <div id="proof-result" style="margin-top: 15px; display: none;">
-                <div class="result-box" id="proof-output"></div>
-            </div>
-        </section>
+        </div>
     </main>
 
-    <!-- Verification Modal -->
-    <div class="modal-overlay" id="verify-modal">
-        <div class="modal">
-            <h3>Verification Result</h3>
-            <div class="modal-content">
-                <div class="result-box" id="verify-result"></div>
+    <!-- Key Detail Modal -->
+    <div class="modal" id="keyModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalKeyName">Key Details</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
             </div>
-            <div class="modal-actions">
-                <button type="button" class="btn" onclick="closeModal()">Close</button>
-            </div>
+            <div id="modalContent">Loading...</div>
         </div>
     </div>
 
-    <script src="/shared/sidebar.js"></script>
-    <script src="/shared/crt-engine.js"></script>
-    <script>
-        // API base URL
-        const API_BASE = '/api/v1/zkp';
+    <!-- Verification Modal -->
+    <div class="modal" id="verifyModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Verification Result</h3>
+                <button class="modal-close" onclick="closeVerifyModal()">&times;</button>
+            </div>
+            <div id="verifyContent"></div>
+        </div>
+    </div>
 
-        // State
+    <script>
+        const API = '/api/v1/zkp';
+        const token = () => localStorage.getItem('sbx_token');
+        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+
         let keys = [];
         let currentProof = null;
 
-        // Initialize
-        document.addEventListener('DOMContentLoaded', () => {
-            loadStatus();
-            loadKeys();
-            setupEventListeners();
-        });
-
-        // API helper
-        async function apiCall(endpoint, method = 'GET', data = null) {
-            const options = {
-                method,
-                headers: {
-                    'Content-Type': 'application/json',
+        async function api(path, opts = {}) {
+            try {
+                const res = await fetch(API + path, { ...opts, headers: headers() });
+                if (res.status === 401) { window.location = '/portal/login.html'; return {}; }
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.detail || 'API error');
                 }
-            };
-            if (data) {
-                options.body = JSON.stringify(data);
+                return res.json();
+            } catch (e) {
+                console.error('API error:', e);
+                throw e;
             }
-            const response = await fetch(`${API_BASE}${endpoint}`, options);
-            if (!response.ok) {
-                const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
-                throw new Error(error.detail || 'API error');
-            }
-            return response.json();
         }
 
         // Load status
         async function loadStatus() {
             try {
-                const status = await apiCall('/status');
-                document.getElementById('tools-status').textContent = status.tools_available ? 'Yes' : 'No';
-                document.getElementById('tools-status').className = 'value ' + (status.tools_available ? 'success' : 'warning');
-                document.getElementById('version-status').textContent = status.version || '1.0.0';
-                document.getElementById('keys-count').textContent = status.key_count || 0;
-                document.getElementById('last-verify').textContent = status.last_verification || 'Never';
-            } catch (err) {
-                console.error('Failed to load status:', err);
-                document.getElementById('tools-status').textContent = 'Error';
-                document.getElementById('tools-status').className = 'value warning';
+                const d = await api('/status');
+                document.getElementById('statTools').textContent = d.tools_available ? 'OK' : 'Missing';
+                document.getElementById('statTools').parentElement.className = 'stat-card ' + (d.tools_available ? 'success' : 'warning');
+                document.getElementById('statVersion').textContent = d.version || '-';
+                document.getElementById('statKeys').textContent = d.key_count || 0;
+                document.getElementById('statProofs').textContent = '-'; // Could track proof count
+            } catch {
+                document.getElementById('statTools').textContent = 'Error';
             }
         }
 
         // Load keys
         async function loadKeys() {
             try {
-                const result = await apiCall('/keys');
-                keys = result.keys || [];
+                const d = await api('/keys');
+                keys = d.keys || [];
                 renderKeys();
                 updateKeySelect();
-            } catch (err) {
-                console.error('Failed to load keys:', err);
+            } catch {
+                document.getElementById('keysTable').innerHTML = '<tr><td colspan="6" style="text-align:center;color:#ff4466;padding:2rem;">Failed to load keys</td></tr>';
             }
         }
 
-        // Render keys table
         function renderKeys() {
-            const container = document.getElementById('keys-container');
+            const tbody = document.getElementById('keysTable');
+            document.getElementById('keyCount').textContent = keys.length;
 
-            if (keys.length === 0) {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <div class="icon">🔑</div>
-                        <p>No keys generated yet</p>
-                    </div>
-                `;
+            if (!keys.length) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--p31-dim);padding:2rem;">No keys generated yet</td></tr>';
                 return;
             }
 
-            container.innerHTML = `
-                <table class="keys-table">
-                    <thead>
-                        <tr>
-                            <th>Name</th>
-                            <th>Nodes</th>
-                            <th>Size</th>
-                            <th>Created</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${keys.map(key => `
-                            <tr>
-                                <td>${escapeHtml(key.name)}</td>
-                                <td>${key.nodes}</td>
-                                <td>${formatSize(key.size)}</td>
-                                <td>${formatDate(key.created)}</td>
-                                <td class="actions">
-                                    <button class="btn btn-sm" onclick="viewKey('${escapeHtml(key.name)}')">View</button>
-                                    <button class="btn btn-sm btn-danger" onclick="deleteKey('${escapeHtml(key.name)}')">Delete</button>
-                                </td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            `;
+            tbody.innerHTML = keys.map(k => `
+                <tr>
+                    <td><code>${k.name}</code></td>
+                    <td>${k.nodes}</td>
+                    <td>${formatSize(k.graph_size)}</td>
+                    <td>${formatSize(k.key_size)}</td>
+                    <td>${new Date(k.created * 1000).toLocaleString()}</td>
+                    <td class="actions">
+                        <button class="btn btn-sm" onclick="viewKey('${k.name}')">View</button>
+                        <button class="btn btn-sm danger" onclick="deleteKey('${k.name}')">Delete</button>
+                    </td>
+                </tr>
+            `).join('');
         }
 
-        // Update key select dropdown
         function updateKeySelect() {
-            const select = document.getElementById('prove-key');
+            const select = document.getElementById('proveKey');
             select.innerHTML = '<option value="">-- Select a key --</option>' +
-                keys.map(key => `<option value="${escapeHtml(key.name)}">${escapeHtml(key.name)} (${key.nodes} nodes)</option>`).join('');
+                keys.map(k => `<option value="${k.name}">${k.name} (${k.nodes} nodes)</option>`).join('');
         }
 
-        // Setup event listeners
-        function setupEventListeners() {
-            // Generate form
-            document.getElementById('generate-form').addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const btn = e.target.querySelector('button[type="submit"]');
-                btn.disabled = true;
-                btn.innerHTML = '<span class="loading"></span> Generating...';
+        function onKeySelect() {
+            const hasKey = document.getElementById('proveKey').value !== '';
+            document.getElementById('btnProve').disabled = !hasKey;
+            document.getElementById('btnVerify').disabled = !hasKey || !currentProof;
+            document.getElementById('proofResult').style.display = 'none';
+            currentProof = null;
+        }
 
-                try {
-                    const data = {
-                        name: document.getElementById('key-name').value,
-                        nodes: parseInt(document.getElementById('node-count').value),
-                        density: parseFloat(document.getElementById('density').value)
-                    };
+        // Keygen form
+        document.getElementById('keygenForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('btnKeygen');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> Generating...';
 
-                    await apiCall('/generate', 'POST', data);
-                    document.getElementById('key-name').value = '';
-                    loadKeys();
-                    loadStatus();
-                } catch (err) {
-                    alert('Failed to generate key: ' + err.message);
-                } finally {
-                    btn.disabled = false;
-                    btn.textContent = 'Generate Key';
-                }
-            });
+            try {
+                const d = await api('/keygen', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        name: document.getElementById('keyName').value,
+                        nodes: parseInt(document.getElementById('keyNodes').value),
+                        density: parseFloat(document.getElementById('keyDensity').value)
+                    })
+                });
+                document.getElementById('keyName').value = '';
+                loadKeys();
+                loadStatus();
+            } catch (e) {
+                alert('Key generation failed: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Generate Key';
+            }
+        });
 
-            // Prove/Verify key selection
-            document.getElementById('prove-key').addEventListener('change', (e) => {
-                const hasSelection = e.target.value !== '';
-                document.getElementById('btn-prove').disabled = !hasSelection;
-                document.getElementById('btn-verify').disabled = !hasSelection || !currentProof;
-            });
+        // Generate proof
+        async function generateProof() {
+            const keyName = document.getElementById('proveKey').value;
+            if (!keyName) return;
 
-            // Prove button
-            document.getElementById('btn-prove').addEventListener('click', async () => {
-                const keyName = document.getElementById('prove-key').value;
-                if (!keyName) return;
+            const btn = document.getElementById('btnProve');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> Generating...';
 
-                const btn = document.getElementById('btn-prove');
-                btn.disabled = true;
-                btn.innerHTML = '<span class="loading"></span> Generating...';
+            try {
+                const d = await api('/prove', {
+                    method: 'POST',
+                    body: JSON.stringify({ name: keyName })
+                });
+                currentProof = d;
 
-                try {
-                    const result = await apiCall('/prove', 'POST', { key_name: keyName });
-                    currentProof = result.proof;
+                document.getElementById('proofResult').style.display = 'block';
+                document.getElementById('proofResult').innerHTML = `
+                    <div class="result-box success">
+                        <strong>Proof Generated Successfully</strong>
+                        Size: ${formatSize(d.proof_size)}
+                        File: ${d.proof_file}
+                        Preview: ${d.proof_preview?.slice(0, 60)}...
+                    </div>
+                `;
+                document.getElementById('btnVerify').disabled = false;
+            } catch (e) {
+                document.getElementById('proofResult').style.display = 'block';
+                document.getElementById('proofResult').innerHTML = `<div class="result-box error">Error: ${e.message}</div>`;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Generate Proof';
+            }
+        }
 
-                    const output = document.getElementById('proof-output');
-                    output.textContent = JSON.stringify(result, null, 2);
-                    output.className = 'result-box result-success';
-                    document.getElementById('proof-result').style.display = 'block';
-                    document.getElementById('btn-verify').disabled = false;
-                } catch (err) {
-                    const output = document.getElementById('proof-output');
-                    output.textContent = 'Error: ' + err.message;
-                    output.className = 'result-box result-error';
-                    document.getElementById('proof-result').style.display = 'block';
-                } finally {
-                    btn.disabled = false;
-                    btn.textContent = 'Generate Proof';
-                }
-            });
+        // Verify proof
+        async function verifyProof() {
+            const keyName = document.getElementById('proveKey').value;
+            if (!keyName || !currentProof) return;
 
-            // Verify button
-            document.getElementById('btn-verify').addEventListener('click', async () => {
-                const keyName = document.getElementById('prove-key').value;
-                if (!keyName || !currentProof) return;
+            const btn = document.getElementById('btnVerify');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> Verifying...';
 
-                const btn = document.getElementById('btn-verify');
-                btn.disabled = true;
-                btn.innerHTML = '<span class="loading"></span> Verifying...';
+            try {
+                const d = await api('/verify', {
+                    method: 'POST',
+                    body: JSON.stringify({ name: keyName })
+                });
 
-                try {
-                    const result = await apiCall('/verify', 'POST', {
-                        key_name: keyName,
-                        proof: currentProof
-                    });
-
-                    const verifyResult = document.getElementById('verify-result');
-                    verifyResult.textContent = result.valid ?
-                        '✓ PROOF VERIFIED SUCCESSFULLY\n\nThe proof is valid for the selected key.' :
-                        '✗ PROOF VERIFICATION FAILED\n\nThe proof is not valid.';
-                    verifyResult.className = 'result-box ' + (result.valid ? 'result-success' : 'result-error');
-
-                    document.getElementById('verify-modal').classList.add('active');
-                    loadStatus();
-                } catch (err) {
-                    const verifyResult = document.getElementById('verify-result');
-                    verifyResult.textContent = 'Error: ' + err.message;
-                    verifyResult.className = 'result-box result-error';
-                    document.getElementById('verify-modal').classList.add('active');
-                } finally {
-                    btn.disabled = false;
-                    btn.textContent = 'Verify Proof';
-                }
-            });
+                document.getElementById('verifyContent').innerHTML = `
+                    <div class="proof-viz ${d.valid ? 'valid' : 'invalid'}">
+                        <div class="icon">${d.valid ? '✓' : '✗'}</div>
+                        <div class="status">${d.valid ? 'PROOF VERIFIED' : 'VERIFICATION FAILED'}</div>
+                        <p style="font-size:0.75rem;color:var(--p31-dim);margin-top:0.5rem;">
+                            ${d.valid ? 'The proof is valid for the selected key.' : 'The proof could not be verified.'}
+                        </p>
+                    </div>
+                    <div class="result-box" style="margin-top:1rem;font-size:0.65rem;">
+Result: ${d.result}
+${d.output || ''}
+                    </div>
+                `;
+                document.getElementById('verifyModal').classList.add('active');
+            } catch (e) {
+                document.getElementById('verifyContent').innerHTML = `<div class="result-box error">Error: ${e.message}</div>`;
+                document.getElementById('verifyModal').classList.add('active');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Verify Proof';
+            }
         }
 
         // View key details
         async function viewKey(name) {
-            try {
-                const result = await apiCall(`/keys/${encodeURIComponent(name)}`);
-                alert(`Key: ${name}\nNodes: ${result.nodes}\nEdges: ${result.edges}\nDensity: ${result.density}\nCreated: ${result.created}`);
-            } catch (err) {
-                alert('Failed to load key details: ' + err.message);
+            document.getElementById('modalKeyName').textContent = name;
+            document.getElementById('modalContent').innerHTML = '<div style="text-align:center;"><span class="spinner"></span></div>';
+            document.getElementById('keyModal').classList.add('active');
+
+            const key = keys.find(k => k.name === name);
+            if (key) {
+                // Generate mini graph visualization
+                const graphNodes = [];
+                for (let i = 0; i < key.nodes; i++) {
+                    graphNodes.push(`<div class="node ${Math.random() > 0.5 ? 'active' : ''}"></div>`);
+                }
+
+                document.getElementById('modalContent').innerHTML = `
+                    <div style="font-size:0.75rem;">
+                        <p><strong>Name:</strong> ${key.name}</p>
+                        <p><strong>Nodes:</strong> ${key.nodes}</p>
+                        <p><strong>Graph Size:</strong> ${formatSize(key.graph_size)}</p>
+                        <p><strong>Key Size:</strong> ${formatSize(key.key_size)}</p>
+                        <p><strong>Created:</strong> ${new Date(key.created * 1000).toLocaleString()}</p>
+                    </div>
+                    <div style="margin-top:1rem;">
+                        <strong style="font-size:0.75rem;">Graph Visualization (${key.nodes} nodes):</strong>
+                        <div class="graph-mini" style="margin-top:0.5rem;">
+                            ${graphNodes.join('')}
+                        </div>
+                    </div>
+                    <div style="margin-top:1rem;display:flex;gap:0.5rem;">
+                        <button class="btn primary btn-sm" onclick="selectKey('${name}')">Use for Proof</button>
+                        <button class="btn danger btn-sm" onclick="deleteKey('${name}');closeModal();">Delete</button>
+                    </div>
+                `;
             }
+        }
+
+        function selectKey(name) {
+            document.getElementById('proveKey').value = name;
+            onKeySelect();
+            closeModal();
         }
 
         // Delete key
@@ -693,47 +444,45 @@
             if (!confirm(`Delete key "${name}"? This cannot be undone.`)) return;
 
             try {
-                await apiCall(`/keys/${encodeURIComponent(name)}`, 'DELETE');
+                await api(`/keys/${encodeURIComponent(name)}`, { method: 'DELETE' });
                 loadKeys();
                 loadStatus();
-            } catch (err) {
-                alert('Failed to delete key: ' + err.message);
+            } catch (e) {
+                alert('Failed to delete key: ' + e.message);
             }
         }
 
-        // Close modal
-        function closeModal() {
-            document.getElementById('verify-modal').classList.remove('active');
-        }
+        // Modals
+        function closeModal() { document.getElementById('keyModal').classList.remove('active'); }
+        function closeVerifyModal() { document.getElementById('verifyModal').classList.remove('active'); }
 
-        // Utility functions
-        function escapeHtml(str) {
-            const div = document.createElement('div');
-            div.textContent = str;
-            return div.innerHTML;
-        }
-
+        // Utilities
         function formatSize(bytes) {
+            if (!bytes) return '-';
             if (bytes < 1024) return bytes + ' B';
             if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
             return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
         }
 
-        function formatDate(dateStr) {
-            if (!dateStr) return '--';
-            const date = new Date(dateStr);
-            return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+        // Refresh
+        function refresh() {
+            loadStatus();
+            loadKeys();
         }
 
-        // Close modal on escape
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') closeModal();
+        // Close modals on escape
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape') {
+                closeModal();
+                closeVerifyModal();
+            }
         });
+        document.getElementById('keyModal').addEventListener('click', e => { if (e.target.id === 'keyModal') closeModal(); });
+        document.getElementById('verifyModal').addEventListener('click', e => { if (e.target.id === 'verifyModal') closeVerifyModal(); });
 
-        // Close modal on overlay click
-        document.getElementById('verify-modal').addEventListener('click', (e) => {
-            if (e.target === e.currentTarget) closeModal();
-        });
+        // Init
+        refresh();
+        setInterval(loadStatus, 30000);
     </script>
 </body>
 </html>
