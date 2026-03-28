@@ -1,0 +1,16 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d $(CURDIR)/debian/secubox-voip/usr/lib/secubox/voip/api
+	install -m 644 api/main.py $(CURDIR)/debian/secubox-voip/usr/lib/secubox/voip/api/
+	touch $(CURDIR)/debian/secubox-voip/usr/lib/secubox/voip/api/__init__.py
+	install -d $(CURDIR)/debian/secubox-voip/usr/share/secubox/www/voip
+	install -m 644 www/voip/index.html $(CURDIR)/debian/secubox-voip/usr/share/secubox/www/voip/
+	install -d $(CURDIR)/debian/secubox-voip/etc/nginx/secubox.d
+	install -m 644 nginx/voip.conf $(CURDIR)/debian/secubox-voip/etc/nginx/secubox.d/
+	install -d $(CURDIR)/debian/secubox-voip/usr/share/secubox/menu.d
+	install -m 644 menu.d/817-voip.json $(CURDIR)/debian/secubox-voip/usr/share/secubox/menu.d/
+	install -d $(CURDIR)/debian/secubox-voip/usr/lib/systemd/system
+	install -m 644 debian/secubox-voip.service $(CURDIR)/debian/secubox-voip/usr/lib/systemd/system/
