@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vault - SecuBox</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <style>
+        .main-content {
+            margin-left: 200px;
+            padding: 2rem;
+        }
+        .status-card {
+            background: var(--card-bg, #1a1a2e);
+            border: 1px solid var(--border-color, #333);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .status-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--border-color, #333);
+        }
+        .status-row:last-child { border-bottom: none; }
+        .badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+        .badge-success { background: #2d5a27; color: #7fff7f; }
+        .badge-warning { background: #5a5a27; color: #ffff7f; }
+        .badge-info { background: #27455a; color: #7fd4ff; }
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            margin-right: 0.5rem;
+        }
+        .btn-primary { background: var(--accent-color, #4a9eff); color: #000; }
+        .btn-success { background: #27ae60; color: #fff; }
+        .btn-danger { background: #c0392b; color: #fff; }
+        .btn-secondary { background: #555; color: #fff; }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.8rem; }
+        .section-title {
+            margin: 2rem 0 1rem 0;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--accent-color, #4a9eff);
+        }
+        .secret-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        .secret-item {
+            background: var(--card-bg, #1a1a2e);
+            border: 1px solid var(--border-color, #333);
+            border-radius: 8px;
+            padding: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .secret-info h4 {
+            margin: 0 0 0.25rem 0;
+            color: var(--accent-color, #4a9eff);
+            font-family: monospace;
+        }
+        .secret-info .desc {
+            color: #888;
+            font-size: 0.9rem;
+            margin: 0;
+        }
+        .secret-info .meta {
+            font-size: 0.8rem;
+            color: #666;
+            margin-top: 0.25rem;
+        }
+        .tag {
+            display: inline-block;
+            padding: 0.1rem 0.4rem;
+            border-radius: 8px;
+            font-size: 0.75rem;
+            background: #333;
+            color: #aaa;
+            margin-right: 0.25rem;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal.active { display: flex; }
+        .modal-content {
+            background: #1a1a2e;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 2rem;
+            max-width: 500px;
+            width: 90%;
+        }
+        .modal-content h3 { margin-top: 0; }
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #aaa;
+        }
+        .form-group input, .form-group textarea {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #333;
+            border-radius: 4px;
+            background: #0a0a0a;
+            color: #fff;
+            font-family: monospace;
+        }
+        .form-group textarea { min-height: 80px; resize: vertical; }
+        .value-display {
+            background: #0a0a0a;
+            border: 1px solid #333;
+            border-radius: 4px;
+            padding: 0.5rem;
+            font-family: monospace;
+            word-break: break-all;
+            color: #7fff7f;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .value-hidden {
+            color: #666;
+            letter-spacing: 2px;
+        }
+        .search-box {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        .search-box input {
+            flex: 1;
+            padding: 0.5rem;
+            border: 1px solid #333;
+            border-radius: 4px;
+            background: #1a1a2e;
+            color: #fff;
+        }
+        .audit-log {
+            background: #0a0a0a;
+            border: 1px solid #333;
+            border-radius: 4px;
+            padding: 1rem;
+            font-family: monospace;
+            font-size: 0.85rem;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .audit-entry {
+            padding: 0.25rem 0;
+            border-bottom: 1px solid #222;
+            color: #aaa;
+        }
+        .audit-entry .action { color: #4a9eff; }
+        .audit-entry .key { color: #7fff7f; }
+    </style>
+</head>
+<body>
+    <div id="sidebar-container"></div>
+
+    <div class="main-content">
+        <h1>🔐 Vault</h1>
+        <p>Secrets management</p>
+
+        <div class="status-card">
+            <h3>Vault Status</h3>
+            <div class="status-row">
+                <span>Local Secrets</span>
+                <span id="secrets-count" class="badge badge-info">-</span>
+            </div>
+            <div class="status-row">
+                <span>Encryption</span>
+                <span id="encryption" class="badge badge-success">-</span>
+            </div>
+            <div class="status-row">
+                <span>HashiCorp Vault</span>
+                <span id="hc-status" class="badge badge-warning">-</span>
+            </div>
+            <div style="margin-top: 1rem;">
+                <button class="btn btn-primary" onclick="showCreateModal()">New Secret</button>
+                <button class="btn btn-secondary" onclick="generateSecret()">Generate</button>
+            </div>
+        </div>
+
+        <div class="search-box">
+            <input type="text" id="search-query" placeholder="Search secrets..." onkeyup="filterSecrets(this.value)">
+        </div>
+
+        <h2 class="section-title">Secrets</h2>
+        <div id="secrets-list" class="secret-list">
+            <p>Loading secrets...</p>
+        </div>
+
+        <h2 class="section-title">Audit Log</h2>
+        <button class="btn btn-secondary btn-sm" onclick="loadAudit()">Refresh</button>
+        <div id="audit-log" class="audit-log" style="margin-top: 0.5rem;">
+            Click refresh to load audit log...
+        </div>
+    </div>
+
+    <!-- Create/Edit Modal -->
+    <div id="secret-modal" class="modal">
+        <div class="modal-content">
+            <h3 id="modal-title">New Secret</h3>
+            <div class="form-group">
+                <label>Key</label>
+                <input type="text" id="secret-key" placeholder="my-api-key">
+            </div>
+            <div class="form-group">
+                <label>Value</label>
+                <textarea id="secret-value" placeholder="secret value..."></textarea>
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <input type="text" id="secret-desc" placeholder="Optional description">
+            </div>
+            <div class="form-group">
+                <label>Tags (comma-separated)</label>
+                <input type="text" id="secret-tags" placeholder="api, production">
+            </div>
+            <div style="margin-top: 1rem;">
+                <button class="btn btn-success" onclick="saveSecret()">Save</button>
+                <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- View Modal -->
+    <div id="view-modal" class="modal">
+        <div class="modal-content">
+            <h3 id="view-title">Secret</h3>
+            <div class="form-group">
+                <label>Key</label>
+                <div class="value-display" id="view-key">-</div>
+            </div>
+            <div class="form-group">
+                <label>Value</label>
+                <div class="value-display">
+                    <span id="view-value" class="value-hidden">••••••••••••</span>
+                    <button class="btn btn-sm btn-secondary" onclick="toggleValue()">Show</button>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <div id="view-desc" style="color: #aaa;">-</div>
+            </div>
+            <div style="margin-top: 1rem;">
+                <button class="btn btn-primary" onclick="copyValue()">Copy</button>
+                <button class="btn btn-secondary" onclick="rotateCurrentSecret()">Rotate</button>
+                <button class="btn btn-secondary" onclick="closeViewModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/shared/sidebar.js"></script>
+    <script>
+        const API = '/api/v1/vault';
+        let allSecrets = [];
+        let currentSecret = null;
+        let valueVisible = false;
+
+        async function loadStatus() {
+            try {
+                const res = await fetch(`${API}/status`);
+                const data = await res.json();
+
+                document.getElementById('secrets-count').textContent = data.local_secrets_count;
+                document.getElementById('encryption').textContent = data.encryption;
+
+                const hcStatus = data.hashicorp_vault?.available ?
+                    (data.hashicorp_vault.sealed ? 'Sealed' : 'Unsealed') : 'Not Available';
+                document.getElementById('hc-status').textContent = hcStatus;
+                document.getElementById('hc-status').className = 'badge ' +
+                    (data.hashicorp_vault?.available && !data.hashicorp_vault?.sealed ? 'badge-success' : 'badge-warning');
+            } catch (e) {
+                console.error('Failed to load status:', e);
+            }
+        }
+
+        async function loadSecrets() {
+            try {
+                const res = await fetch(`${API}/secrets`);
+                const data = await res.json();
+                allSecrets = data.secrets || [];
+                renderSecrets(allSecrets);
+            } catch (e) {
+                console.error('Failed to load secrets:', e);
+            }
+        }
+
+        function renderSecrets(secrets) {
+            const list = document.getElementById('secrets-list');
+
+            if (secrets.length === 0) {
+                list.innerHTML = '<p>No secrets stored</p>';
+                return;
+            }
+
+            list.innerHTML = secrets.map(s => `
+                <div class="secret-item">
+                    <div class="secret-info">
+                        <h4>${s.key}</h4>
+                        <p class="desc">${s.description || 'No description'}</p>
+                        <p class="meta">
+                            ${s.tags?.map(t => `<span class="tag">${t}</span>`).join('') || ''}
+                            Updated: ${s.updated ? new Date(s.updated).toLocaleDateString() : '-'}
+                        </p>
+                    </div>
+                    <div>
+                        <button class="btn btn-sm btn-primary" onclick="viewSecret('${s.key}')">View</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteSecret('${s.key}')">Delete</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function filterSecrets(query) {
+            if (!query) {
+                renderSecrets(allSecrets);
+                return;
+            }
+
+            const q = query.toLowerCase();
+            const filtered = allSecrets.filter(s =>
+                s.key.toLowerCase().includes(q) ||
+                (s.description || '').toLowerCase().includes(q) ||
+                (s.tags || []).some(t => t.toLowerCase().includes(q))
+            );
+            renderSecrets(filtered);
+        }
+
+        function showCreateModal() {
+            document.getElementById('modal-title').textContent = 'New Secret';
+            document.getElementById('secret-key').value = '';
+            document.getElementById('secret-key').disabled = false;
+            document.getElementById('secret-value').value = '';
+            document.getElementById('secret-desc').value = '';
+            document.getElementById('secret-tags').value = '';
+            document.getElementById('secret-modal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('secret-modal').classList.remove('active');
+        }
+
+        async function saveSecret() {
+            const key = document.getElementById('secret-key').value.trim();
+            const value = document.getElementById('secret-value').value;
+            const description = document.getElementById('secret-desc').value;
+            const tags = document.getElementById('secret-tags').value.split(',').map(t => t.trim()).filter(t => t);
+
+            if (!key || !value) {
+                alert('Key and value are required');
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API}/secrets`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key, value, description, tags })
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.detail);
+                }
+
+                closeModal();
+                loadSecrets();
+                loadStatus();
+            } catch (e) {
+                alert('Failed to save: ' + e.message);
+            }
+        }
+
+        async function viewSecret(key) {
+            try {
+                const res = await fetch(`${API}/secrets/${key}`);
+                const data = await res.json();
+
+                currentSecret = data;
+                valueVisible = false;
+
+                document.getElementById('view-title').textContent = key;
+                document.getElementById('view-key').textContent = key;
+                document.getElementById('view-value').textContent = '••••••••••••';
+                document.getElementById('view-value').className = 'value-hidden';
+                document.getElementById('view-desc').textContent = data.description || '-';
+
+                document.getElementById('view-modal').classList.add('active');
+            } catch (e) {
+                alert('Failed to load secret');
+            }
+        }
+
+        function toggleValue() {
+            valueVisible = !valueVisible;
+            const el = document.getElementById('view-value');
+
+            if (valueVisible) {
+                el.textContent = currentSecret.value;
+                el.className = '';
+            } else {
+                el.textContent = '••••••••••••';
+                el.className = 'value-hidden';
+            }
+        }
+
+        function copyValue() {
+            if (currentSecret) {
+                navigator.clipboard.writeText(currentSecret.value);
+                alert('Copied to clipboard');
+            }
+        }
+
+        async function rotateCurrentSecret() {
+            if (!currentSecret) return;
+            if (!confirm('Generate new random value for this secret?')) return;
+
+            try {
+                const res = await fetch(`${API}/secrets/${currentSecret.key}/rotate`, { method: 'POST' });
+                const data = await res.json();
+
+                currentSecret.value = data.new_value;
+                if (valueVisible) {
+                    document.getElementById('view-value').textContent = data.new_value;
+                }
+
+                alert('Secret rotated. New value is shown.');
+                loadSecrets();
+            } catch (e) {
+                alert('Failed to rotate secret');
+            }
+        }
+
+        function closeViewModal() {
+            document.getElementById('view-modal').classList.remove('active');
+            currentSecret = null;
+        }
+
+        async function deleteSecret(key) {
+            if (!confirm(`Delete secret "${key}"?`)) return;
+
+            try {
+                await fetch(`${API}/secrets/${key}`, { method: 'DELETE' });
+                loadSecrets();
+                loadStatus();
+            } catch (e) {
+                alert('Failed to delete secret');
+            }
+        }
+
+        async function generateSecret() {
+            try {
+                const res = await fetch(`${API}/generate?length=32&type=urlsafe`, { method: 'POST' });
+                const data = await res.json();
+
+                document.getElementById('secret-value').value = data.value;
+                showCreateModal();
+            } catch (e) {
+                alert('Failed to generate secret');
+            }
+        }
+
+        async function loadAudit() {
+            try {
+                const res = await fetch(`${API}/audit?lines=50`);
+                const data = await res.json();
+
+                const container = document.getElementById('audit-log');
+                if (data.entries && data.entries.length > 0) {
+                    container.innerHTML = data.entries.reverse().map(e => `
+                        <div class="audit-entry">
+                            <span>${e.timestamp}</span>
+                            <span class="action">${e.action}</span>
+                            <span class="key">${e.key}</span>
+                            ${e.details ? `<span>${e.details}</span>` : ''}
+                        </div>
+                    `).join('');
+                } else {
+                    container.innerHTML = 'No audit entries';
+                }
+            } catch (e) {
+                console.error('Failed to load audit log:', e);
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadStatus();
+            loadSecrets();
+        });
+
+        // Close modals on escape
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeModal();
+                closeViewModal();
+            }
+        });
+    </script>
+</body>
+</html>

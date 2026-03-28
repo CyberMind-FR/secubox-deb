@@ -1,0 +1,8 @@
+secubox-vault (1.0.0-1) stable; urgency=low
+
+  * Initial release
+  * Encrypted local secrets storage
+  * Secret rotation and audit logging
+  * HashiCorp Vault integration
+
+ -- SecuBox Team <team@secubox.local>  Sat, 28 Mar 2026 11:00:00 +0000
