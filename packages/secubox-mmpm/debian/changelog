@@ -1,0 +1,8 @@
+secubox-mmpm (1.0.0-1) stable; urgency=low
+
+  * Initial release
+  * Module browsing and search
+  * GitHub-based module installation
+  * Module updates via git pull
+
+ -- SecuBox Team <team@secubox.local>  Sat, 28 Mar 2026 10:30:00 +0000
