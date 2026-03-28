@@ -1,0 +1,18 @@
+Source: secubox-ollama
+Section: net
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+
+Package: secubox-ollama
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn, python3-httpx
+Recommends: docker.io | podman
+Description: Local AI inference with Ollama
+ SecuBox module for managing local LLM inference via Ollama.
+ Provides container management (Docker/Podman), model pulling,
+ chat completion, and text generation APIs.
+ .
+ Ported from OpenWRT luci-app-ollama.
+ Provides FastAPI backend on /api/v1/ollama/ via Unix socket.

@@ -1,0 +1,9 @@
+{
+  "id": "homeassistant",
+  "name": "Home Assistant",
+  "icon": "🏠",
+  "path": "/homeassistant/",
+  "category": "apps",
+  "order": 807,
+  "description": "Smart home automation hub"
+}

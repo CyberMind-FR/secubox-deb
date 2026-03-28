@@ -1,0 +1,1040 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - Zigbee2MQTT Gateway</title>
+    <link rel="stylesheet" href="/shared/sidebar.css">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <style>
+        :root {
+            /* Zigbee green accents (matches Zigbee Alliance branding) */
+            --zigbee-green: #7cb342;
+            --zigbee-green-dim: #558b2f;
+            --zigbee-green-glow: rgba(124, 179, 66, 0.2);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'IBM Plex Mono', 'Consolas', monospace;
+            background: var(--tube-pale, #e8f5e9);
+            color: var(--tube-black, #1a2e1a);
+            display: flex;
+            min-height: 100vh;
+        }
+
+        body.dark {
+            background: var(--tube-black, #1a2e1a);
+            color: var(--tube-pale, #c9e5c9);
+        }
+
+        .main {
+            flex: 1;
+            margin-left: 220px;
+            padding: 1.5rem;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 2px,
+                rgba(0,0,0,0.03) 2px,
+                rgba(0,0,0,0.03) 4px
+            );
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--p31-dim, #006622);
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            color: var(--zigbee-green);
+            text-shadow: 0 0 10px var(--zigbee-green-glow);
+        }
+
+        .header-actions { display: flex; gap: 0.5rem; align-items: center; }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            border: 1px solid var(--p31-dim, #006622);
+            background: var(--tube-pale, #e8f5e9);
+            color: var(--tube-black, #1a2e1a);
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+
+        body.dark .btn {
+            background: rgba(0,50,20,0.5);
+            color: var(--tube-pale, #c9e5c9);
+        }
+
+        .btn:hover {
+            background: var(--p31-dim, #006622);
+            border-color: var(--p31-peak, #00dd44);
+            color: #fff;
+        }
+
+        .btn-primary {
+            background: var(--zigbee-green-dim);
+            border-color: var(--zigbee-green);
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            background: var(--zigbee-green);
+        }
+
+        .btn-danger {
+            background: #442222;
+            border-color: #884444;
+        }
+
+        .btn-danger:hover {
+            background: #663333;
+        }
+
+        .btn-pairing {
+            background: #443300;
+            border-color: #886600;
+            animation: pairing-pulse 1.5s infinite;
+        }
+
+        @keyframes pairing-pulse {
+            0%, 100% { box-shadow: 0 0 5px var(--zigbee-green-glow); }
+            50% { box-shadow: 0 0 15px var(--zigbee-green); }
+        }
+
+        /* Install Banner */
+        .install-banner {
+            background: linear-gradient(135deg, rgba(124,179,66,0.1) 0%, rgba(124,179,66,0.05) 100%);
+            border: 2px dashed var(--zigbee-green);
+            border-radius: 8px;
+            padding: 2rem;
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .install-banner h2 {
+            color: var(--zigbee-green);
+            margin-bottom: 1rem;
+        }
+
+        .install-banner p {
+            color: var(--p31-dim, #006622);
+            margin-bottom: 1.5rem;
+        }
+
+        /* Status badge */
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+        }
+
+        .status-badge.running {
+            background: rgba(0, 221, 68, 0.1);
+            color: var(--p31-peak);
+            border: 1px solid var(--p31-dim);
+        }
+
+        .status-badge.stopped {
+            background: rgba(255, 68, 68, 0.1);
+            color: #ff4444;
+            border: 1px solid #884444;
+        }
+
+        .status-badge.pairing {
+            background: rgba(255, 200, 0, 0.1);
+            color: #ffc800;
+            border: 1px solid #886600;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid var(--p31-dim, #006622);
+            padding-bottom: 0.5rem;
+        }
+
+        .tab {
+            padding: 0.5rem 1rem;
+            border: none;
+            background: transparent;
+            color: var(--p31-dim, #006622);
+            cursor: pointer;
+            font-family: inherit;
+            border-radius: 4px 4px 0 0;
+            transition: all 0.2s;
+        }
+
+        .tab:hover { color: var(--tube-black, #1a2e1a); }
+        body.dark .tab:hover { color: var(--tube-pale, #c9e5c9); }
+
+        .tab.active {
+            background: rgba(124,179,66,0.1);
+            color: var(--zigbee-green);
+            border: 1px solid var(--p31-dim, #006622);
+            border-bottom: none;
+        }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Cards */
+        .card {
+            background: rgba(124,179,66,0.05);
+            border: 1px solid var(--p31-dim, #006622);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+        }
+
+        body.dark .card {
+            background: rgba(0,50,20,0.3);
+        }
+
+        .card h2 {
+            font-size: 1rem;
+            color: var(--zigbee-green);
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .stat-card {
+            background: rgba(124,179,66,0.05);
+            border: 1px solid var(--p31-dim, #006622);
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        body.dark .stat-card {
+            background: rgba(0,50,20,0.3);
+        }
+
+        .stat-card .icon {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-card .value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--zigbee-green);
+        }
+
+        .stat-card .label {
+            font-size: 0.75rem;
+            color: var(--p31-dim, #006622);
+            text-transform: uppercase;
+        }
+
+        /* Device List */
+        .device-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .device-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem;
+            background: rgba(124,179,66,0.03);
+            border-radius: 4px;
+            border-left: 3px solid var(--p31-dim, #006622);
+        }
+
+        body.dark .device-item {
+            background: rgba(0,0,0,0.2);
+        }
+
+        .device-item.coordinator {
+            border-left-color: var(--zigbee-green);
+            background: rgba(124, 179, 66, 0.1);
+        }
+
+        .device-item.router {
+            border-left-color: #00bcd4;
+        }
+
+        .device-item.end-device {
+            border-left-color: var(--p31-dim, #006622);
+        }
+
+        .device-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .device-name {
+            font-weight: bold;
+            color: var(--tube-black, #1a2e1a);
+        }
+
+        body.dark .device-name {
+            color: var(--tube-pale, #c9e5c9);
+        }
+
+        .device-meta {
+            font-size: 0.8rem;
+            color: var(--p31-dim, #006622);
+        }
+
+        .device-actions {
+            display: flex;
+            gap: 0.25rem;
+        }
+
+        .device-actions button {
+            padding: 0.25rem 0.5rem;
+            background: var(--tube-pale, #e8f5e9);
+            border: 1px solid var(--p31-dim, #006622);
+            color: var(--tube-black, #1a2e1a);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.75rem;
+        }
+
+        body.dark .device-actions button {
+            background: rgba(0,50,20,0.5);
+            color: var(--tube-pale, #c9e5c9);
+        }
+
+        .device-actions button:hover {
+            background: var(--p31-dim, #006622);
+            color: #fff;
+        }
+
+        /* Form elements */
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: var(--p31-dim, #006622);
+            font-size: 0.85rem;
+        }
+
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 0.5rem;
+            background: var(--tube-pale, #e8f5e9);
+            border: 1px solid var(--p31-dim, #006622);
+            border-radius: 4px;
+            color: var(--tube-black, #1a2e1a);
+            font-family: inherit;
+        }
+
+        body.dark .form-group input, body.dark .form-group select {
+            background: rgba(0,20,10,0.8);
+            color: var(--tube-pale, #c9e5c9);
+        }
+
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: var(--zigbee-green);
+        }
+
+        /* Diagnostics */
+        .diag-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            border-bottom: 1px solid var(--p31-dim, #006622);
+        }
+
+        .diag-item:last-child {
+            border-bottom: none;
+        }
+
+        .diag-ok { color: var(--p31-peak, #00dd44); }
+        .diag-warn { color: #ffc800; }
+        .diag-err { color: #ff4444; }
+
+        /* Logs */
+        .logs-container {
+            background: rgba(0,20,10,0.1);
+            border: 1px solid var(--p31-dim, #006622);
+            border-radius: 4px;
+            padding: 1rem;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.8rem;
+        }
+
+        body.dark .logs-container {
+            background: rgba(0,0,0,0.8);
+        }
+
+        .log-line {
+            color: var(--p31-dim, #006622);
+            margin-bottom: 0.25rem;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .log-line:hover {
+            color: var(--p31-peak, #00dd44);
+        }
+
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 2rem;
+            color: var(--p31-dim, #006622);
+        }
+
+        .empty-state .icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        /* Loading */
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            color: var(--p31-dim, #006622);
+        }
+
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 2px solid var(--p31-dim, #006622);
+            border-top-color: var(--zigbee-green);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 0.5rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        @media (max-width: 768px) {
+            .form-row { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body class="crt-light">
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+
+    <main class="main">
+        <header class="header">
+            <div>
+                <h1>Zigbee2MQTT Gateway</h1>
+            </div>
+            <div class="header-actions">
+                <button id="pairBtn" class="btn" onclick="togglePairing()" style="display:none;">
+                    Enable Pairing
+                </button>
+                <span id="statusBadge" class="status-badge stopped">
+                    <span class="status-dot"></span>
+                    <span id="statusText">Stopped</span>
+                </span>
+            </div>
+        </header>
+
+        <!-- Install Banner -->
+        <div id="installBanner" class="install-banner" style="display:none;">
+            <h2>Zigbee2MQTT Not Installed</h2>
+            <p>Pull the Zigbee2MQTT container to start managing your Zigbee smart home devices.</p>
+            <button class="btn btn-primary" onclick="installZigbee()">
+                Pull Zigbee2MQTT Container
+            </button>
+        </div>
+
+        <!-- Main Content -->
+        <div id="mainContent">
+            <!-- Stats Grid -->
+            <div class="stats-grid" id="statsGrid">
+                <div class="stat-card">
+                    <div class="icon">&#128225;</div>
+                    <div class="value" id="deviceCount">--</div>
+                    <div class="label">Devices</div>
+                </div>
+                <div class="stat-card">
+                    <div class="icon">&#128268;</div>
+                    <div class="value" id="serialStatus">--</div>
+                    <div class="label">USB Dongle</div>
+                </div>
+                <div class="stat-card">
+                    <div class="icon">&#128246;</div>
+                    <div class="value" id="channelNum">--</div>
+                    <div class="label">Channel</div>
+                </div>
+                <div class="stat-card">
+                    <div class="icon">&#9889;</div>
+                    <div class="value" id="mqttStatus">--</div>
+                    <div class="label">MQTT</div>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab active" data-tab="devices">Devices</button>
+                <button class="tab" data-tab="network">Network</button>
+                <button class="tab" data-tab="diagnostics">Diagnostics</button>
+                <button class="tab" data-tab="logs">Logs</button>
+                <button class="tab" data-tab="settings">Settings</button>
+            </div>
+
+            <!-- Devices Tab -->
+            <div id="tab-devices" class="tab-content active">
+                <div class="card">
+                    <h2>Paired Devices</h2>
+                    <div id="deviceList" class="device-list">
+                        <div class="loading"><div class="spinner"></div> Loading devices...</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>Quick Actions</h2>
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        <button class="btn btn-primary" onclick="controlService('start')">Start</button>
+                        <button class="btn btn-danger" onclick="controlService('stop')">Stop</button>
+                        <button class="btn" onclick="controlService('restart')">Restart</button>
+                        <button class="btn" onclick="openFrontend()">Open Z2M Frontend</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Network Tab -->
+            <div id="tab-network" class="tab-content">
+                <div class="card">
+                    <h2>Network Topology</h2>
+                    <p style="color: var(--text-dim);">
+                        View the network topology in the Zigbee2MQTT web frontend.
+                    </p>
+                    <button class="btn btn-primary" onclick="openFrontend('#/map')" style="margin-top:1rem;">
+                        Open Network Map
+                    </button>
+                </div>
+
+                <div class="card">
+                    <h2>Coordinator Info</h2>
+                    <div id="coordinatorInfo">
+                        <div class="loading"><div class="spinner"></div> Loading...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Diagnostics Tab -->
+            <div id="tab-diagnostics" class="tab-content">
+                <div class="card">
+                    <h2>System Diagnostics</h2>
+                    <div id="diagnostics">
+                        <div class="loading"><div class="spinner"></div> Running diagnostics...</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>Detected USB Devices</h2>
+                    <div id="serialDevices">
+                        <div class="loading"><div class="spinner"></div> Scanning...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Logs Tab -->
+            <div id="tab-logs" class="tab-content">
+                <div class="card">
+                    <h2>Container Logs</h2>
+                    <div style="margin-bottom: 1rem;">
+                        <button class="btn" onclick="loadLogs()">Refresh Logs</button>
+                    </div>
+                    <div id="logsContainer" class="logs-container">
+                        <div class="loading"><div class="spinner"></div> Loading logs...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings Tab -->
+            <div id="tab-settings" class="tab-content">
+                <div class="card">
+                    <h2>Zigbee2MQTT Configuration</h2>
+                    <form id="configForm">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Serial Port</label>
+                                <select id="cfgSerialPort">
+                                    <option value="/dev/ttyUSB0">/dev/ttyUSB0</option>
+                                    <option value="/dev/ttyUSB1">/dev/ttyUSB1</option>
+                                    <option value="/dev/ttyACM0">/dev/ttyACM0</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Zigbee Channel</label>
+                                <select id="cfgChannel">
+                                    <option value="11">11 (Recommended)</option>
+                                    <option value="15">15</option>
+                                    <option value="20">20</option>
+                                    <option value="25">25</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>MQTT Broker</label>
+                                <input type="text" id="cfgMqttHost" value="mqtt://127.0.0.1:1883">
+                            </div>
+                            <div class="form-group">
+                                <label>Base Topic</label>
+                                <input type="text" id="cfgBaseTopic" value="zigbee2mqtt">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>MQTT Username (optional)</label>
+                                <input type="text" id="cfgMqttUser" placeholder="Leave blank if not required">
+                            </div>
+                            <div class="form-group">
+                                <label>MQTT Password (optional)</label>
+                                <input type="password" id="cfgMqttPass" placeholder="Leave blank if not required">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Frontend Port</label>
+                            <input type="number" id="cfgFrontendPort" value="8099" min="1024" max="65535">
+                        </div>
+                        <button type="submit" class="btn btn-primary">Save Configuration</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const API = '/api/v1/zigbee';
+        let statusData = null;
+        let permitJoinActive = false;
+
+        // Tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+
+                if (tab.dataset.tab === 'logs') loadLogs();
+                if (tab.dataset.tab === 'diagnostics') loadDiagnostics();
+                if (tab.dataset.tab === 'settings') loadConfig();
+                if (tab.dataset.tab === 'network') loadCoordinatorInfo();
+            });
+        });
+
+        async function init() {
+            await loadStatus();
+            await loadDevices();
+            setInterval(loadStatus, 10000);
+        }
+
+        async function loadStatus() {
+            try {
+                const res = await fetch(API + '/status', { credentials: 'include' });
+                statusData = await res.json();
+                updateUI();
+            } catch(e) {
+                console.error('Status error:', e);
+            }
+        }
+
+        function updateUI() {
+            if (!statusData) return;
+
+            const badge = document.getElementById('statusBadge');
+            const text = document.getElementById('statusText');
+            const pairBtn = document.getElementById('pairBtn');
+
+            if (statusData.running) {
+                if (statusData.permit_join) {
+                    badge.className = 'status-badge pairing';
+                    text.textContent = 'Pairing Mode';
+                    pairBtn.textContent = 'Disable Pairing';
+                    pairBtn.className = 'btn btn-pairing';
+                } else {
+                    badge.className = 'status-badge running';
+                    text.textContent = 'Running';
+                    pairBtn.textContent = 'Enable Pairing';
+                    pairBtn.className = 'btn';
+                }
+                pairBtn.style.display = 'inline-block';
+                document.getElementById('installBanner').style.display = 'none';
+            } else {
+                badge.className = 'status-badge stopped';
+                text.textContent = 'Stopped';
+                pairBtn.style.display = 'none';
+            }
+
+            // Update stats
+            document.getElementById('deviceCount').textContent = statusData.device_count || 0;
+            document.getElementById('serialStatus').textContent = statusData.serial_device_exists ? 'OK' : 'Missing';
+            document.getElementById('channelNum').textContent = statusData.channel || '--';
+            document.getElementById('mqttStatus').textContent = statusData.web_accessible ? 'Connected' : 'N/A';
+        }
+
+        async function loadDevices() {
+            const container = document.getElementById('deviceList');
+            try {
+                const res = await fetch(API + '/devices', { credentials: 'include' });
+                const data = await res.json();
+
+                if (data.error) {
+                    container.innerHTML = '<div class="empty-state"><div class="icon">&#128225;</div><p>Service not running</p></div>';
+                    return;
+                }
+
+                if (!data.devices || data.devices.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><div class="icon">&#128225;</div><p>No devices paired yet</p><p style="font-size:0.9rem;margin-top:0.5rem;">Enable pairing mode to add devices</p></div>';
+                    return;
+                }
+
+                container.innerHTML = data.devices.map(d => {
+                    const type = d.type || 'EndDevice';
+                    const typeClass = type === 'Coordinator' ? 'coordinator' : (type === 'Router' ? 'router' : 'end-device');
+                    return `
+                        <div class="device-item ${typeClass}">
+                            <div class="device-info">
+                                <span class="device-name">${escapeHtml(d.friendly_name || d.ieee_address)}</span>
+                                <span class="device-meta">${type} | ${d.definition?.model || 'Unknown'} | ${d.definition?.vendor || ''}</span>
+                            </div>
+                            ${type !== 'Coordinator' ? `
+                            <div class="device-actions">
+                                <button onclick="renameDevice('${escapeHtml(d.friendly_name)}')" title="Rename">&#9998;</button>
+                                <button onclick="removeDevice('${escapeHtml(d.friendly_name)}')" title="Remove">&#10005;</button>
+                            </div>
+                            ` : ''}
+                        </div>
+                    `;
+                }).join('');
+            } catch(e) {
+                container.innerHTML = '<div class="empty-state"><p>Error loading devices</p></div>';
+            }
+        }
+
+        async function togglePairing() {
+            const newState = !statusData?.permit_join;
+            try {
+                const res = await fetch(API + '/permit_join', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ permit: newState, duration: 254 })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    setTimeout(loadStatus, 1000);
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown error'));
+                }
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        async function renameDevice(oldName) {
+            const newName = prompt('Enter new name for device:', oldName);
+            if (!newName || newName === oldName) return;
+
+            try {
+                const res = await fetch(API + '/devices/rename', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ old_name: oldName, new_name: newName })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    loadDevices();
+                } else {
+                    alert('Rename failed: ' + (data.error || 'Unknown error'));
+                }
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        async function removeDevice(deviceId) {
+            if (!confirm('Remove device "' + deviceId + '" from the network?')) return;
+
+            try {
+                const res = await fetch(API + '/devices/' + encodeURIComponent(deviceId), {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+                const data = await res.json();
+                if (data.success) {
+                    loadDevices();
+                } else {
+                    alert('Remove failed: ' + (data.error || 'Unknown error'));
+                }
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        async function controlService(action) {
+            try {
+                const res = await fetch(API + '/' + action, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                const data = await res.json();
+                if (data.success) {
+                    setTimeout(loadStatus, 3000);
+                    setTimeout(loadDevices, 5000);
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown error'));
+                }
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        async function installZigbee() {
+            const btn = event.target;
+            btn.disabled = true;
+            btn.textContent = 'Pulling...';
+
+            try {
+                const res = await fetch(API + '/install', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert('Zigbee2MQTT installed! Configure settings and start the service.');
+                    document.getElementById('installBanner').style.display = 'none';
+                } else {
+                    alert('Install failed: ' + (data.error || 'Unknown error'));
+                }
+            } catch(e) {
+                alert('Error: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Pull Zigbee2MQTT Container';
+            }
+        }
+
+        async function loadDiagnostics() {
+            const container = document.getElementById('diagnostics');
+            const devicesContainer = document.getElementById('serialDevices');
+
+            try {
+                const res = await fetch(API + '/diagnostics', { credentials: 'include' });
+                const data = await res.json();
+
+                container.innerHTML = `
+                    <div class="diag-item">
+                        <span class="${data.serial?.exists ? 'diag-ok' : 'diag-err'}">${data.serial?.exists ? '&#10004;' : '&#10008;'}</span>
+                        <span>Serial device ${data.serial?.port}</span>
+                    </div>
+                    <div class="diag-item">
+                        <span class="${data.kernel_modules?.cp210x ? 'diag-ok' : 'diag-warn'}">${data.kernel_modules?.cp210x ? '&#10004;' : '&#9888;'}</span>
+                        <span>cp210x kernel module</span>
+                    </div>
+                    <div class="diag-item">
+                        <span class="${data.kernel_modules?.ch341 ? 'diag-ok' : 'diag-warn'}">${data.kernel_modules?.ch341 ? '&#10004;' : '&#9888;'}</span>
+                        <span>ch341 kernel module</span>
+                    </div>
+                    <div class="diag-item">
+                        <span class="${data.runtime !== 'none' ? 'diag-ok' : 'diag-err'}">${data.runtime !== 'none' ? '&#10004;' : '&#10008;'}</span>
+                        <span>Container runtime: ${data.runtime || 'none'}</span>
+                    </div>
+                    <div class="diag-item">
+                        <span class="${data.mqtt_available ? 'diag-ok' : 'diag-warn'}">${data.mqtt_available ? '&#10004;' : '&#9888;'}</span>
+                        <span>MQTT broker connectivity</span>
+                    </div>
+                `;
+
+                // Serial devices
+                if (data.detected_devices && data.detected_devices.length > 0) {
+                    devicesContainer.innerHTML = data.detected_devices.map(d => `
+                        <div class="diag-item">
+                            <span class="diag-ok">&#128268;</span>
+                            <span>${d.path} - ${d.product || d.type || 'USB Serial'}</span>
+                        </div>
+                    `).join('');
+                } else {
+                    devicesContainer.innerHTML = '<div class="empty-state"><p>No USB serial devices detected</p></div>';
+                }
+            } catch(e) {
+                container.innerHTML = '<div class="empty-state"><p>Error loading diagnostics</p></div>';
+            }
+        }
+
+        async function loadCoordinatorInfo() {
+            const container = document.getElementById('coordinatorInfo');
+            if (!statusData?.running) {
+                container.innerHTML = '<p style="color:var(--text-dim);">Service not running</p>';
+                return;
+            }
+
+            if (statusData.coordinator) {
+                const c = statusData.coordinator;
+                container.innerHTML = `
+                    <p><strong>Type:</strong> ${c.type || 'Unknown'}</p>
+                    <p><strong>IEEE Address:</strong> ${c.ieee_address || 'N/A'}</p>
+                    <p><strong>Channel:</strong> ${statusData.channel}</p>
+                    <p><strong>Pan ID:</strong> ${c.pan_id || 'N/A'}</p>
+                `;
+            } else {
+                container.innerHTML = '<p style="color:var(--text-dim);">No coordinator info available</p>';
+            }
+        }
+
+        async function loadLogs() {
+            const container = document.getElementById('logsContainer');
+            try {
+                const res = await fetch(API + '/logs?lines=100', { credentials: 'include' });
+                const data = await res.json();
+
+                if (!data.logs || data.logs.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><p>No logs available</p></div>';
+                    return;
+                }
+
+                container.innerHTML = data.logs.map(line =>
+                    `<div class="log-line">${escapeHtml(line)}</div>`
+                ).join('');
+                container.scrollTop = container.scrollHeight;
+            } catch(e) {
+                container.innerHTML = '<div class="empty-state"><p>Error loading logs</p></div>';
+            }
+        }
+
+        async function loadConfig() {
+            try {
+                const res = await fetch(API + '/config', { credentials: 'include' });
+                const data = await res.json();
+
+                document.getElementById('cfgSerialPort').value = data.serial_port || '/dev/ttyUSB0';
+                document.getElementById('cfgChannel').value = data.channel || 11;
+                document.getElementById('cfgMqttHost').value = data.mqtt_host || 'mqtt://127.0.0.1:1883';
+                document.getElementById('cfgBaseTopic').value = data.base_topic || 'zigbee2mqtt';
+                document.getElementById('cfgMqttUser').value = data.mqtt_username || '';
+                document.getElementById('cfgMqttPass').value = '';
+                document.getElementById('cfgFrontendPort').value = data.frontend_port || 8099;
+
+                // Load detected serial devices for dropdown
+                const serialRes = await fetch(API + '/serial_devices', { credentials: 'include' });
+                const serialData = await serialRes.json();
+                if (serialData.devices && serialData.devices.length > 0) {
+                    const select = document.getElementById('cfgSerialPort');
+                    const currentVal = select.value;
+                    select.innerHTML = serialData.devices.map(d =>
+                        `<option value="${d.path}">${d.path} ${d.product ? '(' + d.product + ')' : ''}</option>`
+                    ).join('');
+                    // Add custom option if current value not in list
+                    if (!serialData.devices.find(d => d.path === currentVal)) {
+                        select.innerHTML += `<option value="${currentVal}">${currentVal}</option>`;
+                    }
+                    select.value = currentVal;
+                }
+            } catch(e) {
+                console.error('Config load error:', e);
+            }
+        }
+
+        document.getElementById('configForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const config = {
+                serial_port: document.getElementById('cfgSerialPort').value,
+                channel: parseInt(document.getElementById('cfgChannel').value),
+                mqtt_host: document.getElementById('cfgMqttHost').value,
+                base_topic: document.getElementById('cfgBaseTopic').value,
+                mqtt_username: document.getElementById('cfgMqttUser').value,
+                mqtt_password: document.getElementById('cfgMqttPass').value || '********',
+                frontend_port: parseInt(document.getElementById('cfgFrontendPort').value),
+                permit_join: false
+            };
+
+            try {
+                const res = await fetch(API + '/config', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert('Configuration saved! Restart Zigbee2MQTT to apply changes.');
+                } else {
+                    alert('Error saving configuration');
+                }
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
+        });
+
+        function openFrontend(hash) {
+            const port = statusData?.frontend_port || 8099;
+            window.open('http://' + window.location.hostname + ':' + port + (hash || ''), '_blank');
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.toString()
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        init();
+    </script>
+</body>
+</html>

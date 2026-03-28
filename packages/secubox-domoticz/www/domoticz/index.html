@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - Domoticz</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <style>
+        :root {
+            /* Domoticz accent - teal/cyan */
+            --domoticz-teal: #00bcd4;
+            --domoticz-teal-dim: #0097a7;
+            --domoticz-teal-glow: rgba(0, 188, 212, 0.2);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'IBM Plex Mono', 'Consolas', monospace;
+            background: var(--tube-pale, #e8f5e9);
+            color: var(--tube-black, #1a2e1a);
+            display: flex;
+            min-height: 100vh;
+        }
+
+        body.dark {
+            background: var(--tube-black, #1a2e1a);
+            color: var(--tube-pale, #c9e5c9);
+        }
+
+        .main {
+            flex: 1;
+            margin-left: 220px;
+            padding: 1.5rem;
+            background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--p31-dim, #006622);
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            color: var(--domoticz-teal);
+            text-shadow: 0 0 10px var(--domoticz-teal-glow);
+        }
+
+        .header-actions { display: flex; gap: 0.5rem; align-items: center; }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+        }
+
+        .status-badge.running { background: rgba(0,221,68,0.1); color: var(--p31-peak, #00dd44); border: 1px solid var(--p31-dim); }
+        .status-badge.stopped { background: rgba(255,68,68,0.1); color: #ff4444; border: 1px solid #884444; }
+
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; animation: pulse 2s infinite; }
+
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+        .install-banner {
+            background: linear-gradient(135deg, rgba(0,188,212,0.1) 0%, rgba(0,188,212,0.05) 100%);
+            border: 2px dashed var(--domoticz-teal);
+            border-radius: 8px;
+            padding: 2rem;
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .install-banner h2 { color: var(--domoticz-teal); margin-bottom: 1rem; }
+        .install-banner p { color: var(--p31-dim); margin-bottom: 1.5rem; }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .stat-card {
+            background: rgba(0,188,212,0.05);
+            border: 1px solid var(--p31-dim, #006622);
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        body.dark .stat-card { background: rgba(0,50,20,0.3); }
+
+        .stat-card .icon { font-size: 1.5rem; margin-bottom: 0.5rem; }
+        .stat-card .value { font-size: 1.5rem; font-weight: bold; color: var(--domoticz-teal); }
+        .stat-card .label { font-size: 0.75rem; color: var(--p31-dim); text-transform: uppercase; }
+
+        .tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid var(--p31-dim);
+            padding-bottom: 0.5rem;
+        }
+
+        .tab {
+            padding: 0.5rem 1rem;
+            border: none;
+            background: transparent;
+            color: var(--p31-dim);
+            cursor: pointer;
+            font-family: inherit;
+            border-radius: 4px 4px 0 0;
+            transition: all 0.2s;
+        }
+
+        .tab:hover { color: var(--tube-black); }
+        body.dark .tab:hover { color: var(--tube-pale); }
+
+        .tab.active {
+            background: rgba(0,188,212,0.1);
+            color: var(--domoticz-teal);
+            border: 1px solid var(--p31-dim);
+            border-bottom: none;
+        }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .card {
+            background: rgba(0,188,212,0.05);
+            border: 1px solid var(--p31-dim);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+        }
+
+        body.dark .card { background: rgba(0,50,20,0.3); }
+
+        .card h2 {
+            font-size: 1rem;
+            color: var(--domoticz-teal);
+            margin-bottom: 1rem;
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            border: 1px solid var(--p31-dim);
+            background: var(--tube-pale, #e8f5e9);
+            color: var(--tube-black);
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+
+        body.dark .btn { background: rgba(0,50,20,0.5); color: var(--tube-pale); }
+
+        .btn:hover { background: var(--p31-dim); color: #fff; }
+
+        .btn-primary { background: var(--domoticz-teal-dim); border-color: var(--domoticz-teal); color: #fff; }
+        .btn-primary:hover { background: var(--domoticz-teal); }
+
+        .btn-danger { background: #442222; border-color: #884444; color: #fff; }
+
+        .device-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 1rem;
+        }
+
+        .device-card {
+            background: rgba(0,188,212,0.03);
+            border: 1px solid var(--p31-dim);
+            border-radius: 8px;
+            padding: 1rem;
+            border-left: 3px solid var(--domoticz-teal);
+        }
+
+        body.dark .device-card { background: rgba(0,0,0,0.2); }
+
+        .device-card.off { border-left-color: var(--p31-dim); opacity: 0.7; }
+
+        .device-name { font-weight: bold; margin-bottom: 0.25rem; }
+        .device-type { font-size: 0.75rem; color: var(--p31-dim); margin-bottom: 0.5rem; }
+        .device-data { font-size: 1.2rem; color: var(--domoticz-teal); margin-bottom: 0.5rem; }
+        .device-actions { display: flex; gap: 0.5rem; }
+        .device-actions button { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; color: var(--p31-dim); font-size: 0.85rem; }
+
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 0.5rem;
+            background: var(--tube-pale);
+            border: 1px solid var(--p31-dim);
+            border-radius: 4px;
+            color: var(--tube-black);
+            font-family: inherit;
+        }
+
+        body.dark .form-group input, body.dark .form-group select { background: rgba(0,20,10,0.8); color: var(--tube-pale); }
+
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+
+        .logs-container {
+            background: rgba(0,20,10,0.1);
+            border: 1px solid var(--p31-dim);
+            border-radius: 4px;
+            padding: 1rem;
+            max-height: 400px;
+            overflow-y: auto;
+            font-size: 0.8rem;
+        }
+
+        body.dark .logs-container { background: rgba(0,0,0,0.8); }
+
+        .log-line { color: var(--p31-dim); margin-bottom: 0.25rem; white-space: pre-wrap; }
+        .log-line:hover { color: var(--p31-peak); }
+
+        .loading { text-align: center; padding: 2rem; color: var(--p31-dim); }
+        .empty-state { text-align: center; padding: 2rem; color: var(--p31-dim); }
+
+        @media (max-width: 768px) {
+            .main { margin-left: 0; padding: 1rem; }
+            .form-row { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body class="crt-light">
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+
+    <main class="main">
+        <header class="header">
+            <h1>Domoticz</h1>
+            <div class="header-actions">
+                <button class="btn" onclick="openDomoticz()">Open Domoticz</button>
+                <span id="statusBadge" class="status-badge stopped">
+                    <span class="status-dot"></span>
+                    <span id="statusText">Stopped</span>
+                </span>
+            </div>
+        </header>
+
+        <div id="installBanner" class="install-banner" style="display:none;">
+            <h2>Domoticz Not Installed</h2>
+            <p>Pull the Domoticz container to start managing your smart home devices.</p>
+            <button class="btn btn-primary" onclick="installDomoticz()">Pull Domoticz Container</button>
+        </div>
+
+        <div class="stats-grid" id="statsGrid">
+            <div class="stat-card">
+                <div class="icon">🏠</div>
+                <div class="value" id="deviceCount">--</div>
+                <div class="label">Devices</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon">🎭</div>
+                <div class="value" id="sceneCount">--</div>
+                <div class="label">Scenes</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon">📡</div>
+                <div class="value" id="mqttStatus">--</div>
+                <div class="label">MQTT</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon">💾</div>
+                <div class="value" id="diskUsage">--</div>
+                <div class="label">Storage</div>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" data-tab="devices">Devices</button>
+            <button class="tab" data-tab="scenes">Scenes</button>
+            <button class="tab" data-tab="hardware">Hardware</button>
+            <button class="tab" data-tab="logs">Logs</button>
+            <button class="tab" data-tab="settings">Settings</button>
+        </div>
+
+        <!-- Devices Tab -->
+        <div id="tab-devices" class="tab-content active">
+            <div class="card">
+                <h2>Smart Devices</h2>
+                <div class="device-grid" id="deviceGrid">
+                    <div class="loading">Loading devices...</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>Quick Actions</h2>
+                <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+                    <button class="btn btn-primary" onclick="controlService('start')">Start</button>
+                    <button class="btn btn-danger" onclick="controlService('stop')">Stop</button>
+                    <button class="btn" onclick="controlService('restart')">Restart</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scenes Tab -->
+        <div id="tab-scenes" class="tab-content">
+            <div class="card">
+                <h2>Scenes & Groups</h2>
+                <div id="sceneList">
+                    <div class="loading">Loading scenes...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Hardware Tab -->
+        <div id="tab-hardware" class="tab-content">
+            <div class="card">
+                <h2>Configured Hardware</h2>
+                <div id="hardwareList">
+                    <div class="loading">Loading hardware...</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>USB Devices</h2>
+                <div id="usbList">
+                    <div class="loading">Scanning...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Logs Tab -->
+        <div id="tab-logs" class="tab-content">
+            <div class="card">
+                <h2>Container Logs</h2>
+                <div style="margin-bottom:1rem;">
+                    <button class="btn" onclick="loadLogs()">Refresh</button>
+                </div>
+                <div id="logsContainer" class="logs-container">
+                    <div class="loading">Loading logs...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Tab -->
+        <div id="tab-settings" class="tab-content">
+            <div class="card">
+                <h2>Configuration</h2>
+                <form id="configForm">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Web Port</label>
+                            <input type="number" id="cfgPort" value="8080" min="1024" max="65535">
+                        </div>
+                        <div class="form-group">
+                            <label>Timezone</label>
+                            <select id="cfgTimezone">
+                                <option value="UTC">UTC</option>
+                                <option value="Europe/Paris">Europe/Paris</option>
+                                <option value="Europe/London">Europe/London</option>
+                                <option value="America/New_York">America/New_York</option>
+                                <option value="America/Los_Angeles">America/Los_Angeles</option>
+                                <option value="Asia/Tokyo">Asia/Tokyo</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save Configuration</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <h2>Backup & Restore</h2>
+                <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:1rem;">
+                    <button class="btn btn-primary" onclick="createBackup()">Create Backup</button>
+                    <button class="btn" onclick="loadBackups()">List Backups</button>
+                </div>
+                <div id="backupList"></div>
+            </div>
+
+            <div class="card">
+                <h2>Admin Password</h2>
+                <div class="form-group">
+                    <label>New Password</label>
+                    <input type="password" id="newPassword" placeholder="Enter new password">
+                </div>
+                <button class="btn btn-danger" onclick="resetPassword()">Reset Password</button>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const API = '/api/v1/domoticz';
+        let statusData = null;
+
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+
+                if (tab.dataset.tab === 'logs') loadLogs();
+                if (tab.dataset.tab === 'scenes') loadScenes();
+                if (tab.dataset.tab === 'hardware') { loadHardware(); loadUSB(); }
+                if (tab.dataset.tab === 'settings') loadConfig();
+            });
+        });
+
+        async function init() {
+            await loadStatus();
+            await loadDevices();
+            setInterval(loadStatus, 10000);
+        }
+
+        async function loadStatus() {
+            try {
+                const res = await fetch(API + '/status', { credentials: 'include' });
+                statusData = await res.json();
+                updateUI();
+            } catch(e) { console.error('Status error:', e); }
+        }
+
+        function updateUI() {
+            if (!statusData) return;
+            const badge = document.getElementById('statusBadge');
+            const text = document.getElementById('statusText');
+
+            if (statusData.running) {
+                badge.className = 'status-badge running';
+                text.textContent = 'Running';
+                document.getElementById('installBanner').style.display = 'none';
+            } else if (!statusData.container_exists && statusData.runtime !== 'none') {
+                document.getElementById('installBanner').style.display = 'block';
+                badge.className = 'status-badge stopped';
+                text.textContent = 'Not Installed';
+            } else {
+                badge.className = 'status-badge stopped';
+                text.textContent = 'Stopped';
+            }
+
+            document.getElementById('mqttStatus').textContent = statusData.mosquitto_status || '--';
+            document.getElementById('diskUsage').textContent = statusData.disk_usage || '--';
+        }
+
+        async function loadDevices() {
+            const container = document.getElementById('deviceGrid');
+            try {
+                const res = await fetch(API + '/devices', { credentials: 'include' });
+                const data = await res.json();
+
+                document.getElementById('deviceCount').textContent = data.count || 0;
+
+                if (!data.devices || data.devices.length === 0) {
+                    container.innerHTML = '<div class="empty-state">No devices configured</div>';
+                    return;
+                }
+
+                container.innerHTML = data.devices.map(d => {
+                    const isOn = d.data && (d.data.toLowerCase().includes('on') || d.data.includes('Open'));
+                    return `
+                        <div class="device-card ${isOn ? '' : 'off'}">
+                            <div class="device-name">${escapeHtml(d.name)}</div>
+                            <div class="device-type">${d.type} - ${d.subtype || ''}</div>
+                            <div class="device-data">${escapeHtml(d.data || '--')}</div>
+                            <div class="device-actions">
+                                <button class="btn" onclick="switchDevice(${d.idx}, 'On')">On</button>
+                                <button class="btn" onclick="switchDevice(${d.idx}, 'Off')">Off</button>
+                                <button class="btn" onclick="switchDevice(${d.idx}, 'Toggle')">Toggle</button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } catch(e) {
+                container.innerHTML = '<div class="empty-state">Error loading devices</div>';
+            }
+        }
+
+        async function loadScenes() {
+            const container = document.getElementById('sceneList');
+            try {
+                const res = await fetch(API + '/scenes', { credentials: 'include' });
+                const data = await res.json();
+
+                document.getElementById('sceneCount').textContent = data.count || 0;
+
+                if (!data.scenes || data.scenes.length === 0) {
+                    container.innerHTML = '<div class="empty-state">No scenes configured</div>';
+                    return;
+                }
+
+                container.innerHTML = '<div class="device-grid">' + data.scenes.map(s => `
+                    <div class="device-card">
+                        <div class="device-name">${escapeHtml(s.name)}</div>
+                        <div class="device-type">${s.type}</div>
+                        <div class="device-data">${s.status}</div>
+                        <div class="device-actions">
+                            <button class="btn btn-primary" onclick="activateScene(${s.idx}, 'On')">Activate</button>
+                            <button class="btn" onclick="activateScene(${s.idx}, 'Off')">Deactivate</button>
+                        </div>
+                    </div>
+                `).join('') + '</div>';
+            } catch(e) {
+                container.innerHTML = '<div class="empty-state">Error loading scenes</div>';
+            }
+        }
+
+        async function loadHardware() {
+            const container = document.getElementById('hardwareList');
+            try {
+                const res = await fetch(API + '/hardware', { credentials: 'include' });
+                const data = await res.json();
+
+                if (!data.hardware || data.hardware.length === 0) {
+                    container.innerHTML = '<div class="empty-state">No hardware configured</div>';
+                    return;
+                }
+
+                container.innerHTML = '<div class="device-grid">' + data.hardware.map(h => `
+                    <div class="device-card ${h.enabled ? '' : 'off'}">
+                        <div class="device-name">${escapeHtml(h.name)}</div>
+                        <div class="device-type">${h.type}</div>
+                        <div class="device-data">${h.enabled ? 'Enabled' : 'Disabled'}</div>
+                    </div>
+                `).join('') + '</div>';
+            } catch(e) {
+                container.innerHTML = '<div class="empty-state">Error loading hardware</div>';
+            }
+        }
+
+        async function loadUSB() {
+            const container = document.getElementById('usbList');
+            try {
+                const res = await fetch(API + '/usb_devices', { credentials: 'include' });
+                const data = await res.json();
+
+                if (!data.devices || data.devices.length === 0) {
+                    container.innerHTML = '<div class="empty-state">No USB serial devices detected</div>';
+                    return;
+                }
+
+                container.innerHTML = data.devices.map(d => `
+                    <div style="padding:0.5rem;background:rgba(0,188,212,0.05);border-radius:4px;margin-bottom:0.5rem;">
+                        <strong>${d.path}</strong> - ${d.product || d.type}
+                    </div>
+                `).join('');
+            } catch(e) {
+                container.innerHTML = '<div class="empty-state">Error scanning USB</div>';
+            }
+        }
+
+        async function loadLogs() {
+            const container = document.getElementById('logsContainer');
+            try {
+                const res = await fetch(API + '/logs?lines=100', { credentials: 'include' });
+                const data = await res.json();
+                if (!data.logs || data.logs.length === 0) {
+                    container.innerHTML = '<div class="empty-state">No logs available</div>';
+                    return;
+                }
+                container.innerHTML = data.logs.map(line => `<div class="log-line">${escapeHtml(line)}</div>`).join('');
+                container.scrollTop = container.scrollHeight;
+            } catch(e) {
+                container.innerHTML = '<div class="empty-state">Error loading logs</div>';
+            }
+        }
+
+        async function loadConfig() {
+            try {
+                const res = await fetch(API + '/config', { credentials: 'include' });
+                const data = await res.json();
+                document.getElementById('cfgPort').value = data.port || 8080;
+                document.getElementById('cfgTimezone').value = data.timezone || 'UTC';
+            } catch(e) { console.error('Config error:', e); }
+        }
+
+        async function switchDevice(idx, cmd) {
+            try {
+                const res = await fetch(API + `/devices/${idx}/switch?command=${cmd}`, {
+                    method: 'POST', credentials: 'include'
+                });
+                const data = await res.json();
+                if (data.success) setTimeout(loadDevices, 1000);
+                else alert('Error: ' + (data.error || 'Unknown'));
+            } catch(e) { alert('Error: ' + e.message); }
+        }
+
+        async function activateScene(idx, cmd) {
+            try {
+                const res = await fetch(API + `/scenes/${idx}/activate?command=${cmd}`, {
+                    method: 'POST', credentials: 'include'
+                });
+                const data = await res.json();
+                if (data.success) setTimeout(loadScenes, 1000);
+                else alert('Error: ' + (data.error || 'Unknown'));
+            } catch(e) { alert('Error: ' + e.message); }
+        }
+
+        async function controlService(action) {
+            try {
+                const res = await fetch(API + '/' + action, { method: 'POST', credentials: 'include' });
+                const data = await res.json();
+                if (data.success) {
+                    setTimeout(loadStatus, 3000);
+                    setTimeout(loadDevices, 5000);
+                } else alert('Error: ' + (data.error || data.detail));
+            } catch(e) { alert('Error: ' + e.message); }
+        }
+
+        async function installDomoticz() {
+            const btn = event.target;
+            btn.disabled = true; btn.textContent = 'Pulling...';
+            try {
+                const res = await fetch(API + '/install', { method: 'POST', credentials: 'include' });
+                const data = await res.json();
+                if (data.success) {
+                    alert('Domoticz installed! Start the service to begin.');
+                    document.getElementById('installBanner').style.display = 'none';
+                } else alert('Install failed: ' + (data.error || data.detail));
+            } catch(e) { alert('Error: ' + e.message); }
+            finally { btn.disabled = false; btn.textContent = 'Pull Domoticz Container'; }
+        }
+
+        async function createBackup() {
+            try {
+                const res = await fetch(API + '/backup', { method: 'POST', credentials: 'include' });
+                const data = await res.json();
+                if (data.success) {
+                    alert('Backup created: ' + data.path);
+                    loadBackups();
+                } else alert('Backup failed');
+            } catch(e) { alert('Error: ' + e.message); }
+        }
+
+        async function loadBackups() {
+            const container = document.getElementById('backupList');
+            try {
+                const res = await fetch(API + '/backups', { credentials: 'include' });
+                const data = await res.json();
+                if (!data.backups || data.backups.length === 0) {
+                    container.innerHTML = '<p style="color:var(--p31-dim);">No backups found</p>';
+                    return;
+                }
+                container.innerHTML = data.backups.map(b => `
+                    <div style="display:flex;justify-content:space-between;align-items:center;padding:0.5rem;background:rgba(0,188,212,0.05);border-radius:4px;margin-bottom:0.5rem;">
+                        <span>${b.filename}</span>
+                        <button class="btn" onclick="restoreBackup('${b.path}')">Restore</button>
+                    </div>
+                `).join('');
+            } catch(e) { container.innerHTML = '<p>Error loading backups</p>'; }
+        }
+
+        async function restoreBackup(path) {
+            if (!confirm('Restore from this backup? Current data will be overwritten.')) return;
+            try {
+                const res = await fetch(API + '/restore?path=' + encodeURIComponent(path), {
+                    method: 'POST', credentials: 'include'
+                });
+                const data = await res.json();
+                if (data.success) alert('Restore complete! Start Domoticz to continue.');
+                else alert('Restore failed');
+            } catch(e) { alert('Error: ' + e.message); }
+        }
+
+        async function resetPassword() {
+            const pwd = document.getElementById('newPassword').value;
+            if (!pwd || pwd.length < 4) { alert('Password must be at least 4 characters'); return; }
+            try {
+                const res = await fetch(API + '/reset_password?password=' + encodeURIComponent(pwd), {
+                    method: 'POST', credentials: 'include'
+                });
+                const data = await res.json();
+                if (data.success) alert('Password reset successfully');
+                else alert('Failed: ' + (data.error || data.detail));
+            } catch(e) { alert('Error: ' + e.message); }
+        }
+
+        document.getElementById('configForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const config = {
+                port: parseInt(document.getElementById('cfgPort').value),
+                timezone: document.getElementById('cfgTimezone').value
+            };
+            try {
+                const res = await fetch(API + '/config', {
+                    method: 'POST', credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+                const data = await res.json();
+                if (data.success) alert('Configuration saved! Restart Domoticz to apply.');
+                else alert('Error saving config');
+            } catch(e) { alert('Error: ' + e.message); }
+        });
+
+        function openDomoticz() {
+            const port = statusData?.port || 8080;
+            window.open('http://' + window.location.hostname + ':' + port, '_blank');
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+
+        init();
+    </script>
+</body>
+</html>

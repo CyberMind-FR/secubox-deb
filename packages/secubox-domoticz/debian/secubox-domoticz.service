@@ -1,0 +1,24 @@
+[Unit]
+Description=SecuBox Domoticz API Service
+After=network.target
+
+[Service]
+Type=simple
+ExecStartPre=/bin/mkdir -p /run/secubox
+ExecStart=/usr/bin/python3 -m uvicorn main:app --uds /run/secubox/domoticz.sock
+WorkingDirectory=/usr/share/secubox/api/domoticz
+Restart=always
+RestartSec=5
+User=root
+Group=root
+UMask=0111
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/run/secubox /var/lib/secubox/domoticz /tmp
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

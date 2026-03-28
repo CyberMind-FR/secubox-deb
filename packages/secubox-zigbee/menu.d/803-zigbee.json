@@ -1,0 +1,9 @@
+{
+  "id": "zigbee",
+  "name": "Zigbee",
+  "icon": "📡",
+  "path": "/zigbee/",
+  "category": "apps",
+  "order": 803,
+  "description": "Zigbee2MQTT smart home gateway"
+}

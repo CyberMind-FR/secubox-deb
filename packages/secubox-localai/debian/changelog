@@ -1,0 +1,9 @@
+secubox-localai (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release.
+  * FastAPI backend with 15+ endpoints
+  * Features: Container management, model gallery, chat completion
+  * OpenAI-compatible API proxy
+  * CRT-light P31 phosphor theme with LocalAI purple accents
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 28 Mar 2026 04:00:00 +0100

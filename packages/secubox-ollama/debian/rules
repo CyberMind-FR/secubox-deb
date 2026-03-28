@@ -1,0 +1,17 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	# API files
+	install -d debian/secubox-ollama/usr/lib/secubox/ollama/
+	cp -r api debian/secubox-ollama/usr/lib/secubox/ollama/
+	# Static www files
+	install -d debian/secubox-ollama/usr/share/secubox/www
+	[ -d www ] && cp -r www/. debian/secubox-ollama/usr/share/secubox/www/ || true
+	# Menu definitions
+	install -d debian/secubox-ollama/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-ollama/usr/share/secubox/menu.d/ || true
+	# Modular nginx config
+	install -d debian/secubox-ollama/etc/nginx/secubox.d
+	[ -f nginx/ollama.conf ] && cp nginx/ollama.conf debian/secubox-ollama/etc/nginx/secubox.d/ || true

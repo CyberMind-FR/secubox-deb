@@ -1,0 +1,29 @@
+Source: secubox-domoticz
+Section: admin
+Priority: optional
+Maintainer: SecuBox Team <team@secubox.in>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.0
+Homepage: https://secubox.in
+
+Package: secubox-domoticz
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-core,
+         python3,
+         python3-fastapi,
+         python3-uvicorn,
+         python3-httpx,
+         python3-aiofiles,
+         lxc,
+         lxc-templates
+Description: SecuBox Domoticz - Home automation system
+ Provides a web interface and API for managing Domoticz
+ home automation system running in a container.
+ .
+ Features:
+  - Container-based Domoticz deployment
+  - Device and scene management
+  - Hardware integration (Z-Wave, Zigbee, MQTT)
+  - Backup and restore functionality
+  - USB device passthrough support

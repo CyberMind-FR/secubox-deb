@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - Jellyfin Media Server</title>
+    <link rel="stylesheet" href="/shared/sidebar.css">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <style>
+        :root {
+            --p31-peak: #00dd44;
+            --p31-dim: #006622;
+            --p31-glow: rgba(0, 221, 68, 0.15);
+            --tube-light: #e8f5e9;
+            --tube-mid: #c8e6c9;
+            --tube-dark: #a5d6a7;
+            --text-primary: #1b5e20;
+            --text-secondary: #388e3c;
+            --text-dim: #66bb6a;
+            --surface: #f1f8e9;
+            --surface-alt: #dcedc8;
+            --border: #c5e1a5;
+            --error: #c62828;
+            --warning: #f57c00;
+            --success: #2e7d32;
+            --jellyfin: #00a4dc;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            background: linear-gradient(135deg, var(--tube-light) 0%, var(--tube-mid) 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+        }
+        body.crt-light { background: linear-gradient(135deg, var(--tube-light) 0%, var(--tube-mid) 100%); }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; max-width: calc(100% - 220px); }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid var(--jellyfin);
+        }
+        .header h1 { font-size: 1.5rem; color: var(--jellyfin); }
+        .header-actions { display: flex; gap: 0.5rem; }
+
+        /* Stats Row */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+            box-shadow: 0 2px 8px var(--p31-glow);
+        }
+        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
+        .stat-card .value { font-size: 1.25rem; font-weight: bold; color: var(--p31-dim); margin-top: 0.25rem; }
+        .stat-card.running .value { color: var(--success); }
+        .stat-card.stopped .value { color: var(--error); }
+
+        /* Tabs */
+        .tabs { display: flex; gap: 0; margin-bottom: 1.5rem; border-bottom: 2px solid var(--border); }
+        .tab {
+            padding: 0.75rem 1.5rem;
+            cursor: pointer;
+            border: 1px solid transparent;
+            border-bottom: none;
+            border-radius: 8px 8px 0 0;
+            background: transparent;
+            color: var(--text-secondary);
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .tab:hover { background: var(--surface-alt); }
+        .tab.active {
+            background: var(--surface);
+            border-color: var(--border);
+            color: var(--jellyfin);
+            margin-bottom: -2px;
+            border-bottom: 2px solid var(--surface);
+        }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Cards */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 2px 8px var(--p31-glow);
+        }
+        .card h3 {
+            font-size: 1rem;
+            color: var(--jellyfin);
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            border: 1px solid var(--jellyfin);
+            background: var(--surface);
+            color: var(--jellyfin);
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .btn:hover { background: var(--jellyfin); color: white; }
+        .btn-primary { background: var(--jellyfin); color: white; }
+        .btn-primary:hover { background: #0088b3; }
+        .btn-danger { border-color: var(--error); color: var(--error); }
+        .btn-danger:hover { background: var(--error); color: white; }
+        .btn-success { border-color: var(--success); color: var(--success); }
+        .btn-success:hover { background: var(--success); color: white; }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.875rem; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+        th { color: var(--text-dim); font-weight: 500; font-size: 0.75rem; text-transform: uppercase; }
+        tr:hover { background: var(--surface-alt); }
+
+        /* Forms */
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.25rem; color: var(--text-secondary); font-size: 0.875rem; }
+        input, select {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: white;
+            color: var(--text-primary);
+            font-family: inherit;
+        }
+        input:focus, select:focus { outline: none; border-color: var(--jellyfin); box-shadow: 0 0 5px rgba(0, 164, 220, 0.3); }
+        .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
+
+        /* Badges */
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        .badge-success { background: #c8e6c9; color: #2e7d32; }
+        .badge-error { background: #ffcdd2; color: #c62828; }
+        .badge-warning { background: #ffe0b2; color: #e65100; }
+        .badge-info { background: #b3e5fc; color: #01579b; }
+
+        /* Install Banner */
+        .install-banner {
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+            border: 2px solid var(--jellyfin);
+            border-radius: 12px;
+            padding: 2rem;
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+        .install-banner h2 { color: var(--jellyfin); margin-bottom: 1rem; }
+        .install-banner p { color: var(--text-secondary); margin-bottom: 1.5rem; }
+
+        /* Media type icons */
+        .media-type { display: flex; align-items: center; gap: 0.5rem; }
+        .media-icon { font-size: 1.25rem; }
+
+        /* Logs */
+        .logs-container {
+            background: #1a1a1a;
+            color: #00dd44;
+            padding: 1rem;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 0.8rem;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 1rem;
+            right: 1rem;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            color: white;
+            z-index: 1000;
+            animation: slideIn 0.3s ease;
+        }
+        .toast-success { background: var(--success); }
+        .toast-error { background: var(--error); }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        .spinner {
+            display: inline-block;
+            width: 1rem;
+            height: 1rem;
+            border: 2px solid var(--border);
+            border-top-color: var(--jellyfin);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Open Jellyfin link */
+        .open-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--jellyfin);
+            text-decoration: none;
+            font-weight: 500;
+        }
+        .open-link:hover { text-decoration: underline; }
+
+        @media (max-width: 768px) {
+            .main { margin-left: 0; max-width: 100%; }
+            .stats-row { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body class="crt-light">
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+
+    <main class="main">
+        <header class="header">
+            <h1>Jellyfin Media Server</h1>
+            <div class="header-actions">
+                <a id="openJellyfin" href="#" target="_blank" class="btn" style="display: none;">Open Jellyfin</a>
+                <button class="btn" onclick="refresh()">Refresh</button>
+                <button class="btn btn-primary" id="btnToggle" onclick="toggleService()">Start</button>
+            </div>
+        </header>
+
+        <!-- Install Banner (shown when not installed) -->
+        <div id="installBanner" class="install-banner" style="display: none;">
+            <h2>Welcome to Jellyfin</h2>
+            <p>The Free Software Media System. Stream your media to any device.</p>
+            <button class="btn btn-primary" onclick="installJellyfin()">Install Jellyfin</button>
+        </div>
+
+        <!-- Stats Row -->
+        <div class="stats-row">
+            <div class="stat-card" id="statStatus">
+                <div class="label">Status</div>
+                <div class="value">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Runtime</div>
+                <div class="value" id="statRuntime">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Libraries</div>
+                <div class="value" id="statLibraries">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Disk Usage</div>
+                <div class="value" id="statDisk">-</div>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs">
+            <div class="tab active" onclick="showTab('libraries')">Libraries</div>
+            <div class="tab" onclick="showTab('settings')">Settings</div>
+            <div class="tab" onclick="showTab('logs')">Logs</div>
+            <div class="tab" onclick="showTab('backup')">Backup</div>
+        </div>
+
+        <!-- Libraries Tab -->
+        <div id="tab-libraries" class="tab-content active">
+            <div class="card">
+                <h3>Media Libraries</h3>
+                <div style="margin-bottom: 1rem;">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Library Name</label>
+                            <input type="text" id="libName" placeholder="e.g., Movies">
+                        </div>
+                        <div class="form-group">
+                            <label>Path</label>
+                            <input type="text" id="libPath" placeholder="/media/movies">
+                        </div>
+                        <div class="form-group">
+                            <label>Type</label>
+                            <select id="libType">
+                                <option value="movies">Movies</option>
+                                <option value="tvshows">TV Shows</option>
+                                <option value="music">Music</option>
+                                <option value="photos">Photos</option>
+                                <option value="books">Books</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="display: flex; align-items: flex-end;">
+                            <button class="btn btn-primary" onclick="addLibrary()">Add Library</button>
+                        </div>
+                    </div>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Path</th>
+                            <th>Type</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="librariesTable">
+                        <tr><td colspan="4">Loading...</td></tr>
+                    </tbody>
+                </table>
+                <p style="margin-top: 1rem; color: var(--text-dim); font-size: 0.875rem;">
+                    Note: Libraries are mounted read-only in the container. Restart Jellyfin after adding libraries.
+                </p>
+            </div>
+        </div>
+
+        <!-- Settings Tab -->
+        <div id="tab-settings" class="tab-content">
+            <div class="card">
+                <h3>Configuration</h3>
+                <form id="settingsForm" onsubmit="saveSettings(event)">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Port</label>
+                            <input type="number" id="cfgPort" value="8096" min="1024" max="65535">
+                        </div>
+                        <div class="form-group">
+                            <label>Data Path</label>
+                            <input type="text" id="cfgDataPath" value="/srv/jellyfin">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Timezone</label>
+                            <select id="cfgTimezone">
+                                <option value="Europe/Paris">Europe/Paris</option>
+                                <option value="Europe/London">Europe/London</option>
+                                <option value="America/New_York">America/New_York</option>
+                                <option value="America/Los_Angeles">America/Los_Angeles</option>
+                                <option value="Asia/Tokyo">Asia/Tokyo</option>
+                                <option value="UTC">UTC</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Docker Image</label>
+                            <input type="text" id="cfgImage" value="jellyfin/jellyfin:latest">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Domain (for HAProxy)</label>
+                            <input type="text" id="cfgDomain" value="jellyfin.secubox.local">
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="cfgHwAccel"> Enable Hardware Acceleration (VAAPI)
+                            </label>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save Settings</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Logs Tab -->
+        <div id="tab-logs" class="tab-content">
+            <div class="card">
+                <h3>Container Logs</h3>
+                <div style="margin-bottom: 1rem; display: flex; gap: 0.5rem; align-items: center;">
+                    <label>Lines:</label>
+                    <select id="logLines" onchange="loadLogs()">
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                        <option value="200">200</option>
+                    </select>
+                    <button class="btn" onclick="loadLogs()">Refresh</button>
+                </div>
+                <div class="logs-container" id="logsContainer">Loading logs...</div>
+            </div>
+        </div>
+
+        <!-- Backup Tab -->
+        <div id="tab-backup" class="tab-content">
+            <div class="card">
+                <h3>Backup & Restore</h3>
+                <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                    <div style="flex: 1; min-width: 250px;">
+                        <h4 style="margin-bottom: 0.5rem; color: var(--text-secondary);">Create Backup</h4>
+                        <p style="color: var(--text-dim); font-size: 0.875rem; margin-bottom: 1rem;">
+                            Creates a compressed backup of Jellyfin configuration.
+                        </p>
+                        <button class="btn btn-primary" onclick="createBackup()">Create Backup</button>
+                    </div>
+                    <div style="flex: 1; min-width: 250px;">
+                        <h4 style="margin-bottom: 0.5rem; color: var(--text-secondary);">Restore Backup</h4>
+                        <div class="form-group">
+                            <label>Backup File Path</label>
+                            <input type="text" id="restorePath" placeholder="/tmp/jellyfin-backup-*.tar.gz">
+                        </div>
+                        <button class="btn btn-warning" onclick="restoreBackup()" style="border-color: var(--warning); color: var(--warning);">Restore</button>
+                    </div>
+                </div>
+            </div>
+            <div class="card">
+                <h3>Maintenance</h3>
+                <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                    <button class="btn" onclick="updateJellyfin()">Update to Latest</button>
+                    <button class="btn btn-danger" onclick="uninstallJellyfin()">Uninstall</button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const API = '/api/v1/jellyfin';
+        let isRunning = false;
+        let containerStatus = 'not_installed';
+
+        function getToken() {
+            return localStorage.getItem('jwt_token') || localStorage.getItem('token') || '';
+        }
+
+        async function api(endpoint, options = {}) {
+            const token = getToken();
+            const headers = { 'Content-Type': 'application/json', ...options.headers };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+            const res = await fetch(API + endpoint, { ...options, headers, credentials: 'include' });
+            if (res.status === 401) {
+                window.location.href = '/portal/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+                throw new Error('Unauthorized');
+            }
+            return res.json();
+        }
+
+        function showTab(name) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            const tabs = ['libraries', 'settings', 'logs', 'backup'];
+            document.querySelector(`.tab:nth-child(${tabs.indexOf(name)+1})`).classList.add('active');
+            document.getElementById('tab-' + name).classList.add('active');
+            if (name === 'logs') loadLogs();
+        }
+
+        function toast(msg, type = 'success') {
+            const t = document.createElement('div');
+            t.className = 'toast toast-' + type;
+            t.textContent = msg;
+            document.body.appendChild(t);
+            setTimeout(() => t.remove(), 3000);
+        }
+
+        function getMediaIcon(type) {
+            const icons = {
+                movies: '🎬',
+                tvshows: '📺',
+                music: '🎵',
+                photos: '📷',
+                books: '📚',
+            };
+            return icons[type] || '📁';
+        }
+
+        async function refresh() {
+            try {
+                const status = await api('/status');
+                containerStatus = status.container_status;
+                isRunning = status.container_status === 'running';
+
+                // Show/hide install banner
+                document.getElementById('installBanner').style.display =
+                    status.container_status === 'not_installed' ? 'block' : 'none';
+
+                // Update stats
+                const statEl = document.getElementById('statStatus');
+                statEl.querySelector('.value').textContent = status.container_status;
+                statEl.className = 'stat-card ' + (isRunning ? 'running' : 'stopped');
+
+                document.getElementById('statRuntime').textContent = status.runtime || 'none';
+                document.getElementById('statLibraries').textContent = (status.media_paths || []).length;
+                document.getElementById('statDisk').textContent = status.disk_usage || '-';
+
+                // Update toggle button
+                const btn = document.getElementById('btnToggle');
+                if (status.container_status === 'not_installed') {
+                    btn.textContent = 'Install';
+                    btn.className = 'btn btn-primary';
+                    btn.onclick = installJellyfin;
+                } else if (isRunning) {
+                    btn.textContent = 'Stop';
+                    btn.className = 'btn btn-danger';
+                    btn.onclick = () => toggleService();
+                } else {
+                    btn.textContent = 'Start';
+                    btn.className = 'btn btn-success';
+                    btn.onclick = () => toggleService();
+                }
+
+                // Open Jellyfin link
+                const openLink = document.getElementById('openJellyfin');
+                if (isRunning) {
+                    openLink.style.display = 'inline-flex';
+                    openLink.href = `http://${window.location.hostname}:${status.port}`;
+                } else {
+                    openLink.style.display = 'none';
+                }
+
+                // Update libraries table
+                const tbody = document.getElementById('librariesTable');
+                const paths = status.media_paths || [];
+                if (paths.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4">No libraries configured. Add one above.</td></tr>';
+                } else {
+                    tbody.innerHTML = paths.map(p => `
+                        <tr>
+                            <td><span class="media-type">${getMediaIcon(p.type)} ${p.name}</span></td>
+                            <td><code>${p.path}</code></td>
+                            <td><span class="badge badge-info">${p.type}</span></td>
+                            <td><button class="btn btn-sm btn-danger" onclick="removeLibrary('${p.id}')">Remove</button></td>
+                        </tr>
+                    `).join('');
+                }
+
+                // Load settings
+                document.getElementById('cfgPort').value = status.port || 8096;
+                document.getElementById('cfgDataPath').value = status.data_path || '/srv/jellyfin';
+                document.getElementById('cfgTimezone').value = status.timezone || 'Europe/Paris';
+                document.getElementById('cfgImage').value = status.image || 'jellyfin/jellyfin:latest';
+                document.getElementById('cfgDomain').value = status.domain || 'jellyfin.secubox.local';
+                document.getElementById('cfgHwAccel').checked = status.hw_accel || false;
+
+            } catch (e) {
+                console.error(e);
+                toast('Failed to load status', 'error');
+            }
+        }
+
+        async function toggleService() {
+            const action = isRunning ? 'stop' : 'start';
+            try {
+                document.getElementById('btnToggle').disabled = true;
+                document.getElementById('btnToggle').innerHTML = '<span class="spinner"></span>';
+                const res = await api('/' + action, { method: 'POST' });
+                if (res.success) {
+                    toast(action === 'start' ? 'Jellyfin started!' : 'Jellyfin stopped!');
+                } else {
+                    toast(res.error || 'Action failed', 'error');
+                }
+                await refresh();
+            } catch (e) {
+                toast('Action failed: ' + e.message, 'error');
+            } finally {
+                document.getElementById('btnToggle').disabled = false;
+            }
+        }
+
+        async function installJellyfin() {
+            if (!confirm('Install Jellyfin? This will download the Docker image.')) return;
+            toast('Installing Jellyfin... This may take a few minutes.');
+            try {
+                const res = await api('/install', { method: 'POST' });
+                if (res.success) {
+                    toast('Jellyfin installed! Starting...');
+                    await api('/start', { method: 'POST' });
+                    await refresh();
+                } else {
+                    toast(res.error || 'Install failed', 'error');
+                }
+            } catch (e) {
+                toast('Install failed: ' + e.message, 'error');
+            }
+        }
+
+        async function addLibrary() {
+            const name = document.getElementById('libName').value.trim();
+            const path = document.getElementById('libPath').value.trim();
+            const type = document.getElementById('libType').value;
+
+            if (!name || !path) return toast('Name and path required', 'error');
+
+            try {
+                const res = await api('/media', {
+                    method: 'POST',
+                    body: JSON.stringify({ name, path, type })
+                });
+                if (res.success) {
+                    toast('Library added! Restart Jellyfin to apply.');
+                    document.getElementById('libName').value = '';
+                    document.getElementById('libPath').value = '';
+                    await refresh();
+                } else {
+                    toast(res.error || 'Failed to add', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function removeLibrary(id) {
+            if (!confirm('Remove this library?')) return;
+            try {
+                const res = await api('/media/' + id, { method: 'DELETE' });
+                if (res.success) {
+                    toast('Library removed');
+                    await refresh();
+                } else {
+                    toast(res.error || 'Remove failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function saveSettings(e) {
+            e.preventDefault();
+            try {
+                const res = await api('/config', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        port: parseInt(document.getElementById('cfgPort').value),
+                        data_path: document.getElementById('cfgDataPath').value,
+                        timezone: document.getElementById('cfgTimezone').value,
+                        image: document.getElementById('cfgImage').value,
+                        domain: document.getElementById('cfgDomain').value,
+                        hw_accel: document.getElementById('cfgHwAccel').checked,
+                    })
+                });
+                if (res.success) {
+                    toast('Settings saved! Restart Jellyfin to apply.');
+                } else {
+                    toast('Save failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function loadLogs() {
+            const lines = document.getElementById('logLines').value;
+            try {
+                const data = await api('/logs?lines=' + lines);
+                document.getElementById('logsContainer').textContent = data.logs || 'No logs available';
+            } catch (e) {
+                document.getElementById('logsContainer').textContent = 'Error loading logs';
+            }
+        }
+
+        async function createBackup() {
+            toast('Creating backup...');
+            try {
+                const res = await api('/backup', { method: 'POST' });
+                if (res.success) {
+                    toast('Backup created: ' + res.path);
+                } else {
+                    toast(res.error || 'Backup failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function restoreBackup() {
+            const path = document.getElementById('restorePath').value.trim();
+            if (!path) return toast('Enter backup file path', 'error');
+            if (!confirm('Restore from backup? This will overwrite current config.')) return;
+
+            toast('Restoring backup...');
+            try {
+                const res = await api('/restore', {
+                    method: 'POST',
+                    body: JSON.stringify({ path })
+                });
+                if (res.success) {
+                    toast('Restore complete! Starting Jellyfin...');
+                    await api('/start', { method: 'POST' });
+                    await refresh();
+                } else {
+                    toast(res.error || 'Restore failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function updateJellyfin() {
+            if (!confirm('Update Jellyfin to latest version?')) return;
+            toast('Updating Jellyfin...');
+            try {
+                const res = await api('/update', { method: 'POST' });
+                if (res.success) {
+                    toast('Update complete!');
+                    await refresh();
+                } else {
+                    toast(res.error || 'Update failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function uninstallJellyfin() {
+            if (!confirm('Uninstall Jellyfin? This will remove the container (data is preserved).')) return;
+            try {
+                const res = await api('/uninstall', { method: 'POST' });
+                if (res.success) {
+                    toast('Jellyfin uninstalled');
+                    await refresh();
+                } else {
+                    toast(res.error || 'Uninstall failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        // Initialize
+        refresh();
+        setInterval(refresh, 30000);
+    </script>
+</body>
+</html>

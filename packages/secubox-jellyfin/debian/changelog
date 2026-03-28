@@ -1,0 +1,12 @@
+secubox-jellyfin (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release.
+  * Ported from OpenWRT luci-app-jellyfin.
+  * Features:
+    - Docker/Podman container management
+    - Media library configuration
+    - Hardware acceleration (VAAPI)
+    - Backup/restore functionality
+    - CRT-light P31 phosphor theme
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 28 Mar 2026 07:44:32 +0100

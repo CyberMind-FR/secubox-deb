@@ -1,0 +1,26 @@
+Source: secubox-homeassistant
+Section: admin
+Priority: optional
+Maintainer: SecuBox Team <team@secubox.in>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.0
+
+Package: secubox-homeassistant
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-core,
+         python3,
+         python3-fastapi,
+         python3-uvicorn,
+         python3-httpx,
+         lxc,
+         lxc-templates
+Description: SecuBox Home Assistant - Smart home automation hub
+ Provides a web interface and API for managing Home Assistant
+ running in an LXC container.
+ .
+ Features:
+  - LXC container-based Home Assistant Core
+  - USB device passthrough for Zigbee/Z-Wave
+  - HACS integration support
+  - Backup and restore

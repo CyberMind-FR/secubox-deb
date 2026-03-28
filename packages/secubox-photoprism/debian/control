@@ -1,0 +1,28 @@
+Source: secubox-photoprism
+Section: admin
+Priority: optional
+Maintainer: SecuBox Team <team@secubox.in>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.0
+Homepage: https://secubox.in
+
+Package: secubox-photoprism
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-core,
+         python3,
+         python3-fastapi,
+         python3-uvicorn,
+         python3-httpx,
+         lxc,
+         lxc-templates
+Description: SecuBox PhotoPrism - AI-powered photo management
+ Provides a web interface and API for managing PhotoPrism
+ photo library running in an LXC container.
+ .
+ Features:
+  - LXC container-based PhotoPrism deployment
+  - AI-powered face and object recognition
+  - Full-text photo search
+  - Album management
+  - Photo import and indexing

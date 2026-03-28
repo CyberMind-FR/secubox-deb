@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - Lyrion Music Server</title>
+    <link rel="stylesheet" href="/shared/crt-light.css" id="theme-css">
+    <link rel="stylesheet" href="/shared/sidebar.css">
+    <style>
+        /* Lyrion orange accent - works with both themes */
+        :root {
+            --lyrion-orange: #ff6600;
+            --lyrion-orange-dim: #994400;
+            --lyrion-orange-glow: rgba(255, 102, 0, 0.2);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'IBM Plex Mono', 'Consolas', monospace;
+            background: var(--tube-black, #e8f5e9);
+            color: var(--p31-dim, #006622);
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .main {
+            flex: 1;
+            margin-left: 220px;
+            padding: 1.5rem;
+            background: var(--tube-light, #e8f5e9);
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--tube-muted, #81c784);
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            color: var(--lyrion-orange);
+            text-shadow: 0 0 10px var(--lyrion-orange-glow);
+        }
+
+        .header-actions { display: flex; gap: 0.5rem; }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            border: 1px solid var(--tube-muted, #81c784);
+            background: var(--tube-pale, #c8e6c9);
+            color: var(--p31-dim, #006622);
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+
+        .btn:hover {
+            background: var(--tube-soft, #a5d6a7);
+            border-color: var(--p31-mid, #009933);
+        }
+
+        .btn-primary {
+            background: var(--lyrion-orange-dim);
+            border-color: var(--lyrion-orange);
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            background: var(--lyrion-orange);
+        }
+
+        .btn-danger {
+            background: #ffebee;
+            border-color: #f44336;
+            color: #c62828;
+        }
+
+        .btn-danger:hover {
+            background: #ffcdd2;
+        }
+
+        /* Install Banner */
+        .install-banner {
+            background: var(--tube-pale, #c8e6c9);
+            border: 2px dashed var(--lyrion-orange);
+            border-radius: 8px;
+            padding: 2rem;
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .install-banner h2 {
+            color: var(--lyrion-orange);
+            margin-bottom: 1rem;
+        }
+
+        .install-banner p {
+            color: var(--p31-dim, #006622);
+            margin-bottom: 1.5rem;
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid var(--tube-muted, #81c784);
+            padding-bottom: 0.5rem;
+        }
+
+        .tab {
+            padding: 0.5rem 1rem;
+            border: none;
+            background: transparent;
+            color: var(--p31-dim, #006622);
+            cursor: pointer;
+            font-family: inherit;
+            border-radius: 4px 4px 0 0;
+            transition: all 0.2s;
+            opacity: 0.7;
+        }
+
+        .tab:hover { opacity: 1; }
+
+        .tab.active {
+            background: var(--tube-pale, #c8e6c9);
+            color: var(--lyrion-orange);
+            border: 1px solid var(--tube-muted, #81c784);
+            border-bottom: none;
+            opacity: 1;
+        }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Cards */
+        .card {
+            background: var(--tube-pale, #c8e6c9);
+            border: 1px solid var(--tube-muted, #81c784);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+        }
+
+        .card h2 {
+            font-size: 1rem;
+            color: var(--lyrion-orange);
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .stat-card {
+            background: var(--tube-pale, #c8e6c9);
+            border: 1px solid var(--tube-muted, #81c784);
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        .stat-card .icon {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-card .value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--lyrion-orange);
+        }
+
+        .stat-card .label {
+            font-size: 0.75rem;
+            color: var(--p31-dim, #006622);
+            text-transform: uppercase;
+            opacity: 0.8;
+        }
+
+        /* Status indicator */
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+        }
+
+        .status-badge.running {
+            background: rgba(0, 221, 68, 0.15);
+            color: var(--p31-mid, #009933);
+            border: 1px solid var(--p31-dim, #006622);
+        }
+
+        .status-badge.stopped {
+            background: rgba(244, 67, 54, 0.1);
+            color: #c62828;
+            border: 1px solid #ef9a9a;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Players List */
+        .players-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .player-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem;
+            background: var(--tube-soft, #a5d6a7);
+            border-radius: 4px;
+            border-left: 3px solid var(--tube-muted, #81c784);
+        }
+
+        .player-item.connected {
+            border-left-color: var(--p31-mid, #009933);
+        }
+
+        .player-item .player-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .player-item .player-name {
+            font-weight: bold;
+            color: var(--p31-ghost, #003311);
+        }
+
+        .player-item .player-model {
+            font-size: 0.8rem;
+            color: var(--p31-dim, #006622);
+            opacity: 0.8;
+        }
+
+        .player-controls {
+            display: flex;
+            gap: 0.25rem;
+        }
+
+        .player-controls button {
+            padding: 0.25rem 0.5rem;
+            background: var(--tube-pale, #c8e6c9);
+            border: 1px solid var(--tube-muted, #81c784);
+            color: var(--p31-dim, #006622);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+
+        .player-controls button:hover {
+            background: var(--tube-muted, #81c784);
+        }
+
+        /* Logs */
+        .logs-container {
+            background: var(--p31-ghost, #003311);
+            border: 1px solid var(--tube-muted, #81c784);
+            border-radius: 4px;
+            padding: 1rem;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.8rem;
+        }
+
+        .log-line {
+            color: var(--p31-mid, #009933);
+            margin-bottom: 0.25rem;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .log-line:hover {
+            color: var(--p31-peak, #00dd44);
+        }
+
+        /* Form elements */
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: var(--p31-dim, #006622);
+            font-size: 0.85rem;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 0.5rem;
+            background: var(--tube-light, #e8f5e9);
+            border: 1px solid var(--tube-muted, #81c784);
+            border-radius: 4px;
+            color: var(--p31-ghost, #003311);
+            font-family: inherit;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--lyrion-orange);
+        }
+
+        /* Progress bar */
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: var(--tube-soft, #a5d6a7);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--lyrion-orange);
+            transition: width 0.3s;
+        }
+
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 2rem;
+            color: var(--p31-dim, #006622);
+            opacity: 0.8;
+        }
+
+        .empty-state .icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        /* Loading */
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            color: var(--p31-dim, #006622);
+        }
+
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 2px solid var(--tube-muted, #81c784);
+            border-top-color: var(--lyrion-orange);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 0.5rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Scan progress */
+        .scan-status {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.75rem;
+            background: rgba(255, 102, 0, 0.1);
+            border: 1px solid var(--lyrion-orange-dim);
+            border-radius: 4px;
+            margin-bottom: 1rem;
+        }
+
+        .scan-status .spinner {
+            flex-shrink: 0;
+        }
+
+        /* Backup list */
+        .backup-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .backup-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem;
+            background: var(--tube-soft, #a5d6a7);
+            border-radius: 4px;
+        }
+
+        .backup-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .backup-name {
+            font-weight: bold;
+            color: var(--p31-ghost, #003311);
+        }
+
+        .backup-meta {
+            font-size: 0.8rem;
+            color: var(--p31-dim, #006622);
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body class="crt-light">
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+
+    <main class="main">
+        <header class="header">
+            <div>
+                <h1>Lyrion Music Server</h1>
+            </div>
+            <div class="header-actions">
+                <span id="statusBadge" class="status-badge stopped">
+                    <span class="status-dot"></span>
+                    <span id="statusText">Stopped</span>
+                </span>
+            </div>
+        </header>
+
+        <!-- Install Banner (shown when not installed) -->
+        <div id="installBanner" class="install-banner" style="display:none;">
+            <h2>Lyrion Music Server Not Installed</h2>
+            <p>Pull the Lyrion (Logitech Media Server) container to get started with your music library.</p>
+            <button class="btn btn-primary" onclick="installLyrion()">
+                Pull Lyrion Container
+            </button>
+        </div>
+
+        <!-- Main Content -->
+        <div id="mainContent">
+            <!-- Stats Grid -->
+            <div class="stats-grid" id="statsGrid">
+                <div class="stat-card">
+                    <div class="icon">&#127925;</div>
+                    <div class="value" id="songCount">--</div>
+                    <div class="label">Songs</div>
+                </div>
+                <div class="stat-card">
+                    <div class="icon">&#128191;</div>
+                    <div class="value" id="albumCount">--</div>
+                    <div class="label">Albums</div>
+                </div>
+                <div class="stat-card">
+                    <div class="icon">&#127908;</div>
+                    <div class="value" id="artistCount">--</div>
+                    <div class="label">Artists</div>
+                </div>
+                <div class="stat-card">
+                    <div class="icon">&#128266;</div>
+                    <div class="value" id="playerCount">--</div>
+                    <div class="label">Players</div>
+                </div>
+            </div>
+
+            <!-- Scan Status (when scanning) -->
+            <div id="scanStatus" class="scan-status" style="display:none;">
+                <div class="spinner"></div>
+                <div>
+                    <strong>Library Scan in Progress</strong>
+                    <div id="scanProgress" class="text-dim">Scanning...</div>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab active" data-tab="players">Players</button>
+                <button class="tab" data-tab="library">Library</button>
+                <button class="tab" data-tab="logs">Logs</button>
+                <button class="tab" data-tab="backup">Backup</button>
+                <button class="tab" data-tab="settings">Settings</button>
+            </div>
+
+            <!-- Players Tab -->
+            <div id="tab-players" class="tab-content active">
+                <div class="card">
+                    <h2>Connected Players</h2>
+                    <div id="playersList" class="players-list">
+                        <div class="loading"><div class="spinner"></div> Loading players...</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>Quick Actions</h2>
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        <button class="btn btn-primary" onclick="controlService('start')">Start</button>
+                        <button class="btn btn-danger" onclick="controlService('stop')">Stop</button>
+                        <button class="btn" onclick="controlService('restart')">Restart</button>
+                        <button class="btn" onclick="rescanLibrary('full')">Full Rescan</button>
+                        <button class="btn" onclick="openWebUI()">Open Web UI</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Library Tab -->
+            <div id="tab-library" class="tab-content">
+                <div class="card">
+                    <h2>Library Management</h2>
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem;">
+                        <button class="btn btn-primary" onclick="rescanLibrary('full')">Full Rescan</button>
+                        <button class="btn" onclick="rescanLibrary('playlists')">Scan Playlists</button>
+                        <button class="btn" onclick="rescanLibrary('external')">External Sources</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>Recently Added</h2>
+                    <div id="recentAlbums">
+                        <div class="loading"><div class="spinner"></div> Loading...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Logs Tab -->
+            <div id="tab-logs" class="tab-content">
+                <div class="card">
+                    <h2>Container Logs</h2>
+                    <div style="margin-bottom: 1rem;">
+                        <button class="btn" onclick="loadLogs()">Refresh Logs</button>
+                    </div>
+                    <div id="logsContainer" class="logs-container">
+                        <div class="loading"><div class="spinner"></div> Loading logs...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Backup Tab -->
+            <div id="tab-backup" class="tab-content">
+                <div class="card">
+                    <h2>Backup & Restore</h2>
+                    <p style="color: var(--p31-dim); margin-bottom: 1rem;">
+                        Backup your Lyrion configuration and playlists. Media files are not included.
+                    </p>
+                    <button class="btn btn-primary" onclick="createBackup()">Create Backup</button>
+                </div>
+
+                <div class="card">
+                    <h2>Available Backups</h2>
+                    <div id="backupList" class="backup-list">
+                        <div class="loading"><div class="spinner"></div> Loading...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings Tab -->
+            <div id="tab-settings" class="tab-content">
+                <div class="card">
+                    <h2>Lyrion Configuration</h2>
+                    <form id="configForm">
+                        <div class="form-group">
+                            <label>Web UI Port</label>
+                            <input type="number" id="cfgWebPort" value="9000" min="1024" max="65535">
+                        </div>
+                        <div class="form-group">
+                            <label>CLI Port</label>
+                            <input type="number" id="cfgCliPort" value="9090" min="1024" max="65535">
+                        </div>
+                        <div class="form-group">
+                            <label>Data Path</label>
+                            <input type="text" id="cfgDataPath" value="/srv/lyrion">
+                        </div>
+                        <div class="form-group">
+                            <label>Media Path</label>
+                            <input type="text" id="cfgMediaPath" value="/srv/media">
+                        </div>
+                        <div class="form-group">
+                            <label>Memory Limit</label>
+                            <input type="text" id="cfgMemory" value="512m" placeholder="e.g., 512m, 1g">
+                        </div>
+                        <button type="submit" class="btn btn-primary">Save Configuration</button>
+                    </form>
+                </div>
+
+                <div class="card">
+                    <h2>System Resources</h2>
+                    <div id="systemInfo">
+                        <div class="loading"><div class="spinner"></div> Loading...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const API = '/api/v1/lyrion';
+        let statusData = null;
+
+        // Tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+
+                // Load content for specific tabs
+                if (tab.dataset.tab === 'logs') loadLogs();
+                if (tab.dataset.tab === 'backup') loadBackups();
+                if (tab.dataset.tab === 'settings') loadConfig();
+                if (tab.dataset.tab === 'library') loadRecentAlbums();
+            });
+        });
+
+        // Initial load
+        async function init() {
+            await loadStatus();
+            await loadPlayers();
+            setInterval(loadStatus, 10000);
+            setInterval(checkScanStatus, 5000);
+        }
+
+        async function loadStatus() {
+            try {
+                const res = await fetch(API + '/status', { credentials: 'include' });
+                statusData = await res.json();
+                updateUI();
+            } catch(e) {
+                console.error('Status error:', e);
+            }
+        }
+
+        function updateUI() {
+            if (!statusData) return;
+
+            const badge = document.getElementById('statusBadge');
+            const text = document.getElementById('statusText');
+
+            if (statusData.running) {
+                badge.className = 'status-badge running';
+                text.textContent = 'Running';
+                document.getElementById('installBanner').style.display = 'none';
+                document.getElementById('mainContent').style.display = 'block';
+            } else {
+                badge.className = 'status-badge stopped';
+                text.textContent = 'Stopped';
+            }
+
+            // Update stats
+            if (statusData.library) {
+                document.getElementById('songCount').textContent = formatNumber(statusData.library.songs || 0);
+                document.getElementById('albumCount').textContent = formatNumber(statusData.library.albums || 0);
+                document.getElementById('artistCount').textContent = formatNumber(statusData.library.artists || 0);
+            }
+        }
+
+        function formatNumber(n) {
+            if (n >= 1000000) return (n/1000000).toFixed(1) + 'M';
+            if (n >= 1000) return (n/1000).toFixed(1) + 'K';
+            return n.toString();
+        }
+
+        async function loadPlayers() {
+            const container = document.getElementById('playersList');
+            try {
+                const res = await fetch(API + '/players', { credentials: 'include' });
+                const data = await res.json();
+
+                if (data.error) {
+                    container.innerHTML = '<div class="empty-state"><div class="icon">&#128266;</div><p>Service not running</p></div>';
+                    document.getElementById('playerCount').textContent = '0';
+                    return;
+                }
+
+                document.getElementById('playerCount').textContent = data.count || 0;
+
+                if (!data.players || data.players.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><div class="icon">&#128266;</div><p>No players connected</p></div>';
+                    return;
+                }
+
+                container.innerHTML = data.players.map(p => `
+                    <div class="player-item ${p.connected ? 'connected' : ''}">
+                        <div class="player-info">
+                            <span class="player-name">${escapeHtml(p.name)}</span>
+                            <span class="player-model">${escapeHtml(p.model)} - ${escapeHtml(p.ip)}</span>
+                        </div>
+                        <div class="player-controls">
+                            <button onclick="playerCmd('${p.id}', 'play')" title="Play">&#9654;</button>
+                            <button onclick="playerCmd('${p.id}', 'pause')" title="Pause">&#10074;&#10074;</button>
+                            <button onclick="playerCmd('${p.id}', 'prev')" title="Previous">&#9664;</button>
+                            <button onclick="playerCmd('${p.id}', 'next')" title="Next">&#9654;</button>
+                            <button onclick="playerCmd('${p.id}', 'power_${p.power ? 'off' : 'on'}')" title="Power">${p.power ? '&#9211;' : '&#9212;'}</button>
+                        </div>
+                    </div>
+                `).join('');
+            } catch(e) {
+                container.innerHTML = '<div class="empty-state"><p>Error loading players</p></div>';
+            }
+        }
+
+        async function playerCmd(playerId, command) {
+            try {
+                await fetch(API + '/player/command', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ player_id: playerId, command: command })
+                });
+                setTimeout(loadPlayers, 500);
+            } catch(e) {
+                alert('Command failed: ' + e.message);
+            }
+        }
+
+        async function controlService(action) {
+            try {
+                const res = await fetch(API + '/' + action, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                const data = await res.json();
+                if (data.success) {
+                    setTimeout(loadStatus, 2000);
+                    setTimeout(loadPlayers, 3000);
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown error'));
+                }
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        async function installLyrion() {
+            const btn = event.target;
+            btn.disabled = true;
+            btn.textContent = 'Pulling...';
+
+            try {
+                const res = await fetch(API + '/install', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert('Lyrion installed successfully! Starting service...');
+                    await controlService('start');
+                } else {
+                    alert('Install failed: ' + (data.error || 'Unknown error'));
+                }
+            } catch(e) {
+                alert('Error: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Pull Lyrion Container';
+            }
+        }
+
+        async function rescanLibrary(mode) {
+            try {
+                const res = await fetch(API + '/rescan', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mode: mode })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    document.getElementById('scanStatus').style.display = 'flex';
+                } else {
+                    alert('Rescan failed: ' + (data.error || 'Unknown error'));
+                }
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        async function checkScanStatus() {
+            if (!statusData?.running) return;
+            try {
+                const res = await fetch(API + '/scan_status', { credentials: 'include' });
+                const data = await res.json();
+                const el = document.getElementById('scanStatus');
+                if (data.scanning) {
+                    el.style.display = 'flex';
+                    document.getElementById('scanProgress').textContent = data.progress || 'Scanning...';
+                } else {
+                    el.style.display = 'none';
+                }
+            } catch(e) {}
+        }
+
+        async function loadRecentAlbums() {
+            const container = document.getElementById('recentAlbums');
+            try {
+                const res = await fetch(API + '/library/recent?limit=10', { credentials: 'include' });
+                const data = await res.json();
+
+                if (data.error || !data.albums || data.albums.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><p>No recent albums</p></div>';
+                    return;
+                }
+
+                container.innerHTML = '<ul style="list-style:none;">' + data.albums.map(a => `
+                    <li style="padding:0.5rem 0; border-bottom:1px solid var(--tube-muted);">
+                        <strong>${escapeHtml(a.album || 'Unknown')}</strong>
+                        <span style="color:var(--p31-dim);opacity:0.8;"> - ${escapeHtml(a.artist || 'Unknown')}</span>
+                    </li>
+                `).join('') + '</ul>';
+            } catch(e) {
+                container.innerHTML = '<div class="empty-state"><p>Error loading albums</p></div>';
+            }
+        }
+
+        async function loadLogs() {
+            const container = document.getElementById('logsContainer');
+            try {
+                const res = await fetch(API + '/logs?lines=100', { credentials: 'include' });
+                const data = await res.json();
+
+                if (!data.logs || data.logs.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><p>No logs available</p></div>';
+                    return;
+                }
+
+                container.innerHTML = data.logs.map(line =>
+                    `<div class="log-line">${escapeHtml(line)}</div>`
+                ).join('');
+                container.scrollTop = container.scrollHeight;
+            } catch(e) {
+                container.innerHTML = '<div class="empty-state"><p>Error loading logs</p></div>';
+            }
+        }
+
+        async function loadBackups() {
+            const container = document.getElementById('backupList');
+            try {
+                const res = await fetch(API + '/backup', { credentials: 'include' });
+                const data = await res.json();
+
+                if (!data.backups || data.backups.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><p>No backups available</p></div>';
+                    return;
+                }
+
+                container.innerHTML = data.backups.map(b => `
+                    <div class="backup-item">
+                        <div class="backup-info">
+                            <span class="backup-name">${escapeHtml(b.name)}</span>
+                            <span class="backup-meta">${formatBytes(b.size)} - ${formatDate(b.created)}</span>
+                        </div>
+                        <button class="btn" onclick="restoreBackup('${escapeHtml(b.name)}')">Restore</button>
+                    </div>
+                `).join('');
+            } catch(e) {
+                container.innerHTML = '<div class="empty-state"><p>Error loading backups</p></div>';
+            }
+        }
+
+        async function createBackup() {
+            try {
+                const res = await fetch(API + '/backup', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert('Backup created: ' + data.file);
+                    loadBackups();
+                } else {
+                    alert('Backup failed: ' + (data.error || 'Unknown error'));
+                }
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        async function restoreBackup(name) {
+            if (!confirm('Restore from backup "' + name + '"? This will overwrite current configuration.')) return;
+
+            try {
+                const res = await fetch(API + '/restore/' + encodeURIComponent(name), {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert('Restore complete!');
+                    loadStatus();
+                } else {
+                    alert('Restore failed: ' + (data.error || 'Unknown error'));
+                }
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        async function loadConfig() {
+            try {
+                const res = await fetch(API + '/config', { credentials: 'include' });
+                const data = await res.json();
+
+                document.getElementById('cfgWebPort').value = data.web_port || 9000;
+                document.getElementById('cfgCliPort').value = data.cli_port || 9090;
+                document.getElementById('cfgDataPath').value = data.data_path || '/srv/lyrion';
+                document.getElementById('cfgMediaPath').value = data.media_path || '/srv/media';
+                document.getElementById('cfgMemory').value = data.memory_limit || '512m';
+
+                // Load system info
+                const sysRes = await fetch(API + '/system', { credentials: 'include' });
+                const sysData = await sysRes.json();
+
+                document.getElementById('systemInfo').innerHTML = `
+                    <div style="margin-bottom:1rem;">
+                        <label style="color:var(--p31-dim);">Memory Usage</label>
+                        <div class="progress-bar" style="margin-top:0.5rem;">
+                            <div class="progress-fill" style="width:${sysData.memory?.percent || 0}%"></div>
+                        </div>
+                        <small style="color:var(--p31-dim);opacity:0.8;">${formatBytes(sysData.memory?.used_kb * 1024)} / ${formatBytes(sysData.memory?.total_kb * 1024)}</small>
+                    </div>
+                    <div style="margin-bottom:1rem;">
+                        <label style="color:var(--p31-dim);">Disk Usage (${sysData.disk?.path})</label>
+                        <div class="progress-bar" style="margin-top:0.5rem;">
+                            <div class="progress-fill" style="width:${sysData.disk?.percent || 0}%"></div>
+                        </div>
+                        <small style="color:var(--p31-dim);opacity:0.8;">${formatBytes(sysData.disk?.used_kb * 1024)} / ${formatBytes(sysData.disk?.total_kb * 1024)}</small>
+                    </div>
+                    <div>
+                        <label style="color:var(--p31-dim);">Media Library Size</label>
+                        <p>${formatBytes(sysData.media?.size_kb * 1024)} in ${sysData.media?.path}</p>
+                    </div>
+                    <div style="margin-top:1rem;">
+                        <label style="color:var(--p31-dim);">Container Resources</label>
+                        <p>Memory: ${sysData.container?.memory || 'N/A'} | CPU: ${sysData.container?.cpu || 'N/A'}</p>
+                    </div>
+                `;
+            } catch(e) {
+                console.error('Config load error:', e);
+            }
+        }
+
+        document.getElementById('configForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const config = {
+                web_port: parseInt(document.getElementById('cfgWebPort').value),
+                cli_port: parseInt(document.getElementById('cfgCliPort').value),
+                data_path: document.getElementById('cfgDataPath').value,
+                media_path: document.getElementById('cfgMediaPath').value,
+                memory_limit: document.getElementById('cfgMemory').value
+            };
+
+            try {
+                const res = await fetch(API + '/config', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert('Configuration saved! Restart Lyrion to apply changes.');
+                } else {
+                    alert('Error saving configuration');
+                }
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
+        });
+
+        function openWebUI() {
+            const port = statusData?.web_port || 9000;
+            window.open('http://' + window.location.hostname + ':' + port, '_blank');
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.toString()
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function formatBytes(bytes) {
+            if (!bytes) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+
+        function formatDate(ts) {
+            if (!ts) return '';
+            return new Date(ts * 1000).toLocaleString();
+        }
+
+        // Initialize
+        init();
+    </script>
+</body>
+</html>

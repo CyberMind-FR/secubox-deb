@@ -1,0 +1,9 @@
+{
+  "id": "lyrion",
+  "name": "Lyrion",
+  "icon": "🎵",
+  "path": "/lyrion/",
+  "category": "apps",
+  "order": 802,
+  "description": "Music streaming server (LMS/Squeezebox)"
+}

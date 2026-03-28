@@ -1,0 +1,11 @@
+secubox-domoticz (1.0.0-1) bookworm; urgency=medium
+
+  * Initial release for SecuBox Debian
+  * FastAPI backend with container management
+  * Theme-aware CRT-light frontend
+  * Device and scene management
+  * Hardware integration support
+  * Backup and restore functionality
+  * USB device passthrough
+
+ -- SecuBox Team <team@secubox.in>  Sat, 28 Mar 2026 10:00:00 +0000

@@ -1,0 +1,28 @@
+#!/bin/bash
+set -e
+case "$1" in
+  configure)
+    # Ensure secubox user exists
+    id -u secubox >/dev/null 2>&1 || \
+      adduser --system --group --no-create-home \
+        --home /var/lib/secubox --shell /usr/sbin/nologin secubox
+    # Create runtime directories
+    install -d -o secubox -g secubox -m 750 /run/secubox
+    install -d -o secubox -g secubox -m 750 /var/lib/secubox
+    # Create data directories
+    install -d -m 755 /srv/lyrion
+    install -d -m 755 /srv/media
+    install -d -m 755 /var/backups/secubox/lyrion
+    # Ensure nginx secubox.d directory exists
+    install -d -m 755 /etc/nginx/secubox.d
+    # Ensure config directory exists
+    install -d -m 755 /etc/secubox
+    # Enable and start service
+    systemctl daemon-reload
+    systemctl enable secubox-lyrion.service
+    systemctl start  secubox-lyrion.service || true
+    # Reload nginx to pick up new location
+    systemctl reload nginx 2>/dev/null || true
+    ;;
+esac
+#DEBHELPER#

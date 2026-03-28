@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home Assistant - SecuBox</title>
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root {
+            --ha-blue: #03a9f4;
+            --ha-light: #4fc3f7;
+            --ha-dark: #0288d1;
+        }
+
+        body.dark {
+            --ha-blue: #4fc3f7;
+            --ha-light: #b3e5fc;
+            --ha-dark: #29b6f6;
+        }
+
+        .accent { color: var(--ha-blue); }
+        .accent-bg { background-color: var(--ha-blue); }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 1rem;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 1.5rem;
+        }
+
+        .status-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 1rem;
+            font-size: 0.875rem;
+        }
+
+        .status-badge.running { background: var(--success-bg); color: var(--success); }
+        .status-badge.stopped { background: var(--error-bg); color: var(--error); }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .info-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            padding: 1rem;
+        }
+
+        .info-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+
+        .info-value {
+            font-size: 1.25rem;
+            font-weight: 500;
+            margin-top: 0.25rem;
+        }
+
+        .action-bar {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border: 1px solid var(--border);
+            border-radius: 0.25rem;
+            background: var(--surface);
+            color: var(--text);
+            cursor: pointer;
+            font-size: 0.875rem;
+        }
+
+        .btn:hover { background: var(--hover); }
+        .btn.primary { background: var(--ha-blue); color: white; border-color: var(--ha-blue); }
+        .btn.primary:hover { background: var(--ha-dark); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .tabs {
+            display: flex;
+            gap: 0.5rem;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 1rem;
+        }
+
+        .tab {
+            padding: 0.75rem 1rem;
+            border: none;
+            background: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+        }
+
+        .tab:hover { color: var(--text); }
+        .tab.active { color: var(--ha-blue); border-bottom-color: var(--ha-blue); }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .device-list {
+            display: grid;
+            gap: 0.5rem;
+        }
+
+        .device-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.75rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+        }
+
+        .device-icon { font-size: 1.5rem; }
+        .device-info { flex: 1; }
+        .device-name { font-weight: 500; }
+        .device-state { font-size: 0.875rem; color: var(--text-secondary); }
+
+        .log-viewer {
+            background: var(--bg-dark, #1a1a2e);
+            color: var(--text-light, #e0e0e0);
+            font-family: monospace;
+            font-size: 0.75rem;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+
+        .settings-form {
+            display: grid;
+            gap: 1rem;
+            max-width: 500px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.25rem;
+            font-weight: 500;
+        }
+
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid var(--border);
+            border-radius: 0.25rem;
+            background: var(--surface);
+            color: var(--text);
+        }
+
+        .open-app-btn {
+            position: fixed;
+            bottom: 1rem;
+            right: 1rem;
+            padding: 1rem 1.5rem;
+            background: var(--ha-blue);
+            color: white;
+            border: none;
+            border-radius: 2rem;
+            cursor: pointer;
+            font-size: 1rem;
+            box-shadow: 0 4px 12px rgba(3, 169, 244, 0.4);
+        }
+
+        .open-app-btn:hover { background: var(--ha-dark); }
+        .hidden { display: none !important; }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-secondary);
+        }
+
+        .empty-state-icon { font-size: 3rem; margin-bottom: 1rem; }
+    </style>
+</head>
+<body class="crt-light">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="main-content">
+    <div class="container">
+        <div class="header">
+            <h1><span class="accent">Home Assistant</span></h1>
+            <span id="status-badge" class="status-badge stopped">Stopped</span>
+        </div>
+
+        <div class="info-grid">
+            <div class="info-card">
+                <div class="info-label">Version</div>
+                <div class="info-value" id="ha-version">-</div>
+            </div>
+            <div class="info-card">
+                <div class="info-label">Container IP</div>
+                <div class="info-value" id="ha-ip">-</div>
+            </div>
+            <div class="info-card">
+                <div class="info-label">Disk Usage</div>
+                <div class="info-value" id="ha-disk">-</div>
+            </div>
+            <div class="info-card">
+                <div class="info-label">USB Devices</div>
+                <div class="info-value" id="ha-usb">0</div>
+            </div>
+        </div>
+
+        <div class="action-bar">
+            <button class="btn primary" id="btn-start" onclick="startService()">Start</button>
+            <button class="btn" id="btn-stop" onclick="stopService()" disabled>Stop</button>
+            <button class="btn" id="btn-restart" onclick="restartService()" disabled>Restart</button>
+            <button class="btn" id="btn-hacs" onclick="installHACS()" disabled>Install HACS</button>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" data-tab="overview">Overview</button>
+            <button class="tab" data-tab="devices">USB Devices</button>
+            <button class="tab" data-tab="logs">Logs</button>
+            <button class="tab" data-tab="settings">Settings</button>
+        </div>
+
+        <div id="tab-overview" class="tab-content active">
+            <div class="empty-state">
+                <div class="empty-state-icon">🏠</div>
+                <p>Start Home Assistant to begin configuring your smart home</p>
+                <p style="font-size: 0.875rem; margin-top: 1rem;">
+                    After starting, click "Open Home Assistant" to access the full interface
+                </p>
+            </div>
+        </div>
+
+        <div id="tab-devices" class="tab-content">
+            <p style="margin-bottom: 1rem; color: var(--text-secondary);">
+                USB devices available for Zigbee/Z-Wave integration:
+            </p>
+            <div id="devices-container" class="device-list"></div>
+        </div>
+
+        <div id="tab-logs" class="tab-content">
+            <div class="action-bar">
+                <button class="btn" onclick="loadLogs()">Refresh</button>
+            </div>
+            <div id="log-viewer" class="log-viewer">Loading logs...</div>
+        </div>
+
+        <div id="tab-settings" class="tab-content">
+            <form class="settings-form" onsubmit="saveSettings(event)">
+                <div class="form-group">
+                    <label>Timezone</label>
+                    <select id="setting-timezone">
+                        <option value="UTC">UTC</option>
+                        <option value="Europe/Paris">Europe/Paris</option>
+                        <option value="Europe/London">Europe/London</option>
+                        <option value="America/New_York">America/New_York</option>
+                        <option value="America/Los_Angeles">America/Los_Angeles</option>
+                        <option value="Asia/Tokyo">Asia/Tokyo</option>
+                        <option value="Asia/Shanghai">Asia/Shanghai</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Latitude</label>
+                    <input type="number" id="setting-lat" step="0.0001" placeholder="0.0">
+                </div>
+                <div class="form-group">
+                    <label>Longitude</label>
+                    <input type="number" id="setting-lon" step="0.0001" placeholder="0.0">
+                </div>
+                <div class="form-group">
+                    <label>Unit System</label>
+                    <select id="setting-units">
+                        <option value="metric">Metric</option>
+                        <option value="imperial">Imperial</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn primary">Save Settings</button>
+            </form>
+        </div>
+    </div>
+
+    <button id="open-app-btn" class="open-app-btn hidden" onclick="openApp()">
+        Open Home Assistant
+    </button>
+
+    <script>
+        const API_BASE = '/api/v1/homeassistant';
+        let containerIP = null;
+
+        async function apiCall(endpoint, options = {}) {
+            const token = localStorage.getItem('sbx_token');
+            const response = await fetch(API_BASE + endpoint, {
+                ...options,
+                headers: {
+                    'Authorization': 'Bearer ' + token,
+                    'Content-Type': 'application/json',
+                    ...options.headers
+                }
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return response.json();
+        }
+
+        async function loadStatus() {
+            try {
+                const data = await apiCall('/status');
+                const badge = document.getElementById('status-badge');
+                const btnStart = document.getElementById('btn-start');
+                const btnStop = document.getElementById('btn-stop');
+                const btnRestart = document.getElementById('btn-restart');
+                const btnHacs = document.getElementById('btn-hacs');
+                const openBtn = document.getElementById('open-app-btn');
+
+                if (data.running) {
+                    badge.textContent = 'Running';
+                    badge.className = 'status-badge running';
+                    btnStart.disabled = true;
+                    btnStop.disabled = false;
+                    btnRestart.disabled = false;
+                    btnHacs.disabled = false;
+                    containerIP = data.container_ip;
+                    openBtn.classList.remove('hidden');
+                } else {
+                    badge.textContent = data.container_exists ? 'Stopped' : 'Not Installed';
+                    badge.className = 'status-badge stopped';
+                    btnStart.disabled = !data.container_exists;
+                    btnStart.textContent = data.container_exists ? 'Start' : 'Install';
+                    btnStop.disabled = true;
+                    btnRestart.disabled = true;
+                    btnHacs.disabled = true;
+                    openBtn.classList.add('hidden');
+                }
+
+                document.getElementById('ha-version').textContent = data.version || '-';
+                document.getElementById('ha-ip').textContent = data.container_ip || '-';
+                document.getElementById('ha-disk').textContent = data.disk_usage || '-';
+                document.getElementById('ha-usb').textContent = data.usb_devices?.length || 0;
+
+                loadDevices(data.usb_devices || []);
+            } catch (e) {
+                console.error('Status load failed:', e);
+            }
+        }
+
+        function loadDevices(devices) {
+            const container = document.getElementById('devices-container');
+            if (devices.length === 0) {
+                container.innerHTML = '<div class="empty-state"><p>No USB devices detected</p></div>';
+                return;
+            }
+
+            container.innerHTML = devices.map(dev => `
+                <div class="device-item">
+                    <div class="device-icon">🔌</div>
+                    <div class="device-info">
+                        <div class="device-name">${dev.product || dev.name || dev.path}</div>
+                        <div class="device-state">${dev.path}</div>
+                    </div>
+                    <button class="btn" onclick="addPassthrough('${dev.path}')">Add</button>
+                </div>
+            `).join('');
+        }
+
+        async function addPassthrough(path) {
+            try {
+                await apiCall(`/usb_passthrough?device_path=${encodeURIComponent(path)}`, { method: 'POST' });
+                alert('Device added. Container will restart.');
+            } catch (e) {
+                alert('Failed: ' + e.message);
+            }
+        }
+
+        async function startService() {
+            const btn = document.getElementById('btn-start');
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = originalText === 'Install' ? 'Installing...' : 'Starting...';
+
+            try {
+                const endpoint = originalText === 'Install' ? '/install' : '/start';
+                await apiCall(endpoint, { method: 'POST' });
+                await loadStatus();
+            } catch (e) {
+                alert('Failed: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
+        }
+
+        async function stopService() {
+            document.getElementById('btn-stop').disabled = true;
+            try {
+                await apiCall('/stop', { method: 'POST' });
+                await loadStatus();
+            } catch (e) {
+                alert('Failed: ' + e.message);
+            }
+        }
+
+        async function restartService() {
+            document.getElementById('btn-restart').disabled = true;
+            try {
+                await apiCall('/restart', { method: 'POST' });
+                await loadStatus();
+            } catch (e) {
+                alert('Failed: ' + e.message);
+            }
+        }
+
+        async function installHACS() {
+            if (!confirm('Install HACS (Home Assistant Community Store)?')) return;
+            try {
+                const result = await apiCall('/hacs/install', { method: 'POST' });
+                alert(result.message || 'HACS installed');
+            } catch (e) {
+                alert('Failed: ' + e.message);
+            }
+        }
+
+        async function loadLogs() {
+            try {
+                const data = await apiCall('/logs?lines=200');
+                document.getElementById('log-viewer').textContent = data.logs?.join('\n') || 'No logs';
+            } catch (e) {
+                document.getElementById('log-viewer').textContent = 'Error: ' + e.message;
+            }
+        }
+
+        async function loadConfig() {
+            try {
+                const data = await apiCall('/config');
+                document.getElementById('setting-timezone').value = data.timezone || 'UTC';
+                document.getElementById('setting-lat').value = data.latitude || 0;
+                document.getElementById('setting-lon').value = data.longitude || 0;
+                document.getElementById('setting-units').value = data.unit_system || 'metric';
+            } catch (e) {
+                console.error('Config load failed:', e);
+            }
+        }
+
+        async function saveSettings(e) {
+            e.preventDefault();
+            try {
+                await apiCall('/config', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        timezone: document.getElementById('setting-timezone').value,
+                        latitude: parseFloat(document.getElementById('setting-lat').value) || 0,
+                        longitude: parseFloat(document.getElementById('setting-lon').value) || 0,
+                        unit_system: document.getElementById('setting-units').value
+                    })
+                });
+                alert('Settings saved');
+            } catch (e) {
+                alert('Failed: ' + e.message);
+            }
+        }
+
+        function openApp() {
+            if (containerIP) window.open(`http://${containerIP}:8123`, '_blank');
+        }
+
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+                if (tab.dataset.tab === 'logs') loadLogs();
+                if (tab.dataset.tab === 'settings') loadConfig();
+            });
+        });
+
+        if (window.matchMedia?.('(prefers-color-scheme: dark)').matches) {
+            document.body.classList.add('dark');
+        }
+
+        loadStatus();
+        setInterval(loadStatus, 30000);
+    </script>
+    </main>
+    <script src="/shared/sidebar.js"></script>
+</body>
+</html>

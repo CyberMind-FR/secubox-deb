@@ -1,0 +1,9 @@
+{
+  "id": "localai",
+  "name": "LocalAI",
+  "icon": "🤖",
+  "path": "/localai/",
+  "category": "apps",
+  "order": 804,
+  "description": "Self-hosted LLM inference with OpenAI-compatible API"
+}

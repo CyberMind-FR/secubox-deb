@@ -1,0 +1,23 @@
+[Unit]
+Description=SecuBox Home Assistant API Service
+After=network.target
+
+[Service]
+Type=simple
+ExecStartPre=/bin/mkdir -p /run/secubox
+ExecStart=/usr/bin/python3 -m uvicorn main:app --uds /run/secubox/homeassistant.sock
+WorkingDirectory=/usr/share/secubox/api/homeassistant
+Restart=always
+RestartSec=5
+User=root
+Group=root
+UMask=0111
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/run/secubox /srv/homeassistant /var/lib/lxc /tmp
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

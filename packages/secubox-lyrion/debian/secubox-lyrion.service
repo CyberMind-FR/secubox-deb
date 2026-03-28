@@ -1,0 +1,26 @@
+[Unit]
+Description=SecuBox Lyrion Music Server API
+After=network.target secubox-runtime.service
+Requires=secubox-runtime.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/usr/share/secubox/lyrion
+ExecStart=/usr/bin/uvicorn api.main:app --uds /run/secubox/lyrion.sock --workers 1
+ExecStartPost=-/bin/sleep 1
+ExecStartPost=-/bin/chmod 660 /run/secubox/lyrion.sock
+ExecStartPost=-/bin/chown secubox:secubox /run/secubox/lyrion.sock
+Restart=on-failure
+RestartSec=5
+
+# Security hardening
+NoNewPrivileges=no
+ProtectSystem=full
+ProtectHome=read-only
+PrivateTmp=true
+ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox /var/backups/secubox /srv/lyrion /srv/media
+
+[Install]
+WantedBy=multi-user.target

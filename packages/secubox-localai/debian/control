@@ -1,0 +1,21 @@
+Source: secubox-localai
+Section: admin
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.0
+
+Package: secubox-localai
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-core,
+         python3,
+         python3-fastapi,
+         python3-uvicorn,
+         python3-httpx,
+         nginx,
+         lxc,
+         lxc-templates
+Description: SecuBox LocalAI - Self-hosted LLM inference
+ Alternative to Ollama with OpenAI-compatible API.
+ Features container management, model gallery, and chat interface.

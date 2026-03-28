@@ -93,7 +93,11 @@ Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 | **secubox-daemon** | — | Go | ✅ | Mesh daemon (secuboxd, secuboxctl) | ✅ |
 | **secubox-c3box** | ✅ | Go | ✅ | C3BOX situational awareness dashboard | ✅ |
 
-**Total : 54 modules | ~1000+ endpoints API + Go mesh daemon**
+| **secubox-ollama** | ✅ | ✅ | ✅ | models, chat, generate, system | ✅ |
+| **secubox-jellyfin** | ✅ | ✅ | ✅ | media, config, backup, logs | ✅ |
+| **secubox-lyrion** | ✅ | ✅ | ✅ | players, library, backup, LMS JSON-RPC | ✅ |
+
+**Total : 57 modules | ~1100+ endpoints API + Go mesh daemon**
 
 *Note: mail-lxc and webmail-lxc are backend components integrated into secubox-mail*
 
@@ -166,11 +170,13 @@ bash scripts/build-add-local.sh secubox-crowdsec bookworm
 5. ~~Phase 5 : CSPN Hardening~~ ✅ Fait (partiel)
 6. ~~Phase 6 : CI/CD~~ ✅ Fait
 7. ~~Phase 7 : Documentation + UI Theme~~ ✅ Fait
-8. Phase 8 : Applications (ollama, jellyfin, zigbee...) — 21 modules
-9. Phase 9 : System Tools (vault, cloner, vm...) — 22 modules
-10. Phase 10 : Security Extensions (wazuh, cve...) — 6 modules
+8. **Phase 8 : Applications** — 21 modules (ollama, jellyfin, homeassistant, zigbee...)
+9. **Phase 9 : System Tools** — 22 modules (vault, cloner, vm, glances...)
+10. **Phase 10 : Security Extensions** — 10 modules (wazuh, ai-insights, interceptor...)
 11. Tests d'intégration sur VM et hardware réel
 12. Déployer apt.secubox.in sur serveur production
+
+> **Voir aussi**: [REMAINING-PACKAGES.md](REMAINING-PACKAGES.md) pour l'inventaire détaillé des 53 paquets restants avec classification par complexité
 
 ---
 
