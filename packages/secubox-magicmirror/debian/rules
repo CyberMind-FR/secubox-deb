@@ -1,0 +1,16 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d $(CURDIR)/debian/secubox-magicmirror/usr/lib/secubox/magicmirror/api
+	install -m 644 api/main.py $(CURDIR)/debian/secubox-magicmirror/usr/lib/secubox/magicmirror/api/
+	touch $(CURDIR)/debian/secubox-magicmirror/usr/lib/secubox/magicmirror/api/__init__.py
+	install -d $(CURDIR)/debian/secubox-magicmirror/usr/share/secubox/www/magicmirror
+	install -m 644 www/magicmirror/index.html $(CURDIR)/debian/secubox-magicmirror/usr/share/secubox/www/magicmirror/
+	install -d $(CURDIR)/debian/secubox-magicmirror/etc/nginx/secubox.d
+	install -m 644 nginx/magicmirror.conf $(CURDIR)/debian/secubox-magicmirror/etc/nginx/secubox.d/
+	install -d $(CURDIR)/debian/secubox-magicmirror/usr/share/secubox/menu.d
+	install -m 644 menu.d/819-magicmirror.json $(CURDIR)/debian/secubox-magicmirror/usr/share/secubox/menu.d/
+	install -d $(CURDIR)/debian/secubox-magicmirror/usr/lib/systemd/system
+	install -m 644 debian/secubox-magicmirror.service $(CURDIR)/debian/secubox-magicmirror/usr/lib/systemd/system/
