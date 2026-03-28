@@ -19,6 +19,8 @@ import hashlib
 import hmac
 import time
 import threading
+import socket
+import http.client
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Any
@@ -26,6 +28,9 @@ from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconn
 from pydantic import BaseModel, Field
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
+
+# P2P API socket path
+P2P_SOCKET = "/run/secubox/p2p.sock"
 
 app = FastAPI(title="SecuBox SOC", version="2.0.0")
 
@@ -518,6 +523,106 @@ async def sync_peer(peer_id: str):
             _save_json(PEERS_FILE, peers)
             return {"success": True, "peer": peers[i]}
     raise HTTPException(status_code=404, detail="Peer not found")
+
+
+# ══════════════════════════════════════════════════════════════
+# P2P MESH INTEGRATION
+# ══════════════════════════════════════════════════════════════
+
+def _fetch_p2p_api(endpoint: str) -> Dict[str, Any]:
+    """Fetch data from P2P API via Unix socket."""
+    try:
+        class UnixHTTPConnection(http.client.HTTPConnection):
+            def __init__(self, socket_path):
+                super().__init__("localhost")
+                self.socket_path = socket_path
+
+            def connect(self):
+                self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                self.sock.connect(self.socket_path)
+
+        if Path(P2P_SOCKET).exists():
+            conn = UnixHTTPConnection(P2P_SOCKET)
+            conn.request("GET", endpoint)
+            response = conn.getresponse()
+            if response.status == 200:
+                return json.loads(response.read().decode())
+            conn.close()
+    except Exception as e:
+        return {"error": str(e)}
+    return {}
+
+
+@app.get("/mesh/peers")
+async def get_mesh_peers():
+    """Get P2P mesh peers from the mesh network.
+
+    Returns real-time data from the P2P API including:
+    - All enrolled mesh peers
+    - Master-link tree structure
+    - Connection status
+    """
+    peers_data = _fetch_p2p_api("/peers")
+    tree_data = _fetch_p2p_api("/master-link/tree")
+
+    peers = peers_data.get("peers", [])
+
+    # Enrich with online/offline status
+    enriched_peers = []
+    for peer in peers:
+        enriched_peers.append({
+            "id": peer.get("id", ""),
+            "name": peer.get("name", "Unknown"),
+            "fingerprint": peer.get("fingerprint", ""),
+            "address": peer.get("address", "unknown"),
+            "wan_address": peer.get("wan_address", ""),
+            "status": peer.get("status", "unknown"),
+            "role": peer.get("role", "peer"),
+            "depth": peer.get("depth", 0),
+            "is_local": peer.get("is_local", False),
+            "joined_via": peer.get("joined_via", ""),
+            "added": peer.get("added", "")
+        })
+
+    return {
+        "peers": enriched_peers,
+        "count": len(enriched_peers),
+        "online": sum(1 for p in enriched_peers if p["status"] == "online"),
+        "tree": tree_data.get("tree", {}),
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+
+
+@app.get("/mesh/status")
+async def get_mesh_status():
+    """Get P2P mesh network status."""
+    status_data = _fetch_p2p_api("/status")
+    peers_data = _fetch_p2p_api("/peers")
+
+    peers = peers_data.get("peers", [])
+    online_peers = sum(1 for p in peers if p.get("status") == "online")
+
+    return {
+        "online": status_data.get("online", False),
+        "node_id": status_data.get("node_id", ""),
+        "hostname": status_data.get("hostname", ""),
+        "lan_ip": status_data.get("lan_ip", ""),
+        "wan_ip": status_data.get("wan_ip", ""),
+        "role": status_data.get("master_link", {}).get("role", "unknown"),
+        "peer_count": len(peers),
+        "online_peers": online_peers,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+
+
+@app.get("/mesh/tree")
+async def get_mesh_tree():
+    """Get master-link mesh tree structure."""
+    tree_data = _fetch_p2p_api("/master-link/tree")
+    return {
+        "tree": tree_data.get("tree", {}),
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
 
 
 # ══════════════════════════════════════════════════════════════
