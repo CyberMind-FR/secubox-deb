@@ -1,30 +1,79 @@
 """
-SecuBox Traffic Shaper API
+SecuBox Traffic Shaper API - Production Ready
 Advanced QoS traffic control with TC/CAKE
+
+Features:
+- Traffic class management
+- Classification rules
+- Preset configurations
+- TC/CAKE integration
+- Stats caching with TTL
+- Event history tracking
+- Webhook notifications
 """
 
-from fastapi import FastAPI, Depends, HTTPException
-from pydantic import BaseModel
-from typing import Optional, List
+from fastapi import FastAPI, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
+from typing import Optional, List, Dict, Any
 from pathlib import Path
+from datetime import datetime, timedelta
 import subprocess
-import os
+import threading
+import hashlib
+import hmac
+import time
 import json
 import re
+import asyncio
 
-# Import shared auth
-import sys
-sys.path.insert(0, '/usr/lib/secubox/core')
-try:
-    from secubox_core.auth import require_jwt
-except ImportError:
-    async def require_jwt():
-        return {"sub": "dev"}
+from secubox_core.auth import require_jwt
+from secubox_core.config import get_config
 
-app = FastAPI(title="SecuBox Traffic Shaper API", version="1.0.0")
+app = FastAPI(title="SecuBox Traffic Shaper API", version="2.0.0")
 
 # Configuration
+DATA_DIR = Path("/var/lib/secubox/traffic")
 CONFIG_FILE = Path("/etc/secubox/traffic-shaper.json")
+HISTORY_FILE = DATA_DIR / "history.json"
+WEBHOOKS_FILE = DATA_DIR / "webhooks.json"
+STATS_FILE = DATA_DIR / "stats_history.json"
+
+# Ensure directories
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+
+class StatsCache:
+    """Thread-safe stats cache with TTL."""
+    def __init__(self, ttl_seconds: int = 15):
+        self.ttl = ttl_seconds
+        self._cache: Dict[str, Any] = {}
+        self._timestamps: Dict[str, float] = {}
+        self._lock = threading.Lock()
+
+    def get(self, key: str) -> Optional[Any]:
+        with self._lock:
+            if key in self._cache:
+                if time.time() - self._timestamps[key] < self.ttl:
+                    return self._cache[key]
+        return None
+
+    def set(self, key: str, value: Any):
+        with self._lock:
+            self._cache[key] = value
+            self._timestamps[key] = time.time()
+
+    def invalidate(self, key: str = None):
+        with self._lock:
+            if key:
+                self._cache.pop(key, None)
+                self._timestamps.pop(key, None)
+            else:
+                self._cache.clear()
+                self._timestamps.clear()
+
+
+# Global cache
+stats_cache = StatsCache(ttl_seconds=15)
 
 DEFAULT_CONFIG = {
     "enabled": False,
@@ -32,7 +81,6 @@ DEFAULT_CONFIG = {
     "rules": []
 }
 
-# Presets
 PRESETS = {
     "gaming": {
         "name": "Gaming",
@@ -68,15 +116,24 @@ PRESETS = {
             {"id": "conf_rule", "class": "video_conf", "match_type": "dport", "match_value": "3478-3481,8801-8810", "enabled": True},
             {"id": "vpn_rule", "class": "vpn", "match_type": "dport", "match_value": "1194,1701,500,4500", "enabled": True}
         ]
+    },
+    "balanced": {
+        "name": "Balanced",
+        "description": "Fair distribution across all traffic types",
+        "classes": [
+            {"id": "high", "name": "High Priority", "priority": 2, "rate": "10mbit", "ceil": "50mbit", "interface": "wan", "enabled": True},
+            {"id": "normal", "name": "Normal", "priority": 4, "rate": "5mbit", "ceil": "40mbit", "interface": "wan", "enabled": True},
+            {"id": "bulk", "name": "Bulk", "priority": 6, "rate": "2mbit", "ceil": "30mbit", "interface": "wan", "enabled": True}
+        ],
+        "rules": []
     }
 }
 
 
-# Models
 class TrafficClass(BaseModel):
     id: Optional[str] = None
     name: str
-    priority: int = 5
+    priority: int = Field(default=5, ge=1, le=10)
     rate: str = "1mbit"
     ceil: str = "10mbit"
     interface: str = "wan"
@@ -113,16 +170,16 @@ class PresetRequest(BaseModel):
     preset: str
 
 
-# Helpers
+class WebhookConfig(BaseModel):
+    url: str
+    secret: Optional[str] = None
+    events: List[str] = ["all"]
+    enabled: bool = True
+
+
 def run_cmd(cmd: list, timeout: int = 30) -> tuple:
-    """Run command and return (success, stdout, stderr)"""
     try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=timeout
-        )
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
         return result.returncode == 0, result.stdout, result.stderr
     except subprocess.TimeoutExpired:
         return False, "", "Command timed out"
@@ -131,7 +188,6 @@ def run_cmd(cmd: list, timeout: int = 30) -> tuple:
 
 
 def load_config() -> dict:
-    """Load traffic shaper configuration"""
     if CONFIG_FILE.exists():
         try:
             return json.loads(CONFIG_FILE.read_text())
@@ -141,13 +197,83 @@ def load_config() -> dict:
 
 
 def save_config(config: dict):
-    """Save traffic shaper configuration"""
     CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
     CONFIG_FILE.write_text(json.dumps(config, indent=2))
 
 
+def load_history() -> List[Dict]:
+    if HISTORY_FILE.exists():
+        try:
+            return json.loads(HISTORY_FILE.read_text())
+        except:
+            pass
+    return []
+
+
+def save_history(history: List[Dict]):
+    history = history[-500:]
+    HISTORY_FILE.write_text(json.dumps(history, indent=2, default=str))
+
+
+def add_event(event_type: str, details: Dict = None):
+    history = load_history()
+    event = {
+        "id": hashlib.sha256(f"{time.time()}".encode()).hexdigest()[:12],
+        "type": event_type,
+        "details": details or {},
+        "timestamp": datetime.utcnow().isoformat() + "Z"
+    }
+    history.append(event)
+    save_history(history)
+    asyncio.create_task(trigger_webhooks(event))
+    return event
+
+
+def load_webhooks() -> List[Dict]:
+    if WEBHOOKS_FILE.exists():
+        try:
+            return json.loads(WEBHOOKS_FILE.read_text())
+        except:
+            pass
+    return []
+
+
+def save_webhooks(webhooks: List[Dict]):
+    WEBHOOKS_FILE.write_text(json.dumps(webhooks, indent=2))
+
+
+async def trigger_webhooks(event: Dict):
+    webhooks = load_webhooks()
+    for wh in webhooks:
+        if not wh.get("enabled", True):
+            continue
+        events = wh.get("events", ["all"])
+        if "all" not in events and event["type"] not in events:
+            continue
+
+        try:
+            payload = json.dumps(event)
+            headers = {"Content-Type": "application/json"}
+            if wh.get("secret"):
+                sig = hmac.new(wh["secret"].encode(), payload.encode(), hashlib.sha256).hexdigest()
+                headers["X-Webhook-Signature"] = f"sha256={sig}"
+
+            import httpx
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                await client.post(wh["url"], content=payload, headers=headers)
+        except:
+            pass
+
+
+def format_bytes(size: int) -> str:
+    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+        if abs(size) < 1024:
+            return f"{size:.1f} {unit}"
+        size /= 1024
+    return f"{size:.1f} PB"
+
+
 def get_qdisc_count() -> int:
-    """Count active qdiscs"""
     success, out, _ = run_cmd(["tc", "qdisc", "show"])
     if not success:
         return 0
@@ -155,7 +281,6 @@ def get_qdisc_count() -> int:
 
 
 def get_shaped_interfaces() -> list:
-    """Get interfaces with shaping"""
     success, out, _ = run_cmd(["tc", "qdisc", "show"])
     if not success:
         return []
@@ -171,20 +296,15 @@ def get_shaped_interfaces() -> list:
 
 
 def apply_tc_config(config: dict):
-    """Apply TC configuration"""
-    # Clear existing qdiscs
     for iface in get_shaped_interfaces():
         run_cmd(["tc", "qdisc", "del", "dev", iface, "root"])
 
-    # Get interfaces from classes
     interfaces = set()
     for cls in config.get("classes", []):
         if cls.get("enabled", True):
             interfaces.add(cls.get("interface", "wan"))
 
-    # Setup CAKE qdisc on each interface
     for iface in interfaces:
-        # Try CAKE first, fallback to HTB
         success, _, _ = run_cmd([
             "tc", "qdisc", "add", "dev", iface, "root",
             "cake", "bandwidth", "100mbit", "diffserv4"
@@ -198,7 +318,6 @@ def apply_tc_config(config: dict):
 
 
 def get_tc_stats() -> list:
-    """Get TC class statistics"""
     stats = []
     success, out, _ = run_cmd(["tc", "-s", "class", "show"])
 
@@ -227,6 +346,7 @@ def get_tc_stats() -> list:
             match = re.search(r'Sent\s+(\d+)\s+bytes\s+(\d+)\s+pkt', line)
             if match:
                 current_stats["bytes"] = int(match.group(1))
+                current_stats["bytes_human"] = format_bytes(int(match.group(1)))
                 current_stats["packets"] = int(match.group(2))
 
         elif 'dropped' in line and current_stats:
@@ -240,14 +360,21 @@ def get_tc_stats() -> list:
     return stats
 
 
-# Public endpoints
+# ============================================================================
+# Public Endpoints
+# ============================================================================
+
 @app.get("/status")
 async def get_status():
-    """Get traffic shaper status"""
+    """Get traffic shaper status."""
+    cached = stats_cache.get("status")
+    if cached:
+        return {**cached, "cached": True}
+
     config = load_config()
     qdisc_count = get_qdisc_count()
 
-    return {
+    status = {
         "active": qdisc_count > 0,
         "qdisc_count": qdisc_count,
         "class_count": len(config.get("classes", [])),
@@ -255,30 +382,80 @@ async def get_status():
         "interfaces": get_shaped_interfaces()
     }
 
+    stats_cache.set("status", status)
+    return status
+
+
+@app.get("/health")
+async def health():
+    return {"status": "healthy", "module": "traffic"}
+
+
+@app.get("/summary")
+async def get_summary():
+    """Get comprehensive traffic shaper summary."""
+    config = load_config()
+    qdisc_count = get_qdisc_count()
+    tc_stats = get_tc_stats()
+    history = load_history()
+
+    # Calculate totals
+    total_bytes = sum(s.get("bytes", 0) for s in tc_stats)
+    total_packets = sum(s.get("packets", 0) for s in tc_stats)
+    total_drops = sum(s.get("drops", 0) for s in tc_stats)
+
+    # Active classes
+    enabled_classes = sum(1 for c in config.get("classes", []) if c.get("enabled", True))
+    enabled_rules = sum(1 for r in config.get("rules", []) if r.get("enabled", True))
+
+    # Recent events
+    cutoff = (datetime.utcnow() - timedelta(hours=24)).isoformat()
+    recent_events = [e for e in history if e.get("timestamp", "") > cutoff]
+
+    return {
+        "active": qdisc_count > 0,
+        "classes": {
+            "total": len(config.get("classes", [])),
+            "enabled": enabled_classes
+        },
+        "rules": {
+            "total": len(config.get("rules", [])),
+            "enabled": enabled_rules
+        },
+        "traffic": {
+            "total_bytes": total_bytes,
+            "total_bytes_human": format_bytes(total_bytes),
+            "total_packets": total_packets,
+            "total_drops": total_drops
+        },
+        "interfaces": get_shaped_interfaces(),
+        "qdisc_count": qdisc_count,
+        "events_24h": len(recent_events),
+        "webhooks_configured": len(load_webhooks()),
+        "timestamp": datetime.utcnow().isoformat() + "Z"
+    }
+
 
 @app.get("/classes")
 async def list_classes():
-    """List traffic classes"""
     config = load_config()
-    return {"classes": config.get("classes", [])}
+    return {"classes": config.get("classes", []), "total": len(config.get("classes", []))}
 
 
 @app.get("/rules")
 async def list_rules():
-    """List classification rules"""
     config = load_config()
-    return {"rules": config.get("rules", [])}
+    return {"rules": config.get("rules", []), "total": len(config.get("rules", []))}
 
 
 @app.get("/stats")
 async def get_stats():
-    """Get traffic statistics per class"""
-    return {"stats": get_tc_stats()}
+    stats = get_tc_stats()
+    return {"stats": stats, "total": len(stats)}
 
 
 @app.get("/presets")
 async def list_presets():
-    """List available presets"""
     return {
         "presets": [
             {"id": k, "name": v["name"], "description": v["description"]}
@@ -287,21 +464,27 @@ async def list_presets():
     }
 
 
-# Protected endpoints
-@app.post("/class/add")
-async def add_class(cls: TrafficClass, user: dict = Depends(require_jwt)):
-    """Add traffic class"""
+@app.get("/history")
+async def get_history(limit: int = Query(50, ge=1, le=500)):
+    history = load_history()
+    history = sorted(history, key=lambda x: x.get("timestamp", ""), reverse=True)
+    return {"events": history[:limit], "total": len(history)}
+
+
+# ============================================================================
+# Protected Endpoints
+# ============================================================================
+
+@app.post("/class/add", dependencies=[Depends(require_jwt)])
+async def add_class(cls: TrafficClass):
     config = load_config()
 
     if "classes" not in config:
         config["classes"] = []
 
-    # Generate ID if not provided
     if not cls.id:
-        import time
         cls.id = f"class_{int(time.time())}"
 
-    # Check for duplicate
     for existing in config["classes"]:
         if existing["id"] == cls.id:
             raise HTTPException(status_code=400, detail="Class ID already exists")
@@ -309,13 +492,14 @@ async def add_class(cls: TrafficClass, user: dict = Depends(require_jwt)):
     config["classes"].append(cls.dict())
     save_config(config)
     apply_tc_config(config)
+    stats_cache.invalidate()
 
+    add_event("class_added", {"id": cls.id, "name": cls.name})
     return {"success": True, "message": "Class added successfully", "id": cls.id}
 
 
-@app.post("/class/update")
-async def update_class(req: ClassUpdateRequest, user: dict = Depends(require_jwt)):
-    """Update traffic class"""
+@app.post("/class/update", dependencies=[Depends(require_jwt)])
+async def update_class(req: ClassUpdateRequest):
     config = load_config()
 
     found = False
@@ -341,13 +525,14 @@ async def update_class(req: ClassUpdateRequest, user: dict = Depends(require_jwt
 
     save_config(config)
     apply_tc_config(config)
+    stats_cache.invalidate()
 
+    add_event("class_updated", {"id": req.id})
     return {"success": True, "message": "Class updated successfully"}
 
 
-@app.post("/class/delete")
-async def delete_class(req: ClassDeleteRequest, user: dict = Depends(require_jwt)):
-    """Delete traffic class"""
+@app.post("/class/delete", dependencies=[Depends(require_jwt)])
+async def delete_class(req: ClassDeleteRequest):
     config = load_config()
 
     original_count = len(config.get("classes", []))
@@ -358,21 +543,20 @@ async def delete_class(req: ClassDeleteRequest, user: dict = Depends(require_jwt
 
     save_config(config)
     apply_tc_config(config)
+    stats_cache.invalidate()
 
+    add_event("class_deleted", {"id": req.id})
     return {"success": True, "message": "Class deleted successfully"}
 
 
-@app.post("/rule/add")
-async def add_rule(rule: TrafficRule, user: dict = Depends(require_jwt)):
-    """Add classification rule"""
+@app.post("/rule/add", dependencies=[Depends(require_jwt)])
+async def add_rule(rule: TrafficRule):
     config = load_config()
 
     if "rules" not in config:
         config["rules"] = []
 
-    # Generate ID if not provided
     if not rule.id:
-        import time
         rule.id = f"rule_{int(time.time())}"
 
     config["rules"].append({
@@ -385,13 +569,14 @@ async def add_rule(rule: TrafficRule, user: dict = Depends(require_jwt)):
 
     save_config(config)
     apply_tc_config(config)
+    stats_cache.invalidate()
 
+    add_event("rule_added", {"id": rule.id})
     return {"success": True, "message": "Rule added successfully", "id": rule.id}
 
 
-@app.post("/rule/delete")
-async def delete_rule(req: RuleDeleteRequest, user: dict = Depends(require_jwt)):
-    """Delete classification rule"""
+@app.post("/rule/delete", dependencies=[Depends(require_jwt)])
+async def delete_rule(req: RuleDeleteRequest):
     config = load_config()
 
     original_count = len(config.get("rules", []))
@@ -402,13 +587,14 @@ async def delete_rule(req: RuleDeleteRequest, user: dict = Depends(require_jwt))
 
     save_config(config)
     apply_tc_config(config)
+    stats_cache.invalidate()
 
+    add_event("rule_deleted", {"id": req.id})
     return {"success": True, "message": "Rule deleted successfully"}
 
 
-@app.post("/preset/apply")
-async def apply_preset(req: PresetRequest, user: dict = Depends(require_jwt)):
-    """Apply a preset configuration"""
+@app.post("/preset/apply", dependencies=[Depends(require_jwt)])
+async def apply_preset(req: PresetRequest):
     if req.preset not in PRESETS:
         raise HTTPException(status_code=400, detail=f"Unknown preset: {req.preset}")
 
@@ -422,32 +608,65 @@ async def apply_preset(req: PresetRequest, user: dict = Depends(require_jwt)):
 
     save_config(config)
     apply_tc_config(config)
+    stats_cache.invalidate()
 
+    add_event("preset_applied", {"preset": req.preset})
     return {"success": True, "message": f"Preset '{req.preset}' applied successfully"}
 
 
-@app.post("/apply")
-async def apply_config(user: dict = Depends(require_jwt)):
-    """Apply current configuration"""
+@app.post("/apply", dependencies=[Depends(require_jwt)])
+async def apply_config():
     config = load_config()
     apply_tc_config(config)
+    stats_cache.invalidate()
+
+    add_event("config_applied", {})
     return {"success": True, "message": "Configuration applied"}
 
 
-@app.post("/clear")
-async def clear_shaping(user: dict = Depends(require_jwt)):
-    """Clear all traffic shaping"""
+@app.post("/clear", dependencies=[Depends(require_jwt)])
+async def clear_shaping():
     for iface in get_shaped_interfaces():
         run_cmd(["tc", "qdisc", "del", "dev", iface, "root"])
+    stats_cache.invalidate()
 
+    add_event("shaping_cleared", {})
     return {"success": True, "message": "Traffic shaping cleared"}
+
+
+@app.get("/webhooks", dependencies=[Depends(require_jwt)])
+async def list_webhooks():
+    return {"webhooks": load_webhooks()}
+
+
+@app.post("/webhooks", dependencies=[Depends(require_jwt)])
+async def add_webhook(webhook: WebhookConfig):
+    webhooks = load_webhooks()
+    wh = {
+        "id": hashlib.sha256(f"{time.time()}".encode()).hexdigest()[:12],
+        "url": webhook.url,
+        "secret": webhook.secret,
+        "events": webhook.events,
+        "enabled": webhook.enabled,
+        "created_at": datetime.utcnow().isoformat() + "Z"
+    }
+    webhooks.append(wh)
+    save_webhooks(webhooks)
+    return {"success": True, "webhook": wh}
+
+
+@app.delete("/webhooks/{webhook_id}", dependencies=[Depends(require_jwt)])
+async def delete_webhook(webhook_id: str):
+    webhooks = load_webhooks()
+    webhooks = [w for w in webhooks if w.get("id") != webhook_id]
+    save_webhooks(webhooks)
+    return {"success": True}
 
 
 @app.get("/info")
 async def get_info():
-    """Get module info"""
     return {
         "module": "secubox-traffic",
-        "version": "1.0.0",
+        "version": "2.0.0",
         "description": "Advanced QoS traffic control with TC/CAKE"
     }

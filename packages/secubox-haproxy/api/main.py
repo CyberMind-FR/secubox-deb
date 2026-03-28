@@ -2,21 +2,39 @@
 
 Provides HAProxy management with integrated WAF inspection via mitmproxy.
 Traffic flow: Client → HAProxy → WAF (mitmproxy) → Backend
+
+Features:
+- HAProxy status and stats monitoring
+- VHost and backend management
+- WAF integration with mitmproxy
+- Certificate management with expiry monitoring
+- Traffic history and request statistics
+- Configuration backup/versioning
+- Webhook alerts for health changes
 """
 import os
 import subprocess
 import socket
 import json
+import ssl
+import hashlib
+import hmac
+import threading
+import time
+import asyncio
 import httpx
 from pathlib import Path
 from typing import Optional, List, Dict, Any
-from fastapi import FastAPI, APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from datetime import datetime, timedelta
+from enum import Enum
+
+from fastapi import FastAPI, APIRouter, Depends, HTTPException, Query, BackgroundTasks
+from pydantic import BaseModel, Field
 from secubox_core.auth import router as auth_router, require_jwt
 from secubox_core.config import get_config
 from secubox_core.logger import get_logger
 
-app = FastAPI(title="secubox-haproxy", version="1.0.0", root_path="/api/v1/haproxy")
+app = FastAPI(title="secubox-haproxy", version="2.0.0", root_path="/api/v1/haproxy")
 app.include_router(auth_router, prefix="/auth")
 router = APIRouter()
 log = get_logger("haproxy")
@@ -28,6 +46,279 @@ HAPROXY_CFG = "/etc/haproxy/haproxy.cfg"
 VHOST_ROUTES_FILE = "/var/lib/secubox/haproxy/vhost-routes.json"
 CTL = "/usr/sbin/haproxyctl"
 CERTS_DIR = "/srv/haproxy/certs"
+DATA_DIR = Path("/var/lib/secubox/haproxy")
+CONFIG_BACKUP_DIR = DATA_DIR / "config_backups"
+STATS_HISTORY_FILE = DATA_DIR / "stats_history.json"
+WEBHOOKS_FILE = DATA_DIR / "webhooks.json"
+HEALTH_HISTORY_FILE = DATA_DIR / "health_history.json"
+
+# Ensure directories exist
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+CONFIG_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Models
+# ═══════════════════════════════════════════════════════════════════════
+
+class HealthStatus(str, Enum):
+    HEALTHY = "healthy"
+    DEGRADED = "degraded"
+    UNHEALTHY = "unhealthy"
+
+
+class CertificateInfo(BaseModel):
+    name: str
+    path: str
+    domains: List[str] = []
+    issuer: Optional[str] = None
+    expires_at: Optional[str] = None
+    days_until_expiry: Optional[int] = None
+    expired: bool = False
+
+
+class BackendHealth(BaseModel):
+    name: str
+    status: HealthStatus
+    active_servers: int = 0
+    total_servers: int = 0
+    sessions: int = 0
+    bytes_in: int = 0
+    bytes_out: int = 0
+
+
+class WebhookConfig(BaseModel):
+    id: str
+    url: str
+    events: List[str] = ["backend_down", "backend_up", "cert_expiring"]
+    secret: Optional[str] = None
+    enabled: bool = True
+    created_at: str
+    last_triggered: Optional[str] = None
+    failure_count: int = 0
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Stats Cache
+# ═══════════════════════════════════════════════════════════════════════
+
+class StatsCache:
+    """Thread-safe stats cache with TTL."""
+    def __init__(self, ttl_seconds: int = 30):
+        self.ttl = ttl_seconds
+        self._cache: Dict[str, Any] = {}
+        self._timestamps: Dict[str, float] = {}
+        self._lock = threading.Lock()
+
+    def get(self, key: str) -> Optional[Any]:
+        with self._lock:
+            if key in self._cache:
+                if time.time() - self._timestamps[key] < self.ttl:
+                    return self._cache[key]
+                del self._cache[key]
+                del self._timestamps[key]
+        return None
+
+    def set(self, key: str, value: Any):
+        with self._lock:
+            self._cache[key] = value
+            self._timestamps[key] = time.time()
+
+    def invalidate(self, key: str = None):
+        with self._lock:
+            if key:
+                self._cache.pop(key, None)
+                self._timestamps.pop(key, None)
+            else:
+                self._cache.clear()
+                self._timestamps.clear()
+
+
+stats_cache = StatsCache(ttl_seconds=30)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Background Tasks
+# ═══════════════════════════════════════════════════════════════════════
+
+_health_monitor_task: Optional[asyncio.Task] = None
+_stats_collector_task: Optional[asyncio.Task] = None
+
+
+def _load_json(path: Path, default=None) -> Any:
+    """Load JSON from file with default fallback."""
+    if default is None:
+        default = {}
+    try:
+        if path.exists():
+            return json.loads(path.read_text())
+    except (json.JSONDecodeError, IOError):
+        pass
+    return default
+
+
+def _save_json(path: Path, data: Any):
+    """Save JSON to file."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2))
+
+
+async def _trigger_webhooks(event: str, payload: dict):
+    """Trigger webhooks for an event."""
+    webhooks = _load_json(WEBHOOKS_FILE, {"webhooks": []})
+
+    for hook in webhooks.get("webhooks", []):
+        if not hook.get("enabled", True):
+            continue
+        if event not in hook.get("events", []):
+            continue
+
+        try:
+            data = {
+                "event": event,
+                "timestamp": datetime.now().isoformat(),
+                "payload": payload
+            }
+
+            headers = {"Content-Type": "application/json"}
+            if hook.get("secret"):
+                sig = hmac.new(
+                    hook["secret"].encode(),
+                    json.dumps(data).encode(),
+                    hashlib.sha256
+                ).hexdigest()
+                headers["X-SecuBox-Signature"] = f"sha256={sig}"
+
+            async with httpx.AsyncClient(timeout=10) as client:
+                await client.post(hook["url"], json=data, headers=headers)
+
+            hook["last_triggered"] = datetime.now().isoformat()
+            hook["failure_count"] = 0
+        except Exception:
+            hook["failure_count"] = hook.get("failure_count", 0) + 1
+
+    _save_json(WEBHOOKS_FILE, webhooks)
+
+
+async def _periodic_health_monitor():
+    """Monitor backend health and trigger webhooks on changes."""
+    previous_status: Dict[str, str] = {}
+
+    while True:
+        try:
+            await asyncio.sleep(30)  # Check every 30 seconds
+
+            data = _send_stats_command("show stat")
+            if not data:
+                continue
+
+            stats = _parse_stats_csv(data)
+            history = _load_json(HEALTH_HISTORY_FILE, {"records": []})
+
+            for stat in stats:
+                name = stat.get("pxname", "")
+                svname = stat.get("svname", "")
+                status = stat.get("status", "")
+
+                if svname in ["FRONTEND", "BACKEND"]:
+                    key = f"{name}_{svname}"
+                    prev = previous_status.get(key, "")
+
+                    # Record in history
+                    if status != prev:
+                        history["records"].append({
+                            "name": name,
+                            "type": svname.lower(),
+                            "status": status,
+                            "timestamp": datetime.now().isoformat()
+                        })
+
+                        # Trigger webhooks
+                        if status == "UP" and prev in ["DOWN", "MAINT", ""]:
+                            await _trigger_webhooks("backend_up", {
+                                "name": name,
+                                "type": svname.lower(),
+                                "status": status
+                            })
+                        elif status in ["DOWN", "MAINT"] and prev == "UP":
+                            await _trigger_webhooks("backend_down", {
+                                "name": name,
+                                "type": svname.lower(),
+                                "status": status
+                            })
+
+                    previous_status[key] = status
+
+            # Keep last 1000 records
+            history["records"] = history["records"][-1000:]
+            _save_json(HEALTH_HISTORY_FILE, history)
+
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            pass
+
+
+async def _periodic_stats_collector():
+    """Collect stats periodically for history."""
+    while True:
+        try:
+            await asyncio.sleep(60)  # Collect every minute
+
+            data = _send_stats_command("show stat")
+            if not data:
+                continue
+
+            stats = _parse_stats_csv(data)
+            history = _load_json(STATS_HISTORY_FILE, {"records": []})
+
+            # Aggregate stats
+            total_sessions = 0
+            total_bytes_in = 0
+            total_bytes_out = 0
+            total_req = 0
+
+            for stat in stats:
+                if stat.get("svname") == "FRONTEND":
+                    total_sessions += int(stat.get("scur", 0) or 0)
+                    total_req += int(stat.get("req_tot", 0) or 0)
+                    total_bytes_in += int(stat.get("bin", 0) or 0)
+                    total_bytes_out += int(stat.get("bout", 0) or 0)
+
+            history["records"].append({
+                "timestamp": datetime.now().isoformat(),
+                "sessions": total_sessions,
+                "requests": total_req,
+                "bytes_in": total_bytes_in,
+                "bytes_out": total_bytes_out
+            })
+
+            # Keep last 1440 records (24 hours at 1-minute intervals)
+            history["records"] = history["records"][-1440:]
+            _save_json(STATS_HISTORY_FILE, history)
+
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            pass
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Start background tasks."""
+    global _health_monitor_task, _stats_collector_task
+    _health_monitor_task = asyncio.create_task(_periodic_health_monitor())
+    _stats_collector_task = asyncio.create_task(_periodic_stats_collector())
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Stop background tasks."""
+    global _health_monitor_task, _stats_collector_task
+    if _health_monitor_task:
+        _health_monitor_task.cancel()
+    if _stats_collector_task:
+        _stats_collector_task.cancel()
 
 
 def _cfg():
@@ -494,15 +785,101 @@ async def delete_backend(name: str):
 
 # ── Certificates ──────────────────────────────────────────────────
 
+def _parse_certificate(cert_path: Path) -> CertificateInfo:
+    """Parse certificate file and extract info."""
+    info = CertificateInfo(name=cert_path.stem, path=str(cert_path))
+
+    try:
+        result = subprocess.run(
+            ["openssl", "x509", "-in", str(cert_path), "-noout",
+             "-subject", "-issuer", "-dates", "-ext", "subjectAltName"],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0:
+            output = result.stdout
+
+            # Parse subject for CN
+            for line in output.split('\n'):
+                if 'subject=' in line.lower():
+                    if 'CN=' in line or 'CN =' in line:
+                        cn = line.split('CN')[-1].split('=')[-1].split(',')[0].strip()
+                        if cn:
+                            info.domains.append(cn)
+                elif 'issuer=' in line.lower():
+                    info.issuer = line.split('=', 1)[-1].strip()
+                elif 'notAfter=' in line:
+                    date_str = line.split('=')[1].strip()
+                    try:
+                        exp_date = datetime.strptime(date_str, "%b %d %H:%M:%S %Y %Z")
+                        info.expires_at = exp_date.isoformat()
+                        info.days_until_expiry = (exp_date - datetime.now()).days
+                        info.expired = info.days_until_expiry < 0
+                    except ValueError:
+                        pass
+                elif 'DNS:' in line:
+                    # Parse SAN domains
+                    for part in line.split(','):
+                        if 'DNS:' in part:
+                            domain = part.split('DNS:')[-1].strip()
+                            if domain and domain not in info.domains:
+                                info.domains.append(domain)
+    except Exception:
+        pass
+
+    return info
+
+
 @router.get("/certificates")
 async def list_certificates():
-    """List certificates (public)."""
+    """List certificates with expiry info (public)."""
     certs = []
-    cert_dir = Path("/etc/haproxy/certs")
+    cert_dir = Path(CERTS_DIR)
+    if not cert_dir.exists():
+        cert_dir = Path("/etc/haproxy/certs")
+
     if cert_dir.exists():
         for f in cert_dir.glob("*.pem"):
-            certs.append({"name": f.stem, "path": str(f)})
-    return {"certificates": certs}
+            info = _parse_certificate(f)
+            certs.append(info.model_dump())
+
+    # Sort by expiry (soonest first)
+    certs.sort(key=lambda x: x.get("days_until_expiry") or 999)
+
+    return {
+        "certificates": certs,
+        "total": len(certs),
+        "expiring_soon": sum(1 for c in certs if c.get("days_until_expiry", 999) <= 30 and not c.get("expired")),
+        "expired": sum(1 for c in certs if c.get("expired"))
+    }
+
+
+@router.get("/certificates/{name}")
+async def get_certificate(name: str, user=Depends(require_jwt)):
+    """Get certificate details."""
+    cert_dir = Path(CERTS_DIR)
+    if not cert_dir.exists():
+        cert_dir = Path("/etc/haproxy/certs")
+
+    cert_path = cert_dir / f"{name}.pem"
+    if not cert_path.exists():
+        raise HTTPException(status_code=404, detail="Certificate not found")
+
+    return _parse_certificate(cert_path).model_dump()
+
+
+@router.get("/certificates/expiring")
+async def get_expiring_certificates(days: int = Query(default=30, le=365), user=Depends(require_jwt)):
+    """Get certificates expiring within specified days."""
+    result = await list_certificates()
+    certs = result["certificates"]
+
+    expiring = [c for c in certs if c.get("days_until_expiry") is not None and 0 <= c.get("days_until_expiry", 999) <= days]
+
+    return {
+        "certificates": expiring,
+        "count": len(expiring),
+        "threshold_days": days
+    }
 
 
 # ── ACLs ──────────────────────────────────────────────────────────
@@ -754,6 +1131,481 @@ async def health():
         "status": overall,
         "module": "haproxy",
         "checks": checks
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# STATS HISTORY
+# ═══════════════════════════════════════════════════════════════════════
+
+@router.get("/stats/history")
+async def get_stats_history(
+    hours: int = Query(default=24, le=168),
+    user=Depends(require_jwt)
+):
+    """Get HAProxy stats history."""
+    history = _load_json(STATS_HISTORY_FILE, {"records": []})
+    records = history.get("records", [])
+
+    # Filter by time
+    cutoff = datetime.now() - timedelta(hours=hours)
+    cutoff_str = cutoff.isoformat()
+    records = [r for r in records if r.get("timestamp", "") >= cutoff_str]
+
+    return {
+        "records": records,
+        "period_hours": hours,
+        "count": len(records)
+    }
+
+
+@router.get("/stats/summary")
+async def get_stats_summary(user=Depends(require_jwt)):
+    """Get aggregated stats summary."""
+    cached = stats_cache.get("stats_summary")
+    if cached:
+        return cached
+
+    data = _send_stats_command("show stat")
+    if not data:
+        return {"error": "Stats not available"}
+
+    stats = _parse_stats_csv(data)
+
+    summary = {
+        "frontends": [],
+        "backends": [],
+        "totals": {
+            "current_sessions": 0,
+            "total_requests": 0,
+            "bytes_in": 0,
+            "bytes_out": 0
+        }
+    }
+
+    for stat in stats:
+        pxname = stat.get("pxname", "")
+        svname = stat.get("svname", "")
+        status = stat.get("status", "")
+
+        if svname == "FRONTEND":
+            sessions = int(stat.get("scur", 0) or 0)
+            requests = int(stat.get("req_tot", 0) or 0)
+            bytes_in = int(stat.get("bin", 0) or 0)
+            bytes_out = int(stat.get("bout", 0) or 0)
+
+            summary["frontends"].append({
+                "name": pxname,
+                "status": status,
+                "sessions": sessions,
+                "requests": requests,
+                "bytes_in": bytes_in,
+                "bytes_out": bytes_out,
+                "bytes_in_human": _human_bytes(bytes_in),
+                "bytes_out_human": _human_bytes(bytes_out)
+            })
+
+            summary["totals"]["current_sessions"] += sessions
+            summary["totals"]["total_requests"] += requests
+            summary["totals"]["bytes_in"] += bytes_in
+            summary["totals"]["bytes_out"] += bytes_out
+
+        elif svname == "BACKEND":
+            summary["backends"].append({
+                "name": pxname,
+                "status": status,
+                "active_servers": int(stat.get("act", 0) or 0),
+                "backup_servers": int(stat.get("bck", 0) or 0),
+                "sessions": int(stat.get("scur", 0) or 0),
+                "bytes_in": int(stat.get("bin", 0) or 0),
+                "bytes_out": int(stat.get("bout", 0) or 0),
+                "response_time_avg": int(stat.get("ttime", 0) or 0)
+            })
+
+    summary["totals"]["bytes_in_human"] = _human_bytes(summary["totals"]["bytes_in"])
+    summary["totals"]["bytes_out_human"] = _human_bytes(summary["totals"]["bytes_out"])
+    summary["timestamp"] = datetime.now().isoformat()
+
+    stats_cache.set("stats_summary", summary)
+    return summary
+
+
+def _human_bytes(b: int) -> str:
+    """Convert bytes to human-readable format."""
+    for unit in ["B", "KB", "MB", "GB", "TB"]:
+        if b < 1024:
+            return f"{b:.1f} {unit}"
+        b /= 1024
+    return f"{b:.1f} PB"
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# HEALTH HISTORY
+# ═══════════════════════════════════════════════════════════════════════
+
+@router.get("/health/history")
+async def get_health_history(
+    name: Optional[str] = None,
+    limit: int = Query(default=100, le=1000),
+    user=Depends(require_jwt)
+):
+    """Get backend health history."""
+    history = _load_json(HEALTH_HISTORY_FILE, {"records": []})
+    records = history.get("records", [])
+
+    if name:
+        records = [r for r in records if r.get("name") == name]
+
+    records = sorted(records, key=lambda x: x.get("timestamp", ""), reverse=True)
+
+    return {
+        "records": records[:limit],
+        "total": len(records)
+    }
+
+
+@router.get("/health/backends")
+async def get_backends_health(user=Depends(require_jwt)):
+    """Get current health status of all backends."""
+    data = _send_stats_command("show stat")
+    if not data:
+        return {"backends": [], "error": "Stats not available"}
+
+    stats = _parse_stats_csv(data)
+    backends = []
+
+    for stat in stats:
+        if stat.get("svname") == "BACKEND":
+            status = stat.get("status", "UNKNOWN")
+            health = HealthStatus.HEALTHY if status == "UP" else (
+                HealthStatus.DEGRADED if status in ["NOLB", "DRAIN"] else HealthStatus.UNHEALTHY
+            )
+
+            backends.append({
+                "name": stat.get("pxname", ""),
+                "status": health.value,
+                "haproxy_status": status,
+                "active_servers": int(stat.get("act", 0) or 0),
+                "backup_servers": int(stat.get("bck", 0) or 0),
+                "sessions": int(stat.get("scur", 0) or 0),
+                "session_max": int(stat.get("smax", 0) or 0),
+                "bytes_in": int(stat.get("bin", 0) or 0),
+                "bytes_out": int(stat.get("bout", 0) or 0),
+                "response_time_avg": int(stat.get("ttime", 0) or 0)
+            })
+
+    healthy = sum(1 for b in backends if b["status"] == "healthy")
+
+    return {
+        "backends": backends,
+        "healthy": healthy,
+        "unhealthy": len(backends) - healthy,
+        "total": len(backends)
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# CONFIG BACKUP / VERSIONING
+# ═══════════════════════════════════════════════════════════════════════
+
+@router.get("/config/backups")
+async def list_config_backups(user=Depends(require_jwt)):
+    """List configuration backups."""
+    backups = []
+
+    for f in sorted(CONFIG_BACKUP_DIR.glob("*.cfg"), reverse=True):
+        stat = f.stat()
+        backups.append({
+            "name": f.name,
+            "path": str(f),
+            "size": stat.st_size,
+            "created_at": datetime.fromtimestamp(stat.st_mtime).isoformat()
+        })
+
+    return {
+        "backups": backups[:50],  # Last 50 backups
+        "count": len(backups)
+    }
+
+
+@router.post("/config/backup")
+async def create_config_backup(user=Depends(require_jwt)):
+    """Create a backup of current configuration."""
+    cfg_path = Path(HAPROXY_CFG)
+    if not cfg_path.exists():
+        raise HTTPException(status_code=404, detail="Config file not found")
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_name = f"haproxy_{timestamp}.cfg"
+    backup_path = CONFIG_BACKUP_DIR / backup_name
+
+    # Copy config
+    backup_path.write_text(cfg_path.read_text())
+
+    log.info("Created config backup: %s", backup_name)
+
+    return {
+        "status": "success",
+        "backup": {
+            "name": backup_name,
+            "path": str(backup_path),
+            "size": backup_path.stat().st_size,
+            "created_at": datetime.now().isoformat()
+        }
+    }
+
+
+@router.get("/config/backups/{name}")
+async def get_config_backup(name: str, user=Depends(require_jwt)):
+    """Get content of a specific backup."""
+    backup_path = CONFIG_BACKUP_DIR / name
+    if not backup_path.exists():
+        raise HTTPException(status_code=404, detail="Backup not found")
+
+    return {
+        "name": name,
+        "content": backup_path.read_text(),
+        "size": backup_path.stat().st_size,
+        "created_at": datetime.fromtimestamp(backup_path.stat().st_mtime).isoformat()
+    }
+
+
+@router.post("/config/restore/{name}")
+async def restore_config_backup(name: str, user=Depends(require_jwt)):
+    """Restore configuration from backup."""
+    backup_path = CONFIG_BACKUP_DIR / name
+    if not backup_path.exists():
+        raise HTTPException(status_code=404, detail="Backup not found")
+
+    cfg_path = Path(HAPROXY_CFG)
+
+    # Backup current config first
+    if cfg_path.exists():
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        pre_restore_name = f"haproxy_pre_restore_{timestamp}.cfg"
+        (CONFIG_BACKUP_DIR / pre_restore_name).write_text(cfg_path.read_text())
+
+    # Restore from backup
+    cfg_path.write_text(backup_path.read_text())
+
+    # Validate config
+    result = subprocess.run(
+        ["haproxy", "-c", "-f", str(cfg_path)],
+        capture_output=True, text=True, timeout=10
+    )
+
+    log.info("Restored config from backup: %s", name)
+
+    return {
+        "status": "success",
+        "backup": name,
+        "validation": {
+            "valid": result.returncode == 0,
+            "message": result.stderr or result.stdout
+        }
+    }
+
+
+@router.delete("/config/backups/{name}")
+async def delete_config_backup(name: str, user=Depends(require_jwt)):
+    """Delete a configuration backup."""
+    backup_path = CONFIG_BACKUP_DIR / name
+    if not backup_path.exists():
+        raise HTTPException(status_code=404, detail="Backup not found")
+
+    backup_path.unlink()
+    log.info("Deleted config backup: %s", name)
+
+    return {"status": "success", "deleted": name}
+
+
+@router.post("/config/diff")
+async def diff_config(backup_name: str = Query(...), user=Depends(require_jwt)):
+    """Compare current config with a backup."""
+    backup_path = CONFIG_BACKUP_DIR / backup_name
+    if not backup_path.exists():
+        raise HTTPException(status_code=404, detail="Backup not found")
+
+    cfg_path = Path(HAPROXY_CFG)
+    if not cfg_path.exists():
+        raise HTTPException(status_code=404, detail="Current config not found")
+
+    try:
+        result = subprocess.run(
+            ["diff", "-u", str(backup_path), str(cfg_path)],
+            capture_output=True, text=True, timeout=10
+        )
+
+        return {
+            "has_changes": result.returncode != 0,
+            "diff": result.stdout,
+            "backup": backup_name,
+            "current": str(cfg_path)
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# WEBHOOKS
+# ═══════════════════════════════════════════════════════════════════════
+
+@router.get("/webhooks")
+async def list_webhooks(user=Depends(require_jwt)):
+    """List configured webhooks."""
+    data = _load_json(WEBHOOKS_FILE, {"webhooks": []})
+    return {
+        "webhooks": data.get("webhooks", []),
+        "available_events": [
+            "backend_up", "backend_down", "cert_expiring",
+            "config_changed", "reload_success", "reload_failed"
+        ]
+    }
+
+
+class WebhookCreate(BaseModel):
+    url: str
+    events: List[str] = ["backend_down", "cert_expiring"]
+    secret: Optional[str] = None
+    enabled: bool = True
+
+
+@router.post("/webhooks")
+async def add_webhook(config: WebhookCreate, user=Depends(require_jwt)):
+    """Add a webhook."""
+    data = _load_json(WEBHOOKS_FILE, {"webhooks": []})
+
+    webhook_id = hashlib.sha256(f"{config.url}{time.time()}".encode()).hexdigest()[:12]
+
+    webhook = {
+        "id": webhook_id,
+        "url": config.url,
+        "events": config.events,
+        "secret": config.secret,
+        "enabled": config.enabled,
+        "created_at": datetime.now().isoformat(),
+        "last_triggered": None,
+        "failure_count": 0
+    }
+
+    data["webhooks"].append(webhook)
+    _save_json(WEBHOOKS_FILE, data)
+
+    return {"status": "success", "webhook": webhook}
+
+
+@router.delete("/webhooks/{webhook_id}")
+async def delete_webhook(webhook_id: str, user=Depends(require_jwt)):
+    """Delete a webhook."""
+    data = _load_json(WEBHOOKS_FILE, {"webhooks": []})
+
+    original_len = len(data["webhooks"])
+    data["webhooks"] = [w for w in data["webhooks"] if w.get("id") != webhook_id]
+
+    if len(data["webhooks"]) == original_len:
+        raise HTTPException(status_code=404, detail="Webhook not found")
+
+    _save_json(WEBHOOKS_FILE, data)
+    return {"status": "success"}
+
+
+@router.post("/webhooks/{webhook_id}/test")
+async def test_webhook(webhook_id: str, user=Depends(require_jwt)):
+    """Test a webhook with a sample payload."""
+    data = _load_json(WEBHOOKS_FILE, {"webhooks": []})
+
+    webhook = next((w for w in data["webhooks"] if w.get("id") == webhook_id), None)
+    if not webhook:
+        raise HTTPException(status_code=404, detail="Webhook not found")
+
+    test_payload = {
+        "event": "test",
+        "timestamp": datetime.now().isoformat(),
+        "payload": {"message": "This is a test webhook from SecuBox HAProxy"}
+    }
+
+    try:
+        headers = {"Content-Type": "application/json"}
+        if webhook.get("secret"):
+            sig = hmac.new(
+                webhook["secret"].encode(),
+                json.dumps(test_payload).encode(),
+                hashlib.sha256
+            ).hexdigest()
+            headers["X-SecuBox-Signature"] = f"sha256={sig}"
+
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(webhook["url"], json=test_payload, headers=headers)
+            return {
+                "status": "success",
+                "response_code": resp.status_code,
+                "response_body": resp.text[:500]
+            }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# SUMMARY
+# ═══════════════════════════════════════════════════════════════════════
+
+@router.get("/summary")
+async def get_haproxy_summary(user=Depends(require_jwt)):
+    """Get comprehensive HAProxy summary."""
+    cfg = _cfg()
+    running = _haproxy_running() or _docker_running()
+    vhosts = _load_vhosts()
+    backends = _load_backends()
+
+    # Get stats summary
+    data = _send_stats_command("show stat")
+    stats = _parse_stats_csv(data) if data else []
+
+    total_sessions = 0
+    total_requests = 0
+    backends_up = 0
+    backends_total = 0
+
+    for stat in stats:
+        if stat.get("svname") == "FRONTEND":
+            total_sessions += int(stat.get("scur", 0) or 0)
+            total_requests += int(stat.get("req_tot", 0) or 0)
+        elif stat.get("svname") == "BACKEND":
+            backends_total += 1
+            if stat.get("status") == "UP":
+                backends_up += 1
+
+    # Get certificate summary
+    certs_result = await list_certificates()
+
+    return {
+        "service": {
+            "running": running,
+            "http_port": cfg["http_port"],
+            "https_port": cfg["https_port"],
+            "waf_enabled": cfg["waf_enabled"],
+            "waf_available": _waf_available()
+        },
+        "traffic": {
+            "current_sessions": total_sessions,
+            "total_requests": total_requests
+        },
+        "vhosts": {
+            "total": len(vhosts),
+            "enabled": sum(1 for v in vhosts if v.get("enabled", True)),
+            "waf_protected": sum(1 for v in vhosts if not v.get("waf_bypass", False))
+        },
+        "backends": {
+            "total": backends_total,
+            "healthy": backends_up,
+            "unhealthy": backends_total - backends_up
+        },
+        "certificates": {
+            "total": certs_result["total"],
+            "expiring_soon": certs_result["expiring_soon"],
+            "expired": certs_result["expired"]
+        },
+        "timestamp": datetime.now().isoformat()
     }
 
 

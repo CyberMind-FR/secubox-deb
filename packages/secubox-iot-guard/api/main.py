@@ -755,6 +755,433 @@ async def lookup_manufacturer(mac_address: str):
 
 
 # ============================================================================
+# Google Cast / Chromecast Debug Module
+# ============================================================================
+
+# Known Google device OUI prefixes (for MAC address detection)
+GOOGLE_OUI_PREFIXES = [
+    "1c:f2:9a", "54:60:09", "f4:f5:d8", "48:d6:d5", "a4:77:33",
+    "44:07:0b", "e4:f0:42", "cc:fa:00", "d8:6c:63", "f4:f5:e8",
+    "30:fd:38", "6c:ad:f8", "94:eb:2c", "70:cd:60"
+]
+
+# Google Cast domains that must not be blocked
+CAST_DOMAINS = [
+    "cast.googleapis.com", "clients1.google.com", "gvt2.com",
+    "googlecast.com", "play.google.com", "accounts.google.com",
+    "clouddevices.googleapis.com", "www.gstatic.com"
+]
+
+# Ports used by Google Cast
+CAST_PORTS = {8008, 8009, 8443, 8012, 9000, 5353}
+
+
+class CastDiagnostic(BaseModel):
+    """Google Cast device diagnostic result."""
+    mac_address: str
+    ip_address: Optional[str]
+    device_name: Optional[str]
+    is_google_device: bool
+    diagnostic_vector: Optional[str] = None  # V1=WiFi, V2=LAN, V3=Cloud
+    issues_found: List[str] = []
+    crowdsec_status: Dict[str, Any] = {}
+    suricata_alerts: List[str] = []
+    dns_blocks: List[str] = []
+    nftables_drops: List[str] = []
+    recommendations: List[str] = []
+    timestamp: str
+
+
+def is_google_device(mac_address: str) -> bool:
+    """Check if MAC address belongs to a Google device."""
+    prefix = mac_address[:8].lower()
+    return prefix in GOOGLE_OUI_PREFIXES
+
+
+def find_google_cast_devices() -> List[Dict[str, str]]:
+    """Find Google Cast devices on the network."""
+    devices = []
+    try:
+        # Check ARP table for Google OUIs
+        result = subprocess.run(
+            ["ip", "neigh", "show"],
+            capture_output=True, text=True, timeout=10
+        )
+        for line in result.stdout.strip().split("\n"):
+            parts = line.split()
+            if len(parts) >= 5 and parts[3] == "lladdr":
+                mac = parts[4].lower()
+                if is_google_device(mac):
+                    devices.append({
+                        "ip_address": parts[0],
+                        "mac_address": mac,
+                        "state": parts[-1] if len(parts) > 5 else "unknown"
+                    })
+    except Exception as e:
+        logger.warning(f"ARP scan failed: {e}")
+
+    # Also try mDNS lookup for _googlecast._tcp
+    try:
+        result = subprocess.run(
+            ["avahi-browse", "-t", "-r", "_googlecast._tcp", "-p"],
+            capture_output=True, text=True, timeout=15
+        )
+        for line in result.stdout.strip().split("\n"):
+            if line.startswith("="):
+                parts = line.split(";")
+                if len(parts) >= 8:
+                    ip = parts[7]
+                    name = parts[3]
+                    # Check if already found
+                    if not any(d["ip_address"] == ip for d in devices):
+                        devices.append({
+                            "ip_address": ip,
+                            "mac_address": "",
+                            "name": name,
+                            "state": "mdns"
+                        })
+    except Exception:
+        pass  # avahi-browse may not be available
+
+    return devices
+
+
+def check_crowdsec_for_ip(ip_address: str) -> Dict[str, Any]:
+    """Check if IP is banned or has alerts in CrowdSec."""
+    result = {"banned": False, "alerts": [], "decisions": []}
+    try:
+        # Check decisions
+        proc = subprocess.run(
+            ["cscli", "decisions", "list", "-o", "json"],
+            capture_output=True, text=True, timeout=30
+        )
+        if proc.returncode == 0 and proc.stdout.strip():
+            decisions = json.loads(proc.stdout)
+            for d in (decisions or []):
+                if d.get("value") == ip_address:
+                    result["banned"] = True
+                    result["decisions"].append({
+                        "type": d.get("type"),
+                        "scenario": d.get("scenario"),
+                        "duration": d.get("duration")
+                    })
+
+        # Check alerts
+        proc = subprocess.run(
+            ["cscli", "alerts", "list", "--ip", ip_address, "-o", "json"],
+            capture_output=True, text=True, timeout=30
+        )
+        if proc.returncode == 0 and proc.stdout.strip():
+            alerts = json.loads(proc.stdout)
+            result["alerts"] = [a.get("scenario") for a in (alerts or [])][:10]
+    except Exception as e:
+        result["error"] = str(e)
+
+    return result
+
+
+def check_suricata_alerts(ip_address: str, limit: int = 20) -> List[str]:
+    """Check Suricata alerts for IP."""
+    alerts = []
+    fast_log = Path("/var/log/suricata/fast.log")
+    if fast_log.exists():
+        try:
+            result = subprocess.run(
+                ["grep", ip_address, str(fast_log)],
+                capture_output=True, text=True, timeout=30
+            )
+            for line in result.stdout.strip().split("\n")[-limit:]:
+                if line.strip():
+                    alerts.append(line.strip()[:200])
+        except Exception:
+            pass
+    return alerts
+
+
+def check_dns_blocks(domains: List[str] = None) -> List[str]:
+    """Check if Cast domains are blocked in Unbound."""
+    blocked = []
+    domains = domains or CAST_DOMAINS
+    unbound_log = Path("/var/log/unbound/unbound.log")
+
+    if unbound_log.exists():
+        try:
+            for domain in domains:
+                result = subprocess.run(
+                    ["grep", "-i", domain, str(unbound_log)],
+                    capture_output=True, text=True, timeout=10
+                )
+                for line in result.stdout.strip().split("\n"):
+                    if any(x in line.upper() for x in ["REFUSED", "NXDOMAIN", "BLOCKED"]):
+                        blocked.append(f"{domain}: {line.strip()[:100]}")
+                        break
+        except Exception:
+            pass
+
+    return blocked
+
+
+def check_nftables_drops(ip_address: str) -> List[str]:
+    """Check nftables for DROP rules affecting the IP."""
+    drops = []
+    try:
+        result = subprocess.run(
+            ["nft", "list", "ruleset"],
+            capture_output=True, text=True, timeout=30
+        )
+        # Look for drop/reject rules
+        for line in result.stdout.split("\n"):
+            if ("drop" in line.lower() or "reject" in line.lower()):
+                if ip_address in line or "counter packets" in line:
+                    drops.append(line.strip()[:150])
+    except Exception as e:
+        drops.append(f"Error checking nftables: {e}")
+
+    return drops[:20]
+
+
+def generate_whitelist_nft(ip_address: str, mac_address: str = "") -> str:
+    """Generate nftables whitelist rules for Google Cast device."""
+    return f'''# Google Cast Whitelist - {ip_address}
+# File: /etc/secubox/firewall/shadow/cast-whitelist.nft
+# Apply: secubox-params swap --module firewall --validate-zkp
+
+table inet filter {{
+    set google_cast_ips {{
+        type ipv4_addr
+        flags interval
+        # Google AS15169 ranges for Cast services
+        elements = {{ 172.217.0.0/16, 216.58.0.0/16, 142.250.0.0/15,
+                     74.125.0.0/16, 64.233.160.0/19 }}
+    }}
+
+    chain forward {{
+        # Allow Cast device to Google services
+        ip saddr {ip_address} ip daddr @google_cast_ips tcp dport {{ 443, 8009 }} \\
+            ct state new,established accept \\
+            comment "[SECUBOX-CAST] Google Radio - Cast sessions"
+
+        ip saddr {ip_address} ip daddr @google_cast_ips udp dport {{ 443, 5353 }} \\
+            accept \\
+            comment "[SECUBOX-CAST] Google Radio - QUIC + mDNS"
+
+        # Allow local Cast discovery
+        ip saddr {ip_address} udp dport 5353 accept \\
+            comment "[SECUBOX-CAST] mDNS discovery"
+
+        ip saddr {ip_address} tcp dport {{ 8008, 8009, 8443 }} accept \\
+            comment "[SECUBOX-CAST] Local Cast control"
+    }}
+}}
+'''
+
+
+def generate_unbound_passthrough() -> str:
+    """Generate Unbound configuration for Cast domains."""
+    return '''# Google Cast DNS Passthrough
+# File: /etc/unbound/conf.d/cast-passthrough.conf
+# Apply: systemctl reload unbound
+
+server:
+    local-zone: "cast.googleapis.com." transparent
+    local-zone: "clients1.google.com." transparent
+    local-zone: "gvt2.com." transparent
+    local-zone: "googlecast.com." transparent
+    local-zone: "clouddevices.googleapis.com." transparent
+    local-zone: "play.google.com." transparent
+'''
+
+
+def generate_crowdsec_whitelist(ip_address: str) -> str:
+    """Generate CrowdSec whitelist command."""
+    return f'''# CrowdSec Whitelist for Google Cast Device
+cscli decisions add --ip {ip_address} --type whitelist --duration 0 \\
+    --reason "Google Radio - Cast device - IoT Guard whitelist"
+
+# Verify whitelist
+cscli decisions list | grep {ip_address}
+'''
+
+
+@app.get("/cast/devices")
+async def find_cast_devices():
+    """Find Google Cast/Chromecast devices on the network."""
+    devices = find_google_cast_devices()
+    return {
+        "devices": devices,
+        "count": len(devices),
+        "timestamp": datetime.utcnow().isoformat() + "Z"
+    }
+
+
+@app.get("/cast/diagnose/{ip_address}", dependencies=[Depends(require_jwt)])
+async def diagnose_cast_device(ip_address: str):
+    """Run full diagnostic on a Cast device.
+
+    Checks:
+    - CrowdSec bans/alerts
+    - Suricata alerts
+    - DNS blocks (Unbound)
+    - nftables DROP rules
+    """
+    # Find MAC address
+    mac_address = ""
+    try:
+        result = subprocess.run(
+            ["ip", "neigh", "show", ip_address],
+            capture_output=True, text=True, timeout=10
+        )
+        parts = result.stdout.strip().split()
+        if "lladdr" in parts:
+            idx = parts.index("lladdr")
+            mac_address = parts[idx + 1].lower()
+    except Exception:
+        pass
+
+    issues = []
+    recommendations = []
+    diagnostic_vector = None
+
+    # Check CrowdSec
+    cs_status = check_crowdsec_for_ip(ip_address)
+    if cs_status.get("banned"):
+        issues.append(f"Device is BANNED in CrowdSec: {cs_status['decisions']}")
+        recommendations.append("Run: cscli decisions add --ip {ip} --type whitelist --duration 0")
+        diagnostic_vector = "V3"
+
+    if cs_status.get("alerts"):
+        issues.append(f"CrowdSec alerts: {cs_status['alerts'][:5]}")
+
+    # Check Suricata
+    suricata_alerts = check_suricata_alerts(ip_address)
+    if suricata_alerts:
+        issues.append(f"Suricata alerts detected: {len(suricata_alerts)}")
+        diagnostic_vector = diagnostic_vector or "V3"
+
+    # Check DNS blocks
+    dns_blocks = check_dns_blocks()
+    if dns_blocks:
+        issues.append(f"DNS blocks on Cast domains: {dns_blocks[:5]}")
+        recommendations.append("Add Unbound passthrough for Cast domains")
+        diagnostic_vector = diagnostic_vector or "V3"
+
+    # Check nftables
+    nft_drops = check_nftables_drops(ip_address)
+    if nft_drops:
+        issues.append(f"nftables DROP rules may affect device: {len(nft_drops)}")
+        recommendations.append("Add Cast whitelist to nftables")
+
+    # Generate recommendations
+    if not recommendations and issues:
+        if diagnostic_vector == "V3":
+            recommendations = [
+                "Check TCP RST packets with tcpdump",
+                "Verify TLS interception is not active for device",
+                "Review Suricata rules for false positives"
+            ]
+
+    return CastDiagnostic(
+        mac_address=mac_address,
+        ip_address=ip_address,
+        device_name=None,
+        is_google_device=is_google_device(mac_address) if mac_address else False,
+        diagnostic_vector=diagnostic_vector,
+        issues_found=issues,
+        crowdsec_status=cs_status,
+        suricata_alerts=suricata_alerts,
+        dns_blocks=dns_blocks,
+        nftables_drops=nft_drops,
+        recommendations=recommendations,
+        timestamp=datetime.utcnow().isoformat() + "Z"
+    )
+
+
+@app.post("/cast/whitelist/{ip_address}", dependencies=[Depends(require_jwt)])
+async def whitelist_cast_device(ip_address: str, apply_crowdsec: bool = True):
+    """Whitelist a Cast device in CrowdSec.
+
+    Args:
+        ip_address: Device IP address
+        apply_crowdsec: Whether to apply CrowdSec whitelist immediately
+    """
+    result = {"ip_address": ip_address, "actions": []}
+
+    # Apply CrowdSec whitelist
+    if apply_crowdsec:
+        try:
+            proc = subprocess.run(
+                ["cscli", "decisions", "add", "--ip", ip_address,
+                 "--type", "whitelist", "--duration", "0",
+                 "--reason", "Google Cast device - IoT Guard whitelist"],
+                capture_output=True, text=True, timeout=30
+            )
+            if proc.returncode == 0:
+                result["actions"].append("CrowdSec whitelist applied")
+            else:
+                result["actions"].append(f"CrowdSec error: {proc.stderr}")
+        except Exception as e:
+            result["actions"].append(f"CrowdSec failed: {e}")
+
+    # Generate config files
+    result["nftables_config"] = generate_whitelist_nft(ip_address)
+    result["unbound_config"] = generate_unbound_passthrough()
+    result["crowdsec_commands"] = generate_crowdsec_whitelist(ip_address)
+
+    return result
+
+
+@app.get("/cast/capture/{ip_address}", dependencies=[Depends(require_jwt)])
+async def start_cast_capture(ip_address: str, duration: int = 60):
+    """Start a packet capture for Cast device debugging.
+
+    Args:
+        ip_address: Device IP to capture
+        duration: Capture duration in seconds (max 300)
+    """
+    duration = min(duration, 300)
+    capture_file = f"/tmp/cast_debug_{ip_address.replace('.', '_')}_{int(time.time())}.pcap"
+
+    try:
+        # Start tcpdump in background
+        proc = subprocess.Popen(
+            ["timeout", str(duration), "tcpdump", "-i", "any",
+             f"host {ip_address}", "-w", capture_file],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
+
+        return {
+            "status": "capturing",
+            "ip_address": ip_address,
+            "capture_file": capture_file,
+            "duration": duration,
+            "pid": proc.pid,
+            "message": f"Capture will run for {duration}s. Retrieve with /cast/capture/download/{capture_file}"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to start capture: {e}")
+
+
+@app.get("/cast/config/nftables/{ip_address}")
+async def get_nftables_config(ip_address: str):
+    """Generate nftables whitelist config for Cast device."""
+    return {
+        "config": generate_whitelist_nft(ip_address),
+        "path": "/etc/secubox/firewall/shadow/cast-whitelist.nft",
+        "apply_command": "secubox-params swap --module firewall --validate-zkp"
+    }
+
+
+@app.get("/cast/config/unbound")
+async def get_unbound_config():
+    """Generate Unbound passthrough config for Cast domains."""
+    return {
+        "config": generate_unbound_passthrough(),
+        "path": "/etc/unbound/conf.d/cast-passthrough.conf",
+        "apply_command": "systemctl reload unbound"
+    }
+
+
+# ============================================================================
 # Startup
 # ============================================================================
 
@@ -762,4 +1189,4 @@ async def lookup_manufacturer(mac_address: str):
 async def startup():
     """Initialize on startup."""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    logger.info("IoT Guard started")
+    logger.info("IoT Guard started with Cast Debug module")

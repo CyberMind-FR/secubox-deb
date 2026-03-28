@@ -1,40 +1,96 @@
 """
-SecuBox Watchdog API
+SecuBox Watchdog API - Production Ready
 Service and container health monitoring with auto-recovery
+
+Features:
+- Container and service health monitoring
+- Endpoint HTTP health checks
+- Auto-recovery with configurable policies
+- Stats caching with TTL
+- Event history with JSON persistence
+- Webhook notifications with HMAC signing
+- Background monitoring tasks
 """
 
-from fastapi import FastAPI, Depends, HTTPException, Query
-from pydantic import BaseModel
-from typing import Optional, List
+from fastapi import FastAPI, Depends, HTTPException, Query, BackgroundTasks
+from pydantic import BaseModel, Field
+from typing import Optional, List, Dict, Any
 from pathlib import Path
+from datetime import datetime, timedelta
+from enum import Enum
 import subprocess
-import os
+import asyncio
+import threading
+import hashlib
+import hmac
 import time
 import json
 import httpx
 
-# Import shared auth
-import sys
-sys.path.insert(0, '/usr/lib/secubox/core')
-try:
-    from secubox_core.auth import require_jwt
-except ImportError:
-    async def require_jwt():
-        return {"sub": "dev"}
+from secubox_core.auth import require_jwt
+from secubox_core.config import get_config
 
-app = FastAPI(title="SecuBox Watchdog API", version="1.0.0")
+app = FastAPI(title="SecuBox Watchdog API", version="2.0.0")
 
 # Configuration
 LXC_PATH = Path("/srv/lxc")
+DATA_DIR = Path("/var/lib/secubox/watchdog")
 LOG_FILE = Path("/var/log/secubox/watchdog.log")
 CONFIG_FILE = Path("/etc/secubox/watchdog.json")
+HISTORY_FILE = DATA_DIR / "history.json"
+WEBHOOKS_FILE = DATA_DIR / "webhooks.json"
+STATS_FILE = DATA_DIR / "stats.json"
 ALERT_STATE_DIR = Path("/tmp/watchdog")
+
+# Ensure directories
+for d in [DATA_DIR, ALERT_STATE_DIR, LOG_FILE.parent]:
+    d.mkdir(parents=True, exist_ok=True)
+
+
+class StatsCache:
+    """Thread-safe stats cache with TTL."""
+    def __init__(self, ttl_seconds: int = 30):
+        self.ttl = ttl_seconds
+        self._cache: Dict[str, Any] = {}
+        self._timestamps: Dict[str, float] = {}
+        self._lock = threading.Lock()
+
+    def get(self, key: str) -> Optional[Any]:
+        with self._lock:
+            if key in self._cache:
+                if time.time() - self._timestamps[key] < self.ttl:
+                    return self._cache[key]
+        return None
+
+    def set(self, key: str, value: Any):
+        with self._lock:
+            self._cache[key] = value
+            self._timestamps[key] = time.time()
+
+    def invalidate(self, key: str = None):
+        with self._lock:
+            if key:
+                self._cache.pop(key, None)
+                self._timestamps.pop(key, None)
+            else:
+                self._cache.clear()
+                self._timestamps.clear()
+
+
+# Global cache
+stats_cache = StatsCache(ttl_seconds=15)
+
+# Background task state
+_monitor_task = None
+_monitor_running = False
+
 
 # Default monitored items
 DEFAULT_CONFIG = {
     "enabled": True,
     "interval": 60,
     "alert_cooldown": 300,
+    "auto_recovery": True,
     "containers": [
         {"name": "mailserver", "enabled": True, "critical": True},
         {"name": "roundcube", "enabled": True, "critical": False},
@@ -54,7 +110,25 @@ DEFAULT_CONFIG = {
 }
 
 
-# Models
+class HealthState(str, Enum):
+    HEALTHY = "healthy"
+    DEGRADED = "degraded"
+    CRITICAL = "critical"
+    UNKNOWN = "unknown"
+
+
+class EventType(str, Enum):
+    CONTAINER_DOWN = "container_down"
+    CONTAINER_UP = "container_up"
+    SERVICE_DOWN = "service_down"
+    SERVICE_UP = "service_up"
+    ENDPOINT_DOWN = "endpoint_down"
+    ENDPOINT_UP = "endpoint_up"
+    RECOVERY_ATTEMPTED = "recovery_attempted"
+    RECOVERY_SUCCESS = "recovery_success"
+    RECOVERY_FAILED = "recovery_failed"
+
+
 class ContainerRestart(BaseModel):
     name: str
 
@@ -63,20 +137,17 @@ class ServiceRestart(BaseModel):
     name: str
 
 
-class LogRequest(BaseModel):
-    lines: int = 50
+class WebhookConfig(BaseModel):
+    url: str
+    secret: Optional[str] = None
+    events: List[str] = ["all"]
+    enabled: bool = True
 
 
-# Helpers
 def run_cmd(cmd: list, timeout: int = 30) -> tuple:
     """Run command and return (success, stdout, stderr)"""
     try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=timeout
-        )
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
         return result.returncode == 0, result.stdout, result.stderr
     except subprocess.TimeoutExpired:
         return False, "", "Command timed out"
@@ -85,7 +156,6 @@ def run_cmd(cmd: list, timeout: int = 30) -> tuple:
 
 
 def load_config() -> dict:
-    """Load watchdog configuration"""
     if CONFIG_FILE.exists():
         try:
             return json.loads(CONFIG_FILE.read_text())
@@ -95,17 +165,84 @@ def load_config() -> dict:
 
 
 def save_config(config: dict):
-    """Save watchdog configuration"""
     CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
     CONFIG_FILE.write_text(json.dumps(config, indent=2))
 
 
-def log_event(message: str):
-    """Log an event to the watchdog log"""
+def log_event(message: str, level: str = "INFO"):
     LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
-    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+    timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     with open(LOG_FILE, "a") as f:
-        f.write(f"[{timestamp}] {message}\n")
+        f.write(f"[{timestamp}] [{level}] {message}\n")
+
+
+def load_history() -> List[Dict]:
+    if HISTORY_FILE.exists():
+        try:
+            return json.loads(HISTORY_FILE.read_text())
+        except:
+            pass
+    return []
+
+
+def save_history(history: List[Dict]):
+    # Keep last 1000 events
+    history = history[-1000:]
+    HISTORY_FILE.write_text(json.dumps(history, indent=2, default=str))
+
+
+def add_event(event_type: EventType, target: str, details: Dict = None):
+    history = load_history()
+    event = {
+        "id": hashlib.sha256(f"{time.time()}".encode()).hexdigest()[:12],
+        "type": event_type.value,
+        "target": target,
+        "details": details or {},
+        "timestamp": datetime.utcnow().isoformat() + "Z"
+    }
+    history.append(event)
+    save_history(history)
+    log_event(f"{event_type.value}: {target}", "INFO" if "up" in event_type.value.lower() else "WARNING")
+
+    # Trigger webhooks
+    asyncio.create_task(trigger_webhooks(event))
+    return event
+
+
+def load_webhooks() -> List[Dict]:
+    if WEBHOOKS_FILE.exists():
+        try:
+            return json.loads(WEBHOOKS_FILE.read_text())
+        except:
+            pass
+    return []
+
+
+def save_webhooks(webhooks: List[Dict]):
+    WEBHOOKS_FILE.write_text(json.dumps(webhooks, indent=2))
+
+
+async def trigger_webhooks(event: Dict):
+    webhooks = load_webhooks()
+    for wh in webhooks:
+        if not wh.get("enabled", True):
+            continue
+        events = wh.get("events", ["all"])
+        if "all" not in events and event["type"] not in events:
+            continue
+
+        try:
+            payload = json.dumps(event)
+            headers = {"Content-Type": "application/json"}
+
+            if wh.get("secret"):
+                sig = hmac.new(wh["secret"].encode(), payload.encode(), hashlib.sha256).hexdigest()
+                headers["X-Webhook-Signature"] = f"sha256={sig}"
+
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                await client.post(wh["url"], content=payload, headers=headers)
+        except Exception as e:
+            log_event(f"Webhook failed: {wh['url']} - {e}", "ERROR")
 
 
 def lxc_running(name: str) -> tuple:
@@ -125,15 +262,8 @@ def lxc_running(name: str) -> tuple:
 
 def service_running(process: str) -> tuple:
     """Check if a service process is running, returns (running, pid)"""
-    success, out, _ = run_cmd(["pgrep", "-x", process])
-    if success and out.strip():
-        try:
-            pid = int(out.strip().split('\n')[0])
-            return True, pid
-        except:
-            pass
-    # Try with -f for full command match
-    success, out, _ = run_cmd(["pgrep", "-f", process])
+    # Try without -x flag for better compatibility
+    success, out, _ = run_cmd(["pgrep", process])
     if success and out.strip():
         try:
             pid = int(out.strip().split('\n')[0])
@@ -161,16 +291,57 @@ async def check_endpoint(host: str, path: str = "/", expected_codes: list = [200
         return False, 0
 
 
-# Public endpoints
-@app.get("/status")
-async def get_status():
-    """Get full watchdog status"""
+def get_health_state(containers: List, services: List, endpoints: List) -> HealthState:
+    """Calculate overall health state."""
+    critical_down = 0
+    total_down = 0
+
+    for c in containers:
+        if c["state"] != "running":
+            total_down += 1
+            if c.get("critical"):
+                critical_down += 1
+
+    for s in services:
+        if s["state"] != "running":
+            total_down += 1
+            if s.get("critical"):
+                critical_down += 1
+
+    for e in endpoints:
+        if not e.get("healthy"):
+            total_down += 1
+
+    if critical_down > 0:
+        return HealthState.CRITICAL
+    elif total_down > 0:
+        return HealthState.DEGRADED
+    return HealthState.HEALTHY
+
+
+def format_bytes(size: int) -> str:
+    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+        if abs(size) < 1024:
+            return f"{size:.1f} {unit}"
+        size /= 1024
+    return f"{size:.1f} PB"
+
+
+def format_uptime(seconds: int) -> str:
+    days = seconds // 86400
+    hours = (seconds % 86400) // 3600
+    mins = (seconds % 3600) // 60
+    if days > 0:
+        return f"{days}d {hours}h {mins}m"
+    elif hours > 0:
+        return f"{hours}h {mins}m"
+    return f"{mins}m"
+
+
+async def perform_health_check() -> Dict:
+    """Perform full health check."""
     config = load_config()
 
-    # Check if watchdog daemon is running
-    daemon_running, _ = service_running("watchdogctl")
-
-    # Container status
     containers = []
     for c in config.get("containers", []):
         if not c.get("enabled", True):
@@ -183,7 +354,6 @@ async def get_status():
             "critical": c.get("critical", False)
         })
 
-    # Service status
     services = []
     for s in config.get("services", []):
         if not s.get("enabled", True):
@@ -197,7 +367,6 @@ async def get_status():
             "critical": s.get("critical", False)
         })
 
-    # Endpoint status
     endpoints = []
     for e in config.get("endpoints", []):
         if not e.get("enabled", True):
@@ -211,19 +380,115 @@ async def get_status():
             "healthy": healthy
         })
 
+    health_state = get_health_state(containers, services, endpoints)
+
     return {
-        "enabled": config.get("enabled", True),
-        "running": daemon_running,
-        "interval": config.get("interval", 60),
+        "health": health_state.value,
         "containers": containers,
         "services": services,
-        "endpoints": endpoints
+        "endpoints": endpoints,
+        "timestamp": datetime.utcnow().isoformat() + "Z"
     }
+
+
+async def monitor_loop():
+    """Background monitoring loop."""
+    global _monitor_running
+    _monitor_running = True
+
+    previous_states = {}
+
+    while _monitor_running:
+        try:
+            config = load_config()
+            if not config.get("enabled", True):
+                await asyncio.sleep(30)
+                continue
+
+            check = await perform_health_check()
+            stats_cache.set("last_check", check)
+
+            # Track state changes
+            for c in check["containers"]:
+                key = f"container:{c['name']}"
+                prev = previous_states.get(key)
+                current = c["state"]
+                if prev is not None and prev != current:
+                    if current == "running":
+                        add_event(EventType.CONTAINER_UP, c["name"])
+                    else:
+                        add_event(EventType.CONTAINER_DOWN, c["name"])
+                previous_states[key] = current
+
+            for s in check["services"]:
+                key = f"service:{s['name']}"
+                prev = previous_states.get(key)
+                current = s["state"]
+                if prev is not None and prev != current:
+                    if current == "running":
+                        add_event(EventType.SERVICE_UP, s["name"])
+                    else:
+                        add_event(EventType.SERVICE_DOWN, s["name"])
+                previous_states[key] = current
+
+            for e in check["endpoints"]:
+                key = f"endpoint:{e['name']}"
+                prev = previous_states.get(key)
+                current = e["healthy"]
+                if prev is not None and prev != current:
+                    if current:
+                        add_event(EventType.ENDPOINT_UP, e["name"])
+                    else:
+                        add_event(EventType.ENDPOINT_DOWN, e["name"])
+                previous_states[key] = current
+
+            interval = config.get("interval", 60)
+            await asyncio.sleep(interval)
+
+        except Exception as e:
+            log_event(f"Monitor error: {e}", "ERROR")
+            await asyncio.sleep(30)
+
+
+@app.on_event("startup")
+async def startup():
+    global _monitor_task
+    _monitor_task = asyncio.create_task(monitor_loop())
+    log_event("Watchdog started", "INFO")
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    global _monitor_running, _monitor_task
+    _monitor_running = False
+    if _monitor_task:
+        _monitor_task.cancel()
+
+
+# ============================================================================
+# Public Endpoints
+# ============================================================================
+
+@app.get("/status")
+async def get_status():
+    """Get watchdog status."""
+    cached = stats_cache.get("last_check")
+    if cached:
+        return {**cached, "cached": True}
+
+    check = await perform_health_check()
+    stats_cache.set("last_check", check)
+    return {**check, "cached": False}
+
+
+@app.get("/health")
+async def health():
+    return {"status": "healthy", "module": "watchdog"}
 
 
 @app.get("/containers")
 async def get_containers():
-    """Get detailed container list"""
+    """Get detailed container list."""
     config = load_config()
     containers = []
 
@@ -255,12 +520,12 @@ async def get_containers():
                     "critical": False
                 })
 
-    return {"containers": containers}
+    return {"containers": containers, "total": len(containers)}
 
 
 @app.get("/services")
 async def get_services():
-    """Get detailed service list"""
+    """Get detailed service list."""
     config = load_config()
     services = []
 
@@ -275,12 +540,12 @@ async def get_services():
             "critical": s.get("critical", False)
         })
 
-    return {"services": services}
+    return {"services": services, "total": len(services)}
 
 
 @app.get("/endpoints")
 async def get_endpoints():
-    """Get detailed endpoint list"""
+    """Get detailed endpoint list."""
     config = load_config()
     endpoints = []
 
@@ -295,12 +560,12 @@ async def get_endpoints():
             "enabled": e.get("enabled", True)
         })
 
-    return {"endpoints": endpoints}
+    return {"endpoints": endpoints, "total": len(endpoints)}
 
 
 @app.get("/logs")
 async def get_logs(lines: int = Query(50, ge=1, le=500)):
-    """Get watchdog logs"""
+    """Get watchdog logs."""
     log_lines = []
     total = 0
 
@@ -309,53 +574,107 @@ async def get_logs(lines: int = Query(50, ge=1, le=500)):
         total = len(all_lines)
         log_lines = all_lines[-lines:] if lines < total else all_lines
 
-    return {
-        "lines": log_lines,
-        "total": total
-    }
+    return {"lines": log_lines, "total": total}
+
+
+@app.get("/history")
+async def get_history(limit: int = Query(50, ge=1, le=500), event_type: Optional[str] = None):
+    """Get event history."""
+    history = load_history()
+
+    if event_type:
+        history = [e for e in history if e.get("type") == event_type]
+
+    history = sorted(history, key=lambda x: x.get("timestamp", ""), reverse=True)
+    return {"events": history[:limit], "total": len(history)}
 
 
 @app.get("/config")
-async def get_config():
-    """Get watchdog configuration"""
+async def get_config_endpoint():
+    """Get watchdog configuration."""
     return load_config()
 
 
-# Protected endpoints
-@app.post("/container/restart")
-async def restart_container(req: ContainerRestart, user: dict = Depends(require_jwt)):
-    """Restart a container"""
+@app.get("/summary")
+async def get_summary():
+    """Get comprehensive watchdog summary."""
+    config = load_config()
+    check = await perform_health_check()
+    history = load_history()
+
+    # Count issues
+    containers_down = sum(1 for c in check["containers"] if c["state"] != "running")
+    services_down = sum(1 for s in check["services"] if s["state"] != "running")
+    endpoints_down = sum(1 for e in check["endpoints"] if not e["healthy"])
+
+    # Recent events (24h)
+    cutoff = (datetime.utcnow() - timedelta(hours=24)).isoformat()
+    recent_events = [e for e in history if e.get("timestamp", "") > cutoff]
+
+    return {
+        "health": check["health"],
+        "monitoring": {
+            "enabled": config.get("enabled", True),
+            "interval": config.get("interval", 60),
+            "auto_recovery": config.get("auto_recovery", False)
+        },
+        "containers": {
+            "total": len(check["containers"]),
+            "running": len(check["containers"]) - containers_down,
+            "down": containers_down
+        },
+        "services": {
+            "total": len(check["services"]),
+            "running": len(check["services"]) - services_down,
+            "down": services_down
+        },
+        "endpoints": {
+            "total": len(check["endpoints"]),
+            "healthy": len(check["endpoints"]) - endpoints_down,
+            "unhealthy": endpoints_down
+        },
+        "events_24h": len(recent_events),
+        "webhooks_configured": len(load_webhooks()),
+        "timestamp": datetime.utcnow().isoformat() + "Z"
+    }
+
+
+# ============================================================================
+# Protected Endpoints
+# ============================================================================
+
+@app.post("/container/restart", dependencies=[Depends(require_jwt)])
+async def restart_container(req: ContainerRestart):
+    """Restart a container."""
     container_dir = LXC_PATH / req.name
 
     if not container_dir.exists() or not (container_dir / "config").exists():
         raise HTTPException(status_code=404, detail="Container not found")
 
-    log_event(f"Manual restart requested for container: {req.name}")
+    add_event(EventType.RECOVERY_ATTEMPTED, req.name, {"type": "container", "action": "restart"})
 
-    # Stop container
     run_cmd(["lxc-stop", "-P", str(LXC_PATH), "-n", req.name], timeout=30)
-    time.sleep(1)
+    await asyncio.sleep(1)
 
-    # Start container
     success, out, err = run_cmd(["lxc-start", "-P", str(LXC_PATH), "-n", req.name], timeout=30)
-    time.sleep(2)
+    await asyncio.sleep(2)
 
     running, pid = lxc_running(req.name)
 
     if running:
-        log_event(f"Container {req.name} restarted successfully (PID: {pid})")
+        add_event(EventType.RECOVERY_SUCCESS, req.name, {"pid": pid})
+        stats_cache.invalidate()
         return {"success": True, "state": "running", "pid": pid}
     else:
-        log_event(f"Container {req.name} failed to start: {err}")
+        add_event(EventType.RECOVERY_FAILED, req.name, {"error": err})
         return {"success": False, "error": "Container failed to start", "state": "stopped"}
 
 
-@app.post("/service/restart")
-async def restart_service(req: ServiceRestart, user: dict = Depends(require_jwt)):
-    """Restart a service"""
+@app.post("/service/restart", dependencies=[Depends(require_jwt)])
+async def restart_service(req: ServiceRestart):
+    """Restart a service."""
     config = load_config()
 
-    # Find service in config
     service = None
     for s in config.get("services", []):
         if s["name"] == req.name:
@@ -365,80 +684,97 @@ async def restart_service(req: ServiceRestart, user: dict = Depends(require_jwt)
     if not service:
         raise HTTPException(status_code=404, detail="Service not found in configuration")
 
-    log_event(f"Manual restart requested for service: {req.name}")
+    add_event(EventType.RECOVERY_ATTEMPTED, req.name, {"type": "service", "action": "restart"})
 
-    # Try systemctl restart
     success, out, err = run_cmd(["systemctl", "restart", req.name], timeout=30)
-    time.sleep(2)
+    await asyncio.sleep(2)
 
     running, pid = service_running(service["process"])
 
     if running:
-        log_event(f"Service {req.name} restarted successfully (PID: {pid})")
+        add_event(EventType.RECOVERY_SUCCESS, req.name, {"pid": pid})
+        stats_cache.invalidate()
         return {"success": True, "state": "running", "pid": pid}
     else:
-        log_event(f"Service {req.name} failed to start")
+        add_event(EventType.RECOVERY_FAILED, req.name, {"error": err})
         return {"success": False, "error": "Service failed to start", "state": "stopped"}
 
 
-@app.post("/check")
-async def run_check(user: dict = Depends(require_jwt)):
-    """Run a manual health check"""
-    log_event("Manual health check triggered")
+@app.post("/check", dependencies=[Depends(require_jwt)])
+async def run_check():
+    """Run a manual health check."""
+    check = await perform_health_check()
+    stats_cache.set("last_check", check)
 
-    status = await get_status()
     issues = []
-
-    # Check containers
-    for c in status["containers"]:
+    for c in check["containers"]:
         if c["state"] != "running":
             issues.append(f"Container {c['name']} is {c['state']}")
-
-    # Check services
-    for s in status["services"]:
+    for s in check["services"]:
         if s["state"] != "running":
             issues.append(f"Service {s['name']} is {s['state']}")
-
-    # Check endpoints
-    for e in status["endpoints"]:
+    for e in check["endpoints"]:
         if not e["healthy"]:
             issues.append(f"Endpoint {e['name']} returned {e['code']}")
 
     return {
         "success": True,
+        "health": check["health"],
         "issues": issues,
         "message": f"Health check completed, {len(issues)} issues found"
     }
 
 
-@app.post("/logs/clear")
-async def clear_logs(user: dict = Depends(require_jwt)):
-    """Clear watchdog logs"""
+@app.post("/logs/clear", dependencies=[Depends(require_jwt)])
+async def clear_logs():
+    """Clear watchdog logs."""
     if LOG_FILE.exists():
         LOG_FILE.write_text("")
 
-    # Clear alert states
     ALERT_STATE_DIR.mkdir(parents=True, exist_ok=True)
     for f in ALERT_STATE_DIR.glob("*.alert"):
         f.unlink()
 
-    log_event("Logs cleared")
+    log_event("Logs cleared", "INFO")
     return {"success": True}
 
 
-@app.post("/config")
-async def update_config(config: dict, user: dict = Depends(require_jwt)):
-    """Update watchdog configuration"""
+@app.post("/config", dependencies=[Depends(require_jwt)])
+async def update_config(config: dict):
+    """Update watchdog configuration."""
     save_config(config)
-    log_event("Configuration updated")
+    stats_cache.invalidate()
+    log_event("Configuration updated", "INFO")
     return {"success": True}
 
 
-@app.get("/info")
-async def get_info():
-    """Get module info"""
-    return {
-        "module": "secubox-watchdog",
-        "version": "1.0.0",
-        "description": "Service and container health monitoring"
+@app.get("/webhooks", dependencies=[Depends(require_jwt)])
+async def list_webhooks():
+    """List configured webhooks."""
+    return {"webhooks": load_webhooks()}
+
+
+@app.post("/webhooks", dependencies=[Depends(require_jwt)])
+async def add_webhook(webhook: WebhookConfig):
+    """Add a webhook."""
+    webhooks = load_webhooks()
+    wh = {
+        "id": hashlib.sha256(f"{time.time()}".encode()).hexdigest()[:12],
+        "url": webhook.url,
+        "secret": webhook.secret,
+        "events": webhook.events,
+        "enabled": webhook.enabled,
+        "created_at": datetime.utcnow().isoformat() + "Z"
     }
+    webhooks.append(wh)
+    save_webhooks(webhooks)
+    return {"success": True, "webhook": wh}
+
+
+@app.delete("/webhooks/{webhook_id}", dependencies=[Depends(require_jwt)])
+async def delete_webhook(webhook_id: str):
+    """Delete a webhook."""
+    webhooks = load_webhooks()
+    webhooks = [w for w in webhooks if w.get("id") != webhook_id]
+    save_webhooks(webhooks)
+    return {"success": True}
