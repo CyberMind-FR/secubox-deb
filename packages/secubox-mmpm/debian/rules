@@ -1,0 +1,16 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d $(CURDIR)/debian/secubox-mmpm/usr/lib/secubox/mmpm/api
+	install -m 644 api/main.py $(CURDIR)/debian/secubox-mmpm/usr/lib/secubox/mmpm/api/
+	touch $(CURDIR)/debian/secubox-mmpm/usr/lib/secubox/mmpm/api/__init__.py
+	install -d $(CURDIR)/debian/secubox-mmpm/usr/share/secubox/www/mmpm
+	install -m 644 www/mmpm/index.html $(CURDIR)/debian/secubox-mmpm/usr/share/secubox/www/mmpm/
+	install -d $(CURDIR)/debian/secubox-mmpm/etc/nginx/secubox.d
+	install -m 644 nginx/mmpm.conf $(CURDIR)/debian/secubox-mmpm/etc/nginx/secubox.d/
+	install -d $(CURDIR)/debian/secubox-mmpm/usr/share/secubox/menu.d
+	install -m 644 menu.d/820-mmpm.json $(CURDIR)/debian/secubox-mmpm/usr/share/secubox/menu.d/
+	install -d $(CURDIR)/debian/secubox-mmpm/usr/lib/systemd/system
+	install -m 644 debian/secubox-mmpm.service $(CURDIR)/debian/secubox-mmpm/usr/lib/systemd/system/

@@ -1,0 +1,14 @@
+[Unit]
+Description=SecuBox MMPM API
+After=network.target secubox-core.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/usr/lib/secubox/mmpm
+ExecStart=/usr/bin/uvicorn api.main:app --uds /run/secubox/mmpm.sock --log-level warning
+UMask=0117
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
