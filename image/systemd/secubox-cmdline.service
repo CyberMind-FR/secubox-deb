@@ -1,0 +1,13 @@
+[Unit]
+Description=SecuBox Kernel Command Line Handler
+DefaultDependencies=no
+Before=sysinit.target secubox-net-detect.service network-pre.target
+After=local-fs.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/secubox-cmdline-handler apply
+
+[Install]
+WantedBy=sysinit.target

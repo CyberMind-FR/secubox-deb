@@ -3,7 +3,53 @@
 
 ---
 
-## ✅ Terminé cette session
+## ✅ Terminé cette session (Session 24)
+
+### Network Auto-Detection & Preseed System ✅
+- **secubox-net-detect** — Auto-detection script for WAN/LAN interfaces
+  - Board detection via /proc/device-tree/model (MochaBin, ESPRESSObin)
+  - x64 detection via DMI (VM vs baremetal)
+  - Interface mapping: eth0=WAN, eth*/lan*=LAN based on device
+  - Netplan generation for 3 modes: router, bridge, single
+  - Link detection for x64 auto-discovery
+- **Board configurations**:
+  - `board/x64-live/config.mk` — Live USB profile settings
+  - `board/x64-vm/config.mk` — VM-specific settings
+  - Netplan templates for x64 auto-DHCP on common interfaces
+- **secubox-cmdline-handler** — Kernel parameter parser
+  - `secubox.netmode=router|bridge|single` — Network mode selection
+  - `secubox.kiosk=1` — Enable GUI kiosk mode
+  - `secubox.debug=1` — Enable debug mode
+  - Runs early at boot (sysinit.target)
+- **secubox-kiosk-setup** — GUI kiosk mode installer
+  - Installs Cage Wayland compositor + Chromium
+  - Fullscreen WebUI at https://localhost:9443/
+  - Commands: install, enable, disable, status
+  - Perfect for touchscreen/embedded displays
+- **build-live-usb.sh updates**:
+  - GRUB menu entries: Kiosk Mode, Bridge Mode
+  - Installs all detection scripts and services
+  - Systemd services for early boot configuration
+- **firstboot.sh integration**:
+  - Calls secubox-net-detect to configure network
+  - Updates secubox.conf with detected board/interface
+  - Creates .net-configured marker
+
+### Phase 8-10 Progress ✅
+- secubox-jabber (XMPP) — Deployed
+- secubox-magicmirror — Deployed
+- secubox-mmpm — Deployed
+- secubox-redroid — Deployed
+- secubox-vault — Built
+- secubox-cloner — Built
+- secubox-vm — Built
+- secubox-wazuh — Built
+- secubox-ossec — Built
+- All commits pushed to master
+
+---
+
+## ✅ Terminé session précédente (Session 23)
 
 ### Migration Preparation Workflow ✅
 - Created `.claude/REMAINING-PACKAGES.md` — 53 packages remaining inventory
@@ -759,22 +805,43 @@ Total modules: **41** (was 35)
 
 ## ⬜ Next Up
 
+### PRIORITY: Extend Existing Modules (Before Adding New)
+Per user request: Focus on completing and enhancing existing modules before porting new ones from OpenWRT.
+
+**Modules to Enhance:**
+1. **secubox-netmodes** — Integrate secubox-net-detect for auto-configuration
+2. **secubox-system** — Add board detection info to system status
+3. **secubox-core** — Integrate kiosk setup option in admin
+4. **secubox-hub** — Add network mode selection to dashboard
+5. **secubox-portal** — Add device-specific theming based on board
+
+**Build & Test Live USB:**
+```bash
+sudo bash image/build-live-usb.sh --local-cache
+# Flash and test on x64 hardware or VM
+```
+
 ### Phase 8: Applications (In Progress)
 
 **Completed:**
 - [x] secubox-ollama — LLM inference ✅
 - [x] secubox-jellyfin — Media server ✅
+- [x] secubox-lyrion — Audio server ✅
+- [x] secubox-zigbee — IoT gateway ✅
+- [x] secubox-localai — Local AI inference ✅
+- [x] secubox-jabber — XMPP messaging ✅
+- [x] secubox-magicmirror — Smart display ✅
+- [x] secubox-mmpm — MagicMirror packages ✅
+- [x] secubox-redroid — Android container ✅
 
-**Next Priority: secubox-homeassistant**
-- IoT hub management via LXC
-- FastAPI backend + CRT-light frontend
-- Endpoints: /status, /addons, /integrations, /config
+**Phase 9 (Built, not deployed):**
+- [x] secubox-vault — Secrets management
+- [x] secubox-cloner — System backup/restore
+- [x] secubox-vm — Virtualization (KVM/LXC)
 
-**Migration Workflow:**
-1. `bash scripts/new-package.sh jellyfin "Media server" apps "🎬" 801`
-2. Port RPCD → FastAPI using `.claude/PATTERNS.md`
-3. Apply CRT-light P31 theme to frontend
-4. Build + deploy + verify
+**Phase 10 (Built, not deployed):**
+- [x] secubox-wazuh — SIEM
+- [x] secubox-ossec — Host IDS
 
 > See [REMAINING-PACKAGES.md](REMAINING-PACKAGES.md) for full Phase 8-10 inventory
 

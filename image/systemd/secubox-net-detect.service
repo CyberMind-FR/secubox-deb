@@ -1,0 +1,22 @@
+[Unit]
+Description=SecuBox Network Interface Auto-Detection
+Before=network-pre.target netplan-generate.service
+Wants=network-pre.target
+After=local-fs.target
+
+# Only run on first boot or when marker is missing
+ConditionPathExists=!/var/lib/secubox/.net-configured
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+
+# Run network detection and generate netplan
+ExecStart=/usr/sbin/secubox-net-detect apply router
+
+# Create marker after successful configuration
+ExecStartPost=/bin/mkdir -p /var/lib/secubox
+ExecStartPost=/bin/touch /var/lib/secubox/.net-configured
+
+[Install]
+WantedBy=network-pre.target

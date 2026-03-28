@@ -1,0 +1,34 @@
+# /etc/netplan/00-secubox.yaml — x64 Live — Mode Router (défaut)
+# Auto-détection des interfaces au premier démarrage par secubox-net-detect
+# Ce fichier est un template, remplacé dynamiquement au firstboot
+network:
+  version: 2
+  renderer: networkd
+
+  ethernets:
+    # WAN — première interface détectée avec lien
+    eth0:
+      dhcp4: true
+      dhcp6: false
+      optional: true
+
+    # Interfaces alternatives (VM/Baremetal)
+    enp0s3:
+      dhcp4: true
+      optional: true
+    enp0s8:
+      optional: true
+    enp1s0:
+      dhcp4: true
+      optional: true
+    eno1:
+      dhcp4: true
+      optional: true
+    eno2:
+      optional: true
+
+  # Bridge LAN créé dynamiquement si plusieurs interfaces
+  # bridges:
+  #   br-lan:
+  #     interfaces: [enp0s8, eno2]
+  #     addresses: [192.168.1.1/24]

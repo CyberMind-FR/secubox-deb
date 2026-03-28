@@ -5,6 +5,30 @@
 
 ## 2026-03-28
 
+### Network Auto-Detection & Preseed System
+- Created `secubox-net-detect` — Auto-detection of WAN/LAN interfaces
+  - Board detection: MochaBin, ESPRESSObin v7/Ultra, x64 VM/baremetal
+  - Interface mapping based on device model (eth0=WAN, lan*=LAN)
+  - Netplan generation for router/bridge/single modes
+  - Link detection for x64 auto-discovery
+- Board configurations created:
+  - `board/x64-live/config.mk` — Live USB settings
+  - `board/x64-vm/config.mk` — VM-specific settings
+  - Netplan templates for each board
+- Kernel cmdline handler:
+  - `secubox-cmdline-handler` — Parses secubox.* kernel params
+  - `secubox.netmode=router|bridge|single`
+  - `secubox.kiosk=1` for GUI mode
+- Kiosk GUI mode:
+  - `secubox-kiosk-setup` — Install/enable/disable minimal GUI
+  - Cage Wayland compositor + Chromium fullscreen
+  - Perfect for touchscreen/kiosk deployments
+- Updated `build-live-usb.sh`:
+  - GRUB menu entries for Kiosk Mode, Bridge Mode
+  - Installs net-detect, cmdline-handler, kiosk-setup
+  - Systemd services for early boot configuration
+- Updated `firstboot.sh` with network auto-detection integration
+
 ### secubox-localai v1.0.0 Complete
 - Fifth Phase 8 package ported from OpenWRT
 - FastAPI backend with 15+ endpoints

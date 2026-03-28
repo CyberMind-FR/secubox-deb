@@ -1,0 +1,41 @@
+# /etc/netplan/00-secubox.yaml — x64 VM — Mode Router
+# Configuration pour environnements virtualisés
+network:
+  version: 2
+  renderer: networkd
+
+  ethernets:
+    # VirtualBox NAT adapter (WAN)
+    enp0s3:
+      dhcp4: true
+      dhcp6: false
+      optional: true
+
+    # VirtualBox Host-only adapter (LAN)
+    enp0s8:
+      optional: true
+
+    # KVM/libvirt adapters
+    enp1s0:
+      dhcp4: true
+      optional: true
+    enp2s0:
+      optional: true
+
+    # VMware adapters
+    ens192:
+      dhcp4: true
+      optional: true
+    ens224:
+      optional: true
+
+  bridges:
+    br-lan:
+      interfaces: [enp0s8]
+      addresses: [192.168.1.1/24]
+      dhcp4: false
+      parameters:
+        stp: false
+        forward-delay: 0
+
+  # DHCP server sur br-lan géré par dnsmasq

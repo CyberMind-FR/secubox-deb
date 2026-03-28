@@ -1,0 +1,102 @@
+#!/bin/bash
+# ══════════════════════════════════════════════════════════════════
+#  secubox-cmdline-handler — Kernel Command Line Parameter Handler
+#  Parses kernel parameters for SecuBox-specific options
+#  Run early at boot before network configuration
+# ══════════════════════════════════════════════════════════════════
+set -euo pipefail
+
+CMDLINE="${1:-/proc/cmdline}"
+MARKER_DIR="/var/lib/secubox"
+
+log() { echo "[cmdline] $*" | systemd-cat -t secubox-cmdline -p info 2>/dev/null || echo "[cmdline] $*"; }
+
+# Parse kernel command line
+parse_cmdline() {
+    local cmdline
+    cmdline=$(cat "$CMDLINE" 2>/dev/null || echo "")
+
+    # Default values
+    local netmode="router"
+    local kiosk="0"
+    local debug="0"
+
+    for param in $cmdline; do
+        case "$param" in
+            secubox.netmode=*)
+                netmode="${param#secubox.netmode=}"
+                ;;
+            secubox.kiosk=*)
+                kiosk="${param#secubox.kiosk=}"
+                ;;
+            secubox.debug=*)
+                debug="${param#secubox.debug=}"
+                ;;
+        esac
+    done
+
+    # Export values
+    echo "SECUBOX_NETMODE=${netmode}"
+    echo "SECUBOX_KIOSK=${kiosk}"
+    echo "SECUBOX_DEBUG=${debug}"
+}
+
+# Apply settings from command line
+apply_settings() {
+    mkdir -p "$MARKER_DIR"
+
+    # Source parsed values
+    eval "$(parse_cmdline)"
+
+    log "Network mode: $SECUBOX_NETMODE"
+    log "Kiosk mode: $SECUBOX_KIOSK"
+
+    # Handle network mode
+    if [[ -x /usr/sbin/secubox-net-detect ]]; then
+        case "$SECUBOX_NETMODE" in
+            router|bridge|single)
+                log "Applying network mode: $SECUBOX_NETMODE"
+                /usr/sbin/secubox-net-detect apply "$SECUBOX_NETMODE"
+                ;;
+            *)
+                log "Unknown netmode '$SECUBOX_NETMODE', using router"
+                /usr/sbin/secubox-net-detect apply router
+                ;;
+        esac
+    fi
+
+    # Handle kiosk mode
+    if [[ "$SECUBOX_KIOSK" == "1" ]]; then
+        log "Kiosk mode requested via cmdline"
+        touch "${MARKER_DIR}/.kiosk-enabled"
+
+        # Install kiosk packages if not present
+        if [[ -x /usr/sbin/secubox-kiosk-setup ]]; then
+            if [[ ! -f "${MARKER_DIR}/.kiosk-installed" ]]; then
+                log "Installing kiosk packages..."
+                /usr/sbin/secubox-kiosk-setup install 2>/dev/null || log "Kiosk install deferred"
+            fi
+            /usr/sbin/secubox-kiosk-setup enable 2>/dev/null || log "Kiosk enable deferred"
+        fi
+    fi
+
+    # Debug mode
+    if [[ "$SECUBOX_DEBUG" == "1" ]]; then
+        log "Debug mode enabled"
+        touch "${MARKER_DIR}/.debug-enabled"
+    fi
+}
+
+# Main
+case "${1:-apply}" in
+    parse)
+        parse_cmdline
+        ;;
+    apply)
+        apply_settings
+        ;;
+    *)
+        echo "Usage: $0 {parse|apply}"
+        exit 1
+        ;;
+esac

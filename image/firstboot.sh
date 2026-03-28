@@ -151,7 +151,43 @@ if [[ -f /etc/nginx/sites-available/secubox ]]; then
   nginx -t && systemctl reload nginx 2>/dev/null || true
 fi
 
-# ── 10. nftables — règles de base ────────────────────────────────
+# ── 10. Network Auto-Detection ──────────────────────────────────
+log "=== Network Detection ==="
+if [[ -x /usr/sbin/secubox-net-detect ]]; then
+  # Run detection
+  /usr/sbin/secubox-net-detect detect /run/secubox/net-detect.json
+
+  # Parse detection result
+  if [[ -f /run/secubox/net-detect.json ]]; then
+    DETECTED_BOARD=$(grep -o '"board": "[^"]*"' /run/secubox/net-detect.json | cut -d'"' -f4)
+    DETECTED_WAN=$(grep -o '"wan": "[^"]*"' /run/secubox/net-detect.json | cut -d'"' -f4)
+    DETECTED_LAN=$(grep -o '"lan": "[^"]*"' /run/secubox/net-detect.json | cut -d'"' -f4)
+
+    log "Board: ${DETECTED_BOARD}"
+    log "WAN: ${DETECTED_WAN}"
+    log "LAN: ${DETECTED_LAN}"
+
+    # Update secubox.conf with detected values
+    sed -i "s/^board     = .*/board     = \"${DETECTED_BOARD}\"/" "${SECUBOX_DIR}/secubox.conf"
+
+    # Update DPI interface
+    if [[ -n "${DETECTED_WAN}" ]]; then
+      sed -i "s/^interface = .*/interface = \"${DETECTED_WAN}\"/" "${SECUBOX_DIR}/secubox.conf"
+    fi
+
+    # Apply network configuration (router mode by default)
+    /usr/sbin/secubox-net-detect apply router
+
+    ok "Network auto-configured"
+  fi
+else
+  log "secubox-net-detect not found, using static netplan"
+fi
+
+# Mark network as configured
+touch /var/lib/secubox/.net-configured
+
+# ── 11. nftables — règles de base ────────────────────────────────
 cat > /etc/nftables.conf <<'NFTEOF'
 #!/usr/sbin/nft -f
 # SecuBox nftables — généré par firstboot
