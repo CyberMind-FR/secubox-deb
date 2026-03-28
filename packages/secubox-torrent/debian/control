@@ -1,0 +1,14 @@
+Source: secubox-torrent
+Section: net
+Priority: optional
+Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.0
+
+Package: secubox-torrent
+Architecture: all
+Depends: secubox-core, python3, python3-uvicorn, python3-fastapi, nginx
+Recommends: transmission-daemon
+Description: SecuBox Torrent Client
+ BitTorrent client with Transmission daemon for SecuBox.
+ Manage downloads, upload torrents, track transfer speeds.

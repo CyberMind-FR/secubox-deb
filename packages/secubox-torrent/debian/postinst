@@ -1,0 +1,13 @@
+#!/bin/bash
+set -e
+case "$1" in
+  configure)
+    install -d -o secubox -g secubox -m 750 /var/lib/secubox/torrent/downloads
+    install -d -o secubox -g secubox -m 750 /var/lib/secubox/torrent/watch
+    systemctl daemon-reload
+    systemctl enable secubox-torrent.service
+    systemctl start secubox-torrent.service || true
+    systemctl reload nginx 2>/dev/null || true
+    ;;
+esac
+#DEBHELPER#
