@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SimpleX - SecuBox</title>
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root { --simplex-purple: #6c5ce7; --simplex-light: #a29bfe; --simplex-dark: #5541d7; }
+        body.dark { --simplex-purple: #a29bfe; --simplex-light: #c8c3fe; --simplex-dark: #6c5ce7; }
+        .accent { color: var(--simplex-purple); }
+        .accent-bg { background-color: var(--simplex-purple); }
+        .header { display: flex; justify-content: space-between; align-items: center; padding: 1rem; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
+        .header h1 { margin: 0; font-size: 1.5rem; }
+        .status-badge { padding: 0.25rem 0.75rem; border-radius: 1rem; font-size: 0.875rem; }
+        .status-badge.running { background: var(--success-bg); color: var(--success); }
+        .status-badge.stopped { background: var(--error-bg); color: var(--error); }
+        .info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .info-card { background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem; }
+        .info-label { font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.25rem; }
+        .info-value { font-size: 1rem; font-weight: 500; word-break: break-all; }
+        .action-bar { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+        .btn { padding: 0.5rem 1rem; border: 1px solid var(--border); border-radius: 0.25rem; background: var(--surface); color: var(--text); cursor: pointer; font-size: 0.875rem; }
+        .btn:hover { background: var(--hover); }
+        .btn.primary { background: var(--simplex-purple); color: white; border-color: var(--simplex-purple); }
+        .btn.primary:hover { background: var(--simplex-dark); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .connection-box { background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem; }
+        .connection-box h3 { margin-top: 0; margin-bottom: 1rem; }
+        .connection-string { background: var(--bg-dark, #1a1a2e); color: var(--text-light, #e0e0e0); font-family: monospace; font-size: 0.75rem; padding: 1rem; border-radius: 0.25rem; word-break: break-all; margin-bottom: 1rem; }
+        .copy-btn { width: 100%; }
+        .qr-placeholder { background: var(--surface-alt); border: 2px dashed var(--border); border-radius: 0.5rem; padding: 2rem; text-align: center; color: var(--text-secondary); }
+        .tabs { display: flex; gap: 0.5rem; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
+        .tab { padding: 0.75rem 1rem; border: none; background: none; color: var(--text-secondary); cursor: pointer; border-bottom: 2px solid transparent; }
+        .tab:hover { color: var(--text); }
+        .tab.active { color: var(--simplex-purple); border-bottom-color: var(--simplex-purple); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .log-viewer { background: var(--bg-dark, #1a1a2e); color: var(--text-light, #e0e0e0); font-family: monospace; font-size: 0.75rem; padding: 1rem; border-radius: 0.5rem; height: 300px; overflow-y: auto; white-space: pre-wrap; }
+        .install-form { max-width: 400px; margin: 2rem auto; padding: 2rem; background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; }
+        .install-form h2 { margin-top: 0; text-align: center; }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.25rem; font-weight: 500; }
+        .form-group input { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 0.25rem; background: var(--surface); color: var(--text); }
+        .form-group small { color: var(--text-secondary); font-size: 0.75rem; }
+        .hidden { display: none !important; }
+        .privacy-note { background: var(--info-bg); color: var(--info); padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem; font-size: 0.875rem; }
+    </style>
+</head>
+<body class="crt-light">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="main-content">
+    <div class="container">
+        <div class="header">
+            <h1><span class="accent">SimpleX</span> Chat Server</h1>
+            <span id="status-badge" class="status-badge stopped">Stopped</span>
+        </div>
+
+        <div id="install-section" class="install-form hidden">
+            <h2>Install SimpleX Server</h2>
+            <div class="privacy-note">
+                SimpleX is a privacy-focused messaging protocol with no user identifiers.
+                Your server will relay encrypted messages without access to content.
+            </div>
+            <form onsubmit="install(event)">
+                <div class="form-group">
+                    <label>Server Address</label>
+                    <input type="text" id="server-address" placeholder="your-domain.com or IP">
+                    <small>Leave empty to use container IP</small>
+                </div>
+                <button type="submit" class="btn primary" style="width: 100%; margin-top: 1rem;">Install SMP Server</button>
+            </form>
+        </div>
+
+        <div id="main-section" class="hidden">
+            <div class="info-grid">
+                <div class="info-card">
+                    <div class="info-label">Server Address</div>
+                    <div class="info-value" id="server-address-val">-</div>
+                </div>
+                <div class="info-card">
+                    <div class="info-label">SMP Port</div>
+                    <div class="info-value" id="smp-port">5223</div>
+                </div>
+                <div class="info-card">
+                    <div class="info-label">Container IP</div>
+                    <div class="info-value" id="container-ip">-</div>
+                </div>
+                <div class="info-card">
+                    <div class="info-label">Storage Used</div>
+                    <div class="info-value" id="storage-used">-</div>
+                </div>
+            </div>
+
+            <div class="action-bar">
+                <button class="btn primary" id="btn-start" onclick="startService()">Start</button>
+                <button class="btn" id="btn-stop" onclick="stopService()" disabled>Stop</button>
+                <button class="btn" id="btn-restart" onclick="restartService()" disabled>Restart</button>
+            </div>
+
+            <div class="tabs">
+                <button class="tab active" data-tab="connect">Connect</button>
+                <button class="tab" data-tab="logs">Logs</button>
+            </div>
+
+            <div id="tab-connect" class="tab-content active">
+                <div class="connection-box">
+                    <h3>Server Connection String</h3>
+                    <p style="color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 1rem;">
+                        Add this server to SimpleX Chat app under Settings → Network & Servers → SMP Servers
+                    </p>
+                    <div class="connection-string" id="connection-string">Loading...</div>
+                    <button class="btn primary copy-btn" onclick="copyConnection()">Copy Connection String</button>
+                </div>
+
+                <div class="connection-box">
+                    <h3>Server Fingerprint</h3>
+                    <div class="connection-string" id="fingerprint">Loading...</div>
+                </div>
+            </div>
+
+            <div id="tab-logs" class="tab-content">
+                <div class="action-bar"><button class="btn" onclick="loadLogs()">Refresh</button></div>
+                <div id="log-viewer" class="log-viewer">Loading...</div>
+            </div>
+        </div>
+    </div>
+    </main>
+
+    <script>
+        const API = '/api/v1/simplex';
+
+        async function api(endpoint, options = {}) {
+            const r = await fetch(API + endpoint, { ...options, headers: { 'Authorization': 'Bearer ' + localStorage.getItem('sbx_token'), 'Content-Type': 'application/json', ...options.headers } });
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            return r.json();
+        }
+
+        async function loadStatus() {
+            try {
+                const d = await api('/status');
+                const badge = document.getElementById('status-badge');
+                if (!d.container_exists) {
+                    document.getElementById('install-section').classList.remove('hidden');
+                    document.getElementById('main-section').classList.add('hidden');
+                    badge.textContent = 'Not Installed'; badge.className = 'status-badge stopped';
+                    return;
+                }
+                document.getElementById('install-section').classList.add('hidden');
+                document.getElementById('main-section').classList.remove('hidden');
+                if (d.running) {
+                    badge.textContent = 'Running'; badge.className = 'status-badge running';
+                    document.getElementById('btn-start').disabled = true;
+                    document.getElementById('btn-stop').disabled = false;
+                    document.getElementById('btn-restart').disabled = false;
+                    document.getElementById('container-ip').textContent = d.container_ip || '-';
+                    document.getElementById('server-address-val').textContent = d.server_address || d.container_ip || '-';
+                    loadConnection();
+                    loadStats();
+                } else {
+                    badge.textContent = 'Stopped'; badge.className = 'status-badge stopped';
+                    document.getElementById('btn-start').disabled = false;
+                    document.getElementById('btn-stop').disabled = true;
+                    document.getElementById('btn-restart').disabled = true;
+                }
+            } catch (e) { console.error(e); }
+        }
+
+        async function loadConnection() {
+            try {
+                const d = await api('/connection-string');
+                document.getElementById('connection-string').textContent = d.connection_string || 'Not available';
+                document.getElementById('fingerprint').textContent = d.fingerprint || 'Not available';
+            } catch (e) {
+                document.getElementById('connection-string').textContent = 'Error loading';
+                document.getElementById('fingerprint').textContent = 'Error loading';
+            }
+        }
+
+        async function loadStats() {
+            try {
+                const d = await api('/stats');
+                document.getElementById('storage-used').textContent = d.stats?.storage_used || '-';
+            } catch (e) { console.error(e); }
+        }
+
+        async function install(e) {
+            e.preventDefault();
+            const btn = e.target.querySelector('button'); btn.disabled = true; btn.textContent = 'Installing...';
+            const addr = document.getElementById('server-address').value;
+            try {
+                await api(`/install${addr ? '?server_address=' + encodeURIComponent(addr) : ''}`, { method: 'POST' });
+                await loadStatus();
+            } catch (err) { alert('Failed: ' + err.message); }
+            finally { btn.disabled = false; btn.textContent = 'Install SMP Server'; }
+        }
+
+        async function startService() { document.getElementById('btn-start').disabled = true; try { await api('/start', { method: 'POST' }); await loadStatus(); } catch (e) { alert('Failed: ' + e.message); } }
+        async function stopService() { document.getElementById('btn-stop').disabled = true; try { await api('/stop', { method: 'POST' }); await loadStatus(); } catch (e) { alert('Failed: ' + e.message); } }
+        async function restartService() { document.getElementById('btn-restart').disabled = true; try { await api('/restart', { method: 'POST' }); await loadStatus(); } catch (e) { alert('Failed: ' + e.message); } }
+
+        async function loadLogs() { try { const d = await api('/logs?lines=200'); document.getElementById('log-viewer').textContent = d.logs?.join('\n') || 'No logs'; } catch (e) { document.getElementById('log-viewer').textContent = 'Error: ' + e.message; } }
+
+        function copyConnection() {
+            const text = document.getElementById('connection-string').textContent;
+            navigator.clipboard.writeText(text).then(() => alert('Copied!')).catch(() => {
+                const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); alert('Copied!');
+            });
+        }
+
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+                if (tab.dataset.tab === 'logs') loadLogs();
+            });
+        });
+
+        if (window.matchMedia?.('(prefers-color-scheme: dark)').matches) document.body.classList.add('dark');
+        loadStatus(); setInterval(loadStatus, 30000);
+    </script>
+    <script src="/shared/sidebar.js"></script>
+</body>
+</html>

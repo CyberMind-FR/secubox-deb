@@ -1,0 +1,7 @@
+secubox-simplex (1.0.0-1) bookworm; urgency=medium
+
+  * Initial release
+  * SimpleX SMP server in LXC container
+  * Connection string generation for clients
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Sat, 28 Mar 2026 12:30:00 +0100
