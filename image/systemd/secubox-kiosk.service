@@ -1,0 +1,33 @@
+[Unit]
+Description=SecuBox Kiosk Mode (WebUI Display)
+After=network-online.target nginx.service
+Wants=network-online.target
+
+# Only start if kiosk is enabled
+ConditionPathExists=/var/lib/secubox/.kiosk-enabled
+
+[Service]
+Type=simple
+User=secubox-kiosk
+Group=secubox-kiosk
+
+# Wayland/DRM access
+SupplementaryGroups=video audio input render
+
+# Environment for Wayland
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+Environment=WLR_LIBINPUT_NO_DEVICES=1
+Environment=KIOSK_URL=https://localhost:9443/
+
+# Create runtime directory
+ExecStartPre=/bin/mkdir -p /run/user/1000
+ExecStartPre=/bin/chown secubox-kiosk:secubox-kiosk /run/user/1000
+
+# Cage compositor running kiosk script
+ExecStart=/usr/bin/cage -s -- /home/secubox-kiosk/start-kiosk.sh
+
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=graphical.target

@@ -1,0 +1,249 @@
+#!/bin/bash
+# ══════════════════════════════════════════════════════════════════
+#  secubox-kiosk-setup — GUI Kiosk Mode Configuration
+#  Installs minimal GUI with Chromium kiosk on SecuBox WebUI
+#  For non-headless devices (x64 with display, touchscreen, etc.)
+# ══════════════════════════════════════════════════════════════════
+set -euo pipefail
+
+KIOSK_USER="secubox-kiosk"
+KIOSK_HOME="/home/${KIOSK_USER}"
+KIOSK_URL="https://localhost:9443/"
+MARKER="/var/lib/secubox/.kiosk-installed"
+
+RED='\033[0;31m'; GREEN='\033[0;32m'; CYAN='\033[0;36m'; NC='\033[0m'
+log() { echo -e "${CYAN}[kiosk]${NC} $*"; }
+ok()  { echo -e "${GREEN}[  OK  ]${NC} $*"; }
+err() { echo -e "${RED}[FAIL ]${NC} $*" >&2; exit 1; }
+
+usage() {
+    cat <<EOF
+Usage: secubox-kiosk-setup {install|enable|disable|status}
+
+Commands:
+  install  - Install minimal GUI packages (cage, chromium)
+  enable   - Enable kiosk mode autostart
+  disable  - Disable kiosk mode (console only)
+  status   - Show current kiosk status
+
+The kiosk displays the SecuBox WebUI in fullscreen Chromium,
+using the Cage Wayland compositor (minimal footprint).
+EOF
+    exit 0
+}
+
+# ── Install Minimal GUI Packages ────────────────────────────────────
+install_kiosk() {
+    log "Installing kiosk mode packages..."
+
+    # Check if already installed
+    if [[ -f "$MARKER" ]]; then
+        log "Kiosk packages already installed"
+        return 0
+    fi
+
+    # Required packages for Wayland kiosk
+    # cage: minimal Wayland compositor
+    # chromium: web browser in kiosk mode
+    # fonts-dejavu: readable fonts
+    # libinput: touchscreen/mouse support
+    apt-get update -qq
+
+    apt-get install -y --no-install-recommends \
+        cage \
+        chromium \
+        fonts-dejavu-core \
+        libinput10 \
+        libegl1 \
+        libgles2 \
+        libgbm1 \
+        libdrm2 \
+        mesa-utils \
+        xdg-utils \
+        || err "Failed to install kiosk packages"
+
+    # Create kiosk user
+    if ! id "$KIOSK_USER" &>/dev/null; then
+        useradd -r -m -d "$KIOSK_HOME" -s /usr/sbin/nologin \
+            -G video,audio,input,render "$KIOSK_USER"
+        ok "Created kiosk user: $KIOSK_USER"
+    fi
+
+    # Create kiosk script
+    mkdir -p "${KIOSK_HOME}/.config"
+    cat > "${KIOSK_HOME}/start-kiosk.sh" <<'KIOSK'
+#!/bin/bash
+# SecuBox Kiosk Launcher
+
+# Wait for network
+sleep 5
+
+# Kiosk URL (local SecuBox WebUI)
+URL="${KIOSK_URL:-https://localhost:9443/}"
+
+# Chromium flags for kiosk mode
+CHROMIUM_FLAGS=(
+    --kiosk
+    --no-first-run
+    --disable-translate
+    --disable-infobars
+    --disable-session-crashed-bubble
+    --disable-restore-background-contents
+    --disable-sync
+    --disable-features=TranslateUI
+    --ignore-certificate-errors
+    --noerrdialogs
+    --enable-features=OverlayScrollbar
+    --start-fullscreen
+    --window-position=0,0
+    --check-for-update-interval=604800
+    --disable-component-update
+    --disable-default-apps
+    --disable-extensions
+    --disable-background-networking
+    --disable-domain-reliability
+    --disable-client-side-phishing-detection
+    "$URL"
+)
+
+exec chromium "${CHROMIUM_FLAGS[@]}"
+KIOSK
+    chmod +x "${KIOSK_HOME}/start-kiosk.sh"
+    chown -R "$KIOSK_USER":"$KIOSK_USER" "$KIOSK_HOME"
+
+    # Create systemd service for cage+chromium
+    cat > /etc/systemd/system/secubox-kiosk.service <<EOF
+[Unit]
+Description=SecuBox Kiosk Mode (WebUI)
+After=network-online.target secubox-core.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=${KIOSK_USER}
+Group=${KIOSK_USER}
+
+# Wayland/DRM access
+SupplementaryGroups=video audio input render
+
+# Environment
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+Environment=WLR_LIBINPUT_NO_DEVICES=1
+Environment=KIOSK_URL=${KIOSK_URL}
+
+# Cage compositor running Chromium
+ExecStartPre=/bin/mkdir -p /run/user/1000
+ExecStartPre=/bin/chown ${KIOSK_USER}:${KIOSK_USER} /run/user/1000
+ExecStart=/usr/bin/cage -s -- ${KIOSK_HOME}/start-kiosk.sh
+
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=graphical.target
+EOF
+
+    systemctl daemon-reload
+
+    # Mark as installed
+    mkdir -p /var/lib/secubox
+    echo "installed=$(date -Iseconds)" > "$MARKER"
+
+    ok "Kiosk mode installed"
+    log "Run 'secubox-kiosk-setup enable' to activate"
+}
+
+# ── Enable Kiosk Mode ─────────────────────────────────────────────
+enable_kiosk() {
+    if [[ ! -f "$MARKER" ]]; then
+        err "Kiosk not installed. Run 'secubox-kiosk-setup install' first"
+    fi
+
+    log "Enabling kiosk mode..."
+
+    # Disable console autologin if enabled
+    systemctl disable getty@tty1.service 2>/dev/null || true
+
+    # Enable graphical target
+    systemctl set-default graphical.target
+
+    # Enable kiosk service
+    systemctl enable secubox-kiosk.service
+
+    # Start kiosk
+    systemctl start secubox-kiosk.service || log "Kiosk will start on next boot"
+
+    ok "Kiosk mode enabled"
+    log "SecuBox WebUI will display on the connected screen"
+}
+
+# ── Disable Kiosk Mode ────────────────────────────────────────────
+disable_kiosk() {
+    log "Disabling kiosk mode..."
+
+    # Stop and disable kiosk service
+    systemctl stop secubox-kiosk.service 2>/dev/null || true
+    systemctl disable secubox-kiosk.service 2>/dev/null || true
+
+    # Return to multi-user (console) target
+    systemctl set-default multi-user.target
+
+    # Re-enable console login
+    systemctl enable getty@tty1.service 2>/dev/null || true
+
+    ok "Kiosk mode disabled"
+    log "System will boot to console"
+}
+
+# ── Show Status ──────────────────────────────────────────────────
+show_status() {
+    echo ""
+    echo "SecuBox Kiosk Mode Status"
+    echo "========================="
+
+    if [[ -f "$MARKER" ]]; then
+        echo "Installed: yes ($(cat $MARKER))"
+    else
+        echo "Installed: no"
+    fi
+
+    local kiosk_active="inactive"
+    if systemctl is-active secubox-kiosk.service &>/dev/null; then
+        kiosk_active="active"
+    fi
+    echo "Service: $kiosk_active"
+
+    local default_target
+    default_target=$(systemctl get-default)
+    echo "Default target: $default_target"
+
+    if [[ "$default_target" == "graphical.target" ]] && [[ "$kiosk_active" == "active" ]]; then
+        echo "Mode: KIOSK (GUI)"
+    else
+        echo "Mode: CONSOLE"
+    fi
+
+    echo ""
+}
+
+# ── Main ────────────────────────────────────────────────────────
+case "${1:-}" in
+    install)
+        install_kiosk
+        ;;
+    enable)
+        enable_kiosk
+        ;;
+    disable)
+        disable_kiosk
+        ;;
+    status)
+        show_status
+        ;;
+    -h|--help|help)
+        usage
+        ;;
+    *)
+        usage
+        ;;
+esac

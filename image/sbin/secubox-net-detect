@@ -1,0 +1,363 @@
+#!/bin/bash
+# ══════════════════════════════════════════════════════════════════
+#  secubox-net-detect — Automatic Network Interface Detection
+#  Detects board type and configures WAN/LAN interfaces accordingly
+#  Supports: EspressoBin, MochaBin, x64 (VM/Bare-metal)
+# ══════════════════════════════════════════════════════════════════
+set -euo pipefail
+
+SECUBOX_CONF="/etc/secubox/secubox.conf"
+NETPLAN_DIR="/etc/netplan"
+OUTPUT_JSON="${1:-/run/secubox/net-detect.json}"
+
+# Colors for terminal output
+RED='\033[0;31m'; GREEN='\033[0;32m'; CYAN='\033[0;36m'; NC='\033[0m'
+log() { echo -e "${CYAN}[net-detect]${NC} $*"; }
+ok()  { echo -e "${GREEN}[  OK  ]${NC} $*"; }
+
+# ── Board Detection ────────────────────────────────────────────────
+detect_board() {
+    local board="unknown"
+
+    # ARM: Read device-tree model
+    if [[ -f /proc/device-tree/model ]]; then
+        local model
+        model=$(tr -d '\0' < /proc/device-tree/model)
+
+        case "$model" in
+            *"MOCHAbin"*|*"mochabin"*|*"7040"*)
+                board="mochabin"
+                ;;
+            *"ESPRESSObin Ultra"*|*"espressobin-ultra"*)
+                board="espressobin-ultra"
+                ;;
+            *"ESPRESSObin"*|*"espressobin"*|*"3720"*)
+                board="espressobin-v7"
+                ;;
+            *"Marvell Armada"*)
+                # Generic Marvell detection
+                if grep -q "7040" /proc/device-tree/compatible 2>/dev/null; then
+                    board="mochabin"
+                elif grep -q "3720" /proc/device-tree/compatible 2>/dev/null; then
+                    board="espressobin-v7"
+                fi
+                ;;
+        esac
+    # x64: Check DMI or hostname
+    elif [[ -f /sys/class/dmi/id/product_name ]]; then
+        local product
+        product=$(cat /sys/class/dmi/id/product_name 2>/dev/null || echo "")
+
+        case "$product" in
+            *"VirtualBox"*|*"QEMU"*|*"VMware"*|*"KVM"*)
+                board="x64-vm"
+                ;;
+            *)
+                board="x64-baremetal"
+                ;;
+        esac
+    fi
+
+    echo "$board"
+}
+
+# ── Interface Discovery ────────────────────────────────────────────
+# Returns all physical ethernet interfaces (excludes lo, veth, docker, bridge, wg)
+get_physical_interfaces() {
+    local ifaces=""
+    for iface in /sys/class/net/*; do
+        local name
+        name=$(basename "$iface")
+
+        # Skip non-physical interfaces
+        [[ "$name" == "lo" ]] && continue
+        [[ "$name" == veth* ]] && continue
+        [[ "$name" == docker* ]] && continue
+        [[ "$name" == br-* ]] && continue
+        [[ "$name" == wg* ]] && continue
+        [[ "$name" == tun* ]] && continue
+        [[ "$name" == tap* ]] && continue
+
+        # Check if it's a physical device (has device/driver)
+        if [[ -d "$iface/device" ]] || [[ "$name" == lan* ]] || [[ "$name" == eth* ]] || [[ "$name" == enp* ]]; then
+            ifaces="$ifaces $name"
+        fi
+    done
+
+    echo "$ifaces" | xargs  # Trim whitespace
+}
+
+# ── Check Interface Connectivity ────────────────────────────────────
+# Returns 1 if interface has link (cable connected), 0 otherwise
+check_link() {
+    local iface="$1"
+    local carrier_file="/sys/class/net/${iface}/carrier"
+
+    if [[ -f "$carrier_file" ]]; then
+        local carrier
+        carrier=$(cat "$carrier_file" 2>/dev/null || echo "0")
+        [[ "$carrier" == "1" ]] && return 0
+    fi
+
+    return 1
+}
+
+# ── Check if Interface has DHCP ─────────────────────────────────────
+# Brief DHCP test on interface to detect WAN
+test_dhcp() {
+    local iface="$1"
+    local timeout="${2:-5}"
+
+    # Bring interface up
+    ip link set "$iface" up 2>/dev/null || true
+    sleep 1
+
+    # Try dhclient briefly
+    if command -v dhclient &>/dev/null; then
+        timeout "$timeout" dhclient -1 -v "$iface" &>/dev/null && return 0
+    elif command -v udhcpc &>/dev/null; then
+        timeout "$timeout" udhcpc -i "$iface" -t 3 -n &>/dev/null && return 0
+    fi
+
+    return 1
+}
+
+# ── Board-Specific Interface Mapping ─────────────────────────────────
+get_interface_config() {
+    local board="$1"
+    local wan_iface=""
+    local lan_ifaces=""
+    local sfp_ifaces=""
+    local profile="full"
+
+    case "$board" in
+        mochabin)
+            # MochaBin: Armada 7040 with DSA switch + SFP+
+            wan_iface="eth0"
+            lan_ifaces="eth1 eth2 eth3 eth4"
+            sfp_ifaces="eth5 eth6"
+            profile="full"
+            ;;
+        espressobin-v7)
+            # ESPRESSObin v7: Armada 3720 with DSA (lan0/lan1)
+            wan_iface="eth0"
+            lan_ifaces="lan0 lan1"
+            profile="lite"
+            ;;
+        espressobin-ultra)
+            # ESPRESSObin Ultra: More LAN ports
+            wan_iface="eth0"
+            lan_ifaces="lan0 lan1 lan2 lan3"
+            profile="lite"
+            ;;
+        x64-vm|x64-baremetal)
+            # x64: Auto-detect based on interface names and connectivity
+            local all_ifaces
+            all_ifaces=$(get_physical_interfaces)
+
+            # Try to find WAN: interface with link that gets DHCP
+            for iface in $all_ifaces; do
+                if check_link "$iface"; then
+                    # First interface with link is likely WAN
+                    if [[ -z "$wan_iface" ]]; then
+                        wan_iface="$iface"
+                    else
+                        lan_ifaces="$lan_ifaces $iface"
+                    fi
+                fi
+            done
+
+            # If no link detected, use naming convention
+            if [[ -z "$wan_iface" ]]; then
+                for iface in $all_ifaces; do
+                    case "$iface" in
+                        eth0|enp0s3|enp1s0|eno1)
+                            wan_iface="$iface"
+                            ;;
+                        *)
+                            lan_ifaces="$lan_ifaces $iface"
+                            ;;
+                    esac
+                done
+            fi
+
+            profile="full"
+            ;;
+        *)
+            # Unknown: Use first interface as WAN, rest as LAN
+            local all_ifaces
+            all_ifaces=$(get_physical_interfaces)
+            wan_iface=$(echo "$all_ifaces" | awk '{print $1}')
+            lan_ifaces=$(echo "$all_ifaces" | awk '{$1=""; print $0}' | xargs)
+            profile="lite"
+            ;;
+    esac
+
+    # Trim whitespace
+    lan_ifaces=$(echo "$lan_ifaces" | xargs)
+    sfp_ifaces=$(echo "$sfp_ifaces" | xargs)
+
+    # Output as JSON
+    cat <<EOF
+{
+    "board": "$board",
+    "profile": "$profile",
+    "interfaces": {
+        "wan": "$wan_iface",
+        "lan": "$lan_ifaces",
+        "sfp": "$sfp_ifaces"
+    },
+    "detected_at": "$(date -Iseconds)"
+}
+EOF
+}
+
+# ── Generate Netplan Configuration ──────────────────────────────────
+generate_netplan() {
+    local board="$1"
+    local wan_iface="$2"
+    local lan_ifaces="$3"
+    local sfp_ifaces="${4:-}"
+    local mode="${5:-router}"
+
+    local netplan_file="${NETPLAN_DIR}/00-secubox.yaml"
+
+    # Build ethernets section
+    local ethernets=""
+
+    # WAN interface - DHCP
+    ethernets+="    ${wan_iface}:
+      dhcp4: true
+      dhcp6: false
+      optional: true
+"
+
+    # LAN interfaces
+    for iface in $lan_ifaces; do
+        ethernets+="    ${iface}:
+      optional: true
+"
+    done
+
+    # SFP interfaces (if any)
+    for iface in $sfp_ifaces; do
+        ethernets+="    ${iface}:
+      optional: true
+"
+    done
+
+    # Build bridges section
+    local bridges=""
+    local lan_array=""
+    for iface in $lan_ifaces; do
+        [[ -n "$lan_array" ]] && lan_array+=", "
+        lan_array+="${iface}"
+    done
+
+    case "$mode" in
+        router)
+            bridges="  bridges:
+    br-lan:
+      interfaces: [${lan_array}]
+      addresses: [192.168.1.1/24]
+      dhcp4: false
+      parameters:
+        stp: false
+        forward-delay: 0
+"
+            ;;
+        bridge)
+            # Bridge mode: all interfaces in single bridge, WAN DHCP
+            bridges="  bridges:
+    br0:
+      interfaces: [${lan_array}]
+      dhcp4: true
+      dhcp6: false
+"
+            ;;
+        single)
+            # Single interface mode: WAN only, no bridge
+            bridges=""
+            ;;
+    esac
+
+    # Write netplan config
+    cat > "$netplan_file" <<EOF
+# /etc/netplan/00-secubox.yaml
+# Generated by secubox-net-detect
+# Board: ${board} | Mode: ${mode}
+network:
+  version: 2
+  renderer: networkd
+
+  ethernets:
+${ethernets}
+${bridges}
+  # DHCP server on br-lan managed by dnsmasq (secubox-nac)
+EOF
+
+    log "Netplan configuration written to: $netplan_file"
+}
+
+# ── Main ────────────────────────────────────────────────────────────
+main() {
+    local action="${1:-detect}"
+    local mode="${2:-router}"
+
+    log "=== SecuBox Network Detection ==="
+
+    # Detect board
+    local board
+    board=$(detect_board)
+    log "Board detected: $board"
+
+    # Get interface configuration
+    local config
+    config=$(get_interface_config "$board")
+
+    # Parse JSON (simple extraction)
+    local wan_iface lan_ifaces sfp_ifaces profile
+    wan_iface=$(echo "$config" | grep -o '"wan": "[^"]*"' | cut -d'"' -f4)
+    lan_ifaces=$(echo "$config" | grep -o '"lan": "[^"]*"' | cut -d'"' -f4)
+    sfp_ifaces=$(echo "$config" | grep -o '"sfp": "[^"]*"' | cut -d'"' -f4)
+    profile=$(echo "$config" | grep -o '"profile": "[^"]*"' | cut -d'"' -f4)
+
+    log "WAN interface: $wan_iface"
+    log "LAN interfaces: $lan_ifaces"
+    [[ -n "$sfp_ifaces" ]] && log "SFP interfaces: $sfp_ifaces"
+    log "Profile: $profile"
+
+    case "$action" in
+        detect)
+            # Output detection result
+            mkdir -p "$(dirname "$OUTPUT_JSON")"
+            echo "$config" > "$OUTPUT_JSON"
+            ok "Detection result: $OUTPUT_JSON"
+            echo "$config"
+            ;;
+        apply)
+            # Generate and apply netplan configuration
+            generate_netplan "$board" "$wan_iface" "$lan_ifaces" "$sfp_ifaces" "$mode"
+            log "Applying netplan..."
+            netplan apply 2>/dev/null || warn "netplan apply failed"
+            ok "Network configuration applied (mode: $mode)"
+            ;;
+        test)
+            # Test WAN connectivity
+            if check_link "$wan_iface"; then
+                ok "WAN ($wan_iface) has link"
+            else
+                log "WAN ($wan_iface) no link detected"
+            fi
+            ;;
+        *)
+            echo "Usage: $0 {detect|apply|test} [mode]"
+            echo "  detect - Detect interfaces and output JSON"
+            echo "  apply  - Generate and apply netplan (modes: router|bridge|single)"
+            echo "  test   - Test WAN connectivity"
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"
