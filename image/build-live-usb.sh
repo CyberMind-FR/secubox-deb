@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 # ══════════════════════════════════════════════════════════════════
-#  SecuBox-DEB — build-live-usb.sh
-#  Build a bootable live USB image for amd64
-#  Usage: sudo bash image/build-live-usb.sh [OPTIONS]
+#  SecuBox-DEB — build-live-usb.sh v2.0
+#  Build a bootable live USB image for amd64 with:
+#  - UEFI + Legacy BIOS hybrid boot
+#  - All SecuBox packages slipstreamed
+#  - Root autologin
+#  - Optional GUI kiosk mode
+#  - Network auto-detection
 # ══════════════════════════════════════════════════════════════════
 set -euo pipefail
 
@@ -16,9 +20,9 @@ OUT_DIR="${REPO_DIR}/output"
 APT_MIRROR="http://deb.debian.org/debian"
 APT_SECUBOX="https://apt.secubox.in"
 USE_LOCAL_CACHE=0
-SLIPSTREAM_DEBS=1              # Enabled by default - include local .deb packages
-PERSISTENCE_SIZE="2G"
+SLIPSTREAM_DEBS=1
 INCLUDE_PERSISTENCE=1
+INCLUDE_KIOSK=0
 PRESEED_FILE=""
 
 RED='\033[0;31m'; CYAN='\033[0;36m'; GOLD='\033[0;33m'
@@ -37,19 +41,18 @@ Usage: sudo bash build-live-usb.sh [OPTIONS]
   --suite   SUITE    Debian suite (default: bookworm)
   --out     DIR      Output directory (default: ./output)
   --size    SIZE     Total image size (default: 8G)
-  --local-cache      Use local APT cache (apt-cacher-ng + local repo)
-  --slipstream       Include .deb from output/debs/ in the image (default: enabled)
-  --no-slipstream    Don't include local .deb packages
+  --local-cache      Use local APT cache
+  --kiosk            Include GUI kiosk mode packages
   --no-persistence   Don't include persistent storage partition
-  --preseed FILE     Include preseed config archive (from export-preseed.sh)
+  --preseed FILE     Include preseed config archive
   --help             Show this help
 
-This script builds a live USB image for amd64 systems with:
-  - UEFI boot support (GPT + ESP)
-  - SquashFS compressed root filesystem
-  - OverlayFS for runtime changes
-  - Optional persistent storage partition
+Features:
+  - UEFI + Legacy BIOS boot
   - All SecuBox packages pre-installed
+  - Root autologin on console
+  - Network auto-detection at first boot
+  - Optional kiosk mode (--kiosk)
 
 Output:
   secubox-live-amd64-bookworm.img     - Raw bootable image
@@ -68,10 +71,9 @@ while [[ $# -gt 0 ]]; do
     --out)            OUT_DIR="$2";         shift 2 ;;
     --size)           IMG_SIZE="$2";        shift 2 ;;
     --local-cache)    USE_LOCAL_CACHE=1;    shift   ;;
-    --slipstream)     SLIPSTREAM_DEBS=1;    shift   ;;
-    --no-slipstream)  SLIPSTREAM_DEBS=0;    shift   ;;
+    --kiosk)          INCLUDE_KIOSK=1;      shift   ;;
     --no-persistence) INCLUDE_PERSISTENCE=0; shift   ;;
-    --preseed)        PRESEED_FILE="$2";      shift 2 ;;
+    --preseed)        PRESEED_FILE="$2";    shift 2 ;;
     --help|-h)        usage ;;
     *) err "Unknown argument: $1" ;;
   esac
@@ -81,33 +83,23 @@ done
 [[ $EUID -ne 0 ]] && err "This script must be run as root (sudo)"
 
 # Required tools
-REQUIRED_TOOLS="debootstrap parted mkfs.fat mkfs.ext4 mksquashfs rsync grub-mkrescue xorriso"
-for cmd in $REQUIRED_TOOLS; do
-  command -v "$cmd" >/dev/null || {
-    warn "Installing missing tool: $cmd"
-    apt-get install -y -qq squashfs-tools grub-efi-amd64-bin grub-pc-bin xorriso mtools dosfstools parted 2>/dev/null || true
-    command -v "$cmd" >/dev/null || err "Missing required tool: $cmd"
-  }
+log "Checking dependencies..."
+apt-get install -y -qq debootstrap squashfs-tools grub-efi-amd64-bin grub-pc-bin \
+  xorriso mtools dosfstools parted e2fsprogs live-boot 2>/dev/null || true
+
+for cmd in debootstrap parted mkfs.fat mkfs.ext4 mksquashfs grub-mkimage; do
+  command -v "$cmd" >/dev/null || err "Missing: $cmd"
 done
 
 # ── Local cache detection ─────────────────────────────────────
 if [[ $USE_LOCAL_CACHE -eq 1 ]]; then
-  LOCAL_CACHE_HOST="127.0.0.1"
-  LOCAL_CACHE_PORT="3142"
-  LOCAL_REPO_PORT="8080"
-
-  if curl -sf "http://${LOCAL_CACHE_HOST}:${LOCAL_CACHE_PORT}" >/dev/null 2>&1; then
-    APT_MIRROR="http://${LOCAL_CACHE_HOST}:${LOCAL_CACHE_PORT}/deb.debian.org/debian"
-    log "Local APT cache detected: ${APT_MIRROR}"
-  else
-    warn "apt-cacher-ng not accessible — using remote mirror"
+  if curl -sf "http://127.0.0.1:3142" >/dev/null 2>&1; then
+    APT_MIRROR="http://127.0.0.1:3142/deb.debian.org/debian"
+    log "Using apt-cacher-ng"
   fi
-
-  if curl -sf "http://${LOCAL_CACHE_HOST}:${LOCAL_REPO_PORT}/dists/${SUITE}/Release" >/dev/null 2>&1; then
-    APT_SECUBOX="http://${LOCAL_CACHE_HOST}:${LOCAL_REPO_PORT}"
-    log "Local SecuBox repo detected: ${APT_SECUBOX}"
-  else
-    warn "Local SecuBox repo not accessible — fallback to apt.secubox.in"
+  if curl -sf "http://127.0.0.1:8080/dists/${SUITE}/Release" >/dev/null 2>&1; then
+    APT_SECUBOX="http://127.0.0.1:8080"
+    log "Using local SecuBox repo"
   fi
 fi
 
@@ -124,11 +116,7 @@ log "Suite       : ${SUITE}"
 log "Image       : ${IMG_FILE}"
 log "Size        : ${IMG_SIZE}"
 log "Work dir    : ${WORK_DIR}"
-log "APT Mirror  : ${APT_MIRROR}"
-log "SecuBox Repo: ${APT_SECUBOX}"
-log "Persistence : $([[ $INCLUDE_PERSISTENCE -eq 1 ]] && echo "yes (${PERSISTENCE_SIZE})" || echo "no")"
-[[ $USE_LOCAL_CACHE -eq 1 ]] && log "Local Cache : ${GREEN}enabled${NC}"
-[[ $SLIPSTREAM_DEBS -eq 1 ]] && log "Slipstream  : ${GREEN}enabled${NC}"
+log "Kiosk       : $([[ $INCLUDE_KIOSK -eq 1 ]] && echo "yes" || echo "no")"
 log "══════════════════════════════════════════════════════════"
 
 cleanup() {
@@ -136,34 +124,34 @@ cleanup() {
   umount -lf "${ROOTFS}/proc" 2>/dev/null || true
   umount -lf "${ROOTFS}/sys"  2>/dev/null || true
   umount -lf "${ROOTFS}/dev"  2>/dev/null || true
-  umount -lf "${WORK_DIR}/mnt/esp" 2>/dev/null || true
-  umount -lf "${WORK_DIR}/mnt/live" 2>/dev/null || true
-  umount -lf "${WORK_DIR}/mnt/persistence" 2>/dev/null || true
-  umount -lf "${WORK_DIR}/mnt" 2>/dev/null || true
+  umount -lf "${WORK_DIR}/mnt/"* 2>/dev/null || true
   [[ -n "${LOOP:-}" ]] && losetup -d "${LOOP}" 2>/dev/null || true
   rm -rf "${WORK_DIR}" 2>/dev/null || true
 }
 trap cleanup EXIT
 
-# ── Step 1: Debootstrap ───────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════
+# Step 1: Debootstrap
+# ══════════════════════════════════════════════════════════════════
 log "1/8 Debootstrap ${SUITE} amd64..."
 mkdir -p "${ROOTFS}"
 
 INCLUDE_PKGS="systemd,systemd-sysv,dbus,netplan.io,nftables,openssh-server"
-INCLUDE_PKGS+=",python3,python3-pip,nginx,curl,wget,ca-certificates,gnupg,apt-transport-https"
+INCLUDE_PKGS+=",python3,python3-pip,nginx,curl,wget,ca-certificates,gnupg"
 INCLUDE_PKGS+=",iproute2,iputils-ping,ethtool,net-tools,wireguard-tools"
 INCLUDE_PKGS+=",sudo,less,vim-tiny,logrotate,cron,rsync,jq,dnsmasq"
 INCLUDE_PKGS+=",linux-image-amd64,live-boot,live-config,live-config-systemd"
-INCLUDE_PKGS+=",grub-efi-amd64,efibootmgr,pciutils,usbutils"
+INCLUDE_PKGS+=",grub-efi-amd64,efibootmgr,pciutils,usbutils,lsb-release"
 
-debootstrap --arch=amd64 \
-  --include="${INCLUDE_PKGS}" \
+debootstrap --arch=amd64 --include="${INCLUDE_PKGS}" \
   "${SUITE}" "${ROOTFS}" "${APT_MIRROR}"
 
 ok "Debootstrap complete"
 
-# ── Step 2: Base configuration ────────────────────────────────────
-log "2/8 System base configuration..."
+# ══════════════════════════════════════════════════════════════════
+# Step 2: Base configuration
+# ══════════════════════════════════════════════════════════════════
+log "2/8 System configuration..."
 
 mount -t proc proc   "${ROOTFS}/proc"
 mount -t sysfs sysfs "${ROOTFS}/sys"
@@ -171,544 +159,422 @@ mount --bind /dev    "${ROOTFS}/dev"
 
 # Hostname
 echo "secubox-live" > "${ROOTFS}/etc/hostname"
-
-# /etc/hosts
 cat > "${ROOTFS}/etc/hosts" <<EOF
-127.0.0.1  localhost
-127.0.1.1  secubox-live secubox
+127.0.0.1  localhost secubox-live secubox
 ::1        localhost ip6-localhost ip6-loopback
 EOF
 
-# Live boot configuration
-mkdir -p "${ROOTFS}/etc/live/boot.conf.d"
-cat > "${ROOTFS}/etc/live/boot.conf.d/secubox.conf" <<EOF
-# SecuBox Live Boot Configuration
-LIVE_HOSTNAME=secubox-live
-LIVE_USERNAME=secubox
-LIVE_USER_FULLNAME="SecuBox User"
-LIVE_USER_DEFAULT_GROUPS="audio cdrom dip floppy video plugdev netdev sudo"
-PERSISTENCE=true
-EOF
-
-# Root password (secubox)
+# Root password: secubox
 chroot "${ROOTFS}" bash -c 'echo "root:secubox" | chpasswd'
-
-# Create secubox user
-chroot "${ROOTFS}" useradd -m -s /bin/bash -G sudo secubox 2>/dev/null || true
-chroot "${ROOTFS}" bash -c 'echo "secubox:secubox" | chpasswd'
-
-# Allow sudo without password for secubox
-echo "secubox ALL=(ALL) NOPASSWD: ALL" > "${ROOTFS}/etc/sudoers.d/secubox"
-chmod 440 "${ROOTFS}/etc/sudoers.d/secubox"
-
-# Enable SSH root login
-sed -i 's/#PermitRootLogin.*/PermitRootLogin yes/' "${ROOTFS}/etc/ssh/sshd_config"
-sed -i 's/PermitRootLogin prohibit-password/PermitRootLogin yes/' "${ROOTFS}/etc/ssh/sshd_config"
 
 # Timezone
 echo "Europe/Paris" > "${ROOTFS}/etc/timezone"
 chroot "${ROOTFS}" dpkg-reconfigure -f noninteractive tzdata 2>/dev/null || true
 
 # Locale
-chroot "${ROOTFS}" bash -c "locale-gen en_US.UTF-8 || true"
-chroot "${ROOTFS}" bash -c "update-locale LANG=en_US.UTF-8 || true"
+chroot "${ROOTFS}" bash -c "locale-gen en_US.UTF-8 fr_FR.UTF-8 || true"
+echo 'LANG=fr_FR.UTF-8' > "${ROOTFS}/etc/default/locale"
 
-# Netplan - Initial DHCP config (will be regenerated by secubox-net-detect)
+# French keyboard
+cat > "${ROOTFS}/etc/default/keyboard" <<EOF
+XKBMODEL="pc105"
+XKBLAYOUT="fr"
+XKBVARIANT="latin9"
+EOF
+echo 'KEYMAP=fr' > "${ROOTFS}/etc/vconsole.conf"
+
+# Enable SSH root login
+sed -i 's/#PermitRootLogin.*/PermitRootLogin yes/' "${ROOTFS}/etc/ssh/sshd_config"
+
+# ── Autologin root on tty1 ────────────────────────────────────────
+mkdir -p "${ROOTFS}/etc/systemd/system/getty@tty1.service.d"
+cat > "${ROOTFS}/etc/systemd/system/getty@tty1.service.d/override.conf" <<EOF
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin root --noclear %I \$TERM
+Type=idle
+EOF
+
+# Disable live-config autologin
+mkdir -p "${ROOTFS}/etc/live/config.conf.d"
+echo 'LIVE_CONFIG_NOAUTOLOGIN=true' > "${ROOTFS}/etc/live/config.conf.d/no-autologin.conf"
+
+# Quiet boot
+mkdir -p "${ROOTFS}/etc/systemd/system.conf.d"
+cat > "${ROOTFS}/etc/systemd/system.conf.d/quiet-boot.conf" <<EOF
+[Manager]
+ShowStatus=no
+EOF
+
+# Disable console spam
+cat > "${ROOTFS}/etc/sysctl.d/99-secubox.conf" <<EOF
+kernel.consoleblank=0
+net.ipv4.conf.all.log_martians=0
+kernel.printk=1 1 1 1
+EOF
+
+# ── Network auto-detection config ─────────────────────────────────
 mkdir -p "${ROOTFS}/etc/netplan"
-cat > "${ROOTFS}/etc/netplan/00-live.yaml" <<EOF
-# /etc/netplan/00-live.yaml — Initial Live USB config
-# This will be replaced by secubox-net-detect on first boot
-# to configure proper router mode with WAN DHCP + LAN bridge
+cat > "${ROOTFS}/etc/netplan/00-secubox.yaml" <<EOF
+# Auto-configured by secubox-net-detect
 network:
   version: 2
   renderer: networkd
-
   ethernets:
-    # Common interface names - all set to DHCP for initial connectivity
-    eth0:
+    all-en:
+      match: {name: "en*"}
       dhcp4: true
-      dhcp6: false
-      optional: true
-    enp0s3:
+    all-eth:
+      match: {name: "eth*"}
       dhcp4: true
-      optional: true
-    enp0s8:
-      dhcp4: true
-      optional: true
-    enp1s0:
-      dhcp4: true
-      optional: true
-    eno1:
-      dhcp4: true
-      optional: true
 EOF
+
+chroot "${ROOTFS}" systemctl enable systemd-networkd.service 2>/dev/null || true
+chroot "${ROOTFS}" systemctl disable systemd-networkd-wait-online.service 2>/dev/null || true
+chroot "${ROOTFS}" systemctl mask systemd-networkd-wait-online.service 2>/dev/null || true
 
 ok "Base configuration complete"
 
-# ── Step 3: SecuBox packages ──────────────────────────────────────
-log "3/8 Installing SecuBox packages..."
+# ══════════════════════════════════════════════════════════════════
+# Step 3: Firmware
+# ══════════════════════════════════════════════════════════════════
+log "3/8 Installing firmware..."
 
-# Add SecuBox repo
-SECUBOX_REPO_OK=0
-if [[ "$APT_SECUBOX" == "http://127.0.0.1:"* ]]; then
+cat > "${ROOTFS}/etc/apt/sources.list" <<EOF
+deb ${APT_MIRROR} ${SUITE} main contrib non-free non-free-firmware
+deb ${APT_MIRROR} ${SUITE}-updates main contrib non-free non-free-firmware
+EOF
+
+chroot "${ROOTFS}" apt-get update -q
+chroot "${ROOTFS}" apt-get install -y -q --no-install-recommends \
+  firmware-linux-free firmware-linux-nonfree firmware-misc-nonfree \
+  firmware-realtek firmware-iwlwifi firmware-atheros \
+  amd64-microcode intel-microcode 2>/dev/null || warn "Some firmware unavailable"
+
+ok "Firmware installed"
+
+# ══════════════════════════════════════════════════════════════════
+# Step 4: SecuBox packages (slipstream from cache/repo)
+# ══════════════════════════════════════════════════════════════════
+log "4/8 Installing SecuBox packages..."
+
+# Find all .deb files in cache/repo
+CACHE_DEBS="${REPO_DIR}/cache/repo/pool"
+if [[ -d "$CACHE_DEBS" ]] && find "$CACHE_DEBS" -name "*.deb" | head -1 | grep -q .; then
+  log "Slipstream: Found packages in cache/repo/pool"
+  install -d "${ROOTFS}/tmp/secubox-debs"
+
+  # Copy all secubox debs
+  find "$CACHE_DEBS" -name "secubox-*.deb" -exec cp {} "${ROOTFS}/tmp/secubox-debs/" \;
+  DEB_COUNT=$(ls "${ROOTFS}/tmp/secubox-debs/"*.deb 2>/dev/null | wc -l)
+  log "Slipstream: ${DEB_COUNT} packages found"
+
+  # Install core first
+  if ls "${ROOTFS}/tmp/secubox-debs/secubox-core_"*.deb >/dev/null 2>&1; then
+    chroot "${ROOTFS}" dpkg -i /tmp/secubox-debs/secubox-core_*.deb 2>/dev/null || true
+  fi
+
+  # Install all packages
+  chroot "${ROOTFS}" dpkg -i /tmp/secubox-debs/*.deb 2>/dev/null || true
+  chroot "${ROOTFS}" apt-get install -f -y -q 2>/dev/null || true
+
+  rm -rf "${ROOTFS}/tmp/secubox-debs"
+  ok "Slipstream: ${DEB_COUNT} packages installed"
+else
+  warn "No packages in cache/repo, trying APT..."
   if curl -sf "${APT_SECUBOX}/dists/${SUITE}/Release" >/dev/null 2>&1; then
     cat > "${ROOTFS}/etc/apt/sources.list.d/secubox.list" <<EOF
 deb [trusted=yes] ${APT_SECUBOX} ${SUITE} main
 EOF
-    SECUBOX_REPO_OK=1
-    log "Local SecuBox repo configured (trusted=yes)"
-  fi
-elif curl -sf "${APT_SECUBOX}/secubox-keyring.gpg" -o "${ROOTFS}/usr/share/keyrings/secubox.gpg" 2>/dev/null; then
-  cat > "${ROOTFS}/etc/apt/sources.list.d/secubox.list" <<EOF
-deb [signed-by=/usr/share/keyrings/secubox.gpg] ${APT_SECUBOX} ${SUITE} main
-EOF
-  SECUBOX_REPO_OK=1
-fi
-
-if [[ $SECUBOX_REPO_OK -eq 1 ]]; then
-  chroot "${ROOTFS}" apt-get update -q
-  chroot "${ROOTFS}" apt-get install -y -q secubox-full 2>/dev/null || warn "secubox-full not available"
-else
-  warn "SecuBox APT repo not available — skip"
-fi
-
-# Slipstream: integrate local .deb files
-if [[ $SLIPSTREAM_DEBS -eq 1 ]]; then
-  DEBS_DIR="${REPO_DIR}/output/debs"
-  if [[ -d "${DEBS_DIR}" ]] && ls "${DEBS_DIR}"/*.deb >/dev/null 2>&1; then
-    log "Slipstream: installing local packages..."
-    install -d "${ROOTFS}/tmp/secubox-debs"
-    cp "${DEBS_DIR}"/*.deb "${ROOTFS}/tmp/secubox-debs/"
-
-    # Install secubox-core first
-    if ls "${ROOTFS}/tmp/secubox-debs/secubox-core_"*.deb >/dev/null 2>&1; then
-      chroot "${ROOTFS}" dpkg -i /tmp/secubox-debs/secubox-core_*.deb 2>/dev/null || true
-    fi
-
-    # Install all packages
-    chroot "${ROOTFS}" dpkg -i /tmp/secubox-debs/*.deb 2>/dev/null || true
-    chroot "${ROOTFS}" apt-get install -f -y -q 2>/dev/null || true
-
-    rm -rf "${ROOTFS}/tmp/secubox-debs"
-    ok "Slipstream: $(ls "${DEBS_DIR}"/*.deb 2>/dev/null | wc -l) packages installed"
-  else
-    warn "Slipstream: no .deb files in ${DEBS_DIR}"
+    chroot "${ROOTFS}" apt-get update -q
+    chroot "${ROOTFS}" apt-get install -y -q secubox-full 2>/dev/null || warn "secubox-full unavailable"
   fi
 fi
 
 # Python deps
 chroot "${ROOTFS}" pip3 install --break-system-packages -q \
-  fastapi uvicorn[standard] python-jose[cryptography] httpx \
-  jinja2 tomli pyroute2 psutil authlib aiosqlite 2>/dev/null || warn "pip install partial"
+  fastapi uvicorn python-jose httpx jinja2 tomli pyroute2 psutil 2>/dev/null || true
 
-ok "Packages installed"
+ok "SecuBox packages installed"
 
-# ── Step 4: Live system scripts ───────────────────────────────────
-log "4/8 Installing live system scripts..."
+# ══════════════════════════════════════════════════════════════════
+# Step 5: Network detection & kiosk scripts
+# ══════════════════════════════════════════════════════════════════
+log "5/8 Installing SecuBox scripts..."
 
-# Auto-start script for live boot
-cat > "${ROOTFS}/usr/bin/secubox-live-init" <<'LIVESCRIPT'
-#!/bin/bash
-# SecuBox Live System Initialization
-set -e
+mkdir -p "${ROOTFS}/usr/sbin"
+mkdir -p "${ROOTFS}/usr/lib/secubox"
 
-# Wait for network
-sleep 5
-
-# Generate SSH host keys if missing
-if [ ! -f /etc/ssh/ssh_host_rsa_key ]; then
-    ssh-keygen -A
-    systemctl restart sshd
-fi
-
-# Generate JWT secret if missing
-if [ ! -f /etc/secubox/jwt.secret ]; then
-    mkdir -p /etc/secubox
-    openssl rand -hex 32 > /etc/secubox/jwt.secret
-    chmod 600 /etc/secubox/jwt.secret
-fi
-
-# Create default admin user for web UI
-if [ ! -f /etc/secubox/users.json ]; then
-    mkdir -p /etc/secubox
-    HASH=$(echo -n "admin" | sha256sum | cut -d' ' -f1)
-    cat > /etc/secubox/users.json <<EOF
-{
-  "admin": {
-    "password_hash": "${HASH}",
-    "role": "admin",
-    "enabled": true
-  }
-}
-EOF
-    chmod 600 /etc/secubox/users.json
-fi
-
-# Create runtime directory
-mkdir -p /run/secubox
-chmod 755 /run/secubox
-
-# Enable SecuBox services
-for svc in /etc/systemd/system/secubox-*.service; do
-    [ -f "$svc" ] && systemctl enable "$(basename "$svc")" 2>/dev/null || true
+# Copy scripts
+for script in secubox-net-detect secubox-kiosk-setup secubox-cmdline-handler; do
+  if [[ -f "${SCRIPT_DIR}/sbin/${script}" ]]; then
+    cp "${SCRIPT_DIR}/sbin/${script}" "${ROOTFS}/usr/sbin/"
+    chmod +x "${ROOTFS}/usr/sbin/${script}"
+  fi
 done
 
-# Start nginx
-systemctl enable nginx
-systemctl start nginx
+# Copy firstboot
+if [[ -f "${SCRIPT_DIR}/firstboot.sh" ]]; then
+  cp "${SCRIPT_DIR}/firstboot.sh" "${ROOTFS}/usr/lib/secubox/"
+  chmod +x "${ROOTFS}/usr/lib/secubox/firstboot.sh"
+fi
 
-echo "SecuBox Live System Ready"
-echo "Web UI: https://$(hostname -I | awk '{print $1}'):8443"
-echo "SSH: ssh root@$(hostname -I | awk '{print $1}')"
-echo "Credentials: admin / admin (web) | root / secubox (ssh)"
-LIVESCRIPT
-chmod +x "${ROOTFS}/usr/bin/secubox-live-init"
+# Systemd services
+mkdir -p "${ROOTFS}/etc/systemd/system"
+for svc in secubox-net-detect secubox-cmdline secubox-kiosk; do
+  if [[ -f "${SCRIPT_DIR}/systemd/${svc}.service" ]]; then
+    cp "${SCRIPT_DIR}/systemd/${svc}.service" "${ROOTFS}/etc/systemd/system/"
+  fi
+done
 
-# Systemd service for live init
-cat > "${ROOTFS}/etc/systemd/system/secubox-live-init.service" <<EOF
+# Enable net-detect and cmdline services
+chroot "${ROOTFS}" systemctl enable secubox-cmdline.service 2>/dev/null || true
+
+# Firstboot service
+cat > "${ROOTFS}/etc/systemd/system/secubox-firstboot.service" <<EOF
 [Unit]
-Description=SecuBox Live System Initialization
+Description=SecuBox First Boot
 After=network-online.target
-Wants=network-online.target
+ConditionPathExists=!/var/lib/secubox/.firstboot-done
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/secubox-live-init
+ExecStart=/usr/lib/secubox/firstboot.sh
+ExecStartPost=/bin/touch /var/lib/secubox/.firstboot-done
 RemainAfterExit=yes
 
 [Install]
 WantedBy=multi-user.target
 EOF
+chroot "${ROOTFS}" systemctl enable secubox-firstboot.service 2>/dev/null || true
 
-chroot "${ROOTFS}" systemctl enable secubox-live-init.service
-
-# ── Install preseed system ──────────────────────────────────────
-# Install preseed-apply script
-mkdir -p "${ROOTFS}/usr/lib/secubox"
-cp "${SCRIPT_DIR}/preseed-apply.sh" "${ROOTFS}/usr/lib/secubox/"
-chmod +x "${ROOTFS}/usr/lib/secubox/preseed-apply.sh"
-
-# Install preseed systemd service
-cp "${SCRIPT_DIR}/secubox-preseed.service" "${ROOTFS}/etc/systemd/system/"
-chroot "${ROOTFS}" systemctl enable secubox-preseed.service 2>/dev/null || true
-
-# ── Install network detection and kiosk setup ───────────────────
-mkdir -p "${ROOTFS}/usr/sbin"
-
-# Network auto-detection script
-if [[ -f "${SCRIPT_DIR}/sbin/secubox-net-detect" ]]; then
-    cp "${SCRIPT_DIR}/sbin/secubox-net-detect" "${ROOTFS}/usr/sbin/"
-    chmod +x "${ROOTFS}/usr/sbin/secubox-net-detect"
-    log "Network detection script installed"
+# ── Kiosk mode packages ───────────────────────────────────────────
+if [[ $INCLUDE_KIOSK -eq 1 ]]; then
+  log "Installing kiosk mode packages..."
+  chroot "${ROOTFS}" apt-get install -y -q --no-install-recommends \
+    cage chromium fonts-dejavu-core 2>/dev/null || warn "Kiosk packages failed"
+  ok "Kiosk packages installed"
 fi
 
-# Kiosk setup script
-if [[ -f "${SCRIPT_DIR}/sbin/secubox-kiosk-setup" ]]; then
-    cp "${SCRIPT_DIR}/sbin/secubox-kiosk-setup" "${ROOTFS}/usr/sbin/"
-    chmod +x "${ROOTFS}/usr/sbin/secubox-kiosk-setup"
-    log "Kiosk setup script installed"
+ok "Scripts installed"
+
+# ══════════════════════════════════════════════════════════════════
+# Step 6: Cleanup rootfs
+# ══════════════════════════════════════════════════════════════════
+log "6/8 Cleaning up rootfs..."
+
+# Preseed
+if [[ -n "$PRESEED_FILE" ]] && [[ -f "$PRESEED_FILE" ]]; then
+  mkdir -p "${ROOTFS}/usr/share/secubox"
+  cp "$PRESEED_FILE" "${ROOTFS}/usr/share/secubox/preseed.tar.gz"
+  ok "Preseed included"
 fi
 
-# Cmdline handler script (parses kernel params)
-if [[ -f "${SCRIPT_DIR}/sbin/secubox-cmdline-handler" ]]; then
-    cp "${SCRIPT_DIR}/sbin/secubox-cmdline-handler" "${ROOTFS}/usr/sbin/"
-    chmod +x "${ROOTFS}/usr/sbin/secubox-cmdline-handler"
-    log "Cmdline handler installed"
-fi
+# Mask problematic services
+for svc in lxc-net lxc; do
+  chroot "${ROOTFS}" systemctl disable ${svc}.service 2>/dev/null || true
+  chroot "${ROOTFS}" systemctl mask ${svc}.service 2>/dev/null || true
+done
 
-# Network detection service (runs on first boot before network)
-if [[ -f "${SCRIPT_DIR}/systemd/secubox-net-detect.service" ]]; then
-    cp "${SCRIPT_DIR}/systemd/secubox-net-detect.service" "${ROOTFS}/etc/systemd/system/"
-    chroot "${ROOTFS}" systemctl enable secubox-net-detect.service 2>/dev/null || true
-fi
-
-# Kiosk service (optional, disabled by default)
-if [[ -f "${SCRIPT_DIR}/systemd/secubox-kiosk.service" ]]; then
-    cp "${SCRIPT_DIR}/systemd/secubox-kiosk.service" "${ROOTFS}/etc/systemd/system/"
-    # Not enabled by default - user runs 'secubox-kiosk-setup enable'
-fi
-
-# Cmdline handler service (parses secubox.* kernel params)
-if [[ -f "${SCRIPT_DIR}/systemd/secubox-cmdline.service" ]]; then
-    cp "${SCRIPT_DIR}/systemd/secubox-cmdline.service" "${ROOTFS}/etc/systemd/system/"
-    chroot "${ROOTFS}" systemctl enable secubox-cmdline.service 2>/dev/null || true
-fi
-
-# If preseed file provided, include it
-if [ -n "$PRESEED_FILE" ] && [ -f "$PRESEED_FILE" ]; then
-    log "Installing preseed configuration from: ${PRESEED_FILE}"
-    mkdir -p "${ROOTFS}/usr/share/secubox"
-    cp "$PRESEED_FILE" "${ROOTFS}/usr/share/secubox/preseed.tar.gz"
-    ok "Preseed configuration included"
-fi
+# Clean APT
+chroot "${ROOTFS}" apt-get clean
+rm -rf "${ROOTFS}/var/lib/apt/lists"/*
+rm -rf "${ROOTFS}/var/cache/apt"/*.bin
+rm -rf "${ROOTFS}/tmp"/*
 
 # Welcome message
 cat > "${ROOTFS}/etc/motd" <<'EOF'
 
   ╔═══════════════════════════════════════════════════════════════╗
-  ║                                                               ║
   ║   ███████╗███████╗ ██████╗██╗   ██╗██████╗  ██████╗ ██╗  ██╗  ║
   ║   ██╔════╝██╔════╝██╔════╝██║   ██║██╔══██╗██╔═══██╗╚██╗██╔╝  ║
   ║   ███████╗█████╗  ██║     ██║   ██║██████╔╝██║   ██║ ╚███╔╝   ║
   ║   ╚════██║██╔══╝  ██║     ██║   ██║██╔══██╗██║   ██║ ██╔██╗   ║
   ║   ███████║███████╗╚██████╗╚██████╔╝██████╔╝╚██████╔╝██╔╝ ██╗  ║
   ║   ╚══════╝╚══════╝ ╚═════╝ ╚═════╝ ╚═════╝  ╚═════╝ ╚═╝  ╚═╝  ║
-  ║                                                               ║
-  ║                    LIVE USB SYSTEM                            ║
-  ║                                                               ║
+  ║                       LIVE USB                                ║
   ╚═══════════════════════════════════════════════════════════════╝
 
-  Web UI:      https://<IP>:8443
-  Credentials: admin / admin
-  SSH:         root / secubox  |  secubox / secubox
-
-  For persistent storage, create a partition labeled "persistence"
-  with a file "persistence.conf" containing: / union
+  Web UI:  https://<IP>:9443    SSH: root / secubox
 
 EOF
 
-ok "Live scripts installed"
-
-# ── Step 5: Cleanup rootfs ────────────────────────────────────────
-log "5/8 Cleaning up rootfs..."
-
-# Clean apt cache
-chroot "${ROOTFS}" apt-get clean
-rm -rf "${ROOTFS}/var/lib/apt/lists"/*
-rm -rf "${ROOTFS}/var/cache/apt"/*.bin
-rm -rf "${ROOTFS}/tmp"/*
-
-# Unmount special filesystems
+# Unmount
 umount -lf "${ROOTFS}/proc" 2>/dev/null || true
 umount -lf "${ROOTFS}/sys"  2>/dev/null || true
 umount -lf "${ROOTFS}/dev"  2>/dev/null || true
 
 ok "Rootfs cleaned"
 
-# ── Step 6: Create SquashFS ───────────────────────────────────────
-log "6/8 Creating SquashFS filesystem..."
+# ══════════════════════════════════════════════════════════════════
+# Step 7: Create SquashFS
+# ══════════════════════════════════════════════════════════════════
+log "7/8 Creating SquashFS filesystem..."
 mkdir -p "${LIVE_DIR}/live"
 
 mksquashfs "${ROOTFS}" "${LIVE_DIR}/live/filesystem.squashfs" \
-  -comp xz -b 1M -Xdict-size 100% \
-  -e boot/grub -e boot/efi
+  -comp xz -b 1M -Xdict-size 100% -e boot/grub -e boot/efi
 
-SQUASHFS_SIZE=$(du -sh "${LIVE_DIR}/live/filesystem.squashfs" | cut -f1)
-ok "SquashFS created: ${SQUASHFS_SIZE}"
-
-# Copy kernel and initrd
 cp "${ROOTFS}/boot/vmlinuz-"* "${LIVE_DIR}/live/vmlinuz"
 cp "${ROOTFS}/boot/initrd.img-"* "${LIVE_DIR}/live/initrd.img"
 
-# ── Step 7: Create bootable image ─────────────────────────────────
-log "7/8 Creating bootable USB image (${IMG_SIZE})..."
+SQUASHFS_SIZE=$(du -sh "${LIVE_DIR}/live/filesystem.squashfs" | cut -f1)
+ok "SquashFS: ${SQUASHFS_SIZE}"
 
-# Create image file
-fallocate -l "${IMG_SIZE}" "${IMG_FILE}"
+# ══════════════════════════════════════════════════════════════════
+# Step 8: Create bootable image
+# ══════════════════════════════════════════════════════════════════
+log "8/8 Creating bootable image (${IMG_SIZE})..."
 
-# Partition layout (Hybrid UEFI + Legacy BIOS):
-# - GPT with protective MBR for UEFI
-# - BIOS boot partition for legacy
-# 1. BIOS boot (1MB) - for legacy grub
-# 2. ESP (EFI System Partition) - 512MB
-# 3. Live (SquashFS + kernel) - ~4GB
-# 4. Persistence (optional) - rest
+# Delete old image
+rm -f "${IMG_FILE}" "${IMG_FILE}.gz"
 
+# Create image
+truncate -s "${IMG_SIZE}" "${IMG_FILE}"
+
+# Partition: GPT with hybrid boot
+# 1: BIOS boot (2MB) - legacy grub
+# 2: ESP (512MB) - UEFI
+# 3: LIVE (4GB) - squashfs
+# 4: persistence (rest) - optional
 if [[ $INCLUDE_PERSISTENCE -eq 1 ]]; then
   parted -s "${IMG_FILE}" \
     mklabel gpt \
-    mkpart bios_grub 1MiB 2MiB \
-    mkpart ESP fat32 2MiB 514MiB \
-    mkpart LIVE ext4 514MiB 4610MiB \
-    mkpart persistence ext4 4610MiB 100% \
+    mkpart bios 1MiB 3MiB \
+    mkpart ESP fat32 3MiB 515MiB \
+    mkpart LIVE ext4 515MiB 4611MiB \
+    mkpart persistence ext4 4611MiB 100% \
     set 1 bios_grub on \
     set 2 esp on \
     set 2 boot on
 else
   parted -s "${IMG_FILE}" \
     mklabel gpt \
-    mkpart bios_grub 1MiB 2MiB \
-    mkpart ESP fat32 2MiB 514MiB \
-    mkpart LIVE ext4 514MiB 100% \
+    mkpart bios 1MiB 3MiB \
+    mkpart ESP fat32 3MiB 515MiB \
+    mkpart LIVE ext4 515MiB 100% \
     set 1 bios_grub on \
     set 2 esp on \
     set 2 boot on
 fi
 
-# Setup loop device
+# Setup loop
 LOOP=$(losetup -f --show -P "${IMG_FILE}")
-log "Loop device: ${LOOP}"
+log "Loop: ${LOOP}"
 
-# Format partitions (skip bios_grub - it's raw)
-mkfs.fat -F32 -n "ESP" "${LOOP}p2"
-mkfs.ext4 -L "LIVE" -q "${LOOP}p3"
-if [[ $INCLUDE_PERSISTENCE -eq 1 ]]; then
-  mkfs.ext4 -L "persistence" -q "${LOOP}p4"
+# Wait for partitions
+sleep 1
+partprobe "${LOOP}" 2>/dev/null || true
+sleep 1
+
+# Verify partitions exist
+[[ -b "${LOOP}p2" ]] || err "Partition ${LOOP}p2 not found"
+
+# Format
+mkfs.fat -F32 -n ESP "${LOOP}p2"
+mkfs.ext4 -L LIVE -q "${LOOP}p3"
+if [[ $INCLUDE_PERSISTENCE -eq 1 ]] && [[ -b "${LOOP}p4" ]]; then
+  mkfs.ext4 -L persistence -q "${LOOP}p4"
 fi
 
-# Mount partitions
+# Mount
 MNT="${WORK_DIR}/mnt"
 mkdir -p "${MNT}/esp" "${MNT}/live"
 mount "${LOOP}p2" "${MNT}/esp"
 mount "${LOOP}p3" "${MNT}/live"
 
-# Copy live system files to LIVE partition
+# Copy live files
 mkdir -p "${MNT}/live/live"
 cp "${LIVE_DIR}/live/filesystem.squashfs" "${MNT}/live/live/"
 cp "${LIVE_DIR}/live/vmlinuz" "${MNT}/live/live/"
 cp "${LIVE_DIR}/live/initrd.img" "${MNT}/live/live/"
 
-# Setup ESP structure
+# Setup ESP
 mkdir -p "${MNT}/esp/EFI/BOOT"
 mkdir -p "${MNT}/esp/boot/grub/x86_64-efi"
+mkdir -p "${MNT}/esp/boot/grub/i386-pc"
 
-# Also copy kernel/initrd to ESP (some UEFI need this)
+# Also copy to ESP for some UEFI
 mkdir -p "${MNT}/esp/live"
 cp "${LIVE_DIR}/live/vmlinuz" "${MNT}/esp/live/"
 cp "${LIVE_DIR}/live/initrd.img" "${MNT}/esp/live/"
 
-# GRUB configuration - search for LIVE partition by label
+# GRUB config
 cat > "${MNT}/esp/boot/grub/grub.cfg" <<'GRUBCFG'
 set default=0
 set timeout=5
 
-# Search for the LIVE partition
-search --no-floppy --label LIVE --set=live_part
-
-insmod all_video
-insmod gfxterm
 insmod part_gpt
 insmod fat
 insmod ext2
+insmod all_video
 
-set gfxmode=auto
-terminal_output gfxterm
-
-loadfont unicode
+search --no-floppy --label LIVE --set=live
 
 set menu_color_normal=cyan/black
 set menu_color_highlight=white/blue
 
-menuentry "SecuBox Live (amd64)" {
-    linux ($live_part)/live/vmlinuz boot=live components persistence quiet splash
-    initrd ($live_part)/live/initrd.img
+menuentry "SecuBox Live" {
+    linux ($live)/live/vmlinuz boot=live components persistence quiet
+    initrd ($live)/live/initrd.img
 }
 
-menuentry "SecuBox Live (Safe Mode)" {
-    linux ($live_part)/live/vmlinuz boot=live components memtest noapic noapm nodma nomce nolapic nomodeset nosmp nosplash vga=normal
-    initrd ($live_part)/live/initrd.img
-}
-
-menuentry "SecuBox Live (No Persistence)" {
-    linux ($live_part)/live/vmlinuz boot=live components nopersistence quiet splash
-    initrd ($live_part)/live/initrd.img
-}
-
-menuentry "SecuBox Live (To RAM)" {
-    linux ($live_part)/live/vmlinuz boot=live components toram quiet splash
-    initrd ($live_part)/live/initrd.img
-}
-
-menuentry "SecuBox Live (Kiosk Mode - GUI)" {
-    linux ($live_part)/live/vmlinuz boot=live components persistence quiet splash systemd.unit=graphical.target secubox.kiosk=1
-    initrd ($live_part)/live/initrd.img
+menuentry "SecuBox Live (Kiosk GUI)" {
+    linux ($live)/live/vmlinuz boot=live components persistence quiet secubox.kiosk=1 systemd.unit=graphical.target
+    initrd ($live)/live/initrd.img
 }
 
 menuentry "SecuBox Live (Bridge Mode)" {
-    linux ($live_part)/live/vmlinuz boot=live components persistence quiet splash secubox.netmode=bridge
-    initrd ($live_part)/live/initrd.img
+    linux ($live)/live/vmlinuz boot=live components persistence quiet secubox.netmode=bridge
+    initrd ($live)/live/initrd.img
 }
 
-menuentry "System Shutdown" {
-    halt
+menuentry "SecuBox Live (Safe Mode)" {
+    linux ($live)/live/vmlinuz boot=live components nomodeset nosplash
+    initrd ($live)/live/initrd.img
 }
 
-menuentry "System Restart" {
-    reboot
+menuentry "SecuBox Live (To RAM)" {
+    linux ($live)/live/vmlinuz boot=live components toram
+    initrd ($live)/live/initrd.img
 }
 GRUBCFG
 
-# Copy grub.cfg to EFI/BOOT as well
 cp "${MNT}/esp/boot/grub/grub.cfg" "${MNT}/esp/EFI/BOOT/grub.cfg"
 
-# Install GRUB for UEFI
-log "Installing GRUB UEFI bootloader..."
+# Build GRUB EFI
+GRUB_MODS="part_gpt part_msdos fat ext2 normal linux boot configfile loopback chain efi_gop efi_uga ls search search_label gfxterm all_video"
 
-# Create standalone GRUB EFI with embedded config
-GRUB_MODULES="part_gpt part_msdos fat ext2 normal linux boot configfile loopback chain efifwsetup efi_gop efi_uga ls search search_label search_fs_uuid search_fs_file gfxterm gfxterm_background gfxterm_menu test all_video loadenv"
-
-# Create early config to find main config
-cat > "${WORK_DIR}/grub-early.cfg" <<'EARLYCFG'
+cat > "${WORK_DIR}/grub-embed.cfg" <<'EMBEDCFG'
 search --no-floppy --label ESP --set=root
 set prefix=($root)/boot/grub
 configfile $prefix/grub.cfg
-EARLYCFG
+EMBEDCFG
 
-# Build GRUB EFI image with embedded early config
-if grub-mkimage -o "${MNT}/esp/EFI/BOOT/BOOTX64.EFI" \
-    -O x86_64-efi \
-    -c "${WORK_DIR}/grub-early.cfg" \
-    -p /boot/grub \
-    ${GRUB_MODULES} 2>/dev/null; then
-    ok "GRUB EFI image built with embedded config"
-else
-    warn "grub-mkimage failed, trying alternative method..."
-    # Fallback: use grub-mkstandalone
-    if command -v grub-mkstandalone &>/dev/null; then
-        grub-mkstandalone -O x86_64-efi \
-            -o "${MNT}/esp/EFI/BOOT/BOOTX64.EFI" \
-            --modules="${GRUB_MODULES}" \
-            "boot/grub/grub.cfg=${MNT}/esp/boot/grub/grub.cfg" 2>/dev/null || true
-    fi
+grub-mkimage -o "${MNT}/esp/EFI/BOOT/BOOTX64.EFI" \
+  -O x86_64-efi \
+  -c "${WORK_DIR}/grub-embed.cfg" \
+  -p /boot/grub \
+  ${GRUB_MODS}
 
-    # Last resort: copy pre-built EFI
-    if [[ ! -f "${MNT}/esp/EFI/BOOT/BOOTX64.EFI" ]]; then
-        if [[ -f /usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed ]]; then
-            cp /usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed "${MNT}/esp/EFI/BOOT/BOOTX64.EFI"
-            ok "Using signed GRUB EFI"
-        elif [[ -f /usr/lib/grub/x86_64-efi/monolithic/grubx64.efi ]]; then
-            cp /usr/lib/grub/x86_64-efi/monolithic/grubx64.efi "${MNT}/esp/EFI/BOOT/BOOTX64.EFI"
-            ok "Using monolithic GRUB EFI"
-        else
-            err "No GRUB EFI binary found! Install grub-efi-amd64-bin"
-        fi
-    fi
-fi
+cp "${MNT}/esp/EFI/BOOT/BOOTX64.EFI" "${MNT}/esp/EFI/BOOT/grubx64.efi"
 
-# Copy GRUB modules for runtime loading
-if [[ -d /usr/lib/grub/x86_64-efi ]]; then
-    cp /usr/lib/grub/x86_64-efi/*.mod "${MNT}/esp/boot/grub/x86_64-efi/" 2>/dev/null || true
-    cp /usr/lib/grub/x86_64-efi/*.lst "${MNT}/esp/boot/grub/x86_64-efi/" 2>/dev/null || true
-fi
+# Copy GRUB modules
+cp /usr/lib/grub/x86_64-efi/*.mod "${MNT}/esp/boot/grub/x86_64-efi/" 2>/dev/null || true
 
-# Also name it grubx64.efi for some firmware
-cp "${MNT}/esp/EFI/BOOT/BOOTX64.EFI" "${MNT}/esp/EFI/BOOT/grubx64.efi" 2>/dev/null || true
+# Install BIOS GRUB
+grub-install --target=i386-pc --boot-directory="${MNT}/esp/boot" --recheck "${LOOP}" 2>/dev/null || warn "BIOS GRUB failed"
+cp /usr/lib/grub/i386-pc/*.mod "${MNT}/esp/boot/grub/i386-pc/" 2>/dev/null || true
 
-# Install GRUB for Legacy BIOS (hybrid boot)
-log "Installing GRUB BIOS bootloader..."
-if command -v grub-install &>/dev/null; then
-    # Install GRUB to MBR and bios_grub partition
-    grub-install --target=i386-pc \
-        --boot-directory="${MNT}/esp/boot" \
-        --recheck \
-        "${LOOP}" 2>/dev/null || warn "BIOS GRUB install failed (UEFI-only)"
+ok "GRUB installed (UEFI + BIOS)"
 
-    if [[ -d /usr/lib/grub/i386-pc ]]; then
-        mkdir -p "${MNT}/esp/boot/grub/i386-pc"
-        cp /usr/lib/grub/i386-pc/*.mod "${MNT}/esp/boot/grub/i386-pc/" 2>/dev/null || true
-        cp /usr/lib/grub/i386-pc/*.lst "${MNT}/esp/boot/grub/i386-pc/" 2>/dev/null || true
-    fi
-else
-    warn "grub-install not found, BIOS boot may not work"
-fi
-
-# Setup persistence partition
-if [[ $INCLUDE_PERSISTENCE -eq 1 ]]; then
-    mkdir -p "${MNT}/persistence"
-    mount "${LOOP}p4" "${MNT}/persistence"
-    echo "/ union" > "${MNT}/persistence/persistence.conf"
-    umount "${MNT}/persistence"
-    ok "Persistence partition configured"
+# Persistence
+if [[ $INCLUDE_PERSISTENCE -eq 1 ]] && [[ -b "${LOOP}p4" ]]; then
+  mkdir -p "${MNT}/pers"
+  mount "${LOOP}p4" "${MNT}/pers"
+  echo "/ union" > "${MNT}/pers/persistence.conf"
+  umount "${MNT}/pers"
+  ok "Persistence configured"
 fi
 
 # Sync and unmount
@@ -718,39 +584,29 @@ umount "${MNT}/live"
 losetup -d "${LOOP}"
 LOOP=""
 
-ok "Bootable image created (UEFI + Legacy BIOS)"
+ok "Bootable image created"
 
-# ── Step 8: Compression and checksums ─────────────────────────────
-log "8/8 Compressing image..."
-
-# Compress with gzip
+# ══════════════════════════════════════════════════════════════════
+# Compress
+# ══════════════════════════════════════════════════════════════════
+log "Compressing..."
 gzip -9 -f "${IMG_FILE}"
-IMG_GZ="${IMG_FILE}.gz"
+sha256sum "${IMG_FILE}.gz" > "${IMG_FILE}.gz.sha256"
 
-# Generate checksum
-sha256sum "${IMG_GZ}" > "${IMG_GZ}.sha256"
-
-FINAL_SIZE=$(du -sh "${IMG_GZ}" | cut -f1)
-ok "Final image: ${IMG_GZ} (${FINAL_SIZE})"
+FINAL_SIZE=$(du -sh "${IMG_FILE}.gz" | cut -f1)
 
 echo ""
-echo -e "${GOLD}${BOLD}════════════════════════════════════════════════════════════${NC}"
-echo -e "${GREEN}${BOLD}  SecuBox Live USB Image Ready!${NC}"
+echo -e "${GREEN}${BOLD}════════════════════════════════════════════════════════════${NC}"
+echo -e "${GREEN}${BOLD}  SecuBox Live USB Ready!${NC}"
 echo ""
-echo -e "  Image: ${IMG_GZ}"
+echo -e "  Image: ${IMG_FILE}.gz"
 echo -e "  Size:  ${FINAL_SIZE}"
 echo ""
-echo -e "  ${BOLD}Flash to USB drive:${NC}"
-echo -e "    zcat ${IMG_GZ} | sudo dd of=/dev/sdX bs=4M status=progress"
+echo -e "  ${BOLD}Flash:${NC}"
+echo -e "    zcat ${IMG_FILE}.gz | sudo dd of=/dev/sdX bs=4M status=progress"
 echo ""
-echo -e "  ${BOLD}Boot and access:${NC}"
-echo -e "    Web UI:  https://<IP>:8443 (admin / admin)"
-echo -e "    SSH:     root / secubox  |  secubox / secubox"
+echo -e "  ${BOLD}Credentials:${NC}"
+echo -e "    SSH/Console: root / secubox"
+echo -e "    Web UI: https://<IP>:9443"
 echo ""
-if [[ $INCLUDE_PERSISTENCE -eq 1 ]]; then
-echo -e "  ${BOLD}Persistence:${NC}"
-echo -e "    Changes are saved to the persistence partition automatically."
-echo -e "    Boot with 'No Persistence' option to start fresh."
-fi
-echo ""
-echo -e "${GOLD}${BOLD}════════════════════════════════════════════════════════════${NC}"
+echo -e "${GREEN}${BOLD}════════════════════════════════════════════════════════════${NC}"
