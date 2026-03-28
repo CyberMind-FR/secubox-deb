@@ -1,0 +1,12 @@
+#!/bin/bash
+set -e
+case "$1" in
+  configure)
+    install -d -o root -g root -m 755 /var/lib/secubox/ossec
+    systemctl daemon-reload
+    systemctl enable secubox-ossec.service
+    systemctl start secubox-ossec.service || true
+    systemctl reload nginx 2>/dev/null || true
+    ;;
+esac
+#DEBHELPER#
