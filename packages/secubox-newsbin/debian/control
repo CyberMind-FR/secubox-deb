@@ -1,0 +1,13 @@
+Source: secubox-newsbin
+Section: news
+Priority: optional
+Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.0
+
+Package: secubox-newsbin
+Architecture: all
+Depends: secubox-core, python3, python3-uvicorn, python3-fastapi, nginx, lxc
+Description: SecuBox Newsbin RSS Aggregator
+ LXC-based Miniflux RSS reader for SecuBox.
+ Manage feeds, read news entries, organize subscriptions.
