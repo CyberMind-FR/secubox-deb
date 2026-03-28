@@ -6,6 +6,9 @@ FastAPI backend for mesh networking with:
 - SecuBox peer discovery and registration
 - Service announcement and resolution
 - Mesh DNS integration
+- Peer health monitoring
+- Traffic statistics
+- Webhook notifications
 """
 
 import json
@@ -13,12 +16,17 @@ import subprocess
 import time
 import asyncio
 import socket
+import threading
+import hashlib
+import hmac
+import httpx
 from pathlib import Path
-from typing import Optional, List
-from datetime import datetime
+from typing import Optional, List, Dict, Any
+from datetime import datetime, timedelta
+from enum import Enum
 
-from fastapi import FastAPI, HTTPException, Query, Depends, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException, Query, Depends, WebSocket, WebSocketDisconnect, BackgroundTasks
+from pydantic import BaseModel, Field
 
 try:
     from secubox_core.auth import require_jwt
@@ -29,7 +37,7 @@ except ImportError:
 app = FastAPI(
     title="SecuBox Mesh API",
     description="Yggdrasil mesh network with SecuBox peer discovery",
-    version="1.1.0"
+    version="2.0.0"
 )
 
 # Configuration paths
@@ -38,6 +46,9 @@ DATA_PATH = Path("/var/lib/secubox/mesh")
 SERVICES_FILE = DATA_PATH / "services.json"
 DOMAINS_FILE = DATA_PATH / "domains.json"
 PEERS_FILE = DATA_PATH / "peers.json"
+HEALTH_HISTORY_FILE = DATA_PATH / "health_history.json"
+TRAFFIC_STATS_FILE = DATA_PATH / "traffic_stats.json"
+WEBHOOKS_FILE = DATA_PATH / "webhooks.json"
 
 # SecuBox service announcement port
 SECUBOX_ANNOUNCE_PORT = 9444
@@ -45,6 +56,269 @@ SECUBOX_SERVICE_TYPE = "_secubox._tcp"
 
 # Ensure data directory exists
 DATA_PATH.mkdir(parents=True, exist_ok=True)
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Models
+# ════════════════════════════════════════════════════════════════════════════
+
+class HealthStatus(str, Enum):
+    HEALTHY = "healthy"
+    DEGRADED = "degraded"
+    UNHEALTHY = "unhealthy"
+    UNKNOWN = "unknown"
+
+
+class PeerHealthRecord(BaseModel):
+    ipv6: str
+    status: HealthStatus
+    timestamp: str
+    response_time_ms: Optional[float] = None
+    error: Optional[str] = None
+
+
+class TrafficStats(BaseModel):
+    timestamp: str
+    total_rx_bytes: int = 0
+    total_tx_bytes: int = 0
+    peer_count: int = 0
+    session_count: int = 0
+    secubox_peers_online: int = 0
+
+
+class WebhookConfig(BaseModel):
+    id: str
+    url: str
+    events: List[str] = ["peer_online", "peer_offline", "discovery_complete"]
+    secret: Optional[str] = None
+    enabled: bool = True
+    created_at: str
+    last_triggered: Optional[str] = None
+    failure_count: int = 0
+
+
+class DiscoverySchedule(BaseModel):
+    enabled: bool = False
+    interval_minutes: int = Field(ge=1, le=1440, default=15)
+    last_run: Optional[str] = None
+    next_run: Optional[str] = None
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Stats Cache
+# ════════════════════════════════════════════════════════════════════════════
+
+class StatsCache:
+    """Thread-safe stats cache with TTL."""
+    def __init__(self, ttl_seconds: int = 30):
+        self.ttl = ttl_seconds
+        self._cache: Dict[str, Any] = {}
+        self._timestamps: Dict[str, float] = {}
+        self._lock = threading.Lock()
+
+    def get(self, key: str) -> Optional[Any]:
+        with self._lock:
+            if key in self._cache:
+                if time.time() - self._timestamps[key] < self.ttl:
+                    return self._cache[key]
+                del self._cache[key]
+                del self._timestamps[key]
+        return None
+
+    def set(self, key: str, value: Any):
+        with self._lock:
+            self._cache[key] = value
+            self._timestamps[key] = time.time()
+
+    def invalidate(self, key: str = None):
+        with self._lock:
+            if key:
+                self._cache.pop(key, None)
+                self._timestamps.pop(key, None)
+            else:
+                self._cache.clear()
+                self._timestamps.clear()
+
+
+stats_cache = StatsCache(ttl_seconds=30)
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Background Tasks
+# ════════════════════════════════════════════════════════════════════════════
+
+_discovery_task: Optional[asyncio.Task] = None
+_health_check_task: Optional[asyncio.Task] = None
+
+
+async def _periodic_discovery():
+    """Background task for periodic peer discovery."""
+    while True:
+        try:
+            schedule = load_json(DATA_PATH / "discovery_schedule.json", {
+                "enabled": False, "interval_minutes": 15
+            })
+
+            if schedule.get("enabled", False):
+                interval = schedule.get("interval_minutes", 15)
+                await asyncio.sleep(interval * 60)
+
+                # Run discovery
+                sessions = get_yggdrasil_sessions()
+                data = load_json(PEERS_FILE, {"peers": []})
+
+                discovered = []
+                for session in sessions:
+                    ipv6 = session.get("address", "").split("/")[0]
+                    if ipv6 and ipv6.startswith("2"):
+                        result = await probe_secubox_peer(ipv6, timeout=5.0)
+                        if result["is_secubox"]:
+                            discovered.append({
+                                "ipv6": ipv6,
+                                "hostname": result["hostname"],
+                                "version": result["version"],
+                                "platform": result["platform"],
+                                "online": True
+                            })
+
+                # Update schedule
+                schedule["last_run"] = datetime.now().isoformat()
+                schedule["next_run"] = (datetime.now() + timedelta(minutes=interval)).isoformat()
+                save_json(DATA_PATH / "discovery_schedule.json", schedule)
+
+                # Notify webhooks
+                await trigger_webhooks("discovery_complete", {
+                    "peers_found": len(discovered),
+                    "timestamp": datetime.now().isoformat()
+                })
+            else:
+                await asyncio.sleep(60)
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            await asyncio.sleep(60)
+
+
+async def _periodic_health_check():
+    """Background task for peer health monitoring."""
+    while True:
+        try:
+            await asyncio.sleep(60)  # Check every minute
+            data = load_json(PEERS_FILE, {"peers": []})
+            history = load_json(HEALTH_HISTORY_FILE, {"records": []})
+
+            for peer in data.get("peers", []):
+                ipv6 = peer.get("ipv6")
+                if not ipv6:
+                    continue
+
+                # Quick health check
+                start = time.time()
+                try:
+                    proc = await asyncio.create_subprocess_exec(
+                        "ping", "-c", "1", "-W", "2", ipv6,
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE
+                    )
+                    await asyncio.wait_for(proc.communicate(), timeout=3.0)
+                    response_time = (time.time() - start) * 1000
+
+                    was_online = peer.get("online", False)
+                    peer["online"] = proc.returncode == 0
+
+                    record = {
+                        "ipv6": ipv6,
+                        "status": "healthy" if peer["online"] else "unhealthy",
+                        "timestamp": datetime.now().isoformat(),
+                        "response_time_ms": response_time if peer["online"] else None
+                    }
+                    history["records"].append(record)
+
+                    # Trigger webhook on status change
+                    if was_online and not peer["online"]:
+                        await trigger_webhooks("peer_offline", {
+                            "ipv6": ipv6,
+                            "hostname": peer.get("hostname"),
+                            "timestamp": datetime.now().isoformat()
+                        })
+                    elif not was_online and peer["online"]:
+                        await trigger_webhooks("peer_online", {
+                            "ipv6": ipv6,
+                            "hostname": peer.get("hostname"),
+                            "timestamp": datetime.now().isoformat()
+                        })
+
+                except (asyncio.TimeoutError, Exception):
+                    peer["online"] = False
+
+            # Keep last 1000 records
+            history["records"] = history["records"][-1000:]
+            save_json(HEALTH_HISTORY_FILE, history)
+            save_json(PEERS_FILE, data)
+
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            pass
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Start background tasks."""
+    global _discovery_task, _health_check_task
+    _discovery_task = asyncio.create_task(_periodic_discovery())
+    _health_check_task = asyncio.create_task(_periodic_health_check())
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Stop background tasks."""
+    global _discovery_task, _health_check_task
+    if _discovery_task:
+        _discovery_task.cancel()
+    if _health_check_task:
+        _health_check_task.cancel()
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Webhook Support
+# ════════════════════════════════════════════════════════════════════════════
+
+async def trigger_webhooks(event: str, payload: dict):
+    """Trigger webhooks for an event."""
+    webhooks = load_json(WEBHOOKS_FILE, {"webhooks": []})
+
+    for hook in webhooks.get("webhooks", []):
+        if not hook.get("enabled", True):
+            continue
+        if event not in hook.get("events", []):
+            continue
+
+        try:
+            data = {
+                "event": event,
+                "timestamp": datetime.now().isoformat(),
+                "payload": payload
+            }
+
+            headers = {"Content-Type": "application/json"}
+            if hook.get("secret"):
+                sig = hmac.new(
+                    hook["secret"].encode(),
+                    json.dumps(data).encode(),
+                    hashlib.sha256
+                ).hexdigest()
+                headers["X-SecuBox-Signature"] = f"sha256={sig}"
+
+            async with httpx.AsyncClient(timeout=10) as client:
+                await client.post(hook["url"], json=data, headers=headers)
+
+            hook["last_triggered"] = datetime.now().isoformat()
+            hook["failure_count"] = 0
+        except Exception:
+            hook["failure_count"] = hook.get("failure_count", 0) + 1
+
+    save_json(WEBHOOKS_FILE, webhooks)
 
 
 class ServiceAnnounce(BaseModel):
@@ -574,4 +848,550 @@ async def get_self_info(user=Depends(require_jwt)):
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
-    return {"status": "healthy", "service": "secubox-mesh", "version": "1.1.0"}
+    return {"status": "healthy", "service": "secubox-mesh", "version": "2.0.0"}
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Peer Health Monitoring
+# ════════════════════════════════════════════════════════════════════════════
+
+@app.get("/health/peers")
+async def get_peer_health(user=Depends(require_jwt)):
+    """Get health status of all SecuBox peers."""
+    data = load_json(PEERS_FILE, {"peers": []})
+
+    health_summary = {
+        "total": len(data.get("peers", [])),
+        "online": sum(1 for p in data.get("peers", []) if p.get("online", False)),
+        "offline": sum(1 for p in data.get("peers", []) if not p.get("online", False)),
+        "peers": []
+    }
+
+    for peer in data.get("peers", []):
+        health_summary["peers"].append({
+            "ipv6": peer.get("ipv6"),
+            "hostname": peer.get("hostname"),
+            "status": "healthy" if peer.get("online") else "unhealthy",
+            "last_seen": peer.get("last_seen"),
+            "platform": peer.get("platform")
+        })
+
+    return health_summary
+
+
+@app.post("/health/check/{ipv6:path}")
+async def check_peer_health(ipv6: str, user=Depends(require_jwt)):
+    """Manually check health of a specific peer."""
+    start = time.time()
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "ping", "-c", "3", "-W", "2", ipv6,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10.0)
+        response_time = (time.time() - start) * 1000
+
+        # Parse ping output for packet loss
+        output = stdout.decode()
+        packet_loss = 100
+        if "packet loss" in output.lower():
+            import re
+            match = re.search(r'(\d+)% packet loss', output)
+            if match:
+                packet_loss = int(match.group(1))
+
+        status = "healthy" if proc.returncode == 0 and packet_loss < 50 else (
+            "degraded" if packet_loss < 100 else "unhealthy"
+        )
+
+        # Record in history
+        history = load_json(HEALTH_HISTORY_FILE, {"records": []})
+        history["records"].append({
+            "ipv6": ipv6,
+            "status": status,
+            "timestamp": datetime.now().isoformat(),
+            "response_time_ms": response_time,
+            "packet_loss": packet_loss
+        })
+        history["records"] = history["records"][-1000:]
+        save_json(HEALTH_HISTORY_FILE, history)
+
+        return {
+            "ipv6": ipv6,
+            "status": status,
+            "response_time_ms": round(response_time, 2),
+            "packet_loss": packet_loss,
+            "checked_at": datetime.now().isoformat()
+        }
+
+    except asyncio.TimeoutError:
+        return {
+            "ipv6": ipv6,
+            "status": "unhealthy",
+            "error": "Timeout",
+            "checked_at": datetime.now().isoformat()
+        }
+    except Exception as e:
+        return {
+            "ipv6": ipv6,
+            "status": "unhealthy",
+            "error": str(e),
+            "checked_at": datetime.now().isoformat()
+        }
+
+
+@app.get("/health/history")
+async def get_health_history(
+    ipv6: Optional[str] = None,
+    limit: int = Query(default=100, le=1000),
+    user=Depends(require_jwt)
+):
+    """Get peer health history."""
+    history = load_json(HEALTH_HISTORY_FILE, {"records": []})
+    records = history.get("records", [])
+
+    if ipv6:
+        records = [r for r in records if r.get("ipv6") == ipv6]
+
+    records = sorted(records, key=lambda x: x.get("timestamp", ""), reverse=True)
+
+    return {
+        "records": records[:limit],
+        "total": len(records)
+    }
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Traffic Statistics
+# ════════════════════════════════════════════════════════════════════════════
+
+@app.get("/stats/traffic")
+async def get_traffic_stats(user=Depends(require_jwt)):
+    """Get current traffic statistics."""
+    cached = stats_cache.get("traffic_stats")
+    if cached:
+        return cached
+
+    peers = get_yggdrasil_peers()
+    sessions = get_yggdrasil_sessions()
+    secubox_data = load_json(PEERS_FILE, {"peers": []})
+
+    total_rx = sum(p.get("rx_bytes", 0) for p in peers)
+    total_tx = sum(p.get("tx_bytes", 0) for p in peers)
+
+    # Session traffic
+    session_rx = sum(s.get("rx_bytes", 0) for s in sessions)
+    session_tx = sum(s.get("tx_bytes", 0) for s in sessions)
+
+    stats = {
+        "timestamp": datetime.now().isoformat(),
+        "peers": {
+            "count": len(peers),
+            "rx_bytes": total_rx,
+            "tx_bytes": total_tx,
+            "rx_human": _human_bytes(total_rx),
+            "tx_human": _human_bytes(total_tx)
+        },
+        "sessions": {
+            "count": len(sessions),
+            "rx_bytes": session_rx,
+            "tx_bytes": session_tx,
+            "rx_human": _human_bytes(session_rx),
+            "tx_human": _human_bytes(session_tx)
+        },
+        "secubox_peers": {
+            "total": len(secubox_data.get("peers", [])),
+            "online": sum(1 for p in secubox_data.get("peers", []) if p.get("online", False))
+        }
+    }
+
+    stats_cache.set("traffic_stats", stats)
+    return stats
+
+
+def _human_bytes(b: int) -> str:
+    """Convert bytes to human-readable format."""
+    for unit in ["B", "KB", "MB", "GB", "TB"]:
+        if b < 1024:
+            return f"{b:.1f} {unit}"
+        b /= 1024
+    return f"{b:.1f} PB"
+
+
+@app.get("/stats/history")
+async def get_traffic_history(
+    hours: int = Query(default=24, le=168),
+    user=Depends(require_jwt)
+):
+    """Get traffic statistics history."""
+    history = load_json(TRAFFIC_STATS_FILE, {"records": []})
+    records = history.get("records", [])
+
+    # Filter by time
+    cutoff = datetime.now() - timedelta(hours=hours)
+    cutoff_str = cutoff.isoformat()
+    records = [r for r in records if r.get("timestamp", "") >= cutoff_str]
+
+    return {
+        "records": records,
+        "period_hours": hours
+    }
+
+
+@app.post("/stats/snapshot")
+async def create_stats_snapshot(user=Depends(require_jwt)):
+    """Create a traffic stats snapshot (useful for manual tracking)."""
+    stats = await get_traffic_stats(user)
+
+    history = load_json(TRAFFIC_STATS_FILE, {"records": []})
+    history["records"].append({
+        "timestamp": datetime.now().isoformat(),
+        "total_rx_bytes": stats["peers"]["rx_bytes"] + stats["sessions"]["rx_bytes"],
+        "total_tx_bytes": stats["peers"]["tx_bytes"] + stats["sessions"]["tx_bytes"],
+        "peer_count": stats["peers"]["count"],
+        "session_count": stats["sessions"]["count"],
+        "secubox_peers_online": stats["secubox_peers"]["online"]
+    })
+
+    # Keep last 1000 records
+    history["records"] = history["records"][-1000:]
+    save_json(TRAFFIC_STATS_FILE, history)
+
+    return {"status": "success", "snapshot": stats}
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Discovery Scheduling
+# ════════════════════════════════════════════════════════════════════════════
+
+@app.get("/discovery/schedule")
+async def get_discovery_schedule(user=Depends(require_jwt)):
+    """Get current discovery schedule."""
+    schedule = load_json(DATA_PATH / "discovery_schedule.json", {
+        "enabled": False,
+        "interval_minutes": 15,
+        "last_run": None,
+        "next_run": None
+    })
+    return schedule
+
+
+@app.post("/discovery/schedule")
+async def set_discovery_schedule(config: DiscoverySchedule, user=Depends(require_jwt)):
+    """Configure automatic peer discovery."""
+    schedule = {
+        "enabled": config.enabled,
+        "interval_minutes": config.interval_minutes,
+        "last_run": config.last_run,
+        "next_run": (datetime.now() + timedelta(minutes=config.interval_minutes)).isoformat() if config.enabled else None
+    }
+    save_json(DATA_PATH / "discovery_schedule.json", schedule)
+
+    return {"status": "success", "schedule": schedule}
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Webhooks
+# ════════════════════════════════════════════════════════════════════════════
+
+@app.get("/webhooks")
+async def list_webhooks(user=Depends(require_jwt)):
+    """List configured webhooks."""
+    data = load_json(WEBHOOKS_FILE, {"webhooks": []})
+    return {
+        "webhooks": data.get("webhooks", []),
+        "available_events": ["peer_online", "peer_offline", "discovery_complete", "service_announced", "service_revoked"]
+    }
+
+
+class WebhookCreate(BaseModel):
+    url: str
+    events: List[str] = ["peer_online", "peer_offline"]
+    secret: Optional[str] = None
+    enabled: bool = True
+
+
+@app.post("/webhooks")
+async def add_webhook(config: WebhookCreate, user=Depends(require_jwt)):
+    """Add a webhook."""
+    data = load_json(WEBHOOKS_FILE, {"webhooks": []})
+
+    webhook_id = hashlib.sha256(f"{config.url}{time.time()}".encode()).hexdigest()[:12]
+
+    webhook = {
+        "id": webhook_id,
+        "url": config.url,
+        "events": config.events,
+        "secret": config.secret,
+        "enabled": config.enabled,
+        "created_at": datetime.now().isoformat(),
+        "last_triggered": None,
+        "failure_count": 0
+    }
+
+    data["webhooks"].append(webhook)
+    save_json(WEBHOOKS_FILE, data)
+
+    return {"status": "success", "webhook": webhook}
+
+
+@app.delete("/webhooks/{webhook_id}")
+async def delete_webhook(webhook_id: str, user=Depends(require_jwt)):
+    """Delete a webhook."""
+    data = load_json(WEBHOOKS_FILE, {"webhooks": []})
+
+    original_len = len(data["webhooks"])
+    data["webhooks"] = [w for w in data["webhooks"] if w.get("id") != webhook_id]
+
+    if len(data["webhooks"]) == original_len:
+        raise HTTPException(status_code=404, detail="Webhook not found")
+
+    save_json(WEBHOOKS_FILE, data)
+    return {"status": "success"}
+
+
+@app.post("/webhooks/{webhook_id}/test")
+async def test_webhook(webhook_id: str, user=Depends(require_jwt)):
+    """Test a webhook with a sample payload."""
+    data = load_json(WEBHOOKS_FILE, {"webhooks": []})
+
+    webhook = next((w for w in data["webhooks"] if w.get("id") == webhook_id), None)
+    if not webhook:
+        raise HTTPException(status_code=404, detail="Webhook not found")
+
+    test_payload = {
+        "event": "test",
+        "timestamp": datetime.now().isoformat(),
+        "payload": {"message": "This is a test webhook from SecuBox Mesh"}
+    }
+
+    try:
+        headers = {"Content-Type": "application/json"}
+        if webhook.get("secret"):
+            sig = hmac.new(
+                webhook["secret"].encode(),
+                json.dumps(test_payload).encode(),
+                hashlib.sha256
+            ).hexdigest()
+            headers["X-SecuBox-Signature"] = f"sha256={sig}"
+
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(webhook["url"], json=test_payload, headers=headers)
+            return {
+                "status": "success",
+                "response_code": resp.status_code,
+                "response_body": resp.text[:500]
+            }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e)
+        }
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Service Health Checks
+# ════════════════════════════════════════════════════════════════════════════
+
+@app.get("/services/health")
+async def get_services_health(user=Depends(require_jwt)):
+    """Check health of all announced services."""
+    data = load_json(SERVICES_FILE, {"services": []})
+    ygg_info = get_yggdrasil_info()
+
+    results = []
+    for service in data.get("services", []):
+        port = service.get("port")
+
+        # Check if port is listening locally
+        listening = False
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(1)
+            result = sock.connect_ex(("127.0.0.1", port))
+            listening = result == 0
+            sock.close()
+        except Exception:
+            pass
+
+        results.append({
+            "name": service.get("name"),
+            "port": port,
+            "type": service.get("type"),
+            "status": "healthy" if listening else "unhealthy",
+            "listening": listening,
+            "meshname": f"{service['name']}.{ipv6_to_meshname(ygg_info['ipv6'])}" if ygg_info.get("ipv6") else None
+        })
+
+    return {
+        "services": results,
+        "healthy": sum(1 for s in results if s["status"] == "healthy"),
+        "total": len(results)
+    }
+
+
+@app.post("/services/{name}/health")
+async def check_service_health(name: str, user=Depends(require_jwt)):
+    """Check health of a specific service."""
+    data = load_json(SERVICES_FILE, {"services": []})
+
+    service = next((s for s in data.get("services", []) if s.get("name") == name), None)
+    if not service:
+        raise HTTPException(status_code=404, detail="Service not found")
+
+    port = service.get("port")
+    start = time.time()
+
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(5)
+        result = sock.connect_ex(("127.0.0.1", port))
+        response_time = (time.time() - start) * 1000
+        sock.close()
+
+        return {
+            "name": name,
+            "port": port,
+            "status": "healthy" if result == 0 else "unhealthy",
+            "response_time_ms": round(response_time, 2),
+            "checked_at": datetime.now().isoformat()
+        }
+    except Exception as e:
+        return {
+            "name": name,
+            "port": port,
+            "status": "unhealthy",
+            "error": str(e),
+            "checked_at": datetime.now().isoformat()
+        }
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Export / Import
+# ════════════════════════════════════════════════════════════════════════════
+
+@app.get("/export/peers")
+async def export_peers(format: str = Query(default="json", enum=["json", "csv"]), user=Depends(require_jwt)):
+    """Export SecuBox peers."""
+    data = load_json(PEERS_FILE, {"peers": []})
+    peers = data.get("peers", [])
+
+    if format == "csv":
+        lines = ["ipv6,hostname,version,platform,online,first_seen,last_seen"]
+        for p in peers:
+            lines.append(",".join([
+                p.get("ipv6", ""),
+                p.get("hostname", ""),
+                p.get("version", ""),
+                p.get("platform", ""),
+                str(p.get("online", False)),
+                p.get("first_seen", ""),
+                p.get("last_seen", "")
+            ]))
+        return {"format": "csv", "data": "\n".join(lines)}
+
+    return {
+        "format": "json",
+        "exported_at": datetime.now().isoformat(),
+        "peers": peers
+    }
+
+
+@app.get("/export/services")
+async def export_services(user=Depends(require_jwt)):
+    """Export announced services."""
+    data = load_json(SERVICES_FILE, {"services": []})
+
+    return {
+        "exported_at": datetime.now().isoformat(),
+        "services": data.get("services", [])
+    }
+
+
+class ImportPeers(BaseModel):
+    peers: List[dict]
+    merge: bool = True  # If true, merge with existing; if false, replace
+
+
+@app.post("/import/peers")
+async def import_peers(config: ImportPeers, user=Depends(require_jwt)):
+    """Import SecuBox peers."""
+    data = load_json(PEERS_FILE, {"peers": []})
+
+    if config.merge:
+        existing_ips = {p.get("ipv6") for p in data.get("peers", [])}
+        for peer in config.peers:
+            if peer.get("ipv6") not in existing_ips:
+                data["peers"].append({
+                    **peer,
+                    "first_seen": peer.get("first_seen", datetime.now().isoformat()),
+                    "last_seen": datetime.now().isoformat(),
+                    "online": False
+                })
+    else:
+        data["peers"] = [{
+            **p,
+            "first_seen": p.get("first_seen", datetime.now().isoformat()),
+            "last_seen": datetime.now().isoformat(),
+            "online": False
+        } for p in config.peers]
+
+    save_json(PEERS_FILE, data)
+
+    return {
+        "status": "success",
+        "imported": len(config.peers),
+        "total": len(data["peers"])
+    }
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Mesh Network Summary
+# ════════════════════════════════════════════════════════════════════════════
+
+@app.get("/summary")
+async def get_mesh_summary(user=Depends(require_jwt)):
+    """Get comprehensive mesh network summary."""
+    ygg_info = get_yggdrasil_info()
+    peers = get_yggdrasil_peers()
+    sessions = get_yggdrasil_sessions()
+    services = load_json(SERVICES_FILE, {"services": []})
+    domains = load_json(DOMAINS_FILE, {"domains": []})
+    secubox_peers = load_json(PEERS_FILE, {"peers": []})
+    schedule = load_json(DATA_PATH / "discovery_schedule.json", {"enabled": False})
+
+    # Calculate totals
+    total_rx = sum(p.get("rx_bytes", 0) for p in peers)
+    total_tx = sum(p.get("tx_bytes", 0) for p in peers)
+
+    return {
+        "node": {
+            "ipv6": ygg_info.get("ipv6"),
+            "subnet": ygg_info.get("subnet"),
+            "meshname": ipv6_to_meshname(ygg_info["ipv6"]) if ygg_info.get("ipv6") else None,
+            "running": ygg_info.get("running", False)
+        },
+        "connectivity": {
+            "peers": len(peers),
+            "sessions": len(sessions),
+            "total_rx": _human_bytes(total_rx),
+            "total_tx": _human_bytes(total_tx)
+        },
+        "secubox": {
+            "total_peers": len(secubox_peers.get("peers", [])),
+            "online_peers": sum(1 for p in secubox_peers.get("peers", []) if p.get("online", False)),
+            "last_discovery": secubox_peers.get("last_discovery")
+        },
+        "services": {
+            "local": len(services.get("services", [])),
+            "remote_domains": len(domains.get("domains", []))
+        },
+        "discovery": {
+            "scheduled": schedule.get("enabled", False),
+            "interval_minutes": schedule.get("interval_minutes", 15),
+            "next_run": schedule.get("next_run")
+        },
+        "timestamp": datetime.now().isoformat()
+    }

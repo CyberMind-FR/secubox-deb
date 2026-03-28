@@ -5,6 +5,11 @@ Enhanced with OpenWRT/SecuBox device detection:
 - HTTP probe for LuCI interface detection
 - DHCP hostname pattern matching
 - mDNS/Avahi service discovery
+- Device history tracking with connection logs
+- Scheduled background scanning
+- Export functionality (CSV/JSON)
+- New device alerts via webhooks
+- Device grouping and organization
 """
 import asyncio
 import subprocess
@@ -12,25 +17,42 @@ import re
 import os
 import json
 import socket
+import time
+import csv
+import io
+import threading
 from pathlib import Path
-from datetime import datetime
-from typing import Optional
-from fastapi import FastAPI, Depends, HTTPException
-from pydantic import BaseModel
+from datetime import datetime, timedelta
+from typing import Optional, List, Dict, Any, Set
+from enum import Enum
+from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, Response
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
+import httpx
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
 
-app = FastAPI(title="SecuBox Device-Intel", version="1.2.1")
+app = FastAPI(title="SecuBox Device-Intel", version="2.0.0")
 config = get_config("device-intel")
 
 # OUI database path (install via apt: ieee-data)
 OUI_DB_PATH = "/usr/share/ieee-data/oui.txt"
-DEVICES_FILE = "/var/lib/secubox/device-intel/devices.json"
+DATA_DIR = Path("/var/lib/secubox/device-intel")
+DEVICES_FILE = DATA_DIR / "devices.json"
+HISTORY_FILE = DATA_DIR / "history.json"
+GROUPS_FILE = DATA_DIR / "groups.json"
+WEBHOOKS_FILE = DATA_DIR / "webhooks.json"
+SCAN_STATE_FILE = DATA_DIR / "scan_state.json"
 DHCP_LEASES = "/var/lib/dhcp/dhcpd.leases"
 DNSMASQ_LEASES = "/var/lib/misc/dnsmasq.leases"
 
+# Configuration
+SCAN_INTERVAL = 300  # Default scan interval in seconds (5 minutes)
+HISTORY_RETENTION_DAYS = 30
+MAX_HISTORY_ENTRIES = 10000
+
 # Ensure state directory exists
-Path("/var/lib/secubox/device-intel").mkdir(parents=True, exist_ok=True)
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 # OpenWRT/Router MAC vendor prefixes (common manufacturers)
 ROUTER_VENDORS = {
@@ -59,9 +81,260 @@ OPENWRT_HOSTNAMES = [
 ]
 
 
+class DeviceEvent(str, Enum):
+    FIRST_SEEN = "first_seen"
+    ONLINE = "online"
+    OFFLINE = "offline"
+    IP_CHANGED = "ip_changed"
+    HOSTNAME_CHANGED = "hostname_changed"
+
+
 class DeviceNote(BaseModel):
     mac: str
     note: str
+
+
+class DeviceGroup(BaseModel):
+    id: str
+    name: str
+    description: Optional[str] = None
+    color: str = "#3498db"
+    icon: str = "devices"
+    members: List[str] = []  # List of MAC addresses
+    created_at: str
+    updated_at: Optional[str] = None
+
+
+class DeviceHistoryEntry(BaseModel):
+    timestamp: str
+    mac: str
+    event: DeviceEvent
+    ip: Optional[str] = None
+    details: Optional[Dict[str, Any]] = None
+
+
+class WebhookConfig(BaseModel):
+    url: str
+    events: List[str] = ["new_device", "device_offline"]
+    enabled: bool = True
+    secret: Optional[str] = None
+    timeout: float = 5.0
+
+
+class ScanState(BaseModel):
+    enabled: bool = True
+    interval_seconds: int = 300
+    last_scan: Optional[str] = None
+    next_scan: Optional[str] = None
+    devices_found_last: int = 0
+    new_devices_last: int = 0
+
+
+class DeviceIntelManager:
+    """Manager for device intelligence operations."""
+
+    def __init__(self):
+        self._oui_db: Optional[dict] = None
+        self._known_macs: Set[str] = set()
+        self._scan_lock = threading.Lock()
+        self._last_online: Dict[str, str] = {}  # MAC -> last seen timestamp
+        self._initialized = False
+
+    def _ensure_initialized(self):
+        """Lazy initialization to avoid import-time issues."""
+        if not self._initialized:
+            self._load_known_macs()
+            self._initialized = True
+
+    @property
+    def oui_db(self) -> dict:
+        """Lazy-load OUI database."""
+        if self._oui_db is None:
+            self._oui_db = _load_oui_db()
+        return self._oui_db
+
+    def _load_known_macs(self):
+        """Load known MAC addresses from devices file."""
+        devices = _load_devices()
+        self._known_macs = set(devices.keys())
+
+    def is_new_device(self, mac: str) -> bool:
+        """Check if device is new (never seen before)."""
+        return mac.upper() not in self._known_macs
+
+    def register_device(self, mac: str):
+        """Register a device as known."""
+        self._known_macs.add(mac.upper())
+
+    def record_history(self, mac: str, event: DeviceEvent, ip: str = None, details: Dict = None):
+        """Record a device history event."""
+        entry = DeviceHistoryEntry(
+            timestamp=datetime.utcnow().isoformat() + "Z",
+            mac=mac.upper(),
+            event=event,
+            ip=ip,
+            details=details
+        )
+
+        history = self._load_history()
+        history.append(entry.dict())
+
+        # Trim old entries
+        if len(history) > MAX_HISTORY_ENTRIES:
+            history = history[-MAX_HISTORY_ENTRIES:]
+
+        self._save_history(history)
+        return entry
+
+    def _load_history(self) -> List[Dict]:
+        """Load device history."""
+        if HISTORY_FILE.exists():
+            try:
+                with open(HISTORY_FILE) as f:
+                    return json.load(f)
+            except Exception:
+                pass
+        return []
+
+    def _save_history(self, history: List[Dict]):
+        """Save device history."""
+        try:
+            with open(HISTORY_FILE, 'w') as f:
+                json.dump(history, f)
+        except Exception:
+            pass
+
+    def get_device_history(self, mac: str = None, limit: int = 100) -> List[DeviceHistoryEntry]:
+        """Get device history, optionally filtered by MAC."""
+        history = self._load_history()
+
+        if mac:
+            history = [h for h in history if h.get("mac", "").upper() == mac.upper()]
+
+        # Return most recent first
+        history = sorted(history, key=lambda x: x.get("timestamp", ""), reverse=True)
+        return [DeviceHistoryEntry(**h) for h in history[:limit]]
+
+    def cleanup_old_history(self, days: int = HISTORY_RETENTION_DAYS) -> int:
+        """Remove history entries older than specified days."""
+        cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat() + "Z"
+        history = self._load_history()
+        original_count = len(history)
+
+        history = [h for h in history if h.get("timestamp", "") >= cutoff]
+        self._save_history(history)
+
+        return original_count - len(history)
+
+    async def send_webhook(self, event: str, data: Dict[str, Any]):
+        """Send webhook notification."""
+        webhooks = self._load_webhooks()
+
+        for wh in webhooks:
+            if not wh.enabled or event not in wh.events:
+                continue
+
+            payload = {
+                "event": event,
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "data": data
+            }
+
+            try:
+                headers = {"Content-Type": "application/json"}
+                if wh.secret:
+                    import hashlib
+                    import hmac
+                    sig = hmac.new(
+                        wh.secret.encode(),
+                        json.dumps(payload).encode(),
+                        hashlib.sha256
+                    ).hexdigest()
+                    headers["X-Webhook-Signature"] = sig
+
+                async with httpx.AsyncClient() as client:
+                    await client.post(wh.url, json=payload, headers=headers, timeout=wh.timeout)
+            except Exception:
+                pass
+
+    def _load_webhooks(self) -> List[WebhookConfig]:
+        """Load webhook configurations."""
+        if WEBHOOKS_FILE.exists():
+            try:
+                with open(WEBHOOKS_FILE) as f:
+                    return [WebhookConfig(**wh) for wh in json.load(f)]
+            except Exception:
+                pass
+        return []
+
+    def _save_webhooks(self, webhooks: List[WebhookConfig]):
+        """Save webhook configurations."""
+        try:
+            with open(WEBHOOKS_FILE, 'w') as f:
+                json.dump([wh.dict() for wh in webhooks], f, indent=2)
+        except Exception:
+            pass
+
+    def load_scan_state(self) -> ScanState:
+        """Load scan state."""
+        if SCAN_STATE_FILE.exists():
+            try:
+                with open(SCAN_STATE_FILE) as f:
+                    return ScanState(**json.load(f))
+            except Exception:
+                pass
+        return ScanState()
+
+    def save_scan_state(self, state: ScanState):
+        """Save scan state."""
+        try:
+            with open(SCAN_STATE_FILE, 'w') as f:
+                json.dump(state.dict(), f, indent=2)
+        except Exception:
+            pass
+
+
+# Groups management functions
+def _load_groups() -> Dict[str, DeviceGroup]:
+    """Load device groups."""
+    if GROUPS_FILE.exists():
+        try:
+            with open(GROUPS_FILE) as f:
+                data = json.load(f)
+                return {k: DeviceGroup(**v) for k, v in data.items()}
+        except Exception:
+            pass
+    return {}
+
+
+def _save_groups(groups: Dict[str, DeviceGroup]):
+    """Save device groups."""
+    try:
+        with open(GROUPS_FILE, 'w') as f:
+            json.dump({k: v.dict() for k, v in groups.items()}, f, indent=2)
+    except Exception:
+        pass
+
+
+# Global manager instance (lazily initialized)
+_intel_manager: Optional[DeviceIntelManager] = None
+
+
+def get_intel_manager() -> DeviceIntelManager:
+    """Get or create the global intel manager instance."""
+    global _intel_manager
+    if _intel_manager is None:
+        _intel_manager = DeviceIntelManager()
+    return _intel_manager
+
+
+# Convenience alias for direct access (lazily initialized via property)
+class _IntelManagerProxy:
+    """Proxy that provides lazy access to intel_manager."""
+    def __getattr__(self, name):
+        return getattr(get_intel_manager(), name)
+
+intel_manager = _IntelManagerProxy()
 
 
 class DeviceTag(BaseModel):
@@ -420,21 +693,29 @@ def _get_network_interfaces() -> list[dict]:
 @app.get("/status")
 async def status():
     """Public status endpoint."""
+    scan_state = intel_manager.load_scan_state()
     return {
         "module": "device-intel",
         "status": "ok",
-        "version": "1.1.0",
-        "features": ["arp_scan", "dhcp_leases", "vendor_lookup", "openwrt_detection", "mdns_discovery"]
+        "version": "2.0.0",
+        "features": [
+            "arp_scan", "dhcp_leases", "vendor_lookup", "openwrt_detection",
+            "mdns_discovery", "device_history", "device_groups", "scheduled_scan",
+            "export_csv", "export_json", "webhooks"
+        ],
+        "scan_enabled": scan_state.enabled,
+        "last_scan": scan_state.last_scan
     }
 
 
 @app.get("/devices", dependencies=[Depends(require_jwt)])
 async def get_devices():
     """Get all discovered devices with enriched data."""
-    oui_db = _load_oui_db()
+    oui_db = intel_manager.oui_db
     known_devices = _load_devices()
     arp_devices = _get_arp_table()
     dhcp_leases = _get_dhcp_leases()
+    groups = _load_groups()
 
     devices = []
     seen_macs = set()
@@ -453,6 +734,9 @@ async def get_devices():
         is_router, router_vendor = _is_router_vendor(mac)
         is_openwrt = _is_openwrt_hostname(hostname) or known.get("is_openwrt", False)
 
+        # Find groups this device belongs to
+        device_groups = [g.id for g in groups.values() if mac in g.members]
+
         devices.append({
             "mac": mac,
             "ip": dev["ip"],
@@ -464,6 +748,7 @@ async def get_devices():
             "last_seen": datetime.now().isoformat(),
             "note": known.get("note", ""),
             "tags": known.get("tags", []),
+            "groups": device_groups,
             "trusted": known.get("trusted", False),
             "is_router": is_router,
             "router_vendor": router_vendor,
@@ -477,7 +762,8 @@ async def get_devices():
         "total": len(devices),
         "routers": sum(1 for d in devices if d["is_router"]),
         "openwrt_devices": sum(1 for d in devices if d["is_openwrt"]),
-        "secubox_devices": sum(1 for d in devices if d["is_secubox"])
+        "secubox_devices": sum(1 for d in devices if d["is_secubox"]),
+        "groups_count": len(groups)
     }
 
 
@@ -762,4 +1048,458 @@ async def info():
 @app.get("/health")
 async def health():
     """Health check endpoint."""
-    return {"status": "healthy", "service": "secubox-device-intel", "version": "1.1.0"}
+    return {"status": "healthy", "service": "secubox-device-intel", "version": "2.0.0"}
+
+
+# ============================================================================
+# Device History Endpoints
+# ============================================================================
+
+@app.get("/history", dependencies=[Depends(require_jwt)])
+async def get_history(mac: str = None, limit: int = 100):
+    """Get device connection history."""
+    history = intel_manager.get_device_history(mac, limit)
+    return {
+        "history": [h.dict() for h in history],
+        "count": len(history),
+        "filter_mac": mac
+    }
+
+
+@app.post("/history/cleanup", dependencies=[Depends(require_jwt)])
+async def cleanup_history(days: int = 30):
+    """Clean up old history entries."""
+    removed = intel_manager.cleanup_old_history(days)
+    return {"removed": removed, "retention_days": days}
+
+
+# ============================================================================
+# Device Groups Endpoints
+# ============================================================================
+
+@app.get("/groups", dependencies=[Depends(require_jwt)])
+async def list_groups():
+    """List all device groups."""
+    groups = _load_groups()
+    return {
+        "groups": [g.dict() for g in groups.values()],
+        "count": len(groups)
+    }
+
+
+@app.get("/groups/{group_id}", dependencies=[Depends(require_jwt)])
+async def get_group(group_id: str):
+    """Get a specific group."""
+    groups = _load_groups()
+    if group_id not in groups:
+        raise HTTPException(status_code=404, detail="Group not found")
+    return groups[group_id].dict()
+
+
+class CreateGroupRequest(BaseModel):
+    name: str
+    description: Optional[str] = None
+    color: str = "#3498db"
+    icon: str = "devices"
+
+
+@app.post("/groups", dependencies=[Depends(require_jwt)])
+async def create_group(request: CreateGroupRequest):
+    """Create a new device group."""
+    import uuid
+    groups = _load_groups()
+
+    group_id = str(uuid.uuid4())[:8]
+    group = DeviceGroup(
+        id=group_id,
+        name=request.name,
+        description=request.description,
+        color=request.color,
+        icon=request.icon,
+        created_at=datetime.utcnow().isoformat() + "Z"
+    )
+
+    groups[group_id] = group
+    _save_groups(groups)
+
+    return {"status": "created", "group": group.dict()}
+
+
+@app.put("/groups/{group_id}", dependencies=[Depends(require_jwt)])
+async def update_group(group_id: str, request: CreateGroupRequest):
+    """Update a group."""
+    groups = _load_groups()
+    if group_id not in groups:
+        raise HTTPException(status_code=404, detail="Group not found")
+
+    group = groups[group_id]
+    group.name = request.name
+    group.description = request.description
+    group.color = request.color
+    group.icon = request.icon
+    group.updated_at = datetime.utcnow().isoformat() + "Z"
+
+    _save_groups(groups)
+    return {"status": "updated", "group": group.dict()}
+
+
+@app.delete("/groups/{group_id}", dependencies=[Depends(require_jwt)])
+async def delete_group(group_id: str):
+    """Delete a group."""
+    groups = _load_groups()
+    if group_id not in groups:
+        raise HTTPException(status_code=404, detail="Group not found")
+
+    del groups[group_id]
+    _save_groups(groups)
+    return {"status": "deleted"}
+
+
+@app.post("/groups/{group_id}/members", dependencies=[Depends(require_jwt)])
+async def add_group_member(group_id: str, mac: str):
+    """Add a device to a group."""
+    groups = _load_groups()
+    if group_id not in groups:
+        raise HTTPException(status_code=404, detail="Group not found")
+
+    mac_upper = mac.upper()
+    if mac_upper not in groups[group_id].members:
+        groups[group_id].members.append(mac_upper)
+        groups[group_id].updated_at = datetime.utcnow().isoformat() + "Z"
+        _save_groups(groups)
+
+    return {"status": "added", "mac": mac_upper}
+
+
+@app.delete("/groups/{group_id}/members/{mac}", dependencies=[Depends(require_jwt)])
+async def remove_group_member(group_id: str, mac: str):
+    """Remove a device from a group."""
+    groups = _load_groups()
+    if group_id not in groups:
+        raise HTTPException(status_code=404, detail="Group not found")
+
+    mac_upper = mac.upper()
+    if mac_upper in groups[group_id].members:
+        groups[group_id].members.remove(mac_upper)
+        groups[group_id].updated_at = datetime.utcnow().isoformat() + "Z"
+        _save_groups(groups)
+
+    return {"status": "removed"}
+
+
+@app.get("/device/{mac}/groups", dependencies=[Depends(require_jwt)])
+async def get_device_groups(mac: str):
+    """Get groups a device belongs to."""
+    mac_upper = mac.upper()
+    groups = _load_groups()
+    device_groups = [g.dict() for g in groups.values() if mac_upper in g.members]
+    return {"mac": mac_upper, "groups": device_groups}
+
+
+# ============================================================================
+# Export Endpoints
+# ============================================================================
+
+@app.get("/export/json", dependencies=[Depends(require_jwt)])
+async def export_json():
+    """Export all devices as JSON."""
+    oui_db = _load_oui_db()
+    known_devices = _load_devices()
+    arp_devices = _get_arp_table()
+    dhcp_leases = _get_dhcp_leases()
+    groups = _load_groups()
+
+    devices = []
+    seen_macs = set()
+
+    for dev in arp_devices:
+        mac = dev["mac"]
+        if mac in seen_macs:
+            continue
+        seen_macs.add(mac)
+
+        lease = dhcp_leases.get(mac, {})
+        known = known_devices.get(mac, {})
+        hostname = lease.get("hostname", known.get("hostname", ""))
+        is_router, router_vendor = _is_router_vendor(mac)
+
+        # Find groups this device belongs to
+        device_groups = [g.id for g in groups.values() if mac in g.members]
+
+        devices.append({
+            "mac": mac,
+            "ip": dev["ip"],
+            "interface": dev["interface"],
+            "state": dev["state"],
+            "vendor": _get_vendor(mac, oui_db),
+            "hostname": hostname,
+            "first_seen": known.get("first_seen"),
+            "last_seen": datetime.utcnow().isoformat(),
+            "note": known.get("note", ""),
+            "tags": known.get("tags", []),
+            "groups": device_groups,
+            "trusted": known.get("trusted", False),
+            "is_router": is_router,
+            "router_vendor": router_vendor,
+            "is_openwrt": known.get("is_openwrt", False),
+            "is_secubox": known.get("is_secubox", False),
+        })
+
+    export_data = {
+        "exported_at": datetime.utcnow().isoformat() + "Z",
+        "device_count": len(devices),
+        "devices": devices
+    }
+
+    return Response(
+        content=json.dumps(export_data, indent=2),
+        media_type="application/json",
+        headers={"Content-Disposition": "attachment; filename=devices.json"}
+    )
+
+
+@app.get("/export/csv", dependencies=[Depends(require_jwt)])
+async def export_csv():
+    """Export all devices as CSV."""
+    oui_db = _load_oui_db()
+    known_devices = _load_devices()
+    arp_devices = _get_arp_table()
+    dhcp_leases = _get_dhcp_leases()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    # Header row
+    writer.writerow([
+        "MAC", "IP", "Vendor", "Hostname", "Interface", "State",
+        "First Seen", "Last Seen", "Trusted", "Is Router", "Router Vendor",
+        "Is OpenWRT", "Is SecuBox", "Tags", "Note"
+    ])
+
+    seen_macs = set()
+    for dev in arp_devices:
+        mac = dev["mac"]
+        if mac in seen_macs:
+            continue
+        seen_macs.add(mac)
+
+        lease = dhcp_leases.get(mac, {})
+        known = known_devices.get(mac, {})
+        hostname = lease.get("hostname", known.get("hostname", ""))
+        is_router, router_vendor = _is_router_vendor(mac)
+
+        writer.writerow([
+            mac,
+            dev["ip"],
+            _get_vendor(mac, oui_db),
+            hostname,
+            dev["interface"],
+            dev["state"],
+            known.get("first_seen", ""),
+            datetime.utcnow().isoformat(),
+            known.get("trusted", False),
+            is_router,
+            router_vendor,
+            known.get("is_openwrt", False),
+            known.get("is_secubox", False),
+            ";".join(known.get("tags", [])),
+            known.get("note", "")
+        ])
+
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=devices.csv"}
+    )
+
+
+# ============================================================================
+# Webhooks Endpoints
+# ============================================================================
+
+@app.get("/webhooks", dependencies=[Depends(require_jwt)])
+async def list_webhooks():
+    """List configured webhooks."""
+    webhooks = intel_manager._load_webhooks()
+    return {"webhooks": [wh.dict() for wh in webhooks]}
+
+
+class AddWebhookRequest(BaseModel):
+    url: str
+    events: List[str] = ["new_device", "device_offline"]
+    secret: Optional[str] = None
+    timeout: float = 5.0
+
+
+@app.post("/webhooks", dependencies=[Depends(require_jwt)])
+async def add_webhook(request: AddWebhookRequest):
+    """Add a webhook configuration."""
+    webhooks = intel_manager._load_webhooks()
+
+    for wh in webhooks:
+        if wh.url == request.url:
+            raise HTTPException(status_code=409, detail="Webhook URL already exists")
+
+    new_webhook = WebhookConfig(
+        url=request.url,
+        events=request.events,
+        secret=request.secret,
+        timeout=request.timeout
+    )
+    webhooks.append(new_webhook)
+    intel_manager._save_webhooks(webhooks)
+
+    return {"status": "added", "webhook": new_webhook.dict()}
+
+
+@app.delete("/webhooks", dependencies=[Depends(require_jwt)])
+async def remove_webhook(url: str):
+    """Remove a webhook by URL."""
+    webhooks = intel_manager._load_webhooks()
+    original_count = len(webhooks)
+    webhooks = [wh for wh in webhooks if wh.url != url]
+
+    if len(webhooks) == original_count:
+        raise HTTPException(status_code=404, detail="Webhook not found")
+
+    intel_manager._save_webhooks(webhooks)
+    return {"status": "removed"}
+
+
+# ============================================================================
+# Scheduled Scanning Endpoints
+# ============================================================================
+
+@app.get("/scan/state", dependencies=[Depends(require_jwt)])
+async def get_scan_state():
+    """Get scheduled scan state."""
+    state = intel_manager.load_scan_state()
+    return state.dict()
+
+
+class UpdateScanStateRequest(BaseModel):
+    enabled: bool
+    interval_seconds: int = Field(ge=60, le=3600)
+
+
+@app.put("/scan/state", dependencies=[Depends(require_jwt)])
+async def update_scan_state(request: UpdateScanStateRequest):
+    """Update scheduled scan configuration."""
+    state = intel_manager.load_scan_state()
+    state.enabled = request.enabled
+    state.interval_seconds = request.interval_seconds
+
+    if state.enabled and state.last_scan:
+        last = datetime.fromisoformat(state.last_scan.rstrip("Z"))
+        next_scan = last + timedelta(seconds=state.interval_seconds)
+        state.next_scan = next_scan.isoformat() + "Z"
+
+    intel_manager.save_scan_state(state)
+    return {"status": "updated", "state": state.dict()}
+
+
+@app.post("/scan/now", dependencies=[Depends(require_jwt)])
+async def trigger_scan(background_tasks: BackgroundTasks, interface: str = "eth0"):
+    """Trigger an immediate network scan."""
+    background_tasks.add_task(run_discovery_scan, interface)
+    return {"status": "scan_triggered", "interface": interface}
+
+
+async def run_discovery_scan(interface: str = "eth0"):
+    """Run a discovery scan and track new devices."""
+    with intel_manager._scan_lock:
+        known_devices = _load_devices()
+        previous_macs = set(known_devices.keys())
+
+        # Run network scan
+        await _scan_network(interface)
+        arp_devices = _get_arp_table()
+
+        new_devices = []
+        for dev in arp_devices:
+            mac = dev["mac"]
+
+            # Track as known
+            if mac not in known_devices:
+                known_devices[mac] = {
+                    "first_seen": datetime.utcnow().isoformat() + "Z",
+                    "ip": dev["ip"]
+                }
+
+                # Record history and send webhook for new device
+                intel_manager.record_history(mac, DeviceEvent.FIRST_SEEN, dev["ip"])
+                intel_manager.register_device(mac)
+                new_devices.append({"mac": mac, "ip": dev["ip"]})
+
+                # Send webhook
+                await intel_manager.send_webhook("new_device", {
+                    "mac": mac,
+                    "ip": dev["ip"],
+                    "interface": interface
+                })
+
+            # Update last seen
+            known_devices[mac]["last_seen"] = datetime.utcnow().isoformat() + "Z"
+            known_devices[mac]["ip"] = dev["ip"]
+
+        _save_devices(known_devices)
+
+        # Update scan state
+        state = intel_manager.load_scan_state()
+        state.last_scan = datetime.utcnow().isoformat() + "Z"
+        state.devices_found_last = len(arp_devices)
+        state.new_devices_last = len(new_devices)
+        if state.enabled:
+            next_scan = datetime.utcnow() + timedelta(seconds=state.interval_seconds)
+            state.next_scan = next_scan.isoformat() + "Z"
+        intel_manager.save_scan_state(state)
+
+        return {
+            "devices_found": len(arp_devices),
+            "new_devices": len(new_devices),
+            "new_device_list": new_devices
+        }
+
+
+# ============================================================================
+# Startup / Shutdown
+# ============================================================================
+
+background_scan_task: Optional[asyncio.Task] = None
+
+
+async def periodic_scan():
+    """Background task for periodic network scanning."""
+    while True:
+        try:
+            state = intel_manager.load_scan_state()
+            if state.enabled:
+                await asyncio.sleep(state.interval_seconds)
+                await run_discovery_scan()
+            else:
+                await asyncio.sleep(60)  # Check state every minute when disabled
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            await asyncio.sleep(60)
+
+
+@app.on_event("startup")
+async def startup():
+    """Initialize on startup."""
+    global background_scan_task
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    background_scan_task = asyncio.create_task(periodic_scan())
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    """Cleanup on shutdown."""
+    global background_scan_task
+    if background_scan_task:
+        background_scan_task.cancel()
+        try:
+            await background_scan_task
+        except asyncio.CancelledError:
+            pass
