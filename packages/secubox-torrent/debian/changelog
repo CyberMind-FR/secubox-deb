@@ -1,0 +1,7 @@
+secubox-torrent (1.0.0-1) bookworm; urgency=medium
+
+  * Initial release
+  * Transmission daemon management
+  * Torrent add/remove/control via RPC
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Sat, 28 Mar 2026 12:00:00 +0100

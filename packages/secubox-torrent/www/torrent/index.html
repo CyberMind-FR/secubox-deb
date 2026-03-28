@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Torrent - SecuBox</title>
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root { --torrent-green: #27ae60; --torrent-light: #2ecc71; --torrent-dark: #1e8449; }
+        body.dark { --torrent-green: #2ecc71; --torrent-light: #58d68d; --torrent-dark: #27ae60; }
+        .accent { color: var(--torrent-green); }
+        .accent-bg { background-color: var(--torrent-green); }
+        .header { display: flex; justify-content: space-between; align-items: center; padding: 1rem; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
+        .header h1 { margin: 0; font-size: 1.5rem; }
+        .status-badge { padding: 0.25rem 0.75rem; border-radius: 1rem; font-size: 0.875rem; }
+        .status-badge.running { background: var(--success-bg); color: var(--success); }
+        .status-badge.stopped { background: var(--error-bg); color: var(--error); }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem; text-align: center; }
+        .stat-value { font-size: 1.5rem; font-weight: bold; color: var(--torrent-green); }
+        .stat-label { font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; }
+        .action-bar { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+        .btn { padding: 0.5rem 1rem; border: 1px solid var(--border); border-radius: 0.25rem; background: var(--surface); color: var(--text); cursor: pointer; font-size: 0.875rem; }
+        .btn:hover { background: var(--hover); }
+        .btn.primary { background: var(--torrent-green); color: white; border-color: var(--torrent-green); }
+        .btn.primary:hover { background: var(--torrent-dark); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .tabs { display: flex; gap: 0.5rem; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
+        .tab { padding: 0.75rem 1rem; border: none; background: none; color: var(--text-secondary); cursor: pointer; border-bottom: 2px solid transparent; }
+        .tab:hover { color: var(--text); }
+        .tab.active { color: var(--torrent-green); border-bottom-color: var(--torrent-green); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .torrent-list { display: grid; gap: 0.5rem; }
+        .torrent-item { padding: 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; }
+        .torrent-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem; }
+        .torrent-name { font-weight: 500; word-break: break-word; }
+        .torrent-status { font-size: 0.75rem; padding: 0.125rem 0.5rem; border-radius: 0.25rem; background: var(--surface-alt); }
+        .torrent-status.downloading { background: var(--info-bg); color: var(--info); }
+        .torrent-status.seeding { background: var(--success-bg); color: var(--success); }
+        .torrent-status.stopped { background: var(--warning-bg); color: var(--warning); }
+        .progress-bar { height: 6px; background: var(--border); border-radius: 3px; margin: 0.5rem 0; overflow: hidden; }
+        .progress-fill { height: 100%; background: var(--torrent-green); transition: width 0.3s; }
+        .torrent-meta { display: flex; gap: 1rem; font-size: 0.875rem; color: var(--text-secondary); flex-wrap: wrap; }
+        .torrent-actions { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+        .torrent-actions .btn { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+        .add-form { max-width: 500px; }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.25rem; font-weight: 500; }
+        .form-group input { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 0.25rem; background: var(--surface); color: var(--text); }
+        .download-item { display: flex; align-items: center; gap: 1rem; padding: 0.75rem; background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; margin-bottom: 0.5rem; }
+        .download-icon { font-size: 1.5rem; }
+        .download-info { flex: 1; }
+        .download-name { font-weight: 500; }
+        .download-size { font-size: 0.875rem; color: var(--text-secondary); }
+        .install-section { text-align: center; padding: 3rem; }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body class="crt-light">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="main-content">
+    <div class="container">
+        <div class="header">
+            <h1><span class="accent">Torrent</span> Client</h1>
+            <span id="status-badge" class="status-badge stopped">Stopped</span>
+        </div>
+
+        <div id="install-section" class="install-section hidden">
+            <p>Transmission is not installed</p>
+            <button class="btn primary" onclick="installTransmission()">Install Transmission</button>
+        </div>
+
+        <div id="main-section" class="hidden">
+            <div class="stats-grid">
+                <div class="stat-card"><div class="stat-value" id="download-speed">0</div><div class="stat-label">Download</div></div>
+                <div class="stat-card"><div class="stat-value" id="upload-speed">0</div><div class="stat-label">Upload</div></div>
+                <div class="stat-card"><div class="stat-value" id="active-count">0</div><div class="stat-label">Active</div></div>
+                <div class="stat-card"><div class="stat-value" id="disk-usage">0</div><div class="stat-label">Disk Used</div></div>
+            </div>
+
+            <div class="action-bar">
+                <button class="btn primary" id="btn-start" onclick="startService()">Start</button>
+                <button class="btn" id="btn-stop" onclick="stopService()" disabled>Stop</button>
+                <button class="btn" id="btn-restart" onclick="restartService()" disabled>Restart</button>
+            </div>
+
+            <div class="tabs">
+                <button class="tab active" data-tab="torrents">Torrents</button>
+                <button class="tab" data-tab="add">Add Torrent</button>
+                <button class="tab" data-tab="downloads">Downloads</button>
+            </div>
+
+            <div id="tab-torrents" class="tab-content active">
+                <div class="action-bar"><button class="btn" onclick="loadTorrents()">Refresh</button></div>
+                <div id="torrents-list" class="torrent-list"></div>
+            </div>
+
+            <div id="tab-add" class="tab-content">
+                <div class="add-form">
+                    <form onsubmit="addTorrent(event)">
+                        <div class="form-group">
+                            <label>Magnet Link or URL</label>
+                            <input type="text" id="torrent-link" placeholder="magnet:?xt=urn:btih:..." required>
+                        </div>
+                        <button type="submit" class="btn primary">Add Torrent</button>
+                    </form>
+                    <hr style="margin: 2rem 0; border-color: var(--border);">
+                    <form onsubmit="uploadTorrent(event)">
+                        <div class="form-group">
+                            <label>Upload .torrent File</label>
+                            <input type="file" id="torrent-file" accept=".torrent" required>
+                        </div>
+                        <button type="submit" class="btn primary">Upload</button>
+                    </form>
+                </div>
+            </div>
+
+            <div id="tab-downloads" class="tab-content">
+                <div class="action-bar"><button class="btn" onclick="loadDownloads()">Refresh</button></div>
+                <div id="downloads-list"></div>
+            </div>
+        </div>
+    </div>
+    </main>
+
+    <script>
+        const API = '/api/v1/torrent';
+
+        async function api(endpoint, options = {}) {
+            const r = await fetch(API + endpoint, { ...options, headers: { 'Authorization': 'Bearer ' + localStorage.getItem('sbx_token'), 'Content-Type': 'application/json', ...options.headers } });
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            return r.json();
+        }
+
+        function formatSpeed(bytes) {
+            if (bytes < 1024) return bytes + ' B/s';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB/s';
+            return (bytes / 1024 / 1024).toFixed(1) + ' MB/s';
+        }
+
+        function formatSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            if (bytes < 1024 * 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+            return (bytes / 1024 / 1024 / 1024).toFixed(2) + ' GB';
+        }
+
+        function formatEta(seconds) {
+            if (seconds < 0) return '∞';
+            if (seconds < 60) return seconds + 's';
+            if (seconds < 3600) return Math.floor(seconds / 60) + 'm';
+            if (seconds < 86400) return Math.floor(seconds / 3600) + 'h ' + Math.floor((seconds % 3600) / 60) + 'm';
+            return Math.floor(seconds / 86400) + 'd';
+        }
+
+        async function loadStatus() {
+            try {
+                const d = await api('/status');
+                const badge = document.getElementById('status-badge');
+                if (!d.installed) {
+                    document.getElementById('install-section').classList.remove('hidden');
+                    document.getElementById('main-section').classList.add('hidden');
+                    badge.textContent = 'Not Installed'; badge.className = 'status-badge stopped';
+                    return;
+                }
+                document.getElementById('install-section').classList.add('hidden');
+                document.getElementById('main-section').classList.remove('hidden');
+                if (d.running) {
+                    badge.textContent = 'Running'; badge.className = 'status-badge running';
+                    document.getElementById('btn-start').disabled = true;
+                    document.getElementById('btn-stop').disabled = false;
+                    document.getElementById('btn-restart').disabled = false;
+                    document.getElementById('download-speed').textContent = formatSpeed(d.download_speed || 0);
+                    document.getElementById('upload-speed').textContent = formatSpeed(d.upload_speed || 0);
+                    document.getElementById('active-count').textContent = d.active_torrents || 0;
+                    loadTorrents();
+                } else {
+                    badge.textContent = 'Stopped'; badge.className = 'status-badge stopped';
+                    document.getElementById('btn-start').disabled = false;
+                    document.getElementById('btn-stop').disabled = true;
+                    document.getElementById('btn-restart').disabled = true;
+                }
+                document.getElementById('disk-usage').textContent = d.download_size || '0';
+            } catch (e) { console.error(e); }
+        }
+
+        async function loadTorrents() {
+            try {
+                const d = await api('/torrents');
+                const list = document.getElementById('torrents-list');
+                if (!d.torrents || d.torrents.length === 0) {
+                    list.innerHTML = '<p style="padding:1rem;color:var(--text-secondary);">No torrents. Add one to start downloading.</p>';
+                    return;
+                }
+                list.innerHTML = d.torrents.map(t => `
+                    <div class="torrent-item">
+                        <div class="torrent-header">
+                            <span class="torrent-name">${t.name}</span>
+                            <span class="torrent-status ${t.status}">${t.status}</span>
+                        </div>
+                        <div class="progress-bar"><div class="progress-fill" style="width: ${t.progress}%"></div></div>
+                        <div class="torrent-meta">
+                            <span>${t.progress.toFixed(1)}%</span>
+                            <span>↓ ${formatSpeed(t.download_speed)}</span>
+                            <span>↑ ${formatSpeed(t.upload_speed)}</span>
+                            <span>${formatSize(t.size)}</span>
+                            ${t.eta > 0 ? `<span>ETA: ${formatEta(t.eta)}</span>` : ''}
+                        </div>
+                        <div class="torrent-actions">
+                            ${t.status === 'stopped' ? `<button class="btn" onclick="startTorrent(${t.id})">Start</button>` : `<button class="btn" onclick="stopTorrent(${t.id})">Stop</button>`}
+                            <button class="btn" onclick="deleteTorrent(${t.id}, false)">Remove</button>
+                            <button class="btn" onclick="deleteTorrent(${t.id}, true)" style="color:var(--error);">Delete</button>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) { console.error(e); }
+        }
+
+        async function loadDownloads() {
+            try {
+                const d = await api('/downloads');
+                const list = document.getElementById('downloads-list');
+                if (!d.downloads || d.downloads.length === 0) {
+                    list.innerHTML = '<p style="padding:1rem;color:var(--text-secondary);">No completed downloads</p>';
+                    return;
+                }
+                list.innerHTML = d.downloads.map(f => `
+                    <div class="download-item">
+                        <div class="download-icon">${f.is_dir ? '📁' : '📄'}</div>
+                        <div class="download-info">
+                            <div class="download-name">${f.name}</div>
+                            <div class="download-size">${formatSize(f.size)}</div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) { console.error(e); }
+        }
+
+        async function installTransmission() {
+            const btn = event.target; btn.disabled = true; btn.textContent = 'Installing...';
+            try { await api('/install', { method: 'POST' }); await loadStatus(); } catch (e) { alert('Failed: ' + e.message); }
+            finally { btn.disabled = false; btn.textContent = 'Install Transmission'; }
+        }
+
+        async function startService() { document.getElementById('btn-start').disabled = true; try { await api('/start', { method: 'POST' }); await loadStatus(); } catch (e) { alert('Failed: ' + e.message); } }
+        async function stopService() { document.getElementById('btn-stop').disabled = true; try { await api('/stop', { method: 'POST' }); await loadStatus(); } catch (e) { alert('Failed: ' + e.message); } }
+        async function restartService() { document.getElementById('btn-restart').disabled = true; try { await api('/restart', { method: 'POST' }); await loadStatus(); } catch (e) { alert('Failed: ' + e.message); } }
+
+        async function addTorrent(e) {
+            e.preventDefault();
+            const link = document.getElementById('torrent-link').value;
+            const isMagnet = link.startsWith('magnet:');
+            try {
+                await api(`/torrents?${isMagnet ? 'magnet' : 'url'}=${encodeURIComponent(link)}`, { method: 'POST' });
+                document.getElementById('torrent-link').value = '';
+                loadTorrents();
+            } catch (err) { alert('Failed: ' + err.message); }
+        }
+
+        async function uploadTorrent(e) {
+            e.preventDefault();
+            const file = document.getElementById('torrent-file').files[0];
+            const formData = new FormData();
+            formData.append('file', file);
+            try {
+                await fetch(API + '/torrents/upload', { method: 'POST', headers: { 'Authorization': 'Bearer ' + localStorage.getItem('sbx_token') }, body: formData });
+                document.getElementById('torrent-file').value = '';
+                loadTorrents();
+            } catch (err) { alert('Failed: ' + err.message); }
+        }
+
+        async function startTorrent(id) { try { await api(`/torrents/${id}/start`, { method: 'POST' }); loadTorrents(); } catch (e) { alert('Failed: ' + e.message); } }
+        async function stopTorrent(id) { try { await api(`/torrents/${id}/stop`, { method: 'POST' }); loadTorrents(); } catch (e) { alert('Failed: ' + e.message); } }
+        async function deleteTorrent(id, deleteData) { if (!confirm(deleteData ? 'Delete torrent AND data?' : 'Remove torrent?')) return; try { await api(`/torrents/${id}?delete_data=${deleteData}`, { method: 'DELETE' }); loadTorrents(); } catch (e) { alert('Failed: ' + e.message); } }
+
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+                if (tab.dataset.tab === 'downloads') loadDownloads();
+            });
+        });
+
+        if (window.matchMedia?.('(prefers-color-scheme: dark)').matches) document.body.classList.add('dark');
+        loadStatus(); setInterval(loadStatus, 5000);
+    </script>
+    <script src="/shared/sidebar.js"></script>
+</body>
+</html>
