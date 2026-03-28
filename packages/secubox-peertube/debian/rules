@@ -1,0 +1,16 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d $(CURDIR)/debian/secubox-peertube/usr/lib/secubox/peertube/api
+	install -m 644 api/main.py $(CURDIR)/debian/secubox-peertube/usr/lib/secubox/peertube/api/
+	touch $(CURDIR)/debian/secubox-peertube/usr/lib/secubox/peertube/api/__init__.py
+	install -d $(CURDIR)/debian/secubox-peertube/usr/share/secubox/www/peertube
+	install -m 644 www/peertube/index.html $(CURDIR)/debian/secubox-peertube/usr/share/secubox/www/peertube/
+	install -d $(CURDIR)/debian/secubox-peertube/etc/nginx/secubox.d
+	install -m 644 nginx/peertube.conf $(CURDIR)/debian/secubox-peertube/etc/nginx/secubox.d/
+	install -d $(CURDIR)/debian/secubox-peertube/usr/share/secubox/menu.d
+	install -m 644 menu.d/811-peertube.json $(CURDIR)/debian/secubox-peertube/usr/share/secubox/menu.d/
+	install -d $(CURDIR)/debian/secubox-peertube/usr/lib/systemd/system
+	install -m 644 debian/secubox-peertube.service $(CURDIR)/debian/secubox-peertube/usr/lib/systemd/system/
