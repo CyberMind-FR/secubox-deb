@@ -1,9 +1,89 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-03-27 (Session 21)*
+*Mis à jour : 2026-03-28 (Session 23)*
 
 ---
 
 ## ✅ Terminé cette session
+
+### Migration Preparation Workflow ✅
+- Created `.claude/REMAINING-PACKAGES.md` — 53 packages remaining inventory
+- Classified by complexity (Easy/Medium/Complex/Native)
+- Identified 25 packages with different naming (already ported)
+- Defined Phase 8 (21 apps), Phase 9 (22 tools), Phase 10 (10 security)
+- Updated TODO.md with P8/P9/P10 task items
+- Created HISTORY.md for milestone tracking
+- Set priority: ollama → jellyfin → vault → homeassistant
+
+### secubox-ollama v1.0.0 ✅
+- **FastAPI backend** — Ported from OpenWRT RPCD (485 lines)
+  - Container management (Docker/Podman detection)
+  - Model management (list, pull, remove)
+  - Chat completion API (`/chat`)
+  - Text generation API (`/generate`)
+  - System resource monitoring (`/system`)
+  - Container logs (`/logs`)
+- **CRT-light frontend** — Full P31 phosphor theme
+  - Tabs: Chat, Models, System, Logs, Settings
+  - Popular model quick-pull buttons
+  - Real-time chat interface
+- **Deployed to VM** — Running at https://localhost:9443/ollama/
+
+### secubox-jellyfin v1.0.0 ✅
+- **FastAPI backend** — Ported from OpenWRT RPCD (15+ endpoints)
+  - Container management (Docker/Podman)
+  - Media library configuration
+  - Hardware acceleration (VAAPI)
+  - Backup/restore functionality
+  - Setup wizard tracking
+- **CRT-light frontend** — Jellyfin blue accent theme
+  - Tabs: Libraries, Settings, Logs, Backup
+  - Install banner when not installed
+  - Library type icons (movies, tvshows, music, photos)
+- **Deployed to VM** — Running at https://localhost:9443/jellyfin/
+
+### secubox-lyrion v1.0.0 ✅
+- **FastAPI backend** — Ported from OpenWRT RPCD (18+ endpoints)
+  - Container management (Docker/Podman)
+  - Player control via Squeezebox JSON-RPC
+  - Library scanning, stats
+  - Backup/restore functionality
+- **CRT-light frontend** — Theme-aware with Lyrion orange accents
+  - Tabs: Players, Library, System, Logs, Settings
+  - JSON-RPC integration for library stats
+- **Deployed to VM** — Running at https://localhost:9443/lyrion/
+
+### secubox-zigbee v1.0.0 ✅
+- **FastAPI backend** — Ported from OpenWRT RPCD (20+ endpoints)
+  - Container management (Docker/Podman)
+  - USB serial dongle detection (/dev/ttyUSB*, /dev/ttyACM*)
+  - Device management: rename, remove, permit_join
+  - MQTT integration
+  - Kernel module detection (cp210x, ch341)
+- **CRT-light frontend** — Theme-aware with Zigbee green accents
+  - Tabs: Devices, Network, Diagnostics, Logs, Settings
+  - Pairing mode toggle with animation
+- **Deployed to VM** — Running at https://localhost:9443/zigbee/
+
+### secubox-localai v1.0.0 ✅
+- **FastAPI backend** — Ported from OpenWRT RPCD (15+ endpoints)
+  - Container management (Docker/Podman)
+  - Model gallery with popular LLMs
+  - OpenAI-compatible chat/completion API proxy
+  - Resource monitoring (CPU/memory)
+- **CRT-light frontend** — Theme-aware with LocalAI purple accents
+  - Tabs: Chat, Models, Gallery, Logs, Settings
+  - Interactive chat interface
+- **Deployed to VM** — Running at https://localhost:9443/localai/
+- **Total modules: 59** (was 55)
+
+### Ad Guard Theme Update ✅
+- Updated frontend to be theme-aware
+- Added Ad Guard blue accent color
+- Dark mode support via body.dark class
+
+---
+
+## ✅ Terminé session précédente (Session 21)
 
 ### Live ISO Boot Console Fixes ✅
 - **Issue**: Live ISO boot showed flickering console, login prompt disappearing
@@ -678,6 +758,27 @@ Total modules: **41** (was 35)
 ---
 
 ## ⬜ Next Up
+
+### Phase 8: Applications (In Progress)
+
+**Completed:**
+- [x] secubox-ollama — LLM inference ✅
+- [x] secubox-jellyfin — Media server ✅
+
+**Next Priority: secubox-homeassistant**
+- IoT hub management via LXC
+- FastAPI backend + CRT-light frontend
+- Endpoints: /status, /addons, /integrations, /config
+
+**Migration Workflow:**
+1. `bash scripts/new-package.sh jellyfin "Media server" apps "🎬" 801`
+2. Port RPCD → FastAPI using `.claude/PATTERNS.md`
+3. Apply CRT-light P31 theme to frontend
+4. Build + deploy + verify
+
+> See [REMAINING-PACKAGES.md](REMAINING-PACKAGES.md) for full Phase 8-10 inventory
+
+---
 
 ### Mail Server ✅ COMPLETE
 All optional mail security features implemented:

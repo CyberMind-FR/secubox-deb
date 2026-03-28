@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - Ollama AI</title>
+    <link rel="stylesheet" href="/shared/sidebar.css">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <style>
+        :root {
+            --p31-peak: #00dd44;
+            --p31-dim: #006622;
+            --p31-glow: rgba(0, 221, 68, 0.15);
+            --tube-light: #e8f5e9;
+            --tube-mid: #c8e6c9;
+            --tube-dark: #a5d6a7;
+            --text-primary: #1b5e20;
+            --text-secondary: #388e3c;
+            --text-dim: #66bb6a;
+            --surface: #f1f8e9;
+            --surface-alt: #dcedc8;
+            --border: #c5e1a5;
+            --error: #c62828;
+            --warning: #f57c00;
+            --success: #2e7d32;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            background: linear-gradient(135deg, var(--tube-light) 0%, var(--tube-mid) 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+        }
+        body.crt-light { background: linear-gradient(135deg, var(--tube-light) 0%, var(--tube-mid) 100%); }
+        .main {
+            flex: 1;
+            margin-left: 220px;
+            padding: 1.5rem;
+            max-width: calc(100% - 220px);
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid var(--p31-dim);
+        }
+        .header h1 {
+            font-size: 1.5rem;
+            color: var(--p31-dim);
+            text-shadow: 0 0 10px var(--p31-glow);
+        }
+        .header-actions { display: flex; gap: 0.5rem; }
+
+        /* Stats Row */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+            box-shadow: 0 2px 8px var(--p31-glow);
+        }
+        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
+        .stat-card .value { font-size: 1.5rem; font-weight: bold; color: var(--p31-dim); margin-top: 0.25rem; }
+        .stat-card.running .value { color: var(--success); }
+        .stat-card.stopped .value { color: var(--error); }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 0;
+            margin-bottom: 1.5rem;
+            border-bottom: 2px solid var(--border);
+        }
+        .tab {
+            padding: 0.75rem 1.5rem;
+            cursor: pointer;
+            border: 1px solid transparent;
+            border-bottom: none;
+            border-radius: 8px 8px 0 0;
+            background: transparent;
+            color: var(--text-secondary);
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .tab:hover { background: var(--surface-alt); }
+        .tab.active {
+            background: var(--surface);
+            border-color: var(--border);
+            color: var(--p31-dim);
+            margin-bottom: -2px;
+            border-bottom: 2px solid var(--surface);
+        }
+
+        /* Tab Content */
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Cards */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 2px 8px var(--p31-glow);
+        }
+        .card h3 {
+            font-size: 1rem;
+            color: var(--p31-dim);
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            border: 1px solid var(--p31-dim);
+            background: var(--surface);
+            color: var(--p31-dim);
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .btn:hover {
+            background: var(--p31-dim);
+            color: white;
+            box-shadow: 0 0 10px var(--p31-glow);
+        }
+        .btn-primary {
+            background: var(--p31-dim);
+            color: white;
+        }
+        .btn-primary:hover { background: var(--p31-peak); }
+        .btn-danger { border-color: var(--error); color: var(--error); }
+        .btn-danger:hover { background: var(--error); color: white; }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.875rem; }
+
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+        th { color: var(--text-dim); font-weight: 500; font-size: 0.75rem; text-transform: uppercase; }
+        tr:hover { background: var(--surface-alt); }
+
+        /* Forms */
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.25rem; color: var(--text-secondary); font-size: 0.875rem; }
+        input, select, textarea {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: white;
+            color: var(--text-primary);
+            font-family: inherit;
+        }
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--p31-dim);
+            box-shadow: 0 0 5px var(--p31-glow);
+        }
+        textarea { resize: vertical; min-height: 100px; }
+
+        /* Chat UI */
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            height: 500px;
+        }
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+        .message {
+            margin-bottom: 1rem;
+            padding: 0.75rem;
+            border-radius: 8px;
+            max-width: 80%;
+        }
+        .message.user {
+            background: var(--p31-glow);
+            margin-left: auto;
+            border: 1px solid var(--p31-dim);
+        }
+        .message.assistant {
+            background: var(--surface-alt);
+            margin-right: auto;
+        }
+        .message-role {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            margin-bottom: 0.25rem;
+        }
+        .chat-input {
+            display: flex;
+            gap: 0.5rem;
+        }
+        .chat-input textarea {
+            flex: 1;
+            min-height: 60px;
+        }
+
+        /* Badges */
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        .badge-success { background: #c8e6c9; color: #2e7d32; }
+        .badge-error { background: #ffcdd2; color: #c62828; }
+        .badge-warning { background: #ffe0b2; color: #e65100; }
+
+        /* Progress bar */
+        .progress { height: 8px; background: var(--surface-alt); border-radius: 4px; overflow: hidden; }
+        .progress-bar { height: 100%; background: var(--p31-dim); transition: width 0.3s; }
+
+        /* Logs */
+        .logs-container {
+            background: #1a1a1a;
+            color: #00dd44;
+            padding: 1rem;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 0.8rem;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .log-line { margin: 0.25rem 0; white-space: pre-wrap; word-break: break-all; }
+
+        /* Model size formatting */
+        .model-size { color: var(--text-dim); font-size: 0.875rem; }
+
+        /* Toast notifications */
+        .toast {
+            position: fixed;
+            bottom: 1rem;
+            right: 1rem;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            color: white;
+            z-index: 1000;
+            animation: slideIn 0.3s ease;
+        }
+        .toast-success { background: var(--success); }
+        .toast-error { background: var(--error); }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        /* Loading spinner */
+        .spinner {
+            display: inline-block;
+            width: 1rem;
+            height: 1rem;
+            border: 2px solid var(--border);
+            border-top-color: var(--p31-dim);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        @media (max-width: 768px) {
+            .main { margin-left: 0; max-width: 100%; }
+            .stats-row { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body class="crt-light">
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+
+    <main class="main">
+        <header class="header">
+            <h1>Ollama AI</h1>
+            <div class="header-actions">
+                <button class="btn" id="btnRefresh" onclick="refresh()">Refresh</button>
+                <button class="btn btn-primary" id="btnToggle" onclick="toggleService()">Start</button>
+            </div>
+        </header>
+
+        <!-- Stats Row -->
+        <div class="stats-row">
+            <div class="stat-card" id="statStatus">
+                <div class="label">Status</div>
+                <div class="value">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Runtime</div>
+                <div class="value" id="statRuntime">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Models</div>
+                <div class="value" id="statModels">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Memory</div>
+                <div class="value" id="statMemory">-</div>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs">
+            <div class="tab active" onclick="showTab('chat')">Chat</div>
+            <div class="tab" onclick="showTab('models')">Models</div>
+            <div class="tab" onclick="showTab('system')">System</div>
+            <div class="tab" onclick="showTab('logs')">Logs</div>
+            <div class="tab" onclick="showTab('settings')">Settings</div>
+        </div>
+
+        <!-- Chat Tab -->
+        <div id="tab-chat" class="tab-content active">
+            <div class="card">
+                <h3>Chat with AI</h3>
+                <div class="form-group">
+                    <label>Model</label>
+                    <select id="chatModel">
+                        <option value="">Select a model...</option>
+                    </select>
+                </div>
+                <div class="chat-container">
+                    <div class="chat-messages" id="chatMessages">
+                        <div class="message assistant">
+                            <div class="message-role">Assistant</div>
+                            <div>Hello! Select a model and start chatting.</div>
+                        </div>
+                    </div>
+                    <div class="chat-input">
+                        <textarea id="chatInput" placeholder="Type your message..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat();}"></textarea>
+                        <button class="btn btn-primary" onclick="sendChat()" id="btnSend">Send</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Models Tab -->
+        <div id="tab-models" class="tab-content">
+            <div class="card">
+                <h3>Installed Models</h3>
+                <div style="margin-bottom: 1rem; display: flex; gap: 0.5rem;">
+                    <input type="text" id="pullModelName" placeholder="Model name (e.g., llama3.2, mistral, codellama)" style="flex: 1;">
+                    <button class="btn btn-primary" onclick="pullModel()">Pull Model</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Size</th>
+                            <th>Modified</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="modelsTable">
+                        <tr><td colspan="4">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="card">
+                <h3>Popular Models</h3>
+                <p style="color: var(--text-dim); margin-bottom: 1rem;">Click to pull a model:</p>
+                <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                    <button class="btn btn-sm" onclick="pullModel('llama3.2')">llama3.2 (3B)</button>
+                    <button class="btn btn-sm" onclick="pullModel('mistral')">mistral (7B)</button>
+                    <button class="btn btn-sm" onclick="pullModel('codellama')">codellama (7B)</button>
+                    <button class="btn btn-sm" onclick="pullModel('phi3')">phi3 (3.8B)</button>
+                    <button class="btn btn-sm" onclick="pullModel('gemma2:2b')">gemma2:2b</button>
+                    <button class="btn btn-sm" onclick="pullModel('qwen2.5:3b')">qwen2.5:3b</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- System Tab -->
+        <div id="tab-system" class="tab-content">
+            <div class="card">
+                <h3>System Resources</h3>
+                <div class="stats-row">
+                    <div class="stat-card">
+                        <div class="label">Host Memory</div>
+                        <div class="value" id="sysMemory">-</div>
+                        <div class="progress" style="margin-top: 0.5rem;">
+                            <div class="progress-bar" id="sysMemoryBar" style="width: 0%;"></div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">Disk Usage</div>
+                        <div class="value" id="sysDisk">-</div>
+                        <div class="progress" style="margin-top: 0.5rem;">
+                            <div class="progress-bar" id="sysDiskBar" style="width: 0%;"></div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">Container Memory</div>
+                        <div class="value" id="sysContainerMem">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">Container CPU</div>
+                        <div class="value" id="sysContainerCpu">-</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Logs Tab -->
+        <div id="tab-logs" class="tab-content">
+            <div class="card">
+                <h3>Container Logs</h3>
+                <div style="margin-bottom: 1rem; display: flex; gap: 0.5rem; align-items: center;">
+                    <label>Lines:</label>
+                    <select id="logLines" onchange="loadLogs()">
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                        <option value="200">200</option>
+                    </select>
+                    <button class="btn" onclick="loadLogs()">Refresh Logs</button>
+                </div>
+                <div class="logs-container" id="logsContainer">
+                    <div class="log-line">Loading logs...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Tab -->
+        <div id="tab-settings" class="tab-content">
+            <div class="card">
+                <h3>Configuration</h3>
+                <form id="settingsForm" onsubmit="saveSettings(event)">
+                    <div class="form-group">
+                        <label>API Port</label>
+                        <input type="number" id="cfgPort" value="11434" min="1024" max="65535">
+                    </div>
+                    <div class="form-group">
+                        <label>Data Path</label>
+                        <input type="text" id="cfgDataPath" value="/srv/ollama">
+                    </div>
+                    <div class="form-group">
+                        <label>Memory Limit</label>
+                        <select id="cfgMemory">
+                            <option value="2g">2 GB</option>
+                            <option value="4g" selected>4 GB</option>
+                            <option value="8g">8 GB</option>
+                            <option value="16g">16 GB</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="cfgGpu"> Enable GPU (NVIDIA only)
+                        </label>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save Settings</button>
+                </form>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const API = '/api/v1/ollama';
+        let isRunning = false;
+
+        function getToken() {
+            return localStorage.getItem('jwt_token') || localStorage.getItem('token') || '';
+        }
+
+        async function api(endpoint, options = {}) {
+            const token = getToken();
+            const headers = { 'Content-Type': 'application/json', ...options.headers };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+            const res = await fetch(API + endpoint, { ...options, headers, credentials: 'include' });
+            if (res.status === 401) {
+                window.location.href = '/portal/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+                throw new Error('Unauthorized');
+            }
+            return res.json();
+        }
+
+        function showTab(name) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelector(`.tab:nth-child(${['chat','models','system','logs','settings'].indexOf(name)+1})`).classList.add('active');
+            document.getElementById('tab-' + name).classList.add('active');
+
+            if (name === 'logs') loadLogs();
+            if (name === 'system') loadSystem();
+        }
+
+        function toast(msg, type = 'success') {
+            const t = document.createElement('div');
+            t.className = 'toast toast-' + type;
+            t.textContent = msg;
+            document.body.appendChild(t);
+            setTimeout(() => t.remove(), 3000);
+        }
+
+        function formatSize(bytes) {
+            if (!bytes) return '0 B';
+            const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+            let i = 0;
+            while (bytes >= 1024 && i < units.length - 1) { bytes /= 1024; i++; }
+            return bytes.toFixed(1) + ' ' + units[i];
+        }
+
+        async function refresh() {
+            try {
+                const status = await api('/status');
+                isRunning = status.running;
+
+                // Update stats
+                const statEl = document.getElementById('statStatus');
+                statEl.querySelector('.value').textContent = status.running ? 'Running' : 'Stopped';
+                statEl.className = 'stat-card ' + (status.running ? 'running' : 'stopped');
+
+                document.getElementById('statRuntime').textContent = status.runtime || 'none';
+                document.getElementById('statMemory').textContent = status.memory_limit || '-';
+
+                // Update toggle button
+                const btn = document.getElementById('btnToggle');
+                btn.textContent = status.running ? 'Stop' : 'Start';
+                btn.className = status.running ? 'btn btn-danger' : 'btn btn-primary';
+
+                // Load models if running
+                if (status.running) {
+                    await loadModels();
+                } else {
+                    document.getElementById('statModels').textContent = '-';
+                    document.getElementById('modelsTable').innerHTML = '<tr><td colspan="4">Ollama not running</td></tr>';
+                    document.getElementById('chatModel').innerHTML = '<option value="">Start Ollama first...</option>';
+                }
+            } catch (e) {
+                console.error(e);
+                toast('Failed to load status', 'error');
+            }
+        }
+
+        async function loadModels() {
+            try {
+                const data = await api('/models');
+                const models = data.models || [];
+
+                document.getElementById('statModels').textContent = models.length;
+
+                // Update table
+                const tbody = document.getElementById('modelsTable');
+                if (models.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4">No models installed. Pull one to get started!</td></tr>';
+                } else {
+                    tbody.innerHTML = models.map(m => `
+                        <tr>
+                            <td><strong>${m.name}</strong></td>
+                            <td class="model-size">${formatSize(m.size)}</td>
+                            <td class="model-size">${m.modified ? new Date(m.modified).toLocaleDateString() : '-'}</td>
+                            <td>
+                                <button class="btn btn-sm btn-danger" onclick="removeModel('${m.name}')">Remove</button>
+                            </td>
+                        </tr>
+                    `).join('');
+                }
+
+                // Update chat model selector
+                const select = document.getElementById('chatModel');
+                select.innerHTML = '<option value="">Select a model...</option>' +
+                    models.map(m => `<option value="${m.name}">${m.name}</option>`).join('');
+
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function toggleService() {
+            const action = isRunning ? 'stop' : 'start';
+            try {
+                document.getElementById('btnToggle').disabled = true;
+                document.getElementById('btnToggle').innerHTML = '<span class="spinner"></span>';
+                const res = await api('/' + action, { method: 'POST' });
+                if (res.success) {
+                    toast(action === 'start' ? 'Ollama started!' : 'Ollama stopped!');
+                } else {
+                    toast(res.error || 'Action failed', 'error');
+                }
+                await refresh();
+            } catch (e) {
+                toast('Action failed: ' + e.message, 'error');
+            } finally {
+                document.getElementById('btnToggle').disabled = false;
+            }
+        }
+
+        async function pullModel(name) {
+            name = name || document.getElementById('pullModelName').value.trim();
+            if (!name) return toast('Enter a model name', 'error');
+
+            toast('Pulling ' + name + '... This may take a while.');
+            try {
+                const res = await api('/models/pull', {
+                    method: 'POST',
+                    body: JSON.stringify({ name })
+                });
+                if (res.success) {
+                    toast('Model ' + name + ' pulled successfully!');
+                    await loadModels();
+                } else {
+                    toast(res.error || 'Pull failed', 'error');
+                }
+            } catch (e) {
+                toast('Pull failed: ' + e.message, 'error');
+            }
+        }
+
+        async function removeModel(name) {
+            if (!confirm('Remove model ' + name + '?')) return;
+            try {
+                const res = await api('/models/' + encodeURIComponent(name), { method: 'DELETE' });
+                if (res.success) {
+                    toast('Model removed');
+                    await loadModels();
+                } else {
+                    toast(res.error || 'Remove failed', 'error');
+                }
+            } catch (e) {
+                toast('Remove failed: ' + e.message, 'error');
+            }
+        }
+
+        async function sendChat() {
+            const model = document.getElementById('chatModel').value;
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+
+            if (!model) return toast('Select a model first', 'error');
+            if (!message) return;
+
+            const messagesEl = document.getElementById('chatMessages');
+
+            // Add user message
+            messagesEl.innerHTML += `<div class="message user"><div class="message-role">You</div><div>${escapeHtml(message)}</div></div>`;
+            input.value = '';
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+
+            // Show thinking indicator
+            const thinkingId = 'thinking-' + Date.now();
+            messagesEl.innerHTML += `<div class="message assistant" id="${thinkingId}"><div class="message-role">Assistant</div><div><span class="spinner"></span> Thinking...</div></div>`;
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+
+            try {
+                document.getElementById('btnSend').disabled = true;
+                const res = await api('/chat', {
+                    method: 'POST',
+                    body: JSON.stringify({ model, message })
+                });
+
+                document.getElementById(thinkingId).remove();
+
+                if (res.error) {
+                    messagesEl.innerHTML += `<div class="message assistant"><div class="message-role">Error</div><div style="color: var(--error);">${escapeHtml(res.error)}</div></div>`;
+                } else {
+                    messagesEl.innerHTML += `<div class="message assistant"><div class="message-role">Assistant</div><div>${escapeHtml(res.response)}</div></div>`;
+                }
+                messagesEl.scrollTop = messagesEl.scrollHeight;
+            } catch (e) {
+                document.getElementById(thinkingId).remove();
+                messagesEl.innerHTML += `<div class="message assistant"><div class="message-role">Error</div><div style="color: var(--error);">${escapeHtml(e.message)}</div></div>`;
+            } finally {
+                document.getElementById('btnSend').disabled = false;
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML.replace(/\n/g, '<br>');
+        }
+
+        async function loadSystem() {
+            try {
+                const data = await api('/system');
+
+                document.getElementById('sysMemory').textContent = data.memory.percent + '%';
+                document.getElementById('sysMemoryBar').style.width = data.memory.percent + '%';
+
+                document.getElementById('sysDisk').textContent = data.disk.percent + '%';
+                document.getElementById('sysDiskBar').style.width = data.disk.percent + '%';
+
+                document.getElementById('sysContainerMem').textContent = data.container.memory || '-';
+                document.getElementById('sysContainerCpu').textContent = data.container.cpu || '-';
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function loadLogs() {
+            const lines = document.getElementById('logLines').value;
+            try {
+                const data = await api('/logs?lines=' + lines);
+                const container = document.getElementById('logsContainer');
+                if (data.logs && data.logs.length > 0) {
+                    container.innerHTML = data.logs.map(l => `<div class="log-line">${escapeHtml(l)}</div>`).join('');
+                } else {
+                    container.innerHTML = '<div class="log-line">No logs available</div>';
+                }
+                container.scrollTop = container.scrollHeight;
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function loadSettings() {
+            try {
+                const cfg = await api('/config');
+                document.getElementById('cfgPort').value = cfg.api_port || 11434;
+                document.getElementById('cfgDataPath').value = cfg.data_path || '/srv/ollama';
+                document.getElementById('cfgMemory').value = cfg.memory_limit || '4g';
+                document.getElementById('cfgGpu').checked = cfg.gpu_enabled || false;
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function saveSettings(e) {
+            e.preventDefault();
+            try {
+                const res = await api('/config', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        api_port: parseInt(document.getElementById('cfgPort').value),
+                        data_path: document.getElementById('cfgDataPath').value,
+                        memory_limit: document.getElementById('cfgMemory').value,
+                        gpu_enabled: document.getElementById('cfgGpu').checked
+                    })
+                });
+                if (res.success) {
+                    toast('Settings saved! Restart Ollama to apply.');
+                } else {
+                    toast('Save failed', 'error');
+                }
+            } catch (e) {
+                toast('Save failed: ' + e.message, 'error');
+            }
+        }
+
+        // Initialize
+        refresh();
+        loadSettings();
+        setInterval(refresh, 30000);
+    </script>
+</body>
+</html>

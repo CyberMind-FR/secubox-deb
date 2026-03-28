@@ -1,0 +1,8 @@
+{
+    "name": "Jellyfin",
+    "path": "/jellyfin/",
+    "icon": "film",
+    "category": "apps",
+    "order": 801,
+    "description": "Media server management"
+}

@@ -1,0 +1,21 @@
+Source: secubox-lyrion
+Section: net
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+
+Package: secubox-lyrion
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn, python3-httpx
+Description: Lyrion Music Server (LMS) for SecuBox
+ Debian bookworm port of the OpenWRT luci-app-lyrion module.
+ Provides FastAPI backend on /api/v1/lyrion/ via Unix socket.
+ .
+ Features:
+  - Docker/Podman container management for LMS
+  - Squeezebox JSON-RPC API integration
+  - Player control (play, pause, next, prev, volume)
+  - Library management and scanning
+  - Backup and restore functionality
+  - CRT-light P31 phosphor theme frontend

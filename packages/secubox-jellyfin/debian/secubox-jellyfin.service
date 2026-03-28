@@ -1,0 +1,21 @@
+[Unit]
+Description=SecuBox Jellyfin API
+After=network.target secubox-core.service secubox-runtime.service docker.service
+Requires=secubox-runtime.service
+Wants=docker.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/usr/lib/secubox/jellyfin
+ExecStart=/usr/bin/uvicorn api.main:app --uds /run/secubox/jellyfin.sock --log-level warning
+ExecStartPost=-/bin/sleep 1
+ExecStartPost=-/bin/chmod 660 /run/secubox/jellyfin.sock
+ExecStartPost=-/bin/chown secubox:secubox /run/secubox/jellyfin.sock
+Restart=on-failure
+RestartSec=5
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

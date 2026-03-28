@@ -1,0 +1,21 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+    configure)
+        mkdir -p /srv/homeassistant/config
+        mkdir -p /run/secubox
+        chmod 755 /run/secubox
+
+        if systemctl is-active --quiet nginx; then
+            systemctl reload nginx || true
+        fi
+
+        systemctl daemon-reload
+        systemctl enable secubox-homeassistant.service || true
+        systemctl start secubox-homeassistant.service || true
+        ;;
+esac
+
+#DEBHELPER#
+exit 0

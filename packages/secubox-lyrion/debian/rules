@@ -1,0 +1,24 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	# API files (to /usr/share/secubox/lyrion for service WorkingDirectory)
+	install -d debian/secubox-lyrion/usr/share/secubox/lyrion/
+	cp -r api debian/secubox-lyrion/usr/share/secubox/lyrion/
+	# Static www files
+	install -d debian/secubox-lyrion/usr/share/secubox/www
+	[ -d www ] && cp -r www/. debian/secubox-lyrion/usr/share/secubox/www/ || true
+	# Menu definitions
+	install -d debian/secubox-lyrion/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-lyrion/usr/share/secubox/menu.d/ || true
+	# Modular nginx config
+	install -d debian/secubox-lyrion/etc/nginx/secubox.d
+	[ -f nginx/lyrion.conf ] && cp nginx/lyrion.conf debian/secubox-lyrion/etc/nginx/secubox.d/ || true
+	# Systemd service (use usr/lib for modern systems)
+	install -d debian/secubox-lyrion/usr/lib/systemd/system
+	cp debian/secubox-lyrion.service debian/secubox-lyrion/usr/lib/systemd/system/
+
+override_dh_installsystemd:
+	# Skip dh_installsystemd since we handle it manually
+	true

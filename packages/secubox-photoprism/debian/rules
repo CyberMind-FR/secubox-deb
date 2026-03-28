@@ -1,0 +1,19 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d $(CURDIR)/debian/secubox-photoprism/usr/share/secubox/www/photoprism
+	install -d $(CURDIR)/debian/secubox-photoprism/usr/share/secubox/api/photoprism
+	install -d $(CURDIR)/debian/secubox-photoprism/usr/share/secubox/menu.d
+	install -d $(CURDIR)/debian/secubox-photoprism/etc/nginx/secubox.d
+	install -d $(CURDIR)/debian/secubox-photoprism/srv/photoprism/{originals,import}
+
+	cp -r $(CURDIR)/www/photoprism/* $(CURDIR)/debian/secubox-photoprism/usr/share/secubox/www/photoprism/
+	cp -r $(CURDIR)/api/* $(CURDIR)/debian/secubox-photoprism/usr/share/secubox/api/photoprism/
+	cp $(CURDIR)/menu.d/*.json $(CURDIR)/debian/secubox-photoprism/usr/share/secubox/menu.d/
+	cp $(CURDIR)/nginx/*.conf $(CURDIR)/debian/secubox-photoprism/etc/nginx/secubox.d/
+
+override_dh_installsystemd:
+	dh_installsystemd --name=secubox-photoprism

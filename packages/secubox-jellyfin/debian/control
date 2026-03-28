@@ -1,0 +1,18 @@
+Source: secubox-jellyfin
+Section: net
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+
+Package: secubox-jellyfin
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn
+Recommends: docker.io | podman
+Description: Jellyfin media server management
+ SecuBox module for managing Jellyfin media server via Docker.
+ Provides container management, library configuration,
+ backup/restore, and hardware acceleration support.
+ .
+ Ported from OpenWRT luci-app-jellyfin.
+ Provides FastAPI backend on /api/v1/jellyfin/ via Unix socket.

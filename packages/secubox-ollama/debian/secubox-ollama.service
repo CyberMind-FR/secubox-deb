@@ -1,0 +1,23 @@
+[Unit]
+Description=SecuBox Ollama API
+After=network.target secubox-core.service secubox-runtime.service docker.service
+Requires=secubox-runtime.service
+Wants=docker.service
+
+[Service]
+Type=simple
+# Run as root to access docker/podman
+User=root
+Group=root
+WorkingDirectory=/usr/lib/secubox/ollama
+ExecStart=/usr/bin/uvicorn api.main:app --uds /run/secubox/ollama.sock --log-level warning
+# Use - prefix to ignore failure if socket doesn't exist yet
+ExecStartPost=-/bin/sleep 1
+ExecStartPost=-/bin/chmod 660 /run/secubox/ollama.sock
+ExecStartPost=-/bin/chown secubox:secubox /run/secubox/ollama.sock
+Restart=on-failure
+RestartSec=5
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

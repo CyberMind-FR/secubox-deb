@@ -398,3 +398,142 @@ case "$1" in
 esac
 #DEBHELPER#
 ```
+
+---
+
+## Pattern 11 — Container Runtime (LXC ONLY)
+
+**CRITICAL REQUIREMENT: Use LXC containers exclusively. NEVER use Docker or Podman.**
+
+### Container Creation
+```python
+# Create Debian bookworm LXC container
+subprocess.run([
+    "lxc-create", "-n", CONTAINER_NAME,
+    "-t", "download",
+    "--",
+    "-d", "debian",
+    "-r", "bookworm",
+    "-a", "amd64"
+], timeout=600)
+```
+
+### Container Status Check
+```python
+def lxc_running() -> bool:
+    """Check if LXC container is running."""
+    result = subprocess.run(
+        ["lxc-info", "-n", CONTAINER_NAME, "-s"],
+        capture_output=True, text=True
+    )
+    return "RUNNING" in result.stdout
+
+def lxc_get_ip() -> Optional[str]:
+    """Get LXC container IP."""
+    result = subprocess.run(
+        ["lxc-info", "-n", CONTAINER_NAME, "-iH"],
+        capture_output=True, text=True
+    )
+    return result.stdout.strip().split("\n")[0] if result.returncode == 0 else None
+```
+
+### Execute Commands Inside LXC
+```python
+def lxc_exec(cmd: List[str], timeout: int = 60):
+    """Execute command inside LXC container."""
+    return subprocess.run(
+        ["lxc-attach", "-n", CONTAINER_NAME, "--"] + cmd,
+        capture_output=True, text=True, timeout=timeout
+    )
+```
+
+### USB Device Passthrough
+```python
+# Add to container config
+lxc_config = f"/var/lib/lxc/{CONTAINER_NAME}/config"
+with open(lxc_config, "a") as f:
+    f.write(f"lxc.mount.entry = /dev/ttyUSB0 dev/ttyUSB0 none bind,create=file 0 0\n")
+    f.write("lxc.cgroup2.devices.allow = c 188:* rwm\n")  # ttyUSB
+    f.write("lxc.cgroup2.devices.allow = c 166:* rwm\n")  # ttyACM
+```
+
+### Dependencies for LXC packages
+```
+Depends: ..., lxc, lxc-templates
+```
+
+### Why LXC over Docker/Podman
+- Native Linux container technology (no daemon overhead)
+- Better integration with systemd cgroups
+- Persistent containers by default
+- Direct USB/hardware passthrough
+- Lower memory footprint
+- Full system containers (init, services)
+
+---
+
+## Pattern 12 — Module Web UI Requirements
+
+**CRITICAL: All module frontends MUST include the shared sidebar and CRT theme.**
+
+### Required CSS Includes
+```html
+<head>
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <!-- Module-specific styles -->
+</head>
+```
+
+### Required HTML Structure
+```html
+<body class="crt-light">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="main-content">
+        <div class="container">
+            <!-- Module content here -->
+        </div>
+    </main>
+    <script src="/shared/sidebar.js"></script>
+</body>
+```
+
+### Theme-Aware CSS Variables
+Each module defines accent colors with dark mode support:
+```css
+:root {
+    --module-accent: #00bcd4;      /* Light mode color */
+    --module-accent-dim: #0097a7;
+}
+
+body.dark {
+    --module-accent: #4dd0e1;      /* Dark mode color */
+    --module-accent-dim: #00acc1;
+}
+
+.accent { color: var(--module-accent); }
+.accent-bg { background: var(--module-accent); }
+```
+
+### Shared Resources Location
+- `/shared/crt-light.css` - Light theme (P31 phosphor)
+- `/shared/crt-system.css` - Dark theme (VT100 green)
+- `/shared/sidebar-light.css` - Light sidebar
+- `/shared/sidebar.css` - Dark sidebar
+- `/shared/sidebar.js` - Dynamic menu loader
+
+### Menu Integration
+Module must provide `menu.d/*.json` with fields:
+```json
+{
+  "id": "module-name",
+  "name": "Display Name",
+  "icon": "🔧",
+  "path": "/module/",
+  "category": "apps",
+  "order": 800,
+  "description": "Short description"
+}
+```
+
+**Required fields**: `name` (not `title`), emoji `icon`, `path`, `category`, `order`

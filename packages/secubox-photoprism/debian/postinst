@@ -1,0 +1,28 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+    configure)
+        # Create data directories
+        mkdir -p /srv/photoprism/{originals,import}
+        chmod 755 /srv/photoprism
+
+        # Create run directory
+        mkdir -p /run/secubox
+        chmod 755 /run/secubox
+
+        # Reload nginx if running
+        if systemctl is-active --quiet nginx; then
+            systemctl reload nginx || true
+        fi
+
+        # Enable and start the service
+        systemctl daemon-reload
+        systemctl enable secubox-photoprism.service || true
+        systemctl start secubox-photoprism.service || true
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

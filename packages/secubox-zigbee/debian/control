@@ -1,0 +1,21 @@
+Source: secubox-zigbee
+Section: net
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+
+Package: secubox-zigbee
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn, python3-httpx
+Description: Zigbee2MQTT Gateway for SecuBox
+ Debian bookworm port of the OpenWRT luci-app-zigbee2mqtt module.
+ Provides FastAPI backend on /api/v1/zigbee/ via Unix socket.
+ .
+ Features:
+  - Docker/Podman container management for Zigbee2MQTT
+  - USB serial dongle detection and passthrough
+  - Device pairing and management
+  - MQTT broker integration
+  - Network topology visualization
+  - CRT-light P31 phosphor theme frontend

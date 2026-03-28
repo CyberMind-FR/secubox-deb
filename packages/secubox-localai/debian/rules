@@ -1,0 +1,23 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	# API files
+	install -d debian/secubox-localai/usr/share/secubox/localai/
+	cp -r api debian/secubox-localai/usr/share/secubox/localai/
+	# Static www files
+	install -d debian/secubox-localai/usr/share/secubox/www
+	[ -d www ] && cp -r www/. debian/secubox-localai/usr/share/secubox/www/ || true
+	# Menu definitions
+	install -d debian/secubox-localai/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-localai/usr/share/secubox/menu.d/ || true
+	# Nginx config
+	install -d debian/secubox-localai/etc/nginx/secubox.d
+	[ -f nginx/localai.conf ] && cp nginx/localai.conf debian/secubox-localai/etc/nginx/secubox.d/ || true
+	# Systemd service
+	install -d debian/secubox-localai/usr/lib/systemd/system
+	cp debian/secubox-localai.service debian/secubox-localai/usr/lib/systemd/system/
+
+override_dh_installsystemd:
+	true

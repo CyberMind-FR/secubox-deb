@@ -1,0 +1,28 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+    configure)
+        # Create data directory
+        mkdir -p /var/lib/secubox/domoticz
+        chmod 755 /var/lib/secubox/domoticz
+
+        # Create run directory
+        mkdir -p /run/secubox
+        chmod 755 /run/secubox
+
+        # Reload nginx if running
+        if systemctl is-active --quiet nginx; then
+            systemctl reload nginx || true
+        fi
+
+        # Enable and start the service
+        systemctl daemon-reload
+        systemctl enable secubox-domoticz.service || true
+        systemctl start secubox-domoticz.service || true
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

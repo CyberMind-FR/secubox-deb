@@ -1,0 +1,17 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	# API files
+	install -d debian/secubox-jellyfin/usr/lib/secubox/jellyfin/
+	cp -r api debian/secubox-jellyfin/usr/lib/secubox/jellyfin/
+	# Static www files
+	install -d debian/secubox-jellyfin/usr/share/secubox/www
+	[ -d www ] && cp -r www/. debian/secubox-jellyfin/usr/share/secubox/www/ || true
+	# Menu definitions
+	install -d debian/secubox-jellyfin/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-jellyfin/usr/share/secubox/menu.d/ || true
+	# Modular nginx config
+	install -d debian/secubox-jellyfin/etc/nginx/secubox.d
+	[ -f nginx/jellyfin.conf ] && cp nginx/jellyfin.conf debian/secubox-jellyfin/etc/nginx/secubox.d/ || true

@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PhotoPrism - SecuBox</title>
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root {
+            --photoprism-purple: #9c27b0;
+            --photoprism-light: #ce93d8;
+            --photoprism-dark: #7b1fa2;
+        }
+
+        body.dark {
+            --photoprism-purple: #ce93d8;
+            --photoprism-light: #f3e5f5;
+            --photoprism-dark: #ab47bc;
+        }
+
+        .accent { color: var(--photoprism-purple); }
+        .accent-bg { background-color: var(--photoprism-purple); }
+        .accent-border { border-color: var(--photoprism-purple); }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 1rem;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .status-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 1rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .status-badge.running {
+            background: var(--success-bg);
+            color: var(--success);
+        }
+
+        .status-badge.stopped {
+            background: var(--error-bg);
+            color: var(--error);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: var(--photoprism-purple);
+        }
+
+        .stat-label {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin-top: 0.25rem;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 0.5rem;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 1rem;
+            overflow-x: auto;
+        }
+
+        .tab {
+            padding: 0.75rem 1rem;
+            border: none;
+            background: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            white-space: nowrap;
+            font-size: 0.875rem;
+        }
+
+        .tab:hover {
+            color: var(--text);
+        }
+
+        .tab.active {
+            color: var(--photoprism-purple);
+            border-bottom-color: var(--photoprism-purple);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .photo-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 0.5rem;
+        }
+
+        .photo-item {
+            aspect-ratio: 1;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 0.25rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-secondary);
+            font-size: 2rem;
+        }
+
+        .album-list {
+            display: grid;
+            gap: 0.5rem;
+        }
+
+        .album-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.75rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+        }
+
+        .album-icon {
+            font-size: 2rem;
+        }
+
+        .album-info {
+            flex: 1;
+        }
+
+        .album-title {
+            font-weight: 500;
+        }
+
+        .album-count {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .action-bar {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border: 1px solid var(--border);
+            border-radius: 0.25rem;
+            background: var(--surface);
+            color: var(--text);
+            cursor: pointer;
+            font-size: 0.875rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn:hover {
+            background: var(--hover);
+        }
+
+        .btn.primary {
+            background: var(--photoprism-purple);
+            color: white;
+            border-color: var(--photoprism-purple);
+        }
+
+        .btn.primary:hover {
+            background: var(--photoprism-dark);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .settings-form {
+            display: grid;
+            gap: 1rem;
+            max-width: 500px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.25rem;
+            font-weight: 500;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid var(--border);
+            border-radius: 0.25rem;
+            background: var(--surface);
+            color: var(--text);
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: var(--photoprism-purple);
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .log-viewer {
+            background: var(--bg-dark, #1a1a2e);
+            color: var(--text-light, #e0e0e0);
+            font-family: monospace;
+            font-size: 0.75rem;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-secondary);
+        }
+
+        .empty-state-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+
+        .progress-bar {
+            height: 0.5rem;
+            background: var(--border);
+            border-radius: 0.25rem;
+            overflow: hidden;
+            margin-top: 0.5rem;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--photoprism-purple);
+            transition: width 0.3s ease;
+        }
+
+        .open-app-btn {
+            position: fixed;
+            bottom: 1rem;
+            right: 1rem;
+            padding: 1rem 1.5rem;
+            background: var(--photoprism-purple);
+            color: white;
+            border: none;
+            border-radius: 2rem;
+            cursor: pointer;
+            font-size: 1rem;
+            box-shadow: 0 4px 12px rgba(156, 39, 176, 0.4);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .open-app-btn:hover {
+            background: var(--photoprism-dark);
+        }
+
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body class="crt-light">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="main-content">
+    <div class="container">
+        <div class="header">
+            <h1><span class="accent">PhotoPrism</span></h1>
+            <span id="status-badge" class="status-badge stopped">Stopped</span>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value" id="photo-count">0</div>
+                <div class="stat-label">Photos</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="video-count">0</div>
+                <div class="stat-label">Videos</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="album-count">0</div>
+                <div class="stat-label">Albums</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="library-size">0</div>
+                <div class="stat-label">Library Size</div>
+            </div>
+        </div>
+
+        <div class="action-bar">
+            <button class="btn primary" id="btn-start" onclick="startService()">Start</button>
+            <button class="btn" id="btn-stop" onclick="stopService()" disabled>Stop</button>
+            <button class="btn" id="btn-index" onclick="startIndexing()" disabled>Index Photos</button>
+            <button class="btn" id="btn-import" onclick="startImport()" disabled>Import</button>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" data-tab="photos">Photos</button>
+            <button class="tab" data-tab="albums">Albums</button>
+            <button class="tab" data-tab="faces">Faces</button>
+            <button class="tab" data-tab="logs">Logs</button>
+            <button class="tab" data-tab="settings">Settings</button>
+        </div>
+
+        <div id="tab-photos" class="tab-content active">
+            <div id="photos-container" class="photo-grid">
+                <div class="empty-state" style="grid-column: 1/-1;">
+                    <div class="empty-state-icon">📷</div>
+                    <p>No photos yet. Start the service and import some photos!</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-albums" class="tab-content">
+            <div class="action-bar">
+                <button class="btn primary" onclick="createAlbum()">New Album</button>
+            </div>
+            <div id="albums-container" class="album-list">
+                <div class="empty-state">
+                    <div class="empty-state-icon">📁</div>
+                    <p>No albums yet</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-faces" class="tab-content">
+            <div id="faces-container" class="photo-grid">
+                <div class="empty-state" style="grid-column: 1/-1;">
+                    <div class="empty-state-icon">👤</div>
+                    <p>Face recognition results will appear here after indexing</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-logs" class="tab-content">
+            <div class="action-bar">
+                <button class="btn" onclick="loadLogs()">Refresh</button>
+            </div>
+            <div id="log-viewer" class="log-viewer">Loading logs...</div>
+        </div>
+
+        <div id="tab-settings" class="tab-content">
+            <form class="settings-form" onsubmit="saveSettings(event)">
+                <div class="form-group">
+                    <label>Site URL</label>
+                    <input type="url" id="setting-site-url" placeholder="https://photos.example.com">
+                </div>
+                <div class="form-group">
+                    <label>Site Title</label>
+                    <input type="text" id="setting-site-title" placeholder="My Photos">
+                </div>
+                <div class="form-group">
+                    <label>New Admin Password</label>
+                    <input type="password" id="setting-password" placeholder="Leave empty to keep current">
+                </div>
+                <div class="form-group checkbox-group">
+                    <input type="checkbox" id="setting-public">
+                    <label for="setting-public">Public Mode (no login required)</label>
+                </div>
+                <div class="form-group checkbox-group">
+                    <input type="checkbox" id="setting-readonly">
+                    <label for="setting-readonly">Read-only Mode</label>
+                </div>
+                <button type="submit" class="btn primary">Save Settings</button>
+            </form>
+        </div>
+    </div>
+
+    <button id="open-app-btn" class="open-app-btn hidden" onclick="openApp()">
+        Open PhotoPrism
+    </button>
+
+    <script>
+        const API_BASE = '/api/v1/photoprism';
+        let containerIP = null;
+
+        async function apiCall(endpoint, options = {}) {
+            const token = localStorage.getItem('sbx_token');
+            const response = await fetch(API_BASE + endpoint, {
+                ...options,
+                headers: {
+                    'Authorization': 'Bearer ' + token,
+                    'Content-Type': 'application/json',
+                    ...options.headers
+                }
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return response.json();
+        }
+
+        function formatSize(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+
+        async function loadStatus() {
+            try {
+                const data = await apiCall('/status');
+                const badge = document.getElementById('status-badge');
+                const btnStart = document.getElementById('btn-start');
+                const btnStop = document.getElementById('btn-stop');
+                const btnIndex = document.getElementById('btn-index');
+                const btnImport = document.getElementById('btn-import');
+                const openBtn = document.getElementById('open-app-btn');
+
+                if (data.running) {
+                    badge.textContent = 'Running';
+                    badge.className = 'status-badge running';
+                    btnStart.disabled = true;
+                    btnStop.disabled = false;
+                    btnIndex.disabled = false;
+                    btnImport.disabled = false;
+                    containerIP = data.container_ip;
+                    openBtn.classList.remove('hidden');
+                } else {
+                    badge.textContent = data.container_exists ? 'Stopped' : 'Not Installed';
+                    badge.className = 'status-badge stopped';
+                    btnStart.disabled = !data.container_exists;
+                    btnStart.textContent = data.container_exists ? 'Start' : 'Install';
+                    btnStop.disabled = true;
+                    btnIndex.disabled = true;
+                    btnImport.disabled = true;
+                    openBtn.classList.add('hidden');
+                }
+
+                document.getElementById('photo-count').textContent = data.photos || 0;
+                document.getElementById('video-count').textContent = data.videos || 0;
+                document.getElementById('library-size').textContent = formatSize(data.library_size || 0);
+
+                if (data.running) {
+                    loadAlbums();
+                }
+            } catch (e) {
+                console.error('Status load failed:', e);
+            }
+        }
+
+        async function startService() {
+            const btn = document.getElementById('btn-start');
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Starting...';
+
+            try {
+                const endpoint = originalText === 'Install' ? '/install' : '/start';
+                await apiCall(endpoint, { method: 'POST' });
+                await loadStatus();
+            } catch (e) {
+                alert('Failed to start: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
+        }
+
+        async function stopService() {
+            const btn = document.getElementById('btn-stop');
+            btn.disabled = true;
+            btn.textContent = 'Stopping...';
+
+            try {
+                await apiCall('/stop', { method: 'POST' });
+                await loadStatus();
+            } catch (e) {
+                alert('Failed to stop: ' + e.message);
+            } finally {
+                btn.textContent = 'Stop';
+            }
+        }
+
+        async function startIndexing() {
+            const btn = document.getElementById('btn-index');
+            btn.disabled = true;
+            btn.textContent = 'Indexing...';
+
+            try {
+                const result = await apiCall('/index', { method: 'POST' });
+                alert(result.success ? 'Indexing started' : 'Indexing failed');
+                await loadStatus();
+            } catch (e) {
+                alert('Indexing failed: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Index Photos';
+            }
+        }
+
+        async function startImport() {
+            const btn = document.getElementById('btn-import');
+            btn.disabled = true;
+            btn.textContent = 'Importing...';
+
+            try {
+                const result = await apiCall('/import', { method: 'POST' });
+                alert(result.success ? 'Import started' : 'Import failed');
+                await loadStatus();
+            } catch (e) {
+                alert('Import failed: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Import';
+            }
+        }
+
+        async function loadAlbums() {
+            try {
+                const data = await apiCall('/albums');
+                const container = document.getElementById('albums-container');
+                document.getElementById('album-count').textContent = data.count || 0;
+
+                if (data.albums && data.albums.length > 0) {
+                    container.innerHTML = data.albums.map(album => `
+                        <div class="album-item">
+                            <div class="album-icon">📁</div>
+                            <div class="album-info">
+                                <div class="album-title">${album.Title || album.title || 'Untitled'}</div>
+                                <div class="album-count">${album.PhotoCount || 0} photos</div>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            } catch (e) {
+                console.error('Failed to load albums:', e);
+            }
+        }
+
+        async function createAlbum() {
+            const title = prompt('Album name:');
+            if (!title) return;
+
+            try {
+                await apiCall(`/albums?title=${encodeURIComponent(title)}`, { method: 'POST' });
+                await loadAlbums();
+            } catch (e) {
+                alert('Failed to create album: ' + e.message);
+            }
+        }
+
+        async function loadLogs() {
+            try {
+                const data = await apiCall('/logs?lines=200');
+                const viewer = document.getElementById('log-viewer');
+                viewer.textContent = data.logs ? data.logs.join('\n') : 'No logs available';
+                viewer.scrollTop = viewer.scrollHeight;
+            } catch (e) {
+                document.getElementById('log-viewer').textContent = 'Failed to load logs: ' + e.message;
+            }
+        }
+
+        async function loadConfig() {
+            try {
+                const data = await apiCall('/config');
+                document.getElementById('setting-site-url').value = data.site_url || '';
+                document.getElementById('setting-site-title').value = data.site_title || '';
+                document.getElementById('setting-public').checked = data.public || false;
+                document.getElementById('setting-readonly').checked = data.readonly || false;
+            } catch (e) {
+                console.error('Failed to load config:', e);
+            }
+        }
+
+        async function saveSettings(e) {
+            e.preventDefault();
+
+            const config = {
+                site_url: document.getElementById('setting-site-url').value,
+                site_title: document.getElementById('setting-site-title').value,
+                public: document.getElementById('setting-public').checked,
+                readonly: document.getElementById('setting-readonly').checked
+            };
+
+            const password = document.getElementById('setting-password').value;
+
+            try {
+                await apiCall('/config', {
+                    method: 'POST',
+                    body: JSON.stringify(config)
+                });
+
+                if (password) {
+                    await apiCall(`/reset_password?password=${encodeURIComponent(password)}`, {
+                        method: 'POST'
+                    });
+                }
+
+                alert('Settings saved');
+            } catch (e) {
+                alert('Failed to save settings: ' + e.message);
+            }
+        }
+
+        function openApp() {
+            if (containerIP) {
+                window.open(`http://${containerIP}:2342`, '_blank');
+            }
+        }
+
+        // Tab handling
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+                tab.classList.add('active');
+                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+
+                if (tab.dataset.tab === 'logs') loadLogs();
+                if (tab.dataset.tab === 'settings') loadConfig();
+            });
+        });
+
+        // Theme detection
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.body.classList.add('dark');
+        }
+
+        // Initial load
+        loadStatus();
+        setInterval(loadStatus, 30000);
+    </script>
+    </main>
+    <script src="/shared/sidebar.js"></script>
+</body>
+</html>

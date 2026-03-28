@@ -1,0 +1,9 @@
+secubox-zigbee (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release.
+  * FastAPI backend with 20+ endpoints
+  * Features: Container management, device pairing, MQTT integration
+  * USB serial dongle detection and passthrough
+  * CRT-light P31 phosphor theme with Zigbee green accents
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 28 Mar 2026 09:30:00 +0100
