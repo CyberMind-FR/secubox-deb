@@ -3,69 +3,433 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - Master-link</title>
-    <style>
-        :root { --bg-dark: #e8f5e9; --bg-card: #c8e6c9; --bg-sidebar: #e8f5e9; --border: #a5d6a7; --text: #1b3d1c; --text-dim: #006622; --primary: #00dd44; --cyan: #00d4ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; --purple: #a371f7; }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Courier Prime', monospace; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
-        .sidebar { width: 220px; background: var(--bg-sidebar); border-right: 1px solid var(--border); position: fixed; height: 100vh; overflow-y: auto; }
-        .sidebar-header { padding: 1rem; border-bottom: 1px solid var(--border); }
-        .logo { font-weight: bold; font-size: 1.2rem; }
-        .logo span:nth-child(1) { color: var(--cyan); } .logo span:nth-child(2) { color: var(--red); } .logo span:nth-child(3) { color: var(--green); } .logo span:nth-child(4) { color: var(--yellow); }
-        .nav-section { padding: 0.5rem 0; }
-        .nav-section-title { padding: 0.5rem 1rem; font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
-        .nav-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 1rem; color: var(--text-dim); text-decoration: none; font-size: 0.9rem; border-left: 3px solid transparent; }
-        .nav-item:hover { background: rgba(0,221,68,0.05); color: var(--text); }
-        .nav-item.active { background: rgba(0,221,68,0.1); color: var(--primary); border-left-color: var(--primary); }
-        .nav-item .icon { width: 20px; text-align: center; }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-        .header h1 { font-size: 1.5rem; }
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; }
-        .btn:hover { background: var(--bg-dark); }
-        .btn.primary { background: rgba(0,221,68,0.1); border-color: var(--primary); color: var(--primary); }
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
-        .card h2 { font-size: 1rem; margin-bottom: 1rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
-        .stat-card .value { font-size: 2rem; font-weight: bold; color: var(--purple); }
-        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); }
-    </style>
+    <title>SecuBox - Master-Link</title>
     <link rel="stylesheet" href="/shared/crt-light.css">
     <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root {
+            --p31-peak: #00dd44; --p31-hot: #00ff55; --p31-mid: #009933; --p31-dim: #006622; --p31-ghost: #003311;
+            --p31-decay: #ffb347; --p31-decay-dim: #cc7722;
+            --tube-light: #e8f5e9; --tube-pale: #c8e6c9; --tube-soft: #a5d6a7; --tube-dark: #1b3d1c;
+            --bg-dark: var(--tube-light); --bg-card: var(--tube-pale); --border: var(--tube-soft);
+            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Courier Prime', monospace; background: var(--tube-light); color: var(--tube-dark); display: flex; min-height: 100vh; }
+        .main { flex: 1; margin-left: 220px; padding: 1rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .header h1 { font-size: 1.3rem; color: var(--p31-peak); text-shadow: var(--bloom-text); }
+        .btn { padding: 0.4rem 0.8rem; border-radius: 4px; border: 1px solid var(--p31-dim); background: var(--tube-pale); color: var(--p31-mid); cursor: pointer; font-family: inherit; font-size: 0.8rem; }
+        .btn:hover { color: var(--p31-peak); border-color: var(--p31-mid); }
+        .btn.primary { border-color: var(--p31-mid); color: var(--p31-peak); }
+        .btn.danger { border-color: var(--p31-decay); color: var(--p31-decay); }
+        .btn.success { border-color: var(--p31-mid); color: var(--p31-peak); }
+
+        /* Stats Row */
+        .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
+        .stat-card { background: var(--tube-pale); border: 1px solid var(--tube-soft); border-radius: 6px; padding: 0.75rem; text-align: center; }
+        .stat-card .value { font-size: 1.5rem; font-weight: bold; color: var(--p31-peak); text-shadow: var(--bloom-soft); }
+        .stat-card .label { font-size: 0.65rem; color: var(--p31-dim); text-transform: uppercase; }
+        .stat-card.warning .value { color: var(--p31-decay); text-shadow: 0 0 6px var(--p31-decay); }
+        .stat-card.online .value { color: var(--p31-hot); }
+
+        /* Grid Layout */
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+        @media (max-width: 1000px) { .grid { grid-template-columns: 1fr; } }
+
+        .card { background: var(--tube-pale); border: 1px solid var(--tube-soft); border-radius: 6px; padding: 1rem; }
+        .card h2 { font-size: 0.9rem; color: var(--p31-peak); text-shadow: var(--bloom-soft); margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center; }
+        .card h2 .count { font-size: 0.75rem; background: var(--tube-light); padding: 0.2rem 0.5rem; border-radius: 4px; }
+
+        /* Tabs */
+        .tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; border-bottom: 1px solid var(--p31-ghost); padding-bottom: 0.5rem; }
+        .tab { padding: 0.4rem 0.8rem; border: 1px solid transparent; border-radius: 4px 4px 0 0; cursor: pointer; font-size: 0.75rem; color: var(--p31-dim); background: transparent; }
+        .tab:hover { color: var(--p31-mid); }
+        .tab.active { color: var(--p31-peak); border-color: var(--tube-soft); border-bottom-color: var(--tube-pale); background: var(--tube-pale); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; font-size: 0.75rem; }
+        th, td { padding: 0.5rem; text-align: left; border-bottom: 1px solid var(--p31-ghost); }
+        th { color: var(--p31-dim); font-weight: normal; text-transform: uppercase; font-size: 0.65rem; }
+        tr:hover { background: rgba(51,255,102,0.03); }
+        .badge { padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.65rem; }
+        .badge.approved { background: rgba(51,255,102,0.2); color: var(--p31-peak); }
+        .badge.pending { background: rgba(255,179,71,0.2); color: var(--p31-decay); }
+        .badge.rejected { background: rgba(255,68,102,0.2); color: #ff4466; }
+        .badge.promoted { background: rgba(100,100,255,0.2); color: #6666ff; }
+        .badge.online { background: rgba(51,255,102,0.2); color: var(--p31-peak); }
+        .badge.offline { background: rgba(100,100,100,0.2); color: #888; }
+        .badge.master { background: rgba(100,100,255,0.2); color: #6666ff; }
+        .badge.peer { background: rgba(51,255,102,0.15); color: var(--p31-mid); }
+
+        /* Forms */
+        .form-row { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap; }
+        .form-row input, .form-row select { flex: 1; min-width: 100px; padding: 0.4rem; border: 1px solid var(--tube-soft); background: var(--tube-light); color: var(--p31-mid); border-radius: 4px; font-family: inherit; font-size: 0.75rem; }
+        .form-row input:focus, .form-row select:focus { outline: none; border-color: var(--p31-mid); }
+
+        /* Token Display */
+        .token-display { background: var(--tube-light); border: 1px solid var(--p31-mid); border-radius: 6px; padding: 1rem; margin-bottom: 1rem; }
+        .token-display h3 { color: var(--p31-peak); font-size: 0.85rem; margin-bottom: 0.5rem; }
+        .token-value { font-family: monospace; background: var(--tube-dark); color: var(--p31-hot); padding: 0.5rem; border-radius: 4px; word-break: break-all; margin-bottom: 0.5rem; cursor: pointer; }
+        .token-value:hover { background: #0a1a0a; }
+        .token-urls { font-size: 0.7rem; }
+        .token-urls code { background: var(--tube-pale); padding: 0.2rem 0.4rem; border-radius: 3px; display: block; margin-bottom: 0.3rem; word-break: break-all; }
+
+        /* Mesh Tree */
+        .mesh-tree { font-family: monospace; font-size: 0.75rem; background: var(--tube-light); border: 1px solid var(--tube-soft); border-radius: 4px; padding: 1rem; }
+        .tree-node { margin-left: 1.5rem; padding: 0.3rem 0; border-left: 1px dashed var(--p31-dim); padding-left: 0.75rem; }
+        .tree-node.root { margin-left: 0; border-left: none; padding-left: 0; }
+        .tree-node .hostname { color: var(--p31-peak); font-weight: bold; }
+        .tree-node .role { font-size: 0.65rem; color: var(--p31-dim); }
+        .tree-node .ip { color: var(--p31-mid); font-size: 0.7rem; }
+
+        /* Actions */
+        .actions { display: flex; gap: 0.3rem; }
+        .btn-sm { padding: 0.2rem 0.4rem; font-size: 0.65rem; }
+
+        /* QR Code placeholder */
+        .qr-placeholder { width: 150px; height: 150px; background: var(--tube-light); border: 1px dashed var(--p31-dim); display: flex; align-items: center; justify-content: center; color: var(--p31-dim); font-size: 0.7rem; text-align: center; border-radius: 4px; }
+    </style>
 </head>
 <body>
     <nav class="sidebar" id="sidebar"></nav>
     <script src="/shared/sidebar.js"></script>
+
     <main class="main">
         <header class="header">
-            <h1>Master-link</h1>
-            <button class="btn" onclick="refresh()">Refresh</button>
+            <h1>Master-Link</h1>
+            <div style="display:flex;gap:0.5rem;">
+                <span id="roleDisplay" class="badge master">MASTER</span>
+                <button class="btn" onclick="refresh()">Refresh</button>
+            </div>
         </header>
-        <div class="card">
-            <h2>Status</h2>
-            <p id="status">Loading...</p>
+
+        <!-- Stats Row -->
+        <div class="stats-row">
+            <div class="stat-card"><div class="value" id="statTotal">-</div><div class="label">Total Peers</div></div>
+            <div class="stat-card online"><div class="value" id="statOnline">-</div><div class="label">Online</div></div>
+            <div class="stat-card warning"><div class="value" id="statPending">-</div><div class="label">Pending</div></div>
+            <div class="stat-card"><div class="value" id="statTokens">-</div><div class="label">Active Tokens</div></div>
+            <div class="stat-card"><div class="value" id="statDepth">-</div><div class="label">Mesh Depth</div></div>
         </div>
-        <script>
-            const API = '/api/v1/master-link';
-            const token = () => localStorage.getItem('sbx_token');
-            const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
 
-            async function api(path, opts = {}) {
-                try {
-                    const res = await fetch(API + path, { ...opts, headers: headers() });
-                    if (res.status === 401) { window.location = '/login/'; return {}; }
-                    return res.json();
-                } catch { return {}; }
-            }
+        <!-- Token Generator Card -->
+        <div class="card" style="margin-bottom:1rem;">
+            <h2>Generate Join Token</h2>
+            <div class="form-row">
+                <select id="tokenTtl">
+                    <option value="15">15 min</option>
+                    <option value="60" selected>1 hour</option>
+                    <option value="1440">24 hours</option>
+                    <option value="10080">7 days</option>
+                </select>
+                <select id="tokenMaxUses">
+                    <option value="1" selected>Single use</option>
+                    <option value="5">5 uses</option>
+                    <option value="10">10 uses</option>
+                    <option value="100">100 uses</option>
+                </select>
+                <label style="display:flex;align-items:center;gap:0.3rem;font-size:0.75rem;">
+                    <input type="checkbox" id="tokenAutoApprove"> Auto-approve
+                </label>
+                <button class="btn primary" onclick="generateToken()">Generate Token</button>
+            </div>
+            <div id="tokenDisplay" style="display:none;"></div>
+        </div>
 
-            async function loadStatus() {
-                const d = await api('/status');
-                document.getElementById('status').textContent = JSON.stringify(d, null, 2);
-            }
+        <!-- Tabs Section -->
+        <div class="card">
+            <div class="tabs">
+                <button class="tab active" onclick="showTab('peers')">Peers</button>
+                <button class="tab" onclick="showTab('tokens')">Tokens</button>
+                <button class="tab" onclick="showTab('tree')">Mesh Tree</button>
+                <button class="tab" onclick="showTab('wireguard')">WireGuard</button>
+            </div>
 
-            function refresh() { loadStatus(); }
-            refresh();
-        </script>
+            <!-- Peers Tab -->
+            <div class="tab-content active" id="tab-peers">
+                <div class="form-row">
+                    <select id="filterStatus" onchange="loadPeers()">
+                        <option value="">All status</option>
+                        <option value="pending">Pending</option>
+                        <option value="approved">Approved</option>
+                        <option value="rejected">Rejected</option>
+                        <option value="promoted">Promoted</option>
+                    </select>
+                    <button class="btn danger" onclick="bulkDelete()">Bulk Delete Rejected</button>
+                </div>
+                <table>
+                    <thead><tr><th>ID</th><th>Hostname</th><th>IP</th><th>Status</th><th>Depth</th><th>Online</th><th>Joined</th><th>Actions</th></tr></thead>
+                    <tbody id="peersTable"></tbody>
+                </table>
+            </div>
+
+            <!-- Tokens Tab -->
+            <div class="tab-content" id="tab-tokens">
+                <table>
+                    <thead><tr><th>Token</th><th>Created</th><th>Expires</th><th>Uses</th><th>Auto-approve</th></tr></thead>
+                    <tbody id="tokensTable"></tbody>
+                </table>
+            </div>
+
+            <!-- Tree Tab -->
+            <div class="tab-content" id="tab-tree">
+                <div class="mesh-tree" id="meshTree">Loading...</div>
+            </div>
+
+            <!-- WireGuard Tab -->
+            <div class="tab-content" id="tab-wireguard">
+                <h3 style="color:var(--p31-peak);margin-bottom:0.75rem;font-size:0.85rem;">WireGuard Mesh Peers</h3>
+                <table>
+                    <thead><tr><th>Peer ID</th><th>Public Key</th><th>Endpoint</th><th>Allowed IPs</th></tr></thead>
+                    <tbody id="wgTable"></tbody>
+                </table>
+                <div style="margin-top:1rem;">
+                    <button class="btn primary" onclick="showWgConfig()">Show Config Snippet</button>
+                </div>
+                <pre id="wgConfig" style="display:none;background:var(--tube-light);padding:1rem;border-radius:4px;font-size:0.7rem;margin-top:0.75rem;overflow-x:auto;"></pre>
+            </div>
+        </div>
     </main>
+
+    <script>
+        const API = '/api/v1/master-link';
+        const token = () => localStorage.getItem('sbx_token');
+        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+
+        async function api(path, opts = {}) {
+            try {
+                const res = await fetch(API + path, { ...opts, headers: headers() });
+                if (res.status === 401) { window.location = '/portal/login.html'; return {}; }
+                if (!res.ok) return {};
+                const text = await res.text();
+                return text ? JSON.parse(text) : {};
+            } catch { return {}; }
+        }
+
+        // Tabs
+        function showTab(name) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelector(`[onclick="showTab('${name}')"]`).classList.add('active');
+            document.getElementById('tab-' + name).classList.add('active');
+            if (name === 'tree') loadTree();
+            if (name === 'wireguard') loadWgPeers();
+        }
+
+        // Stats
+        async function loadStats() {
+            const d = await api('/stats');
+            if (!d.total_peers && d.total_peers !== 0) return;
+            document.getElementById('statTotal').textContent = d.total_peers;
+            document.getElementById('statOnline').textContent = d.online || 0;
+            document.getElementById('statPending').textContent = d.by_status?.pending || 0;
+            document.getElementById('statTokens').textContent = d.active_tokens || 0;
+
+            const status = await api('/status');
+            document.getElementById('statDepth').textContent = status.depth || 0;
+            const role = status.role || 'master';
+            const roleEl = document.getElementById('roleDisplay');
+            roleEl.textContent = role.toUpperCase();
+            roleEl.className = 'badge ' + role;
+        }
+
+        // Token Generation
+        async function generateToken() {
+            const ttl = parseInt(document.getElementById('tokenTtl').value);
+            const maxUses = parseInt(document.getElementById('tokenMaxUses').value);
+            const autoApprove = document.getElementById('tokenAutoApprove').checked;
+
+            const d = await api('/token', {
+                method: 'POST',
+                body: JSON.stringify({ ttl_minutes: ttl, max_uses: maxUses, auto_approve: autoApprove })
+            });
+
+            if (!d.token) return alert('Failed to generate token');
+
+            const display = document.getElementById('tokenDisplay');
+            display.style.display = 'block';
+            display.innerHTML = `
+                <div class="token-display">
+                    <h3>Join Token Generated</h3>
+                    <div class="token-value" onclick="copyToken(this)">${d.token}</div>
+                    <div class="token-urls">
+                        <strong>Join URL:</strong>
+                        <code>${d.join_url}</code>
+                        <strong>CLI Command:</strong>
+                        <code>${d.join_cli}</code>
+                        <strong>One-liner:</strong>
+                        <code>${d.one_liner}</code>
+                    </div>
+                    <small style="color:var(--p31-dim);">Expires: ${new Date(d.expires_at).toLocaleString()}</small>
+                </div>
+            `;
+            loadStats();
+            loadTokens();
+        }
+
+        function copyToken(el) {
+            navigator.clipboard.writeText(el.textContent);
+            el.style.background = 'var(--p31-mid)';
+            setTimeout(() => el.style.background = '', 500);
+        }
+
+        // Tokens List
+        async function loadTokens() {
+            const d = await api('/tokens');
+            const tbody = document.getElementById('tokensTable');
+            tbody.innerHTML = (d.tokens || []).map(t => `
+                <tr>
+                    <td><code>${t.token}</code></td>
+                    <td>${new Date(t.created_at).toLocaleString()}</td>
+                    <td>${new Date(t.expires_at).toLocaleString()}</td>
+                    <td>${t.uses}/${t.max_uses}</td>
+                    <td>${t.auto_approve ? '<span class="badge approved">Yes</span>' : '<span class="badge pending">No</span>'}</td>
+                </tr>
+            `).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--p31-dim)">No active tokens</td></tr>';
+        }
+
+        // Peers
+        async function loadPeers() {
+            const status = document.getElementById('filterStatus').value;
+            const url = status ? `/peers?status=${status}` : '/peers';
+            const d = await api(url);
+            const tbody = document.getElementById('peersTable');
+            tbody.innerHTML = (d.peers || []).map(p => `
+                <tr>
+                    <td><code>${p.id}</code></td>
+                    <td>${p.hostname}</td>
+                    <td><code>${p.ip_address}</code></td>
+                    <td><span class="badge ${p.status}">${p.status}</span></td>
+                    <td>${p.depth}</td>
+                    <td><span class="badge ${p.online ? 'online' : 'offline'}">${p.online ? 'ONLINE' : 'OFFLINE'}</span></td>
+                    <td>${new Date(p.joined_at).toLocaleDateString()}</td>
+                    <td class="actions">
+                        ${p.status === 'pending' ? `
+                            <button class="btn btn-sm success" onclick="approvePeer('${p.id}', 'approve')">Approve</button>
+                            <button class="btn btn-sm danger" onclick="approvePeer('${p.id}', 'reject')">Reject</button>
+                        ` : ''}
+                        ${p.status === 'approved' ? `
+                            <button class="btn btn-sm" onclick="approvePeer('${p.id}', 'promote')">Promote</button>
+                        ` : ''}
+                        <button class="btn btn-sm danger" onclick="deletePeer('${p.id}')">Delete</button>
+                    </td>
+                </tr>
+            `).join('') || '<tr><td colspan="8" style="text-align:center;color:var(--p31-dim)">No peers found</td></tr>';
+        }
+
+        async function approvePeer(id, action) {
+            await api(`/peers/${id}/approve`, {
+                method: 'POST',
+                body: JSON.stringify({ action })
+            });
+            loadPeers();
+            loadStats();
+        }
+
+        async function deletePeer(id) {
+            if (!confirm('Delete this peer?')) return;
+            await api(`/peers/${id}`, { method: 'DELETE' });
+            loadPeers();
+            loadStats();
+        }
+
+        async function bulkDelete() {
+            if (!confirm('Delete all rejected peers?')) return;
+            await api('/peers/bulk-delete', {
+                method: 'POST',
+                body: JSON.stringify({ status: 'rejected' })
+            });
+            loadPeers();
+            loadStats();
+        }
+
+        // Mesh Tree
+        async function loadTree() {
+            const d = await api('/tree');
+            if (!d.id) return;
+
+            function renderNode(node, isRoot = false) {
+                let html = `<div class="tree-node ${isRoot ? 'root' : ''}">`;
+                html += `<span class="hostname">${node.hostname}</span> `;
+                html += `<span class="badge ${node.role}">${node.role}</span> `;
+                if (node.ip) html += `<span class="ip">${node.ip}</span>`;
+                html += ` <span class="role">depth:${node.depth}</span>`;
+                if (node.children && node.children.length) {
+                    html += node.children.map(c => renderNode(c)).join('');
+                }
+                html += '</div>';
+                return html;
+            }
+
+            document.getElementById('meshTree').innerHTML = renderNode(d, true);
+        }
+
+        // WireGuard
+        async function loadWgPeers() {
+            const d = await api('/wireguard/peers');
+            const tbody = document.getElementById('wgTable');
+            tbody.innerHTML = (d.peers || []).map(p => `
+                <tr>
+                    <td><code>${p.public_key.slice(0,12)}...</code></td>
+                    <td><code>${p.public_key}</code></td>
+                    <td>${p.endpoint}</td>
+                    <td>${p.allowed_ips}</td>
+                </tr>
+            `).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--p31-dim)">No WireGuard peers configured</td></tr>';
+        }
+
+        async function showWgConfig() {
+            const d = await api('/wireguard/config');
+            const pre = document.getElementById('wgConfig');
+            pre.style.display = pre.style.display === 'none' ? 'block' : 'none';
+            pre.textContent = d.config || '# No peers configured';
+        }
+
+        // Refresh
+        function refresh() {
+            loadStats();
+            loadPeers();
+            loadTokens();
+        }
+
+        // Check for token in URL (join landing)
+        const urlParams = new URLSearchParams(window.location.search);
+        const joinToken = urlParams.get('token');
+        if (joinToken) {
+            document.querySelector('.main').innerHTML = `
+                <div class="card" style="max-width:500px;margin:2rem auto;text-align:center;">
+                    <h2 style="margin-bottom:1rem;">Join SecuBox Mesh</h2>
+                    <p style="color:var(--p31-dim);margin-bottom:1rem;">Token detected. Ready to join the mesh network.</p>
+                    <div class="form-row" style="justify-content:center;">
+                        <input type="text" id="joinHostname" placeholder="Your hostname" value="" style="max-width:200px;">
+                    </div>
+                    <button class="btn primary" onclick="submitJoin()">Join Mesh</button>
+                    <div id="joinResult" style="margin-top:1rem;"></div>
+                </div>
+            `;
+            document.getElementById('joinHostname').value = location.hostname || 'new-node';
+
+            window.submitJoin = async function() {
+                const hostname = document.getElementById('joinHostname').value || 'new-node';
+                const fingerprint = 'fp-' + Math.random().toString(36).slice(2,10);
+                const res = await fetch(API + '/join', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token: joinToken, hostname, fingerprint, capabilities: [] })
+                });
+                const data = await res.json();
+                document.getElementById('joinResult').innerHTML = res.ok
+                    ? `<div class="badge approved">Success: ${data.message}</div><p style="margin-top:0.5rem;color:var(--p31-dim);">Peer ID: ${data.peer_id}</p>`
+                    : `<div class="badge rejected">Error: ${data.detail || 'Unknown error'}</div>`;
+            };
+        } else {
+            refresh();
+            setInterval(loadStats, 30000);
+        }
+    </script>
 </body>
 </html>
