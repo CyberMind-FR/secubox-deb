@@ -1,0 +1,14 @@
+Source: secubox-hexo
+Section: web
+Priority: optional
+Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.0
+
+Package: secubox-hexo
+Architecture: all
+Depends: secubox-core, python3, python3-uvicorn, python3-fastapi, nginx
+Recommends: nodejs, npm
+Description: SecuBox Hexo Blog Generator
+ Static blog generator management for SecuBox.
+ Manage multiple Hexo blogs, posts, themes, and deployments.

@@ -1,0 +1,7 @@
+secubox-hexo (1.0.0-1) bookworm; urgency=medium
+
+  * Initial release
+  * Hexo CLI management and blog deployment
+  * Multi-site support with theme selection
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Sat, 28 Mar 2026 10:30:00 +0100
