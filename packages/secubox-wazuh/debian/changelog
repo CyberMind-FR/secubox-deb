@@ -1,0 +1,8 @@
+secubox-wazuh (1.0.0-1) stable; urgency=low
+
+  * Initial release
+  * Wazuh agent/manager control
+  * Alert viewing and statistics
+  * Agent registration
+
+ -- SecuBox Team <team@secubox.local>  Sat, 28 Mar 2026 12:00:00 +0000
