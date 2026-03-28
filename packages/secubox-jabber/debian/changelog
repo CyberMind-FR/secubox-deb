@@ -1,0 +1,7 @@
+secubox-jabber (1.0.0-1) bookworm; urgency=medium
+
+  * Initial release
+  * Prosody XMPP server management
+  * User and virtual host administration
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Sat, 28 Mar 2026 13:30:00 +0100

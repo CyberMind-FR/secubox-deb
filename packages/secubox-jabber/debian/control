@@ -1,0 +1,14 @@
+Source: secubox-jabber
+Section: net
+Priority: optional
+Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.0
+
+Package: secubox-jabber
+Architecture: all
+Depends: secubox-core, python3, python3-uvicorn, python3-fastapi, nginx
+Recommends: prosody
+Description: SecuBox Jabber XMPP Server
+ Prosody XMPP server management for SecuBox.
+ User accounts, virtual hosts, and federation.

@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jabber - SecuBox</title>
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root { --xmpp-green: #00a86b; --xmpp-light: #00cc84; --xmpp-dark: #008555; }
+        body.dark { --xmpp-green: #00cc84; --xmpp-light: #33d69e; --xmpp-dark: #00a86b; }
+        .accent { color: var(--xmpp-green); }
+        .accent-bg { background-color: var(--xmpp-green); }
+        .header { display: flex; justify-content: space-between; align-items: center; padding: 1rem; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
+        .header h1 { margin: 0; font-size: 1.5rem; }
+        .status-badge { padding: 0.25rem 0.75rem; border-radius: 1rem; font-size: 0.875rem; }
+        .status-badge.running { background: var(--success-bg); color: var(--success); }
+        .status-badge.stopped { background: var(--error-bg); color: var(--error); }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem; text-align: center; }
+        .stat-value { font-size: 1.75rem; font-weight: bold; color: var(--xmpp-green); }
+        .stat-label { font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; }
+        .action-bar { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+        .btn { padding: 0.5rem 1rem; border: 1px solid var(--border); border-radius: 0.25rem; background: var(--surface); color: var(--text); cursor: pointer; font-size: 0.875rem; }
+        .btn:hover { background: var(--hover); }
+        .btn.primary { background: var(--xmpp-green); color: white; border-color: var(--xmpp-green); }
+        .btn.primary:hover { background: var(--xmpp-dark); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .tabs { display: flex; gap: 0.5rem; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
+        .tab { padding: 0.75rem 1rem; border: none; background: none; color: var(--text-secondary); cursor: pointer; border-bottom: 2px solid transparent; }
+        .tab:hover { color: var(--text); }
+        .tab.active { color: var(--xmpp-green); border-bottom-color: var(--xmpp-green); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .user-list { display: grid; gap: 0.5rem; }
+        .user-item { display: flex; align-items: center; gap: 1rem; padding: 0.75rem; background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; }
+        .user-icon { font-size: 1.5rem; }
+        .user-info { flex: 1; }
+        .user-jid { font-weight: 500; font-family: monospace; }
+        .user-domain { font-size: 0.875rem; color: var(--text-secondary); }
+        .log-viewer { background: var(--bg-dark, #1a1a2e); color: var(--text-light, #e0e0e0); font-family: monospace; font-size: 0.75rem; padding: 1rem; border-radius: 0.5rem; height: 300px; overflow-y: auto; white-space: pre-wrap; }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.25rem; font-weight: 500; }
+        .form-group input, .form-group select { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 0.25rem; background: var(--surface); color: var(--text); }
+        .add-form { max-width: 400px; background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1rem; }
+        .install-form { max-width: 400px; margin: 2rem auto; padding: 2rem; background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; text-align: center; }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body class="crt-light">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="main-content">
+    <div class="container">
+        <div class="header">
+            <h1><span class="accent">Jabber</span> XMPP Server</h1>
+            <span id="status-badge" class="status-badge stopped">Stopped</span>
+        </div>
+
+        <div id="install-section" class="install-form hidden">
+            <h2>Install Prosody</h2>
+            <form onsubmit="install(event)">
+                <div class="form-group"><label>Domain</label><input type="text" id="install-domain" placeholder="chat.example.com" required></div>
+                <button type="submit" class="btn primary" style="width: 100%; margin-top: 1rem;">Install Prosody</button>
+            </form>
+        </div>
+
+        <div id="main-section" class="hidden">
+            <div class="stats-grid">
+                <div class="stat-card"><div class="stat-value" id="users-count">0</div><div class="stat-label">Users</div></div>
+                <div class="stat-card"><div class="stat-value" id="hosts-count">0</div><div class="stat-label">Hosts</div></div>
+                <div class="stat-card"><div class="stat-value">5222</div><div class="stat-label">C2S Port</div></div>
+                <div class="stat-card"><div class="stat-value">5269</div><div class="stat-label">S2S Port</div></div>
+            </div>
+
+            <div class="action-bar">
+                <button class="btn primary" id="btn-start" onclick="startService()">Start</button>
+                <button class="btn" id="btn-stop" onclick="stopService()" disabled>Stop</button>
+                <button class="btn" id="btn-restart" onclick="restartService()" disabled>Restart</button>
+                <button class="btn" onclick="reloadConfig()">Reload</button>
+            </div>
+
+            <div class="tabs">
+                <button class="tab active" data-tab="users">Users</button>
+                <button class="tab" data-tab="hosts">Hosts</button>
+                <button class="tab" data-tab="logs">Logs</button>
+            </div>
+
+            <div id="tab-users" class="tab-content active">
+                <div class="add-form">
+                    <h4 style="margin-top:0;">Add User</h4>
+                    <form onsubmit="createUser(event)">
+                        <div class="form-group"><label>Username</label><input type="text" id="user-name" required></div>
+                        <div class="form-group"><label>Domain</label><select id="user-domain"></select></div>
+                        <div class="form-group"><label>Password</label><input type="password" id="user-pass" minlength="6" required></div>
+                        <button type="submit" class="btn primary">Create User</button>
+                    </form>
+                </div>
+                <div id="users-list" class="user-list"></div>
+            </div>
+
+            <div id="tab-hosts" class="tab-content">
+                <div class="add-form">
+                    <h4 style="margin-top:0;">Add Host</h4>
+                    <form onsubmit="createHost(event)">
+                        <div class="form-group"><label>Domain</label><input type="text" id="host-domain" placeholder="chat.example.com" required></div>
+                        <div class="form-group"><label><input type="checkbox" id="host-reg"> Allow Registration</label></div>
+                        <button type="submit" class="btn primary">Add Host</button>
+                    </form>
+                </div>
+                <div id="hosts-list" class="user-list"></div>
+            </div>
+
+            <div id="tab-logs" class="tab-content">
+                <div class="action-bar"><button class="btn" onclick="loadLogs()">Refresh</button></div>
+                <div id="log-viewer" class="log-viewer">Loading...</div>
+            </div>
+        </div>
+    </div>
+    </main>
+
+    <script>
+        const API = '/api/v1/jabber';
+        let hosts = [];
+
+        async function api(endpoint, options = {}) {
+            const r = await fetch(API + endpoint, { ...options, headers: { 'Authorization': 'Bearer ' + localStorage.getItem('sbx_token'), 'Content-Type': 'application/json', ...options.headers } });
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            return r.json();
+        }
+
+        async function loadStatus() {
+            try {
+                const d = await api('/status');
+                const badge = document.getElementById('status-badge');
+                if (!d.installed) {
+                    document.getElementById('install-section').classList.remove('hidden');
+                    document.getElementById('main-section').classList.add('hidden');
+                    badge.textContent = 'Not Installed'; badge.className = 'status-badge stopped';
+                    return;
+                }
+                document.getElementById('install-section').classList.add('hidden');
+                document.getElementById('main-section').classList.remove('hidden');
+                hosts = d.hosts || [];
+                updateDomainSelect();
+                if (d.running) {
+                    badge.textContent = 'Running'; badge.className = 'status-badge running';
+                    document.getElementById('btn-start').disabled = true;
+                    document.getElementById('btn-stop').disabled = false;
+                    document.getElementById('btn-restart').disabled = false;
+                    loadUsers(); loadHosts();
+                } else {
+                    badge.textContent = 'Stopped'; badge.className = 'status-badge stopped';
+                    document.getElementById('btn-start').disabled = false;
+                    document.getElementById('btn-stop').disabled = true;
+                    document.getElementById('btn-restart').disabled = true;
+                }
+                document.getElementById('users-count').textContent = d.users || 0;
+                document.getElementById('hosts-count').textContent = d.hosts?.length || 0;
+            } catch (e) { console.error(e); }
+        }
+
+        function updateDomainSelect() {
+            const sel = document.getElementById('user-domain');
+            sel.innerHTML = hosts.map(h => `<option value="${h}">${h}</option>`).join('') || '<option value="localhost">localhost</option>';
+        }
+
+        async function loadUsers() {
+            try {
+                const d = await api('/users');
+                const list = document.getElementById('users-list');
+                if (!d.users || d.users.length === 0) { list.innerHTML = '<p style="padding:1rem;color:var(--text-secondary);">No users</p>'; return; }
+                list.innerHTML = d.users.map(u => `
+                    <div class="user-item">
+                        <div class="user-icon">👤</div>
+                        <div class="user-info">
+                            <div class="user-jid">${u.jid}</div>
+                            <div class="user-domain">${u.domain}</div>
+                        </div>
+                        <button class="btn" onclick="deleteUser('${u.jid}')" style="color:var(--error);">Delete</button>
+                    </div>
+                `).join('');
+            } catch (e) { console.error(e); }
+        }
+
+        async function loadHosts() {
+            try {
+                const d = await api('/hosts');
+                const list = document.getElementById('hosts-list');
+                if (!d.hosts || d.hosts.length === 0) { list.innerHTML = '<p style="padding:1rem;color:var(--text-secondary);">No hosts</p>'; return; }
+                list.innerHTML = d.hosts.map(h => `
+                    <div class="user-item">
+                        <div class="user-icon">🌐</div>
+                        <div class="user-info">
+                            <div class="user-jid">${h.domain}</div>
+                            <div class="user-domain">${h.enabled ? 'Enabled' : 'Disabled'} · Registration: ${h.registration ? 'Open' : 'Closed'}</div>
+                        </div>
+                        <button class="btn" onclick="deleteHost('${h.domain}')" style="color:var(--error);">Delete</button>
+                    </div>
+                `).join('');
+            } catch (e) { console.error(e); }
+        }
+
+        async function install(e) {
+            e.preventDefault();
+            const btn = e.target.querySelector('button'); btn.disabled = true; btn.textContent = 'Installing...';
+            try { await api(`/install?domain=${document.getElementById('install-domain').value}`, { method: 'POST' }); await loadStatus(); } catch (err) { alert('Failed: ' + err.message); }
+            finally { btn.disabled = false; btn.textContent = 'Install Prosody'; }
+        }
+
+        async function startService() { document.getElementById('btn-start').disabled = true; try { await api('/start', { method: 'POST' }); await loadStatus(); } catch (e) { alert('Failed: ' + e.message); } }
+        async function stopService() { document.getElementById('btn-stop').disabled = true; try { await api('/stop', { method: 'POST' }); await loadStatus(); } catch (e) { alert('Failed: ' + e.message); } }
+        async function restartService() { document.getElementById('btn-restart').disabled = true; try { await api('/restart', { method: 'POST' }); await loadStatus(); } catch (e) { alert('Failed: ' + e.message); } }
+        async function reloadConfig() { try { await api('/reload', { method: 'POST' }); alert('Config reloaded'); } catch (e) { alert('Failed: ' + e.message); } }
+
+        async function createUser(e) {
+            e.preventDefault();
+            const btn = e.target.querySelector('button'); btn.disabled = true;
+            try {
+                await api('/users', { method: 'POST', body: JSON.stringify({
+                    username: document.getElementById('user-name').value,
+                    domain: document.getElementById('user-domain').value,
+                    password: document.getElementById('user-pass').value
+                })});
+                document.getElementById('user-name').value = '';
+                document.getElementById('user-pass').value = '';
+                loadUsers(); loadStatus();
+            } catch (err) { alert('Failed: ' + err.message); }
+            finally { btn.disabled = false; }
+        }
+
+        async function createHost(e) {
+            e.preventDefault();
+            const btn = e.target.querySelector('button'); btn.disabled = true;
+            try {
+                await api('/hosts', { method: 'POST', body: JSON.stringify({
+                    domain: document.getElementById('host-domain').value,
+                    enable_registration: document.getElementById('host-reg').checked
+                })});
+                document.getElementById('host-domain').value = '';
+                loadHosts(); loadStatus();
+            } catch (err) { alert('Failed: ' + err.message); }
+            finally { btn.disabled = false; }
+        }
+
+        async function deleteUser(jid) { if (!confirm(`Delete ${jid}?`)) return; try { await api(`/users/${encodeURIComponent(jid)}`, { method: 'DELETE' }); loadUsers(); } catch (e) { alert('Failed: ' + e.message); } }
+        async function deleteHost(domain) { if (!confirm(`Delete ${domain}?`)) return; try { await api(`/hosts/${domain}`, { method: 'DELETE' }); loadHosts(); loadStatus(); } catch (e) { alert('Failed: ' + e.message); } }
+
+        async function loadLogs() { try { const d = await api('/logs?lines=200'); document.getElementById('log-viewer').textContent = d.logs?.join('\n') || 'No logs'; } catch (e) { document.getElementById('log-viewer').textContent = 'Error: ' + e.message; } }
+
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+                if (tab.dataset.tab === 'logs') loadLogs();
+            });
+        });
+
+        if (window.matchMedia?.('(prefers-color-scheme: dark)').matches) document.body.classList.add('dark');
+        loadStatus(); setInterval(loadStatus, 30000);
+    </script>
+    <script src="/shared/sidebar.js"></script>
+</body>
+</html>
