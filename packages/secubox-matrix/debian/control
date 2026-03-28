@@ -1,0 +1,28 @@
+Source: secubox-matrix
+Section: net
+Priority: optional
+Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+
+Package: secubox-matrix
+Architecture: all
+Depends: ${misc:Depends},
+ secubox-core (>= 1.0),
+ python3-uvicorn,
+ python3-httpx,
+ lxc,
+ lxc-templates
+Recommends: nginx
+Description: SecuBox Matrix Synapse - Federated Chat Server
+ LXC-based Matrix Synapse homeserver for SecuBox.
+ Provides federated, encrypted messaging with Element web client support.
+ .
+ Features:
+  - Full Matrix Synapse homeserver in LXC container
+  - User and room management via web UI
+  - Bridge support (Telegram, Discord, Signal, etc.)
+  - Element web client installation
+  - Federation support
+  - Backup/restore functionality

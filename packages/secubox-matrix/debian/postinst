@@ -1,0 +1,19 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+  configure)
+    # Create data directories
+    install -d -o secubox -g secubox -m 750 /var/lib/secubox/matrix
+    install -d -o secubox -g secubox -m 750 /var/lib/secubox/matrix/data
+
+    # Enable and start service
+    systemctl daemon-reload
+    systemctl enable secubox-matrix.service
+    systemctl start secubox-matrix.service || true
+
+    # Reload nginx if installed
+    systemctl reload nginx 2>/dev/null || true
+    ;;
+esac
+#DEBHELPER#
