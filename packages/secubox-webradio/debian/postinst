@@ -1,0 +1,13 @@
+#!/bin/bash
+set -e
+case "$1" in
+  configure)
+    install -d -o secubox -g secubox -m 750 /var/lib/secubox/webradio/media
+    install -d -o secubox -g secubox -m 750 /var/lib/secubox/webradio/playlists
+    systemctl daemon-reload
+    systemctl enable secubox-webradio.service
+    systemctl start secubox-webradio.service || true
+    systemctl reload nginx 2>/dev/null || true
+    ;;
+esac
+#DEBHELPER#

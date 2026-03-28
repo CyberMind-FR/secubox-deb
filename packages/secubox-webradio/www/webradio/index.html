@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebRadio - SecuBox</title>
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root { --radio-purple: #9b59b6; --radio-light: #bb8fce; --radio-dark: #7d3c98; }
+        body.dark { --radio-purple: #bb8fce; --radio-light: #d7bde2; --radio-dark: #9b59b6; }
+        .accent { color: var(--radio-purple); }
+        .accent-bg { background-color: var(--radio-purple); }
+        .header { display: flex; justify-content: space-between; align-items: center; padding: 1rem; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
+        .header h1 { margin: 0; font-size: 1.5rem; }
+        .status-badge { padding: 0.25rem 0.75rem; border-radius: 1rem; font-size: 0.875rem; }
+        .status-badge.running { background: var(--success-bg); color: var(--success); }
+        .status-badge.stopped { background: var(--error-bg); color: var(--error); }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem; text-align: center; }
+        .stat-value { font-size: 1.75rem; font-weight: bold; color: var(--radio-purple); }
+        .stat-label { font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; }
+        .action-bar { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+        .btn { padding: 0.5rem 1rem; border: 1px solid var(--border); border-radius: 0.25rem; background: var(--surface); color: var(--text); cursor: pointer; font-size: 0.875rem; }
+        .btn:hover { background: var(--hover); }
+        .btn.primary { background: var(--radio-purple); color: white; border-color: var(--radio-purple); }
+        .btn.primary:hover { background: var(--radio-dark); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .tabs { display: flex; gap: 0.5rem; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
+        .tab { padding: 0.75rem 1rem; border: none; background: none; color: var(--text-secondary); cursor: pointer; border-bottom: 2px solid transparent; }
+        .tab:hover { color: var(--text); }
+        .tab.active { color: var(--radio-purple); border-bottom-color: var(--radio-purple); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .mount-list { display: grid; gap: 0.5rem; }
+        .mount-item { display: flex; align-items: center; gap: 1rem; padding: 0.75rem; background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; }
+        .mount-icon { font-size: 1.5rem; }
+        .mount-info { flex: 1; }
+        .mount-name { font-weight: 500; }
+        .mount-meta { font-size: 0.875rem; color: var(--text-secondary); }
+        .player-bar { position: fixed; bottom: 0; left: 0; right: 0; background: var(--surface); border-top: 1px solid var(--border); padding: 0.75rem 1rem; display: flex; align-items: center; gap: 1rem; z-index: 100; }
+        .player-bar.sidebar-open { left: 250px; }
+        .player-info { flex: 1; }
+        .player-title { font-weight: 500; }
+        .player-mount { font-size: 0.875rem; color: var(--text-secondary); }
+        .player-controls { display: flex; gap: 0.5rem; align-items: center; }
+        .play-btn { width: 48px; height: 48px; border-radius: 50%; border: none; background: var(--radio-purple); color: white; font-size: 1.25rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        .play-btn:hover { background: var(--radio-dark); }
+        .volume-slider { width: 100px; }
+        .log-viewer { background: var(--bg-dark, #1a1a2e); color: var(--text-light, #e0e0e0); font-family: monospace; font-size: 0.75rem; padding: 1rem; border-radius: 0.5rem; height: 300px; overflow-y: auto; white-space: pre-wrap; }
+        .install-section { text-align: center; padding: 3rem; }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body class="crt-light">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="main-content" style="padding-bottom: 80px;">
+    <div class="container">
+        <div class="header">
+            <h1><span class="accent">WebRadio</span></h1>
+            <span id="status-badge" class="status-badge stopped">Stopped</span>
+        </div>
+
+        <div id="install-section" class="install-section hidden">
+            <p>Icecast2 is not installed</p>
+            <button class="btn primary" onclick="installIcecast()">Install Icecast2</button>
+        </div>
+
+        <div id="main-section" class="hidden">
+            <div class="stats-grid">
+                <div class="stat-card"><div class="stat-value" id="listeners-count">0</div><div class="stat-label">Listeners</div></div>
+                <div class="stat-card"><div class="stat-value" id="mounts-count">0</div><div class="stat-label">Active Streams</div></div>
+                <div class="stat-card"><div class="stat-value" id="media-count">0</div><div class="stat-label">Media Files</div></div>
+            </div>
+
+            <div class="action-bar">
+                <button class="btn primary" id="btn-start" onclick="startService()">Start</button>
+                <button class="btn" id="btn-stop" onclick="stopService()" disabled>Stop</button>
+                <button class="btn" id="btn-restart" onclick="restartService()" disabled>Restart</button>
+            </div>
+
+            <div class="tabs">
+                <button class="tab active" data-tab="streams">Streams</button>
+                <button class="tab" data-tab="playlists">Playlists</button>
+                <button class="tab" data-tab="media">Media</button>
+                <button class="tab" data-tab="logs">Logs</button>
+            </div>
+
+            <div id="tab-streams" class="tab-content active">
+                <div id="mounts-list" class="mount-list"></div>
+            </div>
+
+            <div id="tab-playlists" class="tab-content">
+                <div class="action-bar"><button class="btn" onclick="loadPlaylists()">Refresh</button></div>
+                <div id="playlists-list" class="mount-list"></div>
+            </div>
+
+            <div id="tab-media" class="tab-content">
+                <div class="action-bar"><button class="btn" onclick="loadMedia()">Refresh</button></div>
+                <div id="media-list" class="mount-list"></div>
+            </div>
+
+            <div id="tab-logs" class="tab-content">
+                <div class="action-bar"><button class="btn" onclick="loadLogs()">Refresh</button></div>
+                <div id="log-viewer" class="log-viewer">Loading...</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="player-bar" class="player-bar hidden">
+        <div class="player-info">
+            <div class="player-title" id="player-title">Not Playing</div>
+            <div class="player-mount" id="player-mount"></div>
+        </div>
+        <div class="player-controls">
+            <input type="range" class="volume-slider" id="volume" min="0" max="100" value="80">
+            <button class="play-btn" id="play-btn" onclick="togglePlay()">▶</button>
+        </div>
+    </div>
+    </main>
+
+    <audio id="audio-player" preload="none"></audio>
+
+    <script>
+        const API = '/api/v1/webradio';
+        const audioPlayer = document.getElementById('audio-player');
+        let currentMount = null;
+
+        async function api(endpoint, options = {}) {
+            const r = await fetch(API + endpoint, { ...options, headers: { 'Authorization': 'Bearer ' + localStorage.getItem('sbx_token'), 'Content-Type': 'application/json', ...options.headers } });
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            return r.json();
+        }
+
+        async function loadStatus() {
+            try {
+                const d = await api('/status');
+                const badge = document.getElementById('status-badge');
+                if (!d.installed) {
+                    document.getElementById('install-section').classList.remove('hidden');
+                    document.getElementById('main-section').classList.add('hidden');
+                    badge.textContent = 'Not Installed'; badge.className = 'status-badge stopped';
+                    return;
+                }
+                document.getElementById('install-section').classList.add('hidden');
+                document.getElementById('main-section').classList.remove('hidden');
+                if (d.running) {
+                    badge.textContent = 'Running'; badge.className = 'status-badge running';
+                    document.getElementById('btn-start').disabled = true;
+                    document.getElementById('btn-stop').disabled = false;
+                    document.getElementById('btn-restart').disabled = false;
+                    document.getElementById('player-bar').classList.remove('hidden');
+                    loadMounts();
+                } else {
+                    badge.textContent = 'Stopped'; badge.className = 'status-badge stopped';
+                    document.getElementById('btn-start').disabled = false;
+                    document.getElementById('btn-stop').disabled = true;
+                    document.getElementById('btn-restart').disabled = true;
+                    document.getElementById('player-bar').classList.add('hidden');
+                }
+                document.getElementById('listeners-count').textContent = d.listeners || 0;
+                document.getElementById('mounts-count').textContent = d.active_mounts || 0;
+                document.getElementById('media-count').textContent = d.media_files || 0;
+            } catch (e) { console.error(e); }
+        }
+
+        async function loadMounts() {
+            try {
+                const d = await api('/mounts');
+                const list = document.getElementById('mounts-list');
+                if (!d.mounts || d.mounts.length === 0) {
+                    list.innerHTML = '<p style="padding:1rem;color:var(--text-secondary);">No active streams. Connect a source to start broadcasting.</p>';
+                    return;
+                }
+                list.innerHTML = d.mounts.map(m => `
+                    <div class="mount-item">
+                        <div class="mount-icon">📻</div>
+                        <div class="mount-info">
+                            <div class="mount-name">${m.title || m.mount}</div>
+                            <div class="mount-meta">${m.listeners} listeners · ${m.bitrate}kbps ${m.type}</div>
+                        </div>
+                        <button class="btn primary" onclick="playStream('${m.mount}', '${m.title || m.mount}')">Listen</button>
+                    </div>
+                `).join('');
+            } catch (e) { console.error(e); }
+        }
+
+        async function loadPlaylists() {
+            try {
+                const d = await api('/playlists');
+                const list = document.getElementById('playlists-list');
+                if (!d.playlists || d.playlists.length === 0) {
+                    list.innerHTML = '<p style="padding:1rem;color:var(--text-secondary);">No playlists. Upload media and create playlists.</p>';
+                    return;
+                }
+                list.innerHTML = d.playlists.map(p => `
+                    <div class="mount-item">
+                        <div class="mount-icon">📄</div>
+                        <div class="mount-info">
+                            <div class="mount-name">${p.name}</div>
+                            <div class="mount-meta">${p.tracks} tracks</div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) { console.error(e); }
+        }
+
+        async function loadMedia() {
+            try {
+                const d = await api('/media');
+                const list = document.getElementById('media-list');
+                if (!d.files || d.files.length === 0) {
+                    list.innerHTML = '<p style="padding:1rem;color:var(--text-secondary);">No media files. Upload audio to /var/lib/secubox/webradio/media/</p>';
+                    return;
+                }
+                list.innerHTML = d.files.slice(0, 50).map(f => `
+                    <div class="mount-item">
+                        <div class="mount-icon">🎵</div>
+                        <div class="mount-info">
+                            <div class="mount-name">${f.name}</div>
+                            <div class="mount-meta">${(f.size / 1024 / 1024).toFixed(1)} MB · ${f.type}</div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) { console.error(e); }
+        }
+
+        async function installIcecast() {
+            const btn = event.target; btn.disabled = true; btn.textContent = 'Installing...';
+            try { await api('/install', { method: 'POST' }); await loadStatus(); } catch (e) { alert('Failed: ' + e.message); }
+            finally { btn.disabled = false; btn.textContent = 'Install Icecast2'; }
+        }
+
+        async function startService() { document.getElementById('btn-start').disabled = true; try { await api('/start', { method: 'POST' }); await loadStatus(); } catch (e) { alert('Failed: ' + e.message); } }
+        async function stopService() { document.getElementById('btn-stop').disabled = true; try { await api('/stop', { method: 'POST' }); await loadStatus(); } catch (e) { alert('Failed: ' + e.message); } }
+        async function restartService() { document.getElementById('btn-restart').disabled = true; try { await api('/restart', { method: 'POST' }); await loadStatus(); } catch (e) { alert('Failed: ' + e.message); } }
+
+        async function loadLogs() { try { const d = await api('/logs?lines=200'); document.getElementById('log-viewer').textContent = d.logs?.join('\n') || 'No logs'; } catch (e) { document.getElementById('log-viewer').textContent = 'Error: ' + e.message; } }
+
+        function playStream(mount, title) {
+            currentMount = mount;
+            audioPlayer.src = `http://${window.location.hostname}:8000${mount}`;
+            audioPlayer.volume = document.getElementById('volume').value / 100;
+            audioPlayer.play();
+            document.getElementById('player-title').textContent = title;
+            document.getElementById('player-mount').textContent = mount;
+            document.getElementById('play-btn').textContent = '⏸';
+        }
+
+        function togglePlay() {
+            if (audioPlayer.paused) {
+                audioPlayer.play();
+                document.getElementById('play-btn').textContent = '⏸';
+            } else {
+                audioPlayer.pause();
+                document.getElementById('play-btn').textContent = '▶';
+            }
+        }
+
+        document.getElementById('volume').addEventListener('input', e => { audioPlayer.volume = e.target.value / 100; });
+
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+                if (tab.dataset.tab === 'logs') loadLogs();
+                if (tab.dataset.tab === 'playlists') loadPlaylists();
+                if (tab.dataset.tab === 'media') loadMedia();
+            });
+        });
+
+        if (window.matchMedia?.('(prefers-color-scheme: dark)').matches) document.body.classList.add('dark');
+        loadStatus(); setInterval(loadStatus, 30000);
+    </script>
+    <script src="/shared/sidebar.js"></script>
+</body>
+</html>

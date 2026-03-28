@@ -1,0 +1,14 @@
+Source: secubox-webradio
+Section: sound
+Priority: optional
+Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.0
+
+Package: secubox-webradio
+Architecture: all
+Depends: secubox-core, python3, python3-uvicorn, python3-fastapi, nginx
+Recommends: icecast2
+Description: SecuBox WebRadio Streaming
+ Internet radio streaming server management for SecuBox.
+ Manage Icecast2 streams, playlists, and media files.
