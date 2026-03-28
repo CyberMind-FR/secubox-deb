@@ -1,0 +1,10 @@
+secubox-jitsi (1.0.0-1) bookworm; urgency=medium
+
+  * Initial release
+  * LXC-based Jitsi Meet video conferencing
+  * Prosody + Jicofo + JVB stack
+  * Authentication support
+  * Let's Encrypt SSL integration
+  * Recording support via Jibri
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Fri, 28 Mar 2026 09:30:00 +0100
