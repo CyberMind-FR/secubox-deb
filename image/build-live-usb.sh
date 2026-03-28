@@ -506,59 +506,83 @@ log "7/8 Creating bootable USB image (${IMG_SIZE})..."
 # Create image file
 fallocate -l "${IMG_SIZE}" "${IMG_FILE}"
 
-# Partition layout:
-# 1. ESP (EFI System Partition) - 512MB
-# 2. Live (SquashFS + kernel) - 4GB
-# 3. Persistence (optional) - rest
+# Partition layout (Hybrid UEFI + Legacy BIOS):
+# - GPT with protective MBR for UEFI
+# - BIOS boot partition for legacy
+# 1. BIOS boot (1MB) - for legacy grub
+# 2. ESP (EFI System Partition) - 512MB
+# 3. Live (SquashFS + kernel) - ~4GB
+# 4. Persistence (optional) - rest
 
 if [[ $INCLUDE_PERSISTENCE -eq 1 ]]; then
   parted -s "${IMG_FILE}" \
     mklabel gpt \
-    mkpart ESP fat32 1MiB 513MiB \
-    mkpart LIVE fat32 513MiB 4609MiB \
-    mkpart persistence ext4 4609MiB 100% \
-    set 1 esp on \
-    set 1 boot on
+    mkpart bios_grub 1MiB 2MiB \
+    mkpart ESP fat32 2MiB 514MiB \
+    mkpart LIVE ext4 514MiB 4610MiB \
+    mkpart persistence ext4 4610MiB 100% \
+    set 1 bios_grub on \
+    set 2 esp on \
+    set 2 boot on
 else
   parted -s "${IMG_FILE}" \
     mklabel gpt \
-    mkpart ESP fat32 1MiB 513MiB \
-    mkpart LIVE fat32 513MiB 100% \
-    set 1 esp on \
-    set 1 boot on
+    mkpart bios_grub 1MiB 2MiB \
+    mkpart ESP fat32 2MiB 514MiB \
+    mkpart LIVE ext4 514MiB 100% \
+    set 1 bios_grub on \
+    set 2 esp on \
+    set 2 boot on
 fi
 
 # Setup loop device
 LOOP=$(losetup -f --show -P "${IMG_FILE}")
 log "Loop device: ${LOOP}"
 
-# Format partitions
-mkfs.fat -F32 -n "ESP" "${LOOP}p1"
-mkfs.fat -F32 -n "LIVE" "${LOOP}p2"
+# Format partitions (skip bios_grub - it's raw)
+mkfs.fat -F32 -n "ESP" "${LOOP}p2"
+mkfs.ext4 -L "LIVE" -q "${LOOP}p3"
 if [[ $INCLUDE_PERSISTENCE -eq 1 ]]; then
-  mkfs.ext4 -L "persistence" -q "${LOOP}p3"
+  mkfs.ext4 -L "persistence" -q "${LOOP}p4"
 fi
 
 # Mount partitions
 MNT="${WORK_DIR}/mnt"
 mkdir -p "${MNT}/esp" "${MNT}/live"
-mount "${LOOP}p1" "${MNT}/esp"
-mount "${LOOP}p2" "${MNT}/live"
+mount "${LOOP}p2" "${MNT}/esp"
+mount "${LOOP}p3" "${MNT}/live"
 
-# Copy live system files
-cp -r "${LIVE_DIR}/live" "${MNT}/live/"
+# Copy live system files to LIVE partition
+mkdir -p "${MNT}/live/live"
+cp "${LIVE_DIR}/live/filesystem.squashfs" "${MNT}/live/live/"
+cp "${LIVE_DIR}/live/vmlinuz" "${MNT}/live/live/"
+cp "${LIVE_DIR}/live/initrd.img" "${MNT}/live/live/"
 
-# Setup GRUB EFI
-mkdir -p "${MNT}/esp/EFI/BOOT" "${MNT}/esp/boot/grub" "${MNT}/esp/live"
+# Setup ESP structure
+mkdir -p "${MNT}/esp/EFI/BOOT"
+mkdir -p "${MNT}/esp/boot/grub/x86_64-efi"
 
-# GRUB configuration
-cat > "${MNT}/esp/boot/grub/grub.cfg" <<'EOF'
+# Also copy kernel/initrd to ESP (some UEFI need this)
+mkdir -p "${MNT}/esp/live"
+cp "${LIVE_DIR}/live/vmlinuz" "${MNT}/esp/live/"
+cp "${LIVE_DIR}/live/initrd.img" "${MNT}/esp/live/"
+
+# GRUB configuration - search for LIVE partition by label
+cat > "${MNT}/esp/boot/grub/grub.cfg" <<'GRUBCFG'
 set default=0
 set timeout=5
 
+# Search for the LIVE partition
+search --no-floppy --label LIVE --set=live_part
+
 insmod all_video
 insmod gfxterm
+insmod part_gpt
+insmod fat
+insmod ext2
+
 set gfxmode=auto
+terminal_output gfxterm
 
 loadfont unicode
 
@@ -566,33 +590,33 @@ set menu_color_normal=cyan/black
 set menu_color_highlight=white/blue
 
 menuentry "SecuBox Live (amd64)" {
-    linux /live/vmlinuz boot=live components persistence quiet splash
-    initrd /live/initrd.img
+    linux ($live_part)/live/vmlinuz boot=live components persistence quiet splash
+    initrd ($live_part)/live/initrd.img
 }
 
 menuentry "SecuBox Live (Safe Mode)" {
-    linux /live/vmlinuz boot=live components memtest noapic noapm nodma nomce nolapic nomodeset nosmp nosplash vga=normal
-    initrd /live/initrd.img
+    linux ($live_part)/live/vmlinuz boot=live components memtest noapic noapm nodma nomce nolapic nomodeset nosmp nosplash vga=normal
+    initrd ($live_part)/live/initrd.img
 }
 
 menuentry "SecuBox Live (No Persistence)" {
-    linux /live/vmlinuz boot=live components nopersistence quiet splash
-    initrd /live/initrd.img
+    linux ($live_part)/live/vmlinuz boot=live components nopersistence quiet splash
+    initrd ($live_part)/live/initrd.img
 }
 
 menuentry "SecuBox Live (To RAM)" {
-    linux /live/vmlinuz boot=live components toram quiet splash
-    initrd /live/initrd.img
+    linux ($live_part)/live/vmlinuz boot=live components toram quiet splash
+    initrd ($live_part)/live/initrd.img
 }
 
 menuentry "SecuBox Live (Kiosk Mode - GUI)" {
-    linux /live/vmlinuz boot=live components persistence quiet splash systemd.unit=graphical.target secubox.kiosk=1
-    initrd /live/initrd.img
+    linux ($live_part)/live/vmlinuz boot=live components persistence quiet splash systemd.unit=graphical.target secubox.kiosk=1
+    initrd ($live_part)/live/initrd.img
 }
 
 menuentry "SecuBox Live (Bridge Mode)" {
-    linux /live/vmlinuz boot=live components persistence quiet splash secubox.netmode=bridge
-    initrd /live/initrd.img
+    linux ($live_part)/live/vmlinuz boot=live components persistence quiet splash secubox.netmode=bridge
+    initrd ($live_part)/live/initrd.img
 }
 
 menuentry "System Shutdown" {
@@ -602,63 +626,99 @@ menuentry "System Shutdown" {
 menuentry "System Restart" {
     reboot
 }
-EOF
+GRUBCFG
 
-# Copy kernel and initrd to ESP for GRUB access
-cp "${LIVE_DIR}/live/vmlinuz" "${MNT}/esp/live/"
-cp "${LIVE_DIR}/live/initrd.img" "${MNT}/esp/live/"
-cp "${LIVE_DIR}/live/filesystem.squashfs" "${MNT}/live/live/"
+# Copy grub.cfg to EFI/BOOT as well
+cp "${MNT}/esp/boot/grub/grub.cfg" "${MNT}/esp/EFI/BOOT/grub.cfg"
 
-# Install GRUB EFI bootloader
-# Try grub-mkimage first for custom build
+# Install GRUB for UEFI
+log "Installing GRUB UEFI bootloader..."
+
+# Create standalone GRUB EFI with embedded config
+GRUB_MODULES="part_gpt part_msdos fat ext2 normal linux boot configfile loopback chain efifwsetup efi_gop efi_uga ls search search_label search_fs_uuid search_fs_file gfxterm gfxterm_background gfxterm_menu test all_video loadenv"
+
+# Create early config to find main config
+cat > "${WORK_DIR}/grub-early.cfg" <<'EARLYCFG'
+search --no-floppy --label ESP --set=root
+set prefix=($root)/boot/grub
+configfile $prefix/grub.cfg
+EARLYCFG
+
+# Build GRUB EFI image with embedded early config
 if grub-mkimage -o "${MNT}/esp/EFI/BOOT/BOOTX64.EFI" \
-  -O x86_64-efi \
-  -p /boot/grub \
-  part_gpt part_msdos fat ext2 normal linux boot configfile loopback \
-  chain efifwsetup efi_gop efi_uga ls search search_label search_fs_uuid \
-  search_fs_file gfxterm gfxterm_background gfxterm_menu test all_video loadenv exfat 2>/dev/null; then
-  ok "GRUB EFI image built successfully"
+    -O x86_64-efi \
+    -c "${WORK_DIR}/grub-early.cfg" \
+    -p /boot/grub \
+    ${GRUB_MODULES} 2>/dev/null; then
+    ok "GRUB EFI image built with embedded config"
 else
-  # Fallback: copy pre-built signed EFI from package
-  warn "grub-mkimage failed, using pre-built EFI"
-  if [[ -f /usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed ]]; then
-    cp /usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed "${MNT}/esp/EFI/BOOT/BOOTX64.EFI"
-  elif [[ -f /usr/lib/grub/x86_64-efi/grub.efi ]]; then
-    cp /usr/lib/grub/x86_64-efi/grub.efi "${MNT}/esp/EFI/BOOT/BOOTX64.EFI"
-  else
-    err "No GRUB EFI binary found!"
-  fi
+    warn "grub-mkimage failed, trying alternative method..."
+    # Fallback: use grub-mkstandalone
+    if command -v grub-mkstandalone &>/dev/null; then
+        grub-mkstandalone -O x86_64-efi \
+            -o "${MNT}/esp/EFI/BOOT/BOOTX64.EFI" \
+            --modules="${GRUB_MODULES}" \
+            "boot/grub/grub.cfg=${MNT}/esp/boot/grub/grub.cfg" 2>/dev/null || true
+    fi
+
+    # Last resort: copy pre-built EFI
+    if [[ ! -f "${MNT}/esp/EFI/BOOT/BOOTX64.EFI" ]]; then
+        if [[ -f /usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed ]]; then
+            cp /usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed "${MNT}/esp/EFI/BOOT/BOOTX64.EFI"
+            ok "Using signed GRUB EFI"
+        elif [[ -f /usr/lib/grub/x86_64-efi/monolithic/grubx64.efi ]]; then
+            cp /usr/lib/grub/x86_64-efi/monolithic/grubx64.efi "${MNT}/esp/EFI/BOOT/BOOTX64.EFI"
+            ok "Using monolithic GRUB EFI"
+        else
+            err "No GRUB EFI binary found! Install grub-efi-amd64-bin"
+        fi
+    fi
 fi
 
-# Also copy as grubx64.efi for some UEFI implementations
+# Copy GRUB modules for runtime loading
+if [[ -d /usr/lib/grub/x86_64-efi ]]; then
+    cp /usr/lib/grub/x86_64-efi/*.mod "${MNT}/esp/boot/grub/x86_64-efi/" 2>/dev/null || true
+    cp /usr/lib/grub/x86_64-efi/*.lst "${MNT}/esp/boot/grub/x86_64-efi/" 2>/dev/null || true
+fi
+
+# Also name it grubx64.efi for some firmware
 cp "${MNT}/esp/EFI/BOOT/BOOTX64.EFI" "${MNT}/esp/EFI/BOOT/grubx64.efi" 2>/dev/null || true
 
-# Copy GRUB modules
-if [[ -d /usr/lib/grub/x86_64-efi ]]; then
-  mkdir -p "${MNT}/esp/boot/grub/x86_64-efi"
-  cp -r /usr/lib/grub/x86_64-efi/*.mod "${MNT}/esp/boot/grub/x86_64-efi/" 2>/dev/null || true
-fi
+# Install GRUB for Legacy BIOS (hybrid boot)
+log "Installing GRUB BIOS bootloader..."
+if command -v grub-install &>/dev/null; then
+    # Install GRUB to MBR and bios_grub partition
+    grub-install --target=i386-pc \
+        --boot-directory="${MNT}/esp/boot" \
+        --recheck \
+        "${LOOP}" 2>/dev/null || warn "BIOS GRUB install failed (UEFI-only)"
 
-# Copy grub.cfg to ESP as well (some UEFI look here)
-cp "${MNT}/esp/boot/grub/grub.cfg" "${MNT}/esp/EFI/BOOT/grub.cfg" 2>/dev/null || true
+    if [[ -d /usr/lib/grub/i386-pc ]]; then
+        mkdir -p "${MNT}/esp/boot/grub/i386-pc"
+        cp /usr/lib/grub/i386-pc/*.mod "${MNT}/esp/boot/grub/i386-pc/" 2>/dev/null || true
+        cp /usr/lib/grub/i386-pc/*.lst "${MNT}/esp/boot/grub/i386-pc/" 2>/dev/null || true
+    fi
+else
+    warn "grub-install not found, BIOS boot may not work"
+fi
 
 # Setup persistence partition
 if [[ $INCLUDE_PERSISTENCE -eq 1 ]]; then
-  mkdir -p "${MNT}/persistence"
-  mount "${LOOP}p3" "${MNT}/persistence"
-  echo "/ union" > "${MNT}/persistence/persistence.conf"
-  umount "${MNT}/persistence"
-  ok "Persistence partition configured"
+    mkdir -p "${MNT}/persistence"
+    mount "${LOOP}p4" "${MNT}/persistence"
+    echo "/ union" > "${MNT}/persistence/persistence.conf"
+    umount "${MNT}/persistence"
+    ok "Persistence partition configured"
 fi
 
-# Unmount
+# Sync and unmount
 sync
 umount "${MNT}/esp"
 umount "${MNT}/live"
 losetup -d "${LOOP}"
 LOOP=""
 
-ok "Bootable image created"
+ok "Bootable image created (UEFI + Legacy BIOS)"
 
 # ── Step 8: Compression and checksums ─────────────────────────────
 log "8/8 Compressing image..."
