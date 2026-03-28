@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hexo - SecuBox</title>
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root { --hexo-blue: #0e83cd; --hexo-light: #5bc0de; --hexo-dark: #0a5a8a; }
+        body.dark { --hexo-blue: #5bc0de; --hexo-light: #8ed4ed; --hexo-dark: #0e83cd; }
+        .accent { color: var(--hexo-blue); }
+        .accent-bg { background-color: var(--hexo-blue); }
+        .header { display: flex; justify-content: space-between; align-items: center; padding: 1rem; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
+        .header h1 { margin: 0; font-size: 1.5rem; }
+        .status-badge { padding: 0.25rem 0.75rem; border-radius: 1rem; font-size: 0.875rem; }
+        .status-badge.installed { background: var(--success-bg); color: var(--success); }
+        .status-badge.missing { background: var(--error-bg); color: var(--error); }
+        .action-bar { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+        .btn { padding: 0.5rem 1rem; border: 1px solid var(--border); border-radius: 0.25rem; background: var(--surface); color: var(--text); cursor: pointer; font-size: 0.875rem; }
+        .btn:hover { background: var(--hover); }
+        .btn.primary { background: var(--hexo-blue); color: white; border-color: var(--hexo-blue); }
+        .btn.primary:hover { background: var(--hexo-dark); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .site-list { display: grid; gap: 1rem; }
+        .site-card { background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem; }
+        .site-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+        .site-name { font-size: 1.25rem; font-weight: 600; }
+        .site-meta { font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.75rem; }
+        .site-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+        .post-list { margin-top: 0.5rem; max-height: 200px; overflow-y: auto; }
+        .post-item { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; border-bottom: 1px solid var(--border); font-size: 0.875rem; }
+        .post-item:last-child { border-bottom: none; }
+        .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
+        .modal.active { display: flex; }
+        .modal-content { background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1.5rem; width: 90%; max-width: 500px; max-height: 90vh; overflow-y: auto; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .modal-close { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-secondary); }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.25rem; font-weight: 500; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 0.25rem; background: var(--surface); color: var(--text); }
+        .form-group textarea { min-height: 200px; font-family: monospace; }
+        .empty-state { text-align: center; padding: 3rem; color: var(--text-secondary); }
+        .badge { display: inline-block; padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem; background: var(--hexo-blue); color: white; }
+        .badge.deployed { background: var(--success); }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body class="crt-light">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="main-content">
+    <div class="container">
+        <div class="header">
+            <h1><span class="accent">Hexo</span> Blog Generator</h1>
+            <span id="status-badge" class="status-badge missing">Not Installed</span>
+        </div>
+
+        <div id="install-section" class="hidden">
+            <div class="empty-state">
+                <p>Hexo CLI is not installed</p>
+                <button class="btn primary" onclick="installHexo()">Install Hexo CLI</button>
+            </div>
+        </div>
+
+        <div id="main-section" class="hidden">
+            <div class="action-bar">
+                <button class="btn primary" onclick="showCreateSite()">New Site</button>
+                <button class="btn" onclick="loadSites()">Refresh</button>
+            </div>
+
+            <div id="sites-list" class="site-list"></div>
+        </div>
+    </div>
+
+    <!-- Create Site Modal -->
+    <div id="create-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Create New Site</h3>
+                <button class="modal-close" onclick="closeModal('create-modal')">&times;</button>
+            </div>
+            <form onsubmit="createSite(event)">
+                <div class="form-group"><label>Site Name (slug)</label><input type="text" id="site-name" pattern="[a-z0-9-]+" required></div>
+                <div class="form-group"><label>Site Title</label><input type="text" id="site-title" required></div>
+                <div class="form-group"><label>Author</label><input type="text" id="site-author" value="SecuBox"></div>
+                <div class="form-group">
+                    <label>Theme</label>
+                    <select id="site-theme">
+                        <option value="landscape">Landscape (Default)</option>
+                        <option value="next">Next</option>
+                        <option value="butterfly">Butterfly</option>
+                        <option value="fluid">Fluid</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn primary" style="width: 100%;">Create Site</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Create Post Modal -->
+    <div id="post-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Create New Post</h3>
+                <button class="modal-close" onclick="closeModal('post-modal')">&times;</button>
+            </div>
+            <form onsubmit="createPost(event)">
+                <input type="hidden" id="post-site">
+                <div class="form-group"><label>Title</label><input type="text" id="post-title" required></div>
+                <div class="form-group"><label>Tags (comma-separated)</label><input type="text" id="post-tags"></div>
+                <div class="form-group"><label>Categories (comma-separated)</label><input type="text" id="post-cats"></div>
+                <div class="form-group"><label>Content (Markdown)</label><textarea id="post-content" placeholder="Write your post in Markdown..."></textarea></div>
+                <button type="submit" class="btn primary" style="width: 100%;">Create Post</button>
+            </form>
+        </div>
+    </div>
+    </main>
+
+    <script>
+        const API = '/api/v1/hexo';
+
+        async function api(endpoint, options = {}) {
+            const r = await fetch(API + endpoint, { ...options, headers: { 'Authorization': 'Bearer ' + localStorage.getItem('sbx_token'), 'Content-Type': 'application/json', ...options.headers } });
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            return r.json();
+        }
+
+        async function loadStatus() {
+            try {
+                const d = await api('/status');
+                const badge = document.getElementById('status-badge');
+                if (d.installed) {
+                    badge.textContent = 'Installed'; badge.className = 'status-badge installed';
+                    document.getElementById('install-section').classList.add('hidden');
+                    document.getElementById('main-section').classList.remove('hidden');
+                    loadSites();
+                } else {
+                    badge.textContent = 'Not Installed'; badge.className = 'status-badge missing';
+                    document.getElementById('install-section').classList.remove('hidden');
+                    document.getElementById('main-section').classList.add('hidden');
+                }
+            } catch (e) { console.error(e); }
+        }
+
+        async function installHexo() {
+            const btn = event.target; btn.disabled = true; btn.textContent = 'Installing...';
+            try {
+                await api('/install', { method: 'POST' });
+                await loadStatus();
+            } catch (e) { alert('Failed: ' + e.message); }
+            finally { btn.disabled = false; btn.textContent = 'Install Hexo CLI'; }
+        }
+
+        async function loadSites() {
+            try {
+                const d = await api('/sites');
+                const list = document.getElementById('sites-list');
+                if (!d.sites || d.sites.length === 0) {
+                    list.innerHTML = '<div class="empty-state"><p>No sites yet. Create your first blog!</p></div>';
+                    return;
+                }
+                list.innerHTML = d.sites.map(s => `
+                    <div class="site-card">
+                        <div class="site-header">
+                            <span class="site-name">${s.title}</span>
+                            ${s.deployed ? '<span class="badge deployed">Deployed</span>' : '<span class="badge">Draft</span>'}
+                        </div>
+                        <div class="site-meta">${s.post_count} posts · Theme: ${s.theme} · <code>${s.name}</code></div>
+                        <div class="site-actions">
+                            <button class="btn" onclick="showCreatePost('${s.name}')">New Post</button>
+                            <button class="btn" onclick="generateSite('${s.name}')">Generate</button>
+                            <button class="btn primary" onclick="deploySite('${s.name}')">Deploy</button>
+                            ${s.deployed ? `<button class="btn" onclick="window.open('/hexo-sites/${s.name}/', '_blank')">View</button>` : ''}
+                            <button class="btn" onclick="deleteSite('${s.name}')" style="color: var(--error);">Delete</button>
+                        </div>
+                        <div class="post-list" id="posts-${s.name}"></div>
+                    </div>
+                `).join('');
+                d.sites.forEach(s => loadPosts(s.name));
+            } catch (e) { console.error(e); }
+        }
+
+        async function loadPosts(site) {
+            try {
+                const d = await api(`/sites/${site}/posts`);
+                const el = document.getElementById(`posts-${site}`);
+                if (!d.posts || d.posts.length === 0) { el.innerHTML = '<div style="padding:0.5rem;color:var(--text-secondary);font-size:0.875rem;">No posts yet</div>'; return; }
+                el.innerHTML = d.posts.slice(0, 5).map(p => `<div class="post-item"><span>${p.title}</span><span>${p.date?.split(' ')[0] || ''}</span></div>`).join('');
+            } catch (e) { console.error(e); }
+        }
+
+        function showCreateSite() { document.getElementById('create-modal').classList.add('active'); }
+        function showCreatePost(site) { document.getElementById('post-site').value = site; document.getElementById('post-modal').classList.add('active'); }
+        function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+
+        async function createSite(e) {
+            e.preventDefault();
+            const btn = e.target.querySelector('button'); btn.disabled = true;
+            try {
+                await api('/sites', { method: 'POST', body: JSON.stringify({
+                    name: document.getElementById('site-name').value,
+                    title: document.getElementById('site-title').value,
+                    author: document.getElementById('site-author').value,
+                    theme: document.getElementById('site-theme').value
+                })});
+                closeModal('create-modal'); loadSites();
+            } catch (err) { alert('Failed: ' + err.message); }
+            finally { btn.disabled = false; }
+        }
+
+        async function createPost(e) {
+            e.preventDefault();
+            const btn = e.target.querySelector('button'); btn.disabled = true;
+            const site = document.getElementById('post-site').value;
+            try {
+                await api(`/sites/${site}/posts`, { method: 'POST', body: JSON.stringify({
+                    site: site,
+                    title: document.getElementById('post-title').value,
+                    content: document.getElementById('post-content').value,
+                    tags: document.getElementById('post-tags').value.split(',').map(t => t.trim()).filter(Boolean),
+                    categories: document.getElementById('post-cats').value.split(',').map(c => c.trim()).filter(Boolean)
+                })});
+                closeModal('post-modal'); loadPosts(site);
+            } catch (err) { alert('Failed: ' + err.message); }
+            finally { btn.disabled = false; }
+        }
+
+        async function generateSite(name) {
+            if (!confirm(`Generate static files for ${name}?`)) return;
+            try { await api(`/sites/${name}/generate`, { method: 'POST' }); alert('Generated successfully!'); } catch (e) { alert('Failed: ' + e.message); }
+        }
+
+        async function deploySite(name) {
+            if (!confirm(`Deploy ${name} to web?`)) return;
+            try {
+                const r = await api(`/sites/${name}/deploy`, { method: 'POST' });
+                alert(r.message || 'Deployed!'); loadSites();
+            } catch (e) { alert('Failed: ' + e.message); }
+        }
+
+        async function deleteSite(name) {
+            if (!confirm(`Delete site ${name}? This cannot be undone.`)) return;
+            try { await api(`/sites/${name}`, { method: 'DELETE' }); loadSites(); } catch (e) { alert('Failed: ' + e.message); }
+        }
+
+        document.querySelectorAll('.modal').forEach(m => m.addEventListener('click', e => { if (e.target === m) closeModal(m.id); }));
+        if (window.matchMedia?.('(prefers-color-scheme: dark)').matches) document.body.classList.add('dark');
+        loadStatus();
+    </script>
+    <script src="/shared/sidebar.js"></script>
+</body>
+</html>

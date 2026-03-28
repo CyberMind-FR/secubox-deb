@@ -1,0 +1,16 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d $(CURDIR)/debian/secubox-hexo/usr/lib/secubox/hexo/api
+	install -m 644 api/main.py $(CURDIR)/debian/secubox-hexo/usr/lib/secubox/hexo/api/
+	touch $(CURDIR)/debian/secubox-hexo/usr/lib/secubox/hexo/api/__init__.py
+	install -d $(CURDIR)/debian/secubox-hexo/usr/share/secubox/www/hexo
+	install -m 644 www/hexo/index.html $(CURDIR)/debian/secubox-hexo/usr/share/secubox/www/hexo/
+	install -d $(CURDIR)/debian/secubox-hexo/etc/nginx/secubox.d
+	install -m 644 nginx/hexo.conf $(CURDIR)/debian/secubox-hexo/etc/nginx/secubox.d/
+	install -d $(CURDIR)/debian/secubox-hexo/usr/share/secubox/menu.d
+	install -m 644 menu.d/812-hexo.json $(CURDIR)/debian/secubox-hexo/usr/share/secubox/menu.d/
+	install -d $(CURDIR)/debian/secubox-hexo/usr/lib/systemd/system
+	install -m 644 debian/secubox-hexo.service $(CURDIR)/debian/secubox-hexo/usr/lib/systemd/system/
