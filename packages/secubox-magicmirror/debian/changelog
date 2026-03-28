@@ -1,0 +1,8 @@
+secubox-magicmirror (1.0.0-1) stable; urgency=low
+
+  * Initial release
+  * MagicMirror service management
+  * Module installation and management
+  * Display brightness and power controls
+
+ -- SecuBox Team <team@secubox.local>  Sat, 28 Mar 2026 10:00:00 +0000

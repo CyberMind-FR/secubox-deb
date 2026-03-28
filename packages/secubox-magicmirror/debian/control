@@ -1,0 +1,15 @@
+Source: secubox-magicmirror
+Section: web
+Priority: optional
+Maintainer: SecuBox Team <team@secubox.local>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.0
+
+Package: secubox-magicmirror
+Architecture: all
+Depends: ${misc:Depends}, python3, python3-fastapi, python3-uvicorn, secubox-core
+Recommends: nodejs, npm, xserver-xorg, chromium
+Description: SecuBox MagicMirror management
+ Smart display platform management for SecuBox.
+ Provides API and web UI for MagicMirror² configuration,
+ module management, and display controls.

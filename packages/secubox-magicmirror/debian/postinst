@@ -1,0 +1,12 @@
+#!/bin/bash
+set -e
+case "$1" in
+  configure)
+    install -d -o secubox -g secubox -m 750 /var/lib/secubox/magicmirror
+    systemctl daemon-reload
+    systemctl enable secubox-magicmirror.service
+    systemctl start secubox-magicmirror.service || true
+    systemctl reload nginx 2>/dev/null || true
+    ;;
+esac
+#DEBHELPER#

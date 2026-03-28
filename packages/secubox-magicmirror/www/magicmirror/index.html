@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MagicMirror - SecuBox</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <style>
+        .main-content {
+            margin-left: 200px;
+            padding: 2rem;
+        }
+        .status-card {
+            background: var(--card-bg, #1a1a2e);
+            border: 1px solid var(--border-color, #333);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .status-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--border-color, #333);
+        }
+        .status-row:last-child { border-bottom: none; }
+        .badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+        .badge-success { background: #2d5a27; color: #7fff7f; }
+        .badge-danger { background: #5a2727; color: #ff7f7f; }
+        .badge-warning { background: #5a5a27; color: #ffff7f; }
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            margin-right: 0.5rem;
+        }
+        .btn-primary { background: var(--accent-color, #4a9eff); color: #000; }
+        .btn-success { background: #27ae60; color: #fff; }
+        .btn-danger { background: #c0392b; color: #fff; }
+        .btn-secondary { background: #555; color: #fff; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .module-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1rem;
+        }
+        .module-card {
+            background: var(--card-bg, #1a1a2e);
+            border: 1px solid var(--border-color, #333);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+        .module-card h4 {
+            margin: 0 0 0.5rem 0;
+            color: var(--accent-color, #4a9eff);
+        }
+        .module-card .type {
+            font-size: 0.8rem;
+            color: #888;
+            margin-bottom: 0.5rem;
+        }
+        .section-title {
+            margin: 2rem 0 1rem 0;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--accent-color, #4a9eff);
+        }
+        .controls-row {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            align-items: center;
+        }
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        .slider-container input[type="range"] {
+            width: 200px;
+        }
+        .slider-value {
+            min-width: 3rem;
+            text-align: center;
+        }
+        .log-box {
+            background: #0a0a0a;
+            border: 1px solid #333;
+            border-radius: 4px;
+            padding: 1rem;
+            font-family: monospace;
+            font-size: 0.85rem;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            color: #7fff7f;
+        }
+        .install-form {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        .install-form input {
+            flex: 1;
+            padding: 0.5rem;
+            border: 1px solid #333;
+            border-radius: 4px;
+            background: #1a1a2e;
+            color: #fff;
+        }
+    </style>
+</head>
+<body>
+    <div id="sidebar-container"></div>
+
+    <div class="main-content">
+        <h1>🪞 MagicMirror</h1>
+        <p>Smart display platform management</p>
+
+        <div class="status-card">
+            <h3>Service Status</h3>
+            <div class="status-row">
+                <span>MagicMirror Service</span>
+                <span id="service-status" class="badge badge-warning">Checking...</span>
+            </div>
+            <div class="status-row">
+                <span>Installation</span>
+                <span id="install-status" class="badge badge-warning">Checking...</span>
+            </div>
+            <div class="status-row">
+                <span>Active Modules</span>
+                <span id="module-count">-</span>
+            </div>
+            <div class="status-row">
+                <span>Web Interface</span>
+                <span id="web-port">-</span>
+            </div>
+            <div style="margin-top: 1rem;">
+                <button class="btn btn-success" onclick="startService()">Start</button>
+                <button class="btn btn-danger" onclick="stopService()">Stop</button>
+                <button class="btn btn-secondary" onclick="restartService()">Restart</button>
+                <a id="open-mm" href="#" target="_blank" class="btn btn-primary" style="text-decoration: none; display: none;">Open MagicMirror</a>
+            </div>
+        </div>
+
+        <div class="status-card">
+            <h3>Display Controls</h3>
+            <div class="controls-row">
+                <button class="btn btn-success" onclick="displayPower('on')">Display On</button>
+                <button class="btn btn-danger" onclick="displayPower('off')">Display Off</button>
+            </div>
+            <div class="slider-container">
+                <label>Brightness:</label>
+                <input type="range" id="brightness" min="0" max="100" value="100" onchange="setBrightness(this.value)">
+                <span class="slider-value" id="brightness-value">100%</span>
+            </div>
+        </div>
+
+        <h2 class="section-title">Installed Modules</h2>
+        <div id="modules-grid" class="module-grid">
+            <p>Loading modules...</p>
+        </div>
+
+        <h2 class="section-title">Install Module</h2>
+        <div class="install-form">
+            <input type="text" id="module-name" placeholder="MMM-ModuleName (e.g., MMM-SystemStats)">
+            <button class="btn btn-primary" onclick="installModule()">Install</button>
+        </div>
+
+        <h3>Popular Modules</h3>
+        <div id="available-modules" class="module-grid">
+            <p>Loading available modules...</p>
+        </div>
+
+        <h2 class="section-title">Logs</h2>
+        <button class="btn btn-secondary" onclick="loadLogs()">Refresh Logs</button>
+        <div id="logs" class="log-box" style="margin-top: 1rem;">
+            Click "Refresh Logs" to load...
+        </div>
+    </div>
+
+    <script src="/shared/sidebar.js"></script>
+    <script>
+        const API = '/api/v1/magicmirror';
+
+        async function loadStatus() {
+            try {
+                const res = await fetch(`${API}/status`);
+                const data = await res.json();
+
+                document.getElementById('service-status').textContent = data.running ? 'Running' : 'Stopped';
+                document.getElementById('service-status').className = 'badge ' + (data.running ? 'badge-success' : 'badge-danger');
+
+                document.getElementById('install-status').textContent = data.installed ? 'Installed' : 'Not Installed';
+                document.getElementById('install-status').className = 'badge ' + (data.installed ? 'badge-success' : 'badge-danger');
+
+                document.getElementById('module-count').textContent = data.module_count || 0;
+
+                const port = data.config?.port || 8080;
+                document.getElementById('web-port').textContent = `Port ${port}`;
+
+                const openBtn = document.getElementById('open-mm');
+                if (data.running) {
+                    openBtn.style.display = 'inline-block';
+                    openBtn.href = `http://${window.location.hostname}:${port}`;
+                } else {
+                    openBtn.style.display = 'none';
+                }
+            } catch (e) {
+                console.error('Failed to load status:', e);
+            }
+        }
+
+        async function loadModules() {
+            try {
+                const res = await fetch(`${API}/modules`);
+                const data = await res.json();
+
+                const grid = document.getElementById('modules-grid');
+                if (data.modules && data.modules.length > 0) {
+                    grid.innerHTML = data.modules.map(m => `
+                        <div class="module-card">
+                            <h4>${m.name}</h4>
+                            <div class="type">${m.type}</div>
+                            ${m.type === 'third-party' ?
+                                `<button class="btn btn-danger" onclick="uninstallModule('${m.name}')">Uninstall</button>` :
+                                ''}
+                        </div>
+                    `).join('');
+                } else {
+                    grid.innerHTML = '<p>No modules found</p>';
+                }
+            } catch (e) {
+                console.error('Failed to load modules:', e);
+            }
+        }
+
+        async function loadAvailableModules() {
+            try {
+                const res = await fetch(`${API}/modules/available`);
+                const data = await res.json();
+
+                const grid = document.getElementById('available-modules');
+                if (data.modules && data.modules.length > 0) {
+                    grid.innerHTML = data.modules.map(m => `
+                        <div class="module-card">
+                            <h4>${m.name}</h4>
+                            <div class="type">${m.description}</div>
+                            <button class="btn btn-primary" onclick="installModuleByName('${m.name}')">Install</button>
+                        </div>
+                    `).join('');
+                }
+            } catch (e) {
+                console.error('Failed to load available modules:', e);
+            }
+        }
+
+        async function startService() {
+            try {
+                await fetch(`${API}/start`, { method: 'POST' });
+                loadStatus();
+            } catch (e) {
+                alert('Failed to start service: ' + e.message);
+            }
+        }
+
+        async function stopService() {
+            try {
+                await fetch(`${API}/stop`, { method: 'POST' });
+                loadStatus();
+            } catch (e) {
+                alert('Failed to stop service: ' + e.message);
+            }
+        }
+
+        async function restartService() {
+            try {
+                await fetch(`${API}/restart`, { method: 'POST' });
+                loadStatus();
+            } catch (e) {
+                alert('Failed to restart service: ' + e.message);
+            }
+        }
+
+        async function displayPower(state) {
+            try {
+                await fetch(`${API}/display/power/${state}`, { method: 'POST' });
+            } catch (e) {
+                alert('Failed to control display: ' + e.message);
+            }
+        }
+
+        async function setBrightness(level) {
+            document.getElementById('brightness-value').textContent = level + '%';
+            try {
+                await fetch(`${API}/display/brightness/${level}`, { method: 'POST' });
+            } catch (e) {
+                console.error('Failed to set brightness:', e);
+            }
+        }
+
+        async function installModule() {
+            const name = document.getElementById('module-name').value.trim();
+            if (!name) {
+                alert('Please enter a module name');
+                return;
+            }
+            await installModuleByName(name);
+        }
+
+        async function installModuleByName(name) {
+            try {
+                const res = await fetch(`${API}/modules/install/${name}`, { method: 'POST' });
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.detail || 'Install failed');
+                }
+                alert('Module installed successfully! Restart MagicMirror to activate.');
+                loadModules();
+            } catch (e) {
+                alert('Failed to install module: ' + e.message);
+            }
+        }
+
+        async function uninstallModule(name) {
+            if (!confirm(`Uninstall ${name}?`)) return;
+            try {
+                await fetch(`${API}/modules/${name}`, { method: 'DELETE' });
+                loadModules();
+            } catch (e) {
+                alert('Failed to uninstall module: ' + e.message);
+            }
+        }
+
+        async function loadLogs() {
+            try {
+                const res = await fetch(`${API}/logs?lines=50`);
+                const data = await res.json();
+                document.getElementById('logs').textContent = data.logs?.join('\n') || 'No logs available';
+            } catch (e) {
+                document.getElementById('logs').textContent = 'Failed to load logs';
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadStatus();
+            loadModules();
+            loadAvailableModules();
+        });
+
+        // Auto-refresh status every 30s
+        setInterval(loadStatus, 30000);
+    </script>
+</body>
+</html>
