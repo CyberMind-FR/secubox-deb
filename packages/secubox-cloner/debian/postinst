@@ -1,0 +1,13 @@
+#!/bin/bash
+set -e
+case "$1" in
+  configure)
+    install -d -o root -g root -m 755 /var/lib/secubox/backups
+    install -d -o root -g root -m 755 /var/lib/secubox/cloner
+    systemctl daemon-reload
+    systemctl enable secubox-cloner.service
+    systemctl start secubox-cloner.service || true
+    systemctl reload nginx 2>/dev/null || true
+    ;;
+esac
+#DEBHELPER#
