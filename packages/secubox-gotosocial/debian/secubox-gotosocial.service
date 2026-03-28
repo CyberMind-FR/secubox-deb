@@ -1,0 +1,17 @@
+[Unit]
+Description=SecuBox GoToSocial API
+After=network.target secubox-core.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/usr/lib/secubox/gotosocial
+ExecStart=/usr/bin/uvicorn api.main:app --uds /run/secubox/gotosocial.sock --log-level warning
+UMask=0117
+Restart=on-failure
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/run/secubox /var/lib/secubox /var/lib/lxc
+
+[Install]
+WantedBy=multi-user.target

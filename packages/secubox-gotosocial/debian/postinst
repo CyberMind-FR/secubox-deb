@@ -1,0 +1,12 @@
+#!/bin/bash
+set -e
+case "$1" in
+  configure)
+    install -d -o secubox -g secubox -m 750 /var/lib/secubox/gotosocial/data
+    systemctl daemon-reload
+    systemctl enable secubox-gotosocial.service
+    systemctl start secubox-gotosocial.service || true
+    systemctl reload nginx 2>/dev/null || true
+    ;;
+esac
+#DEBHELPER#

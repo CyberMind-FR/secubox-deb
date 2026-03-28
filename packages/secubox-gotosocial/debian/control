@@ -1,0 +1,13 @@
+Source: secubox-gotosocial
+Section: net
+Priority: optional
+Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+
+Package: secubox-gotosocial
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn, lxc, lxc-templates
+Description: SecuBox GoToSocial - Fediverse Server
+ LXC-based GoToSocial ActivityPub server for SecuBox.
+ Lightweight Fediverse server compatible with Mastodon.

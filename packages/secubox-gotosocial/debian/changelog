@@ -1,0 +1,5 @@
+secubox-gotosocial (1.0.0-1) bookworm; urgency=medium
+
+  * Initial release - GoToSocial Fediverse server
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Fri, 28 Mar 2026 10:00:00 +0100
