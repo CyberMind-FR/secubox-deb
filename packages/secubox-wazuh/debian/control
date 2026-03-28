@@ -1,0 +1,15 @@
+Source: secubox-wazuh
+Section: admin
+Priority: optional
+Maintainer: SecuBox Team <team@secubox.local>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.0
+
+Package: secubox-wazuh
+Architecture: all
+Depends: ${misc:Depends}, python3, python3-fastapi, python3-uvicorn, secubox-core
+Recommends: wazuh-agent | wazuh-manager
+Description: SecuBox Wazuh SIEM integration
+ Wazuh SIEM integration for SecuBox.
+ Provides management interface for Wazuh agent/manager,
+ alert viewing, and security monitoring.

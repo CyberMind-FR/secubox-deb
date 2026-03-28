@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wazuh SIEM - SecuBox</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <style>
+        .main-content {
+            margin-left: 200px;
+            padding: 2rem;
+        }
+        .status-card {
+            background: var(--card-bg, #1a1a2e);
+            border: 1px solid var(--border-color, #333);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .status-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--border-color, #333);
+        }
+        .status-row:last-child { border-bottom: none; }
+        .badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+        .badge-success { background: #2d5a27; color: #7fff7f; }
+        .badge-warning { background: #5a5a27; color: #ffff7f; }
+        .badge-danger { background: #5a2727; color: #ff7f7f; }
+        .badge-info { background: #27455a; color: #7fd4ff; }
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            margin-right: 0.5rem;
+        }
+        .btn-primary { background: var(--accent-color, #4a9eff); color: #000; }
+        .btn-success { background: #27ae60; color: #fff; }
+        .btn-danger { background: #c0392b; color: #fff; }
+        .btn-secondary { background: #555; color: #fff; }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.8rem; }
+        .section-title {
+            margin: 2rem 0 1rem 0;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--accent-color, #4a9eff);
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .stat-card {
+            background: var(--card-bg, #1a1a2e);
+            border: 1px solid var(--border-color, #333);
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+        }
+        .stat-card .value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: var(--accent-color, #4a9eff);
+        }
+        .stat-card .label {
+            font-size: 0.85rem;
+            color: #888;
+        }
+        .stat-card.critical .value { color: #ff4444; }
+        .stat-card.warning .value { color: #ffaa00; }
+        .alert-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        .alert-item {
+            background: var(--card-bg, #1a1a2e);
+            border: 1px solid var(--border-color, #333);
+            border-radius: 8px;
+            padding: 1rem;
+            border-left: 4px solid #555;
+        }
+        .alert-item.level-high { border-left-color: #ff4444; }
+        .alert-item.level-medium { border-left-color: #ffaa00; }
+        .alert-item.level-low { border-left-color: #44aa44; }
+        .alert-item h4 {
+            margin: 0 0 0.5rem 0;
+            color: var(--accent-color, #4a9eff);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .alert-item .meta {
+            font-size: 0.85rem;
+            color: #888;
+        }
+        .alert-item .description {
+            margin-top: 0.5rem;
+            color: #aaa;
+        }
+        .level-badge {
+            font-size: 0.75rem;
+            padding: 0.1rem 0.4rem;
+            border-radius: 4px;
+            background: #333;
+        }
+        .level-badge.high { background: #5a2727; color: #ff7f7f; }
+        .level-badge.medium { background: #5a5a27; color: #ffff7f; }
+        .level-badge.low { background: #2d5a27; color: #7fff7f; }
+        .top-rules {
+            display: grid;
+            gap: 0.5rem;
+        }
+        .rule-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.5rem;
+            background: #0a0a0a;
+            border-radius: 4px;
+        }
+        .rule-item .count {
+            color: var(--accent-color, #4a9eff);
+            font-weight: bold;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal.active { display: flex; }
+        .modal-content {
+            background: #1a1a2e;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 2rem;
+            max-width: 500px;
+            width: 90%;
+        }
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #aaa;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #333;
+            border-radius: 4px;
+            background: #0a0a0a;
+            color: #fff;
+        }
+    </style>
+</head>
+<body>
+    <div id="sidebar-container"></div>
+
+    <div class="main-content">
+        <h1>🛡️ Wazuh SIEM</h1>
+        <p>Security Information and Event Management</p>
+
+        <div class="status-card">
+            <h3>System Status</h3>
+            <div class="status-row">
+                <span>Mode</span>
+                <span id="wazuh-mode" class="badge badge-info">-</span>
+            </div>
+            <div class="status-row">
+                <span>Version</span>
+                <span id="wazuh-version">-</span>
+            </div>
+            <div class="status-row">
+                <span>Manager</span>
+                <span id="manager-status" class="badge badge-warning">Checking...</span>
+            </div>
+            <div class="status-row">
+                <span>Agent</span>
+                <span id="agent-status" class="badge badge-warning">Checking...</span>
+            </div>
+            <div class="status-row">
+                <span>Agent ID</span>
+                <span id="agent-id">-</span>
+            </div>
+            <div style="margin-top: 1rem;">
+                <button class="btn btn-success" onclick="startAgent()">Start Agent</button>
+                <button class="btn btn-danger" onclick="stopAgent()">Stop Agent</button>
+                <button class="btn btn-secondary" onclick="restartAgent()">Restart</button>
+                <button class="btn btn-primary" onclick="showRegisterModal()">Register</button>
+            </div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="value" id="alerts-total">-</div>
+                <div class="label">Total Alerts</div>
+            </div>
+            <div class="stat-card">
+                <div class="value" id="alerts-24h">-</div>
+                <div class="label">Last 24h</div>
+            </div>
+            <div class="stat-card critical">
+                <div class="value" id="alerts-critical">-</div>
+                <div class="label">Critical (12+)</div>
+            </div>
+            <div class="stat-card warning">
+                <div class="value" id="alerts-warning">-</div>
+                <div class="label">Warning (7-11)</div>
+            </div>
+        </div>
+
+        <h2 class="section-title">Top Rules Triggered</h2>
+        <div id="top-rules" class="top-rules">
+            <p>Loading...</p>
+        </div>
+
+        <h2 class="section-title">Recent Alerts</h2>
+        <div style="margin-bottom: 1rem;">
+            <select id="level-filter" onchange="loadAlerts()">
+                <option value="">All Levels</option>
+                <option value="12">Critical (12+)</option>
+                <option value="7">Warning (7+)</option>
+                <option value="4">Notice (4+)</option>
+            </select>
+            <button class="btn btn-secondary btn-sm" onclick="loadAlerts()">Refresh</button>
+        </div>
+        <div id="alerts-list" class="alert-list">
+            <p>Loading alerts...</p>
+        </div>
+    </div>
+
+    <!-- Register Modal -->
+    <div id="register-modal" class="modal">
+        <div class="modal-content">
+            <h3>Register Agent</h3>
+            <div class="form-group">
+                <label>Manager IP</label>
+                <input type="text" id="manager-ip" placeholder="192.168.1.100">
+            </div>
+            <div class="form-group">
+                <label>Agent Name (optional)</label>
+                <input type="text" id="reg-agent-name" placeholder="Leave empty for hostname">
+            </div>
+            <div class="form-group">
+                <label>Groups (comma-separated)</label>
+                <input type="text" id="reg-groups" placeholder="default,linux">
+            </div>
+            <div style="margin-top: 1rem;">
+                <button class="btn btn-success" onclick="registerAgent()">Register</button>
+                <button class="btn btn-secondary" onclick="closeRegisterModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/shared/sidebar.js"></script>
+    <script>
+        const API = '/api/v1/wazuh';
+
+        async function loadStatus() {
+            try {
+                const res = await fetch(`${API}/status`);
+                const data = await res.json();
+
+                document.getElementById('wazuh-mode').textContent = data.mode || 'none';
+                document.getElementById('wazuh-version').textContent = data.version || '-';
+
+                const managerEl = document.getElementById('manager-status');
+                managerEl.textContent = data.manager_running ? 'Running' : 'Stopped';
+                managerEl.className = 'badge ' + (data.manager_running ? 'badge-success' : 'badge-danger');
+
+                const agentEl = document.getElementById('agent-status');
+                agentEl.textContent = data.agent_running ? 'Running' : 'Stopped';
+                agentEl.className = 'badge ' + (data.agent_running ? 'badge-success' : 'badge-danger');
+
+                document.getElementById('agent-id').textContent =
+                    data.agent?.id ? `${data.agent.id} (${data.agent.name})` : '-';
+            } catch (e) {
+                console.error('Failed to load status:', e);
+            }
+        }
+
+        async function loadStats() {
+            try {
+                const res = await fetch(`${API}/alerts/stats`);
+                const data = await res.json();
+
+                document.getElementById('alerts-total').textContent = data.total || 0;
+                document.getElementById('alerts-24h').textContent = data.last_24h || 0;
+
+                // Count by level
+                let critical = 0, warning = 0;
+                for (const [level, count] of Object.entries(data.by_level || {})) {
+                    if (parseInt(level) >= 12) critical += count;
+                    else if (parseInt(level) >= 7) warning += count;
+                }
+                document.getElementById('alerts-critical').textContent = critical;
+                document.getElementById('alerts-warning').textContent = warning;
+
+                // Top rules
+                const rulesEl = document.getElementById('top-rules');
+                if (data.top_rules && data.top_rules.length > 0) {
+                    rulesEl.innerHTML = data.top_rules.map(r => `
+                        <div class="rule-item">
+                            <span>${r.id}: ${r.description || 'Unknown rule'}</span>
+                            <span class="count">${r.count}</span>
+                        </div>
+                    `).join('');
+                } else {
+                    rulesEl.innerHTML = '<p>No rules triggered</p>';
+                }
+            } catch (e) {
+                console.error('Failed to load stats:', e);
+            }
+        }
+
+        async function loadAlerts() {
+            try {
+                const level = document.getElementById('level-filter').value;
+                let url = `${API}/alerts?count=50`;
+                if (level) url += `&level=${level}`;
+
+                const res = await fetch(url);
+                const data = await res.json();
+
+                const list = document.getElementById('alerts-list');
+                if (data.alerts && data.alerts.length > 0) {
+                    list.innerHTML = data.alerts.reverse().map(a => {
+                        const level = a.rule?.level || 0;
+                        let levelClass = 'low';
+                        if (level >= 12) levelClass = 'high';
+                        else if (level >= 7) levelClass = 'medium';
+
+                        return `
+                            <div class="alert-item level-${levelClass}">
+                                <h4>
+                                    <span class="level-badge ${levelClass}">Level ${level}</span>
+                                    Rule ${a.rule?.id || '-'}
+                                </h4>
+                                <div class="description">${a.rule?.description || 'No description'}</div>
+                                <div class="meta">
+                                    ${a.timestamp || '-'} •
+                                    Agent: ${a.agent?.name || '-'} •
+                                    ${a.location || ''}
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                } else {
+                    list.innerHTML = '<p>No alerts found</p>';
+                }
+            } catch (e) {
+                console.error('Failed to load alerts:', e);
+            }
+        }
+
+        async function startAgent() {
+            try {
+                await fetch(`${API}/agent/start`, { method: 'POST' });
+                loadStatus();
+            } catch (e) {
+                alert('Failed to start agent');
+            }
+        }
+
+        async function stopAgent() {
+            try {
+                await fetch(`${API}/agent/stop`, { method: 'POST' });
+                loadStatus();
+            } catch (e) {
+                alert('Failed to stop agent');
+            }
+        }
+
+        async function restartAgent() {
+            try {
+                await fetch(`${API}/agent/restart`, { method: 'POST' });
+                loadStatus();
+            } catch (e) {
+                alert('Failed to restart agent');
+            }
+        }
+
+        function showRegisterModal() {
+            document.getElementById('manager-ip').value = '';
+            document.getElementById('reg-agent-name').value = '';
+            document.getElementById('reg-groups').value = '';
+            document.getElementById('register-modal').classList.add('active');
+        }
+
+        function closeRegisterModal() {
+            document.getElementById('register-modal').classList.remove('active');
+        }
+
+        async function registerAgent() {
+            const manager_ip = document.getElementById('manager-ip').value.trim();
+            if (!manager_ip) {
+                alert('Manager IP is required');
+                return;
+            }
+
+            const agent_name = document.getElementById('reg-agent-name').value.trim();
+            const groups = document.getElementById('reg-groups').value
+                .split(',').map(g => g.trim()).filter(g => g);
+
+            try {
+                const res = await fetch(`${API}/agent/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ manager_ip, agent_name, groups })
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.detail);
+                }
+
+                alert('Agent registered successfully!');
+                closeRegisterModal();
+                loadStatus();
+            } catch (e) {
+                alert('Registration failed: ' + e.message);
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadStatus();
+            loadStats();
+            loadAlerts();
+        });
+
+        // Auto-refresh
+        setInterval(() => {
+            loadStatus();
+            loadStats();
+        }, 30000);
+
+        // Close modal on escape
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeRegisterModal();
+        });
+    </script>
+</body>
+</html>

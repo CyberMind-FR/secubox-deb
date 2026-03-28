@@ -1,0 +1,16 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d $(CURDIR)/debian/secubox-wazuh/usr/lib/secubox/wazuh/api
+	install -m 644 api/main.py $(CURDIR)/debian/secubox-wazuh/usr/lib/secubox/wazuh/api/
+	touch $(CURDIR)/debian/secubox-wazuh/usr/lib/secubox/wazuh/api/__init__.py
+	install -d $(CURDIR)/debian/secubox-wazuh/usr/share/secubox/www/wazuh
+	install -m 644 www/wazuh/index.html $(CURDIR)/debian/secubox-wazuh/usr/share/secubox/www/wazuh/
+	install -d $(CURDIR)/debian/secubox-wazuh/etc/nginx/secubox.d
+	install -m 644 nginx/wazuh.conf $(CURDIR)/debian/secubox-wazuh/etc/nginx/secubox.d/
+	install -d $(CURDIR)/debian/secubox-wazuh/usr/share/secubox/menu.d
+	install -m 644 menu.d/951-wazuh.json $(CURDIR)/debian/secubox-wazuh/usr/share/secubox/menu.d/
+	install -d $(CURDIR)/debian/secubox-wazuh/usr/lib/systemd/system
+	install -m 644 debian/secubox-wazuh.service $(CURDIR)/debian/secubox-wazuh/usr/lib/systemd/system/
