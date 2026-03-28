@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloner - SecuBox</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <style>
+        .main-content {
+            margin-left: 200px;
+            padding: 2rem;
+        }
+        .status-card {
+            background: var(--card-bg, #1a1a2e);
+            border: 1px solid var(--border-color, #333);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .status-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--border-color, #333);
+        }
+        .status-row:last-child { border-bottom: none; }
+        .badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+        .badge-success { background: #2d5a27; color: #7fff7f; }
+        .badge-warning { background: #5a5a27; color: #ffff7f; }
+        .badge-danger { background: #5a2727; color: #ff7f7f; }
+        .badge-info { background: #27455a; color: #7fd4ff; }
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            margin-right: 0.5rem;
+        }
+        .btn-primary { background: var(--accent-color, #4a9eff); color: #000; }
+        .btn-success { background: #27ae60; color: #fff; }
+        .btn-danger { background: #c0392b; color: #fff; }
+        .btn-secondary { background: #555; color: #fff; }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.8rem; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .section-title {
+            margin: 2rem 0 1rem 0;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--accent-color, #4a9eff);
+        }
+        .backup-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        .backup-item {
+            background: var(--card-bg, #1a1a2e);
+            border: 1px solid var(--border-color, #333);
+            border-radius: 8px;
+            padding: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .backup-info h4 {
+            margin: 0 0 0.25rem 0;
+            color: var(--accent-color, #4a9eff);
+            font-family: monospace;
+        }
+        .backup-info .meta {
+            font-size: 0.85rem;
+            color: #888;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #333;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 0.5rem;
+        }
+        .progress-fill {
+            height: 100%;
+            background: var(--accent-color, #4a9eff);
+            transition: width 0.3s;
+        }
+        .progress-fill.warning { background: #f39c12; }
+        .progress-fill.danger { background: #c0392b; }
+        .disk-usage {
+            display: flex;
+            gap: 2rem;
+            margin-top: 0.5rem;
+        }
+        .disk-stat {
+            text-align: center;
+        }
+        .disk-stat .value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--accent-color, #4a9eff);
+        }
+        .disk-stat .label {
+            font-size: 0.8rem;
+            color: #888;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal.active { display: flex; }
+        .modal-content {
+            background: #1a1a2e;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 2rem;
+            max-width: 500px;
+            width: 90%;
+        }
+        .modal-content h3 { margin-top: 0; }
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #aaa;
+        }
+        .form-group input, .form-group textarea, .form-group select {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #333;
+            border-radius: 4px;
+            background: #0a0a0a;
+            color: #fff;
+        }
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .checkbox-group input[type="checkbox"] {
+            width: auto;
+        }
+    </style>
+</head>
+<body>
+    <div id="sidebar-container"></div>
+
+    <div class="main-content">
+        <h1>💾 Cloner</h1>
+        <p>System backup and restore</p>
+
+        <div class="status-card">
+            <h3>Backup Status</h3>
+            <div class="status-row">
+                <span>Status</span>
+                <span id="backup-status" class="badge badge-success">Idle</span>
+            </div>
+            <div class="status-row">
+                <span>Last Backup</span>
+                <span id="last-backup">-</span>
+            </div>
+            <div class="status-row">
+                <span>Total Backups</span>
+                <span id="backup-count" class="badge badge-info">-</span>
+            </div>
+            <div class="status-row">
+                <span>Total Size</span>
+                <span id="total-size">-</span>
+            </div>
+            <div style="margin-top: 1rem;">
+                <button class="btn btn-primary" onclick="showBackupModal()" id="btn-backup">Create Backup</button>
+                <button class="btn btn-secondary" onclick="cleanupBackups()">Cleanup Old</button>
+            </div>
+        </div>
+
+        <div class="status-card">
+            <h3>Disk Usage</h3>
+            <div class="disk-usage">
+                <div class="disk-stat">
+                    <div class="value" id="disk-used">-</div>
+                    <div class="label">Used</div>
+                </div>
+                <div class="disk-stat">
+                    <div class="value" id="disk-free">-</div>
+                    <div class="label">Free</div>
+                </div>
+                <div class="disk-stat">
+                    <div class="value" id="disk-total">-</div>
+                    <div class="label">Total</div>
+                </div>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="disk-progress" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <h2 class="section-title">Backups</h2>
+        <div id="backup-list" class="backup-list">
+            <p>Loading backups...</p>
+        </div>
+    </div>
+
+    <!-- Create Backup Modal -->
+    <div id="backup-modal" class="modal">
+        <div class="modal-content">
+            <h3>Create Backup</h3>
+            <div class="form-group">
+                <label>Backup Name (optional)</label>
+                <input type="text" id="backup-name" placeholder="Leave empty for auto-generated name">
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <input type="text" id="backup-desc" placeholder="Optional description">
+            </div>
+            <div class="form-group checkbox-group">
+                <input type="checkbox" id="backup-compress" checked>
+                <label for="backup-compress">Compress (gzip)</label>
+            </div>
+            <div style="margin-top: 1rem;">
+                <button class="btn btn-success" onclick="createBackup()">Create</button>
+                <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Backup Details Modal -->
+    <div id="details-modal" class="modal">
+        <div class="modal-content">
+            <h3 id="details-title">Backup Details</h3>
+            <div class="form-group">
+                <label>Size</label>
+                <div id="details-size">-</div>
+            </div>
+            <div class="form-group">
+                <label>Created</label>
+                <div id="details-created">-</div>
+            </div>
+            <div class="form-group">
+                <label>Paths Included</label>
+                <div id="details-paths" style="font-family: monospace; font-size: 0.85rem; color: #7fff7f;">-</div>
+            </div>
+            <div style="margin-top: 1rem;">
+                <button class="btn btn-success" onclick="restoreBackup()">Restore</button>
+                <button class="btn btn-danger" onclick="deleteCurrentBackup()">Delete</button>
+                <button class="btn btn-secondary" onclick="closeDetailsModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/shared/sidebar.js"></script>
+    <script>
+        const API = '/api/v1/cloner';
+        let currentBackup = null;
+
+        async function loadStatus() {
+            try {
+                const res = await fetch(`${API}/status`);
+                const data = await res.json();
+
+                const statusEl = document.getElementById('backup-status');
+                if (data.running) {
+                    statusEl.textContent = 'Running...';
+                    statusEl.className = 'badge badge-warning';
+                    document.getElementById('btn-backup').disabled = true;
+                } else {
+                    statusEl.textContent = 'Idle';
+                    statusEl.className = 'badge badge-success';
+                    document.getElementById('btn-backup').disabled = false;
+                }
+
+                document.getElementById('last-backup').textContent = data.last_backup || '-';
+                document.getElementById('backup-count').textContent = data.backup_count;
+                document.getElementById('total-size').textContent = data.total_backup_size;
+
+                // Disk usage
+                if (data.disk) {
+                    document.getElementById('disk-used').textContent = data.disk.used_human;
+                    document.getElementById('disk-free').textContent = data.disk.free_human;
+                    document.getElementById('disk-total').textContent = data.disk.total_human;
+
+                    const progress = document.getElementById('disk-progress');
+                    progress.style.width = data.disk.percent_used + '%';
+                    progress.className = 'progress-fill';
+                    if (data.disk.percent_used > 90) progress.className += ' danger';
+                    else if (data.disk.percent_used > 70) progress.className += ' warning';
+                }
+            } catch (e) {
+                console.error('Failed to load status:', e);
+            }
+        }
+
+        async function loadBackups() {
+            try {
+                const res = await fetch(`${API}/backups`);
+                const data = await res.json();
+
+                const list = document.getElementById('backup-list');
+                if (data.backups && data.backups.length > 0) {
+                    list.innerHTML = data.backups.map(b => `
+                        <div class="backup-item">
+                            <div class="backup-info">
+                                <h4>${b.id}</h4>
+                                <div class="meta">
+                                    ${b.size_human} • ${new Date(b.created).toLocaleString()}
+                                    ${b.description ? ` • ${b.description}` : ''}
+                                </div>
+                            </div>
+                            <div>
+                                <button class="btn btn-sm btn-primary" onclick="viewBackup('${b.id}')">Details</button>
+                                <button class="btn btn-sm btn-danger" onclick="deleteBackup('${b.id}')">Delete</button>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    list.innerHTML = '<p>No backups found</p>';
+                }
+            } catch (e) {
+                console.error('Failed to load backups:', e);
+            }
+        }
+
+        function showBackupModal() {
+            document.getElementById('backup-name').value = '';
+            document.getElementById('backup-desc').value = '';
+            document.getElementById('backup-compress').checked = true;
+            document.getElementById('backup-modal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('backup-modal').classList.remove('active');
+        }
+
+        async function createBackup() {
+            const name = document.getElementById('backup-name').value.trim();
+            const description = document.getElementById('backup-desc').value.trim();
+            const compress = document.getElementById('backup-compress').checked;
+
+            closeModal();
+
+            try {
+                const res = await fetch(`${API}/backups`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, description, compress })
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.detail);
+                }
+
+                const data = await res.json();
+                alert('Backup created: ' + data.backup_id);
+                loadStatus();
+                loadBackups();
+            } catch (e) {
+                alert('Backup failed: ' + e.message);
+            }
+        }
+
+        async function viewBackup(id) {
+            try {
+                const res = await fetch(`${API}/backups/${id}`);
+                const data = await res.json();
+
+                currentBackup = id;
+                document.getElementById('details-title').textContent = id;
+                document.getElementById('details-size').textContent = data.size_human;
+                document.getElementById('details-created').textContent = new Date(data.created).toLocaleString();
+                document.getElementById('details-paths').textContent = data.paths?.join('\n') || '-';
+
+                document.getElementById('details-modal').classList.add('active');
+            } catch (e) {
+                alert('Failed to load backup details');
+            }
+        }
+
+        function closeDetailsModal() {
+            document.getElementById('details-modal').classList.remove('active');
+            currentBackup = null;
+        }
+
+        async function restoreBackup() {
+            if (!currentBackup) return;
+            if (!confirm(`Restore from ${currentBackup}? This will overwrite existing files.`)) return;
+
+            try {
+                const res = await fetch(`${API}/backups/${currentBackup}/restore`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ backup_id: currentBackup })
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.detail);
+                }
+
+                alert('Restore completed!');
+                closeDetailsModal();
+            } catch (e) {
+                alert('Restore failed: ' + e.message);
+            }
+        }
+
+        async function deleteBackup(id) {
+            if (!confirm(`Delete backup ${id}?`)) return;
+
+            try {
+                await fetch(`${API}/backups/${id}`, { method: 'DELETE' });
+                loadStatus();
+                loadBackups();
+            } catch (e) {
+                alert('Failed to delete backup');
+            }
+        }
+
+        function deleteCurrentBackup() {
+            if (currentBackup) {
+                deleteBackup(currentBackup);
+                closeDetailsModal();
+            }
+        }
+
+        async function cleanupBackups() {
+            const keep = prompt('Keep how many recent backups?', '7');
+            if (!keep) return;
+
+            try {
+                const res = await fetch(`${API}/cleanup?keep=${keep}`, { method: 'POST' });
+                const data = await res.json();
+                alert(`Deleted ${data.deleted} old backups, kept ${data.kept}`);
+                loadStatus();
+                loadBackups();
+            } catch (e) {
+                alert('Cleanup failed');
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadStatus();
+            loadBackups();
+        });
+
+        // Auto-refresh
+        setInterval(loadStatus, 10000);
+
+        // Close modals on escape
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeModal();
+                closeDetailsModal();
+            }
+        });
+    </script>
+</body>
+</html>

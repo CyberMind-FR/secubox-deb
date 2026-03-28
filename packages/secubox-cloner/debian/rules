@@ -1,0 +1,16 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d $(CURDIR)/debian/secubox-cloner/usr/lib/secubox/cloner/api
+	install -m 644 api/main.py $(CURDIR)/debian/secubox-cloner/usr/lib/secubox/cloner/api/
+	touch $(CURDIR)/debian/secubox-cloner/usr/lib/secubox/cloner/api/__init__.py
+	install -d $(CURDIR)/debian/secubox-cloner/usr/share/secubox/www/cloner
+	install -m 644 www/cloner/index.html $(CURDIR)/debian/secubox-cloner/usr/share/secubox/www/cloner/
+	install -d $(CURDIR)/debian/secubox-cloner/etc/nginx/secubox.d
+	install -m 644 nginx/cloner.conf $(CURDIR)/debian/secubox-cloner/etc/nginx/secubox.d/
+	install -d $(CURDIR)/debian/secubox-cloner/usr/share/secubox/menu.d
+	install -m 644 menu.d/902-cloner.json $(CURDIR)/debian/secubox-cloner/usr/share/secubox/menu.d/
+	install -d $(CURDIR)/debian/secubox-cloner/usr/lib/systemd/system
+	install -m 644 debian/secubox-cloner.service $(CURDIR)/debian/secubox-cloner/usr/lib/systemd/system/

@@ -1,0 +1,14 @@
+Source: secubox-cloner
+Section: admin
+Priority: optional
+Maintainer: SecuBox Team <team@secubox.local>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.0
+
+Package: secubox-cloner
+Architecture: all
+Depends: ${misc:Depends}, python3, python3-fastapi, python3-uvicorn, secubox-core
+Description: SecuBox Cloner - System backup and restore
+ System backup and restore for SecuBox.
+ Create, manage, and restore compressed backups
+ of system configuration and data.
