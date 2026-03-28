@@ -1,0 +1,7 @@
+secubox-webradio (1.0.0-1) bookworm; urgency=medium
+
+  * Initial release
+  * Icecast2 management and stream control
+  * Built-in web player with volume control
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Sat, 28 Mar 2026 11:00:00 +0100
