@@ -1,0 +1,14 @@
+Source: secubox-voip
+Section: comm
+Priority: optional
+Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.0
+
+Package: secubox-voip
+Architecture: all
+Depends: secubox-core, python3, python3-uvicorn, python3-fastapi, nginx
+Recommends: asterisk
+Description: SecuBox VoIP PBX
+ Asterisk PBX management for SecuBox.
+ SIP extensions, call routing, and trunk configuration.
