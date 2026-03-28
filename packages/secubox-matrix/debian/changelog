@@ -1,0 +1,10 @@
+secubox-matrix (1.0.0-1) bookworm; urgency=medium
+
+  * Initial release
+  * LXC-based Matrix Synapse homeserver
+  * User and room management
+  * Bridge support (Telegram, Discord, Signal)
+  * Element web client integration
+  * Backup/restore functionality
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Fri, 28 Mar 2026 09:00:00 +0100

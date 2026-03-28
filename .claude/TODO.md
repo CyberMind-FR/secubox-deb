@@ -167,10 +167,10 @@ High-value user-facing services:
 
 - [x] **P8-01** `secubox-ollama` — LLM inference, Ollama API proxy ✅
 - [x] **P8-02** `secubox-jellyfin` — Media server LXC ✅
-- [ ] **P8-03** `secubox-homeassistant` — IoT hub LXC (complex)
-- [ ] **P8-04** `secubox-zigbee` — Zigbee2MQTT gateway
-- [ ] **P8-05** `secubox-photoprism` — Photo management (Go)
-- [ ] **P8-06** `secubox-matrix` — Synapse chat server LXC
+- [x] **P8-03** `secubox-homeassistant` — IoT hub LXC ✅
+- [x] **P8-04** `secubox-zigbee` — Zigbee2MQTT gateway ✅
+- [x] **P8-05** `secubox-photoprism` — Photo management ✅
+- [x] **P8-06** `secubox-matrix` — Synapse chat server LXC ✅
 - [ ] **P8-07** `secubox-jitsi` — Video conferencing LXC
 - [ ] **P8-08** `secubox-gotosocial` — Fediverse server
 - [ ] **P8-09** `secubox-peertube` — Video platform LXC
@@ -183,8 +183,8 @@ High-value user-facing services:
 - [ ] **P8-16** `secubox-simplex` — Secure messaging
 - [ ] **P8-17** `secubox-torrent` — BitTorrent client
 - [ ] **P8-18** `secubox-newsbin` — Usenet client
-- [ ] **P8-19** `secubox-domoticz` — Home automation
-- [ ] **P8-20** `secubox-localai` — Alternative LLM backend
+- [x] **P8-19** `secubox-domoticz` — Home automation ✅
+- [x] **P8-20** `secubox-localai` — Alternative LLM backend ✅
 - [ ] **P8-21** `secubox-mmpm` — MagicMirror package manager
 
 ---
