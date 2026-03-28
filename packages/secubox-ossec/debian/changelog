@@ -1,0 +1,9 @@
+secubox-ossec (1.0.0-1) stable; urgency=low
+
+  * Initial release
+  * OSSEC service control
+  * Alert viewing and statistics
+  * File integrity monitoring (syscheck)
+  * Rootkit detection (rootcheck)
+
+ -- SecuBox Team <team@secubox.local>  Sat, 28 Mar 2026 12:30:00 +0000

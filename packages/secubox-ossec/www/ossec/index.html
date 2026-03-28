@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OSSEC HIDS - SecuBox</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <style>
+        .main-content {
+            margin-left: 200px;
+            padding: 2rem;
+        }
+        .status-card {
+            background: var(--card-bg, #1a1a2e);
+            border: 1px solid var(--border-color, #333);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .status-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--border-color, #333);
+        }
+        .status-row:last-child { border-bottom: none; }
+        .badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+        .badge-success { background: #2d5a27; color: #7fff7f; }
+        .badge-warning { background: #5a5a27; color: #ffff7f; }
+        .badge-danger { background: #5a2727; color: #ff7f7f; }
+        .badge-info { background: #27455a; color: #7fd4ff; }
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            margin-right: 0.5rem;
+            margin-bottom: 0.25rem;
+        }
+        .btn-primary { background: var(--accent-color, #4a9eff); color: #000; }
+        .btn-success { background: #27ae60; color: #fff; }
+        .btn-danger { background: #c0392b; color: #fff; }
+        .btn-secondary { background: #555; color: #fff; }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.8rem; }
+        .section-title {
+            margin: 2rem 0 1rem 0;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--accent-color, #4a9eff);
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .stat-card {
+            background: var(--card-bg, #1a1a2e);
+            border: 1px solid var(--border-color, #333);
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+        }
+        .stat-card .value {
+            font-size: 1.75rem;
+            font-weight: bold;
+            color: var(--accent-color, #4a9eff);
+        }
+        .stat-card .label {
+            font-size: 0.8rem;
+            color: #888;
+        }
+        .stat-card.critical .value { color: #ff4444; }
+        .stat-card.warning .value { color: #ffaa00; }
+        .stat-card.info .value { color: #44aaff; }
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid var(--border-color, #333);
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+        .tab {
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            border: none;
+            background: transparent;
+            color: #888;
+            font-size: 0.9rem;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+        }
+        .tab.active {
+            color: var(--accent-color, #4a9eff);
+            border-bottom-color: var(--accent-color, #4a9eff);
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .alert-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        .alert-item {
+            background: var(--card-bg, #1a1a2e);
+            border: 1px solid var(--border-color, #333);
+            border-radius: 8px;
+            padding: 0.75rem;
+            border-left: 4px solid #555;
+        }
+        .alert-item.level-high { border-left-color: #ff4444; }
+        .alert-item.level-medium { border-left-color: #ffaa00; }
+        .alert-item.level-low { border-left-color: #44aa44; }
+        .alert-item h4 {
+            margin: 0 0 0.25rem 0;
+            font-size: 0.9rem;
+            color: var(--accent-color, #4a9eff);
+        }
+        .alert-item .meta {
+            font-size: 0.8rem;
+            color: #666;
+        }
+        .level-badge {
+            font-size: 0.7rem;
+            padding: 0.1rem 0.3rem;
+            border-radius: 4px;
+            margin-right: 0.5rem;
+        }
+        .level-badge.high { background: #5a2727; color: #ff7f7f; }
+        .level-badge.medium { background: #5a5a27; color: #ffff7f; }
+        .level-badge.low { background: #2d5a27; color: #7fff7f; }
+        .services-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 0.5rem;
+        }
+        .service-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.5rem;
+            background: #0a0a0a;
+            border-radius: 4px;
+        }
+        .path-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        .path-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.5rem;
+            background: #0a0a0a;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 0.85rem;
+        }
+        .log-box {
+            background: #0a0a0a;
+            border: 1px solid #333;
+            border-radius: 4px;
+            padding: 1rem;
+            font-family: monospace;
+            font-size: 0.8rem;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            color: #7fff7f;
+        }
+    </style>
+</head>
+<body>
+    <div id="sidebar-container"></div>
+
+    <div class="main-content">
+        <h1>🔒 OSSEC HIDS</h1>
+        <p>Host-based Intrusion Detection System</p>
+
+        <div class="status-card">
+            <h3>System Status</h3>
+            <div class="status-row">
+                <span>OSSEC Status</span>
+                <span id="ossec-status" class="badge badge-warning">Checking...</span>
+            </div>
+            <div class="status-row">
+                <span>Version</span>
+                <span id="ossec-version">-</span>
+            </div>
+            <div style="margin-top: 1rem;">
+                <button class="btn btn-success" onclick="startOSSEC()">Start</button>
+                <button class="btn btn-danger" onclick="stopOSSEC()">Stop</button>
+                <button class="btn btn-secondary" onclick="restartOSSEC()">Restart</button>
+            </div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="value" id="alerts-total">-</div>
+                <div class="label">Total Alerts</div>
+            </div>
+            <div class="stat-card critical">
+                <div class="value" id="alerts-critical">-</div>
+                <div class="label">Critical</div>
+            </div>
+            <div class="stat-card warning">
+                <div class="value" id="alerts-warning">-</div>
+                <div class="label">Warning</div>
+            </div>
+            <div class="stat-card info">
+                <div class="value" id="alerts-info">-</div>
+                <div class="label">Info</div>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('alerts')">Alerts</button>
+            <button class="tab" onclick="showTab('services')">Services</button>
+            <button class="tab" onclick="showTab('syscheck')">File Integrity</button>
+            <button class="tab" onclick="showTab('rootcheck')">Rootkit Check</button>
+            <button class="tab" onclick="showTab('logs')">Logs</button>
+        </div>
+
+        <div id="tab-alerts" class="tab-content active">
+            <div style="margin-bottom: 1rem;">
+                <select id="level-filter" onchange="loadAlerts()">
+                    <option value="">All Levels</option>
+                    <option value="12">Critical (12+)</option>
+                    <option value="7">Warning (7+)</option>
+                    <option value="4">Notice (4+)</option>
+                </select>
+                <button class="btn btn-secondary btn-sm" onclick="loadAlerts()">Refresh</button>
+            </div>
+            <div id="alerts-list" class="alert-list">
+                <p>Loading alerts...</p>
+            </div>
+        </div>
+
+        <div id="tab-services" class="tab-content">
+            <h3>OSSEC Services</h3>
+            <div id="services-list" class="services-grid">
+                <p>Loading services...</p>
+            </div>
+        </div>
+
+        <div id="tab-syscheck" class="tab-content">
+            <div style="margin-bottom: 1rem;">
+                <button class="btn btn-primary" onclick="runSyscheck()">Run Scan Now</button>
+            </div>
+            <h3>Monitored Paths</h3>
+            <div id="syscheck-paths" class="path-list">
+                <p>Loading...</p>
+            </div>
+        </div>
+
+        <div id="tab-rootcheck" class="tab-content">
+            <div style="margin-bottom: 1rem;">
+                <button class="btn btn-primary" onclick="runRootcheck()">Run Scan Now</button>
+            </div>
+            <h3>Rootkit Detection Status</h3>
+            <div id="rootcheck-status">
+                <p>Loading...</p>
+            </div>
+        </div>
+
+        <div id="tab-logs" class="tab-content">
+            <button class="btn btn-secondary btn-sm" onclick="loadLogs()">Refresh</button>
+            <div id="logs-box" class="log-box" style="margin-top: 0.5rem;">
+                Loading logs...
+            </div>
+        </div>
+    </div>
+
+    <script src="/shared/sidebar.js"></script>
+    <script>
+        const API = '/api/v1/ossec';
+
+        function showTab(tabName) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelector(`.tab-content#tab-${tabName}`).classList.add('active');
+            document.querySelector(`.tab[onclick="showTab('${tabName}')"]`).classList.add('active');
+
+            if (tabName === 'services') loadServices();
+            if (tabName === 'syscheck') loadSyscheck();
+            if (tabName === 'rootcheck') loadRootcheck();
+            if (tabName === 'logs') loadLogs();
+        }
+
+        async function loadStatus() {
+            try {
+                const res = await fetch(`${API}/status`);
+                const data = await res.json();
+
+                const statusEl = document.getElementById('ossec-status');
+                statusEl.textContent = data.running ? 'Running' : 'Stopped';
+                statusEl.className = 'badge ' + (data.running ? 'badge-success' : 'badge-danger');
+
+                document.getElementById('ossec-version').textContent = data.version || '-';
+            } catch (e) {
+                console.error('Failed to load status:', e);
+            }
+        }
+
+        async function loadStats() {
+            try {
+                const res = await fetch(`${API}/alerts/stats`);
+                const data = await res.json();
+
+                document.getElementById('alerts-total').textContent = data.total || 0;
+                document.getElementById('alerts-critical').textContent = data.critical || 0;
+                document.getElementById('alerts-warning').textContent = data.warning || 0;
+                document.getElementById('alerts-info').textContent = data.info || 0;
+            } catch (e) {
+                console.error('Failed to load stats:', e);
+            }
+        }
+
+        async function loadAlerts() {
+            try {
+                const level = document.getElementById('level-filter').value;
+                let url = `${API}/alerts?count=50`;
+                if (level) url += `&level=${level}`;
+
+                const res = await fetch(url);
+                const data = await res.json();
+
+                const list = document.getElementById('alerts-list');
+                if (data.alerts && data.alerts.length > 0) {
+                    list.innerHTML = data.alerts.reverse().map(a => {
+                        const level = a.level || 0;
+                        let levelClass = 'low';
+                        if (level >= 12) levelClass = 'high';
+                        else if (level >= 7) levelClass = 'medium';
+
+                        return `
+                            <div class="alert-item level-${levelClass}">
+                                <h4>
+                                    <span class="level-badge ${levelClass}">L${level}</span>
+                                    Rule ${a.rule_id || '-'}: ${a.description || 'Alert'}
+                                </h4>
+                                <div class="meta">
+                                    ${a.timestamp || '-'}
+                                    ${a.src_ip ? ` • Source: ${a.src_ip}` : ''}
+                                    ${a.user ? ` • User: ${a.user}` : ''}
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                } else {
+                    list.innerHTML = '<p>No alerts found</p>';
+                }
+            } catch (e) {
+                console.error('Failed to load alerts:', e);
+            }
+        }
+
+        async function loadServices() {
+            try {
+                const res = await fetch(`${API}/status`);
+                const data = await res.json();
+
+                const list = document.getElementById('services-list');
+                const services = data.services || {};
+
+                if (Object.keys(services).length > 0) {
+                    list.innerHTML = Object.entries(services).map(([name, status]) => `
+                        <div class="service-item">
+                            <span>${name}</span>
+                            <span class="badge ${status === 'running' ? 'badge-success' : 'badge-danger'}">${status}</span>
+                        </div>
+                    `).join('');
+                } else {
+                    list.innerHTML = '<p>No services found</p>';
+                }
+            } catch (e) {
+                console.error('Failed to load services:', e);
+            }
+        }
+
+        async function loadSyscheck() {
+            try {
+                const res = await fetch(`${API}/syscheck`);
+                const data = await res.json();
+
+                const list = document.getElementById('syscheck-paths');
+                if (data.monitored_paths && data.monitored_paths.length > 0) {
+                    list.innerHTML = data.monitored_paths.map(p => `
+                        <div class="path-item">
+                            <span>${p.path}</span>
+                            <span>
+                                ${p.realtime === 'yes' ? '🔴 Realtime' : ''}
+                                ${p.report_changes === 'yes' ? '📝 Changes' : ''}
+                            </span>
+                        </div>
+                    `).join('');
+                } else {
+                    list.innerHTML = '<p>No monitored paths configured</p>';
+                }
+            } catch (e) {
+                console.error('Failed to load syscheck:', e);
+            }
+        }
+
+        async function loadRootcheck() {
+            try {
+                const res = await fetch(`${API}/rootcheck`);
+                const data = await res.json();
+
+                const container = document.getElementById('rootcheck-status');
+                container.innerHTML = `
+                    <div class="status-card">
+                        <div class="status-row">
+                            <span>Last Scan</span>
+                            <span>${data.last_scan || 'Never'}</span>
+                        </div>
+                        <div class="status-row">
+                            <span>Issues Found</span>
+                            <span class="badge ${data.issues?.length ? 'badge-warning' : 'badge-success'}">
+                                ${data.issues?.length || 0}
+                            </span>
+                        </div>
+                    </div>
+                    ${data.issues?.length ? `
+                        <h4 style="margin-top: 1rem;">Issues</h4>
+                        <div class="log-box">${data.issues.join('\n')}</div>
+                    ` : ''}
+                `;
+            } catch (e) {
+                console.error('Failed to load rootcheck:', e);
+            }
+        }
+
+        async function loadLogs() {
+            try {
+                const res = await fetch(`${API}/logs?lines=100`);
+                const data = await res.json();
+
+                document.getElementById('logs-box').textContent =
+                    data.logs?.join('') || 'No logs available';
+            } catch (e) {
+                document.getElementById('logs-box').textContent = 'Failed to load logs';
+            }
+        }
+
+        async function startOSSEC() {
+            try {
+                await fetch(`${API}/start`, { method: 'POST' });
+                loadStatus();
+            } catch (e) {
+                alert('Failed to start OSSEC');
+            }
+        }
+
+        async function stopOSSEC() {
+            try {
+                await fetch(`${API}/stop`, { method: 'POST' });
+                loadStatus();
+            } catch (e) {
+                alert('Failed to stop OSSEC');
+            }
+        }
+
+        async function restartOSSEC() {
+            try {
+                await fetch(`${API}/restart`, { method: 'POST' });
+                loadStatus();
+            } catch (e) {
+                alert('Failed to restart OSSEC');
+            }
+        }
+
+        async function runSyscheck() {
+            try {
+                const res = await fetch(`${API}/syscheck/scan`, { method: 'POST' });
+                const data = await res.json();
+                alert('Syscheck scan triggered');
+            } catch (e) {
+                alert('Failed to trigger scan');
+            }
+        }
+
+        async function runRootcheck() {
+            try {
+                const res = await fetch(`${API}/rootcheck/scan`, { method: 'POST' });
+                const data = await res.json();
+                alert('Rootcheck scan triggered');
+            } catch (e) {
+                alert('Failed to trigger scan');
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadStatus();
+            loadStats();
+            loadAlerts();
+        });
+
+        // Auto-refresh
+        setInterval(() => {
+            loadStatus();
+            loadStats();
+        }, 30000);
+    </script>
+</body>
+</html>
