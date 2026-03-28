@@ -171,7 +171,7 @@
 
         async function install(e) { e.preventDefault(); const domain = document.getElementById('install-domain').value; const email = document.getElementById('install-email').value; const btn = e.target.querySelector('button'); btn.disabled = true; btn.textContent = 'Installing...'; try { await api(`/install?domain=${encodeURIComponent(domain)}&admin_email=${encodeURIComponent(email)}`, { method: 'POST' }); await loadStatus(); } catch (err) { alert('Failed: ' + err.message); } finally { btn.disabled = false; btn.textContent = 'Install'; } }
         async function startService() { document.getElementById('btn-start').disabled = true; try { await api('/start', { method: 'POST' }); await loadStatus(); } catch (e) { alert('Failed: ' + e.message); } }
-        async def stopService() { document.getElementById('btn-stop').disabled = true; try { await api('/stop', { method: 'POST' }); await loadStatus(); } catch (e) { alert('Failed: ' + e.message); } }
+        async function stopService() { document.getElementById('btn-stop').disabled = true; try { await api('/stop', { method: 'POST' }); await loadStatus(); } catch (e) { alert('Failed: ' + e.message); } }
         async function restartService() { document.getElementById('btn-restart').disabled = true; try { await api('/restart', { method: 'POST' }); await loadStatus(); } catch (e) { alert('Failed: ' + e.message); } }
 
         function showCreateUser() { const u = prompt('Username:'); if (!u) return; const e = prompt('Email:'); if (!e) return; const p = prompt('Password (8+ chars):'); if (!p || p.length < 8) { alert('Password too short'); return; } createUser(u, e, p); }
