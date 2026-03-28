@@ -1,0 +1,16 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d $(CURDIR)/debian/secubox-vault/usr/lib/secubox/vault/api
+	install -m 644 api/main.py $(CURDIR)/debian/secubox-vault/usr/lib/secubox/vault/api/
+	touch $(CURDIR)/debian/secubox-vault/usr/lib/secubox/vault/api/__init__.py
+	install -d $(CURDIR)/debian/secubox-vault/usr/share/secubox/www/vault
+	install -m 644 www/vault/index.html $(CURDIR)/debian/secubox-vault/usr/share/secubox/www/vault/
+	install -d $(CURDIR)/debian/secubox-vault/etc/nginx/secubox.d
+	install -m 644 nginx/vault.conf $(CURDIR)/debian/secubox-vault/etc/nginx/secubox.d/
+	install -d $(CURDIR)/debian/secubox-vault/usr/share/secubox/menu.d
+	install -m 644 menu.d/901-vault.json $(CURDIR)/debian/secubox-vault/usr/share/secubox/menu.d/
+	install -d $(CURDIR)/debian/secubox-vault/usr/lib/systemd/system
+	install -m 644 debian/secubox-vault.service $(CURDIR)/debian/secubox-vault/usr/lib/systemd/system/
