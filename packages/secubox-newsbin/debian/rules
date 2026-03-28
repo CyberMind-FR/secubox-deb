@@ -1,0 +1,16 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d $(CURDIR)/debian/secubox-newsbin/usr/lib/secubox/newsbin/api
+	install -m 644 api/main.py $(CURDIR)/debian/secubox-newsbin/usr/lib/secubox/newsbin/api/
+	touch $(CURDIR)/debian/secubox-newsbin/usr/lib/secubox/newsbin/api/__init__.py
+	install -d $(CURDIR)/debian/secubox-newsbin/usr/share/secubox/www/newsbin
+	install -m 644 www/newsbin/index.html $(CURDIR)/debian/secubox-newsbin/usr/share/secubox/www/newsbin/
+	install -d $(CURDIR)/debian/secubox-newsbin/etc/nginx/secubox.d
+	install -m 644 nginx/newsbin.conf $(CURDIR)/debian/secubox-newsbin/etc/nginx/secubox.d/
+	install -d $(CURDIR)/debian/secubox-newsbin/usr/share/secubox/menu.d
+	install -m 644 menu.d/814-newsbin.json $(CURDIR)/debian/secubox-newsbin/usr/share/secubox/menu.d/
+	install -d $(CURDIR)/debian/secubox-newsbin/usr/lib/systemd/system
+	install -m 644 debian/secubox-newsbin.service $(CURDIR)/debian/secubox-newsbin/usr/lib/systemd/system/

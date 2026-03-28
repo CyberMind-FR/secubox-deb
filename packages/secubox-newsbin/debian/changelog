@@ -1,0 +1,7 @@
+secubox-newsbin (1.0.0-1) bookworm; urgency=medium
+
+  * Initial release
+  * Miniflux LXC container management
+  * Feed subscription and entry reading
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Sat, 28 Mar 2026 11:30:00 +0100
