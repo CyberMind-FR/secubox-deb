@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redroid - SecuBox</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <style>
+        .main-content {
+            margin-left: 200px;
+            padding: 2rem;
+        }
+        .status-card {
+            background: var(--card-bg, #1a1a2e);
+            border: 1px solid var(--border-color, #333);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .status-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--border-color, #333);
+        }
+        .status-row:last-child { border-bottom: none; }
+        .badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+        .badge-success { background: #2d5a27; color: #7fff7f; }
+        .badge-danger { background: #5a2727; color: #ff7f7f; }
+        .badge-warning { background: #5a5a27; color: #ffff7f; }
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            margin-right: 0.5rem;
+        }
+        .btn-primary { background: var(--accent-color, #4a9eff); color: #000; }
+        .btn-success { background: #27ae60; color: #fff; }
+        .btn-danger { background: #c0392b; color: #fff; }
+        .btn-secondary { background: #555; color: #fff; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .section-title {
+            margin: 2rem 0 1rem 0;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--accent-color, #4a9eff);
+        }
+        .image-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 1rem;
+        }
+        .image-card {
+            background: var(--card-bg, #1a1a2e);
+            border: 1px solid var(--border-color, #333);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+        .image-card h4 {
+            margin: 0 0 0.5rem 0;
+            color: var(--accent-color, #4a9eff);
+        }
+        .image-card .info {
+            font-size: 0.9rem;
+            color: #888;
+            margin-bottom: 0.5rem;
+        }
+        .shell-box {
+            background: #0a0a0a;
+            border: 1px solid #333;
+            border-radius: 4px;
+            padding: 1rem;
+            font-family: monospace;
+            font-size: 0.9rem;
+        }
+        .shell-input {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+        .shell-input input {
+            flex: 1;
+            padding: 0.5rem;
+            border: 1px solid #333;
+            border-radius: 4px;
+            background: #1a1a2e;
+            color: #7fff7f;
+            font-family: monospace;
+        }
+        .shell-output {
+            max-height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            color: #7fff7f;
+            margin-top: 0.5rem;
+        }
+        .package-list {
+            max-height: 300px;
+            overflow-y: auto;
+            background: #0a0a0a;
+            border: 1px solid #333;
+            border-radius: 4px;
+            padding: 0.5rem;
+        }
+        .package-item {
+            padding: 0.25rem 0.5rem;
+            font-family: monospace;
+            font-size: 0.85rem;
+            color: #aaa;
+        }
+        .package-item:hover {
+            background: #1a1a2e;
+        }
+        .log-box {
+            background: #0a0a0a;
+            border: 1px solid #333;
+            border-radius: 4px;
+            padding: 1rem;
+            font-family: monospace;
+            font-size: 0.85rem;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            color: #7fff7f;
+        }
+    </style>
+</head>
+<body>
+    <div id="sidebar-container"></div>
+
+    <div class="main-content">
+        <h1>🤖 Redroid</h1>
+        <p>Android in container</p>
+
+        <div class="status-card">
+            <h3>Container Status</h3>
+            <div class="status-row">
+                <span>Docker</span>
+                <span id="docker-status" class="badge badge-warning">Checking...</span>
+            </div>
+            <div class="status-row">
+                <span>Container</span>
+                <span id="container-status" class="badge badge-warning">Checking...</span>
+            </div>
+            <div class="status-row">
+                <span>ADB Connection</span>
+                <span id="adb-status" class="badge badge-warning">Checking...</span>
+            </div>
+            <div class="status-row">
+                <span>ADB Port</span>
+                <span id="adb-port">-</span>
+            </div>
+            <div class="status-row">
+                <span>Image</span>
+                <span id="container-image">-</span>
+            </div>
+            <div style="margin-top: 1rem;">
+                <button class="btn btn-success" onclick="startContainer()">Start</button>
+                <button class="btn btn-danger" onclick="stopContainer()">Stop</button>
+                <button class="btn btn-secondary" onclick="restartContainer()">Restart</button>
+                <button class="btn btn-danger" onclick="removeContainer()">Remove</button>
+            </div>
+        </div>
+
+        <div class="status-card">
+            <h3>ADB Controls</h3>
+            <div style="margin-bottom: 1rem;">
+                <button class="btn btn-primary" onclick="adbConnect()">Connect ADB</button>
+                <button class="btn btn-secondary" onclick="adbDisconnect()">Disconnect</button>
+                <button class="btn btn-secondary" onclick="loadPackages()">List Packages</button>
+            </div>
+
+            <div class="shell-box">
+                <div><strong>ADB Shell</strong></div>
+                <div class="shell-input">
+                    <input type="text" id="shell-cmd" placeholder="Enter shell command..." onkeypress="if(event.key==='Enter')runShell()">
+                    <button class="btn btn-primary" onclick="runShell()">Run</button>
+                </div>
+                <div id="shell-output" class="shell-output"></div>
+            </div>
+        </div>
+
+        <h2 class="section-title">Installed Packages</h2>
+        <div id="packages" class="package-list">
+            <p>Click "List Packages" to load...</p>
+        </div>
+
+        <h2 class="section-title">Available Images</h2>
+        <div id="images" class="image-list">
+            <p>Loading images...</p>
+        </div>
+
+        <h2 class="section-title">Logs</h2>
+        <button class="btn btn-secondary" onclick="loadLogs()">Refresh Logs</button>
+        <div id="logs" class="log-box" style="margin-top: 1rem;">
+            Click "Refresh Logs" to load...
+        </div>
+    </div>
+
+    <script src="/shared/sidebar.js"></script>
+    <script>
+        const API = '/api/v1/redroid';
+
+        async function loadStatus() {
+            try {
+                const res = await fetch(`${API}/status`);
+                const data = await res.json();
+
+                document.getElementById('docker-status').textContent = data.docker_installed ? 'Installed' : 'Not Found';
+                document.getElementById('docker-status').className = 'badge ' + (data.docker_installed ? 'badge-success' : 'badge-danger');
+
+                const containerState = data.running ? 'Running' : (data.container_exists ? 'Stopped' : 'Not Created');
+                document.getElementById('container-status').textContent = containerState;
+                document.getElementById('container-status').className = 'badge ' + (data.running ? 'badge-success' : 'badge-danger');
+
+                document.getElementById('adb-status').textContent = data.adb_connected ? 'Connected' : 'Disconnected';
+                document.getElementById('adb-status').className = 'badge ' + (data.adb_connected ? 'badge-success' : 'badge-warning');
+
+                document.getElementById('adb-port').textContent = data.adb_port;
+                document.getElementById('container-image').textContent = data.container?.image || '-';
+            } catch (e) {
+                console.error('Failed to load status:', e);
+            }
+        }
+
+        async function loadImages() {
+            try {
+                const res = await fetch(`${API}/images`);
+                const data = await res.json();
+
+                const container = document.getElementById('images');
+                if (data.images && data.images.length > 0) {
+                    container.innerHTML = data.images.map(img => `
+                        <div class="image-card">
+                            <h4>Android ${img.android}</h4>
+                            <div class="info">API ${img.api}</div>
+                            <div class="info" style="font-size: 0.8rem; color: #666;">${img.tag}</div>
+                            <div style="margin-top: 0.5rem;">
+                                ${img.pulled ?
+                                    '<span class="badge badge-success">Downloaded</span>' :
+                                    `<button class="btn btn-sm btn-primary" onclick="pullImage('${img.tag}')">Pull</button>`
+                                }
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            } catch (e) {
+                console.error('Failed to load images:', e);
+            }
+        }
+
+        async function startContainer() {
+            try {
+                const res = await fetch(`${API}/start`, { method: 'POST' });
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.detail);
+                }
+                setTimeout(loadStatus, 2000);
+            } catch (e) {
+                alert('Failed to start: ' + e.message);
+            }
+        }
+
+        async function stopContainer() {
+            try {
+                await fetch(`${API}/stop`, { method: 'POST' });
+                loadStatus();
+            } catch (e) {
+                alert('Failed to stop container');
+            }
+        }
+
+        async function restartContainer() {
+            try {
+                await fetch(`${API}/restart`, { method: 'POST' });
+                setTimeout(loadStatus, 2000);
+            } catch (e) {
+                alert('Failed to restart container');
+            }
+        }
+
+        async function removeContainer() {
+            if (!confirm('Remove Redroid container? All data will be lost.')) return;
+            try {
+                await fetch(`${API}/container`, { method: 'DELETE' });
+                loadStatus();
+            } catch (e) {
+                alert('Failed to remove container');
+            }
+        }
+
+        async function adbConnect() {
+            try {
+                const res = await fetch(`${API}/adb/connect`, { method: 'POST' });
+                const data = await res.json();
+                loadStatus();
+                alert(data.output || 'ADB connected');
+            } catch (e) {
+                alert('Failed to connect ADB');
+            }
+        }
+
+        async function adbDisconnect() {
+            try {
+                await fetch(`${API}/adb/disconnect`, { method: 'POST' });
+                loadStatus();
+            } catch (e) {
+                alert('Failed to disconnect ADB');
+            }
+        }
+
+        async function runShell() {
+            const cmd = document.getElementById('shell-cmd').value.trim();
+            if (!cmd) return;
+
+            try {
+                const res = await fetch(`${API}/adb/shell?command=${encodeURIComponent(cmd)}`, {
+                    method: 'POST'
+                });
+                const data = await res.json();
+
+                const output = document.getElementById('shell-output');
+                output.textContent = `$ ${cmd}\n${data.stdout}${data.stderr ? '\n[stderr] ' + data.stderr : ''}`;
+
+                document.getElementById('shell-cmd').value = '';
+            } catch (e) {
+                console.error('Shell command failed:', e);
+            }
+        }
+
+        async function loadPackages() {
+            try {
+                const res = await fetch(`${API}/adb/packages`);
+                const data = await res.json();
+
+                const container = document.getElementById('packages');
+                if (data.packages && data.packages.length > 0) {
+                    container.innerHTML = data.packages.map(pkg =>
+                        `<div class="package-item">${pkg}</div>`
+                    ).join('');
+                } else {
+                    container.innerHTML = '<p>No packages found (is ADB connected?)</p>';
+                }
+            } catch (e) {
+                console.error('Failed to load packages:', e);
+            }
+        }
+
+        async function pullImage(tag) {
+            if (!confirm(`Pull ${tag}? This may take a while.`)) return;
+
+            try {
+                const res = await fetch(`${API}/images/pull/${encodeURIComponent(tag)}`, {
+                    method: 'POST'
+                });
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.detail);
+                }
+                alert('Image pulled successfully!');
+                loadImages();
+            } catch (e) {
+                alert('Failed to pull image: ' + e.message);
+            }
+        }
+
+        async function loadLogs() {
+            try {
+                const res = await fetch(`${API}/logs?lines=50`);
+                const data = await res.json();
+                document.getElementById('logs').textContent = data.logs?.join('\n') || 'No logs available';
+            } catch (e) {
+                document.getElementById('logs').textContent = 'Failed to load logs';
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadStatus();
+            loadImages();
+        });
+
+        // Auto-refresh status
+        setInterval(loadStatus, 30000);
+    </script>
+</body>
+</html>
