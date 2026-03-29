@@ -416,7 +416,17 @@ KIOSK_SCRIPT
   mkdir -p "${ROOTFS}/var/lib/secubox"
   echo "installed=$(date -Iseconds)" > "${ROOTFS}/var/lib/secubox/.kiosk-installed"
 
-  ok "Kiosk packages and user installed"
+  # Setup root autologin on tty2 (console access while kiosk runs on tty1)
+  mkdir -p "${ROOTFS}/etc/systemd/system/getty@tty2.service.d"
+  cat > "${ROOTFS}/etc/systemd/system/getty@tty2.service.d/autologin.conf" <<EOF
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin root --noclear %I \$TERM
+Type=idle
+EOF
+  chroot "${ROOTFS}" systemctl enable getty@tty2.service 2>/dev/null || true
+
+  ok "Kiosk packages and user installed (console on tty2)"
 fi
 
 ok "Scripts installed"
