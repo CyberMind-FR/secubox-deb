@@ -25,11 +25,15 @@
 - **Updated secubox-kiosk.service**
   - `ConditionPathExists=/var/lib/secubox/.kiosk-enabled`
   - `After=nginx.service secubox-hub.service`
+- **Root autologin preserved**
+  - Kiosk uses tty1 for display
+  - Root autologin moved to tty2 (Ctrl+Alt+F2 to access)
+  - Console access always available for debugging
 - **Files modified**:
-  - `image/sbin/secubox-kiosk-setup` — Refactored with setup_kiosk_user(), update_service_file()
+  - `image/sbin/secubox-kiosk-setup` — Refactored with setup_kiosk_user(), update_service_file(), setup_root_autologin_tty2()
   - `image/sbin/secubox-cmdline-handler` — Smart package detection
   - `image/systemd/secubox-kiosk.service` — ConditionPathExists for enabled marker
-  - `image/build-live-usb.sh` — Full kiosk setup when --kiosk flag used
+  - `image/build-live-usb.sh` — Full kiosk setup when --kiosk flag used, tty2 autologin
 
 ---
 

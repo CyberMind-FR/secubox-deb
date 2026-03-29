@@ -143,6 +143,24 @@ KIOSK
     update_service_file "$KIOSK_UID"
 }
 
+# ── Setup Root Autologin on TTY2 ─────────────────────────────────
+setup_root_autologin_tty2() {
+    # Create autologin override for tty2
+    mkdir -p /etc/systemd/system/getty@tty2.service.d
+    cat > /etc/systemd/system/getty@tty2.service.d/autologin.conf <<EOF
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin root --noclear %I \$TERM
+Type=idle
+EOF
+
+    # Enable getty on tty2
+    systemctl enable getty@tty2.service 2>/dev/null || true
+    systemctl start getty@tty2.service 2>/dev/null || true
+
+    log "Root autologin enabled on tty2 (Ctrl+Alt+F2 to access)"
+}
+
 # ── Update Service File with Correct UID ─────────────────────────
 update_service_file() {
     local KIOSK_UID="${1:-1000}"
@@ -204,7 +222,10 @@ enable_kiosk() {
     mkdir -p /var/lib/secubox
     touch "${ENABLED_MARKER}"
 
-    # Disable console autologin if enabled
+    # Setup root autologin on tty2 (so user can still access console)
+    setup_root_autologin_tty2
+
+    # Disable getty on tty1 (kiosk uses it)
     systemctl disable getty@tty1.service 2>/dev/null || true
 
     # Enable graphical target
@@ -293,6 +314,13 @@ show_status() {
         fi
     done
     echo "Packages: $pkgs_ok"
+
+    # Check tty2 autologin
+    if [[ -f /etc/systemd/system/getty@tty2.service.d/autologin.conf ]]; then
+        echo "Console: tty2 (Ctrl+Alt+F2)"
+    else
+        echo "Console: tty1"
+    fi
 
     echo ""
 }
