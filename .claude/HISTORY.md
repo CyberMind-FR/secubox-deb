@@ -3,6 +3,18 @@
 
 ---
 
+## 2026-03-29
+
+### Kiosk Mode Bug Fixes
+- Fixed UID mismatch issue — service now detects actual kiosk user UID
+- Fixed timing issue — cmdline handler defers package installation to after network
+- Fixed marker file confusion (`.kiosk-installed` vs `.kiosk-enabled`)
+- Updated build-live-usb.sh to fully setup kiosk when --kiosk flag used
+- Improved start-kiosk.sh to wait for nginx/hub services (30s max)
+- Service now uses `ConditionPathExists` to check enabled state
+
+---
+
 ## 2026-03-28
 
 ### Network Auto-Detection & Preseed System
