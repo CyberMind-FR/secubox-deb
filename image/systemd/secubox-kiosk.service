@@ -1,6 +1,6 @@
 [Unit]
 Description=SecuBox Kiosk Mode (WebUI Display)
-After=network-online.target nginx.service systemd-user-sessions.service
+After=network-online.target systemd-user-sessions.service
 Wants=network-online.target
 Conflicts=getty@tty1.service
 
@@ -9,17 +9,24 @@ ConditionPathExists=/var/lib/secubox/.kiosk-enabled
 
 [Service]
 Type=simple
-User=secubox-kiosk
-Group=secubox-kiosk
-
-# Wayland/DRM access
-SupplementaryGroups=video audio input render
 
 # Run on tty1
 TTYPath=/dev/tty1
 StandardInput=tty
 StandardOutput=tty
 StandardError=journal
+
+# Create runtime directory AS ROOT (before switching to User)
+ExecStartPre=+/bin/mkdir -p /run/user/1000
+ExecStartPre=+/bin/chown 1000:1000 /run/user/1000
+ExecStartPre=+/bin/chmod 700 /run/user/1000
+
+# Now switch to kiosk user
+User=secubox-kiosk
+Group=secubox-kiosk
+
+# Wayland/DRM access
+SupplementaryGroups=video audio input render
 
 # Environment for Wayland
 Environment=XDG_RUNTIME_DIR=/run/user/1000
@@ -29,16 +36,10 @@ Environment=KIOSK_URL=https://localhost:9443/
 # wlroots environment (VM compatibility)
 Environment=WLR_LIBINPUT_NO_DEVICES=1
 Environment=WLR_NO_HARDWARE_CURSORS=1
-# Fallback to software rendering if GPU not available
 Environment=WLR_RENDERER_ALLOW_SOFTWARE=1
 
-# Create runtime directory
-ExecStartPre=/bin/mkdir -p /run/user/1000
-ExecStartPre=/bin/chown secubox-kiosk:secubox-kiosk /run/user/1000
-ExecStartPre=/bin/chmod 700 /run/user/1000
-
-# Cage compositor running kiosk script
-ExecStart=/usr/bin/cage -s -d -- /home/secubox-kiosk/start-kiosk.sh
+# Cage compositor running kiosk script (no -d flag, not supported in 0.1.4)
+ExecStart=/usr/bin/cage -s -- /home/secubox-kiosk/start-kiosk.sh
 
 Restart=on-failure
 RestartSec=5
