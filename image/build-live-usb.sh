@@ -352,8 +352,71 @@ chroot "${ROOTFS}" systemctl enable secubox-firstboot.service 2>/dev/null || tru
 if [[ $INCLUDE_KIOSK -eq 1 ]]; then
   log "Installing kiosk mode packages..."
   chroot "${ROOTFS}" apt-get install -y -q --no-install-recommends \
-    cage chromium fonts-dejavu-core 2>/dev/null || warn "Kiosk packages failed"
-  ok "Kiosk packages installed"
+    cage chromium fonts-dejavu-core \
+    libinput10 libegl1 libgles2 libgbm1 libdrm2 \
+    mesa-utils xdg-utils 2>/dev/null || warn "Kiosk packages failed"
+
+  # Create kiosk user with UID 1000
+  if ! chroot "${ROOTFS}" id secubox-kiosk &>/dev/null; then
+    chroot "${ROOTFS}" useradd -r -u 1000 -m -d /home/secubox-kiosk -s /usr/sbin/nologin \
+      -G video,audio,input,render secubox-kiosk 2>/dev/null || \
+    chroot "${ROOTFS}" useradd -r -m -d /home/secubox-kiosk -s /usr/sbin/nologin \
+      -G video,audio,input,render secubox-kiosk
+    ok "Created kiosk user"
+  fi
+
+  # Create kiosk start script
+  mkdir -p "${ROOTFS}/home/secubox-kiosk/.config"
+  cat > "${ROOTFS}/home/secubox-kiosk/start-kiosk.sh" <<'KIOSK_SCRIPT'
+#!/bin/bash
+# SecuBox Kiosk Launcher
+
+# Wait for services to be ready
+for i in {1..30}; do
+    if curl -sk https://localhost:9443/ >/dev/null 2>&1; then
+        break
+    fi
+    sleep 1
+done
+
+# Kiosk URL (local SecuBox WebUI)
+URL="${KIOSK_URL:-https://localhost:9443/}"
+
+# Chromium flags for kiosk mode
+CHROMIUM_FLAGS=(
+    --kiosk
+    --no-first-run
+    --disable-translate
+    --disable-infobars
+    --disable-session-crashed-bubble
+    --disable-restore-background-contents
+    --disable-sync
+    --disable-features=TranslateUI
+    --ignore-certificate-errors
+    --noerrdialogs
+    --enable-features=OverlayScrollbar
+    --start-fullscreen
+    --window-position=0,0
+    --check-for-update-interval=604800
+    --disable-component-update
+    --disable-default-apps
+    --disable-extensions
+    --disable-background-networking
+    --disable-domain-reliability
+    --disable-client-side-phishing-detection
+    "$URL"
+)
+
+exec chromium "${CHROMIUM_FLAGS[@]}"
+KIOSK_SCRIPT
+  chmod +x "${ROOTFS}/home/secubox-kiosk/start-kiosk.sh"
+  chroot "${ROOTFS}" chown -R secubox-kiosk:secubox-kiosk /home/secubox-kiosk
+
+  # Mark as installed
+  mkdir -p "${ROOTFS}/var/lib/secubox"
+  echo "installed=$(date -Iseconds)" > "${ROOTFS}/var/lib/secubox/.kiosk-installed"
+
+  ok "Kiosk packages and user installed"
 fi
 
 ok "Scripts installed"

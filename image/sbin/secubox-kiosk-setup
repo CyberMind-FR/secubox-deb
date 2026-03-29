@@ -10,6 +10,7 @@ KIOSK_USER="secubox-kiosk"
 KIOSK_HOME="/home/${KIOSK_USER}"
 KIOSK_URL="https://localhost:9443/"
 MARKER="/var/lib/secubox/.kiosk-installed"
+ENABLED_MARKER="/var/lib/secubox/.kiosk-enabled"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; CYAN='\033[0;36m'; NC='\033[0m'
 log() { echo -e "${CYAN}[kiosk]${NC} $*"; }
@@ -39,6 +40,8 @@ install_kiosk() {
     # Check if already installed
     if [[ -f "$MARKER" ]]; then
         log "Kiosk packages already installed"
+        # Still ensure user and scripts exist
+        setup_kiosk_user
         return 0
     fi
 
@@ -62,12 +65,32 @@ install_kiosk() {
         xdg-utils \
         || err "Failed to install kiosk packages"
 
-    # Create kiosk user
+    # Setup user and scripts
+    setup_kiosk_user
+
+    # Mark as installed
+    mkdir -p /var/lib/secubox
+    echo "installed=$(date -Iseconds)" > "$MARKER"
+
+    ok "Kiosk mode installed"
+    log "Run 'secubox-kiosk-setup enable' to activate"
+}
+
+# ── Setup Kiosk User and Scripts ────────────────────────────────────
+setup_kiosk_user() {
+    # Create kiosk user with UID 1000 if not exists
     if ! id "$KIOSK_USER" &>/dev/null; then
+        # Use UID 1000 to match XDG_RUNTIME_DIR in service file
+        useradd -r -u 1000 -m -d "$KIOSK_HOME" -s /usr/sbin/nologin \
+            -G video,audio,input,render "$KIOSK_USER" 2>/dev/null || \
         useradd -r -m -d "$KIOSK_HOME" -s /usr/sbin/nologin \
             -G video,audio,input,render "$KIOSK_USER"
         ok "Created kiosk user: $KIOSK_USER"
     fi
+
+    # Get actual UID
+    local KIOSK_UID
+    KIOSK_UID=$(id -u "$KIOSK_USER")
 
     # Create kiosk script
     mkdir -p "${KIOSK_HOME}/.config"
@@ -75,8 +98,13 @@ install_kiosk() {
 #!/bin/bash
 # SecuBox Kiosk Launcher
 
-# Wait for network
-sleep 5
+# Wait for services to be ready
+for i in {1..30}; do
+    if curl -sk https://localhost:9443/ >/dev/null 2>&1; then
+        break
+    fi
+    sleep 1
+done
 
 # Kiosk URL (local SecuBox WebUI)
 URL="${KIOSK_URL:-https://localhost:9443/}"
@@ -111,12 +139,22 @@ KIOSK
     chmod +x "${KIOSK_HOME}/start-kiosk.sh"
     chown -R "$KIOSK_USER":"$KIOSK_USER" "$KIOSK_HOME"
 
-    # Create systemd service for cage+chromium
+    # Update systemd service with correct UID (only if service file doesn't exist or needs update)
+    update_service_file "$KIOSK_UID"
+}
+
+# ── Update Service File with Correct UID ─────────────────────────
+update_service_file() {
+    local KIOSK_UID="${1:-1000}"
+
     cat > /etc/systemd/system/secubox-kiosk.service <<EOF
 [Unit]
-Description=SecuBox Kiosk Mode (WebUI)
-After=network-online.target secubox-core.service
+Description=SecuBox Kiosk Mode (WebUI Display)
+After=network-online.target nginx.service secubox-hub.service
 Wants=network-online.target
+
+# Only start if kiosk is enabled
+ConditionPathExists=${ENABLED_MARKER}
 
 [Service]
 Type=simple
@@ -126,14 +164,16 @@ Group=${KIOSK_USER}
 # Wayland/DRM access
 SupplementaryGroups=video audio input render
 
-# Environment
-Environment=XDG_RUNTIME_DIR=/run/user/1000
+# Environment for Wayland (use actual UID)
+Environment=XDG_RUNTIME_DIR=/run/user/${KIOSK_UID}
 Environment=WLR_LIBINPUT_NO_DEVICES=1
 Environment=KIOSK_URL=${KIOSK_URL}
 
-# Cage compositor running Chromium
-ExecStartPre=/bin/mkdir -p /run/user/1000
-ExecStartPre=/bin/chown ${KIOSK_USER}:${KIOSK_USER} /run/user/1000
+# Create runtime directory
+ExecStartPre=/bin/mkdir -p /run/user/${KIOSK_UID}
+ExecStartPre=/bin/chown ${KIOSK_USER}:${KIOSK_USER} /run/user/${KIOSK_UID}
+
+# Cage compositor running kiosk script
 ExecStart=/usr/bin/cage -s -- ${KIOSK_HOME}/start-kiosk.sh
 
 Restart=always
@@ -144,22 +184,25 @@ WantedBy=graphical.target
 EOF
 
     systemctl daemon-reload
-
-    # Mark as installed
-    mkdir -p /var/lib/secubox
-    echo "installed=$(date -Iseconds)" > "$MARKER"
-
-    ok "Kiosk mode installed"
-    log "Run 'secubox-kiosk-setup enable' to activate"
+    log "Updated service file with UID ${KIOSK_UID}"
 }
 
 # ── Enable Kiosk Mode ─────────────────────────────────────────────
 enable_kiosk() {
-    if [[ ! -f "$MARKER" ]]; then
-        err "Kiosk not installed. Run 'secubox-kiosk-setup install' first"
+    # Check if packages are installed (cage, chromium)
+    if ! command -v cage >/dev/null 2>&1; then
+        log "Kiosk packages not installed, installing..."
+        install_kiosk
     fi
 
+    # Ensure user exists and scripts are in place
+    setup_kiosk_user
+
     log "Enabling kiosk mode..."
+
+    # Create enabled marker
+    mkdir -p /var/lib/secubox
+    touch "${ENABLED_MARKER}"
 
     # Disable console autologin if enabled
     systemctl disable getty@tty1.service 2>/dev/null || true
@@ -180,6 +223,9 @@ enable_kiosk() {
 # ── Disable Kiosk Mode ────────────────────────────────────────────
 disable_kiosk() {
     log "Disabling kiosk mode..."
+
+    # Remove enabled marker
+    rm -f "${ENABLED_MARKER}"
 
     # Stop and disable kiosk service
     systemctl stop secubox-kiosk.service 2>/dev/null || true
@@ -207,6 +253,12 @@ show_status() {
         echo "Installed: no"
     fi
 
+    if [[ -f "$ENABLED_MARKER" ]]; then
+        echo "Enabled: yes"
+    else
+        echo "Enabled: no"
+    fi
+
     local kiosk_active="inactive"
     if systemctl is-active secubox-kiosk.service &>/dev/null; then
         kiosk_active="active"
@@ -222,6 +274,25 @@ show_status() {
     else
         echo "Mode: CONSOLE"
     fi
+
+    # Check kiosk user
+    if id "$KIOSK_USER" &>/dev/null; then
+        local uid
+        uid=$(id -u "$KIOSK_USER")
+        echo "User: $KIOSK_USER (UID $uid)"
+    else
+        echo "User: not created"
+    fi
+
+    # Check required packages
+    local pkgs_ok="yes"
+    for pkg in cage chromium; do
+        if ! command -v "$pkg" >/dev/null 2>&1; then
+            pkgs_ok="no (missing $pkg)"
+            break
+        fi
+    done
+    echo "Packages: $pkgs_ok"
 
     echo ""
 }

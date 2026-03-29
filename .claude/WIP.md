@@ -1,9 +1,39 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-03-28 (Session 23)*
+*Mis à jour : 2026-03-29 (Session 25)*
 
 ---
 
-## ✅ Terminé cette session (Session 24)
+## ✅ Terminé cette session (Session 25)
+
+### Kiosk Mode Fixes ✅
+- **Fixed UID mismatch** — Service now uses dynamic UID detection
+  - Kiosk user created with UID 1000 when possible
+  - Service file updated with actual UID at runtime
+  - `XDG_RUNTIME_DIR=/run/user/<actual-uid>`
+- **Fixed timing issue** — cmdline handler no longer tries apt-get at sysinit.target
+  - If packages pre-installed (--kiosk flag): enable immediately
+  - If packages missing: creates oneshot service to install after network
+- **Fixed marker file confusion**
+  - `.kiosk-installed` — Marks packages installed
+  - `.kiosk-enabled` — Marks kiosk mode activated (required by service)
+- **Updated build-live-usb.sh**
+  - `--kiosk` flag now creates user and start script during build
+  - All kiosk dependencies pre-installed for immediate boot
+- **Improved start-kiosk.sh**
+  - Waits for nginx/hub service to be ready (30s max)
+  - Uses `curl -sk` to check HTTPS endpoint
+- **Updated secubox-kiosk.service**
+  - `ConditionPathExists=/var/lib/secubox/.kiosk-enabled`
+  - `After=nginx.service secubox-hub.service`
+- **Files modified**:
+  - `image/sbin/secubox-kiosk-setup` — Refactored with setup_kiosk_user(), update_service_file()
+  - `image/sbin/secubox-cmdline-handler` — Smart package detection
+  - `image/systemd/secubox-kiosk.service` — ConditionPathExists for enabled marker
+  - `image/build-live-usb.sh` — Full kiosk setup when --kiosk flag used
+
+---
+
+## ✅ Terminé session précédente (Session 24)
 
 ### Network Auto-Detection & Preseed System ✅
 - **secubox-net-detect** — Auto-detection script for WAN/LAN interfaces

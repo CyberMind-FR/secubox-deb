@@ -1,6 +1,6 @@
 [Unit]
 Description=SecuBox Kiosk Mode (WebUI Display)
-After=network-online.target nginx.service
+After=network-online.target nginx.service secubox-hub.service
 Wants=network-online.target
 
 # Only start if kiosk is enabled
@@ -14,7 +14,7 @@ Group=secubox-kiosk
 # Wayland/DRM access
 SupplementaryGroups=video audio input render
 
-# Environment for Wayland
+# Environment for Wayland - UID 1000 default (updated by secubox-kiosk-setup)
 Environment=XDG_RUNTIME_DIR=/run/user/1000
 Environment=WLR_LIBINPUT_NO_DEVICES=1
 Environment=KIOSK_URL=https://localhost:9443/

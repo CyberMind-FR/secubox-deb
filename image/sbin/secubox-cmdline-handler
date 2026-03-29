@@ -70,13 +70,41 @@ apply_settings() {
         log "Kiosk mode requested via cmdline"
         touch "${MARKER_DIR}/.kiosk-enabled"
 
-        # Install kiosk packages if not present
-        if [[ -x /usr/sbin/secubox-kiosk-setup ]]; then
-            if [[ ! -f "${MARKER_DIR}/.kiosk-installed" ]]; then
-                log "Installing kiosk packages..."
-                /usr/sbin/secubox-kiosk-setup install 2>/dev/null || log "Kiosk install deferred"
+        # Check if kiosk packages are already installed (pre-baked in image)
+        if command -v cage >/dev/null 2>&1 && command -v chromium >/dev/null 2>&1; then
+            log "Kiosk packages present, enabling kiosk mode"
+
+            # Setup user and scripts if needed (this doesn't require network)
+            if [[ -x /usr/sbin/secubox-kiosk-setup ]]; then
+                # Just setup user/scripts, don't try apt-get install
+                /usr/sbin/secubox-kiosk-setup enable 2>/dev/null || log "Kiosk enable deferred to graphical.target"
             fi
-            /usr/sbin/secubox-kiosk-setup enable 2>/dev/null || log "Kiosk enable deferred"
+
+            # Set graphical target for this boot
+            systemctl set-default graphical.target 2>/dev/null || true
+        else
+            log "Kiosk packages NOT present - use --kiosk flag when building live USB"
+            log "Will attempt installation when network is available"
+
+            # Create a oneshot service to install kiosk after network
+            cat > /etc/systemd/system/secubox-kiosk-install.service <<EOF
+[Unit]
+Description=SecuBox Kiosk Package Installation
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=!/var/lib/secubox/.kiosk-installed
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-kiosk-setup install
+ExecStart=/usr/sbin/secubox-kiosk-setup enable
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+            systemctl daemon-reload 2>/dev/null || true
+            systemctl enable secubox-kiosk-install.service 2>/dev/null || true
         fi
     fi
 
