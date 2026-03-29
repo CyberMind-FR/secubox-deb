@@ -413,9 +413,15 @@ KIOSK_SCRIPT
   chmod +x "${ROOTFS}/home/secubox-kiosk/start-kiosk.sh"
   chroot "${ROOTFS}" chown -R secubox-kiosk:secubox-kiosk /home/secubox-kiosk
 
-  # Mark as installed
+  # Mark as installed AND enabled (so kiosk starts on first boot)
   mkdir -p "${ROOTFS}/var/lib/secubox"
   echo "installed=$(date -Iseconds)" > "${ROOTFS}/var/lib/secubox/.kiosk-installed"
+  touch "${ROOTFS}/var/lib/secubox/.kiosk-enabled"
+
+  # Enable kiosk service and set graphical target
+  chroot "${ROOTFS}" systemctl enable secubox-kiosk.service 2>/dev/null || true
+  chroot "${ROOTFS}" systemctl set-default graphical.target 2>/dev/null || true
+  chroot "${ROOTFS}" systemctl disable getty@tty1.service 2>/dev/null || true
 
   # Setup root autologin on tty2 (console access while kiosk runs on tty1)
   mkdir -p "${ROOTFS}/etc/systemd/system/getty@tty2.service.d"
