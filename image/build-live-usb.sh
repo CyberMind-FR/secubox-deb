@@ -382,8 +382,9 @@ done
 # Kiosk URL (local SecuBox WebUI)
 URL="${KIOSK_URL:-https://localhost:9443/}"
 
-# Chromium flags for kiosk mode
+# Chromium flags for kiosk mode (native Wayland via Ozone)
 CHROMIUM_FLAGS=(
+    --ozone-platform=wayland
     --kiosk
     --no-first-run
     --disable-translate
