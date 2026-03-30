@@ -24,6 +24,7 @@ SLIPSTREAM_DEBS=1
 INCLUDE_PERSISTENCE=1
 INCLUDE_KIOSK=0
 PRESEED_FILE=""
+NO_COMPRESS=0
 
 RED='\033[0;31m'; CYAN='\033[0;36m'; GOLD='\033[0;33m'
 GREEN='\033[0;32m'; NC='\033[0m'; BOLD='\033[1m'
@@ -44,6 +45,7 @@ Usage: sudo bash build-live-usb.sh [OPTIONS]
   --local-cache      Use local APT cache
   --kiosk            Include GUI kiosk mode packages
   --no-persistence   Don't include persistent storage partition
+  --no-compress      Skip gzip compression (faster, for local testing)
   --preseed FILE     Include preseed config archive
   --help             Show this help
 
@@ -73,6 +75,7 @@ while [[ $# -gt 0 ]]; do
     --local-cache)    USE_LOCAL_CACHE=1;    shift   ;;
     --kiosk)          INCLUDE_KIOSK=1;      shift   ;;
     --no-persistence) INCLUDE_PERSISTENCE=0; shift   ;;
+    --no-compress)    NO_COMPRESS=1;        shift   ;;
     --preseed)        PRESEED_FILE="$2";    shift 2 ;;
     --help|-h)        usage ;;
     *) err "Unknown argument: $1" ;;
@@ -313,9 +316,9 @@ chroot "${ROOTFS}" apt-get install -y -q --no-install-recommends \
 ok "Firmware installed"
 
 # ══════════════════════════════════════════════════════════════════
-# Step 4: SecuBox packages (slipstream from cache/repo)
+# Step 4: SecuBox packages (slipstream ALL from cache/repo)
 # ══════════════════════════════════════════════════════════════════
-log "4/8 Installing SecuBox packages..."
+log "4/8 Installing ALL SecuBox packages..."
 
 # Find all .deb files in cache/repo
 CACHE_DEBS="${REPO_DIR}/cache/repo/pool"
@@ -323,22 +326,47 @@ if [[ -d "$CACHE_DEBS" ]] && find "$CACHE_DEBS" -name "*.deb" | head -1 | grep -
   log "Slipstream: Found packages in cache/repo/pool"
   install -d "${ROOTFS}/tmp/secubox-debs"
 
-  # Copy all secubox debs
+  # Copy ALL secubox debs
   find "$CACHE_DEBS" -name "secubox-*.deb" -exec cp {} "${ROOTFS}/tmp/secubox-debs/" \;
   DEB_COUNT=$(ls "${ROOTFS}/tmp/secubox-debs/"*.deb 2>/dev/null | wc -l)
-  log "Slipstream: ${DEB_COUNT} packages found"
 
-  # Install core first
+  # List all packages to be installed
+  log "Slipstream: ${DEB_COUNT} packages to install:"
+  echo ""
+  ls -1 "${ROOTFS}/tmp/secubox-debs/"*.deb | xargs -I{} basename {} | sed 's/_.*$//' | sort -u | while read pkg; do
+    echo "  - ${pkg}"
+  done
+  echo ""
+
+  # Install core first (dependency for all)
   if ls "${ROOTFS}/tmp/secubox-debs/secubox-core_"*.deb >/dev/null 2>&1; then
+    log "Installing secubox-core (dependency)..."
     chroot "${ROOTFS}" dpkg -i /tmp/secubox-debs/secubox-core_*.deb 2>/dev/null || true
   fi
 
   # Install all packages
+  log "Installing all packages..."
   chroot "${ROOTFS}" dpkg -i /tmp/secubox-debs/*.deb 2>/dev/null || true
+
+  # Fix dependencies
+  log "Fixing dependencies..."
   chroot "${ROOTFS}" apt-get install -f -y -q 2>/dev/null || true
 
+  # Verify installations
+  log "Verifying installations..."
+  INSTALLED_COUNT=$(chroot "${ROOTFS}" dpkg -l 'secubox-*' 2>/dev/null | grep "^ii" | wc -l)
+
+  # List installed packages
+  echo ""
+  log "Installed SecuBox packages (${INSTALLED_COUNT}):"
+  chroot "${ROOTFS}" dpkg -l 'secubox-*' 2>/dev/null | grep "^ii" | awk '{print "  ✓ " $2 " (" $3 ")"}' || true
+  echo ""
+
+  # Save list to image
+  chroot "${ROOTFS}" dpkg -l 'secubox-*' 2>/dev/null | grep "^ii" > "${ROOTFS}/var/lib/secubox/installed-packages.txt" || true
+
   rm -rf "${ROOTFS}/tmp/secubox-debs"
-  ok "Slipstream: ${DEB_COUNT} packages installed"
+  ok "Slipstream: ${INSTALLED_COUNT}/${DEB_COUNT} packages installed successfully"
 else
   warn "No packages in cache/repo, trying APT..."
   if curl -sf "${APT_SECUBOX}/dists/${SUITE}/Release" >/dev/null 2>&1; then
@@ -727,26 +755,35 @@ LOOP=""
 ok "Bootable image created"
 
 # ══════════════════════════════════════════════════════════════════
-# Compress
+# Compress (optional)
 # ══════════════════════════════════════════════════════════════════
-log "Compressing..."
-gzip -9 -f "${IMG_FILE}"
-sha256sum "${IMG_FILE}.gz" > "${IMG_FILE}.gz.sha256"
-
-FINAL_SIZE=$(du -sh "${IMG_FILE}.gz" | cut -f1)
+if [[ $NO_COMPRESS -eq 0 ]]; then
+  log "Compressing..."
+  gzip -9 -f "${IMG_FILE}"
+  sha256sum "${IMG_FILE}.gz" > "${IMG_FILE}.gz.sha256"
+  FINAL_SIZE=$(du -sh "${IMG_FILE}.gz" | cut -f1)
+  FINAL_IMG="${IMG_FILE}.gz"
+  FLASH_CMD="zcat ${IMG_FILE}.gz | sudo dd of=/dev/sdX bs=4M status=progress"
+else
+  log "Skipping compression (--no-compress)"
+  sha256sum "${IMG_FILE}" > "${IMG_FILE}.sha256"
+  FINAL_SIZE=$(du -sh "${IMG_FILE}" | cut -f1)
+  FINAL_IMG="${IMG_FILE}"
+  FLASH_CMD="sudo dd if=${IMG_FILE} of=/dev/sdX bs=4M status=progress"
+fi
 
 echo ""
 echo -e "${GREEN}${BOLD}════════════════════════════════════════════════════════════${NC}"
 echo -e "${GREEN}${BOLD}  SecuBox Live USB Ready!${NC}"
 echo ""
-echo -e "  Image: ${IMG_FILE}.gz"
+echo -e "  Image: ${FINAL_IMG}"
 echo -e "  Size:  ${FINAL_SIZE}"
 echo ""
 echo -e "  ${BOLD}Flash:${NC}"
-echo -e "    zcat ${IMG_FILE}.gz | sudo dd of=/dev/sdX bs=4M status=progress"
+echo -e "    ${FLASH_CMD}"
 echo ""
 echo -e "  ${BOLD}Credentials:${NC}"
 echo -e "    SSH/Console: root / secubox"
-echo -e "    Web UI: https://<IP>:9443"
+echo -e "    Web UI: https://192.168.255.1:9443"
 echo ""
 echo -e "${GREEN}${BOLD}════════════════════════════════════════════════════════════${NC}"
