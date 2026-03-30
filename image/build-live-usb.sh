@@ -143,7 +143,7 @@ INCLUDE_PKGS="systemd,systemd-sysv,dbus,netplan.io,nftables,openssh-server"
 INCLUDE_PKGS+=",python3,python3-pip,nginx,curl,wget,ca-certificates,gnupg"
 INCLUDE_PKGS+=",iproute2,iputils-ping,ethtool,net-tools,wireguard-tools"
 INCLUDE_PKGS+=",sudo,less,vim-tiny,logrotate,cron,rsync,jq,dnsmasq"
-INCLUDE_PKGS+=",linux-image-amd64,live-boot,live-boot-initramfs-tools,live-config,live-config-systemd,initramfs-tools"
+INCLUDE_PKGS+=",linux-image-amd64,live-boot,live-config,live-config-systemd"
 INCLUDE_PKGS+=",grub-efi-amd64,efibootmgr,pciutils,usbutils,lsb-release"
 
 debootstrap --arch=amd64 --include="${INCLUDE_PKGS}" \
@@ -314,17 +314,6 @@ chroot "${ROOTFS}" apt-get install -y -q --no-install-recommends \
   amd64-microcode intel-microcode 2>/dev/null || warn "Some firmware unavailable"
 
 ok "Firmware installed"
-
-# VM Guest support (VirtualBox, VMware, QEMU/KVM)
-log "Installing VM guest support..."
-chroot "${ROOTFS}" apt-get install -y -q --no-install-recommends \
-  virtualbox-guest-utils \
-  open-vm-tools \
-  qemu-guest-agent \
-  spice-vdagent \
-  2>/dev/null || warn "Some VM guest packages unavailable"
-
-ok "VM guest support installed"
 
 # ══════════════════════════════════════════════════════════════════
 # Step 4: SecuBox packages (slipstream ALL from cache/repo)
@@ -554,30 +543,6 @@ for svc in lxc-net lxc; do
   chroot "${ROOTFS}" systemctl disable ${svc}.service 2>/dev/null || true
   chroot "${ROOTFS}" systemctl mask ${svc}.service 2>/dev/null || true
 done
-
-# Ensure required modules for live-boot are in initramfs
-log "Configuring initramfs modules..."
-cat >> "${ROOTFS}/etc/initramfs-tools/modules" <<EOF
-# Live boot requirements
-loop
-squashfs
-overlay
-isofs
-EOF
-
-# Configure live-boot
-mkdir -p "${ROOTFS}/etc/live/boot.conf.d"
-cat > "${ROOTFS}/etc/live/boot.conf.d/secubox.conf" <<EOF
-# SecuBox Live configuration
-LIVE_MEDIA_PATH=/live
-EOF
-
-# Ensure initramfs includes live-boot scripts
-echo "RESUME=none" > "${ROOTFS}/etc/initramfs-tools/conf.d/resume"
-
-# Regenerate initramfs with live-boot hooks
-log "Regenerating initramfs with live-boot support..."
-chroot "${ROOTFS}" update-initramfs -u -k all
 
 # Clean APT
 chroot "${ROOTFS}" apt-get clean
