@@ -145,6 +145,7 @@ INCLUDE_PKGS+=",iproute2,iputils-ping,ethtool,net-tools,wireguard-tools"
 INCLUDE_PKGS+=",sudo,less,vim-tiny,logrotate,cron,rsync,jq,dnsmasq"
 INCLUDE_PKGS+=",linux-image-amd64,live-boot,live-boot-initramfs-tools,live-config,live-config-systemd"
 INCLUDE_PKGS+=",grub-efi-amd64,efibootmgr,pciutils,usbutils,lsb-release"
+INCLUDE_PKGS+=",plymouth,plymouth-themes"
 
 debootstrap --arch=amd64 --include="${INCLUDE_PKGS}" \
   "${SUITE}" "${ROOTFS}" "${APT_MIRROR}"
@@ -547,6 +548,151 @@ chroot "${ROOTFS}" systemctl enable secubox-net-fallback.service 2>/dev/null || 
 chroot "${ROOTFS}" systemctl disable systemd-networkd-wait-online.service 2>/dev/null || true
 chroot "${ROOTFS}" systemctl mask systemd-networkd-wait-online.service 2>/dev/null || true
 
+# ── Plymouth Boot Splash Theme ─────────────────────────────────────
+log "Installing Plymouth boot splash..."
+
+# Create SecuBox Plymouth theme directory
+PLYMOUTH_DIR="${ROOTFS}/usr/share/plymouth/themes/secubox"
+mkdir -p "${PLYMOUTH_DIR}"
+
+# Create theme descriptor
+cat > "${PLYMOUTH_DIR}/secubox.plymouth" <<'PLYTHEME'
+[Plymouth Theme]
+Name=SecuBox Cyber
+Description=SecuBox VT100/DEC PDP-11 style boot splash
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/secubox
+ScriptFile=/usr/share/plymouth/themes/secubox/secubox.script
+PLYTHEME
+
+# Create Plymouth script (text-based retro look)
+cat > "${PLYMOUTH_DIR}/secubox.script" <<'PLYSCRIPT'
+# SecuBox Plymouth Theme - VT100/DEC PDP-11 Style
+# Green phosphor terminal aesthetic
+
+# Colors
+Window.SetBackgroundTopColor(0.0, 0.0, 0.0);
+Window.SetBackgroundBottomColor(0.0, 0.05, 0.0);
+
+# Logo and text positioning
+screen_width = Window.GetWidth();
+screen_height = Window.GetHeight();
+center_x = screen_width / 2;
+center_y = screen_height / 2;
+
+# Banner text (ASCII art simulation)
+banner_text = "SECUBOX CYBER DEFENSE SYSTEM";
+banner_sprite = Sprite();
+banner_image = Image.Text(banner_text, 0.0, 1.0, 0.0, "Fixed");
+banner_sprite.SetImage(banner_image);
+banner_sprite.SetPosition(center_x - banner_image.GetWidth() / 2, center_y - 100, 1);
+
+# Version line
+version_text = "DEC PDP-11/70 COMPATIBLE - SECURE BOOT SEQUENCE";
+version_sprite = Sprite();
+version_image = Image.Text(version_text, 0.0, 0.8, 0.0, "Fixed");
+version_sprite.SetImage(version_image);
+version_sprite.SetPosition(center_x - version_image.GetWidth() / 2, center_y - 60, 1);
+
+# Separator line
+sep_text = "================================================================";
+sep_sprite = Sprite();
+sep_image = Image.Text(sep_text, 0.0, 0.6, 0.0, "Fixed");
+sep_sprite.SetImage(sep_image);
+sep_sprite.SetPosition(center_x - sep_image.GetWidth() / 2, center_y - 40, 1);
+
+# Progress indicator
+progress_sprite = Sprite();
+
+fun refresh_callback() {
+    # Blinking cursor effect
+    time = Plymouth.GetTime();
+    if (Math.Int(time * 2) % 2 == 0) {
+        cursor_text = "_";
+    } else {
+        cursor_text = " ";
+    }
+    cursor_image = Image.Text(cursor_text, 0.0, 1.0, 0.0, "Fixed");
+    cursor_sprite = Sprite(cursor_image);
+    cursor_sprite.SetPosition(center_x + 100, center_y + 60, 2);
+}
+
+Plymouth.SetRefreshFunction(refresh_callback);
+
+# Boot progress bar
+progress_box_image = Image.Text("[                              ]", 0.0, 0.8, 0.0, "Fixed");
+progress_box_sprite = Sprite(progress_box_image);
+progress_box_sprite.SetPosition(center_x - progress_box_image.GetWidth() / 2, center_y + 20, 1);
+
+fun boot_progress_callback(duration, progress) {
+    # Update progress bar fill
+    fill_count = Math.Int(progress * 30);
+    fill_text = "";
+    for (i = 0; i < fill_count; i++) {
+        fill_text = fill_text + "#";
+    }
+    for (i = fill_count; i < 30; i++) {
+        fill_text = fill_text + " ";
+    }
+    progress_text = "[" + fill_text + "]";
+    progress_image = Image.Text(progress_text, 0.0, 1.0, 0.0, "Fixed");
+    progress_sprite.SetImage(progress_image);
+    progress_sprite.SetPosition(center_x - progress_image.GetWidth() / 2, center_y + 20, 1);
+}
+
+Plymouth.SetBootProgressFunction(boot_progress_callback);
+
+# Status message display
+message_sprite = Sprite();
+
+fun message_callback(text) {
+    message_image = Image.Text("> " + text, 0.0, 0.7, 0.0, "Fixed");
+    message_sprite.SetImage(message_image);
+    message_sprite.SetPosition(center_x - 200, center_y + 60, 1);
+}
+
+Plymouth.SetMessageFunction(message_callback);
+
+# Display mode change
+fun display_normal_callback() {
+    # Normal boot display
+}
+
+fun display_password_callback(prompt, bullets) {
+    # Password entry (for encrypted disks)
+    password_sprite = Sprite();
+    password_image = Image.Text(prompt + " " + bullets, 0.0, 1.0, 0.0, "Fixed");
+    password_sprite.SetImage(password_image);
+    password_sprite.SetPosition(center_x - password_image.GetWidth() / 2, center_y + 100, 1);
+}
+
+Plymouth.SetDisplayNormalFunction(display_normal_callback);
+Plymouth.SetDisplayPasswordFunction(display_password_callback);
+
+# System update messages
+fun system_update_callback(progress) {
+    update_text = "SYSTEM UPDATE: " + Math.Int(progress * 100) + "%";
+    update_image = Image.Text(update_text, 0.0, 0.8, 0.0, "Fixed");
+    update_sprite = Sprite(update_image);
+    update_sprite.SetPosition(center_x - update_image.GetWidth() / 2, center_y + 80, 1);
+}
+
+Plymouth.SetSystemUpdateFunction(system_update_callback);
+PLYSCRIPT
+
+# Set SecuBox theme as default
+mkdir -p "${ROOTFS}/etc/plymouth"
+echo "[Daemon]" > "${ROOTFS}/etc/plymouth/plymouthd.conf"
+echo "Theme=secubox" >> "${ROOTFS}/etc/plymouth/plymouthd.conf"
+echo "ShowDelay=0" >> "${ROOTFS}/etc/plymouth/plymouthd.conf"
+
+# Update alternatives to use our theme
+chroot "${ROOTFS}" plymouth-set-default-theme secubox 2>/dev/null || true
+
+ok "Plymouth SecuBox theme installed"
+
 ok "Base configuration complete"
 
 # ══════════════════════════════════════════════════════════════════
@@ -811,8 +957,12 @@ echo "squashfs" >> "${ROOTFS}/etc/modules-load.d/live.conf"
 echo "loop" >> "${ROOTFS}/etc/modules-load.d/live.conf"
 echo "overlay" >> "${ROOTFS}/etc/modules-load.d/live.conf"
 
-# Regenerate initramfs with live-boot hooks
-log "Regenerating initramfs..."
+# Ensure Plymouth is in initramfs
+mkdir -p "${ROOTFS}/etc/initramfs-tools/conf.d"
+echo "FRAMEBUFFER=y" > "${ROOTFS}/etc/initramfs-tools/conf.d/plymouth"
+
+# Regenerate initramfs with live-boot and Plymouth hooks
+log "Regenerating initramfs with Plymouth..."
 chroot "${ROOTFS}" update-initramfs -u -k all 2>/dev/null || warn "initramfs update failed"
 
 # Clean APT
@@ -954,7 +1104,7 @@ set menu_color_normal=cyan/black
 set menu_color_highlight=white/blue
 
 menuentry "SecuBox Live" {
-    linux ($live)/live/vmlinuz boot=live live-media-path=live components persistence console=tty0
+    linux ($live)/live/vmlinuz boot=live live-media-path=live components persistence quiet splash
     initrd ($live)/live/initrd.img
 }
 
@@ -964,7 +1114,7 @@ menuentry "SecuBox Live (Kiosk GUI)" {
 }
 
 menuentry "SecuBox Live (Bridge Mode)" {
-    linux ($live)/live/vmlinuz boot=live live-media-path=live components persistence console=tty0 secubox.netmode=bridge
+    linux ($live)/live/vmlinuz boot=live live-media-path=live components persistence quiet splash secubox.netmode=bridge
     initrd ($live)/live/initrd.img
 }
 
@@ -974,7 +1124,7 @@ menuentry "SecuBox Live (Safe Mode)" {
 }
 
 menuentry "SecuBox Live (To RAM)" {
-    linux ($live)/live/vmlinuz boot=live live-media-path=live components toram console=tty0
+    linux ($live)/live/vmlinuz boot=live live-media-path=live components toram quiet splash
     initrd ($live)/live/initrd.img
 }
 

@@ -1,6 +1,6 @@
 [Unit]
 Description=SecuBox Kiosk Mode (WebUI Display)
-After=network-online.target systemd-user-sessions.service
+After=systemd-user-sessions.service plymouth-quit-wait.service
 Wants=network-online.target
 Conflicts=getty@tty1.service
 
@@ -10,40 +10,49 @@ ConditionPathExists=/var/lib/secubox/.kiosk-enabled
 [Service]
 Type=simple
 
-# Run on tty1
-TTYPath=/dev/tty1
-StandardInput=tty
-StandardOutput=tty
-StandardError=journal
+# Run on tty7 (like normal display managers)
+TTYPath=/dev/tty7
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
 
 # Create runtime directory AS ROOT (before switching to User)
 ExecStartPre=+/bin/mkdir -p /run/user/1000
 ExecStartPre=+/bin/chown 1000:1000 /run/user/1000
 ExecStartPre=+/bin/chmod 700 /run/user/1000
 
+# Switch VT to tty7 before starting
+ExecStartPre=+/bin/chvt 7
+
 # Now switch to kiosk user
 User=secubox-kiosk
 Group=secubox-kiosk
 
 # Wayland/DRM access
-SupplementaryGroups=video audio input render
+SupplementaryGroups=video audio input render tty
 
 # Environment for Wayland
 Environment=XDG_RUNTIME_DIR=/run/user/1000
 Environment=XDG_SESSION_TYPE=wayland
 Environment=KIOSK_URL=https://192.168.255.1:9443/
+Environment=WAYLAND_DISPLAY=wayland-0
 
 # wlroots environment (VM compatibility)
 Environment=WLR_LIBINPUT_NO_DEVICES=1
 Environment=WLR_NO_HARDWARE_CURSORS=1
 Environment=WLR_RENDERER_ALLOW_SOFTWARE=1
+Environment=WLR_DRM_NO_ATOMIC=1
 
-# Cage compositor running kiosk script (no -d flag, not supported in 0.1.4)
+# Cage compositor running kiosk script
 ExecStart=/usr/bin/cage -s -- /home/secubox-kiosk/start-kiosk.sh
 
 Restart=on-failure
 RestartSec=5
-TimeoutStartSec=60
+TimeoutStartSec=90
+
+# Resource limits
+MemoryMax=1G
+TasksMax=200
 
 [Install]
 WantedBy=graphical.target
