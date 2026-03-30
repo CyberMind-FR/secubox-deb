@@ -31,7 +31,7 @@ SupplementaryGroups=video audio input render
 # Environment for Wayland
 Environment=XDG_RUNTIME_DIR=/run/user/1000
 Environment=XDG_SESSION_TYPE=wayland
-Environment=KIOSK_URL=https://localhost:9443/
+Environment=KIOSK_URL=https://192.168.255.1:9443/
 
 # wlroots environment (VM compatibility)
 Environment=WLR_LIBINPUT_NO_DEVICES=1
