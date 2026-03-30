@@ -187,8 +187,10 @@ XKBVARIANT="latin9"
 EOF
 echo 'KEYMAP=fr' > "${ROOTFS}/etc/vconsole.conf"
 
-# Enable SSH root login
+# Enable SSH root login with password
 sed -i 's/#PermitRootLogin.*/PermitRootLogin yes/' "${ROOTFS}/etc/ssh/sshd_config"
+sed -i 's/#PasswordAuthentication.*/PasswordAuthentication yes/' "${ROOTFS}/etc/ssh/sshd_config"
+sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/' "${ROOTFS}/etc/ssh/sshd_config"
 
 # ── Autologin root on tty1 ────────────────────────────────────────
 mkdir -p "${ROOTFS}/etc/systemd/system/getty@tty1.service.d"
@@ -843,7 +845,7 @@ if [[ $INCLUDE_KIOSK -eq 1 ]]; then
   log "Installing kiosk mode packages..."
   chroot "${ROOTFS}" apt-get install -y -q --no-install-recommends \
     cage chromium fonts-dejavu-core \
-    xwayland \
+    xwayland kbd \
     libinput10 libegl1 libgles2 libgbm1 libdrm2 \
     mesa-utils xdg-utils 2>/dev/null || true
 
@@ -1109,7 +1111,7 @@ menuentry "SecuBox Live" {
 }
 
 menuentry "SecuBox Live (Kiosk GUI)" {
-    linux ($live)/live/vmlinuz boot=live live-media-path=live components persistence quiet secubox.kiosk=1 systemd.unit=graphical.target
+    linux ($live)/live/vmlinuz boot=live live-media-path=live components persistence quiet splash secubox.kiosk=1 systemd.unit=graphical.target
     initrd ($live)/live/initrd.img
 }
 

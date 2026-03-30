@@ -7,8 +7,8 @@ Conflicts=getty@tty1.service
 [Service]
 Type=simple
 
-# Check if kiosk is enabled (replaces ConditionPathExists to avoid systemd caching)
-ExecStartPre=/bin/sh -c '[ -f /var/lib/secubox/.kiosk-enabled ] || exit 1'
+# Check if kiosk is enabled (+ prefix runs as root before User= switch)
+ExecStartPre=+/bin/sh -c '[ -f /var/lib/secubox/.kiosk-enabled ] || exit 1'
 
 # Run on tty7 (like normal display managers)
 TTYPath=/dev/tty7
@@ -31,11 +31,10 @@ Group=secubox-kiosk
 # Wayland/DRM access
 SupplementaryGroups=video audio input render tty
 
-# Environment for Wayland
+# Environment for Wayland (cage creates its own display, don't set WAYLAND_DISPLAY)
 Environment=XDG_RUNTIME_DIR=/run/user/1000
 Environment=XDG_SESSION_TYPE=wayland
 Environment=KIOSK_URL=https://192.168.255.1:9443/
-Environment=WAYLAND_DISPLAY=wayland-0
 
 # wlroots environment (VM compatibility)
 Environment=WLR_LIBINPUT_NO_DEVICES=1
