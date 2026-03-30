@@ -692,27 +692,27 @@ set menu_color_normal=cyan/black
 set menu_color_highlight=white/blue
 
 menuentry "SecuBox Live" {
-    linux ($live)/live/vmlinuz boot=live components persistence quiet
+    linux ($live)/live/vmlinuz boot=live live-media-path=/live components persistence quiet
     initrd ($live)/live/initrd.img
 }
 
 menuentry "SecuBox Live (Kiosk GUI)" {
-    linux ($live)/live/vmlinuz boot=live components persistence quiet secubox.kiosk=1 systemd.unit=graphical.target
+    linux ($live)/live/vmlinuz boot=live live-media-path=/live components persistence quiet secubox.kiosk=1 systemd.unit=graphical.target
     initrd ($live)/live/initrd.img
 }
 
 menuentry "SecuBox Live (Bridge Mode)" {
-    linux ($live)/live/vmlinuz boot=live components persistence quiet secubox.netmode=bridge
+    linux ($live)/live/vmlinuz boot=live live-media-path=/live components persistence quiet secubox.netmode=bridge
     initrd ($live)/live/initrd.img
 }
 
 menuentry "SecuBox Live (Safe Mode)" {
-    linux ($live)/live/vmlinuz boot=live components nomodeset nosplash
+    linux ($live)/live/vmlinuz boot=live live-media-path=/live components nomodeset nosplash
     initrd ($live)/live/initrd.img
 }
 
 menuentry "SecuBox Live (To RAM)" {
-    linux ($live)/live/vmlinuz boot=live components toram
+    linux ($live)/live/vmlinuz boot=live live-media-path=/live components toram
     initrd ($live)/live/initrd.img
 }
 GRUBCFG
