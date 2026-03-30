@@ -109,7 +109,7 @@ INCLUDE_PKGS="systemd,systemd-sysv,dbus,nftables,openssh-server"
 INCLUDE_PKGS+=",python3,python3-pip,nginx,curl,wget,ca-certificates,gnupg"
 INCLUDE_PKGS+=",iproute2,iputils-ping,net-tools,wireguard-tools"
 INCLUDE_PKGS+=",sudo,less,vim-tiny,cron,rsync,jq"
-INCLUDE_PKGS+=",linux-image-arm64,raspi-firmware"
+INCLUDE_PKGS+=",linux-image-arm64,plymouth,plymouth-themes"
 
 debootstrap --arch=arm64 --foreign --include="${INCLUDE_PKGS}" \
   "${SUITE}" "${ROOTFS}" "${APT_MIRROR}"
@@ -268,6 +268,85 @@ if [ -t 0 ] && [ -z "$SECUBOX_SPLASH_SHOWN" ]; then
 fi
 BASHRC
 
+# ── Plymouth Boot Splash Theme ─────────────────────────────────────
+log "Installing Plymouth boot splash..."
+
+PLYMOUTH_DIR="${ROOTFS}/usr/share/plymouth/themes/secubox"
+mkdir -p "${PLYMOUTH_DIR}"
+
+cat > "${PLYMOUTH_DIR}/secubox.plymouth" <<'PLYTHEME'
+[Plymouth Theme]
+Name=SecuBox Cyber
+Description=SecuBox VT100/DEC PDP-11 style boot splash
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/secubox
+ScriptFile=/usr/share/plymouth/themes/secubox/secubox.script
+PLYTHEME
+
+cat > "${PLYMOUTH_DIR}/secubox.script" <<'PLYSCRIPT'
+# SecuBox Plymouth Theme - Raspberry Pi Edition
+Window.SetBackgroundTopColor(0.0, 0.0, 0.0);
+Window.SetBackgroundBottomColor(0.0, 0.05, 0.0);
+
+screen_width = Window.GetWidth();
+screen_height = Window.GetHeight();
+center_x = screen_width / 2;
+center_y = screen_height / 2;
+
+banner_text = "SECUBOX CYBER DEFENSE SYSTEM";
+banner_sprite = Sprite();
+banner_image = Image.Text(banner_text, 0.0, 1.0, 0.0, "Fixed");
+banner_sprite.SetImage(banner_image);
+banner_sprite.SetPosition(center_x - banner_image.GetWidth() / 2, center_y - 100, 1);
+
+version_text = "RASPBERRY PI 400 - SECURE BOOT SEQUENCE";
+version_sprite = Sprite();
+version_image = Image.Text(version_text, 0.0, 0.8, 0.0, "Fixed");
+version_sprite.SetImage(version_image);
+version_sprite.SetPosition(center_x - version_image.GetWidth() / 2, center_y - 60, 1);
+
+progress_sprite = Sprite();
+
+fun boot_progress_callback(duration, progress) {
+    fill_count = Math.Int(progress * 30);
+    fill_text = "";
+    for (i = 0; i < fill_count; i++) { fill_text = fill_text + "#"; }
+    for (i = fill_count; i < 30; i++) { fill_text = fill_text + " "; }
+    progress_text = "[" + fill_text + "]";
+    progress_image = Image.Text(progress_text, 0.0, 1.0, 0.0, "Fixed");
+    progress_sprite.SetImage(progress_image);
+    progress_sprite.SetPosition(center_x - progress_image.GetWidth() / 2, center_y + 20, 1);
+}
+
+Plymouth.SetBootProgressFunction(boot_progress_callback);
+
+message_sprite = Sprite();
+
+fun message_callback(text) {
+    message_image = Image.Text("> " + text, 0.0, 0.7, 0.0, "Fixed");
+    message_sprite.SetImage(message_image);
+    message_sprite.SetPosition(center_x - 200, center_y + 60, 1);
+}
+
+Plymouth.SetMessageFunction(message_callback);
+PLYSCRIPT
+
+mkdir -p "${ROOTFS}/etc/plymouth"
+cat > "${ROOTFS}/etc/plymouth/plymouthd.conf" <<EOF
+[Daemon]
+Theme=secubox
+ShowDelay=0
+EOF
+
+chroot "${ROOTFS}" plymouth-set-default-theme secubox 2>/dev/null || true
+
+mkdir -p "${ROOTFS}/etc/initramfs-tools/conf.d"
+echo "FRAMEBUFFER=y" > "${ROOTFS}/etc/initramfs-tools/conf.d/plymouth"
+
+ok "Plymouth theme installed"
+
 ok "System configured"
 
 # ══════════════════════════════════════════════════════════════════
@@ -318,9 +397,9 @@ EOF
 
 chroot "${ROOTFS}" apt-get update -q
 
-# Install firmware
+# Install firmware and Raspberry Pi boot files
 chroot "${ROOTFS}" apt-get install -y -q --no-install-recommends \
-  firmware-brcm80211 firmware-misc-nonfree \
+  raspi-firmware firmware-brcm80211 firmware-misc-nonfree \
   2>/dev/null || warn "Some firmware unavailable"
 
 # SecuBox packages from local cache
@@ -383,10 +462,14 @@ enable_uart=1
 #arm_freq=2000
 EOF
 
-# cmdline.txt
+# cmdline.txt (with splash for Plymouth)
 cat > "${ROOTFS}/boot/firmware/cmdline.txt" <<EOF
-console=serial0,115200 console=tty1 root=/dev/mmcblk0p2 rootfstype=ext4 elevator=deadline fsck.repair=yes rootwait quiet
+console=serial0,115200 console=tty1 root=/dev/mmcblk0p2 rootfstype=ext4 elevator=deadline fsck.repair=yes rootwait quiet splash
 EOF
+
+# Regenerate initramfs with Plymouth
+log "Regenerating initramfs with Plymouth..."
+chroot "${ROOTFS}" update-initramfs -u -k all 2>/dev/null || warn "initramfs update issue"
 
 ok "Pi bootloader configured"
 
@@ -437,9 +520,9 @@ UUID=${BOOT_UUID}  /boot/firmware  vfat    defaults          0       2
 UUID=${ROOT_UUID}  /               ext4    defaults,noatime  0       1
 EOF
 
-# Update cmdline with UUID
+# Update cmdline with UUID (splash for Plymouth boot graphics)
 cat > "${MNT}/boot/firmware/cmdline.txt" <<EOF
-console=serial0,115200 console=tty1 root=UUID=${ROOT_UUID} rootfstype=ext4 elevator=deadline fsck.repair=yes rootwait quiet
+console=serial0,115200 console=tty1 root=UUID=${ROOT_UUID} rootfstype=ext4 elevator=deadline fsck.repair=yes rootwait quiet splash
 EOF
 
 # Sync and unmount
