@@ -3,6 +3,29 @@
 
 ---
 
+## 2026-03-30
+
+### Plymouth Boot Splash & Kiosk Fixes
+- Added Plymouth boot splash with VT100/DEC PDP-style green phosphor theme
+- Boot graphics now show DURING boot (not just at login)
+- Fixed kiosk mode service configuration:
+  - Changed from tty1 to tty7 (like standard display managers)
+  - Proper VT allocation and switching
+  - Better wlroots environment variables for VMs
+  - Added tty supplementary group for DRM access
+- Updated GRUB menu entries with `splash` parameter
+- Added initramfs configuration for Plymouth framebuffer
+- RPi 400 build: Added Plymouth support with ARM64 theme
+- Tags: v1.3.6
+
+### Previous Boot Fixes (v1.3.2-v1.3.5)
+- Added VT100 retro CRT DEC PDP-style cyber splash
+- Added hardware auto-check boot mode (`secubox.hwcheck=1`)
+- Fixed boot hanging services with timeouts
+- RPi 400 image builder with HDMI console autologin
+
+---
+
 ## 2026-03-29
 
 ### Kiosk Mode Bug Fixes
