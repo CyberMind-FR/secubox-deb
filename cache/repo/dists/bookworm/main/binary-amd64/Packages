@@ -193,6 +193,29 @@ MD5sum: 3aaf327cd8c2125fcef6e1bd93bf0be1
 Description: SecuBox Cve-triage Module
  CVE Vulnerability Triage
 
+Package: secubox-daemon
+Version: 0.1.0-1
+Architecture: amd64
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Installed-Size: 13018
+Depends: libc6 (>= 2.34), wireguard-tools
+Recommends: secubox-core
+Homepage: https://cybermind.fr/secubox
+Priority: optional
+Section: net
+Filename: pool/main/s/secubox-daemon/secubox-daemon_0.1.0-1_amd64.deb
+Size: 4026710
+SHA256: fadeb4860c4d53f297eaff6e86044709cfba36e35df966c80e934ebd23851518
+SHA1: daee97068112340daf72a2a9291278f7c2d94d1f
+MD5sum: 0d48e026bea30a1fc876e7e40c89f5c9
+Description: SecuBox Mesh Daemon - WireGuard mesh with ZKP authentication
+ Go-based mesh networking daemon for SecuBox featuring:
+ - mDNS peer discovery
+ - WireGuard mesh topology with automatic mesh gate election
+ - GK-HAM-2025 Zero-Knowledge Proof authentication with 24h PFS
+ - SQLite telemetry with metrics collection
+ Includes secuboxd daemon, secuboxctl CLI, and c3box dashboard.
+
 Package: secubox-device-intel
 Version: 1.2.1-1~bookworm1
 Architecture: all
