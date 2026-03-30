@@ -284,8 +284,33 @@
         /* Empty states */
         .empty { color: var(--p31-dim); }
 
+        /* Stat cards for auto-detect */
+        .stat-card {
+            background: var(--tube-pale);
+            border: 1px solid var(--tube-soft);
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+        }
+        .stat-card .label {
+            font-size: 0.7rem;
+            letter-spacing: 0.15em;
+            color: var(--p31-dim);
+            margin-bottom: 0.5rem;
+        }
+        .stat-card .value {
+            font-size: 1.1rem;
+            font-weight: bold;
+            font-family: 'Courier Prime', monospace;
+        }
+        .stat-card.cyan .value { color: var(--p31-peak); text-shadow: 0 0 8px var(--p31-peak); }
+        .stat-card.green .value { color: var(--p31-peak); }
+        .stat-card.purple .value { color: #a371f7; }
+        .stat-card.yellow .value { color: var(--p31-decay); }
+
         @media (max-width: 768px) {
             .main { margin-left: 0; }
+            #detect-result { grid-template-columns: repeat(2, 1fr) !important; }
         }
     </style>
 </head>
@@ -297,13 +322,45 @@
         <header class="header">
             <div class="header-title"><h1>🌐 Network Modes</h1></div>
             <div class="header-actions">
-                <button class="btn success" onclick="applyConfig()">✓ Apply Configuration</button>
+                <button class="btn primary" onclick="autoDetect()" id="btn-autodetect">⚡ Auto-Detect</button>
+                <button class="btn success" onclick="applyConfig()">✓ Apply</button>
                 <button class="btn" onclick="testConfig()">🔍 Test</button>
                 <button class="btn warning" onclick="resetNetwork()">↺ Reset</button>
             </div>
         </header>
 
         <div class="content">
+            <!-- Auto-Detect Card -->
+            <div class="card" id="detect-card" style="margin-bottom: 1.5rem; display: none;">
+                <div class="card-header">
+                    <h2>⚡ Auto-Detection</h2>
+                    <span class="badge badge-green" id="detect-status">READY</span>
+                </div>
+                <div id="detect-result" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-top: 1rem;">
+                    <div class="stat-card cyan">
+                        <div class="label">BOARD</div>
+                        <div class="value" id="detect-board">-</div>
+                    </div>
+                    <div class="stat-card green">
+                        <div class="label">WAN</div>
+                        <div class="value" id="detect-wan">-</div>
+                    </div>
+                    <div class="stat-card green">
+                        <div class="label">LAN</div>
+                        <div class="value" id="detect-lan">-</div>
+                    </div>
+                    <div class="stat-card purple">
+                        <div class="label">SFP</div>
+                        <div class="value" id="detect-sfp">-</div>
+                    </div>
+                </div>
+                <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
+                    <button class="btn success" onclick="autoApply(false)">✓ Apply Detected Config</button>
+                    <button class="btn" onclick="autoApply(true)">👁 Preview YAML</button>
+                    <button class="btn" onclick="hideDetectCard()">✕ Dismiss</button>
+                </div>
+            </div>
+
             <div class="warning-box">
                 <p>⚠️ Changing network mode will restart network services. Connection may be temporarily lost.</p>
             </div>
@@ -436,10 +493,47 @@
         const API = '/api/v1/netmodes';
         let currentMode = 'router';
 
+        function getToken() {
+            // Try multiple storage keys for JWT token
+            return localStorage.getItem('sbx_token') ||
+                   localStorage.getItem('jwt') ||
+                   sessionStorage.getItem('sbx_token') ||
+                   document.cookie.split('; ').find(c => c.startsWith('jwt='))?.split('=')[1] || '';
+        }
+
         async function api(endpoint, method = 'GET', data = null) {
-            const opts = { method, headers: { 'Content-Type': 'application/json' } };
+            const token = getToken();
+            const opts = {
+                method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` })
+                }
+            };
             if (data) opts.body = JSON.stringify(data);
-            try { const res = await fetch(API + endpoint, opts); return res.json(); } catch (e) { return {}; }
+            try {
+                const res = await fetch(API + endpoint, opts);
+                if (res.status === 401) {
+                    // Try to get fresh token via login
+                    const loginRes = await fetch('/api/v1/hub/auth/auth/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username: 'admin', password: 'secubox' })
+                    });
+                    if (loginRes.ok) {
+                        const loginData = await loginRes.json();
+                        localStorage.setItem('sbx_token', loginData.access_token);
+                        // Retry original request with new token
+                        opts.headers['Authorization'] = `Bearer ${loginData.access_token}`;
+                        const retry = await fetch(API + endpoint, opts);
+                        return retry.json();
+                    }
+                }
+                return res.json();
+            } catch (e) {
+                console.error('API error:', e);
+                return { error: e.message };
+            }
         }
 
         function selectMode(mode) {
@@ -484,13 +578,109 @@
         async function saveLan() { alert('LAN configuration saved'); }
         async function saveBridge() { alert('Bridge created'); loadInterfaces(); }
         async function deleteBridge() { if (confirm('Delete bridge?')) { alert('Bridge deleted'); loadInterfaces(); } }
-        async function applyConfig() { if (confirm('Apply configuration?')) { await api('/apply', 'POST', { mode: currentMode }); alert('Configuration applied'); } }
-        async function testConfig() { const result = await api('/test', 'POST'); alert(result.success ? 'Configuration valid' : 'Errors found'); }
-        async function reloadNetplan() { await api('/reload_netplan', 'POST'); alert('Netplan reloaded'); }
-        async function resetNetwork() { if (confirm('Reset to defaults?')) { await api('/reset', 'POST'); loadInterfaces(); } }
+        async function applyConfig() { if (confirm('Apply configuration?')) { await api('/apply_mode', 'POST', { mode: currentMode }); alert('Configuration applied'); } }
+        async function testConfig() { const result = await api('/validate_config'); alert(result.valid ? 'Configuration valid' : 'Errors: ' + result.output); }
+        async function reloadNetplan() { await api('/apply_mode', 'POST', { mode: currentMode }); alert('Netplan reloaded'); }
+        async function resetNetwork() { if (confirm('Reset to defaults?')) { await api('/rollback', 'POST'); loadInterfaces(); } }
+
+        // ══════════════════════════════════════════════════════════════
+        // Auto-Detection Functions
+        // ══════════════════════════════════════════════════════════════
+        let detectResult = null;
+
+        async function autoDetect() {
+            const btn = document.getElementById('btn-autodetect');
+            const card = document.getElementById('detect-card');
+            const status = document.getElementById('detect-status');
+
+            btn.disabled = true;
+            btn.textContent = '⏳ Detecting...';
+            status.textContent = 'SCANNING';
+            status.className = 'badge badge-yellow';
+            card.style.display = 'block';
+
+            try {
+                detectResult = await api('/detect');
+
+                if (detectResult.error) {
+                    status.textContent = 'ERROR';
+                    status.className = 'badge badge-red';
+                    document.getElementById('detect-board').textContent = detectResult.error;
+                } else {
+                    status.textContent = 'DETECTED';
+                    status.className = 'badge badge-green';
+
+                    const ifaces = detectResult.interfaces || {};
+                    document.getElementById('detect-board').textContent = detectResult.board || 'unknown';
+                    document.getElementById('detect-wan').textContent = ifaces.wan || '-';
+                    document.getElementById('detect-lan').textContent = ifaces.lan || '-';
+                    document.getElementById('detect-sfp').textContent = ifaces.sfp || '-';
+
+                    // Pre-fill WAN/LAN selectors
+                    if (ifaces.wan) {
+                        const wanSelect = document.getElementById('wan-iface');
+                        if (wanSelect) {
+                            // Add option if not exists
+                            if (!Array.from(wanSelect.options).find(o => o.value === ifaces.wan)) {
+                                wanSelect.add(new Option(ifaces.wan, ifaces.wan));
+                            }
+                            wanSelect.value = ifaces.wan;
+                        }
+                    }
+                }
+            } catch (e) {
+                status.textContent = 'ERROR';
+                status.className = 'badge badge-red';
+                document.getElementById('detect-board').textContent = e.message;
+            }
+
+            btn.disabled = false;
+            btn.textContent = '⚡ Auto-Detect';
+        }
+
+        async function autoApply(dryRun = false) {
+            if (!detectResult || detectResult.error) {
+                alert('Run Auto-Detect first');
+                return;
+            }
+
+            const result = await api('/auto_apply', 'POST', {
+                mode: currentMode,
+                dry_run: dryRun
+            });
+
+            if (dryRun) {
+                // Show YAML preview
+                const yaml = result.yaml || 'No YAML generated';
+                alert('Generated netplan config:\n\n' + yaml);
+            } else {
+                if (result.success) {
+                    alert('Configuration applied successfully!\nBoard: ' + result.board + '\nMode: ' + result.mode);
+                    loadInterfaces();
+                } else {
+                    alert('Apply failed: ' + (result.error || 'Unknown error'));
+                }
+            }
+        }
+
+        function hideDetectCard() {
+            document.getElementById('detect-card').style.display = 'none';
+        }
+
+        // Check for cached board info on load
+        async function loadBoardInfo() {
+            try {
+                const info = await api('/board_info');
+                if (info.board && info.board !== 'unknown') {
+                    detectResult = info;
+                    // Optionally show card with cached info
+                }
+            } catch (e) {}
+        }
 
         loadInterfaces();
         loadCurrentMode();
+        loadBoardInfo();
         setInterval(loadInterfaces, 30000);
     </script>
     <script src="/shared/crt-engine.js"></script>

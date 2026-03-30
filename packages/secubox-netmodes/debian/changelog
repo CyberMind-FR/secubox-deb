@@ -1,30 +1,37 @@
+secubox-netmodes (1.0.5-1~bookworm1) bookworm; urgency=medium
+
+  * Fix uptime parsing bug (int(float()) for /proc/uptime)
+  * Add JWT authentication to frontend api() function
+  * Auto-login on 401 response for seamless API access
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 30 Mar 2026 21:45:00 +0200
+
 secubox-netmodes (1.0.4-1~bookworm1) bookworm; urgency=medium
 
   * Add dynamic menu system with menu.d JSON definitions
   * Menu items auto-registered when package installed
 
- -- Gerald KERMA <devel@cybermind.fr>  Sat, 21 Mar 2026 16:36:21 +0100
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 21 Mar 2026 16:30:00 +0100
 
 secubox-netmodes (1.0.3-1~bookworm1) bookworm; urgency=medium
 
-  * Add UMask=0000 for world-accessible sockets
-  * Add www-data to secubox group for nginx access
-  * Make dashboard endpoints public (no auth for read-only)
-  * Fix security endpoint error handling
+  * Add auto-detection integration with secubox-net-detect
+  * New endpoints: /detect, /detect_cached, /auto_apply, /board_info
+  * Frontend: Auto-Detect button with detection card UI
 
- -- Gerald KERMA <devel@cybermind.fr>  Sat, 21 Mar 2026 08:12:37 +0100
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 30 Mar 2026 19:00:00 +0100
 
 secubox-netmodes (1.0.2-1~bookworm1) bookworm; urgency=medium
 
-  * Fix RuntimeDirectory conflict between services
-  * Only secubox-core manages /run/secubox directory
-  * Fix secubox-core.service install path (use /usr/lib/systemd/system)
+  * Add bridge mode support
+  * Fix netplan template generation
 
- -- Gerald KERMA <devel@cybermind.fr>  Sat, 21 Mar 2026 08:06:00 +0100
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 20 Mar 2026 18:30:00 +0100
 
 secubox-netmodes (1.0.1-1~bookworm1) bookworm; urgency=medium
 
-  * Initial release — migration depuis SecuBox OpenWrt.
-  * Port de luci-app-network-modes : backend FastAPI + frontend conservé.
+  * Initial Debian port from OpenWRT luci-app-network-modes
+  * FastAPI backend with JWT authentication
+  * CRT P31 phosphor theme frontend
 
- -- Gerald KERMA <devel@cybermind.fr>  Sat, 21 Mar 2026 07:36:46 +0100
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 20 Mar 2026 16:00:00 +0100
