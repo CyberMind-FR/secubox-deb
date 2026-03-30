@@ -315,6 +315,17 @@ chroot "${ROOTFS}" apt-get install -y -q --no-install-recommends \
 
 ok "Firmware installed"
 
+# VM Guest support (VirtualBox, VMware, QEMU/KVM)
+log "Installing VM guest support..."
+chroot "${ROOTFS}" apt-get install -y -q --no-install-recommends \
+  virtualbox-guest-utils \
+  open-vm-tools \
+  qemu-guest-agent \
+  spice-vdagent \
+  2>/dev/null || warn "Some VM guest packages unavailable"
+
+ok "VM guest support installed"
+
 # ══════════════════════════════════════════════════════════════════
 # Step 4: SecuBox packages (slipstream ALL from cache/repo)
 # ══════════════════════════════════════════════════════════════════
