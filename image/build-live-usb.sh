@@ -217,20 +217,23 @@ EOF
 mkdir -p "${ROOTFS}/etc/netplan"
 
 # Main netplan config - DHCP on all interfaces, optional so no boot block
-cat > "${ROOTFS}/etc/netplan/00-secubox.yaml" <<EOF
+cat > "${ROOTFS}/etc/netplan/00-secubox.yaml" <<'NETPLAN'
 network:
   version: 2
   renderer: networkd
   ethernets:
     all-en:
-      match: {name: "en*"}
+      match:
+        name: "en*"
       dhcp4: true
       optional: true
     all-eth:
-      match: {name: "eth*"}
+      match:
+        name: "eth*"
       dhcp4: true
       optional: true
-EOF
+NETPLAN
+chmod 600 "${ROOTFS}/etc/netplan/00-secubox.yaml"
 
 # Dummy interface with fixed IP - always available for kiosk/local access
 cat > "${ROOTFS}/etc/systemd/network/10-dummy0.netdev" <<EOF
