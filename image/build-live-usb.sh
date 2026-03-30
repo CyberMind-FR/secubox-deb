@@ -220,6 +220,99 @@ net.ipv4.conf.all.log_martians=0
 kernel.printk=1 1 1 1
 EOF
 
+# ── Hardware Check Service ──────────────────────────────────────────
+# Auto-check hardware and report at boot when secubox.hwcheck=1
+cat > "${ROOTFS}/usr/local/bin/secubox-hwcheck" <<'HWCHECK'
+#!/bin/bash
+# SecuBox Hardware Check - Evaluates system hardware and reports status
+
+REPORT_FILE="/var/log/secubox-hwcheck.log"
+REPORT_CONSOLE="/dev/tty1"
+
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$REPORT_FILE"
+    [ -c "$REPORT_CONSOLE" ] && echo "$*" > "$REPORT_CONSOLE"
+}
+
+check_hw() {
+    log "═══════════════════════════════════════════════════════════"
+    log "  SecuBox Hardware Check Report"
+    log "═══════════════════════════════════════════════════════════"
+
+    # CPU
+    CPU_MODEL=$(grep -m1 "model name" /proc/cpuinfo | cut -d: -f2 | xargs)
+    CPU_CORES=$(grep -c processor /proc/cpuinfo)
+    log "CPU: $CPU_MODEL ($CPU_CORES cores)"
+
+    # Memory
+    MEM_TOTAL=$(free -h | awk '/Mem:/ {print $2}')
+    MEM_AVAIL=$(free -h | awk '/Mem:/ {print $7}')
+    log "RAM: $MEM_TOTAL total, $MEM_AVAIL available"
+
+    # Storage
+    log "Storage devices:"
+    lsblk -d -o NAME,SIZE,TYPE,MODEL 2>/dev/null | grep -v "^NAME" | while read line; do
+        log "  $line"
+    done
+
+    # Network
+    log "Network interfaces:"
+    for iface in /sys/class/net/*; do
+        name=$(basename "$iface")
+        [ "$name" = "lo" ] && continue
+        state=$(cat "$iface/operstate" 2>/dev/null || echo "unknown")
+        mac=$(cat "$iface/address" 2>/dev/null || echo "n/a")
+        log "  $name: $state ($mac)"
+    done
+
+    # Graphics
+    log "Graphics:"
+    lspci 2>/dev/null | grep -iE "vga|3d|display" | while read line; do
+        log "  $line"
+    done
+
+    # Boot mode
+    if [ -d /sys/firmware/efi ]; then
+        log "Boot mode: UEFI"
+    else
+        log "Boot mode: BIOS/Legacy"
+    fi
+
+    # Virtualization detection
+    VIRT=$(systemd-detect-virt 2>/dev/null || echo "none")
+    log "Virtualization: $VIRT"
+
+    log "═══════════════════════════════════════════════════════════"
+    log "  Hardware check complete - System ready"
+    log "═══════════════════════════════════════════════════════════"
+}
+
+# Check if hwcheck requested via kernel cmdline
+if grep -q "secubox.hwcheck=1" /proc/cmdline; then
+    check_hw
+fi
+HWCHECK
+chmod +x "${ROOTFS}/usr/local/bin/secubox-hwcheck"
+
+# Systemd service for hardware check
+cat > "${ROOTFS}/etc/systemd/system/secubox-hwcheck.service" <<'HWSVC'
+[Unit]
+Description=SecuBox Hardware Check
+After=local-fs.target
+Before=getty@tty1.service
+ConditionKernelCommandLine=secubox.hwcheck=1
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/secubox-hwcheck
+RemainAfterExit=yes
+StandardOutput=journal+console
+
+[Install]
+WantedBy=multi-user.target
+HWSVC
+chroot "${ROOTFS}" systemctl enable secubox-hwcheck.service 2>/dev/null || true
+
 # ── Network config with dummy interface for kiosk ─────────────────
 mkdir -p "${ROOTFS}/etc/netplan"
 
@@ -706,7 +799,7 @@ set menu_color_normal=cyan/black
 set menu_color_highlight=white/blue
 
 menuentry "SecuBox Live" {
-    linux ($live)/live/vmlinuz boot=live live-media-path=live components persistence quiet
+    linux ($live)/live/vmlinuz boot=live live-media-path=live components persistence console=tty0
     initrd ($live)/live/initrd.img
 }
 
@@ -716,17 +809,22 @@ menuentry "SecuBox Live (Kiosk GUI)" {
 }
 
 menuentry "SecuBox Live (Bridge Mode)" {
-    linux ($live)/live/vmlinuz boot=live live-media-path=live components persistence quiet secubox.netmode=bridge
+    linux ($live)/live/vmlinuz boot=live live-media-path=live components persistence console=tty0 secubox.netmode=bridge
     initrd ($live)/live/initrd.img
 }
 
 menuentry "SecuBox Live (Safe Mode)" {
-    linux ($live)/live/vmlinuz boot=live live-media-path=live components nomodeset nosplash
+    linux ($live)/live/vmlinuz boot=live live-media-path=live components nomodeset console=tty0
     initrd ($live)/live/initrd.img
 }
 
 menuentry "SecuBox Live (To RAM)" {
-    linux ($live)/live/vmlinuz boot=live live-media-path=live components toram
+    linux ($live)/live/vmlinuz boot=live live-media-path=live components toram console=tty0
+    initrd ($live)/live/initrd.img
+}
+
+menuentry "SecuBox Live (Auto-Check HW)" {
+    linux ($live)/live/vmlinuz boot=live live-media-path=live components nomodeset console=tty0 secubox.hwcheck=1
     initrd ($live)/live/initrd.img
 }
 GRUBCFG
