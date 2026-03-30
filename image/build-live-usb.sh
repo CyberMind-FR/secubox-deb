@@ -143,7 +143,7 @@ INCLUDE_PKGS="systemd,systemd-sysv,dbus,netplan.io,nftables,openssh-server"
 INCLUDE_PKGS+=",python3,python3-pip,nginx,curl,wget,ca-certificates,gnupg"
 INCLUDE_PKGS+=",iproute2,iputils-ping,ethtool,net-tools,wireguard-tools"
 INCLUDE_PKGS+=",sudo,less,vim-tiny,logrotate,cron,rsync,jq,dnsmasq"
-INCLUDE_PKGS+=",linux-image-amd64,live-boot,live-config,live-config-systemd"
+INCLUDE_PKGS+=",linux-image-amd64,live-boot,live-boot-initramfs-tools,live-config,live-config-systemd"
 INCLUDE_PKGS+=",grub-efi-amd64,efibootmgr,pciutils,usbutils,lsb-release"
 
 debootstrap --arch=amd64 --include="${INCLUDE_PKGS}" \
@@ -543,6 +543,15 @@ for svc in lxc-net lxc; do
   chroot "${ROOTFS}" systemctl disable ${svc}.service 2>/dev/null || true
   chroot "${ROOTFS}" systemctl mask ${svc}.service 2>/dev/null || true
 done
+
+# Ensure squashfs module loads at boot
+echo "squashfs" >> "${ROOTFS}/etc/modules-load.d/live.conf"
+echo "loop" >> "${ROOTFS}/etc/modules-load.d/live.conf"
+echo "overlay" >> "${ROOTFS}/etc/modules-load.d/live.conf"
+
+# Regenerate initramfs with live-boot hooks
+log "Regenerating initramfs..."
+chroot "${ROOTFS}" update-initramfs -u -k all 2>/dev/null || warn "initramfs update failed"
 
 # Clean APT
 chroot "${ROOTFS}" apt-get clean
