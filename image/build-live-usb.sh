@@ -22,7 +22,7 @@ APT_SECUBOX="https://apt.secubox.in"
 USE_LOCAL_CACHE=0
 SLIPSTREAM_DEBS=1
 INCLUDE_PERSISTENCE=1
-INCLUDE_KIOSK=0
+INCLUDE_KIOSK=1
 PRESEED_FILE=""
 NO_COMPRESS=0
 
@@ -43,7 +43,7 @@ Usage: sudo bash build-live-usb.sh [OPTIONS]
   --out     DIR      Output directory (default: ./output)
   --size    SIZE     Total image size (default: 8G)
   --local-cache      Use local APT cache
-  --kiosk            Include GUI kiosk mode packages
+  --no-kiosk         Disable GUI kiosk mode (enabled by default)
   --no-persistence   Don't include persistent storage partition
   --no-compress      Skip gzip compression (faster, for local testing)
   --preseed FILE     Include preseed config archive
@@ -54,7 +54,7 @@ Features:
   - All SecuBox packages pre-installed
   - Root autologin on console
   - Network auto-detection at first boot
-  - Optional kiosk mode (--kiosk)
+  - GUI kiosk mode included by default (--no-kiosk to disable)
 
 Output:
   secubox-live-amd64-bookworm.img     - Raw bootable image
@@ -73,7 +73,7 @@ while [[ $# -gt 0 ]]; do
     --out)            OUT_DIR="$2";         shift 2 ;;
     --size)           IMG_SIZE="$2";        shift 2 ;;
     --local-cache)    USE_LOCAL_CACHE=1;    shift   ;;
-    --kiosk)          INCLUDE_KIOSK=1;      shift   ;;
+    --no-kiosk)       INCLUDE_KIOSK=0;      shift   ;;
     --no-persistence) INCLUDE_PERSISTENCE=0; shift   ;;
     --no-compress)    NO_COMPRESS=1;        shift   ;;
     --preseed)        PRESEED_FILE="$2";    shift 2 ;;
