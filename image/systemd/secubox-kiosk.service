@@ -4,11 +4,11 @@ After=systemd-user-sessions.service plymouth-quit-wait.service
 Wants=network-online.target
 Conflicts=getty@tty1.service
 
-# Only start if kiosk is enabled
-ConditionPathExists=/var/lib/secubox/.kiosk-enabled
-
 [Service]
 Type=simple
+
+# Check if kiosk is enabled (replaces ConditionPathExists to avoid systemd caching)
+ExecStartPre=/bin/sh -c '[ -f /var/lib/secubox/.kiosk-enabled ] || exit 1'
 
 # Run on tty7 (like normal display managers)
 TTYPath=/dev/tty7
