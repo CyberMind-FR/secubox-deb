@@ -234,65 +234,218 @@ log() {
     [ -c "$REPORT_CONSOLE" ] && echo "$*" > "$REPORT_CONSOLE"
 }
 
+cyber_banner() {
+    # VT100 green phosphor style
+    echo -e "\033[32m"
+    cat << 'BANNER'
+
+  ____  _____ ____ _   _ ____   _____  __
+ / ___|| ____/ ___| | | | __ ) / _ \ \/ /
+ \___ \|  _|| |   | | | |  _ \| | | \  /
+  ___) | |__| |___| |_| | |_) | |_| /  \
+ |____/|_____\____|\___/|____/ \___/_/\_\
+
+================================================================
+  DEC PDP-11/70 COMPATIBLE - HARDWARE EVALUATION MODE
+================================================================
+
+BANNER
+}
+
 check_hw() {
-    log "═══════════════════════════════════════════════════════════"
-    log "  SecuBox Hardware Check Report"
-    log "═══════════════════════════════════════════════════════════"
+    clear
+    cyber_banner
+    sleep 1
+
+    log ">>>> SYSTEM HARDWARE SCAN INITIATED <<<<"
+    log "================================================================"
+    echo ""
 
     # CPU
     CPU_MODEL=$(grep -m1 "model name" /proc/cpuinfo | cut -d: -f2 | xargs)
     CPU_CORES=$(grep -c processor /proc/cpuinfo)
-    log "CPU: $CPU_MODEL ($CPU_CORES cores)"
+    log "CPU.......... $CPU_MODEL"
+    log "             ($CPU_CORES PROCESSOR UNITS)"
 
     # Memory
     MEM_TOTAL=$(free -h | awk '/Mem:/ {print $2}')
     MEM_AVAIL=$(free -h | awk '/Mem:/ {print $7}')
-    log "RAM: $MEM_TOTAL total, $MEM_AVAIL available"
+    log "MEMORY....... $MEM_TOTAL TOTAL / $MEM_AVAIL AVAILABLE"
 
     # Storage
-    log "Storage devices:"
+    log "STORAGE DEVICES:"
     lsblk -d -o NAME,SIZE,TYPE,MODEL 2>/dev/null | grep -v "^NAME" | while read line; do
-        log "  $line"
+        log "  * $line"
     done
 
     # Network
-    log "Network interfaces:"
+    log "NETWORK INTERFACES:"
     for iface in /sys/class/net/*; do
         name=$(basename "$iface")
         [ "$name" = "lo" ] && continue
         state=$(cat "$iface/operstate" 2>/dev/null || echo "unknown")
         mac=$(cat "$iface/address" 2>/dev/null || echo "n/a")
-        log "  $name: $state ($mac)"
+        if [ "$state" = "up" ]; then
+            log "  [+] $name: $state ($mac)"
+        else
+            log "  [-] $name: $state ($mac)"
+        fi
     done
 
     # Graphics
-    log "Graphics:"
+    log "GRAPHICS ADAPTER:"
     lspci 2>/dev/null | grep -iE "vga|3d|display" | while read line; do
-        log "  $line"
+        log "  * $line"
     done
 
     # Boot mode
     if [ -d /sys/firmware/efi ]; then
-        log "Boot mode: UEFI"
+        log "BOOT MODE.... UEFI"
     else
-        log "Boot mode: BIOS/Legacy"
+        log "BOOT MODE.... BIOS/LEGACY"
     fi
 
     # Virtualization detection
     VIRT=$(systemd-detect-virt 2>/dev/null || echo "none")
-    log "Virtualization: $VIRT"
+    if [ "$VIRT" = "none" ]; then
+        log "PLATFORM..... BARE METAL"
+    else
+        log "PLATFORM..... VIRTUAL ($VIRT)"
+    fi
 
-    log "═══════════════════════════════════════════════════════════"
-    log "  Hardware check complete - System ready"
-    log "═══════════════════════════════════════════════════════════"
+    echo ""
+    log "================================================================"
+    log ">>>> HARDWARE CHECK COMPLETE - ALL SYSTEMS NOMINAL <<<<"
+    log ">>>> SECUBOX CYBER DEFENSE PLATFORM READY <<<<"
+    log "================================================================"
+    echo ""
+}
+
+# Cyber boot splash with status - VT100 style
+cyber_splash() {
+    clear
+    echo -e "\033[32m"
+    cyber_banner
+
+    local steps=(
+        "INITIALIZING SECURE ENVIRONMENT.......... OK"
+        "LOADING CRYPTOGRAPHIC MODULES............ OK"
+        "CONFIGURING NETWORK STACK................ OK"
+        "ACTIVATING FIREWALL RULES................ OK"
+        "SCANNING FOR THREATS..................... CLEAR"
+        "HARDENING SYSTEM......................... OK"
+        "OPTIMIZING PERFORMANCE................... OK"
+    )
+
+    for step in "${steps[@]}"; do
+        echo -e "  > $step"
+        sleep 0.3
+    done
+
+    echo ""
+    echo "  >>>> SECURE BOOT SEQUENCE COMPLETE <<<<"
+    echo ""
+    sleep 1
 }
 
 # Check if hwcheck requested via kernel cmdline
 if grep -q "secubox.hwcheck=1" /proc/cmdline; then
+    cyber_splash
     check_hw
 fi
 HWCHECK
 chmod +x "${ROOTFS}/usr/local/bin/secubox-hwcheck"
+
+# Create retro CRT VT100 DEC PDP-style boot splash
+cat > "${ROOTFS}/usr/local/bin/secubox-splash" <<'SPLASH'
+#!/bin/bash
+# SecuBox Cyber Boot Splash - VT100/DEC PDP Style
+
+# VT100 escape codes
+ESC="\033"
+GREEN="${ESC}[32m"
+BRIGHT="${ESC}[1m"
+DIM="${ESC}[2m"
+BLINK="${ESC}[5m"
+RESET="${ESC}[0m"
+CLEAR="${ESC}[2J${ESC}[H"
+
+# Clear screen and set green phosphor look
+echo -ne "$CLEAR$GREEN"
+
+# Simulated boot delay
+type_slow() {
+    local text="$1"
+    for ((i=0; i<${#text}; i++)); do
+        echo -n "${text:$i:1}"
+        sleep 0.02
+    done
+    echo ""
+}
+
+cat << 'BANNER'
+
+  ____  _____ ____ _   _ ____   _____  __
+ / ___|| ____/ ___| | | | __ ) / _ \ \/ /
+ \___ \|  _|| |   | | | |  _ \| | | \  /
+  ___) | |__| |___| |_| | |_) | |_| /  \
+ |____/|_____\____|\___/|____/ \___/_/\_\
+
+BANNER
+
+echo ""
+echo -e "${BRIGHT}================================================================${RESET}${GREEN}"
+echo "  DEC PDP-11/70 COMPATIBLE SECURITY TERMINAL"
+echo "  SECUBOX CYBER DEFENSE SYSTEM v1.3"
+echo -e "${BRIGHT}================================================================${RESET}${GREEN}"
+echo ""
+
+type_slow "BOOT SEQUENCE INITIATED..."
+echo ""
+
+# Boot status messages
+steps=(
+    "MEMORY TEST.................... 4096K OK"
+    "LOADING KERNEL................. DONE"
+    "CRYPTOGRAPHIC MODULES.......... LOADED"
+    "NETWORK STACK.................. INITIALIZED"
+    "FIREWALL RULES................. ACTIVE"
+    "INTRUSION DETECTION............ ARMED"
+    "SECURE SHELL................... READY"
+)
+
+for step in "${steps[@]}"; do
+    echo -n "  > "
+    type_slow "$step"
+    sleep 0.1
+done
+
+echo ""
+echo -e "${BRIGHT}================================================================${RESET}${GREEN}"
+echo ""
+echo -e "  ${BLINK}*${RESET}${GREEN} SYSTEM READY"
+echo ""
+echo "  .------------------------------------------------."
+echo "  |  SECUBOX CYBER SECURITY PLATFORM               |"
+echo "  |  TYPE 'help' FOR AVAILABLE COMMANDS            |"
+echo "  |  UNAUTHORIZED ACCESS WILL BE PROSECUTED        |"
+echo "  '------------------------------------------------'"
+echo ""
+echo -e "${DIM}  Press ENTER to continue...${RESET}${GREEN}"
+read -t 5 || true
+echo -ne "$RESET"
+SPLASH
+chmod +x "${ROOTFS}/usr/local/bin/secubox-splash"
+
+# Add splash to root's bashrc for login
+cat >> "${ROOTFS}/root/.bashrc" <<'BASHRC'
+
+# SecuBox Cyber Splash on login
+if [ -t 0 ] && [ -z "$SECUBOX_SPLASH_SHOWN" ]; then
+    export SECUBOX_SPLASH_SHOWN=1
+    /usr/local/bin/secubox-splash 2>/dev/null || true
+fi
+BASHRC
 
 # Systemd service for hardware check
 cat > "${ROOTFS}/etc/systemd/system/secubox-hwcheck.service" <<'HWSVC'
