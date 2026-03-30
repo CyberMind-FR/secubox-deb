@@ -8,7 +8,7 @@ set -euo pipefail
 
 KIOSK_USER="secubox-kiosk"
 KIOSK_HOME="/home/${KIOSK_USER}"
-KIOSK_URL="https://localhost:9443/"
+KIOSK_URL="https://192.168.255.1:9443/"
 MARKER="/var/lib/secubox/.kiosk-installed"
 ENABLED_MARKER="/var/lib/secubox/.kiosk-enabled"
 
@@ -100,14 +100,14 @@ setup_kiosk_user() {
 
 # Wait for services to be ready
 for i in {1..30}; do
-    if curl -sk https://localhost:9443/ >/dev/null 2>&1; then
+    if curl -sk https://192.168.255.1:9443/ >/dev/null 2>&1; then
         break
     fi
     sleep 1
 done
 
-# Kiosk URL (local SecuBox WebUI)
-URL="${KIOSK_URL:-https://localhost:9443/}"
+# Kiosk URL (local SecuBox WebUI via dummy interface)
+URL="${KIOSK_URL:-https://192.168.255.1:9443/}"
 
 # Chromium flags for kiosk mode (native Wayland via Ozone)
 CHROMIUM_FLAGS=(

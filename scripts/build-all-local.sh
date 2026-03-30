@@ -108,10 +108,10 @@ for PKG in "${PACKAGES[@]}"; do
 
   if [[ $BUILD_OK -eq 1 ]]; then
     ok "${PKG} built"
-    ((SUCCESS++))
+    SUCCESS=$((SUCCESS + 1))
   else
     err "${PKG} FAILED"
-    ((FAILED++))
+    FAILED=$((FAILED + 1))
   fi
 done
 

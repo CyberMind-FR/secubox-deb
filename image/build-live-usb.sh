@@ -213,10 +213,11 @@ net.ipv4.conf.all.log_martians=0
 kernel.printk=1 1 1 1
 EOF
 
-# ── Network auto-detection config ─────────────────────────────────
+# ── Network config with dummy interface for kiosk ─────────────────
 mkdir -p "${ROOTFS}/etc/netplan"
+
+# Main netplan config - DHCP on all interfaces, optional so no boot block
 cat > "${ROOTFS}/etc/netplan/00-secubox.yaml" <<EOF
-# Auto-configured by secubox-net-detect
 network:
   version: 2
   renderer: networkd
@@ -224,12 +225,67 @@ network:
     all-en:
       match: {name: "en*"}
       dhcp4: true
+      optional: true
     all-eth:
       match: {name: "eth*"}
       dhcp4: true
+      optional: true
+EOF
+
+# Dummy interface with fixed IP - always available for kiosk/local access
+cat > "${ROOTFS}/etc/systemd/network/10-dummy0.netdev" <<EOF
+[NetDev]
+Name=dummy0
+Kind=dummy
+EOF
+
+cat > "${ROOTFS}/etc/systemd/network/10-dummy0.network" <<EOF
+[Match]
+Name=dummy0
+
+[Network]
+Address=192.168.255.1/24
+EOF
+
+# Fallback network script - runs after boot, adds link-local if no IP
+cat > "${ROOTFS}/usr/sbin/secubox-net-fallback" <<'FALLBACK'
+#!/bin/bash
+# SecuBox Network Fallback - adds link-local IP if DHCP failed
+sleep 10
+
+for iface in /sys/class/net/en* /sys/class/net/eth*; do
+    [ -e "$iface" ] || continue
+    IFACE=$(basename "$iface")
+    [ "$IFACE" = "lo" ] && continue
+
+    # Check if interface has an IP
+    if ! ip addr show "$IFACE" | grep -q "inet "; then
+        echo "[net-fallback] No IP on $IFACE, adding fallback 169.254.1.1/16"
+        ip addr add 169.254.1.1/16 dev "$IFACE" 2>/dev/null || true
+        ip link set "$IFACE" up
+    fi
+done
+FALLBACK
+chmod +x "${ROOTFS}/usr/sbin/secubox-net-fallback"
+
+# Systemd service for fallback
+cat > "${ROOTFS}/etc/systemd/system/secubox-net-fallback.service" <<EOF
+[Unit]
+Description=SecuBox Network Fallback
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-net-fallback
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
 EOF
 
 chroot "${ROOTFS}" systemctl enable systemd-networkd.service 2>/dev/null || true
+chroot "${ROOTFS}" systemctl enable secubox-net-fallback.service 2>/dev/null || true
 chroot "${ROOTFS}" systemctl disable systemd-networkd-wait-online.service 2>/dev/null || true
 chroot "${ROOTFS}" systemctl mask systemd-networkd-wait-online.service 2>/dev/null || true
 
@@ -374,14 +430,14 @@ if [[ $INCLUDE_KIOSK -eq 1 ]]; then
 
 # Wait for services to be ready
 for i in {1..30}; do
-    if curl -sk https://localhost:9443/ >/dev/null 2>&1; then
+    if curl -sk https://192.168.255.1:9443/ >/dev/null 2>&1; then
         break
     fi
     sleep 1
 done
 
-# Kiosk URL (local SecuBox WebUI)
-URL="${KIOSK_URL:-https://localhost:9443/}"
+# Kiosk URL (local SecuBox WebUI via dummy interface or localhost)
+URL="${KIOSK_URL:-https://192.168.255.1:9443/}"
 
 # Chromium flags for kiosk mode (native Wayland via Ozone)
 CHROMIUM_FLAGS=(
