@@ -7,6 +7,7 @@ After=local-fs.target
 [Service]
 Type=oneshot
 RemainAfterExit=yes
+TimeoutStartSec=10s
 ExecStart=/usr/sbin/secubox-cmdline-handler apply
 
 [Install]
