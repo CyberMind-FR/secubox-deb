@@ -1,9 +1,69 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-03-29 (Session 25)*
+*Mis à jour : 2026-03-30 (Session 27)*
 
 ---
 
-## ✅ Terminé cette session (Session 25)
+## ✅ Terminé cette session (Session 27)
+
+### Kiosk X11 Mode ✅
+- **Switched from Cage/Wayland to X11/startx** — VirtualBox GPU compatibility
+  - Cage/wlroots fails with "Basic output test failed" on VBoxSVGA
+  - Created `secubox-kiosk-x11.service` using startx + chromium
+  - Works reliably with VMware SVGA II / VBoxSVGA drivers
+- **Files created on VM**:
+  - `/etc/systemd/system/secubox-kiosk-x11.service`
+  - `/home/secubox-kiosk/.xinitrc`
+
+### Menu System Fix ✅
+- **Problem**: Only 2 modules shown (hub, portal) instead of all installed
+- **Root cause**: menu.d/*.json files not installed on VM
+- **Fix**: Copied 85 menu JSON files to `/usr/share/secubox/menu.d/`
+- **Result**: Menu API now returns all installed modules correctly
+
+### Authentication Fix ✅
+- **Created `/etc/secubox/secubox.conf`** with auth section
+- **JWT login working** — admin/secubox credentials
+- **All API endpoints** now properly authenticated
+
+### secubox-netmodes Fixes ✅
+- **Bug fix**: `int(float())` for /proc/uptime parsing (line 95)
+- **Frontend JWT fix**: Added `getToken()` and auto-login on 401
+- **Auto-Detect working**: Returns board=x64-vm, wan=enp0s3
+- **Files modified**:
+  - `packages/secubox-netmodes/api/main.py` — uptime bug fix
+  - `packages/secubox-netmodes/www/netmodes/index.html` — JWT auth in api()
+
+---
+
+## ✅ Terminé session précédente (Session 26)
+
+### Kiosk GUI VM Testing ✅
+- **Fixed kiosk display** — Enabled 3D acceleration in VirtualBox
+  - `VBoxManage modifyvm "VM" --accelerate3d on --vram 128`
+  - Cage Wayland compositor now renders properly
+- **Installed SecuBox packages on kiosk VM**
+  - secubox-core, secubox-hub, secubox-portal
+  - Fixed nginx port 9443 + nftables firewall rule
+- **Kiosk fully functional** — Displays SecuBox Control Center
+
+### secubox-net-detect Integration ✅
+- **New API endpoints in secubox-netmodes**:
+  - `GET /detect` — Run secubox-net-detect, return JSON (board, interfaces)
+  - `GET /detect_cached` — Return cached detection (faster)
+  - `POST /auto_apply` — Auto-configure network based on detection
+  - `GET /board_info` — Get detected board from state
+- **Frontend updates**:
+  - Added "Auto-Detect" button in header
+  - Auto-Detection card with board/WAN/LAN/SFP display
+  - Preview YAML and Apply buttons
+  - Pre-fills WAN/LAN selectors from detection
+- **Files modified**:
+  - `packages/secubox-netmodes/api/main.py` — +200 lines
+  - `packages/secubox-netmodes/www/netmodes/index.html` — Auto-detect UI
+
+---
+
+## ✅ Terminé session précédente (Session 25)
 
 ### Kiosk Mode Fixes ✅
 - **Fixed UID mismatch** — Service now uses dynamic UID detection
