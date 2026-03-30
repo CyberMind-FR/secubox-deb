@@ -1,3 +1,37 @@
+Package: secubox-ad-guard
+Version: 1.0.0-1
+Architecture: all
+Maintainer: SecuBox <dev@secubox.local>
+Installed-Size: 105
+Depends: secubox-core (>= 1.0.0), python3-httpx
+Priority: optional
+Section: admin
+Filename: pool/main/s/secubox-ad-guard/secubox-ad-guard_1.0.0-1_all.deb
+Size: 18688
+SHA256: 68143b2c681cd01ff38b5543dec64d420f7123b5469768e8b1ec70f303a5d731
+SHA1: cedbae18bc062390feae0f66d1a235d372c0f672
+MD5sum: 8f8b5e36ea97b1504e684dfcb62395c7
+Description: SecuBox Ad Guard Module
+ Ad and tracker detection with per-device statistics.
+ Features blocklist management, delayed blacklisting workflow,
+ and device-type classification (IoT, phones, smart TVs, etc.).
+
+Package: secubox-ai-gateway
+Version: 1.0.0-1~bookworm1
+Architecture: all
+Maintainer: SecuBox <dev@secubox.local>
+Installed-Size: 67
+Depends: secubox-core (>= 1.0.0)
+Priority: optional
+Section: admin
+Filename: pool/main/s/secubox-ai-gateway/secubox-ai-gateway_1.0.0-1~bookworm1_all.deb
+Size: 12586
+SHA256: f972a50366da0b81b684bf52028477cfdd75b28c94ac441387741afaa45f88b6
+SHA1: b7a8ef36e55b556963e0a09a079ee61a9083bf13
+MD5sum: cd525b36e9d43c47c2d85da499fe87ca
+Description: SecuBox Ai-gateway Module
+ AI Data Sovereignty Gateway
+
 Package: secubox-auth
 Version: 1.0.4-1~bookworm1
 Architecture: all
@@ -17,6 +51,38 @@ Description: SecuBox Auth Guardian
  .
  Port Debian bookworm de luci-app-auth-guardian (SecuBox OpenWrt / CyberMind.fr).
 
+Package: secubox-backup
+Version: 1.0.0-1~bookworm1
+Architecture: all
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Installed-Size: 92
+Depends: secubox-core (>= 1.0.0)
+Priority: optional
+Section: admin
+Filename: pool/main/s/secubox-backup/secubox-backup_1.0.0-1~bookworm1_all.deb
+Size: 15936
+SHA256: 99c42319b4a4c8e644cab1384369898c4f754efd7192ee3cb13646166f8c7d1a
+SHA1: fcd657420e4f714207d363b040a0e34f376cf86a
+MD5sum: 1a5a53b46c5f6f3c37f8091c4bc24e0f
+Description: SecuBox Backup Module
+ Backup Manager for system configs and LXC containers
+
+Package: secubox-c3box
+Version: 1.0.0-1~bookworm1
+Architecture: all
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Installed-Size: 66
+Depends: secubox-core (>= 1.0.0)
+Priority: optional
+Section: admin
+Filename: pool/main/s/secubox-c3box/secubox-c3box_1.0.0-1~bookworm1_all.deb
+Size: 11014
+SHA256: fa225093023aa0c0485cecf9a6592277d1be165b368607855ba5c321795f9470
+SHA1: 888b49cacbe2d276e77287ea2a4748d7e6a2f999
+MD5sum: 15855e05e75e42e1557c3091d86d90ec
+Description: SecuBox C3box Module
+ C3Box Services Portal
+
 Package: secubox-cdn
 Version: 1.0.4-1~bookworm1
 Architecture: all
@@ -35,6 +101,40 @@ Description: SecuBox CDN Cache
  Cache CDN local : économies bande passante, politiques par domaine/extension, stats hit ratio.
  .
  Port Debian bookworm de luci-app-cdn-cache (SecuBox OpenWrt / CyberMind.fr).
+
+Package: secubox-cloner
+Version: 1.0.0-1
+Architecture: all
+Maintainer: SecuBox Team <team@secubox.local>
+Installed-Size: 58
+Depends: python3, python3-fastapi, python3-uvicorn, secubox-core
+Priority: optional
+Section: admin
+Filename: pool/main/s/secubox-cloner/secubox-cloner_1.0.0-1_all.deb
+Size: 9450
+SHA256: 7db6eb885d6401193e4f75cb8eb3da786b88dd2eee0b5765ffed9c266bd8cdb9
+SHA1: 82bfecc5c36a07d8c95dd051cf16496acbac15d0
+MD5sum: 0ddcf58eb1cf66d366b53fe982066cb6
+Description: SecuBox Cloner - System backup and restore
+ System backup and restore for SecuBox.
+ Create, manage, and restore compressed backups
+ of system configuration and data.
+
+Package: secubox-config-advisor
+Version: 1.0.0-1~bookworm1
+Architecture: all
+Maintainer: SecuBox <dev@secubox.local>
+Installed-Size: 67
+Depends: secubox-core (>= 1.0.0)
+Priority: optional
+Section: admin
+Filename: pool/main/s/secubox-config-advisor/secubox-config-advisor_1.0.0-1~bookworm1_all.deb
+Size: 11344
+SHA256: 89ff9778cc9e7399d2f388f378045dea2988827738273d43d44c14cd73022974
+SHA1: 4474728f19b955cbbf32a3bcf938b4c7f9aa4660
+MD5sum: cc516b083c0934c4a5f88ff2c31a4ca8
+Description: SecuBox Config-advisor Module
+ Security Configuration Advisor
 
 Package: secubox-core
 Version: 1.0.3-1~bookworm1
@@ -77,6 +177,38 @@ Description: SecuBox CrowdSec Dashboard
  .
  Port Debian bookworm de luci-app-crowdsec-dashboard (SecuBox OpenWrt / CyberMind.fr).
 
+Package: secubox-cve-triage
+Version: 1.0.0-1~bookworm1
+Architecture: all
+Maintainer: SecuBox <dev@secubox.local>
+Installed-Size: 97
+Depends: secubox-core (>= 1.0.0)
+Priority: optional
+Section: admin
+Filename: pool/main/s/secubox-cve-triage/secubox-cve-triage_1.0.0-1~bookworm1_all.deb
+Size: 16496
+SHA256: 2e987a5c0a26ae70b45ceadaa78f707ddfb0964b7fa9bc576838a577685f98c5
+SHA1: 6de1c9a2b246de0bacfa3629aaf2050264fc2c07
+MD5sum: 3aaf327cd8c2125fcef6e1bd93bf0be1
+Description: SecuBox Cve-triage Module
+ CVE Vulnerability Triage
+
+Package: secubox-device-intel
+Version: 1.2.1-1~bookworm1
+Architecture: all
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Installed-Size: 89
+Depends: secubox-core (>= 1.0.0)
+Priority: optional
+Section: admin
+Filename: pool/main/s/secubox-device-intel/secubox-device-intel_1.2.1-1~bookworm1_all.deb
+Size: 17514
+SHA256: ad94fd6523ebad28a2bbc36025d7dd7ee4a986dfc33e4bbd53702574f180f881
+SHA1: 219c4d1bd10da2a5949a3f17cdf75dc119fd18ef
+MD5sum: 8186840caba912a2482dc8f864764114
+Description: SecuBox Device-intel Module
+ Device Intelligence - Asset discovery and fingerprinting
+
 Package: secubox-dns
 Version: 1.0.0-1~bookworm1
 Architecture: all
@@ -92,6 +224,47 @@ SHA1: d4e7f96666bc50619376a7eb7621e975b9a8ac08
 MD5sum: 12bdfcbf3975a26f01d7e8ce5205f89a
 Description: SecuBox Dns Module
  DNS Master - BIND Zone Management
+
+Package: secubox-dns-guard
+Version: 1.0.0-1~bookworm1
+Architecture: all
+Maintainer: SecuBox <dev@secubox.local>
+Installed-Size: 60
+Depends: secubox-core (>= 1.0.0)
+Priority: optional
+Section: admin
+Filename: pool/main/s/secubox-dns-guard/secubox-dns-guard_1.0.0-1~bookworm1_all.deb
+Size: 10940
+SHA256: 13c8aaf2b36f8f218bfd517093ae777a5266b81a0a848f95d71e107074cecdb3
+SHA1: 649236041dac6bbd855cf477ea16db99bab923f0
+MD5sum: 8e20829f14abc6df7941642321345d5f
+Description: SecuBox Dns-guard Module
+ DNS Anomaly Detection
+
+Package: secubox-domoticz
+Version: 1.0.0-1
+Architecture: all
+Maintainer: SecuBox Team <team@secubox.in>
+Installed-Size: 83
+Depends: secubox-core, python3, python3-fastapi, python3-uvicorn, python3-httpx, python3-aiofiles, lxc, lxc-templates
+Homepage: https://secubox.in
+Priority: optional
+Section: admin
+Filename: pool/main/s/secubox-domoticz/secubox-domoticz_1.0.0-1_all.deb
+Size: 13344
+SHA256: 9cef898783ec06f7ee1aead76cc06d2e9f8bdfaec4010a1cbe453d45d00c21a5
+SHA1: 79bd493b700b9c82113da80af6c703b0e7c4c40b
+MD5sum: 4d95677c255ff2ec97aadbdcd055ff08
+Description: SecuBox Domoticz - Home automation system
+ Provides a web interface and API for managing Domoticz
+ home automation system running in a container.
+ .
+ Features:
+  - Container-based Domoticz deployment
+  - Device and scene management
+  - Hardware integration (Z-Wave, Zigbee, MQTT)
+  - Backup and restore functionality
+  - USB device passthrough support
 
 Package: secubox-dpi
 Version: 1.0.4-1~bookworm1
@@ -130,6 +303,26 @@ Description: SecuBox Droplet File Publisher
  Dashboard pour la publication de fichiers et sites statiques.
  Port Debian bookworm de luci-app-droplet (SecuBox OpenWrt).
 
+Package: secubox-exposure
+Version: 1.0.0-1~bookworm1
+Architecture: all
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Installed-Size: 87
+Depends: python3, python3-fastapi, python3-uvicorn, secubox-core
+Recommends: tor
+Homepage: https://secubox.gondwana.systems
+Priority: optional
+Section: admin
+Filename: pool/main/s/secubox-exposure/secubox-exposure_1.0.0-1~bookworm1_all.deb
+Size: 15018
+SHA256: 09c284345ab014fb1260189fc104acbcfad0f6f4b3302ccce9fd7dbca919b248
+SHA1: 364eb0635e61373e4004fb8932cbbb674172994c
+MD5sum: 4c7150f5fc82566b6b2dcaf86739ffd7
+Description: SecuBox Exposure Manager
+ Service exposure management for SecuBox.
+ Provides Tor hidden services, SSL backends, DNS registration,
+ and mesh network exposure capabilities.
+
 Package: secubox-full
 Version: 1.2.0-1~bookworm1
 Architecture: all
@@ -160,6 +353,39 @@ Description: SecuBox Full — All 49 modules
  Publishing: droplet, streamlit, streamforge, metablogizer, publish, c3box
  Infrastructure: backup, repo
 
+Package: secubox-gitea
+Version: 1.4.0-1~bookworm1
+Architecture: all
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Installed-Size: 138
+Depends: secubox-core (>= 1.0.0)
+Priority: optional
+Section: admin
+Filename: pool/main/s/secubox-gitea/secubox-gitea_1.4.0-1~bookworm1_all.deb
+Size: 25150
+SHA256: 5bd47a94bf08270c2f40baf3d84f80baae32e47757e39c56913c90511d87c604
+SHA1: 9827c01f198947da196403b89790ce3bb2cde4a8
+MD5sum: fe107d156ac6be619578cb774ccfe6de
+Description: SecuBox Gitea Module
+ Gitea Git Server
+
+Package: secubox-gotosocial
+Version: 1.0.0-1
+Architecture: all
+Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Installed-Size: 65
+Depends: secubox-core (>= 1.0), python3-uvicorn, lxc, lxc-templates
+Priority: optional
+Section: net
+Filename: pool/main/s/secubox-gotosocial/secubox-gotosocial_1.0.0-1_all.deb
+Size: 10224
+SHA256: 3574be955d75d87d17992a7a1b3683a12999e0641c68210c03629910efcb1a72
+SHA1: e831034c5aacba7eeb4595285df70bff22f32499
+MD5sum: 0cd71219a5feffcf0f5740869bbee44f
+Description: SecuBox GoToSocial - Fediverse Server
+ LXC-based GoToSocial ActivityPub server for SecuBox.
+ Lightweight Fediverse server compatible with Mastodon.
+
 Package: secubox-haproxy
 Version: 1.1.1-1~bookworm1
 Architecture: all
@@ -184,6 +410,73 @@ Description: SecuBox HAProxy Dashboard
   - CrowdSec ban synchronization
   - Dynamic route syncing with WAF module
 
+Package: secubox-hardening
+Version: 1.0.0-1~bookworm1
+Architecture: all
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Installed-Size: 85
+Depends: secubox-core, python3-fastapi, python3-uvicorn
+Recommends: auditd
+Homepage: https://github.com/gkerma/secubox-deb
+Priority: optional
+Section: admin
+Filename: pool/main/s/secubox-hardening/secubox-hardening_1.0.0-1~bookworm1_all.deb
+Size: 14686
+SHA256: dde314ffe17e6e719e002157ee0960d8801e42fbc9597db6eb5bcf571f033b8a
+SHA1: 5874f8898dff3c5df690bc7fd80954140cfc94cd
+MD5sum: 3a21f4a1f69e914e1e69fa9cf893b27a
+Description: SecuBox Kernel and System Hardening
+ Kernel and system hardening for SecuBox appliances.
+ .
+ Features:
+  - Kernel sysctl hardening (ASLR, kptr_restrict, etc.)
+  - Network hardening (SYN cookies, reverse path filter)
+  - Module blacklist (uncommon protocols, filesystems)
+  - Security benchmark tool
+ .
+ Based on ANSSI/CIS benchmark recommendations.
+
+Package: secubox-hexo
+Version: 1.0.0-1
+Architecture: all
+Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Installed-Size: 57
+Depends: secubox-core, python3, python3-uvicorn, python3-fastapi, nginx
+Recommends: nodejs, npm
+Priority: optional
+Section: web
+Filename: pool/main/s/secubox-hexo/secubox-hexo_1.0.0-1_all.deb
+Size: 9402
+SHA256: a1e414fabbb337382ceaeefa6fb8dbf870c00063f950d6e4aa2b0f3d8f69d783
+SHA1: 59649baae1e3e8db9d735090555a7ab6400a739a
+MD5sum: d76d93e8374e1f789019eb926542fbcd
+Description: SecuBox Hexo Blog Generator
+ Static blog generator management for SecuBox.
+ Manage multiple Hexo blogs, posts, themes, and deployments.
+
+Package: secubox-homeassistant
+Version: 1.0.0-1
+Architecture: all
+Maintainer: SecuBox Team <team@secubox.in>
+Installed-Size: 69
+Depends: secubox-core, python3, python3-fastapi, python3-uvicorn, python3-httpx, lxc, lxc-templates
+Priority: optional
+Section: admin
+Filename: pool/main/s/secubox-homeassistant/secubox-homeassistant_1.0.0-1_all.deb
+Size: 11710
+SHA256: 0b7221b4ad2db35b70fa62c77dcf5c800aa4747159ff7842eb30532806d67557
+SHA1: b372b5c7deb9144ab2ac6fabf2831130db0f542f
+MD5sum: 4cafdd2f0cd9eee52a2803b8fa239bf8
+Description: SecuBox Home Assistant - Smart home automation hub
+ Provides a web interface and API for managing Home Assistant
+ running in an LXC container.
+ .
+ Features:
+  - LXC container-based Home Assistant Core
+  - USB device passthrough for Zigbee/Z-Wave
+  - HACS integration support
+  - Backup and restore
+
 Package: secubox-hub
 Version: 1.0.4-1~bookworm1
 Architecture: all
@@ -202,6 +495,105 @@ Description: SecuBox Hub — Tableau de bord central
  Hub central SecuBox : lanceur de modules, état des services, alertes consolidées.
  .
  Port Debian bookworm de luci-app-secubox (SecuBox OpenWrt / CyberMind.fr).
+
+Package: secubox-identity
+Version: 1.0.0-1~bookworm1
+Architecture: all
+Maintainer: SecuBox <dev@secubox.local>
+Installed-Size: 70
+Depends: secubox-core (>= 1.0.0)
+Priority: optional
+Section: admin
+Filename: pool/main/s/secubox-identity/secubox-identity_1.0.0-1~bookworm1_all.deb
+Size: 12260
+SHA256: 06f44c810b0515b7420c32a920e3cce6dcd0f220dbb6eddaa3f400f3f46d7eb1
+SHA1: 4e675f05e2603a8a8e6fd206b00bdbd3fa6fb91a
+MD5sum: 65b157064776f78dc0c01cb84927ff6f
+Description: SecuBox Identity Module
+ Decentralized Identity
+
+Package: secubox-iot-guard
+Version: 1.0.0-1~bookworm1
+Architecture: all
+Maintainer: SecuBox <dev@secubox.local>
+Installed-Size: 89
+Depends: secubox-core (>= 1.0.0)
+Priority: optional
+Section: admin
+Filename: pool/main/s/secubox-iot-guard/secubox-iot-guard_1.0.0-1~bookworm1_all.deb
+Size: 17706
+SHA256: 182bfda48d5578912484260167a4890809f3dd689a8732bd23ee133b07a2a9c1
+SHA1: f01d7f269ff1bf6129e1d4e428292038e90902fa
+MD5sum: c5c0cf07fa09632565dbd7dbe67fffa9
+Description: SecuBox Iot-guard Module
+ IoT Device Security
+
+Package: secubox-jabber
+Version: 1.0.0-1
+Architecture: all
+Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Installed-Size: 54
+Depends: secubox-core, python3, python3-uvicorn, python3-fastapi, nginx
+Recommends: prosody
+Priority: optional
+Section: net
+Filename: pool/main/s/secubox-jabber/secubox-jabber_1.0.0-1_all.deb
+Size: 8630
+SHA256: 1b12282fb687d188a1402ed847d18ab9a4414e25a27e8898667942bce602ab91
+SHA1: 7c0037f850b94ed43d1dd18318d96664d1e6909b
+MD5sum: c3c343773f9feecf0190ecd59ee07956
+Description: SecuBox Jabber XMPP Server
+ Prosody XMPP server management for SecuBox.
+ User accounts, virtual hosts, and federation.
+
+Package: secubox-jellyfin
+Version: 1.0.0-1~bookworm1
+Architecture: all
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Installed-Size: 80
+Depends: secubox-core (>= 1.0), python3-uvicorn
+Recommends: docker.io | podman
+Priority: optional
+Section: net
+Filename: pool/main/s/secubox-jellyfin/secubox-jellyfin_1.0.0-1~bookworm1_all.deb
+Size: 12856
+SHA256: f2857318bf426f9b7d8fe1c0d9f402be84f2512a1bf017dd12491e72e8bf114b
+SHA1: a98fa1400f6891350ccb7a02a7b158763f61caa9
+MD5sum: d456cc27ad2e9dcc4e7189af4ecd4b52
+Description: Jellyfin media server management
+ SecuBox module for managing Jellyfin media server via Docker.
+ Provides container management, library configuration,
+ backup/restore, and hardware acceleration support.
+ .
+ Ported from OpenWRT luci-app-jellyfin.
+ Provides FastAPI backend on /api/v1/jellyfin/ via Unix socket.
+
+Package: secubox-jitsi
+Version: 1.0.0-1
+Architecture: all
+Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Installed-Size: 73
+Depends: secubox-core (>= 1.0), python3-uvicorn, lxc, lxc-templates
+Recommends: nginx
+Homepage: https://cybermind.fr/secubox
+Priority: optional
+Section: net
+Filename: pool/main/s/secubox-jitsi/secubox-jitsi_1.0.0-1_all.deb
+Size: 11752
+SHA256: b6651da576f611f82ed0fd3d5f3ebb92a2e7d3d27000f11f1f5e4c26828a4cf4
+SHA1: b5e06e61798343e3ee841b7f2ee1f178a11594a8
+MD5sum: 09424c1ba26bfb643ed5ef592279f7ef
+Description: SecuBox Jitsi Meet - Video Conferencing
+ LXC-based Jitsi Meet video conferencing for SecuBox.
+ Provides secure, scalable video meetings with screen sharing.
+ .
+ Features:
+  - Full Jitsi Meet in LXC container
+  - Prosody XMPP server for signaling
+  - Jitsi Videobridge (JVB) for media
+  - Optional authentication
+  - Let's Encrypt SSL support
+  - Recording with Jibri (optional)
 
 Package: secubox-lite
 Version: 1.1.0-1~bookworm1
@@ -225,6 +617,83 @@ Description: SecuBox Lite — Essential modules for low-RAM devices
  .
  Includes: Hub, CrowdSec, WireGuard, Network Modes, NAC, and System.
  DPI, QoS, CDN and other heavy modules are excluded.
+
+Package: secubox-localai
+Version: 1.0.0-1~bookworm1
+Architecture: all
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Installed-Size: 73
+Depends: secubox-core, python3, python3-fastapi, python3-uvicorn, python3-httpx, nginx, lxc, lxc-templates
+Priority: optional
+Section: admin
+Filename: pool/main/s/secubox-localai/secubox-localai_1.0.0-1~bookworm1_all.deb
+Size: 12662
+SHA256: 2ba566610ac3ab157b4a4beca124e465f08e5213faf96a0ac77dc875a40b49e1
+SHA1: 1205cb02287c55aed6def25daeed5d83c5b3bc5f
+MD5sum: 039c12f441f38bc7796ed53c98bb943c
+Description: SecuBox LocalAI - Self-hosted LLM inference
+ Alternative to Ollama with OpenAI-compatible API.
+ Features container management, model gallery, and chat interface.
+
+Package: secubox-localrecall
+Version: 1.0.0-1~bookworm1
+Architecture: all
+Maintainer: SecuBox <dev@secubox.local>
+Installed-Size: 58
+Depends: secubox-core (>= 1.0.0)
+Priority: optional
+Section: admin
+Filename: pool/main/s/secubox-localrecall/secubox-localrecall_1.0.0-1~bookworm1_all.deb
+Size: 10438
+SHA256: 9f28c5722b8bc4355040f727b8ea0de81236386c25430a4b95dab69ae6aeb8fc
+SHA1: 9a6e5864514600e32b163fd884b00966bb672957
+MD5sum: ad351b094e0c09a41babd45660c7b21d
+Description: SecuBox Localrecall Module
+ AI Memory System
+
+Package: secubox-lyrion
+Version: 1.0.0-1~bookworm1
+Architecture: all
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Installed-Size: 88
+Depends: secubox-core (>= 1.0), python3-uvicorn, python3-httpx
+Priority: optional
+Section: net
+Filename: pool/main/s/secubox-lyrion/secubox-lyrion_1.0.0-1~bookworm1_all.deb
+Size: 14118
+SHA256: 2e5b09ffb734f70be4cc9fbc5af93c45c618ee39f281823fcdd92a9320802797
+SHA1: 8b460b10ecef87b33bdf5121c7cdd31f51efb1a2
+MD5sum: cbf8a2138a523167e1369c3ed6bc0f7b
+Description: Lyrion Music Server (LMS) for SecuBox
+ Debian bookworm port of the OpenWRT luci-app-lyrion module.
+ Provides FastAPI backend on /api/v1/lyrion/ via Unix socket.
+ .
+ Features:
+  - Docker/Podman container management for LMS
+  - Squeezebox JSON-RPC API integration
+  - Player control (play, pause, next, prev, volume)
+  - Library management and scanning
+  - Backup and restore functionality
+  - CRT-light P31 phosphor theme frontend
+
+Package: secubox-magicmirror
+Version: 1.0.0-1
+Architecture: all
+Maintainer: SecuBox Team <team@secubox.local>
+Installed-Size: 52
+Depends: python3, python3-fastapi, python3-uvicorn, secubox-core
+Recommends: nodejs, npm, xserver-xorg, chromium
+Priority: optional
+Section: web
+Filename: pool/main/s/secubox-magicmirror/secubox-magicmirror_1.0.0-1_all.deb
+Size: 8518
+SHA256: 8b2c7d46146dfa92bf4cd3ff17adac2f28f8ecf1fd0b435b6d4f31b578047ddf
+SHA1: 162ce00ed1da22a40334be17de06e4a435727e45
+MD5sum: 25e9ccab5a8b96172f9104c4b63e120c
+Description: SecuBox MagicMirror management
+ Smart display platform management for SecuBox.
+ Provides API and web UI for MagicMirror² configuration,
+ module management, and display controls.
 
 Package: secubox-mail
 Version: 2.1.0-1~bookworm1
@@ -280,6 +749,65 @@ Description: SecuBox Mail LXC Container (Backend)
  .
  Install secubox-mail for the management UI.
 
+Package: secubox-master-link
+Version: 1.0.0-1~bookworm1
+Architecture: all
+Maintainer: SecuBox <dev@secubox.local>
+Installed-Size: 73
+Depends: secubox-core (>= 1.0.0)
+Priority: optional
+Section: admin
+Filename: pool/main/s/secubox-master-link/secubox-master-link_1.0.0-1~bookworm1_all.deb
+Size: 13982
+SHA256: 988467bf043d4684882ed3085c6e9fb1aaec7cfa30a51b6243dd209d6c810b30
+SHA1: 6f585d04cb714bec48fbba26623b190c60af8a79
+MD5sum: fd3c2a9abb2902b2414f4b98fea42bd3
+Description: SecuBox Master-link Module
+ Mesh Node Enrollment
+
+Package: secubox-matrix
+Version: 1.0.0-1
+Architecture: all
+Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Installed-Size: 79
+Depends: secubox-core (>= 1.0), python3-uvicorn, python3-httpx, lxc, lxc-templates
+Recommends: nginx
+Homepage: https://cybermind.fr/secubox
+Priority: optional
+Section: net
+Filename: pool/main/s/secubox-matrix/secubox-matrix_1.0.0-1_all.deb
+Size: 13132
+SHA256: e79cd888ca8346b18c9eb093c0a7b21e3cf83e252132c1e3368a293aeb2ddb80
+SHA1: e4deb4ed0fcae43d932a88ce4784c79bd2c3d691
+MD5sum: f3988a42b47c0ea1bf35e8fb4e09cfc1
+Description: SecuBox Matrix Synapse - Federated Chat Server
+ LXC-based Matrix Synapse homeserver for SecuBox.
+ Provides federated, encrypted messaging with Element web client support.
+ .
+ Features:
+  - Full Matrix Synapse homeserver in LXC container
+  - User and room management via web UI
+  - Bridge support (Telegram, Discord, Signal, etc.)
+  - Element web client installation
+  - Federation support
+  - Backup/restore functionality
+
+Package: secubox-mcp-server
+Version: 1.0.0-1~bookworm1
+Architecture: all
+Maintainer: SecuBox <dev@secubox.local>
+Installed-Size: 73
+Depends: secubox-core (>= 1.0.0)
+Priority: optional
+Section: admin
+Filename: pool/main/s/secubox-mcp-server/secubox-mcp-server_1.0.0-1~bookworm1_all.deb
+Size: 12944
+SHA256: e109e1f7a4c53cf97b67118106482c4520a631e84bde20b2d1f00f0465d29f55
+SHA1: 5a92e39e9ef3241fa267eaeef19d915f7b2d6f03
+MD5sum: 0a2ef53334af320d894cf39ae5cb4ca7
+Description: SecuBox Mcp-server Module
+ Model Context Protocol Server
+
 Package: secubox-mediaflow
 Version: 1.0.4-1~bookworm1
 Architecture: all
@@ -299,6 +827,38 @@ Description: SecuBox Media Flow
  .
  Port Debian bookworm de luci-app-media-flow (SecuBox OpenWrt / CyberMind.fr).
 
+Package: secubox-mesh
+Version: 1.1.0-1~bookworm1
+Architecture: all
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Installed-Size: 97
+Depends: secubox-core (>= 1.0), python3, python3-fastapi, python3-uvicorn
+Priority: optional
+Section: admin
+Filename: pool/main/s/secubox-mesh/secubox-mesh_1.1.0-1~bookworm1_all.deb
+Size: 16712
+SHA256: 6429fbf7ff4a795bdaf0d7d70939476bb7b6c1b4f5c138a0014225cf490df3f0
+SHA1: 9a19c15fba1b3801401f5e5829f717638644c5d4
+MD5sum: f16ae395cb90aae652a1960c7725e7ed
+Description: SecuBox Mesh DNS - Meshname DNS for mesh networks
+ Meshname DNS management for Yggdrasil and mesh networks.
+
+Package: secubox-meshname
+Version: 1.0.0-1~bookworm1
+Architecture: all
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Installed-Size: 61
+Depends: secubox-core (>= 1.0.0)
+Priority: optional
+Section: admin
+Filename: pool/main/s/secubox-meshname/secubox-meshname_1.0.0-1~bookworm1_all.deb
+Size: 10172
+SHA256: 8d57e6cb088b7250746af3fbdfabf3cf346cfb1faf95f85446e62e05526e7ada
+SHA1: bdb75ca326e9b896dd511588612db1e9ed5534fe
+MD5sum: 65b0d49c7a42f86b1ebcfeb93312f5f9
+Description: SecuBox Meshname Module
+ Meshname DNS - Mesh network domain resolution
+
 Package: secubox-metablogizer
 Version: 1.1.0-1~bookworm1
 Architecture: all
@@ -314,6 +874,64 @@ SHA1: 54a745ffd5ffdf7a6b9e0b681dc5aaee3910e90f
 MD5sum: 9f7a31b9d5ca93f0d38c65d06d236821
 Description: SecuBox MetaBlogizer - Static Site Publisher
  Static site publishing and management for SecuBox.
+
+Package: secubox-metrics
+Version: 1.0.0-1~bookworm1
+Architecture: all
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Installed-Size: 62
+Depends: secubox-core, python3, python3-fastapi, python3-uvicorn
+Homepage: https://secubox.in
+Priority: optional
+Section: admin
+Filename: pool/main/s/secubox-metrics/secubox-metrics_1.0.0-1~bookworm1_all.deb
+Size: 10434
+SHA256: 3c33c5f73b7a026dcd1ee1c42798c6165f02cf2d9b5adda6096c9aef457ee4af
+SHA1: 52e85eb67bc980c2a3436ffa87bb234fe77adb73
+MD5sum: 216282c4eb1cc1fd9037ec7a437ceb0a
+Description: SecuBox Metrics Dashboard
+ Real-time system metrics dashboard with caching.
+ Provides overview stats, WAF metrics, connection counts,
+ and service status monitoring.
+
+Package: secubox-mitmproxy
+Version: 1.0.0-1~bookworm1
+Architecture: all
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Installed-Size: 76
+Depends: python3, python3-fastapi, python3-uvicorn, secubox-core
+Recommends: lxc, nftables, crowdsec
+Homepage: https://secubox.gondwana.systems
+Priority: optional
+Section: admin
+Filename: pool/main/s/secubox-mitmproxy/secubox-mitmproxy_1.0.0-1~bookworm1_all.deb
+Size: 12154
+SHA256: 2fbe1881e0ea88a5f1d8320127a69f86d7b8bab33e924273ea7d0def89092842
+SHA1: c7b1233ea9d7b98f062d0cde6a2971c38f413276
+MD5sum: 73d9e6a55e81616c654425c4262663b0
+Description: SecuBox MITMProxy WAF
+ HTTP/HTTPS traffic inspection and web application firewall.
+ Provides transparent proxy, WAN protection, threat detection,
+ auto-banning, and CrowdSec integration.
+
+Package: secubox-mmpm
+Version: 1.0.0-1
+Architecture: all
+Maintainer: SecuBox Team <team@secubox.local>
+Installed-Size: 56
+Depends: python3, python3-fastapi, python3-uvicorn, secubox-core
+Recommends: git, secubox-magicmirror
+Priority: optional
+Section: web
+Filename: pool/main/s/secubox-mmpm/secubox-mmpm_1.0.0-1_all.deb
+Size: 8874
+SHA256: ed9daff34f666a5bbd5240b277244aabeea4583416a9a85f2101851cf1a33e80
+SHA1: 025d158b87c288f5ad3365380bbeab1057e114d2
+MD5sum: f8baa1f2156feab5c9ed22b08fccec62
+Description: SecuBox MMPM - MagicMirror Package Manager
+ Package manager for MagicMirror modules.
+ Provides API and web UI for browsing, installing,
+ updating, and removing MagicMirror third-party modules.
 
 Package: secubox-nac
 Version: 1.0.4-1~bookworm1
@@ -333,6 +951,25 @@ Description: SecuBox NAC / Client Guardian
  Contrôle d'accès réseau : zones nftables, portail captif, contrôle parental, quarantaine.
  .
  Port Debian bookworm de luci-app-client-guardian (SecuBox OpenWrt / CyberMind.fr).
+
+Package: secubox-ndpid
+Version: 1.0.0-1
+Architecture: all
+Maintainer: SecuBox <dev@secubox.local>
+Installed-Size: 91
+Depends: secubox-core (>= 1.0.0), ndpid | ndpi-reader, python3-zmq
+Recommends: secubox-dpi
+Priority: optional
+Section: admin
+Filename: pool/main/s/secubox-ndpid/secubox-ndpid_1.0.0-1_all.deb
+Size: 15124
+SHA256: 0b6b74b3dcdd72ea20d04f5ee4e976acdfaebef4299790364a66f572f708aff1
+SHA1: bd1311df38776dd38fa78763748b2d4e78706568
+MD5sum: 66d2c172c102225d8f572c88607afa90
+Description: SecuBox nDPId Module
+ Deep Packet Inspection with nDPI daemon integration.
+ Features JA3/JA3S/JA4 TLS fingerprinting, protocol detection,
+ application classification, risk scoring, and flow analysis.
 
 Package: secubox-netdata
 Version: 1.0.4-1~bookworm1
@@ -371,6 +1008,154 @@ Description: SecuBox Network Modes
  Commutation de modes réseau : router, sniffer-inline, sniffer-passif, AP, relay. Templates netplan par mode.
  .
  Port Debian bookworm de luci-app-network-modes (SecuBox OpenWrt / CyberMind.fr).
+
+Package: secubox-network-anomaly
+Version: 1.0.0-1~bookworm1
+Architecture: all
+Maintainer: SecuBox <dev@secubox.local>
+Installed-Size: 57
+Depends: secubox-core (>= 1.0.0)
+Priority: optional
+Section: admin
+Filename: pool/main/s/secubox-network-anomaly/secubox-network-anomaly_1.0.0-1~bookworm1_all.deb
+Size: 10380
+SHA256: cda7e3d401340bccfb52bebb7e675098b441eaf8eb43445d6ff0c938e5ed1596
+SHA1: 5acb679ca6c6f613b9432f091e4d832f72984243
+MD5sum: 9ba066dffbbff0d991e93af7f9c3b4ee
+Description: SecuBox Network-anomaly Module
+ Network Anomaly Detection
+
+Package: secubox-newsbin
+Version: 1.0.0-1
+Architecture: all
+Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Installed-Size: 51
+Depends: secubox-core, python3, python3-uvicorn, python3-fastapi, nginx, lxc
+Priority: optional
+Section: news
+Filename: pool/main/s/secubox-newsbin/secubox-newsbin_1.0.0-1_all.deb
+Size: 8642
+SHA256: e2e661928001dff210559298377dd48365d005577d3a9c5cfe45e5d3f4799f89
+SHA1: 9713640365186200cdef942e7c505b4e85cb1a73
+MD5sum: ffffc2c8624378d109d623f48c890c36
+Description: SecuBox Newsbin RSS Aggregator
+ LXC-based Miniflux RSS reader for SecuBox.
+ Manage feeds, read news entries, organize subscriptions.
+
+Package: secubox-nextcloud
+Version: 1.2.0-1~bookworm1
+Architecture: all
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Installed-Size: 90
+Depends: secubox-core (>= 1.0.0)
+Priority: optional
+Section: admin
+Filename: pool/main/s/secubox-nextcloud/secubox-nextcloud_1.2.0-1~bookworm1_all.deb
+Size: 17080
+SHA256: ac6344e6476fdf39e5ee3a0cfa1dd6a2bbd69112621653719acff8fadd4c195c
+SHA1: 1c1bb804fbb26b9e967baecac01632beefe5c950
+MD5sum: 1197e970801733480d2905d4eafa2cec
+Description: SecuBox Nextcloud Module
+ Nextcloud File Sync
+
+Package: secubox-ollama
+Version: 1.0.0-1~bookworm1
+Architecture: all
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Installed-Size: 78
+Depends: secubox-core (>= 1.0), python3-uvicorn, python3-httpx
+Recommends: docker.io | podman
+Priority: optional
+Section: net
+Filename: pool/main/s/secubox-ollama/secubox-ollama_1.0.0-1~bookworm1_all.deb
+Size: 13032
+SHA256: 8bbe152c6229391abe7b0d2bbdbdbf1c2b4b3fc786ddeacbe56dc0d107ffa45c
+SHA1: 9bc810068524c12dd9a0a3903a3306da3dd25706
+MD5sum: 7f81788549108b70bc0ef1351c4ccee3
+Description: Local AI inference with Ollama
+ SecuBox module for managing local LLM inference via Ollama.
+ Provides container management (Docker/Podman), model pulling,
+ chat completion, and text generation APIs.
+ .
+ Ported from OpenWRT luci-app-ollama.
+ Provides FastAPI backend on /api/v1/ollama/ via Unix socket.
+
+Package: secubox-ossec
+Version: 1.0.0-1
+Architecture: all
+Maintainer: SecuBox Team <team@secubox.local>
+Installed-Size: 61
+Depends: python3, python3-fastapi, python3-uvicorn, secubox-core
+Recommends: ossec-hids | ossec-hids-agent
+Priority: optional
+Section: admin
+Filename: pool/main/s/secubox-ossec/secubox-ossec_1.0.0-1_all.deb
+Size: 9472
+SHA256: 7cd960c6fc48d482b89684f60f1255b7223f9874c0b61b6b1d1dc432f82a8321
+SHA1: 46be92eee3da615643047dadcd0e49d5da001f47
+MD5sum: c0ec8777ea9dbb46813beff0a344a27d
+Description: SecuBox OSSEC HIDS integration
+ OSSEC Host-based Intrusion Detection System integration.
+ Provides management interface for OSSEC services,
+ alert viewing, file integrity, and rootkit detection.
+
+Package: secubox-p2p
+Version: 1.6.0-1~bookworm1
+Architecture: all
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Installed-Size: 184
+Depends: secubox-core (>= 1.0), python3, python3-fastapi, python3-uvicorn, avahi-daemon, avahi-utils
+Priority: optional
+Section: admin
+Filename: pool/main/s/secubox-p2p/secubox-p2p_1.6.0-1~bookworm1_all.deb
+Size: 32302
+SHA256: cd47d166e08f3f9bc67a1c0cf55db65eea9fc768a865c5db1755f40af8e79b44
+SHA1: 9a021d9fdcf5f3fe0bee64abb9051a354699e4c2
+MD5sum: e6cf4491e50bd1ec6a07dbd23ece1590
+Description: SecuBox P2P - Peer-to-Peer Network Hub
+ P2P network management with peers, services, mesh visualization, and threat intel.
+
+Package: secubox-peertube
+Version: 1.0.0-1
+Architecture: all
+Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Installed-Size: 58
+Depends: secubox-core (>= 1.0), python3-uvicorn, lxc, lxc-templates
+Priority: optional
+Section: net
+Filename: pool/main/s/secubox-peertube/secubox-peertube_1.0.0-1_all.deb
+Size: 10426
+SHA256: 584c2d4c521585b20df745de0f912f08a34154856a50568cbe9108913443b931
+SHA1: 009802621b339c1104815f771366c21561003f73
+MD5sum: 814885eed6f661e99a64973987683c5e
+Description: SecuBox PeerTube - Federated Video Platform
+ LXC-based PeerTube video platform for SecuBox.
+ ActivityPub-compatible decentralized YouTube alternative.
+
+Package: secubox-photoprism
+Version: 1.0.0-1
+Architecture: all
+Maintainer: SecuBox Team <team@secubox.in>
+Installed-Size: 72
+Depends: secubox-core, python3, python3-fastapi, python3-uvicorn, python3-httpx, lxc, lxc-templates
+Homepage: https://secubox.in
+Priority: optional
+Section: admin
+Filename: pool/main/s/secubox-photoprism/secubox-photoprism_1.0.0-1_all.deb
+Size: 12042
+SHA256: 0b8111ce00fe267756cb6c1f9bd281f9f02050f0585d331c1572f60417470c5d
+SHA1: cdae28957279bc66ccf38eb2b9752888bb2f5273
+MD5sum: 3377ef4823bd3831e884c8ab3c345107
+Description: SecuBox PhotoPrism - AI-powered photo management
+ Provides a web interface and API for managing PhotoPrism
+ photo library running in an LXC container.
+ .
+ Features:
+  - LXC container-based PhotoPrism deployment
+  - AI-powered face and object recognition
+  - Full-text photo search
+  - Album management
+  - Photo import and indexing
 
 Package: secubox-portal
 Version: 1.0.0-1~bookworm1
@@ -441,6 +1226,102 @@ Description: SecuBox QoS / Bandwidth Manager
  .
  Port Debian bookworm de luci-app-bandwidth-manager (SecuBox OpenWrt / CyberMind.fr).
 
+Package: secubox-redroid
+Version: 1.0.0-1
+Architecture: all
+Maintainer: SecuBox Team <team@secubox.local>
+Installed-Size: 53
+Depends: python3, python3-fastapi, python3-uvicorn, secubox-core
+Recommends: docker.io, adb
+Priority: optional
+Section: web
+Filename: pool/main/s/secubox-redroid/secubox-redroid_1.0.0-1_all.deb
+Size: 8028
+SHA256: 4e4d3c757d39a9b5bf2f4cf0fa0a62df782cd0100440e40a4130d5637091d7d7
+SHA1: 42804bc42910264069ed9dc582d53e458188740f
+MD5sum: e3d5f6562dec892ee7597a256791899d
+Description: SecuBox Redroid - Android in container
+ Android container management for SecuBox.
+ Run Android instances in Docker containers with
+ ADB access for app installation and debugging.
+
+Package: secubox-repo
+Version: 1.0.0-1~bookworm1
+Architecture: all
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Installed-Size: 90
+Depends: secubox-core, python3-fastapi, python3-uvicorn, python3-aiofiles, reprepro, gnupg, rsync
+Recommends: nginx, certbot
+Homepage: https://github.com/gkerma/secubox-deb
+Priority: optional
+Section: admin
+Filename: pool/main/s/secubox-repo/secubox-repo_1.0.0-1~bookworm1_all.deb
+Size: 15972
+SHA256: ec4675d8968268f0bd44e74d7aa8b8ee1cbab3cd32c8a17c013ea036c6b05a6d
+SHA1: a3c977cec9e6a169260eecc73a6b5847f0bb8aa0
+MD5sum: 2d28534e582ee008aff10246162058ec
+Description: SecuBox APT Repository Manager
+ Management interface for the SecuBox APT repository (apt.secubox.in).
+ .
+ Features:
+  - Package management (add, remove, list)
+  - GPG key generation and signing
+  - Multiple distribution support (bookworm, trixie)
+  - Remote sync via rsync
+  - Web interface for repository status
+ .
+ This is the control plane for apt.secubox.in.
+
+Package: secubox-roadmap
+Version: 1.1.0-1~bookworm1
+Architecture: all
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Installed-Size: 69
+Depends: secubox-core (>= 1.0), python3, python3-fastapi, python3-uvicorn
+Priority: optional
+Section: admin
+Filename: pool/main/s/secubox-roadmap/secubox-roadmap_1.1.0-1~bookworm1_all.deb
+Size: 10568
+SHA256: 9b2fd09de60134f8213783ccddd8e02778702851ecc2f34e6198848b6fd81b14
+SHA1: 4de731cb716827cb066eea5dc78a52c2f1002fd1
+MD5sum: 378662a3bd5a4aa30f0e7a117f4528f3
+Description: SecuBox Roadmap - Migration tracking dashboard
+ Tracks migration progress from OpenWRT LuCI apps to SecuBox Debian packages.
+ Shows complete, in-progress, and planned modules with category breakdown.
+
+Package: secubox-simplex
+Version: 1.0.0-1
+Architecture: all
+Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Installed-Size: 52
+Depends: secubox-core, python3, python3-uvicorn, python3-fastapi, nginx, lxc
+Priority: optional
+Section: net
+Filename: pool/main/s/secubox-simplex/secubox-simplex_1.0.0-1_all.deb
+Size: 8462
+SHA256: 775eb8ceddafb48d5c530e1e765d1e9c0486a1aa50261b6446505dcc67d0f2c2
+SHA1: 844bcc827a38bf6301fac9c3d847c0866827e2b3
+MD5sum: c23e9a9bb484c8bc85370be7413ac395
+Description: SecuBox SimpleX Chat Server
+ LXC-based SimpleX SMP server for SecuBox.
+ Privacy-focused messaging relay with no user identifiers.
+
+Package: secubox-soc
+Version: 1.0.0-1~bookworm1
+Architecture: all
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Installed-Size: 80
+Depends: secubox-core (>= 1.0.0)
+Priority: optional
+Section: admin
+Filename: pool/main/s/secubox-soc/secubox-soc_1.0.0-1~bookworm1_all.deb
+Size: 14596
+SHA256: 8a6f72559bf2e8ada0827f876caadcceddadc028d50276ffede0f57fb7b67ecd
+SHA1: 10db27f3c815c09e5a2969c5d4a929e9579be9ec
+MD5sum: 344b98ea7e19857e354bf92ff1a5e124
+Description: SecuBox Soc Module
+ Security Operations Center - Clock, Map, P2P Intel
+
 Package: secubox-streamforge
 Version: 1.0.1-1~bookworm1
 Architecture: all
@@ -496,6 +1377,76 @@ Description: SecuBox System Hub
  .
  Port Debian bookworm de luci-app-system-hub (SecuBox OpenWrt / CyberMind.fr).
 
+Package: secubox-threat-analyst
+Version: 1.0.0-1~bookworm1
+Architecture: all
+Maintainer: SecuBox <dev@secubox.local>
+Installed-Size: 60
+Depends: secubox-core (>= 1.0.0)
+Priority: optional
+Section: admin
+Filename: pool/main/s/secubox-threat-analyst/secubox-threat-analyst_1.0.0-1~bookworm1_all.deb
+Size: 10826
+SHA256: 7c43fd68df50df61109aa40caa7adff973c316bbfd854a86d4c18ab47393d583
+SHA1: ba178bb29036491f9a224613060b38c734e03f62
+MD5sum: e2725497ffde5c7c14edb88111ec9213
+Description: SecuBox Threat-analyst Module
+ AI Threat Analysis Agent
+
+Package: secubox-tor
+Version: 1.0.0-1~bookworm1
+Architecture: all
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Installed-Size: 76
+Depends: secubox-core (>= 1.0.0)
+Priority: optional
+Section: admin
+Filename: pool/main/s/secubox-tor/secubox-tor_1.0.0-1~bookworm1_all.deb
+Size: 13326
+SHA256: f300d9f0ed5114b3c399f5d6413babd139d453eb4407ada770cc80df7d547ceb
+SHA1: 9bfbb9829d6be7807354264f7674fd872261b7b8
+MD5sum: 79c8934f0226614ed1ea7248bb80e5e5
+Description: SecuBox Tor Module
+ Tor anonymity network and hidden services
+
+Package: secubox-torrent
+Version: 1.0.0-1
+Architecture: all
+Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Installed-Size: 59
+Depends: secubox-core, python3, python3-uvicorn, python3-fastapi, nginx
+Recommends: transmission-daemon
+Priority: optional
+Section: net
+Filename: pool/main/s/secubox-torrent/secubox-torrent_1.0.0-1_all.deb
+Size: 9510
+SHA256: 3356338ab73da184e3db13607a4e79b89ebcd8c69100cebbd0c8d6cd78648241
+SHA1: 012abd8ce6421b76697146104e9635b485f7625c
+MD5sum: 47d0381405a5897a18fee34fd874e31e
+Description: SecuBox Torrent Client
+ BitTorrent client with Transmission daemon for SecuBox.
+ Manage downloads, upload torrents, track transfer speeds.
+
+Package: secubox-traffic
+Version: 1.0.0-1~bookworm1
+Architecture: all
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Installed-Size: 79
+Depends: python3, python3-fastapi, python3-uvicorn, secubox-core, iproute2
+Recommends: linux-image-amd64 (>= 5.4) | linux-image-arm64 (>= 5.4)
+Homepage: https://secubox.gondwana.systems
+Priority: optional
+Section: admin
+Filename: pool/main/s/secubox-traffic/secubox-traffic_1.0.0-1~bookworm1_all.deb
+Size: 13488
+SHA256: 4cb04b6d6524be17d3ea46222c324da1735d0ce87502887540ac94d67ed404f9
+SHA1: dbfd7e2aef42b24ddc44d5ff3d892dd665f71bec
+MD5sum: 05f54cfdc66240dd7e3fd2a4046b8df4
+Description: SecuBox Traffic Shaper
+ Advanced QoS traffic control with TC/CAKE.
+ Provides traffic classification, bandwidth management,
+ priority-based shaping, and preset configurations.
+
 Package: secubox-users
 Version: 1.2.0-1~bookworm1
 Architecture: all
@@ -511,6 +1462,25 @@ SHA1: 6e3ff18b02fe7fce3a816402058ba5fc77111528
 MD5sum: 60dde45ba7595bad7ad6e25a5d94ff9e
 Description: SecuBox Users Module
  SecuBox Users - Unified Identity
+
+Package: secubox-vault
+Version: 1.0.0-1
+Architecture: all
+Maintainer: SecuBox Team <team@secubox.local>
+Installed-Size: 58
+Depends: python3, python3-fastapi, python3-uvicorn, python3-cryptography, secubox-core
+Recommends: vault
+Priority: optional
+Section: admin
+Filename: pool/main/s/secubox-vault/secubox-vault_1.0.0-1_all.deb
+Size: 9144
+SHA256: cb4e86a5a4fff460b703116fb2e4a283f47a014ee019d9ee68f4fc4bcaf34869
+SHA1: 50e2469f68926a0e7cc248bc8d7fe904732f4f24
+MD5sum: d7deeb85b4cc2ce19c2319c06e9a7f97
+Description: SecuBox Vault - Secrets management
+ Encrypted secrets storage for SecuBox.
+ Provides secure storage for API keys, passwords,
+ and credentials with audit logging and rotation support.
 
 Package: secubox-vhost
 Version: 1.1.0-1~bookworm1
@@ -530,6 +1500,75 @@ Description: SecuBox Virtual Host Manager
  Gestion des hôtes virtuels nginx et SSL : Let's Encrypt, autosigné, reverse proxy, redirections.
  .
  Port Debian bookworm de luci-app-vhost-manager (SecuBox OpenWrt / CyberMind.fr).
+
+Package: secubox-vm
+Version: 1.0.0-1
+Architecture: all
+Maintainer: SecuBox Team <team@secubox.local>
+Installed-Size: 64
+Depends: python3, python3-fastapi, python3-uvicorn, secubox-core
+Recommends: libvirt-daemon-system, qemu-system-x86, virtinst, lxc
+Priority: optional
+Section: admin
+Filename: pool/main/s/secubox-vm/secubox-vm_1.0.0-1_all.deb
+Size: 9744
+SHA256: 4c00723fb91d6c5340a31b7a738aed5e1004e6b549fdd358585552a809bdc2c6
+SHA1: 3fad35b6215d8522feaf8173b12880b1c3d9c429
+MD5sum: 0dbb1081cbb920b2e75e3887eb4527bb
+Description: SecuBox VM Manager - Virtualization management
+ Virtual machine and container management for SecuBox.
+ Supports KVM/QEMU virtual machines via libvirt
+ and LXC containers.
+
+Package: secubox-voip
+Version: 1.0.0-1
+Architecture: all
+Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Installed-Size: 54
+Depends: secubox-core, python3, python3-uvicorn, python3-fastapi, nginx
+Recommends: asterisk
+Priority: optional
+Section: comm
+Filename: pool/main/s/secubox-voip/secubox-voip_1.0.0-1_all.deb
+Size: 8694
+SHA256: 9e1063b9c7b14630e4bbd0e074d51b307bb6544df7f3d7a88ecc04f842aa25ba
+SHA1: 1c1df5cfdf9b9bbaae17528d3c3aee85e8357fb2
+MD5sum: 28db299bedc89269c1c949c7ac540929
+Description: SecuBox VoIP PBX
+ Asterisk PBX management for SecuBox.
+ SIP extensions, call routing, and trunk configuration.
+
+Package: secubox-vortex-dns
+Version: 1.0.0-1~bookworm1
+Architecture: all
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Installed-Size: 58
+Depends: secubox-core (>= 1.0.0)
+Priority: optional
+Section: admin
+Filename: pool/main/s/secubox-vortex-dns/secubox-vortex-dns_1.0.0-1~bookworm1_all.deb
+Size: 10050
+SHA256: 02211ae1ae358894b1598539c375ea8070b5f104227be8b460b02fade444acea
+SHA1: 8a21e96d48bd7dd2be33bab167b30ae4f4442236
+MD5sum: 902cdcff756f7b305d0d607142426157
+Description: SecuBox Vortex-dns Module
+ DNS Firewall with RPZ and threat feeds
+
+Package: secubox-vortex-firewall
+Version: 1.0.0-1~bookworm1
+Architecture: all
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Installed-Size: 63
+Depends: secubox-core (>= 1.0.0)
+Priority: optional
+Section: admin
+Filename: pool/main/s/secubox-vortex-firewall/secubox-vortex-firewall_1.0.0-1~bookworm1_all.deb
+Size: 10766
+SHA256: 266113c080583a6e1f8fe858643765d4b922a420a63249b295f987f84933ba5b
+SHA1: 819072a999e1e6939c15cbbb3c7a64b3f7e3aec1
+MD5sum: efcd64e47cfe13eb96e857aa0ab7d969
+Description: SecuBox Vortex-firewall Module
+ Vortex Firewall - nftables threat enforcement
 
 Package: secubox-waf
 Version: 1.0.0-1~bookworm1
@@ -557,6 +1596,41 @@ Description: SecuBox Web Application Firewall
   - Rate limiting per IP
   - CrowdSec integration for centralized banning
   - HAProxy reverse proxy integration
+
+Package: secubox-watchdog
+Version: 1.0.0-1~bookworm1
+Architecture: all
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Installed-Size: 77
+Depends: secubox-core (>= 1.0.0)
+Priority: optional
+Section: admin
+Filename: pool/main/s/secubox-watchdog/secubox-watchdog_1.0.0-1~bookworm1_all.deb
+Size: 13262
+SHA256: 29e9edee0ba1a440a00a3e4de21f800b96184a9b06f27a2edb687c84b4e403df
+SHA1: d94ec2dc82718fff745d8a7b5b9791f42dfbe2c6
+MD5sum: 648dd871ffbf888ea7b3bb3ec15c94fc
+Description: SecuBox Watchdog Module
+ Service and container health monitoring
+
+Package: secubox-wazuh
+Version: 1.0.0-1
+Architecture: all
+Maintainer: SecuBox Team <team@secubox.local>
+Installed-Size: 57
+Depends: python3, python3-fastapi, python3-uvicorn, secubox-core
+Recommends: wazuh-agent | wazuh-manager
+Priority: optional
+Section: admin
+Filename: pool/main/s/secubox-wazuh/secubox-wazuh_1.0.0-1_all.deb
+Size: 9156
+SHA256: 9d4fa434c2e9ce2feedd77c2052d2695bc2972e8cafdf539e5ef0d62ecf1a176
+SHA1: bd10f3453a6aa3fb721d2828c5036b49a10d1097
+MD5sum: 3ee8e82d46e26b529e48b615d6f05836
+Description: SecuBox Wazuh SIEM integration
+ Wazuh SIEM integration for SecuBox.
+ Provides management interface for Wazuh agent/manager,
+ alert viewing, and security monitoring.
 
 Package: secubox-webmail
 Version: 1.0.0-1~bookworm1
@@ -608,6 +1682,24 @@ Description: SecuBox Webmail LXC Container (Backend)
  .
  Install secubox-mail for the management UI.
 
+Package: secubox-webradio
+Version: 1.0.0-1
+Architecture: all
+Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Installed-Size: 54
+Depends: secubox-core, python3, python3-uvicorn, python3-fastapi, nginx
+Recommends: icecast2
+Priority: optional
+Section: sound
+Filename: pool/main/s/secubox-webradio/secubox-webradio_1.0.0-1_all.deb
+Size: 8782
+SHA256: 8c4c998c7648cfff2e7c74657f1a5053a194c3817dbdb57860ad47cb5904b3c5
+SHA1: 2b7850cb3659559bfd2faeab190649acf81870b5
+MD5sum: 8601c4d53c47d14d5fe58f89634a0c14
+Description: SecuBox WebRadio Streaming
+ Internet radio streaming server management for SecuBox.
+ Manage Icecast2 streams, playlists, and media files.
+
 Package: secubox-wireguard
 Version: 1.0.0-1~bookworm1
 Architecture: all
@@ -626,4 +1718,45 @@ Description: SecuBox WireGuard Dashboard
  Gestion WireGuard VPN : tunnels, pairs, trafic, QR codes, génération de clés.
  .
  Port Debian bookworm de luci-app-wireguard-dashboard (SecuBox OpenWrt / CyberMind.fr).
+
+Package: secubox-zigbee
+Version: 1.0.0-1~bookworm1
+Architecture: all
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Installed-Size: 89
+Depends: secubox-core (>= 1.0), python3-uvicorn, python3-httpx
+Priority: optional
+Section: net
+Filename: pool/main/s/secubox-zigbee/secubox-zigbee_1.0.0-1~bookworm1_all.deb
+Size: 14622
+SHA256: 5f98360b7be5173bf1528134c52fe90298f6f7d86194be243d4e4cfb961557e5
+SHA1: 0a4b8d690a454910223ec8ec64d36516d81d0648
+MD5sum: 340410b4cb8e697abe191830c7178d67
+Description: Zigbee2MQTT Gateway for SecuBox
+ Debian bookworm port of the OpenWRT luci-app-zigbee2mqtt module.
+ Provides FastAPI backend on /api/v1/zigbee/ via Unix socket.
+ .
+ Features:
+  - Docker/Podman container management for Zigbee2MQTT
+  - USB serial dongle detection and passthrough
+  - Device pairing and management
+  - MQTT broker integration
+  - Network topology visualization
+  - CRT-light P31 phosphor theme frontend
+
+Package: secubox-zkp
+Version: 1.0.0-1~bookworm1
+Architecture: all
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Installed-Size: 64
+Depends: secubox-core (>= 1.0), python3, python3-fastapi, python3-uvicorn
+Priority: optional
+Section: admin
+Filename: pool/main/s/secubox-zkp/secubox-zkp_1.0.0-1~bookworm1_all.deb
+Size: 11132
+SHA256: 5617a714ce59a6ba758c07ee0a0f9f55086d96ba49794280706bd3531d48f102
+SHA1: e63112d1ad465ff129c22c96f85f5e5cbeffbafc
+MD5sum: c9ed86153563455c05dee4c827ed3c5e
+Description: SecuBox ZKP - Zero-Knowledge Proof Dashboard
+ Zero-Knowledge Proof Hamiltonian management for SecuBox.
 
