@@ -198,6 +198,10 @@ ExecStart=-/sbin/agetty --autologin root --noclear %I \$TERM
 Type=idle
 EOF
 
+# Enable getty@tty1 and set default target
+chroot "${ROOTFS}" systemctl enable getty@tty1.service 2>/dev/null || true
+chroot "${ROOTFS}" systemctl set-default multi-user.target 2>/dev/null || true
+
 # Disable live-config autologin
 mkdir -p "${ROOTFS}/etc/live/config.conf.d"
 echo 'LIVE_CONFIG_NOAUTOLOGIN=true' > "${ROOTFS}/etc/live/config.conf.d/no-autologin.conf"
@@ -374,7 +378,12 @@ else
 deb [trusted=yes] ${APT_SECUBOX} ${SUITE} main
 EOF
     chroot "${ROOTFS}" apt-get update -q
-    chroot "${ROOTFS}" apt-get install -y -q secubox-full 2>/dev/null || warn "secubox-full unavailable"
+    chroot "${ROOTFS}" apt-get install -y -q secubox-full 2>/dev/null || true
+
+    # Verify secubox-core installed (dependency of secubox-full)
+    if ! chroot "${ROOTFS}" dpkg -l secubox-core 2>/dev/null | grep -q "^ii"; then
+      warn "secubox-full unavailable"
+    fi
   fi
 fi
 
@@ -442,7 +451,12 @@ if [[ $INCLUDE_KIOSK -eq 1 ]]; then
     cage chromium fonts-dejavu-core \
     xwayland \
     libinput10 libegl1 libgles2 libgbm1 libdrm2 \
-    mesa-utils xdg-utils 2>/dev/null || warn "Kiosk packages failed"
+    mesa-utils xdg-utils 2>/dev/null || true
+
+  # Verify key kiosk packages installed
+  if ! chroot "${ROOTFS}" dpkg -l cage chromium 2>/dev/null | grep -q "^ii"; then
+    warn "Kiosk packages failed"
+  fi
 
   # Create kiosk user with UID 1000
   if ! chroot "${ROOTFS}" id secubox-kiosk &>/dev/null; then
