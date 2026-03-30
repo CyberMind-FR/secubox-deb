@@ -4,7 +4,7 @@
 #  Detects board type and configures WAN/LAN interfaces accordingly
 #  Supports: EspressoBin, MochaBin, x64 (VM/Bare-metal)
 # ══════════════════════════════════════════════════════════════════
-set -euo pipefail
+set -u  # Exit on undefined variables, but allow command failures
 
 SECUBOX_CONF="/etc/secubox/secubox.conf"
 NETPLAN_DIR="/etc/netplan"
@@ -339,7 +339,8 @@ main() {
             # Generate and apply netplan configuration
             generate_netplan "$board" "$wan_iface" "$lan_ifaces" "$sfp_ifaces" "$mode"
             log "Applying netplan..."
-            netplan apply 2>/dev/null || warn "netplan apply failed"
+            # Use timeout to prevent hanging
+            timeout 5 netplan apply 2>/dev/null || log "netplan apply skipped or failed"
             ok "Network configuration applied (mode: $mode)"
             ;;
         test)

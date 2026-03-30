@@ -4,7 +4,7 @@
 #  Parses kernel parameters for SecuBox-specific options
 #  Run early at boot before network configuration
 # ══════════════════════════════════════════════════════════════════
-set -euo pipefail
+set -u  # Exit on undefined variables, but allow command failures
 
 CMDLINE="${1:-/proc/cmdline}"
 MARKER_DIR="/var/lib/secubox"
