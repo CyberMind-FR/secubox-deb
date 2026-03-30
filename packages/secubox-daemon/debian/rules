@@ -7,7 +7,9 @@ export GOFLAGS=-mod=readonly
 	dh $@
 
 override_dh_auto_build:
-	cd ../../daemon && make build
+	# Binaries are pre-built in ../../daemon/build/
+	# To rebuild from source: cd ../../daemon && make build
+	@echo "Using pre-built binaries from daemon/build/"
 
 override_dh_auto_install:
 	# secubox-daemon package
@@ -28,4 +30,5 @@ override_dh_auto_install:
 	cp -r ../../daemon/c3box/frontend/* debian/secubox-c3box/usr/share/c3box/www/ 2>/dev/null || true
 
 override_dh_auto_clean:
-	cd ../../daemon && make clean || true
+	# Don't clean pre-built binaries in ../../daemon/build/
+	@echo "Keeping pre-built binaries"
