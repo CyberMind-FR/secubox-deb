@@ -206,11 +206,13 @@ chroot "${ROOTFS}" systemctl set-default multi-user.target 2>/dev/null || true
 mkdir -p "${ROOTFS}/etc/live/config.conf.d"
 echo 'LIVE_CONFIG_NOAUTOLOGIN=true' > "${ROOTFS}/etc/live/config.conf.d/no-autologin.conf"
 
-# Quiet boot
+# Boot status (show for debugging)
 mkdir -p "${ROOTFS}/etc/systemd/system.conf.d"
-cat > "${ROOTFS}/etc/systemd/system.conf.d/quiet-boot.conf" <<EOF
+cat > "${ROOTFS}/etc/systemd/system.conf.d/boot.conf" <<EOF
 [Manager]
-ShowStatus=no
+ShowStatus=yes
+DefaultTimeoutStartSec=30s
+DefaultTimeoutStopSec=30s
 EOF
 
 # Disable console spam
@@ -978,6 +980,11 @@ menuentry "SecuBox Live (To RAM)" {
 
 menuentry "SecuBox Live (Auto-Check HW)" {
     linux ($live)/live/vmlinuz boot=live live-media-path=live components nomodeset console=tty0 secubox.hwcheck=1
+    initrd ($live)/live/initrd.img
+}
+
+menuentry "SecuBox Live (Emergency Shell)" {
+    linux ($live)/live/vmlinuz boot=live live-media-path=live components nomodeset console=tty0 systemd.unit=emergency.target
     initrd ($live)/live/initrd.img
 }
 GRUBCFG
