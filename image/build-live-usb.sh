@@ -616,7 +616,7 @@ log "7/8 Creating SquashFS filesystem..."
 mkdir -p "${LIVE_DIR}/live"
 
 mksquashfs "${ROOTFS}" "${LIVE_DIR}/live/filesystem.squashfs" \
-  -comp gzip -b 256K -e boot/grub -e boot/efi
+  -comp xz -b 1M -Xdict-size 100% -e boot/grub -e boot/efi
 
 cp "${ROOTFS}/boot/vmlinuz-"* "${LIVE_DIR}/live/vmlinuz"
 cp "${ROOTFS}/boot/initrd.img-"* "${LIVE_DIR}/live/initrd.img"
