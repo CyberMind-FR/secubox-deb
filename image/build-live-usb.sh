@@ -353,6 +353,7 @@ if [[ $INCLUDE_KIOSK -eq 1 ]]; then
   log "Installing kiosk mode packages..."
   chroot "${ROOTFS}" apt-get install -y -q --no-install-recommends \
     cage chromium fonts-dejavu-core \
+    xwayland \
     libinput10 libegl1 libgles2 libgbm1 libdrm2 \
     mesa-utils xdg-utils 2>/dev/null || warn "Kiosk packages failed"
 
