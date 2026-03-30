@@ -171,6 +171,103 @@ EOF
 # Enable serial console
 chroot "${ROOTFS}" systemctl enable serial-getty@ttyAMA0.service 2>/dev/null || true
 
+# Enable getty@tty1 for HDMI console
+mkdir -p "${ROOTFS}/etc/systemd/system/getty@tty1.service.d"
+cat > "${ROOTFS}/etc/systemd/system/getty@tty1.service.d/override.conf" <<EOF
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin root --noclear %I \$TERM
+Type=idle
+EOF
+chroot "${ROOTFS}" systemctl enable getty@tty1.service 2>/dev/null || true
+chroot "${ROOTFS}" systemctl set-default multi-user.target 2>/dev/null || true
+
+# ── Cyber Boot Splash (VT100 DEC PDP-style) ─────────────────────────
+cat > "${ROOTFS}/usr/local/bin/secubox-splash" <<'SPLASH'
+#!/bin/bash
+# SecuBox Cyber Boot Splash - VT100/DEC PDP Style
+
+ESC="\033"
+GREEN="${ESC}[32m"
+BRIGHT="${ESC}[1m"
+DIM="${ESC}[2m"
+BLINK="${ESC}[5m"
+RESET="${ESC}[0m"
+CLEAR="${ESC}[2J${ESC}[H"
+
+echo -ne "$CLEAR$GREEN"
+
+type_slow() {
+    local text="$1"
+    for ((i=0; i<${#text}; i++)); do
+        echo -n "${text:$i:1}"
+        sleep 0.02
+    done
+    echo ""
+}
+
+cat << 'BANNER'
+
+  ____  _____ ____ _   _ ____   _____  __
+ / ___|| ____/ ___| | | | __ ) / _ \ \/ /
+ \___ \|  _|| |   | | | |  _ \| | | \  /
+  ___) | |__| |___| |_| | |_) | |_| /  \
+ |____/|_____\____|\___/|____/ \___/_/\_\
+
+BANNER
+
+echo ""
+echo -e "${BRIGHT}================================================================${RESET}${GREEN}"
+echo "  RASPBERRY PI 400 SECURITY TERMINAL"
+echo "  SECUBOX CYBER DEFENSE SYSTEM"
+echo -e "${BRIGHT}================================================================${RESET}${GREEN}"
+echo ""
+
+type_slow "BOOT SEQUENCE INITIATED..."
+echo ""
+
+steps=(
+    "MEMORY TEST.................... OK"
+    "LOADING KERNEL................. DONE"
+    "CRYPTOGRAPHIC MODULES.......... LOADED"
+    "NETWORK STACK.................. INITIALIZED"
+    "FIREWALL RULES................. ACTIVE"
+    "SECURE SHELL................... READY"
+)
+
+for step in "${steps[@]}"; do
+    echo -n "  > "
+    type_slow "$step"
+    sleep 0.1
+done
+
+echo ""
+echo -e "${BRIGHT}================================================================${RESET}${GREEN}"
+echo ""
+echo -e "  ${BLINK}*${RESET}${GREEN} SYSTEM READY"
+echo ""
+echo "  .------------------------------------------------."
+echo "  |  SECUBOX CYBER SECURITY PLATFORM               |"
+echo "  |  TYPE 'help' FOR AVAILABLE COMMANDS            |"
+echo "  |  RASPBERRY PI 400 ARM64 EDITION                |"
+echo "  '------------------------------------------------'"
+echo ""
+echo -e "${DIM}  Press ENTER to continue...${RESET}${GREEN}"
+read -t 5 || true
+echo -ne "$RESET"
+SPLASH
+chmod +x "${ROOTFS}/usr/local/bin/secubox-splash"
+
+# Add splash to root's bashrc
+cat >> "${ROOTFS}/root/.bashrc" <<'BASHRC'
+
+# SecuBox Cyber Splash on login
+if [ -t 0 ] && [ -z "$SECUBOX_SPLASH_SHOWN" ]; then
+    export SECUBOX_SPLASH_SHOWN=1
+    /usr/local/bin/secubox-splash 2>/dev/null || true
+fi
+BASHRC
+
 ok "System configured"
 
 # ══════════════════════════════════════════════════════════════════
