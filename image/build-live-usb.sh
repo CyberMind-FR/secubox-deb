@@ -555,6 +555,15 @@ for svc in lxc-net lxc; do
   chroot "${ROOTFS}" systemctl mask ${svc}.service 2>/dev/null || true
 done
 
+# Ensure required modules for live-boot are in initramfs
+log "Configuring initramfs modules..."
+cat >> "${ROOTFS}/etc/initramfs-tools/modules" <<EOF
+# Live boot requirements
+loop
+squashfs
+overlay
+EOF
+
 # Regenerate initramfs with live-boot hooks
 log "Regenerating initramfs with live-boot support..."
 chroot "${ROOTFS}" update-initramfs -u -k all
