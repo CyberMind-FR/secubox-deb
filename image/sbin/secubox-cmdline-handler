@@ -82,6 +82,10 @@ apply_settings() {
 
             # Set graphical target for this boot
             systemctl set-default graphical.target 2>/dev/null || true
+
+            # Explicitly start kiosk service (condition was already evaluated by systemd)
+            log "Starting kiosk service..."
+            systemctl start secubox-kiosk.service 2>/dev/null || log "Kiosk service start deferred"
         else
             log "Kiosk packages NOT present - use --kiosk flag when building live USB"
             log "Will attempt installation when network is available"
