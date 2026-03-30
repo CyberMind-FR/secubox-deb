@@ -26,6 +26,9 @@ opkg                             →    apt + repo apt.secubox.in
 | MOCHAbin | Armada 7040 Quad 1.8GHz | 4 GB | 2× SFP+ 10GbE + 4× GbE | SecuBox Pro |
 | ESPRESSObin v7 | Armada 3720 Dual 1.2GHz | 1–2 GB | WAN + 2× LAN DSA | SecuBox Lite |
 | ESPRESSObin Ultra | Armada 3720 Dual 1.2GHz | 2 GB | WAN PoE + 4× LAN + Wi-Fi | SecuBox Lite+ |
+| Raspberry Pi 4 | BCM2711 Quad 1.5GHz | 2-8 GB | GbE + USB | SecuBox Lite |
+| Raspberry Pi 400 | BCM2711 Quad 1.8GHz | 4 GB | GbE + USB | SecuBox Lite |
+| Raspberry Pi 5 | BCM2712 Quad 2.4GHz | 4-8 GB | GbE + USB | SecuBox Full |
 | VM x86_64 | Any | 2+ GB | Virtio/NAT | SecuBox Full |
 
 ---
