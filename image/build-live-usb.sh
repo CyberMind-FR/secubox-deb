@@ -1129,7 +1129,12 @@ menuentry "SecuBox Live (To RAM)" {
 }
 
 menuentry "SecuBox Live (Auto-Check HW)" {
-    linux ($live)/live/vmlinuz boot=live live-media-path=live components nomodeset console=tty0 secubox.hwcheck=1
+    linux ($live)/live/vmlinuz boot=live live-media-path=live components persistence quiet splash secubox.hwcheck=1
+    initrd ($live)/live/initrd.img
+}
+
+menuentry "SecuBox Live (Auto-Check HW - Text Mode)" {
+    linux ($live)/live/vmlinuz boot=live live-media-path=live components persistence nomodeset console=tty0 secubox.hwcheck=1
     initrd ($live)/live/initrd.img
 }
 
