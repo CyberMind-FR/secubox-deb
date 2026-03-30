@@ -544,6 +544,10 @@ for svc in lxc-net lxc; do
   chroot "${ROOTFS}" systemctl mask ${svc}.service 2>/dev/null || true
 done
 
+# Regenerate initramfs with live-boot hooks
+log "Regenerating initramfs with live-boot support..."
+chroot "${ROOTFS}" update-initramfs -u -k all
+
 # Clean APT
 chroot "${ROOTFS}" apt-get clean
 rm -rf "${ROOTFS}/var/lib/apt/lists"/*
