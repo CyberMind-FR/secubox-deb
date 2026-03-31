@@ -569,119 +569,338 @@ ImageDir=/usr/share/plymouth/themes/secubox
 ScriptFile=/usr/share/plymouth/themes/secubox/secubox.script
 PLYTHEME
 
-# Create Plymouth script (text-based retro look)
+# Create Plymouth script - DYNAMIC REACTIVE STATUS DISPLAY
 cat > "${PLYMOUTH_DIR}/secubox.script" <<'PLYSCRIPT'
-# SecuBox Plymouth Theme - VT100/DEC PDP-11 Style
-# Green phosphor terminal aesthetic
+# ═══════════════════════════════════════════════════════════════════════════
+# SecuBox Plymouth Theme - DYNAMIC STATUS DISPLAY
+# Reactive boot splash with real-time service status
+# Colors: Orange=checking | Green=OK | Red=FAIL | Cyan=info
+# ═══════════════════════════════════════════════════════════════════════════
 
-# Colors
-Window.SetBackgroundTopColor(0.0, 0.0, 0.0);
-Window.SetBackgroundBottomColor(0.0, 0.05, 0.0);
+# ─── COLOR DEFINITIONS (RGB 0.0-1.0) ───────────────────────────────────────
+# Phosphor Orange (checking/pending)
+orange_r = 1.0;   orange_g = 0.55;  orange_b = 0.0;
+# Matrix Green (success/OK)
+green_r = 0.0;    green_g = 1.0;    green_b = 0.25;
+# Alert Red (failure/error)
+red_r = 0.9;      red_g = 0.22;     red_b = 0.27;
+# Cyber Cyan (info/neutral)
+cyan_r = 0.0;     cyan_g = 0.83;    cyan_b = 1.0;
+# Muted grey (dimmed text)
+grey_r = 0.42;    grey_g = 0.42;    grey_b = 0.48;
+# Gold hermetic (titles)
+gold_r = 0.79;    gold_g = 0.66;    gold_b = 0.30;
 
-# Logo and text positioning
+# ─── BACKGROUND ────────────────────────────────────────────────────────────
+Window.SetBackgroundTopColor(0.04, 0.04, 0.06);
+Window.SetBackgroundBottomColor(0.02, 0.02, 0.04);
+
+# ─── SCREEN GEOMETRY ───────────────────────────────────────────────────────
 screen_width = Window.GetWidth();
 screen_height = Window.GetHeight();
 center_x = screen_width / 2;
 center_y = screen_height / 2;
 
-# Banner text (ASCII art simulation)
-banner_text = "SECUBOX CYBER DEFENSE SYSTEM";
-banner_sprite = Sprite();
-banner_image = Image.Text(banner_text, 0.0, 1.0, 0.0, "Fixed");
-banner_sprite.SetImage(banner_image);
-banner_sprite.SetPosition(center_x - banner_image.GetWidth() / 2, center_y - 100, 1);
+# ─── STATE TRACKING ────────────────────────────────────────────────────────
+global.boot_phase = 0;
+global.service_count = 0;
+global.ok_count = 0;
+global.fail_count = 0;
+global.last_progress = 0;
 
-# Version line
-version_text = "DEC PDP-11/70 COMPATIBLE - SECURE BOOT SEQUENCE";
-version_sprite = Sprite();
-version_image = Image.Text(version_text, 0.0, 0.8, 0.0, "Fixed");
-version_sprite.SetImage(version_image);
-version_sprite.SetPosition(center_x - version_image.GetWidth() / 2, center_y - 60, 1);
+# ─── HEADER BANNER ─────────────────────────────────────────────────────────
+header1_text = "╔═══════════════════════════════════════════════════════════╗";
+header1_sprite = Sprite();
+header1_image = Image.Text(header1_text, gold_r, gold_g, gold_b, "Fixed");
+header1_sprite.SetImage(header1_image);
+header1_sprite.SetPosition(center_x - header1_image.GetWidth() / 2, 40, 1);
 
-# Separator line
-sep_text = "================================================================";
-sep_sprite = Sprite();
-sep_image = Image.Text(sep_text, 0.0, 0.6, 0.0, "Fixed");
-sep_sprite.SetImage(sep_image);
-sep_sprite.SetPosition(center_x - sep_image.GetWidth() / 2, center_y - 40, 1);
+title_text = "║        SECUBOX CYBER DEFENSE PLATFORM                      ║";
+title_sprite = Sprite();
+title_image = Image.Text(title_text, gold_r, gold_g, gold_b, "Fixed");
+title_sprite.SetImage(title_image);
+title_sprite.SetPosition(center_x - title_image.GetWidth() / 2, 56, 1);
 
-# Progress indicator
-progress_sprite = Sprite();
+subtitle_text = "║            Secure Boot Sequence v2.0                       ║";
+subtitle_sprite = Sprite();
+subtitle_image = Image.Text(subtitle_text, cyan_r, cyan_g, cyan_b, "Fixed");
+subtitle_sprite.SetImage(subtitle_image);
+subtitle_sprite.SetPosition(center_x - subtitle_image.GetWidth() / 2, 72, 1);
+
+header2_text = "╚═══════════════════════════════════════════════════════════╝";
+header2_sprite = Sprite();
+header2_image = Image.Text(header2_text, gold_r, gold_g, gold_b, "Fixed");
+header2_sprite.SetImage(header2_image);
+header2_sprite.SetPosition(center_x - header2_image.GetWidth() / 2, 88, 1);
+
+# ─── PHASE INDICATOR ───────────────────────────────────────────────────────
+phase_sprite = Sprite();
+phase_y = 120;
+
+fun update_phase(phase_name) {
+    phase_text = "► PHASE: " + phase_name;
+    phase_image = Image.Text(phase_text, orange_r, orange_g, orange_b, "Fixed");
+    phase_sprite.SetImage(phase_image);
+    phase_sprite.SetPosition(center_x - phase_image.GetWidth() / 2, phase_y, 1);
+}
+
+update_phase("INITIALIZING KERNEL");
+
+# ─── STATUS LOG AREA (scrolling messages) ──────────────────────────────────
+# We keep last 12 status lines
+status_sprites[0] = Sprite();
+status_sprites[1] = Sprite();
+status_sprites[2] = Sprite();
+status_sprites[3] = Sprite();
+status_sprites[4] = Sprite();
+status_sprites[5] = Sprite();
+status_sprites[6] = Sprite();
+status_sprites[7] = Sprite();
+status_sprites[8] = Sprite();
+status_sprites[9] = Sprite();
+status_sprites[10] = Sprite();
+status_sprites[11] = Sprite();
+
+status_texts[0] = "";
+status_texts[1] = "";
+status_texts[2] = "";
+status_texts[3] = "";
+status_texts[4] = "";
+status_texts[5] = "";
+status_texts[6] = "";
+status_texts[7] = "";
+status_texts[8] = "";
+status_texts[9] = "";
+status_texts[10] = "";
+status_texts[11] = "";
+
+status_colors_r[0] = grey_r; status_colors_g[0] = grey_g; status_colors_b[0] = grey_b;
+status_colors_r[1] = grey_r; status_colors_g[1] = grey_g; status_colors_b[1] = grey_b;
+status_colors_r[2] = grey_r; status_colors_g[2] = grey_g; status_colors_b[2] = grey_b;
+status_colors_r[3] = grey_r; status_colors_g[3] = grey_g; status_colors_b[3] = grey_b;
+status_colors_r[4] = grey_r; status_colors_g[4] = grey_g; status_colors_b[4] = grey_b;
+status_colors_r[5] = grey_r; status_colors_g[5] = grey_g; status_colors_b[5] = grey_b;
+status_colors_r[6] = grey_r; status_colors_g[6] = grey_g; status_colors_b[6] = grey_b;
+status_colors_r[7] = grey_r; status_colors_g[7] = grey_g; status_colors_b[7] = grey_b;
+status_colors_r[8] = grey_r; status_colors_g[8] = grey_g; status_colors_b[8] = grey_b;
+status_colors_r[9] = grey_r; status_colors_g[9] = grey_g; status_colors_b[9] = grey_b;
+status_colors_r[10] = grey_r; status_colors_g[10] = grey_g; status_colors_b[10] = grey_b;
+status_colors_r[11] = grey_r; status_colors_g[11] = grey_g; status_colors_b[11] = grey_b;
+
+log_start_y = 160;
+log_line_height = 16;
+log_x = 80;
+
+fun redraw_status_log() {
+    for (i = 0; i < 12; i++) {
+        if (status_texts[i] != "") {
+            img = Image.Text(status_texts[i], status_colors_r[i], status_colors_g[i], status_colors_b[i], "Fixed");
+            status_sprites[i].SetImage(img);
+            status_sprites[i].SetPosition(log_x, log_start_y + (i * log_line_height), 1);
+        }
+    }
+}
+
+fun add_status_line(text, r, g, b) {
+    # Scroll up - shift all entries
+    for (i = 0; i < 11; i++) {
+        status_texts[i] = status_texts[i + 1];
+        status_colors_r[i] = status_colors_r[i + 1];
+        status_colors_g[i] = status_colors_g[i + 1];
+        status_colors_b[i] = status_colors_b[i + 1];
+    }
+    # Add new entry at bottom
+    status_texts[11] = text;
+    status_colors_r[11] = r;
+    status_colors_g[11] = g;
+    status_colors_b[11] = b;
+
+    redraw_status_log();
+}
+
+# ─── PROGRESS BAR ──────────────────────────────────────────────────────────
+progress_bar_y = log_start_y + (12 * log_line_height) + 20;
+progress_bg_sprite = Sprite();
+progress_fill_sprite = Sprite();
+progress_text_sprite = Sprite();
+
+# Background bar
+progress_bg_text = "╔══════════════════════════════════════════════════════════╗";
+progress_bg_image = Image.Text(progress_bg_text, grey_r, grey_g, grey_b, "Fixed");
+progress_bg_sprite.SetImage(progress_bg_image);
+progress_bg_sprite.SetPosition(center_x - progress_bg_image.GetWidth() / 2, progress_bar_y, 1);
+
+fun update_progress_bar(progress) {
+    fill_count = Math.Int(progress * 58);
+    fill_text = "║";
+    for (i = 0; i < fill_count; i++) {
+        fill_text = fill_text + "█";
+    }
+    for (i = fill_count; i < 58; i++) {
+        fill_text = fill_text + " ";
+    }
+    fill_text = fill_text + "║";
+
+    # Color based on progress: orange while loading, green when done
+    if (progress < 1.0) {
+        fill_image = Image.Text(fill_text, orange_r, orange_g, orange_b, "Fixed");
+    } else {
+        fill_image = Image.Text(fill_text, green_r, green_g, green_b, "Fixed");
+    }
+    progress_fill_sprite.SetImage(fill_image);
+    progress_fill_sprite.SetPosition(center_x - fill_image.GetWidth() / 2, progress_bar_y + 16, 1);
+
+    # Progress percentage
+    pct = Math.Int(progress * 100);
+    pct_text = "╚═══════════════════════ " + pct + "% ═══════════════════════╝";
+    pct_image = Image.Text(pct_text, cyan_r, cyan_g, cyan_b, "Fixed");
+    progress_text_sprite.SetImage(pct_image);
+    progress_text_sprite.SetPosition(center_x - pct_image.GetWidth() / 2, progress_bar_y + 32, 1);
+}
+
+update_progress_bar(0);
+
+# ─── STATS LINE ────────────────────────────────────────────────────────────
+stats_sprite = Sprite();
+stats_y = progress_bar_y + 60;
+
+fun update_stats() {
+    stats_text = "│ Services: " + global.service_count + " │ OK: " + global.ok_count + " │ FAIL: " + global.fail_count + " │";
+
+    if (global.fail_count > 0) {
+        stats_image = Image.Text(stats_text, red_r, red_g, red_b, "Fixed");
+    } else if (global.ok_count > 0) {
+        stats_image = Image.Text(stats_text, green_r, green_g, green_b, "Fixed");
+    } else {
+        stats_image = Image.Text(stats_text, cyan_r, cyan_g, cyan_b, "Fixed");
+    }
+    stats_sprite.SetImage(stats_image);
+    stats_sprite.SetPosition(center_x - stats_image.GetWidth() / 2, stats_y, 1);
+}
+
+update_stats();
+
+# ─── CURSOR BLINK ──────────────────────────────────────────────────────────
+cursor_sprite = Sprite();
 
 fun refresh_callback() {
-    # Blinking cursor effect
     time = Plymouth.GetTime();
+
+    # Blinking cursor
     if (Math.Int(time * 2) % 2 == 0) {
-        cursor_text = "_";
+        cursor_text = "█";
+        cursor_image = Image.Text(cursor_text, orange_r, orange_g, orange_b, "Fixed");
     } else {
         cursor_text = " ";
+        cursor_image = Image.Text(cursor_text, 0, 0, 0, "Fixed");
     }
-    cursor_image = Image.Text(cursor_text, 0.0, 1.0, 0.0, "Fixed");
-    cursor_sprite = Sprite(cursor_image);
-    cursor_sprite.SetPosition(center_x + 100, center_y + 60, 2);
+    cursor_sprite.SetImage(cursor_image);
+    cursor_sprite.SetPosition(log_x + 500, log_start_y + (11 * log_line_height), 2);
 }
 
 Plymouth.SetRefreshFunction(refresh_callback);
 
-# Boot progress bar
-progress_box_image = Image.Text("[                              ]", 0.0, 0.8, 0.0, "Fixed");
-progress_box_sprite = Sprite(progress_box_image);
-progress_box_sprite.SetPosition(center_x - progress_box_image.GetWidth() / 2, center_y + 20, 1);
-
+# ─── BOOT PROGRESS CALLBACK ────────────────────────────────────────────────
 fun boot_progress_callback(duration, progress) {
-    # Update progress bar fill
-    fill_count = Math.Int(progress * 30);
-    fill_text = "";
-    for (i = 0; i < fill_count; i++) {
-        fill_text = fill_text + "#";
+    update_progress_bar(progress);
+    global.last_progress = progress;
+
+    # Update phase based on progress
+    if (progress < 0.2) {
+        update_phase("KERNEL INITIALIZATION");
+    } else if (progress < 0.4) {
+        update_phase("HARDWARE DETECTION");
+    } else if (progress < 0.6) {
+        update_phase("FILESYSTEM MOUNT");
+    } else if (progress < 0.8) {
+        update_phase("NETWORK CONFIGURATION");
+    } else if (progress < 0.95) {
+        update_phase("SECURITY SERVICES");
+    } else {
+        update_phase("SYSTEM READY");
     }
-    for (i = fill_count; i < 30; i++) {
-        fill_text = fill_text + " ";
-    }
-    progress_text = "[" + fill_text + "]";
-    progress_image = Image.Text(progress_text, 0.0, 1.0, 0.0, "Fixed");
-    progress_sprite.SetImage(progress_image);
-    progress_sprite.SetPosition(center_x - progress_image.GetWidth() / 2, center_y + 20, 1);
 }
 
 Plymouth.SetBootProgressFunction(boot_progress_callback);
 
-# Status message display
-message_sprite = Sprite();
+# ─── MESSAGE CALLBACK (systemd status messages) ────────────────────────────
+# Plymouth receives messages in format: "message:status" where status is ok/fail/etc
+# All messages shown in orange (pending) - update_status_callback handles final state
 
 fun message_callback(text) {
-    message_image = Image.Text("> " + text, 0.0, 0.7, 0.0, "Fixed");
-    message_sprite.SetImage(message_image);
-    message_sprite.SetPosition(center_x - 200, center_y + 60, 1);
+    global.service_count++;
+    # Show message in orange (checking state)
+    add_status_line("[....] " + text, orange_r, orange_g, orange_b);
+    update_stats();
 }
 
 Plymouth.SetMessageFunction(message_callback);
 
-# Display mode change
-fun display_normal_callback() {
-    # Normal boot display
+# ─── UPDATE STATUS CALLBACK (final status from systemd) ────────────────────
+# This is called with status: "normal", "pause", "unpause", etc
+# And separately for service status via system messages
+
+fun update_status_callback(status) {
+    # Status updates from systemd - track success/failure
+    if (status == "normal") {
+        # Boot proceeding normally
+        global.ok_count++;
+    } else if (status == "failed" || status == "error") {
+        global.fail_count++;
+        add_status_line("[FAIL] Boot error detected", red_r, red_g, red_b);
+    }
+    update_stats();
 }
 
+Plymouth.SetUpdateStatusFunction(update_status_callback);
+
+# ─── PASSWORD PROMPT ───────────────────────────────────────────────────────
+password_sprite = Sprite();
+password_box_sprite = Sprite();
+
 fun display_password_callback(prompt, bullets) {
-    # Password entry (for encrypted disks)
-    password_sprite = Sprite();
-    password_image = Image.Text(prompt + " " + bullets, 0.0, 1.0, 0.0, "Fixed");
-    password_sprite.SetImage(password_image);
-    password_sprite.SetPosition(center_x - password_image.GetWidth() / 2, center_y + 100, 1);
+    # Password prompt in orange
+    prompt_text = "╔═══ " + prompt + " ═══╗";
+    prompt_image = Image.Text(prompt_text, orange_r, orange_g, orange_b, "Fixed");
+    password_sprite.SetImage(prompt_image);
+    password_sprite.SetPosition(center_x - prompt_image.GetWidth() / 2, center_y, 1);
+
+    # Password bullets
+    bullet_text = "║ " + bullets + " ║";
+    bullet_image = Image.Text(bullet_text, gold_r, gold_g, gold_b, "Fixed");
+    password_box_sprite.SetImage(bullet_image);
+    password_box_sprite.SetPosition(center_x - bullet_image.GetWidth() / 2, center_y + 20, 1);
+}
+
+fun display_normal_callback() {
+    password_sprite.SetOpacity(0);
+    password_box_sprite.SetOpacity(0);
 }
 
 Plymouth.SetDisplayNormalFunction(display_normal_callback);
 Plymouth.SetDisplayPasswordFunction(display_password_callback);
 
-# System update messages
+# ─── SYSTEM UPDATE ─────────────────────────────────────────────────────────
 fun system_update_callback(progress) {
-    update_text = "SYSTEM UPDATE: " + Math.Int(progress * 100) + "%";
-    update_image = Image.Text(update_text, 0.0, 0.8, 0.0, "Fixed");
-    update_sprite = Sprite(update_image);
-    update_sprite.SetPosition(center_x - update_image.GetWidth() / 2, center_y + 80, 1);
+    update_text = "SYSTEM UPDATE IN PROGRESS: " + Math.Int(progress * 100) + "%";
+    add_status_line(update_text, cyan_r, cyan_g, cyan_b);
+    update_progress_bar(progress);
 }
 
 Plymouth.SetSystemUpdateFunction(system_update_callback);
+
+# ─── QUIT CALLBACK ─────────────────────────────────────────────────────────
+fun quit_callback() {
+    update_phase("BOOT COMPLETE");
+    update_progress_bar(1.0);
+    add_status_line("═══ SecuBox Ready ═══", green_r, green_g, green_b);
+}
+
+Plymouth.SetQuitFunction(quit_callback);
+
+# ─── INITIAL MESSAGE ───────────────────────────────────────────────────────
+add_status_line("SecuBox Cyber Defense Platform", gold_r, gold_g, gold_b);
+add_status_line("Initializing secure boot sequence...", cyan_r, cyan_g, cyan_b);
 PLYSCRIPT
 
 # Set SecuBox theme as default
@@ -839,6 +1058,84 @@ RemainAfterExit=yes
 WantedBy=multi-user.target
 EOF
 chroot "${ROOTFS}" systemctl enable secubox-firstboot.service 2>/dev/null || true
+
+# Plymouth boot status generator - sends real service status to plymouth
+cat > "${ROOTFS}/usr/local/bin/secubox-boot-status" <<'BOOTSTATUS'
+#!/bin/bash
+# SecuBox Boot Status Generator - sends status to Plymouth
+# Colors: orange=checking, green=ok, red=fail
+
+plymouth_msg() {
+    plymouth display-message --text="$1" 2>/dev/null || true
+}
+
+plymouth_ok() {
+    plymouth update --status="normal" 2>/dev/null || true
+}
+
+plymouth_fail() {
+    plymouth update --status="failed" 2>/dev/null || true
+}
+
+# Monitor systemd boot progress
+while true; do
+    # Get currently starting services
+    starting=$(systemctl list-jobs --no-legend 2>/dev/null | head -5)
+
+    if [[ -n "$starting" ]]; then
+        # Extract first starting service
+        svc=$(echo "$starting" | head -1 | awk '{print $2}')
+        if [[ -n "$svc" ]]; then
+            plymouth_msg "Starting: ${svc%.service}"
+        fi
+    fi
+
+    # Check for failed services
+    failed=$(systemctl --failed --no-legend 2>/dev/null | wc -l)
+    if [[ $failed -gt 0 ]]; then
+        plymouth_fail
+        fail_name=$(systemctl --failed --no-legend 2>/dev/null | head -1 | awk '{print $1}')
+        plymouth_msg "FAILED: ${fail_name%.service}"
+    fi
+
+    # Check if boot is complete
+    if systemctl is-system-running --quiet 2>/dev/null; then
+        plymouth_ok
+        plymouth_msg "SecuBox Ready"
+        exit 0
+    fi
+
+    # Check if we're in degraded state (some failures but running)
+    state=$(systemctl is-system-running 2>/dev/null || echo "starting")
+    if [[ "$state" == "degraded" ]]; then
+        plymouth_msg "System degraded - some services failed"
+        exit 0
+    fi
+
+    sleep 0.5
+done
+BOOTSTATUS
+chmod +x "${ROOTFS}/usr/local/bin/secubox-boot-status"
+
+# Boot status service
+cat > "${ROOTFS}/etc/systemd/system/secubox-boot-status.service" <<'BOOTSTATUSSVC'
+[Unit]
+Description=SecuBox Boot Status for Plymouth
+DefaultDependencies=no
+After=plymouth-start.service
+Before=plymouth-quit.service plymouth-quit-wait.service
+ConditionKernelCommandLine=splash
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/secubox-boot-status
+TimeoutStartSec=90
+TimeoutStopSec=5
+
+[Install]
+WantedBy=sysinit.target
+BOOTSTATUSSVC
+chroot "${ROOTFS}" systemctl enable secubox-boot-status.service 2>/dev/null || true
 
 # ── Kiosk mode packages ───────────────────────────────────────────
 if [[ $INCLUDE_KIOSK -eq 1 ]]; then
