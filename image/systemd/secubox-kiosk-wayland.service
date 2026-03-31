@@ -1,5 +1,5 @@
 [Unit]
-Description=SecuBox Kiosk Mode (X11/Chromium)
+Description=SecuBox Kiosk Mode (Wayland/Cage)
 After=systemd-user-sessions.service plymouth-quit-wait.service
 Wants=network-online.target
 Conflicts=getty@tty1.service
@@ -28,18 +28,23 @@ ExecStartPre=+/bin/chvt 7
 User=secubox-kiosk
 Group=secubox-kiosk
 
-# X11/DRM access
+# Wayland/DRM access
 SupplementaryGroups=video audio input render tty
 
-# Environment for X11
+# Environment for Wayland (cage creates its own display)
 Environment=XDG_RUNTIME_DIR=/run/user/1000
-Environment=XDG_SESSION_TYPE=x11
-Environment=DISPLAY=:0
-Environment=HOME=/home/secubox-kiosk
+Environment=XDG_SESSION_TYPE=wayland
 Environment=KIOSK_URL=https://192.168.255.1:9443/
 
-# Start X11 with xinit
-ExecStart=/usr/bin/startx /home/secubox-kiosk/.xinitrc -- :0 vt7 -nolisten tcp
+# wlroots environment (VM compatibility - may still fail)
+Environment=WLR_LIBINPUT_NO_DEVICES=1
+Environment=WLR_NO_HARDWARE_CURSORS=1
+Environment=WLR_RENDERER_ALLOW_SOFTWARE=1
+Environment=WLR_RENDERER=pixman
+Environment=WLR_DRM_NO_ATOMIC=1
+
+# Cage compositor running kiosk script
+ExecStart=/usr/bin/cage -s -- /home/secubox-kiosk/start-kiosk.sh
 
 Restart=on-failure
 RestartSec=5
