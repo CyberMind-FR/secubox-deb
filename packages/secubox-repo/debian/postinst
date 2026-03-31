@@ -14,7 +14,8 @@ case "$1" in
 
         # Enable nginx config if nginx is installed
         if [ -d /etc/nginx/sites-enabled ]; then
-            ln -sf /etc/nginx/snippets/secubox-repo.conf /etc/nginx/conf.d/secubox-repo.conf 2>/dev/null || true
+            mkdir -p /etc/nginx/secubox.d
+            ln -sf /etc/nginx/snippets/secubox-repo.conf /etc/nginx/secubox.d/secubox-repo.conf 2>/dev/null || true
         fi
 
         # Enable and start service
