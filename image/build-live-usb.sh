@@ -856,6 +856,13 @@ if [[ $INCLUDE_KIOSK -eq 1 ]]; then
     warn "Kiosk packages failed"
   fi
 
+  # Allow non-console users to start X server (required for systemd service)
+  mkdir -p "${ROOTFS}/etc/X11"
+  cat > "${ROOTFS}/etc/X11/Xwrapper.config" <<'XWRAP'
+allowed_users=anybody
+needs_root_rights=yes
+XWRAP
+
   # Create kiosk user with UID 1000
   if ! chroot "${ROOTFS}" id secubox-kiosk &>/dev/null; then
     chroot "${ROOTFS}" useradd -r -u 1000 -m -d /home/secubox-kiosk -s /usr/sbin/nologin \
