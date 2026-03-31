@@ -85,13 +85,20 @@ WORK_DIR=$(mktemp -d)
 ROOTFS="${WORK_DIR}/rootfs"
 IMG_FILE="${OUT_DIR}/secubox-rpi-arm64-${SUITE}.img"
 
-trap "cleanup" EXIT
 cleanup() {
   log "Cleaning up..."
+  # Unmount in reverse order
+  umount "${MNT:-}/boot/firmware" 2>/dev/null || true
+  umount "${MNT:-}" 2>/dev/null || true
   umount -R "${ROOTFS}" 2>/dev/null || true
-  [[ -n "${LOOP:-}" ]] && losetup -d "$LOOP" 2>/dev/null || true
-  rm -rf "${WORK_DIR}"
+  # Release loop device
+  if [[ -n "${LOOP:-}" ]]; then
+    losetup -d "$LOOP" 2>/dev/null || true
+  fi
+  # Clean workdir
+  rm -rf "${WORK_DIR}" 2>/dev/null || true
 }
+trap "cleanup" EXIT
 
 mkdir -p "${OUT_DIR}" "${ROOTFS}"
 
@@ -469,7 +476,20 @@ EOF
 
 # Regenerate initramfs with Plymouth
 log "Regenerating initramfs with Plymouth..."
-chroot "${ROOTFS}" update-initramfs -u -k all 2>/dev/null || warn "initramfs update issue"
+# Ensure initramfs is generated - critical for boot
+if ! chroot "${ROOTFS}" update-initramfs -u -k all; then
+  warn "initramfs update issue, trying alternative method..."
+  # List kernel version and try to generate specific initrd
+  KVER=$(ls "${ROOTFS}/lib/modules/" | head -1)
+  if [[ -n "$KVER" ]]; then
+    chroot "${ROOTFS}" update-initramfs -c -k "$KVER" || warn "Failed to generate initrd for $KVER"
+  fi
+fi
+
+# Verify initrd exists
+if ! ls "${ROOTFS}/boot/initrd.img-"* >/dev/null 2>&1; then
+  warn "No initrd.img found - Pi may not boot properly"
+fi
 
 ok "Pi bootloader configured"
 
@@ -508,8 +528,19 @@ log "Copying rootfs..."
 rsync -aHAX --info=progress2 "${ROOTFS}/" "${MNT}/"
 
 # Copy kernel and initrd to boot partition
-cp "${MNT}/boot/vmlinuz-"* "${MNT}/boot/firmware/vmlinuz"
-cp "${MNT}/boot/initrd.img-"* "${MNT}/boot/firmware/initrd.img"
+if ls "${MNT}/boot/vmlinuz-"* >/dev/null 2>&1; then
+  cp "${MNT}/boot/vmlinuz-"* "${MNT}/boot/firmware/vmlinuz"
+  ok "Kernel copied"
+else
+  err "No kernel found in rootfs"
+fi
+
+if ls "${MNT}/boot/initrd.img-"* >/dev/null 2>&1; then
+  cp "${MNT}/boot/initrd.img-"* "${MNT}/boot/firmware/initrd.img"
+  ok "Initrd copied"
+else
+  warn "No initrd found - boot may fail without initramfs"
+fi
 
 # Update fstab with proper UUIDs
 BOOT_UUID=$(blkid -s UUID -o value "${LOOP}p1")
