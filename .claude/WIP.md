@@ -1,5 +1,24 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-03-30 (Session 27)*
+*Mis à jour : 2026-03-31 (Session 28)*
+
+---
+
+## ✅ Terminé cette session (Session 28)
+
+### Live USB Initramfs Fix ✅
+- **Problem**: x64 live USB image boots to initramfs prompt (can't find root)
+- **Root cause**: Modules for live-boot (squashfs, loop, overlay) were only in `/etc/modules-load.d/` which loads AFTER boot, not in initramfs
+- **Fixes applied to `image/build-live-usb.sh`**:
+  - Added critical modules to `/etc/initramfs-tools/modules` (squashfs, loop, overlay, ext4, vfat, iso9660, usb_storage, uas, sd_mod, dm_mod, virtio_blk, virtio_scsi, virtio_pci)
+  - Created `/etc/initramfs-tools/conf.d/live-boot.conf` with `MODULES=most` for broad hardware support
+  - Added `filesystem.size` and `filesystem.packages` files to live partition
+  - Fixed `chroot` call for filesystem.packages (used awk on dpkg status instead)
+  - Added debug GRUB menu entries (break=init, break=premount) for troubleshooting
+  - Removed `2>/dev/null` from update-initramfs to surface any errors
+
+### Images Built ✅
+- **x64 Live USB**: `output/secubox-live-amd64-bookworm.img` (8GB, 670MB squashfs)
+- **RPi 400**: `output/secubox-rpi-arm64-bookworm.img` (8GB)
 
 ---
 
