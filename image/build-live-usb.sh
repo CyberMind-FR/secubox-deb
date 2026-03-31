@@ -996,6 +996,38 @@ EOFLIVE
 mkdir -p "${ROOTFS}/etc/initramfs-tools/conf.d"
 echo "FRAMEBUFFER=y" > "${ROOTFS}/etc/initramfs-tools/conf.d/plymouth"
 
+# CRITICAL FIX: Force load squashfs module early via init-top script
+# The standard initramfs module loading doesn't always work for squashfs
+mkdir -p "${ROOTFS}/etc/initramfs-tools/scripts/init-top"
+cat > "${ROOTFS}/etc/initramfs-tools/scripts/init-top/load-squashfs" <<'EOFSQ'
+#!/bin/sh
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case "$1" in
+    prereqs) prereqs; exit 0;;
+esac
+# Force load squashfs module for live-boot
+modprobe -q squashfs 2>/dev/null || true
+modprobe -q loop 2>/dev/null || true
+modprobe -q overlay 2>/dev/null || true
+EOFSQ
+chmod +x "${ROOTFS}/etc/initramfs-tools/scripts/init-top/load-squashfs"
+
+# Also add to hooks to ensure module is copied
+mkdir -p "${ROOTFS}/etc/initramfs-tools/hooks"
+cat > "${ROOTFS}/etc/initramfs-tools/hooks/live-squashfs" <<'EOFHOOK'
+#!/bin/sh
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case "$1" in
+    prereqs) prereqs; exit 0;;
+esac
+. /usr/share/initramfs-tools/hook-functions
+# Ensure squashfs module is included
+manual_add_modules squashfs loop overlay
+EOFHOOK
+chmod +x "${ROOTFS}/etc/initramfs-tools/hooks/live-squashfs"
+
 # Regenerate initramfs with live-boot and Plymouth hooks
 log "Regenerating initramfs with live-boot hooks..."
 chroot "${ROOTFS}" update-initramfs -u -k all || warn "initramfs update failed"
