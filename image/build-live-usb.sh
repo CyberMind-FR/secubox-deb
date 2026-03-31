@@ -885,6 +885,8 @@ CHROMIUM_FLAGS=(
     --ozone-platform=wayland
     --kiosk
     --no-first-run
+    --no-sandbox
+    --disable-gpu-sandbox
     --disable-translate
     --disable-infobars
     --disable-session-crashed-bubble
