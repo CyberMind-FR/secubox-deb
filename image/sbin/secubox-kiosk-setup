@@ -2,7 +2,7 @@
 # ══════════════════════════════════════════════════════════════════
 #  secubox-kiosk-setup — GUI Kiosk Mode Configuration
 #  Installs minimal GUI with Chromium kiosk on SecuBox WebUI
-#  For non-headless devices (x64 with display, touchscreen, etc.)
+#  Supports both X11 (VM-compatible) and Wayland (native) modes
 # ══════════════════════════════════════════════════════════════════
 set -euo pipefail
 
@@ -11,6 +11,7 @@ KIOSK_HOME="/home/${KIOSK_USER}"
 KIOSK_URL="https://192.168.255.1:9443/"
 MARKER="/var/lib/secubox/.kiosk-installed"
 ENABLED_MARKER="/var/lib/secubox/.kiosk-enabled"
+MODE_FILE="/var/lib/secubox/.kiosk-mode"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; CYAN='\033[0;36m'; NC='\033[0m'
 log() { echo -e "${CYAN}[kiosk]${NC} $*"; }
@@ -19,65 +20,96 @@ err() { echo -e "${RED}[FAIL ]${NC} $*" >&2; exit 1; }
 
 usage() {
     cat <<EOF
-Usage: secubox-kiosk-setup {install|enable|disable|status}
+Usage: secubox-kiosk-setup {install|enable|disable|status} [--x11|--wayland]
 
 Commands:
-  install  - Install minimal GUI packages (cage, chromium)
+  install  - Install GUI packages for kiosk mode
   enable   - Enable kiosk mode autostart
   disable  - Disable kiosk mode (console only)
   status   - Show current kiosk status
 
-The kiosk displays the SecuBox WebUI in fullscreen Chromium,
-using the Cage Wayland compositor (minimal footprint).
+Options:
+  --x11      Use X11/startx mode (better VM compatibility)
+  --wayland  Use Cage/Wayland mode (native, requires DRM)
+
+Default: X11 mode (recommended for VMs and most hardware)
+
+The kiosk displays the SecuBox WebUI in fullscreen Chromium.
 EOF
     exit 0
 }
 
+# Detect if running in VM
+detect_vm() {
+    local virt
+    virt=$(systemd-detect-virt 2>/dev/null || echo "none")
+    if [[ "$virt" != "none" ]]; then
+        echo "vm"
+    else
+        echo "bare"
+    fi
+}
+
+# Get current mode (default: x11)
+get_mode() {
+    if [[ -f "$MODE_FILE" ]]; then
+        cat "$MODE_FILE"
+    else
+        echo "x11"
+    fi
+}
+
 # ── Install Minimal GUI Packages ────────────────────────────────────
 install_kiosk() {
-    log "Installing kiosk mode packages..."
+    local mode="${1:-x11}"
+    log "Installing kiosk mode packages (${mode})..."
 
     # Check if already installed
     if [[ -f "$MARKER" ]]; then
         log "Kiosk packages already installed"
         # Still ensure user and scripts exist
-        setup_kiosk_user
+        setup_kiosk_user "$mode"
         return 0
     fi
 
-    # Required packages for Wayland kiosk
-    # cage: minimal Wayland compositor
-    # chromium: web browser in kiosk mode
-    # fonts-dejavu: readable fonts
-    # libinput: touchscreen/mouse support
     apt-get update -qq
 
-    apt-get install -y --no-install-recommends \
-        cage \
-        chromium \
-        fonts-dejavu-core \
-        libinput10 \
-        libegl1 \
-        libgles2 \
-        libgbm1 \
-        libdrm2 \
-        mesa-utils \
-        xdg-utils \
-        || err "Failed to install kiosk packages"
+    # Common packages
+    local common_pkgs="chromium fonts-dejavu-core libinput10 xdg-utils"
+
+    if [[ "$mode" == "wayland" ]]; then
+        # Wayland packages (Cage compositor)
+        apt-get install -y --no-install-recommends \
+            cage \
+            $common_pkgs \
+            libegl1 libgles2 libgbm1 libdrm2 \
+            mesa-utils \
+            || err "Failed to install Wayland kiosk packages"
+    else
+        # X11 packages (xinit + window manager)
+        apt-get install -y --no-install-recommends \
+            xorg xinit x11-xserver-utils \
+            $common_pkgs \
+            unclutter \
+            || err "Failed to install X11 kiosk packages"
+    fi
 
     # Setup user and scripts
-    setup_kiosk_user
+    setup_kiosk_user "$mode"
 
     # Mark as installed
     mkdir -p /var/lib/secubox
     echo "installed=$(date -Iseconds)" > "$MARKER"
+    echo "$mode" > "$MODE_FILE"
 
-    ok "Kiosk mode installed"
+    ok "Kiosk mode installed (${mode})"
     log "Run 'secubox-kiosk-setup enable' to activate"
 }
 
 # ── Setup Kiosk User and Scripts ────────────────────────────────────
 setup_kiosk_user() {
+    local mode="${1:-x11}"
+
     # Create kiosk user with UID 1000 if not exists
     if ! id "$KIOSK_USER" &>/dev/null; then
         # Use UID 1000 to match XDG_RUNTIME_DIR in service file
@@ -92,11 +124,28 @@ setup_kiosk_user() {
     local KIOSK_UID
     KIOSK_UID=$(id -u "$KIOSK_USER")
 
-    # Create kiosk script
+    # Create kiosk scripts directory
     mkdir -p "${KIOSK_HOME}/.config"
+
+    if [[ "$mode" == "wayland" ]]; then
+        # Create Wayland start script
+        create_wayland_script
+    else
+        # Create X11 .xinitrc
+        create_x11_xinitrc
+    fi
+
+    chown -R "$KIOSK_USER":"$KIOSK_USER" "$KIOSK_HOME"
+
+    # Update systemd service with correct UID
+    update_service_file "$KIOSK_UID" "$mode"
+}
+
+# ── Create Wayland Start Script ─────────────────────────────────────
+create_wayland_script() {
     cat > "${KIOSK_HOME}/start-kiosk.sh" <<'KIOSK'
 #!/bin/bash
-# SecuBox Kiosk Launcher
+# SecuBox Kiosk Launcher (Wayland)
 
 # Wait for services to be ready
 for i in {1..30}; do
@@ -114,6 +163,8 @@ CHROMIUM_FLAGS=(
     --ozone-platform=wayland
     --kiosk
     --no-first-run
+    --no-sandbox
+    --disable-gpu-sandbox
     --disable-translate
     --disable-infobars
     --disable-session-crashed-bubble
@@ -138,10 +189,67 @@ CHROMIUM_FLAGS=(
 exec chromium "${CHROMIUM_FLAGS[@]}"
 KIOSK
     chmod +x "${KIOSK_HOME}/start-kiosk.sh"
-    chown -R "$KIOSK_USER":"$KIOSK_USER" "$KIOSK_HOME"
+}
 
-    # Update systemd service with correct UID (only if service file doesn't exist or needs update)
-    update_service_file "$KIOSK_UID"
+# ── Create X11 .xinitrc ─────────────────────────────────────────────
+create_x11_xinitrc() {
+    cat > "${KIOSK_HOME}/.xinitrc" <<'XINITRC'
+#!/bin/bash
+# SecuBox Kiosk X11 Launcher
+
+# Wait for services to be ready
+for i in {1..30}; do
+    if curl -sk https://192.168.255.1:9443/ >/dev/null 2>&1; then
+        break
+    fi
+    sleep 1
+done
+
+# Kiosk URL (local SecuBox WebUI via dummy interface)
+URL="${KIOSK_URL:-https://192.168.255.1:9443/}"
+
+# Disable screen blanking
+xset s off
+xset -dpms
+xset s noblank
+
+# Hide cursor after 3 seconds of inactivity
+unclutter -idle 3 -root &
+
+# Set background to black
+xsetroot -solid black
+
+# Chromium flags for kiosk mode (X11)
+CHROMIUM_FLAGS=(
+    --kiosk
+    --no-first-run
+    --no-sandbox
+    --disable-gpu-sandbox
+    --disable-translate
+    --disable-infobars
+    --disable-session-crashed-bubble
+    --disable-restore-background-contents
+    --disable-sync
+    --disable-features=TranslateUI
+    --ignore-certificate-errors
+    --noerrdialogs
+    --enable-features=OverlayScrollbar
+    --start-fullscreen
+    --window-position=0,0
+    --check-for-update-interval=604800
+    --disable-component-update
+    --disable-default-apps
+    --disable-extensions
+    --disable-background-networking
+    --disable-domain-reliability
+    --disable-client-side-phishing-detection
+    "$URL"
+)
+
+# Run Chromium - exec replaces shell process
+exec chromium "${CHROMIUM_FLAGS[@]}"
+XINITRC
+    chmod +x "${KIOSK_HOME}/.xinitrc"
 }
 
 # ── Setup Root Autologin on TTY2 ─────────────────────────────────
@@ -165,63 +273,143 @@ EOF
 # ── Update Service File with Correct UID ─────────────────────────
 update_service_file() {
     local KIOSK_UID="${1:-1000}"
+    local mode="${2:-x11}"
 
-    cat > /etc/systemd/system/secubox-kiosk.service <<EOF
+    if [[ "$mode" == "wayland" ]]; then
+        # Wayland service (Cage)
+        cat > /etc/systemd/system/secubox-kiosk.service <<EOF
 [Unit]
-Description=SecuBox Kiosk Mode (WebUI Display)
-After=network-online.target nginx.service secubox-hub.service
+Description=SecuBox Kiosk Mode (Wayland/Cage)
+After=systemd-user-sessions.service plymouth-quit-wait.service
 Wants=network-online.target
-
-# Only start if kiosk is enabled
-ConditionPathExists=${ENABLED_MARKER}
+Conflicts=getty@tty1.service
 
 [Service]
 Type=simple
+
+# Check if kiosk is enabled
+ExecStartPre=+/bin/sh -c '[ -f ${ENABLED_MARKER} ] || exit 1'
+
+# Run on tty7
+TTYPath=/dev/tty7
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+
+# Create runtime directory AS ROOT
+ExecStartPre=+/bin/mkdir -p /run/user/${KIOSK_UID}
+ExecStartPre=+/bin/chown ${KIOSK_UID}:${KIOSK_UID} /run/user/${KIOSK_UID}
+ExecStartPre=+/bin/chmod 700 /run/user/${KIOSK_UID}
+
+# Switch VT to tty7
+ExecStartPre=+/bin/chvt 7
+
 User=${KIOSK_USER}
 Group=${KIOSK_USER}
+SupplementaryGroups=video audio input render tty
 
-# Wayland/DRM access
-SupplementaryGroups=video audio input render
-
-# Environment for Wayland (use actual UID)
 Environment=XDG_RUNTIME_DIR=/run/user/${KIOSK_UID}
-Environment=WLR_LIBINPUT_NO_DEVICES=1
+Environment=XDG_SESSION_TYPE=wayland
 Environment=KIOSK_URL=${KIOSK_URL}
+Environment=WLR_LIBINPUT_NO_DEVICES=1
+Environment=WLR_NO_HARDWARE_CURSORS=1
+Environment=WLR_RENDERER_ALLOW_SOFTWARE=1
+Environment=WLR_RENDERER=pixman
+Environment=WLR_DRM_NO_ATOMIC=1
 
-# Create runtime directory
-ExecStartPre=/bin/mkdir -p /run/user/${KIOSK_UID}
-ExecStartPre=/bin/chown ${KIOSK_USER}:${KIOSK_USER} /run/user/${KIOSK_UID}
-
-# Cage compositor running kiosk script
 ExecStart=/usr/bin/cage -s -- ${KIOSK_HOME}/start-kiosk.sh
 
-Restart=always
+Restart=on-failure
 RestartSec=5
+TimeoutStartSec=90
+MemoryMax=1G
+TasksMax=200
 
 [Install]
 WantedBy=graphical.target
 EOF
+    else
+        # X11 service (startx)
+        cat > /etc/systemd/system/secubox-kiosk.service <<EOF
+[Unit]
+Description=SecuBox Kiosk Mode (X11/Chromium)
+After=systemd-user-sessions.service plymouth-quit-wait.service
+Wants=network-online.target
+Conflicts=getty@tty1.service
+
+[Service]
+Type=simple
+
+# Check if kiosk is enabled
+ExecStartPre=+/bin/sh -c '[ -f ${ENABLED_MARKER} ] || exit 1'
+
+# Run on tty7
+TTYPath=/dev/tty7
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+
+# Create runtime directory AS ROOT
+ExecStartPre=+/bin/mkdir -p /run/user/${KIOSK_UID}
+ExecStartPre=+/bin/chown ${KIOSK_UID}:${KIOSK_UID} /run/user/${KIOSK_UID}
+ExecStartPre=+/bin/chmod 700 /run/user/${KIOSK_UID}
+
+# Switch VT to tty7
+ExecStartPre=+/bin/chvt 7
+
+User=${KIOSK_USER}
+Group=${KIOSK_USER}
+SupplementaryGroups=video audio input render tty
+
+Environment=XDG_RUNTIME_DIR=/run/user/${KIOSK_UID}
+Environment=XDG_SESSION_TYPE=x11
+Environment=DISPLAY=:0
+Environment=HOME=${KIOSK_HOME}
+Environment=KIOSK_URL=${KIOSK_URL}
+
+ExecStart=/usr/bin/startx ${KIOSK_HOME}/.xinitrc -- :0 vt7 -nolisten tcp
+
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=90
+MemoryMax=1G
+TasksMax=200
+
+[Install]
+WantedBy=graphical.target
+EOF
+    fi
 
     systemctl daemon-reload
-    log "Updated service file with UID ${KIOSK_UID}"
+    log "Updated service file with UID ${KIOSK_UID} (mode: ${mode})"
 }
 
 # ── Enable Kiosk Mode ─────────────────────────────────────────────
 enable_kiosk() {
-    # Check if packages are installed (cage, chromium)
-    if ! command -v cage >/dev/null 2>&1; then
-        log "Kiosk packages not installed, installing..."
-        install_kiosk
+    local mode="${1:-$(get_mode)}"
+
+    # Check if packages are installed
+    if [[ "$mode" == "wayland" ]]; then
+        if ! command -v cage >/dev/null 2>&1; then
+            log "Wayland packages not installed, installing..."
+            install_kiosk wayland
+        fi
+    else
+        if ! command -v startx >/dev/null 2>&1; then
+            log "X11 packages not installed, installing..."
+            install_kiosk x11
+        fi
     fi
 
     # Ensure user exists and scripts are in place
-    setup_kiosk_user
+    setup_kiosk_user "$mode"
 
-    log "Enabling kiosk mode..."
+    log "Enabling kiosk mode (${mode})..."
 
     # Create enabled marker
     mkdir -p /var/lib/secubox
     touch "${ENABLED_MARKER}"
+    echo "$mode" > "$MODE_FILE"
 
     # Setup root autologin on tty2 (so user can still access console)
     setup_root_autologin_tty2
@@ -238,7 +426,7 @@ enable_kiosk() {
     # Start kiosk
     systemctl start secubox-kiosk.service || log "Kiosk will start on next boot"
 
-    ok "Kiosk mode enabled"
+    ok "Kiosk mode enabled (${mode})"
     log "SecuBox WebUI will display on the connected screen"
 }
 
@@ -275,6 +463,12 @@ show_status() {
         echo "Installed: no"
     fi
 
+    local mode="x11"
+    if [[ -f "$MODE_FILE" ]]; then
+        mode=$(cat "$MODE_FILE")
+    fi
+    echo "Mode: $mode"
+
     if [[ -f "$ENABLED_MARKER" ]]; then
         echo "Enabled: yes"
     else
@@ -292,9 +486,9 @@ show_status() {
     echo "Default target: $default_target"
 
     if [[ "$default_target" == "graphical.target" ]] && [[ "$kiosk_active" == "active" ]]; then
-        echo "Mode: KIOSK (GUI)"
+        echo "State: KIOSK (GUI)"
     else
-        echo "Mode: CONSOLE"
+        echo "State: CONSOLE"
     fi
 
     # Check kiosk user
@@ -308,13 +502,27 @@ show_status() {
 
     # Check required packages
     local pkgs_ok="yes"
-    for pkg in cage chromium; do
-        if ! command -v "$pkg" >/dev/null 2>&1; then
-            pkgs_ok="no (missing $pkg)"
-            break
-        fi
-    done
+    if [[ "$mode" == "wayland" ]]; then
+        for pkg in cage chromium; do
+            if ! command -v "$pkg" >/dev/null 2>&1; then
+                pkgs_ok="no (missing $pkg)"
+                break
+            fi
+        done
+    else
+        for pkg in startx chromium; do
+            if ! command -v "$pkg" >/dev/null 2>&1; then
+                pkgs_ok="no (missing $pkg)"
+                break
+            fi
+        done
+    fi
     echo "Packages: $pkgs_ok"
+
+    # Platform detection
+    local platform
+    platform=$(detect_vm)
+    echo "Platform: $platform"
 
     # Check tty2 autologin
     if [[ -f /etc/systemd/system/getty@tty2.service.d/autologin.conf ]]; then
@@ -327,21 +535,50 @@ show_status() {
 }
 
 # ── Main ────────────────────────────────────────────────────────
-case "${1:-}" in
+MODE=""
+CMD=""
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        install|enable|disable|status)
+            CMD="$1"
+            shift
+            ;;
+        --x11)
+            MODE="x11"
+            shift
+            ;;
+        --wayland)
+            MODE="wayland"
+            shift
+            ;;
+        -h|--help|help)
+            usage
+            ;;
+        *)
+            usage
+            ;;
+    esac
+done
+
+# Default mode: x11 (more compatible)
+if [[ -z "$MODE" ]]; then
+    MODE="x11"
+fi
+
+case "${CMD:-}" in
     install)
-        install_kiosk
+        install_kiosk "$MODE"
         ;;
     enable)
-        enable_kiosk
+        enable_kiosk "$MODE"
         ;;
     disable)
         disable_kiosk
         ;;
     status)
         show_status
-        ;;
-    -h|--help|help)
-        usage
         ;;
     *)
         usage

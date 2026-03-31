@@ -1,5 +1,32 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-03-31 (Session 28)*
+*Mis à jour : 2026-03-31 (Session 29)*
+
+---
+
+## ✅ Terminé cette session (Session 29)
+
+### Kiosk X11 Mode — Integrated into Build Scripts ✅
+- **Problem**: Cage/Wayland kiosk fails on VMs (VirtualBox, VMware) with "Basic output test failed"
+- **Solution**: Switched default kiosk mode from Wayland to X11
+- **Files updated**:
+  - `image/sbin/secubox-kiosk-setup` — Now supports `--x11` (default) and `--wayland` modes
+  - `image/systemd/secubox-kiosk.service` — X11/startx service (default)
+  - `image/systemd/secubox-kiosk-wayland.service` — Wayland/Cage service (optional)
+  - `image/build-live-usb.sh` — Uses X11 kiosk mode with .xinitrc
+- **New features**:
+  - Mode auto-detection saved in `/var/lib/secubox/.kiosk-mode`
+  - `secubox-kiosk-setup status` shows current mode
+  - Automatic package installation for selected mode (xorg/xinit vs cage)
+- **Usage**:
+  ```bash
+  # Default X11 mode (recommended)
+  secubox-kiosk-setup install
+  secubox-kiosk-setup enable
+
+  # Wayland mode (native hardware only)
+  secubox-kiosk-setup install --wayland
+  secubox-kiosk-setup enable --wayland
+  ```
 
 ---
 
