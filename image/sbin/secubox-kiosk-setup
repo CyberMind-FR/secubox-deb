@@ -92,6 +92,13 @@ install_kiosk() {
             $common_pkgs \
             unclutter \
             || err "Failed to install X11 kiosk packages"
+
+        # Allow non-console users to start X server (required for systemd service)
+        mkdir -p /etc/X11
+        cat > /etc/X11/Xwrapper.config <<'XWRAP'
+allowed_users=anybody
+needs_root_rights=yes
+XWRAP
     fi
 
     # Setup user and scripts
