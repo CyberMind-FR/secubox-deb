@@ -40,6 +40,7 @@ Environment=KIOSK_URL=https://192.168.255.1:9443/
 Environment=WLR_LIBINPUT_NO_DEVICES=1
 Environment=WLR_NO_HARDWARE_CURSORS=1
 Environment=WLR_RENDERER_ALLOW_SOFTWARE=1
+Environment=WLR_RENDERER=pixman
 Environment=WLR_DRM_NO_ATOMIC=1
 
 # Cage compositor running kiosk script
