@@ -954,18 +954,51 @@ for svc in lxc-net lxc; do
   chroot "${ROOTFS}" systemctl mask ${svc}.service 2>/dev/null || true
 done
 
-# Ensure squashfs module loads at boot
+# Ensure squashfs module loads at boot (runtime)
 echo "squashfs" >> "${ROOTFS}/etc/modules-load.d/live.conf"
 echo "loop" >> "${ROOTFS}/etc/modules-load.d/live.conf"
 echo "overlay" >> "${ROOTFS}/etc/modules-load.d/live.conf"
+
+# CRITICAL: Add modules to initramfs for live-boot (must be in initrd, not just modules-load.d)
+mkdir -p "${ROOTFS}/etc/initramfs-tools"
+cat >> "${ROOTFS}/etc/initramfs-tools/modules" <<'EOFMOD'
+# Live-boot required modules
+squashfs
+loop
+overlay
+# Filesystem support
+ext4
+vfat
+iso9660
+# USB/storage support
+usb_storage
+uas
+sd_mod
+# Block layer
+dm_mod
+# Virtual drivers for VMs
+virtio_blk
+virtio_scsi
+virtio_pci
+EOFMOD
+
+# Configure initramfs for live-boot
+cat > "${ROOTFS}/etc/initramfs-tools/conf.d/live-boot.conf" <<'EOFLIVE'
+# Include most modules for hardware compatibility
+MODULES=most
+# Compress with gzip for faster boot
+COMPRESS=gzip
+# Resume disabled for live
+RESUME=none
+EOFLIVE
 
 # Ensure Plymouth is in initramfs
 mkdir -p "${ROOTFS}/etc/initramfs-tools/conf.d"
 echo "FRAMEBUFFER=y" > "${ROOTFS}/etc/initramfs-tools/conf.d/plymouth"
 
 # Regenerate initramfs with live-boot and Plymouth hooks
-log "Regenerating initramfs with Plymouth..."
-chroot "${ROOTFS}" update-initramfs -u -k all 2>/dev/null || warn "initramfs update failed"
+log "Regenerating initramfs with live-boot hooks..."
+chroot "${ROOTFS}" update-initramfs -u -k all || warn "initramfs update failed"
 
 # Clean APT
 chroot "${ROOTFS}" apt-get clean
@@ -1008,6 +1041,12 @@ mksquashfs "${ROOTFS}" "${LIVE_DIR}/live/filesystem.squashfs" \
 
 cp "${ROOTFS}/boot/vmlinuz-"* "${LIVE_DIR}/live/vmlinuz"
 cp "${ROOTFS}/boot/initrd.img-"* "${LIVE_DIR}/live/initrd.img"
+
+# Create filesystem.size (required by some live-boot versions)
+du -s "${ROOTFS}" | cut -f1 > "${LIVE_DIR}/live/filesystem.size"
+
+# Create filesystem.packages list (read from dpkg status file since chroot not available)
+awk '/^Package:/{pkg=$2} /^Version:/{print pkg,$2}' "${ROOTFS}/var/lib/dpkg/status" > "${LIVE_DIR}/live/filesystem.packages" 2>/dev/null || true
 
 SQUASHFS_SIZE=$(du -sh "${LIVE_DIR}/live/filesystem.squashfs" | cut -f1)
 ok "SquashFS: ${SQUASHFS_SIZE}"
@@ -1074,11 +1113,14 @@ mkdir -p "${MNT}/esp" "${MNT}/live"
 mount "${LOOP}p2" "${MNT}/esp"
 mount "${LOOP}p3" "${MNT}/live"
 
-# Copy live files
+# Copy live files to root of LIVE partition
+# GRUB looks for ($live)/live/* and live-boot looks for /live/filesystem.squashfs
 mkdir -p "${MNT}/live/live"
 cp "${LIVE_DIR}/live/filesystem.squashfs" "${MNT}/live/live/"
 cp "${LIVE_DIR}/live/vmlinuz" "${MNT}/live/live/"
 cp "${LIVE_DIR}/live/initrd.img" "${MNT}/live/live/"
+cp "${LIVE_DIR}/live/filesystem.size" "${MNT}/live/live/" 2>/dev/null || true
+cp "${LIVE_DIR}/live/filesystem.packages" "${MNT}/live/live/" 2>/dev/null || true
 
 # Setup ESP
 mkdir -p "${MNT}/esp/EFI/BOOT"
@@ -1142,6 +1184,16 @@ menuentry "SecuBox Live (Auto-Check HW - Text Mode)" {
 
 menuentry "SecuBox Live (Emergency Shell)" {
     linux ($live)/live/vmlinuz boot=live live-media-path=live components nomodeset console=tty0 systemd.unit=emergency.target
+    initrd ($live)/live/initrd.img
+}
+
+menuentry "SecuBox Live (Debug - Verbose Boot)" {
+    linux ($live)/live/vmlinuz boot=live live-media-path=live components nomodeset console=tty0 debug=1 break=init
+    initrd ($live)/live/initrd.img
+}
+
+menuentry "SecuBox Live (Debug - Break at Premount)" {
+    linux ($live)/live/vmlinuz boot=live live-media-path=live components nomodeset console=tty0 debug=1 break=premount
     initrd ($live)/live/initrd.img
 }
 GRUBCFG
