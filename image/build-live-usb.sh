@@ -1253,52 +1253,52 @@ set menu_color_normal=cyan/black
 set menu_color_highlight=white/blue
 
 menuentry "SecuBox Live" {
-    linux ($live)/live/vmlinuz boot=live live-media-path=live components persistence quiet splash
+    linux ($live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components persistence quiet splash
     initrd ($live)/live/initrd.img
 }
 
 menuentry "SecuBox Live (Kiosk GUI)" {
-    linux ($live)/live/vmlinuz boot=live live-media-path=live components persistence quiet splash secubox.kiosk=1 systemd.unit=graphical.target
+    linux ($live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components persistence quiet splash secubox.kiosk=1 systemd.unit=graphical.target
     initrd ($live)/live/initrd.img
 }
 
 menuentry "SecuBox Live (Bridge Mode)" {
-    linux ($live)/live/vmlinuz boot=live live-media-path=live components persistence quiet splash secubox.netmode=bridge
+    linux ($live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components persistence quiet splash secubox.netmode=bridge
     initrd ($live)/live/initrd.img
 }
 
 menuentry "SecuBox Live (Safe Mode)" {
-    linux ($live)/live/vmlinuz boot=live live-media-path=live components nomodeset console=tty0
+    linux ($live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components nomodeset console=tty0
     initrd ($live)/live/initrd.img
 }
 
 menuentry "SecuBox Live (To RAM)" {
-    linux ($live)/live/vmlinuz boot=live live-media-path=live components toram quiet splash
+    linux ($live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components toram quiet splash
     initrd ($live)/live/initrd.img
 }
 
 menuentry "SecuBox Live (Auto-Check HW)" {
-    linux ($live)/live/vmlinuz boot=live live-media-path=live components persistence quiet splash secubox.hwcheck=1
+    linux ($live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components persistence quiet splash secubox.hwcheck=1
     initrd ($live)/live/initrd.img
 }
 
 menuentry "SecuBox Live (Auto-Check HW - Text Mode)" {
-    linux ($live)/live/vmlinuz boot=live live-media-path=live components persistence nomodeset console=tty0 secubox.hwcheck=1
+    linux ($live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components persistence nomodeset console=tty0 secubox.hwcheck=1
     initrd ($live)/live/initrd.img
 }
 
 menuentry "SecuBox Live (Emergency Shell)" {
-    linux ($live)/live/vmlinuz boot=live live-media-path=live components nomodeset console=tty0 systemd.unit=emergency.target
+    linux ($live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components nomodeset console=tty0 systemd.unit=emergency.target
     initrd ($live)/live/initrd.img
 }
 
 menuentry "SecuBox Live (Debug - Verbose Boot)" {
-    linux ($live)/live/vmlinuz boot=live live-media-path=live components nomodeset console=tty0 debug=1 break=init
+    linux ($live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components nomodeset console=tty0 debug=1 break=init
     initrd ($live)/live/initrd.img
 }
 
 menuentry "SecuBox Live (Debug - Break at Premount)" {
-    linux ($live)/live/vmlinuz boot=live live-media-path=live components nomodeset console=tty0 debug=1 break=premount
+    linux ($live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components nomodeset console=tty0 debug=1 break=premount
     initrd ($live)/live/initrd.img
 }
 GRUBCFG
