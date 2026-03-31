@@ -1239,7 +1239,7 @@ cp "${LIVE_DIR}/live/initrd.img" "${MNT}/esp/live/"
 
 # GRUB config
 cat > "${MNT}/esp/boot/grub/grub.cfg" <<'GRUBCFG'
-set default=1
+set default=0
 set timeout=5
 
 insmod part_gpt
