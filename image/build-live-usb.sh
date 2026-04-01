@@ -884,7 +884,7 @@ XWRAP
 # Note: secubox-kiosk-launcher already waits for services before starting
 
 # URL from environment (set by launcher) or fallback
-URL="${KIOSK_URL:-https://192.168.255.1:9443/}"
+URL="${KIOSK_URL:-https://localhost/}"
 
 # Log startup
 logger -t secubox-kiosk "Starting Chromium X11 kiosk: $URL"

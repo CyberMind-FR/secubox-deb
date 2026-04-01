@@ -10,8 +10,8 @@ set -u
 # Configuration
 KIOSK_USER="${KIOSK_USER:-secubox-kiosk}"
 KIOSK_HOME="${KIOSK_HOME:-/home/secubox-kiosk}"
-KIOSK_URL="${KIOSK_URL:-https://192.168.255.1:9443/}"
-FALLBACK_URL="${FALLBACK_URL:-https://127.0.0.1/}"
+KIOSK_URL="${KIOSK_URL:-https://localhost/}"
+FALLBACK_URL="${FALLBACK_URL:-https://127.0.0.1:9443/}"
 MAX_WAIT="${MAX_WAIT:-60}"
 LOG_TAG="secubox-kiosk"
 VM_TYPE=""
