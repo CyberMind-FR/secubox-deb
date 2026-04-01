@@ -787,6 +787,16 @@ fi
 chroot "${ROOTFS}" pip3 install --break-system-packages -q \
   fastapi uvicorn python-jose httpx jinja2 tomli pyroute2 psutil 2>/dev/null || true
 
+# Fix misplaced nginx configs (some packages install to conf.d instead of secubox.d)
+# Location blocks must be inside server blocks, so move them to secubox.d
+log "Fixing nginx module configs..."
+for conf in "${ROOTFS}/etc/nginx/conf.d/secubox-"*.conf; do
+  if [[ -f "$conf" ]] && grep -q "^location" "$conf" 2>/dev/null; then
+    mv "$conf" "${ROOTFS}/etc/nginx/secubox.d/" 2>/dev/null || true
+    log "Moved $(basename "$conf") to secubox.d/"
+  fi
+done
+
 ok "SecuBox packages installed"
 
 # ══════════════════════════════════════════════════════════════════
@@ -846,14 +856,18 @@ if [[ $INCLUDE_KIOSK -eq 1 ]]; then
 
   # X11 packages for better VM/hardware compatibility
   # Include VirtualBox, VMware, and fallback drivers
+  # Note: x11-utils must be installed before chromium to avoid luit version conflict
   chroot "${ROOTFS}" apt-get install -y -q --no-install-recommends \
-    xorg xinit x11-xserver-utils \
+    xorg xinit x11-xserver-utils x11-utils \
     xserver-xorg-video-vboxvideo \
     xserver-xorg-video-fbdev \
     xserver-xorg-video-vmware \
-    chromium fonts-dejavu-core \
+    fonts-dejavu-core \
     unclutter kbd \
     libinput10 xdg-utils 2>/dev/null || true
+
+  # Install chromium separately (after x11-utils to avoid dependency conflicts)
+  chroot "${ROOTFS}" apt-get install -y -q chromium 2>/dev/null || true
 
   # Verify key kiosk packages installed
   if ! chroot "${ROOTFS}" dpkg -l xinit chromium 2>/dev/null | grep -q "^ii"; then
