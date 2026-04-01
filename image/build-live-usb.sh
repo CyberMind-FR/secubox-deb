@@ -845,8 +845,12 @@ if [[ $INCLUDE_KIOSK -eq 1 ]]; then
   log "Installing kiosk mode packages (X11)..."
 
   # X11 packages for better VM/hardware compatibility
+  # Include VirtualBox, VMware, and fallback drivers
   chroot "${ROOTFS}" apt-get install -y -q --no-install-recommends \
     xorg xinit x11-xserver-utils \
+    xserver-xorg-video-vboxvideo \
+    xserver-xorg-video-fbdev \
+    xserver-xorg-video-vmware \
     chromium fonts-dejavu-core \
     unclutter kbd \
     libinput10 xdg-utils 2>/dev/null || true
