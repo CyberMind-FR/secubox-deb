@@ -529,6 +529,17 @@ parted -s "${IMG_FILE}" \
 LOOP=$(losetup -fP --show "${IMG_FILE}")
 log "Loop device: ${LOOP}"
 
+# Ensure kernel sees partitions (race condition workaround)
+partprobe "${LOOP}" 2>/dev/null || true
+sleep 1
+
+# Wait for partition devices to appear
+for i in {1..10}; do
+  [[ -b "${LOOP}p1" ]] && break
+  sleep 1
+done
+[[ -b "${LOOP}p1" ]] || err "Partition ${LOOP}p1 not found after waiting"
+
 # Format partitions
 mkfs.vfat -F 32 -n BOOT "${LOOP}p1"
 mkfs.ext4 -L ROOT -q "${LOOP}p2"
