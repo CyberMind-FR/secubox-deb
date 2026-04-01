@@ -4,11 +4,24 @@ from pydantic import BaseModel
 from secubox_core.auth import router as auth_router, require_jwt
 from secubox_core.config import get_board_info
 from secubox_core.logger import get_logger
+from secubox_core.kiosk import (
+    kiosk_status as _kiosk_status,
+    kiosk_enable as _kiosk_enable,
+    kiosk_disable as _kiosk_disable,
+    detect_board_type,
+    get_board_profile,
+    get_board_capabilities,
+    get_board_model,
+    get_physical_interfaces,
+    get_interface_classification,
+    check_interface_carrier,
+)
 import subprocess, json, psutil
 from pathlib import Path
 from typing import Optional, List, Dict, Any
+import platform
 
-app = FastAPI(title="secubox-system", version="1.1.0", root_path="/api/v1/system")
+app = FastAPI(title="secubox-system", version="1.2.0", root_path="/api/v1/system")
 app.include_router(auth_router, prefix="/auth")
 router = APIRouter()
 log = get_logger("system")
@@ -635,7 +648,201 @@ async def run_diagnostic_test(test: str, user=Depends(require_jwt)):
 
 @router.get("/health")
 async def health():
-    return {"status": "ok", "module": "system", "version": "1.1.0"}
+    return {"status": "ok", "module": "system", "version": "1.2.0"}
+
+
+# ══════════════════════════════════════════════════════════════════
+# Board Detection & Hardware Info (uses secubox_core.kiosk)
+# ══════════════════════════════════════════════════════════════════
+
+NET_DETECT_CACHE = Path("/run/secubox/net-detect.json")
+NET_DETECT_SCRIPT = Path("/usr/sbin/secubox-net-detect")
+
+
+def _get_interface_details() -> List[Dict[str, Any]]:
+    """Get physical network interfaces with detailed stats using psutil."""
+    import socket
+    interfaces = []
+    addrs = psutil.net_if_addrs()
+    stats = psutil.net_if_stats()
+    io = psutil.net_io_counters(pernic=True)
+
+    # Get physical interface names from secubox_core.kiosk
+    physical_names = get_physical_interfaces()
+
+    for name in physical_names:
+        addr_list = addrs.get(name, [])
+
+        # Get IPv4 address
+        ipv4 = [a.address for a in addr_list if a.family == socket.AF_INET]
+        mac = [a.address for a in addr_list if a.family == psutil.AF_LINK]
+
+        # Get stats
+        if_stats = stats.get(name)
+        if_io = io.get(name)
+
+        interfaces.append({
+            "name": name,
+            "addresses": ipv4,
+            "mac": mac[0] if mac else None,
+            "up": if_stats.isup if if_stats else False,
+            "carrier": check_interface_carrier(name),
+            "speed": if_stats.speed if if_stats else 0,
+            "mtu": if_stats.mtu if if_stats else 0,
+            "rx_bytes": if_io.bytes_recv if if_io else 0,
+            "tx_bytes": if_io.bytes_sent if if_io else 0,
+        })
+
+    return interfaces
+
+
+@router.get("/board")
+async def board_info_endpoint():
+    """
+    Get detailed board detection info.
+    Returns board type, profile, and interface classification.
+    Uses secubox_core.kiosk functions.
+    """
+    import datetime
+
+    # Try to read cached detection first
+    cached_data = None
+    if NET_DETECT_CACHE.exists():
+        try:
+            cached_data = json.loads(NET_DETECT_CACHE.read_text())
+        except Exception:
+            pass
+
+    # Use secubox_core.kiosk functions
+    board_type = detect_board_type()
+    profile = get_board_profile(board_type)
+    model = get_board_model()
+
+    # Get physical interfaces with details
+    interfaces = _get_interface_details()
+
+    # Classify interfaces using secubox_core.kiosk
+    classification = get_interface_classification(board_type)
+
+    # CPU info
+    cpu_info = {}
+    try:
+        cpuinfo_path = Path("/proc/cpuinfo")
+        if cpuinfo_path.exists():
+            for line in cpuinfo_path.read_text().splitlines():
+                if ":" in line:
+                    key, val = line.split(":", 1)
+                    key = key.strip().lower()
+                    if key == "model name":
+                        cpu_info["model"] = val.strip()
+                    elif key == "hardware":
+                        cpu_info["hardware"] = val.strip()
+    except Exception:
+        pass
+
+    return {
+        "board_type": board_type,
+        "board_model": model,
+        "profile": profile,
+        "architecture": platform.machine(),
+        "cpu_cores": psutil.cpu_count(logical=False) or 1,
+        "cpu_threads": psutil.cpu_count(logical=True) or 1,
+        "cpu_model": cpu_info.get("model", cpu_info.get("hardware", "Unknown")),
+        "interfaces": {
+            "wan": classification["wan"],
+            "lan": classification["lan"],
+            "sfp": classification["sfp"],
+            "all": get_physical_interfaces(),
+        },
+        "interface_details": interfaces,
+        "cached_detection": cached_data,
+        "detected_at": datetime.datetime.now().isoformat(),
+    }
+
+
+@router.post("/board/detect")
+async def run_board_detection(user=Depends(require_jwt)):
+    """
+    Run secubox-net-detect script to refresh board detection.
+    Requires authentication.
+    """
+    if not NET_DETECT_SCRIPT.exists():
+        return {"success": False, "error": "secubox-net-detect not installed"}
+
+    try:
+        result = subprocess.run(
+            [str(NET_DETECT_SCRIPT), "detect"],
+            capture_output=True, text=True, timeout=30
+        )
+
+        # Read the generated JSON
+        if NET_DETECT_CACHE.exists():
+            detection = json.loads(NET_DETECT_CACHE.read_text())
+            return {"success": True, "detection": detection}
+        else:
+            return {
+                "success": result.returncode == 0,
+                "output": result.stdout,
+                "error": result.stderr if result.returncode != 0 else None
+            }
+    except subprocess.TimeoutExpired:
+        return {"success": False, "error": "Detection timed out"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@router.get("/board/capabilities")
+async def board_capabilities():
+    """
+    Get board capabilities based on detected type.
+    Uses secubox_core.kiosk.get_board_capabilities().
+    """
+    board_type = detect_board_type()
+    caps = get_board_capabilities(board_type)
+    caps["profile"] = get_board_profile(board_type)
+
+    return {
+        "board_type": board_type,
+        "capabilities": caps
+    }
+
+
+@router.get("/kiosk/status")
+async def kiosk_status_endpoint():
+    """
+    Get kiosk mode status (public for UI adaptation).
+    Uses secubox_core.kiosk.kiosk_status().
+    """
+    status = _kiosk_status()
+    status["display_modes"] = ["x11", "wayland"]
+    return status
+
+
+@router.post("/kiosk/enable")
+async def kiosk_enable_endpoint(mode: str = "x11", user=Depends(require_jwt)):
+    """
+    Enable kiosk mode (requires auth).
+    Uses secubox_core.kiosk.kiosk_enable().
+    """
+    if mode not in ("x11", "wayland"):
+        raise HTTPException(400, "Invalid mode. Use 'x11' or 'wayland'")
+
+    result = _kiosk_enable(mode)
+    if result["success"]:
+        log.info("Kiosk mode enabled: %s", mode)
+    return result
+
+
+@router.post("/kiosk/disable")
+async def kiosk_disable_endpoint(user=Depends(require_jwt)):
+    """
+    Disable kiosk mode (requires auth).
+    Uses secubox_core.kiosk.kiosk_disable().
+    """
+    result = _kiosk_disable()
+    if result["success"]:
+        log.info("Kiosk mode disabled")
+    return result
 
 
 # ══════════════════════════════════════════════════════════════════

@@ -1,3 +1,17 @@
+secubox-system (1.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * Add board detection integration (secubox-net-detect)
+  * Add /board endpoint with detailed hardware info
+  * Add /board/detect to refresh detection
+  * Add /board/capabilities for board-specific features
+  * Add /kiosk/status, /kiosk/enable, /kiosk/disable endpoints
+  * Frontend: New Board Detection card with WAN/LAN/SFP classification
+  * Frontend: New Kiosk Mode control card
+  * Auto-detect board type (MOCHAbin, ESPRESSObin, x64-vm, x64-baremetal, RPi)
+  * Interface classification based on board type and carrier status
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 01 Apr 2026 10:30:00 +0200
+
 secubox-system (1.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Add system preferences management with ACL

@@ -6,14 +6,19 @@
 <title>SecuBox — Login</title>
 <style>
 :root {
+  /* Default theme - will be overridden by device-specific theme */
   --bg: #0d1117;
   --surface: #161b22;
   --border: #30363d;
   --accent: #58a6ff;
   --accent-glow: rgba(88,166,255,0.2);
+  --accent-dark: #1f6feb;
+  --gradient-start: #58a6ff;
+  --gradient-end: #1f6feb;
   --text: #c9d1d9;
   --muted: #8b949e;
   --success: #3fb950;
+  --warning: #d29922;
   --error: #f85149;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -50,12 +55,26 @@ body::before {
 .logo-section { text-align: center; margin-bottom: 32px; }
 .logo {
   width: 72px; height: 72px;
-  background: linear-gradient(135deg, var(--accent), #1f6feb);
+  background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
   border-radius: 16px;
   display: inline-flex; align-items: center; justify-content: center;
   font-size: 2rem; font-weight: 900; color: #fff;
   margin-bottom: 16px;
   box-shadow: 0 8px 24px var(--accent-glow);
+  transition: all 0.3s ease;
+}
+.badge-device {
+  display: inline-block;
+  padding: 2px 8px;
+  background: var(--accent-glow);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--accent);
+  margin-left: 8px;
+  vertical-align: middle;
+  letter-spacing: 1px;
 }
 .logo-title { font-size: 1.6rem; font-weight: 600; }
 .logo-title span { color: var(--accent); }
@@ -75,11 +94,13 @@ body::before {
 .form-input::placeholder { color: #484f58; }
 .btn {
   width: 100%; padding: 12px;
-  background: var(--accent); border: none; border-radius: 8px;
+  background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+  border: none; border-radius: 8px;
   color: #fff; font-size: 1rem; font-weight: 600;
   cursor: pointer; transition: all 0.2s;
+  box-shadow: 0 4px 12px var(--accent-glow);
 }
-.btn:hover { background: #1f6feb; transform: translateY(-1px); }
+.btn:hover { background: var(--accent-dark); transform: translateY(-1px); box-shadow: 0 6px 16px var(--accent-glow); }
 .btn:active { transform: translateY(0); }
 .btn.loading { opacity: 0.7; pointer-events: none; }
 .msg {
@@ -96,9 +117,9 @@ body::before {
 <div class="container">
   <div class="card">
     <div class="logo-section">
-      <div class="logo">S</div>
-      <h1 class="logo-title">Secu<span>Box</span></h1>
-      <p class="logo-sub">Secure Network Appliance</p>
+      <div class="logo" id="logo-icon">S</div>
+      <h1 class="logo-title" id="logo-title">Secu<span>Box</span><span class="badge-device" id="device-badge" style="display:none;"></span></h1>
+      <p class="logo-sub" id="logo-sub">Secure Network Appliance</p>
     </div>
 
     <div id="msg" class="msg"></div>
@@ -173,6 +194,37 @@ function handleLogin(e) {
   return false;
 }
 
+// Load device-specific theme
+function loadTheme() {
+  fetch('/api/v1/portal/theme')
+  .then(function(r) { return r.json(); })
+  .then(function(theme) {
+    if (theme && theme.colors) {
+      var root = document.documentElement;
+      var c = theme.colors;
+      if (c.accent) root.style.setProperty('--accent', c.accent);
+      if (c.accent_glow) root.style.setProperty('--accent-glow', c.accent_glow);
+      if (c.accent_dark) root.style.setProperty('--accent-dark', c.accent_dark);
+      if (c.gradient_start) root.style.setProperty('--gradient-start', c.gradient_start);
+      if (c.gradient_end) root.style.setProperty('--gradient-end', c.gradient_end);
+    }
+    if (theme && theme.name) {
+      var sub = document.getElementById('logo-sub');
+      if (sub) sub.textContent = 'SecuBox ' + theme.name + ' Edition';
+    }
+    if (theme && theme.badge) {
+      var badge = document.getElementById('device-badge');
+      if (badge) {
+        badge.textContent = theme.badge;
+        badge.style.display = 'inline-block';
+      }
+    }
+  })
+  .catch(function() {
+    // Use default theme on error
+  });
+}
+
 // Check if already authenticated
 var token = localStorage.getItem('sbx_token');
 if (token) {
@@ -184,6 +236,9 @@ if (token) {
   })
   .catch(function() {});
 }
+
+// Load theme on page load
+loadTheme();
 </script>
 </body>
 </html>

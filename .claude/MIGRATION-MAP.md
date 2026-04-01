@@ -1,5 +1,5 @@
 # MIGRATION MAP — SecuBox OpenWrt → Debian
-*Mis à jour : 2026-03-26*
+*Mis à jour : 2026-04-01*
 
 Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 
@@ -41,9 +41,9 @@ Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 
 | Module | www/ | API | deb/ | Endpoints | Statut |
 |--------|------|-----|------|-----------|--------|
-| **secubox-core** | — | — | ✅ | — | ✅ |
-| **secubox-hub** | ✅ (71) | ✅ | ✅ | 40+ endpoints | ✅ |
-| **secubox-portal** | ✅ | ✅ | ✅ | login, auth | ✅ |
+| **secubox-core** | — | ✅ | ✅ | kiosk.py (board detect, kiosk mgmt) v1.1.0 | ✅ |
+| **secubox-hub** | ✅ (71) | ✅ | ✅ | 50+ endpoints (net mode select) v1.1.0 | ✅ |
+| **secubox-portal** | ✅ | ✅ | ✅ | login, auth, theme, branding v2.1.0 | ✅ |
 | **secubox-crowdsec** | ✅ (54) | ✅ | ✅ | 54 endpoints | ✅ |
 | **secubox-netdata** | ✅ (16) | ✅ | ✅ | 16 endpoints | ✅ |
 | **secubox-wireguard** | ✅ (28) | ✅ | ✅ | 28+ endpoints | ✅ |
@@ -53,7 +53,7 @@ Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 | **secubox-qos** | ✅ (80) | ✅ | ✅ | 80+ endpoints HTB + VLAN v1.1.0 | ✅ |
 | **secubox-auth** | ✅ (11) | ✅ | ✅ | 20+ endpoints | ✅ |
 | **secubox-cdn** | ✅ (36) | ✅ | ✅ | 25+ endpoints | ✅ |
-| **secubox-system** | ✅ (42) | ✅ | ✅ | 35+ endpoints | ✅ |
+| **secubox-system** | ✅ (42) | ✅ | ✅ | 45+ endpoints (board detect, kiosk) v1.2.0 | ✅ |
 | **secubox-netmodes** | ✅ (34) | ✅ | ✅ | 25+ endpoints + templates | ✅ |
 | **secubox-nac** | ✅ (32) | ✅ | ✅ | 25+ endpoints | ✅ |
 | **secubox-haproxy** | ✅ | ✅ | ✅ | stats, backends, acls | ✅ |

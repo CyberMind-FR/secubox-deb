@@ -399,6 +399,36 @@
                 </div>
 
                 <div>
+                    <!-- Network Mode Selection Card -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h2>Network Mode</h2>
+                            <a href="/netmodes/" style="font-size: 0.8rem;">Configure →</a>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem;">
+                            <span style="font-size: 2rem;" id="mode-icon">🔀</span>
+                            <div>
+                                <div style="font-weight: bold; color: var(--p31-peak);" id="current-mode-name">Router</div>
+                                <div style="font-size: 0.8rem; color: var(--text-dim);" id="current-mode-desc">Loading...</div>
+                            </div>
+                        </div>
+                        <div style="margin-bottom: 0.75rem;">
+                            <label style="font-size: 0.75rem; color: var(--text-dim); margin-bottom: 0.25rem; display: block;">Change Mode:</label>
+                            <select id="mode-select" style="width: 100%; padding: 0.5rem; border-radius: 4px;">
+                                <option value="router">🔀 Router (NAT + DHCP)</option>
+                                <option value="sniffer-inline">🔍 Inline Sniffer</option>
+                                <option value="sniffer-passive">👁️ Passive Sniffer</option>
+                                <option value="access-point">📡 Access Point</option>
+                                <option value="relay">🔗 VPN Relay</option>
+                            </select>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button class="btn" onclick="previewMode()" style="flex: 1;">Preview</button>
+                            <button class="btn primary" onclick="applyMode()" style="flex: 1;">Apply</button>
+                        </div>
+                        <div id="mode-interfaces" style="margin-top: 0.75rem; font-size: 0.8rem; color: var(--text-dim);"></div>
+                    </div>
+
                     <div class="card">
                         <div class="card-header"><h2>Network Addresses</h2></div>
                         <div class="network-grid">
@@ -586,12 +616,97 @@
             window.location.href = '/login.html';
         }
 
+        // ── Network Mode Functions ────────────────────────────────────
+        async function loadNetworkMode() {
+            const data = await api('/network_mode');
+            if (!data || data.detail) return;
+
+            // Update current mode display
+            document.getElementById('mode-icon').textContent = data.mode_icon || '🔀';
+            document.getElementById('current-mode-name').textContent = data.mode_name || data.current_mode || 'Router';
+            document.getElementById('current-mode-desc').textContent = data.mode_desc || '';
+
+            // Update select to show current mode
+            const select = document.getElementById('mode-select');
+            if (select && data.current_mode) {
+                select.value = data.current_mode;
+            }
+
+            // Update available modes in select
+            if (data.available_modes && data.available_modes.length > 0) {
+                select.innerHTML = data.available_modes.map(m =>
+                    `<option value="${m.id}" ${m.id === data.current_mode ? 'selected' : ''}>${m.icon || '📦'} ${m.name}</option>`
+                ).join('');
+            }
+
+            // Show interface info
+            const ifacesDiv = document.getElementById('mode-interfaces');
+            if (data.interfaces && ifacesDiv) {
+                const wan = (data.interfaces.wan || []).join(', ') || 'N/A';
+                const lan = (data.interfaces.lan || []).join(', ') || 'N/A';
+                ifacesDiv.innerHTML = `<span style="color: var(--p31-decay);">WAN:</span> ${wan} | <span style="color: var(--p31-peak);">LAN:</span> ${lan}`;
+            }
+
+            // Show pending mode warning
+            if (data.pending_mode) {
+                document.getElementById('current-mode-desc').innerHTML =
+                    `<span style="color: var(--yellow);">⚠️ Pending: ${data.pending_mode}</span>`;
+            }
+        }
+
+        async function previewMode() {
+            const mode = document.getElementById('mode-select').value;
+            const data = await api('/network_mode/preview?mode=' + mode);
+            if (data && data.yaml_preview) {
+                alert('Preview for ' + mode + ':\n\n' + data.yaml_preview.substring(0, 500) + '...\n\nGo to Network Modes page for full config.');
+            }
+        }
+
+        async function applyMode() {
+            const mode = document.getElementById('mode-select').value;
+            const currentMode = document.getElementById('current-mode-name').textContent.toLowerCase();
+
+            if (!confirm(`Change network mode to "${mode}"?\n\nThis will reconfigure network interfaces and may disconnect you temporarily.`)) {
+                return;
+            }
+
+            const token = localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token');
+            if (!token) {
+                alert('Authentication required');
+                return;
+            }
+
+            try {
+                const res = await fetch(API + '/network_mode', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + token
+                    },
+                    body: JSON.stringify({ mode: mode, dry_run: false })
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    alert('Network mode changed to: ' + mode + '\n\nPage will reload in 5 seconds...');
+                    setTimeout(() => location.reload(), 5000);
+                } else {
+                    alert('Failed to change mode: ' + (data.error || 'Unknown error'));
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+
+            loadNetworkMode();
+        }
+
         async function refresh() {
             await loadMenu();
             loadDashboard();
             loadHealth();
             loadAlerts();
             loadNetwork();
+            loadNetworkMode();
         }
 
         refresh();

@@ -1,3 +1,17 @@
+secubox-hub (1.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Add network mode selection to dashboard
+  * Add GET /network_mode endpoint (current mode, available modes)
+  * Add POST /network_mode endpoint (change mode via secubox-netmodes)
+  * Add GET /network_mode/preview endpoint (preview YAML config)
+  * Add GET /board_summary endpoint (quick board info)
+  * Frontend: New Network Mode card with mode selector
+  * Frontend: Real-time interface classification (WAN/LAN display)
+  * Frontend: Preview and Apply buttons for mode changes
+  * Uses secubox_core.kiosk for board/interface detection
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 01 Apr 2026 11:30:00 +0200
+
 secubox-hub (1.0.4-1~bookworm1) bookworm; urgency=medium
 
   * Add dynamic menu system with menu.d JSON definitions
