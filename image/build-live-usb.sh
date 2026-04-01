@@ -797,8 +797,8 @@ log "5/8 Installing SecuBox scripts..."
 mkdir -p "${ROOTFS}/usr/sbin"
 mkdir -p "${ROOTFS}/usr/lib/secubox"
 
-# Copy scripts
-for script in secubox-net-detect secubox-kiosk-setup secubox-cmdline-handler; do
+# Copy scripts (including kiosk-launcher for robust startup)
+for script in secubox-net-detect secubox-kiosk-setup secubox-cmdline-handler secubox-kiosk-launcher; do
   if [[ -f "${SCRIPT_DIR}/sbin/${script}" ]]; then
     cp "${SCRIPT_DIR}/sbin/${script}" "${ROOTFS}/usr/sbin/"
     chmod +x "${ROOTFS}/usr/sbin/${script}"
@@ -811,9 +811,9 @@ if [[ -f "${SCRIPT_DIR}/firstboot.sh" ]]; then
   chmod +x "${ROOTFS}/usr/lib/secubox/firstboot.sh"
 fi
 
-# Systemd services
+# Systemd services (including wayland variant for kiosk)
 mkdir -p "${ROOTFS}/etc/systemd/system"
-for svc in secubox-net-detect secubox-cmdline secubox-kiosk; do
+for svc in secubox-net-detect secubox-cmdline secubox-kiosk secubox-kiosk-wayland; do
   if [[ -f "${SCRIPT_DIR}/systemd/${svc}.service" ]]; then
     cp "${SCRIPT_DIR}/systemd/${svc}.service" "${ROOTFS}/etc/systemd/system/"
   fi
@@ -877,28 +877,26 @@ XWRAP
   cat > "${ROOTFS}/home/secubox-kiosk/.xinitrc" <<'XINITRC'
 #!/bin/bash
 # SecuBox Kiosk X11 Launcher
+# Note: secubox-kiosk-launcher already waits for services before starting
 
-# Wait for services to be ready
-for i in {1..30}; do
-    if curl -sk https://192.168.255.1:9443/ >/dev/null 2>&1; then
-        break
-    fi
-    sleep 1
-done
-
-# Kiosk URL (local SecuBox WebUI via dummy interface)
+# URL from environment (set by launcher) or fallback
 URL="${KIOSK_URL:-https://192.168.255.1:9443/}"
 
-# Disable screen blanking
-xset s off
-xset -dpms
-xset s noblank
+# Log startup
+logger -t secubox-kiosk "Starting Chromium X11 kiosk: $URL"
+
+# Disable screen blanking (ignore errors on headless)
+xset s off 2>/dev/null || true
+xset -dpms 2>/dev/null || true
+xset s noblank 2>/dev/null || true
 
 # Hide cursor after 3 seconds of inactivity
-unclutter -idle 3 -root &
+if command -v unclutter &>/dev/null; then
+    unclutter -idle 3 -root &
+fi
 
 # Set background to black
-xsetroot -solid black
+xsetroot -solid black 2>/dev/null || true
 
 # Chromium flags for kiosk mode (X11)
 CHROMIUM_FLAGS=(
@@ -939,55 +937,13 @@ XINITRC
   touch "${ROOTFS}/var/lib/secubox/.kiosk-enabled"
   echo "x11" > "${ROOTFS}/var/lib/secubox/.kiosk-mode"
 
-  # Copy X11 kiosk service (not Wayland/Cage)
-  cat > "${ROOTFS}/etc/systemd/system/secubox-kiosk.service" <<'KIOSK_SVC'
-[Unit]
-Description=SecuBox Kiosk Mode (X11/Chromium)
-After=systemd-user-sessions.service plymouth-quit-wait.service
-Wants=network-online.target
-Conflicts=getty@tty1.service
-
-[Service]
-Type=simple
-
-# Check if kiosk is enabled
-ExecStartPre=+/bin/sh -c '[ -f /var/lib/secubox/.kiosk-enabled ] || exit 1'
-
-# Run on tty7
-TTYPath=/dev/tty7
-TTYReset=yes
-TTYVHangup=yes
-TTYVTDisallocate=yes
-
-# Create runtime directory AS ROOT
-ExecStartPre=+/bin/mkdir -p /run/user/1000
-ExecStartPre=+/bin/chown 1000:1000 /run/user/1000
-ExecStartPre=+/bin/chmod 700 /run/user/1000
-
-# Switch VT to tty7
-ExecStartPre=+/bin/chvt 7
-
-User=secubox-kiosk
-Group=secubox-kiosk
-SupplementaryGroups=video audio input render tty
-
-Environment=XDG_RUNTIME_DIR=/run/user/1000
-Environment=XDG_SESSION_TYPE=x11
-Environment=DISPLAY=:0
-Environment=HOME=/home/secubox-kiosk
-Environment=KIOSK_URL=https://192.168.255.1:9443/
-
-ExecStart=/usr/bin/startx /home/secubox-kiosk/.xinitrc -- :0 vt7 -nolisten tcp
-
-Restart=on-failure
-RestartSec=5
-TimeoutStartSec=90
-MemoryMax=1G
-TasksMax=200
-
-[Install]
-WantedBy=graphical.target
-KIOSK_SVC
+  # Use the fixed kiosk service (already copied from systemd/ directory)
+  # The service uses secubox-kiosk-launcher which handles:
+  # - Dynamic UID detection (no hardcoded 1000)
+  # - Proper dependency waiting (nginx, network)
+  # - User creation if needed
+  # - Fallback URL handling
+  log "Kiosk service already copied from systemd/ directory"
 
   # Enable kiosk service and set graphical target
   chroot "${ROOTFS}" systemctl enable secubox-kiosk.service 2>/dev/null || true
