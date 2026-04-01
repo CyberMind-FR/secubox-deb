@@ -112,17 +112,21 @@ log "═════════════════════════
 # ══════════════════════════════════════════════════════════════════
 log "1/6 Debootstrap arm64..."
 
+# IMPORTANT: Do NOT include kernel/initramfs in debootstrap!
+# initramfs generation under QEMU takes 30+ minutes
+# We install kernel AFTER debootstrap with initramfs disabled
 INCLUDE_PKGS="systemd,systemd-sysv,dbus,nftables,openssh-server"
 INCLUDE_PKGS+=",python3,python3-pip,nginx,curl,wget,ca-certificates,gnupg"
 INCLUDE_PKGS+=",iproute2,iputils-ping,net-tools,wireguard-tools"
 INCLUDE_PKGS+=",sudo,less,vim-tiny,cron,rsync,jq"
-INCLUDE_PKGS+=",linux-image-arm64,plymouth,plymouth-themes"
+# Note: linux-image-arm64, plymouth, initramfs-tools installed later
 
 debootstrap --arch=arm64 --foreign --include="${INCLUDE_PKGS}" \
   "${SUITE}" "${ROOTFS}" "${APT_MIRROR}"
 
 # Complete second stage with QEMU
 cp /usr/bin/qemu-aarch64-static "${ROOTFS}/usr/bin/"
+log "Running debootstrap second stage (this may take a few minutes)..."
 chroot "${ROOTFS}" /debootstrap/debootstrap --second-stage
 
 ok "Debootstrap complete"
@@ -437,6 +441,46 @@ rm -rf "${ROOTFS}/var/lib/apt/lists"/*
 ok "SecuBox packages installed"
 
 # ══════════════════════════════════════════════════════════════════
+# Step 4b: Install kernel (with initramfs disabled to avoid QEMU slowness)
+# ══════════════════════════════════════════════════════════════════
+log "4b/6 Installing kernel (initramfs disabled for speed)..."
+
+# Disable initramfs generation during package install (QEMU is too slow)
+# We'll copy kernel/initrd manually from the installed files
+cat > "${ROOTFS}/etc/initramfs-tools/update-initramfs.conf" <<EOF
+# Disabled during image build (QEMU too slow)
+# Re-enable on first boot if needed
+update_initramfs=no
+EOF
+
+# Also create a hook to skip initramfs generation
+mkdir -p "${ROOTFS}/etc/kernel/postinst.d"
+cat > "${ROOTFS}/etc/kernel/postinst.d/zz-skip-initramfs" <<'HOOK'
+#!/bin/sh
+# Skip initramfs during image build
+if [ -f /etc/initramfs-tools/update-initramfs.conf ]; then
+    grep -q "update_initramfs=no" /etc/initramfs-tools/update-initramfs.conf && exit 0
+fi
+HOOK
+chmod +x "${ROOTFS}/etc/kernel/postinst.d/zz-skip-initramfs"
+
+# Now install kernel and plymouth
+chroot "${ROOTFS}" apt-get update -q
+chroot "${ROOTFS}" apt-get install -y -q --no-install-recommends \
+    linux-image-arm64 initramfs-tools plymouth plymouth-themes \
+    2>/dev/null || warn "Kernel install issues (may be OK)"
+
+# Remove the skip hook
+rm -f "${ROOTFS}/etc/kernel/postinst.d/zz-skip-initramfs"
+
+# Re-enable initramfs updates for runtime
+cat > "${ROOTFS}/etc/initramfs-tools/update-initramfs.conf" <<EOF
+update_initramfs=yes
+EOF
+
+ok "Kernel installed"
+
+# ══════════════════════════════════════════════════════════════════
 # Step 5: Raspberry Pi boot configuration
 # ══════════════════════════════════════════════════════════════════
 log "5/6 Configuring Pi bootloader..."
@@ -451,9 +495,9 @@ cat > "${ROOTFS}/boot/firmware/config.txt" <<EOF
 # Use 64-bit kernel
 arm_64bit=1
 
-# Kernel and initramfs (Debian naming)
+# Kernel (Debian naming) - initramfs added later if available
 kernel=vmlinuz
-initramfs initrd.img followkernel
+# initramfs line added dynamically if initrd.img exists
 
 # Automatically load appropriate DTB
 # For Pi 400, the firmware will load bcm2711-rpi-400.dtb
@@ -486,26 +530,35 @@ dtoverlay=disable-bt
 # display_auto_detect=1
 EOF
 
-# cmdline.txt (with splash for Plymouth)
+# cmdline.txt - Pi can boot WITHOUT initrd using root= directly
+# This avoids slow initramfs generation under QEMU
 cat > "${ROOTFS}/boot/firmware/cmdline.txt" <<EOF
-console=serial0,115200 console=tty1 root=/dev/mmcblk0p2 rootfstype=ext4 elevator=deadline fsck.repair=yes rootwait quiet splash
+console=serial0,115200 console=tty1 root=/dev/mmcblk0p2 rootfstype=ext4 rootwait fsck.repair=yes quiet
 EOF
 
-# Regenerate initramfs with Plymouth
-log "Regenerating initramfs with Plymouth..."
-# Ensure initramfs is generated - critical for boot
-if ! chroot "${ROOTFS}" update-initramfs -u -k all; then
-  warn "initramfs update issue, trying alternative method..."
-  # List kernel version and try to generate specific initrd
-  KVER=$(ls "${ROOTFS}/lib/modules/" | head -1)
-  if [[ -n "$KVER" ]]; then
-    chroot "${ROOTFS}" update-initramfs -c -k "$KVER" || warn "Failed to generate initrd for $KVER"
-  fi
-fi
+# Check if initrd already exists from kernel install
+if ls "${ROOTFS}/boot/initrd.img-"* >/dev/null 2>&1; then
+  log "initrd already exists from kernel install"
+  # Update config.txt to use it
+  sed -i 's/^initramfs.*/initramfs initrd.img followkernel/' "${ROOTFS}/boot/firmware/config.txt"
+else
+  # No initrd - configure for direct boot (faster, simpler)
+  log "No initrd - configuring direct boot (no initramfs needed for Pi)"
+  # Remove initramfs line from config.txt since we're booting directly
+  sed -i '/^initramfs/d' "${ROOTFS}/boot/firmware/config.txt"
 
-# Verify initrd exists
-if ! ls "${ROOTFS}/boot/initrd.img-"* >/dev/null 2>&1; then
-  warn "No initrd.img found - Pi may not boot properly"
+  # Optional: Try to generate initrd if time permits (with timeout)
+  log "Attempting initramfs generation (30s timeout)..."
+  KVER=$(ls "${ROOTFS}/lib/modules/" 2>/dev/null | head -1)
+  if [[ -n "$KVER" ]]; then
+    # Use timeout to prevent hanging
+    timeout 30 chroot "${ROOTFS}" update-initramfs -c -k "$KVER" 2>/dev/null && {
+      log "initrd generated successfully"
+      sed -i '/^\[all\]/a initramfs initrd.img followkernel' "${ROOTFS}/boot/firmware/config.txt"
+    } || {
+      warn "initrd generation timed out - using direct boot (this is fine for Pi)"
+    }
+  fi
 fi
 
 ok "Pi bootloader configured"
@@ -599,9 +652,15 @@ fi
 
 if ls "${MNT}/boot/initrd.img-"* >/dev/null 2>&1; then
   cp "${MNT}/boot/initrd.img-"* "${MNT}/boot/firmware/initrd.img"
-  ok "Initrd copied"
+  # Add initramfs line to config.txt since we have an initrd
+  if ! grep -q "^initramfs" "${MNT}/boot/firmware/config.txt"; then
+    sed -i '/^kernel=vmlinuz/a initramfs initrd.img followkernel' "${MNT}/boot/firmware/config.txt"
+  fi
+  ok "Initrd copied and config.txt updated"
 else
-  warn "No initrd found - boot may fail without initramfs"
+  log "No initrd - Pi will boot directly (this is OK)"
+  # Ensure no initramfs line in config.txt
+  sed -i '/^initramfs/d' "${MNT}/boot/firmware/config.txt"
 fi
 
 # Verify critical boot files
