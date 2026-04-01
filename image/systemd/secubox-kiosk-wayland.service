@@ -1,58 +1,52 @@
 [Unit]
 Description=SecuBox Kiosk Mode (Wayland/Cage)
-After=systemd-user-sessions.service plymouth-quit-wait.service
+Documentation=https://secubox.in/docs/kiosk
+
+# Proper dependency chain - wait for everything to be ready
+After=systemd-user-sessions.service
+After=plymouth-quit-wait.service
+After=network-online.target
+After=nginx.service
+After=systemd-networkd.service
+After=secubox-firstboot.service
+
+# Soft dependencies (don't fail if missing)
 Wants=network-online.target
+Wants=nginx.service
+
+# Conflicts with console on tty1
 Conflicts=getty@tty1.service
+
+# Only start if graphical target is active
+PartOf=graphical.target
 
 [Service]
 Type=simple
 
-# Check if kiosk is enabled (+ prefix runs as root before User= switch)
+# Check if kiosk is enabled (run as root with + prefix)
 ExecStartPre=+/bin/sh -c '[ -f /var/lib/secubox/.kiosk-enabled ] || exit 1'
 
-# Run on tty7 (like normal display managers)
-TTYPath=/dev/tty7
-TTYReset=yes
-TTYVHangup=yes
-TTYVTDisallocate=yes
+# Use the robust launcher script (runs as root, handles user switching internally)
+ExecStart=/usr/sbin/secubox-kiosk-launcher wayland 7
 
-# Create runtime directory AS ROOT (before switching to User)
-ExecStartPre=+/bin/mkdir -p /run/user/1000
-ExecStartPre=+/bin/chown 1000:1000 /run/user/1000
-ExecStartPre=+/bin/chmod 700 /run/user/1000
-
-# Switch VT to tty7 before starting
-ExecStartPre=+/bin/chvt 7
-
-# Now switch to kiosk user
-User=secubox-kiosk
-Group=secubox-kiosk
-
-# Wayland/DRM access
-SupplementaryGroups=video audio input render tty
-
-# Environment for Wayland (cage creates its own display)
-Environment=XDG_RUNTIME_DIR=/run/user/1000
-Environment=XDG_SESSION_TYPE=wayland
-Environment=KIOSK_URL=https://192.168.255.1:9443/
-
-# wlroots environment (VM compatibility - may still fail)
-Environment=WLR_LIBINPUT_NO_DEVICES=1
-Environment=WLR_NO_HARDWARE_CURSORS=1
-Environment=WLR_RENDERER_ALLOW_SOFTWARE=1
-Environment=WLR_RENDERER=pixman
-Environment=WLR_DRM_NO_ATOMIC=1
-
-# Cage compositor running kiosk script
-ExecStart=/usr/bin/cage -s -- /home/secubox-kiosk/start-kiosk.sh
-
+# Restart policy
 Restart=on-failure
-RestartSec=5
-TimeoutStartSec=90
+RestartSec=10
+StartLimitInterval=300
+StartLimitBurst=5
+
+# Generous timeout for slow hardware/VMs
+TimeoutStartSec=180
+TimeoutStopSec=30
 
 # Resource limits
 MemoryMax=1G
 TasksMax=200
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=secubox-kiosk
 
 [Install]
 WantedBy=graphical.target
