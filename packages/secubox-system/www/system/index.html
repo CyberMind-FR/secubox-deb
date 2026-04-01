@@ -345,6 +345,30 @@
                 </div>
             </div>
 
+            <!-- Board Detection Card -->
+            <div class="card" style="margin-bottom: 1.5rem;">
+                <div class="card-header">
+                    <h2>🔍 Board Detection</h2>
+                    <button class="btn" onclick="refreshBoardDetection()">Refresh</button>
+                </div>
+                <div class="grid-3" style="margin-bottom: 0;">
+                    <div>
+                        <div class="info-row"><span class="label">Board Type</span><span id="board-type" style="color: var(--p31-peak);">-</span></div>
+                        <div class="info-row"><span class="label">Profile</span><span id="board-profile">-</span></div>
+                        <div class="info-row"><span class="label">CPU Model</span><span id="cpu-model">-</span></div>
+                        <div class="info-row"><span class="label">Cores/Threads</span><span id="cpu-cores">-</span></div>
+                    </div>
+                    <div>
+                        <div class="info-row"><span class="label">WAN Interface</span><span id="wan-iface" style="color: var(--p31-decay);">-</span></div>
+                        <div class="info-row"><span class="label">LAN Interfaces</span><span id="lan-ifaces">-</span></div>
+                        <div class="info-row"><span class="label">SFP Ports</span><span id="sfp-ifaces">-</span></div>
+                    </div>
+                    <div id="iface-details">
+                        <p style="color: var(--text-dim); font-size: 0.85rem;">Interface details loading...</p>
+                    </div>
+                </div>
+            </div>
+
             <div class="grid-2">
                 <div class="card">
                     <div class="card-header"><h2>🔧 Services</h2></div>
@@ -354,7 +378,7 @@
                 </div>
 
                 <div class="card">
-                    <div class="card-header"><h2>🌐 Network</h2></div>
+                    <div class="card-header"><h2>🌐 Network Interfaces</h2></div>
                     <div id="network-info">
                         <p style="color: var(--text-dim);">Loading...</p>
                     </div>
@@ -406,6 +430,30 @@
                         </select>
                     </div>
                     <button class="btn primary" onclick="saveSettings()">Save Settings</button>
+                </div>
+
+                <div class="card">
+                    <div class="card-header"><h2>🖥️ Kiosk Mode</h2></div>
+                    <div class="info-row">
+                        <span class="label">Status</span>
+                        <span id="kiosk-status" style="color: var(--text-dim);">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="label">Display Mode</span>
+                        <span id="kiosk-mode">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="label">Service</span>
+                        <span id="kiosk-service">-</span>
+                    </div>
+                    <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
+                        <select id="kiosk-mode-select" style="flex: 1;">
+                            <option value="x11">X11 (VMs)</option>
+                            <option value="wayland">Wayland (Native)</option>
+                        </select>
+                        <button class="btn success" onclick="enableKiosk()">Enable</button>
+                        <button class="btn danger" onclick="disableKiosk()">Disable</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -519,7 +567,115 @@
             alert('Settings saved'); loadSystemInfo();
         }
 
-        function refresh() { loadSystemInfo(); loadResources(); loadServices(); loadNetwork(); loadSecurity(); }
+        async function loadKioskStatus() {
+            const data = await api('/kiosk/status');
+            const enabled = data.enabled || false;
+            const mode = data.mode || 'disabled';
+            const active = data.service_active || false;
+
+            document.getElementById('kiosk-status').textContent = enabled ? 'Enabled' : 'Disabled';
+            document.getElementById('kiosk-status').style.color = enabled ? 'var(--p31-peak)' : 'var(--text-dim)';
+            document.getElementById('kiosk-mode').textContent = mode.toUpperCase();
+            document.getElementById('kiosk-service').textContent = active ? 'Running' : 'Stopped';
+            document.getElementById('kiosk-service').style.color = active ? 'var(--p31-peak)' : 'var(--red)';
+        }
+
+        async function enableKiosk() {
+            const mode = document.getElementById('kiosk-mode-select').value;
+            const token = localStorage.getItem('secubox_token');
+            if (!token) { alert('Authentication required'); return; }
+
+            const res = await fetch(API + '/kiosk/enable?mode=' + mode, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            if (data.success) {
+                alert('Kiosk mode enabled (' + mode + ')');
+                loadKioskStatus();
+            } else {
+                alert('Failed: ' + (data.error || 'Unknown error'));
+            }
+        }
+
+        async function disableKiosk() {
+            const token = localStorage.getItem('secubox_token');
+            if (!token) { alert('Authentication required'); return; }
+
+            const res = await fetch(API + '/kiosk/disable', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            if (data.success) {
+                alert('Kiosk mode disabled');
+                loadKioskStatus();
+            } else {
+                alert('Failed: ' + (data.error || 'Unknown error'));
+            }
+        }
+
+        async function loadBoardDetection() {
+            const data = await api('/board');
+
+            // Board type and profile
+            document.getElementById('board-type').textContent = data.board_type || 'Unknown';
+            document.getElementById('board-profile').textContent = (data.profile || 'lite').toUpperCase();
+            document.getElementById('cpu-model').textContent = data.cpu_model || 'Unknown';
+            document.getElementById('cpu-cores').textContent = `${data.cpu_cores || '?'} / ${data.cpu_threads || '?'}`;
+
+            // Interface classification
+            const ifaces = data.interfaces || {};
+            document.getElementById('wan-iface').textContent = (ifaces.wan || []).join(', ') || 'None';
+            document.getElementById('lan-ifaces').textContent = (ifaces.lan || []).join(', ') || 'None';
+            document.getElementById('sfp-ifaces').textContent = (ifaces.sfp || []).length > 0 ? ifaces.sfp.join(', ') : 'N/A';
+
+            // Interface details with carrier status
+            const details = data.interface_details || [];
+            const detailsDiv = document.getElementById('iface-details');
+            if (details.length > 0) {
+                detailsDiv.innerHTML = details.slice(0, 4).map(i => `
+                    <div class="info-row" style="font-size: 0.85rem;">
+                        <span class="label">${i.name}</span>
+                        <span style="color: ${i.carrier ? 'var(--p31-peak)' : 'var(--red)'};">
+                            ${i.addresses?.[0] || 'No IP'} ${i.carrier ? '●' : '○'} ${i.speed ? i.speed + 'Mbps' : ''}
+                        </span>
+                    </div>
+                `).join('');
+            }
+        }
+
+        async function refreshBoardDetection() {
+            // Call the detection endpoint (requires auth)
+            const token = localStorage.getItem('secubox_token');
+            if (!token) {
+                alert('Authentication required for board detection refresh');
+                return;
+            }
+
+            const opts = {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                }
+            };
+
+            try {
+                const res = await fetch(API + '/board/detect', opts);
+                const data = await res.json();
+                if (data.success) {
+                    alert('Board detection refreshed');
+                    loadBoardDetection();
+                } else {
+                    alert('Detection failed: ' + (data.error || 'Unknown error'));
+                }
+            } catch (e) {
+                alert('Detection failed: ' + e.message);
+            }
+        }
+
+        function refresh() { loadSystemInfo(); loadResources(); loadServices(); loadNetwork(); loadSecurity(); loadBoardDetection(); loadKioskStatus(); }
         refresh();
         loadLogs();
         loadPackages();

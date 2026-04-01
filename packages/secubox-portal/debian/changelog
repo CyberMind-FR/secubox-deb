@@ -1,3 +1,15 @@
+secubox-portal (2.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Add device-specific theming based on detected board
+  * Add GET /theme endpoint (returns colors, badge, name for board)
+  * Add GET /branding endpoint (full branding info with capabilities)
+  * Login page dynamically adapts to device type
+  * 7 board themes: MOCHAbin (Pro), ESPRESSObin (Lite), x64-vm (Virtual),
+    x64-baremetal (Server), RPi (Maker), unknown (Standard), default
+  * Uses secubox_core.kiosk for board detection
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 01 Apr 2026 12:00:00 +0200
+
 secubox-portal (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial release

@@ -1,12 +1,18 @@
 """secubox-hub — Dashboard central SecuBox"""
-from fastapi import FastAPI, APIRouter, Depends
+from fastapi import FastAPI, APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from secubox_core.auth import router as auth_router, require_jwt
 from secubox_core.config import get_board_info, get_config
 from secubox_core.logger import get_logger
+from secubox_core.kiosk import (
+    detect_board_type, get_board_profile, get_board_capabilities,
+    get_interface_classification,
+)
 import subprocess
+import json
 from pathlib import Path
 
-app = FastAPI(title="secubox-hub", version="1.0.0", root_path="/api/v1/hub")
+app = FastAPI(title="secubox-hub", version="1.1.0", root_path="/api/v1/hub")
 app.include_router(auth_router, prefix="/auth")
 router = APIRouter()
 log = get_logger("hub")
@@ -100,9 +106,6 @@ async def widgets(user=Depends(require_jwt)):
         {"id": "security", "type": "security_alerts", "position": 2, "enabled": True},
         {"id": "network", "type": "network_stats", "position": 3, "enabled": True},
     ]
-
-
-from pydantic import BaseModel
 
 
 class WidgetRequest(BaseModel):
@@ -449,7 +452,244 @@ async def apply_updates(user=Depends(require_jwt)):
 
 @router.get("/health")
 async def health():
-    return {"status": "ok", "module": "hub"}
+    return {"status": "ok", "module": "hub", "version": "1.1.0"}
+
+
+# ══════════════════════════════════════════════════════════════════
+# Network Mode Selection (integrates with secubox-netmodes)
+# ══════════════════════════════════════════════════════════════════
+
+NETMODES_STATE_FILE = Path("/var/lib/secubox/netmodes-state.json")
+
+AVAILABLE_NETWORK_MODES = {
+    "router": {
+        "name": "Router",
+        "desc": "Full NAT router with DHCP, NAC, DPI",
+        "icon": "🔀",
+        "recommended_for": ["home", "office", "smb"],
+    },
+    "sniffer-inline": {
+        "name": "Inline Sniffer",
+        "desc": "Transparent bridge with dual-stream DPI (tc mirred)",
+        "icon": "🔍",
+        "recommended_for": ["security_audit", "monitoring"],
+    },
+    "sniffer-passive": {
+        "name": "Passive Sniffer",
+        "desc": "Out-of-band monitoring via SPAN/TAP port",
+        "icon": "👁️",
+        "recommended_for": ["readonly_monitoring", "compliance"],
+    },
+    "access-point": {
+        "name": "Access Point",
+        "desc": "WiFi AP 802.11r/k/v with band steering",
+        "icon": "📡",
+        "recommended_for": ["wireless_extension"],
+    },
+    "relay": {
+        "name": "VPN Relay",
+        "desc": "Network relay with WireGuard VPN and optimized MTU",
+        "icon": "🔗",
+        "recommended_for": ["remote_site", "vpn_gateway"],
+    },
+}
+
+
+def _get_netmodes_state() -> dict:
+    """Read current network mode state."""
+    if NETMODES_STATE_FILE.exists():
+        try:
+            return json.loads(NETMODES_STATE_FILE.read_text())
+        except Exception:
+            pass
+    return {"current_mode": "router", "pending_mode": None, "last_change": None}
+
+
+@router.get("/network_mode")
+async def get_network_mode():
+    """
+    Get current network mode and available modes (public endpoint).
+    Used by dashboard to display network mode widget.
+    """
+    state = _get_netmodes_state()
+    current_mode = state.get("current_mode", "router")
+    mode_info = AVAILABLE_NETWORK_MODES.get(current_mode, {})
+
+    # Get board info for recommendations
+    board_type = detect_board_type()
+    board_profile = get_board_profile(board_type)
+    iface_class = get_interface_classification(board_type)
+
+    return {
+        "current_mode": current_mode,
+        "mode_name": mode_info.get("name", current_mode),
+        "mode_desc": mode_info.get("desc", ""),
+        "mode_icon": mode_info.get("icon", "🔀"),
+        "pending_mode": state.get("pending_mode"),
+        "last_change": state.get("last_change"),
+        "board_type": board_type,
+        "board_profile": board_profile,
+        "interfaces": {
+            "wan": iface_class.get("wan", []),
+            "lan": iface_class.get("lan", []),
+            "sfp": iface_class.get("sfp", []),
+        },
+        "available_modes": [
+            {"id": k, **v} for k, v in AVAILABLE_NETWORK_MODES.items()
+        ],
+    }
+
+
+class NetworkModeRequest(BaseModel):
+    mode: str
+    dry_run: bool = False
+
+
+@router.post("/network_mode")
+async def set_network_mode(req: NetworkModeRequest, user=Depends(require_jwt)):
+    """
+    Change network mode (requires authentication).
+    Proxies to secubox-netmodes API.
+    """
+    if req.mode not in AVAILABLE_NETWORK_MODES:
+        raise HTTPException(400, f"Invalid mode: {req.mode}")
+
+    # Call secubox-netmodes API via socket
+    netmodes_sock = Path("/run/secubox/netmodes.sock")
+    if not netmodes_sock.exists():
+        return {"success": False, "error": "secubox-netmodes not running"}
+
+    try:
+        import httpx
+
+        async with httpx.AsyncClient(
+            transport=httpx.AsyncHTTPTransport(uds=str(netmodes_sock))
+        ) as client:
+            if req.dry_run:
+                # Preview changes
+                resp = await client.get(
+                    f"http://localhost/preview_changes?mode={req.mode}",
+                    timeout=30
+                )
+            else:
+                # Apply mode
+                resp = await client.post(
+                    "http://localhost/apply_mode",
+                    json={"mode": req.mode},
+                    timeout=60
+                )
+
+            if resp.status_code == 200:
+                result = resp.json()
+                log.info("Network mode change: %s -> %s", req.mode, result.get("success", "unknown"))
+                return result
+            else:
+                return {"success": False, "error": f"API error: {resp.status_code}"}
+
+    except ImportError:
+        # Fallback: direct subprocess call to netplan
+        log.warning("httpx not available, using fallback")
+        return {"success": False, "error": "httpx not installed for socket communication"}
+    except Exception as e:
+        log.error("network_mode error: %s", e)
+        return {"success": False, "error": str(e)}
+
+
+@router.get("/network_mode/preview")
+async def preview_network_mode(mode: str, user=Depends(require_jwt)):
+    """Preview what configuration would be applied for a mode."""
+    if mode not in AVAILABLE_NETWORK_MODES:
+        raise HTTPException(400, f"Invalid mode: {mode}")
+
+    board_type = detect_board_type()
+    iface_class = get_interface_classification(board_type)
+
+    wan = iface_class.get("wan", ["eth0"])[0] if iface_class.get("wan") else "eth0"
+    lan = iface_class.get("lan", [])
+    lan_str = ", ".join(lan) if lan else ""
+
+    # Generate preview YAML based on mode
+    if mode == "router":
+        yaml_preview = f"""network:
+  version: 2
+  renderer: networkd
+
+  ethernets:
+    {wan}:
+      dhcp4: true
+      optional: true
+"""
+        for iface in lan:
+            yaml_preview += f"""    {iface}:
+      optional: true
+"""
+        if lan:
+            yaml_preview += f"""
+  bridges:
+    br-lan:
+      interfaces: [{lan_str}]
+      addresses: [192.168.1.1/24]
+      dhcp4: false
+"""
+    elif mode in ("sniffer-inline", "sniffer-passive"):
+        yaml_preview = f"""network:
+  version: 2
+  renderer: networkd
+
+  ethernets:
+    {wan}:
+      dhcp4: false
+      optional: true
+"""
+        for iface in lan:
+            yaml_preview += f"""    {iface}:
+      dhcp4: false
+      optional: true
+"""
+        yaml_preview += f"""
+  bridges:
+    br0:
+      interfaces: [{wan}, {lan_str}]
+      dhcp4: true
+      parameters:
+        stp: false
+"""
+    else:
+        yaml_preview = f"""network:
+  version: 2
+  renderer: networkd
+
+  ethernets:
+    {wan}:
+      dhcp4: true
+"""
+
+    return {
+        "mode": mode,
+        "mode_info": AVAILABLE_NETWORK_MODES.get(mode, {}),
+        "board_type": board_type,
+        "interfaces": iface_class,
+        "yaml_preview": yaml_preview,
+    }
+
+
+@router.get("/board_summary")
+async def board_summary():
+    """
+    Quick board summary for dashboard widgets.
+    Uses secubox_core.kiosk functions.
+    """
+    board_type = detect_board_type()
+    profile = get_board_profile(board_type)
+    caps = get_board_capabilities(board_type)
+    ifaces = get_interface_classification(board_type)
+
+    return {
+        "board_type": board_type,
+        "profile": profile,
+        "capabilities": caps,
+        "interfaces": ifaces,
+    }
 
 
 # ── Dynamic Menu System ──────────────────────────────────────────

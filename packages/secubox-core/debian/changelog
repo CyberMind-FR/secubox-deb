@@ -1,3 +1,17 @@
+secubox-core (1.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Add kiosk module (kiosk.py) for kiosk mode management
+  * Add kiosk_status(), kiosk_enable(), kiosk_disable() functions
+  * Add board detection: detect_board_type(), get_board_profile()
+  * Add get_board_capabilities(), get_board_model() functions
+  * Add interface classification: get_interface_classification()
+  * Add get_physical_interfaces(), check_interface_carrier()
+  * Supported boards: MOCHAbin, ESPRESSObin v7/Ultra, x64-vm/baremetal, RPi
+  * Board profiles: "full" (high-end) or "lite" (embedded)
+  * Library version bumped to 1.1.0
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 01 Apr 2026 11:00:00 +0200
+
 secubox-core (1.0.3-1~bookworm1) bookworm; urgency=medium
 
   * Add UMask=0000 for world-accessible sockets

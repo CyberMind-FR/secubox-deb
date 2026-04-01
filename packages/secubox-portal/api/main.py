@@ -28,8 +28,11 @@ import jwt
 from secubox_core.config import get_config
 from secubox_core.logger import get_logger
 from secubox_core.auth import create_token as core_create_token
+from secubox_core.kiosk import (
+    detect_board_type, get_board_profile, get_board_capabilities, get_board_model
+)
 
-app = FastAPI(title="secubox-portal", version="2.0.0", root_path="/api/v1/portal")
+app = FastAPI(title="secubox-portal", version="2.1.0", root_path="/api/v1/portal")
 router = APIRouter()
 log = get_logger("portal")
 
@@ -309,10 +312,206 @@ async def shutdown():
         _cleanup_task.cancel()
 
 
+# ══════════════════════════════════════════════════════════════════
+# Device-Specific Theming
+# ══════════════════════════════════════════════════════════════════
+
+BOARD_THEMES = {
+    "mochabin": {
+        "name": "Pro",
+        "description": "Professional theme for MOCHAbin (Armada 7040)",
+        "logo_text": "SecuBox Pro",
+        "logo_sub": "Enterprise Security Appliance",
+        "colors": {
+            "accent": "#0ea5e9",        # Sky blue
+            "accent_glow": "rgba(14,165,233,0.2)",
+            "accent_dark": "#0284c7",
+            "gradient_start": "#0ea5e9",
+            "gradient_end": "#0369a1",
+            "success": "#22c55e",
+            "warning": "#f59e0b",
+            "error": "#ef4444",
+        },
+        "logo_icon": "S",
+        "badge": "PRO",
+    },
+    "espressobin-v7": {
+        "name": "Lite",
+        "description": "Compact theme for ESPRESSObin (Armada 3720)",
+        "logo_text": "SecuBox Lite",
+        "logo_sub": "Compact Network Security",
+        "colors": {
+            "accent": "#22c55e",         # Green
+            "accent_glow": "rgba(34,197,94,0.2)",
+            "accent_dark": "#16a34a",
+            "gradient_start": "#22c55e",
+            "gradient_end": "#15803d",
+            "success": "#22c55e",
+            "warning": "#eab308",
+            "error": "#dc2626",
+        },
+        "logo_icon": "S",
+        "badge": "LITE",
+    },
+    "espressobin-ultra": {
+        "name": "Ultra",
+        "description": "Enhanced theme for ESPRESSObin Ultra",
+        "logo_text": "SecuBox Ultra",
+        "logo_sub": "Enhanced Compact Security",
+        "colors": {
+            "accent": "#14b8a6",         # Teal
+            "accent_glow": "rgba(20,184,166,0.2)",
+            "accent_dark": "#0d9488",
+            "gradient_start": "#14b8a6",
+            "gradient_end": "#0f766e",
+            "success": "#22c55e",
+            "warning": "#f59e0b",
+            "error": "#ef4444",
+        },
+        "logo_icon": "S",
+        "badge": "ULTRA",
+    },
+    "x64-vm": {
+        "name": "Virtual",
+        "description": "Virtual machine theme",
+        "logo_text": "SecuBox VM",
+        "logo_sub": "Virtual Security Appliance",
+        "colors": {
+            "accent": "#8b5cf6",          # Purple
+            "accent_glow": "rgba(139,92,246,0.2)",
+            "accent_dark": "#7c3aed",
+            "gradient_start": "#8b5cf6",
+            "gradient_end": "#6d28d9",
+            "success": "#22c55e",
+            "warning": "#f59e0b",
+            "error": "#ef4444",
+        },
+        "logo_icon": "V",
+        "badge": "VM",
+    },
+    "x64-baremetal": {
+        "name": "Server",
+        "description": "Bare-metal server theme",
+        "logo_text": "SecuBox Server",
+        "logo_sub": "Bare-Metal Security Platform",
+        "colors": {
+            "accent": "#f97316",          # Orange
+            "accent_glow": "rgba(249,115,22,0.2)",
+            "accent_dark": "#ea580c",
+            "gradient_start": "#f97316",
+            "gradient_end": "#c2410c",
+            "success": "#22c55e",
+            "warning": "#fbbf24",
+            "error": "#dc2626",
+        },
+        "logo_icon": "S",
+        "badge": "SERVER",
+    },
+    "rpi": {
+        "name": "Maker",
+        "description": "Raspberry Pi maker theme",
+        "logo_text": "SecuBox Pi",
+        "logo_sub": "Maker Security Device",
+        "colors": {
+            "accent": "#ec4899",          # Pink (Raspberry)
+            "accent_glow": "rgba(236,72,153,0.2)",
+            "accent_dark": "#db2777",
+            "gradient_start": "#ec4899",
+            "gradient_end": "#be185d",
+            "success": "#22c55e",
+            "warning": "#f59e0b",
+            "error": "#ef4444",
+        },
+        "logo_icon": "Pi",
+        "badge": "PI",
+    },
+    "unknown": {
+        "name": "Standard",
+        "description": "Default SecuBox theme",
+        "logo_text": "SecuBox",
+        "logo_sub": "Secure Network Appliance",
+        "colors": {
+            "accent": "#58a6ff",          # Blue (default)
+            "accent_glow": "rgba(88,166,255,0.2)",
+            "accent_dark": "#1f6feb",
+            "gradient_start": "#58a6ff",
+            "gradient_end": "#1f6feb",
+            "success": "#3fb950",
+            "warning": "#d29922",
+            "error": "#f85149",
+        },
+        "logo_icon": "S",
+        "badge": None,
+    },
+}
+
+
+@router.get("/theme")
+async def get_theme():
+    """
+    Get device-specific theme based on detected board type.
+    Returns theme colors, logo text, and board info.
+    Public endpoint - used by login page and all UI components.
+    """
+    board_type = detect_board_type()
+    profile = get_board_profile(board_type)
+    model = get_board_model()
+
+    # Get theme for this board, fallback to unknown
+    theme = BOARD_THEMES.get(board_type, BOARD_THEMES["unknown"])
+
+    return {
+        "board_type": board_type,
+        "board_model": model,
+        "profile": profile,
+        "theme": theme,
+        "css_vars": _generate_css_vars(theme["colors"]),
+    }
+
+
+def _generate_css_vars(colors: dict) -> str:
+    """Generate CSS custom properties string from colors dict."""
+    css_lines = []
+    for key, value in colors.items():
+        css_name = f"--{key.replace('_', '-')}"
+        css_lines.append(f"{css_name}: {value};")
+    return "\n".join(css_lines)
+
+
+@router.get("/branding")
+async def get_branding():
+    """
+    Get full branding info including theme, capabilities, and display settings.
+    """
+    board_type = detect_board_type()
+    profile = get_board_profile(board_type)
+    caps = get_board_capabilities(board_type)
+    model = get_board_model()
+    theme = BOARD_THEMES.get(board_type, BOARD_THEMES["unknown"])
+
+    return {
+        "board": {
+            "type": board_type,
+            "model": model,
+            "profile": profile,
+            "capabilities": caps,
+        },
+        "branding": {
+            "logo_text": theme["logo_text"],
+            "logo_sub": theme["logo_sub"],
+            "logo_icon": theme["logo_icon"],
+            "badge": theme["badge"],
+            "theme_name": theme["name"],
+        },
+        "colors": theme["colors"],
+        "css_vars": _generate_css_vars(theme["colors"]),
+    }
+
+
 # Public endpoints
 @router.get("/health")
 async def health():
-    return {"status": "ok", "module": "portal", "version": "2.0.0"}
+    return {"status": "ok", "module": "portal", "version": "2.1.0"}
 
 
 @router.get("/status")

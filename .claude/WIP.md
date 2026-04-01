@@ -1,5 +1,93 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-03-31 (Session 29)*
+*Mis à jour : 2026-04-01 (Session 30)*
+
+---
+
+## ✅ Terminé cette session (Session 31)
+
+### secubox-portal v2.1.0 — Device-Specific Theming ✅
+- **New API endpoints**:
+  - `GET /theme` — Returns device-specific theme (colors, badge, name)
+  - `GET /branding` — Full branding info with capabilities
+- **7 board themes**:
+  - MOCHAbin (Pro) — Sky blue accent (#0ea5e9)
+  - ESPRESSObin (Lite) — Green accent (#22c55e)
+  - x64-vm (Virtual) — Violet accent (#8b5cf6)
+  - x64-baremetal (Server) — Orange accent (#f97316)
+  - RPi (Maker) — Pink accent (#ec4899)
+  - unknown (Standard) — Amber accent (#f59e0b)
+  - default — Blue accent (#58a6ff)
+- **Login page enhancements**:
+  - Dynamic CSS variables applied from theme
+  - Device badge shows board edition (PRO, LITE, VM, SERVER, PI)
+  - Subtitle shows "SecuBox [Edition] Edition"
+  - Gradient colors match board theme
+- **Files modified**:
+  - `packages/secubox-portal/api/main.py` — Theme endpoints
+  - `packages/secubox-portal/www/login.html` — Dynamic theming JS
+  - `packages/secubox-portal/debian/changelog` — v2.1.0
+
+---
+
+## ✅ Terminé cette session (Session 30)
+
+### secubox-core v1.1.0 — Kiosk & Board Detection Library ✅
+- **New module `kiosk.py`** in secubox_core with reusable functions:
+  - `kiosk_status()` — Get kiosk mode status
+  - `kiosk_enable(mode)` — Enable kiosk (x11/wayland)
+  - `kiosk_disable()` — Disable kiosk mode
+  - `detect_board_type()` — Auto-detect board type
+  - `get_board_profile()` — Get profile (full/lite)
+  - `get_board_capabilities()` — Board-specific capabilities
+  - `get_board_model()` — Get full model string
+  - `get_physical_interfaces()` — List physical network interfaces
+  - `get_interface_classification()` — Classify WAN/LAN/SFP
+  - `check_interface_carrier()` — Check if cable connected
+- **Supported boards**: MOCHAbin, ESPRESSObin v7/Ultra, x64-vm, x64-baremetal, RPi
+- **Files created/modified**:
+  - `common/secubox_core/kiosk.py` — New module (350+ lines)
+  - `common/secubox_core/__init__.py` — Export new functions, v1.1.0
+  - `packages/secubox-core/debian/changelog` — v1.1.0
+
+### secubox-hub v1.1.0 — Network Mode Selection ✅
+- **New API endpoints**:
+  - `GET /network_mode` — Current mode, available modes, interfaces
+  - `POST /network_mode` — Change mode (proxies to secubox-netmodes)
+  - `GET /network_mode/preview` — Preview YAML config for a mode
+  - `GET /board_summary` — Quick board info for widgets
+- **Frontend updates**:
+  - New "Network Mode" card on dashboard
+  - Mode selector with all available modes (Router, Inline Sniffer, Passive Sniffer, AP, Relay)
+  - Preview button shows YAML config
+  - Apply button changes mode with confirmation
+  - Real-time WAN/LAN interface display
+- **Integration**:
+  - Uses secubox_core.kiosk for board/interface detection
+  - Communicates with secubox-netmodes via Unix socket
+- **Files modified**:
+  - `packages/secubox-hub/api/main.py` — +150 lines for network mode
+  - `packages/secubox-hub/www/index.html` — New Network Mode card + JS
+  - `packages/secubox-hub/debian/changelog` — v1.1.0
+
+### secubox-system v1.2.0 — Board Detection Integration ✅
+- **Refactored to use secubox_core.kiosk** functions (no code duplication)
+- **New API endpoints**:
+  - `GET /board` — Detailed board detection (type, profile, interfaces)
+  - `POST /board/detect` — Refresh detection (runs secubox-net-detect)
+  - `GET /board/capabilities` — Board-specific capabilities and features
+  - `GET /kiosk/status` — Kiosk mode status (enabled, mode, service state)
+  - `POST /kiosk/enable` — Enable kiosk mode (x11 or wayland)
+  - `POST /kiosk/disable` — Disable kiosk mode
+- **Frontend updates**:
+  - New "Board Detection" card with WAN/LAN/SFP classification
+  - Interface details with carrier status (●/○)
+  - Refresh detection button
+  - New "Kiosk Mode" card with enable/disable controls
+  - Mode selection (X11 for VMs, Wayland for native hardware)
+- **Files modified**:
+  - `packages/secubox-system/api/main.py` — Uses secubox_core.kiosk
+  - `packages/secubox-system/www/system/index.html` — New UI cards
+  - `packages/secubox-system/debian/changelog` — v1.2.0
 
 ---
 
@@ -949,11 +1037,13 @@ Total modules: **41** (was 35)
 Per user request: Focus on completing and enhancing existing modules before porting new ones from OpenWRT.
 
 **Modules to Enhance:**
-1. **secubox-netmodes** — Integrate secubox-net-detect for auto-configuration
-2. **secubox-system** — Add board detection info to system status
-3. **secubox-core** — Integrate kiosk setup option in admin
-4. **secubox-hub** — Add network mode selection to dashboard
-5. **secubox-portal** — Add device-specific theming based on board
+1. ~~**secubox-netmodes** — Integrate secubox-net-detect for auto-configuration~~ ✅ Done (Session 26)
+2. ~~**secubox-system** — Add board detection info to system status~~ ✅ Done (Session 30)
+3. ~~**secubox-core** — Integrate kiosk setup option in admin~~ ✅ Done (Session 30)
+4. ~~**secubox-hub** — Add network mode selection to dashboard~~ ✅ Done (Session 30)
+5. ~~**secubox-portal** — Add device-specific theming based on board~~ ✅ Done (Session 31)
+
+**✅ All Priority Module Enhancements Complete!**
 
 **Build & Test Live USB:**
 ```bash
