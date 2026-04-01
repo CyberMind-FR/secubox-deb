@@ -1,0 +1,32 @@
+#!/usr/bin/env python3
+"""
+SecuBox-Deb :: Console TUI
+CyberMind — https://cybermind.fr
+Author: Gerald Kerma <devel@cybermind.fr>
+
+Terminal-based dashboard for SecuBox appliances.
+Auto-starts on TTY1 when GUI kiosk is disabled.
+"""
+import sys
+import os
+
+# Ensure proper terminal setup
+os.environ.setdefault("TERM", "linux")
+
+# Add package to path if running from source
+if __name__ == "__main__":
+    package_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if package_dir not in sys.path:
+        sys.path.insert(0, package_dir)
+
+from console.app import main
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\nExiting SecuBox Console...")
+        sys.exit(0)
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)

@@ -1,0 +1,28 @@
+[Unit]
+Description=SecuBox SOC Gateway
+Documentation=https://cybermind.fr/secubox
+After=network-online.target secubox-core.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=secubox-soc-gateway
+Group=secubox-soc-gateway
+ExecStart=/usr/bin/uvicorn secubox_soc_gateway:app --uds /run/secubox/soc-gateway.sock --workers 2
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5
+RuntimeDirectory=secubox
+RuntimeDirectoryMode=0755
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/var/lib/secubox/soc-gateway
+ReadWritePaths=/var/log/secubox
+ReadWritePaths=/run/secubox
+
+[Install]
+WantedBy=multi-user.target

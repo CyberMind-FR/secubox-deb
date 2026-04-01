@@ -1,0 +1,29 @@
+#!/usr/bin/make -f
+
+export DH_VERBOSE = 1
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+	# Install npm dependencies
+	npm ci --ignore-scripts || npm install --ignore-scripts
+
+override_dh_auto_build:
+	# Build React app
+	npm run build
+
+override_dh_auto_install:
+	# Install built files
+	install -d $(CURDIR)/debian/secubox-soc-web/usr/share/secubox/www/soc
+	cp -r $(CURDIR)/dist/* $(CURDIR)/debian/secubox-soc-web/usr/share/secubox/www/soc/
+
+	# Install nginx config
+	install -d $(CURDIR)/debian/secubox-soc-web/etc/nginx/sites-available
+	install -m 644 $(CURDIR)/debian/secubox-soc-web.nginx.conf $(CURDIR)/debian/secubox-soc-web/etc/nginx/sites-available/secubox-soc-web
+
+override_dh_auto_clean:
+	rm -rf node_modules dist
+
+override_dh_auto_test:
+	# Skip tests during build

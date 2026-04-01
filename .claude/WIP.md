@@ -1,5 +1,109 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-04-01 (Session 30)*
+*Mis à jour : 2026-04-01 (Session 33)*
+
+---
+
+## ✅ Terminé cette session (Session 33)
+
+### SecuBox SOC — Hierarchical Security Operations Center (Phases 1-4) ✅
+
+**Phase 1: secubox-soc-agent v1.0.0** — Edge Node Metrics Agent
+- **Collector**: CPU, memory, disk, network, CrowdSec/Suricata/WAF alerts
+- **Upstreamer**: HMAC-SHA256 signed push to gateway (60s interval)
+- **Command Handler**: Whitelist-based remote command execution
+- **Enrollment**: One-time token workflow with HMAC key generation
+- **Files**: `packages/secubox-soc-agent/{api/main.py, lib/{collector,upstreamer,command_handler}.py}`
+
+**Phase 2: secubox-soc-gateway v1.0.0** — SOC Aggregation Gateway
+- **Node Registry**: Enrollment, health tracking, HMAC token validation
+- **Aggregator**: Fleet-wide metrics aggregation with StatsCache pattern
+- **Alert Correlator**: Cross-node threat correlation (multi-node attack detection)
+- **Remote Command**: Proxy commands to edge nodes via secure channel
+- **WebSocket**: Real-time `/ws/alerts` stream for live monitoring
+- **Files**: `packages/secubox-soc-gateway/{api/main.py, lib/{node_registry,aggregator,alert_correlator,remote_command}.py}`
+
+**Phase 3: secubox-console v1.1.0** — TUI Extension
+- **SOC Client**: Gateway API client for console
+- **Fleet Screen**: Node grid with health indicators (f key)
+- **Alerts Screen**: Unified alert stream with correlation toggle (a key)
+- **Node Screen**: Remote node detail with service management
+- **Files**: `packages/secubox-console/console/{soc_client.py, screens/soc_{fleet,alerts,node}.py}`
+
+**Phase 4: secubox-soc-web v1.0.0** — React Web Dashboard
+- **Stack**: React 18 + Vite + TypeScript + lucide-react
+- **Pages**: FleetOverview, AlertStream, ThreatMap, NodeDetail
+- **Components**: Sidebar, Header, NodeCard, AlertItem, StatCard
+- **Hooks**: useWebSocket (reconnect), useFleet/useAlerts (data)
+- **Theme**: Full cyberpunk CSS (--cosmos-black, --cyber-cyan, etc.)
+- **Nginx**: /soc/ location with proxy to gateway API
+- **Files**: `packages/secubox-soc-web/src/{App.tsx, pages/*, components/*, hooks/*}`
+
+**Packages Built (Phases 1-4):**
+- `secubox-soc-agent_1.0.0-1_all.deb` (12KB)
+- `secubox-soc-gateway_1.0.0-1_all.deb` (15KB)
+- `secubox-console_1.1.0-1_all.deb` (24KB)
+- `secubox-soc-web_1.0.0-1_all.deb` (62KB)
+
+**Phase 5: Hierarchical Mode** ✅
+- **hierarchy.py**: Mode management (edge/regional/central), regional SOC enrollment
+- **cross_region_correlator.py**: Cross-region threat correlation, global summary
+- **Gateway API v1.1.0**: 11 new endpoints for hierarchy management
+- **Web Dashboard v1.1.0**: GlobalView page, Settings page, mode indicators
+
+**New API Endpoints (Gateway v1.1.0):**
+- `GET /hierarchy/status` - Get hierarchy mode
+- `POST /hierarchy/mode` - Set mode (edge/regional/central)
+- `POST /regional/token` - Generate regional enrollment token (central)
+- `POST /regional/enroll` - Enroll regional SOC (central)
+- `POST /regional/ingest` - Receive regional data (central)
+- `GET /regional/socs` - List regional SOCs (central)
+- `POST /upstream/enroll` - Enroll with central (regional)
+- `GET /upstream/status` - Upstream connection status (regional)
+- `GET /global/summary` - Global cross-region summary (central)
+- `GET /global/regions` - Regional breakdown (central)
+- `GET /global/threats` - Cross-region threats (central)
+
+**Packages Updated (Phase 5):**
+- `secubox-soc-gateway_1.1.0-1_all.deb` (21KB)
+- `secubox-soc-web_1.1.0-1_all.deb` (67KB)
+
+---
+
+## ✅ Terminé session précédente (Session 32)
+
+### secubox-console v1.0.0 — Console TUI Dashboard
+- **New package** providing terminal-based dashboard using Python Textual
+- **Features**:
+  - Dashboard screen with live metrics (CPU, memory, disk), uptime, health score
+  - Services screen with start/stop/restart/enable/disable actions
+  - Network screen with interface classification (WAN/LAN/SFP)
+  - Logs screen with real-time streaming and unit filter
+  - Menu screen with system info and quick actions (reboot, shutdown)
+- **Board-specific theming** matching secubox-portal colors:
+  - MOCHAbin (Pro) — Sky blue
+  - ESPRESSObin (Lite) — Green
+  - ESPRESSObin Ultra — Teal
+  - x64-vm — Purple
+  - x64-baremetal — Orange
+  - Raspberry Pi — Pink
+- **Vim-style navigation**: j/k for up/down, h for back, Enter to select
+- **Auto-start on TTY1** when GUI kiosk is disabled
+- **Files created**:
+  - `packages/secubox-console/` — Complete package structure
+  - `packages/secubox-console/console/app.py` — Main Textual App
+  - `packages/secubox-console/console/api_client.py` — Async Unix socket client
+  - `packages/secubox-console/console/theme.py` — Board-specific colors
+  - `packages/secubox-console/console/screens/` — Dashboard, Services, Network, Logs, Menu
+  - `packages/secubox-console/console/widgets/` — Header, Metrics, ServiceList
+  - `packages/secubox-console/debian/` — Full Debian packaging
+
+### secubox-kiosk-setup — Console Mode Integration
+- **New commands**: `console`, `no-console`
+- **Updated `status`** to show kiosk/console/none mode
+- **Files modified**:
+  - `image/sbin/secubox-kiosk-setup` — Added console mode support
+  - `common/secubox_core/kiosk.py` — Added `console_status()`, `display_mode()`
+  - `common/secubox_core/__init__.py` — Export new functions
 
 ---
 
@@ -1044,6 +1148,43 @@ Per user request: Focus on completing and enhancing existing modules before port
 5. ~~**secubox-portal** — Add device-specific theming based on board~~ ✅ Done (Session 31)
 
 **✅ All Priority Module Enhancements Complete!**
+
+### SecuBox SOC — Phase 5: Hierarchical Mode ✅
+
+**Phase 5 implements multi-tier deployment:**
+- [x] Mode configuration (edge/regional/central) via API
+- [x] Regional-to-central aggregation (upstream push)
+- [x] Cross-region threat correlation
+- [x] Multi-tier enrollment workflow
+- [x] Global View page for central SOC
+- [x] Settings page for mode configuration
+- [ ] Deploy and test multi-tier setup (requires hardware)
+
+**Packages Updated:**
+- `secubox-soc-gateway_1.1.0-1_all.deb` (21KB) - Added hierarchy lib
+- `secubox-soc-web_1.1.0-1_all.deb` (67KB) - Added GlobalView & Settings
+
+**Architecture:**
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      CENTRAL SOC                             │
+│   secubox-soc-gateway (central) + secubox-soc-web (React)   │
+└─────────────────────────────────────────────────────────────┘
+                              │
+              ┌───────────────┼───────────────┐
+              ▼               ▼               ▼
+┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐
+│  REGIONAL SOC   │ │  REGIONAL SOC   │ │  REGIONAL SOC   │
+│  (Paris)        │ │  (London)       │ │  (New York)     │
+└─────────────────┘ └─────────────────┘ └─────────────────┘
+       │                   │                   │
+   ┌───┴───┐           ┌───┴───┐           ┌───┴───┐
+   ▼       ▼           ▼       ▼           ▼       ▼
+┌─────┐ ┌─────┐     ┌─────┐ ┌─────┐     ┌─────┐ ┌─────┐
+│Edge │ │Edge │     │Edge │ │Edge │     │Edge │ │Edge │
+│Node │ │Node │     │Node │ │Node │     │Node │ │Node │
+└─────┘ └─────┘     └─────┘ └─────┘     └─────┘ └─────┘
+```
 
 **Build & Test Live USB:**
 ```bash

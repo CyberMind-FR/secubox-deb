@@ -1,0 +1,28 @@
+Source: secubox-soc-web
+Section: web
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13), nodejs (>= 18), npm
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
+
+Package: secubox-soc-web
+Architecture: all
+Depends: ${misc:Depends},
+         nginx
+Suggests: secubox-soc-gateway
+Description: SecuBox SOC Web Dashboard — Browser-based Fleet Monitoring
+ React-based web dashboard for the SecuBox Security Operations Center.
+ Provides real-time fleet monitoring, alert visualization, and remote
+ node management through a modern web interface.
+ .
+ Features:
+  - Fleet overview with node health grid
+  - Real-time alert stream via WebSocket
+  - Cross-node threat correlation visualization
+  - Remote service management (start/stop/restart)
+  - Threat intelligence map
+  - Cyberpunk-themed responsive UI
+ .
+ Part of the SecuBox hierarchical SOC architecture.

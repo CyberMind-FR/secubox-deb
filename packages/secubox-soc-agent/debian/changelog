@@ -1,0 +1,13 @@
+secubox-soc-agent (1.0.0-1) bookworm; urgency=medium
+
+  * Initial release
+  * Implements SOC Agent for edge node monitoring
+  * Features:
+    - System metrics collection (CPU, memory, disk, network)
+    - Security alert aggregation (CrowdSec, Suricata, WAF)
+    - HMAC-SHA256 signed metric push to upstream SOC
+    - Remote command execution with signature validation
+    - SOC gateway enrollment workflow
+    - Command audit logging
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 01 Apr 2026 12:00:00 +0200

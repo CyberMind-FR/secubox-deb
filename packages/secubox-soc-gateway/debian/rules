@@ -1,0 +1,36 @@
+#!/usr/bin/make -f
+
+export DH_VERBOSE = 1
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+	# Skip configure - pure Python package
+
+override_dh_auto_build:
+	# No build needed - pure Python package
+
+override_dh_auto_install:
+	# Install API module
+	install -d $(CURDIR)/debian/secubox-soc-gateway/usr/lib/python3/dist-packages/secubox_soc_gateway
+	cp -r $(CURDIR)/api $(CURDIR)/debian/secubox-soc-gateway/usr/lib/python3/dist-packages/secubox_soc_gateway/
+	cp -r $(CURDIR)/lib $(CURDIR)/debian/secubox-soc-gateway/usr/lib/python3/dist-packages/secubox_soc_gateway/
+	echo "from .api.main import app" > $(CURDIR)/debian/secubox-soc-gateway/usr/lib/python3/dist-packages/secubox_soc_gateway/__init__.py
+
+	# Install systemd service
+	install -d $(CURDIR)/debian/secubox-soc-gateway/lib/systemd/system
+	install -m 644 $(CURDIR)/debian/secubox-soc-gateway.service $(CURDIR)/debian/secubox-soc-gateway/lib/systemd/system/
+
+	# Create data directories
+	install -d $(CURDIR)/debian/secubox-soc-gateway/var/lib/secubox/soc-gateway
+	install -d $(CURDIR)/debian/secubox-soc-gateway/var/log/secubox
+
+override_dh_auto_clean:
+	# Nothing to clean
+
+override_dh_auto_test:
+	# Skip tests during build
+
+override_dh_installsystemd:
+	dh_installsystemd --name=secubox-soc-gateway

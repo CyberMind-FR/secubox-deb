@@ -1,0 +1,32 @@
+Source: secubox-soc-agent
+Section: admin
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
+
+Package: secubox-soc-agent
+Architecture: all
+Depends: ${misc:Depends},
+         python3 (>= 3.11),
+         secubox-core (>= 1.1.0),
+         python3-httpx,
+         python3-fastapi,
+         uvicorn
+Suggests: secubox-watchdog,
+          crowdsec
+Description: SecuBox SOC Agent — Edge Node Agent for SOC Integration
+ Edge node agent that collects system metrics and security alerts,
+ then pushes them to an upstream SOC gateway for centralized monitoring.
+ .
+ Features:
+  - System metrics collection (CPU, memory, disk, network)
+  - Security alert aggregation (CrowdSec, Suricata, WAF)
+  - HMAC-SHA256 signed metric push to upstream SOC
+  - Remote command execution with signature validation
+  - Automatic enrollment with SOC gateway
+  - Command audit logging
+ .
+ Part of the SecuBox hierarchical SOC architecture.

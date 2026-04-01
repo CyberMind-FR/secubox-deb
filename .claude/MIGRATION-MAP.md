@@ -37,7 +37,7 @@ Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 
 ---
 
-## Paquets Debian — 52 modules (49 UI + 3 backend)
+## Paquets Debian — 58 modules (49 UI + 3 backend + 6 tools)
 
 | Module | www/ | API | deb/ | Endpoints | Statut |
 |--------|------|-----|------|-----------|--------|
@@ -96,8 +96,12 @@ Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 | **secubox-ollama** | ✅ | ✅ | ✅ | models, chat, generate, system | ✅ |
 | **secubox-jellyfin** | ✅ | ✅ | ✅ | media, config, backup, logs | ✅ |
 | **secubox-lyrion** | ✅ | ✅ | ✅ | players, library, backup, LMS JSON-RPC | ✅ |
+| **secubox-console** | — | ✅ | ✅ | Textual TUI dashboard (no www) v1.1.0 | ✅ |
+| **secubox-soc-agent** | — | ✅ | ✅ | Edge node metrics agent v1.0.0 | ✅ |
+| **secubox-soc-gateway** | — | ✅ | ✅ | SOC aggregation gateway v1.0.0 | ✅ |
+| **secubox-soc-web** | ✅ | — | ✅ | React SOC dashboard v1.0.0 | ✅ |
 
-**Total : 57 modules | ~1100+ endpoints API + Go mesh daemon**
+**Total : 61 modules | ~1200+ endpoints API + Go mesh daemon + TUI console + SOC**
 
 *Note: mail-lxc and webmail-lxc are backend components integrated into secubox-mail*
 
