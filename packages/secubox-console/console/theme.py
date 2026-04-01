@@ -1,11 +1,71 @@
 """
 SecuBox-Deb :: Console TUI — Theme System
 Board-specific theming for Textual TUI.
+
+Works standalone (without secubox-core) with auto-detection fallback.
 """
 from __future__ import annotations
-from typing import Dict, Tuple
+from typing import Dict
+import platform
+import os
+from pathlib import Path
 
-from secubox_core.kiosk import detect_board_type, get_board_model
+# Try to import secubox_core, fallback to local detection if not available
+try:
+    from secubox_core.kiosk import detect_board_type, get_board_model
+    HAS_SECUBOX_CORE = True
+except ImportError:
+    HAS_SECUBOX_CORE = False
+
+    def detect_board_type() -> str:
+        """Fallback board detection for standalone mode."""
+        # Check DMI/device-tree for board info
+        try:
+            # Check device-tree (ARM boards)
+            dt_model = Path("/proc/device-tree/model")
+            if dt_model.exists():
+                model = dt_model.read_text().strip().lower()
+                if "raspberry" in model:
+                    return "rpi"
+                if "mochi" in model or "7040" in model:
+                    return "mochabin"
+                if "espresso" in model or "3720" in model:
+                    return "espressobin-v7"
+
+            # Check DMI (x86)
+            dmi_vendor = Path("/sys/class/dmi/id/sys_vendor")
+            if dmi_vendor.exists():
+                vendor = dmi_vendor.read_text().strip().lower()
+                if "virtualbox" in vendor or "vmware" in vendor or "qemu" in vendor:
+                    return "x64-vm"
+                return "x64-baremetal"
+
+            # Fallback based on architecture
+            arch = platform.machine()
+            if arch in ("x86_64", "amd64"):
+                return "x64-baremetal"
+            elif arch in ("aarch64", "arm64"):
+                return "unknown-arm64"
+
+        except Exception:
+            pass
+
+        return "unknown"
+
+    def get_board_model() -> str:
+        """Fallback model detection for standalone mode."""
+        try:
+            dt_model = Path("/proc/device-tree/model")
+            if dt_model.exists():
+                return dt_model.read_text().strip()
+
+            dmi_name = Path("/sys/class/dmi/id/product_name")
+            if dmi_name.exists():
+                return dmi_name.read_text().strip()
+        except Exception:
+            pass
+
+        return platform.machine()
 
 
 # Board-specific color schemes
