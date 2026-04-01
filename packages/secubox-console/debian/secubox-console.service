@@ -1,10 +1,8 @@
 [Unit]
-Description=SecuBox Console TUI on TTY1
-After=multi-user.target secubox-runtime.service
-Wants=secubox-runtime.service
-ConditionPathExists=!/var/lib/secubox/.kiosk-enabled
-ConditionPathExists=/var/lib/secubox/.console-enabled
-Conflicts=getty@tty1.service
+Description=SecuBox Console TUI
+Documentation=https://cybermind.fr/secubox
+After=multi-user.target
+ConditionPathExists=/usr/bin/secubox-console
 
 [Service]
 Type=simple
@@ -15,24 +13,8 @@ TTYPath=/dev/tty1
 TTYReset=yes
 TTYVHangup=yes
 TTYVTDisallocate=yes
-
-User=secubox
-Group=secubox
-SupplementaryGroups=tty dialout
-
-Environment=TERM=linux
-Environment=HOME=/var/lib/secubox
-
 Restart=on-failure
 RestartSec=5
-TimeoutStartSec=30
-
-# Security hardening
-NoNewPrivileges=false
-ProtectSystem=strict
-ProtectHome=read-only
-ReadWritePaths=/var/lib/secubox /run/secubox /tmp
-PrivateTmp=true
 
 [Install]
 WantedBy=multi-user.target

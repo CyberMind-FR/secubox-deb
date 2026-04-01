@@ -1,3 +1,13 @@
+secubox-console (1.2.0-1) bookworm; urgency=medium
+
+  * Standalone mode: Works without secubox-core installed
+  * Fallback board detection for non-SecuBox systems
+  * secubox-core moved from Depends to Recommends
+  * Can now be installed on any Debian/Ubuntu system
+  * Fix: BoardHeader import in SOC screens
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 01 Apr 2026 16:00:00 +0200
+
 secubox-console (1.1.0-1) bookworm; urgency=medium
 
   * Add SOC integration for fleet monitoring
