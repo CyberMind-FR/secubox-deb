@@ -1,0 +1,33 @@
+Source: secubox-console
+Section: admin
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
+
+Package: secubox-console
+Architecture: all
+Depends: ${misc:Depends},
+         python3 (>= 3.11),
+         secubox-core (>= 1.1.0),
+         python3-textual (>= 0.40.0),
+         python3-httpx,
+         python3-rich
+Suggests: secubox-hub,
+          secubox-watchdog
+Description: SecuBox Console TUI — Terminal Dashboard
+ Terminal-based dashboard for SecuBox appliances using Python Textual.
+ Provides system monitoring, service management, and network status
+ via a TUI that auto-starts on TTY1 when GUI kiosk is disabled.
+ .
+ Features:
+  - Live system metrics (CPU, memory, disk)
+  - Service management with start/stop/restart
+  - Network interface status with WAN/LAN classification
+  - Real-time log viewer with filtering
+  - Vim-style keyboard navigation
+  - Board-specific theming (MOCHAbin, ESPRESSObin, etc.)
+ .
+ Port Debian bookworm de SecuBox-DEB (CyberMind.fr).

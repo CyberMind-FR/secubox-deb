@@ -1,0 +1,31 @@
+secubox-soc-web (1.1.0-1) bookworm; urgency=medium
+
+  * Phase 5: Hierarchical Mode UI
+  * New features:
+    - Global View page for central SOC
+    - Cross-region threat visualization
+    - Regional SOC status grid
+    - Settings page for mode configuration
+    - Regional enrollment workflow
+    - Token generation for regional SOCs
+    - Mode indicator in header and sidebar
+  * UI enhancements:
+    - Mode-aware navigation (central/regional/edge)
+    - Hierarchy status display
+    - Cross-region threat table
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 01 Apr 2026 15:30:00 +0200
+
+secubox-soc-web (1.0.0-1) bookworm; urgency=medium
+
+  * Initial release
+  * React + Vite web dashboard for SOC
+  * Features:
+    - Fleet overview with health grid
+    - Real-time alert stream via WebSocket
+    - Correlated threats table
+    - Threat map visualization
+    - Node detail with service management
+    - Cyberpunk-themed responsive UI
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 01 Apr 2026 15:00:00 +0200

@@ -1,0 +1,262 @@
+/* SecuBox Console TUI Stylesheet */
+/* This file provides additional styling beyond the generated theme */
+
+/* Layout */
+Screen {
+    layout: vertical;
+}
+
+#dashboard-container {
+    width: 100%;
+    height: 100%;
+    padding: 1;
+}
+
+#services-container {
+    width: 100%;
+    height: 100%;
+    padding: 1;
+}
+
+#network-container {
+    width: 100%;
+    height: 100%;
+    padding: 1;
+}
+
+#logs-container {
+    width: 100%;
+    height: 100%;
+    padding: 1;
+}
+
+#menu-container {
+    width: 100%;
+    height: 100%;
+    padding: 1;
+}
+
+/* Top row cards */
+#top-row {
+    height: auto;
+    width: 100%;
+    margin-bottom: 1;
+}
+
+#top-row > Static {
+    width: 1fr;
+    height: auto;
+    margin: 0 1;
+    padding: 1;
+    border: tall $border;
+    background: $surface;
+}
+
+/* Metrics row */
+#metrics-row {
+    height: auto;
+    width: 100%;
+    margin-bottom: 1;
+}
+
+#metrics-row > MetricCard {
+    width: 1fr;
+    height: auto;
+    margin: 0 1;
+    padding: 1;
+    border: tall $border;
+    background: $surface;
+}
+
+/* Network top row */
+#network-top {
+    height: auto;
+    width: 100%;
+    margin-bottom: 1;
+}
+
+#network-top > Static {
+    width: 1fr;
+    height: auto;
+    margin: 0 1;
+    padding: 1;
+    border: tall $border;
+    background: $surface;
+}
+
+/* Services summary */
+#services-summary {
+    width: 100%;
+    height: 1fr;
+    padding: 1;
+    border: tall $border;
+    background: $surface;
+}
+
+/* Tables */
+DataTable {
+    width: 100%;
+    height: 100%;
+}
+
+#services-table {
+    height: 1fr;
+}
+
+#interfaces-table {
+    height: 1fr;
+}
+
+/* Service actions */
+#service-actions {
+    height: auto;
+    padding: 1;
+    background: $surface;
+    border: tall $border;
+    margin-top: 1;
+}
+
+#action-buttons {
+    height: auto;
+    margin-top: 1;
+}
+
+#action-buttons > Button {
+    margin: 0 1;
+}
+
+/* Status message */
+#status-message {
+    height: auto;
+    padding: 1;
+    color: $primary;
+}
+
+/* Log filter */
+#log-filter {
+    height: auto;
+    padding: 1;
+    background: $surface;
+    border: tall $border;
+    margin-bottom: 1;
+}
+
+#log-filter > Horizontal {
+    height: auto;
+    align: center middle;
+}
+
+#log-filter Label {
+    margin: 0 1;
+}
+
+#log-filter Select {
+    width: 20;
+}
+
+/* Log view */
+#log-view {
+    height: 1fr;
+    border: tall $border;
+    background: $surface;
+    padding: 1;
+}
+
+/* Menu layout */
+#menu-container > Horizontal {
+    height: 1fr;
+}
+
+#sysinfo-panel {
+    width: 1fr;
+    height: 100%;
+    padding: 1;
+    border: tall $border;
+    background: $surface;
+    margin-right: 1;
+}
+
+#actions-panel {
+    width: 30;
+    height: 100%;
+    padding: 1;
+    border: tall $border;
+    background: $surface;
+}
+
+#action-list {
+    height: auto;
+}
+
+#action-list > Button {
+    width: 100%;
+    margin-bottom: 1;
+}
+
+/* Cards */
+.card {
+    padding: 1;
+    background: $surface;
+    border: tall $border;
+}
+
+.card-title {
+    text-style: bold;
+    color: $primary;
+    margin-bottom: 1;
+}
+
+/* Metrics */
+.metric-label {
+    color: $foreground-muted;
+    text-style: italic;
+}
+
+.metric-value {
+    text-style: bold;
+    color: $foreground;
+}
+
+/* Health status */
+.status-healthy {
+    color: $success;
+    text-style: bold;
+}
+
+.status-degraded {
+    color: $warning;
+    text-style: bold;
+}
+
+.status-critical {
+    color: $error;
+    text-style: bold;
+}
+
+.status-unknown {
+    color: $foreground-muted;
+}
+
+/* Service status */
+.service-running {
+    color: $success;
+}
+
+.service-stopped {
+    color: $error;
+}
+
+/* Board badge */
+.board-badge {
+    background: $primary;
+    color: $background;
+    padding: 0 1;
+    text-style: bold;
+    margin-left: 1;
+}
+
+/* Board header */
+.board-header {
+    text-style: bold;
+    color: $primary;
+}

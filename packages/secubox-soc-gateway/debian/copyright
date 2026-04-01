@@ -1,0 +1,12 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: secubox-soc-gateway
+Source: https://cybermind.fr/secubox
+
+Files: *
+Copyright: 2024-2026 CyberMind / Gerald KERMA <devel@cybermind.fr>
+License: Proprietary
+
+License: Proprietary
+ All rights reserved. This software is provided under license
+ from CyberMind. Redistribution is permitted only with explicit
+ written permission from the copyright holder.

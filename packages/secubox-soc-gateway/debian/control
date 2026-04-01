@@ -1,0 +1,35 @@
+Source: secubox-soc-gateway
+Section: admin
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
+
+Package: secubox-soc-gateway
+Architecture: all
+Depends: ${misc:Depends},
+         python3 (>= 3.11),
+         secubox-core (>= 1.1.0),
+         python3-httpx,
+         python3-fastapi,
+         python3-websockets,
+         uvicorn
+Suggests: secubox-soc-agent,
+          secubox-watchdog
+Description: SecuBox SOC Gateway — Central Fleet Monitoring Hub
+ Central SOC aggregation gateway that receives metrics from edge nodes,
+ provides unified alert streams, correlates threats across the fleet,
+ and enables remote node management.
+ .
+ Features:
+  - Node registration with enrollment tokens
+  - Fleet-wide metrics aggregation
+  - Unified alert stream from all nodes
+  - Cross-node threat correlation
+  - Remote command execution
+  - WebSocket real-time updates
+  - Hierarchical deployment support (regional/central)
+ .
+ Part of the SecuBox hierarchical SOC architecture.

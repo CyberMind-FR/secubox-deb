@@ -1,0 +1,35 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    configure)
+        # Create service user if not exists
+        if ! getent passwd secubox-soc-agent > /dev/null; then
+            adduser --system --group --no-create-home \
+                --home /var/lib/secubox/soc-agent \
+                secubox-soc-agent
+        fi
+
+        # Set permissions on data directories
+        chown -R secubox-soc-agent:secubox-soc-agent /var/lib/secubox/soc-agent
+        chmod 700 /var/lib/secubox/soc-agent
+
+        # Ensure log directory exists with correct permissions
+        mkdir -p /var/log/secubox
+        chown root:adm /var/log/secubox
+        chmod 750 /var/log/secubox
+
+        # Create config directory
+        mkdir -p /etc/secubox
+        chmod 755 /etc/secubox
+
+        # Enable and start service
+        systemctl daemon-reload
+        systemctl enable secubox-soc-agent.service
+        systemctl start secubox-soc-agent.service || true
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

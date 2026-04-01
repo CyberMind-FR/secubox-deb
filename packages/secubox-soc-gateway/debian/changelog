@@ -1,0 +1,39 @@
+secubox-soc-gateway (1.1.0-1) bookworm; urgency=medium
+
+  * Phase 5: Hierarchical Mode Implementation
+  * New features:
+    - Mode configuration (edge/regional/central)
+    - Regional SOC enrollment and token management
+    - Regional-to-central aggregation with signed push
+    - Cross-region threat correlation
+    - Global summary and regional breakdown APIs
+    - Multi-tier hierarchy support
+  * API endpoints added:
+    - GET /hierarchy/status
+    - POST /hierarchy/mode
+    - POST /regional/token
+    - POST /regional/enroll
+    - POST /regional/ingest
+    - GET /regional/socs
+    - POST /upstream/enroll
+    - GET /upstream/status
+    - GET /global/summary
+    - GET /global/regions
+    - GET /global/threats
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 01 Apr 2026 15:30:00 +0200
+
+secubox-soc-gateway (1.0.0-1) bookworm; urgency=medium
+
+  * Initial release
+  * Implements SOC Gateway for fleet monitoring
+  * Features:
+    - Node registration with HMAC enrollment tokens
+    - Fleet-wide metrics aggregation
+    - Unified alert stream from all nodes
+    - Cross-node threat correlation
+    - Remote command execution with audit
+    - WebSocket real-time updates
+    - Hierarchical deployment support
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 01 Apr 2026 12:00:00 +0200

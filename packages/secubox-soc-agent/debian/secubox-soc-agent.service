@@ -1,0 +1,28 @@
+[Unit]
+Description=SecuBox SOC Agent
+Documentation=https://cybermind.fr/secubox
+After=network-online.target secubox-core.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=secubox-soc-agent
+Group=secubox-soc-agent
+ExecStart=/usr/bin/uvicorn secubox_soc_agent:app --uds /run/secubox/soc-agent.sock --workers 1
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5
+RuntimeDirectory=secubox
+RuntimeDirectoryMode=0755
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/var/lib/secubox/soc-agent
+ReadWritePaths=/var/log/secubox
+ReadWritePaths=/run/secubox
+
+[Install]
+WantedBy=multi-user.target

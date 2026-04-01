@@ -1,0 +1,38 @@
+#!/usr/bin/make -f
+
+export DH_VERBOSE = 1
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+	# Skip configure - pure Python package
+
+override_dh_auto_build:
+	# No build needed - pure Python package
+
+override_dh_auto_install:
+	# Install console module
+	install -d $(CURDIR)/debian/secubox-console/usr/lib/python3/dist-packages/
+	cp -r $(CURDIR)/console $(CURDIR)/debian/secubox-console/usr/lib/python3/dist-packages/
+
+	# Install entry point script
+	install -d $(CURDIR)/debian/secubox-console/usr/bin
+	install -m 755 $(CURDIR)/bin/secubox-console $(CURDIR)/debian/secubox-console/usr/bin/
+
+	# Install systemd service
+	install -d $(CURDIR)/debian/secubox-console/lib/systemd/system
+	install -m 644 $(CURDIR)/debian/secubox-console.service $(CURDIR)/debian/secubox-console/lib/systemd/system/
+
+	# Install menu.d entry
+	install -d $(CURDIR)/debian/secubox-console/usr/share/secubox/menu.d
+	install -m 644 $(CURDIR)/menu.d/*.json $(CURDIR)/debian/secubox-console/usr/share/secubox/menu.d/
+
+override_dh_auto_clean:
+	# Nothing to clean
+
+override_dh_auto_test:
+	# Skip tests during build
+
+override_dh_installsystemd:
+	dh_installsystemd --no-enable --no-start

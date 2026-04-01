@@ -1,0 +1,25 @@
+secubox-console (1.1.0-1) bookworm; urgency=medium
+
+  * Add SOC integration for fleet monitoring
+  * New screens: SOC Fleet, SOC Alerts, SOC Node Detail
+  * SOC Gateway API client with HMAC authentication
+  * Cross-node threat correlation display
+  * Remote service management on edge nodes
+  * Press 'f' for Fleet overview, 'a' for Alerts
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 01 Apr 2026 14:00:00 +0200
+
+secubox-console (1.0.0-1) bookworm; urgency=medium
+
+  * Initial release
+  * Dashboard screen with live system metrics
+  * Services screen with start/stop/restart/enable/disable
+  * Network screen with interface classification
+  * Logs screen with unit filtering and auto-scroll
+  * Menu screen with system info and quick actions
+  * Board-specific theming (MOCHAbin, ESPRESSObin, x64-vm, etc.)
+  * Vim-style keyboard navigation (j/k/h/Enter)
+  * Async API client for Unix socket communication
+  * systemd service for TTY1 auto-start
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 01 Apr 2026 12:00:00 +0200

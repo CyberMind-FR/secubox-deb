@@ -1,0 +1,32 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+    configure)
+        # Create secubox user if it doesn't exist
+        if ! id -u secubox >/dev/null 2>&1; then
+            useradd -r -s /usr/sbin/nologin -d /var/lib/secubox secubox 2>/dev/null || true
+        fi
+
+        # Add secubox to required groups for terminal access
+        usermod -a -G tty,dialout secubox 2>/dev/null || true
+
+        # Ensure data directory exists
+        mkdir -p /var/lib/secubox
+        chown secubox:secubox /var/lib/secubox
+
+        # Reload systemd
+        systemctl daemon-reload || true
+
+        echo "SecuBox Console TUI installed."
+        echo "To enable console mode on TTY1:"
+        echo "  secubox-kiosk-setup console"
+        echo ""
+        echo "To run manually:"
+        echo "  secubox-console"
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0
