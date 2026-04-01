@@ -15,8 +15,7 @@ from textual.widgets import Static, DataTable, Footer, Header, Label
 from textual.reactive import reactive
 
 from ..soc_client import get_fleet_summary, get_fleet_nodes, is_soc_available
-from ..theme import get_board_colors
-from ..widgets.header import SecuBoxHeader
+from ..widgets.header import BoardHeader
 
 
 class FleetSummary(Static):
@@ -152,7 +151,7 @@ class SOCFleetScreen(Screen):
     status_filter: Optional[str] = None
 
     def compose(self) -> ComposeResult:
-        yield SecuBoxHeader()
+        yield BoardHeader()
         yield Container(
             Vertical(
                 FleetSummary(id="fleet-summary"),

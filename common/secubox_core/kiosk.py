@@ -22,6 +22,7 @@ log = get_logger("kiosk")
 # ══════════════════════════════════════════════════════════════════
 
 KIOSK_ENABLED_MARKER = Path("/var/lib/secubox/.kiosk-enabled")
+CONSOLE_ENABLED_MARKER = Path("/var/lib/secubox/.console-enabled")
 KIOSK_MODE_FILE = Path("/var/lib/secubox/.kiosk-mode")
 KIOSK_SETUP_SCRIPT = Path("/usr/sbin/secubox-kiosk-setup")
 
@@ -79,6 +80,60 @@ def kiosk_status() -> dict:
         "service_active": service_active,
         "service_enabled": service_enabled,
     }
+
+
+def console_status() -> dict:
+    """
+    Get console TUI mode status.
+
+    Returns:
+        {
+            "enabled": bool,
+            "service_active": bool,
+            "service_enabled": bool,
+        }
+    """
+    enabled = CONSOLE_ENABLED_MARKER.exists()
+    service_active = False
+    service_enabled = False
+
+    try:
+        r = subprocess.run(
+            ["systemctl", "is-active", "secubox-console"],
+            capture_output=True, text=True, timeout=5
+        )
+        service_active = r.stdout.strip() == "active"
+    except Exception:
+        pass
+
+    try:
+        r = subprocess.run(
+            ["systemctl", "is-enabled", "secubox-console"],
+            capture_output=True, text=True, timeout=5
+        )
+        service_enabled = r.stdout.strip() == "enabled"
+    except Exception:
+        pass
+
+    return {
+        "enabled": enabled,
+        "service_active": service_active,
+        "service_enabled": service_enabled,
+    }
+
+
+def display_mode() -> str:
+    """
+    Get current display mode.
+
+    Returns:
+        "kiosk" | "console" | "none"
+    """
+    if KIOSK_ENABLED_MARKER.exists():
+        return "kiosk"
+    elif CONSOLE_ENABLED_MARKER.exists():
+        return "console"
+    return "none"
 
 
 def kiosk_enable(mode: Literal["x11", "wayland"] = "x11") -> dict:

@@ -15,7 +15,7 @@ from textual.widgets import Static, DataTable, Footer, Button
 from textual.reactive import reactive
 
 from ..soc_client import get_node_detail, send_service_action, is_soc_available
-from ..widgets.header import SecuBoxHeader
+from ..widgets.header import BoardHeader
 
 
 class NodeInfoPanel(Static):
@@ -223,7 +223,7 @@ class SOCNodeScreen(Screen):
         self.node_id = node_id
 
     def compose(self) -> ComposeResult:
-        yield SecuBoxHeader()
+        yield BoardHeader()
         yield Container(
             Horizontal(
                 Vertical(

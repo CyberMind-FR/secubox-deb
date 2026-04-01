@@ -11,6 +11,7 @@ KIOSK_HOME="/home/${KIOSK_USER}"
 KIOSK_URL="https://192.168.255.1:9443/"
 MARKER="/var/lib/secubox/.kiosk-installed"
 ENABLED_MARKER="/var/lib/secubox/.kiosk-enabled"
+CONSOLE_MARKER="/var/lib/secubox/.console-enabled"
 MODE_FILE="/var/lib/secubox/.kiosk-mode"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; CYAN='\033[0;36m'; NC='\033[0m'
@@ -20,13 +21,15 @@ err() { echo -e "${RED}[FAIL ]${NC} $*" >&2; exit 1; }
 
 usage() {
     cat <<EOF
-Usage: secubox-kiosk-setup {install|enable|disable|status} [--x11|--wayland]
+Usage: secubox-kiosk-setup {install|enable|disable|console|no-console|status} [--x11|--wayland]
 
 Commands:
-  install  - Install GUI packages for kiosk mode
-  enable   - Enable kiosk mode autostart
-  disable  - Disable kiosk mode (console only)
-  status   - Show current kiosk status
+  install     - Install GUI packages for kiosk mode
+  enable      - Enable kiosk mode autostart (GUI)
+  disable     - Disable kiosk mode (return to console)
+  console     - Enable console TUI mode on TTY1
+  no-console  - Disable console TUI mode
+  status      - Show current mode status
 
 Options:
   --x11      Use X11/startx mode (better VM compatibility)
@@ -34,7 +37,10 @@ Options:
 
 Default: X11 mode (recommended for VMs and most hardware)
 
-The kiosk displays the SecuBox WebUI in fullscreen Chromium.
+Modes:
+  - GUI Kiosk: Fullscreen Chromium displaying SecuBox WebUI
+  - Console TUI: Terminal dashboard with metrics and service management
+  - None: Standard console login on TTY1
 EOF
     exit 0
 }
@@ -458,84 +464,150 @@ disable_kiosk() {
     log "System will boot to console"
 }
 
+# ── Enable Console TUI Mode ──────────────────────────────────────
+enable_console() {
+    log "Enabling console TUI mode..."
+
+    # Disable GUI kiosk if active
+    if [[ -f "$ENABLED_MARKER" ]]; then
+        log "Disabling GUI kiosk mode first..."
+        disable_kiosk
+    fi
+
+    # Check if secubox-console package is installed
+    if ! command -v secubox-console >/dev/null 2>&1; then
+        log "Installing secubox-console package..."
+        apt-get update -qq
+        apt-get install -y secubox-console || err "Failed to install secubox-console"
+    fi
+
+    # Create console enabled marker
+    mkdir -p /var/lib/secubox
+    touch "${CONSOLE_MARKER}"
+    echo "console" > "$MODE_FILE"
+
+    # Disable getty on tty1 (console TUI uses it)
+    systemctl disable getty@tty1.service 2>/dev/null || true
+
+    # Enable console TUI service
+    systemctl enable secubox-console.service 2>/dev/null || true
+
+    # Setup root autologin on tty2 for emergency access
+    setup_root_autologin_tty2
+
+    # Start console TUI
+    systemctl start secubox-console.service || log "Console TUI will start on next boot"
+
+    ok "Console TUI mode enabled"
+    log "SecuBox console dashboard will display on TTY1"
+    log "Root console access available on TTY2 (Ctrl+Alt+F2)"
+}
+
+# ── Disable Console TUI Mode ─────────────────────────────────────
+disable_console() {
+    log "Disabling console TUI mode..."
+
+    # Remove console marker
+    rm -f "${CONSOLE_MARKER}"
+
+    # Stop and disable console service
+    systemctl stop secubox-console.service 2>/dev/null || true
+    systemctl disable secubox-console.service 2>/dev/null || true
+
+    # Re-enable console login on tty1
+    systemctl enable getty@tty1.service 2>/dev/null || true
+
+    ok "Console TUI mode disabled"
+    log "Standard console login restored on TTY1"
+}
+
 # ── Show Status ──────────────────────────────────────────────────
 show_status() {
     echo ""
-    echo "SecuBox Kiosk Mode Status"
-    echo "========================="
+    echo "SecuBox Display Mode Status"
+    echo "==========================="
 
+    # Determine current mode
+    local current_mode="none"
+    if [[ -f "$ENABLED_MARKER" ]]; then
+        current_mode="kiosk"
+    elif [[ -f "$CONSOLE_MARKER" ]]; then
+        current_mode="console"
+    fi
+
+    echo "Current Mode: $current_mode"
+
+    # Kiosk status
+    echo ""
+    echo "GUI Kiosk:"
     if [[ -f "$MARKER" ]]; then
-        echo "Installed: yes ($(cat $MARKER))"
+        echo "  Installed: yes"
     else
-        echo "Installed: no"
+        echo "  Installed: no"
     fi
 
-    local mode="x11"
+    local kiosk_mode="x11"
     if [[ -f "$MODE_FILE" ]]; then
-        mode=$(cat "$MODE_FILE")
+        kiosk_mode=$(cat "$MODE_FILE")
     fi
-    echo "Mode: $mode"
 
     if [[ -f "$ENABLED_MARKER" ]]; then
-        echo "Enabled: yes"
+        echo "  Enabled: yes ($kiosk_mode)"
     else
-        echo "Enabled: no"
+        echo "  Enabled: no"
     fi
 
     local kiosk_active="inactive"
     if systemctl is-active secubox-kiosk.service &>/dev/null; then
         kiosk_active="active"
     fi
-    echo "Service: $kiosk_active"
+    echo "  Service: $kiosk_active"
 
+    # Console TUI status
+    echo ""
+    echo "Console TUI:"
+    if command -v secubox-console >/dev/null 2>&1; then
+        echo "  Installed: yes"
+    else
+        echo "  Installed: no"
+    fi
+
+    if [[ -f "$CONSOLE_MARKER" ]]; then
+        echo "  Enabled: yes"
+    else
+        echo "  Enabled: no"
+    fi
+
+    local console_active="inactive"
+    if systemctl is-active secubox-console.service &>/dev/null; then
+        console_active="active"
+    fi
+    echo "  Service: $console_active"
+
+    # System info
+    echo ""
+    echo "System:"
     local default_target
     default_target=$(systemctl get-default)
-    echo "Default target: $default_target"
+    echo "  Default target: $default_target"
 
-    if [[ "$default_target" == "graphical.target" ]] && [[ "$kiosk_active" == "active" ]]; then
-        echo "State: KIOSK (GUI)"
-    else
-        echo "State: CONSOLE"
-    fi
-
-    # Check kiosk user
-    if id "$KIOSK_USER" &>/dev/null; then
-        local uid
-        uid=$(id -u "$KIOSK_USER")
-        echo "User: $KIOSK_USER (UID $uid)"
-    else
-        echo "User: not created"
-    fi
-
-    # Check required packages
-    local pkgs_ok="yes"
-    if [[ "$mode" == "wayland" ]]; then
-        for pkg in cage chromium; do
-            if ! command -v "$pkg" >/dev/null 2>&1; then
-                pkgs_ok="no (missing $pkg)"
-                break
-            fi
-        done
-    else
-        for pkg in startx chromium; do
-            if ! command -v "$pkg" >/dev/null 2>&1; then
-                pkgs_ok="no (missing $pkg)"
-                break
-            fi
-        done
-    fi
-    echo "Packages: $pkgs_ok"
-
-    # Platform detection
     local platform
     platform=$(detect_vm)
-    echo "Platform: $platform"
+    echo "  Platform: $platform"
+
+    # State summary
+    echo ""
+    if [[ "$kiosk_active" == "active" ]]; then
+        echo "State: KIOSK (GUI on TTY7)"
+    elif [[ "$console_active" == "active" ]]; then
+        echo "State: CONSOLE TUI (TTY1)"
+    else
+        echo "State: CONSOLE LOGIN (TTY1)"
+    fi
 
     # Check tty2 autologin
     if [[ -f /etc/systemd/system/getty@tty2.service.d/autologin.conf ]]; then
-        echo "Console: tty2 (Ctrl+Alt+F2)"
-    else
-        echo "Console: tty1"
+        echo "Emergency: TTY2 (Ctrl+Alt+F2)"
     fi
 
     echo ""
@@ -548,7 +620,7 @@ CMD=""
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        install|enable|disable|status)
+        install|enable|disable|console|no-console|status)
             CMD="$1"
             shift
             ;;
@@ -583,6 +655,12 @@ case "${CMD:-}" in
         ;;
     disable)
         disable_kiosk
+        ;;
+    console)
+        enable_console
+        ;;
+    no-console)
+        disable_console
         ;;
     status)
         show_status
