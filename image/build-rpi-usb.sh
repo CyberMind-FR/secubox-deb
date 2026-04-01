@@ -445,28 +445,45 @@ log "5/6 Configuring Pi bootloader..."
 mkdir -p "${ROOTFS}/boot/firmware"
 cat > "${ROOTFS}/boot/firmware/config.txt" <<EOF
 # SecuBox Raspberry Pi 400 Configuration
+# Pi 4/400 ARM64 Boot Configuration
 
-# Boot
+[all]
+# Use 64-bit kernel
 arm_64bit=1
+
+# Kernel and initramfs (Debian naming)
 kernel=vmlinuz
 initramfs initrd.img followkernel
 
+# Automatically load appropriate DTB
+# For Pi 400, the firmware will load bcm2711-rpi-400.dtb
+
+[pi4]
+# Pi 4 specific settings
+max_framebuffers=2
+
+[pi400]
+# Pi 400 specific settings (Pi 400 runs cooler, can handle more)
+arm_boost=1
+
+[all]
 # Display
 hdmi_force_hotplug=1
 disable_overscan=1
 
-# GPU memory (minimum for headless, increase for kiosk)
+# GPU memory (64MB for headless, 128-256 for desktop)
 gpu_mem=64
 
-# Enable USB boot
-program_usb_boot_mode=1
-
-# Serial console
+# Serial console for debugging
 enable_uart=1
+dtoverlay=disable-bt
 
-# Overclock (optional, Pi 400 is already fast)
-#over_voltage=6
-#arm_freq=2000
+# USB boot mode (already enabled on Pi 400 EEPROM)
+# program_usb_boot_mode=1
+
+# Camera/Display (disabled by default)
+# camera_auto_detect=1
+# display_auto_detect=1
 EOF
 
 # cmdline.txt (with splash for Plymouth)
@@ -527,6 +544,40 @@ mount "${LOOP}p1" "${MNT}/boot/firmware"
 log "Copying rootfs..."
 rsync -aHAX --info=progress2 "${ROOTFS}/" "${MNT}/"
 
+# Copy Raspberry Pi firmware files to boot partition
+log "Copying Pi firmware files..."
+
+# The raspi-firmware package installs files to /usr/lib/raspi-firmware/ in Debian
+FIRMWARE_SRC="${MNT}/usr/lib/raspi-firmware"
+if [[ -d "$FIRMWARE_SRC" ]]; then
+  # Copy all firmware files (start*.elf, fixup*.dat, bootcode.bin, etc.)
+  cp -v "${FIRMWARE_SRC}"/*.elf "${MNT}/boot/firmware/" 2>/dev/null || warn "No .elf files found"
+  cp -v "${FIRMWARE_SRC}"/*.dat "${MNT}/boot/firmware/" 2>/dev/null || warn "No .dat files found"
+  cp -v "${FIRMWARE_SRC}"/*.bin "${MNT}/boot/firmware/" 2>/dev/null || true
+  cp -v "${FIRMWARE_SRC}"/*.dtb "${MNT}/boot/firmware/" 2>/dev/null || true
+
+  # Copy overlays directory
+  if [[ -d "${FIRMWARE_SRC}/overlays" ]]; then
+    cp -rv "${FIRMWARE_SRC}/overlays" "${MNT}/boot/firmware/"
+    ok "Firmware overlays copied"
+  fi
+  ok "Pi firmware copied from raspi-firmware package"
+else
+  warn "raspi-firmware not found at ${FIRMWARE_SRC}, trying alternative locations..."
+  # Alternative: firmware might be in /boot/firmware already
+  if [[ -d "${MNT}/boot/firmware" ]] && ls "${MNT}/boot/firmware/"*.elf >/dev/null 2>&1; then
+    ok "Firmware already present in /boot/firmware"
+  else
+    err "No Raspberry Pi firmware found! Install raspi-firmware package."
+  fi
+fi
+
+# Copy Device Tree Blobs from kernel package
+if ls "${MNT}/usr/lib/linux-image-"*/broadcom/*.dtb >/dev/null 2>&1; then
+  cp -v "${MNT}/usr/lib/linux-image-"*/broadcom/bcm*.dtb "${MNT}/boot/firmware/" 2>/dev/null || true
+  ok "Kernel DTBs copied"
+fi
+
 # Copy kernel and initrd to boot partition
 if ls "${MNT}/boot/vmlinuz-"* >/dev/null 2>&1; then
   cp "${MNT}/boot/vmlinuz-"* "${MNT}/boot/firmware/vmlinuz"
@@ -540,6 +591,21 @@ if ls "${MNT}/boot/initrd.img-"* >/dev/null 2>&1; then
   ok "Initrd copied"
 else
   warn "No initrd found - boot may fail without initramfs"
+fi
+
+# Verify critical boot files
+log "Verifying boot files..."
+MISSING_FILES=0
+for f in start4.elf fixup4.dat vmlinuz; do
+  if [[ ! -f "${MNT}/boot/firmware/${f}" ]]; then
+    warn "Missing: ${f}"
+    MISSING_FILES=1
+  fi
+done
+if [[ $MISSING_FILES -eq 0 ]]; then
+  ok "All critical boot files present"
+else
+  warn "Some boot files missing - Pi may not boot!"
 fi
 
 # Update fstab with proper UUIDs
