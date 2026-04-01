@@ -1,11 +1,21 @@
 #!/bin/bash
 set -e
 
+# Check if running in chroot or without systemd
+is_chroot() {
+    [ "$(stat -c %d:%i /)" != "$(stat -c %d:%i /proc/1/root/.)" ] 2>/dev/null || [ ! -d /run/systemd/system ]
+}
+
 case "$1" in
     configure)
         # Create data directory
         mkdir -p /var/lib/secubox/zkp/keys
-        chown -R www-data:www-data /var/lib/secubox/zkp
+        chown -R www-data:www-data /var/lib/secubox/zkp 2>/dev/null || true
+
+        # Skip systemd commands in chroot
+        if is_chroot; then
+            exit 0
+        fi
 
         # Reload nginx if running
         if systemctl is-active --quiet nginx; then
@@ -13,8 +23,8 @@ case "$1" in
         fi
 
         # Enable and start the service
-        systemctl daemon-reload
-        systemctl enable --now secubox-zkp.service
+        systemctl daemon-reload || true
+        systemctl enable --now secubox-zkp.service || true
         ;;
     abort-upgrade|abort-remove|abort-deconfigure)
         ;;

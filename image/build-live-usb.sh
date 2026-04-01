@@ -715,6 +715,27 @@ chroot "${ROOTFS}" apt-get install -y -q --no-install-recommends \
 
 ok "Firmware installed"
 
+# ── Install fake systemctl for chroot builds ───────────────────────
+# Package postinst scripts call systemctl which fails in chroot.
+# This wrapper silently succeeds for those calls during package install.
+log "Installing chroot systemctl wrapper..."
+cat > "${ROOTFS}/usr/local/sbin/systemctl-chroot" <<'FAKESYSTEMCTL'
+#!/bin/bash
+# Fake systemctl for chroot builds - always succeeds
+# Real systemctl is at /bin/systemctl or /usr/bin/systemctl
+exit 0
+FAKESYSTEMCTL
+chmod +x "${ROOTFS}/usr/local/sbin/systemctl-chroot"
+
+# Divert real systemctl temporarily
+if [[ -x "${ROOTFS}/bin/systemctl" ]]; then
+  mv "${ROOTFS}/bin/systemctl" "${ROOTFS}/bin/systemctl.real"
+  ln -sf /usr/local/sbin/systemctl-chroot "${ROOTFS}/bin/systemctl"
+  SYSTEMCTL_DIVERTED=1
+else
+  SYSTEMCTL_DIVERTED=0
+fi
+
 # ══════════════════════════════════════════════════════════════════
 # Step 4: SecuBox packages (slipstream ALL from cache/repo)
 # ══════════════════════════════════════════════════════════════════
@@ -807,6 +828,14 @@ done
 
 ok "SecuBox packages installed"
 
+# ── Restore real systemctl ─────────────────────────────────────────
+if [[ ${SYSTEMCTL_DIVERTED:-0} -eq 1 ]] && [[ -x "${ROOTFS}/bin/systemctl.real" ]]; then
+  rm -f "${ROOTFS}/bin/systemctl"
+  mv "${ROOTFS}/bin/systemctl.real" "${ROOTFS}/bin/systemctl"
+  log "Restored real systemctl"
+fi
+rm -f "${ROOTFS}/usr/local/sbin/systemctl-chroot"
+
 # ══════════════════════════════════════════════════════════════════
 # Step 5: Network detection & kiosk scripts
 # ══════════════════════════════════════════════════════════════════
@@ -866,16 +895,23 @@ if [[ $INCLUDE_KIOSK -eq 1 ]]; then
   # Install in stages to handle dependencies properly:
   # 1. Core X11 and x11-utils first (avoids luit conflict with chromium)
   log "Installing X11 core packages..."
+
+  # First, fix any broken dpkg state from secubox packages (their postinst may fail in chroot)
+  chroot "${ROOTFS}" dpkg --configure -a --force-confold 2>/dev/null || true
+
   chroot "${ROOTFS}" apt-get install -y -q \
     xorg xinit x11-xserver-utils x11-utils \
     xserver-xorg-video-fbdev \
     xserver-xorg-video-vmware \
-    xserver-xorg-video-vboxvideo \
     fonts-dejavu-core unclutter kbd \
     libinput10 xdg-utils || warn "Some X11 packages failed"
 
+  # Ensure xinit specifically is installed (critical for kiosk)
+  chroot "${ROOTFS}" apt-get install -y -q xinit || warn "xinit install failed"
+
   # Fix any broken dependencies before installing chromium
-  chroot "${ROOTFS}" apt-get install -f -y -q || true
+  chroot "${ROOTFS}" dpkg --configure -a --force-confold 2>/dev/null || true
+  chroot "${ROOTFS}" apt-get install -f -y -q 2>/dev/null || true
 
   # 2. Install chromium separately (after x11-utils to avoid dependency conflicts)
   log "Installing Chromium..."
