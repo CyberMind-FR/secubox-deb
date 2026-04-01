@@ -790,8 +790,16 @@ chroot "${ROOTFS}" pip3 install --break-system-packages -q \
 # Fix misplaced nginx configs (some packages install to conf.d instead of secubox.d)
 # Location blocks must be inside server blocks, so move them to secubox.d
 log "Fixing nginx module configs..."
-for conf in "${ROOTFS}/etc/nginx/conf.d/secubox-"*.conf; do
-  if [[ -f "$conf" ]] && grep -q "^location" "$conf" 2>/dev/null; then
+for conf in "${ROOTFS}/etc/nginx/conf.d/secubox-"*.conf "${ROOTFS}/etc/nginx/conf.d/"*secubox*.conf; do
+  [[ -e "$conf" ]] || continue
+  # Handle symlinks - recreate them in secubox.d pointing to correct location
+  if [[ -L "$conf" ]]; then
+    target=$(readlink "$conf")
+    rm -f "$conf"
+    ln -sf "$target" "${ROOTFS}/etc/nginx/secubox.d/$(basename "$conf")" 2>/dev/null || true
+    log "Moved symlink $(basename "$conf") to secubox.d/"
+  # Handle regular files with location directives
+  elif [[ -f "$conf" ]] && grep -q "^location" "$conf" 2>/dev/null; then
     mv "$conf" "${ROOTFS}/etc/nginx/secubox.d/" 2>/dev/null || true
     log "Moved $(basename "$conf") to secubox.d/"
   fi
@@ -855,23 +863,30 @@ if [[ $INCLUDE_KIOSK -eq 1 ]]; then
   log "Installing kiosk mode packages (X11)..."
 
   # X11 packages for better VM/hardware compatibility
-  # Include VirtualBox, VMware, and fallback drivers
-  # Note: x11-utils must be installed before chromium to avoid luit version conflict
-  chroot "${ROOTFS}" apt-get install -y -q --no-install-recommends \
+  # Install in stages to handle dependencies properly:
+  # 1. Core X11 and x11-utils first (avoids luit conflict with chromium)
+  log "Installing X11 core packages..."
+  chroot "${ROOTFS}" apt-get install -y -q \
     xorg xinit x11-xserver-utils x11-utils \
-    xserver-xorg-video-vboxvideo \
     xserver-xorg-video-fbdev \
     xserver-xorg-video-vmware \
-    fonts-dejavu-core \
-    unclutter kbd \
-    libinput10 xdg-utils 2>/dev/null || true
+    xserver-xorg-video-vboxvideo \
+    fonts-dejavu-core unclutter kbd \
+    libinput10 xdg-utils || warn "Some X11 packages failed"
 
-  # Install chromium separately (after x11-utils to avoid dependency conflicts)
-  chroot "${ROOTFS}" apt-get install -y -q chromium 2>/dev/null || true
+  # Fix any broken dependencies before installing chromium
+  chroot "${ROOTFS}" apt-get install -f -y -q || true
 
-  # Verify key kiosk packages installed
-  if ! chroot "${ROOTFS}" dpkg -l xinit chromium 2>/dev/null | grep -q "^ii"; then
-    warn "Kiosk packages failed"
+  # 2. Install chromium separately (after x11-utils to avoid dependency conflicts)
+  log "Installing Chromium..."
+  chroot "${ROOTFS}" apt-get install -y -q chromium || warn "Chromium install failed"
+
+  # Verify key kiosk packages installed - fail build if missing
+  if ! chroot "${ROOTFS}" dpkg -l xinit 2>/dev/null | grep -q "^ii"; then
+    err "FATAL: xinit not installed - kiosk will not work!"
+  fi
+  if ! chroot "${ROOTFS}" dpkg -l chromium 2>/dev/null | grep -q "^ii"; then
+    warn "Chromium not installed - kiosk may not work properly"
   fi
 
   # Allow non-console users to start X server (required for systemd service)
