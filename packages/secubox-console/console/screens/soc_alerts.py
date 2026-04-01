@@ -15,7 +15,7 @@ from textual.widgets import Static, DataTable, Footer
 from textual.reactive import reactive
 
 from ..soc_client import get_alerts, get_correlated_threats, get_correlation_summary, is_soc_available
-from ..widgets.header import SecuBoxHeader
+from ..widgets.header import BoardHeader
 
 
 class CorrelationSummary(Static):
@@ -219,7 +219,7 @@ class SOCAlertsScreen(Screen):
     show_threats: bool = False
 
     def compose(self) -> ComposeResult:
-        yield SecuBoxHeader()
+        yield BoardHeader()
         yield Container(
             Vertical(
                 CorrelationSummary(id="correlation-summary"),

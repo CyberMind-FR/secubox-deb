@@ -14,6 +14,7 @@ from .system import (
 )
 from .kiosk import (
     kiosk_status, kiosk_enable, kiosk_disable,
+    console_status, display_mode,
     detect_board_type, get_board_profile, get_board_capabilities, get_board_model,
     get_physical_interfaces, get_interface_classification, check_interface_carrier,
 )
@@ -30,6 +31,7 @@ __all__ = [
     "disk_usage", "load_average",
     # Kiosk & Board Detection
     "kiosk_status", "kiosk_enable", "kiosk_disable",
+    "console_status", "display_mode",
     "detect_board_type", "get_board_profile", "get_board_capabilities", "get_board_model",
     "get_physical_interfaces", "get_interface_classification", "check_interface_carrier",
 ]
