@@ -1,0 +1,354 @@
+#!/bin/bash
+# ══════════════════════════════════════════════════════════════════
+#  SecuBox Console TUI — Text-based Dashboard Interface
+#  Provides system status and basic controls in terminal mode
+# ══════════════════════════════════════════════════════════════════
+set -u
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+MAGENTA='\033[0;35m'
+CYAN='\033[0;36m'
+WHITE='\033[1;37m'
+NC='\033[0m'
+BOLD='\033[1m'
+
+# Box drawing characters
+H_LINE="═"
+V_LINE="║"
+TL_CORNER="╔"
+TR_CORNER="╗"
+BL_CORNER="╚"
+BR_CORNER="╝"
+
+# Get terminal size
+update_size() {
+    COLS=$(tput cols 2>/dev/null || echo 80)
+    ROWS=$(tput lines 2>/dev/null || echo 24)
+}
+
+# Draw a horizontal line
+draw_line() {
+    local char="${1:-$H_LINE}"
+    local width="${2:-$COLS}"
+    printf '%*s' "$width" '' | tr ' ' "$char"
+}
+
+# Center text
+center() {
+    local text="$1"
+    local width="${2:-$COLS}"
+    local text_len=${#text}
+    local padding=$(( (width - text_len) / 2 ))
+    printf "%*s%s%*s" "$padding" "" "$text" "$padding" ""
+}
+
+# Print status indicator
+status_icon() {
+    local status="$1"
+    case "$status" in
+        ok|active|running)   echo -e "${GREEN}●${NC}" ;;
+        warn|warning)        echo -e "${YELLOW}●${NC}" ;;
+        error|failed|dead)   echo -e "${RED}●${NC}" ;;
+        unknown|inactive)    echo -e "${WHITE}○${NC}" ;;
+        *)                   echo -e "${WHITE}○${NC}" ;;
+    esac
+}
+
+# Get service status
+get_service_status() {
+    local svc="$1"
+    if systemctl is-active "$svc" &>/dev/null; then
+        echo "active"
+    elif systemctl is-failed "$svc" &>/dev/null; then
+        echo "failed"
+    else
+        echo "inactive"
+    fi
+}
+
+# Get network info
+get_network_info() {
+    local ip=$(hostname -I 2>/dev/null | awk '{print $1}')
+    echo "${ip:-No IP}"
+}
+
+# Get memory usage
+get_memory() {
+    free -h 2>/dev/null | awk '/^Mem:/{printf "%s/%s", $3, $2}'
+}
+
+# Get disk usage
+get_disk() {
+    df -h / 2>/dev/null | awk 'NR==2{printf "%s/%s (%s)", $3, $2, $5}'
+}
+
+# Get uptime
+get_uptime() {
+    uptime -p 2>/dev/null | sed 's/up //' || uptime | awk -F'up ' '{print $2}' | awk -F',' '{print $1}'
+}
+
+# Get CPU load
+get_load() {
+    cut -d' ' -f1-3 /proc/loadavg 2>/dev/null
+}
+
+# Clear screen and draw header
+draw_header() {
+    clear
+    update_size
+
+    echo -e "${CYAN}${BOLD}"
+    center "╔════════════════════════════════════════════════════════════╗"
+    center "║               SecuBox Console Dashboard                     ║"
+    center "║                  CyberMind Security                        ║"
+    center "╚════════════════════════════════════════════════════════════╝"
+    echo -e "${NC}"
+    echo
+}
+
+# Draw system status section
+draw_system_status() {
+    echo -e "${YELLOW}${BOLD}  System Status${NC}"
+    echo -e "  $(draw_line '─' 60)"
+
+    local hostname=$(hostname 2>/dev/null || echo "secubox")
+    local ip=$(get_network_info)
+    local uptime=$(get_uptime)
+    local load=$(get_load)
+    local mem=$(get_memory)
+    local disk=$(get_disk)
+
+    printf "  ${WHITE}Hostname:${NC}  %-20s  ${WHITE}IP:${NC} %s\n" "$hostname" "$ip"
+    printf "  ${WHITE}Uptime:${NC}    %-20s  ${WHITE}Load:${NC} %s\n" "$uptime" "$load"
+    printf "  ${WHITE}Memory:${NC}    %-20s  ${WHITE}Disk:${NC} %s\n" "$mem" "$disk"
+    echo
+}
+
+# Draw services section
+draw_services() {
+    echo -e "${YELLOW}${BOLD}  Core Services${NC}"
+    echo -e "  $(draw_line '─' 60)"
+
+    local services=(
+        "nginx:Web Server"
+        "secubox-firstboot:First Boot"
+        "nftables:Firewall"
+        "ssh:SSH Server"
+        "NetworkManager:Network Manager"
+    )
+
+    local col=0
+    for entry in "${services[@]}"; do
+        local svc="${entry%%:*}"
+        local name="${entry#*:}"
+        local status=$(get_service_status "$svc")
+        local icon=$(status_icon "$status")
+
+        printf "  %s %-22s" "$icon" "$name"
+        ((col++))
+        if [[ $col -ge 2 ]]; then
+            echo
+            col=0
+        fi
+    done
+    [[ $col -ne 0 ]] && echo
+    echo
+}
+
+# Draw security services
+draw_security() {
+    echo -e "${YELLOW}${BOLD}  Security Services${NC}"
+    echo -e "  $(draw_line '─' 60)"
+
+    local services=(
+        "crowdsec:CrowdSec IDS"
+        "suricata:Suricata IPS"
+        "secubox-waf:WAF (HAProxy)"
+        "tor:Tor Network"
+        "wg-quick@wg0:WireGuard VPN"
+    )
+
+    local col=0
+    for entry in "${services[@]}"; do
+        local svc="${entry%%:*}"
+        local name="${entry#*:}"
+        local status=$(get_service_status "$svc")
+        local icon=$(status_icon "$status")
+
+        printf "  %s %-22s" "$icon" "$name"
+        ((col++))
+        if [[ $col -ge 2 ]]; then
+            echo
+            col=0
+        fi
+    done
+    [[ $col -ne 0 ]] && echo
+    echo
+}
+
+# Draw network interfaces
+draw_network() {
+    echo -e "${YELLOW}${BOLD}  Network Interfaces${NC}"
+    echo -e "  $(draw_line '─' 60)"
+
+    ip -br addr show 2>/dev/null | head -6 | while read -r iface state addrs; do
+        local icon=$(status_icon "$([[ $state == "UP" ]] && echo "ok" || echo "inactive")")
+        printf "  %s %-12s %s %s\n" "$icon" "$iface" "$state" "$addrs"
+    done
+    echo
+}
+
+# Draw menu
+draw_menu() {
+    echo -e "${CYAN}${BOLD}  Commands${NC}"
+    echo -e "  $(draw_line '─' 60)"
+    echo -e "  ${WHITE}r${NC} Refresh    ${WHITE}s${NC} Services    ${WHITE}n${NC} Network    ${WHITE}l${NC} Logs"
+    echo -e "  ${WHITE}w${NC} Web UI     ${WHITE}c${NC} Config      ${WHITE}h${NC} Help       ${WHITE}q${NC} Quit"
+    echo
+}
+
+# Draw footer
+draw_footer() {
+    echo -e "  $(draw_line '─' 60)"
+    echo -e "  ${CYAN}SecuBox Live USB${NC} | Press ${WHITE}h${NC} for help | ${WHITE}q${NC} to quit"
+}
+
+# Show help
+show_help() {
+    clear
+    draw_header
+    echo -e "${YELLOW}${BOLD}  SecuBox Console TUI - Help${NC}"
+    echo -e "  $(draw_line '─' 60)"
+    echo
+    echo -e "  ${WHITE}Navigation:${NC}"
+    echo -e "    r   - Refresh current view"
+    echo -e "    q   - Quit TUI (return to shell)"
+    echo
+    echo -e "  ${WHITE}Views:${NC}"
+    echo -e "    s   - Detailed services status"
+    echo -e "    n   - Network interfaces and routes"
+    echo -e "    l   - View system logs (journalctl)"
+    echo
+    echo -e "  ${WHITE}Actions:${NC}"
+    echo -e "    w   - Open Web UI in text browser (if available)"
+    echo -e "    c   - Edit configuration"
+    echo
+    echo -e "  ${WHITE}Access:${NC}"
+    echo -e "    Web UI: https://$(get_network_info)/"
+    echo -e "    SSH: ssh root@$(get_network_info)"
+    echo
+    echo -e "  Press any key to return..."
+    read -rsn1
+}
+
+# Show services detail
+show_services() {
+    clear
+    draw_header
+    echo -e "${YELLOW}${BOLD}  Service Status (systemctl)${NC}"
+    echo -e "  $(draw_line '─' 60)"
+    echo
+    systemctl list-units --type=service --state=running,failed --no-pager --no-legend 2>/dev/null | \
+        grep -E 'secubox|nginx|crowdsec|suricata|tor|wireguard|nftables|ssh|network' | \
+        head -20 | while read -r unit load active sub desc; do
+            local icon=$(status_icon "$active")
+            printf "  %s %-35s %s\n" "$icon" "$unit" "$active"
+        done
+    echo
+    echo -e "  Press any key to return..."
+    read -rsn1
+}
+
+# Show network detail
+show_network() {
+    clear
+    draw_header
+    echo -e "${YELLOW}${BOLD}  Network Configuration${NC}"
+    echo -e "  $(draw_line '─' 60)"
+    echo
+    echo -e "  ${WHITE}Interfaces:${NC}"
+    ip -br addr show 2>/dev/null | head -10
+    echo
+    echo -e "  ${WHITE}Routes:${NC}"
+    ip route show 2>/dev/null | head -8
+    echo
+    echo -e "  ${WHITE}DNS:${NC}"
+    grep nameserver /etc/resolv.conf 2>/dev/null | head -3
+    echo
+    echo -e "  Press any key to return..."
+    read -rsn1
+}
+
+# Show logs
+show_logs() {
+    clear
+    journalctl -f --no-pager -n 50 2>/dev/null || {
+        echo "Press q to return..."
+        read -rsn1
+    }
+}
+
+# Open web browser
+open_web() {
+    local url="https://$(get_network_info)/"
+    if command -v w3m &>/dev/null; then
+        w3m "$url"
+    elif command -v lynx &>/dev/null; then
+        lynx "$url"
+    elif command -v links &>/dev/null; then
+        links "$url"
+    else
+        clear
+        draw_header
+        echo -e "  ${RED}No text browser installed${NC}"
+        echo -e "  Access the Web UI at: ${WHITE}$url${NC}"
+        echo
+        echo -e "  Press any key to return..."
+        read -rsn1
+    fi
+}
+
+# Main dashboard
+main_dashboard() {
+    draw_header
+    draw_system_status
+    draw_services
+    draw_security
+    draw_menu
+    draw_footer
+}
+
+# Main loop
+main() {
+    # Hide cursor
+    tput civis 2>/dev/null
+    trap 'tput cnorm 2>/dev/null; clear; exit 0' EXIT INT TERM
+
+    while true; do
+        main_dashboard
+
+        # Read single key with timeout for auto-refresh
+        if read -rsn1 -t 30 key; then
+            case "$key" in
+                r|R) continue ;;
+                s|S) show_services ;;
+                n|N) show_network ;;
+                l|L) show_logs ;;
+                h|H) show_help ;;
+                w|W) open_web ;;
+                q|Q) break ;;
+                *) continue ;;
+            esac
+        fi
+    done
+
+    # Restore cursor
+    tput cnorm 2>/dev/null
+    clear
+}
+
+main "$@"
