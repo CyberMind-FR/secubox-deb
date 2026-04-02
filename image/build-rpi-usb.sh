@@ -447,6 +447,31 @@ rm -rf "${ROOTFS}/var/lib/apt/lists"/*
 
 ok "SecuBox packages installed"
 
+# ── Pre-generate SSL certificates for nginx ─────────────────────────
+# (firstboot normally does this, but nginx needs certs to start)
+log "Pre-generating SSL certificates..."
+mkdir -p "${ROOTFS}/etc/secubox/tls"
+chroot "${ROOTFS}" openssl req -x509 -newkey rsa:2048 -days 365 \
+  -keyout /etc/secubox/tls/key.pem \
+  -out /etc/secubox/tls/cert.pem \
+  -nodes -subj "/CN=secubox-rpi/O=CyberMind SecuBox/C=FR" \
+  -addext "subjectAltName=DNS:localhost,DNS:secubox.local,IP:127.0.0.1,IP:192.168.1.1" \
+  2>/dev/null || warn "SSL cert generation failed"
+
+chmod 640 "${ROOTFS}/etc/secubox/tls/key.pem" 2>/dev/null || true
+chmod 644 "${ROOTFS}/etc/secubox/tls/cert.pem" 2>/dev/null || true
+
+# Create secubox directories
+mkdir -p "${ROOTFS}/etc/secubox"
+mkdir -p "${ROOTFS}/run/secubox"
+mkdir -p "${ROOTFS}/var/lib/secubox"
+
+# Enable nginx for API proxying
+ln -sf /usr/lib/systemd/system/nginx.service \
+  "${ROOTFS}/etc/systemd/system/multi-user.target.wants/nginx.service" 2>/dev/null || true
+
+ok "SSL certificates pre-generated"
+
 # ══════════════════════════════════════════════════════════════════
 # Step 4b: Install kernel (with initramfs disabled to avoid QEMU slowness)
 # ══════════════════════════════════════════════════════════════════
@@ -559,9 +584,16 @@ else
   log "Generating initramfs (this may take 3-5 minutes under QEMU)..."
   KVER=$(ls "${ROOTFS}/lib/modules/" 2>/dev/null | head -1)
   if [[ -n "$KVER" ]]; then
+    # Create wrapper script to ensure PATH is set for mkinitramfs
+    cat > "${ROOTFS}/tmp/gen-initrd.sh" <<INITRD
+#!/bin/bash
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/sbin:/usr/local/bin
+update-initramfs -c -k ${KVER}
+INITRD
+    chmod +x "${ROOTFS}/tmp/gen-initrd.sh"
+
     # Use timeout to prevent infinite hanging
-    # Set PATH explicitly for mkinitramfs to find rm, cp, etc.
-    if timeout 300 chroot "${ROOTFS}" /bin/bash -c "export PATH=/usr/sbin:/usr/bin:/sbin:/bin && update-initramfs -c -k $KVER"; then
+    if timeout 300 chroot "${ROOTFS}" /tmp/gen-initrd.sh; then
       # Verify initrd was actually created and has content
       if [[ -s "${ROOTFS}/boot/initrd.img-${KVER}" ]]; then
         INITRD_SIZE=$(du -h "${ROOTFS}/boot/initrd.img-${KVER}" | cut -f1)
