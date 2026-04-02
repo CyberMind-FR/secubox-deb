@@ -941,8 +941,8 @@ log "5/8 Installing SecuBox scripts..."
 mkdir -p "${ROOTFS}/usr/sbin"
 mkdir -p "${ROOTFS}/usr/lib/secubox"
 
-# Copy scripts (including kiosk-launcher for robust startup and TUI)
-for script in secubox-net-detect secubox-kiosk-setup secubox-cmdline-handler secubox-kiosk-launcher secubox-console-tui; do
+# Copy scripts (including kiosk-launcher for robust startup, TUI, and mode switcher)
+for script in secubox-net-detect secubox-kiosk-setup secubox-cmdline-handler secubox-kiosk-launcher secubox-console-tui secubox-mode; do
   if [[ -f "${SCRIPT_DIR}/sbin/${script}" ]]; then
     cp "${SCRIPT_DIR}/sbin/${script}" "${ROOTFS}/usr/sbin/"
     chmod +x "${ROOTFS}/usr/sbin/${script}"
@@ -1418,6 +1418,11 @@ menuentry "SecuBox Live" {
 
 menuentry "SecuBox Live (Kiosk GUI)" {
     linux ($live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components persistence quiet splash secubox.kiosk=1 systemd.unit=graphical.target
+    initrd ($live)/live/initrd.img
+}
+
+menuentry "SecuBox Live (Console TUI)" {
+    linux ($live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components persistence quiet splash secubox.mode=tui
     initrd ($live)/live/initrd.img
 }
 

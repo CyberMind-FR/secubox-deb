@@ -19,6 +19,7 @@ parse_cmdline() {
     # Default values
     local netmode="router"
     local kiosk="0"
+    local mode="kiosk"  # Default display mode: kiosk, tui, or console
     local debug="0"
 
     for param in $cmdline; do
@@ -29,6 +30,9 @@ parse_cmdline() {
             secubox.kiosk=*)
                 kiosk="${param#secubox.kiosk=}"
                 ;;
+            secubox.mode=*)
+                mode="${param#secubox.mode=}"
+                ;;
             secubox.debug=*)
                 debug="${param#secubox.debug=}"
                 ;;
@@ -38,6 +42,7 @@ parse_cmdline() {
     # Export values
     echo "SECUBOX_NETMODE=${netmode}"
     echo "SECUBOX_KIOSK=${kiosk}"
+    echo "SECUBOX_MODE=${mode}"
     echo "SECUBOX_DEBUG=${debug}"
 }
 
@@ -49,7 +54,28 @@ apply_settings() {
     eval "$(parse_cmdline)"
 
     log "Network mode: $SECUBOX_NETMODE"
-    log "Kiosk mode: $SECUBOX_KIOSK"
+    log "Display mode: $SECUBOX_MODE"
+
+    # Handle display mode (kiosk/tui/console)
+    case "$SECUBOX_MODE" in
+        tui)
+            log "TUI mode requested via cmdline"
+            rm -f "${MARKER_DIR}/.kiosk-enabled"
+            touch "${MARKER_DIR}/.tui-enabled"
+            systemctl disable secubox-kiosk.service 2>/dev/null || true
+            systemctl enable secubox-console-tui.service 2>/dev/null || true
+            ;;
+        console)
+            log "Console mode requested via cmdline"
+            rm -f "${MARKER_DIR}/.kiosk-enabled"
+            rm -f "${MARKER_DIR}/.tui-enabled"
+            systemctl disable secubox-kiosk.service 2>/dev/null || true
+            systemctl disable secubox-console-tui.service 2>/dev/null || true
+            ;;
+        kiosk|*)
+            # Default: kiosk mode (handled below)
+            ;;
+    esac
 
     # Handle network mode
     if [[ -x /usr/sbin/secubox-net-detect ]]; then

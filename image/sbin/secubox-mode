@@ -1,0 +1,164 @@
+#!/bin/bash
+# ══════════════════════════════════════════════════════════════════
+#  SecuBox Mode Switcher — Switch between Kiosk (GUI) and TUI modes
+# ══════════════════════════════════════════════════════════════════
+set -u
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+log() { echo -e "${CYAN}[secubox]${NC} $*"; }
+ok()  { echo -e "${GREEN}[  OK  ]${NC} $*"; }
+err() { echo -e "${RED}[ERROR]${NC} $*" >&2; }
+
+usage() {
+    cat <<EOF
+SecuBox Mode Switcher
+
+Usage: secubox-mode <command>
+
+Commands:
+  kiosk     Switch to Kiosk mode (GUI with Chromium)
+  tui       Switch to TUI mode (Console dashboard)
+  console   Drop to console (disable both modes)
+  status    Show current mode
+
+The mode switch takes effect on next boot, or immediately with --now flag.
+
+Examples:
+  secubox-mode kiosk     # Enable kiosk mode
+  secubox-mode tui --now # Switch to TUI immediately
+  secubox-mode console   # Disable both, drop to login shell
+
+EOF
+    exit 1
+}
+
+current_mode() {
+    if [[ -f /var/lib/secubox/.kiosk-enabled ]]; then
+        echo "kiosk"
+    elif [[ -f /var/lib/secubox/.tui-enabled ]]; then
+        echo "tui"
+    else
+        echo "console"
+    fi
+}
+
+switch_to_kiosk() {
+    local now="${1:-}"
+
+    log "Switching to Kiosk mode..."
+
+    mkdir -p /var/lib/secubox
+    touch /var/lib/secubox/.kiosk-enabled
+    rm -f /var/lib/secubox/.tui-enabled
+
+    systemctl enable secubox-kiosk.service 2>/dev/null || true
+    systemctl disable secubox-console-tui.service 2>/dev/null || true
+
+    ok "Kiosk mode enabled"
+
+    if [[ "$now" == "--now" ]]; then
+        log "Restarting display services..."
+        systemctl stop secubox-console-tui.service 2>/dev/null || true
+        systemctl restart secubox-kiosk.service
+    else
+        log "Reboot to apply changes: sudo reboot"
+    fi
+}
+
+switch_to_tui() {
+    local now="${1:-}"
+
+    log "Switching to TUI mode..."
+
+    mkdir -p /var/lib/secubox
+    touch /var/lib/secubox/.tui-enabled
+    rm -f /var/lib/secubox/.kiosk-enabled
+
+    systemctl disable secubox-kiosk.service 2>/dev/null || true
+    systemctl enable secubox-console-tui.service 2>/dev/null || true
+
+    ok "TUI mode enabled"
+
+    if [[ "$now" == "--now" ]]; then
+        log "Stopping kiosk, starting TUI..."
+        systemctl stop secubox-kiosk.service 2>/dev/null || true
+        # Kill X11 if running
+        pkill -9 Xorg 2>/dev/null || true
+        pkill -9 chromium 2>/dev/null || true
+        sleep 1
+        # Start TUI on tty1
+        systemctl start secubox-console-tui.service
+    else
+        log "Reboot to apply changes: sudo reboot"
+    fi
+}
+
+switch_to_console() {
+    log "Switching to Console mode (no GUI/TUI)..."
+
+    rm -f /var/lib/secubox/.kiosk-enabled
+    rm -f /var/lib/secubox/.tui-enabled
+
+    systemctl disable secubox-kiosk.service 2>/dev/null || true
+    systemctl disable secubox-console-tui.service 2>/dev/null || true
+    systemctl stop secubox-kiosk.service 2>/dev/null || true
+    systemctl stop secubox-console-tui.service 2>/dev/null || true
+
+    # Kill X11 if running
+    pkill -9 Xorg 2>/dev/null || true
+    pkill -9 chromium 2>/dev/null || true
+
+    ok "Console mode enabled - you'll get a login prompt"
+}
+
+show_status() {
+    local mode=$(current_mode)
+
+    echo
+    echo "SecuBox Display Mode"
+    echo "===================="
+    echo
+    echo -e "Current mode: ${CYAN}${mode}${NC}"
+    echo
+
+    case "$mode" in
+        kiosk)
+            echo "  Kiosk mode: Chromium browser in fullscreen"
+            echo "  Press Ctrl+Alt+F2 to access console"
+            echo "  Use 'secubox-mode tui' to switch to TUI"
+            ;;
+        tui)
+            echo "  TUI mode: Console-based dashboard"
+            echo "  Press 'q' to exit TUI, then 'secubox-mode kiosk' to switch"
+            ;;
+        console)
+            echo "  Console mode: Standard login shell"
+            echo "  Use 'secubox-mode kiosk' or 'secubox-mode tui' to switch"
+            ;;
+    esac
+    echo
+}
+
+# Main
+case "${1:-}" in
+    kiosk)
+        switch_to_kiosk "${2:-}"
+        ;;
+    tui)
+        switch_to_tui "${2:-}"
+        ;;
+    console)
+        switch_to_console
+        ;;
+    status)
+        show_status
+        ;;
+    *)
+        usage
+        ;;
+esac
