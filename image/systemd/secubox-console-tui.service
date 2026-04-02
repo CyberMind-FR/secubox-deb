@@ -1,0 +1,25 @@
+[Unit]
+Description=SecuBox Console TUI Dashboard
+Documentation=https://secubox.in/docs/tui
+After=multi-user.target
+After=network-online.target
+After=secubox-firstboot.service
+
+# Conflicts with kiosk mode
+Conflicts=secubox-kiosk.service
+
+[Service]
+Type=simple
+ExecStartPre=/bin/sh -c '[ -f /var/lib/secubox/.tui-enabled ] || exit 1'
+ExecStart=/usr/sbin/secubox-console-tui
+Restart=on-failure
+RestartSec=5
+StandardInput=tty
+StandardOutput=tty
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+
+[Install]
+WantedBy=multi-user.target

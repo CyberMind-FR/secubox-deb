@@ -433,6 +433,11 @@ main() {
             exec su -s /bin/bash "$KIOSK_USER" -c \
                 "export HOME='$KIOSK_HOME' XDG_RUNTIME_DIR='$XDG_RUNTIME_DIR' XDG_SESSION_TYPE=wayland KIOSK_URL='$KIOSK_URL' WLR_LIBINPUT_NO_DEVICES=1 WLR_NO_HARDWARE_CURSORS=1 WLR_RENDERER_ALLOW_SOFTWARE=1 WLR_RENDERER=pixman; exec /usr/bin/cage -s -- '$KIOSK_HOME/start-kiosk.sh'"
             ;;
+        tui)
+            log "Launching SecuBox Console TUI..."
+            # Run the TUI interface on console
+            exec /usr/sbin/secubox-console-tui
+            ;;
         *)
             err "Unknown mode: $mode"
             exit 1

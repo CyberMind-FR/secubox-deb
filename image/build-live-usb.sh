@@ -911,24 +911,27 @@ ln -sf /usr/lib/systemd/system/nginx.service \
 
 # ── Pre-generate SSL certificates for nginx ─────────────────────────
 # (firstboot normally does this, but nginx needs certs to start on live USB)
+# Generate certs on HOST (chroot may lack /dev/urandom) and copy them in
 log "Pre-generating SSL certificates..."
 mkdir -p "${ROOTFS}/etc/secubox/tls"
-chroot "${ROOTFS}" openssl req -x509 -newkey rsa:2048 -days 365 \
-  -keyout /etc/secubox/tls/key.pem \
-  -out /etc/secubox/tls/cert.pem \
-  -nodes -subj "/CN=secubox-live/O=CyberMind SecuBox/C=FR" \
-  -addext "subjectAltName=DNS:localhost,DNS:secubox.local,IP:127.0.0.1,IP:192.168.1.1" \
-  2>/dev/null || warn "SSL cert generation failed"
-
-# Set proper permissions
-chmod 640 "${ROOTFS}/etc/secubox/tls/key.pem" 2>/dev/null || true
-chmod 644 "${ROOTFS}/etc/secubox/tls/cert.pem" 2>/dev/null || true
-
-# Create secubox directories for config
-mkdir -p "${ROOTFS}/etc/secubox"
 mkdir -p "${ROOTFS}/run/secubox"
 mkdir -p "${ROOTFS}/var/lib/secubox"
-ok "SSL certificates pre-generated"
+
+# Generate on host system
+openssl req -x509 -newkey rsa:2048 -days 365 \
+  -keyout "${ROOTFS}/etc/secubox/tls/key.pem" \
+  -out "${ROOTFS}/etc/secubox/tls/cert.pem" \
+  -nodes -subj "/CN=secubox-live/O=CyberMind SecuBox/C=FR" \
+  -addext "subjectAltName=DNS:localhost,DNS:secubox.local,IP:127.0.0.1,IP:192.168.1.1" \
+  2>/dev/null
+
+if [[ -f "${ROOTFS}/etc/secubox/tls/cert.pem" ]]; then
+  chmod 640 "${ROOTFS}/etc/secubox/tls/key.pem"
+  chmod 644 "${ROOTFS}/etc/secubox/tls/cert.pem"
+  ok "SSL certificates pre-generated"
+else
+  warn "SSL cert generation failed - nginx may not start"
+fi
 
 # ══════════════════════════════════════════════════════════════════
 # Step 5: Network detection & kiosk scripts
@@ -938,8 +941,8 @@ log "5/8 Installing SecuBox scripts..."
 mkdir -p "${ROOTFS}/usr/sbin"
 mkdir -p "${ROOTFS}/usr/lib/secubox"
 
-# Copy scripts (including kiosk-launcher for robust startup)
-for script in secubox-net-detect secubox-kiosk-setup secubox-cmdline-handler secubox-kiosk-launcher; do
+# Copy scripts (including kiosk-launcher for robust startup and TUI)
+for script in secubox-net-detect secubox-kiosk-setup secubox-cmdline-handler secubox-kiosk-launcher secubox-console-tui; do
   if [[ -f "${SCRIPT_DIR}/sbin/${script}" ]]; then
     cp "${SCRIPT_DIR}/sbin/${script}" "${ROOTFS}/usr/sbin/"
     chmod +x "${ROOTFS}/usr/sbin/${script}"
@@ -952,9 +955,9 @@ if [[ -f "${SCRIPT_DIR}/firstboot.sh" ]]; then
   chmod +x "${ROOTFS}/usr/lib/secubox/firstboot.sh"
 fi
 
-# Systemd services (including wayland variant for kiosk)
+# Systemd services (including wayland variant for kiosk and TUI)
 mkdir -p "${ROOTFS}/etc/systemd/system"
-for svc in secubox-net-detect secubox-cmdline secubox-kiosk secubox-kiosk-wayland; do
+for svc in secubox-net-detect secubox-cmdline secubox-kiosk secubox-kiosk-wayland secubox-console-tui; do
   if [[ -f "${SCRIPT_DIR}/systemd/${svc}.service" ]]; then
     cp "${SCRIPT_DIR}/systemd/${svc}.service" "${ROOTFS}/etc/systemd/system/"
   fi
