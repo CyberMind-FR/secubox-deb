@@ -1298,6 +1298,89 @@ ok "Rootfs cleaned"
 # ── Final permission fixes (MUST be done after all setup, before squashfs) ──
 log "Final permission fixes..."
 
+# Ensure www directory exists with fallback index.html
+mkdir -p "${ROOTFS}/usr/share/secubox/www"
+if [[ ! -f "${ROOTFS}/usr/share/secubox/www/index.html" ]]; then
+  log "Creating fallback index.html..."
+  cat > "${ROOTFS}/usr/share/secubox/www/index.html" <<'FALLBACK_HTML'
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox Live</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #0a0a0f 100%);
+            color: #e8e6d9;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            text-align: center;
+            padding: 2rem;
+            max-width: 600px;
+        }
+        h1 {
+            font-size: 3rem;
+            color: #c9a84c;
+            margin-bottom: 1rem;
+            text-shadow: 0 0 20px rgba(201, 168, 76, 0.3);
+        }
+        .subtitle {
+            font-size: 1.2rem;
+            color: #00d4ff;
+            margin-bottom: 2rem;
+        }
+        .status {
+            background: rgba(0, 212, 255, 0.1);
+            border: 1px solid #00d4ff;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        .status h2 {
+            color: #00ff41;
+            margin-bottom: 0.5rem;
+        }
+        .info {
+            color: #6b6b7a;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+        .info a {
+            color: #c9a84c;
+            text-decoration: none;
+        }
+        .info a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⚡ SecuBox</h1>
+        <p class="subtitle">CyberMind Security Platform</p>
+        <div class="status">
+            <h2>✓ System Running</h2>
+            <p>SecuBox Live USB is operational</p>
+        </div>
+        <div class="info">
+            <p>Access the full dashboard at <a href="https://localhost/">https://localhost/</a></p>
+            <p>Default credentials: admin / admin</p>
+            <p><br>Console: Press Ctrl+Alt+F2 for terminal</p>
+        </div>
+    </div>
+</body>
+</html>
+FALLBACK_HTML
+  ok "Fallback index.html created"
+fi
+
 # Fix www directory ownership (nginx runs as www-data)
 if [[ -d "${ROOTFS}/usr/share/secubox/www" ]]; then
   chown -R root:root "${ROOTFS}/usr/share/secubox/www"
