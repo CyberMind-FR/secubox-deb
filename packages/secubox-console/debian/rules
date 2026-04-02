@@ -20,9 +20,9 @@ override_dh_auto_install:
 	install -d $(CURDIR)/debian/secubox-console/usr/bin
 	install -m 755 $(CURDIR)/bin/secubox-console $(CURDIR)/debian/secubox-console/usr/bin/
 
-	# Install systemd service
-	install -d $(CURDIR)/debian/secubox-console/lib/systemd/system
-	install -m 644 $(CURDIR)/debian/secubox-console.service $(CURDIR)/debian/secubox-console/lib/systemd/system/
+	# Install systemd service (use /usr/lib for modern Debian)
+	install -d $(CURDIR)/debian/secubox-console/usr/lib/systemd/system
+	install -m 644 $(CURDIR)/debian/secubox-console.service $(CURDIR)/debian/secubox-console/usr/lib/systemd/system/
 
 	# Install menu.d entry
 	install -d $(CURDIR)/debian/secubox-console/usr/share/secubox/menu.d

@@ -834,6 +834,18 @@ if [[ $CACHE_COUNT -gt 0 ]] || [[ $OUTPUT_COUNT -gt 0 ]]; then
   log "Reconfiguring packages..."
   chroot "${ROOTFS}" dpkg --configure -a --force-confold 2>/dev/null || true
 
+  # Install textual for console TUI (dependency of secubox-console)
+  if ls "${ROOTFS}/tmp/secubox-debs/secubox-console_"*.deb >/dev/null 2>&1 || \
+     chroot "${ROOTFS}" dpkg -l secubox-console 2>/dev/null | grep -q "^ii"; then
+    log "Installing textual for console TUI..."
+    # Try apt first, fall back to pip
+    if ! chroot "${ROOTFS}" apt-get install -y -q python3-textual python3-rich 2>/dev/null; then
+      chroot "${ROOTFS}" pip3 install --break-system-packages textual 2>/dev/null || \
+        warn "textual installation failed - console TUI may not work"
+    fi
+    ok "Console TUI dependencies installed"
+  fi
+
   # Verify installations
   log "Verifying installations..."
   INSTALLED_COUNT=$(chroot "${ROOTFS}" dpkg -l 'secubox-*' 2>/dev/null | grep "^ii" | wc -l)
@@ -1039,11 +1051,36 @@ allowed_users=anybody
 needs_root_rights=yes
 XWRAP
 
-  # Create kiosk user with UID 1000
+  # X11 config for VirtualBox/VM compatibility (use modesetting driver)
+  mkdir -p "${ROOTFS}/etc/X11/xorg.conf.d"
+  cat > "${ROOTFS}/etc/X11/xorg.conf.d/10-modesetting.conf" <<'XCONF'
+Section "Device"
+    Identifier  "Default Device"
+    Driver      "modesetting"
+EndSection
+
+Section "Screen"
+    Identifier  "Default Screen"
+    Device      "Default Device"
+    DefaultDepth 24
+    SubSection "Display"
+        Depth   24
+        Modes   "1024x768" "800x600" "640x480"
+    EndSubSection
+EndSection
+
+Section "ServerFlags"
+    Option "AutoAddGPU" "false"
+    Option "AutoBindGPU" "false"
+EndSection
+XCONF
+  ok "X11 modesetting config created"
+
+  # Create kiosk user with UID 1000 (use /bin/bash for X11 su commands)
   if ! chroot "${ROOTFS}" id secubox-kiosk &>/dev/null; then
-    chroot "${ROOTFS}" useradd -r -u 1000 -m -d /home/secubox-kiosk -s /usr/sbin/nologin \
+    chroot "${ROOTFS}" useradd -r -u 1000 -m -d /home/secubox-kiosk -s /bin/bash \
       -G video,audio,input,render secubox-kiosk 2>/dev/null || \
-    chroot "${ROOTFS}" useradd -r -m -d /home/secubox-kiosk -s /usr/sbin/nologin \
+    chroot "${ROOTFS}" useradd -r -m -d /home/secubox-kiosk -s /bin/bash \
       -G video,audio,input,render secubox-kiosk
     ok "Created kiosk user"
   fi
