@@ -408,6 +408,13 @@ EOF
 
 chroot "${ROOTFS}" apt-get update -q
 
+# Install Python dependencies FIRST (required by SecuBox packages)
+log "Installing Python dependencies..."
+chroot "${ROOTFS}" apt-get install -y -q python3-pip python3-venv 2>/dev/null || true
+chroot "${ROOTFS}" pip3 install --break-system-packages -q \
+  fastapi uvicorn python-jose httpx jinja2 tomli pyroute2 psutil pydantic 2>&1 | tail -5 || true
+ok "Python dependencies installed"
+
 # Install firmware and Raspberry Pi boot files
 chroot "${ROOTFS}" apt-get install -y -q --no-install-recommends \
   raspi-firmware firmware-brcm80211 firmware-misc-nonfree \
@@ -547,17 +554,31 @@ else
   # Remove initramfs line from config.txt since we're booting directly
   sed -i '/^initramfs/d' "${ROOTFS}/boot/firmware/config.txt"
 
-  # Optional: Try to generate initrd if time permits (with timeout)
-  log "Attempting initramfs generation (30s timeout)..."
+  # Generate initrd (required for module loading)
+  # QEMU arm64 emulation is slow - allow 5 minutes
+  log "Generating initramfs (this may take 3-5 minutes under QEMU)..."
   KVER=$(ls "${ROOTFS}/lib/modules/" 2>/dev/null | head -1)
   if [[ -n "$KVER" ]]; then
-    # Use timeout to prevent hanging
-    timeout 30 chroot "${ROOTFS}" update-initramfs -c -k "$KVER" 2>/dev/null && {
-      log "initrd generated successfully"
-      sed -i '/^\[all\]/a initramfs initrd.img followkernel' "${ROOTFS}/boot/firmware/config.txt"
-    } || {
-      warn "initrd generation timed out - using direct boot (this is fine for Pi)"
-    }
+    # Use timeout to prevent infinite hanging
+    # Set PATH explicitly for mkinitramfs to find rm, cp, etc.
+    if timeout 300 chroot "${ROOTFS}" /bin/bash -c "export PATH=/usr/sbin:/usr/bin:/sbin:/bin && update-initramfs -c -k $KVER"; then
+      # Verify initrd was actually created and has content
+      if [[ -s "${ROOTFS}/boot/initrd.img-${KVER}" ]]; then
+        INITRD_SIZE=$(du -h "${ROOTFS}/boot/initrd.img-${KVER}" | cut -f1)
+        ok "initrd generated successfully (${INITRD_SIZE})"
+        sed -i '/^\[all\]/a initramfs initrd.img followkernel' "${ROOTFS}/boot/firmware/config.txt"
+      else
+        warn "initrd file empty or missing - Pi may not boot!"
+      fi
+    else
+      err "initrd generation failed or timed out after 5 minutes!"
+      err "Without initrd, the Pi cannot load kernel modules."
+      err "Try running on native ARM64 hardware or increasing timeout."
+      exit 1
+    fi
+  else
+    err "No kernel modules found in ${ROOTFS}/lib/modules/"
+    exit 1
   fi
 fi
 
