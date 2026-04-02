@@ -272,6 +272,13 @@ ok "Configuration base terminée"
 # ── Étape 3 : APT SecuBox + paquets ──────────────────────────────
 log "3/7 Installation paquets SecuBox..."
 
+# Install Python dependencies FIRST (required by SecuBox packages)
+log "Installing Python dependencies..."
+chroot "${ROOTFS}" apt-get install -y -q python3-pip python3-venv 2>/dev/null || true
+chroot "${ROOTFS}" pip3 install --break-system-packages -q \
+  fastapi uvicorn python-jose httpx jinja2 tomli pyroute2 psutil pydantic 2>&1 | tail -5 || true
+ok "Python dependencies installed"
+
 # Ajouter repo SecuBox (si disponible)
 SECUBOX_REPO_OK=0
 if [[ "$APT_SECUBOX" == "http://127.0.0.1:"* ]]; then

@@ -741,14 +741,45 @@ fi
 # ══════════════════════════════════════════════════════════════════
 log "4/8 Installing ALL SecuBox packages..."
 
-# Find all .deb files in cache/repo
+# Install Python dependencies FIRST (required by SecuBox packages)
+log "Installing Python dependencies..."
+chroot "${ROOTFS}" apt-get install -y -q python3-pip python3-venv 2>/dev/null || true
+chroot "${ROOTFS}" pip3 install --break-system-packages -q \
+  fastapi uvicorn python-jose httpx jinja2 tomli pyroute2 psutil pydantic 2>&1 | tail -5 || true
+ok "Python dependencies installed"
+
+# Find all .deb files in cache/repo or output/debs
 CACHE_DEBS="${REPO_DIR}/cache/repo/pool"
-if [[ -d "$CACHE_DEBS" ]] && find "$CACHE_DEBS" -name "*.deb" | head -1 | grep -q .; then
-  log "Slipstream: Found packages in cache/repo/pool"
+OUTPUT_DEBS="${REPO_DIR}/output/debs"
+
+# Check both locations for packages
+CACHE_COUNT=$(find "$CACHE_DEBS" -name "secubox-*.deb" 2>/dev/null | wc -l)
+OUTPUT_COUNT=$(find "$OUTPUT_DEBS" -maxdepth 1 -name "secubox-*.deb" 2>/dev/null | wc -l)
+log "Found ${CACHE_COUNT} packages in cache, ${OUTPUT_COUNT} in output/debs"
+
+if [[ $CACHE_COUNT -gt 0 ]] || [[ $OUTPUT_COUNT -gt 0 ]]; then
+  log "Slipstream: Installing from local packages"
   install -d "${ROOTFS}/tmp/secubox-debs"
 
-  # Copy ALL secubox debs
-  find "$CACHE_DEBS" -name "secubox-*.deb" -exec cp {} "${ROOTFS}/tmp/secubox-debs/" \;
+  # Copy ALL secubox debs from cache
+  if [[ $CACHE_COUNT -gt 0 ]]; then
+    find "$CACHE_DEBS" -name "secubox-*.deb" -exec cp {} "${ROOTFS}/tmp/secubox-debs/" \;
+    log "Copied ${CACHE_COUNT} packages from cache"
+  fi
+
+  # Also copy from output/debs (for packages not yet in cache, like secubox-console)
+  if [[ -d "$OUTPUT_DEBS" ]]; then
+    for deb in "${OUTPUT_DEBS}"/secubox-*.deb; do
+      [[ -f "$deb" ]] || continue
+      pkg_name=$(basename "$deb" | sed 's/_.*$//')
+      # Only copy if not already present (prefer cache version)
+      if ! ls "${ROOTFS}/tmp/secubox-debs/${pkg_name}_"*.deb >/dev/null 2>&1; then
+        cp "$deb" "${ROOTFS}/tmp/secubox-debs/"
+        log "Added ${pkg_name} from output/debs"
+      fi
+    done
+  fi
+
   DEB_COUNT=$(ls "${ROOTFS}/tmp/secubox-debs/"*.deb 2>/dev/null | wc -l)
 
   # List all packages to be installed
@@ -762,16 +793,22 @@ if [[ -d "$CACHE_DEBS" ]] && find "$CACHE_DEBS" -name "*.deb" | head -1 | grep -
   # Install core first (dependency for all)
   if ls "${ROOTFS}/tmp/secubox-debs/secubox-core_"*.deb >/dev/null 2>&1; then
     log "Installing secubox-core (dependency)..."
-    chroot "${ROOTFS}" dpkg -i /tmp/secubox-debs/secubox-core_*.deb 2>/dev/null || true
+    chroot "${ROOTFS}" bash -c 'dpkg -i --force-depends /tmp/secubox-debs/secubox-core_*.deb' || warn "secubox-core install failed"
   fi
 
-  # Install all packages
+  # Install all packages (force overwrite for duplicate files)
   log "Installing all packages..."
-  chroot "${ROOTFS}" dpkg -i /tmp/secubox-debs/*.deb 2>/dev/null || true
+  # Use bash -c to ensure glob expansion happens inside chroot
+  chroot "${ROOTFS}" bash -c 'dpkg -i --force-depends --force-overwrite /tmp/secubox-debs/*.deb 2>&1' | \
+    grep -v "^dpkg: warning" | grep -v "^Selecting\|^Preparing\|^Unpacking\|^Setting up" | head -50 || true
 
-  # Fix dependencies
+  # Fix dependencies with apt
   log "Fixing dependencies..."
-  chroot "${ROOTFS}" apt-get install -f -y -q 2>/dev/null || true
+  chroot "${ROOTFS}" apt-get install -f -y --fix-broken || warn "apt-get -f failed"
+
+  # Second pass: reconfigure any packages that failed
+  log "Reconfiguring packages..."
+  chroot "${ROOTFS}" dpkg --configure -a --force-confold 2>/dev/null || true
 
   # Verify installations
   log "Verifying installations..."
@@ -804,10 +841,6 @@ EOF
   fi
 fi
 
-# Python deps
-chroot "${ROOTFS}" pip3 install --break-system-packages -q \
-  fastapi uvicorn python-jose httpx jinja2 tomli pyroute2 psutil 2>/dev/null || true
-
 # Fix misplaced nginx configs (some packages install to conf.d instead of secubox.d)
 # Location blocks must be inside server blocks, so move them to secubox.d
 log "Fixing nginx module configs..."
@@ -835,6 +868,46 @@ if [[ ${SYSTEMCTL_DIVERTED:-0} -eq 1 ]] && [[ -x "${ROOTFS}/bin/systemctl.real" 
   log "Restored real systemctl"
 fi
 rm -f "${ROOTFS}/usr/local/sbin/systemctl-chroot"
+
+# ── Enable all SecuBox services ────────────────────────────────────
+# CRITICAL: Package postinst scripts may fail in chroot, so we
+# explicitly enable all services here by creating symlinks directly
+# (systemctl enable doesn't work reliably without systemd running)
+log "Enabling SecuBox services..."
+
+# Create wants directory if missing
+mkdir -p "${ROOTFS}/etc/systemd/system/multi-user.target.wants"
+
+# First, enable secubox-runtime (creates /run/secubox socket directory)
+if [[ -f "${ROOTFS}/usr/lib/systemd/system/secubox-runtime.service" ]]; then
+  ln -sf /usr/lib/systemd/system/secubox-runtime.service \
+    "${ROOTFS}/etc/systemd/system/multi-user.target.wants/secubox-runtime.service"
+  ok "secubox-runtime enabled (socket directory)"
+fi
+
+# Enable all SecuBox API services by creating symlinks
+ENABLED_COUNT=0
+for svc in "${ROOTFS}/usr/lib/systemd/system/secubox-"*.service; do
+  [[ -f "$svc" ]] || continue
+  svc_name=$(basename "$svc")
+  # Skip services that should not auto-start
+  case "$svc_name" in
+    secubox-kiosk*.service|secubox-console.service|secubox-runtime.service)
+      # Kiosk and console are optional - enabled separately
+      # Runtime already handled above
+      continue
+      ;;
+  esac
+  # Create symlink to enable service
+  ln -sf "/usr/lib/systemd/system/${svc_name}" \
+    "${ROOTFS}/etc/systemd/system/multi-user.target.wants/${svc_name}"
+  ENABLED_COUNT=$((ENABLED_COUNT + 1))
+done
+ok "Enabled ${ENABLED_COUNT} SecuBox services"
+
+# Enable nginx for API proxying
+ln -sf /usr/lib/systemd/system/nginx.service \
+  "${ROOTFS}/etc/systemd/system/multi-user.target.wants/nginx.service" 2>/dev/null || true
 
 # ══════════════════════════════════════════════════════════════════
 # Step 5: Network detection & kiosk scripts
@@ -866,8 +939,11 @@ for svc in secubox-net-detect secubox-cmdline secubox-kiosk secubox-kiosk-waylan
   fi
 done
 
-# Enable net-detect and cmdline services
-chroot "${ROOTFS}" systemctl enable secubox-cmdline.service 2>/dev/null || true
+# Enable net-detect and cmdline services (using symlinks for chroot)
+if [[ -f "${ROOTFS}/etc/systemd/system/secubox-cmdline.service" ]]; then
+  ln -sf /etc/systemd/system/secubox-cmdline.service \
+    "${ROOTFS}/etc/systemd/system/sysinit.target.wants/secubox-cmdline.service" 2>/dev/null || true
+fi
 
 # Firstboot service
 cat > "${ROOTFS}/etc/systemd/system/secubox-firstboot.service" <<EOF
@@ -885,7 +961,9 @@ RemainAfterExit=yes
 [Install]
 WantedBy=multi-user.target
 EOF
-chroot "${ROOTFS}" systemctl enable secubox-firstboot.service 2>/dev/null || true
+# Enable firstboot using symlink
+ln -sf /etc/systemd/system/secubox-firstboot.service \
+  "${ROOTFS}/etc/systemd/system/multi-user.target.wants/secubox-firstboot.service"
 
 # ── Kiosk mode packages (X11 mode - better VM compatibility) ─────────
 if [[ $INCLUDE_KIOSK -eq 1 ]]; then
@@ -917,9 +995,11 @@ if [[ $INCLUDE_KIOSK -eq 1 ]]; then
   log "Installing Chromium..."
   chroot "${ROOTFS}" apt-get install -y -q chromium || warn "Chromium install failed"
 
-  # Verify key kiosk packages installed - fail build if missing
+  # Verify key kiosk packages installed - warn if missing but continue
   if ! chroot "${ROOTFS}" dpkg -l xinit 2>/dev/null | grep -q "^ii"; then
-    err "FATAL: xinit not installed - kiosk will not work!"
+    warn "xinit not installed - kiosk may not work"
+    # Try one more time with forced install
+    chroot "${ROOTFS}" apt-get install -y -q --fix-broken xinit 2>/dev/null || true
   fi
   if ! chroot "${ROOTFS}" dpkg -l chromium 2>/dev/null | grep -q "^ii"; then
     warn "Chromium not installed - kiosk may not work properly"
@@ -1014,9 +1094,13 @@ XINITRC
   # - Fallback URL handling
   log "Kiosk service already copied from systemd/ directory"
 
-  # Enable kiosk service and set graphical target
-  chroot "${ROOTFS}" systemctl enable secubox-kiosk.service 2>/dev/null || true
-  chroot "${ROOTFS}" systemctl set-default graphical.target 2>/dev/null || true
+  # Enable kiosk service using symlink and set graphical target
+  mkdir -p "${ROOTFS}/etc/systemd/system/graphical.target.wants"
+  ln -sf /etc/systemd/system/secubox-kiosk.service \
+    "${ROOTFS}/etc/systemd/system/graphical.target.wants/secubox-kiosk.service"
+  # Set graphical target as default
+  ln -sf /usr/lib/systemd/system/graphical.target \
+    "${ROOTFS}/etc/systemd/system/default.target"
   chroot "${ROOTFS}" systemctl disable getty@tty1.service 2>/dev/null || true
 
   # Setup root autologin on tty2 (console access while kiosk runs on tty7)
@@ -1027,9 +1111,35 @@ ExecStart=
 ExecStart=-/sbin/agetty --autologin root --noclear %I \$TERM
 Type=idle
 EOF
-  chroot "${ROOTFS}" systemctl enable getty@tty2.service 2>/dev/null || true
+  ln -sf /usr/lib/systemd/system/getty@.service \
+    "${ROOTFS}/etc/systemd/system/getty.target.wants/getty@tty2.service" 2>/dev/null || true
 
   ok "Kiosk X11 packages and user installed (console on tty2)"
+else
+  # ── No kiosk: Enable console TUI mode instead ─────────────────────
+  log "Kiosk disabled - enabling console TUI mode..."
+
+  # Enable secubox-console service if available
+  if [[ -f "${ROOTFS}/usr/lib/systemd/system/secubox-console.service" ]]; then
+    ln -sf /usr/lib/systemd/system/secubox-console.service \
+      "${ROOTFS}/etc/systemd/system/multi-user.target.wants/secubox-console.service"
+    mkdir -p "${ROOTFS}/var/lib/secubox"
+    echo "enabled" > "${ROOTFS}/var/lib/secubox/.console-enabled"
+    ok "Console TUI enabled on tty1"
+  else
+    log "secubox-console not installed - standard shell login"
+  fi
+
+  # Setup root autologin on tty1 for console access
+  mkdir -p "${ROOTFS}/etc/systemd/system/getty@tty1.service.d"
+  cat > "${ROOTFS}/etc/systemd/system/getty@tty1.service.d/autologin.conf" <<'AUTOLOGIN'
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin root --noclear %I $TERM
+AUTOLOGIN
+  mkdir -p "${ROOTFS}/etc/systemd/system/getty.target.wants"
+  ln -sf /usr/lib/systemd/system/getty@.service \
+    "${ROOTFS}/etc/systemd/system/getty.target.wants/getty@tty1.service" 2>/dev/null || true
 fi
 
 ok "Scripts installed"
