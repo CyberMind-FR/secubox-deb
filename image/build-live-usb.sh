@@ -861,33 +861,6 @@ done
 
 ok "SecuBox packages installed"
 
-# ── Fix permissions for nginx access ──────────────────────────────
-# The SecuBox packages may install files with wrong ownership
-# nginx runs as www-data and needs to read the webroot
-log "Fixing file permissions..."
-if [[ -d "${ROOTFS}/usr/share/secubox/www" ]]; then
-  chown -R root:root "${ROOTFS}/usr/share/secubox/www"
-  chmod -R 755 "${ROOTFS}/usr/share/secubox/www"
-  find "${ROOTFS}/usr/share/secubox/www" -type f -exec chmod 644 {} \;
-  ok "Fixed www directory permissions"
-fi
-
-# Ensure nginx can read SSL certs
-if [[ -d "${ROOTFS}/etc/secubox/tls" ]]; then
-  chmod 755 "${ROOTFS}/etc/secubox"
-  chmod 755 "${ROOTFS}/etc/secubox/tls"
-  chmod 644 "${ROOTFS}/etc/secubox/tls/cert.pem"
-  chmod 640 "${ROOTFS}/etc/secubox/tls/key.pem"
-  chown root:ssl-cert "${ROOTFS}/etc/secubox/tls/key.pem" 2>/dev/null || \
-    chown root:www-data "${ROOTFS}/etc/secubox/tls/key.pem"
-fi
-
-# Ensure secubox.d directory is readable
-if [[ -d "${ROOTFS}/etc/nginx/secubox.d" ]]; then
-  chmod 755 "${ROOTFS}/etc/nginx/secubox.d"
-  find "${ROOTFS}/etc/nginx/secubox.d" -type f -exec chmod 644 {} \;
-fi
-
 # ── Restore real systemctl ─────────────────────────────────────────
 if [[ ${SYSTEMCTL_DIVERTED:-0} -eq 1 ]] && [[ -x "${ROOTFS}/bin/systemctl.real" ]]; then
   rm -f "${ROOTFS}/bin/systemctl"
@@ -1320,6 +1293,36 @@ umount -lf "${ROOTFS}/sys"  2>/dev/null || true
 umount -lf "${ROOTFS}/dev"  2>/dev/null || true
 
 ok "Rootfs cleaned"
+
+# ── Final permission fixes (MUST be done after all setup, before squashfs) ──
+log "Final permission fixes..."
+
+# Fix www directory ownership (nginx runs as www-data)
+if [[ -d "${ROOTFS}/usr/share/secubox/www" ]]; then
+  chown -R root:root "${ROOTFS}/usr/share/secubox/www"
+  chmod -R 755 "${ROOTFS}/usr/share/secubox/www"
+  find "${ROOTFS}/usr/share/secubox/www" -type f -exec chmod 644 {} \;
+  log "Fixed www directory: $(ls -ld ${ROOTFS}/usr/share/secubox/www)"
+fi
+
+# Fix /etc/secubox ownership
+if [[ -d "${ROOTFS}/etc/secubox" ]]; then
+  chown -R root:root "${ROOTFS}/etc/secubox"
+  chmod 755 "${ROOTFS}/etc/secubox"
+  chmod 755 "${ROOTFS}/etc/secubox/tls" 2>/dev/null || true
+  chmod 644 "${ROOTFS}/etc/secubox/tls/cert.pem" 2>/dev/null || true
+  chmod 640 "${ROOTFS}/etc/secubox/tls/key.pem" 2>/dev/null || true
+  # Make key readable by www-data
+  chgrp www-data "${ROOTFS}/etc/secubox/tls/key.pem" 2>/dev/null || true
+fi
+
+# Fix nginx secubox.d
+if [[ -d "${ROOTFS}/etc/nginx/secubox.d" ]]; then
+  chmod 755 "${ROOTFS}/etc/nginx/secubox.d"
+  chmod 644 "${ROOTFS}/etc/nginx/secubox.d/"*.conf 2>/dev/null || true
+fi
+
+ok "Permissions fixed"
 
 # ══════════════════════════════════════════════════════════════════
 # Step 7: Create SquashFS
