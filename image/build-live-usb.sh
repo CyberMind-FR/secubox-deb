@@ -748,6 +748,30 @@ chroot "${ROOTFS}" pip3 install --break-system-packages -q \
   fastapi uvicorn python-jose httpx jinja2 tomli pyroute2 psutil pydantic 2>&1 | tail -5 || true
 ok "Python dependencies installed"
 
+# ── Pre-generate SSL certificates for nginx BEFORE installing packages ──
+# (Package postinst scripts test nginx, which needs certs to exist)
+# Generate certs on HOST (chroot may lack /dev/urandom) and copy them in
+log "Pre-generating SSL certificates (needed for nginx test during package install)..."
+mkdir -p "${ROOTFS}/etc/secubox/tls"
+mkdir -p "${ROOTFS}/run/secubox"
+mkdir -p "${ROOTFS}/var/lib/secubox"
+
+# Generate on host system
+openssl req -x509 -newkey rsa:2048 -days 365 \
+  -keyout "${ROOTFS}/etc/secubox/tls/key.pem" \
+  -out "${ROOTFS}/etc/secubox/tls/cert.pem" \
+  -nodes -subj "/CN=secubox-live/O=CyberMind SecuBox/C=FR" \
+  -addext "subjectAltName=DNS:localhost,DNS:secubox.local,IP:127.0.0.1,IP:192.168.1.1" \
+  2>/dev/null
+
+if [[ -f "${ROOTFS}/etc/secubox/tls/cert.pem" ]]; then
+  chmod 640 "${ROOTFS}/etc/secubox/tls/key.pem"
+  chmod 644 "${ROOTFS}/etc/secubox/tls/cert.pem"
+  ok "SSL certificates pre-generated"
+else
+  warn "SSL cert generation failed - nginx may not start"
+fi
+
 # Find all .deb files in cache/repo or output/debs
 CACHE_DEBS="${REPO_DIR}/cache/repo/pool"
 OUTPUT_DEBS="${REPO_DIR}/output/debs"
@@ -909,29 +933,7 @@ ok "Enabled ${ENABLED_COUNT} SecuBox services"
 ln -sf /usr/lib/systemd/system/nginx.service \
   "${ROOTFS}/etc/systemd/system/multi-user.target.wants/nginx.service" 2>/dev/null || true
 
-# ── Pre-generate SSL certificates for nginx ─────────────────────────
-# (firstboot normally does this, but nginx needs certs to start on live USB)
-# Generate certs on HOST (chroot may lack /dev/urandom) and copy them in
-log "Pre-generating SSL certificates..."
-mkdir -p "${ROOTFS}/etc/secubox/tls"
-mkdir -p "${ROOTFS}/run/secubox"
-mkdir -p "${ROOTFS}/var/lib/secubox"
-
-# Generate on host system
-openssl req -x509 -newkey rsa:2048 -days 365 \
-  -keyout "${ROOTFS}/etc/secubox/tls/key.pem" \
-  -out "${ROOTFS}/etc/secubox/tls/cert.pem" \
-  -nodes -subj "/CN=secubox-live/O=CyberMind SecuBox/C=FR" \
-  -addext "subjectAltName=DNS:localhost,DNS:secubox.local,IP:127.0.0.1,IP:192.168.1.1" \
-  2>/dev/null
-
-if [[ -f "${ROOTFS}/etc/secubox/tls/cert.pem" ]]; then
-  chmod 640 "${ROOTFS}/etc/secubox/tls/key.pem"
-  chmod 644 "${ROOTFS}/etc/secubox/tls/cert.pem"
-  ok "SSL certificates pre-generated"
-else
-  warn "SSL cert generation failed - nginx may not start"
-fi
+# Note: SSL certs were already generated before package installation
 
 # ══════════════════════════════════════════════════════════════════
 # Step 5: Network detection & kiosk scripts
@@ -1440,27 +1442,51 @@ rm -f "${IMG_FILE}" "${IMG_FILE}.gz"
 # Create image
 truncate -s "${IMG_SIZE}" "${IMG_FILE}"
 
-# Partition: GPT with hybrid boot
+# Calculate partition sizes dynamically
+# Convert IMG_SIZE to MiB (e.g., "4G" -> 4096, "8G" -> 8192)
+IMG_SIZE_NUM="${IMG_SIZE%[GgMm]}"
+IMG_SIZE_UNIT="${IMG_SIZE: -1}"
+if [[ "$IMG_SIZE_UNIT" == "G" ]] || [[ "$IMG_SIZE_UNIT" == "g" ]]; then
+  IMG_SIZE_MIB=$((IMG_SIZE_NUM * 1024))
+else
+  IMG_SIZE_MIB=$IMG_SIZE_NUM
+fi
+
+# Partition layout:
 # 1: BIOS boot (2MB) - legacy grub
 # 2: ESP (512MB) - UEFI
-# 3: LIVE (4GB) - squashfs
-# 4: persistence (rest) - optional
+# 3: LIVE - squashfs + grub + kernels (dynamic, leaves room for persistence)
+# 4: persistence (optional, ~1/3 of total for 8G+, or rest)
+
+ESP_END=515  # 3 + 512 = 515 MiB
 if [[ $INCLUDE_PERSISTENCE -eq 1 ]]; then
+  # For persistence, leave 25% of image for persistence (min 512MB)
+  PERSIST_SIZE=$(( IMG_SIZE_MIB / 4 ))
+  [[ $PERSIST_SIZE -lt 512 ]] && PERSIST_SIZE=512
+  LIVE_END=$(( IMG_SIZE_MIB - PERSIST_SIZE - 2 ))  # -2 for GPT backup
+
+  # Sanity check: LIVE must be at least 1GB for squashfs
+  [[ $LIVE_END -lt 1539 ]] && LIVE_END=1539
+
+  log "Partitions: ESP ${ESP_END}MiB, LIVE ${ESP_END}-${LIVE_END}MiB, Persist ${LIVE_END}MiB-100%"
+
   parted -s "${IMG_FILE}" \
     mklabel gpt \
     mkpart bios 1MiB 3MiB \
-    mkpart ESP fat32 3MiB 515MiB \
-    mkpart LIVE ext4 515MiB 4611MiB \
-    mkpart persistence ext4 4611MiB 100% \
+    mkpart ESP fat32 3MiB ${ESP_END}MiB \
+    mkpart LIVE ext4 ${ESP_END}MiB ${LIVE_END}MiB \
+    mkpart persistence ext4 ${LIVE_END}MiB 100% \
     set 1 bios_grub on \
     set 2 esp on \
     set 2 boot on
 else
+  log "Partitions: ESP ${ESP_END}MiB, LIVE ${ESP_END}MiB-100%"
+
   parted -s "${IMG_FILE}" \
     mklabel gpt \
     mkpart bios 1MiB 3MiB \
-    mkpart ESP fat32 3MiB 515MiB \
-    mkpart LIVE ext4 515MiB 100% \
+    mkpart ESP fat32 3MiB ${ESP_END}MiB \
+    mkpart LIVE ext4 ${ESP_END}MiB 100% \
     set 1 bios_grub on \
     set 2 esp on \
     set 2 boot on
