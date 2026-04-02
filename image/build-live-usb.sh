@@ -1001,7 +1001,8 @@ if [[ $INCLUDE_KIOSK -eq 1 ]]; then
   # First, fix any broken dpkg state from secubox packages (their postinst may fail in chroot)
   chroot "${ROOTFS}" dpkg --configure -a --force-confold 2>/dev/null || true
 
-  chroot "${ROOTFS}" apt-get install -y -q \
+  # Install X11 packages non-interactively (avoid keyboard-configuration prompt)
+  chroot "${ROOTFS}" env DEBIAN_FRONTEND=noninteractive apt-get install -y -q \
     xorg xinit x11-xserver-utils x11-utils \
     xserver-xorg-video-fbdev \
     xserver-xorg-video-vmware \
@@ -1009,7 +1010,7 @@ if [[ $INCLUDE_KIOSK -eq 1 ]]; then
     libinput10 xdg-utils || warn "Some X11 packages failed"
 
   # Ensure xinit specifically is installed (critical for kiosk)
-  chroot "${ROOTFS}" apt-get install -y -q xinit || warn "xinit install failed"
+  chroot "${ROOTFS}" env DEBIAN_FRONTEND=noninteractive apt-get install -y -q xinit || warn "xinit install failed"
 
   # Fix any broken dependencies before installing chromium
   chroot "${ROOTFS}" dpkg --configure -a --force-confold 2>/dev/null || true
@@ -1017,13 +1018,13 @@ if [[ $INCLUDE_KIOSK -eq 1 ]]; then
 
   # 2. Install chromium separately (after x11-utils to avoid dependency conflicts)
   log "Installing Chromium..."
-  chroot "${ROOTFS}" apt-get install -y -q chromium || warn "Chromium install failed"
+  chroot "${ROOTFS}" env DEBIAN_FRONTEND=noninteractive apt-get install -y -q chromium || warn "Chromium install failed"
 
   # Verify key kiosk packages installed - warn if missing but continue
   if ! chroot "${ROOTFS}" dpkg -l xinit 2>/dev/null | grep -q "^ii"; then
     warn "xinit not installed - kiosk may not work"
     # Try one more time with forced install
-    chroot "${ROOTFS}" apt-get install -y -q --fix-broken xinit 2>/dev/null || true
+    chroot "${ROOTFS}" env DEBIAN_FRONTEND=noninteractive apt-get install -y -q --fix-broken xinit 2>/dev/null || true
   fi
   if ! chroot "${ROOTFS}" dpkg -l chromium 2>/dev/null | grep -q "^ii"; then
     warn "Chromium not installed - kiosk may not work properly"
