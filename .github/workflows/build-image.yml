@@ -73,8 +73,10 @@ jobs:
           esac
 
       - name: Build image for ${{ matrix.board }}
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
-          sudo bash image/build-image.sh \
+          sudo -E bash image/build-image.sh \
             --board ${{ matrix.board }} \
             --suite ${{ env.DEBIAN_SUITE }} \
             --out output/ \
