@@ -814,6 +814,13 @@ if [[ $CACHE_COUNT -gt 0 ]] || [[ $OUTPUT_COUNT -gt 0 ]]; then
   done
   echo ""
 
+  # Pre-install textual via pip for secubox-console (Debian's version is too old)
+  if ls "${ROOTFS}/tmp/secubox-debs/secubox-console_"*.deb >/dev/null 2>&1; then
+    log "Pre-installing textual for console TUI (pip, Debian version too old)..."
+    chroot "${ROOTFS}" pip3 install --break-system-packages textual rich 2>/dev/null && \
+      ok "textual installed via pip" || warn "textual pip install failed"
+  fi
+
   # Install core first (dependency for all)
   if ls "${ROOTFS}/tmp/secubox-debs/secubox-core_"*.deb >/dev/null 2>&1; then
     log "Installing secubox-core (dependency)..."

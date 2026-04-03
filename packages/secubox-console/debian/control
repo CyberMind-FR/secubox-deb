@@ -11,10 +11,10 @@ Package: secubox-console
 Architecture: all
 Depends: ${misc:Depends},
          python3 (>= 3.11),
-         python3-textual (>= 0.40.0),
          python3-httpx,
          python3-rich
-Recommends: secubox-core (>= 1.1.0)
+Recommends: secubox-core (>= 1.1.0),
+            python3-pip
 Suggests: secubox-hub,
           secubox-watchdog,
           secubox-soc-gateway
