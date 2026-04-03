@@ -17,7 +17,7 @@ StandardError=journal
 
 # Security hardening
 NoNewPrivileges=yes
-ProtectSystem=strict
+ProtectSystem=full
 ProtectHome=yes
 PrivateTmp=yes
 ReadWritePaths=/run/secubox /var/log/secubox /var/lib/secubox

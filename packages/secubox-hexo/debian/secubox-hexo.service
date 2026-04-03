@@ -10,7 +10,9 @@ ExecStart=/usr/bin/uvicorn api.main:app --uds /run/secubox/hexo.sock --log-level
 UMask=0117
 Restart=on-failure
 PrivateTmp=true
-ProtectSystem=strict
+RuntimeDirectory=secubox
+RuntimeDirectoryMode=0775
+ProtectSystem=full
 ReadWritePaths=/run/secubox /var/lib/secubox /var/www/hexo
 
 [Install]

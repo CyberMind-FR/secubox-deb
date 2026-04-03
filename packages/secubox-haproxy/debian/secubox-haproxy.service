@@ -17,7 +17,9 @@ Restart=on-failure
 RestartSec=5
 PrivateTmp=true
 NoNewPrivileges=true
-ProtectSystem=strict
+RuntimeDirectory=secubox
+RuntimeDirectoryMode=0775
+ProtectSystem=full
 ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox /etc/haproxy /run/haproxy
 
 [Install]

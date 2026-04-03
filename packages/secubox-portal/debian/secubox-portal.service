@@ -32,7 +32,7 @@ RestartSec=5
 # Security
 PrivateTmp=true
 NoNewPrivileges=true
-ProtectSystem=strict
+ProtectSystem=full
 ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox
 
 [Install]
