@@ -1,9 +1,33 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-04-01 (Session 33)*
+*Mis à jour : 2026-04-03 (Session 34)*
 
 ---
 
-## ✅ Terminé cette session (Session 33)
+## ✅ Terminé cette session (Session 34)
+
+### Build Timestamp Display — secubox-hub v1.2.0 ✅
+- **API**: Added `_get_build_info()` function to read `/etc/secubox/build-info.json`
+- **Dashboard**: Build timestamp badge displayed in header (date + time)
+- **Tooltip**: Shows git commit, branch, board info on hover
+- **Build script**: Creates `build-info.json` with timestamp, git info, board type
+
+### Build System Fixes ✅
+- **Package priority**: Fixed `build-live-usb.sh` to prefer `output/debs` over cache
+- **nginx config**: Fixed secubox-soc-web to install in `secubox.d/` not `sites-available/`
+- **Symlink fix**: Removed broken `secubox-repo.conf` symlink creation from postinst
+
+### Packages Updated (Session 34)
+- `secubox-hub_1.2.0-1~bookworm1_all.deb` — Build timestamp feature
+- `secubox-soc-web_1.1.0-1_all.deb` — Nginx config fix (secubox.d/)
+
+### Release v1.4.0 ✅
+- Tag: `v1.4.0`
+- Commit: `19ca292`
+- Pushed to: `origin/master`
+
+---
+
+## ✅ Terminé session précédente (Session 33)
 
 ### SecuBox SOC — Hierarchical Security Operations Center (Phases 1-4) ✅
 
