@@ -889,12 +889,10 @@ fi
 log "Fixing nginx module configs..."
 for conf in "${ROOTFS}/etc/nginx/conf.d/secubox-"*.conf "${ROOTFS}/etc/nginx/conf.d/"*secubox*.conf; do
   [[ -e "$conf" ]] || continue
-  # Handle symlinks - recreate them in secubox.d pointing to correct location
+  # Handle symlinks - just remove them (broken symlinks cause nginx failures)
   if [[ -L "$conf" ]]; then
-    target=$(readlink "$conf")
     rm -f "$conf"
-    ln -sf "$target" "${ROOTFS}/etc/nginx/secubox.d/$(basename "$conf")" 2>/dev/null || true
-    log "Moved symlink $(basename "$conf") to secubox.d/"
+    log "Removed symlink $(basename "$conf") from conf.d/"
   # Handle regular files with location directives
   elif [[ -f "$conf" ]] && grep -q "^location" "$conf" 2>/dev/null; then
     mv "$conf" "${ROOTFS}/etc/nginx/secubox.d/" 2>/dev/null || true
@@ -909,6 +907,11 @@ for site in "${ROOTFS}/etc/nginx/sites-enabled/secubox-"*; do
     rm -f "$site"
     log "Removed misplaced site $(basename "$site") (location blocks belong in secubox.d/)"
   fi
+done
+
+# Clean up any broken symlinks in secubox.d
+for conf in "${ROOTFS}/etc/nginx/secubox.d/"*.conf; do
+  [[ -L "$conf" ]] && [[ ! -e "$conf" ]] && rm -f "$conf" && log "Removed broken symlink $(basename "$conf")"
 done
 
 ok "SecuBox packages installed"
