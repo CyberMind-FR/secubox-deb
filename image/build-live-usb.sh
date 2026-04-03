@@ -785,21 +785,23 @@ if [[ $CACHE_COUNT -gt 0 ]] || [[ $OUTPUT_COUNT -gt 0 ]]; then
   log "Slipstream: Installing from local packages"
   install -d "${ROOTFS}/tmp/secubox-debs"
 
-  # Copy ALL secubox debs from cache
-  if [[ $CACHE_COUNT -gt 0 ]]; then
-    find "$CACHE_DEBS" -name "secubox-*.deb" -exec cp {} "${ROOTFS}/tmp/secubox-debs/" \;
-    log "Copied ${CACHE_COUNT} packages from cache"
-  fi
-
-  # Also copy from output/debs (for packages not yet in cache, like secubox-console)
+  # Copy from output/debs FIRST (prefer newer local builds over cache)
   if [[ -d "$OUTPUT_DEBS" ]]; then
     for deb in "${OUTPUT_DEBS}"/secubox-*.deb; do
       [[ -f "$deb" ]] || continue
+      cp "$deb" "${ROOTFS}/tmp/secubox-debs/"
+    done
+    log "Copied ${OUTPUT_COUNT} packages from output/debs"
+  fi
+
+  # Then add from cache for packages not in output/debs
+  if [[ $CACHE_COUNT -gt 0 ]]; then
+    for deb in $(find "$CACHE_DEBS" -name "secubox-*.deb"); do
       pkg_name=$(basename "$deb" | sed 's/_.*$//')
-      # Only copy if not already present (prefer cache version)
+      # Only copy if not already present (prefer output/debs version)
       if ! ls "${ROOTFS}/tmp/secubox-debs/${pkg_name}_"*.deb >/dev/null 2>&1; then
         cp "$deb" "${ROOTFS}/tmp/secubox-debs/"
-        log "Added ${pkg_name} from output/debs"
+        log "Added ${pkg_name} from cache"
       fi
     done
   fi

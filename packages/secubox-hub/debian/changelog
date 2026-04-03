@@ -1,3 +1,11 @@
+secubox-hub (1.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * Add build_info endpoint with build timestamp display
+  * Dashboard shows build date, git commit, and board info
+  * Reads /etc/secubox/build-info.json created at image build time
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 03 Apr 2026 10:30:00 +0200
+
 secubox-hub (1.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Add network mode selection to dashboard
