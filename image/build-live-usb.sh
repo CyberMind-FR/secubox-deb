@@ -902,6 +902,15 @@ for conf in "${ROOTFS}/etc/nginx/conf.d/secubox-"*.conf "${ROOTFS}/etc/nginx/con
   fi
 done
 
+# Also fix sites-enabled (some packages create symlinks there for location blocks)
+for site in "${ROOTFS}/etc/nginx/sites-enabled/secubox-"*; do
+  [[ -e "$site" ]] || continue
+  if [[ -f "$site" ]] && grep -q "^location" "$site" 2>/dev/null; then
+    rm -f "$site"
+    log "Removed misplaced site $(basename "$site") (location blocks belong in secubox.d/)"
+  fi
+done
+
 ok "SecuBox packages installed"
 
 # ── Restore real systemctl ─────────────────────────────────────────
