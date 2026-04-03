@@ -10,7 +10,7 @@ override_dh_auto_install:
 	install -d $(CURDIR)/debian/secubox-repo/usr/lib/secubox/repo/api
 	install -d $(CURDIR)/debian/secubox-repo/usr/share/secubox/www/repo
 	install -d $(CURDIR)/debian/secubox-repo/etc/secubox/repo
-	install -d $(CURDIR)/debian/secubox-repo/etc/nginx/snippets
+	install -d $(CURDIR)/debian/secubox-repo/etc/nginx/secubox.d
 	install -d $(CURDIR)/debian/secubox-repo/usr/share/secubox/menu.d
 
 	# Install repoctl
@@ -26,8 +26,8 @@ override_dh_auto_install:
 	cp -r conf/* $(CURDIR)/debian/secubox-repo/etc/secubox/repo/ || true
 	cp -r templates/* $(CURDIR)/debian/secubox-repo/etc/secubox/repo/ || true
 
-	# Install nginx config
-	install -m 644 debian/nginx-repo.conf $(CURDIR)/debian/secubox-repo/etc/nginx/snippets/secubox-repo.conf || true
+	# Install nginx config (secubox.d for auto-include in server block)
+	install -m 644 debian/nginx-repo.conf $(CURDIR)/debian/secubox-repo/etc/nginx/secubox.d/repo.conf || true
 
 	# Install menu entry
 	install -m 644 debian/menu.json $(CURDIR)/debian/secubox-repo/usr/share/secubox/menu.d/repo.json || true

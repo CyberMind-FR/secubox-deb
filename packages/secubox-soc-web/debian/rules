@@ -18,9 +18,9 @@ override_dh_auto_install:
 	install -d $(CURDIR)/debian/secubox-soc-web/usr/share/secubox/www/soc
 	cp -r $(CURDIR)/dist/* $(CURDIR)/debian/secubox-soc-web/usr/share/secubox/www/soc/
 
-	# Install nginx config
-	install -d $(CURDIR)/debian/secubox-soc-web/etc/nginx/sites-available
-	install -m 644 $(CURDIR)/debian/secubox-soc-web.nginx.conf $(CURDIR)/debian/secubox-soc-web/etc/nginx/sites-available/secubox-soc-web
+	# Install nginx config (secubox.d for auto-include in server block)
+	install -d $(CURDIR)/debian/secubox-soc-web/etc/nginx/secubox.d
+	install -m 644 $(CURDIR)/debian/secubox-soc-web.nginx.conf $(CURDIR)/debian/secubox-soc-web/etc/nginx/secubox.d/soc-web.conf
 
 override_dh_auto_clean:
 	rm -rf node_modules dist
