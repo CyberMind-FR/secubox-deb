@@ -887,50 +887,59 @@ fi
 # Fix misplaced nginx configs (some packages install to conf.d instead of secubox.d)
 # Location blocks must be inside server blocks, so move them to secubox.d
 log "Fixing nginx module configs..."
+
+# Disable strict mode temporarily for glob handling
+set +e
+
+log "DEBUG: Checking conf.d..."
 for conf in "${ROOTFS}/etc/nginx/conf.d/secubox-"*.conf "${ROOTFS}/etc/nginx/conf.d/"*secubox*.conf; do
   [[ -e "$conf" ]] || continue
-  # Handle symlinks - just remove them (broken symlinks cause nginx failures)
   if [[ -L "$conf" ]]; then
     rm -f "$conf"
     log "Removed symlink $(basename "$conf") from conf.d/"
-  # Handle regular files with location directives
   elif [[ -f "$conf" ]] && grep -q "^location" "$conf" 2>/dev/null; then
     mv "$conf" "${ROOTFS}/etc/nginx/secubox.d/" 2>/dev/null || true
     log "Moved $(basename "$conf") to secubox.d/"
   fi
 done
+log "DEBUG: conf.d done"
 
-# Also fix sites-enabled (some packages create symlinks there for location blocks)
+log "DEBUG: Checking sites-enabled..."
 for site in "${ROOTFS}/etc/nginx/sites-enabled/secubox-"*; do
   [[ -e "$site" ]] || [[ -L "$site" ]] || continue
-  # Follow symlink to check the real file
   real_file="$site"
-  [[ -L "$site" ]] && real_file=$(readlink -f "$site" 2>/dev/null | sed "s|^|${ROOTFS}|; s|${ROOTFS}${ROOTFS}|${ROOTFS}|")
+  [[ -L "$site" ]] && real_file=$(readlink -f "$site" 2>/dev/null | sed "s|^|${ROOTFS}|; s|${ROOTFS}${ROOTFS}|${ROOTFS}|") || true
   if [[ -f "$real_file" ]] && grep -q "^location" "$real_file" 2>/dev/null; then
-    # Copy content to secubox.d, then remove site symlink/file
     base_name=$(basename "$site" | sed 's/^secubox-//')
     cp "$real_file" "${ROOTFS}/etc/nginx/secubox.d/${base_name}.conf" 2>/dev/null || true
     rm -f "$site"
     log "Moved $(basename "$site") content to secubox.d/${base_name}.conf"
   fi
 done
+log "DEBUG: sites-enabled done"
 
-# Clean up any broken symlinks in secubox.d
+log "DEBUG: Cleaning broken symlinks in secubox.d..."
 for conf in "${ROOTFS}/etc/nginx/secubox.d/"*.conf; do
-  [[ -L "$conf" ]] && [[ ! -e "$conf" ]] && rm -f "$conf" && log "Removed broken symlink $(basename "$conf")"
+  if [[ -L "$conf" ]] && [[ ! -e "$conf" ]]; then
+    rm -f "$conf" && log "Removed broken symlink $(basename "$conf")" || true
+  fi
 done
+log "DEBUG: symlink cleanup 1 done"
 
-# Also clean symlinks pointing to non-existent files (snippets directory doesn't exist)
+log "DEBUG: Cleaning symlinks to non-existent targets..."
 for conf in "${ROOTFS}/etc/nginx/secubox.d/"*.conf; do
   if [[ -L "$conf" ]]; then
-    target=$(readlink "$conf" 2>/dev/null)
-    # If target is an absolute path that doesn't exist in the chroot
-    if [[ "$target" == /* ]] && [[ ! -e "${ROOTFS}${target}" ]]; then
+    target=$(readlink "$conf" 2>/dev/null) || target=""
+    if [[ -n "$target" ]] && [[ "$target" == /* ]] && [[ ! -e "${ROOTFS}${target}" ]]; then
       rm -f "$conf"
       log "Removed broken symlink $(basename "$conf") -> $target"
     fi
   fi
 done
+log "DEBUG: symlink cleanup 2 done"
+
+# Re-enable strict mode
+set -e
 
 ok "SecuBox packages installed"
 
@@ -979,7 +988,7 @@ cat > "${ROOTFS}/etc/secubox/build-info.json" <<EOF
   "build_date": "${BUILD_DATE}",
   "git_commit": "${GIT_COMMIT}",
   "git_branch": "${GIT_BRANCH}",
-  "board": "${BOARD}",
+  "board": "amd64-live",
   "version": "1.0.0",
   "builder": "$(whoami)@$(hostname)"
 }
