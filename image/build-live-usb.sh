@@ -1040,7 +1040,8 @@ if [[ $INCLUDE_KIOSK -eq 1 ]]; then
     xserver-xorg-video-fbdev \
     xserver-xorg-video-vmware \
     fonts-dejavu-core unclutter kbd \
-    libinput10 xdg-utils || warn "Some X11 packages failed"
+    libinput10 xdg-utils \
+    virtualbox-guest-x11 virtualbox-guest-utils 2>/dev/null || warn "Some X11 packages failed"
 
   # Ensure xinit specifically is installed (critical for kiosk)
   chroot "${ROOTFS}" env DEBIAN_FRONTEND=noninteractive apt-get install -y -q xinit || warn "xinit install failed"
