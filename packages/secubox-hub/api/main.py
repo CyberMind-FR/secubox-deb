@@ -72,6 +72,17 @@ async def settings(user=Depends(require_jwt)):
     return get_config()
 
 
+def _get_build_info() -> dict:
+    """Get build metadata from /etc/secubox/build-info.json."""
+    build_file = Path("/etc/secubox/build-info.json")
+    if build_file.exists():
+        try:
+            return json.loads(build_file.read_text())
+        except Exception:
+            pass
+    return {"build_timestamp": None, "version": "dev"}
+
+
 @router.get("/dashboard")
 async def dashboard():
     """Données complètes du dashboard (public for demo)."""
@@ -79,6 +90,7 @@ async def dashboard():
     board = get_board_info()
     modules_status = {k: _svc(v) for k, v in MODULES.items()}
     active = sum(1 for m in modules_status.values() if m["active"])
+    build_info = _get_build_info()
 
     return {
         "board": board,
@@ -90,6 +102,7 @@ async def dashboard():
         "disk_percent": psutil.disk_usage("/").percent,
         "load_avg": list(psutil.getloadavg()),
         "uptime": int(float(Path("/proc/uptime").read_text().split()[0])),
+        "build_info": build_info,
     }
 
 
