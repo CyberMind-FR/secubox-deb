@@ -3,6 +3,13 @@ set -e
 
 case "$1" in
     configure)
+        # Install textual via pip (Debian bookworm version is too old)
+        if ! python3 -c "import textual; from textual import __version__; exit(0 if tuple(map(int, __version__.split('.')[:2])) >= (0,40) else 1)" 2>/dev/null; then
+            echo "Installing textual via pip (required >= 0.40.0)..."
+            pip3 install --break-system-packages textual 2>/dev/null || \
+                echo "Warning: textual pip install failed - console TUI may not work"
+        fi
+
         # Create secubox user if it doesn't exist
         if ! id -u secubox >/dev/null 2>&1; then
             useradd -r -s /usr/sbin/nologin -d /var/lib/secubox secubox 2>/dev/null || true
