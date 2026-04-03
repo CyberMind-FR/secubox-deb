@@ -902,16 +902,34 @@ done
 
 # Also fix sites-enabled (some packages create symlinks there for location blocks)
 for site in "${ROOTFS}/etc/nginx/sites-enabled/secubox-"*; do
-  [[ -e "$site" ]] || continue
-  if [[ -f "$site" ]] && grep -q "^location" "$site" 2>/dev/null; then
+  [[ -e "$site" ]] || [[ -L "$site" ]] || continue
+  # Follow symlink to check the real file
+  real_file="$site"
+  [[ -L "$site" ]] && real_file=$(readlink -f "$site" 2>/dev/null | sed "s|^|${ROOTFS}|; s|${ROOTFS}${ROOTFS}|${ROOTFS}|")
+  if [[ -f "$real_file" ]] && grep -q "^location" "$real_file" 2>/dev/null; then
+    # Copy content to secubox.d, then remove site symlink/file
+    base_name=$(basename "$site" | sed 's/^secubox-//')
+    cp "$real_file" "${ROOTFS}/etc/nginx/secubox.d/${base_name}.conf" 2>/dev/null || true
     rm -f "$site"
-    log "Removed misplaced site $(basename "$site") (location blocks belong in secubox.d/)"
+    log "Moved $(basename "$site") content to secubox.d/${base_name}.conf"
   fi
 done
 
 # Clean up any broken symlinks in secubox.d
 for conf in "${ROOTFS}/etc/nginx/secubox.d/"*.conf; do
   [[ -L "$conf" ]] && [[ ! -e "$conf" ]] && rm -f "$conf" && log "Removed broken symlink $(basename "$conf")"
+done
+
+# Also clean symlinks pointing to non-existent files (snippets directory doesn't exist)
+for conf in "${ROOTFS}/etc/nginx/secubox.d/"*.conf; do
+  if [[ -L "$conf" ]]; then
+    target=$(readlink "$conf" 2>/dev/null)
+    # If target is an absolute path that doesn't exist in the chroot
+    if [[ "$target" == /* ]] && [[ ! -e "${ROOTFS}${target}" ]]; then
+      rm -f "$conf"
+      log "Removed broken symlink $(basename "$conf") -> $target"
+    fi
+  fi
 done
 
 ok "SecuBox packages installed"
