@@ -105,8 +105,8 @@ Section "Screen"
 EndSection
 
 Section "ServerFlags"
-    Option "AutoAddDevices" "false"
-    Option "AutoEnableDevices" "false"
+    Option "AutoAddDevices" "true"
+    Option "AutoEnableDevices" "true"
     Option "DontZap" "true"
 EndSection
 XCONF
