@@ -934,6 +934,37 @@ done
 
 ok "SecuBox packages installed"
 
+# ── Fix systemd service namespaces for /run/secubox ────────────────
+# Services with ProtectSystem=strict create mount namespaces that prevent
+# socket creation in /run/secubox. Add RuntimeDirectory and tmpfiles.d.
+log "Configuring systemd services for /run/secubox..."
+
+# Create tmpfiles.d entry for /run/secubox
+mkdir -p "${ROOTFS}/etc/tmpfiles.d"
+echo "d /run/secubox 0775 secubox secubox -" > "${ROOTFS}/etc/tmpfiles.d/secubox.conf"
+
+# Create systemd overrides for services that use ProtectSystem with /run/secubox
+for unit in "${ROOTFS}"/lib/systemd/system/secubox-*.service; do
+  [[ -f "$unit" ]] || continue
+  svc=$(basename "$unit" .service)
+
+  # Check if service uses ProtectSystem with ReadWritePaths containing /run/secubox
+  if grep -q "ProtectSystem=" "$unit" && grep -q "ReadWritePaths=.*/run/secubox" "$unit"; then
+    override_dir="${ROOTFS}/etc/systemd/system/${svc}.service.d"
+    mkdir -p "$override_dir"
+    cat > "$override_dir/runtime.conf" << 'EOF'
+[Service]
+# Fix for namespace issues with /run/secubox
+RuntimeDirectory=secubox
+RuntimeDirectoryMode=0775
+RuntimeDirectoryPreserve=yes
+EOF
+    log "Created override for $svc"
+  fi
+done
+
+ok "Systemd service overrides created"
+
 # ── Restore real systemctl ─────────────────────────────────────────
 if [[ ${SYSTEMCTL_DIVERTED:-0} -eq 1 ]] && [[ -x "${ROOTFS}/bin/systemctl.real" ]]; then
   rm -f "${ROOTFS}/bin/systemctl"

@@ -14,7 +14,9 @@ Group=root
 UMask=0111
 
 NoNewPrivileges=true
-ProtectSystem=strict
+RuntimeDirectory=secubox
+RuntimeDirectoryMode=0775
+ProtectSystem=full
 ProtectHome=true
 ReadWritePaths=/run/secubox /srv/homeassistant /var/lib/lxc /tmp
 PrivateTmp=true

@@ -15,7 +15,9 @@ UMask=0111
 
 # Security hardening
 NoNewPrivileges=true
-ProtectSystem=strict
+RuntimeDirectory=secubox
+RuntimeDirectoryMode=0775
+ProtectSystem=full
 ProtectHome=true
 ReadWritePaths=/run/secubox /srv/photoprism /var/lib/lxc /tmp
 PrivateTmp=true
