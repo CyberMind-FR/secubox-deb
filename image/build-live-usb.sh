@@ -944,7 +944,7 @@ mkdir -p "${ROOTFS}/etc/tmpfiles.d"
 echo "d /run/secubox 0775 secubox secubox -" > "${ROOTFS}/etc/tmpfiles.d/secubox.conf"
 
 # Create systemd overrides for services that use ProtectSystem with /run/secubox
-for unit in "${ROOTFS}"/lib/systemd/system/secubox-*.service; do
+for unit in "${ROOTFS}"/usr/lib/systemd/system/secubox-*.service; do
   [[ -f "$unit" ]] || continue
   svc=$(basename "$unit" .service)
 
@@ -964,6 +964,27 @@ EOF
 done
 
 ok "Systemd service overrides created"
+
+# ── Create build metadata ──────────────────────────────────────────
+log "Creating build metadata..."
+BUILD_TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+BUILD_DATE=$(date +"%Y-%m-%d")
+GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+
+mkdir -p "${ROOTFS}/etc/secubox"
+cat > "${ROOTFS}/etc/secubox/build-info.json" <<EOF
+{
+  "build_timestamp": "${BUILD_TIMESTAMP}",
+  "build_date": "${BUILD_DATE}",
+  "git_commit": "${GIT_COMMIT}",
+  "git_branch": "${GIT_BRANCH}",
+  "board": "${BOARD}",
+  "version": "1.0.0",
+  "builder": "$(whoami)@$(hostname)"
+}
+EOF
+log "Build metadata: ${BUILD_DATE} (${GIT_COMMIT})"
 
 # ── Restore real systemctl ─────────────────────────────────────────
 if [[ ${SYSTEMCTL_DIVERTED:-0} -eq 1 ]] && [[ -x "${ROOTFS}/bin/systemctl.real" ]]; then

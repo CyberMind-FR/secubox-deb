@@ -320,6 +320,7 @@
             <div class="header-title">
                 <h1>SecuBox Control Center</h1>
                 <span class="badge version" id="version">v1.0.0</span>
+                <span class="badge version" id="build-info" title="Build timestamp">Build: --</span>
                 <span class="badge active" id="status-badge">-/- Active</span>
             </div>
             <div class="header-actions">
@@ -530,6 +531,20 @@
             const modules = data.modules || {};
             const total = Object.keys(modules).length;
             const active = Object.values(modules).filter(m => m.active).length;
+
+            // Update build info
+            if (data.build_info) {
+                const bi = data.build_info;
+                const buildEl = document.getElementById('build-info');
+                if (bi.build_timestamp) {
+                    const d = new Date(bi.build_timestamp);
+                    buildEl.textContent = 'Build: ' + d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                    buildEl.title = `Built: ${bi.build_timestamp}\nCommit: ${bi.git_commit || 'N/A'}\nBoard: ${bi.board || 'generic'}`;
+                }
+                if (bi.version) {
+                    document.getElementById('version').textContent = 'v' + bi.version;
+                }
+            }
 
             document.getElementById('total-modules').textContent = total;
             document.getElementById('installed-modules').textContent = menuData?.total_installed || total;

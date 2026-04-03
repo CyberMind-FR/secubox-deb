@@ -12,10 +12,10 @@ case "$1" in
         chown -R secubox:secubox /var/lib/secubox-repo
         chown -R secubox:secubox /var/www/apt.secubox.in
 
-        # Enable nginx config if nginx is installed
-        if [ -d /etc/nginx/sites-enabled ]; then
-            mkdir -p /etc/nginx/secubox.d
-            ln -sf /etc/nginx/snippets/secubox-repo.conf /etc/nginx/secubox.d/secubox-repo.conf 2>/dev/null || true
+        # Nginx config is installed directly in secubox.d by the package
+        # Reload nginx if running
+        if systemctl is-active --quiet nginx 2>/dev/null; then
+            systemctl reload nginx || true
         fi
 
         # Enable and start service
