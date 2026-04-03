@@ -3,9 +3,7 @@ set -e
 
 case "$1" in
     remove|upgrade|deconfigure)
-        # Remove nginx site link
-        rm -f /etc/nginx/sites-enabled/secubox-soc-web 2>/dev/null || true
-
+        # Config in /etc/nginx/secubox.d/ removed automatically by dpkg
         # Reload nginx if running
         if systemctl is-active --quiet nginx; then
             systemctl reload nginx || true

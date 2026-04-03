@@ -3,11 +3,7 @@ set -e
 
 case "$1" in
     configure)
-        # Enable nginx site if not already done
-        if [ -d /etc/nginx/sites-enabled ] && [ ! -e /etc/nginx/sites-enabled/secubox-soc-web ]; then
-            ln -sf /etc/nginx/sites-available/secubox-soc-web /etc/nginx/sites-enabled/secubox-soc-web 2>/dev/null || true
-        fi
-
+        # Config is in /etc/nginx/secubox.d/ - auto-included by main server block
         # Reload nginx if running
         if systemctl is-active --quiet nginx; then
             systemctl reload nginx || true
