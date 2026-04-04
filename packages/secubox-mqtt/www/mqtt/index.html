@@ -551,7 +551,16 @@
 
         // Get auth token
         function getToken() {
-            return localStorage.getItem('sbx_token') || '';
+            return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token') || '';
+        }
+
+        // Check auth on page load
+        function checkAuth() {
+            if (!getToken()) {
+                window.location.href = '/portal/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+                return false;
+            }
+            return true;
         }
 
         // API helpers
@@ -563,6 +572,10 @@
             };
             try {
                 const response = await fetch(url, { ...options, headers });
+                if (response.status === 401) {
+                    window.location.href = '/portal/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+                    return null;
+                }
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}`);
                 }
@@ -920,12 +933,14 @@
             }
         }
 
-        // Init
+        // Init - check auth first
         document.addEventListener('DOMContentLoaded', () => {
+            if (!checkAuth()) return;
             refreshStatus();
             updateStats();
-            setInterval(refreshStatus, 30000);
-            setInterval(updateStats, 60000);
+            // Auto-refresh every 15 seconds
+            setInterval(refreshStatus, 15000);
+            setInterval(updateStats, 30000);
         });
     </script>
 </body>

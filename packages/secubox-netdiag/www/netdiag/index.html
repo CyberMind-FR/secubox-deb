@@ -650,6 +650,14 @@
             return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token');
         }
 
+        function checkAuth() {
+            if (!getToken()) {
+                window.location.href = '/portal/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+                return false;
+            }
+            return true;
+        }
+
         async function api(endpoint, method = 'GET', data = null) {
             const token = getToken();
             const opts = {
@@ -999,8 +1007,20 @@
             if (activeTab === 'connections') { loadConnections(); loadPorts(); }
         }
 
-        // Init
-        loadStatus();
+        // Init - check auth first
+        if (checkAuth()) {
+            loadStatus();
+            // Auto-refresh network data every 30 seconds
+            setInterval(() => {
+                const activeTab = document.querySelector('.tab.active');
+                if (activeTab) {
+                    const tab = activeTab.dataset.tab;
+                    if (tab === 'interfaces') loadInterfaces();
+                    if (tab === 'routes') { loadRoutes(); loadArp(); }
+                    if (tab === 'connections') { loadConnections(); loadPorts(); }
+                }
+            }, 30000);
+        }
     </script>
     <script src="/shared/sidebar.js"></script>
 </body>
