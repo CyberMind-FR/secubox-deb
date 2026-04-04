@@ -1,6 +1,6 @@
 {
   "id": "waf",
-  "name": "Waf",
+  "name": "WAF",
   "category": "security",
   "icon": "🛡️",
   "path": "/waf/",

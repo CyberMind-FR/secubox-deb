@@ -1,6 +1,6 @@
 {
   "id": "config-advisor",
-  "name": "Config-advisor",
+  "name": "Config Advisor",
   "category": "security",
   "icon": "📋",
   "path": "/config-advisor/",

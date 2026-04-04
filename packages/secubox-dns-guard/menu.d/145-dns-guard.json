@@ -1,6 +1,6 @@
 {
   "id": "dns-guard",
-  "name": "Dns-guard",
+  "name": "DNS Guard",
   "category": "security",
   "icon": "🌐",
   "path": "/dns-guard/",
