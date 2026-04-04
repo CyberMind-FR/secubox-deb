@@ -6,12 +6,20 @@ export DH_VERBOSE = 1
 	dh $@
 
 override_dh_auto_configure:
-	# Install npm dependencies
-	npm ci --ignore-scripts || npm install --ignore-scripts
+	# Install npm dependencies (skip if pre-built in CI)
+	@if [ ! -d "$(CURDIR)/dist" ]; then \
+		npm ci --ignore-scripts || npm install --ignore-scripts; \
+	else \
+		echo "Using pre-built dist from CI"; \
+	fi
 
 override_dh_auto_build:
-	# Build React app
-	npm run build
+	# Build React app (skip if pre-built in CI)
+	@if [ ! -d "$(CURDIR)/dist" ]; then \
+		npm run build; \
+	else \
+		echo "dist/ already exists, skipping build"; \
+	fi
 
 override_dh_auto_install:
 	# Install built files
