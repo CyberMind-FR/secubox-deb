@@ -32,3 +32,11 @@ override_dh_auto_install:
 override_dh_auto_clean:
 	# Don't clean pre-built binaries in ../../daemon/build/
 	@echo "Keeping pre-built binaries"
+
+override_dh_strip:
+	# Skip stripping - Go binaries are cross-compiled and already stripped with -ldflags "-s -w"
+	@echo "Skipping dh_strip for pre-built Go binaries"
+
+override_dh_dwz:
+	# Skip dwz - no debug info in stripped Go binaries
+	@echo "Skipping dh_dwz for pre-built Go binaries"
