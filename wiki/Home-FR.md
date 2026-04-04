@@ -1,8 +1,8 @@
 # SecuBox-DEB
 
-**Appliance de Sécurité pour Debian** | [English](Home) | [中文](Home-ZH) | **v1.5.0**
+**Appliance de Sécurité pour Debian** | [English](Home) | [中文](Home-ZH) | **v1.5.1**
 
-SecuBox est une solution d'appliance de sécurité complète portée d'OpenWrt vers Debian bookworm, conçue pour les cartes ARM64 GlobalScale (MOCHAbin, ESPRESSObin) et les systèmes x86_64. Maintenant avec **93 paquets** et plus de **2000+ points d'API**.
+SecuBox est une solution d'appliance de sécurité complète portée d'OpenWrt vers Debian bookworm, conçue pour les cartes ARM64 GlobalScale (MOCHAbin, ESPRESSObin) et les systèmes x86_64. Maintenant avec **124 paquets** et plus de **2000+ points d'API**.
 
 ---
 
@@ -14,7 +14,7 @@ Testez SecuBox instantanément dans VirtualBox - aucune clé USB requise :
 
 ```bash
 # Télécharger l'image
-wget https://github.com/CyberMind-FR/secubox-deb/releases/download/v1.5.0/secubox-live-amd64-bookworm.img.gz
+wget https://github.com/CyberMind-FR/secubox-deb/releases/download/v1.5.1/secubox-live-amd64-bookworm.img.gz
 gunzip secubox-live-amd64-bookworm.img.gz
 
 # Convertir au format VDI
@@ -50,7 +50,7 @@ Démarrez directement depuis USB sur du matériel physique :
 
 ```bash
 # Télécharger
-wget https://github.com/CyberMind-FR/secubox-deb/releases/download/v1.5.0/secubox-live-amd64-bookworm.img.gz
+wget https://github.com/CyberMind-FR/secubox-deb/releases/download/v1.5.1/secubox-live-amd64-bookworm.img.gz
 
 # Flasher sur clé USB (remplacer /dev/sdX)
 zcat secubox-live-amd64-bookworm.img.gz | sudo dd of=/dev/sdX bs=4M status=progress
@@ -118,7 +118,7 @@ Options:
 | **Outils Système** | Glances, MQTT, TURN, Vault, Cloner, VM | 22 |
 | **Email & DNS** | Postfix/Dovecot, Webmail, DNS Provider | 9 |
 
-**Total : 93 paquets**
+**Total : 124 paquets**
 
 ---
 

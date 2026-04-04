@@ -1,6 +1,6 @@
 # SecuBox-DEB
 
-**Debian 安全设备** | [English](Home) | [Français](Home-FR) | **v1.5.0**
+**Debian 安全设备** | [English](Home) | [Français](Home-FR) | **v1.5.1**
 
 SecuBox 是一个完整的安全设备解决方案，从 OpenWrt 移植到 Debian bookworm，专为 GlobalScale ARM64 开发板（MOCHAbin、ESPRESSObin）和 x86_64 系统设计。现在包含 **93 个软件包**和 **2000+ 个 API 端点**。
 
@@ -14,7 +14,7 @@ SecuBox 是一个完整的安全设备解决方案，从 OpenWrt 移植到 Debia
 
 ```bash
 # 下载镜像
-wget https://github.com/CyberMind-FR/secubox-deb/releases/download/v1.5.0/secubox-live-amd64-bookworm.img.gz
+wget https://github.com/CyberMind-FR/secubox-deb/releases/download/v1.5.1/secubox-live-amd64-bookworm.img.gz
 gunzip secubox-live-amd64-bookworm.img.gz
 
 # 转换为 VDI 格式
@@ -50,7 +50,7 @@ curl -sL https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/scrip
 
 ```bash
 # 下载
-wget https://github.com/CyberMind-FR/secubox-deb/releases/download/v1.5.0/secubox-live-amd64-bookworm.img.gz
+wget https://github.com/CyberMind-FR/secubox-deb/releases/download/v1.5.1/secubox-live-amd64-bookworm.img.gz
 
 # 写入 USB 驱动器（将 /dev/sdX 替换为您的设备）
 zcat secubox-live-amd64-bookworm.img.gz | sudo dd of=/dev/sdX bs=4M status=progress
