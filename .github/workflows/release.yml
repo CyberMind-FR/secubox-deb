@@ -73,21 +73,31 @@ jobs:
           cat > release/RELEASE_NOTES.md << EOF
           # SecuBox-DEB ${VERSION}
 
-          ## What's Included
+          ## ⚡ CyberMind Security Platform
 
-          ### Packages (33 total)
-          - **Core:** hub, core, portal, system
-          - **Security:** crowdsec, waf, auth, nac
+          ### What's Included
+
+          **93 Packages** across all security domains:
+          - **Core:** hub, core, portal, system, console
+          - **Security:** crowdsec, waf, auth, nac, threats, ipblock, mac-guard
           - **Networking:** wireguard, haproxy, dpi, qos, netmodes, vhost, cdn
-          - **Applications:** mail, gitea, nextcloud, webmail, dns, users
-          - **Publishing:** droplet, streamlit, streamforge, metablogizer, publish
-          - **Monitoring:** netdata, mediaflow, c3box
+          - **Applications:** mail, gitea, nextcloud, ollama, jellyfin, matrix
+          - **SOC:** soc-agent, soc-gateway, soc-web (hierarchical security operations)
+          - **Intel:** device-intel, vortex-dns, vortex-firewall, ai-insights
 
           ### System Images
           - MOCHAbin (Marvell Armada 7040) - arm64
           - ESPRESSObin v7 (Marvell Armada 3720) - arm64
           - ESPRESSObin Ultra (Marvell Armada 3720) - arm64
           - VM x64 (VirtualBox/QEMU) - amd64
+
+          ### Boot Options
+          - ⚡ **SecuBox Live** - Normal boot with persistence
+          - 🖼️ **Kiosk GUI** - Fullscreen browser (default)
+          - 📟 **Console TUI** - Text-based dashboard
+          - 🌉 **Bridge Mode** - Inline transparent bridge
+          - 💾 **Install to Disk** - Permanent installation
+          - 🚀 **To RAM** - Load entire system to memory
 
           ## Quick Install
 
@@ -97,15 +107,18 @@ jobs:
           sudo apt install secubox-full
           \`\`\`
 
-          ### From Image
+          ### From Live USB Image
           \`\`\`bash
-          # ARM64 boards
-          gunzip -c secubox-mochabin-bookworm.img.gz | sudo dd of=/dev/sdX bs=4M status=progress
+          # Flash to USB
+          gunzip -c secubox-live-amd64-bookworm.img.gz | sudo dd of=/dev/sdX bs=4M status=progress
 
-          # VirtualBox
-          gunzip secubox-vm-x64-bookworm.img.gz
-          VBoxManage convertfromraw secubox-vm-x64-bookworm.img secubox.vdi --format VDI
+          # VirtualBox VM
+          bash image/create-vbox-vm.sh --name SecuBox --memory 4096
           \`\`\`
+
+          ### Default Credentials
+          - **Web UI:** https://<IP>:9443 (admin / secubox)
+          - **SSH:** root / secubox
 
           ## Checksums
 
@@ -118,9 +131,9 @@ jobs:
 
           ## Documentation
 
-          - [Installation Guide](https://github.com/gkerma/secubox-deb/wiki/Installation)
-          - [API Documentation](https://github.com/gkerma/secubox-deb/wiki/API)
-          - [Security Hardening](https://github.com/gkerma/secubox-deb/wiki/Security)
+          - [Wiki Home](https://github.com/CyberMind-FR/secubox-deb/wiki)
+          - [VirtualBox Quick Start](https://github.com/CyberMind-FR/secubox-deb/wiki/VirtualBox)
+          - [API Reference](https://github.com/CyberMind-FR/secubox-deb/wiki/API-Reference)
 
           EOF
 

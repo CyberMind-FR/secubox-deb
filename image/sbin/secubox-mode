@@ -1,18 +1,23 @@
 #!/bin/bash
 # ══════════════════════════════════════════════════════════════════
 #  SecuBox Mode Switcher — Switch between Kiosk (GUI) and TUI modes
+#  CRT-style output with emoji status indicators
 # ══════════════════════════════════════════════════════════════════
 set -u
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-CYAN='\033[0;36m'
+# CRT-style colors
+GOLD='\033[38;5;214m'
+CYAN='\033[38;5;45m'
+GREEN='\033[38;5;82m'
+RED='\033[38;5;196m'
+GRAY='\033[38;5;242m'
+WHITE='\033[38;5;250m'
 NC='\033[0m'
 
-log() { echo -e "${CYAN}[secubox]${NC} $*"; }
-ok()  { echo -e "${GREEN}[  OK  ]${NC} $*"; }
-err() { echo -e "${RED}[ERROR]${NC} $*" >&2; }
+log() { echo -e "${CYAN}⚡${NC} $*"; }
+ok()  { echo -e "${GREEN}✓${NC} $*"; }
+err() { echo -e "${RED}✗${NC} $*" >&2; }
+warn() { echo -e "${GOLD}⚠${NC} $*"; }
 
 usage() {
     cat <<EOF
@@ -120,27 +125,40 @@ show_status() {
     local mode=$(current_mode)
 
     echo
-    echo "SecuBox Display Mode"
-    echo "===================="
-    echo
-    echo -e "Current mode: ${CYAN}${mode}${NC}"
+    echo -e "${GOLD}╭─────────────────────────────────────────────────────────╮${NC}"
+    echo -e "${GOLD}│${NC}           ${WHITE}⚡ SecuBox Display Mode${NC}                     ${GOLD}│${NC}"
+    echo -e "${GOLD}╰─────────────────────────────────────────────────────────╯${NC}"
     echo
 
     case "$mode" in
         kiosk)
-            echo "  Kiosk mode: Chromium browser in fullscreen"
-            echo "  Press Ctrl+Alt+F2 to access console"
-            echo "  Use 'secubox-mode tui' to switch to TUI"
+            echo -e "  ${GREEN}●${NC} Current: ${CYAN}Kiosk GUI${NC} 🖼️"
+            echo
+            echo -e "  ${GRAY}Chromium browser in fullscreen on tty7${NC}"
+            echo -e "  ${GRAY}Press ${WHITE}Ctrl+Alt+F2${GRAY} to access console${NC}"
+            echo -e "  ${GRAY}Use ${WHITE}secubox-mode tui${GRAY} to switch to TUI${NC}"
             ;;
         tui)
-            echo "  TUI mode: Console-based dashboard"
-            echo "  Press 'q' to exit TUI, then 'secubox-mode kiosk' to switch"
+            echo -e "  ${GREEN}●${NC} Current: ${CYAN}Console TUI${NC} 📟"
+            echo
+            echo -e "  ${GRAY}Text-based dashboard on tty1${NC}"
+            echo -e "  ${GRAY}Press ${WHITE}q${GRAY} to exit TUI${NC}"
+            echo -e "  ${GRAY}Use ${WHITE}secubox-mode kiosk${GRAY} for GUI mode${NC}"
             ;;
         console)
-            echo "  Console mode: Standard login shell"
-            echo "  Use 'secubox-mode kiosk' or 'secubox-mode tui' to switch"
+            echo -e "  ${GREEN}●${NC} Current: ${CYAN}Console Shell${NC} 🖥️"
+            echo
+            echo -e "  ${GRAY}Standard login shell${NC}"
+            echo -e "  ${GRAY}Use ${WHITE}secubox-mode kiosk${GRAY} or ${WHITE}tui${GRAY} to switch${NC}"
             ;;
     esac
+
+    echo
+    echo -e "  ${GRAY}────────────────────────────────────────────────────${NC}"
+    echo -e "  ${WHITE}Modes:${NC}"
+    echo -e "    ${CYAN}kiosk${NC}   🖼️  Full-screen browser GUI"
+    echo -e "    ${CYAN}tui${NC}     📟  Console text dashboard"
+    echo -e "    ${CYAN}console${NC} 🖥️  Standard shell login"
     echo
 }
 
