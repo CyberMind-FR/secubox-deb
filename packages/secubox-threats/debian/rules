@@ -1,0 +1,17 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-threats/usr/lib/secubox/threats/
+	cp -r api debian/secubox-threats/usr/lib/secubox/threats/
+	install -d debian/secubox-threats/usr/share/secubox/www
+	[ -d www ] && cp -r www/. debian/secubox-threats/usr/share/secubox/www/ || true
+	install -d debian/secubox-threats/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-threats/usr/share/secubox/menu.d/ || true
+	# Modular nginx config
+	install -d debian/secubox-threats/etc/nginx/secubox.d
+	[ -f nginx/threats.conf ] && cp nginx/threats.conf debian/secubox-threats/etc/nginx/secubox.d/ || true
+	# Systemd service
+	install -d debian/secubox-threats/usr/lib/systemd/system
+	[ -f systemd/secubox-threats.service ] && cp systemd/secubox-threats.service debian/secubox-threats/usr/lib/systemd/system/ || true

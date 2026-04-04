@@ -37,7 +37,7 @@ Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 
 ---
 
-## Paquets Debian — 85 modules (72 UI + 3 backend + 10 tools)
+## Paquets Debian — 93 modules (80 UI + 3 backend + 10 tools)
 
 | Module | www/ | API | deb/ | Endpoints | Statut |
 |--------|------|-----|------|-----------|--------|
@@ -115,7 +115,18 @@ Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 | **secubox-peertube** | ✅ | ✅ | ✅ | videos, channels, federation, transcoding | ✅ |
 | **secubox-voip** | ✅ | ✅ | ✅ | extensions, trunks, routes, IVR, CDR | ✅ |
 
-**Total : 85 modules | ~1700+ endpoints API + Go mesh daemon + TUI console + SOC**
+| **secubox-wazuh** | — | ✅ | ✅ | SIEM, agent enrollment | ✅ |
+| **secubox-ossec** | — | ✅ | ✅ | Host IDS | ✅ |
+| **secubox-ai-insights** | ✅ | ✅ | ✅ | ML threat detection, anomalies | ✅ |
+| **secubox-ipblock** | ✅ | ✅ | ✅ | IP blocklist, nftables sets | ✅ |
+| **secubox-interceptor** | ✅ | ✅ | ✅ | traffic interception, SSL inspect | ✅ |
+| **secubox-cookies** | ✅ | ✅ | ✅ | cookie tracking, GDPR | ✅ |
+| **secubox-mac-guard** | ✅ | ✅ | ✅ | MAC whitelist/blacklist | ✅ |
+| **secubox-dns-provider** | ✅ | ✅ | ✅ | OVH, Gandi, Cloudflare API | ✅ |
+| **secubox-threats** | ✅ | ✅ | ✅ | unified threat dashboard, IOCs | ✅ |
+| **secubox-openclaw** | ✅ | ✅ | ✅ | OSINT reconnaissance | ✅ |
+
+**Total : 93 modules | ~2000+ endpoints API + Go mesh daemon + TUI console + SOC**
 
 *Note: mail-lxc and webmail-lxc are backend components integrated into secubox-mail*
 
@@ -190,7 +201,7 @@ bash scripts/build-add-local.sh secubox-crowdsec bookworm
 7. ~~Phase 7 : Documentation + UI Theme~~ ✅ Fait
 8. ~~Phase 8 : Applications~~ ✅ **21/21 modules complete**
 9. ~~Phase 9 : System Tools~~ ✅ **22/22 modules complete**
-10. **Phase 10 : Security Extensions** — 10 modules (wazuh, ai-insights, interceptor...)
+10. ~~Phase 10 : Security Extensions~~ ✅ **10/10 modules complete**
 11. Tests d'intégration sur VM et hardware réel
 12. Déployer apt.secubox.in sur serveur production
 

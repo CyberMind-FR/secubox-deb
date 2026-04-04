@@ -1,0 +1,19 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-ai-insights/usr/lib/secubox/ai-insights/
+	cp -r api debian/secubox-ai-insights/usr/lib/secubox/ai-insights/
+	install -d debian/secubox-ai-insights/usr/share/secubox/www
+	[ -d www ] && cp -r www/. debian/secubox-ai-insights/usr/share/secubox/www/ || true
+	install -d debian/secubox-ai-insights/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-ai-insights/usr/share/secubox/menu.d/ || true
+	# Modular nginx config
+	install -d debian/secubox-ai-insights/etc/nginx/secubox.d
+	[ -f nginx/ai-insights.conf ] && cp nginx/ai-insights.conf debian/secubox-ai-insights/etc/nginx/secubox.d/ || true
+	# Systemd service
+	install -d debian/secubox-ai-insights/usr/lib/systemd/system
+	[ -f systemd/secubox-ai-insights.service ] && cp systemd/secubox-ai-insights.service debian/secubox-ai-insights/usr/lib/systemd/system/ || true
+	# Config directory
+	install -d debian/secubox-ai-insights/etc/secubox

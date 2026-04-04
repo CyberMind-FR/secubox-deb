@@ -1,0 +1,15 @@
+secubox-openclaw (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release
+  * OSINT intelligence gathering module
+  * Domain reconnaissance with DNS enumeration
+  * IP intelligence with port scanning
+  * Email security analysis (SPF/DMARC)
+  * Subdomain discovery
+  * Certificate transparency integration (crt.sh)
+  * WHOIS lookup with parsing
+  * Shodan/Censys/VirusTotal API integration support
+  * Export to JSON/CSV/XML formats
+  * P31 Phosphor light theme UI
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Apr 2026 12:00:00 +0200

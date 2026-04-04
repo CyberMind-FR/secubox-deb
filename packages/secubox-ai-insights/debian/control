@@ -1,0 +1,26 @@
+Source: secubox-ai-insights
+Section: net
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
+
+Package: secubox-ai-insights
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3 (>= 3.11)
+Recommends: crowdsec, suricata
+Description: SecuBox AI Insights - ML-based Threat Detection
+ Machine learning powered threat detection and security insights module.
+ .
+ Features:
+  - ML-based threat detection and classification
+  - Anomaly detection in network traffic
+  - Log analysis with trained models
+  - Threat scoring and risk assessment
+  - CrowdSec and Suricata integration
+  - Model management (train, deploy)
+  - Alert correlation engine
+ .
+ Port Debian bookworm de SecuBox OpenWrt (CyberMind.fr).

@@ -1,0 +1,30 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+override_dh_auto_install:
+	# Install API
+	install -d $(CURDIR)/debian/secubox-cookies/usr/lib/secubox/cookies/api
+	install -m 644 api/*.py $(CURDIR)/debian/secubox-cookies/usr/lib/secubox/cookies/api/
+
+	# Install web frontend
+	install -d $(CURDIR)/debian/secubox-cookies/usr/share/secubox/www/cookies
+	install -m 644 www/cookies/*.html $(CURDIR)/debian/secubox-cookies/usr/share/secubox/www/cookies/
+
+	# Install systemd service
+	install -d $(CURDIR)/debian/secubox-cookies/usr/lib/systemd/system
+	install -m 644 systemd/secubox-cookies.service $(CURDIR)/debian/secubox-cookies/usr/lib/systemd/system/
+
+	# Install menu entry
+	install -d $(CURDIR)/debian/secubox-cookies/usr/share/secubox/menu.d
+	install -m 644 menu.d/*.json $(CURDIR)/debian/secubox-cookies/usr/share/secubox/menu.d/
+
+	# Install nginx config
+	install -d $(CURDIR)/debian/secubox-cookies/etc/nginx/secubox.d
+	install -m 644 nginx/cookies.conf $(CURDIR)/debian/secubox-cookies/etc/nginx/secubox.d/cookies.conf
+
+	# Create data directories
+	install -d $(CURDIR)/debian/secubox-cookies/var/lib/secubox/cookies
+	install -d $(CURDIR)/debian/secubox-cookies/var/cache/secubox/cookies
+	install -d $(CURDIR)/debian/secubox-cookies/var/log/secubox

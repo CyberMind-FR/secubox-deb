@@ -1,0 +1,21 @@
+Source: secubox-openclaw
+Section: admin
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+
+Package: secubox-openclaw
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0.0), dnsutils, whois, curl
+Recommends: nmap
+Description: SecuBox OpenClaw OSINT Module
+ Open Source Intelligence (OSINT) tool for reconnaissance and
+ information gathering. Features include:
+  - Domain reconnaissance with DNS enumeration
+  - IP intelligence and port scanning
+  - Email harvesting detection
+  - Subdomain discovery
+  - Certificate transparency lookups
+  - WHOIS information gathering
+  - Shodan/Censys/VirusTotal integration

@@ -1,0 +1,11 @@
+secubox-ipblock (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release
+  * IP blocklist management with multiple sources
+  * nftables integration for IPv4/IPv6 blocking
+  * Whitelist support
+  * Auto-update scheduling
+  * Import/export functionality
+  * Block history and statistics
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Apr 2026 10:00:00 +0200

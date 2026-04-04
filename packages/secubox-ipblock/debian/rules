@@ -1,0 +1,11 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-ipblock/usr/lib/secubox/ipblock
+	cp -r api debian/secubox-ipblock/usr/lib/secubox/ipblock/
+	install -d debian/secubox-ipblock/usr/share/secubox/www/ipblock
+	cp -r www/ipblock/. debian/secubox-ipblock/usr/share/secubox/www/ipblock/
+	install -d debian/secubox-ipblock/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-ipblock/usr/share/secubox/menu.d/ || true

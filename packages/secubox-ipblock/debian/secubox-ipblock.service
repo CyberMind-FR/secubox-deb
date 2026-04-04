@@ -1,0 +1,27 @@
+[Unit]
+Description=SecuBox IPBlock API
+After=network.target secubox-core.service
+Requires=secubox-core.service
+
+[Service]
+Type=simple
+User=secubox
+Group=secubox
+WorkingDirectory=/usr/lib/secubox/ipblock
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/ipblock.sock --log-level warning
+Restart=on-failure
+RestartSec=5
+UMask=0000
+PrivateTmp=true
+NoNewPrivileges=true
+RuntimeDirectory=secubox
+RuntimeDirectoryMode=0775
+ProtectSystem=full
+ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox /etc/nftables.d
+
+# Allow nft commands
+AmbientCapabilities=CAP_NET_ADMIN
+CapabilityBoundingSet=CAP_NET_ADMIN
+
+[Install]
+WantedBy=multi-user.target

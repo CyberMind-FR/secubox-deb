@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - DNS Provider</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root {
+            /* P31 Phosphor spectrum */
+            --p31-peak: #00dd44;
+            --p31-hot: #00ff55;
+            --p31-mid: #009933;
+            --p31-dim: #006622;
+            --p31-ghost: #003311;
+            --p31-decay: #ffb347;
+            --p31-decay-dim: #cc7722;
+            /* Tube glass */
+            --tube-light: #e8f5e9;
+            --tube-pale: #c8e6c9;
+            --tube-soft: #a5d6a7;
+            /* DNS Provider accent - Blue */
+            --accent: #3b82f6;
+            --accent-dim: #1d4ed8;
+            --accent-glow: rgba(59, 130, 246, 0.3);
+            /* Legacy mappings */
+            --bg-dark: var(--tube-light);
+            --bg-card: var(--tube-pale);
+            --border: var(--tube-soft);
+            --text: #1a1a2e;
+            --text-dim: var(--p31-dim);
+            --primary: var(--accent);
+            --cyan: var(--accent);
+            --green: var(--p31-peak);
+            --red: #ff4466;
+            --yellow: var(--p31-decay);
+            /* Bloom effects */
+            --bloom-accent: 0 0 6px var(--accent), 0 0 14px var(--accent-glow);
+            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Courier Prime', 'Courier New', monospace;
+            background: var(--tube-light);
+            background-image: radial-gradient(ellipse at 50% 40%, var(--accent-glow) 0%, transparent 70%);
+            color: var(--text);
+            display: flex;
+            min-height: 100vh;
+        }
+        .sidebar { width: 220px; background: var(--bg-sidebar); border-right: 1px solid var(--border); position: fixed; height: 100vh; overflow-y: auto; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        .header h1 { font-size: 1.5rem; color: var(--accent); text-shadow: var(--bloom-accent); }
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: var(--bg-card);
+            color: var(--text);
+            cursor: pointer;
+            margin-left: 0.5rem;
+            font-family: inherit;
+            letter-spacing: 0.05em;
+            transition: all 0.2s;
+        }
+        .btn:hover { border-color: var(--accent); color: var(--accent); }
+        .btn.primary { background: rgba(59,130,246,0.1); border-color: var(--accent); color: var(--accent); }
+        .btn.primary:hover { background: rgba(59,130,246,0.2); box-shadow: var(--bloom-accent); }
+        .btn.success { background: rgba(0,221,68,0.1); border-color: var(--green); color: var(--green); }
+        .btn.danger { background: rgba(255,68,102,0.1); border-color: var(--red); color: var(--red); }
+
+        /* Stats Row */
+        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+        }
+        .stat-card .value { font-size: 2rem; font-weight: bold; color: var(--accent); text-shadow: 0 0 10px var(--accent-glow); }
+        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); letter-spacing: 0.1em; text-transform: uppercase; }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 0;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid var(--border);
+            background: var(--bg-card);
+            border-radius: 8px 8px 0 0;
+            overflow: hidden;
+        }
+        .tab {
+            padding: 0.75rem 1.25rem;
+            cursor: pointer;
+            color: var(--text-dim);
+            border-bottom: 2px solid transparent;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            transition: all 0.2s;
+        }
+        .tab:hover { color: var(--accent); }
+        .tab.active { color: var(--accent); border-bottom-color: var(--accent); text-shadow: var(--bloom-accent); }
+
+        /* Tab Content */
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Cards */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-bottom: 1.5rem;
+        }
+        .card h2 {
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+            color: var(--p31-decay);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* Provider Cards */
+        .providers-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
+        .provider-card {
+            background: var(--tube-light);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            position: relative;
+        }
+        .provider-card.enabled { border-left: 3px solid var(--green); }
+        .provider-card.disabled { border-left: 3px solid var(--text-dim); opacity: 0.7; }
+        .provider-card .provider-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
+        .provider-card .provider-name { font-weight: bold; font-size: 1rem; }
+        .provider-card .provider-type { font-size: 0.75rem; color: var(--accent); text-transform: uppercase; letter-spacing: 0.1em; }
+        .provider-card .provider-status { display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: var(--text-dim); }
+        .provider-card .status-dot { width: 8px; height: 8px; border-radius: 50%; }
+        .provider-card .status-dot.active { background: var(--green); box-shadow: 0 0 6px var(--green); }
+        .provider-card .status-dot.inactive { background: var(--text-dim); }
+        .provider-card .provider-actions { margin-top: 1rem; display: flex; gap: 0.5rem; }
+        .provider-card .provider-actions .btn { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+
+        /* Domain List */
+        .domain-list { display: flex; flex-direction: column; gap: 0.5rem; }
+        .domain-item {
+            padding: 0.75rem;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .domain-item:hover { background: rgba(59,130,246,0.05); border-color: var(--accent); }
+        .domain-item.active { background: rgba(59,130,246,0.1); border-color: var(--accent); }
+        .domain-item .domain-name { font-weight: 600; }
+        .domain-item .domain-provider { font-size: 0.75rem; color: var(--text-dim); }
+        .domain-item .domain-records { font-size: 0.8rem; color: var(--accent); }
+
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 0.6rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.875rem; }
+        th { color: var(--p31-decay); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; }
+        tr:hover { background: rgba(59,130,246,0.03); }
+
+        /* Type Badges */
+        .type-badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            font-family: monospace;
+        }
+        .type-A { background: rgba(59,130,246,0.2); color: var(--accent); }
+        .type-AAAA { background: rgba(139,92,246,0.2); color: #8b5cf6; }
+        .type-CNAME { background: rgba(0,221,68,0.2); color: var(--green); }
+        .type-MX { background: rgba(255,179,71,0.2); color: var(--yellow); }
+        .type-TXT { background: rgba(139,148,158,0.2); color: var(--text-dim); }
+        .type-NS { background: rgba(236,72,153,0.2); color: #ec4899; }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal.show { display: flex; }
+        .modal-content {
+            background: var(--bg-card);
+            border: 1px solid var(--accent);
+            border-radius: 8px;
+            padding: 1.5rem;
+            min-width: 450px;
+            max-width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 0 30px var(--accent-glow);
+        }
+        .modal-content h3 {
+            margin-bottom: 1rem;
+            color: var(--accent);
+            letter-spacing: 0.1em;
+        }
+
+        /* Forms */
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.25rem; font-size: 0.8rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.1em; }
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background: var(--tube-light);
+            color: var(--text);
+            font-family: inherit;
+        }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 8px var(--accent-glow);
+        }
+        .form-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+
+        /* ACME Section */
+        .acme-status {
+            padding: 1rem;
+            border-radius: 8px;
+            background: var(--tube-light);
+            border: 1px solid var(--border);
+        }
+        .acme-status.pending { border-color: var(--yellow); }
+        .acme-status.valid { border-color: var(--green); }
+        .acme-status .status-icon { font-size: 1.5rem; margin-right: 0.5rem; }
+
+        /* Log Entries */
+        .log-entry {
+            padding: 0.5rem;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.8rem;
+            display: flex;
+            gap: 1rem;
+        }
+        .log-entry .timestamp { color: var(--text-dim); min-width: 150px; }
+        .log-entry .action { color: var(--accent); min-width: 120px; font-weight: 600; }
+        .log-entry .details { color: var(--text); }
+
+        /* Grid layouts */
+        .grid-2 { display: grid; grid-template-columns: 300px 1fr; gap: 1.5rem; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+
+        /* DDNS Form */
+        .ddns-form {
+            display: grid;
+            grid-template-columns: 1fr 1fr auto;
+            gap: 1rem;
+            align-items: end;
+        }
+
+        /* Empty state */
+        .empty { color: var(--text-dim); text-align: center; padding: 2rem; }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .grid-2 { grid-template-columns: 1fr; }
+            .stats-row { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (max-width: 768px) {
+            .main { margin-left: 0; }
+            .sidebar { display: none; }
+            .stats-row { grid-template-columns: 1fr; }
+            .modal-content { min-width: 95%; }
+        }
+
+        .mono { font-family: monospace; font-size: 0.85rem; }
+    </style>
+</head>
+<body class="crt-light">
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+
+    <main class="main">
+        <header class="header">
+            <h1>DNS Provider</h1>
+            <div>
+                <button class="btn" onclick="refresh()">Refresh</button>
+            </div>
+        </header>
+
+        <div class="stats-row">
+            <div class="stat-card"><div class="value" id="stat-providers">-</div><div class="label">Providers</div></div>
+            <div class="stat-card"><div class="value" id="stat-domains">-</div><div class="label">Domains</div></div>
+            <div class="stat-card"><div class="value" id="stat-records">-</div><div class="label">Records</div></div>
+            <div class="stat-card"><div class="value" id="stat-status">-</div><div class="label">Status</div></div>
+        </div>
+
+        <div class="tabs">
+            <div class="tab active" data-tab="providers">Providers</div>
+            <div class="tab" data-tab="domains">Domains</div>
+            <div class="tab" data-tab="records">Records</div>
+            <div class="tab" data-tab="acme">ACME</div>
+            <div class="tab" data-tab="ddns">Dynamic DNS</div>
+            <div class="tab" data-tab="settings">Settings</div>
+        </div>
+
+        <!-- Providers Tab -->
+        <div class="tab-content active" id="tab-providers">
+            <div class="card">
+                <h2>DNS Providers <button class="btn primary" onclick="showAddProvider()">+ Add Provider</button></h2>
+                <div class="providers-grid" id="providers-list">
+                    <div class="empty">Loading providers...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Domains Tab -->
+        <div class="tab-content" id="tab-domains">
+            <div class="card">
+                <h2>Managed Domains</h2>
+                <div class="domain-list" id="domains-list">
+                    <div class="empty">Loading domains...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Records Tab -->
+        <div class="tab-content" id="tab-records">
+            <div class="grid-2">
+                <div class="card">
+                    <h2>Select Domain</h2>
+                    <div class="domain-list" id="records-domain-list">
+                        <div class="empty">Select a domain</div>
+                    </div>
+                </div>
+                <div class="card">
+                    <h2>DNS Records <span id="current-domain-name"></span>
+                        <button class="btn primary" id="add-record-btn" style="display:none" onclick="showAddRecord()">+ Add Record</button>
+                    </h2>
+                    <div id="records-container">
+                        <div class="empty">Select a domain to view records</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ACME Tab -->
+        <div class="tab-content" id="tab-acme">
+            <div class="card">
+                <h2>ACME DNS-01 Challenge</h2>
+                <p style="margin-bottom: 1rem; color: var(--text-dim);">Create DNS TXT records for Let's Encrypt certificate validation.</p>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Domain</label>
+                        <input type="text" id="acme-domain" placeholder="example.com">
+                    </div>
+                    <div class="form-group">
+                        <label>Provider</label>
+                        <select id="acme-provider"></select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Token</label>
+                        <input type="text" id="acme-token" placeholder="ACME challenge token">
+                    </div>
+                    <div class="form-group">
+                        <label>Key Authorization</label>
+                        <input type="text" id="acme-keyauth" placeholder="Key authorization value">
+                    </div>
+                </div>
+                <div class="form-actions" style="justify-content: flex-start;">
+                    <button class="btn success" onclick="createAcmeChallenge()">Create Challenge</button>
+                    <button class="btn danger" onclick="deleteAcmeChallenge()">Delete Challenge</button>
+                </div>
+            </div>
+            <div class="card">
+                <h2>Active Challenges</h2>
+                <div id="acme-challenges">
+                    <div class="empty">No active ACME challenges</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- DDNS Tab -->
+        <div class="tab-content" id="tab-ddns">
+            <div class="card">
+                <h2>Dynamic DNS Update</h2>
+                <p style="margin-bottom: 1rem; color: var(--text-dim);">Update DNS A/AAAA records with your current IP address.</p>
+                <div class="ddns-form">
+                    <div class="form-group">
+                        <label>Domain</label>
+                        <input type="text" id="ddns-domain" placeholder="example.com">
+                    </div>
+                    <div class="form-group">
+                        <label>Subdomain</label>
+                        <input type="text" id="ddns-subdomain" placeholder="@ or www" value="@">
+                    </div>
+                    <button class="btn primary" onclick="updateDdns()">Update IP</button>
+                </div>
+                <div class="form-row" style="margin-top: 1rem;">
+                    <div class="form-group">
+                        <label>Provider</label>
+                        <select id="ddns-provider"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Manual IPv4 (optional)</label>
+                        <input type="text" id="ddns-ipv4" placeholder="Auto-detect">
+                    </div>
+                </div>
+            </div>
+            <div class="card">
+                <h2>Recent DDNS Updates</h2>
+                <div id="ddns-history">
+                    <div class="empty">No recent DDNS updates</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Tab -->
+        <div class="tab-content" id="tab-settings">
+            <div class="card">
+                <h2>Configuration</h2>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Default TTL (seconds)</label>
+                        <input type="number" id="config-ttl" value="300">
+                    </div>
+                    <div class="form-group">
+                        <label>ACME Challenge TTL</label>
+                        <input type="number" id="config-acme-ttl" value="60">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>DDNS Check Interval (seconds)</label>
+                        <input type="number" id="config-ddns-interval" value="300">
+                    </div>
+                    <div class="form-group">
+                        <label>Audit Log Retention (days)</label>
+                        <input type="number" id="config-audit-retention" value="90">
+                    </div>
+                </div>
+                <div class="form-actions" style="justify-content: flex-start;">
+                    <button class="btn primary" onclick="saveConfig()">Save Configuration</button>
+                </div>
+            </div>
+            <div class="card">
+                <h2>Audit Log</h2>
+                <div id="audit-log" style="max-height: 400px; overflow-y: auto;">
+                    <div class="empty">Loading logs...</div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Add Provider Modal -->
+    <div class="modal" id="provider-modal">
+        <div class="modal-content">
+            <h3>Add DNS Provider</h3>
+            <div class="form-group">
+                <label>Provider Name</label>
+                <input type="text" id="provider-name" placeholder="My Cloudflare">
+            </div>
+            <div class="form-group">
+                <label>Provider Type</label>
+                <select id="provider-type" onchange="updateCredentialFields()">
+                    <option value="cloudflare">Cloudflare</option>
+                    <option value="gandi">Gandi</option>
+                    <option value="ovh">OVH</option>
+                    <option value="route53">AWS Route53</option>
+                </select>
+            </div>
+            <div id="credential-fields">
+                <!-- Dynamic credential fields -->
+            </div>
+            <div class="form-actions">
+                <button class="btn" onclick="hideModal('provider-modal')">Cancel</button>
+                <button class="btn primary" onclick="addProvider()">Add Provider</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Record Modal -->
+    <div class="modal" id="record-modal">
+        <div class="modal-content">
+            <h3>Add DNS Record</h3>
+            <div class="form-group">
+                <label>Type</label>
+                <select id="record-type">
+                    <option value="A">A - IPv4 Address</option>
+                    <option value="AAAA">AAAA - IPv6 Address</option>
+                    <option value="CNAME">CNAME - Canonical Name</option>
+                    <option value="MX">MX - Mail Exchange</option>
+                    <option value="TXT">TXT - Text Record</option>
+                    <option value="NS">NS - Nameserver</option>
+                    <option value="SRV">SRV - Service</option>
+                    <option value="CAA">CAA - Cert Authority</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Name</label>
+                <input type="text" id="record-name" placeholder="@ or www">
+            </div>
+            <div class="form-group">
+                <label>Value</label>
+                <input type="text" id="record-value" placeholder="192.168.1.1">
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>TTL (seconds)</label>
+                    <input type="number" id="record-ttl" value="300">
+                </div>
+                <div class="form-group">
+                    <label>Priority (MX/SRV)</label>
+                    <input type="number" id="record-priority" placeholder="10">
+                </div>
+            </div>
+            <div class="form-actions">
+                <button class="btn" onclick="hideModal('record-modal')">Cancel</button>
+                <button class="btn primary" onclick="addRecord()">Create Record</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API = '/api/v1/dns-provider';
+        const token = () => localStorage.getItem('sbx_token');
+        const headers = () => ({
+            'Content-Type': 'application/json',
+            ...(token() ? { 'Authorization': 'Bearer ' + token() } : {})
+        });
+
+        let providers = [];
+        let domains = [];
+        let currentDomain = null;
+        let currentProviderId = null;
+
+        async function api(path, opts = {}) {
+            try {
+                const res = await fetch(API + path, { ...opts, headers: headers() });
+                if (res.status === 401) { window.location = '/login.html'; return {}; }
+                return res.json();
+            } catch (e) { console.error(e); return {}; }
+        }
+
+        // Tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+            });
+        });
+
+        // Load data
+        async function loadSummary() {
+            const d = await api('/summary');
+            document.getElementById('stat-providers').textContent = d.providers?.total || 0;
+            document.getElementById('stat-domains').textContent = d.domains || 0;
+            document.getElementById('stat-status').textContent = d.providers?.active > 0 ? 'OK' : '-';
+            document.getElementById('stat-status').style.color = d.providers?.active > 0 ? 'var(--green)' : 'var(--text-dim)';
+        }
+
+        async function loadProviders() {
+            const d = await api('/providers');
+            providers = d.providers || [];
+            const list = document.getElementById('providers-list');
+
+            if (!providers.length) {
+                list.innerHTML = '<div class="empty">No providers configured. Add a provider to get started.</div>';
+                return;
+            }
+
+            list.innerHTML = providers.map(p => `
+                <div class="provider-card ${p.enabled ? 'enabled' : 'disabled'}">
+                    <div class="provider-header">
+                        <div>
+                            <div class="provider-name">${escapeHtml(p.name)}</div>
+                            <div class="provider-type">${p.provider.toUpperCase()}</div>
+                        </div>
+                        <div class="provider-status">
+                            <span class="status-dot ${p.enabled ? 'active' : 'inactive'}"></span>
+                            ${p.enabled ? 'Active' : 'Disabled'}
+                        </div>
+                    </div>
+                    <div style="font-size: 0.75rem; color: var(--text-dim); margin-bottom: 0.5rem;">
+                        ID: ${p.id}
+                    </div>
+                    <div class="provider-actions">
+                        <button class="btn ${p.enabled ? 'danger' : 'success'}" onclick="toggleProvider('${p.id}', ${!p.enabled})">
+                            ${p.enabled ? 'Disable' : 'Enable'}
+                        </button>
+                        <button class="btn danger" onclick="deleteProvider('${p.id}')">Delete</button>
+                    </div>
+                </div>
+            `).join('');
+
+            // Update provider selects
+            updateProviderSelects();
+        }
+
+        async function loadDomains() {
+            const d = await api('/domains');
+            domains = d.domains || [];
+
+            // Update domains list
+            const list = document.getElementById('domains-list');
+            const recordsList = document.getElementById('records-domain-list');
+
+            if (!domains.length) {
+                list.innerHTML = '<div class="empty">No domains found. Add a provider first.</div>';
+                recordsList.innerHTML = '<div class="empty">No domains available</div>';
+                return;
+            }
+
+            const html = domains.map(d => `
+                <div class="domain-item" onclick="selectDomain('${d.name}', '${d.provider_id}')">
+                    <div>
+                        <div class="domain-name">${escapeHtml(d.name)}</div>
+                        <div class="domain-provider">${escapeHtml(d.provider_name || d.provider_type)}</div>
+                    </div>
+                    <div class="domain-records">${d.status || 'active'}</div>
+                </div>
+            `).join('');
+
+            list.innerHTML = html;
+            recordsList.innerHTML = html;
+
+            // Update total records count (rough estimate)
+            document.getElementById('stat-records').textContent = domains.length * 5 + '+';
+        }
+
+        async function selectDomain(name, providerId) {
+            currentDomain = name;
+            currentProviderId = providerId;
+            document.getElementById('current-domain-name').textContent = ': ' + name;
+            document.getElementById('add-record-btn').style.display = '';
+
+            // Highlight selected
+            document.querySelectorAll('#records-domain-list .domain-item').forEach(el => {
+                el.classList.toggle('active', el.textContent.includes(name));
+            });
+
+            // Load records
+            const d = await api(`/domain/${encodeURIComponent(name)}/records?provider_id=${providerId}`);
+            const records = d.records || [];
+
+            const container = document.getElementById('records-container');
+            if (!records.length) {
+                container.innerHTML = '<div class="empty">No records found</div>';
+                return;
+            }
+
+            container.innerHTML = `<table>
+                <thead><tr><th>Type</th><th>Name</th><th>Value</th><th>TTL</th><th></th></tr></thead>
+                <tbody>${records.map(r => `<tr>
+                    <td><span class="type-badge type-${r.type}">${r.type}</span></td>
+                    <td class="mono">${escapeHtml(r.name)}</td>
+                    <td class="mono" style="max-width:200px;overflow:hidden;text-overflow:ellipsis">${escapeHtml(r.value)}</td>
+                    <td>${r.ttl || '-'}</td>
+                    <td><button class="btn danger" style="padding:0.25rem 0.5rem;font-size:0.75rem" onclick="deleteRecord('${r.id}')">Del</button></td>
+                </tr>`).join('')}</tbody>
+            </table>`;
+        }
+
+        async function loadConfig() {
+            const d = await api('/config');
+            document.getElementById('config-ttl').value = d.default_ttl || 300;
+            document.getElementById('config-acme-ttl').value = d.acme_ttl || 60;
+            document.getElementById('config-ddns-interval').value = d.ddns_check_interval || 300;
+            document.getElementById('config-audit-retention').value = d.audit_retention_days || 90;
+        }
+
+        async function loadAuditLog() {
+            const d = await api('/logs?limit=50');
+            const logs = d.logs || [];
+            const container = document.getElementById('audit-log');
+
+            if (!logs.length) {
+                container.innerHTML = '<div class="empty">No audit logs</div>';
+                return;
+            }
+
+            container.innerHTML = logs.map(l => `
+                <div class="log-entry">
+                    <span class="timestamp">${formatDate(l.timestamp)}</span>
+                    <span class="action">${l.action}</span>
+                    <span class="details">${JSON.stringify(l.details || {})}</span>
+                </div>
+            `).join('');
+        }
+
+        function updateProviderSelects() {
+            const html = providers.filter(p => p.enabled).map(p =>
+                `<option value="${p.id}">${escapeHtml(p.name)} (${p.provider})</option>`
+            ).join('');
+
+            document.getElementById('acme-provider').innerHTML = html || '<option>No providers</option>';
+            document.getElementById('ddns-provider').innerHTML = html || '<option>No providers</option>';
+        }
+
+        // Provider management
+        function showAddProvider() {
+            updateCredentialFields();
+            showModal('provider-modal');
+        }
+
+        function updateCredentialFields() {
+            const type = document.getElementById('provider-type').value;
+            const fields = document.getElementById('credential-fields');
+
+            const configs = {
+                cloudflare: [{ name: 'api_token', label: 'API Token', type: 'password' }],
+                gandi: [{ name: 'api_key', label: 'API Key', type: 'password' }],
+                ovh: [
+                    { name: 'application_key', label: 'Application Key', type: 'text' },
+                    { name: 'application_secret', label: 'Application Secret', type: 'password' },
+                    { name: 'consumer_key', label: 'Consumer Key', type: 'password' },
+                    { name: 'endpoint', label: 'Endpoint', type: 'text', default: 'ovh-eu' }
+                ],
+                route53: [
+                    { name: 'access_key_id', label: 'Access Key ID', type: 'text' },
+                    { name: 'secret_access_key', label: 'Secret Access Key', type: 'password' },
+                    { name: 'region', label: 'Region', type: 'text', default: 'us-east-1' }
+                ]
+            };
+
+            const config = configs[type] || [];
+            fields.innerHTML = config.map(f => `
+                <div class="form-group">
+                    <label>${f.label}</label>
+                    <input type="${f.type}" id="cred-${f.name}" placeholder="${f.label}" value="${f.default || ''}">
+                </div>
+            `).join('');
+        }
+
+        async function addProvider() {
+            const type = document.getElementById('provider-type').value;
+            const name = document.getElementById('provider-name').value.trim();
+
+            if (!name) { alert('Provider name required'); return; }
+
+            const credentials = {};
+            document.querySelectorAll('#credential-fields input').forEach(input => {
+                const key = input.id.replace('cred-', '');
+                credentials[key] = input.value;
+            });
+
+            const r = await api('/provider', {
+                method: 'POST',
+                body: JSON.stringify({ provider: type, name, credentials, enabled: true })
+            });
+
+            if (r.success) {
+                hideModal('provider-modal');
+                refresh();
+                document.getElementById('provider-name').value = '';
+            } else {
+                alert('Error: ' + (r.detail || 'Failed to add provider'));
+            }
+        }
+
+        async function toggleProvider(id, enabled) {
+            await api(`/provider/${id}`, {
+                method: 'PUT',
+                body: JSON.stringify({ enabled })
+            });
+            refresh();
+        }
+
+        async function deleteProvider(id) {
+            if (!confirm('Delete this provider?')) return;
+            await api(`/provider/${id}`, { method: 'DELETE' });
+            refresh();
+        }
+
+        // Record management
+        function showAddRecord() {
+            showModal('record-modal');
+        }
+
+        async function addRecord() {
+            const type = document.getElementById('record-type').value;
+            const name = document.getElementById('record-name').value.trim() || '@';
+            const value = document.getElementById('record-value').value.trim();
+            const ttl = parseInt(document.getElementById('record-ttl').value) || 300;
+            const priority = parseInt(document.getElementById('record-priority').value) || null;
+
+            if (!value) { alert('Value required'); return; }
+            if (!currentDomain || !currentProviderId) { alert('Select a domain first'); return; }
+
+            const body = { type, name, value, ttl };
+            if (priority) body.priority = priority;
+
+            const r = await api(`/domain/${encodeURIComponent(currentDomain)}/record?provider_id=${currentProviderId}`, {
+                method: 'POST',
+                body: JSON.stringify(body)
+            });
+
+            if (r.success) {
+                hideModal('record-modal');
+                selectDomain(currentDomain, currentProviderId);
+            } else {
+                alert('Error: ' + (r.detail || 'Failed to create record'));
+            }
+        }
+
+        async function deleteRecord(recordId) {
+            if (!confirm('Delete this record?')) return;
+            if (!currentDomain || !currentProviderId) return;
+
+            await api(`/domain/${encodeURIComponent(currentDomain)}/record/${recordId}?provider_id=${currentProviderId}`, {
+                method: 'DELETE'
+            });
+            selectDomain(currentDomain, currentProviderId);
+        }
+
+        // ACME
+        async function createAcmeChallenge() {
+            const domain = document.getElementById('acme-domain').value.trim();
+            const token = document.getElementById('acme-token').value.trim();
+            const keyauth = document.getElementById('acme-keyauth').value.trim();
+            const providerId = document.getElementById('acme-provider').value;
+
+            if (!domain || !token || !keyauth) {
+                alert('All fields required');
+                return;
+            }
+
+            const r = await api(`/acme/challenge?provider_id=${providerId}`, {
+                method: 'POST',
+                body: JSON.stringify({ domain, token, key_authorization: keyauth })
+            });
+
+            if (r.success) {
+                alert('ACME challenge created: ' + r.record);
+            } else {
+                alert('Error: ' + (r.detail || 'Failed'));
+            }
+        }
+
+        async function deleteAcmeChallenge() {
+            const domain = document.getElementById('acme-domain').value.trim();
+            const token = document.getElementById('acme-token').value.trim();
+            const providerId = document.getElementById('acme-provider').value;
+
+            if (!domain || !token) {
+                alert('Domain and token required');
+                return;
+            }
+
+            const r = await api(`/acme/challenge?domain=${encodeURIComponent(domain)}&token=${encodeURIComponent(token)}&provider_id=${providerId}`, {
+                method: 'DELETE'
+            });
+
+            alert(r.success ? 'Challenge deleted' : 'Error: ' + (r.detail || 'Failed'));
+        }
+
+        // DDNS
+        async function updateDdns() {
+            const domain = document.getElementById('ddns-domain').value.trim();
+            const subdomain = document.getElementById('ddns-subdomain').value.trim() || '@';
+            const ip = document.getElementById('ddns-ipv4').value.trim() || null;
+            const providerId = document.getElementById('ddns-provider').value;
+
+            if (!domain) { alert('Domain required'); return; }
+
+            const body = { domain, subdomain };
+            if (ip) body.ip = ip;
+
+            const r = await api(`/ddns/update?provider_id=${providerId}`, {
+                method: 'POST',
+                body: JSON.stringify(body)
+            });
+
+            if (r.success) {
+                alert(`DDNS updated: ${r.subdomain}.${r.domain} -> ${r.ipv4}`);
+            } else {
+                alert('Error: ' + (r.detail || 'Failed'));
+            }
+        }
+
+        // Config
+        async function saveConfig() {
+            const config = {
+                default_ttl: parseInt(document.getElementById('config-ttl').value),
+                acme_ttl: parseInt(document.getElementById('config-acme-ttl').value),
+                ddns_check_interval: parseInt(document.getElementById('config-ddns-interval').value),
+                audit_retention_days: parseInt(document.getElementById('config-audit-retention').value)
+            };
+
+            const r = await api('/config', {
+                method: 'POST',
+                body: JSON.stringify(config)
+            });
+
+            alert(r.success ? 'Configuration saved' : 'Error saving configuration');
+        }
+
+        // Utils
+        function showModal(id) { document.getElementById(id).classList.add('show'); }
+        function hideModal(id) { document.getElementById(id).classList.remove('show'); }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text || '';
+            return div.innerHTML;
+        }
+
+        function formatDate(iso) {
+            try {
+                return new Date(iso).toLocaleString();
+            } catch { return iso; }
+        }
+
+        async function refresh() {
+            await Promise.all([
+                loadSummary(),
+                loadProviders(),
+                loadDomains(),
+                loadConfig(),
+                loadAuditLog()
+            ]);
+        }
+
+        refresh();
+    </script>
+    <script src="/shared/crt-engine.js"></script>
+</body>
+</html>

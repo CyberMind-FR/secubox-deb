@@ -1,0 +1,9 @@
+{
+  "id": "interceptor",
+  "name": "Interceptor",
+  "icon": "interception",
+  "path": "/interceptor/",
+  "category": "security",
+  "order": 703,
+  "description": "Traffic interception and analysis"
+}

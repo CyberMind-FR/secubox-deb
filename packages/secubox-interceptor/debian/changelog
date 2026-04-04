@@ -1,0 +1,14 @@
+secubox-interceptor (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release
+  * HTTP/HTTPS traffic interception
+  * SSL/TLS inspection with CA certificate
+  * Request/response modification rules
+  * Traffic recording and replay
+  * Protocol analysis and content filtering
+  * Session management
+  * WAF integration
+  * Real-time flow monitoring
+  * Statistics dashboard
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Apr 2026 10:30:00 +0200

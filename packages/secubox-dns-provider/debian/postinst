@@ -1,0 +1,13 @@
+#!/bin/sh
+set -e
+if [ "$1" = "configure" ]; then
+    # Create data directories
+    mkdir -p /var/lib/secubox/dns-provider
+    chown -R secubox:secubox /var/lib/secubox/dns-provider
+
+    systemctl daemon-reload
+    systemctl enable secubox-dns-provider.service || true
+    systemctl start secubox-dns-provider.service || true
+fi
+#DEBHELPER#
+exit 0

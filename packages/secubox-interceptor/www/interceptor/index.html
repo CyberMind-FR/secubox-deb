@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - Interceptor</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root {
+            /* P31 Phosphor spectrum */
+            --p31-peak: #00dd44;
+            --p31-hot: #00ff55;
+            --p31-mid: #009933;
+            --p31-dim: #006622;
+            --p31-ghost: #003311;
+            --p31-decay: #ffb347;
+            --p31-decay-dim: #cc7722;
+            /* Tube glass */
+            --tube-light: #e8f5e9;
+            --tube-pale: #c8e6c9;
+            --tube-soft: #a5d6a7;
+            /* Interceptor accent - Amber */
+            --accent: #f59e0b;
+            --accent-dim: #d97706;
+            --accent-light: rgba(245, 158, 11, 0.15);
+            /* Legacy mappings */
+            --bg-dark: var(--tube-light);
+            --bg-card: var(--tube-pale);
+            --border: var(--tube-soft);
+            --text: var(--tube-dark);
+            --text-dim: var(--p31-dim);
+            --primary: var(--accent);
+            --green: var(--p31-peak);
+            --red: #ff4466;
+            --yellow: var(--p31-decay);
+            --orange: var(--accent);
+            /* Bloom effects */
+            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-amber: 0 0 3px var(--accent), 0 0 10px rgba(245,158,11,0.4);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Courier Prime', 'Courier New', monospace;
+            background: var(--tube-light);
+            background-image: radial-gradient(ellipse at 50% 40%, rgba(245,158,11,0.025) 0%, transparent 70%);
+            color: var(--tube-dark);
+            display: flex;
+            min-height: 100vh;
+        }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        .header h1 { font-size: 1.5rem; display: flex; align-items: center; gap: 0.5rem; color: var(--accent); text-shadow: var(--bloom-amber); }
+
+        .badge { padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; border: 1px solid; letter-spacing: 0.1em; text-transform: uppercase; }
+        .badge-green { background: rgba(63,185,80,0.15); border-color: var(--green); color: var(--green); }
+        .badge-red { background: rgba(248,81,73,0.15); border-color: var(--red); color: var(--red); }
+        .badge-yellow { background: rgba(210,153,34,0.15); border-color: var(--yellow); color: var(--yellow); }
+        .badge-amber { background: var(--accent-light); border-color: var(--accent); color: var(--accent); }
+        .badge-primary { background: var(--accent-light); border-color: var(--accent); color: var(--accent); }
+
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.875rem; font-family: 'Courier Prime', monospace; letter-spacing: 0.08em; text-transform: uppercase; transition: all 0.2s; }
+        .btn:hover { background: var(--bg-dark); border-color: var(--p31-dim); }
+        .btn-primary { background: var(--accent-light); border-color: var(--accent); color: var(--accent); }
+        .btn-primary:hover { background: rgba(245,158,11,0.25); box-shadow: 0 0 12px rgba(245,158,11,0.2); }
+        .btn-green { background: rgba(63,185,80,0.15); border-color: var(--green); color: var(--green); }
+        .btn-red { background: rgba(248,81,73,0.15); border-color: var(--red); color: var(--red); }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; box-shadow: inset 0 0 20px rgba(0,0,0,0.3); }
+        .card:hover { border-color: var(--p31-dim); }
+        .card-title { font-size: 0.85rem; font-weight: 600; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; color: var(--accent); text-shadow: var(--bloom-amber); letter-spacing: 0.1em; text-transform: uppercase; }
+
+        .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+        .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+        @media (max-width: 1200px) { .grid-4 { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 768px) { .grid-4, .grid-3, .grid-2 { grid-template-columns: 1fr; } .main { margin-left: 0; } }
+
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
+        .stat-value { font-size: 2rem; font-weight: bold; text-shadow: 0 0 10px currentColor; }
+        .stat-value.amber { color: var(--accent); }
+        .stat-value.green { color: var(--green); }
+        .stat-value.red { color: var(--red); }
+        .stat-label { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; letter-spacing: 0.15em; }
+
+        /* Tabs */
+        .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 1rem; background: var(--tube-pale); }
+        .tab { padding: 0.75rem 1.25rem; cursor: pointer; border-bottom: 2px solid transparent; color: var(--p31-dim); letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.8rem; transition: all 0.2s; }
+        .tab:hover { color: var(--accent); }
+        .tab.active { color: var(--accent); border-bottom-color: var(--accent); text-shadow: var(--bloom-amber); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Table */
+        table { width: 100%; border-collapse: collapse; font-family: 'Courier Prime', monospace; }
+        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--p31-ghost); }
+        th { font-size: 0.75rem; color: var(--accent); text-shadow: var(--bloom-amber); text-transform: uppercase; letter-spacing: 0.15em; }
+        td { font-size: 0.875rem; color: var(--p31-mid); }
+        tr:hover { background: rgba(245,158,11,0.03); }
+
+        /* Flow list */
+        .flow-item { padding: 0.75rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 1rem; cursor: pointer; transition: background 0.2s; }
+        .flow-item:hover { background: rgba(245,158,11,0.05); }
+        .flow-method { min-width: 60px; font-weight: bold; }
+        .flow-method.GET { color: var(--green); }
+        .flow-method.POST { color: var(--accent); }
+        .flow-method.PUT { color: #3b82f6; }
+        .flow-method.DELETE { color: var(--red); }
+        .flow-url { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--p31-mid); }
+        .flow-status { min-width: 50px; text-align: right; }
+        .flow-status.s2xx { color: var(--green); }
+        .flow-status.s3xx { color: var(--accent); }
+        .flow-status.s4xx { color: var(--red); }
+        .flow-status.s5xx { color: #a855f7; }
+        .flow-time { font-size: 0.75rem; color: var(--text-dim); min-width: 80px; text-align: right; }
+
+        /* Rule builder */
+        .rule-form { display: grid; gap: 1rem; }
+        .form-group { display: flex; flex-direction: column; gap: 0.5rem; }
+        .form-group label { font-size: 0.75rem; color: var(--accent); letter-spacing: 0.1em; text-transform: uppercase; }
+        input, select, textarea { font-family: 'Courier Prime', monospace; background: var(--tube-light); border: 1px solid var(--tube-soft); color: var(--p31-mid); padding: 0.5rem; border-radius: 4px; }
+        input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 8px rgba(245,158,11,0.1); }
+
+        /* Toggle */
+        .toggle { position: relative; display: inline-block; width: 44px; height: 24px; }
+        .toggle input { opacity: 0; width: 0; height: 0; }
+        .toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: var(--bg-dark); border: 1px solid var(--border); border-radius: 24px; transition: 0.3s; }
+        .toggle-slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 2px; bottom: 2px; background: var(--text-dim); border-radius: 50%; transition: 0.3s; }
+        .toggle input:checked + .toggle-slider { background: var(--accent); border-color: var(--accent); }
+        .toggle input:checked + .toggle-slider:before { transform: translateX(20px); background: white; }
+
+        /* Modal */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 1000; justify-content: center; align-items: center; }
+        .modal.active { display: flex; }
+        .modal-content { background: var(--tube-pale); border: 1px solid var(--accent); border-radius: 8px; padding: 1.5rem; max-width: 800px; width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 0 30px rgba(245,158,11,0.1); }
+        .modal-title { font-size: 1rem; color: var(--accent); text-shadow: var(--bloom-amber); margin-bottom: 1rem; letter-spacing: 0.1em; }
+        .modal-close { position: absolute; top: 1rem; right: 1rem; font-size: 1.5rem; cursor: pointer; color: var(--text-dim); }
+
+        /* Toast */
+        .toast { position: fixed; bottom: 20px; right: 20px; padding: 1rem 1.5rem; border-radius: 8px; background: var(--tube-pale); border: 1px solid var(--p31-dim); z-index: 1000; animation: slideIn 0.3s; font-family: 'Courier Prime', monospace; }
+        .toast-success { border-color: var(--green); }
+        .toast-error { border-color: var(--red); }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        .actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+        .empty { text-align: center; padding: 2rem; color: var(--p31-dim); }
+
+        /* Recording indicator */
+        .recording { display: inline-flex; align-items: center; gap: 0.5rem; color: var(--red); }
+        .recording-dot { width: 10px; height: 10px; background: var(--red); border-radius: 50%; animation: pulse 1s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+        /* Code viewer */
+        .code-viewer { background: #1a1a2e; color: var(--p31-peak); padding: 1rem; border-radius: 4px; font-family: 'Courier Prime', monospace; font-size: 0.8rem; overflow-x: auto; max-height: 300px; overflow-y: auto; }
+        .code-viewer .header { color: var(--accent); }
+        .code-viewer .value { color: #a5d6a7; }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: var(--tube-light); }
+        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
+        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
+    </style>
+</head>
+<body class="crt-light">
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+
+    <main class="main">
+        <header class="header">
+            <h1>Traffic Interceptor <span class="badge" id="status-badge">Loading...</span></h1>
+            <div class="actions">
+                <span class="recording" id="recording-indicator" style="display: none;">
+                    <span class="recording-dot"></span> Recording
+                </span>
+                <button class="btn btn-primary" id="toggle-btn" onclick="toggleService()">Start</button>
+                <button class="btn" onclick="refresh()">Refresh</button>
+            </div>
+        </header>
+
+        <p style="color: var(--text-dim); margin-bottom: 1.5rem;">HTTP/HTTPS traffic interception and analysis</p>
+
+        <!-- Stats -->
+        <div class="grid-4">
+            <div class="stat-card">
+                <div class="stat-value amber" id="stat-flows">0</div>
+                <div class="stat-label">Total Flows</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value red" id="stat-blocked">0</div>
+                <div class="stat-label">Blocked</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value green" id="stat-sessions">0</div>
+                <div class="stat-label">Active Sessions</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value amber" id="stat-bytes">0</div>
+                <div class="stat-label">Bytes Inspected</div>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs">
+            <div class="tab active" data-tab="sessions">Sessions</div>
+            <div class="tab" data-tab="flows">Flows</div>
+            <div class="tab" data-tab="rules">Rules</div>
+            <div class="tab" data-tab="recordings">Recordings</div>
+            <div class="tab" data-tab="statistics">Statistics</div>
+            <div class="tab" data-tab="settings">Settings</div>
+        </div>
+
+        <!-- Sessions Tab -->
+        <div class="tab-content active" id="tab-sessions">
+            <div class="card">
+                <div class="card-title">
+                    <span>Active Sessions</span>
+                    <span class="badge badge-amber" id="sessions-count">0</span>
+                </div>
+                <div id="sessions-table">
+                    <div class="empty">Loading...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Flows Tab -->
+        <div class="tab-content" id="tab-flows">
+            <div class="card">
+                <div class="card-title">
+                    <span>Intercepted Flows</span>
+                    <div class="actions">
+                        <input type="text" id="flow-filter" placeholder="Filter by host..." style="width: 200px;">
+                        <button class="btn btn-sm" onclick="loadFlows()">Filter</button>
+                    </div>
+                </div>
+                <div id="flows-list">
+                    <div class="empty">Loading...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Rules Tab -->
+        <div class="tab-content" id="tab-rules">
+            <div class="card">
+                <div class="card-title">
+                    <span>Interception Rules</span>
+                    <button class="btn btn-primary btn-sm" onclick="showRuleModal()">Add Rule</button>
+                </div>
+                <div id="rules-table">
+                    <div class="empty">Loading...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recordings Tab -->
+        <div class="tab-content" id="tab-recordings">
+            <div class="card">
+                <div class="card-title">
+                    <span>Traffic Recordings</span>
+                    <div class="actions">
+                        <button class="btn btn-primary btn-sm" id="record-btn" onclick="toggleRecording()">Start Recording</button>
+                    </div>
+                </div>
+                <div id="recordings-list">
+                    <div class="empty">Loading...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Statistics Tab -->
+        <div class="tab-content" id="tab-statistics">
+            <div class="grid-2">
+                <div class="card">
+                    <div class="card-title">By HTTP Method</div>
+                    <div id="stats-methods">
+                        <div class="empty">Loading...</div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-title">By Status Code</div>
+                    <div id="stats-status">
+                        <div class="empty">Loading...</div>
+                    </div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-title">Top Hosts</div>
+                <div id="stats-hosts">
+                    <div class="empty">Loading...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Tab -->
+        <div class="tab-content" id="tab-settings">
+            <div class="grid-2">
+                <div class="card">
+                    <div class="card-title">General Settings</div>
+                    <table>
+                        <tr>
+                            <td>SSL/TLS Inspection</td>
+                            <td style="text-align: right;">
+                                <label class="toggle">
+                                    <input type="checkbox" id="ssl-inspection" onchange="updateConfig('ssl_inspection', this.checked)">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>WAF Integration</td>
+                            <td style="text-align: right;">
+                                <label class="toggle">
+                                    <input type="checkbox" id="waf-integration" onchange="updateConfig('waf_integration', this.checked)">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Listen Port</td>
+                            <td style="text-align: right;">
+                                <input type="number" id="listen-port" style="width: 100px; text-align: right;" onchange="updateConfig('listen_port', parseInt(this.value))">
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+                <div class="card">
+                    <div class="card-title">Content Filters</div>
+                    <table>
+                        <tr>
+                            <td>Block Malware</td>
+                            <td style="text-align: right;">
+                                <label class="toggle">
+                                    <input type="checkbox" id="block-malware" onchange="updateConfig('block_malware', this.checked)">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Block Scripts</td>
+                            <td style="text-align: right;">
+                                <label class="toggle">
+                                    <input type="checkbox" id="block-scripts" onchange="updateConfig('block_scripts', this.checked)">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Block Trackers</td>
+                            <td style="text-align: right;">
+                                <label class="toggle">
+                                    <input type="checkbox" id="block-trackers" onchange="updateConfig('block_trackers', this.checked)">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Flow Detail Modal -->
+    <div class="modal" id="flow-modal">
+        <div class="modal-content" style="position: relative;">
+            <span class="modal-close" onclick="closeModal('flow-modal')">&times;</span>
+            <div class="modal-title">Flow Details</div>
+            <div id="flow-detail">
+                <div class="empty">Loading...</div>
+            </div>
+            <div class="actions" style="margin-top: 1rem;">
+                <button class="btn btn-primary" onclick="replayFlow()">Replay</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rule Modal -->
+    <div class="modal" id="rule-modal">
+        <div class="modal-content" style="position: relative;">
+            <span class="modal-close" onclick="closeModal('rule-modal')">&times;</span>
+            <div class="modal-title">Create Rule</div>
+            <div class="rule-form">
+                <div class="form-group">
+                    <label>Rule Name</label>
+                    <input type="text" id="rule-name" placeholder="My Rule">
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea id="rule-description" rows="2" placeholder="Optional description"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Match Type</label>
+                    <select id="rule-match-type">
+                        <option value="all">All Traffic</option>
+                        <option value="request">Request Only</option>
+                        <option value="response">Response Only</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Condition (JSON)</label>
+                    <textarea id="rule-conditions" rows="3" placeholder='[{"field": "host", "operator": "contains", "value": "example.com"}]'></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Action (JSON)</label>
+                    <textarea id="rule-actions" rows="3" placeholder='[{"type": "block"}]'></textarea>
+                </div>
+            </div>
+            <div class="actions" style="margin-top: 1rem;">
+                <button class="btn btn-primary" onclick="createRule()">Create Rule</button>
+                <button class="btn" onclick="closeModal('rule-modal')">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast"></div>
+
+    <script>
+        const API = '/api/v1/interceptor';
+        const token = () => localStorage.getItem('sbx_token');
+        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+
+        let statusData = {};
+        let configData = {};
+        let selectedFlowId = null;
+
+        async function api(path, opts = {}) {
+            try {
+                const res = await fetch(API + path, { ...opts, headers: headers() });
+                if (res.status === 401) { window.location = '/portal/login.html'; return null; }
+                return res.json();
+            } catch (e) { console.error(e); return null; }
+        }
+
+        function showToast(msg, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.innerHTML = `<div class="toast toast-${type}">${msg}</div>`;
+            setTimeout(() => toast.innerHTML = '', 3000);
+        }
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+
+        // Tab handling
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+            });
+        });
+
+        // Modal handling
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('active');
+        }
+
+        function showRuleModal() {
+            document.getElementById('rule-modal').classList.add('active');
+        }
+
+        async function loadStatus() {
+            statusData = await api('/status') || {};
+
+            const badge = document.getElementById('status-badge');
+            const toggleBtn = document.getElementById('toggle-btn');
+            const recordIndicator = document.getElementById('recording-indicator');
+
+            if (statusData.running) {
+                badge.textContent = 'Running';
+                badge.className = 'badge badge-green';
+                toggleBtn.textContent = 'Stop';
+                toggleBtn.className = 'btn btn-red';
+            } else {
+                badge.textContent = 'Stopped';
+                badge.className = 'badge badge-red';
+                toggleBtn.textContent = 'Start';
+                toggleBtn.className = 'btn btn-primary';
+            }
+
+            recordIndicator.style.display = statusData.recording_enabled ? 'inline-flex' : 'none';
+
+            // Update stats
+            document.getElementById('stat-flows').textContent = statusData.total_flows || 0;
+            document.getElementById('stat-blocked').textContent = statusData.blocked_flows || 0;
+            document.getElementById('stat-sessions').textContent = statusData.active_sessions || 0;
+            document.getElementById('stat-bytes').textContent = formatBytes(statusData.bytes_inspected || 0);
+        }
+
+        async function loadConfig() {
+            configData = await api('/config') || {};
+
+            document.getElementById('ssl-inspection').checked = configData.ssl_inspection || false;
+            document.getElementById('waf-integration').checked = configData.waf_integration || false;
+            document.getElementById('listen-port').value = configData.listen_port || 8889;
+
+            const filters = configData.content_filters || {};
+            document.getElementById('block-malware').checked = filters.block_malware || false;
+            document.getElementById('block-scripts').checked = filters.block_scripts || false;
+            document.getElementById('block-trackers').checked = filters.block_trackers || false;
+
+            // Update record button
+            const recordBtn = document.getElementById('record-btn');
+            if (configData.recording_enabled) {
+                recordBtn.textContent = 'Stop Recording';
+                recordBtn.className = 'btn btn-red btn-sm';
+            } else {
+                recordBtn.textContent = 'Start Recording';
+                recordBtn.className = 'btn btn-primary btn-sm';
+            }
+        }
+
+        async function loadSessions() {
+            const data = await api('/sessions') || {};
+            const sessions = data.sessions || [];
+
+            document.getElementById('sessions-count').textContent = sessions.length;
+
+            if (sessions.length === 0) {
+                document.getElementById('sessions-table').innerHTML = '<div class="empty">No active sessions</div>';
+                return;
+            }
+
+            const rows = sessions.map(s => `
+                <tr>
+                    <td style="font-family: monospace;">${s.id}</td>
+                    <td>${s.client_ip || '-'}</td>
+                    <td>${s.host || '-'}</td>
+                    <td>${s.flows || 0}</td>
+                    <td>${s.duration || '-'}</td>
+                    <td><button class="btn btn-sm btn-red" onclick="closeSession('${s.id}')">Close</button></td>
+                </tr>
+            `).join('');
+
+            document.getElementById('sessions-table').innerHTML = `
+                <table>
+                    <thead><tr><th>ID</th><th>Client</th><th>Host</th><th>Flows</th><th>Duration</th><th>Action</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            `;
+        }
+
+        async function loadFlows() {
+            const filter = document.getElementById('flow-filter').value;
+            const params = filter ? `?filter_host=${encodeURIComponent(filter)}` : '';
+            const data = await api('/flows' + params) || {};
+            const flows = data.flows || [];
+
+            if (flows.length === 0) {
+                document.getElementById('flows-list').innerHTML = '<div class="empty">No flows captured</div>';
+                return;
+            }
+
+            const items = flows.map(f => {
+                const statusClass = f.status_code ? `s${Math.floor(f.status_code/100)}xx` : '';
+                return `
+                    <div class="flow-item" onclick="showFlowDetail('${f.id}')">
+                        <span class="flow-method ${f.method || 'GET'}">${f.method || 'GET'}</span>
+                        <span class="flow-url">${f.host || ''}${f.path || '/'}</span>
+                        <span class="flow-status ${statusClass}">${f.status_code || '-'}</span>
+                        <span class="flow-time">${f.timestamp ? new Date(f.timestamp).toLocaleTimeString() : '-'}</span>
+                    </div>
+                `;
+            }).join('');
+
+            document.getElementById('flows-list').innerHTML = items;
+        }
+
+        async function showFlowDetail(flowId) {
+            selectedFlowId = flowId;
+            const data = await api(`/flow/${flowId}`) || {};
+            const flow = data.flow || {};
+
+            const detail = `
+                <div style="margin-bottom: 1rem;">
+                    <strong>Request</strong>
+                    <div class="code-viewer">
+                        <span class="header">${flow.method || 'GET'}</span> ${flow.path || '/'}<br>
+                        <span class="header">Host:</span> <span class="value">${flow.host || '-'}</span><br>
+                        ${(flow.request_headers || []).map(h => `<span class="header">${h.name}:</span> <span class="value">${h.value}</span><br>`).join('')}
+                    </div>
+                </div>
+                <div style="margin-bottom: 1rem;">
+                    <strong>Response</strong>
+                    <div class="code-viewer">
+                        <span class="header">Status:</span> <span class="value">${flow.status_code || '-'}</span><br>
+                        ${(flow.response_headers || []).map(h => `<span class="header">${h.name}:</span> <span class="value">${h.value}</span><br>`).join('')}
+                    </div>
+                </div>
+                ${flow.request_body ? `<div style="margin-bottom: 1rem;"><strong>Request Body</strong><div class="code-viewer">${flow.request_body}</div></div>` : ''}
+                ${flow.response_body ? `<div><strong>Response Body</strong><div class="code-viewer">${flow.response_body.substring(0, 2000)}${flow.response_body.length > 2000 ? '...' : ''}</div></div>` : ''}
+            `;
+
+            document.getElementById('flow-detail').innerHTML = detail;
+            document.getElementById('flow-modal').classList.add('active');
+        }
+
+        async function replayFlow() {
+            if (!selectedFlowId) return;
+            const res = await api(`/flow/${selectedFlowId}/replay`, { method: 'POST' });
+            if (res && res.success) {
+                showToast('Flow queued for replay');
+                closeModal('flow-modal');
+            } else {
+                showToast(res?.error || 'Failed to replay', 'error');
+            }
+        }
+
+        async function loadRules() {
+            const data = await api('/rules') || {};
+            const rules = data.rules || [];
+
+            if (rules.length === 0) {
+                document.getElementById('rules-table').innerHTML = '<div class="empty">No rules defined</div>';
+                return;
+            }
+
+            const rows = rules.map(r => `
+                <tr>
+                    <td>${r.name}</td>
+                    <td>${r.description || '-'}</td>
+                    <td>${r.match_type}</td>
+                    <td><span class="badge ${r.enabled ? 'badge-green' : 'badge-red'}">${r.enabled ? 'Enabled' : 'Disabled'}</span></td>
+                    <td><button class="btn btn-sm btn-red" onclick="deleteRule('${r.id}')">Delete</button></td>
+                </tr>
+            `).join('');
+
+            document.getElementById('rules-table').innerHTML = `
+                <table>
+                    <thead><tr><th>Name</th><th>Description</th><th>Match</th><th>Status</th><th>Action</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            `;
+        }
+
+        async function createRule() {
+            const name = document.getElementById('rule-name').value;
+            const description = document.getElementById('rule-description').value;
+            const matchType = document.getElementById('rule-match-type').value;
+            let conditions = [];
+            let actions = [];
+
+            try {
+                const condStr = document.getElementById('rule-conditions').value;
+                const actStr = document.getElementById('rule-actions').value;
+                if (condStr) conditions = JSON.parse(condStr);
+                if (actStr) actions = JSON.parse(actStr);
+            } catch (e) {
+                showToast('Invalid JSON format', 'error');
+                return;
+            }
+
+            if (!name) {
+                showToast('Rule name required', 'error');
+                return;
+            }
+
+            const res = await api('/rule', {
+                method: 'POST',
+                body: JSON.stringify({
+                    name,
+                    description,
+                    match_type: matchType,
+                    conditions,
+                    actions,
+                    enabled: true
+                })
+            });
+
+            if (res && res.success) {
+                showToast('Rule created');
+                closeModal('rule-modal');
+                loadRules();
+            } else {
+                showToast(res?.error || 'Failed to create rule', 'error');
+            }
+        }
+
+        async function deleteRule(ruleId) {
+            if (!confirm('Delete this rule?')) return;
+            const res = await api(`/rule/${ruleId}`, { method: 'DELETE' });
+            if (res && res.success) {
+                showToast('Rule deleted');
+                loadRules();
+            } else {
+                showToast(res?.error || 'Failed to delete', 'error');
+            }
+        }
+
+        async function loadRecordings() {
+            const data = await api('/recordings') || {};
+            const recordings = data.recordings || [];
+
+            if (recordings.length === 0) {
+                document.getElementById('recordings-list').innerHTML = '<div class="empty">No recordings</div>';
+                return;
+            }
+
+            const rows = recordings.map(r => `
+                <tr>
+                    <td>${r.id}</td>
+                    <td>${r.started ? new Date(r.started).toLocaleString() : '-'}</td>
+                    <td>${r.duration || '-'}</td>
+                    <td>${r.flows || 0} flows</td>
+                    <td>${formatBytes(r.size || 0)}</td>
+                </tr>
+            `).join('');
+
+            document.getElementById('recordings-list').innerHTML = `
+                <table>
+                    <thead><tr><th>ID</th><th>Started</th><th>Duration</th><th>Flows</th><th>Size</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            `;
+        }
+
+        async function loadStats() {
+            const data = await api('/stats') || {};
+
+            // Methods
+            const methods = data.by_method || {};
+            const methodRows = Object.entries(methods).map(([m, c]) => `<tr><td class="flow-method ${m}">${m}</td><td>${c}</td></tr>`).join('');
+            document.getElementById('stats-methods').innerHTML = methodRows ? `<table><tbody>${methodRows}</tbody></table>` : '<div class="empty">No data</div>';
+
+            // Status codes
+            const status = data.by_status || {};
+            const statusRows = Object.entries(status).map(([s, c]) => `<tr><td>${s}</td><td>${c}</td></tr>`).join('');
+            document.getElementById('stats-status').innerHTML = statusRows ? `<table><tbody>${statusRows}</tbody></table>` : '<div class="empty">No data</div>';
+
+            // Top hosts
+            const hosts = data.top_hosts || {};
+            const hostRows = Object.entries(hosts).map(([h, c]) => `<tr><td>${h}</td><td>${c}</td></tr>`).join('');
+            document.getElementById('stats-hosts').innerHTML = hostRows ? `<table><thead><tr><th>Host</th><th>Requests</th></tr></thead><tbody>${hostRows}</tbody></table>` : '<div class="empty">No data</div>';
+        }
+
+        async function toggleService() {
+            const action = statusData.running ? '/stop' : '/start';
+            await api(action, { method: 'POST' });
+            showToast(statusData.running ? 'Stopping...' : 'Starting...');
+            setTimeout(refresh, 2000);
+        }
+
+        async function toggleRecording() {
+            const action = configData.recording_enabled ? '/record/stop' : '/record/start';
+            const res = await api(action, { method: 'POST' });
+            if (res && res.success) {
+                showToast(configData.recording_enabled ? 'Recording stopped' : 'Recording started');
+                refresh();
+            } else {
+                showToast(res?.error || 'Failed', 'error');
+            }
+        }
+
+        async function closeSession(sessionId) {
+            const res = await api(`/session/${sessionId}/close`, { method: 'POST' });
+            if (res && res.success) {
+                showToast('Session closed');
+                loadSessions();
+            } else {
+                showToast(res?.error || 'Failed', 'error');
+            }
+        }
+
+        async function updateConfig(key, value) {
+            const res = await api('/config', {
+                method: 'POST',
+                body: JSON.stringify({ [key]: value })
+            });
+            if (res && res.success) {
+                showToast('Configuration updated');
+            } else {
+                showToast(res?.error || 'Failed to update', 'error');
+            }
+        }
+
+        async function refresh() {
+            await Promise.all([
+                loadStatus(),
+                loadConfig(),
+                loadSessions(),
+                loadFlows(),
+                loadRules(),
+                loadRecordings(),
+                loadStats()
+            ]);
+        }
+
+        refresh();
+        setInterval(refresh, 30000);
+    </script>
+    <script src="/shared/crt-engine.js"></script>
+</body>
+</html>

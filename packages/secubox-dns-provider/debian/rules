@@ -1,0 +1,14 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-dns-provider/usr/lib/secubox/dns-provider
+	cp -r api debian/secubox-dns-provider/usr/lib/secubox/dns-provider/
+	install -d debian/secubox-dns-provider/usr/share/secubox/www/dns-provider
+	cp -r www/dns-provider/. debian/secubox-dns-provider/usr/share/secubox/www/dns-provider/
+	install -d debian/secubox-dns-provider/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-dns-provider/usr/share/secubox/menu.d/ || true
+	# Modular nginx config
+	install -d debian/secubox-dns-provider/etc/nginx/secubox.d
+	[ -f nginx/dns-provider.conf ] && cp nginx/dns-provider.conf debian/secubox-dns-provider/etc/nginx/secubox.d/ || true

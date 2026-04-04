@@ -1,0 +1,8 @@
+#!/bin/sh
+set -e
+if [ "$1" = "remove" ]; then
+    systemctl stop secubox-openclaw.service || true
+    systemctl disable secubox-openclaw.service || true
+fi
+#DEBHELPER#
+exit 0

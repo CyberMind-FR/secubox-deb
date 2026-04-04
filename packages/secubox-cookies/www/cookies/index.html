@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - Cookie Tracker</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root {
+            /* Privacy/Lime accent color */
+            --accent: #84cc16;
+            --accent-dim: #65a30d;
+            --accent-bright: #a3e635;
+            --accent-ghost: #365314;
+            /* P31 Phosphor spectrum */
+            --p31-peak: #00dd44;
+            --p31-hot: #00ff55;
+            --p31-mid: #009933;
+            --p31-dim: #006622;
+            --p31-ghost: #003311;
+            --p31-decay: #ffb347;
+            --p31-decay-dim: #cc7722;
+            /* Tube glass */
+            --tube-light: #e8f5e9;
+            --tube-pale: #c8e6c9;
+            --tube-soft: #a5d6a7;
+            /* Legacy mappings */
+            --bg-dark: var(--tube-light);
+            --bg-card: var(--tube-pale);
+            --border: var(--tube-soft);
+            --text: #1a1a1a;
+            --text-dim: var(--p31-dim);
+            --primary: var(--accent);
+            --cyan: var(--p31-peak);
+            --green: var(--accent);
+            --red: #ff4466;
+            --yellow: var(--p31-decay);
+            --orange: var(--p31-decay-dim);
+            --purple: #a371f7;
+            /* Bloom effects */
+            --bloom-text: 0 0 2px var(--accent), 0 0 6px var(--accent), 0 0 14px rgba(132,204,22,0.5);
+            --bloom-soft: 0 0 6px var(--accent), 0 0 14px rgba(132,204,22,0.5);
+            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Courier Prime', 'Courier New', monospace;
+            background: var(--tube-light);
+            background-image: radial-gradient(ellipse at 50% 40%, rgba(132,204,22,0.025) 0%, transparent 70%);
+            color: var(--text);
+            display: flex;
+            min-height: 100vh;
+        }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        .header h1 {
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--accent);
+            text-shadow: var(--bloom-text);
+        }
+        .badge { padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; border: 1px solid; }
+        .badge-green { background: rgba(132,204,22,0.15); border-color: var(--accent); color: var(--accent); }
+        .badge-red { background: rgba(248,81,73,0.15); border-color: var(--red); color: var(--red); }
+        .badge-yellow { background: rgba(210,153,34,0.15); border-color: var(--yellow); color: var(--yellow); }
+        .badge-lime { background: rgba(132,204,22,0.15); border-color: var(--accent); color: var(--accent); }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: var(--bg-card);
+            color: var(--text-dim);
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-family: 'Courier Prime', monospace;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            transition: all 0.2s;
+        }
+        .btn:hover { border-color: var(--accent-dim); color: var(--accent); }
+        .btn-lime, .btn-green {
+            background: rgba(132,204,22,0.15);
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+        .btn-lime:hover, .btn-green:hover {
+            background: rgba(132,204,22,0.25);
+            box-shadow: 0 0 12px rgba(132,204,22,0.2);
+        }
+        .btn-red { background: rgba(248,81,73,0.15); border-color: var(--red); color: var(--red); }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.1);
+        }
+        .card:hover { border-color: var(--accent-dim); }
+        .card-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: var(--p31-decay);
+            text-shadow: var(--bloom-amber);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 0;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid var(--border);
+            background: var(--bg-card);
+            border-radius: 8px 8px 0 0;
+            overflow: hidden;
+        }
+        .tab {
+            padding: 0.75rem 1.25rem;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            color: var(--text-dim);
+            font-size: 0.85rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            transition: all 0.2s;
+        }
+        .tab:hover { color: var(--accent-dim); }
+        .tab.active {
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+            text-shadow: var(--bloom-soft);
+        }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+        .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+        @media (max-width: 1200px) { .grid-4 { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 768px) { .grid-4, .grid-3, .grid-2 { grid-template-columns: 1fr; } .main { margin-left: 0; } }
+
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            text-shadow: 0 0 10px currentColor;
+        }
+        .stat-value.lime { color: var(--accent); }
+        .stat-value.yellow { color: var(--yellow); }
+        .stat-value.red { color: var(--red); }
+        .stat-value.cyan { color: var(--cyan); }
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            margin-top: 0.25rem;
+            letter-spacing: 0.15em;
+        }
+
+        table { width: 100%; border-collapse: collapse; font-family: 'Courier Prime', monospace; }
+        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+        th {
+            font-size: 0.75rem;
+            color: var(--p31-decay);
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+        }
+        td { font-size: 0.875rem; color: var(--p31-mid); }
+        tr:hover { background: rgba(132,204,22,0.03); }
+
+        .domain-group { margin-bottom: 1.5rem; }
+        .domain-header {
+            padding: 0.75rem;
+            background: rgba(132,204,22,0.1);
+            border: 1px solid var(--accent-dim);
+            border-radius: 6px 6px 0 0;
+            font-weight: 600;
+            color: var(--accent);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .domain-cookies {
+            border: 1px solid var(--border);
+            border-top: none;
+            border-radius: 0 0 6px 6px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .tracker-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.15rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+        .tracker-analytics { background: rgba(132,204,22,0.15); color: var(--accent); }
+        .tracker-advertising { background: rgba(255,68,102,0.15); color: var(--red); }
+        .tracker-marketing { background: rgba(255,179,71,0.15); color: var(--orange); }
+        .tracker-unknown { background: rgba(108,117,125,0.15); color: #6c757d; }
+
+        .violation-item {
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .violation-item:last-child { border-bottom: none; }
+        .violation-type { font-weight: 600; }
+        .violation-type.third_party { color: var(--orange); }
+        .violation-type.tracker { color: var(--red); }
+        .violation-type.excessive_age { color: var(--yellow); }
+
+        .toast { position: fixed; bottom: 20px; right: 20px; padding: 1rem 1.5rem; border-radius: 8px; background: var(--bg-card); border: 1px solid var(--border); z-index: 1000; animation: slideIn 0.3s; }
+        .toast-success { border-color: var(--accent); }
+        .toast-error { border-color: var(--red); }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        .actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+        .empty { text-align: center; padding: 2rem; color: var(--text-dim); }
+
+        .toggle { position: relative; display: inline-block; width: 44px; height: 24px; }
+        .toggle input { opacity: 0; width: 0; height: 0; }
+        .toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: var(--bg-dark); border: 1px solid var(--border); border-radius: 24px; transition: 0.3s; }
+        .toggle-slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 2px; bottom: 2px; background: var(--text-dim); border-radius: 50%; transition: 0.3s; }
+        .toggle input:checked + .toggle-slider { background: var(--accent); border-color: var(--accent); }
+        .toggle input:checked + .toggle-slider:before { transform: translateX(20px); background: white; }
+
+        input, select, textarea {
+            font-family: 'Courier Prime', monospace;
+            background: var(--tube-light);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 0.5rem;
+            border-radius: 4px;
+            width: 100%;
+        }
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--accent-dim);
+            box-shadow: 0 0 8px rgba(132,204,22,0.2);
+        }
+
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; color: var(--text-dim); font-size: 0.85rem; }
+
+        .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center; }
+        .modal.active { display: flex; }
+        .modal-content { background: var(--bg-card); border: 1px solid var(--accent-dim); border-radius: 8px; padding: 1.5rem; min-width: 400px; max-width: 90vw; }
+        .modal-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 1rem; color: var(--accent); }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
+
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: var(--tube-light); }
+        ::-webkit-scrollbar-thumb { background: var(--accent-dim); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+    </style>
+</head>
+<body class="crt-light">
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+
+    <main class="main">
+        <header class="header">
+            <h1>Cookie Tracker <span class="badge badge-lime" id="status-badge">Loading...</span></h1>
+            <div class="actions">
+                <button class="btn btn-lime" onclick="showScanModal()">Scan URL</button>
+                <button class="btn" onclick="refresh()">Refresh</button>
+            </div>
+        </header>
+
+        <p style="color: var(--text-dim); margin-bottom: 1.5rem;">Cookie tracking, privacy compliance, and tracker detection</p>
+
+        <!-- Tabs -->
+        <div class="tabs">
+            <div class="tab active" data-tab="dashboard" onclick="switchTab('dashboard')">Dashboard</div>
+            <div class="tab" data-tab="cookies" onclick="switchTab('cookies')">Cookies</div>
+            <div class="tab" data-tab="trackers" onclick="switchTab('trackers')">Trackers</div>
+            <div class="tab" data-tab="policies" onclick="switchTab('policies')">Policies</div>
+            <div class="tab" data-tab="violations" onclick="switchTab('violations')">Violations</div>
+            <div class="tab" data-tab="settings" onclick="switchTab('settings')">Settings</div>
+        </div>
+
+        <!-- Dashboard Tab -->
+        <div class="tab-content active" id="tab-dashboard">
+            <div class="grid-4">
+                <div class="stat-card">
+                    <div class="stat-value lime" id="stat-total">0</div>
+                    <div class="stat-label">Total Cookies</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value yellow" id="stat-thirdparty">0</div>
+                    <div class="stat-label">Third-Party</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value red" id="stat-trackers">0</div>
+                    <div class="stat-label">Trackers</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value cyan" id="stat-domains">0</div>
+                    <div class="stat-label">Domains</div>
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="card">
+                    <div class="card-title">
+                        <span>Recent Violations</span>
+                        <span class="badge badge-red" id="violations-count">0</span>
+                    </div>
+                    <div id="recent-violations">
+                        <div class="empty">Loading...</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">Tracker Categories</div>
+                    <div id="tracker-categories">
+                        <div class="empty">Loading...</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">Privacy Status</div>
+                <div class="grid-3">
+                    <div style="padding: 1rem; text-align: center;">
+                        <div style="font-size: 1.5rem; margin-bottom: 0.5rem;" id="gdpr-status">-</div>
+                        <div style="color: var(--text-dim); font-size: 0.85rem;">GDPR Mode</div>
+                    </div>
+                    <div style="padding: 1rem; text-align: center;">
+                        <div style="font-size: 1.5rem; margin-bottom: 0.5rem;" id="tracker-detection-status">-</div>
+                        <div style="color: var(--text-dim); font-size: 0.85rem;">Tracker Detection</div>
+                    </div>
+                    <div style="padding: 1rem; text-align: center;">
+                        <div style="font-size: 1.5rem; margin-bottom: 0.5rem;" id="thirdparty-detection-status">-</div>
+                        <div style="color: var(--text-dim); font-size: 0.85rem;">Third-Party Detection</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Cookies Tab -->
+        <div class="tab-content" id="tab-cookies">
+            <div class="card">
+                <div class="card-title">
+                    <span>Tracked Cookies</span>
+                    <div class="actions">
+                        <select id="cookie-filter" onchange="loadCookies()" style="width: auto;">
+                            <option value="">All Cookies</option>
+                            <option value="thirdparty">Third-Party Only</option>
+                            <option value="trackers">Trackers Only</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="cookies-list">
+                    <div class="empty">Loading...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Trackers Tab -->
+        <div class="tab-content" id="tab-trackers">
+            <div class="card">
+                <div class="card-title">
+                    <span>Known Tracker Patterns</span>
+                    <button class="btn btn-lime btn-sm" onclick="showAddTrackerModal()">Add Pattern</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Category</th>
+                            <th>Pattern</th>
+                            <th>Detections</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="trackers-table">
+                        <tr><td colspan="5" class="empty">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Policies Tab -->
+        <div class="tab-content" id="tab-policies">
+            <div class="card">
+                <div class="card-title">
+                    <span>Cookie Policies</span>
+                    <button class="btn btn-lime btn-sm" onclick="showAddPolicyModal()">Add Policy</button>
+                </div>
+                <div id="policies-list">
+                    <div class="empty">Loading...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Violations Tab -->
+        <div class="tab-content" id="tab-violations">
+            <div class="card">
+                <div class="card-title">
+                    <span>Policy Violations</span>
+                    <select id="violation-filter" onchange="loadViolations()" style="width: auto;">
+                        <option value="">All Types</option>
+                        <option value="third_party">Third-Party</option>
+                        <option value="tracker">Tracker</option>
+                        <option value="excessive_age">Excessive Age</option>
+                    </select>
+                </div>
+                <div id="violations-list">
+                    <div class="empty">Loading...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Tab -->
+        <div class="tab-content" id="tab-settings">
+            <div class="card">
+                <div class="card-title">Configuration</div>
+                <table>
+                    <tr>
+                        <td>Cookie Tracking Enabled</td>
+                        <td style="text-align: right;">
+                            <label class="toggle">
+                                <input type="checkbox" id="cfg-enabled" onchange="updateConfig('enabled', this.checked)">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>GDPR Compliance Mode</td>
+                        <td style="text-align: right;">
+                            <label class="toggle">
+                                <input type="checkbox" id="cfg-gdpr" onchange="updateConfig('gdpr_mode', this.checked)">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Tracker Detection</td>
+                        <td style="text-align: right;">
+                            <label class="toggle">
+                                <input type="checkbox" id="cfg-tracker-detection" onchange="updateConfig('tracker_detection', this.checked)">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Third-Party Detection</td>
+                        <td style="text-align: right;">
+                            <label class="toggle">
+                                <input type="checkbox" id="cfg-thirdparty-detection" onchange="updateConfig('third_party_detection', this.checked)">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Block Trackers</td>
+                        <td style="text-align: right;">
+                            <label class="toggle">
+                                <input type="checkbox" id="cfg-block-trackers" onchange="updateConfig('block_trackers', this.checked)">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Alert on Suspicious</td>
+                        <td style="text-align: right;">
+                            <label class="toggle">
+                                <input type="checkbox" id="cfg-alert" onchange="updateConfig('alert_on_suspicious', this.checked)">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </td>
+                    </tr>
+                </table>
+                <div style="margin-top: 1rem;">
+                    <div class="form-group">
+                        <label>Scan Interval (seconds)</label>
+                        <input type="number" id="cfg-scan-interval" onchange="updateConfig('scan_interval', parseInt(this.value))" style="width: 150px;">
+                    </div>
+                    <div class="form-group">
+                        <label>Retention Period (days)</label>
+                        <input type="number" id="cfg-retention" onchange="updateConfig('retention_days', parseInt(this.value))" style="width: 150px;">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Scan Modal -->
+    <div class="modal" id="scan-modal">
+        <div class="modal-content">
+            <div class="modal-title">Scan URL for Cookies</div>
+            <div class="form-group">
+                <label>URL</label>
+                <input type="text" id="scan-url" placeholder="https://example.com">
+            </div>
+            <div class="form-group">
+                <label>Include Third-Party</label>
+                <label class="toggle">
+                    <input type="checkbox" id="scan-thirdparty" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            <div class="modal-actions">
+                <button class="btn" onclick="closeModal('scan-modal')">Cancel</button>
+                <button class="btn btn-lime" onclick="scanUrl()">Scan</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Tracker Modal -->
+    <div class="modal" id="tracker-modal">
+        <div class="modal-content">
+            <div class="modal-title">Add Tracker Pattern</div>
+            <div class="form-group">
+                <label>Name</label>
+                <input type="text" id="tracker-name" placeholder="Google Analytics">
+            </div>
+            <div class="form-group">
+                <label>Pattern (regex)</label>
+                <input type="text" id="tracker-pattern" placeholder=".*google-analytics\.com.*">
+            </div>
+            <div class="form-group">
+                <label>Category</label>
+                <select id="tracker-category">
+                    <option value="analytics">Analytics</option>
+                    <option value="advertising">Advertising</option>
+                    <option value="marketing">Marketing</option>
+                    <option value="social">Social</option>
+                    <option value="unknown">Unknown</option>
+                </select>
+            </div>
+            <div class="modal-actions">
+                <button class="btn" onclick="closeModal('tracker-modal')">Cancel</button>
+                <button class="btn btn-lime" onclick="addTracker()">Add</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Policy Modal -->
+    <div class="modal" id="policy-modal">
+        <div class="modal-content">
+            <div class="modal-title">Create Cookie Policy</div>
+            <div class="form-group">
+                <label>Policy Name</label>
+                <input type="text" id="policy-name" placeholder="My Policy">
+            </div>
+            <div class="form-group">
+                <label>Block Third-Party Cookies</label>
+                <label class="toggle">
+                    <input type="checkbox" id="policy-block-thirdparty">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            <div class="form-group">
+                <label>Block Trackers</label>
+                <label class="toggle">
+                    <input type="checkbox" id="policy-block-trackers" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            <div class="form-group">
+                <label>Require Consent</label>
+                <label class="toggle">
+                    <input type="checkbox" id="policy-require-consent" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            <div class="form-group">
+                <label>Max Cookie Age (days)</label>
+                <input type="number" id="policy-max-age" value="365" style="width: 150px;">
+            </div>
+            <div class="modal-actions">
+                <button class="btn" onclick="closeModal('policy-modal')">Cancel</button>
+                <button class="btn btn-lime" onclick="addPolicy()">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast"></div>
+
+    <script>
+        const API = '/api/v1/cookies';
+        const token = () => localStorage.getItem('sbx_token');
+        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+
+        async function api(path, opts = {}) {
+            try {
+                const res = await fetch(API + path, { ...opts, headers: headers() });
+                if (res.status === 401) { window.location = '/portal/login.html'; return null; }
+                return res.json();
+            } catch (e) { console.error(e); return null; }
+        }
+
+        function showToast(msg, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.innerHTML = `<div class="toast toast-${type}">${msg}</div>`;
+            setTimeout(() => toast.innerHTML = '', 3000);
+        }
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab-' + tab));
+
+            // Load data for tab
+            switch(tab) {
+                case 'cookies': loadCookies(); break;
+                case 'trackers': loadTrackers(); break;
+                case 'policies': loadPolicies(); break;
+                case 'violations': loadViolations(); break;
+                case 'settings': loadConfig(); break;
+            }
+        }
+
+        function showModal(id) { document.getElementById(id).classList.add('active'); }
+        function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+        function showScanModal() { showModal('scan-modal'); }
+        function showAddTrackerModal() { showModal('tracker-modal'); }
+        function showAddPolicyModal() { showModal('policy-modal'); }
+
+        async function loadStatus() {
+            const data = await api('/status') || {};
+            const badge = document.getElementById('status-badge');
+            badge.textContent = data.enabled ? 'Active' : 'Disabled';
+            badge.className = 'badge ' + (data.enabled ? 'badge-lime' : 'badge-red');
+
+            document.getElementById('gdpr-status').textContent = data.gdpr_mode ? 'Enabled' : 'Disabled';
+            document.getElementById('gdpr-status').style.color = data.gdpr_mode ? 'var(--accent)' : 'var(--text-dim)';
+            document.getElementById('tracker-detection-status').textContent = data.tracker_detection ? 'Active' : 'Off';
+            document.getElementById('tracker-detection-status').style.color = data.tracker_detection ? 'var(--accent)' : 'var(--text-dim)';
+            document.getElementById('thirdparty-detection-status').textContent = data.third_party_detection !== false ? 'Active' : 'Off';
+            document.getElementById('thirdparty-detection-status').style.color = data.third_party_detection !== false ? 'var(--accent)' : 'var(--text-dim)';
+        }
+
+        async function loadStats() {
+            const data = await api('/stats') || {};
+            const stats = data.stats || {};
+
+            document.getElementById('stat-total').textContent = stats.total_cookies || 0;
+            document.getElementById('stat-thirdparty').textContent = stats.third_party_cookies || 0;
+            document.getElementById('stat-trackers').textContent = stats.tracker_cookies || 0;
+            document.getElementById('stat-domains').textContent = stats.total_domains || 0;
+            document.getElementById('violations-count').textContent = stats.violations_today || 0;
+
+            // Tracker categories
+            const categories = stats.tracker_categories || {};
+            if (Object.keys(categories).length > 0) {
+                const html = Object.entries(categories).map(([cat, count]) => `
+                    <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid var(--border);">
+                        <span class="tracker-badge tracker-${cat}">${cat}</span>
+                        <span>${count}</span>
+                    </div>
+                `).join('');
+                document.getElementById('tracker-categories').innerHTML = html;
+            } else {
+                document.getElementById('tracker-categories').innerHTML = '<div class="empty">No trackers detected</div>';
+            }
+        }
+
+        async function loadViolationsPreview() {
+            const data = await api('/violations?limit=5') || {};
+            const violations = data.violations || [];
+
+            if (violations.length === 0) {
+                document.getElementById('recent-violations').innerHTML = '<div class="empty">No violations</div>';
+                return;
+            }
+
+            const html = violations.map(v => `
+                <div class="violation-item">
+                    <div>
+                        <span class="violation-type ${v.violation_type}">${v.violation_type.replace('_', ' ')}</span>
+                        <span style="color: var(--text-dim); margin-left: 0.5rem;">${v.domain}</span>
+                    </div>
+                    <span style="font-size: 0.75rem; color: var(--text-dim);">${new Date(v.timestamp).toLocaleString()}</span>
+                </div>
+            `).join('');
+            document.getElementById('recent-violations').innerHTML = html;
+        }
+
+        async function loadCookies() {
+            const filter = document.getElementById('cookie-filter').value;
+            let path = '/cookies?limit=100';
+            if (filter === 'thirdparty') path += '&third_party_only=true';
+            if (filter === 'trackers') path += '&trackers_only=true';
+
+            const data = await api(path) || {};
+            const cookies = data.cookies || [];
+
+            if (cookies.length === 0) {
+                document.getElementById('cookies-list').innerHTML = '<div class="empty">No cookies tracked</div>';
+                return;
+            }
+
+            // Group by domain
+            const byDomain = {};
+            cookies.forEach(c => {
+                const d = c.domain || 'unknown';
+                if (!byDomain[d]) byDomain[d] = [];
+                byDomain[d].push(c);
+            });
+
+            const html = Object.entries(byDomain).map(([domain, domainCookies]) => `
+                <div class="domain-group">
+                    <div class="domain-header">
+                        <span>${domain}</span>
+                        <span class="badge badge-lime">${domainCookies.length} cookies</span>
+                    </div>
+                    <div class="domain-cookies">
+                        <table>
+                            <thead><tr><th>Name</th><th>Type</th><th>Expires</th></tr></thead>
+                            <tbody>
+                                ${domainCookies.map(c => `
+                                    <tr>
+                                        <td>${c.name || '-'}</td>
+                                        <td>
+                                            ${c.is_tracker ? `<span class="tracker-badge tracker-${c.tracker_category || 'unknown'}">${c.tracker_name || 'Tracker'}</span>` : ''}
+                                            ${c.is_third_party ? '<span class="badge badge-yellow">3rd Party</span>' : ''}
+                                            ${!c.is_tracker && !c.is_third_party ? '<span style="color: var(--text-dim);">First Party</span>' : ''}
+                                        </td>
+                                        <td style="font-size: 0.75rem;">${c.expires || 'Session'}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `).join('');
+
+            document.getElementById('cookies-list').innerHTML = html;
+        }
+
+        async function loadTrackers() {
+            const data = await api('/trackers') || {};
+            const trackers = data.trackers || [];
+
+            if (trackers.length === 0) {
+                document.getElementById('trackers-table').innerHTML = '<tr><td colspan="5" class="empty">No tracker patterns</td></tr>';
+                return;
+            }
+
+            const html = trackers.map((t, i) => `
+                <tr>
+                    <td><strong>${t.name}</strong></td>
+                    <td><span class="tracker-badge tracker-${t.category}">${t.category}</span></td>
+                    <td style="font-family: monospace; font-size: 0.75rem; max-width: 200px; overflow: hidden; text-overflow: ellipsis;">${t.pattern}</td>
+                    <td>${t.detections || 0}</td>
+                    <td><button class="btn btn-red btn-sm" onclick="removeTracker('${t.name}')">Remove</button></td>
+                </tr>
+            `).join('');
+
+            document.getElementById('trackers-table').innerHTML = html;
+        }
+
+        async function loadPolicies() {
+            const data = await api('/policies') || {};
+            const policies = data.policies || [];
+
+            if (policies.length === 0) {
+                document.getElementById('policies-list').innerHTML = '<div class="empty">No policies configured</div>';
+                return;
+            }
+
+            const html = policies.map(p => `
+                <div class="card" style="margin-bottom: 0.75rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <strong>${p.name}</strong>
+                            <span class="badge ${p.enabled ? 'badge-lime' : 'badge-red'}" style="margin-left: 0.5rem;">${p.enabled ? 'Active' : 'Disabled'}</span>
+                        </div>
+                        <button class="btn btn-red btn-sm" onclick="removePolicy('${p.id}')">Delete</button>
+                    </div>
+                    <div style="margin-top: 0.75rem; font-size: 0.85rem; color: var(--text-dim);">
+                        Block 3rd Party: ${p.block_third_party ? 'Yes' : 'No'} |
+                        Block Trackers: ${p.block_trackers ? 'Yes' : 'No'} |
+                        Require Consent: ${p.require_consent ? 'Yes' : 'No'} |
+                        Max Age: ${p.max_cookie_age_days} days
+                    </div>
+                </div>
+            `).join('');
+
+            document.getElementById('policies-list').innerHTML = html;
+        }
+
+        async function loadViolations() {
+            const filter = document.getElementById('violation-filter').value;
+            let path = '/violations?limit=50';
+            if (filter) path += '&violation_type=' + filter;
+
+            const data = await api(path) || {};
+            const violations = data.violations || [];
+
+            if (violations.length === 0) {
+                document.getElementById('violations-list').innerHTML = '<div class="empty">No violations found</div>';
+                return;
+            }
+
+            const html = violations.map(v => `
+                <div class="violation-item">
+                    <div>
+                        <span class="violation-type ${v.violation_type}">${v.violation_type.replace('_', ' ')}</span>
+                        <span style="margin-left: 0.5rem;"><strong>${v.domain}</strong> / ${v.cookie_name}</span>
+                        <div style="font-size: 0.8rem; color: var(--text-dim); margin-top: 0.25rem;">${v.description}</div>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="font-size: 0.75rem; color: var(--text-dim);">${v.policy}</div>
+                        <div style="font-size: 0.7rem; color: var(--text-dim);">${new Date(v.timestamp).toLocaleString()}</div>
+                    </div>
+                </div>
+            `).join('');
+
+            document.getElementById('violations-list').innerHTML = html;
+        }
+
+        async function loadConfig() {
+            const config = await api('/config') || {};
+            document.getElementById('cfg-enabled').checked = config.enabled !== false;
+            document.getElementById('cfg-gdpr').checked = config.gdpr_mode !== false;
+            document.getElementById('cfg-tracker-detection').checked = config.tracker_detection !== false;
+            document.getElementById('cfg-thirdparty-detection').checked = config.third_party_detection !== false;
+            document.getElementById('cfg-block-trackers').checked = config.block_trackers !== false;
+            document.getElementById('cfg-alert').checked = config.alert_on_suspicious !== false;
+            document.getElementById('cfg-scan-interval').value = config.scan_interval || 300;
+            document.getElementById('cfg-retention').value = config.retention_days || 30;
+        }
+
+        async function updateConfig(key, value) {
+            const res = await api('/config', {
+                method: 'POST',
+                body: JSON.stringify({ [key]: value })
+            });
+            showToast(res?.success ? 'Configuration updated' : 'Failed to update', res?.success ? 'success' : 'error');
+        }
+
+        async function scanUrl() {
+            const url = document.getElementById('scan-url').value;
+            if (!url) { showToast('Please enter a URL', 'error'); return; }
+
+            const includeThirdParty = document.getElementById('scan-thirdparty').checked;
+
+            const res = await api('/scan', {
+                method: 'POST',
+                body: JSON.stringify({ url, include_third_party: includeThirdParty })
+            });
+
+            closeModal('scan-modal');
+
+            if (res?.success) {
+                const result = res.result || {};
+                showToast(`Scan complete: ${result.cookies_found} cookies, ${result.trackers} trackers`);
+                refresh();
+            } else {
+                showToast('Scan failed', 'error');
+            }
+        }
+
+        async function addTracker() {
+            const name = document.getElementById('tracker-name').value;
+            const pattern = document.getElementById('tracker-pattern').value;
+            const category = document.getElementById('tracker-category').value;
+
+            if (!name || !pattern) { showToast('Please fill all fields', 'error'); return; }
+
+            const res = await api('/tracker/add', {
+                method: 'POST',
+                body: JSON.stringify({ name, pattern, category })
+            });
+
+            closeModal('tracker-modal');
+
+            if (res?.success) {
+                showToast('Tracker pattern added');
+                loadTrackers();
+            } else {
+                showToast(res?.detail || 'Failed to add tracker', 'error');
+            }
+        }
+
+        async function removeTracker(name) {
+            if (!confirm(`Remove tracker pattern "${name}"?`)) return;
+            const res = await api('/tracker/' + encodeURIComponent(name), { method: 'DELETE' });
+            showToast(res?.success ? 'Tracker removed' : 'Failed', res?.success ? 'success' : 'error');
+            loadTrackers();
+        }
+
+        async function addPolicy() {
+            const name = document.getElementById('policy-name').value;
+            if (!name) { showToast('Please enter a policy name', 'error'); return; }
+
+            const res = await api('/policy', {
+                method: 'POST',
+                body: JSON.stringify({
+                    name,
+                    block_third_party: document.getElementById('policy-block-thirdparty').checked,
+                    block_trackers: document.getElementById('policy-block-trackers').checked,
+                    require_consent: document.getElementById('policy-require-consent').checked,
+                    max_cookie_age_days: parseInt(document.getElementById('policy-max-age').value) || 365
+                })
+            });
+
+            closeModal('policy-modal');
+
+            if (res?.success) {
+                showToast('Policy created');
+                loadPolicies();
+            } else {
+                showToast(res?.detail || 'Failed to create policy', 'error');
+            }
+        }
+
+        async function removePolicy(id) {
+            if (!confirm('Delete this policy?')) return;
+            const res = await api('/policy/' + id, { method: 'DELETE' });
+            showToast(res?.success ? 'Policy deleted' : 'Failed', res?.success ? 'success' : 'error');
+            loadPolicies();
+        }
+
+        async function refresh() {
+            await Promise.all([loadStatus(), loadStats(), loadViolationsPreview()]);
+        }
+
+        // Initial load
+        refresh();
+        setInterval(refresh, 30000);
+    </script>
+    <script src="/shared/crt-engine.js"></script>
+</body>
+</html>

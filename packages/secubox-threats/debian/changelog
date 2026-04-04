@@ -1,0 +1,12 @@
+secubox-threats (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release
+  * Unified threat dashboard
+  * Aggregated alerts from CrowdSec, Suricata, WAF
+  * IOC management (IPs, domains, hashes)
+  * Threat intelligence feeds
+  * Risk scoring and timeline
+  * Incident tracking
+  * Report generation
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Apr 2026 10:00:00 +0200

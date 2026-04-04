@@ -1,0 +1,27 @@
+#!/bin/sh
+set -e
+if [ "$1" = "configure" ]; then
+    # Create required directories
+    mkdir -p /etc/secubox/ipblock
+    mkdir -p /var/lib/secubox/ipblock/lists
+    mkdir -p /etc/nftables.d
+    chown -R secubox:secubox /var/lib/secubox/ipblock 2>/dev/null || true
+
+    # Install nginx config
+    if [ -d /etc/nginx/secubox.d ]; then
+        cat > /etc/nginx/secubox.d/ipblock.conf << 'EOF'
+# /etc/nginx/secubox.d/ipblock.conf
+location /api/v1/ipblock/ {
+    proxy_pass http://unix:/run/secubox/ipblock.sock:/;
+    include /etc/nginx/snippets/secubox-proxy.conf;
+}
+EOF
+        nginx -t 2>/dev/null && systemctl reload nginx 2>/dev/null || true
+    fi
+
+    systemctl daemon-reload
+    systemctl enable secubox-ipblock.service || true
+    systemctl start secubox-ipblock.service || true
+fi
+#DEBHELPER#
+exit 0

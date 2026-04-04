@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - AI Insights</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root {
+            /* P31 Phosphor Light Theme with Violet AI accent */
+            --ai-violet: #7c3aed;
+            --ai-violet-light: #a78bfa;
+            --ai-violet-dark: #5b21b6;
+            --p31-peak: #00dd44;
+            --p31-mid: #009933;
+            --p31-dim: #006622;
+            --tube-light: #f5f3ff;
+            --tube-pale: #ede9fe;
+            --tube-soft: #ddd6fe;
+            --bg-card: var(--tube-pale);
+            --border: var(--tube-soft);
+            --text: #1e1b4b;
+            --text-dim: #6b7280;
+            --primary: var(--ai-violet);
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --success: var(--p31-peak);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Courier Prime', monospace; background: var(--tube-light); color: var(--text); display: flex; min-height: 100vh; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 2px solid var(--border); }
+        .header h1 { font-size: 1.5rem; display: flex; align-items: center; gap: 0.5rem; color: var(--ai-violet); }
+        .badge { padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.75rem; background: var(--tube-light); border: 1px solid var(--border); }
+        .badge.ai { background: var(--ai-violet); color: white; border-color: var(--ai-violet); }
+
+        /* Tabs */
+        .tabs { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+        .tab { padding: 0.6rem 1.2rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text); cursor: pointer; font-family: inherit; font-size: 0.85rem; transition: all 0.2s; }
+        .tab:hover { background: var(--tube-soft); }
+        .tab.active { background: var(--ai-violet); color: white; border-color: var(--ai-violet); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Stats Grid */
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; text-align: center; }
+        .stat-icon { font-size: 1.5rem; margin-bottom: 0.5rem; }
+        .stat-value { font-size: 2rem; font-weight: bold; color: var(--primary); }
+        .stat-value.danger { color: var(--danger); }
+        .stat-value.warning { color: var(--warning); }
+        .stat-value.success { color: var(--success); }
+        .stat-label { color: var(--text-dim); font-size: 0.85rem; margin-top: 0.25rem; }
+
+        /* Cards */
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border); }
+        .card-header h2 { font-size: 1.1rem; display: flex; align-items: center; gap: 0.5rem; }
+
+        /* Buttons */
+        .btn { padding: 0.5rem 1rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text); cursor: pointer; font-family: inherit; font-size: 0.85rem; transition: all 0.2s; }
+        .btn:hover { background: var(--tube-light); }
+        .btn-primary { background: var(--ai-violet); border-color: var(--ai-violet); color: white; }
+        .btn-primary:hover { background: var(--ai-violet-dark); }
+        .btn-sm { padding: 0.3rem 0.6rem; font-size: 0.8rem; }
+        .btn-danger { background: var(--danger); border-color: var(--danger); color: white; }
+
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: 0.75rem; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+        th { color: var(--text-dim); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; background: var(--tube-light); }
+        tr:hover { background: rgba(124, 58, 237, 0.05); }
+
+        /* Severity badges */
+        .severity { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
+        .severity.critical { background: rgba(239, 68, 68, 0.2); color: var(--danger); }
+        .severity.high { background: rgba(245, 158, 11, 0.2); color: #b45309; }
+        .severity.medium { background: rgba(124, 58, 237, 0.2); color: var(--ai-violet); }
+        .severity.low { background: rgba(0, 221, 68, 0.2); color: var(--p31-mid); }
+
+        /* Model cards */
+        .model-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; }
+        .model-card { background: var(--tube-light); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; border-left: 4px solid var(--ai-violet); }
+        .model-card.deployed { border-left-color: var(--success); }
+        .model-card.training { border-left-color: var(--warning); }
+        .model-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem; }
+        .model-name { font-weight: 600; font-size: 1rem; }
+        .model-status { padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; text-transform: uppercase; }
+        .model-status.ready { background: var(--ai-violet-light); color: white; }
+        .model-status.deployed { background: var(--success); color: white; }
+        .model-status.training { background: var(--warning); color: white; }
+        .model-meta { font-size: 0.8rem; color: var(--text-dim); margin-top: 0.5rem; }
+
+        /* Threat Timeline */
+        .timeline-chart { height: 200px; background: var(--tube-light); border-radius: 8px; padding: 1rem; position: relative; overflow: hidden; }
+        .timeline-bars { display: flex; align-items: flex-end; height: 150px; gap: 2px; }
+        .timeline-bar { flex: 1; background: var(--ai-violet-light); border-radius: 2px 2px 0 0; transition: height 0.3s; min-width: 8px; }
+        .timeline-bar:hover { background: var(--ai-violet); }
+        .timeline-labels { display: flex; justify-content: space-between; margin-top: 0.5rem; font-size: 0.7rem; color: var(--text-dim); }
+
+        /* Risk Gauge */
+        .gauge-container { display: flex; justify-content: center; gap: 2rem; padding: 1rem; }
+        .gauge { text-align: center; }
+        .gauge-circle { width: 120px; height: 120px; border-radius: 50%; border: 8px solid var(--tube-soft); position: relative; display: flex; align-items: center; justify-content: center; margin: 0 auto 0.5rem; }
+        .gauge-value { font-size: 1.5rem; font-weight: bold; }
+        .gauge-label { font-size: 0.85rem; color: var(--text-dim); }
+        .gauge.critical .gauge-circle { border-color: var(--danger); }
+        .gauge.high .gauge-circle { border-color: var(--warning); }
+        .gauge.medium .gauge-circle { border-color: var(--ai-violet); }
+        .gauge.low .gauge-circle { border-color: var(--success); }
+
+        /* Correlation Graph */
+        .correlation-item { background: var(--tube-light); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 0.75rem; border-left: 4px solid var(--danger); }
+        .correlation-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+        .correlation-score { font-size: 1.2rem; font-weight: bold; color: var(--danger); }
+        .correlation-alerts { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
+        .alert-chip { padding: 0.2rem 0.5rem; background: var(--bg-card); border-radius: 4px; font-size: 0.75rem; font-family: monospace; }
+
+        /* Forms */
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.85rem; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 0.6rem; border: 1px solid var(--border); border-radius: 6px; background: var(--tube-light); color: var(--text); font-family: inherit; }
+        .form-row { display: flex; gap: 1rem; }
+        .form-row .form-group { flex: 1; }
+
+        /* Toggle switch */
+        .toggle { display: flex; align-items: center; gap: 0.75rem; }
+        .toggle-switch { position: relative; width: 48px; height: 24px; }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: var(--border); border-radius: 24px; transition: 0.3s; }
+        .toggle-slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: 0.3s; }
+        .toggle-switch input:checked + .toggle-slider { background: var(--ai-violet); }
+        .toggle-switch input:checked + .toggle-slider:before { transform: translateX(24px); }
+
+        /* Empty state */
+        .empty-state { text-align: center; padding: 3rem; color: var(--text-dim); }
+        .empty-state .icon { font-size: 3rem; margin-bottom: 1rem; }
+
+        /* Grid layouts */
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+
+        @media (max-width: 768px) {
+            .main { margin-left: 0; padding: 1rem; }
+            .grid-2 { grid-template-columns: 1fr; }
+            .gauge-container { flex-direction: column; align-items: center; }
+        }
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <div class="main">
+        <div class="header">
+            <h1>AI Insights</h1>
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <span class="badge ai">ML-Powered</span>
+                <span class="badge">v1.0.0</span>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('dashboard')">Dashboard</button>
+            <button class="tab" onclick="showTab('threats')">Threats</button>
+            <button class="tab" onclick="showTab('anomalies')">Anomalies</button>
+            <button class="tab" onclick="showTab('models')">Models</button>
+            <button class="tab" onclick="showTab('correlations')">Correlations</button>
+            <button class="tab" onclick="showTab('settings')">Settings</button>
+        </div>
+
+        <!-- Dashboard Tab -->
+        <div id="tab-dashboard" class="tab-content active">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon">🎯</div>
+                    <div class="stat-value danger" id="threats-today">-</div>
+                    <div class="stat-label">Threats Today</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">🚨</div>
+                    <div class="stat-value warning" id="critical-threats">-</div>
+                    <div class="stat-label">Critical</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">📊</div>
+                    <div class="stat-value" id="active-anomalies">-</div>
+                    <div class="stat-label">Anomalies</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">🔗</div>
+                    <div class="stat-value" id="correlations-count">-</div>
+                    <div class="stat-label">Correlations</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">🤖</div>
+                    <div class="stat-value success" id="models-deployed">-</div>
+                    <div class="stat-label">Models Active</div>
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>📈 Threat Timeline (7 days)</h2>
+                    </div>
+                    <div class="timeline-chart">
+                        <div class="timeline-bars" id="timeline-bars"></div>
+                        <div class="timeline-labels">
+                            <span id="timeline-start">-</span>
+                            <span id="timeline-end">Today</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2>🎚️ Risk Scores</h2>
+                    </div>
+                    <div class="gauge-container" id="gauges">
+                        <div class="gauge medium">
+                            <div class="gauge-circle">
+                                <span class="gauge-value" id="overall-score">-</span>
+                            </div>
+                            <div class="gauge-label">Overall Risk</div>
+                        </div>
+                        <div class="gauge low">
+                            <div class="gauge-circle">
+                                <span class="gauge-value" id="ml-confidence">-</span>
+                            </div>
+                            <div class="gauge-label">ML Confidence</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2>🔥 Latest Detections</h2>
+                    <button class="btn btn-sm" onclick="loadLatestThreats()">Refresh</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr><th>Time</th><th>Type</th><th>Source</th><th>Score</th><th>Severity</th></tr>
+                    </thead>
+                    <tbody id="latest-threats">
+                        <tr><td colspan="5" class="empty-state">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Threats Tab -->
+        <div id="tab-threats" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <h2>🎯 Threat Detections</h2>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <select id="threat-severity-filter" onchange="loadThreats()">
+                            <option value="">All Severities</option>
+                            <option value="critical">Critical</option>
+                            <option value="high">High</option>
+                            <option value="medium">Medium</option>
+                            <option value="low">Low</option>
+                        </select>
+                        <button class="btn btn-sm" onclick="loadThreats()">Refresh</button>
+                    </div>
+                </div>
+                <table>
+                    <thead>
+                        <tr><th>Timestamp</th><th>Type</th><th>Source IP</th><th>Target IP</th><th>Score</th><th>Severity</th><th>Description</th></tr>
+                    </thead>
+                    <tbody id="threats-table">
+                        <tr><td colspan="7" class="empty-state">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2>📊 Threat History</h2>
+                </div>
+                <div class="timeline-chart" style="height: 250px;">
+                    <div class="timeline-bars" id="history-bars" style="height: 200px;"></div>
+                    <div class="timeline-labels">
+                        <span>7 days ago</span>
+                        <span>Today</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Anomalies Tab -->
+        <div id="tab-anomalies" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <h2>📡 Detected Anomalies</h2>
+                    <button class="btn btn-sm" onclick="loadAnomalies()">Refresh</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr><th>Timestamp</th><th>Category</th><th>Score</th><th>Deviation</th><th>Source</th><th>Description</th></tr>
+                    </thead>
+                    <tbody id="anomalies-table">
+                        <tr><td colspan="6" class="empty-state"><div class="icon">✅</div><div>No anomalies detected</div></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Models Tab -->
+        <div id="tab-models" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <h2>🤖 ML Models</h2>
+                    <button class="btn btn-primary btn-sm" onclick="showTrainModal()">Train New Model</button>
+                </div>
+                <div class="model-grid" id="models-grid">
+                    <div class="empty-state"><div class="icon">🤖</div><div>Loading models...</div></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2>📊 Model Performance</h2>
+                </div>
+                <table>
+                    <thead>
+                        <tr><th>Model</th><th>Type</th><th>Accuracy</th><th>Status</th><th>Deployed</th><th>Actions</th></tr>
+                    </thead>
+                    <tbody id="models-table">
+                        <tr><td colspan="6" class="empty-state">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Correlations Tab -->
+        <div id="tab-correlations" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <h2>🔗 Alert Correlations</h2>
+                    <button class="btn btn-sm" onclick="loadCorrelations()">Refresh</button>
+                </div>
+                <div id="correlations-list">
+                    <div class="empty-state"><div class="icon">🔗</div><div>No correlations detected</div></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Tab -->
+        <div id="tab-settings" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <h2>⚙️ Configuration</h2>
+                </div>
+                <form id="config-form">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Detection Threshold</label>
+                            <input type="number" id="cfg-threshold" min="0" max="1" step="0.1" value="0.7">
+                        </div>
+                        <div class="form-group">
+                            <label>Anomaly Sensitivity</label>
+                            <input type="number" id="cfg-sensitivity" min="0" max="1" step="0.1" value="0.8">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Training Interval (hours)</label>
+                            <input type="number" id="cfg-interval" min="1" max="168" value="24">
+                        </div>
+                        <div class="form-group">
+                            <label>Data Retention (days)</label>
+                            <input type="number" id="cfg-retention" min="1" max="365" value="30">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <div class="toggle">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="cfg-autotrain" checked>
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <span>Auto-train models</span>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <div class="toggle">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="cfg-crowdsec" checked>
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <span>CrowdSec Integration</span>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <div class="toggle">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="cfg-suricata" checked>
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <span>Suricata Integration</span>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save Configuration</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2>🔌 Integrations Status</h2>
+                </div>
+                <div id="integrations-status">Loading...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Train Model Modal -->
+    <div id="train-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000;">
+        <div style="background:var(--bg-card); max-width:400px; margin:10% auto; padding:1.5rem; border-radius:8px;">
+            <h3 style="margin-bottom:1rem;">Train New Model</h3>
+            <div class="form-group">
+                <label>Model Name</label>
+                <input type="text" id="train-name" placeholder="My Custom Model">
+            </div>
+            <div class="form-group">
+                <label>Model Type</label>
+                <select id="train-type">
+                    <option value="anomaly">Anomaly Detection</option>
+                    <option value="classification">Threat Classification</option>
+                </select>
+            </div>
+            <div style="display:flex; gap:0.5rem; justify-content:flex-end;">
+                <button class="btn" onclick="hideTrainModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="trainModel()">Start Training</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/shared/sidebar.js"></script>
+    <script>
+        const API = '/api/v1/ai-insights';
+
+        async function api(path, method = 'GET', data = null) {
+            const token = localStorage.getItem('sbx_token');
+            const headers = { 'Content-Type': 'application/json', ...(token ? { 'Authorization': 'Bearer ' + token } : {}) };
+            try {
+                const res = await fetch(API + path, { method, headers, body: data ? JSON.stringify(data) : null });
+                if (res.status === 401) { window.location = '/portal/login.html'; return null; }
+                return res.json();
+            } catch { return null; }
+        }
+
+        function showTab(name) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelector(`.tab[onclick="showTab('${name}')"]`).classList.add('active');
+            document.getElementById('tab-' + name).classList.add('active');
+
+            // Load data for tab
+            if (name === 'threats') loadThreats();
+            else if (name === 'anomalies') loadAnomalies();
+            else if (name === 'models') loadModels();
+            else if (name === 'correlations') loadCorrelations();
+            else if (name === 'settings') loadConfig();
+        }
+
+        async function loadStatus() {
+            const data = await api('/status');
+            if (!data) return;
+            document.getElementById('threats-today').textContent = data.threats_today || 0;
+            document.getElementById('critical-threats').textContent = data.critical_threats || 0;
+            document.getElementById('active-anomalies').textContent = data.active_anomalies || 0;
+            document.getElementById('correlations-count').textContent = data.correlations || 0;
+            document.getElementById('models-deployed').textContent = data.models_deployed || 0;
+
+            // Calculate risk score
+            const risk = Math.min(100, data.threats_today * 5 + data.critical_threats * 20);
+            document.getElementById('overall-score').textContent = risk;
+            updateGaugeClass('overall-score', risk);
+
+            // ML confidence
+            const confidence = data.models_deployed > 0 ? 85 : 50;
+            document.getElementById('ml-confidence').textContent = confidence + '%';
+        }
+
+        function updateGaugeClass(id, value) {
+            const gauge = document.getElementById(id).closest('.gauge');
+            gauge.className = 'gauge';
+            if (value >= 75) gauge.classList.add('critical');
+            else if (value >= 50) gauge.classList.add('high');
+            else if (value >= 25) gauge.classList.add('medium');
+            else gauge.classList.add('low');
+        }
+
+        async function loadLatestThreats() {
+            const data = await api('/threats?limit=5');
+            const tbody = document.getElementById('latest-threats');
+            if (!data?.threats?.length) {
+                tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No threats detected</td></tr>';
+                return;
+            }
+            tbody.innerHTML = data.threats.map(t => `
+                <tr>
+                    <td>${new Date(t.timestamp).toLocaleString()}</td>
+                    <td>${t.type}</td>
+                    <td><code>${t.source_ip || '-'}</code></td>
+                    <td>${Math.round(t.score)}</td>
+                    <td><span class="severity ${t.severity}">${t.severity}</span></td>
+                </tr>
+            `).join('');
+        }
+
+        async function loadTimeline() {
+            const data = await api('/threats/history?days=7');
+            if (!data?.history) return;
+
+            const bars = document.getElementById('timeline-bars');
+            const maxVal = Math.max(...data.history.map(h => h.total), 1);
+
+            bars.innerHTML = data.history.map(h => {
+                const height = Math.max(5, (h.total / maxVal) * 100);
+                return `<div class="timeline-bar" style="height:${height}%" title="${h.date}: ${h.total} threats"></div>`;
+            }).join('');
+
+            if (data.history.length > 0) {
+                document.getElementById('timeline-start').textContent = data.history[0].date;
+            }
+        }
+
+        async function loadThreats() {
+            const severity = document.getElementById('threat-severity-filter').value;
+            const url = severity ? `/threats?limit=50&severity=${severity}` : '/threats?limit=50';
+            const data = await api(url);
+            const tbody = document.getElementById('threats-table');
+            if (!data?.threats?.length) {
+                tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No threats found</td></tr>';
+                return;
+            }
+            tbody.innerHTML = data.threats.map(t => `
+                <tr>
+                    <td>${new Date(t.timestamp).toLocaleString()}</td>
+                    <td>${t.type}</td>
+                    <td><code>${t.source_ip || '-'}</code></td>
+                    <td><code>${t.target_ip || '-'}</code></td>
+                    <td>${Math.round(t.score)}</td>
+                    <td><span class="severity ${t.severity}">${t.severity}</span></td>
+                    <td>${t.description || '-'}</td>
+                </tr>
+            `).join('');
+
+            // Also load history chart
+            loadHistoryChart();
+        }
+
+        async function loadHistoryChart() {
+            const data = await api('/threats/history?days=7');
+            if (!data?.history) return;
+
+            const bars = document.getElementById('history-bars');
+            const maxVal = Math.max(...data.history.map(h => h.total), 1);
+
+            bars.innerHTML = data.history.map(h => {
+                const height = Math.max(5, (h.total / maxVal) * 100);
+                const critical = h.critical || 0;
+                const high = h.high || 0;
+                return `<div class="timeline-bar" style="height:${height}%; background: linear-gradient(to top, var(--danger) ${critical/h.total*100}%, var(--warning) ${(critical+high)/h.total*100}%, var(--ai-violet-light) 100%);" title="${h.date}: ${h.total} (${critical} critical, ${high} high)"></div>`;
+            }).join('');
+        }
+
+        async function loadAnomalies() {
+            const data = await api('/anomalies?limit=50');
+            const tbody = document.getElementById('anomalies-table');
+            if (!data?.anomalies?.length) {
+                tbody.innerHTML = '<tr><td colspan="6" class="empty-state"><div class="icon">✅</div><div>No anomalies detected</div></td></tr>';
+                return;
+            }
+            tbody.innerHTML = data.anomalies.map(a => `
+                <tr>
+                    <td>${new Date(a.timestamp).toLocaleString()}</td>
+                    <td>${a.category}</td>
+                    <td>${Math.round(a.score)}</td>
+                    <td>${(a.baseline_deviation * 100).toFixed(1)}%</td>
+                    <td>${a.source}</td>
+                    <td>${a.description}</td>
+                </tr>
+            `).join('');
+        }
+
+        async function loadModels() {
+            const data = await api('/models');
+            const grid = document.getElementById('models-grid');
+            const tbody = document.getElementById('models-table');
+
+            if (!data?.models?.length) {
+                grid.innerHTML = '<div class="empty-state"><div class="icon">🤖</div><div>No models available</div></div>';
+                tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No models</td></tr>';
+                return;
+            }
+
+            grid.innerHTML = data.models.map(m => `
+                <div class="model-card ${m.status}">
+                    <div class="model-header">
+                        <div class="model-name">${m.name}</div>
+                        <span class="model-status ${m.status}">${m.status}</span>
+                    </div>
+                    <div>Type: ${m.type} | Version: ${m.version}</div>
+                    <div class="model-meta">
+                        ${m.accuracy ? `Accuracy: ${(m.accuracy * 100).toFixed(1)}%` : 'Not trained'}
+                        ${m.deployed_at ? ` | Deployed: ${new Date(m.deployed_at).toLocaleDateString()}` : ''}
+                    </div>
+                </div>
+            `).join('');
+
+            tbody.innerHTML = data.models.map(m => `
+                <tr>
+                    <td>${m.name}</td>
+                    <td>${m.type}</td>
+                    <td>${m.accuracy ? (m.accuracy * 100).toFixed(1) + '%' : '-'}</td>
+                    <td><span class="model-status ${m.status}">${m.status}</span></td>
+                    <td>${m.deployed_at ? new Date(m.deployed_at).toLocaleString() : '-'}</td>
+                    <td>
+                        ${m.status === 'ready' ? `<button class="btn btn-sm btn-primary" onclick="deployModel('${m.id}')">Deploy</button>` : ''}
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        async function loadCorrelations() {
+            const data = await api('/correlations?limit=20');
+            const container = document.getElementById('correlations-list');
+
+            if (!data?.correlations?.length) {
+                container.innerHTML = '<div class="empty-state"><div class="icon">🔗</div><div>No correlations detected</div></div>';
+                return;
+            }
+
+            container.innerHTML = data.correlations.map(c => `
+                <div class="correlation-item">
+                    <div class="correlation-header">
+                        <div>
+                            <strong>${c.attack_stage || 'Attack Pattern'}</strong>
+                            <div style="font-size:0.8rem;color:var(--text-dim);">${new Date(c.timestamp).toLocaleString()}</div>
+                        </div>
+                        <div class="correlation-score">${Math.round(c.correlation_score)}%</div>
+                    </div>
+                    <div style="font-size:0.9rem;">${c.recommendation}</div>
+                    <div class="correlation-alerts">
+                        ${c.ttps?.map(t => `<span class="alert-chip">${t}</span>`).join('') || ''}
+                        <span class="alert-chip">${c.alerts?.length || 0} alerts</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function loadConfig() {
+            const data = await api('/config');
+            if (!data) return;
+
+            document.getElementById('cfg-threshold').value = data.detection_threshold || 0.7;
+            document.getElementById('cfg-sensitivity').value = data.anomaly_sensitivity || 0.8;
+            document.getElementById('cfg-interval').value = data.train_interval_hours || 24;
+            document.getElementById('cfg-retention').value = data.retention_days || 30;
+            document.getElementById('cfg-autotrain').checked = data.auto_train !== false;
+            document.getElementById('cfg-crowdsec').checked = data.crowdsec_integration !== false;
+            document.getElementById('cfg-suricata').checked = data.suricata_integration !== false;
+
+            loadIntegrations();
+        }
+
+        async function loadIntegrations() {
+            const data = await api('/integrations');
+            const container = document.getElementById('integrations-status');
+
+            if (!data?.integrations) {
+                container.innerHTML = '<div class="empty-state">Failed to load integrations</div>';
+                return;
+            }
+
+            container.innerHTML = `<table>
+                <thead><tr><th>Integration</th><th>Status</th><th>Description</th></tr></thead>
+                <tbody>
+                ${data.integrations.map(i => `
+                    <tr>
+                        <td><strong>${i.name}</strong></td>
+                        <td><span class="severity ${i.status === 'running' ? 'low' : (i.status === 'disabled' ? 'medium' : 'high')}">${i.status}</span></td>
+                        <td>${i.description}</td>
+                    </tr>
+                `).join('')}
+                </tbody>
+            </table>`;
+        }
+
+        document.getElementById('config-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const config = {
+                detection_threshold: parseFloat(document.getElementById('cfg-threshold').value),
+                anomaly_sensitivity: parseFloat(document.getElementById('cfg-sensitivity').value),
+                train_interval_hours: parseInt(document.getElementById('cfg-interval').value),
+                retention_days: parseInt(document.getElementById('cfg-retention').value),
+                auto_train: document.getElementById('cfg-autotrain').checked,
+                crowdsec_integration: document.getElementById('cfg-crowdsec').checked,
+                suricata_integration: document.getElementById('cfg-suricata').checked,
+            };
+            await api('/config', 'POST', config);
+            alert('Configuration saved');
+        });
+
+        function showTrainModal() {
+            document.getElementById('train-modal').style.display = 'block';
+        }
+
+        function hideTrainModal() {
+            document.getElementById('train-modal').style.display = 'none';
+        }
+
+        async function trainModel() {
+            const name = document.getElementById('train-name').value.trim();
+            const type = document.getElementById('train-type').value;
+            if (!name) { alert('Please enter a model name'); return; }
+
+            const result = await api('/model/train', 'POST', { name, model_type: type });
+            if (result?.status === 'training_started') {
+                alert('Model training started');
+                hideTrainModal();
+                loadModels();
+            } else {
+                alert('Failed to start training');
+            }
+        }
+
+        async function deployModel(id) {
+            const result = await api('/model/deploy', 'POST', { model_id: id });
+            if (result?.status === 'deployed') {
+                alert('Model deployed successfully');
+                loadModels();
+            } else {
+                alert('Failed to deploy model');
+            }
+        }
+
+        // Initial load
+        loadStatus();
+        loadLatestThreats();
+        loadTimeline();
+        setInterval(loadStatus, 30000);
+    </script>
+    <script src="/shared/crt-engine.js"></script>
+</body>
+</html>

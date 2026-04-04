@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = "remove" ]; then
+    systemctl stop secubox-threats.service || true
+    systemctl disable secubox-threats.service || true
+fi
+
+#DEBHELPER#
+exit 0
