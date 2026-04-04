@@ -654,7 +654,7 @@ fi
 # Create default admin user for web UI
 if [ ! -f /etc/secubox/users.json ]; then
     mkdir -p /etc/secubox
-    HASH=$(echo -n "admin" | sha256sum | cut -d' ' -f1)
+    HASH=$(echo -n "secubox" | sha256sum | cut -d' ' -f1)
     cat > /etc/secubox/users.json <<EOF
 {
   "admin": {
