@@ -22,8 +22,31 @@
   - Core services running (nginx, secubox-hub, crowdsec)
   - Network interfaces up (enp0s3, dummy0, br-lan)
 
+### CI Workflows — Package Slipstream Fix ✅
+- **Issue:** CI-built images didn't include SecuBox packages
+- **Root cause:** `build-image.yml` didn't download packages or pass `--slipstream` flag
+- **Solution:**
+  - Added package download step using `dawidd6/action-download-artifact`
+  - Added `--slipstream` flag to build command
+  - Updated package count from 33/93 to **124 packages**
+- **Files Modified:**
+  - `.github/workflows/build-image.yml` — Download packages + slipstream
+  - `.github/workflows/build-live-usb.yml` — Remove redundant cache copy
+  - `.github/workflows/release.yml` — Update package count
+
+### CI Workflow Chain (Fixed)
+```
+build-packages.yml → secubox-debs-all (124 packages)
+         ↓
+build-image.yml    → Downloads + slipstreams
+build-live-usb.yml → Downloads + slipstreams
+         ↓
+release.yml        → All packages + images
+```
+
 **Commits:**
 - `70961cb` - fix(build): Add startup.nsh for VirtualBox EFI compatibility
+- `38841a9` - fix(ci): Include all SecuBox packages in image builds
 
 ---
 
