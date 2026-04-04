@@ -1,0 +1,14 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-smtp-relay/usr/lib/secubox/smtp-relay/
+	cp -r api debian/secubox-smtp-relay/usr/lib/secubox/smtp-relay/
+	install -d debian/secubox-smtp-relay/usr/share/secubox/www
+	[ -d www ] && cp -r www/. debian/secubox-smtp-relay/usr/share/secubox/www/ || true
+	install -d debian/secubox-smtp-relay/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-smtp-relay/usr/share/secubox/menu.d/ || true
+	# Modular nginx config
+	install -d debian/secubox-smtp-relay/etc/nginx/secubox.d
+	[ -f nginx/smtp-relay.conf ] && cp nginx/smtp-relay.conf debian/secubox-smtp-relay/etc/nginx/secubox.d/ || true

@@ -1,0 +1,9 @@
+{
+  "id": "reporter",
+  "name": "Reporter",
+  "category": "monitoring",
+  "icon": "📊",
+  "path": "/reporter/",
+  "order": 909,
+  "description": "System report generation - PDF/HTML exports"
+}

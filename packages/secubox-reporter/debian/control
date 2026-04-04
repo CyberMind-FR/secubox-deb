@@ -1,0 +1,19 @@
+Source: secubox-reporter
+Section: net
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
+
+Package: secubox-reporter
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-weasyprint | wkhtmltopdf
+Recommends: python3-weasyprint
+Description: SecuBox Reporter - System report generation
+ System reporting module that generates PDF/HTML reports for SecuBox.
+ Supports daily, weekly, security, and network report types.
+ Features scheduled report generation with cron expressions.
+ .
+ Port Debian bookworm de SecuBox (CyberMind.fr).

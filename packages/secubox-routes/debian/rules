@@ -1,0 +1,14 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-routes/usr/lib/secubox/routes/
+	cp -r api debian/secubox-routes/usr/lib/secubox/routes/
+	install -d debian/secubox-routes/usr/share/secubox/www
+	[ -d www ] && cp -r www/. debian/secubox-routes/usr/share/secubox/www/ || true
+	install -d debian/secubox-routes/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-routes/usr/share/secubox/menu.d/ || true
+	# Modular nginx config
+	install -d debian/secubox-routes/etc/nginx/secubox.d
+	[ -f nginx/routes.conf ] && cp nginx/routes.conf debian/secubox-routes/etc/nginx/secubox.d/ || true

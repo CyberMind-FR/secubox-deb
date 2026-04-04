@@ -1,0 +1,24 @@
+Source: secubox-routes
+Section: net
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
+
+Package: secubox-routes
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0), iproute2
+Description: SecuBox Routes - Routing table viewer and manager
+ SecuBox module for viewing and managing routing tables,
+ policy routing rules, and ARP/NDP neighbors.
+ .
+ Features:
+  - View IPv4 and IPv6 routes
+  - Add/delete routes dynamically
+  - Policy routing rules management
+  - ARP/NDP neighbor table viewer
+  - Route cache flush capability
+ .
+ Part of the SecuBox security appliance suite.

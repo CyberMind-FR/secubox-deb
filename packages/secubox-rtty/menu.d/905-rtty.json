@@ -1,0 +1,9 @@
+{
+  "id": "rtty",
+  "name": "Remote Terminal",
+  "icon": "terminal",
+  "path": "/rtty/",
+  "category": "system",
+  "order": 905,
+  "description": "Web-based remote terminal access using rtty"
+}

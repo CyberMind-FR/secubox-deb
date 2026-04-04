@@ -1,0 +1,25 @@
+[Unit]
+Description=SecuBox SMTP Relay — Email forwarding API
+After=network.target secubox-core.service
+Requires=secubox-core.service
+
+[Service]
+UMask=0000
+Type=simple
+User=secubox
+Group=secubox
+WorkingDirectory=/usr/lib/secubox/smtp-relay
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app \
+    --uds /run/secubox/smtp-relay.sock \
+    --log-level warning
+Restart=on-failure
+RestartSec=5
+PrivateTmp=true
+NoNewPrivileges=true
+RuntimeDirectory=secubox
+RuntimeDirectoryMode=0775
+ProtectSystem=full
+ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox /etc/postfix /var/log/mail.log
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,13 @@
+secubox-rtty (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release - Remote terminal access using rtty
+  * FastAPI backend with rtty integration
+  * Service control (start/stop/restart)
+  * Active terminal session monitoring
+  * Access token generation with TTL
+  * Configuration editor for rtty settings
+  * SSL/TLS support
+  * P31 Phosphor light theme frontend
+  * Three-fold architecture (Components/Status/Access)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Apr 2026 14:00:00 +0200

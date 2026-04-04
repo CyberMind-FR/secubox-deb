@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox Reporter</title>
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root {
+            /* P31 Phosphor spectrum */
+            --p31-peak: #00dd44;
+            --p31-hot: #00ff55;
+            --p31-mid: #009933;
+            --p31-dim: #006622;
+            --p31-ghost: #003311;
+            --p31-decay: #ffb347;
+            --p31-decay-dim: #cc7722;
+            /* Tube glass */
+            --tube-light: #e8f5e9;
+            --tube-pale: #c8e6c9;
+            --tube-soft: #a5d6a7;
+            --tube-dark: #1a1a2e;
+            /* Legacy mappings */
+            --bg-dark: var(--tube-light);
+            --bg-card: var(--tube-pale);
+            --border: var(--tube-soft);
+            --text: var(--tube-dark);
+            --text-dim: var(--p31-dim);
+            --primary: var(--p31-peak);
+            --green: var(--p31-peak);
+            --red: #ff4466;
+            --yellow: var(--p31-decay);
+            /* Bloom effects */
+            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Courier Prime', 'Courier New', monospace;
+            background: var(--tube-light);
+            background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
+            color: var(--tube-dark);
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Main content */
+        .main { flex: 1; margin-left: 220px; }
+        .header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); background: var(--bg-card); }
+        .header-title { display: flex; align-items: center; gap: 1rem; }
+        .header-title h1 { font-size: 1.5rem; font-weight: 600; color: var(--p31-hot); text-shadow: var(--bloom-text); }
+        .badge { padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.75rem; font-weight: 500; font-family: 'Courier Prime', monospace; letter-spacing: 0.1em; text-transform: uppercase; border: 1px solid; }
+        .badge.version { background: rgba(51,255,102,0.1); border-color: var(--p31-peak); color: var(--p31-peak); }
+        .badge.active { background: rgba(63,185,80,0.2); color: var(--green); text-shadow: var(--bloom-soft); }
+        .header-actions { display: flex; gap: 0.75rem; }
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--tube-soft); background: var(--tube-pale); color: var(--p31-mid); cursor: pointer; display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; font-family: 'Courier Prime', monospace; letter-spacing: 0.08em; text-transform: uppercase; transition: all 0.2s; }
+        .btn:hover { border-color: var(--p31-dim); color: var(--p31-peak); text-shadow: var(--bloom-soft); box-shadow: 0 0 12px rgba(51,255,102,0.1); }
+        .btn.primary { border-color: var(--p31-peak); color: var(--p31-peak); background: rgba(51,255,102,0.1); }
+        .btn.primary:hover { background: rgba(51,255,102,0.2); box-shadow: 0 0 16px rgba(51,255,102,0.2); }
+        .btn.danger { background: rgba(255,68,102,0.1); border-color: #ff4466; color: #ff4466; }
+        .btn.danger:hover { background: rgba(255,68,102,0.2); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .content { padding: 1.5rem; }
+        .subtitle { color: var(--text-dim); font-size: 0.9rem; margin-bottom: 1.5rem; }
+
+        /* Tabs */
+        .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--p31-ghost); margin-bottom: 1.5rem; background: var(--tube-pale); padding: 0.5rem 1rem 0; border-radius: 8px 8px 0 0; }
+        .tab { padding: 0.75rem 1.5rem; cursor: pointer; color: var(--p31-dim); letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.8rem; border-bottom: 2px solid transparent; transition: all 0.2s; }
+        .tab:hover { color: var(--p31-mid); }
+        .tab.active { color: var(--p31-peak); text-shadow: var(--bloom-soft); border-bottom-color: var(--p31-peak); }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Stats row */
+        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; text-align: center; }
+        .stat-card .value { font-size: 2rem; font-weight: bold; margin-bottom: 0.25rem; text-shadow: 0 0 10px currentColor; }
+        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.15em; }
+        .stat-card.green .value { color: var(--p31-peak); }
+        .stat-card.yellow .value { color: var(--p31-decay); }
+        .stat-card.red .value { color: #ff4466; }
+
+        /* Card */
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; box-shadow: inset 0 0 20px rgba(0,0,0,0.3); }
+        .card:hover { border-color: var(--p31-dim); box-shadow: 0 0 8px rgba(51,255,102,0.05), inset 0 0 20px rgba(0,0,0,0.3); }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .card-header h2 { font-size: 0.85rem; color: var(--p31-decay); text-shadow: var(--bloom-amber); letter-spacing: 0.1em; text-transform: uppercase; }
+
+        /* Table */
+        .data-table { width: 100%; border-collapse: collapse; font-family: 'Courier Prime', monospace; }
+        .data-table th { text-align: left; padding: 0.75rem; color: var(--p31-decay); text-shadow: var(--bloom-amber); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.15em; border-bottom: 1px solid var(--p31-ghost); }
+        .data-table td { padding: 0.75rem; border-bottom: 1px solid var(--p31-ghost); font-size: 0.9rem; color: var(--p31-mid); }
+        .data-table tr:hover { background: rgba(51,255,102,0.03); }
+
+        .status-badge { padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-family: monospace; }
+        .status-badge.completed { background: rgba(63,185,80,0.2); color: var(--green); }
+        .status-badge.pending, .status-badge.generating { background: rgba(255,179,71,0.2); color: var(--yellow); }
+        .status-badge.failed { background: rgba(255,68,102,0.2); color: #ff4466; }
+
+        .action-btn { background: none; border: none; cursor: pointer; padding: 0.25rem 0.5rem; border-radius: 4px; color: var(--p31-mid); font-size: 0.9rem; }
+        .action-btn:hover { background: rgba(51,255,102,0.1); color: var(--p31-peak); }
+        .action-btn.delete:hover { background: rgba(255,68,102,0.1); color: #ff4466; }
+
+        /* Forms */
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; font-size: 0.8rem; color: var(--p31-dim); margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.1em; }
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%; padding: 0.75rem; border: 1px solid var(--tube-soft); border-radius: 6px;
+            background: var(--tube-light); color: var(--p31-mid); font-family: 'Courier Prime', monospace;
+        }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+            outline: none; border-color: var(--p31-dim); box-shadow: 0 0 8px rgba(51,255,102,0.1);
+        }
+
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+
+        /* Checkbox group */
+        .checkbox-group { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; }
+        .checkbox-item { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: var(--tube-light); border-radius: 4px; cursor: pointer; }
+        .checkbox-item:hover { background: rgba(51,255,102,0.05); }
+        .checkbox-item input[type="checkbox"] { accent-color: var(--p31-peak); }
+
+        /* Preview panel */
+        .preview-panel { background: var(--tube-light); border: 1px solid var(--tube-soft); border-radius: 8px; padding: 1.5rem; min-height: 300px; }
+        .preview-panel h3 { color: var(--p31-decay); font-size: 0.9rem; margin-bottom: 1rem; text-transform: uppercase; letter-spacing: 0.1em; }
+        .preview-placeholder { color: var(--p31-dim); text-align: center; padding: 3rem; font-style: italic; }
+
+        /* Schedule items */
+        .schedule-item { display: flex; justify-content: space-between; align-items: center; padding: 1rem; background: var(--tube-light); border-radius: 6px; margin-bottom: 0.75rem; }
+        .schedule-info { flex: 1; }
+        .schedule-info .name { font-weight: bold; color: var(--p31-mid); }
+        .schedule-info .cron { font-size: 0.8rem; color: var(--p31-dim); font-family: monospace; }
+        .schedule-toggle { position: relative; width: 50px; height: 26px; }
+        .schedule-toggle input { opacity: 0; width: 0; height: 0; }
+        .schedule-toggle .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--tube-soft); border-radius: 26px; transition: 0.3s; }
+        .schedule-toggle .slider:before { position: absolute; content: ""; height: 20px; width: 20px; left: 3px; bottom: 3px; background-color: white; border-radius: 50%; transition: 0.3s; }
+        .schedule-toggle input:checked + .slider { background-color: var(--p31-peak); box-shadow: 0 0 8px var(--p31-peak); }
+        .schedule-toggle input:checked + .slider:before { transform: translateX(24px); }
+
+        /* Cron presets */
+        .cron-presets { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
+        .cron-preset { padding: 0.25rem 0.75rem; background: rgba(51,255,102,0.1); border: 1px solid var(--p31-dim); border-radius: 4px; cursor: pointer; font-size: 0.75rem; color: var(--p31-mid); transition: all 0.2s; }
+        .cron-preset:hover { background: rgba(51,255,102,0.2); border-color: var(--p31-peak); color: var(--p31-peak); }
+
+        /* Grid layout */
+        .grid-2 { display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; }
+
+        /* Empty state */
+        .empty-state { text-align: center; padding: 3rem; color: var(--p31-dim); }
+        .empty-state .icon { font-size: 3rem; margin-bottom: 1rem; opacity: 0.5; }
+
+        /* Toast */
+        .toast-container { position: fixed; top: 1rem; right: 1rem; z-index: 1000; }
+        .toast { padding: 1rem 1.5rem; background: var(--tube-pale); border: 1px solid var(--p31-dim); border-radius: 6px; margin-bottom: 0.5rem; font-family: 'Courier Prime', monospace; animation: slideIn 0.3s ease; }
+        .toast.success { border-color: var(--p31-peak); }
+        .toast.error { border-color: #ff4466; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        /* Loading */
+        .loading { text-align: center; padding: 2rem; color: var(--p31-dim); }
+        .spinner { display: inline-block; width: 24px; height: 24px; border: 2px solid var(--tube-soft); border-top-color: var(--p31-peak); border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 0.5rem; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        @media (max-width: 1200px) { .stats-row { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 900px) {
+            .grid-2 { grid-template-columns: 1fr; }
+            .sidebar { display: none; }
+            .main { margin-left: 0; }
+            .form-row { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body class="crt-light">
+    <nav class="sidebar" id="sidebar"></nav>
+
+    <main class="main">
+        <header class="header">
+            <div class="header-title">
+                <h1>SecuBox Reporter</h1>
+                <span class="badge version">v1.0.0</span>
+                <span class="badge active" id="status-badge">- Reports</span>
+            </div>
+            <div class="header-actions">
+                <button class="btn" onclick="refreshData()">Refresh</button>
+                <button class="btn primary" onclick="showTab('generate')">+ New Report</button>
+            </div>
+        </header>
+
+        <div class="content">
+            <p class="subtitle">System report generation - PDF/HTML exports</p>
+
+            <div class="stats-row">
+                <div class="stat-card green">
+                    <div class="value" id="total-reports">-</div>
+                    <div class="label">Total Reports</div>
+                </div>
+                <div class="stat-card green">
+                    <div class="value" id="completed-reports">-</div>
+                    <div class="label">Completed</div>
+                </div>
+                <div class="stat-card yellow">
+                    <div class="value" id="pending-reports">-</div>
+                    <div class="label">Pending</div>
+                </div>
+                <div class="stat-card red">
+                    <div class="value" id="failed-reports">-</div>
+                    <div class="label">Failed</div>
+                </div>
+            </div>
+
+            <div class="tabs">
+                <div class="tab active" data-tab="reports" onclick="showTab('reports')">Reports</div>
+                <div class="tab" data-tab="generate" onclick="showTab('generate')">Generate</div>
+                <div class="tab" data-tab="schedule" onclick="showTab('schedule')">Schedule</div>
+            </div>
+
+            <!-- Reports Tab -->
+            <div id="tab-reports" class="tab-content active">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Generated Reports</h2>
+                        <select id="filter-type" onchange="loadReports()" style="padding: 0.25rem 0.5rem; border-radius: 4px; border: 1px solid var(--tube-soft); background: var(--tube-light);">
+                            <option value="">All Types</option>
+                            <option value="daily">Daily</option>
+                            <option value="weekly">Weekly</option>
+                            <option value="security">Security</option>
+                            <option value="network">Network</option>
+                        </select>
+                    </div>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>Type</th>
+                                <th>Format</th>
+                                <th>Status</th>
+                                <th>Created</th>
+                                <th>Size</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="reports-table">
+                            <tr><td colspan="7" class="loading"><span class="spinner"></span> Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Generate Tab -->
+            <div id="tab-generate" class="tab-content">
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2>Generate New Report</h2>
+                        </div>
+                        <form id="generate-form" onsubmit="generateReport(event)">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Report Type</label>
+                                    <select id="report-type" required onchange="updateSections()">
+                                        <option value="daily">Daily Report</option>
+                                        <option value="weekly">Weekly Report</option>
+                                        <option value="security">Security Report</option>
+                                        <option value="network">Network Report</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Format</label>
+                                    <select id="report-format">
+                                        <option value="pdf">PDF</option>
+                                        <option value="html">HTML</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Report Title (optional)</label>
+                                <input type="text" id="report-title" placeholder="Auto-generated if empty">
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Start Date</label>
+                                    <input type="date" id="start-date">
+                                </div>
+                                <div class="form-group">
+                                    <label>End Date</label>
+                                    <input type="date" id="end-date">
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Sections to Include</label>
+                                <div class="checkbox-group" id="sections-group">
+                                    <!-- Populated dynamically -->
+                                </div>
+                            </div>
+
+                            <button type="submit" class="btn primary" style="width: 100%;">Generate Report</button>
+                        </form>
+                    </div>
+
+                    <div class="preview-panel">
+                        <h3>Preview</h3>
+                        <div id="preview-content" class="preview-placeholder">
+                            Select a report type to see available sections
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Schedule Tab -->
+            <div id="tab-schedule" class="tab-content">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Scheduled Reports</h2>
+                    </div>
+                    <div id="schedules-list">
+                        <div class="loading"><span class="spinner"></span> Loading...</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Add/Edit Schedule</h2>
+                    </div>
+                    <form id="schedule-form" onsubmit="saveSchedule(event)">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Report Type</label>
+                                <select id="schedule-type" required>
+                                    <option value="daily">Daily Report</option>
+                                    <option value="weekly">Weekly Report</option>
+                                    <option value="security">Security Report</option>
+                                    <option value="network">Network Report</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Format</label>
+                                <select id="schedule-format">
+                                    <option value="pdf">PDF</option>
+                                    <option value="html">HTML</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Cron Expression</label>
+                            <input type="text" id="schedule-cron" placeholder="0 6 * * *" required>
+                            <div class="cron-presets">
+                                <span class="cron-preset" onclick="setCron('0 6 * * *')">Daily 6:00 AM</span>
+                                <span class="cron-preset" onclick="setCron('0 7 * * 1')">Weekly Monday 7:00 AM</span>
+                                <span class="cron-preset" onclick="setCron('0 0 1 * *')">Monthly 1st</span>
+                                <span class="cron-preset" onclick="setCron('0 */6 * * *')">Every 6 hours</span>
+                                <span class="cron-preset" onclick="setCron('0 8 * * 1-5')">Weekdays 8:00 AM</span>
+                            </div>
+                        </div>
+
+                        <div style="display: flex; gap: 1rem;">
+                            <label class="schedule-toggle" style="flex: 0;">
+                                <input type="checkbox" id="schedule-enabled" checked>
+                                <span class="slider"></span>
+                            </label>
+                            <span style="color: var(--p31-dim); font-size: 0.9rem;">Enable this schedule</span>
+                        </div>
+
+                        <button type="submit" class="btn primary" style="width: 100%; margin-top: 1rem;">Save Schedule</button>
+                    </form>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <div class="toast-container" id="toast-container"></div>
+
+    <script>
+        const API = '/api/v1/reporter';
+        let refreshInterval = null;
+
+        // Section definitions by report type
+        const SECTIONS = {
+            daily: [
+                { id: 'system_health', name: 'System Health', default: true },
+                { id: 'services_status', name: 'Services Status', default: true },
+                { id: 'alerts_summary', name: 'Alerts Summary', default: true },
+                { id: 'network_stats', name: 'Network Statistics', default: true },
+            ],
+            weekly: [
+                { id: 'system_health', name: 'System Health', default: true },
+                { id: 'services_status', name: 'Services Status', default: true },
+                { id: 'alerts_summary', name: 'Alerts Summary', default: true },
+                { id: 'network_stats', name: 'Network Statistics', default: true },
+                { id: 'security_events', name: 'Security Events', default: true },
+                { id: 'bandwidth_usage', name: 'Bandwidth Usage', default: true },
+                { id: 'top_clients', name: 'Top Clients', default: true },
+            ],
+            security: [
+                { id: 'security_events', name: 'Security Events', default: true },
+                { id: 'crowdsec_decisions', name: 'CrowdSec Decisions', default: true },
+                { id: 'blocked_ips', name: 'Blocked IPs', default: true },
+                { id: 'auth_failures', name: 'Auth Failures', default: true },
+                { id: 'waf_alerts', name: 'WAF Alerts', default: true },
+                { id: 'vulnerability_scan', name: 'Vulnerability Scan', default: false },
+            ],
+            network: [
+                { id: 'interface_stats', name: 'Interface Statistics', default: true },
+                { id: 'bandwidth_usage', name: 'Bandwidth Usage', default: true },
+                { id: 'top_protocols', name: 'Top Protocols', default: true },
+                { id: 'top_clients', name: 'Top Clients', default: true },
+                { id: 'dns_queries', name: 'DNS Queries', default: true },
+                { id: 'connection_summary', name: 'Connection Summary', default: true },
+            ],
+        };
+
+        async function api(endpoint, method = 'GET', data = null) {
+            const token = localStorage.getItem('sbx_token');
+            const opts = {
+                method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': 'Bearer ' + token } : {})
+                }
+            };
+            if (data) opts.body = JSON.stringify(data);
+            try {
+                const res = await fetch(API + endpoint, opts);
+                if (res.status === 401) {
+                    window.location.href = '/portal/login.html';
+                    return {};
+                }
+                return res.json();
+            } catch (e) {
+                console.error('API error:', e);
+                return {};
+            }
+        }
+
+        function checkAuth() {
+            const token = localStorage.getItem('sbx_token');
+            if (!token) {
+                window.location.href = '/portal/login.html';
+            }
+        }
+
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 4000);
+        }
+
+        function formatBytes(bytes) {
+            if (!bytes) return '-';
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '-';
+            const d = new Date(dateStr);
+            return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+
+        function showTab(tabId) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelector(`.tab[data-tab="${tabId}"]`).classList.add('active');
+            document.getElementById(`tab-${tabId}`).classList.add('active');
+
+            if (tabId === 'generate') {
+                updateSections();
+            } else if (tabId === 'schedule') {
+                loadSchedule();
+            }
+        }
+
+        async function loadStats() {
+            const data = await api('/stats');
+            if (data && data.reports_summary) {
+                const s = data.reports_summary;
+                document.getElementById('total-reports').textContent = s.total || 0;
+                document.getElementById('completed-reports').textContent = s.completed || 0;
+                document.getElementById('pending-reports').textContent = s.pending || 0;
+                document.getElementById('failed-reports').textContent = s.failed || 0;
+                document.getElementById('status-badge').textContent = `${s.completed || 0} Reports`;
+            }
+        }
+
+        async function loadReports() {
+            const filterType = document.getElementById('filter-type').value;
+            let endpoint = '/reports?limit=50';
+            if (filterType) endpoint += `&report_type=${filterType}`;
+
+            const data = await api(endpoint);
+            const tbody = document.getElementById('reports-table');
+
+            if (!data.reports || data.reports.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="empty-state"><div class="icon">📄</div>No reports found</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = data.reports.map(r => `
+                <tr>
+                    <td>${r.title}</td>
+                    <td>${r.report_type}</td>
+                    <td>${r.format.toUpperCase()}</td>
+                    <td><span class="status-badge ${r.status}">${r.status}</span></td>
+                    <td>${formatDate(r.created_at)}</td>
+                    <td>${formatBytes(r.file_size)}</td>
+                    <td>
+                        ${r.status === 'completed' ? `<button class="action-btn" onclick="downloadReport('${r.id}')" title="Download">Download</button>` : ''}
+                        <button class="action-btn delete" onclick="deleteReport('${r.id}')" title="Delete">Delete</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function updateSections() {
+            const type = document.getElementById('report-type').value;
+            const sections = SECTIONS[type] || [];
+            const group = document.getElementById('sections-group');
+
+            group.innerHTML = sections.map(s => `
+                <label class="checkbox-item">
+                    <input type="checkbox" name="section" value="${s.id}" ${s.default ? 'checked' : ''}>
+                    <span>${s.name}</span>
+                </label>
+            `).join('');
+
+            // Update preview
+            const preview = document.getElementById('preview-content');
+            const typeLabels = { daily: 'Daily', weekly: 'Weekly', security: 'Security', network: 'Network' };
+            preview.innerHTML = `
+                <div style="text-align: left;">
+                    <p><strong>Report Type:</strong> ${typeLabels[type] || type}</p>
+                    <p><strong>Sections:</strong></p>
+                    <ul style="margin-left: 1rem; color: var(--p31-mid);">
+                        ${sections.filter(s => s.default).map(s => `<li>${s.name}</li>`).join('')}
+                    </ul>
+                </div>
+            `;
+        }
+
+        async function generateReport(e) {
+            e.preventDefault();
+
+            const selectedSections = Array.from(document.querySelectorAll('input[name="section"]:checked')).map(cb => cb.value);
+
+            const data = {
+                report_type: document.getElementById('report-type').value,
+                format: document.getElementById('report-format').value,
+                title: document.getElementById('report-title').value || null,
+                start_date: document.getElementById('start-date').value || null,
+                end_date: document.getElementById('end-date').value || null,
+                sections: selectedSections.length > 0 ? selectedSections : null,
+            };
+
+            const result = await api('/reports/generate', 'POST', data);
+
+            if (result.success) {
+                showToast(`Report generation started (ID: ${result.report_id})`);
+                showTab('reports');
+                // Poll for completion
+                setTimeout(loadReports, 2000);
+                setTimeout(loadReports, 5000);
+                setTimeout(loadStats, 5000);
+            } else {
+                showToast(result.error || 'Failed to generate report', 'error');
+            }
+        }
+
+        async function downloadReport(id) {
+            const token = localStorage.getItem('sbx_token');
+            const url = `${API}/reports/${id}/download`;
+
+            // Use fetch with auth header then trigger download
+            try {
+                const res = await fetch(url, {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                if (!res.ok) throw new Error('Download failed');
+
+                const blob = await res.blob();
+                const contentDisp = res.headers.get('Content-Disposition');
+                let filename = 'report';
+                if (contentDisp) {
+                    const match = contentDisp.match(/filename="?(.+)"?/);
+                    if (match) filename = match[1];
+                }
+
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = filename;
+                a.click();
+                URL.revokeObjectURL(a.href);
+            } catch (e) {
+                showToast('Download failed', 'error');
+            }
+        }
+
+        async function deleteReport(id) {
+            if (!confirm('Delete this report?')) return;
+
+            const result = await api(`/reports/${id}`, 'DELETE');
+            if (result.success) {
+                showToast('Report deleted');
+                loadReports();
+                loadStats();
+            } else {
+                showToast(result.error || 'Failed to delete', 'error');
+            }
+        }
+
+        async function loadSchedule() {
+            const data = await api('/schedule');
+            const list = document.getElementById('schedules-list');
+
+            if (!data.schedules || data.schedules.length === 0) {
+                list.innerHTML = '<div class="empty-state">No schedules configured</div>';
+                return;
+            }
+
+            list.innerHTML = data.schedules.map(s => `
+                <div class="schedule-item">
+                    <div class="schedule-info">
+                        <div class="name">${s.report_type.charAt(0).toUpperCase() + s.report_type.slice(1)} Report (${s.format.toUpperCase()})</div>
+                        <div class="cron">${s.cron} - ${s.description || ''}</div>
+                    </div>
+                    <label class="schedule-toggle">
+                        <input type="checkbox" ${s.enabled ? 'checked' : ''} onchange="toggleSchedule('${s.report_type}', this.checked)">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            `).join('');
+        }
+
+        function setCron(cron) {
+            document.getElementById('schedule-cron').value = cron;
+        }
+
+        async function saveSchedule(e) {
+            e.preventDefault();
+
+            const data = {
+                report_type: document.getElementById('schedule-type').value,
+                format: document.getElementById('schedule-format').value,
+                cron: document.getElementById('schedule-cron').value,
+                enabled: document.getElementById('schedule-enabled').checked,
+            };
+
+            const result = await api('/schedule', 'POST', data);
+
+            if (result.success) {
+                showToast('Schedule saved');
+                loadSchedule();
+            } else {
+                showToast(result.error || 'Failed to save schedule', 'error');
+            }
+        }
+
+        async function toggleSchedule(reportType, enabled) {
+            const scheduleData = await api('/schedule');
+            const schedule = scheduleData.schedules?.find(s => s.report_type === reportType);
+
+            if (schedule) {
+                await api('/schedule', 'POST', {
+                    report_type: reportType,
+                    format: schedule.format,
+                    cron: schedule.cron,
+                    enabled: enabled,
+                });
+                showToast(`Schedule ${enabled ? 'enabled' : 'disabled'}`);
+            }
+        }
+
+        async function refreshData() {
+            await Promise.all([loadStats(), loadReports()]);
+            showToast('Data refreshed');
+        }
+
+        // Initialize
+        checkAuth();
+        loadStats();
+        loadReports();
+        updateSections();
+
+        // Auto-refresh every 60 seconds
+        refreshInterval = setInterval(() => {
+            loadStats();
+            loadReports();
+        }, 60000);
+    </script>
+    <script src="/shared/sidebar.js"></script>
+    <script src="/shared/crt-engine.js"></script>
+</body>
+</html>

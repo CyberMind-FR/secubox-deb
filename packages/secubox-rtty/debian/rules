@@ -1,0 +1,21 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	# Install API
+	install -d debian/secubox-rtty/usr/lib/secubox/rtty/
+	cp -r api debian/secubox-rtty/usr/lib/secubox/rtty/
+	# Install frontend
+	install -d debian/secubox-rtty/usr/share/secubox/www
+	[ -d www ] && cp -r www/. debian/secubox-rtty/usr/share/secubox/www/ || true
+	# Install menu entry
+	install -d debian/secubox-rtty/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-rtty/usr/share/secubox/menu.d/ || true
+	# Modular nginx config
+	install -d debian/secubox-rtty/etc/nginx/secubox.d
+	[ -f nginx/rtty.conf ] && cp nginx/rtty.conf debian/secubox-rtty/etc/nginx/secubox.d/ || true
+	# Create data directories
+	install -d debian/secubox-rtty/var/lib/secubox/rtty
+	install -d debian/secubox-rtty/var/log/rtty
+	install -d debian/secubox-rtty/etc/rtty
