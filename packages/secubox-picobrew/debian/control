@@ -1,0 +1,22 @@
+Source: secubox-picobrew
+Section: net
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+
+Package: secubox-picobrew
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn
+Description: Homebrew/Fermentation Controller for SecuBox
+ SecuBox-DEB Phase 9 IoT module for homebrewing and fermentation.
+ Provides FastAPI backend on /api/v1/picobrew/ via Unix socket.
+ .
+ Features:
+  - Temperature monitoring via GPIO/I2C/USB sensors (DS18B20, DHT22, BME280)
+  - Fermentation profile management with temperature schedules
+  - Brew session logging with continuous temperature tracking
+  - Recipe management and library
+  - Temperature deviation alerts
+  - Support for Tilt/iSpindel hydrometers
+  - CRT-light P31 phosphor theme with amber accents frontend

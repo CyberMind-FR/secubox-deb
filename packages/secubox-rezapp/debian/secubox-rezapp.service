@@ -1,0 +1,16 @@
+[Unit]
+Description=SecuBox RezApp API
+After=network.target secubox-core.service docker.service
+Wants=docker.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/usr/lib/secubox/rezapp
+ExecStart=/usr/bin/uvicorn api.main:app --uds /run/secubox/rezapp.sock --log-level warning
+UMask=0117
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

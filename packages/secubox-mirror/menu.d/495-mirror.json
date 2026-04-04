@@ -1,0 +1,9 @@
+{
+  "id": "mirror",
+  "name": "Mirror/CDN",
+  "category": "system",
+  "icon": "cloud-download",
+  "path": "/mirror/",
+  "order": 495,
+  "description": "APT repository mirror and CDN cache"
+}

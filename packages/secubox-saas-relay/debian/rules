@@ -1,0 +1,14 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-saas-relay/usr/lib/secubox/saas-relay/
+	cp -r api debian/secubox-saas-relay/usr/lib/secubox/saas-relay/
+	install -d debian/secubox-saas-relay/usr/share/secubox/www
+	[ -d www ] && cp -r www/. debian/secubox-saas-relay/usr/share/secubox/www/ || true
+	install -d debian/secubox-saas-relay/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-saas-relay/usr/share/secubox/menu.d/ || true
+	# Modular nginx config
+	install -d debian/secubox-saas-relay/etc/nginx/secubox.d
+	[ -f nginx/saas-relay.conf ] && cp nginx/saas-relay.conf debian/secubox-saas-relay/etc/nginx/secubox.d/ || true

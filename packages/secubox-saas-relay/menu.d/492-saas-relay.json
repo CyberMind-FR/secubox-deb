@@ -1,0 +1,9 @@
+{
+  "id": "saas-relay",
+  "name": "SaaS Relay",
+  "category": "services",
+  "icon": "cloud-arrow-up",
+  "path": "/saas-relay/",
+  "order": 492,
+  "description": "SaaS/API proxy relay"
+}

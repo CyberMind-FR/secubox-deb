@@ -1,0 +1,16 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d $(CURDIR)/debian/secubox-rezapp/usr/lib/secubox/rezapp/api
+	install -m 644 api/main.py $(CURDIR)/debian/secubox-rezapp/usr/lib/secubox/rezapp/api/
+	touch $(CURDIR)/debian/secubox-rezapp/usr/lib/secubox/rezapp/api/__init__.py
+	install -d $(CURDIR)/debian/secubox-rezapp/usr/share/secubox/www/rezapp
+	install -m 644 www/rezapp/index.html $(CURDIR)/debian/secubox-rezapp/usr/share/secubox/www/rezapp/
+	install -d $(CURDIR)/debian/secubox-rezapp/etc/nginx/secubox.d
+	install -m 644 nginx/rezapp.conf $(CURDIR)/debian/secubox-rezapp/etc/nginx/secubox.d/
+	install -d $(CURDIR)/debian/secubox-rezapp/usr/share/secubox/menu.d
+	install -m 644 menu.d/494-rezapp.json $(CURDIR)/debian/secubox-rezapp/usr/share/secubox/menu.d/
+	install -d $(CURDIR)/debian/secubox-rezapp/usr/lib/systemd/system
+	install -m 644 debian/secubox-rezapp.service $(CURDIR)/debian/secubox-rezapp/usr/lib/systemd/system/

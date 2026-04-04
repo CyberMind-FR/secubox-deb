@@ -1,0 +1,9 @@
+secubox-mirror (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release for SecuBox-DEB Phase 9.
+  * Mirror/CDN caching module for APT repositories.
+  * FastAPI backend with nginx caching proxy integration.
+  * P31 Phosphor light theme frontend dashboard.
+  * Features: mirror management, cache statistics, sync status, purge.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Apr 2026 12:00:00 +0200

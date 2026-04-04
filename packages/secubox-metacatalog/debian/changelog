@@ -1,0 +1,11 @@
+secubox-metacatalog (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release
+  * FastAPI backend for service catalog
+  * Service discovery via systemd
+  * Dependency graph visualization
+  * API endpoint documentation
+  * P31 Phosphor light theme frontend
+  * JWT authentication via secubox-core
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Apr 2026 12:00:00 +0200

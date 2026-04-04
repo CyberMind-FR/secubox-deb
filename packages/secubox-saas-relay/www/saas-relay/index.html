@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - SaaS Relay Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root {
+            /* P31 Phosphor spectrum */
+            --p31-peak: #00dd44;
+            --p31-hot: #00ff55;
+            --p31-mid: #009933;
+            --p31-dim: #006622;
+            --p31-ghost: #003311;
+            --p31-decay: #ffb347;
+            --p31-decay-dim: #cc7722;
+            /* Tube glass */
+            --tube-light: #e8f5e9;
+            --tube-pale: #c8e6c9;
+            --tube-soft: #a5d6a7;
+            --tube-dark: #1a1a2e;
+            /* Legacy mappings */
+            --bg-dark: var(--tube-light);
+            --bg-card: var(--tube-pale);
+            --border: var(--tube-soft);
+            --text: var(--tube-dark);
+            --text-dim: var(--p31-dim);
+            --primary: var(--p31-peak);
+            --green: var(--p31-peak);
+            --red: #ff4466;
+            --yellow: var(--p31-decay);
+            --orange: var(--p31-decay-dim);
+            --purple: #a371f7;
+            --cyan: var(--p31-mid);
+            /* Bloom effects */
+            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Courier Prime', 'Courier New', monospace;
+            background: var(--tube-light);
+            background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
+            color: var(--tube-dark);
+            display: flex;
+            min-height: 100vh;
+        }
+        .sidebar { width: 220px; position: fixed; height: 100vh; overflow-y: auto; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
+        .header h1 { font-size: 1.5rem; color: var(--p31-hot); text-shadow: var(--bloom-text); }
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--tube-soft); background: var(--tube-pale); color: var(--p31-mid); cursor: pointer; font-size: 0.85rem; font-family: inherit; letter-spacing: 0.08em; text-transform: uppercase; transition: all 0.2s; }
+        .btn:hover { border-color: var(--p31-dim); color: var(--p31-peak); text-shadow: var(--bloom-soft); }
+        .btn.primary { border-color: var(--p31-peak); color: var(--p31-peak); background: rgba(51,255,102,0.1); }
+        .btn.primary:hover { background: rgba(51,255,102,0.2); box-shadow: 0 0 16px rgba(51,255,102,0.2); }
+        .btn.danger { border-color: var(--red); color: var(--red); background: rgba(255,68,102,0.1); }
+        .btn.danger:hover { background: rgba(255,68,102,0.2); }
+        .btn-group { display: flex; gap: 0.5rem; }
+        .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card { background: var(--tube-pale); border: 1px solid var(--tube-soft); border-radius: 8px; padding: 1rem; text-align: center; }
+        .stat-card .value { font-size: 1.5rem; font-weight: bold; color: var(--p31-peak); text-shadow: 0 0 10px currentColor; }
+        .stat-card .label { font-size: 0.7rem; color: var(--p31-dim); margin-top: 0.25rem; letter-spacing: 0.15em; text-transform: uppercase; }
+        .stat-card.yellow .value { color: var(--p31-decay); }
+        .stat-card.red .value { color: var(--red); }
+        .card { background: var(--tube-pale); border: 1px solid var(--tube-soft); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; box-shadow: inset 0 0 20px rgba(0,0,0,0.3); }
+        .card:hover { border-color: var(--p31-dim); }
+        .card h2 { margin-bottom: 1rem; color: var(--p31-decay); text-shadow: var(--bloom-amber); letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.85rem; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        th, td { padding: 0.6rem; text-align: left; border-bottom: 1px solid var(--p31-ghost); }
+        th { color: var(--p31-decay); text-shadow: var(--bloom-amber); letter-spacing: 0.15em; font-size: 0.75rem; text-transform: uppercase; }
+        td { color: var(--p31-mid); }
+        tr:hover { background: rgba(51,255,102,0.03); }
+        .badge { padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; border: 1px solid; }
+        .badge.healthy { background: rgba(51,255,102,0.15); border-color: var(--p31-peak); color: var(--p31-peak); text-shadow: var(--bloom-soft); }
+        .badge.degraded { background: rgba(255,179,71,0.1); border-color: var(--p31-decay); color: var(--p31-decay); }
+        .badge.unhealthy { background: rgba(255,68,102,0.1); border-color: var(--red); color: var(--red); }
+        .badge.unknown { background: rgba(139,148,158,0.2); border-color: var(--text-dim); color: var(--text-dim); }
+        .badge.rest { background: rgba(51,255,102,0.1); border-color: var(--p31-mid); color: var(--p31-mid); }
+        .badge.graphql { background: rgba(163,113,247,0.1); border-color: var(--purple); color: var(--purple); }
+        .badge.webhook { background: rgba(255,179,71,0.1); border-color: var(--p31-decay); color: var(--p31-decay); }
+        .badge.enabled { background: rgba(51,255,102,0.1); border-color: var(--p31-peak); color: var(--p31-peak); }
+        .badge.disabled { background: rgba(139,148,158,0.2); border-color: var(--text-dim); color: var(--text-dim); }
+        .tabs { display: flex; gap: 0; margin-bottom: 1rem; border-bottom: 1px solid var(--p31-ghost); background: var(--tube-pale); }
+        .tab { padding: 0.75rem 1.25rem; cursor: pointer; color: var(--p31-dim); letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.8rem; border-bottom: 2px solid transparent; }
+        .tab:hover { color: var(--p31-mid); }
+        .tab.active { color: var(--p31-peak); text-shadow: var(--bloom-soft); border-bottom-color: var(--p31-peak); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        input, select, textarea { font-family: 'Courier Prime', monospace; background: var(--tube-light); border: 1px solid var(--tube-soft); color: var(--p31-mid); padding: 0.5rem; border-radius: 4px; width: 100%; }
+        input:focus, select:focus, textarea:focus { outline: none; border-color: var(--p31-dim); box-shadow: 0 0 8px rgba(51,255,102,0.1); }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.25rem; font-size: 0.8rem; color: var(--p31-dim); letter-spacing: 0.1em; text-transform: uppercase; }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+        .key-preview { font-family: monospace; background: var(--tube-light); padding: 0.25rem 0.5rem; border-radius: 4px; border: 1px solid var(--tube-soft); }
+        .progress-bar { height: 8px; background: var(--tube-light); border-radius: 4px; overflow: hidden; margin-top: 0.5rem; }
+        .progress-bar .fill { height: 100%; background: var(--p31-peak); transition: width 0.3s; }
+        .progress-bar.warning .fill { background: var(--p31-decay); }
+        .progress-bar.danger .fill { background: var(--red); }
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 100; align-items: center; justify-content: center; }
+        .modal.show { display: flex; }
+        .modal-content { background: var(--tube-pale); border: 1px solid var(--p31-dim); border-radius: 8px; padding: 1.5rem; min-width: 500px; max-width: 90vw; max-height: 90vh; overflow-y: auto; box-shadow: 0 0 30px rgba(51,255,102,0.1); }
+        .modal-title { color: var(--p31-decay); text-shadow: var(--bloom-amber); letter-spacing: 0.1em; margin-bottom: 1rem; }
+        .modal-footer { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.5rem; }
+        .empty { text-align: center; padding: 2rem; color: var(--p31-dim); }
+        .health-indicator { display: inline-flex; align-items: center; gap: 0.5rem; }
+        .health-dot { width: 8px; height: 8px; border-radius: 50%; }
+        .health-dot.healthy { background: var(--p31-peak); box-shadow: 0 0 8px var(--p31-peak); }
+        .health-dot.degraded { background: var(--p31-decay); }
+        .health-dot.unhealthy { background: var(--red); }
+        .health-dot.unknown { background: var(--text-dim); }
+        @media (max-width: 900px) { .sidebar { display: none; } .main { margin-left: 0; } .form-row { grid-template-columns: 1fr; } .modal-content { min-width: auto; } }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: var(--tube-light); }
+        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
+        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
+    </style>
+</head>
+<body class="crt-light">
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+
+    <main class="main">
+        <header class="header">
+            <h1>SaaS Relay Dashboard</h1>
+            <div class="btn-group">
+                <button class="btn" onclick="refresh()">Refresh</button>
+                <button class="btn primary" onclick="showAddService()">Add Service</button>
+            </div>
+        </header>
+
+        <div class="stats-row">
+            <div class="stat-card">
+                <div class="value" id="services-count">-</div>
+                <div class="label">Services</div>
+            </div>
+            <div class="stat-card">
+                <div class="value" id="healthy-count">-</div>
+                <div class="label">Healthy</div>
+            </div>
+            <div class="stat-card yellow">
+                <div class="value" id="requests-today">-</div>
+                <div class="label">Requests Today</div>
+            </div>
+            <div class="stat-card">
+                <div class="value" id="requests-total">-</div>
+                <div class="label">Total Requests</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="tabs">
+                <div class="tab active" data-tab="services" onclick="switchTab('services')">Services</div>
+                <div class="tab" data-tab="keys" onclick="switchTab('keys')">API Keys</div>
+                <div class="tab" data-tab="stats" onclick="switchTab('stats')">Statistics</div>
+                <div class="tab" data-tab="logs" onclick="switchTab('logs')">Request Logs</div>
+            </div>
+
+            <!-- Services Tab -->
+            <div id="services" class="tab-content active">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Service</th>
+                            <th>Type</th>
+                            <th>Base URL</th>
+                            <th>Health</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="services-list">
+                        <tr><td colspan="6" class="empty">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- API Keys Tab -->
+            <div id="keys" class="tab-content">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Service</th>
+                            <th>API Key</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="keys-list">
+                        <tr><td colspan="3" class="empty">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Statistics Tab -->
+            <div id="stats" class="tab-content">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Service</th>
+                            <th>Today / Quota</th>
+                            <th>Total</th>
+                            <th>Avg Response</th>
+                            <th>Error Rate</th>
+                            <th>Last Request</th>
+                        </tr>
+                    </thead>
+                    <tbody id="stats-list">
+                        <tr><td colspan="6" class="empty">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Request Logs Tab -->
+            <div id="logs" class="tab-content">
+                <div style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
+                    <select id="log-filter" onchange="loadLogs()" style="width: auto; min-width: 200px;">
+                        <option value="">All Services</option>
+                    </select>
+                    <button class="btn danger" onclick="clearLogs()">Clear Logs</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Timestamp</th>
+                            <th>Service</th>
+                            <th>Method</th>
+                            <th>Path</th>
+                            <th>Status</th>
+                            <th>Response Time</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logs-list">
+                        <tr><td colspan="6" class="empty">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <!-- Add Service Modal -->
+    <div class="modal" id="add-service-modal">
+        <div class="modal-content">
+            <h3 class="modal-title">Add SaaS Service</h3>
+            <form id="add-service-form" onsubmit="addService(event)">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Service Name (ID)</label>
+                        <input type="text" id="svc-name" required placeholder="my-api" pattern="[a-zA-Z0-9_-]+">
+                    </div>
+                    <div class="form-group">
+                        <label>Display Name</label>
+                        <input type="text" id="svc-display-name" required placeholder="My API Service">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Base URL</label>
+                    <input type="url" id="svc-base-url" required placeholder="https://api.example.com">
+                </div>
+                <div class="form-group">
+                    <label>API Key</label>
+                    <input type="password" id="svc-api-key" required placeholder="Your API key (will be encrypted)">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Service Type</label>
+                        <select id="svc-type">
+                            <option value="rest">REST API</option>
+                            <option value="graphql">GraphQL</option>
+                            <option value="webhook">Webhook</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Health Endpoint</label>
+                        <input type="text" id="svc-health" placeholder="/health (optional)">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Auth Header</label>
+                        <input type="text" id="svc-auth-header" value="Authorization">
+                    </div>
+                    <div class="form-group">
+                        <label>Auth Prefix</label>
+                        <input type="text" id="svc-auth-prefix" value="Bearer ">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Rate Limit (req/min)</label>
+                        <input type="number" id="svc-rate-limit" value="100" min="1">
+                    </div>
+                    <div class="form-group">
+                        <label>Daily Quota</label>
+                        <input type="number" id="svc-quota" value="10000" min="1">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea id="svc-description" rows="2" placeholder="Optional description"></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn" onclick="hideModal('add-service-modal')">Cancel</button>
+                    <button type="submit" class="btn primary">Add Service</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Edit Key Modal -->
+    <div class="modal" id="edit-key-modal">
+        <div class="modal-content">
+            <h3 class="modal-title">Update API Key</h3>
+            <form id="edit-key-form" onsubmit="updateKey(event)">
+                <input type="hidden" id="edit-key-service">
+                <div class="form-group">
+                    <label>Service</label>
+                    <input type="text" id="edit-key-service-display" disabled>
+                </div>
+                <div class="form-group">
+                    <label>New API Key</label>
+                    <input type="password" id="edit-key-value" required placeholder="Enter new API key">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn" onclick="hideModal('edit-key-modal')">Cancel</button>
+                    <button type="submit" class="btn primary">Update Key</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Service Details Modal -->
+    <div class="modal" id="service-details-modal">
+        <div class="modal-content">
+            <h3 class="modal-title">Service Details</h3>
+            <div id="service-details-content"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn" onclick="hideModal('service-details-modal')">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API = '/api/v1/saas-relay';
+        const token = () => localStorage.getItem('sbx_token');
+        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+
+        async function api(path, opts = {}) {
+            try {
+                const res = await fetch(API + path, { ...opts, headers: headers() });
+                if (res.status === 401) { window.location = '/login.html'; return {}; }
+                return res.json();
+            } catch (e) { console.error(e); return {}; }
+        }
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+            document.getElementById(tabName).classList.add('active');
+
+            if (tabName === 'logs') loadLogs();
+            if (tabName === 'stats') loadStats();
+            if (tabName === 'keys') loadKeys();
+        }
+
+        function showModal(id) { document.getElementById(id).classList.add('show'); }
+        function hideModal(id) { document.getElementById(id).classList.remove('show'); }
+
+        async function loadStatus() {
+            const d = await api('/status');
+            document.getElementById('services-count').textContent = d.services_count || 0;
+            document.getElementById('healthy-count').textContent = d.healthy_services || 0;
+            document.getElementById('requests-today').textContent = (d.requests_today || 0).toLocaleString();
+            document.getElementById('requests-total').textContent = (d.total_requests || 0).toLocaleString();
+        }
+
+        async function loadServices() {
+            const d = await api('/services');
+            const services = d.services || [];
+            const list = document.getElementById('services-list');
+            const filter = document.getElementById('log-filter');
+
+            // Update filter options
+            filter.innerHTML = '<option value="">All Services</option>' +
+                services.map(s => `<option value="${s.name}">${s.display_name}</option>`).join('');
+
+            if (!services.length) {
+                list.innerHTML = '<tr><td colspan="6" class="empty">No services configured</td></tr>';
+                return;
+            }
+
+            list.innerHTML = services.map(s => `
+                <tr>
+                    <td>
+                        <strong>${s.display_name}</strong><br>
+                        <span style="font-size:0.75rem;color:var(--p31-dim)">${s.name}</span>
+                    </td>
+                    <td><span class="badge ${s.service_type}">${s.service_type.toUpperCase()}</span></td>
+                    <td style="font-size:0.8rem;max-width:200px;overflow:hidden;text-overflow:ellipsis">${s.base_url}</td>
+                    <td>
+                        <span class="health-indicator">
+                            <span class="health-dot ${s.health_status}"></span>
+                            <span class="badge ${s.health_status}">${s.health_status}</span>
+                        </span>
+                    </td>
+                    <td><span class="badge ${s.enabled ? 'enabled' : 'disabled'}">${s.enabled ? 'Enabled' : 'Disabled'}</span></td>
+                    <td>
+                        <div class="btn-group">
+                            <button class="btn" onclick="viewService('${s.name}')">View</button>
+                            <button class="btn" onclick="toggleService('${s.name}')">${s.enabled ? 'Disable' : 'Enable'}</button>
+                            <button class="btn" onclick="checkHealth('${s.name}')">Check</button>
+                            <button class="btn danger" onclick="removeService('${s.name}')">Remove</button>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        async function loadKeys() {
+            const d = await api('/keys');
+            const keys = d.keys || [];
+            const list = document.getElementById('keys-list');
+
+            if (!keys.length) {
+                list.innerHTML = '<tr><td colspan="3" class="empty">No API keys configured</td></tr>';
+                return;
+            }
+
+            list.innerHTML = keys.map(k => `
+                <tr>
+                    <td><strong>${k.display_name}</strong></td>
+                    <td>
+                        ${k.has_key ? `<span class="key-preview">${k.key_preview}</span>` : '<span style="color:var(--red)">No key</span>'}
+                    </td>
+                    <td>
+                        <div class="btn-group">
+                            <button class="btn" onclick="showEditKey('${k.service}', '${k.display_name}')">Update</button>
+                            ${k.has_key ? `<button class="btn danger" onclick="deleteKey('${k.service}')">Delete</button>` : ''}
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        async function loadStats() {
+            const d = await api('/stats');
+            const stats = d.stats || [];
+            const list = document.getElementById('stats-list');
+
+            if (!stats.length) {
+                list.innerHTML = '<tr><td colspan="6" class="empty">No statistics available</td></tr>';
+                return;
+            }
+
+            list.innerHTML = stats.map(s => {
+                const quotaPercent = s.quota_used_percent || 0;
+                const progressClass = quotaPercent > 90 ? 'danger' : (quotaPercent > 70 ? 'warning' : '');
+                return `
+                    <tr>
+                        <td><strong>${s.display_name}</strong></td>
+                        <td>
+                            ${s.requests_today.toLocaleString()} / ${s.quota_daily.toLocaleString()}
+                            <div class="progress-bar ${progressClass}">
+                                <div class="fill" style="width: ${Math.min(quotaPercent, 100)}%"></div>
+                            </div>
+                        </td>
+                        <td>${s.requests_total.toLocaleString()}</td>
+                        <td>${s.avg_response_time_ms.toFixed(0)} ms</td>
+                        <td style="color: ${s.error_rate > 5 ? 'var(--red)' : 'inherit'}">${s.error_rate.toFixed(1)}%</td>
+                        <td style="font-size:0.8rem">${s.last_request ? new Date(s.last_request).toLocaleString() : '-'}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        async function loadLogs() {
+            const service = document.getElementById('log-filter').value;
+            const d = await api('/logs' + (service ? `?service=${service}` : ''));
+            const logs = d.logs || [];
+            const list = document.getElementById('logs-list');
+
+            if (!logs.length) {
+                list.innerHTML = '<tr><td colspan="6" class="empty">No request logs</td></tr>';
+                return;
+            }
+
+            list.innerHTML = logs.map(l => `
+                <tr>
+                    <td style="font-size:0.8rem">${new Date(l.timestamp).toLocaleString()}</td>
+                    <td>${l.service}</td>
+                    <td>${l.method}</td>
+                    <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis">${l.path}</td>
+                    <td><span class="badge ${l.status_code < 400 ? 'healthy' : 'unhealthy'}">${l.status_code || 'ERR'}</span></td>
+                    <td>${l.response_time_ms.toFixed(0)} ms</td>
+                </tr>
+            `).join('');
+        }
+
+        function showAddService() { showModal('add-service-modal'); }
+
+        async function addService(e) {
+            e.preventDefault();
+            const service = {
+                name: document.getElementById('svc-name').value,
+                display_name: document.getElementById('svc-display-name').value,
+                base_url: document.getElementById('svc-base-url').value,
+                api_key: document.getElementById('svc-api-key').value,
+                service_type: document.getElementById('svc-type').value,
+                health_endpoint: document.getElementById('svc-health').value || null,
+                auth_header: document.getElementById('svc-auth-header').value,
+                auth_prefix: document.getElementById('svc-auth-prefix').value,
+                rate_limit: parseInt(document.getElementById('svc-rate-limit').value),
+                quota_daily: parseInt(document.getElementById('svc-quota').value),
+                description: document.getElementById('svc-description').value || null
+            };
+
+            const d = await api('/service/add', { method: 'POST', body: JSON.stringify(service) });
+            if (d.success) {
+                hideModal('add-service-modal');
+                document.getElementById('add-service-form').reset();
+                refresh();
+            } else {
+                alert('Failed to add service: ' + (d.detail || 'Unknown error'));
+            }
+        }
+
+        async function viewService(name) {
+            const d = await api(`/service/${name}`);
+            if (!d.name) {
+                alert('Service not found');
+                return;
+            }
+
+            const content = `
+                <div style="display:grid;gap:1rem;">
+                    <div><strong>Name:</strong> ${d.name}</div>
+                    <div><strong>Display Name:</strong> ${d.display_name}</div>
+                    <div><strong>Base URL:</strong> ${d.base_url}</div>
+                    <div><strong>Type:</strong> ${d.service_type}</div>
+                    <div><strong>Auth Header:</strong> ${d.auth_header}</div>
+                    <div><strong>Health Endpoint:</strong> ${d.health_endpoint || 'Not configured'}</div>
+                    <div><strong>Rate Limit:</strong> ${d.rate_limit} req/min</div>
+                    <div><strong>Daily Quota:</strong> ${d.quota_daily}</div>
+                    <div><strong>Status:</strong> ${d.enabled ? 'Enabled' : 'Disabled'}</div>
+                    <div><strong>Has API Key:</strong> ${d.has_api_key ? 'Yes' : 'No'}</div>
+                    <div><strong>Health:</strong> <span class="badge ${d.health_status}">${d.health_status}</span></div>
+                    ${d.description ? `<div><strong>Description:</strong> ${d.description}</div>` : ''}
+                    <div><strong>Created:</strong> ${d.created_at ? new Date(d.created_at).toLocaleString() : '-'}</div>
+                </div>
+            `;
+            document.getElementById('service-details-content').innerHTML = content;
+            showModal('service-details-modal');
+        }
+
+        async function toggleService(name) {
+            await api(`/service/${name}/toggle`, { method: 'POST' });
+            loadServices();
+        }
+
+        async function checkHealth(name) {
+            const d = await api(`/service/${name}/check`, { method: 'POST' });
+            if (d.health) {
+                alert(`Health: ${d.health.status}\n${d.health.message || ''}`);
+                loadServices();
+            }
+        }
+
+        async function removeService(name) {
+            if (!confirm(`Remove service "${name}"? This will delete all configuration and statistics.`)) return;
+            await api(`/service/${name}`, { method: 'DELETE' });
+            refresh();
+        }
+
+        function showEditKey(service, displayName) {
+            document.getElementById('edit-key-service').value = service;
+            document.getElementById('edit-key-service-display').value = displayName;
+            document.getElementById('edit-key-value').value = '';
+            showModal('edit-key-modal');
+        }
+
+        async function updateKey(e) {
+            e.preventDefault();
+            const service = document.getElementById('edit-key-service').value;
+            const apiKey = document.getElementById('edit-key-value').value;
+
+            const d = await api(`/keys/${service}`, { method: 'PUT', body: JSON.stringify({ api_key: apiKey }) });
+            if (d.success) {
+                hideModal('edit-key-modal');
+                loadKeys();
+            } else {
+                alert('Failed to update key: ' + (d.detail || 'Unknown error'));
+            }
+        }
+
+        async function deleteKey(name) {
+            if (!confirm(`Delete API key for "${name}"?`)) return;
+            await api(`/keys/${name}`, { method: 'DELETE' });
+            loadKeys();
+        }
+
+        async function clearLogs() {
+            const service = document.getElementById('log-filter').value;
+            if (!confirm(service ? `Clear logs for "${service}"?` : 'Clear all logs?')) return;
+            await api('/logs' + (service ? `?service=${service}` : ''), { method: 'DELETE' });
+            loadLogs();
+        }
+
+        function refresh() {
+            loadStatus();
+            loadServices();
+        }
+
+        refresh();
+        setInterval(refresh, 30000);
+    </script>
+    <script src="/shared/crt-engine.js"></script>
+</body>
+</html>

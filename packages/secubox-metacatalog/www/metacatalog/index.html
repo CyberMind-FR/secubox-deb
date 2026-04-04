@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - Service Catalog</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root {
+            /* P31 Phosphor spectrum */
+            --p31-peak: #00dd44;
+            --p31-hot: #00ff55;
+            --p31-mid: #009933;
+            --p31-dim: #006622;
+            --p31-ghost: #003311;
+            --p31-decay: #ffb347;
+            --p31-decay-dim: #cc7722;
+            /* Tube glass */
+            --tube-light: #e8f5e9;
+            --tube-pale: #c8e6c9;
+            --tube-soft: #a5d6a7;
+            --tube-dark: #1b3d1c;
+            /* Legacy mappings */
+            --bg-dark: var(--tube-light);
+            --bg-card: var(--tube-pale);
+            --border: var(--tube-soft);
+            --text: var(--tube-dark);
+            --text-dim: var(--p31-dim);
+            --primary: var(--p31-peak);
+            --green: var(--p31-peak);
+            --red: #ff4466;
+            --yellow: var(--p31-decay);
+            /* Bloom effects */
+            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Courier Prime', 'Courier New', monospace;
+            background: var(--tube-light);
+            background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
+            color: var(--tube-dark);
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar { width: 220px; background: var(--bg-sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; position: fixed; height: 100vh; overflow-y: auto; }
+
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 0; margin-bottom: 1rem; border-bottom: 1px solid var(--border); }
+        .header-title { display: flex; align-items: center; gap: 1rem; }
+        .header-title h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--p31-hot);
+            text-shadow: var(--bloom-text);
+            letter-spacing: 0.05em;
+        }
+        .badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            font-family: 'Courier Prime', monospace;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            border: 1px solid;
+        }
+        .badge.version { background: rgba(0,150,0,0.1); border-color: var(--p31-dim); color: var(--p31-dim); }
+        .badge.running { background: rgba(51,255,102,0.15); border-color: var(--p31-peak); color: var(--p31-peak); }
+        .badge.stopped { background: rgba(255,68,102,0.1); border-color: #ff4466; color: #ff4466; }
+
+        .header-actions { display: flex; gap: 0.75rem; }
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            border: 1px solid var(--tube-soft);
+            background: var(--tube-pale);
+            color: var(--p31-mid);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+            font-family: 'Courier Prime', monospace;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            transition: all 0.2s;
+        }
+        .btn:hover {
+            border-color: var(--p31-dim);
+            color: var(--p31-peak);
+            text-shadow: var(--bloom-soft);
+            box-shadow: 0 0 12px rgba(51,255,102,0.1);
+        }
+        .btn.primary {
+            background: rgba(51,255,102,0.1);
+            border-color: var(--p31-peak);
+            color: var(--p31-peak);
+        }
+        .btn.primary:hover {
+            background: rgba(51,255,102,0.2);
+            box-shadow: 0 0 16px rgba(51,255,102,0.2);
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid var(--p31-ghost);
+            background: var(--tube-pale);
+            padding: 0 1rem;
+            margin-bottom: 1.5rem;
+            border-radius: 6px 6px 0 0;
+        }
+        .tab {
+            padding: 0.75rem 1.25rem;
+            cursor: pointer;
+            color: var(--p31-dim);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        .tab:hover { color: var(--p31-mid); }
+        .tab.active {
+            color: var(--p31-peak);
+            text-shadow: var(--bloom-soft);
+            border-bottom-color: var(--p31-peak);
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Stats Row */
+        .stats-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card {
+            background: var(--tube-pale);
+            border: 1px solid var(--tube-soft);
+            border-radius: 8px;
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .stat-card .value {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 0.25rem;
+            text-shadow: 0 0 10px currentColor;
+        }
+        .stat-card .label {
+            font-size: 0.7rem;
+            color: var(--p31-dim);
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+        }
+        .stat-card.green .value { color: var(--p31-peak); }
+        .stat-card.cyan .value { color: var(--p31-mid); }
+        .stat-card.yellow .value { color: var(--p31-decay); }
+        .stat-card.red .value { color: #ff4466; }
+
+        /* Cards */
+        .card {
+            background: var(--tube-pale);
+            border: 1px solid var(--tube-soft);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-bottom: 1.5rem;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.1);
+        }
+        .card:hover {
+            border-color: var(--p31-dim);
+            box-shadow: 0 0 8px rgba(51,255,102,0.05), inset 0 0 20px rgba(0,0,0,0.1);
+        }
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        .card-header h2 {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--p31-decay);
+            text-shadow: var(--bloom-amber);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+
+        /* Service Grid */
+        .service-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1rem;
+        }
+        .service-card {
+            background: var(--tube-pale);
+            border: 1px solid var(--tube-soft);
+            border-radius: 8px;
+            padding: 1rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .service-card:hover {
+            border-color: var(--p31-dim);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(51,255,102,0.1);
+        }
+        .service-card.not-installed {
+            opacity: 0.6;
+            background: var(--tube-light);
+        }
+        .service-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 0.5rem;
+        }
+        .service-name {
+            font-weight: 700;
+            color: var(--p31-mid);
+            font-size: 0.9rem;
+        }
+        .service-desc {
+            font-size: 0.75rem;
+            color: var(--p31-dim);
+            margin-bottom: 0.75rem;
+            line-height: 1.4;
+        }
+        .service-meta {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+        .service-tag {
+            font-size: 0.65rem;
+            padding: 0.2rem 0.5rem;
+            background: var(--tube-light);
+            border-radius: 3px;
+            color: var(--p31-dim);
+        }
+
+        /* Status indicators */
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .status-dot.running { background: var(--p31-peak); box-shadow: 0 0 8px var(--p31-peak); }
+        .status-dot.stopped { background: var(--p31-dim); }
+        .status-dot.failed { background: #ff4466; box-shadow: 0 0 8px #ff4466; }
+        .status-dot.unknown { background: var(--p31-decay); }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            padding: 0.15rem 0.5rem;
+            border-radius: 3px;
+            font-size: 0.65rem;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+        }
+        .status-badge.running { background: rgba(51,255,102,0.15); color: var(--p31-peak); }
+        .status-badge.stopped { background: rgba(0,102,34,0.1); color: var(--p31-dim); }
+        .status-badge.failed { background: rgba(255,68,102,0.1); color: #ff4466; }
+        .status-badge.unknown, .status-badge.not_installed { background: rgba(255,179,71,0.1); color: var(--p31-decay); }
+
+        /* Filter bar */
+        .filter-bar {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            padding: 0.75rem;
+            background: var(--tube-light);
+            border: 1px solid var(--tube-soft);
+            border-radius: 6px;
+            flex-wrap: wrap;
+        }
+        .filter-bar select,
+        .filter-bar input {
+            font-family: 'Courier Prime', monospace;
+            background: white;
+            border: 1px solid var(--tube-soft);
+            color: var(--p31-mid);
+            padding: 0.5rem;
+            border-radius: 4px;
+        }
+        .filter-bar select:focus,
+        .filter-bar input:focus {
+            outline: none;
+            border-color: var(--p31-dim);
+            box-shadow: 0 0 8px rgba(51,255,102,0.1);
+        }
+        .filter-bar input[type="text"] {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        /* Dependency Graph */
+        #dependency-graph {
+            width: 100%;
+            height: 500px;
+            background: var(--tube-light);
+            border: 1px solid var(--tube-soft);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .graph-legend {
+            display: flex;
+            gap: 1.5rem;
+            margin-top: 1rem;
+            padding: 0.75rem;
+            background: var(--tube-pale);
+            border-radius: 6px;
+            font-size: 0.75rem;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* Endpoint list */
+        .endpoint-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .endpoint-item {
+            display: flex;
+            align-items: center;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--p31-ghost);
+        }
+        .endpoint-method {
+            width: 60px;
+            font-size: 0.7rem;
+            font-weight: bold;
+            padding: 0.2rem 0.4rem;
+            border-radius: 3px;
+            text-align: center;
+            margin-right: 0.75rem;
+        }
+        .endpoint-method.get { background: rgba(51,255,102,0.15); color: var(--p31-peak); }
+        .endpoint-method.post { background: rgba(255,179,71,0.15); color: var(--p31-decay); }
+        .endpoint-method.put { background: rgba(0,150,255,0.15); color: #0096ff; }
+        .endpoint-method.delete { background: rgba(255,68,102,0.15); color: #ff4466; }
+        .endpoint-path {
+            font-family: 'Courier Prime', monospace;
+            font-size: 0.85rem;
+            color: var(--p31-mid);
+            flex: 1;
+        }
+        .endpoint-auth {
+            font-size: 0.65rem;
+            padding: 0.15rem 0.4rem;
+            border-radius: 3px;
+            background: rgba(0,102,34,0.1);
+            color: var(--p31-dim);
+        }
+
+        /* Service detail panel */
+        .detail-panel {
+            display: none;
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 400px;
+            height: 100vh;
+            background: var(--tube-pale);
+            border-left: 1px solid var(--p31-dim);
+            box-shadow: -4px 0 20px rgba(0,0,0,0.1);
+            z-index: 100;
+            overflow-y: auto;
+            padding: 1.5rem;
+        }
+        .detail-panel.show { display: block; }
+        .detail-panel .close-btn {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--p31-dim);
+        }
+        .detail-section {
+            margin-bottom: 1.5rem;
+        }
+        .detail-section h3 {
+            font-size: 0.75rem;
+            color: var(--p31-decay);
+            text-shadow: var(--bloom-amber);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            margin-bottom: 0.75rem;
+        }
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--p31-ghost);
+        }
+        .detail-row .label {
+            color: var(--p31-dim);
+            font-size: 0.8rem;
+        }
+        .detail-row .value {
+            color: var(--p31-mid);
+            font-size: 0.8rem;
+            font-family: 'Courier Prime', monospace;
+        }
+        .dep-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+        .dep-tag {
+            font-size: 0.7rem;
+            padding: 0.2rem 0.5rem;
+            background: var(--tube-light);
+            border: 1px solid var(--tube-soft);
+            border-radius: 4px;
+            color: var(--p31-mid);
+        }
+
+        /* Refresh indicator */
+        .refresh-indicator {
+            font-size: 0.7rem;
+            color: var(--p31-dim);
+            margin-left: auto;
+        }
+
+        /* Responsive */
+        @media (max-width: 1200px) { .stats-row { grid-template-columns: repeat(3, 1fr); } }
+        @media (max-width: 900px) {
+            .service-grid { grid-template-columns: 1fr 1fr; }
+            .sidebar { display: none; }
+            .main { margin-left: 0; }
+            .detail-panel { width: 100%; }
+        }
+        @media (max-width: 768px) {
+            .main { margin-left: 0; padding: 1rem; }
+            .stats-row { grid-template-columns: 1fr 1fr; }
+            .service-grid { grid-template-columns: 1fr; }
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: var(--tube-light); }
+        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
+        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
+
+        /* Empty state */
+        .empty {
+            color: var(--p31-dim);
+            text-align: center;
+            padding: 2rem;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body class="crt-light">
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+
+    <main class="main">
+        <header class="header">
+            <div class="header-title">
+                <h1>Service Catalog</h1>
+                <span class="badge version" id="version-badge">v1.0.0</span>
+                <span class="badge running" id="status-badge">Running</span>
+            </div>
+            <div class="header-actions">
+                <span class="refresh-indicator" id="last-refresh">Last refresh: --</span>
+                <button class="btn primary" onclick="refresh()">Refresh</button>
+            </div>
+        </header>
+
+        <div class="stats-row">
+            <div class="stat-card cyan">
+                <div class="value" id="total-count">0</div>
+                <div class="label">Total Services</div>
+            </div>
+            <div class="stat-card green">
+                <div class="value" id="running-count">0</div>
+                <div class="label">Running</div>
+            </div>
+            <div class="stat-card yellow">
+                <div class="value" id="stopped-count">0</div>
+                <div class="label">Stopped</div>
+            </div>
+            <div class="stat-card red">
+                <div class="value" id="failed-count">0</div>
+                <div class="label">Failed</div>
+            </div>
+            <div class="stat-card cyan">
+                <div class="value" id="installed-count">0</div>
+                <div class="label">Installed</div>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <div class="tab active" data-tab="services">Services</div>
+            <div class="tab" data-tab="dependencies">Dependencies</div>
+            <div class="tab" data-tab="endpoints">API Endpoints</div>
+        </div>
+
+        <!-- Services Tab -->
+        <div id="tab-services" class="tab-content active">
+            <div class="filter-bar">
+                <select id="filter-category" onchange="filterServices()">
+                    <option value="">All Categories</option>
+                    <option value="system">System</option>
+                    <option value="security">Security</option>
+                    <option value="network">Network</option>
+                    <option value="monitoring">Monitoring</option>
+                </select>
+                <select id="filter-status" onchange="filterServices()">
+                    <option value="">All Status</option>
+                    <option value="running">Running</option>
+                    <option value="stopped">Stopped</option>
+                    <option value="failed">Failed</option>
+                    <option value="not_installed">Not Installed</option>
+                </select>
+                <label style="display: flex; align-items: center; gap: 0.5rem;">
+                    <input type="checkbox" id="filter-installed" onchange="filterServices()">
+                    <span style="font-size: 0.8rem; color: var(--p31-dim);">Installed Only</span>
+                </label>
+                <input type="text" id="filter-search" placeholder="Search services..." onkeyup="filterServices()">
+            </div>
+
+            <div class="service-grid" id="services-grid">
+                <div class="empty">Loading services...</div>
+            </div>
+        </div>
+
+        <!-- Dependencies Tab -->
+        <div id="tab-dependencies" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <h2>Dependency Graph</h2>
+                </div>
+                <div id="dependency-graph">
+                    <canvas id="graph-canvas"></canvas>
+                </div>
+                <div class="graph-legend">
+                    <div class="legend-item">
+                        <span class="status-dot running"></span> Running
+                    </div>
+                    <div class="legend-item">
+                        <span class="status-dot stopped"></span> Stopped
+                    </div>
+                    <div class="legend-item">
+                        <span class="status-dot failed"></span> Failed
+                    </div>
+                    <div class="legend-item">
+                        <span class="status-dot unknown"></span> Not Installed
+                    </div>
+                    <div class="legend-item">
+                        <span style="color: var(--p31-dim);">Arrow = depends on</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Endpoints Tab -->
+        <div id="tab-endpoints" class="tab-content">
+            <div class="filter-bar">
+                <select id="endpoint-service" onchange="loadEndpoints()">
+                    <option value="">Select a service...</option>
+                </select>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2>API Endpoints</h2>
+                </div>
+                <div class="endpoint-list" id="endpoints-list">
+                    <div class="empty">Select a service to view its endpoints</div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Service Detail Panel -->
+    <div class="detail-panel" id="detail-panel">
+        <button class="close-btn" onclick="closeDetail()">&times;</button>
+        <div id="detail-content"></div>
+    </div>
+
+    <script>
+        const API = '/api/v1/metacatalog';
+        let allServices = [];
+        let dependencyGraph = { nodes: [], edges: [] };
+
+        // Check authentication
+        async function checkAuth() {
+            const token = localStorage.getItem('sbx_token');
+            if (!token) {
+                window.location.href = '/portal/login.html';
+                return false;
+            }
+            return true;
+        }
+
+        async function api(endpoint, method = 'GET', data = null) {
+            const token = localStorage.getItem('sbx_token');
+            const opts = {
+                method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token
+                }
+            };
+            if (data) opts.body = JSON.stringify(data);
+            try {
+                const res = await fetch(API + endpoint, opts);
+                if (res.status === 401) {
+                    window.location.href = '/portal/login.html';
+                    return null;
+                }
+                return res.json();
+            } catch (e) {
+                console.error('API error:', e);
+                return null;
+            }
+        }
+
+        // Tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+
+                if (tab.dataset.tab === 'dependencies') {
+                    setTimeout(drawGraph, 100);
+                }
+            });
+        });
+
+        // Load status
+        async function loadStatus() {
+            const data = await api('/status');
+            if (!data) return;
+
+            document.getElementById('total-count').textContent = data.total_services || 0;
+            document.getElementById('running-count').textContent = data.running || 0;
+            document.getElementById('stopped-count').textContent = data.stopped || 0;
+            document.getElementById('failed-count').textContent = data.failed || 0;
+            document.getElementById('last-refresh').textContent =
+                'Last refresh: ' + (data.last_refresh ? new Date(data.last_refresh).toLocaleTimeString() : '--');
+        }
+
+        // Load services
+        async function loadServices() {
+            const data = await api('/services');
+            if (!data) return;
+
+            allServices = data.services || [];
+
+            // Count installed
+            const installed = allServices.filter(s => s.installed).length;
+            document.getElementById('installed-count').textContent = installed;
+
+            // Populate endpoint dropdown
+            const select = document.getElementById('endpoint-service');
+            select.innerHTML = '<option value="">Select a service...</option>';
+            allServices.filter(s => s.installed && s.status === 'running').forEach(s => {
+                select.innerHTML += `<option value="${s.name}">${s.name}</option>`;
+            });
+
+            filterServices();
+        }
+
+        // Filter services
+        function filterServices() {
+            const category = document.getElementById('filter-category').value;
+            const status = document.getElementById('filter-status').value;
+            const installedOnly = document.getElementById('filter-installed').checked;
+            const search = document.getElementById('filter-search').value.toLowerCase();
+
+            let filtered = allServices;
+
+            if (category) {
+                filtered = filtered.filter(s => s.category === category);
+            }
+            if (status) {
+                filtered = filtered.filter(s => s.status === status);
+            }
+            if (installedOnly) {
+                filtered = filtered.filter(s => s.installed);
+            }
+            if (search) {
+                filtered = filtered.filter(s =>
+                    s.name.toLowerCase().includes(search) ||
+                    (s.description || '').toLowerCase().includes(search)
+                );
+            }
+
+            renderServices(filtered);
+        }
+
+        // Render service grid
+        function renderServices(services) {
+            const grid = document.getElementById('services-grid');
+
+            if (services.length === 0) {
+                grid.innerHTML = '<div class="empty">No services found</div>';
+                return;
+            }
+
+            grid.innerHTML = services.map(s => `
+                <div class="service-card ${s.installed ? '' : 'not-installed'}" onclick="showDetail('${s.name}')">
+                    <div class="service-header">
+                        <span class="service-name">${s.name.replace('secubox-', '')}</span>
+                        <span class="status-badge ${s.status}">
+                            <span class="status-dot ${s.status}"></span>
+                            ${s.status}
+                        </span>
+                    </div>
+                    <div class="service-desc">${s.description || 'No description'}</div>
+                    <div class="service-meta">
+                        <span class="service-tag">${s.category}</span>
+                        ${s.installed ? '<span class="service-tag">installed</span>' : ''}
+                        ${s.enabled ? '<span class="service-tag">enabled</span>' : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Show service detail
+        async function showDetail(name) {
+            const data = await api('/service/' + name);
+            if (!data) return;
+
+            const deps = await api('/dependencies/' + name);
+
+            const panel = document.getElementById('detail-panel');
+            const content = document.getElementById('detail-content');
+
+            content.innerHTML = `
+                <h2 style="color: var(--p31-hot); margin-bottom: 1.5rem;">${data.name}</h2>
+
+                <div class="detail-section">
+                    <h3>Status</h3>
+                    <div class="detail-row">
+                        <span class="label">Status</span>
+                        <span class="status-badge ${data.status}">${data.status}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="label">Installed</span>
+                        <span class="value">${data.installed ? 'Yes' : 'No'}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="label">Enabled</span>
+                        <span class="value">${data.enabled ? 'Yes' : 'No'}</span>
+                    </div>
+                    ${data.active_since ? `
+                    <div class="detail-row">
+                        <span class="label">Active Since</span>
+                        <span class="value">${data.active_since}</span>
+                    </div>
+                    ` : ''}
+                    ${data.memory_usage ? `
+                    <div class="detail-row">
+                        <span class="label">Memory</span>
+                        <span class="value">${data.memory_usage}</span>
+                    </div>
+                    ` : ''}
+                </div>
+
+                <div class="detail-section">
+                    <h3>Details</h3>
+                    <div class="detail-row">
+                        <span class="label">Description</span>
+                        <span class="value">${data.description || '-'}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="label">Category</span>
+                        <span class="value">${data.category}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="label">Socket</span>
+                        <span class="value">${data.socket || '-'}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="label">Systemd Unit</span>
+                        <span class="value">${data.systemd_unit || '-'}</span>
+                    </div>
+                </div>
+
+                <div class="detail-section">
+                    <h3>Dependencies</h3>
+                    <div class="dep-list">
+                        ${(deps?.direct_dependencies || []).length > 0
+                            ? deps.direct_dependencies.map(d => `<span class="dep-tag">${d}</span>`).join('')
+                            : '<span style="color: var(--p31-dim);">None</span>'}
+                    </div>
+                </div>
+
+                <div class="detail-section">
+                    <h3>Dependents (services that depend on this)</h3>
+                    <div class="dep-list">
+                        ${(deps?.dependents || []).length > 0
+                            ? deps.dependents.map(d => `<span class="dep-tag">${d}</span>`).join('')
+                            : '<span style="color: var(--p31-dim);">None</span>'}
+                    </div>
+                </div>
+            `;
+
+            panel.classList.add('show');
+        }
+
+        function closeDetail() {
+            document.getElementById('detail-panel').classList.remove('show');
+        }
+
+        // Load dependency graph
+        async function loadDependencies() {
+            const data = await api('/dependencies');
+            if (!data) return;
+
+            dependencyGraph = data;
+        }
+
+        // Draw dependency graph on canvas
+        function drawGraph() {
+            const container = document.getElementById('dependency-graph');
+            const canvas = document.getElementById('graph-canvas');
+            const ctx = canvas.getContext('2d');
+
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+
+            const nodes = dependencyGraph.nodes || [];
+            const edges = dependencyGraph.edges || [];
+
+            if (nodes.length === 0) {
+                ctx.fillStyle = '#006622';
+                ctx.font = '14px "Courier Prime"';
+                ctx.textAlign = 'center';
+                ctx.fillText('No services discovered', canvas.width / 2, canvas.height / 2);
+                return;
+            }
+
+            // Layout nodes in a circle
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const radius = Math.min(canvas.width, canvas.height) * 0.35;
+
+            const nodePositions = {};
+            nodes.forEach((node, i) => {
+                const angle = (2 * Math.PI * i) / nodes.length - Math.PI / 2;
+                nodePositions[node.id] = {
+                    x: centerX + radius * Math.cos(angle),
+                    y: centerY + radius * Math.sin(angle),
+                    node: node
+                };
+            });
+
+            // Draw edges
+            ctx.strokeStyle = '#a5d6a7';
+            ctx.lineWidth = 1.5;
+            edges.forEach(edge => {
+                const from = nodePositions[edge.from];
+                const to = nodePositions[edge.to];
+                if (from && to) {
+                    ctx.beginPath();
+                    ctx.moveTo(from.x, from.y);
+                    ctx.lineTo(to.x, to.y);
+                    ctx.stroke();
+
+                    // Draw arrow
+                    const angle = Math.atan2(to.y - from.y, to.x - from.x);
+                    const arrowLen = 10;
+                    const arrowX = to.x - 25 * Math.cos(angle);
+                    const arrowY = to.y - 25 * Math.sin(angle);
+
+                    ctx.beginPath();
+                    ctx.moveTo(arrowX, arrowY);
+                    ctx.lineTo(
+                        arrowX - arrowLen * Math.cos(angle - Math.PI / 6),
+                        arrowY - arrowLen * Math.sin(angle - Math.PI / 6)
+                    );
+                    ctx.moveTo(arrowX, arrowY);
+                    ctx.lineTo(
+                        arrowX - arrowLen * Math.cos(angle + Math.PI / 6),
+                        arrowY - arrowLen * Math.sin(angle + Math.PI / 6)
+                    );
+                    ctx.stroke();
+                }
+            });
+
+            // Draw nodes
+            Object.values(nodePositions).forEach(pos => {
+                const node = pos.node;
+                const colors = {
+                    running: '#00dd44',
+                    stopped: '#006622',
+                    failed: '#ff4466',
+                    unknown: '#ffb347',
+                    not_installed: '#ffb347'
+                };
+
+                // Node circle
+                ctx.beginPath();
+                ctx.arc(pos.x, pos.y, 20, 0, 2 * Math.PI);
+                ctx.fillStyle = node.installed ? (colors[node.status] || '#006622') : '#cc7722';
+                ctx.fill();
+                ctx.strokeStyle = '#1b3d1c';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // Node label
+                ctx.fillStyle = '#1b3d1c';
+                ctx.font = 'bold 10px "Courier Prime"';
+                ctx.textAlign = 'center';
+                ctx.fillText(node.label, pos.x, pos.y + 35);
+            });
+        }
+
+        // Load endpoints for a service
+        async function loadEndpoints() {
+            const name = document.getElementById('endpoint-service').value;
+            const list = document.getElementById('endpoints-list');
+
+            if (!name) {
+                list.innerHTML = '<div class="empty">Select a service to view its endpoints</div>';
+                return;
+            }
+
+            const data = await api('/endpoints/' + name);
+            if (!data) {
+                list.innerHTML = '<div class="empty">Failed to load endpoints</div>';
+                return;
+            }
+
+            const endpoints = data.endpoints || [];
+
+            if (endpoints.length === 0) {
+                list.innerHTML = '<div class="empty">No endpoints documented</div>';
+                return;
+            }
+
+            list.innerHTML = `
+                <div style="margin-bottom: 1rem; font-size: 0.8rem; color: var(--p31-dim);">
+                    Base path: <code style="color: var(--p31-mid);">${data.base_path}</code>
+                </div>
+            ` + endpoints.map(ep => `
+                <div class="endpoint-item">
+                    <span class="endpoint-method ${ep.method.toLowerCase()}">${ep.method}</span>
+                    <span class="endpoint-path">${ep.path}</span>
+                    ${ep.auth ? '<span class="endpoint-auth">AUTH</span>' : ''}
+                </div>
+            `).join('');
+        }
+
+        // Refresh all data
+        async function refresh() {
+            await api('/refresh', 'POST');
+            await Promise.all([
+                loadStatus(),
+                loadServices(),
+                loadDependencies()
+            ]);
+            if (document.querySelector('.tab.active').dataset.tab === 'dependencies') {
+                drawGraph();
+            }
+        }
+
+        // Initial load
+        async function init() {
+            if (!await checkAuth()) return;
+            await Promise.all([
+                loadStatus(),
+                loadServices(),
+                loadDependencies()
+            ]);
+            // Auto-refresh every 60 seconds
+            setInterval(async () => {
+                await loadStatus();
+                await loadServices();
+            }, 60000);
+        }
+
+        // Handle window resize for graph
+        window.addEventListener('resize', () => {
+            if (document.querySelector('.tab.active').dataset.tab === 'dependencies') {
+                drawGraph();
+            }
+        });
+
+        // Close detail panel on escape
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeDetail();
+        });
+
+        init();
+    </script>
+    <script src="/shared/crt-engine.js"></script>
+</body>
+</html>

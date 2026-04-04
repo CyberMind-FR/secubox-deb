@@ -1,0 +1,17 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-mirror/usr/lib/secubox/mirror/
+	cp -r api debian/secubox-mirror/usr/lib/secubox/mirror/
+	install -d debian/secubox-mirror/usr/share/secubox/www
+	[ -d www ] && cp -r www/. debian/secubox-mirror/usr/share/secubox/www/ || true
+	install -d debian/secubox-mirror/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-mirror/usr/share/secubox/menu.d/ || true
+	# Modular nginx config
+	install -d debian/secubox-mirror/etc/nginx/secubox.d
+	[ -f nginx/mirror.conf ] && cp nginx/mirror.conf debian/secubox-mirror/etc/nginx/secubox.d/ || true
+	# Systemd service
+	install -d debian/secubox-mirror/usr/lib/systemd/system
+	cp debian/secubox-mirror.service debian/secubox-mirror/usr/lib/systemd/system/

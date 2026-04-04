@@ -1,0 +1,19 @@
+Source: secubox-metabolizer
+Section: net
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
+
+Package: secubox-metabolizer
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-fastapi, python3-uvicorn
+Description: SecuBox Metabolizer - Log processor and analyzer
+ Log processing module that analyzes journalctl logs, extracts patterns,
+ calculates statistics, and monitors log rotation for SecuBox.
+ Features include pattern detection, error trend analysis, and service
+ log aggregation.
+ .
+ Port Debian bookworm de SecuBox (CyberMind.fr).

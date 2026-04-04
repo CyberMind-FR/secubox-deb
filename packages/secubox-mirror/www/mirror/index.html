@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - Mirror/CDN Cache</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root {
+            /* P31 Phosphor spectrum */
+            --p31-peak: #00dd44;
+            --p31-hot: #00ff55;
+            --p31-mid: #009933;
+            --p31-dim: #006622;
+            --p31-ghost: #003311;
+            --p31-decay: #ffb347;
+            --p31-decay-dim: #cc7722;
+            /* Tube glass */
+            --tube-light: #e8f5e9;
+            --tube-pale: #c8e6c9;
+            --tube-soft: #a5d6a7;
+            --tube-dark: #1a1a2e;
+            /* Legacy mappings */
+            --bg-dark: var(--tube-light);
+            --bg-card: var(--tube-pale);
+            --border: var(--tube-soft);
+            --text: var(--tube-dark);
+            --text-dim: var(--p31-dim);
+            --primary: var(--p31-peak);
+            --cyan: var(--p31-peak);
+            --green: var(--p31-peak);
+            --red: #ff4466;
+            --yellow: var(--p31-decay);
+            --orange: var(--p31-decay-dim);
+            --purple: #a371f7;
+            /* Bloom effects */
+            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Courier Prime', 'Courier New', monospace;
+            background: var(--tube-light);
+            background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
+            color: var(--tube-dark);
+            display: flex;
+            min-height: 100vh;
+        }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
+        .header h1 {
+            font-size: 1.5rem;
+            color: var(--p31-hot);
+            text-shadow: var(--bloom-text);
+            font-weight: 700;
+            letter-spacing: 0.05em;
+        }
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            border: 1px solid var(--tube-soft);
+            background: var(--tube-pale);
+            color: var(--p31-mid);
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-family: 'Courier Prime', monospace;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            transition: all 0.2s;
+        }
+        .btn:hover {
+            border-color: var(--p31-dim);
+            color: var(--p31-peak);
+            text-shadow: var(--bloom-soft);
+            box-shadow: 0 0 12px rgba(51,255,102,0.1);
+        }
+        .btn.primary {
+            border-color: var(--p31-peak);
+            color: var(--p31-peak);
+            background: rgba(51,255,102,0.1);
+        }
+        .btn.primary:hover {
+            background: rgba(51,255,102,0.2);
+            box-shadow: 0 0 16px rgba(51,255,102,0.2);
+        }
+        .btn.danger {
+            background: rgba(255,68,102,0.1);
+            border-color: var(--red);
+            color: var(--red);
+        }
+        .btn.danger:hover { background: rgba(255,68,102,0.2); }
+        .btn-group { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
+        .card {
+            background: var(--tube-pale);
+            border: 1px solid var(--tube-soft);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-bottom: 1.5rem;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
+        }
+        .card:hover {
+            border-color: var(--p31-dim);
+            box-shadow: 0 0 8px rgba(51,255,102,0.05), inset 0 0 20px rgba(0,0,0,0.3);
+        }
+        .card h2 {
+            font-size: 0.85rem;
+            margin-bottom: 1rem;
+            color: var(--p31-decay);
+            text-shadow: var(--bloom-amber);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card {
+            background: var(--tube-pale);
+            border: 1px solid var(--tube-soft);
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+        }
+        .stat-card .value {
+            font-size: 1.8rem;
+            font-weight: bold;
+            text-shadow: 0 0 10px currentColor;
+        }
+        .stat-card .label {
+            font-size: 0.75rem;
+            color: var(--p31-dim);
+            margin-top: 0.25rem;
+            letter-spacing: 0.15em;
+        }
+        .stat-card.hit .value { color: var(--p31-peak); }
+        .stat-card.size .value { color: var(--p31-mid); }
+        .stat-card.mirrors .value { color: var(--purple); }
+        .stat-card.requests .value { color: var(--p31-decay); }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+            font-family: 'Courier Prime', monospace;
+        }
+        th {
+            padding: 0.6rem;
+            text-align: left;
+            color: var(--p31-decay);
+            text-shadow: var(--bloom-amber);
+            letter-spacing: 0.15em;
+            border-bottom: 1px solid var(--p31-ghost);
+            font-weight: 500;
+            font-size: 0.8rem;
+        }
+        td {
+            padding: 0.6rem;
+            border-bottom: 1px solid var(--p31-ghost);
+            color: var(--p31-mid);
+        }
+        tr:hover { background: rgba(51,255,102,0.03); }
+
+        .badge {
+            display: inline-block;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            font-family: 'Courier Prime', monospace;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            border: 1px solid;
+        }
+        .badge.online, .badge.ok { background: rgba(51,255,102,0.15); border-color: var(--p31-peak); color: var(--p31-peak); text-shadow: var(--bloom-soft); }
+        .badge.offline, .badge.error { background: rgba(255,68,102,0.1); border-color: var(--red); color: var(--red); }
+        .badge.syncing { background: rgba(255,179,71,0.1); border-color: var(--p31-decay); color: var(--p31-decay); }
+        .badge.unknown { background: rgba(139,148,158,0.2); border-color: var(--text-dim); color: var(--text-dim); }
+        .badge.apt { background: rgba(163,113,247,0.1); border-color: var(--purple); color: var(--purple); }
+        .badge.generic { background: rgba(51,255,102,0.1); border-color: var(--p31-mid); color: var(--p31-mid); }
+
+        .progress { background: var(--tube-light); border-radius: 4px; height: 8px; overflow: hidden; width: 100px; display: inline-block; }
+        .progress-bar { height: 100%; background: var(--p31-peak); box-shadow: 0 0 6px var(--p31-peak); }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.85);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal.show { display: flex; }
+        .modal-content {
+            background: var(--tube-pale);
+            border: 1px solid var(--p31-dim);
+            box-shadow: 0 0 30px rgba(51,255,102,0.1);
+            border-radius: 8px;
+            padding: 1.5rem;
+            min-width: 400px;
+            max-width: 90%;
+        }
+        .modal-title {
+            font-size: 1.1rem;
+            margin-bottom: 1rem;
+            color: var(--p31-decay);
+            text-shadow: var(--bloom-amber);
+            letter-spacing: 0.1em;
+        }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label {
+            display: block;
+            margin-bottom: 0.3rem;
+            font-size: 0.85rem;
+            color: var(--p31-dim);
+            letter-spacing: 0.1em;
+        }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid var(--tube-soft);
+            border-radius: 4px;
+            background: var(--tube-light);
+            color: var(--p31-mid);
+            font-family: 'Courier Prime', monospace;
+        }
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: var(--p31-dim);
+            box-shadow: 0 0 8px rgba(51,255,102,0.1);
+        }
+        .modal-actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem; }
+
+        .actions-cell { display: flex; gap: 0.3rem; }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: var(--tube-light); }
+        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
+        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
+
+        .empty { color: var(--p31-dim); font-style: italic; }
+
+        @media (max-width: 768px) {
+            .main { margin-left: 0; }
+            .modal-content { min-width: auto; margin: 1rem; }
+        }
+    </style>
+</head>
+<body class="crt-light">
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+
+    <main class="main">
+        <header class="header">
+            <h1>Mirror/CDN Cache</h1>
+            <div class="btn-group">
+                <button class="btn" onclick="refresh()">Refresh</button>
+                <button class="btn primary" onclick="showAddModal()">Add Mirror</button>
+                <button class="btn" onclick="syncAll()">Sync All</button>
+                <button class="btn danger" onclick="purgeCache()">Purge Cache</button>
+            </div>
+        </header>
+
+        <div class="grid">
+            <div class="stat-card hit">
+                <div class="value" id="hitRate">-</div>
+                <div class="label">Hit Rate %</div>
+            </div>
+            <div class="stat-card size">
+                <div class="value" id="cacheSize">-</div>
+                <div class="label">Cache Size</div>
+            </div>
+            <div class="stat-card mirrors">
+                <div class="value" id="mirrorCount">-</div>
+                <div class="label">Mirrors</div>
+            </div>
+            <div class="stat-card requests">
+                <div class="value" id="totalRequests">-</div>
+                <div class="label">Total Requests</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Configured Mirrors</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Type</th>
+                        <th>URL</th>
+                        <th>Status</th>
+                        <th>Last Sync</th>
+                        <th>Size</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="mirrorsTable">
+                    <tr><td colspan="7" class="empty">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h2>Cache Statistics</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Metric</th>
+                        <th>Value</th>
+                        <th>Graph</th>
+                    </tr>
+                </thead>
+                <tbody id="statsTable">
+                    <tr><td colspan="3" class="empty">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h2>Recent Cache Activity</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Path</th>
+                        <th>Size</th>
+                        <th>Age</th>
+                    </tr>
+                </thead>
+                <tbody id="cacheTable">
+                    <tr><td colspan="3" class="empty">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+    <!-- Add Mirror Modal -->
+    <div class="modal" id="addModal">
+        <div class="modal-content">
+            <h3 class="modal-title">Add Mirror</h3>
+            <form id="addForm" onsubmit="addMirror(event)">
+                <div class="form-group">
+                    <label>Name</label>
+                    <input type="text" name="name" required placeholder="debian-bookworm">
+                </div>
+                <div class="form-group">
+                    <label>URL</label>
+                    <input type="url" name="url" required placeholder="https://deb.debian.org/debian">
+                </div>
+                <div class="form-group">
+                    <label>Type</label>
+                    <select name="type">
+                        <option value="apt">APT Repository</option>
+                        <option value="npm">NPM Registry</option>
+                        <option value="pypi">PyPI</option>
+                        <option value="docker">Docker Registry</option>
+                        <option value="generic">Generic HTTP</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Max Size</label>
+                    <input type="text" name="max_size" value="5g" placeholder="5g">
+                </div>
+                <div class="form-group">
+                    <label>Sync Interval (seconds)</label>
+                    <input type="number" name="sync_interval" value="3600" min="300">
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn" onclick="hideAddModal()">Cancel</button>
+                    <button type="submit" class="btn primary">Add Mirror</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const API = '/api/v1/mirror';
+
+        async function api(path, opts = {}) {
+            try {
+                const res = await fetch(API + path, {
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    ...opts
+                });
+                return res.json();
+            } catch (e) {
+                console.error('API error:', e);
+                return {};
+            }
+        }
+
+        async function refresh() {
+            // Load status
+            const status = await api('/status');
+            const nginx = status.nginx_stats || {};
+            const cache = status.cache_stats || {};
+
+            document.getElementById('hitRate').textContent = (nginx.hit_rate || 0).toFixed(1);
+            document.getElementById('cacheSize').textContent = formatSize(cache.size_bytes || 0);
+            document.getElementById('mirrorCount').textContent = status.mirror_count || 0;
+            document.getElementById('totalRequests').textContent = formatNumber(nginx.requests || 0);
+
+            // Load mirrors
+            const mirrors = await api('/mirrors');
+            const mirrorsBody = document.getElementById('mirrorsTable');
+            if (mirrors.mirrors && mirrors.mirrors.length > 0) {
+                mirrorsBody.innerHTML = mirrors.mirrors.map(m => `
+                    <tr>
+                        <td><strong>${escapeHtml(m.name)}</strong></td>
+                        <td><span class="badge ${m.type}">${m.type.toUpperCase()}</span></td>
+                        <td style="font-family:monospace;font-size:0.8rem;max-width:200px;overflow:hidden;text-overflow:ellipsis">${escapeHtml(m.url)}</td>
+                        <td><span class="badge ${m.sync_status || 'unknown'}">${(m.sync_status || 'unknown').toUpperCase()}</span></td>
+                        <td>${m.last_sync ? formatTime(m.last_sync) : '-'}</td>
+                        <td>${m.size_mb ? m.size_mb + ' MB' : '-'}</td>
+                        <td class="actions-cell">
+                            <button class="btn btn-sm" onclick="syncMirror('${escapeHtml(m.name)}')">Sync</button>
+                            <button class="btn btn-sm danger" onclick="removeMirror('${escapeHtml(m.name)}')">Remove</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } else {
+                mirrorsBody.innerHTML = '<tr><td colspan="7" class="empty">No mirrors configured</td></tr>';
+            }
+
+            // Load cache stats
+            const cacheStats = await api('/cache/stats');
+            const statsBody = document.getElementById('statsTable');
+            const disk = cacheStats.disk || {};
+            const ngStats = cacheStats.nginx || {};
+
+            const stats = [
+                { name: 'Cache Hits', value: formatNumber(ngStats.hits || 0), percent: ngStats.hit_rate || 0 },
+                { name: 'Cache Misses', value: formatNumber(ngStats.misses || 0), percent: 100 - (ngStats.hit_rate || 0) },
+                { name: 'Cached Files', value: formatNumber(disk.files || 0), percent: 0 },
+                { name: 'Disk Usage', value: formatSize(disk.size_bytes || 0), percent: 0 },
+                { name: 'Bandwidth Saved', value: formatSize((ngStats.bandwidth_saved_mb || 0) * 1024 * 1024), percent: 0 },
+            ];
+            statsBody.innerHTML = stats.map(s => `
+                <tr>
+                    <td>${s.name}</td>
+                    <td>${s.value}</td>
+                    <td>${s.percent > 0 ? `<div class="progress"><div class="progress-bar" style="width:${Math.min(s.percent, 100)}%"></div></div>` : '-'}</td>
+                </tr>
+            `).join('');
+
+            // Load recent cache
+            const cacheList = await api('/cache/list?limit=20');
+            const cacheBody = document.getElementById('cacheTable');
+            if (cacheList.files && cacheList.files.length > 0) {
+                cacheBody.innerHTML = cacheList.files.map(f => `
+                    <tr>
+                        <td style="font-family:monospace;font-size:0.8rem">${escapeHtml(f.path)}</td>
+                        <td>${formatSize(f.size)}</td>
+                        <td>${formatAge(f.age_seconds)}</td>
+                    </tr>
+                `).join('');
+            } else {
+                cacheBody.innerHTML = '<tr><td colspan="3" class="empty">No cached files</td></tr>';
+            }
+        }
+
+        function showAddModal() {
+            document.getElementById('addModal').classList.add('show');
+        }
+
+        function hideAddModal() {
+            document.getElementById('addModal').classList.remove('show');
+            document.getElementById('addForm').reset();
+        }
+
+        async function addMirror(e) {
+            e.preventDefault();
+            const form = e.target;
+            const data = {
+                name: form.name.value,
+                url: form.url.value,
+                type: form.type.value,
+                max_size: form.max_size.value,
+                sync_interval: parseInt(form.sync_interval.value),
+                enabled: true
+            };
+
+            const res = await api('/mirror/add', {
+                method: 'POST',
+                body: JSON.stringify(data)
+            });
+
+            if (res.success) {
+                hideAddModal();
+                refresh();
+            } else {
+                alert('Failed to add mirror: ' + (res.detail || 'Unknown error'));
+            }
+        }
+
+        async function removeMirror(name) {
+            if (!confirm(`Remove mirror "${name}"? This cannot be undone.`)) return;
+
+            const res = await api('/mirror/remove?name=' + encodeURIComponent(name), {
+                method: 'POST'
+            });
+
+            if (res.success) {
+                refresh();
+            } else {
+                alert('Failed to remove mirror: ' + (res.detail || 'Unknown error'));
+            }
+        }
+
+        async function syncMirror(name) {
+            const res = await api('/sync/' + encodeURIComponent(name), {
+                method: 'POST'
+            });
+
+            if (res.success) {
+                alert('Sync completed successfully');
+                refresh();
+            } else {
+                alert('Sync failed: ' + (res.error || 'Unknown error'));
+            }
+        }
+
+        async function syncAll() {
+            const res = await api('/sync', { method: 'POST' });
+            if (res.success) {
+                alert('All mirrors synced');
+                refresh();
+            } else {
+                alert('Sync failed');
+            }
+        }
+
+        async function purgeCache() {
+            if (!confirm('Purge all cached data? This cannot be undone.')) return;
+
+            const res = await api('/cache/purge', { method: 'POST' });
+            if (res.success) {
+                refresh();
+            } else {
+                alert('Purge failed');
+            }
+        }
+
+        // Utility functions
+        function formatSize(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+
+        function formatNumber(n) {
+            if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+            if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+            return n.toString();
+        }
+
+        function formatAge(seconds) {
+            if (seconds < 60) return seconds + 's';
+            if (seconds < 3600) return Math.floor(seconds / 60) + 'm';
+            if (seconds < 86400) return Math.floor(seconds / 3600) + 'h';
+            return Math.floor(seconds / 86400) + 'd';
+        }
+
+        function formatTime(iso) {
+            try {
+                const d = new Date(iso);
+                return d.toLocaleString();
+            } catch { return iso; }
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, '&amp;')
+                      .replace(/</g, '&lt;')
+                      .replace(/>/g, '&gt;')
+                      .replace(/"/g, '&quot;');
+        }
+
+        // Close modal on background click
+        document.getElementById('addModal').addEventListener('click', function(e) {
+            if (e.target === this) hideAddModal();
+        });
+
+        // Initial load
+        refresh();
+        setInterval(refresh, 30000);
+    </script>
+    <script src="/shared/crt-engine.js"></script>
+</body>
+</html>

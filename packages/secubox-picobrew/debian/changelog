@@ -1,0 +1,12 @@
+secubox-picobrew (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release.
+  * FastAPI backend with 25+ endpoints
+  * Features: Temperature monitoring, fermentation profiles, session logging
+  * Sensor support: DS18B20, DHT22, BME280, Tilt, iSpindel, manual
+  * Built-in fermentation profiles: Ale Standard, Lager Classic, Belgian Saison
+  * Temperature alert system with configurable thresholds
+  * Recipe management and brew session tracking
+  * CRT-light P31 phosphor theme with amber brewing accents
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Apr 2026 10:00:00 +0200
