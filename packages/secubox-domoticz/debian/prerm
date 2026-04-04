@@ -1,0 +1,12 @@
+#!/bin/bash
+set -e
+case "$1" in
+  remove|upgrade)
+    # Stop and disable service
+    systemctl stop    secubox-domoticz.service 2>/dev/null || true
+    systemctl disable secubox-domoticz.service 2>/dev/null || true
+    # Reload nginx to remove location
+    systemctl reload nginx 2>/dev/null || true
+    ;;
+esac
+#DEBHELPER#

@@ -1,25 +1,20 @@
 [Unit]
-Description=SecuBox PhotoPrism API Service
-After=network.target
+Description=SecuBox PhotoPrism API
+After=network.target secubox-core.service secubox-runtime.service docker.service
+Requires=secubox-runtime.service
+Wants=docker.service
 
 [Service]
 Type=simple
-ExecStartPre=/bin/mkdir -p /run/secubox
-ExecStart=/usr/bin/python3 -m uvicorn main:app --uds /run/secubox/photoprism.sock
-WorkingDirectory=/usr/share/secubox/api/photoprism
-Restart=always
-RestartSec=5
 User=root
 Group=root
-UMask=0111
-
-# Security hardening
-NoNewPrivileges=true
-RuntimeDirectory=secubox
-RuntimeDirectoryMode=0775
-ProtectSystem=full
-ProtectHome=true
-ReadWritePaths=/run/secubox /srv/photoprism /var/lib/lxc /tmp
+WorkingDirectory=/usr/lib/secubox/photoprism
+ExecStart=/usr/bin/uvicorn api.main:app --uds /run/secubox/photoprism.sock --log-level warning
+ExecStartPost=-/bin/sleep 1
+ExecStartPost=-/bin/chmod 660 /run/secubox/photoprism.sock
+ExecStartPost=-/bin/chown secubox:secubox /run/secubox/photoprism.sock
+Restart=on-failure
+RestartSec=5
 PrivateTmp=true
 
 [Install]

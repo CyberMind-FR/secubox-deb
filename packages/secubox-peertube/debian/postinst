@@ -2,10 +2,25 @@
 set -e
 case "$1" in
   configure)
-    install -d -o secubox -g secubox -m 750 /var/lib/secubox/peertube/data
+    # Ensure secubox user exists
+    id -u secubox >/dev/null 2>&1 || \
+      adduser --system --group --no-create-home \
+        --home /var/lib/secubox --shell /usr/sbin/nologin secubox
+    # Create runtime directories
+    install -d -o secubox -g secubox -m 750 /run/secubox
+    install -d -o secubox -g secubox -m 750 /var/lib/secubox
+    # Create PeerTube data directory
+    install -d -o root -g root -m 755 /srv/peertube
+    install -d -o root -g root -m 755 /srv/peertube/storage
+    install -d -o root -g root -m 755 /srv/peertube/config
+    install -d -o root -g root -m 755 /srv/peertube/data
+    # Ensure nginx secubox.d directory exists
+    install -d -m 755 /etc/nginx/secubox.d
+    # Enable and start service
     systemctl daemon-reload
     systemctl enable secubox-peertube.service
-    systemctl start secubox-peertube.service || true
+    systemctl start  secubox-peertube.service || true
+    # Reload nginx to pick up new location
     systemctl reload nginx 2>/dev/null || true
     ;;
 esac

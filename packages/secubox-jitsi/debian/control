@@ -1,7 +1,7 @@
 Source: secubox-jitsi
 Section: net
 Priority: optional
-Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.6.2
 Homepage: https://cybermind.fr/secubox
@@ -10,18 +10,19 @@ Package: secubox-jitsi
 Architecture: all
 Depends: ${misc:Depends},
  secubox-core (>= 1.0),
- python3-uvicorn,
- lxc,
- lxc-templates
-Recommends: nginx
+ python3-uvicorn
+Recommends: docker.io | podman, docker-compose | podman-compose, nginx
 Description: SecuBox Jitsi Meet - Video Conferencing
- LXC-based Jitsi Meet video conferencing for SecuBox.
+ Docker-based Jitsi Meet video conferencing for SecuBox.
  Provides secure, scalable video meetings with screen sharing.
  .
  Features:
-  - Full Jitsi Meet in LXC container
-  - Prosody XMPP server for signaling
-  - Jitsi Videobridge (JVB) for media
-  - Optional authentication
-  - Let's Encrypt SSL support
-  - Recording with Jibri (optional)
+  - Full Jitsi Meet Docker stack (Web, Prosody, Jicofo, JVB)
+  - JWT, LDAP, or internal authentication
+  - Jibri recording and streaming support
+  - SRTP/SRTCP encryption
+  - Breakout rooms and lobby
+  - CRT-light P31 phosphor theme dashboard
+ .
+ Ported from OpenWRT luci-app-jitsi concept.
+ Provides FastAPI backend on /api/v1/jitsi/ via Unix socket.

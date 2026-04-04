@@ -8,15 +8,15 @@
     <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
         :root {
-            --matrix-green: #0dbd8b;
+            --matrix-green: #0dbd8c;
             --matrix-light: #4dd2a8;
             --matrix-dark: #0a9d73;
         }
 
         body.dark {
-            --matrix-green: #4dd2a8;
-            --matrix-light: #7ee2c4;
-            --matrix-dark: #0dbd8b;
+            --matrix-green: #0dbd8c;
+            --matrix-light: #4dd2a8;
+            --matrix-dark: #0a9d73;
         }
 
         .accent { color: var(--matrix-green); }
@@ -261,47 +261,34 @@
             </div>
 
             <div class="tabs">
-                <button class="tab active" data-tab="users">Users</button>
+                <button class="tab active" data-tab="server">Server</button>
+                <button class="tab" data-tab="users">Users</button>
                 <button class="tab" data-tab="rooms">Rooms</button>
-                <button class="tab" data-tab="bridges">Bridges</button>
+                <button class="tab" data-tab="federation">Federation</button>
+                <button class="tab" data-tab="media">Media</button>
+                <button class="tab" data-tab="registration">Registration</button>
                 <button class="tab" data-tab="logs">Logs</button>
-                <button class="tab" data-tab="settings">Settings</button>
             </div>
 
-            <div id="tab-users" class="tab-content active">
-                <div class="action-bar">
-                    <button class="btn primary" onclick="showCreateUser()">Create User</button>
-                </div>
-                <div id="users-list" class="user-list"></div>
-            </div>
-
-            <div id="tab-rooms" class="tab-content">
-                <div id="rooms-list" class="room-list"></div>
-            </div>
-
-            <div id="tab-bridges" class="tab-content">
-                <p style="margin-bottom: 1rem; color: var(--text-secondary);">
-                    Connect Matrix to external messaging platforms:
-                </p>
-                <div id="bridges-list" class="bridge-list"></div>
-            </div>
-
-            <div id="tab-logs" class="tab-content">
-                <div class="action-bar">
-                    <button class="btn" onclick="loadLogs()">Refresh</button>
-                </div>
-                <div id="log-viewer" class="log-viewer">Loading logs...</div>
-            </div>
-
-            <div id="tab-settings" class="tab-content">
+            <!-- Server Tab -->
+            <div id="tab-server" class="tab-content active">
+                <h3 style="margin-top:0;">Server Configuration</h3>
                 <form class="settings-form" onsubmit="saveSettings(event)">
                     <div class="form-group checkbox-group">
                         <input type="checkbox" id="setting-registration">
                         <label>Enable Public Registration</label>
                     </div>
                     <div class="form-group checkbox-group">
+                        <input type="checkbox" id="setting-token-required">
+                        <label>Require Registration Token</label>
+                    </div>
+                    <div class="form-group checkbox-group">
                         <input type="checkbox" id="setting-guests">
                         <label>Allow Guest Access</label>
+                    </div>
+                    <div class="form-group checkbox-group">
+                        <input type="checkbox" id="setting-url-preview">
+                        <label>Enable URL Previews</label>
                     </div>
                     <div class="form-group">
                         <label>Max Upload Size</label>
@@ -314,6 +301,100 @@
                     </div>
                     <button type="submit" class="btn primary">Save Settings</button>
                 </form>
+
+                <h3 style="margin-top: 2rem;">Container Management</h3>
+                <div id="container-status" class="info-card" style="margin-bottom: 1rem;">
+                    <div class="info-label">Docker/Podman Status</div>
+                    <div id="container-info">Checking...</div>
+                </div>
+                <div class="action-bar" id="container-actions">
+                    <button class="btn" onclick="containerStart()">Start Container</button>
+                    <button class="btn" onclick="containerStop()">Stop Container</button>
+                    <button class="btn" onclick="containerRestart()">Restart Container</button>
+                </div>
+            </div>
+
+            <!-- Users Tab -->
+            <div id="tab-users" class="tab-content">
+                <div class="action-bar">
+                    <button class="btn primary" onclick="showCreateUser()">Create User</button>
+                    <button class="btn" onclick="loadUsers()">Refresh</button>
+                </div>
+                <div id="users-list" class="user-list"></div>
+            </div>
+
+            <!-- Rooms Tab -->
+            <div id="tab-rooms" class="tab-content">
+                <div class="action-bar">
+                    <button class="btn" onclick="loadRooms()">Refresh</button>
+                </div>
+                <div id="rooms-list" class="room-list"></div>
+            </div>
+
+            <!-- Federation Tab -->
+            <div id="tab-federation" class="tab-content">
+                <div class="info-grid" style="margin-bottom: 1.5rem;">
+                    <div class="info-card">
+                        <div class="info-label">Federation Status</div>
+                        <div class="info-value" id="fed-status">-</div>
+                    </div>
+                    <div class="info-card">
+                        <div class="info-label">Total Peers</div>
+                        <div class="info-value" id="fed-total">0</div>
+                    </div>
+                    <div class="info-card">
+                        <div class="info-label">Active Peers</div>
+                        <div class="info-value" id="fed-active">0</div>
+                    </div>
+                </div>
+                <div class="action-bar">
+                    <button class="btn" onclick="loadFederationPeers()">Refresh Peers</button>
+                    <button class="btn" onclick="showBlockServer()">Block Server</button>
+                </div>
+                <div id="federation-peers" class="user-list"></div>
+            </div>
+
+            <!-- Media Tab -->
+            <div id="tab-media" class="tab-content">
+                <div class="info-grid" style="margin-bottom: 1.5rem;">
+                    <div class="info-card">
+                        <div class="info-label">Local Media</div>
+                        <div class="info-value" id="media-local">0 MB</div>
+                    </div>
+                    <div class="info-card">
+                        <div class="info-label">Remote Cache</div>
+                        <div class="info-value" id="media-remote">0 MB</div>
+                    </div>
+                    <div class="info-card">
+                        <div class="info-label">Total Storage</div>
+                        <div class="info-value" id="media-total">0 MB</div>
+                    </div>
+                </div>
+                <div class="action-bar">
+                    <button class="btn" onclick="loadMediaStats()">Refresh</button>
+                    <button class="btn danger" onclick="purgeMedia()">Purge Remote Cache (30+ days)</button>
+                </div>
+            </div>
+
+            <!-- Registration Tab -->
+            <div id="tab-registration" class="tab-content">
+                <h3 style="margin-top:0;">Registration Tokens</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+                    Generate tokens to allow controlled user registration.
+                </p>
+                <div class="action-bar">
+                    <button class="btn primary" onclick="createToken()">Generate Token</button>
+                    <button class="btn" onclick="loadRegistrations()">Refresh</button>
+                </div>
+                <div id="tokens-list" class="user-list"></div>
+            </div>
+
+            <!-- Logs Tab -->
+            <div id="tab-logs" class="tab-content">
+                <div class="action-bar">
+                    <button class="btn" onclick="loadLogs()">Refresh</button>
+                </div>
+                <div id="log-viewer" class="log-viewer">Loading logs...</div>
             </div>
         </div>
     </div>
@@ -386,10 +467,173 @@
                 if (data.running) {
                     loadUsers();
                     loadRooms();
-                    loadBridges();
+                    loadConfig();
+                    loadContainerStatus();
                 }
             } catch (e) {
                 console.error('Status load failed:', e);
+            }
+        }
+
+        // Container Management
+        async function loadContainerStatus() {
+            try {
+                const data = await apiCall('/container/status');
+                const info = document.getElementById('container-info');
+                if (!data.available) {
+                    info.innerHTML = '<span style="color: var(--text-secondary);">Docker/Podman not available</span>';
+                } else if (!data.deployed) {
+                    info.innerHTML = '<span style="color: var(--warning);">Container not deployed</span>';
+                } else {
+                    const running = data.containers?.some(c => c.state === 'running');
+                    info.innerHTML = `<span style="color: ${running ? 'var(--success)' : 'var(--error)'};">${data.runtime}: ${running ? 'Running' : 'Stopped'}</span>`;
+                }
+            } catch (e) {
+                document.getElementById('container-info').textContent = 'Error loading status';
+            }
+        }
+
+        async function containerStart() {
+            try { await apiCall('/container/start', { method: 'POST' }); loadContainerStatus(); } catch (e) { alert('Failed: ' + e.message); }
+        }
+        async function containerStop() {
+            try { await apiCall('/container/stop', { method: 'POST' }); loadContainerStatus(); } catch (e) { alert('Failed: ' + e.message); }
+        }
+        async function containerRestart() {
+            try { await apiCall('/container/restart', { method: 'POST' }); loadContainerStatus(); } catch (e) { alert('Failed: ' + e.message); }
+        }
+
+        // Federation
+        async function loadFederationStatus() {
+            try {
+                const data = await apiCall('/federation/status');
+                document.getElementById('fed-status').textContent = data.enabled ? 'Enabled' : 'Disabled';
+                document.getElementById('fed-status').style.color = data.enabled ? 'var(--success)' : 'var(--error)';
+                document.getElementById('fed-total').textContent = data.total_peers || 0;
+                document.getElementById('fed-active').textContent = data.active_peers || 0;
+            } catch (e) {
+                console.error('Federation status failed:', e);
+            }
+        }
+
+        async function loadFederationPeers() {
+            try {
+                const data = await apiCall('/federation/peers?limit=50');
+                const container = document.getElementById('federation-peers');
+                if (!data.peers || data.peers.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><p>No federated peers yet</p></div>';
+                    return;
+                }
+                container.innerHTML = data.peers.map(p => `
+                    <div class="list-item">
+                        <div class="item-icon">${p.last_successful ? '✅' : '❌'}</div>
+                        <div class="item-info">
+                            <div class="item-name">${p.destination}</div>
+                            <div class="item-meta">${p.last_successful ? 'Active' : 'Failed'}</div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) {
+                console.error('Federation peers failed:', e);
+            }
+        }
+
+        function showBlockServer() {
+            const server = prompt('Server to block (e.g., evil.example.com):');
+            if (!server) return;
+            blockServer(server);
+        }
+
+        async function blockServer(server) {
+            try {
+                await apiCall('/federation/block', {
+                    method: 'POST',
+                    body: JSON.stringify({ server_name: server })
+                });
+                alert('Server blocked. Restart required to apply.');
+            } catch (e) {
+                alert('Failed: ' + e.message);
+            }
+        }
+
+        // Media Management
+        async function loadMediaStats() {
+            try {
+                const data = await apiCall('/media/stats');
+                document.getElementById('media-local').textContent = data.local_media_size_mb + ' MB';
+                document.getElementById('media-remote').textContent = data.remote_media_size_mb + ' MB';
+                document.getElementById('media-total').textContent = data.total_size_mb + ' MB';
+            } catch (e) {
+                console.error('Media stats failed:', e);
+            }
+        }
+
+        async function purgeMedia() {
+            const days = prompt('Purge remote media older than (days):', '30');
+            if (!days) return;
+            try {
+                const data = await apiCall(`/media/purge?before_days=${days}`, { method: 'POST' });
+                alert(`Purged ${data.deleted || 0} files`);
+                loadMediaStats();
+            } catch (e) {
+                alert('Failed: ' + e.message);
+            }
+        }
+
+        // Registration Tokens
+        async function loadRegistrations() {
+            try {
+                const data = await apiCall('/registrations');
+                const container = document.getElementById('tokens-list');
+                if (!data.tokens || data.tokens.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><p>No registration tokens</p></div>';
+                    return;
+                }
+                container.innerHTML = data.tokens.map(t => `
+                    <div class="list-item">
+                        <div class="item-icon">🎟️</div>
+                        <div class="item-info">
+                            <div class="item-name" style="font-family: monospace;">${t.token}</div>
+                            <div class="item-meta">Uses: ${t.completed}/${t.uses_allowed || '∞'} · Pending: ${t.pending}</div>
+                        </div>
+                        <button class="btn" onclick="copyToken('${t.token}')">Copy</button>
+                        <button class="btn" style="color: var(--error);" onclick="deleteToken('${t.token}')">Delete</button>
+                    </div>
+                `).join('');
+            } catch (e) {
+                console.error('Registrations load failed:', e);
+            }
+        }
+
+        async function createToken() {
+            const uses = prompt('Number of uses allowed (leave empty for unlimited):');
+            try {
+                const body = {};
+                if (uses) body.uses_allowed = parseInt(uses);
+                const data = await apiCall('/registrations/token', {
+                    method: 'POST',
+                    body: JSON.stringify(body)
+                });
+                alert(`Token created: ${data.token}`);
+                navigator.clipboard.writeText(data.token);
+                loadRegistrations();
+            } catch (e) {
+                alert('Failed: ' + e.message);
+            }
+        }
+
+        function copyToken(token) {
+            navigator.clipboard.writeText(token);
+            alert('Token copied to clipboard');
+        }
+
+        async function deleteToken(token) {
+            if (!confirm('Delete this token?')) return;
+            try {
+                await apiCall(`/registrations/token/${token}`, { method: 'DELETE' });
+                loadRegistrations();
+            } catch (e) {
+                alert('Failed: ' + e.message);
             }
         }
 
@@ -585,7 +829,9 @@
             try {
                 const data = await apiCall('/config');
                 document.getElementById('setting-registration').checked = data.enable_registration || false;
+                document.getElementById('setting-token-required').checked = data.registration_requires_token || false;
                 document.getElementById('setting-guests').checked = data.allow_guest_access || false;
+                document.getElementById('setting-url-preview').checked = data.url_preview_enabled || false;
                 document.getElementById('setting-upload').value = data.max_upload_size || '50M';
             } catch (e) {
                 console.error('Config load failed:', e);
@@ -599,11 +845,13 @@
                     method: 'POST',
                     body: JSON.stringify({
                         enable_registration: document.getElementById('setting-registration').checked,
+                        registration_requires_token: document.getElementById('setting-token-required').checked,
                         allow_guest_access: document.getElementById('setting-guests').checked,
+                        url_preview_enabled: document.getElementById('setting-url-preview').checked,
                         max_upload_size: document.getElementById('setting-upload').value
                     })
                 });
-                alert('Settings saved');
+                alert('Settings saved. Restart may be required.');
             } catch (e) {
                 alert('Failed: ' + e.message);
             }
@@ -639,8 +887,17 @@
                 document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
                 tab.classList.add('active');
                 document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
-                if (tab.dataset.tab === 'logs') loadLogs();
-                if (tab.dataset.tab === 'settings') loadConfig();
+
+                // Load data for each tab
+                switch(tab.dataset.tab) {
+                    case 'server': loadConfig(); loadContainerStatus(); break;
+                    case 'users': loadUsers(); break;
+                    case 'rooms': loadRooms(); break;
+                    case 'federation': loadFederationStatus(); loadFederationPeers(); break;
+                    case 'media': loadMediaStats(); break;
+                    case 'registration': loadRegistrations(); break;
+                    case 'logs': loadLogs(); break;
+                }
             });
         });
 

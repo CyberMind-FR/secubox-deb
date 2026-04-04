@@ -1,0 +1,8 @@
+{
+    "name": "PhotoPrism",
+    "path": "/photoprism/",
+    "icon": "camera",
+    "category": "apps",
+    "order": 617,
+    "description": "Photo management and AI recognition"
+}

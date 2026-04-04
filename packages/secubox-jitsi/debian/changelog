@@ -1,10 +1,23 @@
-secubox-jitsi (1.0.0-1) bookworm; urgency=medium
+secubox-jitsi (1.0.0-1~bookworm1) bookworm; urgency=medium
 
-  * Initial release
-  * LXC-based Jitsi Meet video conferencing
-  * Prosody + Jicofo + JVB stack
-  * Authentication support
-  * Let's Encrypt SSL integration
-  * Recording support via Jibri
+  * Complete rewrite with Docker-based deployment.
+  * Features:
+    - Docker-compose Jitsi stack (Web, Prosody, Jicofo, JVB, Jibri)
+    - JWT, LDAP, and internal authentication support
+    - Recording management via Jibri
+    - Room statistics via JVB colibri API
+    - P31 Phosphor light theme with teal accent
+    - Comprehensive API for all Jitsi management
+  * API Endpoints:
+    - /health, /status - Health and status
+    - /config - Configuration management
+    - /rooms, /room/{name} - Room management
+    - /stats - Server statistics
+    - /recordings - Recording management
+    - /auth/config - Authentication settings
+    - /prosody/status - XMPP server status
+    - /jibri/status, /enable, /disable - Recording service
+    - /container/* - Docker lifecycle management
+    - /logs - Container logs
 
- -- Gandalf / CyberMind <gk@cybermind.fr>  Fri, 28 Mar 2026 09:30:00 +0100
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Apr 2026 09:00:00 +0100

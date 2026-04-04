@@ -1,13 +1,25 @@
 Source: secubox-newsbin
-Section: news
+Section: net
 Priority: optional
-Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
-Standards-Version: 4.6.0
+Standards-Version: 4.6.2
 
 Package: secubox-newsbin
 Architecture: all
-Depends: secubox-core, python3, python3-uvicorn, python3-fastapi, nginx, lxc
-Description: SecuBox Newsbin RSS Aggregator
- LXC-based Miniflux RSS reader for SecuBox.
- Manage feeds, read news entries, organize subscriptions.
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn
+Recommends: docker.io | podman
+Description: Usenet downloader management for SecuBox
+ SecuBox module for managing SABnzbd Usenet downloader via Docker.
+ Provides NZB download management, queue control, Usenet server
+ configuration, categories, and post-processing support.
+ .
+ Features:
+  - SABnzbd container management (Docker/Podman)
+  - NZB file/URL handling
+  - Download queue with pause/resume
+  - Usenet server configuration
+  - Category organization
+  - Download history and statistics
+ .
+ Provides FastAPI backend on /api/v1/newsbin/ via Unix socket.

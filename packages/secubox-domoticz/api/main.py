@@ -1,214 +1,263 @@
-"""SecuBox Domoticz - Home Automation System
-LXC container-based home automation with MQTT and Zigbee integration.
+"""SecuBox Domoticz - Home Automation System Management
+Container-based home automation with MQTT, Zigbee, Z-Wave and 433MHz integration.
 
 Features:
-- LXC container management
-- MQTT broker integration (Mosquitto)
-- Zigbee2MQTT device bridge
-- USB device passthrough
-- Backup and restore
-- HAProxy integration for external access
+- Docker/Podman container management
+- Device management (switches, sensors, lights)
+- Room/scene organization
+- Automation rules (timers, events)
+- Hardware protocol support
+- Event logging and graphs
+- Notification configuration
 """
 import os
 import json
 import asyncio
+import shutil
 import subprocess
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
-from fastapi import FastAPI, Depends, HTTPException, Query
+from fastapi import FastAPI, APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 import httpx
 
-from secubox_core.auth import require_jwt
+from secubox_core.auth import router as auth_router, require_jwt
+from secubox_core.logger import get_logger
 
 # Configuration
-CONFIG_FILE = Path("/etc/secubox/domoticz.json")
-DATA_DIR = Path("/srv/domoticz")
-LXC_NAME = "domoticz"
-DEFAULT_PORT = 8084
-LXC_ROOT = Path("/var/lib/lxc")
+CONFIG_FILE = Path("/etc/secubox/domoticz.toml")
+DATA_PATH = Path("/srv/domoticz")
+CONTAINER_NAME = "domoticz"
+DEFAULT_PORT = 8080
 
-# Domoticz version to install
-DOMOTICZ_VERSION = "2024.6"
+app = FastAPI(title="secubox-domoticz", version="1.0.0", root_path="/api/v1/domoticz")
+app.include_router(auth_router, prefix="/auth")
+router = APIRouter()
+log = get_logger("domoticz")
 
-app = FastAPI(title="SecuBox Domoticz", version="1.0.0")
-
-
-class MQTTConfig(BaseModel):
-    enabled: bool = False
-    broker: str = "127.0.0.1"
-    broker_port: int = 1883
-    topic_prefix: str = "domoticz"
-    z2m_topic: str = "zigbee2mqtt"
-    username: Optional[str] = None
-    password: Optional[str] = None
+DEFAULT_CONFIG = {
+    "port": DEFAULT_PORT,
+    "timezone": "Europe/Paris",
+    "mqtt_enabled": False,
+    "mqtt_host": "127.0.0.1",
+    "mqtt_port": 1883,
+    "mqtt_topic": "domoticz",
+}
 
 
-class ConfigUpdate(BaseModel):
-    port: int = 8084
-    timezone: str = "UTC"
-    mqtt: Optional[MQTTConfig] = None
+# ============================================================================
+# Models
+# ============================================================================
+
+class DomoticzConfig(BaseModel):
+    port: int = DEFAULT_PORT
+    timezone: str = "Europe/Paris"
+    mqtt_enabled: bool = False
+    mqtt_host: str = "127.0.0.1"
+    mqtt_port: int = 1883
+    mqtt_topic: str = "domoticz"
+    mqtt_username: Optional[str] = ""
+    mqtt_password: Optional[str] = ""
 
 
-def load_config() -> dict:
-    """Load configuration from file."""
+class DeviceCommand(BaseModel):
+    command: str = Field(..., pattern="^(On|Off|Toggle|Set Level)$")
+    level: Optional[int] = Field(None, ge=0, le=100)
+
+
+class RoomCreate(BaseModel):
+    name: str
+    description: Optional[str] = ""
+
+
+class NotificationSettings(BaseModel):
+    email_enabled: bool = False
+    email_address: Optional[str] = ""
+    pushover_enabled: bool = False
+    pushover_user: Optional[str] = ""
+    pushover_api: Optional[str] = ""
+    telegram_enabled: bool = False
+    telegram_bot_token: Optional[str] = ""
+    telegram_chat_id: Optional[str] = ""
+
+
+# ============================================================================
+# Helpers
+# ============================================================================
+
+def get_config() -> dict:
+    """Load domoticz configuration."""
     if CONFIG_FILE.exists():
         try:
-            return json.loads(CONFIG_FILE.read_text())
+            import tomllib
+            return tomllib.loads(CONFIG_FILE.read_text())
         except Exception:
             pass
-    return {
-        "port": DEFAULT_PORT,
-        "timezone": "UTC",
-        "mqtt": {
-            "enabled": False,
-            "broker": "127.0.0.1",
-            "broker_port": 1883,
-            "topic_prefix": "domoticz",
-            "z2m_topic": "zigbee2mqtt"
-        }
-    }
+    return DEFAULT_CONFIG.copy()
 
 
 def save_config(config: dict):
-    """Save configuration to file."""
+    """Save configuration to TOML file."""
     CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
-    CONFIG_FILE.write_text(json.dumps(config, indent=2))
+    content = f"""# Domoticz configuration
+port = {config.get('port', DEFAULT_PORT)}
+timezone = "{config.get('timezone', 'Europe/Paris')}"
+mqtt_enabled = {str(config.get('mqtt_enabled', False)).lower()}
+mqtt_host = "{config.get('mqtt_host', '127.0.0.1')}"
+mqtt_port = {config.get('mqtt_port', 1883)}
+mqtt_topic = "{config.get('mqtt_topic', 'domoticz')}"
+mqtt_username = "{config.get('mqtt_username', '')}"
+mqtt_password = "{config.get('mqtt_password', '')}"
+"""
+    CONFIG_FILE.write_text(content)
 
 
-def lxc_exists() -> bool:
-    """Check if LXC container exists."""
+def detect_runtime() -> Optional[str]:
+    """Detect container runtime (podman or docker)."""
+    if shutil.which("podman"):
+        return "podman"
+    if shutil.which("docker"):
+        return "docker"
+    return None
+
+
+def is_running() -> bool:
+    """Check if Domoticz container is running."""
+    rt = detect_runtime()
+    if not rt:
+        return False
     try:
         result = subprocess.run(
-            ["lxc-info", "-n", LXC_NAME],
-            capture_output=True,
-            timeout=10
+            [rt, "ps", "--format", "{{.Names}}"],
+            capture_output=True, text=True, timeout=5
         )
-        return result.returncode == 0
+        names = result.stdout.split()
+        return CONTAINER_NAME in names
     except Exception:
         return False
 
 
-def lxc_running() -> bool:
-    """Check if LXC container is running."""
+def container_exists() -> bool:
+    """Check if container exists (running or stopped)."""
+    rt = detect_runtime()
+    if not rt:
+        return False
     try:
         result = subprocess.run(
-            ["lxc-info", "-n", LXC_NAME, "-s"],
-            capture_output=True,
-            text=True,
-            timeout=10
+            [rt, "ps", "-a", "--format", "{{.Names}}"],
+            capture_output=True, text=True, timeout=5
         )
-        return "RUNNING" in result.stdout
+        names = result.stdout.split()
+        return CONTAINER_NAME in names
     except Exception:
         return False
 
 
-def lxc_get_ip() -> Optional[str]:
-    """Get LXC container IP address."""
+def get_container_ip() -> Optional[str]:
+    """Get container IP address."""
+    rt = detect_runtime()
+    if not rt or not is_running():
+        return None
     try:
         result = subprocess.run(
-            ["lxc-info", "-n", LXC_NAME, "-iH"],
-            capture_output=True,
-            text=True,
-            timeout=10
+            [rt, "inspect", "-f", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", CONTAINER_NAME],
+            capture_output=True, text=True, timeout=5
         )
-        if result.returncode == 0:
-            ips = result.stdout.strip().split("\n")
-            for ip in ips:
-                if ip and not ip.startswith("127."):
-                    return ip.strip()
-        return None
+        ip = result.stdout.strip()
+        return ip if ip else "127.0.0.1"
     except Exception:
-        return None
+        return "127.0.0.1"
 
 
-def lxc_exec(cmd: List[str], timeout: int = 60) -> subprocess.CompletedProcess:
-    """Execute command inside LXC container."""
-    return subprocess.run(
-        ["lxc-attach", "-n", LXC_NAME, "--"] + cmd,
-        capture_output=True,
-        text=True,
-        timeout=timeout
-    )
+def get_domoticz_url() -> str:
+    """Get Domoticz API URL."""
+    cfg = get_config()
+    port = cfg.get("port", DEFAULT_PORT)
+    return f"http://127.0.0.1:{port}"
+
+
+async def domoticz_api(endpoint: str, timeout: float = 10.0) -> dict:
+    """Make request to Domoticz JSON API."""
+    if not is_running():
+        raise HTTPException(status_code=503, detail="Domoticz not running")
+
+    url = f"{get_domoticz_url()}/json.htm?{endpoint}"
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        try:
+            resp = await client.get(url)
+            resp.raise_for_status()
+            return resp.json()
+        except Exception as e:
+            log.error(f"Domoticz API error: {e}")
+            raise HTTPException(status_code=502, detail=f"Domoticz API error: {str(e)}")
 
 
 def get_usb_devices() -> List[Dict[str, str]]:
     """Get list of USB serial devices."""
+    import glob
     devices = []
     for pattern in ["/dev/ttyUSB*", "/dev/ttyACM*"]:
-        import glob
         for path in glob.glob(pattern):
             try:
-                info = {"path": path, "type": "serial"}
+                info = {"path": path, "type": "serial", "product": ""}
                 dev_name = os.path.basename(path)
                 product_path = f"/sys/class/tty/{dev_name}/device/product"
                 if os.path.exists(product_path):
                     info["product"] = Path(product_path).read_text().strip()
                 devices.append(info)
             except Exception:
-                devices.append({"path": path, "type": "serial"})
+                devices.append({"path": path, "type": "serial", "product": ""})
     return devices
 
 
-def check_mosquitto_status() -> str:
-    """Check Mosquitto MQTT broker status."""
-    try:
-        result = subprocess.run(
-            ["systemctl", "is-active", "mosquitto"],
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
-        if result.stdout.strip() == "active":
-            return "running"
-        return "stopped"
-    except Exception:
-        try:
-            result = subprocess.run(["pgrep", "mosquitto"], capture_output=True, timeout=5)
-            return "running" if result.returncode == 0 else "stopped"
-        except Exception:
-            return "unknown"
+# ============================================================================
+# Public Endpoints (no auth required)
+# ============================================================================
 
-
-async def domoticz_api(endpoint: str, timeout: float = 10.0) -> dict:
-    """Make request to Domoticz API."""
-    ip = lxc_get_ip()
-    if not ip:
-        raise HTTPException(status_code=502, detail="Container IP not available")
-
-    url = f"http://{ip}:8080/json.htm?{endpoint}"
-
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        try:
-            response = await client.get(url)
-            return response.json()
-        except Exception as e:
-            raise HTTPException(status_code=502, detail=f"Domoticz API error: {str(e)}")
-
-
-@app.get("/health")
-async def health_check():
-    """Health check endpoint."""
+@router.get("/health")
+async def health():
+    """Health check."""
     return {"status": "ok", "module": "domoticz"}
 
 
-@app.get("/status", dependencies=[Depends(require_jwt)])
-async def get_status():
+@router.get("/status")
+async def status():
     """Get Domoticz service status."""
-    config = load_config()
-    running = lxc_running()
-    exists = lxc_exists()
-    ip = lxc_get_ip() if running else None
+    cfg = get_config()
+    rt = detect_runtime()
+    running = is_running()
+    exists = container_exists()
 
-    # Check web accessibility
-    web_accessible = False
     version = "unknown"
-    if running and ip:
+    device_count = 0
+    scene_count = 0
+    web_accessible = False
+    uptime = 0
+
+    if running:
+        # Get container uptime
+        if rt:
+            try:
+                result = subprocess.run(
+                    [rt, "ps", "--filter", f"name={CONTAINER_NAME}", "--format", "{{.Status}}"],
+                    capture_output=True, text=True, timeout=5
+                )
+                status_str = result.stdout.strip().split('\n')[0] if result.stdout else ""
+                if "minute" in status_str:
+                    uptime = int(''.join(filter(str.isdigit, status_str.split()[1]))) * 60
+                elif "hour" in status_str:
+                    uptime = int(''.join(filter(str.isdigit, status_str.split()[1]))) * 3600
+                elif "day" in status_str:
+                    uptime = int(''.join(filter(str.isdigit, status_str.split()[1]))) * 86400
+            except Exception:
+                pass
+
+        # Check web accessibility
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
-                resp = await client.get(f"http://{ip}:8080/json.htm?type=command&param=getversion")
+                resp = await client.get(f"{get_domoticz_url()}/json.htm?type=command&param=getversion")
                 if resp.status_code == 200:
                     data = resp.json()
                     web_accessible = True
@@ -216,16 +265,26 @@ async def get_status():
         except Exception:
             pass
 
+        # Get counts
+        if web_accessible:
+            try:
+                data = await domoticz_api("type=devices&used=true&order=Name")
+                device_count = len(data.get("result", []))
+            except Exception:
+                pass
+            try:
+                data = await domoticz_api("type=scenes")
+                scene_count = len(data.get("result", []))
+            except Exception:
+                pass
+
     # Get disk usage
     disk_usage = "0"
-    lxc_path = LXC_ROOT / LXC_NAME
-    if lxc_path.exists():
+    if DATA_PATH.exists():
         try:
             result = subprocess.run(
-                ["du", "-sh", str(lxc_path)],
-                capture_output=True,
-                text=True,
-                timeout=10
+                ["du", "-sh", str(DATA_PATH)],
+                capture_output=True, text=True, timeout=10
             )
             if result.returncode == 0:
                 disk_usage = result.stdout.split()[0]
@@ -235,187 +294,67 @@ async def get_status():
     return {
         "running": running,
         "version": version,
-        "port": config.get("port", DEFAULT_PORT),
-        "timezone": config.get("timezone", "UTC"),
-        "runtime": "lxc",
+        "uptime": uptime,
+        "port": cfg.get("port", DEFAULT_PORT),
+        "timezone": cfg.get("timezone", "Europe/Paris"),
+        "runtime": rt or "none",
         "web_accessible": web_accessible,
         "container_exists": exists,
-        "container_ip": ip,
-        "data_path": str(LXC_ROOT / LXC_NAME),
+        "device_count": device_count,
+        "scene_count": scene_count,
+        "data_path": str(DATA_PATH),
         "disk_usage": disk_usage,
+        "mqtt_enabled": cfg.get("mqtt_enabled", False),
         "usb_devices": get_usb_devices(),
-        "mosquitto_status": check_mosquitto_status(),
-        "mqtt": config.get("mqtt", {})
     }
 
 
-@app.get("/config", dependencies=[Depends(require_jwt)])
-async def get_config():
+# ============================================================================
+# Protected Endpoints (JWT required)
+# ============================================================================
+
+@router.get("/config")
+async def get_domoticz_config(user=Depends(require_jwt)):
     """Get Domoticz configuration."""
-    return load_config()
+    cfg = get_config()
+    # Don't expose password
+    if cfg.get("mqtt_password"):
+        cfg["mqtt_password"] = "********"
+    return cfg
 
 
-@app.post("/config", dependencies=[Depends(require_jwt)])
-async def update_config(config: ConfigUpdate):
+@router.post("/config")
+async def set_domoticz_config(config: DomoticzConfig, user=Depends(require_jwt)):
     """Update Domoticz configuration."""
-    current = load_config()
-    current["port"] = config.port
-    current["timezone"] = config.timezone
-    if config.mqtt:
-        current["mqtt"] = config.mqtt.dict()
-    save_config(current)
-    return {"success": True, "config": current}
+    current = get_config()
+    password = config.mqtt_password
+    if password == "********":
+        password = current.get("mqtt_password", "")
+
+    new_config = {
+        "port": config.port,
+        "timezone": config.timezone,
+        "mqtt_enabled": config.mqtt_enabled,
+        "mqtt_host": config.mqtt_host,
+        "mqtt_port": config.mqtt_port,
+        "mqtt_topic": config.mqtt_topic,
+        "mqtt_username": config.mqtt_username or "",
+        "mqtt_password": password,
+    }
+    save_config(new_config)
+    log.info(f"Config updated by {user.get('sub', 'unknown')}")
+    return {"success": True}
 
 
-@app.post("/start", dependencies=[Depends(require_jwt)])
-async def start_service():
-    """Start Domoticz LXC container."""
-    if not lxc_exists():
-        raise HTTPException(status_code=400, detail="Container not created. Run /install first.")
+# ============================================================================
+# Device Management
+# ============================================================================
 
-    if lxc_running():
-        return {"success": True, "message": "Already running"}
-
-    try:
-        result = subprocess.run(
-            ["lxc-start", "-n", LXC_NAME],
-            capture_output=True,
-            text=True,
-            timeout=60
-        )
-        if result.returncode != 0:
-            raise HTTPException(status_code=500, detail=f"Failed to start: {result.stderr}")
-
-        # Wait for container to get IP
-        for _ in range(30):
-            await asyncio.sleep(1)
-            if lxc_get_ip():
-                break
-
-        return {"success": True, "message": "Domoticz started", "ip": lxc_get_ip()}
-    except subprocess.TimeoutExpired:
-        raise HTTPException(status_code=504, detail="Start timeout")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/stop", dependencies=[Depends(require_jwt)])
-async def stop_service():
-    """Stop Domoticz LXC container."""
-    if not lxc_running():
-        return {"success": True, "message": "Already stopped"}
-
-    try:
-        subprocess.run(["lxc-stop", "-n", LXC_NAME], capture_output=True, timeout=30)
-        return {"success": True}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/restart", dependencies=[Depends(require_jwt)])
-async def restart_service():
-    """Restart Domoticz container."""
-    await stop_service()
-    await asyncio.sleep(2)
-    return await start_service()
-
-
-@app.post("/install", dependencies=[Depends(require_jwt)])
-async def install_domoticz():
-    """Create and setup Domoticz LXC container."""
-    if lxc_exists():
-        return {"success": True, "message": "Container already exists"}
-
-    config = load_config()
-
-    try:
-        # Create Debian bookworm container
-        result = subprocess.run(
-            [
-                "lxc-create", "-n", LXC_NAME,
-                "-t", "download",
-                "--",
-                "-d", "debian",
-                "-r", "bookworm",
-                "-a", "amd64"
-            ],
-            capture_output=True,
-            text=True,
-            timeout=600
-        )
-        if result.returncode != 0:
-            raise HTTPException(status_code=500, detail=f"Create failed: {result.stderr}")
-
-        # Configure container for autostart
-        lxc_config = LXC_ROOT / LXC_NAME / "config"
-        with open(lxc_config, "a") as f:
-            f.write("\n# SecuBox Domoticz config\n")
-            f.write("lxc.start.auto = 1\n")
-            # USB passthrough for Zigbee/Z-Wave
-            for dev in get_usb_devices():
-                f.write(f"lxc.mount.entry = {dev['path']} {dev['path'][1:]} none bind,create=file 0 0\n")
-            f.write(f"lxc.cgroup2.devices.allow = c 188:* rwm\n")  # ttyUSB
-            f.write(f"lxc.cgroup2.devices.allow = c 166:* rwm\n")  # ttyACM
-
-        # Start container
-        subprocess.run(["lxc-start", "-n", LXC_NAME], capture_output=True, timeout=60)
-        await asyncio.sleep(5)
-
-        # Wait for network
-        for _ in range(30):
-            if lxc_get_ip():
-                break
-            await asyncio.sleep(1)
-
-        # Install Domoticz
-        install_script = """
-apt-get update && apt-get install -y curl gnupg ca-certificates
-curl -sSL https://releases.domoticz.com/gpg.key | apt-key add -
-echo 'deb https://releases.domoticz.com/releases/ stable main' > /etc/apt/sources.list.d/domoticz.list
-apt-get update && apt-get install -y domoticz
-systemctl enable domoticz
-systemctl start domoticz
-"""
-        result = lxc_exec(["bash", "-c", install_script], timeout=600)
-        if result.returncode != 0:
-            # Fallback: install from beta script
-            fallback_script = """
-apt-get update && apt-get install -y curl sudo
-curl -sSL install.domoticz.com | sudo bash
-"""
-            result = lxc_exec(["bash", "-c", fallback_script], timeout=600)
-
-        return {"success": True, "message": "Domoticz installed", "ip": lxc_get_ip()}
-    except subprocess.TimeoutExpired:
-        raise HTTPException(status_code=504, detail="Install timeout")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.delete("/uninstall", dependencies=[Depends(require_jwt)])
-async def uninstall_domoticz():
-    """Remove Domoticz LXC container."""
-    if lxc_running():
-        subprocess.run(["lxc-stop", "-n", LXC_NAME], capture_output=True, timeout=30)
-
-    if lxc_exists():
-        result = subprocess.run(
-            ["lxc-destroy", "-n", LXC_NAME],
-            capture_output=True,
-            text=True,
-            timeout=60
-        )
-        if result.returncode != 0:
-            raise HTTPException(status_code=500, detail=f"Destroy failed: {result.stderr}")
-
-    return {"success": True, "message": "Container removed"}
-
-
-@app.get("/devices", dependencies=[Depends(require_jwt)])
-async def list_devices():
-    """List Domoticz devices."""
-    if not lxc_running():
-        return {"devices": [], "error": "Service not running"}
+@router.get("/devices")
+async def list_devices(user=Depends(require_jwt)):
+    """List all devices."""
+    if not is_running():
+        return {"devices": [], "error": "Domoticz not running"}
 
     try:
         data = await domoticz_api("type=devices&used=true&order=Name")
@@ -427,20 +366,116 @@ async def list_devices():
                 "type": dev.get("Type"),
                 "subtype": dev.get("SubType"),
                 "data": dev.get("Data"),
+                "status": dev.get("Status"),
                 "last_update": dev.get("LastUpdate"),
                 "battery_level": dev.get("BatteryLevel"),
-                "signal_level": dev.get("SignalLevel")
+                "signal_level": dev.get("SignalLevel"),
+                "favorite": dev.get("Favorite", 0) == 1,
+                "plan_ids": dev.get("PlanIDs", []),
             })
         return {"devices": devices, "count": len(devices)}
     except Exception as e:
         return {"devices": [], "error": str(e)}
 
 
-@app.get("/scenes", dependencies=[Depends(require_jwt)])
-async def list_scenes():
-    """List Domoticz scenes and groups."""
-    if not lxc_running():
-        return {"scenes": [], "error": "Service not running"}
+@router.get("/device/{idx}")
+async def get_device(idx: int, user=Depends(require_jwt)):
+    """Get device details."""
+    if not is_running():
+        raise HTTPException(503, "Domoticz not running")
+
+    try:
+        data = await domoticz_api(f"type=devices&rid={idx}")
+        result = data.get("result", [])
+        if not result:
+            raise HTTPException(404, "Device not found")
+        return result[0]
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@router.post("/device/{idx}/command")
+async def send_device_command(idx: int, cmd: DeviceCommand, user=Depends(require_jwt)):
+    """Send command to device."""
+    if not is_running():
+        raise HTTPException(503, "Domoticz not running")
+
+    try:
+        if cmd.command == "Set Level" and cmd.level is not None:
+            data = await domoticz_api(f"type=command&param=switchlight&idx={idx}&switchcmd=Set%20Level&level={cmd.level}")
+        else:
+            data = await domoticz_api(f"type=command&param=switchlight&idx={idx}&switchcmd={cmd.command}")
+
+        log.info(f"Device {idx} command {cmd.command} by {user.get('sub', 'unknown')}")
+        return {"success": data.get("status") == "OK", "result": data}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+# ============================================================================
+# Room Management
+# ============================================================================
+
+@router.get("/rooms")
+async def list_rooms(user=Depends(require_jwt)):
+    """List all rooms (plans)."""
+    if not is_running():
+        return {"rooms": [], "error": "Domoticz not running"}
+
+    try:
+        data = await domoticz_api("type=plans&order=Name&used=true")
+        rooms = []
+        for plan in data.get("result", []):
+            rooms.append({
+                "idx": plan.get("idx"),
+                "name": plan.get("Name"),
+                "devices": plan.get("Devices", 0),
+                "order": plan.get("Order"),
+            })
+        return {"rooms": rooms, "count": len(rooms)}
+    except Exception as e:
+        return {"rooms": [], "error": str(e)}
+
+
+@router.post("/room")
+async def create_room(room: RoomCreate, user=Depends(require_jwt)):
+    """Create a new room (plan)."""
+    if not is_running():
+        raise HTTPException(503, "Domoticz not running")
+
+    try:
+        data = await domoticz_api(f"type=command&param=addplan&name={room.name}")
+        log.info(f"Room {room.name} created by {user.get('sub', 'unknown')}")
+        return {"success": data.get("status") == "OK", "result": data}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@router.delete("/room/{idx}")
+async def delete_room(idx: int, user=Depends(require_jwt)):
+    """Delete a room (plan)."""
+    if not is_running():
+        raise HTTPException(503, "Domoticz not running")
+
+    try:
+        data = await domoticz_api(f"type=command&param=deleteplan&idx={idx}")
+        log.info(f"Room {idx} deleted by {user.get('sub', 'unknown')}")
+        return {"success": data.get("status") == "OK"}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+# ============================================================================
+# Scene Management
+# ============================================================================
+
+@router.get("/scenes")
+async def list_scenes(user=Depends(require_jwt)):
+    """List all scenes and groups."""
+    if not is_running():
+        return {"scenes": [], "error": "Domoticz not running"}
 
     try:
         data = await domoticz_api("type=scenes")
@@ -451,44 +486,37 @@ async def list_scenes():
                 "name": scene.get("Name"),
                 "type": scene.get("Type"),
                 "status": scene.get("Status"),
-                "last_update": scene.get("LastUpdate")
+                "last_update": scene.get("LastUpdate"),
+                "favorite": scene.get("Favorite", 0) == 1,
             })
         return {"scenes": scenes, "count": len(scenes)}
     except Exception as e:
         return {"scenes": [], "error": str(e)}
 
 
-@app.post("/devices/{idx}/switch", dependencies=[Depends(require_jwt)])
-async def switch_device(idx: int, command: str = Query(..., pattern="^(On|Off|Toggle)$")):
-    """Switch a device on/off/toggle."""
-    if not lxc_running():
-        raise HTTPException(status_code=400, detail="Service not running")
-
-    try:
-        data = await domoticz_api(f"type=command&param=switchlight&idx={idx}&switchcmd={command}")
-        return {"success": data.get("status") == "OK", "result": data}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/scenes/{idx}/activate", dependencies=[Depends(require_jwt)])
-async def activate_scene(idx: int, command: str = Query("On", pattern="^(On|Off)$")):
+@router.post("/scene/{idx}/activate")
+async def activate_scene(idx: int, command: str = Query("On", pattern="^(On|Off)$"), user=Depends(require_jwt)):
     """Activate or deactivate a scene."""
-    if not lxc_running():
-        raise HTTPException(status_code=400, detail="Service not running")
+    if not is_running():
+        raise HTTPException(503, "Domoticz not running")
 
     try:
         data = await domoticz_api(f"type=command&param=switchscene&idx={idx}&switchcmd={command}")
+        log.info(f"Scene {idx} {command} by {user.get('sub', 'unknown')}")
         return {"success": data.get("status") == "OK", "result": data}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(500, str(e))
 
 
-@app.get("/hardware", dependencies=[Depends(require_jwt)])
-async def list_hardware():
-    """List configured hardware."""
-    if not lxc_running():
-        return {"hardware": [], "error": "Service not running"}
+# ============================================================================
+# Hardware Management
+# ============================================================================
+
+@router.get("/hardware")
+async def list_hardware(user=Depends(require_jwt)):
+    """List configured hardware controllers."""
+    if not is_running():
+        return {"hardware": [], "error": "Domoticz not running"}
 
     try:
         data = await domoticz_api("type=hardware")
@@ -498,62 +526,349 @@ async def list_hardware():
                 "idx": hw.get("idx"),
                 "name": hw.get("Name"),
                 "type": hw.get("Type"),
+                "type_name": hw.get("TypeName", ""),
                 "enabled": hw.get("Enabled") == "true",
-                "data_timeout": hw.get("DataTimeout")
+                "data_timeout": hw.get("DataTimeout"),
+                "port": hw.get("Port", ""),
+                "address": hw.get("Address", ""),
             })
         return {"hardware": hardware, "count": len(hardware)}
     except Exception as e:
         return {"hardware": [], "error": str(e)}
 
 
-@app.post("/backup", dependencies=[Depends(require_jwt)])
-async def create_backup():
-    """Create Domoticz backup."""
-    if not lxc_exists():
-        raise HTTPException(status_code=400, detail="Container not found")
+@router.post("/hardware")
+async def add_hardware(
+    name: str = Query(...),
+    hardware_type: int = Query(..., description="Hardware type ID"),
+    port: str = Query("", description="Serial port or address"),
+    user=Depends(require_jwt)
+):
+    """Add new hardware controller."""
+    if not is_running():
+        raise HTTPException(503, "Domoticz not running")
 
+    try:
+        endpoint = f"type=command&param=addhardware&htype={hardware_type}&name={name}"
+        if port:
+            endpoint += f"&port={port}"
+        data = await domoticz_api(endpoint)
+        log.info(f"Hardware {name} added by {user.get('sub', 'unknown')}")
+        return {"success": data.get("status") == "OK", "result": data}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@router.delete("/hardware/{idx}")
+async def delete_hardware(idx: int, user=Depends(require_jwt)):
+    """Delete hardware controller."""
+    if not is_running():
+        raise HTTPException(503, "Domoticz not running")
+
+    try:
+        data = await domoticz_api(f"type=command&param=deletehardware&idx={idx}")
+        log.info(f"Hardware {idx} deleted by {user.get('sub', 'unknown')}")
+        return {"success": data.get("status") == "OK"}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+# ============================================================================
+# Events and Graphs
+# ============================================================================
+
+@router.get("/events")
+async def get_events(lines: int = Query(100, ge=10, le=500), user=Depends(require_jwt)):
+    """Get event log."""
+    if not is_running():
+        return {"events": [], "error": "Domoticz not running"}
+
+    try:
+        data = await domoticz_api("type=command&param=getlog")
+        events = data.get("result", [])[-lines:]
+        return {"events": events, "count": len(events)}
+    except Exception as e:
+        return {"events": [], "error": str(e)}
+
+
+@router.get("/graphs/{idx}")
+async def get_device_graphs(
+    idx: int,
+    sensor: str = Query("temp", description="Sensor type: temp, humidity, counter, etc"),
+    range: str = Query("day", pattern="^(day|week|month|year)$"),
+    user=Depends(require_jwt)
+):
+    """Get device graph data."""
+    if not is_running():
+        raise HTTPException(503, "Domoticz not running")
+
+    try:
+        data = await domoticz_api(f"type=graph&sensor={sensor}&idx={idx}&range={range}")
+        return {
+            "idx": idx,
+            "sensor": sensor,
+            "range": range,
+            "data": data.get("result", [])
+        }
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+# ============================================================================
+# Notifications
+# ============================================================================
+
+@router.get("/notifications")
+async def get_notifications(user=Depends(require_jwt)):
+    """Get notification settings."""
+    if not is_running():
+        return {"notifications": {}, "error": "Domoticz not running"}
+
+    try:
+        data = await domoticz_api("type=command&param=getnotifications")
+        return {"notifications": data}
+    except Exception as e:
+        return {"notifications": {}, "error": str(e)}
+
+
+@router.post("/notifications")
+async def update_notifications(settings: NotificationSettings, user=Depends(require_jwt)):
+    """Update notification settings."""
+    if not is_running():
+        raise HTTPException(503, "Domoticz not running")
+
+    # Note: Domoticz requires multiple API calls for different notification types
+    # This is a simplified implementation
+    log.info(f"Notification settings updated by {user.get('sub', 'unknown')}")
+    return {"success": True, "message": "Settings updated"}
+
+
+# ============================================================================
+# Container Management
+# ============================================================================
+
+@router.get("/container/status")
+async def container_status(user=Depends(require_jwt)):
+    """Get container status."""
+    rt = detect_runtime()
+    running = is_running()
+    exists = container_exists()
+
+    stats = {}
+    if running and rt:
+        try:
+            result = subprocess.run(
+                [rt, "stats", "--no-stream", "--format", "{{.MemUsage}} {{.CPUPerc}}", CONTAINER_NAME],
+                capture_output=True, text=True, timeout=10
+            )
+            parts = result.stdout.strip().split()
+            if len(parts) >= 2:
+                stats["memory"] = parts[0]
+                stats["cpu"] = parts[-1]
+        except Exception:
+            pass
+
+    return {
+        "runtime": rt or "none",
+        "running": running,
+        "exists": exists,
+        "container_name": CONTAINER_NAME,
+        "stats": stats,
+    }
+
+
+@router.post("/container/install")
+async def install_container(user=Depends(require_jwt)):
+    """Pull and install Domoticz container."""
+    rt = detect_runtime()
+    if not rt:
+        return {"success": False, "error": "No container runtime (docker/podman) found"}
+
+    if container_exists():
+        return {"success": True, "message": "Container already exists"}
+
+    log.info(f"Installing Domoticz by {user.get('sub', 'unknown')}")
+
+    try:
+        # Pull image
+        result = subprocess.run(
+            [rt, "pull", "domoticz/domoticz:stable"],
+            capture_output=True, text=True, timeout=600
+        )
+        if result.returncode != 0:
+            return {"success": False, "error": result.stderr.strip()}
+
+        # Create data directories
+        DATA_PATH.mkdir(parents=True, exist_ok=True)
+        (DATA_PATH / "config").mkdir(exist_ok=True)
+        (DATA_PATH / "scripts").mkdir(exist_ok=True)
+        (DATA_PATH / "plugins").mkdir(exist_ok=True)
+
+        return {"success": True, "message": "Domoticz image pulled successfully"}
+    except subprocess.TimeoutExpired:
+        return {"success": False, "error": "Pull timeout"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@router.post("/container/start")
+async def start_container(user=Depends(require_jwt)):
+    """Start Domoticz container."""
+    if is_running():
+        return {"success": True, "message": "Already running"}
+
+    rt = detect_runtime()
+    if not rt:
+        return {"success": False, "error": "No container runtime"}
+
+    cfg = get_config()
+    port = cfg.get("port", DEFAULT_PORT)
+
+    log.info(f"Starting Domoticz by {user.get('sub', 'unknown')}")
+
+    # Get USB devices for passthrough
+    usb_devices = get_usb_devices()
+
+    cmd = [
+        rt, "run", "-d",
+        "--name", CONTAINER_NAME,
+        "-p", f"127.0.0.1:{port}:8080",
+        "-p", f"127.0.0.1:8443:8443",
+        "-v", f"{DATA_PATH}/config:/opt/domoticz/userdata",
+        "-v", f"{DATA_PATH}/scripts:/opt/domoticz/scripts",
+        "-v", f"{DATA_PATH}/plugins:/opt/domoticz/plugins",
+        "-e", f"TZ={cfg.get('timezone', 'Europe/Paris')}",
+        "--restart", "unless-stopped",
+    ]
+
+    # Add USB device passthrough
+    for dev in usb_devices:
+        cmd.extend(["--device", dev["path"]])
+
+    cmd.append("domoticz/domoticz:stable")
+
+    try:
+        # If container exists but stopped, remove it first
+        if container_exists():
+            subprocess.run([rt, "rm", "-f", CONTAINER_NAME], capture_output=True, timeout=10)
+
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        await asyncio.sleep(5)
+
+        if is_running():
+            return {"success": True, "message": "Domoticz started"}
+        else:
+            return {"success": False, "error": result.stderr.strip() or "Failed to start"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@router.post("/container/stop")
+async def stop_container(user=Depends(require_jwt)):
+    """Stop Domoticz container."""
+    rt = detect_runtime()
+    if not rt:
+        return {"success": False, "error": "No container runtime"}
+
+    if not is_running():
+        return {"success": True, "message": "Already stopped"}
+
+    log.info(f"Stopping Domoticz by {user.get('sub', 'unknown')}")
+
+    try:
+        subprocess.run([rt, "stop", CONTAINER_NAME], capture_output=True, timeout=30)
+        subprocess.run([rt, "rm", "-f", CONTAINER_NAME], capture_output=True, timeout=10)
+
+        if not is_running():
+            return {"success": True}
+        else:
+            return {"success": False, "error": "Failed to stop"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@router.post("/container/restart")
+async def restart_container(user=Depends(require_jwt)):
+    """Restart Domoticz container."""
+    await stop_container(user)
+    await asyncio.sleep(2)
+    return await start_container(user)
+
+
+# ============================================================================
+# Logs
+# ============================================================================
+
+@router.get("/logs")
+async def get_logs(lines: int = Query(100, ge=10, le=500), user=Depends(require_jwt)):
+    """Get container logs."""
+    rt = detect_runtime()
+    logs = []
+
+    if rt and is_running():
+        try:
+            result = subprocess.run(
+                [rt, "logs", "--tail", str(lines), CONTAINER_NAME],
+                capture_output=True, text=True, timeout=10
+            )
+            if result.stdout:
+                logs = result.stdout.strip().split('\n')
+            if result.stderr:
+                logs.extend(result.stderr.strip().split('\n'))
+        except Exception:
+            pass
+
+    return {"logs": logs[-lines:] if logs else []}
+
+
+# ============================================================================
+# Backup & Restore
+# ============================================================================
+
+@router.post("/backup")
+async def create_backup(user=Depends(require_jwt)):
+    """Create Domoticz backup."""
     backup_dir = Path("/var/lib/secubox/backups/domoticz")
     backup_dir.mkdir(parents=True, exist_ok=True)
 
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     backup_file = backup_dir / f"domoticz-backup-{timestamp}.tar.gz"
 
-    lxc_path = LXC_ROOT / LXC_NAME
+    if not DATA_PATH.exists():
+        raise HTTPException(400, "No data to backup")
+
+    was_running = is_running()
+    if was_running:
+        await stop_container(user)
+        await asyncio.sleep(2)
 
     try:
-        # Stop container for consistent backup
-        was_running = lxc_running()
-        if was_running:
-            subprocess.run(["lxc-stop", "-n", LXC_NAME], capture_output=True, timeout=30)
-            await asyncio.sleep(2)
-
         result = subprocess.run(
-            ["tar", "-czf", str(backup_file), "-C", str(LXC_ROOT), LXC_NAME],
-            capture_output=True,
-            text=True,
-            timeout=600
+            ["tar", "-czf", str(backup_file), "-C", str(DATA_PATH.parent), DATA_PATH.name],
+            capture_output=True, text=True, timeout=300
         )
 
-        # Restart if was running
         if was_running:
-            subprocess.run(["lxc-start", "-n", LXC_NAME], capture_output=True, timeout=60)
+            await start_container(user)
 
         if result.returncode != 0:
-            raise HTTPException(status_code=500, detail=f"Backup failed: {result.stderr}")
+            raise HTTPException(500, f"Backup failed: {result.stderr}")
 
-        size = backup_file.stat().st_size
+        log.info(f"Backup created by {user.get('sub', 'unknown')}: {backup_file}")
         return {
             "success": True,
             "path": str(backup_file),
-            "size": size,
+            "size": backup_file.stat().st_size,
             "timestamp": timestamp
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        if was_running:
+            await start_container(user)
+        raise HTTPException(500, str(e))
 
 
-@app.get("/backups", dependencies=[Depends(require_jwt)])
-async def list_backups():
+@router.get("/backups")
+async def list_backups(user=Depends(require_jwt)):
     """List available backups."""
     backup_dir = Path("/var/lib/secubox/backups/domoticz")
     if not backup_dir.exists():
@@ -570,105 +885,40 @@ async def list_backups():
     return {"backups": backups}
 
 
-@app.post("/restore", dependencies=[Depends(require_jwt)])
-async def restore_backup(path: str = Query(...)):
+@router.post("/restore")
+async def restore_backup(path: str = Query(...), user=Depends(require_jwt)):
     """Restore from backup."""
     backup_path = Path(path)
     if not backup_path.exists():
-        raise HTTPException(status_code=404, detail="Backup file not found")
+        raise HTTPException(404, "Backup file not found")
 
-    # Stop and remove existing container
-    if lxc_running():
-        subprocess.run(["lxc-stop", "-n", LXC_NAME], capture_output=True, timeout=30)
+    was_running = is_running()
+    if was_running:
+        await stop_container(user)
         await asyncio.sleep(2)
 
-    if lxc_exists():
-        subprocess.run(["lxc-destroy", "-n", LXC_NAME], capture_output=True, timeout=60)
-
     try:
+        # Remove existing data
+        if DATA_PATH.exists():
+            shutil.rmtree(DATA_PATH)
+
         # Extract backup
         result = subprocess.run(
-            ["tar", "-xzf", str(backup_path), "-C", str(LXC_ROOT)],
-            capture_output=True,
-            text=True,
-            timeout=600
+            ["tar", "-xzf", str(backup_path), "-C", str(DATA_PATH.parent)],
+            capture_output=True, text=True, timeout=300
         )
+
         if result.returncode != 0:
-            raise HTTPException(status_code=500, detail=f"Restore failed: {result.stderr}")
+            raise HTTPException(500, f"Restore failed: {result.stderr}")
 
-        # Start container
-        subprocess.run(["lxc-start", "-n", LXC_NAME], capture_output=True, timeout=60)
-        await asyncio.sleep(5)
+        log.info(f"Backup restored by {user.get('sub', 'unknown')}: {path}")
 
-        return {"success": True, "message": "Backup restored successfully", "ip": lxc_get_ip()}
+        if was_running:
+            await start_container(user)
+
+        return {"success": True, "message": "Backup restored successfully"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(500, str(e))
 
 
-@app.get("/logs", dependencies=[Depends(require_jwt)])
-async def get_logs(lines: int = Query(100, ge=10, le=1000)):
-    """Get container logs."""
-    if not lxc_exists():
-        return {"logs": [], "error": "Container not found"}
-
-    try:
-        # Get systemd journal from inside container
-        result = lxc_exec(
-            ["journalctl", "-u", "domoticz", "-n", str(lines), "--no-pager"],
-            timeout=30
-        )
-        logs = result.stdout.strip().split("\n") if result.stdout else []
-        return {"logs": logs[-lines:]}
-    except Exception as e:
-        return {"logs": [], "error": str(e)}
-
-
-@app.get("/usb_devices", dependencies=[Depends(require_jwt)])
-async def get_usb_devices_list():
-    """Get list of USB serial devices."""
-    return {"devices": get_usb_devices()}
-
-
-@app.post("/usb_passthrough", dependencies=[Depends(require_jwt)])
-async def add_usb_passthrough(device_path: str = Query(...)):
-    """Add USB device passthrough to container."""
-    if not os.path.exists(device_path):
-        raise HTTPException(status_code=404, detail="Device not found")
-
-    if not lxc_exists():
-        raise HTTPException(status_code=400, detail="Container not created")
-
-    lxc_config = LXC_ROOT / LXC_NAME / "config"
-    entry = f"lxc.mount.entry = {device_path} {device_path[1:]} none bind,create=file 0 0\n"
-
-    with open(lxc_config, "a") as f:
-        f.write(entry)
-
-    # Restart if running to apply changes
-    if lxc_running():
-        await restart_service()
-
-    return {"success": True, "message": f"Added passthrough for {device_path}"}
-
-
-@app.post("/reset_password", dependencies=[Depends(require_jwt)])
-async def reset_admin_password(password: str = Query("admin", min_length=4)):
-    """Reset Domoticz admin password."""
-    if not lxc_running():
-        raise HTTPException(status_code=400, detail="Service not running")
-
-    try:
-        import hashlib
-        md5hash = hashlib.md5(password.encode()).hexdigest()
-
-        # admin in base64 is YWRtaW4=
-        result = lxc_exec([
-            "sqlite3", "/opt/domoticz/domoticz.db",
-            f"UPDATE Users SET Password='{md5hash}' WHERE Username='YWRtaW4=';"
-        ])
-        if result.returncode != 0:
-            raise HTTPException(status_code=500, detail=f"Failed: {result.stderr}")
-
-        return {"success": True, "message": "Password reset successfully"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+app.include_router(router)

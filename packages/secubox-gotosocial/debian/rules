@@ -3,14 +3,18 @@
 	dh $@
 
 override_dh_auto_install:
-	install -d $(CURDIR)/debian/secubox-gotosocial/usr/lib/secubox/gotosocial/api
-	install -m 644 api/main.py $(CURDIR)/debian/secubox-gotosocial/usr/lib/secubox/gotosocial/api/
-	touch $(CURDIR)/debian/secubox-gotosocial/usr/lib/secubox/gotosocial/api/__init__.py
-	install -d $(CURDIR)/debian/secubox-gotosocial/usr/share/secubox/www/gotosocial
-	install -m 644 www/gotosocial/index.html $(CURDIR)/debian/secubox-gotosocial/usr/share/secubox/www/gotosocial/
-	install -d $(CURDIR)/debian/secubox-gotosocial/etc/nginx/secubox.d
-	install -m 644 nginx/gotosocial.conf $(CURDIR)/debian/secubox-gotosocial/etc/nginx/secubox.d/
-	install -d $(CURDIR)/debian/secubox-gotosocial/usr/share/secubox/menu.d
-	install -m 644 menu.d/810-gotosocial.json $(CURDIR)/debian/secubox-gotosocial/usr/share/secubox/menu.d/
-	install -d $(CURDIR)/debian/secubox-gotosocial/usr/lib/systemd/system
-	install -m 644 debian/secubox-gotosocial.service $(CURDIR)/debian/secubox-gotosocial/usr/lib/systemd/system/
+	# API files
+	install -d debian/secubox-gotosocial/usr/lib/secubox/gotosocial/
+	cp -r api debian/secubox-gotosocial/usr/lib/secubox/gotosocial/
+	# Static www files
+	install -d debian/secubox-gotosocial/usr/share/secubox/www
+	[ -d www ] && cp -r www/. debian/secubox-gotosocial/usr/share/secubox/www/ || true
+	# Menu definitions
+	install -d debian/secubox-gotosocial/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-gotosocial/usr/share/secubox/menu.d/ || true
+	# Modular nginx config
+	install -d debian/secubox-gotosocial/etc/nginx/secubox.d
+	[ -f nginx/gotosocial.conf ] && cp nginx/gotosocial.conf debian/secubox-gotosocial/etc/nginx/secubox.d/ || true
+	# Systemd service
+	install -d debian/secubox-gotosocial/usr/lib/systemd/system
+	[ -d systemd ] && cp systemd/*.service debian/secubox-gotosocial/usr/lib/systemd/system/ || true

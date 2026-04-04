@@ -1,0 +1,1 @@
+# secubox-homeassistant API routers

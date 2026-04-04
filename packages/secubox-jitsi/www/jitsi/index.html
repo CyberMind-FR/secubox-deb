@@ -3,572 +3,979 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Jitsi Meet - SecuBox</title>
+    <title>SecuBox - Jitsi Meet</title>
+    <link rel="stylesheet" href="/shared/sidebar.css">
     <link rel="stylesheet" href="/shared/crt-light.css">
-    <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
         :root {
-            --jitsi-blue: #246fe5;
-            --jitsi-light: #5090e8;
-            --jitsi-dark: #1a5cc4;
+            --p31-peak: #00dd44;
+            --p31-dim: #006622;
+            --p31-glow: rgba(0, 221, 68, 0.15);
+            --tube-light: #e8f5e9;
+            --tube-mid: #c8e6c9;
+            --tube-dark: #a5d6a7;
+            --text-primary: #1b5e20;
+            --text-secondary: #388e3c;
+            --text-dim: #66bb6a;
+            --surface: #f1f8e9;
+            --surface-alt: #dcedc8;
+            --border: #c5e1a5;
+            --error: #c62828;
+            --warning: #f57c00;
+            --success: #2e7d32;
+            --jitsi: #1a7a7a;
+            --jitsi-light: #2aa0a0;
+            --jitsi-dark: #125858;
         }
-
-        body.dark {
-            --jitsi-blue: #5090e8;
-            --jitsi-light: #7aabe8;
-            --jitsi-dark: #246fe5;
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            background: linear-gradient(135deg, var(--tube-light) 0%, var(--tube-mid) 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
         }
-
-        .accent { color: var(--jitsi-blue); }
-        .accent-bg { background-color: var(--jitsi-blue); }
-
+        body.crt-light { background: linear-gradient(135deg, var(--tube-light) 0%, var(--tube-mid) 100%); }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; max-width: calc(100% - 220px); }
         .header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 1rem;
-            border-bottom: 1px solid var(--border);
-            margin-bottom: 1rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid var(--jitsi);
         }
+        .header h1 { font-size: 1.5rem; color: var(--jitsi); }
+        .header-actions { display: flex; gap: 0.5rem; }
 
-        .header h1 { margin: 0; font-size: 1.5rem; }
-
-        .status-badge {
-            padding: 0.25rem 0.75rem;
-            border-radius: 1rem;
-            font-size: 0.875rem;
-        }
-
-        .status-badge.running { background: var(--success-bg); color: var(--success); }
-        .status-badge.stopped { background: var(--error-bg); color: var(--error); }
-
-        .stats-grid {
+        /* Stats Row */
+        .stats-row {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
             gap: 1rem;
             margin-bottom: 1.5rem;
         }
-
         .stat-card {
             background: var(--surface);
             border: 1px solid var(--border);
-            border-radius: 0.5rem;
+            border-radius: 8px;
             padding: 1rem;
             text-align: center;
+            box-shadow: 0 2px 8px var(--p31-glow);
         }
+        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
+        .stat-card .value { font-size: 1.25rem; font-weight: bold; color: var(--jitsi); margin-top: 0.25rem; }
+        .stat-card.running .value { color: var(--success); }
+        .stat-card.stopped .value { color: var(--error); }
 
-        .stat-value {
-            font-size: 2rem;
-            font-weight: bold;
-            color: var(--jitsi-blue);
-        }
-
-        .stat-label {
-            font-size: 0.75rem;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-        }
-
-        .services-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 0.5rem;
-            margin-bottom: 1rem;
-        }
-
-        .service-badge {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.5rem 0.75rem;
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 0.25rem;
-            font-size: 0.875rem;
-        }
-
-        .service-status {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-        }
-
-        .service-status.active { background: var(--success); }
-        .service-status.inactive { background: var(--error); }
-
-        .action-bar {
-            display: flex;
-            gap: 0.5rem;
-            margin-bottom: 1rem;
-            flex-wrap: wrap;
-        }
-
-        .btn {
-            padding: 0.5rem 1rem;
-            border: 1px solid var(--border);
-            border-radius: 0.25rem;
-            background: var(--surface);
-            color: var(--text);
-            cursor: pointer;
-            font-size: 0.875rem;
-        }
-
-        .btn:hover { background: var(--hover); }
-        .btn.primary { background: var(--jitsi-blue); color: white; border-color: var(--jitsi-blue); }
-        .btn.primary:hover { background: var(--jitsi-dark); }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-        .tabs {
-            display: flex;
-            gap: 0.5rem;
-            border-bottom: 1px solid var(--border);
-            margin-bottom: 1rem;
-        }
-
+        /* Tabs */
+        .tabs { display: flex; gap: 0; margin-bottom: 1.5rem; border-bottom: 2px solid var(--border); flex-wrap: wrap; }
         .tab {
-            padding: 0.75rem 1rem;
-            border: none;
-            background: none;
-            color: var(--text-secondary);
+            padding: 0.75rem 1.25rem;
             cursor: pointer;
-            border-bottom: 2px solid transparent;
+            border: 1px solid transparent;
+            border-bottom: none;
+            border-radius: 8px 8px 0 0;
+            background: transparent;
+            color: var(--text-secondary);
+            font-weight: 500;
+            transition: all 0.2s;
+            font-size: 0.875rem;
         }
-
-        .tab:hover { color: var(--text); }
-        .tab.active { color: var(--jitsi-blue); border-bottom-color: var(--jitsi-blue); }
+        .tab:hover { background: var(--surface-alt); }
+        .tab.active {
+            background: var(--surface);
+            border-color: var(--border);
+            color: var(--jitsi);
+            margin-bottom: -2px;
+            border-bottom: 2px solid var(--surface);
+        }
 
         .tab-content { display: none; }
         .tab-content.active { display: block; }
 
-        .log-viewer {
-            background: var(--bg-dark, #1a1a2e);
-            color: var(--text-light, #e0e0e0);
-            font-family: monospace;
-            font-size: 0.75rem;
-            padding: 1rem;
-            border-radius: 0.5rem;
-            height: 400px;
-            overflow-y: auto;
-            white-space: pre-wrap;
+        /* Cards */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 2px 8px var(--p31-glow);
+        }
+        .card h3 {
+            font-size: 1rem;
+            color: var(--jitsi);
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border);
         }
 
-        .settings-form {
-            display: grid;
-            gap: 1rem;
-            max-width: 500px;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 0.25rem;
+        /* Buttons */
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            border: 1px solid var(--jitsi);
+            background: var(--surface);
+            color: var(--jitsi);
+            cursor: pointer;
             font-weight: 500;
+            transition: all 0.2s;
+            font-size: 0.875rem;
         }
+        .btn:hover { background: var(--jitsi); color: white; }
+        .btn-primary { background: var(--jitsi); color: white; }
+        .btn-primary:hover { background: var(--jitsi-dark); }
+        .btn-danger { border-color: var(--error); color: var(--error); }
+        .btn-danger:hover { background: var(--error); color: white; }
+        .btn-success { border-color: var(--success); color: var(--success); }
+        .btn-success:hover { background: var(--success); color: white; }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.8rem; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-        .form-group input, .form-group select {
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+        th { color: var(--text-dim); font-weight: 500; font-size: 0.75rem; text-transform: uppercase; }
+        tr:hover { background: var(--surface-alt); }
+
+        /* Forms */
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.25rem; color: var(--text-secondary); font-size: 0.875rem; }
+        input, select {
             width: 100%;
             padding: 0.5rem;
             border: 1px solid var(--border);
-            border-radius: 0.25rem;
-            background: var(--surface);
-            color: var(--text);
+            border-radius: 6px;
+            background: white;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 0.875rem;
         }
+        input:focus, select:focus { outline: none; border-color: var(--jitsi); box-shadow: 0 0 5px rgba(26, 122, 122, 0.3); }
+        .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            cursor: pointer;
+        }
+        .checkbox-label input { width: auto; }
 
-        .quick-join {
-            max-width: 400px;
-            margin: 1rem auto;
-            padding: 1.5rem;
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 0.5rem;
+        /* Badges */
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        .badge-success { background: #c8e6c9; color: #2e7d32; }
+        .badge-error { background: #ffcdd2; color: #c62828; }
+        .badge-warning { background: #ffe0b2; color: #e65100; }
+        .badge-info { background: #b3e5fc; color: #01579b; }
+
+        /* Install Banner */
+        .install-banner {
+            background: linear-gradient(135deg, #e0f2f1 0%, #b2dfdb 100%);
+            border: 2px solid var(--jitsi);
+            border-radius: 12px;
+            padding: 2rem;
             text-align: center;
+            margin-bottom: 1.5rem;
         }
+        .install-banner h2 { color: var(--jitsi); margin-bottom: 1rem; }
+        .install-banner p { color: var(--text-secondary); margin-bottom: 1.5rem; }
 
-        .quick-join input {
-            width: 100%;
-            padding: 0.75rem;
-            font-size: 1rem;
-            border: 1px solid var(--border);
-            border-radius: 0.25rem;
+        /* Container Status Grid */
+        .container-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 0.75rem;
             margin-bottom: 1rem;
         }
+        .container-badge {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem;
+            background: var(--surface-alt);
+            border-radius: 6px;
+            font-size: 0.875rem;
+        }
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+        .status-dot.running { background: var(--success); }
+        .status-dot.stopped { background: var(--error); }
+        .status-dot.not_installed { background: var(--text-dim); }
 
-        .open-app-btn {
+        /* Quick Join */
+        .quick-join {
+            background: linear-gradient(135deg, #e0f2f1 0%, #b2dfdb 100%);
+            border: 1px solid var(--jitsi);
+            border-radius: 8px;
+            padding: 1.5rem;
+            text-align: center;
+            max-width: 400px;
+            margin: 1rem auto;
+        }
+        .quick-join h3 { color: var(--jitsi); margin-bottom: 1rem; }
+        .quick-join input {
+            margin-bottom: 1rem;
+            text-align: center;
+            font-size: 1rem;
+        }
+
+        /* Logs */
+        .logs-container {
+            background: #1a1a1a;
+            color: #00dd44;
+            padding: 1rem;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 0.75rem;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        /* Toast */
+        .toast {
             position: fixed;
             bottom: 1rem;
             right: 1rem;
             padding: 1rem 1.5rem;
-            background: var(--jitsi-blue);
+            border-radius: 8px;
             color: white;
-            border: none;
-            border-radius: 2rem;
-            cursor: pointer;
-            font-size: 1rem;
-            box-shadow: 0 4px 12px rgba(36, 111, 229, 0.4);
+            z-index: 1000;
+            animation: slideIn 0.3s ease;
         }
+        .toast-success { background: var(--success); }
+        .toast-error { background: var(--error); }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
-        .open-app-btn:hover { background: var(--jitsi-dark); }
-        .hidden { display: none !important; }
-
-        .install-form {
-            max-width: 400px;
-            margin: 2rem auto;
-            padding: 2rem;
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 0.5rem;
+        .spinner {
+            display: inline-block;
+            width: 1rem;
+            height: 1rem;
+            border: 2px solid var(--border);
+            border-top-color: var(--jitsi);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
         }
+        @keyframes spin { to { transform: rotate(360deg); } }
 
-        .install-form h2 { margin-top: 0; text-align: center; }
+        /* Open App link */
+        .open-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--jitsi);
+            text-decoration: none;
+            font-weight: 500;
+        }
+        .open-link:hover { text-decoration: underline; }
+
+        /* Recording list */
+        .recording-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border);
+        }
+        .recording-item:last-child { border-bottom: none; }
+        .recording-info { flex: 1; }
+        .recording-name { font-weight: 500; }
+        .recording-meta { font-size: 0.75rem; color: var(--text-dim); }
+
+        @media (max-width: 768px) {
+            .main { margin-left: 0; max-width: 100%; padding: 1rem; }
+            .stats-row { grid-template-columns: repeat(2, 1fr); }
+            .tabs { flex-wrap: wrap; }
+            .tab { padding: 0.5rem 0.75rem; font-size: 0.75rem; }
+        }
     </style>
 </head>
 <body class="crt-light">
     <nav class="sidebar" id="sidebar"></nav>
-    <main class="main-content">
-    <div class="container">
-        <div class="header">
-            <h1><span class="accent">Jitsi</span> Meet</h1>
-            <span id="status-badge" class="status-badge stopped">Stopped</span>
+    <script src="/shared/sidebar.js"></script>
+
+    <main class="main">
+        <header class="header">
+            <h1>Jitsi Meet</h1>
+            <div class="header-actions">
+                <a id="openJitsi" href="#" target="_blank" class="btn" style="display: none;">Open Jitsi</a>
+                <button class="btn" onclick="refresh()">Refresh</button>
+                <button class="btn btn-primary" id="btnToggle" onclick="toggleService()">Start</button>
+            </div>
+        </header>
+
+        <!-- Install Banner -->
+        <div id="installBanner" class="install-banner" style="display: none;">
+            <h2>Video Conferencing</h2>
+            <p>Self-hosted, secure video meetings with screen sharing, chat, and recording.</p>
+            <button class="btn btn-primary" onclick="installJitsi()">Install Jitsi Meet</button>
         </div>
 
-        <div id="install-section" class="install-form hidden">
-            <h2>Install Jitsi Meet</h2>
-            <form onsubmit="installJitsi(event)">
-                <div class="form-group">
-                    <label>Domain</label>
-                    <input type="text" id="install-domain" placeholder="meet.example.com" required>
-                    <small style="color: var(--text-secondary);">Must resolve to this server</small>
-                </div>
-                <button type="submit" class="btn primary" style="width: 100%; margin-top: 1rem;">Install Jitsi</button>
-            </form>
+        <!-- Stats Row -->
+        <div class="stats-row">
+            <div class="stat-card" id="statStatus">
+                <div class="label">Status</div>
+                <div class="value">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Meetings</div>
+                <div class="value" id="statConferences">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Participants</div>
+                <div class="value" id="statParticipants">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Recordings</div>
+                <div class="value" id="statRecordings">0</div>
+            </div>
         </div>
 
-        <div id="main-section" class="hidden">
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-value" id="active-conferences">0</div>
-                    <div class="stat-label">Active Meetings</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value" id="active-participants">0</div>
-                    <div class="stat-label">Participants</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value" id="largest-conference">0</div>
-                    <div class="stat-label">Largest Meeting</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value" id="total-conferences">0</div>
-                    <div class="stat-label">Total Created</div>
-                </div>
+        <!-- Container Status -->
+        <div class="card" id="containerCard">
+            <h3>Services</h3>
+            <div class="container-grid" id="containerGrid">
+                <!-- Filled by JS -->
             </div>
+        </div>
 
-            <div class="services-grid" id="services-grid"></div>
+        <!-- Tabs -->
+        <div class="tabs">
+            <div class="tab active" onclick="showTab('dashboard')">Dashboard</div>
+            <div class="tab" onclick="showTab('rooms')">Rooms</div>
+            <div class="tab" onclick="showTab('recordings')">Recordings</div>
+            <div class="tab" onclick="showTab('auth')">Auth</div>
+            <div class="tab" onclick="showTab('settings')">Settings</div>
+            <div class="tab" onclick="showTab('logs')">Logs</div>
+        </div>
 
-            <div class="action-bar">
-                <button class="btn primary" id="btn-start" onclick="startService()">Start</button>
-                <button class="btn" id="btn-stop" onclick="stopService()" disabled>Stop</button>
-                <button class="btn" id="btn-restart" onclick="restartService()" disabled>Restart</button>
-            </div>
-
+        <!-- Dashboard Tab -->
+        <div id="tab-dashboard" class="tab-content active">
             <div class="quick-join">
-                <h3 style="margin-top: 0;">Quick Join</h3>
-                <input type="text" id="room-name" placeholder="Enter room name...">
-                <button class="btn primary" onclick="joinRoom()" style="width: 100%;">Join Meeting</button>
+                <h3>Quick Join</h3>
+                <input type="text" id="roomName" placeholder="Enter room name...">
+                <button class="btn btn-primary" onclick="joinRoom()" style="width: 100%;">Join Meeting</button>
             </div>
 
-            <div class="tabs">
-                <button class="tab active" data-tab="overview">Overview</button>
-                <button class="tab" data-tab="auth">Authentication</button>
-                <button class="tab" data-tab="logs">Logs</button>
-                <button class="tab" data-tab="settings">Settings</button>
+            <div class="card">
+                <h3>Server Statistics</h3>
+                <div class="form-row">
+                    <div>
+                        <strong>Domain:</strong> <span id="infoDomain">-</span>
+                    </div>
+                    <div>
+                        <strong>URL:</strong> <a id="infoUrl" href="#" target="_blank">-</a>
+                    </div>
+                    <div>
+                        <strong>Disk Usage:</strong> <span id="infoDisk">-</span>
+                    </div>
+                    <div>
+                        <strong>Total Created:</strong> <span id="infoTotalConferences">0</span>
+                    </div>
+                </div>
             </div>
+        </div>
 
-            <div id="tab-overview" class="tab-content active">
-                <div class="info-grid" style="display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
-                    <div class="info-card" style="background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem;">
-                        <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Domain</div>
-                        <div style="font-size: 1.25rem; font-weight: 500; margin-top: 0.25rem;" id="jitsi-domain">-</div>
+        <!-- Rooms Tab -->
+        <div id="tab-rooms" class="tab-content">
+            <div class="card">
+                <h3>Active Rooms</h3>
+                <p style="color: var(--text-dim); margin-bottom: 1rem;">
+                    Real-time room list requires Prosody admin module. Stats show aggregate data.
+                </p>
+                <div class="form-row">
+                    <div>
+                        <strong>Active Meetings:</strong> <span id="roomsActive">0</span>
                     </div>
-                    <div class="info-card" style="background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem;">
-                        <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Container IP</div>
-                        <div style="font-size: 1.25rem; font-weight: 500; margin-top: 0.25rem;" id="container-ip">-</div>
+                    <div>
+                        <strong>Total Participants:</strong> <span id="roomsParticipants">0</span>
                     </div>
-                    <div class="info-card" style="background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem;">
-                        <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Disk Usage</div>
-                        <div style="font-size: 1.25rem; font-weight: 500; margin-top: 0.25rem;" id="disk-usage">-</div>
+                    <div>
+                        <strong>Largest Meeting:</strong> <span id="roomsLargest">0</span>
                     </div>
                 </div>
             </div>
 
-            <div id="tab-auth" class="tab-content">
-                <p style="margin-bottom: 1rem;">Enable authentication to require login for meeting moderators.</p>
-                <div class="action-bar">
-                    <button class="btn primary" onclick="enableAuth()">Enable Authentication</button>
+            <div class="card">
+                <h3>Create Room Link</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Room Name</label>
+                        <input type="text" id="createRoomName" placeholder="team-meeting">
+                    </div>
+                    <div class="form-group" style="display: flex; align-items: flex-end;">
+                        <button class="btn btn-primary" onclick="createRoomLink()">Generate Link</button>
+                    </div>
                 </div>
-                <h4>Create Moderator User</h4>
-                <form class="settings-form" onsubmit="createUser(event)">
+                <div id="roomLinkResult" style="margin-top: 1rem; display: none;">
+                    <strong>Meeting Link:</strong><br>
+                    <code id="roomLinkUrl" style="word-break: break-all;"></code>
+                    <button class="btn btn-sm" onclick="copyRoomLink()" style="margin-left: 0.5rem;">Copy</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recordings Tab -->
+        <div id="tab-recordings" class="tab-content">
+            <div class="card">
+                <h3>Jibri Recording Service</h3>
+                <div id="jibriStatus" style="margin-bottom: 1rem;">Loading...</div>
+                <div class="header-actions">
+                    <button class="btn btn-success" id="btnEnableJibri" onclick="enableJibri()">Enable Jibri</button>
+                    <button class="btn btn-danger" id="btnDisableJibri" onclick="disableJibri()" style="display: none;">Disable Jibri</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Recordings</h3>
+                <div id="recordingsList">Loading...</div>
+            </div>
+        </div>
+
+        <!-- Auth Tab -->
+        <div id="tab-auth" class="tab-content">
+            <div class="card">
+                <h3>Authentication Settings</h3>
+                <p style="color: var(--text-dim); margin-bottom: 1rem;">
+                    Configure authentication to require login for meeting moderators.
+                </p>
+                <form id="authForm" onsubmit="saveAuthConfig(event)">
                     <div class="form-group">
-                        <label>Username</label>
-                        <input type="text" id="auth-username" required>
+                        <label>Authentication Type</label>
+                        <select id="authType">
+                            <option value="none">None (Anonymous)</option>
+                            <option value="internal">Internal (Prosody)</option>
+                            <option value="jwt">JWT Token</option>
+                            <option value="ldap">LDAP</option>
+                        </select>
+                    </div>
+
+                    <div id="jwtConfig" style="display: none;">
+                        <div class="form-group">
+                            <label>JWT App ID</label>
+                            <input type="text" id="jwtAppId" value="secubox">
+                        </div>
+                        <div class="form-group">
+                            <label>JWT Secret</label>
+                            <input type="password" id="jwtSecret" placeholder="Enter secret key">
+                        </div>
+                    </div>
+
+                    <div id="ldapConfig" style="display: none;">
+                        <div class="form-group">
+                            <label>LDAP URL</label>
+                            <input type="text" id="ldapUrl" placeholder="ldap://ldap.example.com">
+                        </div>
+                        <div class="form-group">
+                            <label>LDAP Base DN</label>
+                            <input type="text" id="ldapBase" placeholder="ou=users,dc=example,dc=com">
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">Save Authentication</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Settings Tab -->
+        <div id="tab-settings" class="tab-content">
+            <div class="card">
+                <h3>Jitsi Configuration</h3>
+                <form id="settingsForm" onsubmit="saveSettings(event)">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Domain</label>
+                            <input type="text" id="cfgDomain" value="meet.secubox.local">
+                        </div>
+                        <div class="form-group">
+                            <label>Public URL</label>
+                            <input type="text" id="cfgPublicUrl" value="https://meet.secubox.local">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>HTTP Port</label>
+                            <input type="number" id="cfgHttpPort" value="8443">
+                        </div>
+                        <div class="form-group">
+                            <label>HTTPS Port</label>
+                            <input type="number" id="cfgHttpsPort" value="443">
+                        </div>
+                        <div class="form-group">
+                            <label>JVB Port (UDP)</label>
+                            <input type="number" id="cfgJvbPort" value="10000">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Timezone</label>
+                            <select id="cfgTimezone">
+                                <option value="Europe/Paris">Europe/Paris</option>
+                                <option value="Europe/London">Europe/London</option>
+                                <option value="America/New_York">America/New_York</option>
+                                <option value="America/Los_Angeles">America/Los_Angeles</option>
+                                <option value="Asia/Tokyo">Asia/Tokyo</option>
+                                <option value="UTC">UTC</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Max Participants</label>
+                            <input type="number" id="cfgMaxParticipants" value="100" min="2" max="500">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="cfgLobby" checked> Enable Lobby
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="cfgBreakout" checked> Enable Breakout Rooms
+                            </label>
+                        </div>
                     </div>
                     <div class="form-group">
-                        <label>Password</label>
-                        <input type="password" id="auth-password" minlength="8" required>
+                        <label>Welcome Message</label>
+                        <input type="text" id="cfgWelcome" value="Welcome to SecuBox Meeting">
                     </div>
-                    <button type="submit" class="btn primary">Create User</button>
+                    <button type="submit" class="btn btn-primary">Save Settings</button>
                 </form>
             </div>
 
-            <div id="tab-logs" class="tab-content">
-                <div class="action-bar">
-                    <select id="log-service">
-                        <option value="jicofo">Jicofo</option>
+            <div class="card">
+                <h3>Maintenance</h3>
+                <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                    <button class="btn" onclick="restartJitsi()">Restart All Services</button>
+                    <button class="btn btn-danger" onclick="uninstallJitsi()">Uninstall</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Logs Tab -->
+        <div id="tab-logs" class="tab-content">
+            <div class="card">
+                <h3>Container Logs</h3>
+                <div style="margin-bottom: 1rem; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                    <label>Service:</label>
+                    <select id="logService">
+                        <option value="web">Web</option>
                         <option value="prosody">Prosody</option>
-                        <option value="jitsi-videobridge2">JVB</option>
-                        <option value="nginx">Nginx</option>
+                        <option value="jicofo">Jicofo</option>
+                        <option value="jvb">JVB</option>
+                        <option value="jibri">Jibri</option>
+                    </select>
+                    <label>Lines:</label>
+                    <select id="logLines">
+                        <option value="50">50</option>
+                        <option value="100" selected>100</option>
+                        <option value="200">200</option>
                     </select>
                     <button class="btn" onclick="loadLogs()">Refresh</button>
                 </div>
-                <div id="log-viewer" class="log-viewer">Select a service and click Refresh</div>
-            </div>
-
-            <div id="tab-settings" class="tab-content">
-                <h4>SSL Certificate</h4>
-                <form class="settings-form" onsubmit="setupSSL(event)">
-                    <div class="form-group">
-                        <label>Email (for Let's Encrypt)</label>
-                        <input type="email" id="ssl-email" required>
-                    </div>
-                    <button type="submit" class="btn primary">Setup Let's Encrypt</button>
-                </form>
+                <div class="logs-container" id="logsContainer">Select a service and click Refresh</div>
             </div>
         </div>
-    </div>
-
-    <button id="open-app-btn" class="open-app-btn hidden" onclick="openJitsi()">
-        Open Jitsi Meet
-    </button>
     </main>
 
     <script>
-        const API_BASE = '/api/v1/jitsi';
-        let containerIP = null;
+        const API = '/api/v1/jitsi';
+        let isRunning = false;
+        let jitsiDomain = '';
+        let publicUrl = '';
 
-        async function apiCall(endpoint, options = {}) {
-            const token = localStorage.getItem('sbx_token');
-            const response = await fetch(API_BASE + endpoint, {
-                ...options,
-                headers: {
-                    'Authorization': 'Bearer ' + token,
-                    'Content-Type': 'application/json',
-                    ...options.headers
-                }
-            });
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            return response.json();
+        function getToken() {
+            return localStorage.getItem('jwt_token') || localStorage.getItem('token') || localStorage.getItem('sbx_token') || '';
         }
 
-        async function loadStatus() {
-            try {
-                const data = await apiCall('/status');
-                const badge = document.getElementById('status-badge');
-                const btnStart = document.getElementById('btn-start');
-                const btnStop = document.getElementById('btn-stop');
-                const btnRestart = document.getElementById('btn-restart');
-                const openBtn = document.getElementById('open-app-btn');
+        async function api(endpoint, options = {}) {
+            const token = getToken();
+            const headers = { 'Content-Type': 'application/json', ...options.headers };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+            const res = await fetch(API + endpoint, { ...options, headers, credentials: 'include' });
+            if (res.status === 401) {
+                window.location.href = '/portal/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+                throw new Error('Unauthorized');
+            }
+            return res.json();
+        }
 
-                if (!data.container_exists) {
-                    document.getElementById('install-section').classList.remove('hidden');
-                    document.getElementById('main-section').classList.add('hidden');
-                    badge.textContent = 'Not Installed';
-                    badge.className = 'status-badge stopped';
+        function showTab(name) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            const tabs = ['dashboard', 'rooms', 'recordings', 'auth', 'settings', 'logs'];
+            const idx = tabs.indexOf(name);
+            document.querySelector(`.tab:nth-child(${idx + 1})`).classList.add('active');
+            document.getElementById('tab-' + name).classList.add('active');
+            if (name === 'logs') loadLogs();
+            if (name === 'recordings') loadRecordings();
+            if (name === 'rooms') loadRooms();
+        }
+
+        function toast(msg, type = 'success') {
+            const t = document.createElement('div');
+            t.className = 'toast toast-' + type;
+            t.textContent = msg;
+            document.body.appendChild(t);
+            setTimeout(() => t.remove(), 3000);
+        }
+
+        async function refresh() {
+            try {
+                const status = await api('/status');
+                isRunning = status.running;
+                jitsiDomain = status.domain;
+                publicUrl = status.public_url;
+
+                // Show/hide install banner
+                const notInstalled = Object.values(status.containers || {}).every(c => c.status === 'not_installed');
+                document.getElementById('installBanner').style.display = notInstalled ? 'block' : 'none';
+
+                // Update stats
+                const statEl = document.getElementById('statStatus');
+                statEl.querySelector('.value').textContent = isRunning ? 'Running' : 'Stopped';
+                statEl.className = 'stat-card ' + (isRunning ? 'running' : 'stopped');
+
+                document.getElementById('statConferences').textContent = status.active_conferences || 0;
+                document.getElementById('statParticipants').textContent = status.active_participants || 0;
+                document.getElementById('statRecordings').textContent = status.recording_count || 0;
+
+                // Update container grid
+                const grid = document.getElementById('containerGrid');
+                const containers = status.containers || {};
+                grid.innerHTML = Object.entries(containers).map(([name, info]) => `
+                    <div class="container-badge">
+                        <span class="status-dot ${info.status}"></span>
+                        <span>${name}</span>
+                    </div>
+                `).join('');
+
+                // Update toggle button
+                const btn = document.getElementById('btnToggle');
+                if (notInstalled) {
+                    btn.textContent = 'Install';
+                    btn.className = 'btn btn-primary';
+                    btn.onclick = installJitsi;
+                } else if (isRunning) {
+                    btn.textContent = 'Stop';
+                    btn.className = 'btn btn-danger';
+                    btn.onclick = () => toggleService();
+                } else {
+                    btn.textContent = 'Start';
+                    btn.className = 'btn btn-success';
+                    btn.onclick = () => toggleService();
+                }
+
+                // Open Jitsi link
+                const openLink = document.getElementById('openJitsi');
+                if (isRunning && publicUrl) {
+                    openLink.style.display = 'inline-flex';
+                    openLink.href = publicUrl;
+                } else {
+                    openLink.style.display = 'none';
+                }
+
+                // Update info
+                document.getElementById('infoDomain').textContent = status.domain || '-';
+                const urlEl = document.getElementById('infoUrl');
+                urlEl.textContent = status.public_url || '-';
+                urlEl.href = status.public_url || '#';
+                document.getElementById('infoDisk').textContent = status.disk_usage || '-';
+                document.getElementById('infoTotalConferences').textContent = status.total_conferences_created || 0;
+
+                // Load settings
+                document.getElementById('cfgDomain').value = status.domain || 'meet.secubox.local';
+                document.getElementById('cfgPublicUrl').value = status.public_url || 'https://meet.secubox.local';
+                document.getElementById('cfgHttpPort').value = status.http_port || 8443;
+                document.getElementById('cfgHttpsPort').value = status.https_port || 443;
+                document.getElementById('cfgJvbPort').value = status.jvb_port || 10000;
+
+                // Load Jibri status
+                loadJibriStatus();
+
+            } catch (e) {
+                console.error(e);
+                toast('Failed to load status', 'error');
+            }
+        }
+
+        async function loadRooms() {
+            try {
+                const data = await api('/rooms');
+                document.getElementById('roomsActive').textContent = data.total_active || 0;
+                document.getElementById('roomsParticipants').textContent = data.total_participants || 0;
+                document.getElementById('roomsLargest').textContent = data.largest_conference || 0;
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function loadJibriStatus() {
+            try {
+                const data = await api('/jibri/status');
+                const statusEl = document.getElementById('jibriStatus');
+                const enableBtn = document.getElementById('btnEnableJibri');
+                const disableBtn = document.getElementById('btnDisableJibri');
+
+                if (data.enabled) {
+                    statusEl.innerHTML = `<span class="badge ${data.running ? 'badge-success' : 'badge-error'}">${data.running ? 'Running' : 'Stopped'}</span>`;
+                    enableBtn.style.display = 'none';
+                    disableBtn.style.display = 'inline-block';
+                } else {
+                    statusEl.innerHTML = '<span class="badge badge-warning">Not Enabled</span>';
+                    enableBtn.style.display = 'inline-block';
+                    disableBtn.style.display = 'none';
+                }
+            } catch (e) {
+                document.getElementById('jibriStatus').textContent = 'Error loading status';
+            }
+        }
+
+        async function loadRecordings() {
+            try {
+                const data = await api('/recordings');
+                const list = document.getElementById('recordingsList');
+
+                if (!data.recordings || data.recordings.length === 0) {
+                    list.innerHTML = '<p style="color: var(--text-dim);">No recordings available.</p>';
                     return;
                 }
 
-                document.getElementById('install-section').classList.add('hidden');
-                document.getElementById('main-section').classList.remove('hidden');
-
-                if (data.running) {
-                    badge.textContent = 'Running';
-                    badge.className = 'status-badge running';
-                    btnStart.disabled = true;
-                    btnStop.disabled = false;
-                    btnRestart.disabled = false;
-                    containerIP = data.container_ip;
-                    openBtn.classList.remove('hidden');
-
-                    // Update stats
-                    document.getElementById('active-conferences').textContent = data.active_conferences || 0;
-                    document.getElementById('active-participants').textContent = data.active_participants || 0;
-                } else {
-                    badge.textContent = 'Stopped';
-                    badge.className = 'status-badge stopped';
-                    btnStart.disabled = false;
-                    btnStop.disabled = true;
-                    btnRestart.disabled = true;
-                    openBtn.classList.add('hidden');
-                }
-
-                document.getElementById('jitsi-domain').textContent = data.domain || '-';
-                document.getElementById('container-ip').textContent = data.container_ip || '-';
-                document.getElementById('disk-usage').textContent = data.disk_usage || '-';
-
-                // Services
-                const servicesGrid = document.getElementById('services-grid');
-                if (data.services) {
-                    servicesGrid.innerHTML = Object.entries(data.services).map(([name, active]) => `
-                        <div class="service-badge">
-                            <span class="service-status ${active ? 'active' : 'inactive'}"></span>
-                            ${name}
+                list.innerHTML = data.recordings.map(r => `
+                    <div class="recording-item">
+                        <div class="recording-info">
+                            <div class="recording-name">${r.filename}</div>
+                            <div class="recording-meta">${r.size_human} - ${new Date(r.created).toLocaleString()}</div>
                         </div>
-                    `).join('');
+                        <div>
+                            <button class="btn btn-sm btn-danger" onclick="deleteRecording('${r.id}')">Delete</button>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) {
+                document.getElementById('recordingsList').innerHTML = '<p style="color: var(--error);">Error loading recordings</p>';
+            }
+        }
+
+        async function toggleService() {
+            const action = isRunning ? 'stop' : 'start';
+            try {
+                document.getElementById('btnToggle').disabled = true;
+                document.getElementById('btnToggle').innerHTML = '<span class="spinner"></span>';
+                const res = await api('/container/' + action, { method: 'POST' });
+                if (res.success) {
+                    toast(action === 'start' ? 'Jitsi started!' : 'Jitsi stopped!');
+                } else {
+                    toast(res.error || 'Action failed', 'error');
                 }
-
-                // Load conference stats
-                if (data.running) loadConferences();
+                await refresh();
             } catch (e) {
-                console.error('Status load failed:', e);
-            }
-        }
-
-        async function loadConferences() {
-            try {
-                const data = await apiCall('/conferences');
-                document.getElementById('active-conferences').textContent = data.conferences || 0;
-                document.getElementById('active-participants').textContent = data.participants || 0;
-                document.getElementById('largest-conference').textContent = data.largest_conference || 0;
-                document.getElementById('total-conferences').textContent = data.total_conferences_created || 0;
-            } catch (e) {
-                console.error('Conferences load failed:', e);
-            }
-        }
-
-        async function installJitsi(e) {
-            e.preventDefault();
-            const domain = document.getElementById('install-domain').value;
-            if (!domain) return;
-
-            const btn = e.target.querySelector('button');
-            btn.disabled = true;
-            btn.textContent = 'Installing... (this takes several minutes)';
-
-            try {
-                await apiCall(`/install?domain=${encodeURIComponent(domain)}`, { method: 'POST' });
-                await loadStatus();
-            } catch (err) {
-                alert('Installation failed: ' + err.message);
+                toast('Action failed: ' + e.message, 'error');
             } finally {
-                btn.disabled = false;
-                btn.textContent = 'Install Jitsi';
+                document.getElementById('btnToggle').disabled = false;
             }
         }
 
-        async function startService() {
-            document.getElementById('btn-start').disabled = true;
+        async function installJitsi() {
+            if (!confirm('Install Jitsi Meet? This will download Docker images (~2GB).')) return;
+            toast('Installing Jitsi... This may take several minutes.');
             try {
-                await apiCall('/start', { method: 'POST' });
-                await loadStatus();
+                const res = await api('/container/install', { method: 'POST' });
+                if (res.success) {
+                    toast('Jitsi installed! Starting...');
+                    await api('/container/start', { method: 'POST' });
+                    await refresh();
+                } else {
+                    toast(res.error || 'Install failed', 'error');
+                }
             } catch (e) {
-                alert('Failed: ' + e.message);
+                toast('Install failed: ' + e.message, 'error');
             }
         }
 
-        async function stopService() {
-            document.getElementById('btn-stop').disabled = true;
+        async function restartJitsi() {
+            if (!confirm('Restart all Jitsi services?')) return;
+            toast('Restarting...');
             try {
-                await apiCall('/stop', { method: 'POST' });
-                await loadStatus();
+                const res = await api('/container/restart', { method: 'POST' });
+                if (res.success) {
+                    toast('Jitsi restarted');
+                    await refresh();
+                } else {
+                    toast(res.error || 'Restart failed', 'error');
+                }
             } catch (e) {
-                alert('Failed: ' + e.message);
+                toast('Failed: ' + e.message, 'error');
             }
         }
 
-        async function restartService() {
-            document.getElementById('btn-restart').disabled = true;
+        async function uninstallJitsi() {
+            if (!confirm('Uninstall Jitsi? This will remove containers (data is preserved).')) return;
             try {
-                await apiCall('/restart', { method: 'POST' });
-                await loadStatus();
+                const res = await api('/container/uninstall', { method: 'POST' });
+                if (res.success) {
+                    toast('Jitsi uninstalled');
+                    await refresh();
+                } else {
+                    toast(res.error || 'Uninstall failed', 'error');
+                }
             } catch (e) {
-                alert('Failed: ' + e.message);
+                toast('Failed: ' + e.message, 'error');
             }
         }
 
         function joinRoom() {
-            const roomName = document.getElementById('room-name').value.trim();
-            if (!roomName) {
-                alert('Enter a room name');
-                return;
-            }
-            if (containerIP) {
-                window.open(`https://${containerIP}/${roomName}`, '_blank');
-            }
+            const roomName = document.getElementById('roomName').value.trim();
+            if (!roomName) return toast('Enter a room name', 'error');
+            const url = publicUrl ? `${publicUrl}/${roomName}` : `https://${jitsiDomain}/${roomName}`;
+            window.open(url, '_blank');
         }
 
-        async function enableAuth() {
-            if (!confirm('Enable authentication? This will require users to log in as moderators.')) return;
+        function createRoomLink() {
+            const name = document.getElementById('createRoomName').value.trim();
+            if (!name) return toast('Enter a room name', 'error');
+            const url = publicUrl ? `${publicUrl}/${name}` : `https://${jitsiDomain}/${name}`;
+            document.getElementById('roomLinkUrl').textContent = url;
+            document.getElementById('roomLinkResult').style.display = 'block';
+        }
+
+        function copyRoomLink() {
+            const url = document.getElementById('roomLinkUrl').textContent;
+            navigator.clipboard.writeText(url);
+            toast('Link copied!');
+        }
+
+        async function enableJibri() {
+            if (!confirm('Enable Jibri recording service? This requires additional resources.')) return;
             try {
-                await apiCall('/auth/enable', { method: 'POST' });
-                alert('Authentication enabled');
+                const res = await api('/jibri/enable', { method: 'POST' });
+                if (res.success) {
+                    toast('Jibri enabled. Restart Jitsi to apply.');
+                } else {
+                    toast(res.error || 'Failed', 'error');
+                }
+                await loadJibriStatus();
             } catch (e) {
-                alert('Failed: ' + e.message);
+                toast('Failed: ' + e.message, 'error');
             }
         }
 
-        async function createUser(e) {
-            e.preventDefault();
-            const username = document.getElementById('auth-username').value;
-            const password = document.getElementById('auth-password').value;
+        async function disableJibri() {
+            if (!confirm('Disable Jibri recording service?')) return;
             try {
-                const result = await apiCall(`/auth/users?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`, { method: 'POST' });
-                alert(`User created: ${result.username}`);
-                e.target.reset();
-            } catch (err) {
-                alert('Failed: ' + err.message);
+                const res = await api('/jibri/disable', { method: 'POST' });
+                if (res.success) {
+                    toast('Jibri disabled');
+                } else {
+                    toast(res.error || 'Failed', 'error');
+                }
+                await loadJibriStatus();
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function deleteRecording(id) {
+            if (!confirm('Delete this recording?')) return;
+            try {
+                const res = await api('/recording/' + id, { method: 'DELETE' });
+                if (res.success) {
+                    toast('Recording deleted');
+                    await loadRecordings();
+                } else {
+                    toast(res.error || 'Delete failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        // Auth type toggle
+        document.getElementById('authType').addEventListener('change', function() {
+            document.getElementById('jwtConfig').style.display = this.value === 'jwt' ? 'block' : 'none';
+            document.getElementById('ldapConfig').style.display = this.value === 'ldap' ? 'block' : 'none';
+        });
+
+        async function saveAuthConfig(e) {
+            e.preventDefault();
+            const authType = document.getElementById('authType').value;
+            const body = { auth_type: authType };
+
+            if (authType === 'jwt') {
+                body.jwt_app_id = document.getElementById('jwtAppId').value;
+                body.jwt_secret = document.getElementById('jwtSecret').value;
+            } else if (authType === 'ldap') {
+                body.ldap_url = document.getElementById('ldapUrl').value;
+                body.ldap_base = document.getElementById('ldapBase').value;
+            }
+
+            try {
+                const res = await api('/auth/config', {
+                    method: 'POST',
+                    body: JSON.stringify(body)
+                });
+                if (res.success) {
+                    toast('Auth config saved. Restart to apply.');
+                } else {
+                    toast('Save failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function saveSettings(e) {
+            e.preventDefault();
+            try {
+                const res = await api('/config', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        domain: document.getElementById('cfgDomain').value,
+                        public_url: document.getElementById('cfgPublicUrl').value,
+                        http_port: parseInt(document.getElementById('cfgHttpPort').value),
+                        https_port: parseInt(document.getElementById('cfgHttpsPort').value),
+                        timezone: document.getElementById('cfgTimezone').value,
+                        max_participants: parseInt(document.getElementById('cfgMaxParticipants').value),
+                        enable_lobby: document.getElementById('cfgLobby').checked,
+                        enable_breakout_rooms: document.getElementById('cfgBreakout').checked,
+                        welcome_message: document.getElementById('cfgWelcome').value,
+                    })
+                });
+                if (res.success) {
+                    toast('Settings saved! Restart to apply.');
+                } else {
+                    toast('Save failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
             }
         }
 
         async function loadLogs() {
-            const service = document.getElementById('log-service').value;
+            const service = document.getElementById('logService').value;
+            const lines = document.getElementById('logLines').value;
             try {
-                const data = await apiCall(`/logs?service=${service}&lines=200`);
-                document.getElementById('log-viewer').textContent = data.logs?.join('\n') || 'No logs';
+                const data = await api(`/logs?service=${service}&lines=${lines}`);
+                document.getElementById('logsContainer').textContent = data.logs || 'No logs available';
             } catch (e) {
-                document.getElementById('log-viewer').textContent = 'Error: ' + e.message;
+                document.getElementById('logsContainer').textContent = 'Error loading logs';
             }
         }
 
-        async function setupSSL(e) {
-            e.preventDefault();
-            const email = document.getElementById('ssl-email').value;
-            try {
-                await apiCall(`/ssl/letsencrypt?email=${encodeURIComponent(email)}`, { method: 'POST' });
-                alert('SSL certificate installed');
-            } catch (err) {
-                alert('Failed: ' + err.message);
-            }
-        }
-
-        function openJitsi() {
-            if (containerIP) window.open(`https://${containerIP}/`, '_blank');
-        }
-
-        document.querySelectorAll('.tab').forEach(tab => {
-            tab.addEventListener('click', () => {
-                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-                tab.classList.add('active');
-                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
-                if (tab.dataset.tab === 'logs') loadLogs();
-            });
-        });
-
-        if (window.matchMedia?.('(prefers-color-scheme: dark)').matches) {
-            document.body.classList.add('dark');
-        }
-
-        loadStatus();
-        setInterval(loadStatus, 30000);
+        // Initialize
+        refresh();
+        setInterval(refresh, 30000);
     </script>
-    <script src="/shared/sidebar.js"></script>
 </body>
 </html>

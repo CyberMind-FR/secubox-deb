@@ -1,9 +1,9 @@
-secubox-homeassistant (1.0.0-1) bookworm; urgency=medium
+secubox-homeassistant (1.0.0-1~bookworm1) bookworm; urgency=medium
 
-  * Initial release for SecuBox Debian
-  * FastAPI backend with LXC container management
-  * Theme-aware CRT-light frontend
-  * USB device passthrough support
-  * HACS installation support
+  * Initial release.
+  * FastAPI backend with 25+ endpoints
+  * Features: Docker/Podman/LXC management, entity control, automations
+  * Scene management, HACS support, backup/restore
+  * CRT-light P31 phosphor theme with Home Assistant blue accents
 
- -- SecuBox Team <team@secubox.in>  Sat, 28 Mar 2026 10:00:00 +0000
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Apr 2026 10:00:00 +0200

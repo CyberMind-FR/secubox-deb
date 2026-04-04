@@ -3,193 +3,987 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GoToSocial - SecuBox</title>
+    <title>SecuBox - GoToSocial Fediverse Server</title>
+    <link rel="stylesheet" href="/shared/sidebar.css">
     <link rel="stylesheet" href="/shared/crt-light.css">
-    <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
-        :root { --gts-purple: #6364ff; --gts-light: #8b8cff; --gts-dark: #4a4bcc; }
-        body.dark { --gts-purple: #8b8cff; --gts-light: #b0b1ff; --gts-dark: #6364ff; }
-        .accent { color: var(--gts-purple); }
-        .accent-bg { background-color: var(--gts-purple); }
-        .header { display: flex; justify-content: space-between; align-items: center; padding: 1rem; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
-        .header h1 { margin: 0; font-size: 1.5rem; }
-        .status-badge { padding: 0.25rem 0.75rem; border-radius: 1rem; font-size: 0.875rem; }
-        .status-badge.running { background: var(--success-bg); color: var(--success); }
-        .status-badge.stopped { background: var(--error-bg); color: var(--error); }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem; text-align: center; }
-        .stat-value { font-size: 2rem; font-weight: bold; color: var(--gts-purple); }
-        .stat-label { font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; }
-        .action-bar { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
-        .btn { padding: 0.5rem 1rem; border: 1px solid var(--border); border-radius: 0.25rem; background: var(--surface); color: var(--text); cursor: pointer; font-size: 0.875rem; }
-        .btn:hover { background: var(--hover); }
-        .btn.primary { background: var(--gts-purple); color: white; border-color: var(--gts-purple); }
-        .btn.primary:hover { background: var(--gts-dark); }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .tabs { display: flex; gap: 0.5rem; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
-        .tab { padding: 0.75rem 1rem; border: none; background: none; color: var(--text-secondary); cursor: pointer; border-bottom: 2px solid transparent; }
-        .tab:hover { color: var(--text); }
-        .tab.active { color: var(--gts-purple); border-bottom-color: var(--gts-purple); }
+        :root {
+            --p31-peak: #00dd44;
+            --p31-dim: #006622;
+            --p31-glow: rgba(0, 221, 68, 0.15);
+            --tube-light: #f8f9fa;
+            --tube-mid: #e9ecef;
+            --tube-dark: #dee2e6;
+            --text-primary: #212529;
+            --text-secondary: #495057;
+            --text-dim: #6c757d;
+            --surface: #ffffff;
+            --surface-alt: #f8f9fa;
+            --border: #dee2e6;
+            --error: #dc3545;
+            --warning: #fd7e14;
+            --success: #198754;
+            --gotosocial: #f97316;
+            --gotosocial-dark: #ea580c;
+            --gotosocial-light: #fb923c;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            background: linear-gradient(135deg, var(--tube-light) 0%, var(--tube-mid) 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+        }
+        body.crt-light { background: linear-gradient(135deg, var(--tube-light) 0%, var(--tube-mid) 100%); }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; max-width: calc(100% - 220px); }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid var(--gotosocial);
+        }
+        .header h1 { font-size: 1.5rem; color: var(--gotosocial); display: flex; align-items: center; gap: 0.5rem; }
+        .header h1 .fedi-icon { font-size: 1.75rem; }
+        .header-actions { display: flex; gap: 0.5rem; align-items: center; }
+
+        /* Stats Row */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(249, 115, 22, 0.1);
+        }
+        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
+        .stat-card .value { font-size: 1.25rem; font-weight: bold; color: var(--gotosocial); margin-top: 0.25rem; }
+        .stat-card.running .value { color: var(--success); }
+        .stat-card.stopped .value { color: var(--error); }
+
+        /* Tabs */
+        .tabs { display: flex; gap: 0; margin-bottom: 1.5rem; border-bottom: 2px solid var(--border); flex-wrap: wrap; }
+        .tab {
+            padding: 0.6rem 1rem;
+            cursor: pointer;
+            border: 1px solid transparent;
+            border-bottom: none;
+            border-radius: 8px 8px 0 0;
+            background: transparent;
+            color: var(--text-secondary);
+            font-weight: 500;
+            font-size: 0.875rem;
+            transition: all 0.2s;
+        }
+        .tab:hover { background: var(--surface-alt); }
+        .tab.active {
+            background: var(--surface);
+            border-color: var(--border);
+            color: var(--gotosocial);
+            margin-bottom: -2px;
+            border-bottom: 2px solid var(--surface);
+        }
+
         .tab-content { display: none; }
         .tab-content.active { display: block; }
-        .list-item { display: flex; align-items: center; gap: 1rem; padding: 0.75rem; background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; margin-bottom: 0.5rem; }
-        .item-icon { font-size: 1.5rem; }
-        .item-info { flex: 1; }
-        .item-name { font-weight: 500; }
-        .item-meta { font-size: 0.875rem; color: var(--text-secondary); }
-        .log-viewer { background: var(--bg-dark, #1a1a2e); color: var(--text-light, #e0e0e0); font-family: monospace; font-size: 0.75rem; padding: 1rem; border-radius: 0.5rem; height: 400px; overflow-y: auto; white-space: pre-wrap; }
-        .settings-form { display: grid; gap: 1rem; max-width: 500px; }
-        .form-group label { display: block; margin-bottom: 0.25rem; font-weight: 500; }
-        .form-group input, .form-group select { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 0.25rem; background: var(--surface); color: var(--text); }
-        .checkbox-group { display: flex; align-items: center; gap: 0.5rem; }
-        .checkbox-group input { width: auto; }
-        .open-app-btn { position: fixed; bottom: 1rem; right: 1rem; padding: 1rem 1.5rem; background: var(--gts-purple); color: white; border: none; border-radius: 2rem; cursor: pointer; font-size: 1rem; box-shadow: 0 4px 12px rgba(99, 100, 255, 0.4); }
-        .open-app-btn:hover { background: var(--gts-dark); }
-        .hidden { display: none !important; }
-        .install-form { max-width: 400px; margin: 2rem auto; padding: 2rem; background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; }
-        .install-form h2 { margin-top: 0; text-align: center; }
+
+        /* Cards */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 2px 8px rgba(249, 115, 22, 0.08);
+        }
+        .card h3 {
+            font-size: 1rem;
+            color: var(--gotosocial);
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            border: 1px solid var(--gotosocial);
+            background: var(--surface);
+            color: var(--gotosocial);
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 0.875rem;
+            transition: all 0.2s;
+        }
+        .btn:hover { background: var(--gotosocial); color: white; }
+        .btn-primary { background: var(--gotosocial); color: white; }
+        .btn-primary:hover { background: var(--gotosocial-dark); }
+        .btn-danger { border-color: var(--error); color: var(--error); }
+        .btn-danger:hover { background: var(--error); color: white; }
+        .btn-success { border-color: var(--success); color: var(--success); }
+        .btn-success:hover { background: var(--success); color: white; }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.8rem; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+        th { color: var(--text-dim); font-weight: 500; font-size: 0.75rem; text-transform: uppercase; }
+        tr:hover { background: var(--surface-alt); }
+
+        /* Forms */
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.25rem; color: var(--text-secondary); font-size: 0.875rem; }
+        input, select, textarea {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: white;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 0.875rem;
+        }
+        input:focus, select:focus, textarea:focus { outline: none; border-color: var(--gotosocial); box-shadow: 0 0 5px rgba(249, 115, 22, 0.3); }
+        .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
+
+        /* Badges */
+        .badge {
+            display: inline-block;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 500;
+        }
+        .badge-success { background: #d1fae5; color: #065f46; }
+        .badge-error { background: #fee2e2; color: #991b1b; }
+        .badge-warning { background: #fef3c7; color: #92400e; }
+        .badge-info { background: #e0f2fe; color: #0369a1; }
+        .badge-admin { background: #fef3c7; color: #92400e; }
+        .badge-suspended { background: #fee2e2; color: #991b1b; }
+
+        /* Install Banner */
+        .install-banner {
+            background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+            border: 2px solid var(--gotosocial);
+            border-radius: 12px;
+            padding: 2rem;
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+        .install-banner h2 { color: var(--gotosocial); margin-bottom: 0.5rem; }
+        .install-banner p { color: var(--text-secondary); margin-bottom: 1.5rem; }
+
+        /* Logs */
+        .logs-container {
+            background: #1a1a1a;
+            color: var(--gotosocial-light);
+            padding: 1rem;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 0.75rem;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 1rem;
+            right: 1rem;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            color: white;
+            z-index: 1000;
+            animation: slideIn 0.3s ease;
+        }
+        .toast-success { background: var(--success); }
+        .toast-error { background: var(--error); }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        .spinner {
+            display: inline-block;
+            width: 1rem;
+            height: 1rem;
+            border: 2px solid var(--border);
+            border-top-color: var(--gotosocial);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .modal {
+            background: var(--surface);
+            border-radius: 12px;
+            padding: 1.5rem;
+            min-width: 400px;
+            max-width: 90vw;
+        }
+        .modal h3 { margin-bottom: 1rem; color: var(--gotosocial); }
+        .modal-actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem; }
+
+        /* Emoji grid */
+        .emoji-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            gap: 0.5rem;
+        }
+        .emoji-item {
+            background: var(--surface-alt);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.5rem;
+            text-align: center;
+            font-size: 0.75rem;
+        }
+        .emoji-item img { width: 32px; height: 32px; margin-bottom: 0.25rem; }
+
+        @media (max-width: 768px) {
+            .main { margin-left: 0; max-width: 100%; padding: 1rem; }
+            .stats-row { grid-template-columns: repeat(2, 1fr); }
+            .tabs { overflow-x: auto; }
+        }
     </style>
 </head>
 <body class="crt-light">
     <nav class="sidebar" id="sidebar"></nav>
-    <main class="main-content">
-    <div class="container">
-        <div class="header">
-            <h1><span class="accent">GoToSocial</span></h1>
-            <span id="status-badge" class="status-badge stopped">Stopped</span>
+    <script src="/shared/sidebar.js"></script>
+
+    <main class="main">
+        <header class="header">
+            <h1><span class="fedi-icon">&#128232;</span> GoToSocial</h1>
+            <div class="header-actions">
+                <a id="openGTS" href="#" target="_blank" class="btn" style="display: none;">Open Instance</a>
+                <button class="btn" onclick="refresh()">Refresh</button>
+                <button class="btn btn-primary" id="btnToggle" onclick="toggleService()">Start</button>
+            </div>
+        </header>
+
+        <!-- Install Banner -->
+        <div id="installBanner" class="install-banner" style="display: none;">
+            <h2>Welcome to GoToSocial</h2>
+            <p>An ActivityPub social network server. Federate with the entire Fediverse.</p>
+            <button class="btn btn-primary" onclick="installGTS()">Install GoToSocial</button>
         </div>
 
-        <div id="install-section" class="install-form hidden">
-            <h2>Install GoToSocial</h2>
-            <form onsubmit="install(event)">
-                <div class="form-group">
-                    <label>Domain</label>
-                    <input type="text" id="install-domain" placeholder="social.example.com" required>
-                </div>
-                <button type="submit" class="btn primary" style="width: 100%; margin-top: 1rem;">Install</button>
-            </form>
+        <!-- Stats Row -->
+        <div class="stats-row">
+            <div class="stat-card" id="statStatus">
+                <div class="label">Status</div>
+                <div class="value">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Runtime</div>
+                <div class="value" id="statRuntime">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Users</div>
+                <div class="value" id="statUsers">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Disk Usage</div>
+                <div class="value" id="statDisk">-</div>
+            </div>
         </div>
 
-        <div id="main-section" class="hidden">
-            <div class="stats-grid">
-                <div class="stat-card"><div class="stat-value" id="users-count">0</div><div class="stat-label">Users</div></div>
-                <div class="stat-card"><div class="stat-value" id="statuses-count">0</div><div class="stat-label">Posts</div></div>
-                <div class="stat-card"><div class="stat-value" id="disk-usage">-</div><div class="stat-label">Storage</div></div>
-            </div>
+        <!-- Tabs -->
+        <div class="tabs">
+            <div class="tab active" onclick="showTab('instance')">Instance</div>
+            <div class="tab" onclick="showTab('accounts')">Accounts</div>
+            <div class="tab" onclick="showTab('federation')">Federation</div>
+            <div class="tab" onclick="showTab('media')">Media</div>
+            <div class="tab" onclick="showTab('moderation')">Moderation</div>
+            <div class="tab" onclick="showTab('emojis')">Emojis</div>
+            <div class="tab" onclick="showTab('logs')">Logs</div>
+        </div>
 
-            <div class="action-bar">
-                <button class="btn primary" id="btn-start" onclick="startService()">Start</button>
-                <button class="btn" id="btn-stop" onclick="stopService()" disabled>Stop</button>
-                <button class="btn" id="btn-restart" onclick="restartService()" disabled>Restart</button>
-                <button class="btn" onclick="createBackup()">Backup</button>
-            </div>
-
-            <div class="tabs">
-                <button class="tab active" data-tab="users">Users</button>
-                <button class="tab" data-tab="federation">Federation</button>
-                <button class="tab" data-tab="logs">Logs</button>
-                <button class="tab" data-tab="settings">Settings</button>
-            </div>
-
-            <div id="tab-users" class="tab-content active">
-                <div class="action-bar"><button class="btn primary" onclick="showCreateUser()">Create User</button></div>
-                <div id="users-list"></div>
-            </div>
-
-            <div id="tab-federation" class="tab-content">
-                <h4>Domain Blocks</h4>
-                <div class="action-bar">
-                    <input type="text" id="block-domain" placeholder="domain.to.block" style="flex:1; padding: 0.5rem;">
-                    <button class="btn" onclick="addBlock()">Block Domain</button>
-                </div>
-                <div id="blocks-list"></div>
-            </div>
-
-            <div id="tab-logs" class="tab-content">
-                <div class="action-bar"><button class="btn" onclick="loadLogs()">Refresh</button></div>
-                <div id="log-viewer" class="log-viewer">Loading...</div>
-            </div>
-
-            <div id="tab-settings" class="tab-content">
-                <form class="settings-form" onsubmit="saveSettings(event)">
-                    <div class="form-group"><label>Instance Title</label><input type="text" id="setting-title"></div>
-                    <div class="form-group"><label>Description</label><input type="text" id="setting-desc"></div>
-                    <div class="form-group checkbox-group"><input type="checkbox" id="setting-registration"><label>Open Registration</label></div>
-                    <div class="form-group checkbox-group"><input type="checkbox" id="setting-approval"><label>Require Approval</label></div>
-                    <button type="submit" class="btn primary">Save</button>
+        <!-- Instance Tab -->
+        <div id="tab-instance" class="tab-content active">
+            <div class="card">
+                <h3>Instance Settings</h3>
+                <form id="instanceForm" onsubmit="saveInstance(event)">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Instance Title</label>
+                            <input type="text" id="instTitle" placeholder="My SecuBox Social">
+                        </div>
+                        <div class="form-group">
+                            <label>Domain</label>
+                            <input type="text" id="instDomain" placeholder="social.example.com" readonly>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Short Description</label>
+                        <input type="text" id="instDescShort" placeholder="A friendly Fediverse instance">
+                    </div>
+                    <div class="form-group">
+                        <label>Full Description</label>
+                        <textarea id="instDesc" rows="3" placeholder="Tell people about your instance..."></textarea>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Contact Email</label>
+                            <input type="email" id="instEmail" placeholder="admin@example.com">
+                        </div>
+                        <div class="form-group">
+                            <label>Contact Account</label>
+                            <input type="text" id="instAccount" placeholder="@admin">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label><input type="checkbox" id="instRegOpen"> Open Registration</label>
+                        </div>
+                        <div class="form-group">
+                            <label><input type="checkbox" id="instApproval" checked> Require Approval</label>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save Instance Settings</button>
                 </form>
             </div>
         </div>
-    </div>
-    <button id="open-app-btn" class="open-app-btn hidden" onclick="openApp()">Open GoToSocial</button>
+
+        <!-- Accounts Tab -->
+        <div id="tab-accounts" class="tab-content">
+            <div class="card">
+                <h3>User Accounts</h3>
+                <div style="margin-bottom: 1rem;">
+                    <button class="btn btn-primary" onclick="showCreateAccount()">Create Account</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Username</th>
+                            <th>Email</th>
+                            <th>Status</th>
+                            <th>Role</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="accountsTable">
+                        <tr><td colspan="5">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Federation Tab -->
+        <div id="tab-federation" class="tab-content">
+            <div class="card">
+                <h3>Domain Blocks</h3>
+                <div style="margin-bottom: 1rem; display: flex; gap: 0.5rem;">
+                    <input type="text" id="blockDomain" placeholder="domain.to.block" style="flex: 1;">
+                    <input type="text" id="blockComment" placeholder="Reason (optional)" style="flex: 1;">
+                    <button class="btn btn-danger" onclick="addDomainBlock()">Block Domain</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Domain</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="blockedTable">
+                        <tr><td colspan="2">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="card">
+                <h3>Domain Allowlist</h3>
+                <div style="margin-bottom: 1rem; display: flex; gap: 0.5rem;">
+                    <input type="text" id="allowDomain" placeholder="domain.to.allow" style="flex: 1;">
+                    <button class="btn btn-success" onclick="addDomainAllow()">Allow Domain</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Domain</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="allowedTable">
+                        <tr><td colspan="2">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Media Tab -->
+        <div id="tab-media" class="tab-content">
+            <div class="card">
+                <h3>Media Storage Statistics</h3>
+                <div class="stats-row">
+                    <div class="stat-card">
+                        <div class="label">Total Size</div>
+                        <div class="value" id="mediaTotalSize">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">Attachments</div>
+                        <div class="value" id="mediaAttachments">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">Custom Emojis</div>
+                        <div class="value" id="mediaEmojis">0</div>
+                    </div>
+                </div>
+            </div>
+            <div class="card">
+                <h3>Media Cleanup</h3>
+                <p style="margin-bottom: 1rem; color: var(--text-dim);">Clean up remote media cache to free disk space.</p>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Keep remote media newer than (days)</label>
+                        <input type="number" id="cleanupDays" value="30" min="7" max="365">
+                    </div>
+                    <div class="form-group" style="display: flex; align-items: flex-end; gap: 0.5rem;">
+                        <button class="btn" onclick="cleanupMedia(true)">Dry Run</button>
+                        <button class="btn btn-danger" onclick="cleanupMedia(false)">Clean Now</button>
+                    </div>
+                </div>
+                <button class="btn" onclick="pruneOrphaned()" style="margin-top: 0.5rem;">Prune Orphaned Media</button>
+            </div>
+        </div>
+
+        <!-- Moderation Tab -->
+        <div id="tab-moderation" class="tab-content">
+            <div class="card">
+                <h3>Moderation Reports</h3>
+                <p style="color: var(--text-dim);">Reports are managed through the GoToSocial admin panel or API.</p>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Reporter</th>
+                            <th>Target</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="reportsTable">
+                        <tr><td colspan="5">No reports to display. Use the GoToSocial admin panel for detailed report management.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Emojis Tab -->
+        <div id="tab-emojis" class="tab-content">
+            <div class="card">
+                <h3>Custom Emojis</h3>
+                <p style="margin-bottom: 1rem; color: var(--text-dim);">Upload custom emojis for your instance.</p>
+                <div id="emojiGrid" class="emoji-grid">
+                    <p>Loading emojis...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Logs Tab -->
+        <div id="tab-logs" class="tab-content">
+            <div class="card">
+                <h3>Container Logs</h3>
+                <div style="margin-bottom: 1rem; display: flex; gap: 0.5rem; align-items: center;">
+                    <label>Lines:</label>
+                    <select id="logLines" onchange="loadLogs()">
+                        <option value="50">50</option>
+                        <option value="100" selected>100</option>
+                        <option value="200">200</option>
+                        <option value="500">500</option>
+                    </select>
+                    <button class="btn" onclick="loadLogs()">Refresh</button>
+                </div>
+                <div class="logs-container" id="logsContainer">Loading logs...</div>
+            </div>
+        </div>
     </main>
+
+    <!-- Create Account Modal -->
+    <div id="createAccountModal" class="modal-overlay" style="display: none;">
+        <div class="modal">
+            <h3>Create Account</h3>
+            <form onsubmit="createAccount(event)">
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="newUsername" required minlength="1" maxlength="64" pattern="[a-z0-9_]+">
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="newEmail" required>
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="newPassword" required minlength="8">
+                </div>
+                <div class="form-group">
+                    <label><input type="checkbox" id="newAdmin"> Make Admin</label>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn" onclick="hideCreateAccount()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <script>
         const API = '/api/v1/gotosocial';
-        let containerIP = null;
+        let isRunning = false;
+        let containerStatus = 'not_installed';
+
+        function getToken() {
+            return localStorage.getItem('jwt_token') || localStorage.getItem('token') || localStorage.getItem('sbx_token') || '';
+        }
 
         async function api(endpoint, options = {}) {
-            const r = await fetch(API + endpoint, { ...options, headers: { 'Authorization': 'Bearer ' + localStorage.getItem('sbx_token'), 'Content-Type': 'application/json', ...options.headers } });
-            if (!r.ok) throw new Error(`HTTP ${r.status}`);
-            return r.json();
+            const token = getToken();
+            const headers = { 'Content-Type': 'application/json', ...options.headers };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+            const res = await fetch(API + endpoint, { ...options, headers, credentials: 'include' });
+            if (res.status === 401) {
+                window.location.href = '/portal/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+                throw new Error('Unauthorized');
+            }
+            return res.json();
         }
 
-        async function loadStatus() {
+        const tabNames = ['instance', 'accounts', 'federation', 'media', 'moderation', 'emojis', 'logs'];
+        function showTab(name) {
+            document.querySelectorAll('.tab').forEach((t, i) => {
+                t.classList.toggle('active', tabNames[i] === name);
+            });
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.getElementById('tab-' + name).classList.add('active');
+
+            if (name === 'logs') loadLogs();
+            else if (name === 'accounts') loadAccounts();
+            else if (name === 'federation') loadFederation();
+            else if (name === 'media') loadMediaStats();
+            else if (name === 'emojis') loadEmojis();
+        }
+
+        function toast(msg, type = 'success') {
+            const t = document.createElement('div');
+            t.className = 'toast toast-' + type;
+            t.textContent = msg;
+            document.body.appendChild(t);
+            setTimeout(() => t.remove(), 3000);
+        }
+
+        async function refresh() {
             try {
-                const d = await api('/status');
-                const badge = document.getElementById('status-badge');
-                if (!d.container_exists) {
-                    document.getElementById('install-section').classList.remove('hidden');
-                    document.getElementById('main-section').classList.add('hidden');
-                    badge.textContent = 'Not Installed'; badge.className = 'status-badge stopped';
+                const status = await api('/status');
+                containerStatus = status.container_status;
+                isRunning = status.container_status === 'running';
+
+                document.getElementById('installBanner').style.display =
+                    status.container_status === 'not_installed' ? 'block' : 'none';
+
+                const statEl = document.getElementById('statStatus');
+                statEl.querySelector('.value').textContent = status.container_status;
+                statEl.className = 'stat-card ' + (isRunning ? 'running' : 'stopped');
+
+                document.getElementById('statRuntime').textContent = status.runtime || 'none';
+                document.getElementById('statUsers').textContent = status.users_count || 0;
+                document.getElementById('statDisk').textContent = status.disk_usage || '-';
+
+                const btn = document.getElementById('btnToggle');
+                if (status.container_status === 'not_installed') {
+                    btn.textContent = 'Install';
+                    btn.className = 'btn btn-primary';
+                    btn.onclick = installGTS;
+                } else if (isRunning) {
+                    btn.textContent = 'Stop';
+                    btn.className = 'btn btn-danger';
+                    btn.onclick = () => toggleService();
+                } else {
+                    btn.textContent = 'Start';
+                    btn.className = 'btn btn-success';
+                    btn.onclick = () => toggleService();
+                }
+
+                const openLink = document.getElementById('openGTS');
+                if (isRunning && status.domain) {
+                    openLink.style.display = 'inline-flex';
+                    openLink.href = `https://${status.domain}`;
+                } else {
+                    openLink.style.display = 'none';
+                }
+
+                // Load instance settings
+                document.getElementById('instDomain').value = status.domain || '';
+                document.getElementById('instTitle').value = status.instance_title || '';
+                document.getElementById('instRegOpen').checked = status.registration_open || false;
+                document.getElementById('instApproval').checked = status.approval_required !== false;
+
+            } catch (e) {
+                console.error(e);
+                toast('Failed to load status', 'error');
+            }
+        }
+
+        async function toggleService() {
+            const action = isRunning ? '/container/stop' : '/container/start';
+            try {
+                document.getElementById('btnToggle').disabled = true;
+                document.getElementById('btnToggle').innerHTML = '<span class="spinner"></span>';
+                const res = await api(action, { method: 'POST' });
+                if (res.success) {
+                    toast(isRunning ? 'GoToSocial stopped!' : 'GoToSocial started!');
+                } else {
+                    toast(res.error || 'Action failed', 'error');
+                }
+                await refresh();
+            } catch (e) {
+                toast('Action failed: ' + e.message, 'error');
+            } finally {
+                document.getElementById('btnToggle').disabled = false;
+            }
+        }
+
+        async function installGTS() {
+            if (!confirm('Install GoToSocial? This will download the Docker image.')) return;
+            toast('Installing GoToSocial... This may take a few minutes.');
+            try {
+                const res = await api('/container/install', { method: 'POST' });
+                if (res.success) {
+                    toast('GoToSocial installed! Starting...');
+                    await api('/container/start', { method: 'POST' });
+                    await refresh();
+                } else {
+                    toast(res.error || 'Install failed', 'error');
+                }
+            } catch (e) {
+                toast('Install failed: ' + e.message, 'error');
+            }
+        }
+
+        // Instance Settings
+        async function saveInstance(e) {
+            e.preventDefault();
+            try {
+                const res = await api('/instance', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        instance_title: document.getElementById('instTitle').value,
+                        instance_description: document.getElementById('instDesc').value,
+                        instance_description_short: document.getElementById('instDescShort').value,
+                        contact_email: document.getElementById('instEmail').value,
+                        contact_account: document.getElementById('instAccount').value,
+                        registration_open: document.getElementById('instRegOpen').checked,
+                        approval_required: document.getElementById('instApproval').checked,
+                    })
+                });
+                if (res.success) {
+                    toast('Instance settings saved! Restart to apply.');
+                } else {
+                    toast('Save failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        // Accounts
+        async function loadAccounts() {
+            try {
+                const data = await api('/accounts');
+                const tbody = document.getElementById('accountsTable');
+                const accounts = data.accounts || [];
+                if (accounts.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5">No accounts found.</td></tr>';
                     return;
                 }
-                document.getElementById('install-section').classList.add('hidden');
-                document.getElementById('main-section').classList.remove('hidden');
-                if (d.running) {
-                    badge.textContent = 'Running'; badge.className = 'status-badge running';
-                    document.getElementById('btn-start').disabled = true;
-                    document.getElementById('btn-stop').disabled = false;
-                    document.getElementById('btn-restart').disabled = false;
-                    containerIP = d.container_ip;
-                    document.getElementById('open-app-btn').classList.remove('hidden');
-                    loadUsers(); loadBlocks();
-                } else {
-                    badge.textContent = 'Stopped'; badge.className = 'status-badge stopped';
-                    document.getElementById('btn-start').disabled = false;
-                    document.getElementById('btn-stop').disabled = true;
-                    document.getElementById('btn-restart').disabled = true;
-                    document.getElementById('open-app-btn').classList.add('hidden');
-                }
-                document.getElementById('users-count').textContent = d.users_count || 0;
-                document.getElementById('statuses-count').textContent = d.statuses_count || 0;
-                document.getElementById('disk-usage').textContent = d.disk_usage || '-';
-            } catch (e) { console.error(e); }
+                tbody.innerHTML = accounts.map(a => `
+                    <tr>
+                        <td>@${a.username}</td>
+                        <td>${a.email || '-'}</td>
+                        <td>${a.suspended ? '<span class="badge badge-suspended">Suspended</span>' : '<span class="badge badge-success">Active</span>'}</td>
+                        <td>${a.admin ? '<span class="badge badge-admin">Admin</span>' : 'User'}</td>
+                        <td>
+                            ${a.suspended
+                                ? `<button class="btn btn-sm btn-success" onclick="unsuspendAccount('${a.username}')">Unsuspend</button>`
+                                : `<button class="btn btn-sm btn-danger" onclick="suspendAccount('${a.username}')">Suspend</button>`}
+                            ${!a.admin
+                                ? `<button class="btn btn-sm" onclick="promoteAccount('${a.username}')">Promote</button>`
+                                : `<button class="btn btn-sm" onclick="demoteAccount('${a.username}')">Demote</button>`}
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (e) {
+                document.getElementById('accountsTable').innerHTML = '<tr><td colspan="5">Error loading accounts</td></tr>';
+            }
         }
 
-        async function install(e) { e.preventDefault(); const domain = document.getElementById('install-domain').value; const btn = e.target.querySelector('button'); btn.disabled = true; btn.textContent = 'Installing...'; try { await api(`/install?domain=${encodeURIComponent(domain)}`, { method: 'POST' }); await loadStatus(); } catch (err) { alert('Failed: ' + err.message); } finally { btn.disabled = false; btn.textContent = 'Install'; } }
-        async function startService() { document.getElementById('btn-start').disabled = true; try { await api('/start', { method: 'POST' }); await loadStatus(); } catch (e) { alert('Failed: ' + e.message); } }
-        async function stopService() { document.getElementById('btn-stop').disabled = true; try { await api('/stop', { method: 'POST' }); await loadStatus(); } catch (e) { alert('Failed: ' + e.message); } }
-        async function restartService() { document.getElementById('btn-restart').disabled = true; try { await api('/restart', { method: 'POST' }); await loadStatus(); } catch (e) { alert('Failed: ' + e.message); } }
+        function showCreateAccount() {
+            document.getElementById('createAccountModal').style.display = 'flex';
+        }
 
-        async function loadUsers() { try { const d = await api('/users'); document.getElementById('users-list').innerHTML = (d.users || []).map(u => `<div class="list-item"><div class="item-icon">👤</div><div class="item-info"><div class="item-name">@${u.username}</div><div class="item-meta">${u.display_name || ''}</div></div><button class="btn" onclick="promoteUser('${u.username}')">Promote</button></div>`).join('') || '<p>No users</p>'; } catch (e) { console.error(e); } }
-        function showCreateUser() { const u = prompt('Username:'); if (!u) return; const e = prompt('Email:'); if (!e) return; const p = prompt('Password (8+ chars):'); if (!p || p.length < 8) { alert('Password too short'); return; } createUser(u, e, p); }
-        async function createUser(u, e, p) { try { await api('/users', { method: 'POST', body: JSON.stringify({ username: u, email: e, password: p }) }); loadUsers(); } catch (err) { alert('Failed: ' + err.message); } }
-        async function promoteUser(u) { try { await api(`/users/${u}/promote`, { method: 'POST' }); alert('User promoted'); } catch (e) { alert('Failed: ' + e.message); } }
+        function hideCreateAccount() {
+            document.getElementById('createAccountModal').style.display = 'none';
+        }
 
-        async function loadBlocks() { try { const d = await api('/federation/blocks'); document.getElementById('blocks-list').innerHTML = (d.blocks || []).map(b => `<div class="list-item"><div class="item-icon">🚫</div><div class="item-info"><div class="item-name">${b.domain}</div></div><button class="btn" onclick="removeBlock('${b.domain}')">Unblock</button></div>`).join('') || '<p>No blocks</p>'; } catch (e) { console.error(e); } }
-        async function addBlock() { const d = document.getElementById('block-domain').value; if (!d) return; try { await api(`/federation/blocks?domain=${encodeURIComponent(d)}`, { method: 'POST' }); loadBlocks(); document.getElementById('block-domain').value = ''; } catch (e) { alert('Failed: ' + e.message); } }
-        async function removeBlock(d) { try { await api(`/federation/blocks/${encodeURIComponent(d)}`, { method: 'DELETE' }); loadBlocks(); } catch (e) { alert('Failed: ' + e.message); } }
+        async function createAccount(e) {
+            e.preventDefault();
+            const username = document.getElementById('newUsername').value;
+            const email = document.getElementById('newEmail').value;
+            const password = document.getElementById('newPassword').value;
+            const admin = document.getElementById('newAdmin').checked;
 
-        async function loadLogs() { try { const d = await api('/logs?lines=200'); document.getElementById('log-viewer').textContent = d.logs?.join('\n') || 'No logs'; } catch (e) { document.getElementById('log-viewer').textContent = 'Error: ' + e.message; } }
-        async function saveSettings(e) { e.preventDefault(); try { await api('/config', { method: 'POST', body: JSON.stringify({ instance_title: document.getElementById('setting-title').value, instance_description: document.getElementById('setting-desc').value, accounts_registration_open: document.getElementById('setting-registration').checked, accounts_approval_required: document.getElementById('setting-approval').checked }) }); alert('Saved'); } catch (err) { alert('Failed: ' + err.message); } }
-        async function createBackup() { try { const r = await api('/backup', { method: 'POST' }); alert(`Backup: ${r.file} (${r.size})`); } catch (e) { alert('Failed: ' + e.message); } }
-        function openApp() { if (containerIP) window.open(`http://${containerIP}:8080/`, '_blank'); }
+            try {
+                const res = await api('/account', {
+                    method: 'POST',
+                    body: JSON.stringify({ username, email, password, admin })
+                });
+                if (res.success) {
+                    toast('Account created!');
+                    hideCreateAccount();
+                    loadAccounts();
+                } else {
+                    toast(res.error || 'Create failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
 
-        document.querySelectorAll('.tab').forEach(tab => { tab.addEventListener('click', () => { document.querySelectorAll('.tab').forEach(t => t.classList.remove('active')); document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active')); tab.classList.add('active'); document.getElementById('tab-' + tab.dataset.tab).classList.add('active'); if (tab.dataset.tab === 'logs') loadLogs(); }); });
-        if (window.matchMedia?.('(prefers-color-scheme: dark)').matches) document.body.classList.add('dark');
-        loadStatus(); setInterval(loadStatus, 30000);
+        async function suspendAccount(username) {
+            if (!confirm(`Suspend @${username}?`)) return;
+            try {
+                await api(`/account/${username}/suspend`, { method: 'POST' });
+                toast('Account suspended');
+                loadAccounts();
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function unsuspendAccount(username) {
+            try {
+                await api(`/account/${username}/unsuspend`, { method: 'POST' });
+                toast('Account unsuspended');
+                loadAccounts();
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function promoteAccount(username) {
+            try {
+                await api(`/account/${username}/promote`, { method: 'POST' });
+                toast('Account promoted to admin');
+                loadAccounts();
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function demoteAccount(username) {
+            try {
+                await api(`/account/${username}/demote`, { method: 'POST' });
+                toast('Account demoted');
+                loadAccounts();
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        // Federation
+        async function loadFederation() {
+            try {
+                const data = await api('/federation/peers');
+
+                const blockedTbody = document.getElementById('blockedTable');
+                const blocked = data.blocked || [];
+                if (blocked.length === 0) {
+                    blockedTbody.innerHTML = '<tr><td colspan="2">No blocked domains.</td></tr>';
+                } else {
+                    blockedTbody.innerHTML = blocked.map(d => `
+                        <tr>
+                            <td>${d}</td>
+                            <td><button class="btn btn-sm" onclick="unblockDomain('${d}')">Unblock</button></td>
+                        </tr>
+                    `).join('');
+                }
+
+                const allowedTbody = document.getElementById('allowedTable');
+                const allowed = data.allowed || [];
+                if (allowed.length === 0) {
+                    allowedTbody.innerHTML = '<tr><td colspan="2">No allowed domains (open federation).</td></tr>';
+                } else {
+                    allowedTbody.innerHTML = allowed.map(d => `
+                        <tr>
+                            <td>${d}</td>
+                            <td><button class="btn btn-sm btn-danger" onclick="removeAllowedDomain('${d}')">Remove</button></td>
+                        </tr>
+                    `).join('');
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function addDomainBlock() {
+            const domain = document.getElementById('blockDomain').value.trim();
+            const comment = document.getElementById('blockComment').value.trim();
+            if (!domain) return toast('Enter domain to block', 'error');
+
+            try {
+                const res = await api('/federation/block', {
+                    method: 'POST',
+                    body: JSON.stringify({ domain, public_comment: comment })
+                });
+                if (res.success) {
+                    toast('Domain blocked');
+                    document.getElementById('blockDomain').value = '';
+                    document.getElementById('blockComment').value = '';
+                    loadFederation();
+                } else {
+                    toast(res.error || 'Block failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function unblockDomain(domain) {
+            try {
+                await api(`/federation/block/${encodeURIComponent(domain)}`, { method: 'DELETE' });
+                toast('Domain unblocked');
+                loadFederation();
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function addDomainAllow() {
+            const domain = document.getElementById('allowDomain').value.trim();
+            if (!domain) return toast('Enter domain to allow', 'error');
+
+            try {
+                const res = await api(`/federation/allow?domain=${encodeURIComponent(domain)}`, { method: 'POST' });
+                if (res.success) {
+                    toast('Domain allowed');
+                    document.getElementById('allowDomain').value = '';
+                    loadFederation();
+                } else {
+                    toast(res.error || 'Allow failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function removeAllowedDomain(domain) {
+            try {
+                await api(`/federation/allow/${encodeURIComponent(domain)}`, { method: 'DELETE' });
+                toast('Domain removed from allowlist');
+                loadFederation();
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        // Media
+        async function loadMediaStats() {
+            try {
+                const data = await api('/media/stats');
+                document.getElementById('mediaTotalSize').textContent = data.total_size || '-';
+                document.getElementById('mediaAttachments').textContent = data.attachment_count || 0;
+                document.getElementById('mediaEmojis').textContent = data.emoji_count || 0;
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function cleanupMedia(dryRun) {
+            const days = parseInt(document.getElementById('cleanupDays').value);
+            try {
+                toast(dryRun ? 'Running cleanup preview...' : 'Cleaning up media...');
+                const res = await api('/media/cleanup', {
+                    method: 'POST',
+                    body: JSON.stringify({ days, dry_run: dryRun })
+                });
+                if (res.success) {
+                    toast(res.output || (dryRun ? 'Dry run complete' : 'Cleanup complete'));
+                    loadMediaStats();
+                } else {
+                    toast(res.error || 'Cleanup failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function pruneOrphaned() {
+            toast('Pruning orphaned media...');
+            try {
+                const res = await api('/media/prune/orphaned', { method: 'POST' });
+                if (res.success) {
+                    toast('Orphaned media pruned');
+                    loadMediaStats();
+                } else {
+                    toast(res.error || 'Prune failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        // Emojis
+        async function loadEmojis() {
+            try {
+                const data = await api('/emojis');
+                const grid = document.getElementById('emojiGrid');
+                const emojis = data.emojis || [];
+                if (emojis.length === 0) {
+                    grid.innerHTML = '<p>No custom emojis. Upload via GoToSocial admin panel.</p>';
+                    return;
+                }
+                grid.innerHTML = emojis.map(e => `
+                    <div class="emoji-item">
+                        <div>:${e.shortcode}:</div>
+                        ${e.category ? `<small>${e.category}</small>` : ''}
+                    </div>
+                `).join('');
+            } catch (e) {
+                document.getElementById('emojiGrid').innerHTML = '<p>Error loading emojis</p>';
+            }
+        }
+
+        // Logs
+        async function loadLogs() {
+            const lines = document.getElementById('logLines').value;
+            try {
+                const data = await api('/logs?lines=' + lines);
+                document.getElementById('logsContainer').textContent = data.logs || 'No logs available';
+            } catch (e) {
+                document.getElementById('logsContainer').textContent = 'Error loading logs: ' + e.message;
+            }
+        }
+
+        // Initialize
+        refresh();
+        setInterval(refresh, 30000);
     </script>
-    <script src="/shared/sidebar.js"></script>
 </body>
 </html>

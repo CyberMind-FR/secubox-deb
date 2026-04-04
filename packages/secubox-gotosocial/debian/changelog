@@ -1,5 +1,14 @@
-secubox-gotosocial (1.0.0-1) bookworm; urgency=medium
+secubox-gotosocial (1.0.0-1~bookworm1) bookworm; urgency=medium
 
-  * Initial release - GoToSocial Fediverse server
+  * Initial release.
+  * GoToSocial ActivityPub/Fediverse server module.
+  * Features:
+    - Docker/Podman container management
+    - User account management (create, suspend, promote)
+    - Federation controls (block/allow domains)
+    - Media storage management and cleanup
+    - Custom emoji management
+    - Moderation tools
+    - P31 Phosphor light theme with orange accent
 
- -- Gandalf / CyberMind <gk@cybermind.fr>  Fri, 28 Mar 2026 10:00:00 +0100
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Apr 2026 10:00:00 +0100

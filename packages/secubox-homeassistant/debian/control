@@ -1,26 +1,23 @@
 Source: secubox-homeassistant
-Section: admin
+Section: net
 Priority: optional
-Maintainer: SecuBox Team <team@secubox.in>
+Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
-Standards-Version: 4.6.0
+Standards-Version: 4.6.2
 
 Package: secubox-homeassistant
 Architecture: all
-Depends: ${misc:Depends},
-         secubox-core,
-         python3,
-         python3-fastapi,
-         python3-uvicorn,
-         python3-httpx,
-         lxc,
-         lxc-templates
-Description: SecuBox Home Assistant - Smart home automation hub
- Provides a web interface and API for managing Home Assistant
- running in an LXC container.
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn, python3-httpx
+Recommends: docker.io | podman, lxc
+Description: Home Assistant IoT Hub for SecuBox
+ Debian bookworm port of Home Assistant integration module.
+ Provides FastAPI backend on /api/v1/homeassistant/ via Unix socket.
  .
  Features:
-  - LXC container-based Home Assistant Core
-  - USB device passthrough for Zigbee/Z-Wave
-  - HACS integration support
-  - Backup and restore
+  - Docker/Podman/LXC container management for Home Assistant
+  - Entity and device browser with controls
+  - Automation management with enable/disable toggles
+  - Scene management and activation
+  - HACS (Home Assistant Community Store) integration
+  - Backup and restore functionality
+  - CRT-light P31 phosphor theme with HA blue accents

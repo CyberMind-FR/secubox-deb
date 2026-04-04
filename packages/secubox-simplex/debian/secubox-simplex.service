@@ -1,14 +1,29 @@
 [Unit]
 Description=SecuBox SimpleX API
-After=network.target secubox-core.service
+Documentation=https://simplex.chat/docs/
+After=network.target secubox-core.service docker.service
+Wants=docker.service
 
 [Service]
 Type=simple
 User=root
+Group=root
 WorkingDirectory=/usr/lib/secubox/simplex
 ExecStart=/usr/bin/uvicorn api.main:app --uds /run/secubox/simplex.sock --log-level warning
+RuntimeDirectory=secubox
+RuntimeDirectoryMode=0755
 UMask=0117
 Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Security hardening
+NoNewPrivileges=false
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/secubox/simplex /var/cache/secubox/simplex /etc/secubox/simplex /run/secubox
+PrivateTmp=true
 
 [Install]
 WantedBy=multi-user.target

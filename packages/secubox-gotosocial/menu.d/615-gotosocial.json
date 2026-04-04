@@ -1,0 +1,8 @@
+{
+    "name": "GoToSocial",
+    "path": "/gotosocial/",
+    "icon": "share-2",
+    "category": "apps",
+    "order": 615,
+    "description": "Fediverse/ActivityPub server"
+}

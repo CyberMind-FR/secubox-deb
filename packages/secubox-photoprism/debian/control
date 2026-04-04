@@ -1,28 +1,25 @@
 Source: secubox-photoprism
-Section: admin
+Section: net
 Priority: optional
-Maintainer: SecuBox Team <team@secubox.in>
+Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
-Standards-Version: 4.6.0
-Homepage: https://secubox.in
+Standards-Version: 4.6.2
 
 Package: secubox-photoprism
 Architecture: all
-Depends: ${misc:Depends},
-         secubox-core,
-         python3,
-         python3-fastapi,
-         python3-uvicorn,
-         python3-httpx,
-         lxc,
-         lxc-templates
-Description: SecuBox PhotoPrism - AI-powered photo management
- Provides a web interface and API for managing PhotoPrism
- photo library running in an LXC container.
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn
+Recommends: docker.io | podman
+Description: PhotoPrism photo management for SecuBox
+ SecuBox module for managing PhotoPrism photo server via Docker.
+ Provides container management, library indexing, face recognition,
+ album management, and storage configuration.
  .
  Features:
-  - LXC container-based PhotoPrism deployment
-  - AI-powered face and object recognition
-  - Full-text photo search
+  - Docker/Podman container management
+  - AI-powered face recognition
+  - Photo library indexing and organization
   - Album management
-  - Photo import and indexing
+  - Import workflow
+  - CRT-light P31 phosphor theme
+ .
+ Provides FastAPI backend on /api/v1/photoprism/ via Unix socket.

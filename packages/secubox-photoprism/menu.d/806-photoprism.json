@@ -1,9 +1,0 @@
-{
-  "id": "photoprism",
-  "name": "PhotoPrism",
-  "icon": "📷",
-  "path": "/photoprism/",
-  "category": "apps",
-  "order": 806,
-  "description": "AI-powered photo management"
-}

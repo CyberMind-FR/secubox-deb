@@ -3,277 +3,1427 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebRadio - SecuBox</title>
-    <link rel="stylesheet" href="/shared/crt-light.css">
-    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <title>SecuBox - WebRadio</title>
+    <link rel="stylesheet" href="/shared/crt-light.css" id="theme-css">
+    <link rel="stylesheet" href="/shared/sidebar.css">
     <style>
-        :root { --radio-purple: #9b59b6; --radio-light: #bb8fce; --radio-dark: #7d3c98; }
-        body.dark { --radio-purple: #bb8fce; --radio-light: #d7bde2; --radio-dark: #9b59b6; }
-        .accent { color: var(--radio-purple); }
-        .accent-bg { background-color: var(--radio-purple); }
-        .header { display: flex; justify-content: space-between; align-items: center; padding: 1rem; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
-        .header h1 { margin: 0; font-size: 1.5rem; }
-        .status-badge { padding: 0.25rem 0.75rem; border-radius: 1rem; font-size: 0.875rem; }
-        .status-badge.running { background: var(--success-bg); color: var(--success); }
-        .status-badge.stopped { background: var(--error-bg); color: var(--error); }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem; text-align: center; }
-        .stat-value { font-size: 1.75rem; font-weight: bold; color: var(--radio-purple); }
-        .stat-label { font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; }
-        .action-bar { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
-        .btn { padding: 0.5rem 1rem; border: 1px solid var(--border); border-radius: 0.25rem; background: var(--surface); color: var(--text); cursor: pointer; font-size: 0.875rem; }
-        .btn:hover { background: var(--hover); }
-        .btn.primary { background: var(--radio-purple); color: white; border-color: var(--radio-purple); }
-        .btn.primary:hover { background: var(--radio-dark); }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .tabs { display: flex; gap: 0.5rem; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
-        .tab { padding: 0.75rem 1rem; border: none; background: none; color: var(--text-secondary); cursor: pointer; border-bottom: 2px solid transparent; }
-        .tab:hover { color: var(--text); }
-        .tab.active { color: var(--radio-purple); border-bottom-color: var(--radio-purple); }
+        /* WebRadio violet accent - works with both themes */
+        :root {
+            --radio-violet: #8b5cf6;
+            --radio-violet-dim: #6d28d9;
+            --radio-violet-glow: rgba(139, 92, 246, 0.2);
+            --radio-violet-light: #a78bfa;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'IBM Plex Mono', 'Consolas', monospace;
+            background: var(--tube-black, #e8f5e9);
+            color: var(--p31-dim, #006622);
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .main {
+            flex: 1;
+            margin-left: 220px;
+            padding: 1.5rem;
+            padding-bottom: 120px;
+            background: var(--tube-light, #e8f5e9);
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--tube-muted, #81c784);
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            color: var(--radio-violet);
+            text-shadow: 0 0 10px var(--radio-violet-glow);
+        }
+
+        .header-actions { display: flex; gap: 0.5rem; }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            border: 1px solid var(--tube-muted, #81c784);
+            background: var(--tube-pale, #c8e6c9);
+            color: var(--p31-dim, #006622);
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+
+        .btn:hover {
+            background: var(--tube-soft, #a5d6a7);
+            border-color: var(--p31-mid, #009933);
+        }
+
+        .btn-primary {
+            background: var(--radio-violet-dim);
+            border-color: var(--radio-violet);
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            background: var(--radio-violet);
+        }
+
+        .btn-danger {
+            background: #ffebee;
+            border-color: #f44336;
+            color: #c62828;
+        }
+
+        .btn-danger:hover {
+            background: #ffcdd2;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Install Banner */
+        .install-banner {
+            background: var(--tube-pale, #c8e6c9);
+            border: 2px dashed var(--radio-violet);
+            border-radius: 8px;
+            padding: 2rem;
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .install-banner h2 {
+            color: var(--radio-violet);
+            margin-bottom: 1rem;
+        }
+
+        .install-banner p {
+            color: var(--p31-dim, #006622);
+            margin-bottom: 1.5rem;
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid var(--tube-muted, #81c784);
+            padding-bottom: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .tab {
+            padding: 0.5rem 1rem;
+            border: none;
+            background: transparent;
+            color: var(--p31-dim, #006622);
+            cursor: pointer;
+            font-family: inherit;
+            border-radius: 4px 4px 0 0;
+            transition: all 0.2s;
+            opacity: 0.7;
+        }
+
+        .tab:hover { opacity: 1; }
+
+        .tab.active {
+            background: var(--tube-pale, #c8e6c9);
+            color: var(--radio-violet);
+            border: 1px solid var(--tube-muted, #81c784);
+            border-bottom: none;
+            opacity: 1;
+        }
+
         .tab-content { display: none; }
         .tab-content.active { display: block; }
-        .mount-list { display: grid; gap: 0.5rem; }
-        .mount-item { display: flex; align-items: center; gap: 1rem; padding: 0.75rem; background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; }
-        .mount-icon { font-size: 1.5rem; }
-        .mount-info { flex: 1; }
-        .mount-name { font-weight: 500; }
-        .mount-meta { font-size: 0.875rem; color: var(--text-secondary); }
-        .player-bar { position: fixed; bottom: 0; left: 0; right: 0; background: var(--surface); border-top: 1px solid var(--border); padding: 0.75rem 1rem; display: flex; align-items: center; gap: 1rem; z-index: 100; }
-        .player-bar.sidebar-open { left: 250px; }
-        .player-info { flex: 1; }
-        .player-title { font-weight: 500; }
-        .player-mount { font-size: 0.875rem; color: var(--text-secondary); }
-        .player-controls { display: flex; gap: 0.5rem; align-items: center; }
-        .play-btn { width: 48px; height: 48px; border-radius: 50%; border: none; background: var(--radio-purple); color: white; font-size: 1.25rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-        .play-btn:hover { background: var(--radio-dark); }
-        .volume-slider { width: 100px; }
-        .log-viewer { background: var(--bg-dark, #1a1a2e); color: var(--text-light, #e0e0e0); font-family: monospace; font-size: 0.75rem; padding: 1rem; border-radius: 0.5rem; height: 300px; overflow-y: auto; white-space: pre-wrap; }
-        .install-section { text-align: center; padding: 3rem; }
-        .hidden { display: none !important; }
+
+        /* Cards */
+        .card {
+            background: var(--tube-pale, #c8e6c9);
+            border: 1px solid var(--tube-muted, #81c784);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+        }
+
+        .card h2 {
+            font-size: 1rem;
+            color: var(--radio-violet);
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .stat-card {
+            background: var(--tube-pale, #c8e6c9);
+            border: 1px solid var(--tube-muted, #81c784);
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        .stat-card .icon {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-card .value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--radio-violet);
+        }
+
+        .stat-card .label {
+            font-size: 0.75rem;
+            color: var(--p31-dim, #006622);
+            text-transform: uppercase;
+            opacity: 0.8;
+        }
+
+        /* Status indicator */
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+        }
+
+        .status-badge.running {
+            background: rgba(0, 221, 68, 0.15);
+            color: var(--p31-mid, #009933);
+            border: 1px solid var(--p31-dim, #006622);
+        }
+
+        .status-badge.stopped {
+            background: rgba(244, 67, 54, 0.1);
+            color: #c62828;
+            border: 1px solid #ef9a9a;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Station List */
+        .station-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .station-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem;
+            background: var(--tube-soft, #a5d6a7);
+            border-radius: 4px;
+            border-left: 3px solid var(--tube-muted, #81c784);
+        }
+
+        .station-item:hover {
+            border-left-color: var(--radio-violet);
+        }
+
+        .station-info {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+        }
+
+        .station-name {
+            font-weight: bold;
+            color: var(--p31-ghost, #003311);
+        }
+
+        .station-meta {
+            font-size: 0.8rem;
+            color: var(--p31-dim, #006622);
+            opacity: 0.8;
+        }
+
+        .station-controls {
+            display: flex;
+            gap: 0.25rem;
+        }
+
+        .station-controls button {
+            padding: 0.25rem 0.5rem;
+            background: var(--tube-pale, #c8e6c9);
+            border: 1px solid var(--tube-muted, #81c784);
+            color: var(--p31-dim, #006622);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+
+        .station-controls button:hover {
+            background: var(--radio-violet);
+            color: #fff;
+            border-color: var(--radio-violet);
+        }
+
+        /* Audio Player Bar */
+        .player-bar {
+            position: fixed;
+            bottom: 0;
+            left: 220px;
+            right: 0;
+            background: var(--tube-pale, #c8e6c9);
+            border-top: 2px solid var(--radio-violet);
+            padding: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            z-index: 100;
+        }
+
+        .player-info {
+            flex: 1;
+        }
+
+        .player-title {
+            font-weight: bold;
+            color: var(--radio-violet);
+        }
+
+        .player-meta {
+            font-size: 0.8rem;
+            color: var(--p31-dim, #006622);
+        }
+
+        .player-controls {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .play-btn {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            border: 2px solid var(--radio-violet);
+            background: var(--radio-violet-dim);
+            color: white;
+            font-size: 1.25rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .play-btn:hover {
+            background: var(--radio-violet);
+        }
+
+        .volume-slider {
+            width: 100px;
+            accent-color: var(--radio-violet);
+        }
+
+        /* Audio Visualizer */
+        .visualizer {
+            display: flex;
+            align-items: flex-end;
+            gap: 2px;
+            height: 40px;
+            padding: 0 1rem;
+        }
+
+        .visualizer-bar {
+            width: 4px;
+            background: var(--radio-violet);
+            border-radius: 2px;
+            transition: height 0.1s;
+        }
+
+        /* Recording List */
+        .recording-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem;
+            background: var(--tube-soft, #a5d6a7);
+            border-radius: 4px;
+            margin-bottom: 0.5rem;
+        }
+
+        .recording-info {
+            flex: 1;
+        }
+
+        .recording-name {
+            font-weight: bold;
+            color: var(--p31-ghost, #003311);
+        }
+
+        .recording-meta {
+            font-size: 0.8rem;
+            color: var(--p31-dim, #006622);
+        }
+
+        /* Schedule Grid */
+        .schedule-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 0.5rem;
+        }
+
+        .day-column {
+            background: var(--tube-soft, #a5d6a7);
+            border-radius: 4px;
+            padding: 0.5rem;
+            min-height: 200px;
+        }
+
+        .day-header {
+            text-align: center;
+            font-weight: bold;
+            color: var(--radio-violet);
+            margin-bottom: 0.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--tube-muted, #81c784);
+        }
+
+        .schedule-entry {
+            background: var(--tube-pale, #c8e6c9);
+            border-left: 3px solid var(--radio-violet);
+            padding: 0.5rem;
+            margin-bottom: 0.25rem;
+            border-radius: 2px;
+            font-size: 0.8rem;
+        }
+
+        /* Logs */
+        .logs-container {
+            background: var(--p31-ghost, #003311);
+            border: 1px solid var(--tube-muted, #81c784);
+            border-radius: 4px;
+            padding: 1rem;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.8rem;
+        }
+
+        .log-line {
+            color: var(--p31-mid, #009933);
+            margin-bottom: 0.25rem;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        /* Form elements */
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: var(--p31-dim, #006622);
+            font-size: 0.85rem;
+        }
+
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 0.5rem;
+            background: var(--tube-light, #e8f5e9);
+            border: 1px solid var(--tube-muted, #81c784);
+            border-radius: 4px;
+            color: var(--p31-ghost, #003311);
+            font-family: inherit;
+        }
+
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: var(--radio-violet);
+        }
+
+        /* Genre filters */
+        .genre-filters {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+
+        .genre-btn {
+            padding: 0.25rem 0.75rem;
+            border: 1px solid var(--tube-muted, #81c784);
+            border-radius: 20px;
+            background: transparent;
+            color: var(--p31-dim, #006622);
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+
+        .genre-btn:hover, .genre-btn.active {
+            background: var(--radio-violet);
+            border-color: var(--radio-violet);
+            color: #fff;
+        }
+
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 2rem;
+            color: var(--p31-dim, #006622);
+            opacity: 0.8;
+        }
+
+        .empty-state .icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        /* Loading */
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            color: var(--p31-dim, #006622);
+        }
+
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 2px solid var(--tube-muted, #81c784);
+            border-top-color: var(--radio-violet);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 0.5rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 200;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: var(--tube-light, #e8f5e9);
+            border-radius: 8px;
+            padding: 1.5rem;
+            max-width: 500px;
+            width: 90%;
+            border: 2px solid var(--radio-violet);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .modal-header h3 {
+            color: var(--radio-violet);
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--p31-dim, #006622);
+        }
     </style>
 </head>
 <body class="crt-light">
     <nav class="sidebar" id="sidebar"></nav>
-    <main class="main-content" style="padding-bottom: 80px;">
-    <div class="container">
-        <div class="header">
-            <h1><span class="accent">WebRadio</span></h1>
-            <span id="status-badge" class="status-badge stopped">Stopped</span>
+    <script src="/shared/sidebar.js"></script>
+
+    <main class="main">
+        <header class="header">
+            <div>
+                <h1>WebRadio</h1>
+            </div>
+            <div class="header-actions">
+                <span id="statusBadge" class="status-badge stopped">
+                    <span class="status-dot"></span>
+                    <span id="statusText">Stopped</span>
+                </span>
+            </div>
+        </header>
+
+        <!-- Install Banner -->
+        <div id="installBanner" class="install-banner" style="display:none;">
+            <h2>Streaming Server Not Installed</h2>
+            <p>Pull the Icecast container to start streaming internet radio.</p>
+            <button class="btn btn-primary" onclick="installContainers()">
+                Install Icecast
+            </button>
         </div>
 
-        <div id="install-section" class="install-section hidden">
-            <p>Icecast2 is not installed</p>
-            <button class="btn primary" onclick="installIcecast()">Install Icecast2</button>
-        </div>
-
-        <div id="main-section" class="hidden">
+        <!-- Main Content -->
+        <div id="mainContent">
+            <!-- Stats Grid -->
             <div class="stats-grid">
-                <div class="stat-card"><div class="stat-value" id="listeners-count">0</div><div class="stat-label">Listeners</div></div>
-                <div class="stat-card"><div class="stat-value" id="mounts-count">0</div><div class="stat-label">Active Streams</div></div>
-                <div class="stat-card"><div class="stat-value" id="media-count">0</div><div class="stat-label">Media Files</div></div>
+                <div class="stat-card">
+                    <div class="icon">&#127898;</div>
+                    <div class="value" id="stationsCount">--</div>
+                    <div class="label">Stations</div>
+                </div>
+                <div class="stat-card">
+                    <div class="icon">&#127897;</div>
+                    <div class="value" id="recordingsCount">--</div>
+                    <div class="label">Recordings</div>
+                </div>
+                <div class="stat-card">
+                    <div class="icon">&#128266;</div>
+                    <div class="value" id="listenersCount">0</div>
+                    <div class="label">Listeners</div>
+                </div>
+                <div class="stat-card">
+                    <div class="icon">&#9889;</div>
+                    <div class="value" id="streamStatus">--</div>
+                    <div class="label">Stream</div>
+                </div>
             </div>
 
-            <div class="action-bar">
-                <button class="btn primary" id="btn-start" onclick="startService()">Start</button>
-                <button class="btn" id="btn-stop" onclick="stopService()" disabled>Stop</button>
-                <button class="btn" id="btn-restart" onclick="restartService()" disabled>Restart</button>
-            </div>
-
+            <!-- Tabs -->
             <div class="tabs">
-                <button class="tab active" data-tab="streams">Streams</button>
-                <button class="tab" data-tab="playlists">Playlists</button>
-                <button class="tab" data-tab="media">Media</button>
-                <button class="tab" data-tab="logs">Logs</button>
+                <button class="tab active" data-tab="player">Player</button>
+                <button class="tab" data-tab="stations">Stations</button>
+                <button class="tab" data-tab="streaming">Streaming</button>
+                <button class="tab" data-tab="recordings">Recordings</button>
+                <button class="tab" data-tab="schedule">Schedule</button>
+                <button class="tab" data-tab="settings">Settings</button>
             </div>
 
-            <div id="tab-streams" class="tab-content active">
-                <div id="mounts-list" class="mount-list"></div>
+            <!-- Player Tab -->
+            <div id="tab-player" class="tab-content active">
+                <div class="card">
+                    <h2>Now Playing</h2>
+                    <div id="nowPlaying" class="empty-state">
+                        <div class="icon">&#127898;</div>
+                        <p>Select a station to start listening</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>Quick Stations</h2>
+                    <div id="quickStations" class="station-list">
+                        <div class="loading"><div class="spinner"></div> Loading stations...</div>
+                    </div>
+                </div>
             </div>
 
-            <div id="tab-playlists" class="tab-content">
-                <div class="action-bar"><button class="btn" onclick="loadPlaylists()">Refresh</button></div>
-                <div id="playlists-list" class="mount-list"></div>
+            <!-- Stations Tab -->
+            <div id="tab-stations" class="tab-content">
+                <div class="card">
+                    <h2>Add Station</h2>
+                    <form id="addStationForm">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                            <div class="form-group">
+                                <label>Station Name</label>
+                                <input type="text" id="stationName" required placeholder="My Radio">
+                            </div>
+                            <div class="form-group">
+                                <label>Stream URL</label>
+                                <input type="url" id="stationUrl" required placeholder="http://stream.example.com/radio">
+                            </div>
+                            <div class="form-group">
+                                <label>Genre</label>
+                                <select id="stationGenre">
+                                    <option value="Various">Various</option>
+                                    <option value="Rock">Rock</option>
+                                    <option value="Pop">Pop</option>
+                                    <option value="Jazz">Jazz</option>
+                                    <option value="Classical">Classical</option>
+                                    <option value="Electronic">Electronic</option>
+                                    <option value="Hip-Hop">Hip-Hop</option>
+                                    <option value="Country">Country</option>
+                                    <option value="News">News/Talk</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Bitrate (kbps)</label>
+                                <input type="number" id="stationBitrate" value="128" min="32" max="320">
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Add Station</button>
+                    </form>
+                </div>
+
+                <div class="card">
+                    <h2>Favorite Stations</h2>
+                    <div class="genre-filters" id="genreFilters">
+                        <button class="genre-btn active" data-genre="all">All</button>
+                    </div>
+                    <div id="stationsList" class="station-list">
+                        <div class="loading"><div class="spinner"></div> Loading stations...</div>
+                    </div>
+                </div>
             </div>
 
-            <div id="tab-media" class="tab-content">
-                <div class="action-bar"><button class="btn" onclick="loadMedia()">Refresh</button></div>
-                <div id="media-list" class="mount-list"></div>
+            <!-- Streaming Tab -->
+            <div id="tab-streaming" class="tab-content">
+                <div class="card">
+                    <h2>Streaming Server</h2>
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem;">
+                        <button class="btn btn-primary" onclick="startStream()">Start</button>
+                        <button class="btn btn-danger" onclick="stopStream()">Stop</button>
+                        <button class="btn" onclick="restartStream()">Restart</button>
+                    </div>
+                    <div id="streamDetails">
+                        <p style="color: var(--p31-dim);">Start the streaming server to broadcast to listeners.</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>Active Mounts</h2>
+                    <div id="mountsList" class="station-list">
+                        <div class="empty-state"><p>No active streams</p></div>
+                    </div>
+                </div>
             </div>
 
-            <div id="tab-logs" class="tab-content">
-                <div class="action-bar"><button class="btn" onclick="loadLogs()">Refresh</button></div>
-                <div id="log-viewer" class="log-viewer">Loading...</div>
+            <!-- Recordings Tab -->
+            <div id="tab-recordings" class="tab-content">
+                <div class="card">
+                    <h2>Record a Station</h2>
+                    <div style="display: flex; gap: 0.5rem; align-items: flex-end; flex-wrap: wrap;">
+                        <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 200px;">
+                            <label>Station</label>
+                            <select id="recordStation"></select>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label>Format</label>
+                            <select id="recordFormat">
+                                <option value="mp3">MP3</option>
+                                <option value="ogg">OGG</option>
+                                <option value="aac">AAC</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-primary" onclick="startRecording()">Start Recording</button>
+                        <button class="btn btn-danger" onclick="stopRecording()">Stop All</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>Saved Recordings</h2>
+                    <div id="recordingsList">
+                        <div class="loading"><div class="spinner"></div> Loading recordings...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Schedule Tab -->
+            <div id="tab-schedule" class="tab-content">
+                <div class="card">
+                    <h2>Weekly Schedule</h2>
+                    <button class="btn btn-primary" onclick="showAddScheduleModal()" style="margin-bottom: 1rem;">Add Schedule Entry</button>
+                    <div class="schedule-grid" id="scheduleGrid">
+                        <div class="day-column"><div class="day-header">Mon</div></div>
+                        <div class="day-column"><div class="day-header">Tue</div></div>
+                        <div class="day-column"><div class="day-header">Wed</div></div>
+                        <div class="day-column"><div class="day-header">Thu</div></div>
+                        <div class="day-column"><div class="day-header">Fri</div></div>
+                        <div class="day-column"><div class="day-header">Sat</div></div>
+                        <div class="day-column"><div class="day-header">Sun</div></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings Tab -->
+            <div id="tab-settings" class="tab-content">
+                <div class="card">
+                    <h2>Configuration</h2>
+                    <form id="configForm">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                            <div class="form-group">
+                                <label>Icecast Port</label>
+                                <input type="number" id="cfgIcecastPort" value="8000" min="1024" max="65535">
+                            </div>
+                            <div class="form-group">
+                                <label>Liquidsoap Port</label>
+                                <input type="number" id="cfgLiquidsoapPort" value="8001" min="1024" max="65535">
+                            </div>
+                            <div class="form-group">
+                                <label>Data Path</label>
+                                <input type="text" id="cfgDataPath" value="/var/lib/secubox/webradio">
+                            </div>
+                            <div class="form-group">
+                                <label>Memory Limit</label>
+                                <input type="text" id="cfgMemory" value="256m">
+                            </div>
+                            <div class="form-group">
+                                <label>Max Recording Hours</label>
+                                <input type="number" id="cfgMaxRecording" value="4" min="1" max="24">
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Save Configuration</button>
+                    </form>
+                </div>
+
+                <div class="card">
+                    <h2>Container Status</h2>
+                    <div id="containerStatus">
+                        <div class="loading"><div class="spinner"></div> Loading...</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>Logs</h2>
+                    <div style="margin-bottom: 1rem;">
+                        <button class="btn" onclick="loadLogs()">Refresh Logs</button>
+                    </div>
+                    <div id="logsContainer" class="logs-container">
+                        <div class="log-line">Logs will appear here...</div>
+                    </div>
+                </div>
             </div>
         </div>
-    </div>
-
-    <div id="player-bar" class="player-bar hidden">
-        <div class="player-info">
-            <div class="player-title" id="player-title">Not Playing</div>
-            <div class="player-mount" id="player-mount"></div>
-        </div>
-        <div class="player-controls">
-            <input type="range" class="volume-slider" id="volume" min="0" max="100" value="80">
-            <button class="play-btn" id="play-btn" onclick="togglePlay()">▶</button>
-        </div>
-    </div>
     </main>
 
-    <audio id="audio-player" preload="none"></audio>
+    <!-- Audio Player Bar -->
+    <div id="playerBar" class="player-bar" style="display: none;">
+        <div class="visualizer" id="visualizer"></div>
+        <div class="player-info">
+            <div class="player-title" id="playerTitle">Not Playing</div>
+            <div class="player-meta" id="playerMeta"></div>
+        </div>
+        <div class="player-controls">
+            <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="80">
+            <button class="play-btn" id="playBtn" onclick="togglePlay()">&#9654;</button>
+        </div>
+    </div>
+
+    <!-- Add Schedule Modal -->
+    <div id="scheduleModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add Schedule Entry</h3>
+                <button class="modal-close" onclick="closeScheduleModal()">&times;</button>
+            </div>
+            <form id="scheduleForm">
+                <div class="form-group">
+                    <label>Station</label>
+                    <select id="schedStation" required></select>
+                </div>
+                <div class="form-group">
+                    <label>Day of Week</label>
+                    <select id="schedDay" required>
+                        <option value="0">Monday</option>
+                        <option value="1">Tuesday</option>
+                        <option value="2">Wednesday</option>
+                        <option value="3">Thursday</option>
+                        <option value="4">Friday</option>
+                        <option value="5">Saturday</option>
+                        <option value="6">Sunday</option>
+                    </select>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div class="form-group">
+                        <label>Start Time</label>
+                        <input type="time" id="schedStart" required>
+                    </div>
+                    <div class="form-group">
+                        <label>End Time</label>
+                        <input type="time" id="schedEnd" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Action</label>
+                    <select id="schedAction">
+                        <option value="play">Play</option>
+                        <option value="record">Record</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary">Add Entry</button>
+            </form>
+        </div>
+    </div>
+
+    <audio id="audioPlayer" preload="none"></audio>
 
     <script>
         const API = '/api/v1/webradio';
-        const audioPlayer = document.getElementById('audio-player');
-        let currentMount = null;
+        const audioPlayer = document.getElementById('audioPlayer');
+        let statusData = null;
+        let stationsData = [];
+        let currentStation = null;
 
-        async function api(endpoint, options = {}) {
-            const r = await fetch(API + endpoint, { ...options, headers: { 'Authorization': 'Bearer ' + localStorage.getItem('sbx_token'), 'Content-Type': 'application/json', ...options.headers } });
-            if (!r.ok) throw new Error(`HTTP ${r.status}`);
-            return r.json();
-        }
-
-        async function loadStatus() {
-            try {
-                const d = await api('/status');
-                const badge = document.getElementById('status-badge');
-                if (!d.installed) {
-                    document.getElementById('install-section').classList.remove('hidden');
-                    document.getElementById('main-section').classList.add('hidden');
-                    badge.textContent = 'Not Installed'; badge.className = 'status-badge stopped';
-                    return;
-                }
-                document.getElementById('install-section').classList.add('hidden');
-                document.getElementById('main-section').classList.remove('hidden');
-                if (d.running) {
-                    badge.textContent = 'Running'; badge.className = 'status-badge running';
-                    document.getElementById('btn-start').disabled = true;
-                    document.getElementById('btn-stop').disabled = false;
-                    document.getElementById('btn-restart').disabled = false;
-                    document.getElementById('player-bar').classList.remove('hidden');
-                    loadMounts();
-                } else {
-                    badge.textContent = 'Stopped'; badge.className = 'status-badge stopped';
-                    document.getElementById('btn-start').disabled = false;
-                    document.getElementById('btn-stop').disabled = true;
-                    document.getElementById('btn-restart').disabled = true;
-                    document.getElementById('player-bar').classList.add('hidden');
-                }
-                document.getElementById('listeners-count').textContent = d.listeners || 0;
-                document.getElementById('mounts-count').textContent = d.active_mounts || 0;
-                document.getElementById('media-count').textContent = d.media_files || 0;
-            } catch (e) { console.error(e); }
-        }
-
-        async function loadMounts() {
-            try {
-                const d = await api('/mounts');
-                const list = document.getElementById('mounts-list');
-                if (!d.mounts || d.mounts.length === 0) {
-                    list.innerHTML = '<p style="padding:1rem;color:var(--text-secondary);">No active streams. Connect a source to start broadcasting.</p>';
-                    return;
-                }
-                list.innerHTML = d.mounts.map(m => `
-                    <div class="mount-item">
-                        <div class="mount-icon">📻</div>
-                        <div class="mount-info">
-                            <div class="mount-name">${m.title || m.mount}</div>
-                            <div class="mount-meta">${m.listeners} listeners · ${m.bitrate}kbps ${m.type}</div>
-                        </div>
-                        <button class="btn primary" onclick="playStream('${m.mount}', '${m.title || m.mount}')">Listen</button>
-                    </div>
-                `).join('');
-            } catch (e) { console.error(e); }
-        }
-
-        async function loadPlaylists() {
-            try {
-                const d = await api('/playlists');
-                const list = document.getElementById('playlists-list');
-                if (!d.playlists || d.playlists.length === 0) {
-                    list.innerHTML = '<p style="padding:1rem;color:var(--text-secondary);">No playlists. Upload media and create playlists.</p>';
-                    return;
-                }
-                list.innerHTML = d.playlists.map(p => `
-                    <div class="mount-item">
-                        <div class="mount-icon">📄</div>
-                        <div class="mount-info">
-                            <div class="mount-name">${p.name}</div>
-                            <div class="mount-meta">${p.tracks} tracks</div>
-                        </div>
-                    </div>
-                `).join('');
-            } catch (e) { console.error(e); }
-        }
-
-        async function loadMedia() {
-            try {
-                const d = await api('/media');
-                const list = document.getElementById('media-list');
-                if (!d.files || d.files.length === 0) {
-                    list.innerHTML = '<p style="padding:1rem;color:var(--text-secondary);">No media files. Upload audio to /var/lib/secubox/webradio/media/</p>';
-                    return;
-                }
-                list.innerHTML = d.files.slice(0, 50).map(f => `
-                    <div class="mount-item">
-                        <div class="mount-icon">🎵</div>
-                        <div class="mount-info">
-                            <div class="mount-name">${f.name}</div>
-                            <div class="mount-meta">${(f.size / 1024 / 1024).toFixed(1)} MB · ${f.type}</div>
-                        </div>
-                    </div>
-                `).join('');
-            } catch (e) { console.error(e); }
-        }
-
-        async function installIcecast() {
-            const btn = event.target; btn.disabled = true; btn.textContent = 'Installing...';
-            try { await api('/install', { method: 'POST' }); await loadStatus(); } catch (e) { alert('Failed: ' + e.message); }
-            finally { btn.disabled = false; btn.textContent = 'Install Icecast2'; }
-        }
-
-        async function startService() { document.getElementById('btn-start').disabled = true; try { await api('/start', { method: 'POST' }); await loadStatus(); } catch (e) { alert('Failed: ' + e.message); } }
-        async function stopService() { document.getElementById('btn-stop').disabled = true; try { await api('/stop', { method: 'POST' }); await loadStatus(); } catch (e) { alert('Failed: ' + e.message); } }
-        async function restartService() { document.getElementById('btn-restart').disabled = true; try { await api('/restart', { method: 'POST' }); await loadStatus(); } catch (e) { alert('Failed: ' + e.message); } }
-
-        async function loadLogs() { try { const d = await api('/logs?lines=200'); document.getElementById('log-viewer').textContent = d.logs?.join('\n') || 'No logs'; } catch (e) { document.getElementById('log-viewer').textContent = 'Error: ' + e.message; } }
-
-        function playStream(mount, title) {
-            currentMount = mount;
-            audioPlayer.src = `http://${window.location.hostname}:8000${mount}`;
-            audioPlayer.volume = document.getElementById('volume').value / 100;
-            audioPlayer.play();
-            document.getElementById('player-title').textContent = title;
-            document.getElementById('player-mount').textContent = mount;
-            document.getElementById('play-btn').textContent = '⏸';
-        }
-
-        function togglePlay() {
-            if (audioPlayer.paused) {
-                audioPlayer.play();
-                document.getElementById('play-btn').textContent = '⏸';
-            } else {
-                audioPlayer.pause();
-                document.getElementById('play-btn').textContent = '▶';
-            }
-        }
-
-        document.getElementById('volume').addEventListener('input', e => { audioPlayer.volume = e.target.value / 100; });
-
+        // Tab switching
         document.querySelectorAll('.tab').forEach(tab => {
             tab.addEventListener('click', () => {
                 document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
                 document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
                 tab.classList.add('active');
                 document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
-                if (tab.dataset.tab === 'logs') loadLogs();
-                if (tab.dataset.tab === 'playlists') loadPlaylists();
-                if (tab.dataset.tab === 'media') loadMedia();
+
+                if (tab.dataset.tab === 'recordings') loadRecordings();
+                if (tab.dataset.tab === 'schedule') loadSchedule();
+                if (tab.dataset.tab === 'settings') { loadConfig(); loadContainerStatus(); }
+                if (tab.dataset.tab === 'streaming') loadStreamStatus();
             });
         });
 
-        if (window.matchMedia?.('(prefers-color-scheme: dark)').matches) document.body.classList.add('dark');
-        loadStatus(); setInterval(loadStatus, 30000);
+        // Initialize
+        async function init() {
+            await loadStatus();
+            await loadStations();
+            setInterval(loadStatus, 15000);
+            initVisualizer();
+        }
+
+        async function loadStatus() {
+            try {
+                const res = await fetch(API + '/status', { credentials: 'include' });
+                statusData = await res.json();
+                updateStatusUI();
+            } catch(e) {
+                console.error('Status error:', e);
+            }
+        }
+
+        function updateStatusUI() {
+            if (!statusData) return;
+
+            const badge = document.getElementById('statusBadge');
+            const text = document.getElementById('statusText');
+
+            if (statusData.streaming) {
+                badge.className = 'status-badge running';
+                text.textContent = 'Streaming';
+                document.getElementById('streamStatus').textContent = 'ON';
+            } else {
+                badge.className = 'status-badge stopped';
+                text.textContent = 'Stopped';
+                document.getElementById('streamStatus').textContent = 'OFF';
+            }
+
+            document.getElementById('stationsCount').textContent = statusData.stations_count || 0;
+            document.getElementById('recordingsCount').textContent = statusData.recordings_count || 0;
+        }
+
+        async function loadStations() {
+            try {
+                const res = await fetch(API + '/stations', { credentials: 'include' });
+                const data = await res.json();
+                stationsData = data.stations || [];
+                renderStations();
+                updateStationSelects();
+            } catch(e) {
+                console.error('Stations error:', e);
+            }
+        }
+
+        function renderStations(genre = 'all') {
+            const list = document.getElementById('stationsList');
+            const quickList = document.getElementById('quickStations');
+
+            let filtered = stationsData;
+            if (genre !== 'all') {
+                filtered = stationsData.filter(s => s.genre === genre);
+            }
+
+            if (filtered.length === 0) {
+                list.innerHTML = '<div class="empty-state"><div class="icon">&#127898;</div><p>No stations. Add your favorite radio stations!</p></div>';
+                quickList.innerHTML = '<div class="empty-state"><p>No stations added yet</p></div>';
+                return;
+            }
+
+            const html = filtered.map(s => `
+                <div class="station-item">
+                    <div class="station-info">
+                        <span class="station-name">${escapeHtml(s.name)}</span>
+                        <span class="station-meta">${escapeHtml(s.genre)} - ${s.bitrate}kbps ${s.codec.toUpperCase()}</span>
+                    </div>
+                    <div class="station-controls">
+                        <button onclick="playStation('${s.id}')" title="Play">&#9654;</button>
+                        <button onclick="recordStation('${s.id}')" title="Record">&#9899;</button>
+                        <button onclick="deleteStation('${s.id}')" title="Delete">&#128465;</button>
+                    </div>
+                </div>
+            `).join('');
+
+            list.innerHTML = html;
+            quickList.innerHTML = stationsData.slice(0, 5).map(s => `
+                <div class="station-item">
+                    <div class="station-info">
+                        <span class="station-name">${escapeHtml(s.name)}</span>
+                        <span class="station-meta">${escapeHtml(s.genre)}</span>
+                    </div>
+                    <div class="station-controls">
+                        <button onclick="playStation('${s.id}')" title="Play">&#9654;</button>
+                    </div>
+                </div>
+            `).join('');
+
+            // Update genre filters
+            const genres = [...new Set(stationsData.map(s => s.genre))];
+            const filtersHtml = '<button class="genre-btn active" data-genre="all">All</button>' +
+                genres.map(g => `<button class="genre-btn" data-genre="${escapeHtml(g)}">${escapeHtml(g)}</button>`).join('');
+            document.getElementById('genreFilters').innerHTML = filtersHtml;
+
+            document.querySelectorAll('.genre-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.genre-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    renderStations(btn.dataset.genre);
+                });
+            });
+        }
+
+        function updateStationSelects() {
+            const options = stationsData.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
+            document.getElementById('recordStation').innerHTML = options || '<option value="">No stations</option>';
+            document.getElementById('schedStation').innerHTML = options || '<option value="">No stations</option>';
+        }
+
+        async function playStation(stationId) {
+            const station = stationsData.find(s => s.id === stationId);
+            if (!station) return;
+
+            currentStation = station;
+            audioPlayer.src = station.url;
+            audioPlayer.volume = document.getElementById('volumeSlider').value / 100;
+            audioPlayer.play();
+
+            document.getElementById('playerTitle').textContent = station.name;
+            document.getElementById('playerMeta').textContent = `${station.genre} - ${station.bitrate}kbps`;
+            document.getElementById('playerBar').style.display = 'flex';
+            document.getElementById('playBtn').innerHTML = '&#10074;&#10074;';
+
+            document.getElementById('nowPlaying').innerHTML = `
+                <div style="text-align:center;">
+                    <div style="font-size:3rem;margin-bottom:1rem;">&#127898;</div>
+                    <div style="font-size:1.2rem;font-weight:bold;color:var(--radio-violet);">${escapeHtml(station.name)}</div>
+                    <div style="color:var(--p31-dim);">${escapeHtml(station.genre)} - ${station.bitrate}kbps</div>
+                </div>
+            `;
+        }
+
+        function togglePlay() {
+            if (audioPlayer.paused) {
+                audioPlayer.play();
+                document.getElementById('playBtn').innerHTML = '&#10074;&#10074;';
+            } else {
+                audioPlayer.pause();
+                document.getElementById('playBtn').innerHTML = '&#9654;';
+            }
+        }
+
+        document.getElementById('volumeSlider').addEventListener('input', e => {
+            audioPlayer.volume = e.target.value / 100;
+        });
+
+        // Add station form
+        document.getElementById('addStationForm').addEventListener('submit', async e => {
+            e.preventDefault();
+            const station = {
+                name: document.getElementById('stationName').value,
+                url: document.getElementById('stationUrl').value,
+                genre: document.getElementById('stationGenre').value,
+                bitrate: parseInt(document.getElementById('stationBitrate').value),
+                codec: 'mp3'
+            };
+
+            try {
+                const res = await fetch(API + '/station/add', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(station)
+                });
+                const data = await res.json();
+                if (data.success) {
+                    e.target.reset();
+                    loadStations();
+                } else {
+                    alert('Error: ' + (data.error || 'Failed to add station'));
+                }
+            } catch(err) {
+                alert('Error: ' + err.message);
+            }
+        });
+
+        async function deleteStation(stationId) {
+            if (!confirm('Delete this station?')) return;
+            try {
+                await fetch(API + '/station/' + stationId, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+                loadStations();
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        // Streaming controls
+        async function startStream() {
+            try {
+                const res = await fetch(API + '/stream/start', { method: 'POST', credentials: 'include' });
+                const data = await res.json();
+                if (!data.success) alert('Error: ' + (data.error || 'Failed'));
+                loadStatus();
+            } catch(e) { alert('Error: ' + e.message); }
+        }
+
+        async function stopStream() {
+            try {
+                const res = await fetch(API + '/stream/stop', { method: 'POST', credentials: 'include' });
+                const data = await res.json();
+                if (!data.success) alert('Error: ' + (data.error || 'Failed'));
+                loadStatus();
+            } catch(e) { alert('Error: ' + e.message); }
+        }
+
+        async function restartStream() {
+            try {
+                const res = await fetch(API + '/container/restart', { method: 'POST', credentials: 'include' });
+                const data = await res.json();
+                if (!data.success) alert('Error: ' + (data.error || 'Failed'));
+                loadStatus();
+            } catch(e) { alert('Error: ' + e.message); }
+        }
+
+        async function loadStreamStatus() {
+            try {
+                const res = await fetch(API + '/stream/status', { credentials: 'include' });
+                const data = await res.json();
+                document.getElementById('listenersCount').textContent = data.listeners || 0;
+
+                if (data.mounts && data.mounts.length > 0) {
+                    document.getElementById('mountsList').innerHTML = data.mounts.map(m => `
+                        <div class="station-item">
+                            <div class="station-info">
+                                <span class="station-name">${escapeHtml(m.title || m.mount)}</span>
+                                <span class="station-meta">${m.listeners} listeners - ${m.bitrate}kbps</span>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            } catch(e) {}
+        }
+
+        // Recordings
+        async function loadRecordings() {
+            const container = document.getElementById('recordingsList');
+            try {
+                const res = await fetch(API + '/recordings', { credentials: 'include' });
+                const data = await res.json();
+
+                if (!data.recordings || data.recordings.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><div class="icon">&#127897;</div><p>No recordings yet</p></div>';
+                    return;
+                }
+
+                container.innerHTML = data.recordings.map(r => `
+                    <div class="recording-item">
+                        <div class="recording-info">
+                            <div class="recording-name">${escapeHtml(r.name)}</div>
+                            <div class="recording-meta">${formatBytes(r.size)} - ${formatDate(r.created)} - ${r.format}</div>
+                        </div>
+                        <div class="station-controls">
+                            <button onclick="playRecording('${escapeHtml(r.path)}')" title="Play">&#9654;</button>
+                            <button onclick="deleteRecording('${escapeHtml(r.name)}')" title="Delete">&#128465;</button>
+                        </div>
+                    </div>
+                `).join('');
+            } catch(e) {
+                container.innerHTML = '<div class="empty-state"><p>Error loading recordings</p></div>';
+            }
+        }
+
+        async function startRecording() {
+            const stationId = document.getElementById('recordStation').value;
+            const format = document.getElementById('recordFormat').value;
+            if (!stationId) return alert('Select a station first');
+
+            try {
+                const res = await fetch(API + '/record/start?station_id=' + stationId + '&format=' + format, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert('Recording started: ' + data.filename);
+                    loadRecordings();
+                } else {
+                    alert('Error: ' + (data.error || 'Failed'));
+                }
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        async function stopRecording() {
+            try {
+                const res = await fetch(API + '/record/stop', { method: 'POST', credentials: 'include' });
+                const data = await res.json();
+                alert('Stopped ' + (data.stopped || 0) + ' recording(s)');
+                loadRecordings();
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        async function deleteRecording(filename) {
+            if (!confirm('Delete this recording?')) return;
+            try {
+                await fetch(API + '/recording/' + encodeURIComponent(filename), {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+                loadRecordings();
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        // Schedule
+        async function loadSchedule() {
+            try {
+                const res = await fetch(API + '/schedule', { credentials: 'include' });
+                const data = await res.json();
+
+                const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+                const grid = document.getElementById('scheduleGrid');
+                grid.innerHTML = days.map((day, i) => `
+                    <div class="day-column">
+                        <div class="day-header">${day}</div>
+                        ${(data.schedule || []).filter(e => e.day_of_week === i).map(e => {
+                            const station = stationsData.find(s => s.id === e.station_id);
+                            return `
+                                <div class="schedule-entry">
+                                    <div>${e.start_time} - ${e.end_time}</div>
+                                    <div style="font-weight:bold;">${escapeHtml(station?.name || 'Unknown')}</div>
+                                    <div>${e.action}</div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                `).join('');
+            } catch(e) {}
+        }
+
+        function showAddScheduleModal() {
+            document.getElementById('scheduleModal').classList.add('active');
+        }
+
+        function closeScheduleModal() {
+            document.getElementById('scheduleModal').classList.remove('active');
+        }
+
+        document.getElementById('scheduleForm').addEventListener('submit', async e => {
+            e.preventDefault();
+            const entry = {
+                station_id: document.getElementById('schedStation').value,
+                day_of_week: parseInt(document.getElementById('schedDay').value),
+                start_time: document.getElementById('schedStart').value,
+                end_time: document.getElementById('schedEnd').value,
+                action: document.getElementById('schedAction').value,
+                enabled: true
+            };
+
+            try {
+                const res = await fetch(API + '/schedule', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(entry)
+                });
+                const data = await res.json();
+                if (data.success) {
+                    closeScheduleModal();
+                    loadSchedule();
+                } else {
+                    alert('Error: ' + (data.error || 'Failed'));
+                }
+            } catch(err) {
+                alert('Error: ' + err.message);
+            }
+        });
+
+        // Settings
+        async function loadConfig() {
+            try {
+                const res = await fetch(API + '/config', { credentials: 'include' });
+                const data = await res.json();
+                document.getElementById('cfgIcecastPort').value = data.icecast_port || 8000;
+                document.getElementById('cfgLiquidsoapPort').value = data.liquidsoap_port || 8001;
+                document.getElementById('cfgDataPath').value = data.data_path || '/var/lib/secubox/webradio';
+                document.getElementById('cfgMemory').value = data.memory_limit || '256m';
+                document.getElementById('cfgMaxRecording').value = data.max_recording_hours || 4;
+            } catch(e) {}
+        }
+
+        async function loadContainerStatus() {
+            try {
+                const res = await fetch(API + '/container/status', { credentials: 'include' });
+                const data = await res.json();
+                document.getElementById('containerStatus').innerHTML = `
+                    <p><strong>Runtime:</strong> ${data.runtime || 'Not found'}</p>
+                    ${(data.containers || []).map(c => `
+                        <p>${c.name}: ${c.running ? '<span style="color:green;">Running</span>' : '<span style="color:red;">Stopped</span>'}</p>
+                    `).join('')}
+                `;
+            } catch(e) {
+                document.getElementById('containerStatus').innerHTML = '<p>Error loading status</p>';
+            }
+        }
+
+        document.getElementById('configForm').addEventListener('submit', async e => {
+            e.preventDefault();
+            const config = {
+                icecast_port: parseInt(document.getElementById('cfgIcecastPort').value),
+                liquidsoap_port: parseInt(document.getElementById('cfgLiquidsoapPort').value),
+                data_path: document.getElementById('cfgDataPath').value,
+                memory_limit: document.getElementById('cfgMemory').value,
+                max_recording_hours: parseInt(document.getElementById('cfgMaxRecording').value),
+                output_formats: ['mp3', 'ogg', 'aac']
+            };
+
+            try {
+                const res = await fetch(API + '/config', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+                const data = await res.json();
+                if (data.success) alert('Configuration saved!');
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
+        });
+
+        async function installContainers() {
+            const btn = event.target;
+            btn.disabled = true;
+            btn.textContent = 'Installing...';
+            try {
+                const res = await fetch(API + '/container/install', { method: 'POST', credentials: 'include' });
+                const data = await res.json();
+                if (data.success) {
+                    alert('Containers installed!');
+                    document.getElementById('installBanner').style.display = 'none';
+                } else {
+                    alert('Error: ' + (data.errors?.join(', ') || 'Failed'));
+                }
+            } catch(e) {
+                alert('Error: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Install Icecast';
+            }
+        }
+
+        async function loadLogs() {
+            const container = document.getElementById('logsContainer');
+            try {
+                const res = await fetch(API + '/logs?lines=100', { credentials: 'include' });
+                const data = await res.json();
+                container.innerHTML = (data.logs || []).map(line => `<div class="log-line">${escapeHtml(line)}</div>`).join('') || '<div class="log-line">No logs</div>';
+                container.scrollTop = container.scrollHeight;
+            } catch(e) {
+                container.innerHTML = '<div class="log-line">Error loading logs</div>';
+            }
+        }
+
+        // Audio Visualizer
+        function initVisualizer() {
+            const viz = document.getElementById('visualizer');
+            for (let i = 0; i < 12; i++) {
+                const bar = document.createElement('div');
+                bar.className = 'visualizer-bar';
+                bar.style.height = '4px';
+                viz.appendChild(bar);
+            }
+        }
+
+        audioPlayer.addEventListener('play', () => {
+            animateVisualizer();
+        });
+
+        audioPlayer.addEventListener('pause', () => {
+            document.querySelectorAll('.visualizer-bar').forEach(bar => {
+                bar.style.height = '4px';
+            });
+        });
+
+        function animateVisualizer() {
+            if (audioPlayer.paused) return;
+            document.querySelectorAll('.visualizer-bar').forEach(bar => {
+                bar.style.height = (4 + Math.random() * 36) + 'px';
+            });
+            requestAnimationFrame(() => setTimeout(animateVisualizer, 100));
+        }
+
+        // Utilities
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.toString().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function formatBytes(bytes) {
+            if (!bytes) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+
+        function formatDate(ts) {
+            if (!ts) return '';
+            return new Date(ts * 1000).toLocaleString();
+        }
+
+        // Initialize
+        init();
     </script>
-    <script src="/shared/sidebar.js"></script>
 </body>
 </html>

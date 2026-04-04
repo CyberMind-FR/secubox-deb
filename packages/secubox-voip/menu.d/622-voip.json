@@ -1,0 +1,8 @@
+{
+    "name": "VoIP/PBX",
+    "path": "/voip/",
+    "icon": "phone",
+    "category": "apps",
+    "order": 622,
+    "description": "Asterisk/FreePBX PBX management"
+}

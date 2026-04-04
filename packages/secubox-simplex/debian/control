@@ -3,11 +3,32 @@ Section: net
 Priority: optional
 Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
-Standards-Version: 4.6.0
+Standards-Version: 4.6.2
 
 Package: secubox-simplex
 Architecture: all
-Depends: secubox-core, python3, python3-uvicorn, python3-fastapi, nginx, lxc
+Depends: secubox-core,
+         python3,
+         python3-uvicorn,
+         python3-fastapi,
+         python3-pydantic,
+         nginx,
+         openssl,
+         ${misc:Depends}
+Recommends: docker.io | podman
+Suggests: certbot
 Description: SecuBox SimpleX Chat Server
- LXC-based SimpleX SMP server for SecuBox.
- Privacy-focused messaging relay with no user identifiers.
+ Privacy-focused SimpleX SMP/XFTP server management for SecuBox.
+ .
+ Features:
+  - SimpleX Chat SMP relay server
+  - Zero-knowledge messaging infrastructure
+  - No user identifiers or metadata
+  - Docker/Podman container deployment
+  - TLS certificate management
+  - Backup and restore functionality
+  - Connection statistics
+  - Queue management
+ .
+ SimpleX is a decentralized messaging protocol that provides
+ strong privacy guarantees without relying on user identifiers.

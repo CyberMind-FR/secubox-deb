@@ -3,671 +3,937 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PhotoPrism - SecuBox</title>
+    <title>SecuBox - PhotoPrism Photo Management</title>
+    <link rel="stylesheet" href="/shared/sidebar.css">
     <link rel="stylesheet" href="/shared/crt-light.css">
-    <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
         :root {
-            --photoprism-purple: #9c27b0;
-            --photoprism-light: #ce93d8;
-            --photoprism-dark: #7b1fa2;
+            --p31-peak: #00dd44;
+            --p31-dim: #006622;
+            --p31-glow: rgba(0, 221, 68, 0.15);
+            --tube-light: #e8f5e9;
+            --tube-mid: #c8e6c9;
+            --tube-dark: #a5d6a7;
+            --text-primary: #1b5e20;
+            --text-secondary: #388e3c;
+            --text-dim: #66bb6a;
+            --surface: #f1f8e9;
+            --surface-alt: #dcedc8;
+            --border: #c5e1a5;
+            --error: #c62828;
+            --warning: #f57c00;
+            --success: #2e7d32;
+            --photoprism: #a855f7;
+            --photoprism-dark: #9333ea;
+            --photoprism-light: #c084fc;
         }
-
-        body.dark {
-            --photoprism-purple: #ce93d8;
-            --photoprism-light: #f3e5f5;
-            --photoprism-dark: #ab47bc;
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            background: linear-gradient(135deg, var(--tube-light) 0%, var(--tube-mid) 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
         }
-
-        .accent { color: var(--photoprism-purple); }
-        .accent-bg { background-color: var(--photoprism-purple); }
-        .accent-border { border-color: var(--photoprism-purple); }
-
+        body.crt-light { background: linear-gradient(135deg, var(--tube-light) 0%, var(--tube-mid) 100%); }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; max-width: calc(100% - 220px); }
         .header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 1rem;
-            border-bottom: 1px solid var(--border);
-            margin-bottom: 1rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid var(--photoprism);
         }
+        .header h1 { font-size: 1.5rem; color: var(--photoprism); }
+        .header-actions { display: flex; gap: 0.5rem; }
 
-        .header h1 {
-            margin: 0;
-            font-size: 1.5rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .status-badge {
-            padding: 0.25rem 0.75rem;
-            border-radius: 1rem;
-            font-size: 0.875rem;
-            font-weight: 500;
-        }
-
-        .status-badge.running {
-            background: var(--success-bg);
-            color: var(--success);
-        }
-
-        .status-badge.stopped {
-            background: var(--error-bg);
-            color: var(--error);
-        }
-
-        .stats-grid {
+        /* Stats Row */
+        .stats-row {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
             gap: 1rem;
             margin-bottom: 1.5rem;
         }
-
         .stat-card {
             background: var(--surface);
             border: 1px solid var(--border);
-            border-radius: 0.5rem;
+            border-radius: 8px;
             padding: 1rem;
             text-align: center;
+            box-shadow: 0 2px 8px var(--p31-glow);
         }
+        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
+        .stat-card .value { font-size: 1.25rem; font-weight: bold; color: var(--photoprism); margin-top: 0.25rem; }
+        .stat-card.running .value { color: var(--success); }
+        .stat-card.stopped .value { color: var(--error); }
 
-        .stat-value {
-            font-size: 2rem;
-            font-weight: bold;
-            color: var(--photoprism-purple);
-        }
-
-        .stat-label {
-            font-size: 0.875rem;
-            color: var(--text-secondary);
-            margin-top: 0.25rem;
-        }
-
-        .tabs {
-            display: flex;
-            gap: 0.5rem;
-            border-bottom: 1px solid var(--border);
-            margin-bottom: 1rem;
-            overflow-x: auto;
-        }
-
+        /* Tabs */
+        .tabs { display: flex; gap: 0; margin-bottom: 1.5rem; border-bottom: 2px solid var(--border); }
         .tab {
-            padding: 0.75rem 1rem;
-            border: none;
-            background: none;
-            color: var(--text-secondary);
+            padding: 0.75rem 1.5rem;
             cursor: pointer;
-            border-bottom: 2px solid transparent;
-            white-space: nowrap;
-            font-size: 0.875rem;
-        }
-
-        .tab:hover {
-            color: var(--text);
-        }
-
-        .tab.active {
-            color: var(--photoprism-purple);
-            border-bottom-color: var(--photoprism-purple);
-        }
-
-        .tab-content {
-            display: none;
-        }
-
-        .tab-content.active {
-            display: block;
-        }
-
-        .photo-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-            gap: 0.5rem;
-        }
-
-        .photo-item {
-            aspect-ratio: 1;
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 0.25rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            border: 1px solid transparent;
+            border-bottom: none;
+            border-radius: 8px 8px 0 0;
+            background: transparent;
             color: var(--text-secondary);
-            font-size: 2rem;
-        }
-
-        .album-list {
-            display: grid;
-            gap: 0.5rem;
-        }
-
-        .album-item {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            padding: 0.75rem;
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 0.5rem;
-        }
-
-        .album-icon {
-            font-size: 2rem;
-        }
-
-        .album-info {
-            flex: 1;
-        }
-
-        .album-title {
             font-weight: 500;
+            transition: all 0.2s;
+        }
+        .tab:hover { background: var(--surface-alt); }
+        .tab.active {
+            background: var(--surface);
+            border-color: var(--border);
+            color: var(--photoprism);
+            margin-bottom: -2px;
+            border-bottom: 2px solid var(--surface);
         }
 
-        .album-count {
-            font-size: 0.875rem;
-            color: var(--text-secondary);
-        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
 
-        .action-bar {
-            display: flex;
-            gap: 0.5rem;
+        /* Cards */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.25rem;
             margin-bottom: 1rem;
-            flex-wrap: wrap;
+            box-shadow: 0 2px 8px var(--p31-glow);
+        }
+        .card h3 {
+            font-size: 1rem;
+            color: var(--photoprism);
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border);
         }
 
+        /* Buttons */
         .btn {
             padding: 0.5rem 1rem;
-            border: 1px solid var(--border);
-            border-radius: 0.25rem;
+            border-radius: 6px;
+            border: 1px solid var(--photoprism);
             background: var(--surface);
-            color: var(--text);
+            color: var(--photoprism);
             cursor: pointer;
-            font-size: 0.875rem;
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .btn:hover {
-            background: var(--hover);
-        }
-
-        .btn.primary {
-            background: var(--photoprism-purple);
-            color: white;
-            border-color: var(--photoprism-purple);
-        }
-
-        .btn.primary:hover {
-            background: var(--photoprism-dark);
-        }
-
-        .btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .settings-form {
-            display: grid;
-            gap: 1rem;
-            max-width: 500px;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 0.25rem;
             font-weight: 500;
+            transition: all 0.2s;
         }
+        .btn:hover { background: var(--photoprism); color: white; }
+        .btn-primary { background: var(--photoprism); color: white; }
+        .btn-primary:hover { background: var(--photoprism-dark); }
+        .btn-danger { border-color: var(--error); color: var(--error); }
+        .btn-danger:hover { background: var(--error); color: white; }
+        .btn-success { border-color: var(--success); color: var(--success); }
+        .btn-success:hover { background: var(--success); color: white; }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.875rem; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-        .form-group input,
-        .form-group select {
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+        th { color: var(--text-dim); font-weight: 500; font-size: 0.75rem; text-transform: uppercase; }
+        tr:hover { background: var(--surface-alt); }
+
+        /* Forms */
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.25rem; color: var(--text-secondary); font-size: 0.875rem; }
+        input, select {
             width: 100%;
             padding: 0.5rem;
             border: 1px solid var(--border);
-            border-radius: 0.25rem;
-            background: var(--surface);
-            color: var(--text);
+            border-radius: 6px;
+            background: white;
+            color: var(--text-primary);
+            font-family: inherit;
         }
+        input:focus, select:focus { outline: none; border-color: var(--photoprism); box-shadow: 0 0 5px rgba(168, 85, 247, 0.3); }
+        .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
+        .checkbox-label { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; }
+        .checkbox-label input[type="checkbox"] { width: auto; }
 
-        .form-group input:focus,
-        .form-group select:focus {
-            outline: none;
-            border-color: var(--photoprism-purple);
-        }
-
-        .checkbox-group {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .log-viewer {
-            background: var(--bg-dark, #1a1a2e);
-            color: var(--text-light, #e0e0e0);
-            font-family: monospace;
+        /* Badges */
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
             font-size: 0.75rem;
+            font-weight: 500;
+        }
+        .badge-success { background: #c8e6c9; color: #2e7d32; }
+        .badge-error { background: #ffcdd2; color: #c62828; }
+        .badge-warning { background: #ffe0b2; color: #e65100; }
+        .badge-info { background: #e1bee7; color: #7b1fa2; }
+
+        /* Install Banner */
+        .install-banner {
+            background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
+            border: 2px solid var(--photoprism);
+            border-radius: 12px;
+            padding: 2rem;
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+        .install-banner h2 { color: var(--photoprism); margin-bottom: 1rem; }
+        .install-banner p { color: var(--text-secondary); margin-bottom: 1.5rem; }
+
+        /* Album Grid */
+        .album-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+        .album-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
             padding: 1rem;
-            border-radius: 0.5rem;
-            height: 400px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .album-card:hover { border-color: var(--photoprism); transform: translateY(-2px); }
+        .album-icon { font-size: 3rem; margin-bottom: 0.5rem; }
+        .album-title { font-weight: 500; color: var(--text-primary); }
+        .album-count { font-size: 0.875rem; color: var(--text-dim); }
+
+        /* Storage Bar */
+        .storage-bar {
+            background: var(--border);
+            height: 20px;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 1rem 0;
+        }
+        .storage-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--photoprism) 0%, var(--photoprism-light) 100%);
+            transition: width 0.3s;
+        }
+        .storage-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.875rem;
+            color: var(--text-dim);
+        }
+
+        /* Face Recognition Toggle */
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 26px;
+        }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: var(--border);
+            transition: 0.4s;
+            border-radius: 26px;
+        }
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: 0.4s;
+            border-radius: 50%;
+        }
+        input:checked + .toggle-slider { background-color: var(--photoprism); }
+        input:checked + .toggle-slider:before { transform: translateX(24px); }
+
+        /* Logs */
+        .logs-container {
+            background: #1a1a1a;
+            color: #c084fc;
+            padding: 1rem;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 0.8rem;
+            max-height: 400px;
             overflow-y: auto;
             white-space: pre-wrap;
             word-break: break-all;
         }
 
-        .empty-state {
-            text-align: center;
-            padding: 3rem;
-            color: var(--text-secondary);
-        }
-
-        .empty-state-icon {
-            font-size: 3rem;
-            margin-bottom: 1rem;
-        }
-
-        .progress-bar {
-            height: 0.5rem;
-            background: var(--border);
-            border-radius: 0.25rem;
-            overflow: hidden;
-            margin-top: 0.5rem;
-        }
-
-        .progress-fill {
-            height: 100%;
-            background: var(--photoprism-purple);
-            transition: width 0.3s ease;
-        }
-
-        .open-app-btn {
+        /* Toast */
+        .toast {
             position: fixed;
             bottom: 1rem;
             right: 1rem;
             padding: 1rem 1.5rem;
-            background: var(--photoprism-purple);
+            border-radius: 8px;
             color: white;
-            border: none;
-            border-radius: 2rem;
-            cursor: pointer;
-            font-size: 1rem;
-            box-shadow: 0 4px 12px rgba(156, 39, 176, 0.4);
-            display: flex;
+            z-index: 1000;
+            animation: slideIn 0.3s ease;
+        }
+        .toast-success { background: var(--success); }
+        .toast-error { background: var(--error); }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        .spinner {
+            display: inline-block;
+            width: 1rem;
+            height: 1rem;
+            border: 2px solid var(--border);
+            border-top-color: var(--photoprism);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Open PhotoPrism link */
+        .open-link {
+            display: inline-flex;
             align-items: center;
             gap: 0.5rem;
+            color: var(--photoprism);
+            text-decoration: none;
+            font-weight: 500;
         }
+        .open-link:hover { text-decoration: underline; }
 
-        .open-app-btn:hover {
-            background: var(--photoprism-dark);
+        @media (max-width: 768px) {
+            .main { margin-left: 0; max-width: 100%; }
+            .stats-row { grid-template-columns: repeat(2, 1fr); }
+            .tabs { overflow-x: auto; }
         }
-
-        .hidden { display: none !important; }
     </style>
 </head>
 <body class="crt-light">
     <nav class="sidebar" id="sidebar"></nav>
-    <main class="main-content">
-    <div class="container">
-        <div class="header">
-            <h1><span class="accent">PhotoPrism</span></h1>
-            <span id="status-badge" class="status-badge stopped">Stopped</span>
+    <script src="/shared/sidebar.js"></script>
+
+    <main class="main">
+        <header class="header">
+            <h1>PhotoPrism Photo Management</h1>
+            <div class="header-actions">
+                <a id="openPhotoprism" href="#" target="_blank" class="btn" style="display: none;">Open PhotoPrism</a>
+                <button class="btn" onclick="refresh()">Refresh</button>
+                <button class="btn btn-primary" id="btnToggle" onclick="toggleService()">Start</button>
+            </div>
+        </header>
+
+        <!-- Install Banner (shown when not installed) -->
+        <div id="installBanner" class="install-banner" style="display: none;">
+            <h2>Welcome to PhotoPrism</h2>
+            <p>AI-Powered Photos App for the Decentralized Web. Browse, organize and share your photo collection.</p>
+            <button class="btn btn-primary" onclick="installPhotoprism()">Install PhotoPrism</button>
         </div>
 
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-value" id="photo-count">0</div>
-                <div class="stat-label">Photos</div>
+        <!-- Stats Row -->
+        <div class="stats-row">
+            <div class="stat-card" id="statStatus">
+                <div class="label">Status</div>
+                <div class="value">-</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value" id="video-count">0</div>
-                <div class="stat-label">Videos</div>
+                <div class="label">Photos</div>
+                <div class="value" id="statPhotos">-</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value" id="album-count">0</div>
-                <div class="stat-label">Albums</div>
+                <div class="label">Videos</div>
+                <div class="value" id="statVideos">-</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value" id="library-size">0</div>
-                <div class="stat-label">Library Size</div>
+                <div class="label">Albums</div>
+                <div class="value" id="statAlbums">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Storage Used</div>
+                <div class="value" id="statStorage">-</div>
             </div>
         </div>
 
-        <div class="action-bar">
-            <button class="btn primary" id="btn-start" onclick="startService()">Start</button>
-            <button class="btn" id="btn-stop" onclick="stopService()" disabled>Stop</button>
-            <button class="btn" id="btn-index" onclick="startIndexing()" disabled>Index Photos</button>
-            <button class="btn" id="btn-import" onclick="startImport()" disabled>Import</button>
-        </div>
-
+        <!-- Tabs -->
         <div class="tabs">
-            <button class="tab active" data-tab="photos">Photos</button>
-            <button class="tab" data-tab="albums">Albums</button>
-            <button class="tab" data-tab="faces">Faces</button>
-            <button class="tab" data-tab="logs">Logs</button>
-            <button class="tab" data-tab="settings">Settings</button>
+            <div class="tab active" onclick="showTab('library')">Library</div>
+            <div class="tab" onclick="showTab('albums')">Albums</div>
+            <div class="tab" onclick="showTab('faces')">Faces</div>
+            <div class="tab" onclick="showTab('storage')">Storage</div>
+            <div class="tab" onclick="showTab('settings')">Settings</div>
+            <div class="tab" onclick="showTab('logs')">Logs</div>
         </div>
 
-        <div id="tab-photos" class="tab-content active">
-            <div id="photos-container" class="photo-grid">
-                <div class="empty-state" style="grid-column: 1/-1;">
-                    <div class="empty-state-icon">📷</div>
-                    <p>No photos yet. Start the service and import some photos!</p>
+        <!-- Library Tab -->
+        <div id="tab-library" class="tab-content active">
+            <div class="card">
+                <h3>Library Management</h3>
+                <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem;">
+                    <button class="btn btn-primary" id="btnIndex" onclick="startIndexing()">Index Library</button>
+                    <button class="btn" id="btnImport" onclick="startImport()">Import Photos</button>
                 </div>
+                <div class="form-row">
+                    <div class="stat-card">
+                        <div class="label">Total Photos</div>
+                        <div class="value" id="libPhotos">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">Total Videos</div>
+                        <div class="value" id="libVideos">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">Pending Import</div>
+                        <div class="value" id="libPending">0</div>
+                    </div>
+                </div>
+                <p style="margin-top: 1rem; color: var(--text-dim); font-size: 0.875rem;">
+                    Place photos in the import folder, then click "Import Photos" to add them to your library.
+                </p>
             </div>
         </div>
 
+        <!-- Albums Tab -->
         <div id="tab-albums" class="tab-content">
-            <div class="action-bar">
-                <button class="btn primary" onclick="createAlbum()">New Album</button>
-            </div>
-            <div id="albums-container" class="album-list">
-                <div class="empty-state">
-                    <div class="empty-state-icon">📁</div>
-                    <p>No albums yet</p>
+            <div class="card">
+                <h3>Albums</h3>
+                <div style="margin-bottom: 1rem;">
+                    <div class="form-row" style="align-items: flex-end;">
+                        <div class="form-group">
+                            <label>Album Title</label>
+                            <input type="text" id="albumTitle" placeholder="e.g., Vacation 2024">
+                        </div>
+                        <div class="form-group">
+                            <label>Description</label>
+                            <input type="text" id="albumDesc" placeholder="Optional description">
+                        </div>
+                        <div class="form-group">
+                            <button class="btn btn-primary" onclick="createAlbum()">Create Album</button>
+                        </div>
+                    </div>
+                </div>
+                <div id="albumsGrid" class="album-grid">
+                    <p style="color: var(--text-dim);">No albums yet. Create one above.</p>
                 </div>
             </div>
         </div>
 
+        <!-- Faces Tab -->
         <div id="tab-faces" class="tab-content">
-            <div id="faces-container" class="photo-grid">
-                <div class="empty-state" style="grid-column: 1/-1;">
-                    <div class="empty-state-icon">👤</div>
-                    <p>Face recognition results will appear here after indexing</p>
+            <div class="card">
+                <h3>Face Recognition</h3>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                    <div>
+                        <p style="color: var(--text-secondary);">Enable AI-powered face recognition to automatically identify and group photos by people.</p>
+                        <p style="color: var(--text-dim); font-size: 0.875rem; margin-top: 0.5rem;">Status: <span id="faceStatus">-</span></p>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="faceToggle" onchange="toggleFaceRecognition()">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                <p style="color: var(--text-dim); font-size: 0.875rem;">
+                    Note: Changes to face recognition settings require a restart of PhotoPrism.
+                </p>
+            </div>
+        </div>
+
+        <!-- Storage Tab -->
+        <div id="tab-storage" class="tab-content">
+            <div class="card">
+                <h3>Storage Information</h3>
+                <div id="storageInfo">
+                    <div class="form-row">
+                        <div>
+                            <label style="color: var(--text-dim);">Originals Path</label>
+                            <p id="storOriginals" style="font-family: monospace;">/srv/photoprism/originals</p>
+                        </div>
+                        <div>
+                            <label style="color: var(--text-dim);">Import Path</label>
+                            <p id="storImport" style="font-family: monospace;">/srv/photoprism/import</p>
+                        </div>
+                    </div>
+                    <div class="storage-bar">
+                        <div class="storage-fill" id="storageBar" style="width: 0%;"></div>
+                    </div>
+                    <div class="storage-info">
+                        <span>Used: <span id="storUsed">0</span></span>
+                        <span>Free: <span id="storFree">0</span></span>
+                        <span>Total: <span id="storTotal">0</span></span>
+                    </div>
                 </div>
             </div>
-        </div>
-
-        <div id="tab-logs" class="tab-content">
-            <div class="action-bar">
-                <button class="btn" onclick="loadLogs()">Refresh</button>
+            <div class="card">
+                <h3>Storage Breakdown</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Location</th>
+                            <th>Size</th>
+                        </tr>
+                    </thead>
+                    <tbody id="storageTable">
+                        <tr><td colspan="2">Loading...</td></tr>
+                    </tbody>
+                </table>
             </div>
-            <div id="log-viewer" class="log-viewer">Loading logs...</div>
         </div>
 
+        <!-- Settings Tab -->
         <div id="tab-settings" class="tab-content">
-            <form class="settings-form" onsubmit="saveSettings(event)">
-                <div class="form-group">
-                    <label>Site URL</label>
-                    <input type="url" id="setting-site-url" placeholder="https://photos.example.com">
+            <div class="card">
+                <h3>Configuration</h3>
+                <form id="settingsForm" onsubmit="saveSettings(event)">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Port</label>
+                            <input type="number" id="cfgPort" value="2342" min="1024" max="65535">
+                        </div>
+                        <div class="form-group">
+                            <label>Data Path</label>
+                            <input type="text" id="cfgDataPath" value="/srv/photoprism">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Originals Path</label>
+                            <input type="text" id="cfgOriginals" value="/srv/photoprism/originals">
+                        </div>
+                        <div class="form-group">
+                            <label>Import Path</label>
+                            <input type="text" id="cfgImport" value="/srv/photoprism/import">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Timezone</label>
+                            <select id="cfgTimezone">
+                                <option value="Europe/Paris">Europe/Paris</option>
+                                <option value="Europe/London">Europe/London</option>
+                                <option value="America/New_York">America/New_York</option>
+                                <option value="America/Los_Angeles">America/Los_Angeles</option>
+                                <option value="Asia/Tokyo">Asia/Tokyo</option>
+                                <option value="UTC">UTC</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Docker Image</label>
+                            <input type="text" id="cfgImage" value="photoprism/photoprism:latest">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Domain (for HAProxy)</label>
+                            <input type="text" id="cfgDomain" value="photos.secubox.local">
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 2rem; flex-wrap: wrap; margin-bottom: 1rem;">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="cfgFaces"> Face Recognition
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="cfgExperimental"> Experimental Features
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="cfgReadonly"> Read-only Mode
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="cfgPublic"> Public Mode (no login)
+                        </label>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save Settings</button>
+                </form>
+            </div>
+            <div class="card">
+                <h3>Maintenance</h3>
+                <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                    <button class="btn" onclick="updatePhotoprism()">Update to Latest</button>
+                    <button class="btn" onclick="createBackup()">Create Backup</button>
+                    <button class="btn btn-danger" onclick="uninstallPhotoprism()">Uninstall</button>
                 </div>
-                <div class="form-group">
-                    <label>Site Title</label>
-                    <input type="text" id="setting-site-title" placeholder="My Photos">
-                </div>
-                <div class="form-group">
-                    <label>New Admin Password</label>
-                    <input type="password" id="setting-password" placeholder="Leave empty to keep current">
-                </div>
-                <div class="form-group checkbox-group">
-                    <input type="checkbox" id="setting-public">
-                    <label for="setting-public">Public Mode (no login required)</label>
-                </div>
-                <div class="form-group checkbox-group">
-                    <input type="checkbox" id="setting-readonly">
-                    <label for="setting-readonly">Read-only Mode</label>
-                </div>
-                <button type="submit" class="btn primary">Save Settings</button>
-            </form>
+            </div>
         </div>
-    </div>
 
-    <button id="open-app-btn" class="open-app-btn hidden" onclick="openApp()">
-        Open PhotoPrism
-    </button>
+        <!-- Logs Tab -->
+        <div id="tab-logs" class="tab-content">
+            <div class="card">
+                <h3>Container Logs</h3>
+                <div style="margin-bottom: 1rem; display: flex; gap: 0.5rem; align-items: center;">
+                    <label>Lines:</label>
+                    <select id="logLines" onchange="loadLogs()">
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                        <option value="200">200</option>
+                    </select>
+                    <button class="btn" onclick="loadLogs()">Refresh</button>
+                </div>
+                <div class="logs-container" id="logsContainer">Loading logs...</div>
+            </div>
+        </div>
+    </main>
 
     <script>
-        const API_BASE = '/api/v1/photoprism';
-        let containerIP = null;
+        const API = '/api/v1/photoprism';
+        let isRunning = false;
+        let containerStatus = 'not_installed';
 
-        async function apiCall(endpoint, options = {}) {
-            const token = localStorage.getItem('sbx_token');
-            const response = await fetch(API_BASE + endpoint, {
-                ...options,
-                headers: {
-                    'Authorization': 'Bearer ' + token,
-                    'Content-Type': 'application/json',
-                    ...options.headers
-                }
-            });
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            return response.json();
+        function getToken() {
+            return localStorage.getItem('jwt_token') || localStorage.getItem('token') || '';
         }
 
-        function formatSize(bytes) {
-            if (bytes === 0) return '0 B';
-            const k = 1024;
-            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        async function api(endpoint, options = {}) {
+            const token = getToken();
+            const headers = { 'Content-Type': 'application/json', ...options.headers };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+            const res = await fetch(API + endpoint, { ...options, headers, credentials: 'include' });
+            if (res.status === 401) {
+                window.location.href = '/portal/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+                throw new Error('Unauthorized');
+            }
+            return res.json();
         }
 
-        async function loadStatus() {
+        function showTab(name) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            const tabs = ['library', 'albums', 'faces', 'storage', 'settings', 'logs'];
+            document.querySelector(`.tab:nth-child(${tabs.indexOf(name)+1})`).classList.add('active');
+            document.getElementById('tab-' + name).classList.add('active');
+            if (name === 'logs') loadLogs();
+            if (name === 'storage') loadStorage();
+            if (name === 'faces') loadFaces();
+            if (name === 'albums') loadAlbums();
+        }
+
+        function toast(msg, type = 'success') {
+            const t = document.createElement('div');
+            t.className = 'toast toast-' + type;
+            t.textContent = msg;
+            document.body.appendChild(t);
+            setTimeout(() => t.remove(), 3000);
+        }
+
+        async function refresh() {
             try {
-                const data = await apiCall('/status');
-                const badge = document.getElementById('status-badge');
-                const btnStart = document.getElementById('btn-start');
-                const btnStop = document.getElementById('btn-stop');
-                const btnIndex = document.getElementById('btn-index');
-                const btnImport = document.getElementById('btn-import');
-                const openBtn = document.getElementById('open-app-btn');
+                const status = await api('/status');
+                containerStatus = status.container_status;
+                isRunning = status.container_status === 'running';
 
-                if (data.running) {
-                    badge.textContent = 'Running';
-                    badge.className = 'status-badge running';
-                    btnStart.disabled = true;
-                    btnStop.disabled = false;
-                    btnIndex.disabled = false;
-                    btnImport.disabled = false;
-                    containerIP = data.container_ip;
-                    openBtn.classList.remove('hidden');
+                // Show/hide install banner
+                document.getElementById('installBanner').style.display =
+                    status.container_status === 'not_installed' ? 'block' : 'none';
+
+                // Update stats
+                const statEl = document.getElementById('statStatus');
+                statEl.querySelector('.value').textContent = status.container_status;
+                statEl.className = 'stat-card ' + (isRunning ? 'running' : 'stopped');
+
+                const libStats = status.library_stats || {};
+                document.getElementById('statPhotos').textContent = libStats.total_photos || 0;
+                document.getElementById('statVideos').textContent = libStats.total_videos || 0;
+                document.getElementById('statAlbums').textContent = libStats.total_albums || 0;
+                document.getElementById('statStorage').textContent = libStats.storage_used || '-';
+
+                document.getElementById('libPhotos').textContent = libStats.total_photos || 0;
+                document.getElementById('libVideos').textContent = libStats.total_videos || 0;
+                document.getElementById('libPending').textContent = libStats.import_pending || 0;
+
+                // Update toggle button
+                const btn = document.getElementById('btnToggle');
+                if (status.container_status === 'not_installed') {
+                    btn.textContent = 'Install';
+                    btn.className = 'btn btn-primary';
+                    btn.onclick = installPhotoprism;
+                } else if (isRunning) {
+                    btn.textContent = 'Stop';
+                    btn.className = 'btn btn-danger';
+                    btn.onclick = () => toggleService();
                 } else {
-                    badge.textContent = data.container_exists ? 'Stopped' : 'Not Installed';
-                    badge.className = 'status-badge stopped';
-                    btnStart.disabled = !data.container_exists;
-                    btnStart.textContent = data.container_exists ? 'Start' : 'Install';
-                    btnStop.disabled = true;
-                    btnIndex.disabled = true;
-                    btnImport.disabled = true;
-                    openBtn.classList.add('hidden');
+                    btn.textContent = 'Start';
+                    btn.className = 'btn btn-success';
+                    btn.onclick = () => toggleService();
                 }
 
-                document.getElementById('photo-count').textContent = data.photos || 0;
-                document.getElementById('video-count').textContent = data.videos || 0;
-                document.getElementById('library-size').textContent = formatSize(data.library_size || 0);
+                // Enable/disable action buttons
+                document.getElementById('btnIndex').disabled = !isRunning;
+                document.getElementById('btnImport').disabled = !isRunning;
 
-                if (data.running) {
-                    loadAlbums();
+                // Open PhotoPrism link
+                const openLink = document.getElementById('openPhotoprism');
+                if (isRunning) {
+                    openLink.style.display = 'inline-flex';
+                    openLink.href = `http://${window.location.hostname}:${status.port}`;
+                } else {
+                    openLink.style.display = 'none';
                 }
+
+                // Load settings
+                document.getElementById('cfgPort').value = status.port || 2342;
+                document.getElementById('cfgDataPath').value = status.data_path || '/srv/photoprism';
+                document.getElementById('cfgOriginals').value = status.originals_path || '/srv/photoprism/originals';
+                document.getElementById('cfgImport').value = status.import_path || '/srv/photoprism/import';
+                document.getElementById('cfgTimezone').value = status.timezone || 'Europe/Paris';
+                document.getElementById('cfgImage').value = status.image || 'photoprism/photoprism:latest';
+                document.getElementById('cfgDomain').value = status.domain || 'photos.secubox.local';
+                document.getElementById('cfgFaces').checked = status.face_recognition !== false;
+                document.getElementById('cfgExperimental').checked = status.experimental || false;
+                document.getElementById('cfgReadonly').checked = status.readonly || false;
+                document.getElementById('cfgPublic').checked = status.public || false;
+
             } catch (e) {
-                console.error('Status load failed:', e);
+                console.error(e);
+                toast('Failed to load status', 'error');
             }
         }
 
-        async function startService() {
-            const btn = document.getElementById('btn-start');
-            const originalText = btn.textContent;
-            btn.disabled = true;
-            btn.textContent = 'Starting...';
-
+        async function toggleService() {
+            const action = isRunning ? '/container/stop' : '/container/start';
             try {
-                const endpoint = originalText === 'Install' ? '/install' : '/start';
-                await apiCall(endpoint, { method: 'POST' });
-                await loadStatus();
+                document.getElementById('btnToggle').disabled = true;
+                document.getElementById('btnToggle').innerHTML = '<span class="spinner"></span>';
+                const res = await api(action, { method: 'POST' });
+                if (res.success) {
+                    toast(isRunning ? 'PhotoPrism stopped!' : 'PhotoPrism started!');
+                } else {
+                    toast(res.error || 'Action failed', 'error');
+                }
+                await refresh();
             } catch (e) {
-                alert('Failed to start: ' + e.message);
+                toast('Action failed: ' + e.message, 'error');
             } finally {
-                btn.disabled = false;
-                btn.textContent = originalText;
+                document.getElementById('btnToggle').disabled = false;
             }
         }
 
-        async function stopService() {
-            const btn = document.getElementById('btn-stop');
-            btn.disabled = true;
-            btn.textContent = 'Stopping...';
-
+        async function installPhotoprism() {
+            if (!confirm('Install PhotoPrism? This will download the Docker image.')) return;
+            toast('Installing PhotoPrism... This may take a few minutes.');
             try {
-                await apiCall('/stop', { method: 'POST' });
-                await loadStatus();
+                const res = await api('/container/install', { method: 'POST' });
+                if (res.success) {
+                    toast('PhotoPrism installed! Starting...');
+                    await api('/container/start', { method: 'POST' });
+                    await refresh();
+                } else {
+                    toast(res.error || 'Install failed', 'error');
+                }
             } catch (e) {
-                alert('Failed to stop: ' + e.message);
-            } finally {
-                btn.textContent = 'Stop';
+                toast('Install failed: ' + e.message, 'error');
             }
         }
 
         async function startIndexing() {
-            const btn = document.getElementById('btn-index');
-            btn.disabled = true;
-            btn.textContent = 'Indexing...';
-
+            if (!isRunning) return toast('PhotoPrism must be running', 'error');
+            toast('Starting indexing...');
             try {
-                const result = await apiCall('/index', { method: 'POST' });
-                alert(result.success ? 'Indexing started' : 'Indexing failed');
-                await loadStatus();
+                const res = await api('/library/index', { method: 'POST' });
+                if (res.success) {
+                    toast('Indexing started!');
+                } else {
+                    toast(res.error || 'Indexing failed', 'error');
+                }
             } catch (e) {
-                alert('Indexing failed: ' + e.message);
-            } finally {
-                btn.disabled = false;
-                btn.textContent = 'Index Photos';
+                toast('Indexing failed: ' + e.message, 'error');
             }
         }
 
         async function startImport() {
-            const btn = document.getElementById('btn-import');
-            btn.disabled = true;
-            btn.textContent = 'Importing...';
-
+            if (!isRunning) return toast('PhotoPrism must be running', 'error');
+            toast('Starting import...');
             try {
-                const result = await apiCall('/import', { method: 'POST' });
-                alert(result.success ? 'Import started' : 'Import failed');
-                await loadStatus();
+                const res = await api('/library/import', { method: 'POST' });
+                if (res.success) {
+                    toast('Import started!');
+                    await refresh();
+                } else {
+                    toast(res.error || 'Import failed', 'error');
+                }
             } catch (e) {
-                alert('Import failed: ' + e.message);
-            } finally {
-                btn.disabled = false;
-                btn.textContent = 'Import';
+                toast('Import failed: ' + e.message, 'error');
             }
         }
 
         async function loadAlbums() {
             try {
-                const data = await apiCall('/albums');
-                const container = document.getElementById('albums-container');
-                document.getElementById('album-count').textContent = data.count || 0;
-
-                if (data.albums && data.albums.length > 0) {
-                    container.innerHTML = data.albums.map(album => `
-                        <div class="album-item">
-                            <div class="album-icon">📁</div>
-                            <div class="album-info">
-                                <div class="album-title">${album.Title || album.title || 'Untitled'}</div>
-                                <div class="album-count">${album.PhotoCount || 0} photos</div>
-                            </div>
+                const res = await api('/albums');
+                const grid = document.getElementById('albumsGrid');
+                const albums = res.albums || [];
+                if (albums.length === 0) {
+                    grid.innerHTML = '<p style="color: var(--text-dim);">No albums yet. Create one above.</p>';
+                } else {
+                    grid.innerHTML = albums.map(a => `
+                        <div class="album-card" onclick="viewAlbum('${a.id}')">
+                            <div class="album-icon">📷</div>
+                            <div class="album-title">${a.title}</div>
+                            <div class="album-count">${a.photo_count || 0} photos</div>
                         </div>
                     `).join('');
                 }
             } catch (e) {
-                console.error('Failed to load albums:', e);
+                console.error(e);
             }
         }
 
         async function createAlbum() {
-            const title = prompt('Album name:');
-            if (!title) return;
+            const title = document.getElementById('albumTitle').value.trim();
+            const description = document.getElementById('albumDesc').value.trim();
+            if (!title) return toast('Album title required', 'error');
 
             try {
-                await apiCall(`/albums?title=${encodeURIComponent(title)}`, { method: 'POST' });
-                await loadAlbums();
+                const res = await api('/album/create', {
+                    method: 'POST',
+                    body: JSON.stringify({ title, description })
+                });
+                if (res.success) {
+                    toast('Album created!');
+                    document.getElementById('albumTitle').value = '';
+                    document.getElementById('albumDesc').value = '';
+                    await loadAlbums();
+                } else {
+                    toast(res.error || 'Failed to create', 'error');
+                }
             } catch (e) {
-                alert('Failed to create album: ' + e.message);
+                toast('Failed: ' + e.message, 'error');
             }
         }
 
-        async function loadLogs() {
+        function viewAlbum(id) {
+            toast('Album view not implemented yet');
+        }
+
+        async function loadFaces() {
             try {
-                const data = await apiCall('/logs?lines=200');
-                const viewer = document.getElementById('log-viewer');
-                viewer.textContent = data.logs ? data.logs.join('\n') : 'No logs available';
-                viewer.scrollTop = viewer.scrollHeight;
+                const res = await api('/faces');
+                document.getElementById('faceToggle').checked = res.enabled;
+                document.getElementById('faceStatus').textContent = res.status;
             } catch (e) {
-                document.getElementById('log-viewer').textContent = 'Failed to load logs: ' + e.message;
+                console.error(e);
             }
         }
 
-        async function loadConfig() {
+        async function toggleFaceRecognition() {
+            const enabled = document.getElementById('faceToggle').checked;
             try {
-                const data = await apiCall('/config');
-                document.getElementById('setting-site-url').value = data.site_url || '';
-                document.getElementById('setting-site-title').value = data.site_title || '';
-                document.getElementById('setting-public').checked = data.public || false;
-                document.getElementById('setting-readonly').checked = data.readonly || false;
+                const endpoint = enabled ? '/faces/enable' : '/faces/disable';
+                const res = await api(endpoint, { method: 'POST' });
+                if (res.success) {
+                    toast(res.message || 'Settings updated');
+                } else {
+                    toast(res.error || 'Failed', 'error');
+                }
             } catch (e) {
-                console.error('Failed to load config:', e);
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function loadStorage() {
+            try {
+                const res = await api('/storage');
+                document.getElementById('storOriginals').textContent = res.originals_path || '/srv/photoprism/originals';
+                document.getElementById('storImport').textContent = res.import_path || '/srv/photoprism/import';
+                document.getElementById('storUsed').textContent = res.originals_size || '0';
+                document.getElementById('storFree').textContent = res.disk_free || '0';
+                document.getElementById('storTotal').textContent = res.disk_total || '0';
+                document.getElementById('storageBar').style.width = (res.disk_used_percent || 0) + '%';
+
+                const table = document.getElementById('storageTable');
+                table.innerHTML = `
+                    <tr><td>Data</td><td>${res.data_size || '0'}</td></tr>
+                    <tr><td>Originals</td><td>${res.originals_size || '0'}</td></tr>
+                    <tr><td>Import</td><td>${res.import_size || '0'}</td></tr>
+                `;
+            } catch (e) {
+                console.error(e);
             }
         }
 
         async function saveSettings(e) {
             e.preventDefault();
-
-            const config = {
-                site_url: document.getElementById('setting-site-url').value,
-                site_title: document.getElementById('setting-site-title').value,
-                public: document.getElementById('setting-public').checked,
-                readonly: document.getElementById('setting-readonly').checked
-            };
-
-            const password = document.getElementById('setting-password').value;
-
             try {
-                await apiCall('/config', {
+                const res = await api('/config', {
                     method: 'POST',
-                    body: JSON.stringify(config)
+                    body: JSON.stringify({
+                        port: parseInt(document.getElementById('cfgPort').value),
+                        data_path: document.getElementById('cfgDataPath').value,
+                        originals_path: document.getElementById('cfgOriginals').value,
+                        import_path: document.getElementById('cfgImport').value,
+                        timezone: document.getElementById('cfgTimezone').value,
+                        image: document.getElementById('cfgImage').value,
+                        domain: document.getElementById('cfgDomain').value,
+                        face_recognition: document.getElementById('cfgFaces').checked,
+                        experimental: document.getElementById('cfgExperimental').checked,
+                        readonly: document.getElementById('cfgReadonly').checked,
+                        public: document.getElementById('cfgPublic').checked,
+                    })
                 });
-
-                if (password) {
-                    await apiCall(`/reset_password?password=${encodeURIComponent(password)}`, {
-                        method: 'POST'
-                    });
+                if (res.success) {
+                    toast('Settings saved! Restart PhotoPrism to apply.');
+                } else {
+                    toast('Save failed', 'error');
                 }
-
-                alert('Settings saved');
             } catch (e) {
-                alert('Failed to save settings: ' + e.message);
+                toast('Failed: ' + e.message, 'error');
             }
         }
 
-        function openApp() {
-            if (containerIP) {
-                window.open(`http://${containerIP}:2342`, '_blank');
+        async function loadLogs() {
+            const lines = document.getElementById('logLines').value;
+            try {
+                const data = await api('/logs?lines=' + lines);
+                document.getElementById('logsContainer').textContent = data.logs || 'No logs available';
+            } catch (e) {
+                document.getElementById('logsContainer').textContent = 'Error loading logs';
             }
         }
 
-        // Tab handling
-        document.querySelectorAll('.tab').forEach(tab => {
-            tab.addEventListener('click', () => {
-                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-
-                tab.classList.add('active');
-                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
-
-                if (tab.dataset.tab === 'logs') loadLogs();
-                if (tab.dataset.tab === 'settings') loadConfig();
-            });
-        });
-
-        // Theme detection
-        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-            document.body.classList.add('dark');
+        async function createBackup() {
+            toast('Creating backup...');
+            try {
+                const res = await api('/backup', { method: 'POST' });
+                if (res.success) {
+                    toast('Backup created: ' + res.path);
+                } else {
+                    toast(res.error || 'Backup failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
         }
 
-        // Initial load
-        loadStatus();
-        setInterval(loadStatus, 30000);
+        async function updatePhotoprism() {
+            if (!confirm('Update PhotoPrism to latest version?')) return;
+            toast('Updating PhotoPrism...');
+            try {
+                const res = await api('/container/update', { method: 'POST' });
+                if (res.success) {
+                    toast('Update complete!');
+                    await refresh();
+                } else {
+                    toast(res.error || 'Update failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function uninstallPhotoprism() {
+            if (!confirm('Uninstall PhotoPrism? This will remove the container (data is preserved).')) return;
+            try {
+                const res = await api('/container/uninstall', { method: 'POST' });
+                if (res.success) {
+                    toast('PhotoPrism uninstalled');
+                    await refresh();
+                } else {
+                    toast(res.error || 'Uninstall failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        // Initialize
+        refresh();
+        setInterval(refresh, 30000);
     </script>
-    </main>
-    <script src="/shared/sidebar.js"></script>
 </body>
 </html>

@@ -1,13 +1,20 @@
 Source: secubox-gotosocial
 Section: net
 Priority: optional
-Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.6.2
 
 Package: secubox-gotosocial
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn, lxc, lxc-templates
-Description: SecuBox GoToSocial - Fediverse Server
- LXC-based GoToSocial ActivityPub server for SecuBox.
- Lightweight Fediverse server compatible with Mastodon.
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn
+Recommends: docker.io | podman
+Description: GoToSocial Fediverse server management
+ SecuBox module for managing GoToSocial ActivityPub server via Docker/Podman.
+ Provides container management, account management, federation controls,
+ media storage, moderation tools, and emoji management.
+ .
+ GoToSocial is a fast, lightweight ActivityPub social network server,
+ compatible with Mastodon and the wider Fediverse.
+ .
+ Provides FastAPI backend on /api/v1/gotosocial/ via Unix socket.

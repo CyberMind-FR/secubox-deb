@@ -1,0 +1,1 @@
+# SecuBox Domoticz API

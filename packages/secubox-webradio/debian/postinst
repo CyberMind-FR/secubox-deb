@@ -2,11 +2,27 @@
 set -e
 case "$1" in
   configure)
-    install -d -o secubox -g secubox -m 750 /var/lib/secubox/webradio/media
-    install -d -o secubox -g secubox -m 750 /var/lib/secubox/webradio/playlists
+    # Ensure secubox user exists
+    id -u secubox >/dev/null 2>&1 || \
+      adduser --system --group --no-create-home \
+        --home /var/lib/secubox --shell /usr/sbin/nologin secubox
+    # Create runtime directories
+    install -d -o secubox -g secubox -m 750 /run/secubox
+    install -d -o secubox -g secubox -m 750 /var/lib/secubox
+    # Create data directories
+    install -d -o secubox -g secubox -m 755 /var/lib/secubox/webradio
+    install -d -o secubox -g secubox -m 755 /var/lib/secubox/webradio/recordings
+    install -d -o secubox -g secubox -m 755 /var/lib/secubox/webradio/icecast
+    install -d -o secubox -g secubox -m 755 /var/lib/secubox/webradio/logs
+    # Ensure nginx secubox.d directory exists
+    install -d -m 755 /etc/nginx/secubox.d
+    # Ensure config directory exists
+    install -d -m 755 /etc/secubox
+    # Enable and start service
     systemctl daemon-reload
     systemctl enable secubox-webradio.service
-    systemctl start secubox-webradio.service || true
+    systemctl start  secubox-webradio.service || true
+    # Reload nginx to pick up new location
     systemctl reload nginx 2>/dev/null || true
     ;;
 esac

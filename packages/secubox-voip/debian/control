@@ -1,14 +1,27 @@
 Source: secubox-voip
-Section: comm
+Section: net
 Priority: optional
-Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
-Standards-Version: 4.6.0
+Standards-Version: 4.6.2
 
 Package: secubox-voip
 Architecture: all
-Depends: secubox-core, python3, python3-uvicorn, python3-fastapi, nginx
-Recommends: asterisk
-Description: SecuBox VoIP PBX
- Asterisk PBX management for SecuBox.
- SIP extensions, call routing, and trunk configuration.
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn
+Recommends: docker.io | podman
+Description: VoIP/PBX management module for SecuBox
+ SecuBox module for managing Asterisk/FreePBX PBX system via Docker.
+ Provides extension management, trunk configuration, call routing,
+ IVR menus, voicemail, and call detail records.
+ .
+ Features:
+  - Docker/Podman container management
+  - Extension and voicemail management
+  - SIP trunk configuration
+  - Inbound/outbound route management
+  - IVR menu builder
+  - Call detail records (CDR)
+  - SIP peer status monitoring
+ .
+ Ported from OpenWRT luci-app-voip pattern.
+ Provides FastAPI backend on /api/v1/voip/ via Unix socket.

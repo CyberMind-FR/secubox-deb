@@ -1,0 +1,9 @@
+{
+  "id": "webradio",
+  "name": "WebRadio",
+  "icon": "📻",
+  "path": "/webradio/",
+  "category": "apps",
+  "order": 611,
+  "description": "Internet radio streaming and recording"
+}

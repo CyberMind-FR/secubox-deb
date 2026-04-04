@@ -1,11 +1,11 @@
-secubox-domoticz (1.0.0-1) bookworm; urgency=medium
+secubox-domoticz (1.0.0-1~bookworm1) bookworm; urgency=medium
 
-  * Initial release for SecuBox Debian
-  * FastAPI backend with container management
-  * Theme-aware CRT-light frontend
-  * Device and scene management
-  * Hardware integration support
+  * Initial release.
+  * FastAPI backend with comprehensive Domoticz API proxy
+  * Features: Container management, device/room/scene management
+  * Hardware integration (Z-Wave, Zigbee, 433MHz, MQTT)
+  * Event logging, graphs, and notifications
   * Backup and restore functionality
-  * USB device passthrough
+  * CRT-light P31 phosphor theme with cyan (#06b6d4) accents
 
- -- SecuBox Team <team@secubox.in>  Sat, 28 Mar 2026 10:00:00 +0000
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Apr 2026 10:00:00 +0100

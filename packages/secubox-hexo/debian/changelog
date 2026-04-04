@@ -1,7 +1,14 @@
-secubox-hexo (1.0.0-1) bookworm; urgency=medium
+secubox-hexo (1.0.0-1~bookworm1) bookworm; urgency=medium
 
-  * Initial release
-  * Hexo CLI management and blog deployment
-  * Multi-site support with theme selection
+  * Initial release.
+  * Features:
+    - Docker/Podman container management for Hexo
+    - Multiple blog creation and management
+    - Theme gallery with popular Hexo themes
+    - Plugin management (sitemap, RSS, search, etc.)
+    - Post editor with markdown preview
+    - Draft/publish workflow
+    - Preview server with live reload
+    - CRT-light P31 phosphor theme with orange accent
 
- -- Gandalf / CyberMind <gk@cybermind.fr>  Sat, 28 Mar 2026 10:30:00 +0100
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Apr 2026 09:00:00 +0200

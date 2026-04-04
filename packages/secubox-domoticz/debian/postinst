@@ -1,28 +1,29 @@
 #!/bin/bash
 set -e
-
 case "$1" in
-    configure)
-        # Create data directory
-        mkdir -p /var/lib/secubox/domoticz
-        chmod 755 /var/lib/secubox/domoticz
-
-        # Create run directory
-        mkdir -p /run/secubox
-        chmod 755 /run/secubox
-
-        # Reload nginx if running
-        if systemctl is-active --quiet nginx; then
-            systemctl reload nginx || true
-        fi
-
-        # Enable and start the service
-        systemctl daemon-reload
-        systemctl enable secubox-domoticz.service || true
-        systemctl start secubox-domoticz.service || true
-        ;;
+  configure)
+    # Ensure secubox user exists
+    id -u secubox >/dev/null 2>&1 || \
+      adduser --system --group --no-create-home \
+        --home /var/lib/secubox --shell /usr/sbin/nologin secubox
+    # Create runtime directories
+    install -d -o secubox -g secubox -m 750 /run/secubox
+    install -d -o secubox -g secubox -m 750 /var/lib/secubox
+    # Create data directories
+    install -d -m 755 /srv/domoticz
+    install -d -m 755 /srv/domoticz/config
+    install -d -m 755 /srv/domoticz/scripts
+    install -d -m 755 /srv/domoticz/plugins
+    # Ensure nginx secubox.d directory exists
+    install -d -m 755 /etc/nginx/secubox.d
+    # Ensure config directory exists
+    install -d -m 755 /etc/secubox
+    # Enable and start service
+    systemctl daemon-reload
+    systemctl enable secubox-domoticz.service
+    systemctl start  secubox-domoticz.service || true
+    # Reload nginx to pick up new location
+    systemctl reload nginx 2>/dev/null || true
+    ;;
 esac
-
 #DEBHELPER#
-
-exit 0

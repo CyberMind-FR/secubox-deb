@@ -1,21 +1,29 @@
 #!/bin/bash
 set -e
-
 case "$1" in
-    configure)
-        mkdir -p /srv/homeassistant/config
-        mkdir -p /run/secubox
-        chmod 755 /run/secubox
-
-        if systemctl is-active --quiet nginx; then
-            systemctl reload nginx || true
-        fi
-
-        systemctl daemon-reload
-        systemctl enable secubox-homeassistant.service || true
-        systemctl start secubox-homeassistant.service || true
-        ;;
+  configure)
+    # Ensure secubox user exists
+    id -u secubox >/dev/null 2>&1 || \
+      adduser --system --group --no-create-home \
+        --home /var/lib/secubox --shell /usr/sbin/nologin secubox
+    # Create runtime directories
+    install -d -o secubox -g secubox -m 750 /run/secubox
+    install -d -o secubox -g secubox -m 750 /var/lib/secubox
+    # Create data directories
+    install -d -m 755 /srv/homeassistant
+    install -d -m 755 /srv/homeassistant/config
+    install -d -m 755 /srv/homeassistant/backups
+    install -d -m 755 /var/cache/secubox/homeassistant
+    # Ensure nginx secubox.d directory exists
+    install -d -m 755 /etc/nginx/secubox.d
+    # Ensure config directory exists
+    install -d -m 755 /etc/secubox
+    # Enable and start service
+    systemctl daemon-reload
+    systemctl enable secubox-homeassistant.service
+    systemctl start  secubox-homeassistant.service || true
+    # Reload nginx to pick up new location
+    systemctl reload nginx 2>/dev/null || true
+    ;;
 esac
-
 #DEBHELPER#
-exit 0

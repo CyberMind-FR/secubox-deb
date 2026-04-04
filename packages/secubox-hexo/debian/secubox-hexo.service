@@ -1,19 +1,21 @@
 [Unit]
 Description=SecuBox Hexo API
-After=network.target secubox-core.service
+After=network.target secubox-core.service secubox-runtime.service docker.service
+Requires=secubox-runtime.service
+Wants=docker.service
 
 [Service]
 Type=simple
 User=root
+Group=root
 WorkingDirectory=/usr/lib/secubox/hexo
 ExecStart=/usr/bin/uvicorn api.main:app --uds /run/secubox/hexo.sock --log-level warning
-UMask=0117
+ExecStartPost=-/bin/sleep 1
+ExecStartPost=-/bin/chmod 660 /run/secubox/hexo.sock
+ExecStartPost=-/bin/chown secubox:secubox /run/secubox/hexo.sock
 Restart=on-failure
+RestartSec=5
 PrivateTmp=true
-RuntimeDirectory=secubox
-RuntimeDirectoryMode=0775
-ProtectSystem=full
-ReadWritePaths=/run/secubox /var/lib/secubox /var/www/hexo
 
 [Install]
 WantedBy=multi-user.target
