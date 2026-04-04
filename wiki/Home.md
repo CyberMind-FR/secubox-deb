@@ -1,8 +1,8 @@
 # SecuBox-DEB
 
-**Security Appliance for Debian** | [Francais](Home-FR) | [中文](Home-ZH)
+**Security Appliance for Debian** | [Francais](Home-FR) | [中文](Home-ZH) | **v1.4.0**
 
-SecuBox is a complete security appliance solution ported from OpenWrt to Debian bookworm, designed for GlobalScale ARM64 boards (MOCHAbin, ESPRESSObin) and x86_64 systems.
+SecuBox is a complete security appliance solution ported from OpenWrt to Debian bookworm, designed for GlobalScale ARM64 boards (MOCHAbin, ESPRESSObin) and x86_64 systems. Now featuring 61 packages with 1200+ API endpoints.
 
 ## Quick Start
 
@@ -31,11 +31,12 @@ sudo apt install secubox-full
 
 | Category | Modules |
 |----------|---------|
-| **Security** | CrowdSec IDS/IPS, WAF, NAC, Auth |
-| **Networking** | WireGuard VPN, HAProxy, DPI, QoS |
-| **Monitoring** | Netdata, MediaFlow, Metrics |
+| **Security** | CrowdSec IDS/IPS, WAF, NAC, Auth, Hardening |
+| **Networking** | WireGuard VPN, HAProxy, DPI, QoS, Network Modes |
+| **SOC** | Fleet Monitoring, Alert Correlation, Threat Maps |
+| **Monitoring** | Netdata, MediaFlow, Metrics, Console TUI |
 | **Email** | Postfix/Dovecot, Webmail |
-| **Publishing** | Droplet, Streamlit, MetaBlogizer |
+| **Apps** | Ollama, Jellyfin, Zigbee, LocalAI |
 
 ## Supported Hardware
 

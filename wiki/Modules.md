@@ -23,6 +23,8 @@ Complete list of SecuBox packages and their functionality.
 - System health monitoring
 - Alert aggregation
 - Dynamic menu generation
+- Build timestamp display (v1.2.0+)
+- Network mode selection
 
 ### secubox-portal
 **Authentication Portal**
@@ -171,6 +173,47 @@ Complete list of SecuBox packages and their functionality.
 - Custom metrics
 - API endpoints
 - Dashboard integration
+
+### secubox-console
+**Terminal TUI Dashboard** (v1.1.0)
+
+- Textual-based terminal interface
+- Live system metrics display
+- Service management (start/stop/restart)
+- Network interface status
+- Real-time log streaming
+- Board-specific theming
+
+## SOC Modules
+
+### secubox-soc-agent
+**Edge Node Metrics Agent**
+
+- System metrics collection
+- Security alert forwarding (CrowdSec, Suricata, WAF)
+- HMAC-signed upstream push
+- Remote command execution
+- One-time enrollment tokens
+
+### secubox-soc-gateway
+**SOC Aggregation Gateway**
+
+- Node registry and health tracking
+- Fleet-wide metrics aggregation
+- Cross-node threat correlation
+- WebSocket real-time alerts
+- Hierarchical mode (edge/regional/central)
+- Cross-region threat detection
+
+### secubox-soc-web
+**React Web Dashboard**
+
+- Fleet overview with health indicators
+- Unified alert stream
+- Threat map visualization
+- Node detail management
+- Global view for central SOC
+- Cyberpunk UI theme
 
 ## DNS & Email Modules
 

@@ -25,3 +25,15 @@ daemon/build/
 
 # Local APT cache/repo (build artifacts)
 cache/repo/
+
+# Node.js
+node_modules/
+dist/
+*.log
+.npm/
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
