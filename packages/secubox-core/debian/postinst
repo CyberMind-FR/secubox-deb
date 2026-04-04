@@ -11,9 +11,12 @@ case "$1" in
 
     # ── Répertoires ──
     install -d -o secubox -g secubox -m 750 /etc/secubox
-    install -d -o secubox -g secubox -m 750 /run/secubox
+    install -d -m 1777 /run/secubox  # World-writable for all service sockets
     install -d -o secubox -g secubox -m 750 /var/lib/secubox
     install -d -o secubox -g secubox -m 750 /usr/share/secubox/www
+
+    # ── tmpfiles.d for persistent /run/secubox ──
+    systemd-tmpfiles --create 2>/dev/null || true
 
     # ── Config initiale si absente ──
     if [ ! -f /etc/secubox/secubox.conf ]; then
