@@ -1,0 +1,18 @@
+Source: secubox-smtp-relay
+Section: net
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
+
+Package: secubox-smtp-relay
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0), postfix
+Recommends: libsasl2-modules
+Description: SecuBox SMTP Relay — Email forwarding through smarthost
+ SMTP relay module for forwarding emails through a smarthost.
+ Provides web interface for queue management, configuration, and monitoring.
+ .
+ Port Debian bookworm de luci-app-smtp-relay (SecuBox OpenWrt / CyberMind.fr).

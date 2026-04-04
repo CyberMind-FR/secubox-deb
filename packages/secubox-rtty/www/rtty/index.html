@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - Remote Terminal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root {
+            /* P31 Phosphor spectrum */
+            --p31-peak: #00dd44;
+            --p31-hot: #00ff55;
+            --p31-mid: #009933;
+            --p31-dim: #006622;
+            --p31-ghost: #003311;
+            --p31-decay: #ffb347;
+            --p31-decay-dim: #cc7722;
+            /* Tube glass */
+            --tube-light: #e8f5e9;
+            --tube-pale: #c8e6c9;
+            --tube-soft: #a5d6a7;
+            /* Module accent - terminal green for RTTY */
+            --module-accent: #00cc66;
+            --module-accent-dim: #009944;
+            /* Legacy mappings */
+            --bg-dark: var(--tube-light);
+            --bg-card: var(--tube-pale);
+            --border: var(--tube-soft);
+            --text: #1a2e1a;
+            --text-dim: var(--p31-dim);
+            --primary: var(--module-accent);
+            --cyan: #00bcd4;
+            --green: var(--p31-peak);
+            --red: #ff4466;
+            --yellow: var(--p31-decay);
+            --purple: #a371f7;
+            /* Bloom effects */
+            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-accent: 0 0 3px var(--module-accent), 0 0 10px rgba(0,204,102,0.4);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Courier Prime', 'Courier New', monospace;
+            background: var(--tube-light);
+            background-image: radial-gradient(ellipse at 50% 40%, rgba(0,204,102,0.025) 0%, transparent 70%);
+            color: var(--text);
+            display: flex;
+            min-height: 100vh;
+        }
+        .sidebar { width: 220px; background: var(--bg-dark); border-right: 1px solid var(--border); position: fixed; height: 100vh; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 0; margin-bottom: 1rem; border-bottom: 1px solid var(--border); }
+        .header-title { display: flex; align-items: center; gap: 1rem; }
+        .header-title h1 { font-size: 1.5rem; color: var(--module-accent); text-shadow: var(--bloom-accent); }
+        .badge { padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.75rem; border: 1px solid; letter-spacing: 0.1em; text-transform: uppercase; }
+        .badge.active { background: rgba(63,185,80,0.2); color: var(--green); border-color: var(--green); }
+        .badge.inactive { background: rgba(248,81,73,0.2); color: var(--red); border-color: var(--red); }
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; font-family: inherit; transition: all 0.2s; }
+        .btn:hover { background: var(--bg-dark); border-color: var(--p31-dim); }
+        .btn.primary { background: rgba(0,204,102,0.1); border-color: var(--module-accent); color: var(--module-accent); }
+        .btn.primary:hover { background: rgba(0,204,102,0.2); }
+        .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
+        .btn.success { background: rgba(63,185,80,0.1); border-color: var(--green); color: var(--green); }
+        .btn-group { display: flex; gap: 0.5rem; }
+        .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--bg-card); padding: 0 1rem; margin-bottom: 1.5rem; border-radius: 8px 8px 0 0; }
+        .tab { padding: 0.75rem 1.25rem; cursor: pointer; color: var(--text-dim); border-bottom: 2px solid transparent; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.8rem; }
+        .tab:hover { color: var(--text); }
+        .tab.active { color: var(--module-accent); border-bottom-color: var(--module-accent); text-shadow: var(--bloom-accent); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; text-align: center; }
+        .stat-card .value { font-size: 2rem; font-weight: bold; margin-bottom: 0.25rem; }
+        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.15em; }
+        .stat-card.green .value { color: var(--module-accent); text-shadow: var(--bloom-accent); }
+        .stat-card.cyan .value { color: var(--cyan); }
+        .stat-card.yellow .value { color: var(--yellow); }
+        .stat-card.purple .value { color: var(--purple); }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .card-header h2 { font-size: 0.9rem; font-weight: 600; color: var(--p31-decay); text-transform: uppercase; letter-spacing: 0.1em; }
+        .table { width: 100%; border-collapse: collapse; }
+        .table th { text-align: left; padding: 0.75rem; color: var(--p31-decay); font-size: 0.75rem; text-transform: uppercase; border-bottom: 1px solid var(--border); letter-spacing: 0.15em; }
+        .table td { padding: 0.75rem; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+        .table tr:hover { background: rgba(0,204,102,0.03); }
+        .scroll-list { max-height: 400px; overflow-y: auto; }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--text-dim); }
+        .form-group input, .form-group textarea, .form-group select { width: 100%; padding: 0.5rem; border: 1px solid var(--border); background: var(--tube-light); color: var(--text); border-radius: 6px; font-family: inherit; }
+        .form-group input:focus, .form-group textarea:focus, .form-group select:focus { outline: none; border-color: var(--module-accent); box-shadow: 0 0 8px rgba(0,204,102,0.2); }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+        .status-dot.active { background: var(--green); box-shadow: 0 0 8px var(--green); }
+        .status-dot.inactive { background: var(--red); }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center; }
+        .modal.show { display: flex; }
+        .modal-content { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; width: 90%; max-width: 500px; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .modal-header h2 { color: var(--p31-decay); }
+        .modal-close { background: none; border: none; color: var(--text-dim); font-size: 1.5rem; cursor: pointer; }
+        .token-box { background: var(--tube-light); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-top: 1rem; font-family: 'Courier Prime', monospace; font-size: 0.85rem; }
+        .token-box .token-row { display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px dashed var(--border); }
+        .token-box .token-row:last-child { border-bottom: none; }
+        .token-box .token-label { color: var(--text-dim); }
+        .token-box .token-value { color: var(--module-accent); word-break: break-all; max-width: 70%; text-align: right; }
+        .toast { position: fixed; bottom: 1rem; right: 1rem; padding: 1rem 1.5rem; border-radius: 8px; background: var(--bg-card); border: 1px solid var(--p31-dim); z-index: 2000; display: none; }
+        .toast.show { display: block; }
+        .toast.success { border-color: var(--green); }
+        .toast.error { border-color: var(--red); }
+        .endpoint-card { background: var(--tube-light); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 0.75rem; }
+        .endpoint-card h3 { font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--text); }
+        .endpoint-card .url { font-family: monospace; color: var(--module-accent); font-size: 0.85rem; }
+        .copy-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; padding: 0.25rem 0.5rem; }
+        .copy-btn:hover { color: var(--module-accent); }
+        .terminal-frame { width: 100%; height: 500px; border: 2px solid var(--module-accent); border-radius: 8px; background: #0a0a0a; }
+        .terminal-placeholder { width: 100%; height: 500px; border: 2px dashed var(--border); border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-dim); background: var(--tube-light); }
+        .terminal-placeholder svg { width: 64px; height: 64px; margin-bottom: 1rem; opacity: 0.5; }
+        .toggle-switch { position: relative; display: inline-block; width: 50px; height: 24px; }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: var(--border); border-radius: 24px; transition: 0.3s; }
+        .toggle-slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: 0.3s; }
+        .toggle-switch input:checked + .toggle-slider { background: var(--module-accent); }
+        .toggle-switch input:checked + .toggle-slider:before { transform: translateX(26px); }
+        @media (max-width: 1200px) { .stats-row { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 900px) { .grid-2, .form-row { grid-template-columns: 1fr; } .sidebar { display: none; } .main { margin-left: 0; } }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: var(--tube-light); }
+        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
+        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
+    </style>
+</head>
+<body class="crt-light">
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+
+    <main class="main">
+        <header class="header">
+            <div class="header-title">
+                <h1>Remote Terminal</h1>
+                <span class="badge" id="status-badge">-</span>
+            </div>
+            <div class="btn-group">
+                <button class="btn" onclick="refreshAll()">Refresh</button>
+                <button class="btn primary" onclick="showTokenModal()">Generate Token</button>
+            </div>
+        </header>
+
+        <div class="tabs">
+            <div class="tab active" data-tab="terminal">Terminal</div>
+            <div class="tab" data-tab="sessions">Sessions</div>
+            <div class="tab" data-tab="config">Config</div>
+        </div>
+
+        <div class="content">
+            <!-- Terminal Tab -->
+            <div id="tab-terminal" class="tab-content active">
+                <div class="stats-row">
+                    <div class="stat-card green">
+                        <div class="value" id="active-sessions">0</div>
+                        <div class="label">Active Sessions</div>
+                    </div>
+                    <div class="stat-card cyan">
+                        <div class="value" id="tokens-count">0</div>
+                        <div class="label">Access Tokens</div>
+                    </div>
+                    <div class="stat-card yellow">
+                        <div class="value" id="http-port">-</div>
+                        <div class="label">HTTP Port</div>
+                    </div>
+                    <div class="stat-card purple">
+                        <div class="value" id="ssl-status">-</div>
+                        <div class="label">SSL</div>
+                    </div>
+                </div>
+
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2>Service Control</h2>
+                        </div>
+                        <div class="btn-group" style="margin-bottom: 1rem;">
+                            <button class="btn success" onclick="serviceAction('start')">Start</button>
+                            <button class="btn danger" onclick="serviceAction('stop')">Stop</button>
+                            <button class="btn" onclick="serviceAction('restart')">Restart</button>
+                        </div>
+                        <div id="service-info">
+                            <p><strong>Status:</strong> <span id="svc-status">-</span></p>
+                            <p><strong>Host:</strong> <span id="svc-host">-</span></p>
+                            <p><strong>Ports:</strong> <span id="svc-ports">-</span></p>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h2>Quick Access</h2>
+                        </div>
+                        <p style="color: var(--text-dim); margin-bottom: 1rem; font-size: 0.85rem;">
+                            Generate an access token to connect to the web terminal.
+                        </p>
+                        <button class="btn primary" onclick="showTokenModal()" style="width: 100%;">
+                            Generate Access Token
+                        </button>
+                        <div id="quick-token" style="margin-top: 1rem;"></div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Web Terminal</h2>
+                        <button class="btn" onclick="openTerminal()">Open in New Tab</button>
+                    </div>
+                    <div id="terminal-container">
+                        <div class="terminal-placeholder">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            <p>Terminal will load when rtty service is running</p>
+                            <p style="font-size: 0.8rem; margin-top: 0.5rem;">Start the service and generate an access token to connect</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Access Endpoints</h2>
+                    </div>
+                    <div id="endpoints-list"></div>
+                </div>
+            </div>
+
+            <!-- Sessions Tab -->
+            <div id="tab-sessions" class="tab-content">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Active Sessions</h2>
+                        <button class="btn" onclick="loadSessions()">Refresh</button>
+                    </div>
+                    <div class="scroll-list">
+                        <table class="table" id="sessions-table">
+                            <thead>
+                                <tr>
+                                    <th>Client IP</th>
+                                    <th>Port</th>
+                                    <th>Protocol</th>
+                                    <th>Local Address</th>
+                                    <th>State</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td colspan="5">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Access Tokens</h2>
+                        <button class="btn primary" onclick="showTokenModal()">+ New Token</button>
+                    </div>
+                    <div class="scroll-list">
+                        <table class="table" id="tokens-table">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Created</th>
+                                    <th>Expires</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td colspan="5">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Service Logs</h2>
+                        <button class="btn" onclick="loadLogs()">Refresh</button>
+                    </div>
+                    <div class="scroll-list" style="background: var(--tube-light); padding: 1rem; border-radius: 6px; font-size: 0.8rem; font-family: monospace;">
+                        <pre id="logs-content" style="margin: 0; white-space: pre-wrap;">Loading logs...</pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Config Tab -->
+            <div id="tab-config" class="tab-content">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>RTTY Configuration</h2>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Host</label>
+                            <input type="text" id="cfg-host" placeholder="0.0.0.0">
+                        </div>
+                        <div class="form-group">
+                            <label>Port</label>
+                            <input type="number" id="cfg-port" placeholder="5912">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>HTTP Port (Web UI)</label>
+                            <input type="number" id="cfg-http-port" placeholder="5913">
+                        </div>
+                        <div class="form-group">
+                            <label>Log Level</label>
+                            <select id="cfg-log-level">
+                                <option value="debug">Debug</option>
+                                <option value="info">Info</option>
+                                <option value="warning">Warning</option>
+                                <option value="error">Error</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group" style="display: flex; align-items: center; gap: 1rem;">
+                        <label style="margin-bottom: 0;">Enable SSL/TLS</label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="cfg-ssl">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div id="ssl-fields" style="display: none;">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>SSL Certificate Path</label>
+                                <input type="text" id="cfg-ssl-cert" placeholder="/etc/ssl/certs/rtty.crt">
+                            </div>
+                            <div class="form-group">
+                                <label>SSL Key Path</label>
+                                <input type="text" id="cfg-ssl-key" placeholder="/etc/ssl/private/rtty.key">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Authentication Token</label>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <input type="password" id="cfg-token" placeholder="Server authentication token">
+                            <button class="btn" onclick="generateServerToken()">Generate</button>
+                        </div>
+                        <p style="font-size: 0.75rem; color: var(--text-dim); margin-top: 0.5rem;">
+                            This token is used by rtty clients to authenticate with the server.
+                        </p>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn primary" onclick="saveConfig()">Save Configuration</button>
+                        <button class="btn" onclick="loadConfig()">Reset</button>
+                    </div>
+                    <p style="color: var(--text-dim); font-size: 0.85rem; margin-top: 1rem;">
+                        After saving, restart the service for changes to take effect.
+                    </p>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Components</h2>
+                    </div>
+                    <div id="components-list"></div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Token Modal -->
+    <div id="token-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Generate Access Token</h2>
+                <button class="modal-close" onclick="closeTokenModal()">&times;</button>
+            </div>
+            <div class="form-group">
+                <label>Token Name</label>
+                <input type="text" id="token-name" placeholder="e.g., admin-session">
+            </div>
+            <div class="form-group">
+                <label>TTL (seconds)</label>
+                <input type="number" id="token-ttl" value="86400" min="60" max="604800">
+                <p style="font-size: 0.75rem; color: var(--text-dim); margin-top: 0.5rem;">
+                    Default: 86400 (24 hours). Max: 604800 (7 days).
+                </p>
+            </div>
+            <button class="btn primary" onclick="generateToken()" style="width: 100%;">Generate</button>
+            <div id="token-result"></div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="toast"></div>
+
+    <script>
+        const API = '/api/v1/rtty';
+
+        function getToken() {
+            return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token');
+        }
+
+        function checkAuth() {
+            if (!getToken()) {
+                window.location.href = '/portal/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+                return false;
+            }
+            return true;
+        }
+
+        async function api(endpoint, method = 'GET', data = null) {
+            const opts = {
+                method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + getToken()
+                }
+            };
+            if (data) opts.body = JSON.stringify(data);
+            try {
+                const res = await fetch(API + endpoint, opts);
+                if (res.status === 401) {
+                    window.location.href = '/portal/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+                    return {};
+                }
+                return res.json();
+            } catch (e) {
+                console.error('API error:', e);
+                return {};
+            }
+        }
+
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = 'toast show ' + type;
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+
+        // Tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+            });
+        });
+
+        // SSL toggle
+        document.getElementById('cfg-ssl').addEventListener('change', function() {
+            document.getElementById('ssl-fields').style.display = this.checked ? 'block' : 'none';
+        });
+
+        function formatDate(timestamp) {
+            if (!timestamp) return '-';
+            return new Date(timestamp * 1000).toLocaleString();
+        }
+
+        async function loadStatus() {
+            const data = await api('/status');
+            const badge = document.getElementById('status-badge');
+
+            if (data.service?.active) {
+                badge.className = 'badge active';
+                badge.textContent = 'Running';
+            } else {
+                badge.className = 'badge inactive';
+                badge.textContent = 'Stopped';
+            }
+
+            document.getElementById('svc-status').innerHTML =
+                '<span class="status-dot ' + (data.service?.active ? 'active' : 'inactive') + '"></span> ' +
+                (data.service?.active ? 'Active' : 'Inactive');
+            document.getElementById('svc-host').textContent = data.host || '-';
+            document.getElementById('svc-ports').textContent =
+                `API: ${data.port || '-'}, HTTP: ${data.http_port || '-'}`;
+
+            document.getElementById('active-sessions').textContent = data.active_sessions || 0;
+            document.getElementById('tokens-count').textContent = data.tokens_count || 0;
+            document.getElementById('http-port').textContent = data.http_port || '-';
+            document.getElementById('ssl-status').textContent = data.ssl_enabled ? 'ON' : 'OFF';
+
+            // Update terminal if service is running
+            updateTerminalDisplay(data.service?.active, data.http_port);
+        }
+
+        function updateTerminalDisplay(active, port) {
+            const container = document.getElementById('terminal-container');
+            if (active && port) {
+                container.innerHTML = `
+                    <iframe class="terminal-frame" src="/rtty-terminal/" id="terminal-iframe"></iframe>
+                `;
+            } else {
+                container.innerHTML = `
+                    <div class="terminal-placeholder">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        <p>Terminal will load when rtty service is running</p>
+                        <p style="font-size: 0.8rem; margin-top: 0.5rem;">Start the service and generate an access token to connect</p>
+                    </div>
+                `;
+            }
+        }
+
+        async function loadEndpoints() {
+            const data = await api('/access');
+            const container = document.getElementById('endpoints-list');
+            const endpoints = data.endpoints || [];
+
+            container.innerHTML = endpoints.map(e => `
+                <div class="endpoint-card">
+                    <h3>${e.name}</h3>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span class="url">${e.url}</span>
+                        <button class="copy-btn" onclick="copyToClipboard('${e.url}')">Copy</button>
+                    </div>
+                </div>
+            `).join('') || '<p style="color: var(--text-dim);">No endpoints configured</p>';
+        }
+
+        async function loadSessions() {
+            const data = await api('/sessions');
+            const tbody = document.querySelector('#sessions-table tbody');
+            const sessions = data.sessions || [];
+
+            tbody.innerHTML = sessions.length > 0 ? sessions.map(s => `
+                <tr>
+                    <td style="font-family: monospace;">${s.client_ip || '-'}</td>
+                    <td>${s.client_port || '-'}</td>
+                    <td>${s.protocol || '-'}</td>
+                    <td style="font-family: monospace; font-size: 0.85rem;">${s.local_addr || '-'}</td>
+                    <td>${s.state || '-'}</td>
+                </tr>
+            `).join('') : '<tr><td colspan="5">No active sessions</td></tr>';
+        }
+
+        async function loadTokens() {
+            const data = await api('/tokens');
+            const tbody = document.querySelector('#tokens-table tbody');
+            const tokens = data.tokens || [];
+            const now = Math.floor(Date.now() / 1000);
+
+            tbody.innerHTML = tokens.length > 0 ? tokens.map(t => {
+                const expired = t.expired || t.expires < now;
+                return `
+                    <tr>
+                        <td>${t.name}</td>
+                        <td>${formatDate(t.created)}</td>
+                        <td>${formatDate(t.expires)}</td>
+                        <td>
+                            <span class="badge ${expired ? 'inactive' : 'active'}">
+                                ${expired ? 'Expired' : 'Active'}
+                            </span>
+                        </td>
+                        <td>
+                            <button class="btn danger" onclick="revokeToken('${t.name}')">Revoke</button>
+                        </td>
+                    </tr>
+                `;
+            }).join('') : '<tr><td colspan="5">No tokens generated</td></tr>';
+        }
+
+        async function loadConfig() {
+            const data = await api('/config');
+            const config = data.config || {};
+
+            document.getElementById('cfg-host').value = config.host || '0.0.0.0';
+            document.getElementById('cfg-port').value = config.port || 5912;
+            document.getElementById('cfg-http-port').value = config.http_port || 5913;
+            document.getElementById('cfg-log-level').value = config.log_level || 'info';
+            document.getElementById('cfg-ssl').checked = config.ssl || false;
+            document.getElementById('cfg-ssl-cert').value = config.ssl_cert || '';
+            document.getElementById('cfg-ssl-key').value = config.ssl_key || '';
+            document.getElementById('cfg-token').value = '';
+
+            // Toggle SSL fields visibility
+            document.getElementById('ssl-fields').style.display = config.ssl ? 'block' : 'none';
+        }
+
+        async function saveConfig() {
+            const data = {
+                host: document.getElementById('cfg-host').value.trim(),
+                port: parseInt(document.getElementById('cfg-port').value) || 5912,
+                http_port: parseInt(document.getElementById('cfg-http-port').value) || 5913,
+                log_level: document.getElementById('cfg-log-level').value,
+                ssl: document.getElementById('cfg-ssl').checked,
+                ssl_cert: document.getElementById('cfg-ssl-cert').value.trim(),
+                ssl_key: document.getElementById('cfg-ssl-key').value.trim()
+            };
+
+            const token = document.getElementById('cfg-token').value.trim();
+            if (token) {
+                data.token = token;
+            }
+
+            const result = await api('/config', 'POST', data);
+            if (result.success) {
+                showToast('Configuration saved. Restart service to apply.');
+            } else {
+                showToast(result.error || 'Failed to save config', 'error');
+            }
+        }
+
+        async function loadLogs() {
+            const data = await api('/logs?lines=100');
+            const lines = data.lines || [];
+            document.getElementById('logs-content').textContent = lines.join('\n') || 'No logs available';
+        }
+
+        async function loadComponents() {
+            const data = await api('/components');
+            const container = document.getElementById('components-list');
+            const components = data.components || [];
+
+            container.innerHTML = components.map(c => `
+                <div class="endpoint-card">
+                    <h3>${c.name} <span style="font-size: 0.75rem; color: var(--text-dim);">(${c.type})</span></h3>
+                    <p style="color: var(--text-dim); font-size: 0.85rem;">${c.description}</p>
+                    <p style="margin-top: 0.5rem;">
+                        ${c.status !== undefined
+                            ? `<span class="badge ${c.status ? 'active' : 'inactive'}">${c.status ? 'Active' : 'Inactive'}</span>`
+                            : `<span class="badge ${c.exists ? 'active' : 'inactive'}">${c.exists ? 'Exists' : 'Missing'}</span>`
+                        }
+                    </p>
+                </div>
+            `).join('');
+        }
+
+        async function serviceAction(action) {
+            const result = await api('/' + action, 'POST');
+            if (result.success) {
+                showToast('Service ' + action + ' successful');
+                setTimeout(loadStatus, 1000);
+            } else {
+                showToast(result.error || 'Action failed', 'error');
+            }
+        }
+
+        function openTerminal() {
+            window.open('/rtty-terminal/', '_blank');
+        }
+
+        // Token management
+        function showTokenModal() {
+            document.getElementById('token-modal').classList.add('show');
+            document.getElementById('token-result').innerHTML = '';
+        }
+
+        function closeTokenModal() {
+            document.getElementById('token-modal').classList.remove('show');
+        }
+
+        async function generateToken() {
+            const name = document.getElementById('token-name').value.trim();
+            const ttl = parseInt(document.getElementById('token-ttl').value) || 86400;
+
+            if (!name) {
+                showToast('Token name is required', 'error');
+                return;
+            }
+
+            const result = await api('/token', 'POST', { name, ttl });
+
+            if (result.success) {
+                document.getElementById('token-result').innerHTML = `
+                    <div class="token-box">
+                        <div class="token-row">
+                            <span class="token-label">Name:</span>
+                            <span class="token-value">${result.name}</span>
+                        </div>
+                        <div class="token-row">
+                            <span class="token-label">Token:</span>
+                            <span class="token-value" style="font-size: 0.75rem;">${result.token}</span>
+                        </div>
+                        <div class="token-row">
+                            <span class="token-label">Expires:</span>
+                            <span class="token-value">${formatDate(result.expires)}</span>
+                        </div>
+                        <div class="token-row">
+                            <span class="token-label">Access URL:</span>
+                            <span class="token-value" style="font-size: 0.75rem;">${result.access_url}</span>
+                        </div>
+                    </div>
+                    <button class="btn" onclick="copyToClipboard('${result.token}')" style="width: 100%; margin-top: 1rem;">
+                        Copy Token
+                    </button>
+                `;
+                loadTokens();
+                loadStatus();
+            } else {
+                document.getElementById('token-result').innerHTML =
+                    '<p style="color: var(--red); margin-top: 1rem;">' + (result.error || 'Failed to generate token') + '</p>';
+            }
+        }
+
+        async function revokeToken(name) {
+            if (!confirm('Revoke token "' + name + '"?')) return;
+
+            const result = await api('/tokens/' + name, 'DELETE');
+            if (result.success) {
+                showToast('Token revoked');
+                loadTokens();
+                loadStatus();
+            } else {
+                showToast(result.error || 'Failed to revoke token', 'error');
+            }
+        }
+
+        function generateServerToken() {
+            // Generate a random token
+            const array = new Uint8Array(32);
+            crypto.getRandomValues(array);
+            const token = Array.from(array, b => b.toString(16).padStart(2, '0')).join('');
+            document.getElementById('cfg-token').value = token;
+            document.getElementById('cfg-token').type = 'text';
+            showToast('Server token generated');
+        }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                showToast('Copied to clipboard');
+            }).catch(() => {
+                showToast('Failed to copy', 'error');
+            });
+        }
+
+        function refreshAll() {
+            loadStatus();
+            loadEndpoints();
+            loadSessions();
+            loadTokens();
+            loadComponents();
+        }
+
+        // Initial load - check auth first
+        if (checkAuth()) {
+            refreshAll();
+            loadConfig();
+            loadLogs();
+
+            // Auto-refresh every 15 seconds
+            setInterval(() => {
+                loadStatus();
+                loadSessions();
+            }, 15000);
+        }
+    </script>
+    <script src="/shared/crt-engine.js"></script>
+</body>
+</html>

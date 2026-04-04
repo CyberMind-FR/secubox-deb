@@ -1,0 +1,11 @@
+secubox-routes (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release
+  * FastAPI backend for routing table management
+  * IPv4/IPv6 route viewing and management
+  * Policy routing rules (ip rule) support
+  * ARP/NDP neighbor table viewing
+  * P31 Phosphor light theme frontend
+  * JWT authentication via secubox-core
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Apr 2026 10:00:00 +0200

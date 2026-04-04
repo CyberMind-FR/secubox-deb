@@ -1,0 +1,995 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - Routes</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root {
+            /* P31 Phosphor spectrum */
+            --p31-peak: #00dd44;
+            --p31-hot: #00ff55;
+            --p31-mid: #009933;
+            --p31-dim: #006622;
+            --p31-ghost: #003311;
+            --p31-decay: #ffb347;
+            --p31-decay-dim: #cc7722;
+            /* Tube glass */
+            --tube-light: #e8f5e9;
+            --tube-pale: #c8e6c9;
+            --tube-soft: #a5d6a7;
+            --tube-dark: #1b3d1c;
+            /* Legacy mappings */
+            --bg-dark: var(--tube-light);
+            --bg-card: var(--tube-pale);
+            --border: var(--tube-soft);
+            --text: var(--tube-dark);
+            --text-dim: var(--p31-dim);
+            --primary: var(--p31-peak);
+            --green: var(--p31-peak);
+            --red: #ff4466;
+            --yellow: var(--p31-decay);
+            /* Bloom effects */
+            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Courier Prime', 'Courier New', monospace;
+            background: var(--tube-light);
+            background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
+            color: var(--tube-dark);
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar { width: 220px; background: var(--bg-sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; position: fixed; height: 100vh; overflow-y: auto; }
+
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 0; margin-bottom: 1rem; border-bottom: 1px solid var(--border); }
+        .header-title { display: flex; align-items: center; gap: 1rem; }
+        .header-title h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--p31-hot);
+            text-shadow: var(--bloom-text);
+            letter-spacing: 0.05em;
+        }
+        .badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            font-family: 'Courier Prime', monospace;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            border: 1px solid;
+        }
+        .badge.version { background: rgba(0,150,0,0.1); border-color: var(--p31-dim); color: var(--p31-dim); }
+        .badge.running { background: rgba(51,255,102,0.15); border-color: var(--p31-peak); color: var(--p31-peak); }
+        .badge.stopped { background: rgba(255,68,102,0.1); border-color: #ff4466; color: #ff4466; }
+
+        .header-actions { display: flex; gap: 0.75rem; }
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            border: 1px solid var(--tube-soft);
+            background: var(--tube-pale);
+            color: var(--p31-mid);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+            font-family: 'Courier Prime', monospace;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            transition: all 0.2s;
+        }
+        .btn:hover {
+            border-color: var(--p31-dim);
+            color: var(--p31-peak);
+            text-shadow: var(--bloom-soft);
+            box-shadow: 0 0 12px rgba(51,255,102,0.1);
+        }
+        .btn.primary {
+            background: rgba(51,255,102,0.1);
+            border-color: var(--p31-peak);
+            color: var(--p31-peak);
+        }
+        .btn.primary:hover {
+            background: rgba(51,255,102,0.2);
+            box-shadow: 0 0 16px rgba(51,255,102,0.2);
+        }
+        .btn.danger {
+            background: rgba(255,68,102,0.1);
+            border-color: #ff4466;
+            color: #ff4466;
+        }
+        .btn.danger:hover {
+            background: rgba(255,68,102,0.2);
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid var(--p31-ghost);
+            background: var(--tube-pale);
+            padding: 0 1rem;
+            margin-bottom: 1.5rem;
+            border-radius: 6px 6px 0 0;
+        }
+        .tab {
+            padding: 0.75rem 1.25rem;
+            cursor: pointer;
+            color: var(--p31-dim);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        .tab:hover { color: var(--p31-mid); }
+        .tab.active {
+            color: var(--p31-peak);
+            text-shadow: var(--bloom-soft);
+            border-bottom-color: var(--p31-peak);
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Stats Row */
+        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card {
+            background: var(--tube-pale);
+            border: 1px solid var(--tube-soft);
+            border-radius: 8px;
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .stat-card .value {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 0.25rem;
+            text-shadow: 0 0 10px currentColor;
+        }
+        .stat-card .label {
+            font-size: 0.7rem;
+            color: var(--p31-dim);
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+        }
+        .stat-card.green .value { color: var(--p31-peak); }
+        .stat-card.cyan .value { color: var(--p31-mid); }
+        .stat-card.yellow .value { color: var(--p31-decay); }
+        .stat-card.red .value { color: #ff4466; }
+
+        /* Cards */
+        .card {
+            background: var(--tube-pale);
+            border: 1px solid var(--tube-soft);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-bottom: 1.5rem;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.1);
+        }
+        .card:hover {
+            border-color: var(--p31-dim);
+            box-shadow: 0 0 8px rgba(51,255,102,0.05), inset 0 0 20px rgba(0,0,0,0.1);
+        }
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        .card-header h2 {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--p31-decay);
+            text-shadow: var(--bloom-amber);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+
+        /* Tables */
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            font-family: 'Courier Prime', monospace;
+        }
+        .table th {
+            text-align: left;
+            padding: 0.75rem;
+            color: var(--p31-decay);
+            text-shadow: var(--bloom-amber);
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            border-bottom: 1px solid var(--p31-ghost);
+        }
+        .table td {
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--p31-ghost);
+            font-size: 0.85rem;
+            color: var(--p31-mid);
+        }
+        .table tr:hover { background: rgba(51,255,102,0.03); }
+        .table .mono { font-family: 'Courier Prime', monospace; }
+
+        /* Scroll container */
+        .scroll-list { max-height: 400px; overflow-y: auto; }
+
+        /* Filter bar */
+        .filter-bar {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            padding: 0.75rem;
+            background: var(--tube-light);
+            border: 1px solid var(--tube-soft);
+            border-radius: 6px;
+        }
+        .filter-bar select,
+        .filter-bar input {
+            font-family: 'Courier Prime', monospace;
+            background: white;
+            border: 1px solid var(--tube-soft);
+            color: var(--p31-mid);
+            padding: 0.5rem;
+            border-radius: 4px;
+        }
+        .filter-bar select:focus,
+        .filter-bar input:focus {
+            outline: none;
+            border-color: var(--p31-dim);
+            box-shadow: 0 0 8px rgba(51,255,102,0.1);
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal.show { display: flex; }
+        .modal-content {
+            background: var(--tube-pale);
+            border: 1px solid var(--p31-dim);
+            border-radius: 12px;
+            padding: 1.5rem;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 0 30px rgba(51,255,102,0.1);
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        .modal-header h2 {
+            font-size: 1.1rem;
+            color: var(--p31-decay);
+            text-shadow: var(--bloom-amber);
+            letter-spacing: 0.1em;
+        }
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text-dim);
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-size: 0.8rem;
+            color: var(--p31-dim);
+            letter-spacing: 0.1em;
+        }
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid var(--tube-soft);
+            background: white;
+            color: var(--p31-mid);
+            border-radius: 6px;
+            font-family: 'Courier Prime', monospace;
+        }
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: var(--p31-dim);
+            box-shadow: 0 0 8px rgba(51,255,102,0.1);
+        }
+
+        /* Status badges */
+        .status-badge {
+            display: inline-block;
+            padding: 0.15rem 0.5rem;
+            border-radius: 3px;
+            font-size: 0.65rem;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+        }
+        .status-badge.reachable { background: rgba(51,255,102,0.15); color: var(--p31-peak); }
+        .status-badge.stale { background: rgba(255,179,71,0.15); color: var(--p31-decay); }
+        .status-badge.failed { background: rgba(255,68,102,0.1); color: #ff4466; }
+        .status-badge.permanent { background: rgba(0,150,0,0.1); color: var(--p31-mid); }
+
+        /* Grid layouts */
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+
+        /* Responsive */
+        @media (max-width: 1200px) { .stats-row { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 900px) {
+            .grid-2 { grid-template-columns: 1fr; }
+            .sidebar { display: none; }
+            .main { margin-left: 0; }
+        }
+        @media (max-width: 768px) {
+            .main { margin-left: 0; padding: 1rem; }
+            .stats-row { grid-template-columns: 1fr 1fr; }
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: var(--tube-light); }
+        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
+        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
+
+        /* Empty state */
+        .empty {
+            color: var(--p31-dim);
+            text-align: center;
+            padding: 2rem;
+            font-style: italic;
+        }
+
+        /* Last refresh indicator */
+        .refresh-indicator {
+            font-size: 0.7rem;
+            color: var(--p31-dim);
+            margin-left: auto;
+        }
+    </style>
+</head>
+<body class="crt-light">
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+
+    <main class="main">
+        <header class="header">
+            <div class="header-title">
+                <h1>Routes Manager</h1>
+                <span class="badge version" id="version-badge">v1.0.0</span>
+                <span class="badge running" id="status-badge">Running</span>
+            </div>
+            <div class="header-actions">
+                <span class="refresh-indicator" id="last-refresh">Last refresh: --</span>
+                <button class="btn" onclick="flushCache()">Flush Cache</button>
+                <button class="btn primary" onclick="refresh()">Refresh</button>
+            </div>
+        </header>
+
+        <div class="stats-row">
+            <div class="stat-card green">
+                <div class="value" id="ipv4-count">0</div>
+                <div class="label">IPv4 Routes</div>
+            </div>
+            <div class="stat-card cyan">
+                <div class="value" id="ipv6-count">0</div>
+                <div class="label">IPv6 Routes</div>
+            </div>
+            <div class="stat-card yellow">
+                <div class="value" id="rules-count">0</div>
+                <div class="label">Policy Rules</div>
+            </div>
+            <div class="stat-card green">
+                <div class="value" id="neighbors-count">0</div>
+                <div class="label">Neighbors</div>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <div class="tab active" data-tab="routes">Routes</div>
+            <div class="tab" data-tab="rules">Policy Rules</div>
+            <div class="tab" data-tab="neighbors">Neighbors</div>
+        </div>
+
+        <!-- Routes Tab -->
+        <div id="tab-routes" class="tab-content active">
+            <div class="filter-bar">
+                <select id="route-family" onchange="filterRoutes()">
+                    <option value="all">All (IPv4 + IPv6)</option>
+                    <option value="ipv4">IPv4 Only</option>
+                    <option value="ipv6">IPv6 Only</option>
+                </select>
+                <input type="text" id="route-filter" placeholder="Filter by destination..." onkeyup="filterRoutes()">
+                <button class="btn primary" onclick="showAddRouteModal()">Add Route</button>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2>Routing Table</h2>
+                </div>
+                <div class="scroll-list">
+                    <table class="table" id="routes-table">
+                        <thead>
+                            <tr>
+                                <th>Destination</th>
+                                <th>Gateway</th>
+                                <th>Interface</th>
+                                <th>Metric</th>
+                                <th>Protocol</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td colspan="6" class="empty">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Rules Tab -->
+        <div id="tab-rules" class="tab-content">
+            <div class="filter-bar">
+                <select id="rule-family" onchange="loadRules()">
+                    <option value="all">All (IPv4 + IPv6)</option>
+                    <option value="ipv4">IPv4 Only</option>
+                    <option value="ipv6">IPv6 Only</option>
+                </select>
+                <button class="btn primary" onclick="showAddRuleModal()">Add Rule</button>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2>Policy Routing Rules</h2>
+                </div>
+                <div class="scroll-list">
+                    <table class="table" id="rules-table">
+                        <thead>
+                            <tr>
+                                <th>Priority</th>
+                                <th>Selector</th>
+                                <th>Action</th>
+                                <th>Table</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td colspan="5" class="empty">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2>Routing Tables</h2>
+                </div>
+                <div id="tables-list">
+                    <p class="empty">Loading...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Neighbors Tab -->
+        <div id="tab-neighbors" class="tab-content">
+            <div class="grid-2">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>ARP Table (IPv4)</h2>
+                    </div>
+                    <div class="scroll-list">
+                        <table class="table" id="arp-table">
+                            <thead>
+                                <tr>
+                                    <th>IP Address</th>
+                                    <th>MAC Address</th>
+                                    <th>Interface</th>
+                                    <th>State</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td colspan="4" class="empty">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2>NDP Table (IPv6)</h2>
+                    </div>
+                    <div class="scroll-list">
+                        <table class="table" id="ndp-table">
+                            <thead>
+                                <tr>
+                                    <th>IP Address</th>
+                                    <th>MAC Address</th>
+                                    <th>Interface</th>
+                                    <th>State</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td colspan="4" class="empty">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Add Route Modal -->
+    <div id="add-route-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Add Route</h2>
+                <button class="modal-close" onclick="closeAddRouteModal()">&times;</button>
+            </div>
+            <div class="form-group">
+                <label>Destination (CIDR)</label>
+                <input type="text" id="route-dest" placeholder="10.0.0.0/8 or default">
+            </div>
+            <div class="form-group">
+                <label>Gateway (optional)</label>
+                <input type="text" id="route-gateway" placeholder="192.168.1.1">
+            </div>
+            <div class="form-group">
+                <label>Interface (optional)</label>
+                <input type="text" id="route-iface" placeholder="eth0">
+            </div>
+            <div class="form-group">
+                <label>Metric (optional)</label>
+                <input type="number" id="route-metric" placeholder="100">
+            </div>
+            <div class="form-group">
+                <label>Table (optional)</label>
+                <input type="text" id="route-table" placeholder="main">
+            </div>
+            <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                <button class="btn" onclick="closeAddRouteModal()">Cancel</button>
+                <button class="btn primary" onclick="addRoute()">Add Route</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Rule Modal -->
+    <div id="add-rule-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Add Policy Rule</h2>
+                <button class="modal-close" onclick="closeAddRuleModal()">&times;</button>
+            </div>
+            <div class="form-group">
+                <label>Priority (0-32767)</label>
+                <input type="number" id="rule-priority" placeholder="100" min="0" max="32767">
+            </div>
+            <div class="form-group">
+                <label>From (source prefix)</label>
+                <input type="text" id="rule-from" placeholder="192.168.1.0/24">
+            </div>
+            <div class="form-group">
+                <label>To (destination prefix)</label>
+                <input type="text" id="rule-to" placeholder="10.0.0.0/8">
+            </div>
+            <div class="form-group">
+                <label>Table</label>
+                <input type="text" id="rule-table" placeholder="custom or table ID">
+            </div>
+            <div class="form-group">
+                <label>Firewall Mark (optional)</label>
+                <input type="text" id="rule-fwmark" placeholder="0x1">
+            </div>
+            <div class="form-group">
+                <label>Input Interface (optional)</label>
+                <input type="text" id="rule-iif" placeholder="eth0">
+            </div>
+            <div class="form-group">
+                <label>Output Interface (optional)</label>
+                <input type="text" id="rule-oif" placeholder="eth1">
+            </div>
+            <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                <button class="btn" onclick="closeAddRuleModal()">Cancel</button>
+                <button class="btn primary" onclick="addRule()">Add Rule</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API = '/api/v1/routes';
+        let allRoutes = { ipv4: [], ipv6: [] };
+        let allRules = { ipv4: [], ipv6: [] };
+
+        // Check authentication
+        async function checkAuth() {
+            const token = localStorage.getItem('sbx_token');
+            if (!token) {
+                window.location.href = '/portal/login.html';
+                return false;
+            }
+            return true;
+        }
+
+        async function api(endpoint, method = 'GET', data = null) {
+            const token = localStorage.getItem('sbx_token');
+            const opts = {
+                method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token
+                }
+            };
+            if (data) opts.body = JSON.stringify(data);
+            try {
+                const res = await fetch(API + endpoint, opts);
+                if (res.status === 401) {
+                    window.location.href = '/portal/login.html';
+                    return null;
+                }
+                return res.json();
+            } catch (e) {
+                console.error('API error:', e);
+                return null;
+            }
+        }
+
+        // Tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+            });
+        });
+
+        // Load status
+        async function loadStatus() {
+            const data = await api('/status');
+            if (!data) return;
+
+            document.getElementById('ipv4-count').textContent = data.ipv4_routes || 0;
+            document.getElementById('ipv6-count').textContent = data.ipv6_routes || 0;
+            document.getElementById('rules-count').textContent = data.rules || 0;
+            document.getElementById('neighbors-count').textContent = data.neighbors || 0;
+            document.getElementById('status-badge').textContent = data.status === 'running' ? 'Running' : 'Error';
+            document.getElementById('status-badge').className = 'badge ' + (data.status === 'running' ? 'running' : 'stopped');
+        }
+
+        // Load routes
+        async function loadRoutes() {
+            const data = await api('/routes');
+            if (!data) return;
+
+            allRoutes.ipv4 = (data.ipv4 || []).map(r => ({ ...r, family: 'ipv4' }));
+            allRoutes.ipv6 = (data.ipv6 || []).map(r => ({ ...r, family: 'ipv6' }));
+
+            filterRoutes();
+        }
+
+        // Filter and display routes
+        function filterRoutes() {
+            const family = document.getElementById('route-family').value;
+            const filter = document.getElementById('route-filter').value.toLowerCase();
+
+            let routes = [];
+            if (family === 'all' || family === 'ipv4') routes = routes.concat(allRoutes.ipv4);
+            if (family === 'all' || family === 'ipv6') routes = routes.concat(allRoutes.ipv6);
+
+            if (filter) {
+                routes = routes.filter(r =>
+                    (r.destination || '').toLowerCase().includes(filter) ||
+                    (r.gateway || '').toLowerCase().includes(filter) ||
+                    (r.interface || '').toLowerCase().includes(filter)
+                );
+            }
+
+            const tbody = document.querySelector('#routes-table tbody');
+            if (routes.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="empty">No routes found</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = routes.map(r => `
+                <tr>
+                    <td class="mono">${r.destination || 'default'}</td>
+                    <td class="mono">${r.gateway || '-'}</td>
+                    <td>${r.interface || '-'}</td>
+                    <td>${r.metric !== null ? r.metric : '-'}</td>
+                    <td>${r.protocol || '-'}</td>
+                    <td>
+                        <button class="btn danger" onclick="deleteRoute('${r.destination}', '${r.gateway || ''}', '${r.interface || ''}')">Delete</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // Load rules
+        async function loadRules() {
+            const data = await api('/rules');
+            if (!data) return;
+
+            allRules.ipv4 = data.ipv4 || [];
+            allRules.ipv6 = data.ipv6 || [];
+
+            const family = document.getElementById('rule-family').value;
+            let rules = [];
+            if (family === 'all' || family === 'ipv4') rules = rules.concat(allRules.ipv4.map(r => ({ ...r, family: 'ipv4' })));
+            if (family === 'all' || family === 'ipv6') rules = rules.concat(allRules.ipv6.map(r => ({ ...r, family: 'ipv6' })));
+
+            // Sort by priority
+            rules.sort((a, b) => a.priority - b.priority);
+
+            const tbody = document.querySelector('#rules-table tbody');
+            if (rules.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="empty">No rules found</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = rules.map(r => `
+                <tr>
+                    <td class="mono">${r.priority}</td>
+                    <td>${r.selector || 'all'}</td>
+                    <td>${r.action || 'lookup'}</td>
+                    <td>${r.table || '-'}</td>
+                    <td>
+                        ${r.priority > 0 && r.priority < 32766 ?
+                            `<button class="btn danger" onclick="deleteRule(${r.priority})">Delete</button>` :
+                            '<span class="status-badge permanent">System</span>'}
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // Load tables
+        async function loadTables() {
+            const data = await api('/tables');
+            if (!data) return;
+
+            const tables = data.tables || [];
+            const container = document.getElementById('tables-list');
+
+            if (tables.length === 0) {
+                container.innerHTML = '<p class="empty">No custom tables defined</p>';
+                return;
+            }
+
+            container.innerHTML = `
+                <table class="table">
+                    <thead><tr><th>ID</th><th>Name</th></tr></thead>
+                    <tbody>
+                        ${tables.map(t => `<tr><td class="mono">${t.id}</td><td>${t.name}</td></tr>`).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        // Load neighbors
+        async function loadNeighbors() {
+            const data = await api('/neighbors');
+            if (!data) return;
+
+            const arp = data.arp || [];
+            const ndp = data.ndp || [];
+
+            // ARP table
+            const arpTbody = document.querySelector('#arp-table tbody');
+            if (arp.length === 0) {
+                arpTbody.innerHTML = '<tr><td colspan="4" class="empty">No ARP entries</td></tr>';
+            } else {
+                arpTbody.innerHTML = arp.map(n => `
+                    <tr>
+                        <td class="mono">${n.ip}</td>
+                        <td class="mono">${n.mac || '-'}</td>
+                        <td>${n.interface}</td>
+                        <td><span class="status-badge ${getStateClass(n.state)}">${n.state}</span></td>
+                    </tr>
+                `).join('');
+            }
+
+            // NDP table
+            const ndpTbody = document.querySelector('#ndp-table tbody');
+            if (ndp.length === 0) {
+                ndpTbody.innerHTML = '<tr><td colspan="4" class="empty">No NDP entries</td></tr>';
+            } else {
+                ndpTbody.innerHTML = ndp.map(n => `
+                    <tr>
+                        <td class="mono" style="word-break: break-all;">${n.ip}</td>
+                        <td class="mono">${n.mac || '-'}</td>
+                        <td>${n.interface}</td>
+                        <td><span class="status-badge ${getStateClass(n.state)}">${n.state}</span></td>
+                    </tr>
+                `).join('');
+            }
+        }
+
+        function getStateClass(state) {
+            state = (state || '').toUpperCase();
+            if (state === 'REACHABLE' || state === 'PERMANENT') return 'reachable';
+            if (state === 'STALE' || state === 'DELAY') return 'stale';
+            if (state === 'FAILED' || state === 'INCOMPLETE') return 'failed';
+            return 'stale';
+        }
+
+        // Add route
+        function showAddRouteModal() {
+            document.getElementById('add-route-modal').classList.add('show');
+        }
+
+        function closeAddRouteModal() {
+            document.getElementById('add-route-modal').classList.remove('show');
+            // Clear form
+            document.getElementById('route-dest').value = '';
+            document.getElementById('route-gateway').value = '';
+            document.getElementById('route-iface').value = '';
+            document.getElementById('route-metric').value = '';
+            document.getElementById('route-table').value = '';
+        }
+
+        async function addRoute() {
+            const dest = document.getElementById('route-dest').value.trim();
+            if (!dest) {
+                alert('Destination is required');
+                return;
+            }
+
+            const data = { destination: dest };
+            const gateway = document.getElementById('route-gateway').value.trim();
+            const iface = document.getElementById('route-iface').value.trim();
+            const metric = document.getElementById('route-metric').value.trim();
+            const table = document.getElementById('route-table').value.trim();
+
+            if (gateway) data.gateway = gateway;
+            if (iface) data.interface = iface;
+            if (metric) data.metric = parseInt(metric);
+            if (table) data.table = table;
+
+            const result = await api('/routes', 'POST', data);
+            if (result && result.success) {
+                closeAddRouteModal();
+                loadRoutes();
+                loadStatus();
+            } else {
+                alert('Failed to add route: ' + (result?.error || 'Unknown error'));
+            }
+        }
+
+        async function deleteRoute(dest, gateway, iface) {
+            if (!confirm(`Delete route to ${dest}?`)) return;
+
+            const data = { destination: dest };
+            if (gateway) data.gateway = gateway;
+            if (iface) data.interface = iface;
+
+            const result = await api('/routes', 'DELETE', data);
+            if (result && result.success) {
+                loadRoutes();
+                loadStatus();
+            } else {
+                alert('Failed to delete route: ' + (result?.error || 'Unknown error'));
+            }
+        }
+
+        // Add rule
+        function showAddRuleModal() {
+            document.getElementById('add-rule-modal').classList.add('show');
+        }
+
+        function closeAddRuleModal() {
+            document.getElementById('add-rule-modal').classList.remove('show');
+            // Clear form
+            document.getElementById('rule-priority').value = '';
+            document.getElementById('rule-from').value = '';
+            document.getElementById('rule-to').value = '';
+            document.getElementById('rule-table').value = '';
+            document.getElementById('rule-fwmark').value = '';
+            document.getElementById('rule-iif').value = '';
+            document.getElementById('rule-oif').value = '';
+        }
+
+        async function addRule() {
+            const priority = document.getElementById('rule-priority').value.trim();
+            if (!priority) {
+                alert('Priority is required');
+                return;
+            }
+
+            const data = { priority: parseInt(priority) };
+            const from = document.getElementById('rule-from').value.trim();
+            const to = document.getElementById('rule-to').value.trim();
+            const table = document.getElementById('rule-table').value.trim();
+            const fwmark = document.getElementById('rule-fwmark').value.trim();
+            const iif = document.getElementById('rule-iif').value.trim();
+            const oif = document.getElementById('rule-oif').value.trim();
+
+            if (from) data.from = from;
+            if (to) data.to = to;
+            if (table) data.table = table;
+            if (fwmark) data.fwmark = fwmark;
+            if (iif) data.iif = iif;
+            if (oif) data.oif = oif;
+
+            const result = await api('/rules', 'POST', data);
+            if (result && result.success) {
+                closeAddRuleModal();
+                loadRules();
+                loadStatus();
+            } else {
+                alert('Failed to add rule: ' + (result?.error || 'Unknown error'));
+            }
+        }
+
+        async function deleteRule(priority) {
+            if (!confirm(`Delete rule with priority ${priority}?`)) return;
+
+            const result = await api('/rules/' + priority, 'DELETE');
+            if (result && result.success) {
+                loadRules();
+                loadStatus();
+            } else {
+                alert('Failed to delete rule: ' + (result?.error || 'Unknown error'));
+            }
+        }
+
+        // Flush cache
+        async function flushCache() {
+            if (!confirm('Flush the routing cache?')) return;
+
+            const result = await api('/flush', 'POST');
+            if (result && result.success) {
+                alert('Route cache flushed');
+            } else {
+                alert('Failed to flush cache: ' + (result?.error || 'Unknown error'));
+            }
+        }
+
+        // Update last refresh time
+        function updateRefreshTime() {
+            const now = new Date();
+            document.getElementById('last-refresh').textContent =
+                'Last refresh: ' + now.toLocaleTimeString();
+        }
+
+        // Refresh all data
+        async function refresh() {
+            await Promise.all([
+                loadStatus(),
+                loadRoutes(),
+                loadRules(),
+                loadTables(),
+                loadNeighbors()
+            ]);
+            updateRefreshTime();
+        }
+
+        // Initial load
+        async function init() {
+            if (!await checkAuth()) return;
+            refresh();
+            // Auto-refresh every 30 seconds
+            setInterval(refresh, 30000);
+        }
+
+        init();
+    </script>
+    <script src="/shared/crt-engine.js"></script>
+</body>
+</html>

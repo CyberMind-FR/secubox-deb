@@ -1,0 +1,9 @@
+{
+  "id": "routes",
+  "name": "Routes",
+  "category": "network",
+  "icon": "🛣️",
+  "path": "/routes/",
+  "order": 907,
+  "description": "Routing table viewer and manager"
+}

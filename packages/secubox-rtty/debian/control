@@ -1,0 +1,21 @@
+Source: secubox-rtty
+Section: net
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+
+Package: secubox-rtty
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-core,
+         rtty
+Description: SecuBox Remote Terminal Access (rtty)
+ Web-based remote terminal access module for SecuBox.
+ Features:
+  - rtty service control (start/stop/restart)
+  - Active terminal session monitoring
+  - Access token generation and management
+  - Configuration editor (port, SSL, auth)
+  - Embedded terminal web interface
+  - Three-fold architecture (Components/Status/Access)

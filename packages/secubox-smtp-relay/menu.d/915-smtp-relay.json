@@ -1,0 +1,9 @@
+{
+  "id": "smtp-relay",
+  "name": "SMTP Relay",
+  "category": "services",
+  "icon": "envelope",
+  "path": "/smtp-relay/",
+  "order": 915,
+  "description": "Email forwarding through smarthost"
+}

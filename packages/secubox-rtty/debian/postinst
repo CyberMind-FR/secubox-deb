@@ -1,0 +1,33 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    configure)
+        # Add www-data to secubox group for nginx access
+        usermod -a -G secubox www-data 2>/dev/null || true
+
+        # Create data directories
+        mkdir -p /var/lib/secubox/rtty
+        chown -R secubox:secubox /var/lib/secubox/rtty
+
+        # Create config directory
+        mkdir -p /etc/rtty
+        chown -R secubox:secubox /etc/rtty
+
+        # Create log directory
+        mkdir -p /var/log/rtty
+        chown secubox:secubox /var/log/rtty
+
+        # Enable and start service
+        systemctl daemon-reload
+        systemctl enable secubox-rtty.service
+        systemctl start secubox-rtty.service || true
+
+        # Reload nginx if running
+        systemctl reload nginx 2>/dev/null || true
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

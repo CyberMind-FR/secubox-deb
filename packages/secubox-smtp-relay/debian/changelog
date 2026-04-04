@@ -1,0 +1,13 @@
+secubox-smtp-relay (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release — SMTP relay module for SecuBox.
+  * FastAPI backend with Postfix management endpoints.
+  * Web interface with P31 Phosphor light theme.
+  * Queue management (view, flush, delete).
+  * Smarthost configuration with SASL authentication.
+  * TLS encryption support.
+  * Test email functionality.
+  * Mail log viewing.
+  * Auto-refresh dashboard (30 seconds).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Apr 2026 12:00:00 +0200
