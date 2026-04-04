@@ -1,9 +1,33 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-04-04 (Session 39)*
+*Mis à jour : 2026-04-04 (Session 40)*
 
 ---
 
-## ✅ Terminé cette session (Session 39)
+## ✅ Terminé cette session (Session 40)
+
+### VirtualBox EFI Boot Fix ✅
+- **Issue:** VirtualBox EFI firmware wasn't finding the GRUB bootloader, showing PXE boot instead
+- **Root cause:** VirtualBox EFI shell doesn't always auto-detect `/EFI/BOOT/BOOTX64.EFI`
+- **Solution:** Added `startup.nsh` script to ESP root for EFI shell auto-boot
+- **Files Modified:**
+  - `image/build-live-usb.sh` — Added startup.nsh creation after GRUB EFI install
+
+### VirtualBox VM Testing ✅
+- VM boots successfully with UEFI firmware enabled
+- GRUB menu displays with all boot options and emojis
+- Linux boots and services start correctly
+- SSH access confirmed working
+- secubox-status command shows:
+  - Kiosk GUI mode active
+  - Core services running (nginx, secubox-hub, crowdsec)
+  - Network interfaces up (enp0s3, dummy0, br-lan)
+
+**Commits:**
+- `70961cb` - fix(build): Add startup.nsh for VirtualBox EFI compatibility
+
+---
+
+## ✅ Terminé session précédente (Session 39)
 
 ### Boot Banner Improvements — CRT Style with Colors & Emojis ✅
 - **`/etc/issue`** — Pre-login banner with ANSI colors (gold/cyan)
