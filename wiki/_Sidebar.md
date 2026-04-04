@@ -1,6 +1,7 @@
 **[Home](Home)** | [FR](Home-FR) | [中文](Home-ZH)
 
 ### Getting Started
+* [[Live-USB-VirtualBox|VirtualBox Quick Start]] ⭐
 * [[Live-USB]] | [FR](Live-USB-FR) | [中文](Live-USB-ZH)
 * [[Installation]] | [FR](Installation-FR) | [中文](Installation-ZH)
 
