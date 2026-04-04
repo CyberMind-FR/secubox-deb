@@ -6,6 +6,14 @@ on:
     tags: ['v*']
   pull_request:
     branches: [main, master]
+  workflow_call:
+    secrets:
+      GPG_PRIVATE_KEY:
+        required: false
+      DEPLOY_SSH_KEY:
+        required: false
+      DEPLOY_KNOWN_HOSTS:
+        required: false
   workflow_dispatch:
     inputs:
       package:
