@@ -2,6 +2,10 @@
 Description=SecuBox Kiosk Mode (X11/Chromium)
 Documentation=https://secubox.in/docs/kiosk
 
+# Wait for cmdline handler to decide display mode FIRST
+After=secubox-cmdline.service
+Requires=secubox-cmdline.service
+
 # Proper dependency chain - wait for everything to be ready
 After=systemd-user-sessions.service
 After=plymouth-quit-wait.service

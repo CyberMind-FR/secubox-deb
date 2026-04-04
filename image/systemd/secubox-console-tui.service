@@ -1,6 +1,11 @@
 [Unit]
 Description=SecuBox Console TUI Dashboard
 Documentation=https://secubox.in/docs/tui
+
+# Wait for cmdline handler to decide display mode FIRST
+After=secubox-cmdline.service
+Requires=secubox-cmdline.service
+
 After=multi-user.target
 After=network-online.target
 After=secubox-firstboot.service
