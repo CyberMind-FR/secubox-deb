@@ -1,0 +1,24 @@
+Source: secubox-mqtt
+Section: net
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
+
+Package: secubox-mqtt
+Architecture: all
+Depends: ${misc:Depends},
+ secubox-core (>= 1.0),
+ mosquitto,
+ mosquitto-clients
+Description: SecuBox MQTT — Mosquitto Broker Management
+ MQTT broker management module for SecuBox providing:
+ - Broker status and health monitoring
+ - Client connection tracking
+ - Topic monitoring
+ - User and ACL management
+ - Configuration management via web UI
+ .
+ Part of SecuBox-Deb platform — CyberMind.fr

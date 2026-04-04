@@ -1,0 +1,26 @@
+[Unit]
+Description=SecuBox MQTT Broker Management API
+After=network.target secubox-core.service mosquitto.service
+Requires=secubox-core.service
+Wants=mosquitto.service
+
+[Service]
+UMask=0000
+Type=simple
+User=secubox
+Group=secubox
+WorkingDirectory=/usr/lib/secubox/mqtt
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app \
+    --uds /run/secubox/mqtt.sock \
+    --log-level warning
+Restart=on-failure
+RestartSec=5
+PrivateTmp=true
+NoNewPrivileges=true
+RuntimeDirectory=secubox
+RuntimeDirectoryMode=0775
+ProtectSystem=full
+ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox /etc/mosquitto
+
+[Install]
+WantedBy=multi-user.target

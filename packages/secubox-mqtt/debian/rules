@@ -1,0 +1,14 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-mqtt/usr/lib/secubox/mqtt/
+	cp -r api debian/secubox-mqtt/usr/lib/secubox/mqtt/
+	install -d debian/secubox-mqtt/usr/share/secubox/www
+	[ -d www ] && cp -r www/. debian/secubox-mqtt/usr/share/secubox/www/ || true
+	install -d debian/secubox-mqtt/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-mqtt/usr/share/secubox/menu.d/ || true
+	# Modular nginx config
+	install -d debian/secubox-mqtt/etc/nginx/secubox.d
+	[ -f nginx/mqtt.conf ] && cp nginx/mqtt.conf debian/secubox-mqtt/etc/nginx/secubox.d/ || true

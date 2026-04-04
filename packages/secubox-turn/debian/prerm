@@ -1,0 +1,14 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    remove|purge)
+        # Stop the service
+        systemctl stop secubox-turn.service 2>/dev/null || true
+        systemctl disable secubox-turn.service 2>/dev/null || true
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

@@ -1,0 +1,14 @@
+secubox-turn (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release - TURN/STUN server management for WebRTC
+  * FastAPI backend with coturn integration
+  * Service control (start/stop/restart)
+  * User management with turnadmin
+  * Temporary credential generation using HMAC-SHA1
+  * Active session monitoring
+  * Configuration editor for turnserver.conf
+  * Realm settings management
+  * P31 Phosphor light theme frontend
+  * Three-fold architecture (Components/Status/Access)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Apr 2026 12:00:00 +0200

@@ -1,0 +1,49 @@
+#!/bin/bash
+set -e
+case "$1" in
+  configure)
+    # Ensure secubox user exists (created by secubox-core)
+    id -u secubox >/dev/null 2>&1 || \
+      adduser --system --group --no-create-home \
+        --home /var/lib/secubox --shell /usr/sbin/nologin secubox
+
+    # Create runtime directories
+    install -d -o secubox -g secubox -m 750 /run/secubox
+    install -d -o secubox -g secubox -m 750 /var/lib/secubox/mqtt
+
+    # Create mosquitto directories if needed
+    install -d -o mosquitto -g mosquitto -m 750 /var/lib/mosquitto
+    install -d -m 755 /etc/mosquitto
+
+    # Create default password file if it doesn't exist
+    if [ ! -f /etc/mosquitto/passwd ]; then
+      touch /etc/mosquitto/passwd
+      chmod 600 /etc/mosquitto/passwd
+      chown mosquitto:mosquitto /etc/mosquitto/passwd
+    fi
+
+    # Create default ACL file if it doesn't exist
+    if [ ! -f /etc/mosquitto/acl ]; then
+      cat > /etc/mosquitto/acl << 'EOF'
+# Mosquitto ACL - managed by SecuBox
+# Default: allow $SYS topics for all authenticated users
+
+pattern read $SYS/#
+EOF
+      chmod 644 /etc/mosquitto/acl
+      chown mosquitto:mosquitto /etc/mosquitto/acl
+    fi
+
+    # Enable and start services
+    systemctl daemon-reload
+    systemctl enable secubox-mqtt.service
+    systemctl start  secubox-mqtt.service || true
+
+    # Ensure nginx config directory exists
+    install -d -m 755 /etc/nginx/secubox.d
+
+    # Reload nginx if installed
+    systemctl reload nginx 2>/dev/null || true
+    ;;
+esac
+#DEBHELPER#

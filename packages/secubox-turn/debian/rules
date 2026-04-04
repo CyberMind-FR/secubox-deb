@@ -1,0 +1,20 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	# Install API
+	install -d debian/secubox-turn/usr/lib/secubox/turn/
+	cp -r api debian/secubox-turn/usr/lib/secubox/turn/
+	# Install frontend
+	install -d debian/secubox-turn/usr/share/secubox/www
+	[ -d www ] && cp -r www/. debian/secubox-turn/usr/share/secubox/www/ || true
+	# Install menu entry
+	install -d debian/secubox-turn/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-turn/usr/share/secubox/menu.d/ || true
+	# Modular nginx config
+	install -d debian/secubox-turn/etc/nginx/secubox.d
+	[ -f nginx/turn.conf ] && cp nginx/turn.conf debian/secubox-turn/etc/nginx/secubox.d/ || true
+	# Create data directories
+	install -d debian/secubox-turn/var/lib/secubox/turn
+	install -d debian/secubox-turn/var/log/turnserver

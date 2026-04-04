@@ -1,5 +1,5 @@
 # TODO — SecuBox-DEB Backlog
-*Mis à jour : 2026-04-01*
+*Mis à jour : 2026-04-04*
 
 ---
 
@@ -175,17 +175,17 @@ High-value user-facing services:
 - [ ] **P8-08** `secubox-gotosocial` — Fediverse server
 - [ ] **P8-09** `secubox-peertube` — Video platform LXC
 - [ ] **P8-10** `secubox-hexo` — Static blog generator
-- [ ] **P8-11** `secubox-magicmirror` — Smart display
+- [x] **P8-11** `secubox-magicmirror` — Smart display ✅
 - [x] **P8-12** `secubox-lyrion` — Music server ✅
 - [ ] **P8-13** `secubox-webradio` — Internet radio
 - [ ] **P8-14** `secubox-voip` — VoIP/PBX LXC
-- [ ] **P8-15** `secubox-jabber` — XMPP server
+- [x] **P8-15** `secubox-jabber` — XMPP server ✅
 - [ ] **P8-16** `secubox-simplex` — Secure messaging
 - [ ] **P8-17** `secubox-torrent` — BitTorrent client
 - [ ] **P8-18** `secubox-newsbin` — Usenet client
 - [x] **P8-19** `secubox-domoticz` — Home automation ✅
 - [x] **P8-20** `secubox-localai` — Alternative LLM backend ✅
-- [ ] **P8-21** `secubox-mmpm` — MagicMirror package manager
+- [x] **P8-21** `secubox-mmpm` — MagicMirror package manager ✅
 
 ---
 
@@ -193,10 +193,10 @@ High-value user-facing services:
 
 Infrastructure utilities:
 
-- [ ] **P9-01** `secubox-vault` — Config backup/restore
-- [ ] **P9-02** `secubox-cloner` — System imaging
-- [ ] **P9-03** `secubox-vm` — QEMU/KVM virtualization
-- [ ] **P9-04** `secubox-glances` — System monitor
+- [x] **P9-01** `secubox-vault` — Config backup/restore ✅
+- [x] **P9-02** `secubox-cloner` — System imaging ✅
+- [x] **P9-03** `secubox-vm` — QEMU/KVM virtualization ✅
+- [x] **P9-04** `secubox-glances` — System monitor ✅
 - [ ] **P9-05** `secubox-rtty` — Remote terminal
 - [ ] **P9-06** `secubox-nettweak` — Network tuning
 - [ ] **P9-07** `secubox-routes` — Routing table view
@@ -206,14 +206,14 @@ Infrastructure utilities:
 - [ ] **P9-11** `secubox-metacatalog` — Service catalog
 - [ ] **P9-12** `secubox-saas-relay` — SaaS proxy
 - [ ] **P9-13** `secubox-rezapp` — App deployment
-- [ ] **P9-14** `secubox-turn` — TURN/STUN server
+- [x] **P9-14** `secubox-turn` — TURN/STUN server ✅
 - [ ] **P9-15** `secubox-smtp-relay` — Mail relay
-- [ ] **P9-16** `secubox-mqtt` — MQTT broker
+- [x] **P9-16** `secubox-mqtt` — MQTT broker ✅
 - [ ] **P9-17** `secubox-cyberfeed` — Threat feed aggregator
 - [ ] **P9-18** `secubox-avatar` — Identity management
 - [ ] **P9-19** `secubox-admin` — Admin dashboard
 - [ ] **P9-20** `secubox-mirror` — Mirror/CDN
-- [ ] **P9-21** `secubox-netdiag` — Network diagnostics
+- [x] **P9-21** `secubox-netdiag` — Network diagnostics ✅
 - [ ] **P9-22** `secubox-picobrew` — Homebrew controller
 
 ---

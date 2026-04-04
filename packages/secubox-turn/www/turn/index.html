@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - TURN/STUN Server</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root {
+            /* P31 Phosphor spectrum */
+            --p31-peak: #00dd44;
+            --p31-hot: #00ff55;
+            --p31-mid: #009933;
+            --p31-dim: #006622;
+            --p31-ghost: #003311;
+            --p31-decay: #ffb347;
+            --p31-decay-dim: #cc7722;
+            /* Tube glass */
+            --tube-light: #e8f5e9;
+            --tube-pale: #c8e6c9;
+            --tube-soft: #a5d6a7;
+            /* Module accent - cyan for TURN */
+            --module-accent: #00bcd4;
+            --module-accent-dim: #0097a7;
+            /* Legacy mappings */
+            --bg-dark: var(--tube-light);
+            --bg-card: var(--tube-pale);
+            --border: var(--tube-soft);
+            --text: #1a2e1a;
+            --text-dim: var(--p31-dim);
+            --primary: var(--module-accent);
+            --cyan: var(--module-accent);
+            --green: var(--p31-peak);
+            --red: #ff4466;
+            --yellow: var(--p31-decay);
+            --purple: #a371f7;
+            /* Bloom effects */
+            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-cyan: 0 0 3px var(--module-accent), 0 0 10px rgba(0,188,212,0.4);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Courier Prime', 'Courier New', monospace;
+            background: var(--tube-light);
+            background-image: radial-gradient(ellipse at 50% 40%, rgba(0,188,212,0.025) 0%, transparent 70%);
+            color: var(--text);
+            display: flex;
+            min-height: 100vh;
+        }
+        .sidebar { width: 220px; background: var(--bg-dark); border-right: 1px solid var(--border); position: fixed; height: 100vh; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 0; margin-bottom: 1rem; border-bottom: 1px solid var(--border); }
+        .header-title { display: flex; align-items: center; gap: 1rem; }
+        .header-title h1 { font-size: 1.5rem; color: var(--module-accent); text-shadow: var(--bloom-cyan); }
+        .badge { padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.75rem; border: 1px solid; letter-spacing: 0.1em; text-transform: uppercase; }
+        .badge.active { background: rgba(63,185,80,0.2); color: var(--green); border-color: var(--green); }
+        .badge.inactive { background: rgba(248,81,73,0.2); color: var(--red); border-color: var(--red); }
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; font-family: inherit; transition: all 0.2s; }
+        .btn:hover { background: var(--bg-dark); border-color: var(--p31-dim); }
+        .btn.primary { background: rgba(0,188,212,0.1); border-color: var(--module-accent); color: var(--module-accent); }
+        .btn.primary:hover { background: rgba(0,188,212,0.2); }
+        .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
+        .btn.success { background: rgba(63,185,80,0.1); border-color: var(--green); color: var(--green); }
+        .btn-group { display: flex; gap: 0.5rem; }
+        .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--bg-card); padding: 0 1rem; margin-bottom: 1.5rem; border-radius: 8px 8px 0 0; }
+        .tab { padding: 0.75rem 1.25rem; cursor: pointer; color: var(--text-dim); border-bottom: 2px solid transparent; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.8rem; }
+        .tab:hover { color: var(--text); }
+        .tab.active { color: var(--module-accent); border-bottom-color: var(--module-accent); text-shadow: var(--bloom-cyan); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; text-align: center; }
+        .stat-card .value { font-size: 2rem; font-weight: bold; margin-bottom: 0.25rem; }
+        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.15em; }
+        .stat-card.cyan .value { color: var(--module-accent); text-shadow: var(--bloom-cyan); }
+        .stat-card.green .value { color: var(--green); }
+        .stat-card.yellow .value { color: var(--yellow); }
+        .stat-card.purple .value { color: var(--purple); }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .card-header h2 { font-size: 0.9rem; font-weight: 600; color: var(--p31-decay); text-transform: uppercase; letter-spacing: 0.1em; }
+        .table { width: 100%; border-collapse: collapse; }
+        .table th { text-align: left; padding: 0.75rem; color: var(--p31-decay); font-size: 0.75rem; text-transform: uppercase; border-bottom: 1px solid var(--border); letter-spacing: 0.15em; }
+        .table td { padding: 0.75rem; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+        .table tr:hover { background: rgba(0,188,212,0.03); }
+        .scroll-list { max-height: 400px; overflow-y: auto; }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--text-dim); }
+        .form-group input, .form-group textarea, .form-group select { width: 100%; padding: 0.5rem; border: 1px solid var(--border); background: var(--tube-light); color: var(--text); border-radius: 6px; font-family: inherit; }
+        .form-group input:focus, .form-group textarea:focus { outline: none; border-color: var(--module-accent); box-shadow: 0 0 8px rgba(0,188,212,0.2); }
+        .form-group textarea { min-height: 200px; font-family: 'Courier Prime', monospace; }
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+        .status-dot.active { background: var(--green); box-shadow: 0 0 8px var(--green); }
+        .status-dot.inactive { background: var(--red); }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center; }
+        .modal.show { display: flex; }
+        .modal-content { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; width: 90%; max-width: 500px; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .modal-header h2 { color: var(--p31-decay); }
+        .modal-close { background: none; border: none; color: var(--text-dim); font-size: 1.5rem; cursor: pointer; }
+        .cred-box { background: var(--tube-light); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-top: 1rem; font-family: 'Courier Prime', monospace; font-size: 0.85rem; }
+        .cred-box .cred-row { display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px dashed var(--border); }
+        .cred-box .cred-row:last-child { border-bottom: none; }
+        .cred-box .cred-label { color: var(--text-dim); }
+        .cred-box .cred-value { color: var(--module-accent); word-break: break-all; max-width: 70%; text-align: right; }
+        .toast { position: fixed; bottom: 1rem; right: 1rem; padding: 1rem 1.5rem; border-radius: 8px; background: var(--bg-card); border: 1px solid var(--p31-dim); z-index: 2000; display: none; }
+        .toast.show { display: block; }
+        .toast.success { border-color: var(--green); }
+        .toast.error { border-color: var(--red); }
+        .endpoint-card { background: var(--tube-light); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 0.75rem; }
+        .endpoint-card h3 { font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--text); }
+        .endpoint-card .url { font-family: monospace; color: var(--module-accent); font-size: 0.85rem; }
+        .copy-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; padding: 0.25rem 0.5rem; }
+        .copy-btn:hover { color: var(--module-accent); }
+        @media (max-width: 1200px) { .stats-row { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } .sidebar { display: none; } .main { margin-left: 0; } }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: var(--tube-light); }
+        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
+        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
+    </style>
+</head>
+<body class="crt-light">
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+
+    <main class="main">
+        <header class="header">
+            <div class="header-title">
+                <h1>TURN/STUN Server</h1>
+                <span class="badge" id="status-badge">-</span>
+            </div>
+            <div class="btn-group">
+                <button class="btn" onclick="refreshAll()">Refresh</button>
+                <button class="btn primary" onclick="showCredModal()">Generate Credentials</button>
+            </div>
+        </header>
+
+        <div class="tabs">
+            <div class="tab active" data-tab="dashboard">Dashboard</div>
+            <div class="tab" data-tab="sessions">Sessions</div>
+            <div class="tab" data-tab="users">Users</div>
+            <div class="tab" data-tab="config">Config</div>
+        </div>
+
+        <div class="content">
+            <!-- Dashboard Tab -->
+            <div id="tab-dashboard" class="tab-content active">
+                <div class="stats-row">
+                    <div class="stat-card cyan">
+                        <div class="value" id="active-sessions">0</div>
+                        <div class="label">Active Sessions</div>
+                    </div>
+                    <div class="stat-card green">
+                        <div class="value" id="users-count">0</div>
+                        <div class="label">Users</div>
+                    </div>
+                    <div class="stat-card yellow">
+                        <div class="value" id="udp-connections">0</div>
+                        <div class="label">UDP Connections</div>
+                    </div>
+                    <div class="stat-card purple">
+                        <div class="value" id="tcp-connections">0</div>
+                        <div class="label">TCP Connections</div>
+                    </div>
+                </div>
+
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2>Service Control</h2>
+                        </div>
+                        <div class="btn-group" style="margin-bottom: 1rem;">
+                            <button class="btn success" onclick="serviceAction('start')">Start</button>
+                            <button class="btn danger" onclick="serviceAction('stop')">Stop</button>
+                            <button class="btn" onclick="serviceAction('restart')">Restart</button>
+                        </div>
+                        <div id="service-info">
+                            <p><strong>Status:</strong> <span id="svc-status">-</span></p>
+                            <p><strong>Realm:</strong> <span id="svc-realm">-</span></p>
+                            <p><strong>Ports:</strong> <span id="svc-ports">-</span></p>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h2>Quick Credentials</h2>
+                        </div>
+                        <p style="color: var(--text-dim); margin-bottom: 1rem; font-size: 0.85rem;">
+                            Generate temporary TURN credentials for WebRTC testing.
+                        </p>
+                        <button class="btn primary" onclick="showCredModal()" style="width: 100%;">
+                            Generate Test Credentials
+                        </button>
+                        <div id="quick-creds" style="margin-top: 1rem;"></div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Server Endpoints</h2>
+                    </div>
+                    <div id="endpoints-list"></div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Bandwidth Usage</h2>
+                    </div>
+                    <div class="stats-row" style="margin-bottom: 0;">
+                        <div class="stat-card">
+                            <div class="value" id="total-allocations">0</div>
+                            <div class="label">Total Allocations</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="value" id="auth-failures">0</div>
+                            <div class="label">Auth Failures</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sessions Tab -->
+            <div id="tab-sessions" class="tab-content">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Active Sessions</h2>
+                        <button class="btn" onclick="loadSessions()">Refresh</button>
+                    </div>
+                    <div class="scroll-list">
+                        <table class="table" id="sessions-table">
+                            <thead>
+                                <tr>
+                                    <th>Client IP</th>
+                                    <th>Port</th>
+                                    <th>Protocol</th>
+                                    <th>Local Address</th>
+                                    <th>State</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td colspan="5">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Users Tab -->
+            <div id="tab-users" class="tab-content">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>TURN Users</h2>
+                        <button class="btn primary" onclick="showAddUserModal()">+ Add User</button>
+                    </div>
+                    <div class="scroll-list">
+                        <table class="table" id="users-table">
+                            <thead>
+                                <tr>
+                                    <th>Username</th>
+                                    <th>Created</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td colspan="3">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Realm Settings</h2>
+                    </div>
+                    <div class="form-group">
+                        <label>Realm</label>
+                        <input type="text" id="realm-input" placeholder="turn.example.com">
+                    </div>
+                    <div class="form-group">
+                        <label>Auth Secret</label>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <input type="password" id="secret-input" placeholder="Click generate to create new secret">
+                            <button class="btn" onclick="generateSecret()">Generate</button>
+                        </div>
+                    </div>
+                    <button class="btn primary" onclick="saveRealm()">Save Realm Settings</button>
+                </div>
+            </div>
+
+            <!-- Config Tab -->
+            <div id="tab-config" class="tab-content">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>turnserver.conf</h2>
+                        <div class="btn-group">
+                            <button class="btn" onclick="loadConfig()">Reload</button>
+                            <button class="btn primary" onclick="saveConfig()">Save</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <textarea id="config-editor" placeholder="Loading configuration..."></textarea>
+                    </div>
+                    <p style="color: var(--text-dim); font-size: 0.85rem;">
+                        After saving, restart the service for changes to take effect.
+                    </p>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Server Logs</h2>
+                        <button class="btn" onclick="loadLogs()">Refresh</button>
+                    </div>
+                    <div class="scroll-list" style="background: var(--tube-light); padding: 1rem; border-radius: 6px; font-size: 0.8rem; font-family: monospace;">
+                        <pre id="logs-content" style="margin: 0; white-space: pre-wrap;">Loading logs...</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Add User Modal -->
+    <div id="add-user-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Add TURN User</h2>
+                <button class="modal-close" onclick="closeAddUserModal()">&times;</button>
+            </div>
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" id="new-username" placeholder="e.g., webrtc-client">
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" id="new-password" placeholder="Secure password">
+            </div>
+            <button class="btn primary" onclick="addUser()" style="width: 100%;">Add User</button>
+        </div>
+    </div>
+
+    <!-- Credentials Modal -->
+    <div id="cred-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Generate TURN Credentials</h2>
+                <button class="modal-close" onclick="closeCredModal()">&times;</button>
+            </div>
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" id="cred-username" value="webrtc" placeholder="Base username">
+            </div>
+            <div class="form-group">
+                <label>TTL (seconds)</label>
+                <input type="number" id="cred-ttl" value="86400" min="60" max="604800">
+            </div>
+            <button class="btn primary" onclick="generateCreds()" style="width: 100%;">Generate</button>
+            <div id="cred-result"></div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="toast"></div>
+
+    <script>
+        const API = '/api/v1/turn';
+        let token = localStorage.getItem('sbx_token');
+
+        function getToken() {
+            return localStorage.getItem('sbx_token');
+        }
+
+        async function api(endpoint, method = 'GET', data = null) {
+            const opts = {
+                method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + getToken()
+                }
+            };
+            if (data) opts.body = JSON.stringify(data);
+            try {
+                const res = await fetch(API + endpoint, opts);
+                if (res.status === 401) {
+                    window.location.href = '/portal/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+                    return {};
+                }
+                return res.json();
+            } catch (e) {
+                console.error('API error:', e);
+                return {};
+            }
+        }
+
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = 'toast show ' + type;
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+
+        // Tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+            });
+        });
+
+        function formatDate(timestamp) {
+            if (!timestamp) return '-';
+            return new Date(timestamp * 1000).toLocaleString();
+        }
+
+        async function loadStatus() {
+            const data = await api('/status');
+            const badge = document.getElementById('status-badge');
+
+            if (data.service?.active) {
+                badge.className = 'badge active';
+                badge.textContent = 'Running';
+            } else {
+                badge.className = 'badge inactive';
+                badge.textContent = 'Stopped';
+            }
+
+            document.getElementById('svc-status').innerHTML =
+                '<span class="status-dot ' + (data.service?.active ? 'active' : 'inactive') + '"></span> ' +
+                (data.service?.active ? 'Active' : 'Inactive');
+            document.getElementById('svc-realm').textContent = data.realm || '-';
+            document.getElementById('svc-ports').textContent =
+                `UDP/TCP: ${data.listening_port || '-'}, TLS: ${data.tls_port || '-'}`;
+            document.getElementById('users-count').textContent = data.users_count || 0;
+            document.getElementById('realm-input').value = data.realm || '';
+        }
+
+        async function loadStats() {
+            const data = await api('/stats');
+            document.getElementById('active-sessions').textContent = data.active_sessions || 0;
+            document.getElementById('udp-connections').textContent = data.udp_connections || 0;
+            document.getElementById('tcp-connections').textContent = data.tcp_connections || 0;
+            document.getElementById('total-allocations').textContent = data.total_allocations || 0;
+            document.getElementById('auth-failures').textContent = data.auth_failures || 0;
+        }
+
+        async function loadEndpoints() {
+            const data = await api('/access');
+            const container = document.getElementById('endpoints-list');
+            const endpoints = data.endpoints || [];
+
+            container.innerHTML = endpoints.map(e => `
+                <div class="endpoint-card">
+                    <h3>${e.name}</h3>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span class="url">${e.url}</span>
+                        <button class="copy-btn" onclick="copyToClipboard('${e.url}')">Copy</button>
+                    </div>
+                </div>
+            `).join('') || '<p style="color: var(--text-dim);">No endpoints configured</p>';
+        }
+
+        async function loadSessions() {
+            const data = await api('/sessions');
+            const tbody = document.querySelector('#sessions-table tbody');
+            const sessions = data.sessions || [];
+
+            tbody.innerHTML = sessions.length > 0 ? sessions.map(s => `
+                <tr>
+                    <td style="font-family: monospace;">${s.client_ip || '-'}</td>
+                    <td>${s.client_port || '-'}</td>
+                    <td>${s.protocol || '-'}</td>
+                    <td style="font-family: monospace; font-size: 0.85rem;">${s.local_addr || '-'}</td>
+                    <td>${s.state || '-'}</td>
+                </tr>
+            `).join('') : '<tr><td colspan="5">No active sessions</td></tr>';
+        }
+
+        async function loadUsers() {
+            const data = await api('/users');
+            const tbody = document.querySelector('#users-table tbody');
+            const users = data.users || [];
+
+            tbody.innerHTML = users.length > 0 ? users.map(u => `
+                <tr>
+                    <td>${u.username}</td>
+                    <td>${formatDate(u.created)}</td>
+                    <td>
+                        <button class="btn danger" onclick="deleteUser('${u.username}')">Delete</button>
+                    </td>
+                </tr>
+            `).join('') : '<tr><td colspan="3">No users configured</td></tr>';
+        }
+
+        async function loadConfig() {
+            const data = await api('/config');
+            document.getElementById('config-editor').value = data.content || '';
+        }
+
+        async function saveConfig() {
+            const content = document.getElementById('config-editor').value;
+            const result = await api('/config', 'POST', { content });
+            if (result.success) {
+                showToast('Configuration saved. Restart service to apply.');
+            } else {
+                showToast(result.error || 'Failed to save config', 'error');
+            }
+        }
+
+        async function loadLogs() {
+            const data = await api('/logs?lines=100');
+            const lines = data.lines || [];
+            document.getElementById('logs-content').textContent = lines.join('\n') || 'No logs available';
+        }
+
+        async function serviceAction(action) {
+            const result = await api('/' + action, 'POST');
+            if (result.success) {
+                showToast('Service ' + action + ' successful');
+                setTimeout(loadStatus, 1000);
+            } else {
+                showToast(result.error || 'Action failed', 'error');
+            }
+        }
+
+        // User management
+        function showAddUserModal() {
+            document.getElementById('add-user-modal').classList.add('show');
+        }
+
+        function closeAddUserModal() {
+            document.getElementById('add-user-modal').classList.remove('show');
+        }
+
+        async function addUser() {
+            const username = document.getElementById('new-username').value.trim();
+            const password = document.getElementById('new-password').value;
+
+            if (!username || !password) {
+                showToast('Username and password required', 'error');
+                return;
+            }
+
+            const result = await api('/users', 'POST', { username, password });
+            if (result.success) {
+                showToast('User added successfully');
+                closeAddUserModal();
+                loadUsers();
+                loadStatus();
+            } else {
+                showToast(result.error || 'Failed to add user', 'error');
+            }
+        }
+
+        async function deleteUser(username) {
+            if (!confirm('Delete user ' + username + '?')) return;
+
+            const result = await api('/users/' + username, 'DELETE');
+            if (result.success) {
+                showToast('User deleted');
+                loadUsers();
+                loadStatus();
+            } else {
+                showToast(result.error || 'Failed to delete user', 'error');
+            }
+        }
+
+        // Realm settings
+        async function generateSecret() {
+            const result = await api('/generate_secret', 'POST');
+            if (result.secret) {
+                document.getElementById('secret-input').value = result.secret;
+                document.getElementById('secret-input').type = 'text';
+                showToast('New secret generated');
+            }
+        }
+
+        async function saveRealm() {
+            const realm = document.getElementById('realm-input').value.trim();
+            const secret = document.getElementById('secret-input').value.trim();
+
+            if (!realm) {
+                showToast('Realm is required', 'error');
+                return;
+            }
+
+            const data = { realm };
+            if (secret) data.secret = secret;
+
+            const result = await api('/realm', 'POST', data);
+            if (result.success) {
+                showToast('Realm settings saved. Restart service to apply.');
+                document.getElementById('secret-input').value = '';
+                document.getElementById('secret-input').type = 'password';
+            } else {
+                showToast(result.error || 'Failed to save realm', 'error');
+            }
+        }
+
+        // Credentials
+        function showCredModal() {
+            document.getElementById('cred-modal').classList.add('show');
+            document.getElementById('cred-result').innerHTML = '';
+        }
+
+        function closeCredModal() {
+            document.getElementById('cred-modal').classList.remove('show');
+        }
+
+        async function generateCreds() {
+            const username = document.getElementById('cred-username').value.trim() || 'webrtc';
+            const ttl = parseInt(document.getElementById('cred-ttl').value) || 86400;
+
+            const result = await api('/credentials', 'POST', { username, ttl });
+
+            if (result.error) {
+                document.getElementById('cred-result').innerHTML =
+                    '<p style="color: var(--red); margin-top: 1rem;">' + result.error + '</p>';
+                return;
+            }
+
+            const turnUrls = result.turn_urls || [];
+            const stunUrls = result.stun_urls || [];
+
+            document.getElementById('cred-result').innerHTML = `
+                <div class="cred-box">
+                    <div class="cred-row">
+                        <span class="cred-label">Username:</span>
+                        <span class="cred-value">${result.username}</span>
+                    </div>
+                    <div class="cred-row">
+                        <span class="cred-label">Password:</span>
+                        <span class="cred-value">${result.password}</span>
+                    </div>
+                    <div class="cred-row">
+                        <span class="cred-label">TTL:</span>
+                        <span class="cred-value">${result.ttl}s</span>
+                    </div>
+                    <div class="cred-row">
+                        <span class="cred-label">Expires:</span>
+                        <span class="cred-value">${formatDate(result.expires)}</span>
+                    </div>
+                    <div class="cred-row">
+                        <span class="cred-label">TURN URLs:</span>
+                        <span class="cred-value">${turnUrls.join('<br>')}</span>
+                    </div>
+                    <div class="cred-row">
+                        <span class="cred-label">STUN URLs:</span>
+                        <span class="cred-value">${stunUrls.join('<br>')}</span>
+                    </div>
+                </div>
+                <button class="btn" onclick="copyCredentials()" style="width: 100%; margin-top: 1rem;">
+                    Copy ICE Configuration
+                </button>
+            `;
+
+            // Store for copy
+            window._lastCreds = result;
+        }
+
+        function copyCredentials() {
+            if (!window._lastCreds) return;
+            const c = window._lastCreds;
+            const iceConfig = {
+                iceServers: [
+                    { urls: c.stun_urls },
+                    {
+                        urls: c.turn_urls,
+                        username: c.username,
+                        credential: c.password
+                    }
+                ]
+            };
+            copyToClipboard(JSON.stringify(iceConfig, null, 2));
+            showToast('ICE configuration copied');
+        }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                showToast('Copied to clipboard');
+            }).catch(() => {
+                showToast('Failed to copy', 'error');
+            });
+        }
+
+        function refreshAll() {
+            loadStatus();
+            loadStats();
+            loadEndpoints();
+            loadSessions();
+            loadUsers();
+        }
+
+        // Initial load
+        refreshAll();
+        loadConfig();
+        loadLogs();
+
+        // Auto-refresh
+        setInterval(() => {
+            loadStatus();
+            loadStats();
+        }, 30000);
+    </script>
+    <script src="/shared/crt-engine.js"></script>
+</body>
+</html>

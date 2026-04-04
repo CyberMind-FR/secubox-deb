@@ -1,0 +1,9 @@
+#!/bin/bash
+set -e
+case "$1" in
+  remove|deconfigure)
+    systemctl stop secubox-glances.service || true
+    systemctl disable secubox-glances.service || true
+    ;;
+esac
+#DEBHELPER#

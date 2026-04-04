@@ -1,0 +1,18 @@
+Source: secubox-glances
+Section: net
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
+
+Package: secubox-glances
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0), glances, python3-psutil
+Description: SecuBox Glances Dashboard
+ System monitoring module wrapping the Glances monitoring tool.
+ Provides real-time CPU, memory, disk, network stats with P31 Phosphor theme.
+ .
+ Features: hardware sensors, process list, historical data, service control.
+ Port Debian bookworm for SecuBox (CyberMind.fr).

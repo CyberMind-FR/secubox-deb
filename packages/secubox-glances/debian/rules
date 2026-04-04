@@ -1,0 +1,14 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-glances/usr/lib/secubox/glances/
+	cp -r api debian/secubox-glances/usr/lib/secubox/glances/
+	install -d debian/secubox-glances/usr/share/secubox/www
+	[ -d www ] && cp -r www/. debian/secubox-glances/usr/share/secubox/www/ || true
+	install -d debian/secubox-glances/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-glances/usr/share/secubox/menu.d/ || true
+	# Modular nginx config
+	install -d debian/secubox-glances/etc/nginx/secubox.d
+	[ -f nginx/glances.conf ] && cp nginx/glances.conf debian/secubox-glances/etc/nginx/secubox.d/ || true
