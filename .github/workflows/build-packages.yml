@@ -99,6 +99,14 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Build React app (for soc-web)
+        if: matrix.package == 'secubox-soc-web'
+        run: |
+          cd packages/secubox-soc-web
+          npm ci --ignore-scripts || npm install --ignore-scripts
+          npm run build
+          ls -la dist/
+
       - name: Setup Go (for daemon)
         if: matrix.package == 'secubox-daemon'
         uses: actions/setup-go@v5
@@ -107,11 +115,15 @@ jobs:
 
       - name: Build Go binaries (for daemon)
         if: matrix.package == 'secubox-daemon'
+        env:
+          GOOS: linux
+          GOARCH: ${{ matrix.arch == 'arm64' && 'arm64' || 'amd64' }}
         run: |
           cd daemon
           mkdir -p build
-          GOOS=linux GOARCH=${{ matrix.arch == 'arm64' && 'arm64' || 'amd64' }} go build -o build/secuboxd ./cmd/secuboxd
-          GOOS=linux GOARCH=${{ matrix.arch == 'arm64' && 'arm64' || 'amd64' }} go build -o build/secuboxctl ./cmd/secuboxctl
+          go build -ldflags "-s -w" -o build/secuboxd ./cmd/secuboxd
+          go build -ldflags "-s -w" -o build/secuboxctl ./cmd/secuboxctl
+          go build -ldflags "-s -w" -o build/c3box ./c3box/backend
           ls -la build/
 
       - name: Build ${{ matrix.package }} (${{ matrix.arch }})
