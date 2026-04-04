@@ -12,15 +12,18 @@
 - **Files Modified:**
   - `image/build-live-usb.sh` — Added startup.nsh creation after GRUB EFI install
 
-### VirtualBox VM Testing ✅
-- VM boots successfully with UEFI firmware enabled
-- GRUB menu displays with all boot options and emojis
-- Linux boots and services start correctly
-- SSH access confirmed working
-- secubox-status command shows:
-  - Kiosk GUI mode active
-  - Core services running (nginx, secubox-hub, crowdsec)
-  - Network interfaces up (enp0s3, dummy0, br-lan)
+### TUI Mode Boot Fix ✅
+- **Issue:** Selecting TUI mode from GRUB menu loaded Kiosk GUI instead
+- **Root cause:** Kiosk service started before cmdline handler could disable it
+- **Solution:**
+  - Use `systemctl mask` to prevent kiosk from starting
+  - Kill X11/Chromium if already running
+  - Create generator drop-in for correct systemd target
+  - Add `Requires=secubox-cmdline.service` to kiosk and TUI services
+- **Files Modified:**
+  - `image/sbin/secubox-cmdline-handler` — Mask kiosk, kill X11
+  - `image/systemd/secubox-kiosk.service` — Require cmdline handler
+  - `image/systemd/secubox-console-tui.service` — Require cmdline handler
 
 ### CI Workflows — Package Slipstream Fix ✅
 - **Issue:** CI-built images didn't include SecuBox packages
@@ -33,6 +36,22 @@
   - `.github/workflows/build-image.yml` — Download packages + slipstream
   - `.github/workflows/build-live-usb.yml` — Remove redundant cache copy
   - `.github/workflows/release.yml` — Update package count
+
+### Wiki Update ✅
+- Updated all wiki pages to v1.5.1
+- Package count updated from 93 to 124
+- Updated Home.md, Home-FR.md, Home-ZH.md, _Sidebar.md
+
+### Release v1.5.1 ⏳
+- Tag created and pushed
+- CI workflow building (124 packages × 2 architectures)
+- Missing secrets for publish step: `GPG_PRIVATE_KEY`, `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS`
+
+### VM Creation Script Test ✅
+- Tested `create-secubox-vm.sh --download`
+- Downloaded v1.5.0 image (before EFI fix)
+- Manually patched with startup.nsh
+- VM boots successfully in Kiosk GUI mode
 
 ### CI Workflow Chain (Fixed)
 ```
@@ -47,6 +66,8 @@ release.yml        → All packages + images
 **Commits:**
 - `70961cb` - fix(build): Add startup.nsh for VirtualBox EFI compatibility
 - `38841a9` - fix(ci): Include all SecuBox packages in image builds
+- `df8c984` - fix(boot): TUI mode now properly overrides kiosk
+- `10d09e3` - docs: Update to v1.5.1 with 124 packages (wiki)
 
 ---
 
