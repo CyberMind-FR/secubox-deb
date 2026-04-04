@@ -34,3 +34,8 @@ override_dh_auto_install:
 	               debian/secubox-core/usr/lib/systemd/system/
 	# Create modular nginx directory (modules install their snippets here)
 	install -d debian/secubox-core/etc/nginx/secubox.d
+
+	# tmpfiles.d for /run/secubox socket directory (world-writable for all services)
+	install -d debian/secubox-core/usr/lib/tmpfiles.d
+	install -m 644 tmpfiles.d/secubox.conf \
+	               debian/secubox-core/usr/lib/tmpfiles.d/
