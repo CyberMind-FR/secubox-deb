@@ -3,6 +3,20 @@
 name: Publish Packages
 
 on:
+  workflow_call:
+    inputs:
+      distribution:
+        description: 'Target distribution'
+        required: false
+        type: string
+        default: 'bookworm'
+    secrets:
+      GPG_PRIVATE_KEY:
+        required: true
+      DEPLOY_SSH_KEY:
+        required: true
+      DEPLOY_KNOWN_HOSTS:
+        required: true
   workflow_run:
     workflows: ["Build SecuBox .deb packages"]
     types: [completed]

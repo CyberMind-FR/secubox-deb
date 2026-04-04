@@ -1,6 +1,21 @@
 name: Build SecuBox System Images
 
 on:
+  workflow_call:
+    inputs:
+      board:
+        description: 'Target board'
+        required: false
+        type: string
+        default: 'all'
+      size:
+        description: 'Image size'
+        required: false
+        type: string
+        default: '8G'
+    secrets:
+      GPG_PRIVATE_KEY:
+        required: false
   workflow_dispatch:
     inputs:
       board:
@@ -33,7 +48,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        board: ${{ github.event_name == 'push' && fromJson('["mochabin","espressobin-v7","espressobin-ultra","vm-x64"]') || (github.event.inputs.board == 'all' && fromJson('["mochabin","espressobin-v7","espressobin-ultra","vm-x64"]') || fromJson(format('["{0}"]', github.event.inputs.board))) }}
+        # Handle all event types: push (tags), workflow_call, workflow_dispatch
+        board: ${{ (github.event_name == 'push' || (inputs.board == 'all' || inputs.board == '')) && fromJson('["mochabin","espressobin-v7","espressobin-ultra","vm-x64"]') || (github.event.inputs.board == 'all' && fromJson('["mochabin","espressobin-v7","espressobin-ultra","vm-x64"]') || fromJson(format('["{0}"]', inputs.board || github.event.inputs.board || 'vm-x64'))) }}
 
     steps:
       - name: Checkout
@@ -80,7 +96,7 @@ jobs:
             --board ${{ matrix.board }} \
             --suite ${{ env.DEBIAN_SUITE }} \
             --out output/ \
-            --size ${{ github.event.inputs.size || '8G' }}
+            --size ${{ inputs.size || github.event.inputs.size || '8G' }}
           sudo chown -R $(id -u):$(id -g) output/
         timeout-minutes: 90
 
