@@ -467,7 +467,15 @@
         let sortAsc = false;
 
         function getToken() {
-            return localStorage.getItem('sbx_token');
+            return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token');
+        }
+
+        function checkAuth() {
+            if (!getToken()) {
+                window.location.href = '/portal/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+                return false;
+            }
+            return true;
         }
 
         async function api(endpoint, options = {}) {
@@ -829,14 +837,20 @@
         // Config form submit
         document.getElementById('config-form').addEventListener('submit', saveConfig);
 
-        // Initial load
-        refresh();
-        setInterval(() => {
-            loadStats();
-            if (document.querySelector('.tab[data-tab="processes"]').classList.contains('active')) {
-                loadProcesses();
-            }
-        }, 5000);
+        // Initial load - check auth first
+        if (checkAuth()) {
+            refresh();
+            // Auto-refresh every 10 seconds
+            setInterval(() => {
+                loadStats();
+                const activeTab = document.querySelector('.tab.active');
+                if (activeTab) {
+                    const tab = activeTab.dataset.tab;
+                    if (tab === 'processes') loadProcesses();
+                    else if (tab === 'sensors') loadSensors();
+                }
+            }, 10000);
+        }
     </script>
     <script src="/shared/crt-engine.js"></script>
 </body>

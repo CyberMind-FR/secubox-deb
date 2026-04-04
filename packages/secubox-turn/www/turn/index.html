@@ -368,10 +368,17 @@
 
     <script>
         const API = '/api/v1/turn';
-        let token = localStorage.getItem('sbx_token');
 
         function getToken() {
-            return localStorage.getItem('sbx_token');
+            return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token');
+        }
+
+        function checkAuth() {
+            if (!getToken()) {
+                window.location.href = '/portal/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+                return false;
+            }
+            return true;
         }
 
         async function api(endpoint, method = 'GET', data = null) {
@@ -696,16 +703,19 @@
             loadUsers();
         }
 
-        // Initial load
-        refreshAll();
-        loadConfig();
-        loadLogs();
+        // Initial load - check auth first
+        if (checkAuth()) {
+            refreshAll();
+            loadConfig();
+            loadLogs();
 
-        // Auto-refresh
-        setInterval(() => {
-            loadStatus();
-            loadStats();
-        }, 30000);
+            // Auto-refresh every 15 seconds
+            setInterval(() => {
+                loadStatus();
+                loadStats();
+                loadSessions();
+            }, 15000);
+        }
     </script>
     <script src="/shared/crt-engine.js"></script>
 </body>
