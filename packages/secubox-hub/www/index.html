@@ -480,23 +480,47 @@
     <script>
         const API = '/api/v1/hub';
 
+        // ── Authentication ────────────────────────────────────────────
+        function getToken() {
+            return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token');
+        }
+
+        function checkAuth() {
+            if (!getToken()) {
+                window.location.href = '/portal/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+                return false;
+            }
+            return true;
+        }
+
+        // Check auth immediately on page load
+        if (!checkAuth()) {
+            document.body.innerHTML = '<div style="padding:2rem;color:var(--p31-peak);">Redirecting to login...</div>';
+        }
+
         // Dynamic menu cache
         let menuData = null;
 
         async function api(endpoint, method = 'GET', data = null) {
-            const token = localStorage.getItem('sbx_token');
+            const token = getToken();
+            if (!token) {
+                checkAuth();
+                return {};
+            }
             const opts = {
                 method,
                 headers: {
                     'Content-Type': 'application/json',
-                    ...(token ? { 'Authorization': 'Bearer ' + token } : {})
+                    'Authorization': 'Bearer ' + token
                 }
             };
             if (data) opts.body = JSON.stringify(data);
             try {
                 const res = await fetch(API + endpoint, opts);
                 if (res.status === 401) {
-                    window.location.href = '/portal/login.html';
+                    localStorage.removeItem('sbx_token');
+                    localStorage.removeItem('secubox_token');
+                    checkAuth();
                     return {};
                 }
                 return res.json();
@@ -685,9 +709,9 @@
                 return;
             }
 
-            const token = localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token');
+            const token = getToken();
             if (!token) {
-                alert('Authentication required');
+                checkAuth();
                 return;
             }
 
@@ -724,8 +748,11 @@
             loadNetworkMode();
         }
 
-        refresh();
-        setInterval(refresh, 30000);
+        // Only initialize if authenticated
+        if (checkAuth()) {
+            refresh();
+            setInterval(refresh, 30000);
+        }
     </script>
     <script src="/shared/sidebar.js"></script>
     <script src="/shared/crt-engine.js"></script>
