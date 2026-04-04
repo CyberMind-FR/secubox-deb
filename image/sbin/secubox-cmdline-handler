@@ -68,15 +68,29 @@ apply_settings() {
             rm -f "${MARKER_DIR}/.kiosk-enabled"
             touch "${MARKER_DIR}/.tui-enabled"
 
-            # Disable kiosk, enable TUI
-            systemctl disable secubox-kiosk.service 2>/dev/null || true
+            # Mask kiosk service to prevent any startup
+            systemctl mask secubox-kiosk.service 2>/dev/null || true
             systemctl stop secubox-kiosk.service 2>/dev/null || true
+
+            # Kill any X11/Chromium if already started
+            pkill -9 Xorg 2>/dev/null || true
+            pkill -9 chromium 2>/dev/null || true
+
+            # Enable TUI service
+            systemctl unmask secubox-console-tui.service 2>/dev/null || true
             systemctl enable secubox-console-tui.service 2>/dev/null || true
 
-            # Set multi-user target (no graphical)
+            # Set multi-user target for current AND future boots
             systemctl set-default multi-user.target 2>/dev/null || true
 
-            # Start TUI service (will run on tty1)
+            # Write to generator drop-in to ensure correct target on this boot
+            mkdir -p /run/systemd/generator
+            echo "[Unit]" > /run/systemd/generator/default.target
+            echo "Requires=multi-user.target" >> /run/systemd/generator/default.target
+
+            systemctl daemon-reload 2>/dev/null || true
+
+            # Start TUI service
             log "Starting console TUI service..."
             systemctl start secubox-console-tui.service 2>/dev/null &
             ;;
