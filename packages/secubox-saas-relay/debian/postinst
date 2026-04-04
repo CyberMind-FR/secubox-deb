@@ -1,0 +1,15 @@
+#!/bin/bash
+set -e
+case "$1" in
+  configure)
+    id -u secubox >/dev/null 2>&1 || \
+      adduser --system --group --no-create-home --home /var/lib/secubox --shell /usr/sbin/nologin secubox
+    install -d -o secubox -g secubox -m 750 /run/secubox /var/lib/secubox /var/lib/secubox/saas-relay
+    install -d -o secubox -g secubox -m 700 /etc/secubox/secrets
+    install -d -o secubox -g secubox -m 750 /var/cache/secubox/saas-relay
+    systemctl daemon-reload
+    systemctl enable secubox-saas-relay.service
+    systemctl start secubox-saas-relay.service || true
+    ;;
+esac
+#DEBHELPER#

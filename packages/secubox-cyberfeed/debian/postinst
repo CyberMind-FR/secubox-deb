@@ -1,0 +1,26 @@
+#!/bin/sh
+set -e
+if [ "$1" = "configure" ]; then
+    # Create required directories
+    mkdir -p /etc/secubox/cyberfeed
+    mkdir -p /var/lib/secubox/cyberfeed/cache
+    chown -R secubox:secubox /var/lib/secubox/cyberfeed 2>/dev/null || true
+
+    # Install nginx config if not already installed via package
+    if [ -d /etc/nginx/secubox.d ] && [ ! -f /etc/nginx/secubox.d/cyberfeed.conf ]; then
+        cat > /etc/nginx/secubox.d/cyberfeed.conf << 'EOF'
+# /etc/nginx/secubox.d/cyberfeed.conf
+location /api/v1/cyberfeed/ {
+    proxy_pass http://unix:/run/secubox/cyberfeed.sock:/;
+    include /etc/nginx/snippets/secubox-proxy.conf;
+}
+EOF
+        nginx -t 2>/dev/null && systemctl reload nginx 2>/dev/null || true
+    fi
+
+    systemctl daemon-reload
+    systemctl enable secubox-cyberfeed.service || true
+    systemctl start secubox-cyberfeed.service || true
+fi
+#DEBHELPER#
+exit 0

@@ -1,0 +1,9 @@
+{
+  "id": "picobrew",
+  "name": "PicoBrew",
+  "icon": "🍺",
+  "path": "/picobrew/",
+  "category": "apps",
+  "order": 496,
+  "description": "Homebrew fermentation controller"
+}

@@ -1,0 +1,21 @@
+Source: secubox-saas-relay
+Section: net
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+
+Package: secubox-saas-relay
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn, python3-httpx, python3-cryptography
+Description: SecuBox SaaS/API Proxy Relay
+ Secure proxy relay for external SaaS APIs with encrypted key storage.
+ Port Debian bookworm de SecuBox-DEB Phase 9.
+ .
+ Features:
+  - Proxy configuration for external SaaS APIs
+  - API key management (encrypted storage with Fernet)
+  - Rate limiting and quota tracking per service
+  - Request/response logging
+  - Health checks for proxied services
+  - P31 Phosphor light theme dashboard

@@ -1,13 +1,51 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-04-04 (Session 35)*
+*Mis à jour : 2026-04-04 (Session 36)*
 
 ---
 
-## ✅ Terminé cette session (Session 35)
+## 🔄 En cours cette session (Session 36)
 
-### Phase 9 — System Tools (7/22 complete)
+### Phase 9 — System Tools (15/22 → 22/22 in progress)
 
-**New Modules Created:**
+**CI/CD Fix:**
+- Fixed `build-live-usb.sh` pipefail issue with non-existent directories
+- `find` commands now check directory existence before running
+- Commit: `a1c0d56` - Pushed to master
+
+**READMEs Added:**
+- `secubox-ksm/README.md` — KSM documentation
+- `secubox-admin/README.md` — Admin module documentation
+
+**New Modules Being Created (7):**
+- `secubox-metabolizer` — Log processor/analyzer
+- `secubox-metacatalog` — Service catalog/registry
+- `secubox-cyberfeed` — Threat feed aggregator
+- `secubox-mirror` — Mirror/CDN caching
+- `secubox-saas-relay` — SaaS API proxy
+- `secubox-rezapp` — App deployment manager
+- `secubox-picobrew` — Homebrew/fermentation controller
+
+**Previously Completed (Session 35):**
+- secubox-rtty, secubox-routes, secubox-reporter, secubox-smtp-relay (built)
+- secubox-nettweak, secubox-ksm, secubox-avatar, secubox-admin (created + built)
+
+---
+
+## ✅ Terminé session précédente (Session 35)
+
+### Phase 9 — System Tools (15/22 complete)
+
+**Modules Built (Session 35):**
+- `secubox-rtty_1.0.0-1~bookworm1_all.deb` — Remote terminal
+- `secubox-routes_1.0.0-1~bookworm1_all.deb` — Routing table view
+- `secubox-reporter_1.0.0-1~bookworm1_all.deb` — System reports
+- `secubox-smtp-relay_1.0.0-1~bookworm1_all.deb` — Mail relay
+- `secubox-nettweak_1.0.0-1~bookworm1_all.deb` — Network tuning
+- `secubox-ksm_1.0.0-1~bookworm1_all.deb` — Kernel same-page merging
+- `secubox-avatar_1.0.0-1~bookworm1_all.deb` — Identity management
+- `secubox-admin_1.0.0-1~bookworm1_all.deb` — Admin dashboard
+
+**New Modules Created (Session 35 earlier):**
 - `secubox-glances` v1.0.0 — System monitoring (Glances wrapper)
   - Real-time CPU/memory/disk/network stats
   - Process list, sensor readings

@@ -1,0 +1,8 @@
+#!/bin/sh
+set -e
+if [ "$1" = "remove" ]; then
+    systemctl stop secubox-cyberfeed.service || true
+    systemctl disable secubox-cyberfeed.service || true
+fi
+#DEBHELPER#
+exit 0

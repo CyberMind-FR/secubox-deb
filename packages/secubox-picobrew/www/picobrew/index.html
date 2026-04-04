@@ -1,0 +1,1774 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - PicoBrew Controller</title>
+    <link rel="stylesheet" href="/shared/sidebar.css">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <style>
+        :root {
+            /* Amber/Beer-inspired accents */
+            --brew-amber: #d4a024;
+            --brew-amber-dim: #a67c00;
+            --brew-amber-glow: rgba(212, 160, 36, 0.3);
+            --brew-copper: #b87333;
+            --brew-foam: #f5f0e1;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'IBM Plex Mono', 'Consolas', monospace;
+            background: var(--tube-pale, #f5f0e1);
+            color: var(--tube-black, #2a1f0a);
+            display: flex;
+            min-height: 100vh;
+        }
+
+        body.dark {
+            background: var(--tube-black, #1a1408);
+            color: var(--tube-pale, #e8dcc8);
+        }
+
+        .main {
+            flex: 1;
+            margin-left: 220px;
+            padding: 1.5rem;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 2px,
+                rgba(0,0,0,0.02) 2px,
+                rgba(0,0,0,0.02) 4px
+            );
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid var(--brew-amber-dim);
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            color: var(--brew-amber);
+            text-shadow: 0 0 10px var(--brew-amber-glow);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .header-actions { display: flex; gap: 0.5rem; align-items: center; }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            border: 1px solid var(--brew-amber-dim);
+            background: var(--tube-pale, #f5f0e1);
+            color: var(--tube-black, #2a1f0a);
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+
+        body.dark .btn {
+            background: rgba(40,30,10,0.8);
+            color: var(--tube-pale, #e8dcc8);
+        }
+
+        .btn:hover {
+            background: var(--brew-amber-dim);
+            border-color: var(--brew-amber);
+            color: #fff;
+        }
+
+        .btn-primary {
+            background: var(--brew-amber-dim);
+            border-color: var(--brew-amber);
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            background: var(--brew-amber);
+        }
+
+        .btn-danger {
+            background: #5c2020;
+            border-color: #884444;
+        }
+
+        .btn-success {
+            background: #2c5c20;
+            border-color: #448844;
+            color: #fff;
+        }
+
+        /* Status badge */
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+        }
+
+        .status-badge.active {
+            background: rgba(44, 92, 32, 0.2);
+            color: #4a4;
+            border: 1px solid #486;
+        }
+
+        .status-badge.idle {
+            background: rgba(212, 160, 36, 0.2);
+            color: var(--brew-amber);
+            border: 1px solid var(--brew-amber-dim);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid var(--brew-amber-dim);
+            padding-bottom: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .tab {
+            padding: 0.5rem 1rem;
+            border: none;
+            background: transparent;
+            color: var(--brew-amber-dim);
+            cursor: pointer;
+            font-family: inherit;
+            border-radius: 4px 4px 0 0;
+            transition: all 0.2s;
+        }
+
+        .tab:hover { color: var(--tube-black, #2a1f0a); }
+        body.dark .tab:hover { color: var(--tube-pale, #e8dcc8); }
+
+        .tab.active {
+            background: rgba(212,160,36,0.15);
+            color: var(--brew-amber);
+            border: 1px solid var(--brew-amber-dim);
+            border-bottom: none;
+        }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .stat-card {
+            background: rgba(212,160,36,0.08);
+            border: 1px solid var(--brew-amber-dim);
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        body.dark .stat-card {
+            background: rgba(40,30,10,0.5);
+        }
+
+        .stat-card .icon {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-card .value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--brew-amber);
+        }
+
+        .stat-card .label {
+            font-size: 0.75rem;
+            color: var(--brew-amber-dim);
+            text-transform: uppercase;
+        }
+
+        /* Cards */
+        .card {
+            background: rgba(212,160,36,0.05);
+            border: 1px solid var(--brew-amber-dim);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+        }
+
+        body.dark .card {
+            background: rgba(40,30,10,0.4);
+        }
+
+        .card h2 {
+            font-size: 1rem;
+            color: var(--brew-amber);
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* Temperature Display */
+        .temp-display {
+            font-size: 3rem;
+            font-weight: bold;
+            color: var(--brew-amber);
+            text-align: center;
+            padding: 1.5rem;
+            background: linear-gradient(135deg, rgba(212,160,36,0.1) 0%, rgba(212,160,36,0.05) 100%);
+            border-radius: 12px;
+            border: 2px solid var(--brew-amber-dim);
+            margin-bottom: 1rem;
+        }
+
+        .temp-display .unit {
+            font-size: 1.5rem;
+            color: var(--brew-amber-dim);
+        }
+
+        .temp-display .target {
+            font-size: 1rem;
+            color: var(--brew-amber-dim);
+            margin-top: 0.5rem;
+        }
+
+        /* Chart Container */
+        .chart-container {
+            background: rgba(0,0,0,0.03);
+            border: 1px solid var(--brew-amber-dim);
+            border-radius: 8px;
+            padding: 1rem;
+            height: 300px;
+            position: relative;
+        }
+
+        body.dark .chart-container {
+            background: rgba(0,0,0,0.3);
+        }
+
+        .chart-placeholder {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--brew-amber-dim);
+            font-style: italic;
+        }
+
+        /* Simple SVG Chart */
+        .chart-svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .chart-line {
+            fill: none;
+            stroke: var(--brew-amber);
+            stroke-width: 2;
+        }
+
+        .chart-grid {
+            stroke: var(--brew-amber-dim);
+            stroke-width: 0.5;
+            opacity: 0.3;
+        }
+
+        .chart-label {
+            fill: var(--brew-amber-dim);
+            font-size: 10px;
+        }
+
+        /* Session List */
+        .session-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .session-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem;
+            background: rgba(212,160,36,0.05);
+            border-radius: 4px;
+            border-left: 4px solid var(--brew-amber-dim);
+        }
+
+        body.dark .session-item {
+            background: rgba(0,0,0,0.2);
+        }
+
+        .session-item.active {
+            border-left-color: #4a4;
+            background: rgba(44,92,32,0.1);
+        }
+
+        .session-item.completed {
+            border-left-color: var(--brew-copper);
+        }
+
+        .session-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .session-name {
+            font-weight: bold;
+            color: var(--tube-black, #2a1f0a);
+        }
+
+        body.dark .session-name {
+            color: var(--tube-pale, #e8dcc8);
+        }
+
+        .session-meta {
+            font-size: 0.8rem;
+            color: var(--brew-amber-dim);
+        }
+
+        .session-actions {
+            display: flex;
+            gap: 0.25rem;
+        }
+
+        .session-actions button {
+            padding: 0.25rem 0.5rem;
+            background: var(--tube-pale, #f5f0e1);
+            border: 1px solid var(--brew-amber-dim);
+            color: var(--tube-black, #2a1f0a);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.75rem;
+        }
+
+        body.dark .session-actions button {
+            background: rgba(40,30,10,0.8);
+            color: var(--tube-pale, #e8dcc8);
+        }
+
+        .session-actions button:hover {
+            background: var(--brew-amber-dim);
+            color: #fff;
+        }
+
+        /* Profile Steps */
+        .profile-steps {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .profile-step {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.5rem;
+            background: rgba(212,160,36,0.05);
+            border-radius: 4px;
+        }
+
+        .step-day {
+            font-weight: bold;
+            color: var(--brew-amber);
+            min-width: 60px;
+        }
+
+        .step-temp {
+            font-weight: bold;
+        }
+
+        .step-ramp {
+            font-size: 0.8rem;
+            color: var(--brew-amber-dim);
+        }
+
+        /* Sensor List */
+        .sensor-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .sensor-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem;
+            background: rgba(212,160,36,0.05);
+            border-radius: 4px;
+            border-left: 4px solid var(--brew-amber);
+        }
+
+        body.dark .sensor-item {
+            background: rgba(0,0,0,0.2);
+        }
+
+        .sensor-item.offline {
+            border-left-color: #844;
+            opacity: 0.7;
+        }
+
+        .sensor-reading {
+            font-size: 1.25rem;
+            font-weight: bold;
+            color: var(--brew-amber);
+        }
+
+        /* Alert List */
+        .alert-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .alert-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem;
+            background: rgba(180,60,60,0.1);
+            border-radius: 4px;
+            border-left: 4px solid #b44;
+        }
+
+        .alert-item.acknowledged {
+            opacity: 0.6;
+            border-left-color: #666;
+        }
+
+        .alert-info {
+            flex: 1;
+        }
+
+        .alert-message {
+            color: var(--tube-black, #2a1f0a);
+        }
+
+        body.dark .alert-message {
+            color: var(--tube-pale, #e8dcc8);
+        }
+
+        .alert-time {
+            font-size: 0.8rem;
+            color: var(--brew-amber-dim);
+        }
+
+        /* Form elements */
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: var(--brew-amber-dim);
+            font-size: 0.85rem;
+        }
+
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%;
+            padding: 0.5rem;
+            background: var(--tube-pale, #f5f0e1);
+            border: 1px solid var(--brew-amber-dim);
+            border-radius: 4px;
+            color: var(--tube-black, #2a1f0a);
+            font-family: inherit;
+        }
+
+        body.dark .form-group input, body.dark .form-group select, body.dark .form-group textarea {
+            background: rgba(20,15,5,0.8);
+            color: var(--tube-pale, #e8dcc8);
+        }
+
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+            outline: none;
+            border-color: var(--brew-amber);
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        @media (max-width: 768px) {
+            .form-row { grid-template-columns: 1fr; }
+            .main { margin-left: 0; padding: 1rem; }
+        }
+
+        /* Recipe Card */
+        .recipe-card {
+            background: rgba(212,160,36,0.08);
+            border: 1px solid var(--brew-amber-dim);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .recipe-card h3 {
+            color: var(--brew-amber);
+            margin-bottom: 0.5rem;
+        }
+
+        .recipe-style {
+            font-size: 0.85rem;
+            color: var(--brew-amber-dim);
+            font-style: italic;
+        }
+
+        .recipe-gravity {
+            display: flex;
+            gap: 1rem;
+            margin-top: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 2rem;
+            color: var(--brew-amber-dim);
+        }
+
+        .empty-state .icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        /* Loading */
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            color: var(--brew-amber-dim);
+        }
+
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 2px solid var(--brew-amber-dim);
+            border-top-color: var(--brew-amber);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 0.5rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: var(--tube-pale, #f5f0e1);
+            border: 2px solid var(--brew-amber);
+            border-radius: 8px;
+            padding: 1.5rem;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        body.dark .modal-content {
+            background: var(--tube-black, #1a1408);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--brew-amber-dim);
+        }
+
+        .modal-header h2 {
+            color: var(--brew-amber);
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--brew-amber-dim);
+        }
+
+        .modal-close:hover {
+            color: var(--brew-amber);
+        }
+
+        /* Builtin Profiles */
+        .builtin-profile {
+            padding: 0.75rem;
+            background: rgba(212,160,36,0.1);
+            border: 1px solid var(--brew-amber-dim);
+            border-radius: 4px;
+            margin-bottom: 0.5rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .builtin-profile:hover {
+            background: rgba(212,160,36,0.2);
+            border-color: var(--brew-amber);
+        }
+
+        .builtin-profile h4 {
+            color: var(--brew-amber);
+            margin-bottom: 0.25rem;
+        }
+
+        .builtin-profile p {
+            font-size: 0.85rem;
+            color: var(--brew-amber-dim);
+        }
+    </style>
+</head>
+<body class="crt-light">
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+
+    <main class="main">
+        <header class="header">
+            <div>
+                <h1><span style="font-size: 1.75rem;">&#127866;</span> PicoBrew Controller</h1>
+            </div>
+            <div class="header-actions">
+                <button class="btn btn-primary" onclick="showStartSessionModal()">New Session</button>
+                <span id="statusBadge" class="status-badge idle">
+                    <span class="status-dot"></span>
+                    <span id="statusText">Idle</span>
+                </span>
+            </div>
+        </header>
+
+        <!-- Stats Grid -->
+        <div class="stats-grid" id="statsGrid">
+            <div class="stat-card">
+                <div class="icon">&#127777;</div>
+                <div class="value" id="sensorCount">--</div>
+                <div class="label">Sensors</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon">&#127866;</div>
+                <div class="value" id="activeSessionCount">--</div>
+                <div class="label">Active</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon">&#128202;</div>
+                <div class="value" id="profileCount">--</div>
+                <div class="label">Profiles</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon">&#128276;</div>
+                <div class="value" id="alertCount">--</div>
+                <div class="label">Alerts</div>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab active" data-tab="dashboard">Dashboard</button>
+            <button class="tab" data-tab="sessions">Sessions</button>
+            <button class="tab" data-tab="profiles">Profiles</button>
+            <button class="tab" data-tab="sensors">Sensors</button>
+            <button class="tab" data-tab="recipes">Recipes</button>
+            <button class="tab" data-tab="alerts">Alerts</button>
+        </div>
+
+        <!-- Dashboard Tab -->
+        <div id="tab-dashboard" class="tab-content active">
+            <div class="form-row">
+                <div class="card">
+                    <h2>&#127777; Current Temperature</h2>
+                    <div class="temp-display" id="currentTemp">
+                        <span class="temp-value">--</span><span class="unit">C</span>
+                        <div class="target" id="targetTemp"></div>
+                    </div>
+                    <div id="sensorSelect" style="margin-top: 1rem;">
+                        <select id="dashboardSensor" onchange="updateDashboardSensor()">
+                            <option value="">Select sensor...</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="card">
+                    <h2>&#127866; Active Session</h2>
+                    <div id="activeSessionInfo">
+                        <div class="empty-state">
+                            <p>No active session</p>
+                            <button class="btn btn-primary" onclick="showStartSessionModal()" style="margin-top: 1rem;">
+                                Start Brewing
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>&#128200; Temperature History (24h)</h2>
+                <div class="chart-container" id="tempChart">
+                    <div class="chart-placeholder">Select a session to view temperature history</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>&#128161; Quick Readings</h2>
+                <div id="quickReadings" class="sensor-list">
+                    <div class="loading"><div class="spinner"></div> Loading sensors...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sessions Tab -->
+        <div id="tab-sessions" class="tab-content">
+            <div class="card">
+                <h2>&#127866; Brew Sessions</h2>
+                <div style="margin-bottom: 1rem;">
+                    <button class="btn btn-primary" onclick="showStartSessionModal()">Start New Session</button>
+                </div>
+                <div id="sessionList" class="session-list">
+                    <div class="loading"><div class="spinner"></div> Loading sessions...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Profiles Tab -->
+        <div id="tab-profiles" class="tab-content">
+            <div class="card">
+                <h2>&#128202; Fermentation Profiles</h2>
+                <div style="margin-bottom: 1rem;">
+                    <button class="btn btn-primary" onclick="showAddProfileModal()">Create Profile</button>
+                    <button class="btn" onclick="showBuiltinProfiles()">Import Built-in</button>
+                </div>
+                <div id="profileList">
+                    <div class="loading"><div class="spinner"></div> Loading profiles...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sensors Tab -->
+        <div id="tab-sensors" class="tab-content">
+            <div class="card">
+                <h2>&#127777; Temperature Sensors</h2>
+                <div style="margin-bottom: 1rem;">
+                    <button class="btn" onclick="detectSensors()">Detect Hardware</button>
+                    <button class="btn btn-primary" onclick="showAddSensorModal()">Add Sensor</button>
+                </div>
+                <div id="sensorList" class="sensor-list">
+                    <div class="loading"><div class="spinner"></div> Loading sensors...</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>&#128270; Detected Hardware</h2>
+                <div id="detectedSensors">
+                    <p style="color: var(--brew-amber-dim);">Click "Detect Hardware" to scan for sensors</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recipes Tab -->
+        <div id="tab-recipes" class="tab-content">
+            <div class="card">
+                <h2>&#128214; Recipe Library</h2>
+                <div style="margin-bottom: 1rem;">
+                    <button class="btn btn-primary" onclick="showAddRecipeModal()">Add Recipe</button>
+                </div>
+                <div id="recipeList">
+                    <div class="loading"><div class="spinner"></div> Loading recipes...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Alerts Tab -->
+        <div id="tab-alerts" class="tab-content">
+            <div class="card">
+                <h2>&#128276; Temperature Alerts</h2>
+                <div style="margin-bottom: 1rem;">
+                    <button class="btn" onclick="loadAlerts()">Refresh</button>
+                    <button class="btn btn-danger" onclick="clearAlerts()">Clear Acknowledged</button>
+                </div>
+                <div id="alertList" class="alert-list">
+                    <div class="loading"><div class="spinner"></div> Loading alerts...</div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Start Session Modal -->
+    <div id="startSessionModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>&#127866; Start New Session</h2>
+                <button class="modal-close" onclick="closeModal('startSessionModal')">&times;</button>
+            </div>
+            <form id="startSessionForm" onsubmit="startSession(event)">
+                <div class="form-group">
+                    <label>Session Name *</label>
+                    <input type="text" id="sessionName" required placeholder="e.g., Belgian Tripel Batch #5">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Recipe</label>
+                        <select id="sessionRecipe">
+                            <option value="">-- Select --</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Profile</label>
+                        <select id="sessionProfile">
+                            <option value="">-- Select --</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Sensor</label>
+                        <select id="sessionSensor">
+                            <option value="">-- Select --</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Original Gravity (OG)</label>
+                        <input type="number" id="sessionOG" step="0.001" placeholder="1.050">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Notes</label>
+                    <textarea id="sessionNotes" rows="3" placeholder="Optional notes..."></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary">Start Session</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add Profile Modal -->
+    <div id="addProfileModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>&#128202; Create Profile</h2>
+                <button class="modal-close" onclick="closeModal('addProfileModal')">&times;</button>
+            </div>
+            <form id="addProfileForm" onsubmit="addProfile(event)">
+                <div class="form-group">
+                    <label>Profile Name *</label>
+                    <input type="text" id="profileName" required placeholder="e.g., Ale Standard">
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <input type="text" id="profileDescription" placeholder="Brief description">
+                </div>
+                <div class="form-group">
+                    <label>Steps (Day, Target Temp, Ramp Hours)</label>
+                    <div id="profileSteps">
+                        <div class="profile-step" style="display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 0.5rem; margin-bottom: 0.5rem;">
+                            <input type="number" placeholder="Day" class="step-day" value="0" min="0">
+                            <input type="number" placeholder="Temp" class="step-temp" step="0.5">
+                            <input type="number" placeholder="Ramp (h)" class="step-ramp" value="0" min="0">
+                            <button type="button" class="btn btn-danger" onclick="this.parentElement.remove()" style="padding: 0.25rem 0.5rem;">&times;</button>
+                        </div>
+                    </div>
+                    <button type="button" class="btn" onclick="addProfileStep()">+ Add Step</button>
+                </div>
+                <button type="submit" class="btn btn-primary">Save Profile</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Builtin Profiles Modal -->
+    <div id="builtinProfilesModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>&#128230; Import Built-in Profile</h2>
+                <button class="modal-close" onclick="closeModal('builtinProfilesModal')">&times;</button>
+            </div>
+            <div id="builtinProfilesList">
+                <div class="loading"><div class="spinner"></div> Loading...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Sensor Modal -->
+    <div id="addSensorModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>&#127777; Add Sensor</h2>
+                <button class="modal-close" onclick="closeModal('addSensorModal')">&times;</button>
+            </div>
+            <form id="addSensorForm" onsubmit="addSensor(event)">
+                <div class="form-group">
+                    <label>Sensor ID *</label>
+                    <input type="text" id="sensorId" required placeholder="e.g., fermenter-1">
+                </div>
+                <div class="form-group">
+                    <label>Name *</label>
+                    <input type="text" id="sensorName" required placeholder="e.g., Primary Fermenter">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Type</label>
+                        <select id="sensorType">
+                            <option value="ds18b20">DS18B20 (1-Wire)</option>
+                            <option value="dht22">DHT22</option>
+                            <option value="bme280">BME280</option>
+                            <option value="tilt">Tilt Hydrometer</option>
+                            <option value="ispindel">iSpindel</option>
+                            <option value="manual">Manual Entry</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Address/MAC</label>
+                        <input type="text" id="sensorAddress" placeholder="Hardware address">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Calibration Offset</label>
+                    <input type="number" id="sensorCalibration" step="0.1" value="0" placeholder="0.0">
+                </div>
+                <button type="submit" class="btn btn-primary">Add Sensor</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add Recipe Modal -->
+    <div id="addRecipeModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>&#128214; Add Recipe</h2>
+                <button class="modal-close" onclick="closeModal('addRecipeModal')">&times;</button>
+            </div>
+            <form id="addRecipeForm" onsubmit="addRecipe(event)">
+                <div class="form-group">
+                    <label>Recipe Name *</label>
+                    <input type="text" id="recipeName" required placeholder="e.g., Belgian Tripel">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Style</label>
+                        <input type="text" id="recipeStyle" placeholder="e.g., Belgian Strong Ale">
+                    </div>
+                    <div class="form-group">
+                        <label>Fermentation Profile</label>
+                        <select id="recipeProfile">
+                            <option value="">-- Select --</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Target OG</label>
+                        <input type="number" id="recipeOG" step="0.001" placeholder="1.080">
+                    </div>
+                    <div class="form-group">
+                        <label>Target FG</label>
+                        <input type="number" id="recipeFG" step="0.001" placeholder="1.012">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Ingredients</label>
+                    <textarea id="recipeIngredients" rows="3" placeholder="Grain bill, hops, yeast..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Instructions</label>
+                    <textarea id="recipeInstructions" rows="3" placeholder="Brewing steps..."></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary">Save Recipe</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const API = '/api/v1/picobrew';
+        let statusData = null;
+        let sensors = [];
+        let profiles = [];
+        let recipes = [];
+
+        // Tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+
+                // Load data for tab
+                if (tab.dataset.tab === 'sessions') loadSessions();
+                if (tab.dataset.tab === 'profiles') loadProfiles();
+                if (tab.dataset.tab === 'sensors') loadSensors();
+                if (tab.dataset.tab === 'recipes') loadRecipes();
+                if (tab.dataset.tab === 'alerts') loadAlerts();
+            });
+        });
+
+        async function init() {
+            await loadStatus();
+            await loadSensors();
+            await loadProfiles();
+            await loadRecipes();
+            updateDashboard();
+            setInterval(loadStatus, 30000);
+            setInterval(updateDashboard, 30000);
+        }
+
+        async function loadStatus() {
+            try {
+                const res = await fetch(API + '/status', { credentials: 'include' });
+                statusData = await res.json();
+                updateStatusUI();
+            } catch(e) {
+                console.error('Status error:', e);
+            }
+        }
+
+        function updateStatusUI() {
+            if (!statusData) return;
+
+            const badge = document.getElementById('statusBadge');
+            const text = document.getElementById('statusText');
+
+            if (statusData.active_sessions > 0) {
+                badge.className = 'status-badge active';
+                text.textContent = `${statusData.active_sessions} Active`;
+            } else {
+                badge.className = 'status-badge idle';
+                text.textContent = 'Idle';
+            }
+
+            document.getElementById('sensorCount').textContent = statusData.sensor_count || 0;
+            document.getElementById('activeSessionCount').textContent = statusData.active_sessions || 0;
+            document.getElementById('profileCount').textContent = statusData.profile_count || 0;
+            document.getElementById('alertCount').textContent = statusData.unread_alerts || 0;
+        }
+
+        async function updateDashboard() {
+            // Update quick readings
+            const quickReadings = document.getElementById('quickReadings');
+            if (statusData && statusData.latest_readings && statusData.latest_readings.length > 0) {
+                quickReadings.innerHTML = statusData.latest_readings.map(r => `
+                    <div class="sensor-item">
+                        <div>
+                            <strong>${escapeHtml(r.sensor_id)}</strong>
+                            <span style="color: var(--brew-amber-dim); font-size: 0.8rem; margin-left: 0.5rem;">
+                                ${r.sensor_type}
+                            </span>
+                        </div>
+                        <span class="sensor-reading">${r.temperature.toFixed(1)}${statusData.temp_unit || 'C'}</span>
+                    </div>
+                `).join('');
+            } else {
+                quickReadings.innerHTML = '<div class="empty-state"><p>No sensor readings available</p></div>';
+            }
+
+            // Update current temp display
+            if (statusData && statusData.latest_readings && statusData.latest_readings.length > 0) {
+                const firstReading = statusData.latest_readings[0];
+                document.querySelector('.temp-value').textContent = firstReading.temperature.toFixed(1);
+                document.querySelector('.unit').textContent = statusData.temp_unit || 'C';
+            }
+
+            // Load active session info
+            await loadActiveSession();
+        }
+
+        async function loadActiveSession() {
+            const container = document.getElementById('activeSessionInfo');
+            try {
+                const res = await fetch(API + '/sessions?status=active', { credentials: 'include' });
+                const data = await res.json();
+
+                if (data.sessions && data.sessions.length > 0) {
+                    const session = data.sessions[0];
+                    const start = new Date(session.start_time);
+                    const days = Math.floor((Date.now() - start) / (1000 * 60 * 60 * 24));
+
+                    container.innerHTML = `
+                        <p><strong>${escapeHtml(session.name)}</strong></p>
+                        <p style="color: var(--brew-amber-dim); font-size: 0.9rem;">
+                            Day ${days} | ${session.recipe_name ? 'Recipe: ' + escapeHtml(session.recipe_name) : 'No recipe'}
+                        </p>
+                        ${session.og ? `<p style="font-size: 0.9rem;">OG: ${session.og}</p>` : ''}
+                        <div style="margin-top: 1rem;">
+                            <button class="btn" onclick="viewSession('${session.id}')">View Details</button>
+                            <button class="btn btn-danger" onclick="endSession('${session.id}')">End Session</button>
+                        </div>
+                    `;
+                } else {
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <p>No active session</p>
+                            <button class="btn btn-primary" onclick="showStartSessionModal()" style="margin-top: 1rem;">
+                                Start Brewing
+                            </button>
+                        </div>
+                    `;
+                }
+            } catch(e) {
+                container.innerHTML = '<p style="color: #844;">Error loading session</p>';
+            }
+        }
+
+        async function loadSensors() {
+            const container = document.getElementById('sensorList');
+            const dashSelect = document.getElementById('dashboardSensor');
+            const sessionSelect = document.getElementById('sessionSensor');
+
+            try {
+                const res = await fetch(API + '/sensors', { credentials: 'include' });
+                const data = await res.json();
+                sensors = data.sensors || [];
+
+                if (sensors.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><p>No sensors configured</p></div>';
+                } else {
+                    container.innerHTML = sensors.map(s => `
+                        <div class="sensor-item ${s.last_reading ? '' : 'offline'}">
+                            <div>
+                                <strong>${escapeHtml(s.name)}</strong>
+                                <span style="color: var(--brew-amber-dim); font-size: 0.8rem; margin-left: 0.5rem;">
+                                    ${s.type} | ${s.address || 'manual'}
+                                </span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 1rem;">
+                                <span class="sensor-reading">
+                                    ${s.last_reading ? s.last_reading.temperature.toFixed(1) + (statusData?.temp_unit || 'C') : '--'}
+                                </span>
+                                <button class="btn btn-danger" onclick="deleteSensor('${s.id}')" style="padding: 0.25rem 0.5rem;">
+                                    &times;
+                                </button>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+
+                // Update dropdowns
+                const options = sensors.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
+                dashSelect.innerHTML = '<option value="">Select sensor...</option>' + options;
+                sessionSelect.innerHTML = '<option value="">-- Select --</option>' + options;
+
+            } catch(e) {
+                container.innerHTML = '<div class="empty-state"><p>Error loading sensors</p></div>';
+            }
+        }
+
+        async function detectSensors() {
+            const container = document.getElementById('detectedSensors');
+            container.innerHTML = '<div class="loading"><div class="spinner"></div> Scanning...</div>';
+
+            try {
+                const res = await fetch(API + '/sensors/detect', { credentials: 'include' });
+                const data = await res.json();
+
+                if (data.detected && data.detected.length > 0) {
+                    container.innerHTML = data.detected.map(d => `
+                        <div class="sensor-item" style="margin-bottom: 0.5rem;">
+                            <div>
+                                <strong>${escapeHtml(d.type.toUpperCase())}</strong>
+                                <span style="color: var(--brew-amber-dim); font-size: 0.8rem; margin-left: 0.5rem;">
+                                    ${d.address || d.path || 'detected'}
+                                </span>
+                            </div>
+                            <button class="btn btn-primary" onclick="addDetectedSensor('${escapeHtml(JSON.stringify(d).replace(/'/g, "\\'"))}')" style="padding: 0.25rem 0.5rem;">
+                                Add
+                            </button>
+                        </div>
+                    `).join('');
+                } else {
+                    container.innerHTML = '<p style="color: var(--brew-amber-dim);">No hardware sensors detected</p>';
+                }
+            } catch(e) {
+                container.innerHTML = '<p style="color: #844;">Error detecting sensors</p>';
+            }
+        }
+
+        function addDetectedSensor(jsonStr) {
+            const sensor = JSON.parse(jsonStr);
+            document.getElementById('sensorId').value = sensor.id || sensor.address || '';
+            document.getElementById('sensorName').value = sensor.product || sensor.type.toUpperCase();
+            document.getElementById('sensorType').value = sensor.type || 'manual';
+            document.getElementById('sensorAddress').value = sensor.address || sensor.path || '';
+            showModal('addSensorModal');
+        }
+
+        async function loadProfiles() {
+            const container = document.getElementById('profileList');
+            const sessionSelect = document.getElementById('sessionProfile');
+            const recipeSelect = document.getElementById('recipeProfile');
+
+            try {
+                const res = await fetch(API + '/profiles', { credentials: 'include' });
+                const data = await res.json();
+                profiles = data.profiles || [];
+
+                if (profiles.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><p>No profiles created yet</p></div>';
+                } else {
+                    container.innerHTML = profiles.map(p => `
+                        <div class="card" style="margin-bottom: 0.5rem;">
+                            <h3 style="color: var(--brew-amber);">${escapeHtml(p.name)}</h3>
+                            <p style="color: var(--brew-amber-dim); font-size: 0.85rem;">${escapeHtml(p.description || '')}</p>
+                            <div class="profile-steps" style="margin-top: 0.5rem;">
+                                ${(p.steps || []).map(s => `
+                                    <div class="profile-step">
+                                        <span class="step-day">Day ${s.day}</span>
+                                        <span class="step-temp">${s.target_temp}C</span>
+                                        ${s.ramp_time > 0 ? `<span class="step-ramp">(${s.ramp_time}h ramp)</span>` : ''}
+                                    </div>
+                                `).join('')}
+                            </div>
+                            <button class="btn btn-danger" onclick="deleteProfile('${escapeHtml(p.name)}')" style="margin-top: 0.5rem; padding: 0.25rem 0.5rem;">
+                                Delete
+                            </button>
+                        </div>
+                    `).join('');
+                }
+
+                // Update dropdowns
+                const options = profiles.map(p => `<option value="${escapeHtml(p.name)}">${escapeHtml(p.name)}</option>`).join('');
+                sessionSelect.innerHTML = '<option value="">-- Select --</option>' + options;
+                recipeSelect.innerHTML = '<option value="">-- Select --</option>' + options;
+
+            } catch(e) {
+                container.innerHTML = '<div class="empty-state"><p>Error loading profiles</p></div>';
+            }
+        }
+
+        async function loadSessions() {
+            const container = document.getElementById('sessionList');
+
+            try {
+                const res = await fetch(API + '/sessions', { credentials: 'include' });
+                const data = await res.json();
+
+                if (!data.sessions || data.sessions.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><p>No brew sessions yet</p></div>';
+                } else {
+                    container.innerHTML = data.sessions.map(s => {
+                        const start = new Date(s.start_time);
+                        const status = s.status === 'active' ? 'active' : 'completed';
+                        return `
+                            <div class="session-item ${status}">
+                                <div class="session-info">
+                                    <span class="session-name">${escapeHtml(s.name)}</span>
+                                    <span class="session-meta">
+                                        ${start.toLocaleDateString()} | ${s.status}
+                                        ${s.og ? ' | OG: ' + s.og : ''}
+                                        ${s.fg ? ' | FG: ' + s.fg : ''}
+                                    </span>
+                                </div>
+                                <div class="session-actions">
+                                    <button onclick="viewSession('${s.id}')" title="View">&#128065;</button>
+                                    ${s.status === 'active' ? `<button onclick="endSession('${s.id}')" title="End">&#10004;</button>` : ''}
+                                    <button onclick="deleteSession('${s.id}')" title="Delete">&#10005;</button>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+            } catch(e) {
+                container.innerHTML = '<div class="empty-state"><p>Error loading sessions</p></div>';
+            }
+        }
+
+        async function loadRecipes() {
+            const container = document.getElementById('recipeList');
+            const sessionSelect = document.getElementById('sessionRecipe');
+
+            try {
+                const res = await fetch(API + '/recipes', { credentials: 'include' });
+                const data = await res.json();
+                recipes = data.recipes || [];
+
+                if (recipes.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><p>No recipes saved yet</p></div>';
+                } else {
+                    container.innerHTML = recipes.map(r => `
+                        <div class="recipe-card">
+                            <h3>${escapeHtml(r.name)}</h3>
+                            ${r.style ? `<p class="recipe-style">${escapeHtml(r.style)}</p>` : ''}
+                            <div class="recipe-gravity">
+                                ${r.og_target ? `<span>OG: ${r.og_target}</span>` : ''}
+                                ${r.fg_target ? `<span>FG: ${r.fg_target}</span>` : ''}
+                                ${r.fermentation_profile ? `<span>Profile: ${escapeHtml(r.fermentation_profile)}</span>` : ''}
+                            </div>
+                            <button class="btn btn-danger" onclick="deleteRecipe('${escapeHtml(r.name)}')" style="margin-top: 0.5rem; padding: 0.25rem 0.5rem;">
+                                Delete
+                            </button>
+                        </div>
+                    `).join('');
+                }
+
+                // Update session recipe dropdown
+                const options = recipes.map(r => `<option value="${escapeHtml(r.name)}">${escapeHtml(r.name)}</option>`).join('');
+                sessionSelect.innerHTML = '<option value="">-- Select --</option>' + options;
+
+            } catch(e) {
+                container.innerHTML = '<div class="empty-state"><p>Error loading recipes</p></div>';
+            }
+        }
+
+        async function loadAlerts() {
+            const container = document.getElementById('alertList');
+
+            try {
+                const res = await fetch(API + '/alerts', { credentials: 'include' });
+                const data = await res.json();
+
+                if (!data.alerts || data.alerts.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><p>No alerts</p></div>';
+                } else {
+                    container.innerHTML = data.alerts.map(a => {
+                        const time = new Date(a.timestamp);
+                        return `
+                            <div class="alert-item ${a.acknowledged ? 'acknowledged' : ''}">
+                                <div class="alert-info">
+                                    <p class="alert-message">${escapeHtml(a.message)}</p>
+                                    <p class="alert-time">${time.toLocaleString()} | ${a.alert_type}</p>
+                                </div>
+                                <div style="display: flex; gap: 0.25rem;">
+                                    ${!a.acknowledged ? `<button class="btn" onclick="acknowledgeAlert('${a.id}')" style="padding: 0.25rem 0.5rem;">&#10004;</button>` : ''}
+                                    <button class="btn btn-danger" onclick="deleteAlert('${a.id}')" style="padding: 0.25rem 0.5rem;">&times;</button>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+            } catch(e) {
+                container.innerHTML = '<div class="empty-state"><p>Error loading alerts</p></div>';
+            }
+        }
+
+        // Modal functions
+        function showModal(id) {
+            document.getElementById(id).classList.add('active');
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('active');
+        }
+
+        function showStartSessionModal() {
+            loadProfiles();
+            loadRecipes();
+            loadSensors();
+            showModal('startSessionModal');
+        }
+
+        function showAddProfileModal() {
+            showModal('addProfileModal');
+        }
+
+        function showAddSensorModal() {
+            showModal('addSensorModal');
+        }
+
+        function showAddRecipeModal() {
+            loadProfiles();
+            showModal('addRecipeModal');
+        }
+
+        async function showBuiltinProfiles() {
+            const container = document.getElementById('builtinProfilesList');
+            container.innerHTML = '<div class="loading"><div class="spinner"></div> Loading...</div>';
+            showModal('builtinProfilesModal');
+
+            try {
+                const res = await fetch(API + '/profiles/builtin', { credentials: 'include' });
+                const data = await res.json();
+
+                container.innerHTML = (data.profiles || []).map(p => `
+                    <div class="builtin-profile" onclick="importBuiltinProfile('${escapeHtml(p.name)}')">
+                        <h4>${escapeHtml(p.name)}</h4>
+                        <p>${escapeHtml(p.description)}</p>
+                    </div>
+                `).join('');
+            } catch(e) {
+                container.innerHTML = '<p style="color: #844;">Error loading profiles</p>';
+            }
+        }
+
+        async function importBuiltinProfile(name) {
+            try {
+                const res = await fetch(API + '/profiles/import/' + encodeURIComponent(name), {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                const data = await res.json();
+                if (data.success) {
+                    closeModal('builtinProfilesModal');
+                    loadProfiles();
+                    alert('Profile imported successfully!');
+                } else {
+                    alert('Error: ' + (data.detail || 'Unknown error'));
+                }
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        function addProfileStep() {
+            const container = document.getElementById('profileSteps');
+            const step = document.createElement('div');
+            step.className = 'profile-step';
+            step.style = 'display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 0.5rem; margin-bottom: 0.5rem;';
+            step.innerHTML = `
+                <input type="number" placeholder="Day" class="step-day" min="0">
+                <input type="number" placeholder="Temp" class="step-temp" step="0.5">
+                <input type="number" placeholder="Ramp (h)" class="step-ramp" value="0" min="0">
+                <button type="button" class="btn btn-danger" onclick="this.parentElement.remove()" style="padding: 0.25rem 0.5rem;">&times;</button>
+            `;
+            container.appendChild(step);
+        }
+
+        // Form submissions
+        async function startSession(e) {
+            e.preventDefault();
+            const data = {
+                name: document.getElementById('sessionName').value,
+                recipe_name: document.getElementById('sessionRecipe').value || null,
+                profile_name: document.getElementById('sessionProfile').value || null,
+                sensor_id: document.getElementById('sessionSensor').value || null,
+                og: parseFloat(document.getElementById('sessionOG').value) || null,
+                notes: document.getElementById('sessionNotes').value || ''
+            };
+
+            try {
+                const res = await fetch(API + '/session/start', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await res.json();
+                if (result.success) {
+                    closeModal('startSessionModal');
+                    document.getElementById('startSessionForm').reset();
+                    loadStatus();
+                    loadSessions();
+                    updateDashboard();
+                    alert('Session started!');
+                } else {
+                    alert('Error: ' + (result.detail || 'Unknown error'));
+                }
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        async function addProfile(e) {
+            e.preventDefault();
+            const steps = [];
+            document.querySelectorAll('#profileSteps .profile-step').forEach(row => {
+                const day = parseInt(row.querySelector('.step-day').value);
+                const temp = parseFloat(row.querySelector('.step-temp').value);
+                const ramp = parseInt(row.querySelector('.step-ramp').value) || 0;
+                if (!isNaN(day) && !isNaN(temp)) {
+                    steps.push({ day, target_temp: temp, ramp_time: ramp });
+                }
+            });
+
+            if (steps.length === 0) {
+                alert('Please add at least one step');
+                return;
+            }
+
+            const data = {
+                name: document.getElementById('profileName').value,
+                description: document.getElementById('profileDescription').value || '',
+                steps: steps
+            };
+
+            try {
+                const res = await fetch(API + '/profile/add', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await res.json();
+                if (result.success) {
+                    closeModal('addProfileModal');
+                    document.getElementById('addProfileForm').reset();
+                    loadProfiles();
+                    loadStatus();
+                    alert('Profile created!');
+                } else {
+                    alert('Error: ' + (result.detail || 'Unknown error'));
+                }
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        async function addSensor(e) {
+            e.preventDefault();
+            const data = {
+                id: document.getElementById('sensorId').value,
+                name: document.getElementById('sensorName').value,
+                type: document.getElementById('sensorType').value,
+                address: document.getElementById('sensorAddress').value || null,
+                calibration_offset: parseFloat(document.getElementById('sensorCalibration').value) || 0,
+                enabled: true
+            };
+
+            try {
+                const res = await fetch(API + '/sensors', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await res.json();
+                if (result.success) {
+                    closeModal('addSensorModal');
+                    document.getElementById('addSensorForm').reset();
+                    loadSensors();
+                    loadStatus();
+                    alert('Sensor added!');
+                } else {
+                    alert('Error: ' + (result.detail || 'Unknown error'));
+                }
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        async function addRecipe(e) {
+            e.preventDefault();
+            const data = {
+                name: document.getElementById('recipeName').value,
+                style: document.getElementById('recipeStyle').value || '',
+                og_target: parseFloat(document.getElementById('recipeOG').value) || null,
+                fg_target: parseFloat(document.getElementById('recipeFG').value) || null,
+                fermentation_profile: document.getElementById('recipeProfile').value || null,
+                ingredients: document.getElementById('recipeIngredients').value || '',
+                instructions: document.getElementById('recipeInstructions').value || ''
+            };
+
+            try {
+                const res = await fetch(API + '/recipe/add', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await res.json();
+                if (result.success) {
+                    closeModal('addRecipeModal');
+                    document.getElementById('addRecipeForm').reset();
+                    loadRecipes();
+                    loadStatus();
+                    alert('Recipe saved!');
+                } else {
+                    alert('Error: ' + (result.detail || 'Unknown error'));
+                }
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        // Delete functions
+        async function deleteSensor(id) {
+            if (!confirm('Delete this sensor?')) return;
+            try {
+                await fetch(API + '/sensors/' + encodeURIComponent(id), {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+                loadSensors();
+                loadStatus();
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        async function deleteProfile(name) {
+            if (!confirm('Delete this profile?')) return;
+            try {
+                await fetch(API + '/profile/' + encodeURIComponent(name), {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+                loadProfiles();
+                loadStatus();
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        async function deleteRecipe(name) {
+            if (!confirm('Delete this recipe?')) return;
+            try {
+                await fetch(API + '/recipe/' + encodeURIComponent(name), {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+                loadRecipes();
+                loadStatus();
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        async function deleteSession(id) {
+            if (!confirm('Delete this session and all its data?')) return;
+            try {
+                await fetch(API + '/session/' + encodeURIComponent(id), {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+                loadSessions();
+                loadStatus();
+                updateDashboard();
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        async function endSession(id) {
+            const fg = prompt('Enter Final Gravity (FG) if measured:', '');
+            try {
+                const params = new URLSearchParams();
+                if (fg) params.append('fg', fg);
+                await fetch(API + '/session/' + encodeURIComponent(id) + '/end' + (fg ? '?' + params : ''), {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                loadSessions();
+                loadStatus();
+                updateDashboard();
+                alert('Session completed!');
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        function viewSession(id) {
+            // TODO: Implement detailed session view with chart
+            alert('Session view coming soon! ID: ' + id);
+        }
+
+        async function acknowledgeAlert(id) {
+            try {
+                await fetch(API + '/alerts/' + encodeURIComponent(id) + '/acknowledge', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                loadAlerts();
+                loadStatus();
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        async function deleteAlert(id) {
+            try {
+                await fetch(API + '/alerts/' + encodeURIComponent(id), {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+                loadAlerts();
+                loadStatus();
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        async function clearAlerts() {
+            if (!confirm('Clear all acknowledged alerts?')) return;
+            try {
+                await fetch(API + '/alerts/clear?acknowledged_only=true', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                loadAlerts();
+                loadStatus();
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        function updateDashboardSensor() {
+            const sensorId = document.getElementById('dashboardSensor').value;
+            if (!sensorId) return;
+
+            // Find sensor reading
+            if (statusData && statusData.latest_readings) {
+                const reading = statusData.latest_readings.find(r => r.sensor_id === sensorId);
+                if (reading) {
+                    document.querySelector('.temp-value').textContent = reading.temperature.toFixed(1);
+                }
+            }
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.toString()
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        // Close modals on outside click
+        document.querySelectorAll('.modal').forEach(modal => {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.classList.remove('active');
+                }
+            });
+        });
+
+        init();
+    </script>
+</body>
+</html>

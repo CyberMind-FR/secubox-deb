@@ -1,0 +1,17 @@
+Source: secubox-rezapp
+Section: admin
+Priority: optional
+Maintainer: SecuBox Team <team@secubox.local>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.0
+
+Package: secubox-rezapp
+Architecture: all
+Depends: ${misc:Depends}, python3, python3-fastapi, python3-uvicorn, python3-psutil, secubox-core
+Recommends: docker.io | docker-ce, containerd
+Suggests: lxc
+Description: SecuBox RezApp - Application deployment and management
+ Application deployment and management module for SecuBox.
+ Deploy and manage containerized applications using Docker or LXC.
+ Features include application templates, resource management,
+ log viewing, and health monitoring.

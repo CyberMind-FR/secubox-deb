@@ -1,0 +1,10 @@
+secubox-saas-relay (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release of secubox-saas-relay
+  * SaaS/API proxy relay with encrypted key storage
+  * Rate limiting and quota tracking per service
+  * Health checks for proxied services
+  * Request/response logging
+  * P31 Phosphor light theme dashboard
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Apr 2026 12:00:00 +0200

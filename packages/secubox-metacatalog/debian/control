@@ -1,0 +1,26 @@
+Source: secubox-metacatalog
+Section: admin
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
+
+Package: secubox-metacatalog
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-fastapi, python3-uvicorn
+Description: SecuBox Metacatalog - Service catalog and registry
+ SecuBox module for discovering and monitoring installed SecuBox services.
+ Provides a centralized view of all services, their health status,
+ dependencies, and API endpoints.
+ .
+ Features:
+  - Catalog of installed SecuBox services
+  - Service health status tracking
+  - Dependency mapping between services
+  - API endpoint documentation
+  - Service metadata (version, ports, sockets)
+  - P31 Phosphor light theme frontend
+ .
+ Part of the SecuBox security appliance suite.

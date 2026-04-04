@@ -1,0 +1,9 @@
+{
+  "id": "metabolizer",
+  "name": "Metabolizer",
+  "category": "system",
+  "icon": "&#128202;",
+  "path": "/metabolizer/",
+  "order": 480,
+  "description": "Log processor and analyzer - patterns, errors, statistics"
+}

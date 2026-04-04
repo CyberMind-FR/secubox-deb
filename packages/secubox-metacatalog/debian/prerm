@@ -1,0 +1,14 @@
+#!/bin/bash
+set -e
+case "$1" in
+  remove|deconfigure)
+    rm -f /etc/nginx/secubox.d/metacatalog.conf
+    systemctl reload nginx 2>/dev/null || true
+    ;;
+  upgrade)
+    # Don't remove nginx config on upgrade, postinst will reinstall it
+    ;;
+esac
+systemctl stop    secubox-metacatalog.service 2>/dev/null || true
+systemctl disable secubox-metacatalog.service 2>/dev/null || true
+#DEBHELPER#

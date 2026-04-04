@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RezApp - SecuBox</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <style>
+        .main-content {
+            margin-left: 200px;
+            padding: 2rem;
+        }
+        .status-card {
+            background: var(--card-bg, #1a1a2e);
+            border: 1px solid var(--border-color, #333);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .status-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--border-color, #333);
+        }
+        .status-row:last-child { border-bottom: none; }
+        .badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+        .badge-success { background: #2d5a27; color: #7fff7f; }
+        .badge-warning { background: #5a5a27; color: #ffff7f; }
+        .badge-danger { background: #5a2727; color: #ff7f7f; }
+        .badge-info { background: #27455a; color: #7fd4ff; }
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            margin-right: 0.5rem;
+        }
+        .btn-primary { background: var(--accent-color, #4a9eff); color: #000; }
+        .btn-success { background: #27ae60; color: #fff; }
+        .btn-danger { background: #c0392b; color: #fff; }
+        .btn-warning { background: #d68910; color: #fff; }
+        .btn-secondary { background: #555; color: #fff; }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.8rem; }
+        .section-title {
+            margin: 2rem 0 1rem 0;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--accent-color, #4a9eff);
+        }
+        .app-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 1rem;
+        }
+        .app-card {
+            background: var(--card-bg, #1a1a2e);
+            border: 1px solid var(--border-color, #333);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+        .app-card h4 {
+            margin: 0 0 0.5rem 0;
+            color: var(--accent-color, #4a9eff);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .app-card .runtime-badge {
+            font-size: 0.7rem;
+            padding: 0.1rem 0.4rem;
+            border-radius: 4px;
+            background: #2196f3;
+            color: #fff;
+            text-transform: uppercase;
+        }
+        .app-card .state {
+            margin-bottom: 0.5rem;
+        }
+        .app-card .meta {
+            font-size: 0.85rem;
+            color: #888;
+            margin-bottom: 0.75rem;
+        }
+        .app-card .stats {
+            font-size: 0.8rem;
+            color: #aaa;
+            background: #0a0a14;
+            padding: 0.5rem;
+            border-radius: 4px;
+            margin-bottom: 0.75rem;
+        }
+        .app-card .stats .stat-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.15rem 0;
+        }
+        .app-card .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.25rem;
+        }
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid var(--border-color, #333);
+            margin-bottom: 1rem;
+        }
+        .tab {
+            padding: 0.75rem 1.5rem;
+            cursor: pointer;
+            border: none;
+            background: transparent;
+            color: #888;
+            font-size: 1rem;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+        }
+        .tab.active {
+            color: var(--accent-color, #4a9eff);
+            border-bottom-color: var(--accent-color, #4a9eff);
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal.active { display: flex; }
+        .modal-content {
+            background: #1a1a2e;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 2rem;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .modal-content h3 { margin-top: 0; }
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #aaa;
+        }
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #333;
+            border-radius: 4px;
+            background: #0a0a0a;
+            color: #fff;
+        }
+        .form-group textarea {
+            min-height: 100px;
+            font-family: monospace;
+        }
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+        .stats-row {
+            display: flex;
+            gap: 2rem;
+        }
+        .stat-box {
+            text-align: center;
+        }
+        .stat-box .value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: var(--accent-color, #4a9eff);
+        }
+        .stat-box .label {
+            font-size: 0.85rem;
+            color: #888;
+        }
+        .template-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+        .template-card {
+            background: var(--card-bg, #1a1a2e);
+            border: 1px solid var(--border-color, #333);
+            border-radius: 8px;
+            padding: 1rem;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+        .template-card:hover {
+            border-color: var(--accent-color, #4a9eff);
+        }
+        .template-card.selected {
+            border-color: var(--accent-color, #4a9eff);
+            background: #1a2a3e;
+        }
+        .template-card h5 {
+            margin: 0 0 0.25rem 0;
+            color: var(--accent-color, #4a9eff);
+        }
+        .template-card .desc {
+            font-size: 0.85rem;
+            color: #888;
+        }
+        .logs-viewer {
+            background: #0a0a0a;
+            border: 1px solid #333;
+            border-radius: 4px;
+            padding: 1rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            line-height: 1.4;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+    <div id="sidebar-container"></div>
+
+    <div class="main-content">
+        <h1>RezApp</h1>
+        <p>Application deployment and management</p>
+
+        <div class="status-card">
+            <h3>Platform Status</h3>
+            <div class="status-row">
+                <span>Docker</span>
+                <span id="docker-status" class="badge badge-warning">Checking...</span>
+            </div>
+            <div class="status-row">
+                <span>LXC</span>
+                <span id="lxc-status" class="badge badge-warning">Checking...</span>
+            </div>
+            <div class="stats-row" style="margin-top: 1rem;">
+                <div class="stat-box">
+                    <div class="value" id="app-count">-</div>
+                    <div class="label">Applications</div>
+                </div>
+                <div class="stat-box">
+                    <div class="value" id="app-running">-</div>
+                    <div class="label">Running</div>
+                </div>
+                <div class="stat-box">
+                    <div class="value" id="template-count">-</div>
+                    <div class="label">Templates</div>
+                </div>
+            </div>
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+            <button class="btn btn-primary" onclick="showDeployModal()">Deploy App</button>
+            <button class="btn btn-secondary" onclick="loadApps()">Refresh</button>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('apps')">Applications</button>
+            <button class="tab" onclick="showTab('templates')">Templates</button>
+            <button class="tab" onclick="showTab('images')">Images</button>
+        </div>
+
+        <div id="tab-apps" class="tab-content active">
+            <div id="app-list" class="app-grid">
+                <p>Loading...</p>
+            </div>
+        </div>
+
+        <div id="tab-templates" class="tab-content">
+            <div id="template-list" class="template-grid">
+                <p>Loading...</p>
+            </div>
+        </div>
+
+        <div id="tab-images" class="tab-content">
+            <div style="margin-bottom: 1rem;">
+                <input type="text" id="pull-image-name" placeholder="image:tag (e.g., nginx:latest)" style="width: 300px; padding: 0.5rem; background: #0a0a0a; border: 1px solid #333; border-radius: 4px; color: #fff;">
+                <button class="btn btn-primary" onclick="pullImage()">Pull Image</button>
+            </div>
+            <div id="image-list" class="app-grid">
+                <p>Loading...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Deploy Modal -->
+    <div id="deploy-modal" class="modal">
+        <div class="modal-content">
+            <h3>Deploy Application</h3>
+
+            <div class="form-group">
+                <label>Application Name</label>
+                <input type="text" id="deploy-name" placeholder="my-app">
+            </div>
+
+            <div class="form-group">
+                <label>Select Template (optional)</label>
+                <div id="deploy-templates" class="template-grid" style="max-height: 200px; overflow-y: auto;">
+                    <!-- Templates will be loaded here -->
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Or Custom Image</label>
+                <input type="text" id="deploy-image" placeholder="nginx:latest">
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Memory Limit</label>
+                    <select id="deploy-memory">
+                        <option value="256m">256 MB</option>
+                        <option value="512m" selected>512 MB</option>
+                        <option value="1g">1 GB</option>
+                        <option value="2g">2 GB</option>
+                        <option value="4g">4 GB</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>CPU Limit</label>
+                    <select id="deploy-cpus">
+                        <option value="0.5">0.5 CPU</option>
+                        <option value="1" selected>1 CPU</option>
+                        <option value="2">2 CPUs</option>
+                        <option value="4">4 CPUs</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Port Mappings (host:container, one per line)</label>
+                <textarea id="deploy-ports" placeholder="8080:80&#10;8443:443"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label>Environment Variables (KEY=value, one per line)</label>
+                <textarea id="deploy-env" placeholder="DB_HOST=localhost&#10;DB_PORT=5432"></textarea>
+            </div>
+
+            <div style="margin-top: 1rem;">
+                <button class="btn btn-success" onclick="deployApp()">Deploy</button>
+                <button class="btn btn-secondary" onclick="closeDeployModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Logs Modal -->
+    <div id="logs-modal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <h3>Application Logs: <span id="logs-app-name"></span></h3>
+            <div class="logs-viewer" id="logs-content">
+                Loading...
+            </div>
+            <div style="margin-top: 1rem;">
+                <button class="btn btn-primary" onclick="refreshLogs()">Refresh</button>
+                <button class="btn btn-secondary" onclick="closeLogsModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/shared/sidebar.js"></script>
+    <script>
+        const API = '/api/v1/rezapp';
+        let allApps = [];
+        let allTemplates = [];
+        let selectedTemplate = null;
+        let currentLogsApp = null;
+
+        function showTab(tabName) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelector(`.tab-content#tab-${tabName}`).classList.add('active');
+            document.querySelector(`.tab[onclick="showTab('${tabName}')"]`).classList.add('active');
+
+            if (tabName === 'images') loadImages();
+        }
+
+        async function loadStatus() {
+            try {
+                const res = await fetch(`${API}/status`);
+                const data = await res.json();
+
+                const dockerEl = document.getElementById('docker-status');
+                dockerEl.textContent = data.docker?.available ? 'Available' : 'Not Available';
+                dockerEl.className = 'badge ' + (data.docker?.available ? 'badge-success' : 'badge-danger');
+
+                const lxcEl = document.getElementById('lxc-status');
+                lxcEl.textContent = data.lxc?.available ? 'Available' : 'Not Available';
+                lxcEl.className = 'badge ' + (data.lxc?.available ? 'badge-success' : 'badge-danger');
+
+                document.getElementById('app-count').textContent = data.apps?.total || 0;
+                document.getElementById('app-running').textContent = data.apps?.running || 0;
+                document.getElementById('template-count').textContent = data.templates?.count || 0;
+            } catch (e) {
+                console.error('Failed to load status:', e);
+            }
+        }
+
+        async function loadApps() {
+            try {
+                const res = await fetch(`${API}/apps`);
+                const data = await res.json();
+                allApps = data.apps || [];
+
+                // Get stats for running apps
+                const statsRes = await fetch(`${API}/stats`);
+                const statsData = await statsRes.json();
+
+                renderApps(statsData.stats || {});
+            } catch (e) {
+                console.error('Failed to load apps:', e);
+            }
+        }
+
+        function renderApps(stats) {
+            const el = document.getElementById('app-list');
+
+            if (allApps.length === 0) {
+                el.innerHTML = '<p>No applications deployed</p>';
+                return;
+            }
+
+            el.innerHTML = allApps.map(app => {
+                const isRunning = app.state === 'running';
+                const stateClass = isRunning ? 'badge-success' : 'badge-danger';
+                const appStats = stats[app.name] || {};
+
+                return `
+                    <div class="app-card">
+                        <h4>
+                            ${app.name}
+                            <span class="runtime-badge">${app.runtime || 'docker'}</span>
+                        </h4>
+                        <div class="state">
+                            <span class="badge ${stateClass}">${app.status || app.state || 'unknown'}</span>
+                        </div>
+                        <div class="meta">
+                            <div>Image: ${app.image || '-'}</div>
+                            ${app.ports ? `<div>Ports: ${app.ports}</div>` : ''}
+                        </div>
+                        ${isRunning && Object.keys(appStats).length ? `
+                            <div class="stats">
+                                <div class="stat-item"><span>CPU:</span> <span>${appStats.cpu_percent || '-'}</span></div>
+                                <div class="stat-item"><span>Memory:</span> <span>${appStats.memory_usage || '-'}</span></div>
+                                <div class="stat-item"><span>Net I/O:</span> <span>${appStats.net_io || '-'}</span></div>
+                            </div>
+                        ` : ''}
+                        <div class="actions">
+                            ${!isRunning ?
+                                `<button class="btn btn-sm btn-success" onclick="startApp('${app.name}')">Start</button>` :
+                                `<button class="btn btn-sm btn-warning" onclick="stopApp('${app.name}')">Stop</button>
+                                 <button class="btn btn-sm btn-secondary" onclick="restartApp('${app.name}')">Restart</button>`
+                            }
+                            <button class="btn btn-sm btn-info" onclick="showLogs('${app.name}')">Logs</button>
+                            <button class="btn btn-sm btn-danger" onclick="undeployApp('${app.name}')">Undeploy</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function loadTemplates() {
+            try {
+                const res = await fetch(`${API}/templates`);
+                const data = await res.json();
+                allTemplates = data.templates || [];
+                renderTemplates();
+            } catch (e) {
+                console.error('Failed to load templates:', e);
+            }
+        }
+
+        function renderTemplates() {
+            const el = document.getElementById('template-list');
+
+            if (allTemplates.length === 0) {
+                el.innerHTML = '<p>No templates available</p>';
+                return;
+            }
+
+            el.innerHTML = allTemplates.map(t => `
+                <div class="template-card">
+                    <h5>${t.name}</h5>
+                    <div class="desc">${t.description || t.image}</div>
+                    <div style="margin-top: 0.5rem; font-size: 0.75rem; color: #666;">
+                        ${t.builtin ? 'Built-in' : 'Custom'}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function loadImages() {
+            try {
+                const res = await fetch(`${API}/images`);
+                const data = await res.json();
+                renderImages(data.images || []);
+            } catch (e) {
+                console.error('Failed to load images:', e);
+            }
+        }
+
+        function renderImages(images) {
+            const el = document.getElementById('image-list');
+
+            if (images.length === 0) {
+                el.innerHTML = '<p>No images available</p>';
+                return;
+            }
+
+            el.innerHTML = images.map(img => `
+                <div class="app-card">
+                    <h4>${img.repository}:${img.tag}</h4>
+                    <div class="meta">
+                        <div>ID: ${img.id}</div>
+                        <div>Size: ${img.size}</div>
+                        <div>Created: ${img.created}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function startApp(name) {
+            try {
+                await fetch(`${API}/app/${name}/start`, { method: 'POST' });
+                loadApps();
+                loadStatus();
+            } catch (e) {
+                alert('Failed to start application');
+            }
+        }
+
+        async function stopApp(name) {
+            try {
+                await fetch(`${API}/app/${name}/stop`, { method: 'POST' });
+                loadApps();
+                loadStatus();
+            } catch (e) {
+                alert('Failed to stop application');
+            }
+        }
+
+        async function restartApp(name) {
+            try {
+                await fetch(`${API}/app/${name}/restart`, { method: 'POST' });
+                loadApps();
+                loadStatus();
+            } catch (e) {
+                alert('Failed to restart application');
+            }
+        }
+
+        async function undeployApp(name) {
+            if (!confirm(`Remove ${name}? This will delete the container.`)) return;
+            try {
+                const res = await fetch(`${API}/app/undeploy?name=${encodeURIComponent(name)}`, {
+                    method: 'POST'
+                });
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.detail);
+                }
+                loadApps();
+                loadStatus();
+            } catch (e) {
+                alert('Failed to undeploy: ' + e.message);
+            }
+        }
+
+        function showDeployModal() {
+            selectedTemplate = null;
+            document.getElementById('deploy-name').value = '';
+            document.getElementById('deploy-image').value = '';
+            document.getElementById('deploy-memory').value = '512m';
+            document.getElementById('deploy-cpus').value = '1';
+            document.getElementById('deploy-ports').value = '';
+            document.getElementById('deploy-env').value = '';
+
+            // Load templates in modal
+            const templatesEl = document.getElementById('deploy-templates');
+            templatesEl.innerHTML = allTemplates.map(t => `
+                <div class="template-card" data-template="${t.name}" onclick="selectTemplate('${t.name}')">
+                    <h5>${t.name}</h5>
+                    <div class="desc">${t.description || ''}</div>
+                </div>
+            `).join('');
+
+            document.getElementById('deploy-modal').classList.add('active');
+        }
+
+        function closeDeployModal() {
+            document.getElementById('deploy-modal').classList.remove('active');
+        }
+
+        function selectTemplate(name) {
+            selectedTemplate = name;
+            document.querySelectorAll('#deploy-templates .template-card').forEach(c => {
+                c.classList.remove('selected');
+                if (c.dataset.template === name) {
+                    c.classList.add('selected');
+                }
+            });
+
+            // Pre-fill from template
+            const template = allTemplates.find(t => t.name === name);
+            if (template) {
+                document.getElementById('deploy-image').value = template.image || '';
+                if (template.default_memory) {
+                    document.getElementById('deploy-memory').value = template.default_memory;
+                }
+                if (template.default_cpus) {
+                    document.getElementById('deploy-cpus').value = template.default_cpus.toString();
+                }
+                if (template.default_ports) {
+                    document.getElementById('deploy-ports').value =
+                        Object.entries(template.default_ports)
+                            .map(([h, c]) => `${h}:${c}`).join('\n');
+                }
+                if (template.default_env) {
+                    document.getElementById('deploy-env').value =
+                        Object.entries(template.default_env)
+                            .map(([k, v]) => `${k}=${v}`).join('\n');
+                }
+            }
+        }
+
+        async function deployApp() {
+            const name = document.getElementById('deploy-name').value.trim();
+            if (!name) {
+                alert('Application name is required');
+                return;
+            }
+
+            const image = document.getElementById('deploy-image').value.trim();
+            if (!image && !selectedTemplate) {
+                alert('Please select a template or specify an image');
+                return;
+            }
+
+            // Parse ports
+            const portsText = document.getElementById('deploy-ports').value.trim();
+            const ports = {};
+            if (portsText) {
+                portsText.split('\n').forEach(line => {
+                    const [host, container] = line.split(':');
+                    if (host && container) {
+                        ports[host.trim()] = parseInt(container.trim());
+                    }
+                });
+            }
+
+            // Parse env
+            const envText = document.getElementById('deploy-env').value.trim();
+            const env = {};
+            if (envText) {
+                envText.split('\n').forEach(line => {
+                    const idx = line.indexOf('=');
+                    if (idx > 0) {
+                        env[line.substring(0, idx).trim()] = line.substring(idx + 1).trim();
+                    }
+                });
+            }
+
+            const config = {
+                name,
+                template: selectedTemplate || null,
+                image: image || null,
+                runtime: 'docker',
+                ports: Object.keys(ports).length ? ports : null,
+                env: Object.keys(env).length ? env : null,
+                memory: document.getElementById('deploy-memory').value,
+                cpus: parseFloat(document.getElementById('deploy-cpus').value)
+            };
+
+            try {
+                const res = await fetch(`${API}/app/deploy`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.detail);
+                }
+
+                closeDeployModal();
+                loadApps();
+                loadStatus();
+            } catch (e) {
+                alert('Failed to deploy: ' + e.message);
+            }
+        }
+
+        function showLogs(name) {
+            currentLogsApp = name;
+            document.getElementById('logs-app-name').textContent = name;
+            document.getElementById('logs-content').textContent = 'Loading...';
+            document.getElementById('logs-modal').classList.add('active');
+            refreshLogs();
+        }
+
+        async function refreshLogs() {
+            if (!currentLogsApp) return;
+            try {
+                const res = await fetch(`${API}/app/${currentLogsApp}/logs?lines=200`);
+                const data = await res.json();
+                document.getElementById('logs-content').textContent = data.logs || 'No logs available';
+            } catch (e) {
+                document.getElementById('logs-content').textContent = 'Failed to load logs';
+            }
+        }
+
+        function closeLogsModal() {
+            document.getElementById('logs-modal').classList.remove('active');
+            currentLogsApp = null;
+        }
+
+        async function pullImage() {
+            const image = document.getElementById('pull-image-name').value.trim();
+            if (!image) {
+                alert('Please enter an image name');
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API}/images/pull?image=${encodeURIComponent(image)}`, {
+                    method: 'POST'
+                });
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.detail);
+                }
+                alert('Image pulled successfully');
+                loadImages();
+            } catch (e) {
+                alert('Failed to pull image: ' + e.message);
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadStatus();
+            loadApps();
+            loadTemplates();
+        });
+
+        // Auto-refresh
+        setInterval(() => {
+            loadStatus();
+            loadApps();
+        }, 15000);
+
+        // Close modals on escape
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeDeployModal();
+                closeLogsModal();
+            }
+        });
+    </script>
+</body>
+</html>

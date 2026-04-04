@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox Metabolizer</title>
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root {
+            /* P31 Phosphor spectrum */
+            --p31-peak: #00dd44;
+            --p31-hot: #00ff55;
+            --p31-mid: #009933;
+            --p31-dim: #006622;
+            --p31-ghost: #003311;
+            --p31-decay: #ffb347;
+            --p31-decay-dim: #cc7722;
+            /* Tube glass */
+            --tube-light: #e8f5e9;
+            --tube-pale: #c8e6c9;
+            --tube-soft: #a5d6a7;
+            --tube-dark: #1a1a2e;
+            /* Legacy mappings */
+            --bg-dark: var(--tube-light);
+            --bg-card: var(--tube-pale);
+            --border: var(--tube-soft);
+            --text: var(--tube-dark);
+            --text-dim: var(--p31-dim);
+            --primary: var(--p31-peak);
+            --green: var(--p31-peak);
+            --red: #ff4466;
+            --yellow: var(--p31-decay);
+            /* Bloom effects */
+            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Courier Prime', 'Courier New', monospace;
+            background: var(--tube-light);
+            background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
+            color: var(--tube-dark);
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Main content */
+        .main { flex: 1; margin-left: 220px; }
+        .header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); background: var(--bg-card); }
+        .header-title { display: flex; align-items: center; gap: 1rem; }
+        .header-title h1 { font-size: 1.5rem; font-weight: 600; color: var(--p31-hot); text-shadow: var(--bloom-text); }
+        .badge { padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.75rem; font-weight: 500; font-family: 'Courier Prime', monospace; letter-spacing: 0.1em; text-transform: uppercase; border: 1px solid; }
+        .badge.version { background: rgba(51,255,102,0.1); border-color: var(--p31-peak); color: var(--p31-peak); }
+        .badge.active { background: rgba(63,185,80,0.2); color: var(--green); text-shadow: var(--bloom-soft); }
+        .header-actions { display: flex; gap: 0.75rem; }
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--tube-soft); background: var(--tube-pale); color: var(--p31-mid); cursor: pointer; display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; font-family: 'Courier Prime', monospace; letter-spacing: 0.08em; text-transform: uppercase; transition: all 0.2s; }
+        .btn:hover { border-color: var(--p31-dim); color: var(--p31-peak); text-shadow: var(--bloom-soft); box-shadow: 0 0 12px rgba(51,255,102,0.1); }
+        .btn.primary { border-color: var(--p31-peak); color: var(--p31-peak); background: rgba(51,255,102,0.1); }
+        .btn.primary:hover { background: rgba(51,255,102,0.2); box-shadow: 0 0 16px rgba(51,255,102,0.2); }
+        .btn.danger { background: rgba(255,68,102,0.1); border-color: #ff4466; color: #ff4466; }
+        .btn.danger:hover { background: rgba(255,68,102,0.2); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .content { padding: 1.5rem; }
+        .subtitle { color: var(--text-dim); font-size: 0.9rem; margin-bottom: 1.5rem; }
+
+        /* Tabs */
+        .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--p31-ghost); margin-bottom: 1.5rem; background: var(--tube-pale); padding: 0.5rem 1rem 0; border-radius: 8px 8px 0 0; }
+        .tab { padding: 0.75rem 1.5rem; cursor: pointer; color: var(--p31-dim); letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.8rem; border-bottom: 2px solid transparent; transition: all 0.2s; }
+        .tab:hover { color: var(--p31-mid); }
+        .tab.active { color: var(--p31-peak); text-shadow: var(--bloom-soft); border-bottom-color: var(--p31-peak); }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Stats row */
+        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; text-align: center; }
+        .stat-card .value { font-size: 2rem; font-weight: bold; margin-bottom: 0.25rem; text-shadow: 0 0 10px currentColor; }
+        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.15em; }
+        .stat-card.green .value { color: var(--p31-peak); }
+        .stat-card.yellow .value { color: var(--p31-decay); }
+        .stat-card.red .value { color: #ff4466; }
+
+        /* Card */
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; box-shadow: inset 0 0 20px rgba(0,0,0,0.3); }
+        .card:hover { border-color: var(--p31-dim); box-shadow: 0 0 8px rgba(51,255,102,0.05), inset 0 0 20px rgba(0,0,0,0.3); }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .card-header h2 { font-size: 0.85rem; color: var(--p31-decay); text-shadow: var(--bloom-amber); letter-spacing: 0.1em; text-transform: uppercase; }
+
+        /* Table */
+        .data-table { width: 100%; border-collapse: collapse; font-family: 'Courier Prime', monospace; }
+        .data-table th { text-align: left; padding: 0.75rem; color: var(--p31-decay); text-shadow: var(--bloom-amber); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.15em; border-bottom: 1px solid var(--p31-ghost); }
+        .data-table td { padding: 0.75rem; border-bottom: 1px solid var(--p31-ghost); font-size: 0.9rem; color: var(--p31-mid); }
+        .data-table tr:hover { background: rgba(51,255,102,0.03); }
+
+        .status-badge { padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-family: monospace; text-transform: uppercase; }
+        .status-badge.error, .status-badge.err, .status-badge.crit, .status-badge.alert, .status-badge.emerg { background: rgba(255,68,102,0.2); color: #ff4466; }
+        .status-badge.warning { background: rgba(255,179,71,0.2); color: var(--yellow); }
+        .status-badge.info, .status-badge.notice { background: rgba(51,255,102,0.2); color: var(--green); }
+        .status-badge.active { background: rgba(63,185,80,0.2); color: var(--green); }
+        .status-badge.inactive { background: rgba(107,107,122,0.2); color: var(--text-dim); }
+
+        .priority-0, .priority-1, .priority-2, .priority-3 { color: #ff4466; font-weight: bold; }
+        .priority-4 { color: var(--yellow); }
+        .priority-5, .priority-6, .priority-7 { color: var(--p31-mid); }
+
+        /* Log viewer */
+        .log-viewer { background: var(--tube-light); border: 1px solid var(--tube-soft); border-radius: 6px; padding: 1rem; max-height: 400px; overflow-y: auto; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; }
+        .log-entry { padding: 0.25rem 0; border-bottom: 1px solid rgba(0,0,0,0.05); display: flex; gap: 1rem; }
+        .log-entry:last-child { border-bottom: none; }
+        .log-entry .timestamp { color: var(--p31-dim); min-width: 180px; }
+        .log-entry .message { flex: 1; word-break: break-word; }
+        .log-entry.error { background: rgba(255,68,102,0.05); }
+        .log-entry.error .message { color: #ff4466; }
+        .log-entry.warning { background: rgba(255,179,71,0.05); }
+        .log-entry.warning .message { color: var(--p31-decay-dim); }
+
+        /* Pattern cards */
+        .pattern-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
+        .pattern-card { background: var(--tube-light); border: 1px solid var(--tube-soft); border-radius: 6px; padding: 1rem; }
+        .pattern-card:hover { border-color: var(--p31-dim); }
+        .pattern-card .pattern-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+        .pattern-card .pattern-name { font-weight: bold; color: var(--p31-mid); }
+        .pattern-card .pattern-count { font-size: 1.5rem; font-weight: bold; color: var(--p31-peak); }
+        .pattern-card .pattern-type { font-size: 0.75rem; color: var(--p31-dim); text-transform: uppercase; }
+        .pattern-card .pattern-services { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.5rem; }
+        .pattern-card .pattern-sample { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.5rem; font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+        /* Chart container */
+        .chart-container { height: 200px; background: var(--tube-light); border-radius: 6px; padding: 1rem; position: relative; }
+        .chart-bars { display: flex; align-items: flex-end; height: 100%; gap: 2px; }
+        .chart-bar { flex: 1; background: var(--p31-mid); border-radius: 2px 2px 0 0; min-width: 8px; transition: all 0.2s; position: relative; }
+        .chart-bar:hover { background: var(--p31-peak); }
+        .chart-bar.error { background: #ff4466; }
+        .chart-bar.warning { background: var(--p31-decay); }
+        .chart-bar .bar-label { position: absolute; bottom: -20px; left: 50%; transform: translateX(-50%); font-size: 0.6rem; color: var(--text-dim); white-space: nowrap; }
+
+        /* Service selector */
+        .service-selector { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; }
+        .service-tag { padding: 0.25rem 0.75rem; background: var(--tube-light); border: 1px solid var(--tube-soft); border-radius: 4px; cursor: pointer; font-size: 0.8rem; transition: all 0.2s; }
+        .service-tag:hover { border-color: var(--p31-dim); }
+        .service-tag.selected { background: rgba(51,255,102,0.1); border-color: var(--p31-peak); color: var(--p31-peak); }
+        .service-tag.active::before { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--p31-peak); margin-right: 0.5rem; }
+        .service-tag.inactive::before { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--text-dim); margin-right: 0.5rem; }
+
+        /* Filters */
+        .filters { display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: center; }
+        .filter-group { display: flex; align-items: center; gap: 0.5rem; }
+        .filter-group label { font-size: 0.8rem; color: var(--p31-dim); text-transform: uppercase; }
+        .filter-group select, .filter-group input { padding: 0.5rem; border: 1px solid var(--tube-soft); border-radius: 4px; background: var(--tube-light); color: var(--p31-mid); font-family: 'Courier Prime', monospace; }
+        .filter-group select:focus, .filter-group input:focus { outline: none; border-color: var(--p31-dim); }
+
+        /* Grid layouts */
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+
+        /* Empty state */
+        .empty-state { text-align: center; padding: 3rem; color: var(--p31-dim); }
+        .empty-state .icon { font-size: 3rem; margin-bottom: 1rem; opacity: 0.5; }
+
+        /* Toast */
+        .toast-container { position: fixed; top: 1rem; right: 1rem; z-index: 1000; }
+        .toast { padding: 1rem 1.5rem; background: var(--tube-pale); border: 1px solid var(--p31-dim); border-radius: 6px; margin-bottom: 0.5rem; font-family: 'Courier Prime', monospace; animation: slideIn 0.3s ease; }
+        .toast.success { border-color: var(--p31-peak); }
+        .toast.error { border-color: #ff4466; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        /* Loading */
+        .loading { text-align: center; padding: 2rem; color: var(--p31-dim); }
+        .spinner { display: inline-block; width: 24px; height: 24px; border: 2px solid var(--tube-soft); border-top-color: var(--p31-peak); border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 0.5rem; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Progress bar */
+        .progress-bar { height: 8px; background: var(--tube-soft); border-radius: 4px; overflow: hidden; }
+        .progress-bar .fill { height: 100%; border-radius: 4px; transition: width 0.3s; }
+        .progress-bar .fill.green { background: var(--p31-peak); }
+        .progress-bar .fill.yellow { background: var(--p31-decay); }
+        .progress-bar .fill.red { background: #ff4466; }
+
+        @media (max-width: 1200px) { .stats-row { grid-template-columns: repeat(2, 1fr); } .grid-2 { grid-template-columns: 1fr; } }
+        @media (max-width: 900px) {
+            .sidebar { display: none; }
+            .main { margin-left: 0; }
+            .grid-3 { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body class="crt-light">
+    <nav class="sidebar" id="sidebar"></nav>
+
+    <main class="main">
+        <header class="header">
+            <div class="header-title">
+                <h1>SecuBox Metabolizer</h1>
+                <span class="badge version">v1.0.0</span>
+                <span class="badge active" id="status-badge">- logs/h</span>
+            </div>
+            <div class="header-actions">
+                <button class="btn" onclick="refreshData()">Refresh</button>
+                <select id="time-window" onchange="refreshData()" class="btn">
+                    <option value="1h">Last Hour</option>
+                    <option value="6h">Last 6 Hours</option>
+                    <option value="24h" selected>Last 24 Hours</option>
+                    <option value="7d">Last 7 Days</option>
+                </select>
+            </div>
+        </header>
+
+        <div class="content">
+            <p class="subtitle">Log processor and analyzer - patterns, errors, and statistics</p>
+
+            <div class="stats-row">
+                <div class="stat-card green">
+                    <div class="value" id="total-entries">-</div>
+                    <div class="label">Total Entries</div>
+                </div>
+                <div class="stat-card red">
+                    <div class="value" id="error-count">-</div>
+                    <div class="label">Errors</div>
+                </div>
+                <div class="stat-card yellow">
+                    <div class="value" id="warning-count">-</div>
+                    <div class="label">Warnings</div>
+                </div>
+                <div class="stat-card green">
+                    <div class="value" id="services-count">-</div>
+                    <div class="label">Active Services</div>
+                </div>
+            </div>
+
+            <div class="tabs">
+                <div class="tab active" data-tab="overview" onclick="showTab('overview')">Overview</div>
+                <div class="tab" data-tab="patterns" onclick="showTab('patterns')">Patterns</div>
+                <div class="tab" data-tab="errors" onclick="showTab('errors')">Errors</div>
+                <div class="tab" data-tab="services" onclick="showTab('services')">Services</div>
+                <div class="tab" data-tab="rotation" onclick="showTab('rotation')">Log Files</div>
+            </div>
+
+            <!-- Overview Tab -->
+            <div id="tab-overview" class="tab-content active">
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2>Hourly Trend</h2>
+                        </div>
+                        <div class="chart-container" id="hourly-chart">
+                            <div class="loading"><span class="spinner"></span> Loading...</div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <h2>Priority Distribution</h2>
+                        </div>
+                        <div id="priority-stats">
+                            <div class="loading"><span class="spinner"></span> Loading...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Top Services by Log Volume</h2>
+                    </div>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Service</th>
+                                <th>Entries</th>
+                                <th>Volume</th>
+                            </tr>
+                        </thead>
+                        <tbody id="top-services-table">
+                            <tr><td colspan="3" class="loading"><span class="spinner"></span> Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Patterns Tab -->
+            <div id="tab-patterns" class="tab-content">
+                <div class="filters">
+                    <div class="filter-group">
+                        <label>Type:</label>
+                        <select id="pattern-type-filter" onchange="loadPatterns()">
+                            <option value="">All Types</option>
+                            <option value="error">Error</option>
+                            <option value="warning">Warning</option>
+                            <option value="auth_failure">Auth Failure</option>
+                            <option value="connection">Connection</option>
+                            <option value="service_state">Service State</option>
+                            <option value="security">Security</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Detected Patterns</h2>
+                    </div>
+                    <div class="pattern-grid" id="patterns-grid">
+                        <div class="loading"><span class="spinner"></span> Loading...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Errors Tab -->
+            <div id="tab-errors" class="tab-content">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Recent Errors</h2>
+                        <span id="errors-count-badge" class="badge">0 errors</span>
+                    </div>
+                    <div class="log-viewer" id="errors-log">
+                        <div class="loading"><span class="spinner"></span> Loading...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Services Tab -->
+            <div id="tab-services" class="tab-content">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Select Service</h2>
+                    </div>
+                    <div class="service-selector" id="service-selector">
+                        <div class="loading"><span class="spinner"></span> Loading...</div>
+                    </div>
+                </div>
+
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2>Service Statistics</h2>
+                        </div>
+                        <div id="service-stats">
+                            <div class="empty-state">Select a service to view statistics</div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <h2>Service Logs</h2>
+                        </div>
+                        <div class="log-viewer" id="service-logs" style="max-height: 300px;">
+                            <div class="empty-state">Select a service to view logs</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Log Files Tab -->
+            <div id="tab-rotation" class="tab-content">
+                <div class="stats-row" style="grid-template-columns: repeat(3, 1fr);">
+                    <div class="stat-card green">
+                        <div class="value" id="total-files">-</div>
+                        <div class="label">Total Files</div>
+                    </div>
+                    <div class="stat-card yellow">
+                        <div class="value" id="rotated-files">-</div>
+                        <div class="label">Rotated Files</div>
+                    </div>
+                    <div class="stat-card green">
+                        <div class="value" id="total-size">-</div>
+                        <div class="label">Total Size</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Log Files</h2>
+                    </div>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>File</th>
+                                <th>Size</th>
+                                <th>Modified</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rotation-table">
+                            <tr><td colspan="4" class="loading"><span class="spinner"></span> Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <div class="toast-container" id="toast-container"></div>
+
+    <script>
+        const API = '/api/v1/metabolizer';
+        let selectedService = null;
+        let refreshInterval = null;
+
+        async function api(endpoint, method = 'GET', data = null) {
+            const token = localStorage.getItem('sbx_token');
+            const opts = {
+                method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': 'Bearer ' + token } : {})
+                }
+            };
+            if (data) opts.body = JSON.stringify(data);
+            try {
+                const res = await fetch(API + endpoint, opts);
+                if (res.status === 401) {
+                    window.location.href = '/portal/login.html';
+                    return {};
+                }
+                return res.json();
+            } catch (e) {
+                console.error('API error:', e);
+                return {};
+            }
+        }
+
+        function checkAuth() {
+            const token = localStorage.getItem('sbx_token');
+            if (!token) {
+                window.location.href = '/portal/login.html';
+            }
+        }
+
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 4000);
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '-';
+            const d = new Date(dateStr);
+            return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+
+        function getTimeWindow() {
+            return document.getElementById('time-window').value;
+        }
+
+        function showTab(tabId) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelector(`.tab[data-tab="${tabId}"]`).classList.add('active');
+            document.getElementById(`tab-${tabId}`).classList.add('active');
+
+            if (tabId === 'patterns') loadPatterns();
+            else if (tabId === 'errors') loadErrors();
+            else if (tabId === 'services') loadServices();
+            else if (tabId === 'rotation') loadRotation();
+        }
+
+        async function loadStats() {
+            const since = getTimeWindow();
+            const data = await api(`/stats?since=${since}`);
+            if (!data.total_entries) return;
+
+            document.getElementById('total-entries').textContent = data.total_entries.toLocaleString();
+            document.getElementById('error-count').textContent = data.error_count.toLocaleString();
+            document.getElementById('warning-count').textContent = data.warning_count.toLocaleString();
+            document.getElementById('services-count').textContent = data.top_services?.length || 0;
+            document.getElementById('status-badge').textContent = `${data.error_rate_percent}% errors`;
+
+            // Render hourly chart
+            renderHourlyChart(data.hourly_trend || []);
+
+            // Render priority distribution
+            renderPriorityStats(data.priority_distribution || {});
+
+            // Render top services
+            renderTopServices(data.top_services || []);
+        }
+
+        function renderHourlyChart(trend) {
+            const container = document.getElementById('hourly-chart');
+            if (!trend.length) {
+                container.innerHTML = '<div class="empty-state">No data available</div>';
+                return;
+            }
+
+            const maxCount = Math.max(...trend.map(t => t.count));
+            const bars = trend.map(t => {
+                const height = maxCount > 0 ? (t.count / maxCount * 100) : 0;
+                const hour = t.hour.split(' ')[1] || t.hour;
+                return `<div class="chart-bar" style="height: ${height}%" title="${t.count} entries at ${hour}">
+                    <span class="bar-label">${hour}</span>
+                </div>`;
+            }).join('');
+
+            container.innerHTML = `<div class="chart-bars">${bars}</div>`;
+        }
+
+        function renderPriorityStats(distribution) {
+            const container = document.getElementById('priority-stats');
+            const total = Object.values(distribution).reduce((a, b) => a + b, 0);
+
+            const priorities = [
+                { name: 'Emergency', key: 'emerg', class: 'red' },
+                { name: 'Alert', key: 'alert', class: 'red' },
+                { name: 'Critical', key: 'crit', class: 'red' },
+                { name: 'Error', key: 'err', class: 'red' },
+                { name: 'Warning', key: 'warning', class: 'yellow' },
+                { name: 'Notice', key: 'notice', class: 'green' },
+                { name: 'Info', key: 'info', class: 'green' },
+                { name: 'Debug', key: 'debug', class: 'green' },
+            ];
+
+            const html = priorities.filter(p => distribution[p.key] > 0).map(p => {
+                const count = distribution[p.key] || 0;
+                const percent = total > 0 ? (count / total * 100) : 0;
+                return `
+                    <div style="margin-bottom: 0.75rem;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                            <span>${p.name}</span>
+                            <span>${count.toLocaleString()} (${percent.toFixed(1)}%)</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="fill ${p.class}" style="width: ${percent}%"></div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            container.innerHTML = html || '<div class="empty-state">No data</div>';
+        }
+
+        function renderTopServices(services) {
+            const tbody = document.getElementById('top-services-table');
+            if (!services.length) {
+                tbody.innerHTML = '<tr><td colspan="3" class="empty-state">No data</td></tr>';
+                return;
+            }
+
+            const maxCount = Math.max(...services.map(s => s.count));
+            tbody.innerHTML = services.map(s => {
+                const percent = maxCount > 0 ? (s.count / maxCount * 100) : 0;
+                return `
+                    <tr>
+                        <td>${s.service}</td>
+                        <td>${s.count.toLocaleString()}</td>
+                        <td style="width: 40%;">
+                            <div class="progress-bar">
+                                <div class="fill green" style="width: ${percent}%"></div>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        async function loadPatterns() {
+            const since = getTimeWindow();
+            const type = document.getElementById('pattern-type-filter').value;
+            let endpoint = `/patterns?since=${since}`;
+            if (type) endpoint += `&pattern_type=${type}`;
+
+            const data = await api(endpoint);
+            const grid = document.getElementById('patterns-grid');
+
+            if (!data.all_patterns || data.all_patterns.length === 0) {
+                grid.innerHTML = '<div class="empty-state"><div class="icon">/</div>No patterns detected</div>';
+                return;
+            }
+
+            grid.innerHTML = data.all_patterns.map(p => `
+                <div class="pattern-card">
+                    <div class="pattern-header">
+                        <div>
+                            <div class="pattern-name">${p.pattern}</div>
+                            <div class="pattern-type">${p.pattern_type}</div>
+                        </div>
+                        <div class="pattern-count">${p.count}</div>
+                    </div>
+                    <div class="pattern-services">Services: ${p.services.slice(0, 3).join(', ')}${p.services.length > 3 ? '...' : ''}</div>
+                    ${p.recent_match ? `<div class="pattern-sample">${p.recent_match}</div>` : ''}
+                </div>
+            `).join('');
+        }
+
+        async function loadErrors() {
+            const since = getTimeWindow();
+            const data = await api(`/errors?since=${since}&limit=100`);
+            const container = document.getElementById('errors-log');
+            const badge = document.getElementById('errors-count-badge');
+
+            badge.textContent = `${data.total_errors || 0} errors`;
+
+            if (!data.errors || data.errors.length === 0) {
+                container.innerHTML = '<div class="empty-state">No errors found</div>';
+                return;
+            }
+
+            container.innerHTML = data.errors.map(e => {
+                const ts = formatDate(e.timestamp);
+                const svc = e.service.replace('.service', '');
+                return `
+                    <div class="log-entry error">
+                        <span class="timestamp">${ts}</span>
+                        <span class="status-badge ${e.priority_name}">${e.priority_name}</span>
+                        <span style="color: var(--p31-dim); min-width: 150px;">${svc}</span>
+                        <span class="message">${e.message}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function loadServices() {
+            const data = await api('/services');
+            const container = document.getElementById('service-selector');
+
+            if (!data.services || data.services.length === 0) {
+                container.innerHTML = '<div class="empty-state">No services found</div>';
+                return;
+            }
+
+            container.innerHTML = data.services.filter(s => s.has_logs).map(s => {
+                const statusClass = s.active ? 'active' : 'inactive';
+                const selectedClass = selectedService === s.name ? 'selected' : '';
+                return `
+                    <span class="service-tag ${statusClass} ${selectedClass}" onclick="selectService('${s.name}')">${s.name.replace('.service', '')}</span>
+                `;
+            }).join('');
+        }
+
+        async function selectService(serviceName) {
+            selectedService = serviceName;
+
+            // Update selection UI
+            document.querySelectorAll('.service-tag').forEach(t => t.classList.remove('selected'));
+            document.querySelectorAll('.service-tag').forEach(t => {
+                if (t.textContent === serviceName.replace('.service', '')) {
+                    t.classList.add('selected');
+                }
+            });
+
+            // Load service stats
+            const since = getTimeWindow();
+            const statsData = await api(`/services/${serviceName}/stats?since=${since}`);
+            const statsContainer = document.getElementById('service-stats');
+
+            if (statsData.stats) {
+                const s = statsData.stats;
+                statsContainer.innerHTML = `
+                    <div class="grid-3" style="margin-bottom: 1rem;">
+                        <div class="stat-card green" style="padding: 0.75rem;">
+                            <div class="value" style="font-size: 1.5rem;">${s.total_lines}</div>
+                            <div class="label">Total Lines</div>
+                        </div>
+                        <div class="stat-card red" style="padding: 0.75rem;">
+                            <div class="value" style="font-size: 1.5rem;">${s.error_count}</div>
+                            <div class="label">Errors</div>
+                        </div>
+                        <div class="stat-card yellow" style="padding: 0.75rem;">
+                            <div class="value" style="font-size: 1.5rem;">${s.warning_count}</div>
+                            <div class="label">Warnings</div>
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; font-size: 0.9rem;">
+                        <div><span style="color: var(--p31-dim);">Lines/Hour:</span> ${s.lines_per_hour}</div>
+                        <div><span style="color: var(--p31-dim);">Error Rate:</span> ${s.error_rate}%</div>
+                        <div style="grid-column: span 2;"><span style="color: var(--p31-dim);">Last Activity:</span> ${formatDate(s.last_activity)}</div>
+                    </div>
+                `;
+            }
+
+            // Load service logs
+            const logsData = await api(`/services/${serviceName}/logs?since=${since}&lines=50`);
+            const logsContainer = document.getElementById('service-logs');
+
+            if (logsData.logs && logsData.logs.length > 0) {
+                logsContainer.innerHTML = logsData.logs.map(l => {
+                    const ts = formatDate(l.timestamp);
+                    const priority = parseInt(l.priority);
+                    let entryClass = '';
+                    if (priority <= 3) entryClass = 'error';
+                    else if (priority === 4) entryClass = 'warning';
+                    return `
+                        <div class="log-entry ${entryClass}">
+                            <span class="timestamp">${ts}</span>
+                            <span class="message">${l.message}</span>
+                        </div>
+                    `;
+                }).join('');
+            } else {
+                logsContainer.innerHTML = '<div class="empty-state">No logs found</div>';
+            }
+        }
+
+        async function loadRotation() {
+            const data = await api('/rotation');
+
+            document.getElementById('total-files').textContent = data.total_files || 0;
+            document.getElementById('rotated-files').textContent = data.rotated_files || 0;
+            document.getElementById('total-size').textContent = data.total_size_human || '-';
+
+            const tbody = document.getElementById('rotation-table');
+            if (!data.files || data.files.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No files found</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = data.files.map(f => `
+                <tr>
+                    <td title="${f.path}">${f.name}</td>
+                    <td>${f.size_human}</td>
+                    <td>${formatDate(f.modified)}</td>
+                    <td><span class="status-badge ${f.is_rotated ? 'warning' : 'active'}">${f.is_rotated ? 'Rotated' : 'Active'}</span></td>
+                </tr>
+            `).join('');
+        }
+
+        async function refreshData() {
+            await loadStats();
+            // Also refresh current tab
+            const activeTab = document.querySelector('.tab.active')?.dataset.tab;
+            if (activeTab === 'patterns') loadPatterns();
+            else if (activeTab === 'errors') loadErrors();
+            else if (activeTab === 'services') loadServices();
+            else if (activeTab === 'rotation') loadRotation();
+            showToast('Data refreshed');
+        }
+
+        // Initialize
+        checkAuth();
+        loadStats();
+
+        // Auto-refresh every 60 seconds
+        refreshInterval = setInterval(() => {
+            loadStats();
+        }, 60000);
+    </script>
+    <script src="/shared/sidebar.js"></script>
+    <script src="/shared/crt-engine.js"></script>
+</body>
+</html>

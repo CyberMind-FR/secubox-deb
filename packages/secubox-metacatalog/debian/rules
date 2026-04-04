@@ -1,0 +1,16 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-metacatalog/usr/lib/secubox/metacatalog/
+	cp -r api debian/secubox-metacatalog/usr/lib/secubox/metacatalog/
+	install -d debian/secubox-metacatalog/usr/share/secubox/www
+	[ -d www ] && cp -r www/. debian/secubox-metacatalog/usr/share/secubox/www/ || true
+	install -d debian/secubox-metacatalog/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-metacatalog/usr/share/secubox/menu.d/ || true
+	# Modular nginx config
+	install -d debian/secubox-metacatalog/etc/nginx/secubox.d
+	[ -f nginx/metacatalog.conf ] && cp nginx/metacatalog.conf debian/secubox-metacatalog/etc/nginx/secubox.d/ || true
+	# Cache directory
+	install -d debian/secubox-metacatalog/var/cache/secubox/metacatalog

@@ -1,0 +1,20 @@
+#!/bin/bash
+set -e
+case "$1" in
+  configure)
+    id -u secubox >/dev/null 2>&1 || \
+      adduser --system --group --no-create-home \
+        --home /var/lib/secubox --shell /usr/sbin/nologin secubox
+    install -d -o secubox -g secubox -m 750 /run/secubox
+    install -d -o secubox -g secubox -m 750 /var/lib/secubox
+    install -d -o secubox -g secubox -m 750 /var/lib/secubox/mirrors
+    install -d -o secubox -g secubox -m 750 /var/cache/secubox-mirror
+    install -d -o secubox -g secubox -m 750 /etc/nginx/secubox-mirror.d
+    systemctl daemon-reload
+    systemctl enable secubox-mirror.service
+    systemctl start  secubox-mirror.service || true
+    install -d -m 755 /etc/nginx/secubox.d
+    systemctl reload nginx 2>/dev/null || true
+    ;;
+esac
+#DEBHELPER#

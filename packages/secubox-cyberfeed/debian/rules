@@ -1,0 +1,13 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-cyberfeed/usr/lib/secubox/cyberfeed
+	cp -r api debian/secubox-cyberfeed/usr/lib/secubox/cyberfeed/
+	install -d debian/secubox-cyberfeed/usr/share/secubox/www/cyberfeed
+	cp -r www/cyberfeed/. debian/secubox-cyberfeed/usr/share/secubox/www/cyberfeed/
+	install -d debian/secubox-cyberfeed/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-cyberfeed/usr/share/secubox/menu.d/ || true
+	install -d debian/secubox-cyberfeed/etc/nginx/secubox.d
+	[ -d nginx ] && cp nginx/*.conf debian/secubox-cyberfeed/etc/nginx/secubox.d/ || true

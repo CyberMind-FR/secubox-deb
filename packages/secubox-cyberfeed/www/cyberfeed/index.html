@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - CyberFeed</title>
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Courier Prime', monospace; background: var(--tube-light); color: var(--tube-dark); display: flex; min-height: 100vh; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
+        .header h1 { font-size: 1.5rem; color: var(--p31-peak); text-shadow: var(--bloom-text); }
+        .header-actions { display: flex; gap: 0.5rem; align-items: center; }
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--p31-dim); background: var(--tube-pale); color: var(--p31-mid); cursor: pointer; font-size: 0.875rem; font-family: 'Courier Prime', monospace; transition: all 0.2s; }
+        .btn:hover { background: var(--tube-bezel); color: var(--p31-peak); text-shadow: var(--bloom-soft); }
+        .btn.primary { background: rgba(51,255,102,0.1); border-color: var(--p31-mid); color: var(--p31-peak); }
+        .btn.success { background: rgba(51,255,102,0.15); border-color: var(--p31-peak); color: var(--p31-hot); }
+        .btn.danger { background: rgba(255,179,71,0.1); border-color: var(--p31-decay); color: var(--p31-decay); }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+        .card { background: var(--tube-pale); border: 1px solid var(--p31-dim); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
+        .card h2 { font-size: 1rem; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; color: var(--p31-peak); text-shadow: var(--bloom-soft); }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card { background: var(--tube-pale); border: 1px solid var(--p31-dim); border-radius: 8px; padding: 1rem; text-align: center; }
+        .stat-card .value { font-size: 1.75rem; font-weight: bold; color: var(--p31-peak); text-shadow: var(--bloom-text); }
+        .stat-card .label { font-size: 0.75rem; color: var(--p31-dim); margin-top: 0.25rem; }
+        .stat-card.feeds .value { color: var(--p31-peak); }
+        .stat-card.ips .value { color: var(--p31-decay); text-shadow: var(--bloom-amber); }
+        .stat-card.domains .value { color: var(--p31-hot); }
+        .stat-card.errors .value { color: var(--p31-decay); }
+        table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--p31-ghost); }
+        th { color: var(--p31-dim); font-weight: 500; }
+        tr:hover { background: rgba(51,255,102,0.05); }
+        .badge { padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; display: inline-block; }
+        .badge.active { background: rgba(51,255,102,0.2); color: var(--p31-peak); }
+        .badge.disabled { background: rgba(15,136,34,0.2); color: var(--p31-dim); }
+        .badge.error { background: rgba(255,179,71,0.2); color: var(--p31-decay); }
+        .badge.updating { background: rgba(51,255,102,0.15); color: var(--p31-mid); animation: pulse 1s infinite; }
+        .badge.ip { background: rgba(255,179,71,0.15); color: var(--p31-decay-dim); }
+        .badge.domain { background: rgba(51,255,102,0.15); color: var(--p31-peak); }
+        .badge.url { background: rgba(100,150,255,0.15); color: #8ab4f8; }
+        .badge.botnet { background: rgba(255,100,100,0.15); color: #f87171; }
+        .badge.malware { background: rgba(255,150,100,0.15); color: #fb923c; }
+        .badge.spam { background: rgba(200,200,100,0.15); color: #fbbf24; }
+        .badge.phishing { background: rgba(200,100,200,0.15); color: #c084fc; }
+        .badge.threats { background: rgba(255,120,120,0.15); color: #f87171; }
+        .badge.abuse { background: rgba(255,150,150,0.15); color: #fca5a5; }
+        .badge.reputation { background: rgba(100,200,200,0.15); color: #5eead4; }
+        .badge.anonymizer { background: rgba(150,100,200,0.15); color: #a78bfa; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .toggle { position: relative; display: inline-block; width: 40px; height: 22px; }
+        .toggle input { opacity: 0; width: 0; height: 0; }
+        .toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: var(--p31-ghost); border-radius: 22px; transition: 0.3s; }
+        .toggle-slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px; background: var(--p31-dim); border-radius: 50%; transition: 0.3s; }
+        .toggle input:checked + .toggle-slider { background: var(--p31-mid); }
+        .toggle input:checked + .toggle-slider:before { transform: translateX(18px); background: var(--p31-peak); }
+        .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 1000; align-items: center; justify-content: center; }
+        .modal.active { display: flex; }
+        .modal-content { background: var(--tube-pale); border: 1px solid var(--p31-dim); border-radius: 8px; padding: 1.5rem; width: 90%; max-width: 600px; max-height: 80vh; overflow-y: auto; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .modal-header h3 { font-size: 1.1rem; color: var(--p31-peak); text-shadow: var(--bloom-soft); }
+        .close-btn { background: none; border: none; color: var(--p31-dim); cursor: pointer; font-size: 1.5rem; }
+        .close-btn:hover { color: var(--p31-decay); }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; color: var(--p31-dim); font-size: 0.875rem; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 0.5rem; border-radius: 4px; border: 1px solid var(--tube-soft); background: var(--tube-light); color: var(--p31-mid); font-family: 'Courier Prime', monospace; }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--p31-mid); box-shadow: 0 0 8px rgba(51,255,102,0.3); }
+        .tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; border-bottom: 1px solid var(--p31-ghost); padding-bottom: 0.5rem; }
+        .tab { padding: 0.5rem 1rem; cursor: pointer; border-radius: 4px 4px 0 0; color: var(--p31-dim); transition: all 0.2s; }
+        .tab:hover { color: var(--p31-mid); }
+        .tab.active { color: var(--p31-peak); background: rgba(51,255,102,0.1); border-bottom: 2px solid var(--p31-peak); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .blocklist-preview { max-height: 300px; overflow-y: auto; background: var(--tube-light); border: 1px solid var(--tube-soft); border-radius: 4px; padding: 0.5rem; font-size: 0.75rem; }
+        .blocklist-preview code { color: var(--p31-mid); }
+        .search-box { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+        .search-box input { flex: 1; }
+        .indicator-item { padding: 0.5rem; border-bottom: 1px solid var(--tube-soft); display: flex; justify-content: space-between; align-items: center; }
+        .indicator-item:last-child { border-bottom: none; }
+        .indicator-value { font-family: monospace; color: var(--p31-mid); }
+        .indicator-meta { font-size: 0.75rem; color: var(--p31-dim); }
+        .feed-desc { font-size: 0.75rem; color: var(--p31-dim); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .actions { display: flex; gap: 0.25rem; }
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+    <main class="main">
+        <header class="header">
+            <h1>CyberFeed - Threat Intelligence</h1>
+            <div class="header-actions">
+                <button class="btn" onclick="refresh()">Refresh</button>
+                <button class="btn primary" onclick="updateAllFeeds()">Update All Feeds</button>
+                <button class="btn" onclick="showAddFeed()">Add Feed</button>
+            </div>
+        </header>
+
+        <div class="stats-grid">
+            <div class="stat-card feeds">
+                <div class="value" id="statFeeds">-</div>
+                <div class="label">Active Feeds</div>
+            </div>
+            <div class="stat-card ips">
+                <div class="value" id="statIPs">-</div>
+                <div class="label">Blocked IPs</div>
+            </div>
+            <div class="stat-card domains">
+                <div class="value" id="statDomains">-</div>
+                <div class="label">Blocked Domains</div>
+            </div>
+            <div class="stat-card errors">
+                <div class="value" id="statErrors">-</div>
+                <div class="label">Feed Errors</div>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('feeds')">Feeds</div>
+            <div class="tab" onclick="switchTab('blocklist')">Blocklists</div>
+            <div class="tab" onclick="switchTab('indicators')">IoC Lookup</div>
+            <div class="tab" onclick="switchTab('export')">Export</div>
+        </div>
+
+        <!-- Feeds Tab -->
+        <div class="tab-content active" id="tab-feeds">
+            <div class="card">
+                <h2>Threat Intelligence Feeds</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Enabled</th>
+                            <th>Feed Name</th>
+                            <th>Type</th>
+                            <th>Category</th>
+                            <th>Entries</th>
+                            <th>Status</th>
+                            <th>Last Update</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="feedsTable"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Blocklist Tab -->
+        <div class="tab-content" id="tab-blocklist">
+            <div class="card">
+                <h2>
+                    IP Blocklist
+                    <span id="ipCount" style="font-weight: normal; font-size: 0.875rem;"></span>
+                </h2>
+                <div class="blocklist-preview" id="ipBlocklist">
+                    <code>Loading...</code>
+                </div>
+            </div>
+            <div class="card">
+                <h2>
+                    Domain Blocklist
+                    <span id="domainCount" style="font-weight: normal; font-size: 0.875rem;"></span>
+                </h2>
+                <div class="blocklist-preview" id="domainBlocklist">
+                    <code>Loading...</code>
+                </div>
+            </div>
+        </div>
+
+        <!-- IoC Lookup Tab -->
+        <div class="tab-content" id="tab-indicators">
+            <div class="card">
+                <h2>Check Indicator</h2>
+                <div class="search-box">
+                    <input type="text" id="checkInput" placeholder="Enter IP or domain to check...">
+                    <button class="btn primary" onclick="checkIndicator()">Check</button>
+                </div>
+                <div id="checkResult"></div>
+            </div>
+            <div class="card">
+                <h2>Recent Indicators</h2>
+                <div id="indicatorsList"></div>
+            </div>
+        </div>
+
+        <!-- Export Tab -->
+        <div class="tab-content" id="tab-export">
+            <div class="card">
+                <h2>Export Blocklists</h2>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+                    <div>
+                        <h3 style="font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--p31-mid);">IP Blocklist</h3>
+                        <button class="btn btn-sm" onclick="exportList('ips', 'plain')">Plain Text</button>
+                        <button class="btn btn-sm" onclick="exportList('ips', 'nftables')">nftables</button>
+                        <button class="btn btn-sm" onclick="exportList('ips', 'hosts')">Hosts</button>
+                    </div>
+                    <div>
+                        <h3 style="font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--p31-mid);">Domain Blocklist</h3>
+                        <button class="btn btn-sm" onclick="exportList('domains', 'plain')">Plain Text</button>
+                        <button class="btn btn-sm" onclick="exportList('domains', 'hosts')">Hosts</button>
+                        <button class="btn btn-sm" onclick="exportList('domains', 'unbound')">Unbound</button>
+                        <button class="btn btn-sm" onclick="exportList('domains', 'dnsmasq')">dnsmasq</button>
+                    </div>
+                </div>
+                <div id="exportPreview" style="margin-top: 1rem; display: none;">
+                    <h3 style="font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--p31-mid);">Export Preview</h3>
+                    <div class="blocklist-preview" style="max-height: 400px;">
+                        <code id="exportContent"></code>
+                    </div>
+                    <button class="btn primary" style="margin-top: 0.5rem;" onclick="downloadExport()">Download</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add Feed Modal -->
+        <div class="modal" id="addFeedModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Add Custom Feed</h3>
+                    <button class="close-btn" onclick="closeModal('addFeedModal')">&times;</button>
+                </div>
+                <div class="form-group">
+                    <label>Feed Name</label>
+                    <input type="text" id="feedName" placeholder="my-custom-feed">
+                </div>
+                <div class="form-group">
+                    <label>Feed URL</label>
+                    <input type="text" id="feedUrl" placeholder="https://example.com/blocklist.txt">
+                </div>
+                <div class="form-group">
+                    <label>Feed Type</label>
+                    <select id="feedType">
+                        <option value="ip">IP addresses</option>
+                        <option value="domain">Domains</option>
+                        <option value="url">URLs</option>
+                        <option value="hash">File Hashes</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Format</label>
+                    <select id="feedFormat">
+                        <option value="plain">Plain (one entry per line)</option>
+                        <option value="hosts">Hosts file format</option>
+                        <option value="csv">CSV (first column)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Category</label>
+                    <input type="text" id="feedCategory" placeholder="malware, phishing, etc.">
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <input type="text" id="feedDesc" placeholder="Brief description">
+                </div>
+                <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                    <button class="btn" onclick="closeModal('addFeedModal')">Cancel</button>
+                    <button class="btn primary" onclick="addFeed()">Add Feed</button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const API = '/api/v1/cyberfeed';
+        const token = () => localStorage.getItem('sbx_token');
+        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+
+        let currentExport = { type: '', format: '', content: '' };
+
+        async function api(path, opts = {}) {
+            try {
+                const res = await fetch(API + path, { ...opts, headers: headers() });
+                if (res.status === 401) { window.location = '/portal/login.html'; return {}; }
+                if (!res.ok) return {};
+                const text = await res.text();
+                return text ? JSON.parse(text) : {};
+            } catch { return {}; }
+        }
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelector(`.tab[onclick*="${tab}"]`).classList.add('active');
+            document.getElementById('tab-' + tab).classList.add('active');
+
+            if (tab === 'blocklist') loadBlocklists();
+            if (tab === 'indicators') loadIndicators();
+        }
+
+        async function loadStats() {
+            const d = await api('/stats');
+            document.getElementById('statFeeds').textContent = d.active_feeds || 0;
+            document.getElementById('statIPs').textContent = (d.total_ips || 0).toLocaleString();
+            document.getElementById('statDomains').textContent = (d.total_domains || 0).toLocaleString();
+            document.getElementById('statErrors').textContent = d.feeds_with_errors || 0;
+        }
+
+        async function loadFeeds() {
+            const d = await api('/feeds');
+            const tbody = document.getElementById('feedsTable');
+            tbody.innerHTML = (d.feeds || []).map(f => `<tr>
+                <td>
+                    <label class="toggle">
+                        <input type="checkbox" ${f.enabled ? 'checked' : ''} onchange="toggleFeed('${f.name}', this.checked)">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </td>
+                <td>
+                    <div>${f.name}</div>
+                    <div class="feed-desc" title="${f.description || ''}">${f.description || ''}</div>
+                </td>
+                <td><span class="badge ${f.feed_type}">${f.feed_type}</span></td>
+                <td><span class="badge ${f.category || ''}">${f.category || '-'}</span></td>
+                <td>${(f.entry_count || 0).toLocaleString()}</td>
+                <td><span class="badge ${f.status}">${f.status}</span></td>
+                <td>${f.last_update ? new Date(f.last_update).toLocaleString() : '-'}</td>
+                <td class="actions">
+                    <button class="btn btn-sm" onclick="updateFeed('${f.name}')">Update</button>
+                    ${!f.builtin ? `<button class="btn btn-sm danger" onclick="removeFeed('${f.name}')">Remove</button>` : ''}
+                </td>
+            </tr>`).join('') || '<tr><td colspan="8" style="text-align:center;color:var(--p31-dim)">No feeds configured</td></tr>';
+        }
+
+        async function loadBlocklists() {
+            const ips = await api('/blocklist/ips?limit=100');
+            const domains = await api('/blocklist/domains?limit=100');
+
+            document.getElementById('ipCount').textContent = `(${(ips.total || 0).toLocaleString()} total)`;
+            document.getElementById('domainCount').textContent = `(${(domains.total || 0).toLocaleString()} total)`;
+
+            document.getElementById('ipBlocklist').innerHTML = '<code>' +
+                (ips.ips || []).map(ip => ip).join('\n') +
+                (ips.total > 100 ? '\n... and more' : '') +
+                '</code>';
+
+            document.getElementById('domainBlocklist').innerHTML = '<code>' +
+                (domains.domains || []).map(d => d).join('\n') +
+                (domains.total > 100 ? '\n... and more' : '') +
+                '</code>';
+        }
+
+        async function loadIndicators() {
+            const d = await api('/indicators?limit=50');
+            const div = document.getElementById('indicatorsList');
+            div.innerHTML = (d.indicators || []).map(i => `<div class="indicator-item">
+                <div>
+                    <div class="indicator-value">${i.value}</div>
+                    <div class="indicator-meta">${i.source} - ${i.category}</div>
+                </div>
+                <span class="badge ${i.ioc_type}">${i.ioc_type}</span>
+            </div>`).join('') || '<div style="color:var(--p31-dim);text-align:center;padding:1rem;">No indicators loaded</div>';
+        }
+
+        async function toggleFeed(name, enabled) {
+            await api(`/feed/${name}/enable?enabled=${enabled}`, { method: 'POST' });
+            loadStats();
+            loadFeeds();
+        }
+
+        async function updateFeed(name) {
+            const d = await api(`/feed/${name}/update`, { method: 'POST' });
+            if (d.success) {
+                alert(`Updated ${name}: ${d.entries} entries`);
+            } else {
+                alert(`Error updating ${name}: ${d.error || 'Unknown error'}`);
+            }
+            refresh();
+        }
+
+        async function updateAllFeeds() {
+            const d = await api('/feeds/update', { method: 'POST' });
+            const results = d.results || [];
+            const success = results.filter(r => r.success).length;
+            const failed = results.filter(r => !r.success).length;
+            alert(`Updated ${success} feeds. ${failed} failed.`);
+            refresh();
+        }
+
+        async function removeFeed(name) {
+            if (!confirm(`Remove feed "${name}"?`)) return;
+            await api(`/feeds/${name}`, { method: 'DELETE' });
+            refresh();
+        }
+
+        async function checkIndicator() {
+            const input = document.getElementById('checkInput').value.trim();
+            if (!input) return;
+
+            const resultDiv = document.getElementById('checkResult');
+            resultDiv.innerHTML = '<div style="color:var(--p31-dim)">Checking...</div>';
+
+            // Determine if IP or domain
+            const isIP = /^(\d{1,3}\.){3}\d{1,3}$/.test(input);
+            const endpoint = isIP ? `/check/ip/${input}` : `/check/domain/${input}`;
+
+            const d = await api(endpoint);
+
+            if (d.blocked) {
+                resultDiv.innerHTML = `<div style="background:rgba(255,100,100,0.1);border:1px solid #f87171;border-radius:4px;padding:1rem;">
+                    <strong style="color:#f87171;">BLOCKED</strong>
+                    <div style="margin-top:0.5rem;font-size:0.875rem;">
+                        Found in ${d.matches.length} feed(s):
+                        <ul style="margin-top:0.5rem;padding-left:1.5rem;">
+                            ${d.matches.map(m => `<li>${m.feed} (${m.category})</li>`).join('')}
+                        </ul>
+                    </div>
+                </div>`;
+            } else {
+                resultDiv.innerHTML = `<div style="background:rgba(51,255,102,0.1);border:1px solid var(--p31-mid);border-radius:4px;padding:1rem;">
+                    <strong style="color:var(--p31-peak);">CLEAN</strong>
+                    <div style="margin-top:0.5rem;font-size:0.875rem;color:var(--p31-dim);">
+                        Not found in any enabled blocklist.
+                    </div>
+                </div>`;
+            }
+        }
+
+        async function exportList(type, format) {
+            const d = await api(`/export/${type}?format=${format}`);
+            currentExport = { type, format, content: d.content || '' };
+
+            document.getElementById('exportPreview').style.display = 'block';
+            document.getElementById('exportContent').textContent = d.content || 'No data';
+        }
+
+        function downloadExport() {
+            const blob = new Blob([currentExport.content], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `cyberfeed-${currentExport.type}-${currentExport.format}.txt`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function showAddFeed() {
+            document.getElementById('addFeedModal').classList.add('active');
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('active');
+        }
+
+        async function addFeed() {
+            const feed = {
+                name: document.getElementById('feedName').value.trim(),
+                url: document.getElementById('feedUrl').value.trim(),
+                feed_type: document.getElementById('feedType').value,
+                format: document.getElementById('feedFormat').value,
+                category: document.getElementById('feedCategory').value.trim() || null,
+                description: document.getElementById('feedDesc').value.trim() || null,
+                enabled: true
+            };
+
+            if (!feed.name || !feed.url) {
+                alert('Name and URL are required');
+                return;
+            }
+
+            await api('/feeds/add', { method: 'POST', body: JSON.stringify(feed) });
+            closeModal('addFeedModal');
+            refresh();
+        }
+
+        function refresh() {
+            loadStats();
+            loadFeeds();
+        }
+
+        // Enter key for indicator check
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('checkInput').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') checkIndicator();
+            });
+        });
+
+        refresh();
+    </script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+secubox-cyberfeed (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release
+  * Phase 9 - Threat Intelligence Module
+  * Multi-source feed aggregation (abuse.ch, Spamhaus, etc.)
+  * IP and domain blocklist management
+  * IoC tracking and lookup
+  * Export to multiple formats (nftables, unbound, dnsmasq)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Apr 2026 10:00:00 +0200
