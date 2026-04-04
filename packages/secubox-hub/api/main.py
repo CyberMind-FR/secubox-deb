@@ -51,7 +51,7 @@ async def modules(user=Depends(require_jwt)):
     return [{"id": k, **_svc(v)} for k,v in MODULES.items()]
 
 @router.get("/alerts")
-async def alerts():
+async def alerts(user=Depends(require_jwt)):
     alerts_list = []
     for mod, svc in MODULES.items():
         r = subprocess.run(["systemctl", "is-active", svc], capture_output=True, text=True)
@@ -84,8 +84,8 @@ def _get_build_info() -> dict:
 
 
 @router.get("/dashboard")
-async def dashboard():
-    """Données complètes du dashboard (public for demo)."""
+async def dashboard(user=Depends(require_jwt)):
+    """Données complètes du dashboard."""
     import psutil
     board = get_board_info()
     modules_status = {k: _svc(v) for k, v in MODULES.items()}
@@ -147,7 +147,7 @@ async def security_summary(user=Depends(require_jwt)):
 
 
 @router.get("/network_summary")
-async def network_summary():
+async def network_summary(user=Depends(require_jwt)):
     """Résumé réseau."""
     import json
     r = subprocess.run(["ip", "-j", "link", "show"], capture_output=True, text=True)
@@ -388,7 +388,7 @@ async def recent_events(user=Depends(require_jwt)):
 
 
 @router.get("/system_health")
-async def system_health():
+async def system_health(user=Depends(require_jwt)):
     """Score de santé système."""
     import psutil
     cpu = psutil.cpu_percent(0.1)
@@ -519,9 +519,9 @@ def _get_netmodes_state() -> dict:
 
 
 @router.get("/network_mode")
-async def get_network_mode():
+async def get_network_mode(user=Depends(require_jwt)):
     """
-    Get current network mode and available modes (public endpoint).
+    Get current network mode and available modes.
     Used by dashboard to display network mode widget.
     """
     state = _get_netmodes_state()
@@ -687,7 +687,7 @@ async def preview_network_mode(mode: str, user=Depends(require_jwt)):
 
 
 @router.get("/board_summary")
-async def board_summary():
+async def board_summary(user=Depends(require_jwt)):
     """
     Quick board summary for dashboard widgets.
     Uses secubox_core.kiosk functions.
@@ -805,9 +805,9 @@ def _check_module_active(module_id: str) -> bool:
 
 
 @router.get("/menu")
-async def menu():
+async def menu(user=Depends(require_jwt)):
     """
-    Dynamic menu endpoint (public).
+    Dynamic menu endpoint.
     Returns categorized menu items for installed modules only.
     """
     menu_items = _load_menu_definitions()
