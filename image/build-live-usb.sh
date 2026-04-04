@@ -2256,6 +2256,12 @@ grub-mkimage -o "${MNT}/esp/EFI/BOOT/BOOTX64.EFI" \
 
 cp "${MNT}/esp/EFI/BOOT/BOOTX64.EFI" "${MNT}/esp/EFI/BOOT/grubx64.efi"
 
+# Add startup.nsh for EFI shell auto-boot (VirtualBox/OVMF compatibility)
+cat > "${MNT}/esp/startup.nsh" <<'STARTUPNSH'
+@echo -off
+\EFI\BOOT\BOOTX64.EFI
+STARTUPNSH
+
 # Copy GRUB modules
 cp /usr/lib/grub/x86_64-efi/*.mod "${MNT}/esp/boot/grub/x86_64-efi/" 2>/dev/null || true
 
