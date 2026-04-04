@@ -1,9 +1,72 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-04-04 (Session 38)*
+*Mis à jour : 2026-04-04 (Session 39)*
 
 ---
 
-## ✅ Terminé cette session (Session 38)
+## ✅ Terminé cette session (Session 39)
+
+### Boot Banner Improvements — CRT Style with Colors & Emojis ✅
+- **`/etc/issue`** — Pre-login banner with ANSI colors (gold/cyan)
+  - ASCII art SecuBox logo
+  - Default credentials display
+  - Web UI and SSH info
+- **`/etc/motd`** — Post-login MOTD with colored ASCII art
+  - LIVE USB badge in green
+  - Access info with color highlights
+- **`/usr/bin/secubox-status`** — System status command with CRT colors
+  - System info (hostname, uptime, memory, disk)
+  - Network interfaces with IP addresses
+  - Core services status (nginx, haproxy, crowdsec, etc.)
+  - Display mode indicator (kiosk/TUI/console)
+  - Quick access links
+- **`/usr/sbin/secubox-boot-banner`** — Boot-time banner script
+  - Boot progress indicators with checkmarks
+  - Network/Nginx/API status at boot
+
+### Profile.d Login Status ✅
+- **`/etc/profile.d/secubox-login.sh`** — Login status display
+  - Quick status line showing mode, service count, IP
+  - Only displays on TTY login (not SSH/tmux)
+- **`/usr/bin/secubox-help`** — Quick help command
+  - Lists common secubox-* commands by category
+  - System, Network, Security, Modes sections
+- **`/usr/bin/secubox-logs`** — Live security logs shortcut
+
+### secubox-cmdline-handler Improvements ✅
+- **TUI mode fix** — Now properly starts TUI service, not just enables it
+- **Console mode** — Enables standard getty on tty1
+- **Default mode detection** — Checks for build-time kiosk marker
+- **Better logging** — Mode transitions logged to journal
+
+### secubox-mode CRT Styling ✅
+- Updated with CRT-style colors (gold, cyan, green, red)
+- Emoji status indicators (✓, ✗, ⚠, ●)
+- Improved status display with mode details and help text
+- Better visual formatting for mode selection
+
+### GRUB Menu Improvements ✅
+- **Dynamic default** — Kiosk GUI (entry 1) is default when `--kiosk` flag used
+- **Emoji indicators** — All menu entries have relevant emojis:
+  - ⚡ SecuBox Live (standard)
+  - 🖼️ Kiosk GUI [DEFAULT]
+  - 📟 Console TUI
+  - 🌉 Bridge Mode
+  - 🛡️ Safe Mode
+  - 💾 Install to Disk
+  - 🚀 To RAM
+  - 🔧 HW Check
+  - 🚨 Emergency Shell
+  - 🐛 Debug modes
+- **CRT menu colors** — Cyan on black with yellow highlights
+
+### Files Modified
+- `image/build-live-usb.sh` — Banner, profile.d, GRUB config updates
+- `image/sbin/secubox-cmdline-handler` — Mode switching improvements
+- `image/sbin/secubox-mode` — CRT style colors and emoji status
+
+---
+
+## ✅ Terminé session précédente (Session 38)
 
 ### Wiki Documentation — VirtualBox Quick Start ✅
 - **wiki/Home.md** — Updated with VirtualBox (2 Minutes) quick start section

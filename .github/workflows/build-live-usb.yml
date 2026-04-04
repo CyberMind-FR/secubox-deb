@@ -176,14 +176,17 @@ jobs:
             ```
 
             ### Boot Options
-            - **SecuBox Live** - Normal boot with persistence
-            - **Safe Mode** - Minimal drivers for troubleshooting
-            - **No Persistence** - Fresh start, no saved changes
-            - **To RAM** - Load entire system to memory
+            - ⚡ **SecuBox Live** - Normal boot with persistence
+            - 🖼️ **Kiosk GUI** - Fullscreen browser (default)
+            - 📟 **Console TUI** - Text-based dashboard
+            - 🌉 **Bridge Mode** - Inline transparent bridge
+            - 🛡️ **Safe Mode** - Minimal drivers for troubleshooting
+            - 💾 **Install to Disk** - Install to local storage
+            - 🚀 **To RAM** - Load entire system to memory
 
             ### Credentials
-            - **Web UI:** https://<IP>:8443 (admin / admin)
-            - **SSH:** root / secubox | secubox / secubox
+            - **Web UI:** https://<IP>:9443 (admin / secubox)
+            - **SSH:** root / secubox
 
             ### Verification
             ```bash

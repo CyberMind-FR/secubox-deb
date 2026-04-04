@@ -67,18 +67,45 @@ apply_settings() {
             log "TUI mode requested via cmdline"
             rm -f "${MARKER_DIR}/.kiosk-enabled"
             touch "${MARKER_DIR}/.tui-enabled"
+
+            # Disable kiosk, enable TUI
             systemctl disable secubox-kiosk.service 2>/dev/null || true
+            systemctl stop secubox-kiosk.service 2>/dev/null || true
             systemctl enable secubox-console-tui.service 2>/dev/null || true
+
+            # Set multi-user target (no graphical)
+            systemctl set-default multi-user.target 2>/dev/null || true
+
+            # Start TUI service (will run on tty1)
+            log "Starting console TUI service..."
+            systemctl start secubox-console-tui.service 2>/dev/null &
             ;;
         console)
-            log "Console mode requested via cmdline"
+            log "Console mode requested via cmdline (standard shell)"
             rm -f "${MARKER_DIR}/.kiosk-enabled"
             rm -f "${MARKER_DIR}/.tui-enabled"
+
+            # Disable both kiosk and TUI
             systemctl disable secubox-kiosk.service 2>/dev/null || true
             systemctl disable secubox-console-tui.service 2>/dev/null || true
+            systemctl stop secubox-kiosk.service 2>/dev/null || true
+            systemctl stop secubox-console-tui.service 2>/dev/null || true
+
+            # Set multi-user target with standard getty
+            systemctl set-default multi-user.target 2>/dev/null || true
+            systemctl enable getty@tty1.service 2>/dev/null || true
             ;;
-        kiosk|*)
-            # Default: kiosk mode (handled below)
+        kiosk)
+            log "Kiosk mode explicitly requested"
+            # Will be handled below with secubox.kiosk=1 logic
+            ;;
+        *)
+            # Default: check if kiosk marker exists from build time
+            if [[ -f "${MARKER_DIR}/.kiosk-enabled" ]]; then
+                log "Default mode: Kiosk (marker present from build)"
+            else
+                log "Default mode: Console shell"
+            fi
             ;;
     esac
 

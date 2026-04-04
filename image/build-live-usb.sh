@@ -452,6 +452,120 @@ if [ -t 0 ] && [ -z "$SECUBOX_SPLASH_SHOWN" ]; then
 fi
 BASHRC
 
+# ── Profile.d script for login status display ──────────────────────────────────
+mkdir -p "${ROOTFS}/etc/profile.d"
+cat > "${ROOTFS}/etc/profile.d/secubox-login.sh" <<'PROFILE'
+#!/bin/bash
+# SecuBox Login Status Display
+# Shows quick system status on interactive shell login
+
+# Only run on interactive terminals
+[[ $- != *i* ]] && return
+[[ -z "$PS1" ]] && return
+
+# Avoid double display with splash
+[[ -n "$SECUBOX_STATUS_SHOWN" ]] && return
+export SECUBOX_STATUS_SHOWN=1
+
+# Colors
+GOLD='\033[38;5;214m'
+CYAN='\033[38;5;45m'
+GREEN='\033[38;5;82m'
+RED='\033[38;5;196m'
+GRAY='\033[38;5;242m'
+WHITE='\033[38;5;250m'
+RESET='\033[0m'
+
+# Quick status line after MOTD
+show_quick_status() {
+    local ip=$(hostname -I 2>/dev/null | awk '{print $1}')
+    local services_ok=0
+    local services_fail=0
+
+    for svc in nginx secubox-api nftables; do
+        if systemctl is-active --quiet "$svc" 2>/dev/null; then
+            ((services_ok++))
+        else
+            ((services_fail++))
+        fi
+    done
+
+    # Mode indicator
+    local mode_icon="🖥️"
+    local mode_text="Console"
+    if [[ -f /var/lib/secubox/.kiosk-enabled ]]; then
+        mode_icon="🖼️"
+        mode_text="Kiosk"
+    elif [[ -f /var/lib/secubox/.tui-enabled ]]; then
+        mode_icon="📟"
+        mode_text="TUI"
+    fi
+
+    echo ""
+    echo -e "${GRAY}────────────────────────────────────────────────────────────${RESET}"
+    echo -e "  ${mode_icon} ${CYAN}${mode_text}${RESET}  │  ${GREEN}●${RESET} ${services_ok} services  │  🌐 ${CYAN}${ip:-no-ip}${RESET}"
+    echo -e "${GRAY}────────────────────────────────────────────────────────────${RESET}"
+    echo -e "  ${GRAY}Type ${WHITE}secubox-status${GRAY} for details  •  ${WHITE}secubox-help${GRAY} for commands${RESET}"
+    echo ""
+}
+
+# Only show on tty login, not in SSH or within screen/tmux
+if [[ -z "$SSH_TTY" ]] && [[ -z "$TMUX" ]] && [[ -z "$STY" ]]; then
+    show_quick_status
+fi
+PROFILE
+chmod +x "${ROOTFS}/etc/profile.d/secubox-login.sh"
+
+# ── SecuBox help command ─────────────────────────────────────────────────────
+cat > "${ROOTFS}/usr/bin/secubox-help" <<'HELP_CMD'
+#!/bin/bash
+# SecuBox Quick Help
+GOLD='\033[38;5;214m'
+CYAN='\033[38;5;45m'
+WHITE='\033[38;5;250m'
+GRAY='\033[38;5;242m'
+RESET='\033[0m'
+
+echo -e "${GOLD}"
+echo '  ╭─────────────────────────────────────────────────────────╮'
+echo '  │             ⚡ SecuBox Quick Commands                   │'
+echo '  ╰─────────────────────────────────────────────────────────╯'
+echo -e "${RESET}"
+
+echo -e "  ${WHITE}System${RESET}"
+echo -e "    ${CYAN}secubox-status${GRAY}        System overview with services${RESET}"
+echo -e "    ${CYAN}secubox-logs${GRAY}          Live security logs${RESET}"
+echo -e "    ${CYAN}secubox-services${GRAY}      Manage services${RESET}"
+echo ""
+echo -e "  ${WHITE}Network${RESET}"
+echo -e "    ${CYAN}secubox-network${GRAY}       Network configuration${RESET}"
+echo -e "    ${CYAN}secubox-firewall${GRAY}      Firewall rules status${RESET}"
+echo ""
+echo -e "  ${WHITE}Security${RESET}"
+echo -e "    ${CYAN}secubox-threats${GRAY}       View blocked threats${RESET}"
+echo -e "    ${CYAN}secubox-waf-status${GRAY}    WAF inspection status${RESET}"
+echo ""
+echo -e "  ${WHITE}Modes${RESET}"
+echo -e "    ${CYAN}secubox-mode kiosk${GRAY}    Switch to Kiosk GUI${RESET}"
+echo -e "    ${CYAN}secubox-mode tui${GRAY}      Switch to TUI dashboard${RESET}"
+echo -e "    ${CYAN}secubox-mode console${GRAY}  Switch to shell console${RESET}"
+echo ""
+echo -e "  ${GRAY}Web UI: https://$(hostname -I 2>/dev/null | awk '{print $1}' || echo 'localhost'):9443${RESET}"
+echo ""
+HELP_CMD
+chmod +x "${ROOTFS}/usr/bin/secubox-help"
+
+# ── SecuBox logs command ─────────────────────────────────────────────────────
+cat > "${ROOTFS}/usr/bin/secubox-logs" <<'LOGS_CMD'
+#!/bin/bash
+# SecuBox Live Security Logs
+echo "📋 SecuBox Security Logs (Ctrl+C to exit)"
+echo "─────────────────────────────────────────"
+journalctl -f -u 'secubox-*' -u crowdsec -u suricata -u nginx --no-pager 2>/dev/null || \
+journalctl -f --no-pager
+LOGS_CMD
+chmod +x "${ROOTFS}/usr/bin/secubox-logs"
+
 # Systemd service for hardware check
 cat > "${ROOTFS}/etc/systemd/system/secubox-hwcheck.service" <<'HWSVC'
 [Unit]
@@ -1615,22 +1729,177 @@ rm -rf "${ROOTFS}/var/lib/apt/lists"/*
 rm -rf "${ROOTFS}/var/cache/apt"/*.bin
 rm -rf "${ROOTFS}/tmp"/*
 
-# Welcome message
-cat > "${ROOTFS}/etc/motd" <<'EOF'
+# ── CRT-Style Boot Banner with Colors and Emojis ──────────────────────────────
+log "Creating colorful boot banners..."
 
+# Pre-login banner (/etc/issue) - shown before login prompt
+cat > "${ROOTFS}/etc/issue" <<'ISSUE'
+[38;5;214m
+   ██████ ███████  ██████ ██    ██ ██████   ██████  ██   ██
+  ██      ██      ██      ██    ██ ██   ██ ██    ██  ██ ██
+  ███████ █████   ██      ██    ██ ██████  ██    ██   ███
+       ██ ██      ██      ██    ██ ██   ██ ██    ██  ██ ██
+  ███████ ███████  ██████  ██████  ██████   ██████  ██   ██
+[0m
+[38;5;45m  ⚡ CyberMind Security Platform[0m         [38;5;242m\l @ \n[0m
+
+[38;5;250m  🔐 Default: [38;5;214mroot[38;5;250m / [38;5;214msecubox[0m
+[38;5;250m  🌐 Web UI: [38;5;45mhttps://<IP>:9443[0m
+[38;5;250m  📡 SSH:    [38;5;45mport 22[0m
+
+[38;5;242m─────────────────────────────────────────────────────────────[0m
+
+ISSUE
+
+# Post-login MOTD with dynamic info (/etc/motd)
+cat > "${ROOTFS}/etc/motd" <<'MOTD'
+[38;5;214m
   ╔═══════════════════════════════════════════════════════════════╗
-  ║   ███████╗███████╗ ██████╗██╗   ██╗██████╗  ██████╗ ██╗  ██╗  ║
-  ║   ██╔════╝██╔════╝██╔════╝██║   ██║██╔══██╗██╔═══██╗╚██╗██╔╝  ║
-  ║   ███████╗█████╗  ██║     ██║   ██║██████╔╝██║   ██║ ╚███╔╝   ║
-  ║   ╚════██║██╔══╝  ██║     ██║   ██║██╔══██╗██║   ██║ ██╔██╗   ║
-  ║   ███████║███████╗╚██████╗╚██████╔╝██████╔╝╚██████╔╝██╔╝ ██╗  ║
-  ║   ╚══════╝╚══════╝ ╚═════╝ ╚═════╝ ╚═════╝  ╚═════╝ ╚═╝  ╚═╝  ║
-  ║                       LIVE USB                                ║
-  ╚═══════════════════════════════════════════════════════════════╝
+  ║[38;5;45m   ███████╗███████╗ ██████╗██╗   ██╗██████╗  ██████╗ ██╗  ██╗  [38;5;214m║
+  ║[38;5;45m   ██╔════╝██╔════╝██╔════╝██║   ██║██╔══██╗██╔═══██╗╚██╗██╔╝  [38;5;214m║
+  ║[38;5;45m   ███████╗█████╗  ██║     ██║   ██║██████╔╝██║   ██║ ╚███╔╝   [38;5;214m║
+  ║[38;5;45m   ╚════██║██╔══╝  ██║     ██║   ██║██╔══██╗██║   ██║ ██╔██╗   [38;5;214m║
+  ║[38;5;45m   ███████║███████╗╚██████╗╚██████╔╝██████╔╝╚██████╔╝██╔╝ ██╗  [38;5;214m║
+  ║[38;5;45m   ╚══════╝╚══════╝ ╚═════╝ ╚═════╝ ╚═════╝  ╚═════╝ ╚═╝  ╚═╝  [38;5;214m║
+  ║[38;5;82m                    ⚡ LIVE USB MODE ⚡                       [38;5;214m║
+  ╚═══════════════════════════════════════════════════════════════╝[0m
 
-  Web UI:  https://<IP>:9443    SSH: root / secubox
+[38;5;250m  🌐 Web UI:     [38;5;45mhttps://<IP>:9443[0m
+[38;5;250m  🔐 Credentials: [38;5;214mroot[38;5;250m / [38;5;214msecubox[0m
+[38;5;250m  📖 Docs:       [38;5;45mhttps://secubox.in/docs[0m
 
-EOF
+[38;5;242m  Type [38;5;82msecubox-status[38;5;242m for system overview[0m
+
+MOTD
+
+# Dynamic status script for interactive use
+cat > "${ROOTFS}/usr/bin/secubox-status" <<'STATUS_SCRIPT'
+#!/bin/bash
+# SecuBox Status - CRT-style system overview
+# CyberMind — https://cybermind.fr
+
+# Colors
+GOLD='\033[38;5;214m'
+CYAN='\033[38;5;45m'
+GREEN='\033[38;5;82m'
+RED='\033[38;5;196m'
+GRAY='\033[38;5;242m'
+WHITE='\033[38;5;250m'
+RESET='\033[0m'
+
+# Status indicators
+ok="${GREEN}●${RESET}"
+fail="${RED}●${RESET}"
+warn="${GOLD}●${RESET}"
+
+# Header
+echo -e "${CYAN}"
+echo '  ╭──────────────────────────────────────────────────────────╮'
+echo '  │           ⚡ SecuBox System Status ⚡                   │'
+echo '  ╰──────────────────────────────────────────────────────────╯'
+echo -e "${RESET}"
+
+# System info
+echo -e "${WHITE}  📊 System Info${RESET}"
+echo -e "     ${GRAY}Hostname:${RESET}  $(hostname)"
+echo -e "     ${GRAY}Uptime:${RESET}    $(uptime -p 2>/dev/null || echo 'N/A')"
+echo -e "     ${GRAY}Memory:${RESET}    $(free -h | awk '/^Mem:/{printf "%s / %s (%.1f%%)", $3, $2, $3/$2*100}')"
+echo -e "     ${GRAY}Disk:${RESET}      $(df -h / | awk 'NR==2{printf "%s / %s (%s)", $3, $2, $5}')"
+echo ""
+
+# Network info
+echo -e "${WHITE}  🌐 Network${RESET}"
+for iface in $(ip -o link show | awk -F': ' '{print $2}' | grep -v '^lo$'); do
+    ip_addr=$(ip -4 addr show "$iface" 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -1)
+    if [[ -n "$ip_addr" ]]; then
+        echo -e "     ${GREEN}●${RESET} ${GRAY}${iface}:${RESET}  ${CYAN}${ip_addr}${RESET}"
+    fi
+done
+echo ""
+
+# Core services
+echo -e "${WHITE}  🔧 Core Services${RESET}"
+services=(nginx haproxy secubox-api secubox-hub crowdsec suricata)
+for svc in "${services[@]}"; do
+    if systemctl is-active --quiet "$svc" 2>/dev/null; then
+        echo -e "     ${ok} ${GRAY}${svc}${RESET}"
+    elif systemctl list-unit-files "${svc}.service" 2>/dev/null | grep -q "$svc"; then
+        echo -e "     ${fail} ${GRAY}${svc}${RESET} (stopped)"
+    fi
+done
+echo ""
+
+# Mode detection
+echo -e "${WHITE}  🎮 Display Mode${RESET}"
+if [[ -f /var/lib/secubox/.kiosk-enabled ]]; then
+    echo -e "     ${ok} ${CYAN}Kiosk GUI${RESET} (Web browser on tty7)"
+elif [[ -f /var/lib/secubox/.tui-enabled ]]; then
+    echo -e "     ${ok} ${CYAN}Console TUI${RESET} (Text dashboard on tty1)"
+else
+    echo -e "     ${warn} ${CYAN}Console Shell${RESET} (Standard login)"
+fi
+echo ""
+
+# Quick links
+echo -e "${GOLD}  ────────────────────────────────────────────────────────────${RESET}"
+echo -e "${WHITE}  🔗 Quick Access${RESET}"
+IP=$(hostname -I | awk '{print $1}')
+echo -e "     ${GRAY}Dashboard:${RESET}  ${CYAN}https://${IP:-localhost}:9443${RESET}"
+echo -e "     ${GRAY}Admin API:${RESET}  ${CYAN}https://${IP:-localhost}:9443/api/v1/${RESET}"
+echo ""
+STATUS_SCRIPT
+chmod +x "${ROOTFS}/usr/bin/secubox-status"
+
+# Also add a boot-time banner display script
+cat > "${ROOTFS}/usr/sbin/secubox-boot-banner" <<'BOOT_BANNER'
+#!/bin/bash
+# SecuBox Boot Banner - Displayed during boot
+# CyberMind — https://cybermind.fr
+
+GOLD='\033[38;5;214m'
+CYAN='\033[38;5;45m'
+GREEN='\033[38;5;82m'
+GRAY='\033[38;5;242m'
+RESET='\033[0m'
+
+clear
+echo -e "${GOLD}"
+cat << 'LOGO'
+
+   ██████ ███████  ██████ ██    ██ ██████   ██████  ██   ██
+  ██      ██      ██      ██    ██ ██   ██ ██    ██  ██ ██
+  ███████ █████   ██      ██    ██ ██████  ██    ██   ███
+       ██ ██      ██      ██    ██ ██   ██ ██    ██  ██ ██
+  ███████ ███████  ██████  ██████  ██████   ██████  ██   ██
+
+LOGO
+echo -e "${RESET}"
+echo -e "${CYAN}  ⚡ CyberMind Security Platform${RESET}"
+echo -e "${GRAY}     Booting...${RESET}"
+echo ""
+
+# Show boot progress
+show_status() {
+    local name="$1"
+    local check="$2"
+    if eval "$check" 2>/dev/null; then
+        echo -e "  ${GREEN}✓${RESET} ${name}"
+    else
+        echo -e "  ${GRAY}○${RESET} ${name} (waiting...)"
+    fi
+}
+
+show_status "Network" "ip route | grep -q default"
+show_status "Nginx" "systemctl is-active --quiet nginx"
+show_status "SecuBox API" "systemctl is-active --quiet secubox-api"
+
+echo ""
+echo -e "${GRAY}  Dashboard: https://$(hostname -I | awk '{print $1}' || echo 'localhost'):9443${RESET}"
+echo ""
+BOOT_BANNER
+chmod +x "${ROOTFS}/usr/sbin/secubox-boot-banner"
+
+ok "Boot banners created with CRT colors and emojis"
 
 # Unmount
 umount -lf "${ROOTFS}/proc" 2>/dev/null || true
@@ -1878,9 +2147,18 @@ mkdir -p "${MNT}/esp/live"
 cp "${LIVE_DIR}/live/vmlinuz" "${MNT}/esp/live/"
 cp "${LIVE_DIR}/live/initrd.img" "${MNT}/esp/live/"
 
-# GRUB config
-cat > "${MNT}/esp/boot/grub/grub.cfg" <<'GRUBCFG'
-set default=0
+# GRUB config - Dynamic based on build options
+# When kiosk is enabled, default to Kiosk GUI (entry 1), otherwise standard boot (entry 0)
+if [[ "${INCLUDE_KIOSK:-1}" == "1" ]]; then
+    GRUB_DEFAULT=1  # Kiosk GUI is second entry
+    log "GRUB default: Kiosk GUI mode"
+else
+    GRUB_DEFAULT=0  # Standard boot
+    log "GRUB default: Standard boot"
+fi
+
+cat > "${MNT}/esp/boot/grub/grub.cfg" <<GRUBCFG
+set default=${GRUB_DEFAULT}
 set timeout=5
 
 insmod part_gpt
@@ -1890,30 +2168,35 @@ insmod all_video
 
 search --no-floppy --label LIVE --set=live
 
+# CRT-style menu colors (cyan on black, gold highlights)
 set menu_color_normal=cyan/black
-set menu_color_highlight=white/blue
+set menu_color_highlight=yellow/blue
 
-menuentry "SecuBox Live" {
-    linux ($live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components persistence quiet splash
-    initrd ($live)/live/initrd.img
+menuentry "⚡ SecuBox Live" {
+    linux (\$live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components persistence quiet splash
+    initrd (\$live)/live/initrd.img
 }
 
-menuentry "SecuBox Live (Kiosk GUI)" {
-    linux ($live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components persistence quiet splash secubox.kiosk=1 systemd.unit=graphical.target
-    initrd ($live)/live/initrd.img
+menuentry "🖼️ SecuBox Live (Kiosk GUI) [DEFAULT]" {
+    linux (\$live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components persistence quiet splash secubox.kiosk=1 systemd.unit=graphical.target
+    initrd (\$live)/live/initrd.img
 }
+GRUBCFG
 
-menuentry "SecuBox Live (Console TUI)" {
+# Append the rest of the menu entries with emoji indicators
+cat >> "${MNT}/esp/boot/grub/grub.cfg" <<'GRUBCFG'
+
+menuentry "📟 SecuBox Live (Console TUI)" {
     linux ($live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components persistence quiet splash secubox.mode=tui
     initrd ($live)/live/initrd.img
 }
 
-menuentry "SecuBox Live (Bridge Mode)" {
+menuentry "🌉 SecuBox Live (Bridge Mode)" {
     linux ($live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components persistence quiet splash secubox.netmode=bridge
     initrd ($live)/live/initrd.img
 }
 
-menuentry "SecuBox Live (Safe Mode)" {
+menuentry "🛡️ SecuBox Live (Safe Mode)" {
     linux ($live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components nomodeset console=tty0
     initrd ($live)/live/initrd.img
 }
@@ -1923,32 +2206,32 @@ menuentry "💾 Install SecuBox to Disk" {
     initrd ($live)/live/initrd.img
 }
 
-menuentry "SecuBox Live (To RAM)" {
+menuentry "🚀 SecuBox Live (To RAM)" {
     linux ($live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components toram quiet splash
     initrd ($live)/live/initrd.img
 }
 
-menuentry "SecuBox Live (Auto-Check HW)" {
+menuentry "🔧 SecuBox Live (HW Check)" {
     linux ($live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components persistence quiet splash secubox.hwcheck=1
     initrd ($live)/live/initrd.img
 }
 
-menuentry "SecuBox Live (Auto-Check HW - Text Mode)" {
+menuentry "🔧 SecuBox Live (HW Check - Text)" {
     linux ($live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components persistence nomodeset console=tty0 secubox.hwcheck=1
     initrd ($live)/live/initrd.img
 }
 
-menuentry "SecuBox Live (Emergency Shell)" {
+menuentry "🚨 Emergency Shell" {
     linux ($live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components nomodeset console=tty0 systemd.unit=emergency.target
     initrd ($live)/live/initrd.img
 }
 
-menuentry "SecuBox Live (Debug - Verbose Boot)" {
+menuentry "🐛 Debug (Verbose Boot)" {
     linux ($live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components nomodeset console=tty0 debug=1 break=init
     initrd ($live)/live/initrd.img
 }
 
-menuentry "SecuBox Live (Debug - Break at Premount)" {
+menuentry "🐛 Debug (Break at Premount)" {
     linux ($live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components nomodeset console=tty0 debug=1 break=premount
     initrd ($live)/live/initrd.img
 }
