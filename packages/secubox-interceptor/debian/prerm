@@ -1,0 +1,13 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    remove|upgrade|deconfigure)
+        systemctl stop secubox-interceptor.service || true
+        systemctl disable secubox-interceptor.service || true
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

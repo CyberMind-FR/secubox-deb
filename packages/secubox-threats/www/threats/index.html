@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - Unified Threats Dashboard</title>
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root {
+            /* P31 Phosphor Light theme with threat red accent */
+            --p31-peak: #00dd44; --p31-hot: #00ff55; --p31-mid: #009933; --p31-dim: #006622; --p31-ghost: #003311;
+            --threat-red: #dc2626; --threat-red-dim: #991b1b; --threat-red-light: rgba(220, 38, 38, 0.15);
+            --warning-amber: #f59e0b; --warning-amber-dim: #b45309;
+            --tube-light: #e8f5e9; --tube-pale: #c8e6c9; --tube-soft: #a5d6a7; --tube-dark: #1a1a2e;
+            --bg-dark: var(--tube-light); --bg-card: var(--tube-pale); --border: var(--tube-soft);
+            --text: var(--tube-dark); --text-dim: var(--p31-dim);
+            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-threat: 0 0 6px var(--threat-red), 0 0 14px rgba(220,38,38,0.5);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Courier Prime', monospace; background: var(--tube-light); color: var(--tube-dark); display: flex; min-height: 100vh; }
+        .main { flex: 1; margin-left: 220px; padding: 1rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .header h1 { font-size: 1.3rem; color: var(--threat-red); text-shadow: var(--bloom-threat); }
+        .btn { padding: 0.4rem 0.8rem; border-radius: 4px; border: 1px solid var(--p31-dim); background: var(--tube-pale); color: var(--p31-mid); cursor: pointer; font-family: inherit; font-size: 0.8rem; transition: all 0.2s; }
+        .btn:hover { color: var(--p31-peak); border-color: var(--p31-mid); }
+        .btn.primary { border-color: var(--p31-mid); color: var(--p31-peak); }
+        .btn.danger { border-color: var(--threat-red); color: var(--threat-red); }
+        .btn.danger:hover { background: var(--threat-red-light); }
+
+        /* Risk Score Card */
+        .risk-card { background: var(--tube-pale); border: 2px solid var(--tube-soft); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 1.5rem; }
+        .risk-gauge { width: 100px; height: 100px; position: relative; }
+        .risk-gauge svg { transform: rotate(-90deg); }
+        .risk-gauge circle { fill: none; stroke-width: 8; }
+        .risk-gauge .bg { stroke: var(--tube-soft); }
+        .risk-gauge .progress { stroke: var(--p31-peak); stroke-linecap: round; transition: stroke-dashoffset 0.5s; }
+        .risk-gauge .progress.critical { stroke: var(--threat-red); }
+        .risk-gauge .progress.high { stroke: var(--warning-amber); }
+        .risk-gauge .value { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(0deg); font-size: 1.5rem; font-weight: bold; color: var(--p31-peak); }
+        .risk-gauge .value.critical { color: var(--threat-red); }
+        .risk-gauge .value.high { color: var(--warning-amber); }
+        .risk-info h2 { font-size: 1.1rem; color: var(--p31-peak); margin-bottom: 0.5rem; }
+        .risk-level { font-size: 0.9rem; padding: 0.2rem 0.6rem; border-radius: 4px; display: inline-block; margin-bottom: 0.5rem; }
+        .risk-level.critical { background: var(--threat-red-light); color: var(--threat-red); }
+        .risk-level.high { background: rgba(245,158,11,0.15); color: var(--warning-amber); }
+        .risk-level.medium { background: rgba(51,255,102,0.15); color: var(--p31-mid); }
+        .risk-level.low { background: rgba(0,102,34,0.15); color: var(--p31-dim); }
+        .risk-stats { display: flex; gap: 1.5rem; font-size: 0.75rem; color: var(--p31-dim); }
+        .risk-stats span { display: flex; align-items: center; gap: 0.3rem; }
+        .risk-stats .count { font-weight: bold; color: var(--p31-mid); }
+
+        /* Stats Row */
+        .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
+        .stat-card { background: var(--tube-pale); border: 1px solid var(--tube-soft); border-radius: 6px; padding: 0.75rem; text-align: center; }
+        .stat-card .value { font-size: 1.5rem; font-weight: bold; color: var(--p31-peak); text-shadow: var(--bloom-soft); }
+        .stat-card .label { font-size: 0.65rem; color: var(--p31-dim); text-transform: uppercase; }
+        .stat-card.critical .value { color: var(--threat-red); text-shadow: var(--bloom-threat); }
+        .stat-card.warning .value { color: var(--warning-amber); }
+
+        /* Tabs */
+        .tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; border-bottom: 1px solid var(--p31-ghost); padding-bottom: 0.5rem; flex-wrap: wrap; }
+        .tab { padding: 0.4rem 0.8rem; border: 1px solid transparent; border-radius: 4px 4px 0 0; cursor: pointer; font-size: 0.75rem; color: var(--p31-dim); background: transparent; }
+        .tab:hover { color: var(--p31-mid); }
+        .tab.active { color: var(--threat-red); border-color: var(--tube-soft); border-bottom-color: var(--tube-light); background: var(--tube-pale); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Card */
+        .card { background: var(--tube-pale); border: 1px solid var(--tube-soft); border-radius: 6px; padding: 1rem; margin-bottom: 1rem; }
+        .card h2 { font-size: 0.9rem; color: var(--threat-red); margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center; }
+        .card h2 .count { font-size: 0.75rem; background: var(--tube-light); padding: 0.2rem 0.5rem; border-radius: 4px; color: var(--p31-dim); }
+
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; font-size: 0.75rem; }
+        th, td { padding: 0.5rem; text-align: left; border-bottom: 1px solid var(--p31-ghost); }
+        th { color: var(--p31-dim); font-weight: normal; text-transform: uppercase; font-size: 0.65rem; }
+        tr:hover { background: rgba(220,38,38,0.03); }
+        .badge { padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.65rem; }
+        .badge.critical { background: var(--threat-red-light); color: var(--threat-red); }
+        .badge.high { background: rgba(245,158,11,0.2); color: var(--warning-amber); }
+        .badge.medium { background: rgba(51,255,102,0.15); color: var(--p31-mid); }
+        .badge.low { background: rgba(0,102,34,0.2); color: var(--p31-dim); }
+        .badge.active { background: var(--threat-red-light); color: var(--threat-red); }
+        .badge.resolved { background: rgba(0,102,34,0.2); color: var(--p31-dim); }
+        .badge.open { background: rgba(220,38,38,0.15); color: var(--threat-red); }
+        .badge.investigating { background: rgba(245,158,11,0.2); color: var(--warning-amber); }
+        .badge.contained { background: rgba(51,255,102,0.15); color: var(--p31-mid); }
+        .badge.closed { background: rgba(0,102,34,0.15); color: var(--p31-dim); }
+
+        /* Source badges */
+        .badge.crowdsec { background: rgba(139,92,246,0.15); color: #8b5cf6; }
+        .badge.suricata { background: rgba(236,72,153,0.15); color: #ec4899; }
+        .badge.waf { background: rgba(59,130,246,0.15); color: #3b82f6; }
+
+        /* Forms */
+        .form-row { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; flex-wrap: wrap; }
+        .form-row input, .form-row select, .form-row textarea { flex: 1; min-width: 100px; padding: 0.4rem; border: 1px solid var(--tube-soft); background: var(--tube-light); color: var(--p31-mid); border-radius: 4px; font-family: inherit; font-size: 0.75rem; }
+        .form-row input:focus, .form-row select:focus, .form-row textarea:focus { outline: none; border-color: var(--threat-red); }
+        .form-row textarea { min-height: 60px; resize: vertical; }
+
+        /* Timeline */
+        .timeline { max-height: 400px; overflow-y: auto; }
+        .timeline-item { display: flex; gap: 0.75rem; padding: 0.6rem 0; border-bottom: 1px solid var(--p31-ghost); }
+        .timeline-time { font-size: 0.65rem; color: var(--p31-dim); min-width: 70px; }
+        .timeline-icon { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; flex-shrink: 0; }
+        .timeline-icon.threat { background: var(--threat-red-light); color: var(--threat-red); }
+        .timeline-icon.alert { background: rgba(245,158,11,0.15); color: var(--warning-amber); }
+        .timeline-icon.incident { background: rgba(139,92,246,0.15); color: #8b5cf6; }
+        .timeline-content { flex: 1; }
+        .timeline-content .title { font-size: 0.8rem; color: var(--tube-dark); margin-bottom: 0.2rem; }
+        .timeline-content .desc { font-size: 0.7rem; color: var(--p31-dim); }
+
+        /* Alerts Feed */
+        .alerts-feed { max-height: 300px; overflow-y: auto; }
+        .alert-item { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; border-bottom: 1px solid var(--p31-ghost); font-size: 0.7rem; }
+        .alert-item:hover { background: rgba(220,38,38,0.03); }
+        .alert-item .time { color: var(--p31-dim); min-width: 70px; font-size: 0.65rem; }
+        .alert-item .message { flex: 1; color: var(--tube-dark); }
+        .alert-item .value { color: var(--p31-mid); font-family: monospace; font-size: 0.65rem; }
+        .alert-item.critical { background: rgba(220,38,38,0.05); }
+        .alert-item.critical .message { color: var(--threat-red); }
+
+        /* IOC Search */
+        .search-box { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+        .search-box input { flex: 1; padding: 0.5rem; border: 1px solid var(--tube-soft); background: var(--tube-light); border-radius: 4px; font-family: inherit; }
+        .search-box input:focus { outline: none; border-color: var(--threat-red); }
+
+        /* Actions */
+        .actions { display: flex; gap: 0.3rem; }
+        .btn-sm { padding: 0.2rem 0.4rem; font-size: 0.65rem; }
+
+        /* Grid layout */
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+        @media (max-width: 1000px) { .grid-2 { grid-template-columns: 1fr; } }
+
+        /* Modal */
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 1000; }
+        .modal-overlay.active { display: flex; }
+        .modal { background: var(--tube-light); border: 1px solid var(--tube-soft); border-radius: 8px; padding: 1.5rem; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto; }
+        .modal h3 { color: var(--threat-red); margin-bottom: 1rem; font-size: 1rem; }
+        .modal .form-group { margin-bottom: 0.75rem; }
+        .modal .form-group label { display: block; font-size: 0.7rem; color: var(--p31-dim); margin-bottom: 0.25rem; }
+        .modal .form-group input, .modal .form-group select, .modal .form-group textarea { width: 100%; padding: 0.5rem; border: 1px solid var(--tube-soft); background: var(--tube-pale); border-radius: 4px; font-family: inherit; font-size: 0.8rem; }
+        .modal-actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem; }
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+
+    <main class="main">
+        <header class="header">
+            <h1>Unified Threats Dashboard</h1>
+            <div style="display:flex;gap:0.5rem;align-items:center;">
+                <span id="lastUpdate" style="font-size:0.7rem;color:var(--p31-dim);"></span>
+                <button class="btn" onclick="refresh()">Refresh</button>
+            </div>
+        </header>
+
+        <!-- Risk Score Card -->
+        <div class="risk-card">
+            <div class="risk-gauge">
+                <svg width="100" height="100">
+                    <circle class="bg" cx="50" cy="50" r="40"/>
+                    <circle class="progress" id="riskProgress" cx="50" cy="50" r="40" stroke-dasharray="251.2" stroke-dashoffset="251.2"/>
+                </svg>
+                <div class="value" id="riskValue">--</div>
+            </div>
+            <div class="risk-info">
+                <h2>Risk Assessment</h2>
+                <span class="risk-level" id="riskLevel">Loading...</span>
+                <div class="risk-stats">
+                    <span>Threats: <span class="count" id="riskThreats">-</span></span>
+                    <span>Alerts: <span class="count" id="riskAlerts">-</span></span>
+                    <span>Incidents: <span class="count" id="riskIncidents">-</span></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stats Row -->
+        <div class="stats-row">
+            <div class="stat-card"><div class="value" id="statThreats">-</div><div class="label">Active Threats</div></div>
+            <div class="stat-card critical"><div class="value" id="statCritical">-</div><div class="label">Critical</div></div>
+            <div class="stat-card warning"><div class="value" id="statAlerts">-</div><div class="label">Unack Alerts</div></div>
+            <div class="stat-card"><div class="value" id="statIOCs">-</div><div class="label">IOCs</div></div>
+            <div class="stat-card"><div class="value" id="statIncidents">-</div><div class="label">Open Incidents</div></div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('dashboard')">Dashboard</button>
+            <button class="tab" onclick="showTab('threats')">Threats</button>
+            <button class="tab" onclick="showTab('alerts')">Alerts</button>
+            <button class="tab" onclick="showTab('iocs')">IOCs</button>
+            <button class="tab" onclick="showTab('feeds')">Feeds</button>
+            <button class="tab" onclick="showTab('incidents')">Incidents</button>
+            <button class="tab" onclick="showTab('reports')">Reports</button>
+        </div>
+
+        <!-- Dashboard Tab -->
+        <div class="tab-content active" id="tab-dashboard">
+            <div class="grid-2">
+                <div class="card">
+                    <h2>Threat Timeline (24h)</h2>
+                    <div class="timeline" id="timeline"></div>
+                </div>
+                <div class="card">
+                    <h2>Recent Alerts <span class="count" id="alertCount">0</span></h2>
+                    <div class="alerts-feed" id="alertsFeed"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Threats Tab -->
+        <div class="tab-content" id="tab-threats">
+            <div class="card">
+                <h2>Active Threats <button class="btn primary btn-sm" onclick="showModal('threatModal')">+ New Threat</button></h2>
+                <div class="form-row">
+                    <select id="threatSeverityFilter" onchange="loadThreats()">
+                        <option value="">All Severities</option>
+                        <option value="critical">Critical</option>
+                        <option value="high">High</option>
+                        <option value="medium">Medium</option>
+                        <option value="low">Low</option>
+                    </select>
+                    <select id="threatStatusFilter" onchange="loadThreats()">
+                        <option value="">All Statuses</option>
+                        <option value="active">Active</option>
+                        <option value="resolved">Resolved</option>
+                    </select>
+                </div>
+                <table>
+                    <thead><tr><th>ID</th><th>Name</th><th>Severity</th><th>Category</th><th>Source</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
+                    <tbody id="threatsTable"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Alerts Tab -->
+        <div class="tab-content" id="tab-alerts">
+            <div class="card">
+                <h2>Aggregated Alerts</h2>
+                <div class="form-row">
+                    <select id="alertSourceFilter" onchange="loadAlerts()">
+                        <option value="">All Sources</option>
+                        <option value="crowdsec">CrowdSec</option>
+                        <option value="suricata">Suricata</option>
+                        <option value="waf">WAF</option>
+                    </select>
+                    <select id="alertSeverityFilter" onchange="loadAlerts()">
+                        <option value="">All Severities</option>
+                        <option value="critical">Critical</option>
+                        <option value="high">High</option>
+                        <option value="medium">Medium</option>
+                    </select>
+                    <button class="btn" onclick="loadAlerts()">Refresh</button>
+                </div>
+                <table>
+                    <thead><tr><th>Time</th><th>Source</th><th>Severity</th><th>Message</th><th>Value</th><th>Ack</th></tr></thead>
+                    <tbody id="alertsTable"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- IOCs Tab -->
+        <div class="tab-content" id="tab-iocs">
+            <div class="card">
+                <h2>Indicators of Compromise <button class="btn primary btn-sm" onclick="showModal('iocModal')">+ Add IOC</button></h2>
+                <div class="search-box">
+                    <input type="text" id="iocSearch" placeholder="Search IOCs (IP, domain, hash)..." onkeyup="searchIOCs()">
+                    <select id="iocTypeFilter" onchange="loadIOCs()">
+                        <option value="">All Types</option>
+                        <option value="ip">IP</option>
+                        <option value="domain">Domain</option>
+                        <option value="hash">Hash</option>
+                        <option value="url">URL</option>
+                    </select>
+                </div>
+                <table>
+                    <thead><tr><th>Value</th><th>Type</th><th>Threat Type</th><th>Confidence</th><th>Source</th><th>Added</th><th>Actions</th></tr></thead>
+                    <tbody id="iocsTable"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Feeds Tab -->
+        <div class="tab-content" id="tab-feeds">
+            <div class="card">
+                <h2>Threat Intelligence Feeds <button class="btn primary btn-sm" onclick="showModal('feedModal')">+ Subscribe</button></h2>
+                <table>
+                    <thead><tr><th>Name</th><th>URL</th><th>Type</th><th>IOCs</th><th>Last Refresh</th><th>Status</th><th>Actions</th></tr></thead>
+                    <tbody id="feedsTable"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Incidents Tab -->
+        <div class="tab-content" id="tab-incidents">
+            <div class="card">
+                <h2>Security Incidents <button class="btn primary btn-sm" onclick="showModal('incidentModal')">+ New Incident</button></h2>
+                <div class="form-row">
+                    <select id="incidentStatusFilter" onchange="loadIncidents()">
+                        <option value="">All Statuses</option>
+                        <option value="open">Open</option>
+                        <option value="investigating">Investigating</option>
+                        <option value="contained">Contained</option>
+                        <option value="resolved">Resolved</option>
+                        <option value="closed">Closed</option>
+                    </select>
+                </div>
+                <table>
+                    <thead><tr><th>ID</th><th>Title</th><th>Severity</th><th>Status</th><th>Assignee</th><th>Created</th><th>Actions</th></tr></thead>
+                    <tbody id="incidentsTable"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Reports Tab -->
+        <div class="tab-content" id="tab-reports">
+            <div class="card">
+                <h2>Generated Reports</h2>
+                <div class="form-row">
+                    <select id="reportType">
+                        <option value="summary">Summary</option>
+                        <option value="detailed">Detailed</option>
+                        <option value="executive">Executive</option>
+                        <option value="ioc_export">IOC Export</option>
+                    </select>
+                    <select id="reportPeriod">
+                        <option value="24h">Last 24 Hours</option>
+                        <option value="7d">Last 7 Days</option>
+                        <option value="30d">Last 30 Days</option>
+                    </select>
+                    <button class="btn primary" onclick="generateReport()">Generate Report</button>
+                </div>
+                <table>
+                    <thead><tr><th>ID</th><th>Type</th><th>Period</th><th>Generated</th><th>Summary</th><th>Actions</th></tr></thead>
+                    <tbody id="reportsTable"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modals -->
+    <div class="modal-overlay" id="threatModal">
+        <div class="modal">
+            <h3>Create New Threat</h3>
+            <div class="form-group"><label>Name</label><input type="text" id="threatName" placeholder="Threat name..."></div>
+            <div class="form-group"><label>Description</label><textarea id="threatDesc" placeholder="Threat description..."></textarea></div>
+            <div class="form-group"><label>Severity</label><select id="threatSeverity"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option><option value="critical">Critical</option></select></div>
+            <div class="form-group"><label>Category</label><select id="threatCategory"><option value="malware">Malware</option><option value="phishing">Phishing</option><option value="intrusion">Intrusion</option><option value="dos">DoS</option><option value="other">Other</option></select></div>
+            <div class="modal-actions">
+                <button class="btn" onclick="hideModal('threatModal')">Cancel</button>
+                <button class="btn danger" onclick="createThreat()">Create Threat</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="iocModal">
+        <div class="modal">
+            <h3>Add IOC</h3>
+            <div class="form-group"><label>Value</label><input type="text" id="iocValue" placeholder="IP, domain, hash, or URL..."></div>
+            <div class="form-group"><label>Type</label><select id="iocType"><option value="ip">IP</option><option value="domain">Domain</option><option value="hash">Hash</option><option value="url">URL</option></select></div>
+            <div class="form-group"><label>Threat Type</label><select id="iocThreatType"><option value="malware">Malware</option><option value="phishing">Phishing</option><option value="c2">C2</option><option value="scanner">Scanner</option><option value="spam">Spam</option></select></div>
+            <div class="form-group"><label>Confidence (0-100)</label><input type="number" id="iocConfidence" value="70" min="0" max="100"></div>
+            <div class="modal-actions">
+                <button class="btn" onclick="hideModal('iocModal')">Cancel</button>
+                <button class="btn danger" onclick="addIOC()">Add IOC</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="feedModal">
+        <div class="modal">
+            <h3>Subscribe to Feed</h3>
+            <div class="form-group"><label>Name</label><input type="text" id="feedName" placeholder="Feed name..."></div>
+            <div class="form-group"><label>URL</label><input type="text" id="feedUrl" placeholder="https://..."></div>
+            <div class="form-group"><label>Type</label><select id="feedType"><option value="stix">STIX</option><option value="csv">CSV</option><option value="json">JSON</option><option value="misp">MISP</option></select></div>
+            <div class="modal-actions">
+                <button class="btn" onclick="hideModal('feedModal')">Cancel</button>
+                <button class="btn danger" onclick="subscribeFeed()">Subscribe</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="incidentModal">
+        <div class="modal">
+            <h3>Create Incident</h3>
+            <div class="form-group"><label>Title</label><input type="text" id="incidentTitle" placeholder="Incident title..."></div>
+            <div class="form-group"><label>Description</label><textarea id="incidentDesc" placeholder="Incident description..."></textarea></div>
+            <div class="form-group"><label>Severity</label><select id="incidentSeverity"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option><option value="critical">Critical</option></select></div>
+            <div class="form-group"><label>Assignee</label><input type="text" id="incidentAssignee" placeholder="Analyst name..."></div>
+            <div class="modal-actions">
+                <button class="btn" onclick="hideModal('incidentModal')">Cancel</button>
+                <button class="btn danger" onclick="createIncident()">Create Incident</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API = '/api/v1/threats';
+        const token = () => localStorage.getItem('sbx_token');
+        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+
+        async function api(path, opts = {}) {
+            try {
+                const res = await fetch(API + path, { ...opts, headers: headers() });
+                if (res.status === 401) { window.location = '/portal/login.html'; return {}; }
+                if (!res.ok) return {};
+                const text = await res.text();
+                return text ? JSON.parse(text) : {};
+            } catch { return {}; }
+        }
+
+        // Tabs
+        function showTab(name) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelector(`[onclick="showTab('${name}')"]`).classList.add('active');
+            document.getElementById('tab-' + name).classList.add('active');
+            // Load tab data
+            if (name === 'threats') loadThreats();
+            else if (name === 'alerts') loadAlerts();
+            else if (name === 'iocs') loadIOCs();
+            else if (name === 'feeds') loadFeeds();
+            else if (name === 'incidents') loadIncidents();
+            else if (name === 'reports') loadReports();
+        }
+
+        // Modals
+        function showModal(id) { document.getElementById(id).classList.add('active'); }
+        function hideModal(id) { document.getElementById(id).classList.remove('active'); }
+        document.querySelectorAll('.modal-overlay').forEach(m => {
+            m.addEventListener('click', e => { if (e.target === m) hideModal(m.id); });
+        });
+
+        // Risk Score
+        async function loadRiskScore() {
+            const d = await api('/scores');
+            if (!d.overall_score && d.overall_score !== 0) return;
+            const score = d.overall_score;
+            const level = d.risk_level;
+            const progress = document.getElementById('riskProgress');
+            const circumference = 251.2;
+            progress.style.strokeDashoffset = circumference - (score / 100 * circumference);
+            progress.classList.remove('critical', 'high');
+            if (level === 'critical') progress.classList.add('critical');
+            else if (level === 'high') progress.classList.add('high');
+
+            const valueEl = document.getElementById('riskValue');
+            valueEl.textContent = Math.round(score);
+            valueEl.classList.remove('critical', 'high');
+            if (level === 'critical') valueEl.classList.add('critical');
+            else if (level === 'high') valueEl.classList.add('high');
+
+            const levelEl = document.getElementById('riskLevel');
+            levelEl.textContent = level.toUpperCase();
+            levelEl.className = 'risk-level ' + level;
+
+            document.getElementById('riskThreats').textContent = d.active_threats || 0;
+            document.getElementById('riskAlerts').textContent = d.unacked_alerts || 0;
+            document.getElementById('riskIncidents').textContent = d.open_incidents || 0;
+        }
+
+        // Stats
+        async function loadStats() {
+            const d = await api('/status');
+            document.getElementById('statThreats').textContent = d.active_threats || 0;
+            document.getElementById('statCritical').textContent = d.critical_threats || 0;
+            document.getElementById('statAlerts').textContent = d.unacknowledged_alerts || 0;
+            document.getElementById('statIOCs').textContent = d.total_iocs || 0;
+            document.getElementById('statIncidents').textContent = d.open_incidents || 0;
+        }
+
+        // Timeline
+        async function loadTimeline() {
+            const d = await api('/timeline?hours=24&limit=50');
+            const container = document.getElementById('timeline');
+            if (!d.events?.length) {
+                container.innerHTML = '<div style="text-align:center;color:var(--p31-dim);padding:2rem;">No events in last 24 hours</div>';
+                return;
+            }
+            container.innerHTML = d.events.map(e => `
+                <div class="timeline-item">
+                    <div class="timeline-time">${new Date(e.timestamp).toLocaleTimeString()}</div>
+                    <div class="timeline-icon ${e.type}">${e.type === 'threat' ? '!' : e.type === 'alert' ? '?' : '#'}</div>
+                    <div class="timeline-content">
+                        <div class="title"><span class="badge ${e.severity}">${e.severity}</span> ${e.title}</div>
+                        <div class="desc">${e.description}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Alerts Feed (dashboard)
+        async function loadAlertsFeed() {
+            const d = await api('/alerts?limit=20');
+            document.getElementById('alertCount').textContent = d.total || 0;
+            const container = document.getElementById('alertsFeed');
+            if (!d.alerts?.length) {
+                container.innerHTML = '<div style="text-align:center;color:var(--p31-dim);padding:1rem;">No alerts</div>';
+                return;
+            }
+            container.innerHTML = d.alerts.map(a => `
+                <div class="alert-item ${a.severity}">
+                    <span class="time">${new Date(a.timestamp).toLocaleTimeString()}</span>
+                    <span class="badge ${a.source}">${a.source}</span>
+                    <span class="badge ${a.severity}">${a.severity}</span>
+                    <span class="message">${a.message}</span>
+                    <span class="value">${a.value || ''}</span>
+                </div>
+            `).join('');
+        }
+
+        // Threats Table
+        async function loadThreats() {
+            const severity = document.getElementById('threatSeverityFilter')?.value || '';
+            const status = document.getElementById('threatStatusFilter')?.value || '';
+            const d = await api(`/threats?limit=50${severity ? '&severity=' + severity : ''}${status ? '&status=' + status : ''}`);
+            const tbody = document.getElementById('threatsTable');
+            tbody.innerHTML = (d.threats || []).map(t => `
+                <tr>
+                    <td><code>${t.id.slice(0,8)}</code></td>
+                    <td>${t.name}</td>
+                    <td><span class="badge ${t.severity}">${t.severity}</span></td>
+                    <td>${t.category}</td>
+                    <td>${t.source}</td>
+                    <td><span class="badge ${t.status}">${t.status}</span></td>
+                    <td>${new Date(t.created_at).toLocaleDateString()}</td>
+                    <td class="actions">
+                        ${t.status !== 'resolved' ? `
+                            <button class="btn btn-sm" onclick="acknowledgeThreat('${t.id}')" title="Acknowledge">ACK</button>
+                            <button class="btn btn-sm danger" onclick="resolveThreat('${t.id}')" title="Resolve">RES</button>
+                        ` : ''}
+                    </td>
+                </tr>
+            `).join('') || '<tr><td colspan="8" style="text-align:center;color:var(--p31-dim)">No threats</td></tr>';
+        }
+
+        async function createThreat() {
+            const name = document.getElementById('threatName').value;
+            const description = document.getElementById('threatDesc').value;
+            const severity = document.getElementById('threatSeverity').value;
+            const category = document.getElementById('threatCategory').value;
+            if (!name) return alert('Name is required');
+            await api('/threats', { method: 'POST', body: JSON.stringify({ name, description, severity, category, source: 'manual' }) });
+            hideModal('threatModal');
+            document.getElementById('threatName').value = '';
+            document.getElementById('threatDesc').value = '';
+            loadThreats(); loadStats(); loadRiskScore(); loadTimeline();
+        }
+
+        async function acknowledgeThreat(id) {
+            const analyst = prompt('Analyst name:');
+            if (!analyst) return;
+            await api(`/threat/${id}/acknowledge`, { method: 'POST', body: JSON.stringify({ analyst }) });
+            loadThreats(); loadStats();
+        }
+
+        async function resolveThreat(id) {
+            const analyst = prompt('Analyst name:');
+            const resolution = prompt('Resolution:');
+            if (!analyst || !resolution) return;
+            await api(`/threat/${id}/resolve`, { method: 'POST', body: JSON.stringify({ analyst, resolution }) });
+            loadThreats(); loadStats(); loadRiskScore();
+        }
+
+        // Alerts Table
+        async function loadAlerts() {
+            const source = document.getElementById('alertSourceFilter')?.value || '';
+            const severity = document.getElementById('alertSeverityFilter')?.value || '';
+            const d = await api(`/alerts?limit=100${source ? '&source=' + source : ''}${severity ? '&severity=' + severity : ''}`);
+            const tbody = document.getElementById('alertsTable');
+            tbody.innerHTML = (d.alerts || []).map(a => `
+                <tr class="${a.severity === 'critical' ? 'critical' : ''}">
+                    <td>${new Date(a.timestamp).toLocaleString()}</td>
+                    <td><span class="badge ${a.source}">${a.source}</span></td>
+                    <td><span class="badge ${a.severity}">${a.severity}</span></td>
+                    <td>${a.message}</td>
+                    <td><code>${a.value || '-'}</code></td>
+                    <td>${a.acknowledged ? 'Yes' : '-'}</td>
+                </tr>
+            `).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--p31-dim)">No alerts</td></tr>';
+        }
+
+        // IOCs
+        async function loadIOCs() {
+            const type = document.getElementById('iocTypeFilter')?.value || '';
+            const search = document.getElementById('iocSearch')?.value || '';
+            const d = await api(`/iocs?limit=100${type ? '&type=' + type : ''}${search ? '&search=' + encodeURIComponent(search) : ''}`);
+            const tbody = document.getElementById('iocsTable');
+            tbody.innerHTML = (d.iocs || []).map(i => `
+                <tr>
+                    <td><code>${i.value.length > 40 ? i.value.slice(0,40) + '...' : i.value}</code></td>
+                    <td><span class="badge">${i.type}</span></td>
+                    <td><span class="badge ${i.threat_type === 'malware' || i.threat_type === 'c2' ? 'critical' : 'medium'}">${i.threat_type}</span></td>
+                    <td>${i.confidence}%</td>
+                    <td>${i.source}</td>
+                    <td>${new Date(i.added_at).toLocaleDateString()}</td>
+                    <td><button class="btn btn-sm danger" onclick="deleteIOC('${i.id}')">Del</button></td>
+                </tr>
+            `).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--p31-dim)">No IOCs</td></tr>';
+        }
+
+        function searchIOCs() {
+            clearTimeout(window._iocSearchTimeout);
+            window._iocSearchTimeout = setTimeout(loadIOCs, 300);
+        }
+
+        async function addIOC() {
+            const value = document.getElementById('iocValue').value;
+            const type = document.getElementById('iocType').value;
+            const threat_type = document.getElementById('iocThreatType').value;
+            const confidence = parseInt(document.getElementById('iocConfidence').value) || 70;
+            if (!value) return alert('Value is required');
+            await api('/ioc', { method: 'POST', body: JSON.stringify({ value, type, threat_type, confidence, source: 'manual' }) });
+            hideModal('iocModal');
+            document.getElementById('iocValue').value = '';
+            loadIOCs(); loadStats();
+        }
+
+        async function deleteIOC(id) {
+            if (!confirm('Delete this IOC?')) return;
+            await api(`/ioc/${id}`, { method: 'DELETE' });
+            loadIOCs(); loadStats();
+        }
+
+        // Feeds
+        async function loadFeeds() {
+            const d = await api('/feeds');
+            const tbody = document.getElementById('feedsTable');
+            tbody.innerHTML = (d.feeds || []).map(f => `
+                <tr>
+                    <td>${f.name}</td>
+                    <td><code>${f.url.slice(0,40)}...</code></td>
+                    <td>${f.type}</td>
+                    <td>${f.ioc_count || 0}</td>
+                    <td>${f.last_refresh ? new Date(f.last_refresh).toLocaleString() : 'Never'}</td>
+                    <td><span class="badge ${f.enabled ? 'medium' : 'low'}">${f.status}</span></td>
+                    <td><button class="btn btn-sm danger" onclick="deleteFeed('${f.id}')">Unsub</button></td>
+                </tr>
+            `).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--p31-dim)">No feeds subscribed</td></tr>';
+        }
+
+        async function subscribeFeed() {
+            const name = document.getElementById('feedName').value;
+            const url = document.getElementById('feedUrl').value;
+            const type = document.getElementById('feedType').value;
+            if (!name || !url) return alert('Name and URL are required');
+            await api('/feed/subscribe', { method: 'POST', body: JSON.stringify({ name, url, type }) });
+            hideModal('feedModal');
+            document.getElementById('feedName').value = '';
+            document.getElementById('feedUrl').value = '';
+            loadFeeds();
+        }
+
+        async function deleteFeed(id) {
+            if (!confirm('Unsubscribe from this feed?')) return;
+            await api(`/feed/${id}`, { method: 'DELETE' });
+            loadFeeds();
+        }
+
+        // Incidents
+        async function loadIncidents() {
+            const status = document.getElementById('incidentStatusFilter')?.value || '';
+            const d = await api(`/incidents?limit=50${status ? '&status=' + status : ''}`);
+            const tbody = document.getElementById('incidentsTable');
+            tbody.innerHTML = (d.incidents || []).map(i => `
+                <tr>
+                    <td><code>${i.id.slice(0,8)}</code></td>
+                    <td>${i.title}</td>
+                    <td><span class="badge ${i.severity}">${i.severity}</span></td>
+                    <td><span class="badge ${i.status}">${i.status}</span></td>
+                    <td>${i.assignee || '-'}</td>
+                    <td>${new Date(i.created_at).toLocaleDateString()}</td>
+                    <td class="actions">
+                        <button class="btn btn-sm" onclick="updateIncidentStatus('${i.id}', 'investigating')">Inv</button>
+                        <button class="btn btn-sm" onclick="updateIncidentStatus('${i.id}', 'resolved')">Res</button>
+                    </td>
+                </tr>
+            `).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--p31-dim)">No incidents</td></tr>';
+        }
+
+        async function createIncident() {
+            const title = document.getElementById('incidentTitle').value;
+            const description = document.getElementById('incidentDesc').value;
+            const severity = document.getElementById('incidentSeverity').value;
+            const assignee = document.getElementById('incidentAssignee').value;
+            if (!title) return alert('Title is required');
+            await api('/incident', { method: 'POST', body: JSON.stringify({ title, description, severity, status: 'open', assignee }) });
+            hideModal('incidentModal');
+            document.getElementById('incidentTitle').value = '';
+            document.getElementById('incidentDesc').value = '';
+            document.getElementById('incidentAssignee').value = '';
+            loadIncidents(); loadStats(); loadRiskScore();
+        }
+
+        async function updateIncidentStatus(id, status) {
+            // Fetch current incident and update status
+            const d = await api(`/incidents`);
+            const incident = d.incidents?.find(i => i.id === id);
+            if (incident) {
+                await api(`/incident/${id}`, { method: 'PUT', body: JSON.stringify({ ...incident, status }) });
+                loadIncidents(); loadStats(); loadRiskScore();
+            }
+        }
+
+        // Reports
+        async function loadReports() {
+            const d = await api('/reports');
+            const tbody = document.getElementById('reportsTable');
+            tbody.innerHTML = (d.reports || []).map(r => `
+                <tr>
+                    <td><code>${r.id.slice(0,8)}</code></td>
+                    <td>${r.type}</td>
+                    <td>${r.period}</td>
+                    <td>${new Date(r.generated_at).toLocaleString()}</td>
+                    <td>Threats: ${r.data?.summary?.total_threats || 0}, Alerts: ${r.data?.summary?.total_alerts || 0}</td>
+                    <td><button class="btn btn-sm" onclick="viewReport('${r.id}')">View</button></td>
+                </tr>
+            `).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--p31-dim)">No reports generated</td></tr>';
+        }
+
+        async function generateReport() {
+            const type = document.getElementById('reportType').value;
+            const period = document.getElementById('reportPeriod').value;
+            await api('/report/generate', { method: 'POST', body: JSON.stringify({ type, period }) });
+            loadReports();
+        }
+
+        async function viewReport(id) {
+            const d = await api(`/report/${id}`);
+            if (d.data) {
+                alert(`Report Summary:\n\nThreats: ${d.data.summary?.total_threats || 0}\nAlerts: ${d.data.summary?.total_alerts || 0}\nIncidents: ${d.data.summary?.total_incidents || 0}\nIOCs: ${d.data.summary?.total_iocs || 0}\n\nCritical Threats: ${d.data.summary?.critical_threats || 0}`);
+            }
+        }
+
+        // Refresh
+        function refresh() {
+            loadRiskScore();
+            loadStats();
+            loadTimeline();
+            loadAlertsFeed();
+            document.getElementById('lastUpdate').textContent = 'Updated: ' + new Date().toLocaleTimeString();
+        }
+
+        // Init
+        refresh();
+        setInterval(refresh, 60000);
+    </script>
+</body>
+</html>

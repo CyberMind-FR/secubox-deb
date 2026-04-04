@@ -1,0 +1,21 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d $(CURDIR)/debian/secubox-interceptor/usr/lib/secubox/interceptor/api
+	install -m 644 api/*.py $(CURDIR)/debian/secubox-interceptor/usr/lib/secubox/interceptor/api/
+	install -d $(CURDIR)/debian/secubox-interceptor/usr/share/secubox/www/interceptor
+	install -m 644 www/interceptor/*.html $(CURDIR)/debian/secubox-interceptor/usr/share/secubox/www/interceptor/
+	install -d $(CURDIR)/debian/secubox-interceptor/usr/lib/systemd/system
+	install -m 644 systemd/secubox-interceptor.service $(CURDIR)/debian/secubox-interceptor/usr/lib/systemd/system/
+	install -d $(CURDIR)/debian/secubox-interceptor/var/lib/secubox/interceptor
+	install -d $(CURDIR)/debian/secubox-interceptor/var/lib/secubox/interceptor/flows
+	install -d $(CURDIR)/debian/secubox-interceptor/var/lib/secubox/interceptor/recordings
+	install -d $(CURDIR)/debian/secubox-interceptor/usr/share/secubox/menu.d
+	install -m 644 menu.d/*.json $(CURDIR)/debian/secubox-interceptor/usr/share/secubox/menu.d/
+
+	# Install nginx config
+	install -d $(CURDIR)/debian/secubox-interceptor/etc/nginx/secubox.d
+	install -m 644 nginx/interceptor.conf $(CURDIR)/debian/secubox-interceptor/etc/nginx/secubox.d/interceptor.conf

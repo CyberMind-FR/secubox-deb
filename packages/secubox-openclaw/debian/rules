@@ -1,0 +1,15 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-openclaw/usr/lib/secubox/openclaw
+	cp -r api debian/secubox-openclaw/usr/lib/secubox/openclaw/
+	install -d debian/secubox-openclaw/usr/share/secubox/www/openclaw
+	cp -r www/openclaw/. debian/secubox-openclaw/usr/share/secubox/www/openclaw/
+	install -d debian/secubox-openclaw/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-openclaw/usr/share/secubox/menu.d/ || true
+	install -d debian/secubox-openclaw/etc/nginx/secubox.d
+	[ -d nginx ] && cp -r nginx/. debian/secubox-openclaw/etc/nginx/secubox.d/ || true
+	install -d debian/secubox-openclaw/lib/systemd/system
+	[ -d systemd ] && cp systemd/*.service debian/secubox-openclaw/lib/systemd/system/ || true

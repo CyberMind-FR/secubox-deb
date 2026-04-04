@@ -1,0 +1,21 @@
+Source: secubox-interceptor
+Section: admin
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://secubox.gondwana.systems
+
+Package: secubox-interceptor
+Architecture: all
+Depends: ${misc:Depends},
+ python3,
+ python3-fastapi,
+ python3-uvicorn,
+ secubox-core
+Recommends: secubox-mitmproxy, secubox-waf, openssl
+Description: SecuBox Traffic Interceptor
+ HTTP/HTTPS traffic interception and analysis module.
+ Provides SSL/TLS inspection, request/response modification,
+ traffic recording, protocol analysis, content filtering,
+ and WAF integration.

@@ -1,0 +1,17 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-mac-guard/usr/lib/secubox/mac-guard/
+	cp -r api debian/secubox-mac-guard/usr/lib/secubox/mac-guard/
+	install -d debian/secubox-mac-guard/usr/share/secubox/www
+	[ -d www ] && cp -r www/. debian/secubox-mac-guard/usr/share/secubox/www/ || true
+	install -d debian/secubox-mac-guard/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-mac-guard/usr/share/secubox/menu.d/ || true
+	# Modular nginx config
+	install -d debian/secubox-mac-guard/etc/nginx/secubox.d
+	[ -f nginx/mac-guard.conf ] && cp nginx/mac-guard.conf debian/secubox-mac-guard/etc/nginx/secubox.d/ || true
+	# Systemd service
+	install -d debian/secubox-mac-guard/usr/lib/systemd/system
+	[ -f systemd/secubox-mac-guard.service ] && cp systemd/secubox-mac-guard.service debian/secubox-mac-guard/usr/lib/systemd/system/ || true

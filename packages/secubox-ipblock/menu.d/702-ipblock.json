@@ -1,0 +1,9 @@
+{
+  "id": "ipblock",
+  "name": "IP Blocklist",
+  "category": "security",
+  "icon": "block",
+  "path": "/ipblock/",
+  "order": 702,
+  "description": "IP blocklist management with multiple sources"
+}

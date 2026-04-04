@@ -1,0 +1,12 @@
+secubox-mac-guard (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release.
+  * MAC address whitelist/blacklist management
+  * Device discovery via ARP table and DHCP leases
+  * OUI vendor lookup using ieee-data
+  * Device naming and tagging
+  * Alert on unknown devices
+  * nftables integration for MAC filtering
+  * P31 Phosphor light theme with cyan accent
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Apr 2026 12:00:00 +0200

@@ -1,0 +1,9 @@
+{
+  "id": "ai-insights",
+  "name": "AI Insights",
+  "category": "security",
+  "icon": "🤖",
+  "path": "/ai-insights/",
+  "order": 701,
+  "description": "ML-based threat detection and security insights"
+}

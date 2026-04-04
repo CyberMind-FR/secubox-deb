@@ -1,0 +1,25 @@
+[Unit]
+Description=SecuBox AI Insights - ML Threat Detection API
+After=network.target secubox-core.service
+Requires=secubox-core.service
+
+[Service]
+UMask=0000
+Type=simple
+User=secubox
+Group=secubox
+WorkingDirectory=/usr/lib/secubox/ai-insights
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app \
+    --uds /run/secubox/ai-insights.sock \
+    --log-level warning
+Restart=on-failure
+RestartSec=5
+PrivateTmp=true
+NoNewPrivileges=true
+RuntimeDirectory=secubox
+RuntimeDirectoryMode=0775
+ProtectSystem=full
+ReadWritePaths=/run/secubox /var/lib/secubox /var/cache/secubox /etc/secubox
+
+[Install]
+WantedBy=multi-user.target

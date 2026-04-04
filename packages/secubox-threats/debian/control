@@ -1,0 +1,16 @@
+Source: secubox-threats
+Section: admin
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+
+Package: secubox-threats
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0.0), python3-tomli
+Recommends: secubox-crowdsec, suricata
+Description: SecuBox Unified Threats Dashboard
+ Unified security threats dashboard aggregating alerts from
+ CrowdSec, Suricata, and WAF. Features threat intelligence,
+ IOC management, risk scoring, incident tracking, and
+ report generation.

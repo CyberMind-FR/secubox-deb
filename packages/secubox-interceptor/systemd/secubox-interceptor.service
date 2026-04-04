@@ -1,0 +1,18 @@
+[Unit]
+Description=SecuBox Traffic Interceptor API
+After=network.target secubox-core.service
+Wants=secubox-core.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/usr/lib/secubox/interceptor
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/interceptor.sock --log-level warning
+Restart=on-failure
+RestartSec=5
+PrivateTmp=true
+RuntimeDirectory=secubox
+
+[Install]
+WantedBy=multi-user.target

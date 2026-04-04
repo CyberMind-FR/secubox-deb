@@ -1,0 +1,31 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    configure)
+        # Create config directory
+        mkdir -p /etc/secubox
+
+        # Create run directory
+        mkdir -p /run/secubox
+
+        # Create data directories
+        mkdir -p /var/lib/secubox/cookies
+        mkdir -p /var/cache/secubox/cookies
+        mkdir -p /var/log/secubox
+
+        # Enable and start service
+        systemctl daemon-reload
+        systemctl enable secubox-cookies.service
+        systemctl start secubox-cookies.service || true
+
+        # Reload nginx if installed
+        if systemctl is-active --quiet nginx; then
+            systemctl reload nginx || true
+        fi
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

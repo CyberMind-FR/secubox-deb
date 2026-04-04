@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - MAC Guard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root {
+            /* P31 Phosphor spectrum */
+            --p31-peak: #00dd44;
+            --p31-hot: #00ff55;
+            --p31-mid: #009933;
+            --p31-dim: #006622;
+            --p31-ghost: #003311;
+            --p31-decay: #ffb347;
+            --p31-decay-dim: #cc7722;
+            /* Cyan accent for network branding */
+            --accent: #06b6d4;
+            --accent-dim: #0891b2;
+            --accent-light: #22d3ee;
+            /* Tube glass */
+            --tube-light: #e8f5e9;
+            --tube-pale: #c8e6c9;
+            --tube-soft: #a5d6a7;
+            /* Legacy mappings */
+            --bg-dark: var(--tube-light);
+            --bg-card: var(--tube-pale);
+            --border: var(--tube-soft);
+            --text: #1a1a2e;
+            --text-dim: var(--p31-dim);
+            --primary: var(--accent);
+            --cyan: var(--accent);
+            --green: var(--p31-peak);
+            --red: #ff4466;
+            --yellow: var(--p31-decay);
+            --orange: var(--p31-decay-dim);
+            --purple: #a371f7;
+            /* Bloom effects */
+            --bloom-text: 0 0 2px var(--accent), 0 0 6px var(--accent), 0 0 14px rgba(6,182,212,0.5);
+            --bloom-soft: 0 0 6px var(--accent), 0 0 14px rgba(6,182,212,0.5);
+            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Courier Prime', 'Courier New', monospace;
+            background: var(--tube-light);
+            background-image: radial-gradient(ellipse at 50% 40%, rgba(6,182,212,0.03) 0%, transparent 70%);
+            color: var(--text);
+            display: flex;
+            min-height: 100vh;
+        }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
+        .header h1 { font-size: 1.5rem; color: var(--accent); text-shadow: var(--bloom-text); }
+        .header-actions { display: flex; gap: 0.5rem; }
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: var(--bg-card);
+            color: var(--text);
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-family: 'Courier Prime', monospace;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            transition: all 0.2s;
+        }
+        .btn:hover { background: var(--bg-dark); border-color: var(--accent-dim); }
+        .btn.primary { background: rgba(6,182,212,0.1); border-color: var(--accent); color: var(--accent); }
+        .btn.primary:hover { background: rgba(6,182,212,0.2); box-shadow: var(--bloom-soft); }
+        .btn.success { background: rgba(0,221,68,0.1); border-color: var(--green); color: var(--green); }
+        .btn.danger { background: rgba(255,68,102,0.1); border-color: var(--red); color: var(--red); }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-bottom: 1.5rem;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.02);
+        }
+        .card:hover { border-color: var(--accent-dim); }
+        .card h2 {
+            font-size: 1rem;
+            margin-bottom: 1rem;
+            color: var(--p31-decay);
+            text-shadow: var(--bloom-amber);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+        }
+        .stat-card .value {
+            font-size: 2rem;
+            font-weight: bold;
+            text-shadow: 0 0 10px currentColor;
+        }
+        .stat-card .label {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            margin-top: 0.25rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+        .stat-card.cyan .value { color: var(--accent); }
+        .stat-card.green .value { color: var(--green); }
+        .stat-card.red .value { color: var(--red); }
+        .stat-card.yellow .value { color: var(--yellow); }
+        .stat-card.purple .value { color: var(--purple); }
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 0.5rem;
+        }
+        .tab {
+            padding: 0.5rem 1rem;
+            border: 1px solid transparent;
+            border-radius: 6px 6px 0 0;
+            background: transparent;
+            color: var(--text-dim);
+            cursor: pointer;
+            font-family: 'Courier Prime', monospace;
+            font-size: 0.8rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            transition: all 0.2s;
+        }
+        .tab:hover { color: var(--accent); }
+        .tab.active {
+            color: var(--accent);
+            border-color: var(--border);
+            border-bottom-color: var(--tube-light);
+            background: var(--tube-light);
+            text-shadow: var(--bloom-soft);
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        /* Table */
+        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        th, td { padding: 0.6rem; text-align: left; border-bottom: 1px solid var(--border); }
+        th {
+            color: var(--p31-decay);
+            text-shadow: var(--bloom-amber);
+            font-weight: 500;
+            font-size: 0.75rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+        tr:hover { background: rgba(6,182,212,0.03); }
+        /* Badges */
+        .badge {
+            display: inline-block;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+        .badge.online { background: rgba(0,221,68,0.15); color: var(--green); border: 1px solid var(--green); }
+        .badge.offline { background: rgba(139,148,158,0.15); color: var(--text-dim); border: 1px solid var(--text-dim); }
+        .badge.blocked { background: rgba(255,68,102,0.15); color: var(--red); border: 1px solid var(--red); }
+        .badge.whitelist { background: rgba(6,182,212,0.15); color: var(--accent); border: 1px solid var(--accent); }
+        .badge.blacklist { background: rgba(255,68,102,0.15); color: var(--red); border: 1px solid var(--red); }
+        .badge.unknown { background: rgba(255,179,71,0.15); color: var(--yellow); border: 1px solid var(--yellow); }
+        .badge.alert { background: rgba(255,68,102,0.15); color: var(--red); }
+        .tag {
+            display: inline-block;
+            padding: 0.1rem 0.3rem;
+            border-radius: 3px;
+            font-size: 0.65rem;
+            background: rgba(163,113,247,0.15);
+            color: var(--purple);
+            margin-right: 0.25rem;
+        }
+        .vendor { color: var(--text-dim); font-size: 0.75rem; }
+        .mac { font-family: 'Courier Prime', monospace; font-size: 0.8rem; letter-spacing: 0.05em; }
+        .actions { display: flex; gap: 0.25rem; flex-wrap: wrap; }
+        /* Search */
+        .search-box {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        .search-box input {
+            flex: 1;
+            padding: 0.5rem;
+            border-radius: 4px;
+            border: 1px solid var(--border);
+            background: var(--bg-dark);
+            color: var(--text);
+            font-family: 'Courier Prime', monospace;
+        }
+        .search-box input:focus {
+            outline: none;
+            border-color: var(--accent-dim);
+            box-shadow: 0 0 8px rgba(6,182,212,0.1);
+        }
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal.active { display: flex; }
+        .modal-content {
+            background: var(--bg-card);
+            border: 1px solid var(--accent-dim);
+            border-radius: 8px;
+            padding: 1.5rem;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 0 30px rgba(6,182,212,0.1);
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        .modal-header h3 {
+            font-size: 1.1rem;
+            color: var(--accent);
+            text-shadow: var(--bloom-soft);
+        }
+        .close-btn {
+            background: none;
+            border: none;
+            color: var(--text-dim);
+            cursor: pointer;
+            font-size: 1.5rem;
+        }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: var(--text-dim);
+            font-size: 0.8rem;
+            letter-spacing: 0.05em;
+        }
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%;
+            padding: 0.5rem;
+            border-radius: 4px;
+            border: 1px solid var(--border);
+            background: var(--bg-dark);
+            color: var(--text);
+            font-family: 'Courier Prime', monospace;
+        }
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: var(--accent-dim);
+        }
+        /* Alert list */
+        .alert-item {
+            padding: 0.75rem;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            margin-bottom: 0.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .alert-item.unread { border-left: 3px solid var(--red); }
+        .alert-item .alert-info { flex: 1; }
+        .alert-item .alert-mac { font-family: monospace; color: var(--accent); }
+        .alert-item .alert-time { font-size: 0.7rem; color: var(--text-dim); }
+        .alert-item .alert-msg { font-size: 0.85rem; margin-top: 0.25rem; }
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-dim);
+        }
+        /* Responsive */
+        @media (max-width: 768px) {
+            .main { margin-left: 0; padding: 1rem; }
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            .tabs { flex-wrap: wrap; }
+        }
+    </style>
+</head>
+<body class="crt-light">
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+
+    <main class="main">
+        <header class="header">
+            <h1>MAC Guard</h1>
+            <div class="header-actions">
+                <button class="btn primary" onclick="scanNetwork()">Scan Network</button>
+                <button class="btn" onclick="refresh()">Refresh</button>
+            </div>
+        </header>
+
+        <div class="stats-grid">
+            <div class="stat-card cyan">
+                <div class="value" id="statTotal">-</div>
+                <div class="label">Total Devices</div>
+            </div>
+            <div class="stat-card green">
+                <div class="value" id="statOnline">-</div>
+                <div class="label">Online</div>
+            </div>
+            <div class="stat-card cyan">
+                <div class="value" id="statWhitelist">-</div>
+                <div class="label">Whitelisted</div>
+            </div>
+            <div class="stat-card red">
+                <div class="value" id="statBlacklist">-</div>
+                <div class="label">Blocked</div>
+            </div>
+            <div class="stat-card yellow">
+                <div class="value" id="statUnknown">-</div>
+                <div class="label">Unknown</div>
+            </div>
+            <div class="stat-card red">
+                <div class="value" id="statAlerts">-</div>
+                <div class="label">Alerts</div>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('devices')">Devices</button>
+            <button class="tab" onclick="showTab('whitelist')">Whitelist</button>
+            <button class="tab" onclick="showTab('blacklist')">Blacklist</button>
+            <button class="tab" onclick="showTab('alerts')">Alerts</button>
+            <button class="tab" onclick="showTab('stats')">Statistics</button>
+            <button class="tab" onclick="showTab('settings')">Settings</button>
+        </div>
+
+        <!-- Devices Tab -->
+        <div id="tab-devices" class="tab-content active">
+            <div class="card">
+                <h2>Discovered Devices <span id="deviceCount"></span></h2>
+                <div class="search-box">
+                    <input type="text" id="deviceSearch" placeholder="Search by MAC, IP, vendor, name..." onkeyup="filterDevices()">
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Status</th>
+                            <th>MAC Address</th>
+                            <th>IP</th>
+                            <th>Vendor</th>
+                            <th>Name/Tags</th>
+                            <th>List</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="devicesTable"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Whitelist Tab -->
+        <div id="tab-whitelist" class="tab-content">
+            <div class="card">
+                <h2>Allowed Devices <button class="btn btn-sm primary" onclick="showAddModal('whitelist')">+ Add</button></h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>MAC Address</th>
+                            <th>Name</th>
+                            <th>Vendor</th>
+                            <th>Reason</th>
+                            <th>Added</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="whitelistTable"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Blacklist Tab -->
+        <div id="tab-blacklist" class="tab-content">
+            <div class="card">
+                <h2>Blocked Devices <button class="btn btn-sm danger" onclick="showAddModal('blacklist')">+ Add</button></h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>MAC Address</th>
+                            <th>Name</th>
+                            <th>Vendor</th>
+                            <th>Reason</th>
+                            <th>Blocked</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="blacklistTable"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Alerts Tab -->
+        <div id="tab-alerts" class="tab-content">
+            <div class="card">
+                <h2>MAC Alerts <button class="btn btn-sm" onclick="ackAllAlerts()">Acknowledge All</button></h2>
+                <div id="alertsList"></div>
+            </div>
+        </div>
+
+        <!-- Statistics Tab -->
+        <div id="tab-stats" class="tab-content">
+            <div class="card">
+                <h2>Vendor Distribution</h2>
+                <div id="vendorStats"></div>
+            </div>
+        </div>
+
+        <!-- Settings Tab -->
+        <div id="tab-settings" class="tab-content">
+            <div class="card">
+                <h2>MAC Guard Settings</h2>
+                <div class="form-group">
+                    <label>Mode</label>
+                    <select id="settingMode">
+                        <option value="whitelist">Whitelist (allow only listed)</option>
+                        <option value="blacklist">Blacklist (block only listed)</option>
+                        <option value="disabled">Disabled</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="settingAlertUnknown"> Alert on unknown devices
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="settingAutoBlock"> Auto-block unknown devices
+                    </label>
+                </div>
+                <button class="btn primary" onclick="saveSettings()">Save Settings</button>
+                <button class="btn" onclick="syncNft()">Sync nftables</button>
+            </div>
+        </div>
+
+        <!-- Add MAC Modal -->
+        <div class="modal" id="addModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 id="modalTitle">Add to Whitelist</h3>
+                    <button class="close-btn" onclick="closeModal()">&times;</button>
+                </div>
+                <div class="form-group">
+                    <label>MAC Address</label>
+                    <input type="text" id="modalMac" placeholder="XX:XX:XX:XX:XX:XX" pattern="([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}">
+                </div>
+                <div class="form-group">
+                    <label>Name (optional)</label>
+                    <input type="text" id="modalName" placeholder="Device name">
+                </div>
+                <div class="form-group">
+                    <label>Reason (optional)</label>
+                    <input type="text" id="modalReason" placeholder="Reason for adding">
+                </div>
+                <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                    <button class="btn" onclick="closeModal()">Cancel</button>
+                    <button class="btn primary" id="modalSubmit" onclick="submitAdd()">Add</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Device Detail Modal -->
+        <div class="modal" id="deviceModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Device Details</h3>
+                    <button class="close-btn" onclick="closeDeviceModal()">&times;</button>
+                </div>
+                <div class="form-group">
+                    <label>MAC Address</label>
+                    <input type="text" id="detailMac" readonly>
+                </div>
+                <div class="form-group">
+                    <label>IP Address</label>
+                    <input type="text" id="detailIp" readonly>
+                </div>
+                <div class="form-group">
+                    <label>Vendor</label>
+                    <input type="text" id="detailVendor" readonly>
+                </div>
+                <div class="form-group">
+                    <label>Hostname</label>
+                    <input type="text" id="detailHostname" readonly>
+                </div>
+                <div class="form-group">
+                    <label>Name</label>
+                    <input type="text" id="detailName" placeholder="Custom name">
+                </div>
+                <div class="form-group">
+                    <label>Tags (comma separated)</label>
+                    <input type="text" id="detailTags" placeholder="server, iot, phone...">
+                </div>
+                <div class="form-group">
+                    <label>First Seen</label>
+                    <input type="text" id="detailFirstSeen" readonly>
+                </div>
+                <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                    <button class="btn" onclick="closeDeviceModal()">Cancel</button>
+                    <button class="btn primary" onclick="saveDeviceTag()">Save</button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const API = '/api/v1/mac-guard';
+        const token = () => localStorage.getItem('sbx_token');
+        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+
+        let allDevices = [];
+        let currentListType = 'whitelist';
+        let currentMac = null;
+
+        async function api(path, opts = {}) {
+            try {
+                const res = await fetch(API + path, { ...opts, headers: headers() });
+                if (res.status === 401) { window.location = '/portal/login.html'; return {}; }
+                if (!res.ok) return {};
+                const text = await res.text();
+                return text ? JSON.parse(text) : {};
+            } catch { return {}; }
+        }
+
+        function showTab(tabId) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelector(`.tab-content#tab-${tabId}`).classList.add('active');
+            document.querySelector(`.tab[onclick="showTab('${tabId}')"]`).classList.add('active');
+
+            if (tabId === 'whitelist') loadWhitelist();
+            if (tabId === 'blacklist') loadBlacklist();
+            if (tabId === 'alerts') loadAlerts();
+            if (tabId === 'stats') loadVendorStats();
+            if (tabId === 'settings') loadSettings();
+        }
+
+        async function loadStatus() {
+            const d = await api('/status');
+            document.getElementById('statTotal').textContent = d.total_devices || 0;
+            document.getElementById('statOnline').textContent = d.online_devices || 0;
+            document.getElementById('statWhitelist').textContent = d.whitelist_count || 0;
+            document.getElementById('statBlacklist').textContent = d.blacklist_count || 0;
+            document.getElementById('statUnknown').textContent = d.unknown_count || 0;
+            document.getElementById('statAlerts').textContent = d.alert_count || 0;
+        }
+
+        async function loadDevices() {
+            const d = await api('/devices');
+            allDevices = d.devices || [];
+            renderDevices(allDevices);
+            document.getElementById('deviceCount').textContent = `(${allDevices.length})`;
+        }
+
+        function renderDevices(devices) {
+            const tbody = document.getElementById('devicesTable');
+            if (!devices.length) {
+                tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No devices found</td></tr>';
+                return;
+            }
+            tbody.innerHTML = devices.map(dev => {
+                const statusClass = dev.status === 'online' ? 'online' : (dev.status === 'blocked' ? 'blocked' : 'offline');
+                const listClass = dev.list_status;
+                const tags = (dev.tags || []).map(t => `<span class="tag">${t}</span>`).join('');
+                const name = dev.name ? `<strong>${dev.name}</strong> ` : '';
+                return `<tr>
+                    <td><span class="badge ${statusClass}">${dev.status}</span></td>
+                    <td><span class="mac">${dev.mac}</span></td>
+                    <td>${dev.ip || '-'}</td>
+                    <td><span class="vendor">${dev.vendor || 'Unknown'}</span></td>
+                    <td>${name}${tags || '-'}</td>
+                    <td><span class="badge ${listClass}">${dev.list_status}</span></td>
+                    <td class="actions">
+                        <button class="btn btn-sm" onclick="showDeviceDetail('${dev.mac}')">Edit</button>
+                        ${dev.list_status !== 'whitelist' ? `<button class="btn btn-sm success" onclick="quickAdd('whitelist', '${dev.mac}')">Allow</button>` : ''}
+                        ${dev.list_status !== 'blacklist' ? `<button class="btn btn-sm danger" onclick="quickAdd('blacklist', '${dev.mac}')">Block</button>` : ''}
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        function filterDevices() {
+            const q = document.getElementById('deviceSearch').value.toLowerCase();
+            const filtered = allDevices.filter(d =>
+                d.mac.toLowerCase().includes(q) ||
+                (d.ip || '').includes(q) ||
+                (d.vendor || '').toLowerCase().includes(q) ||
+                (d.name || '').toLowerCase().includes(q) ||
+                (d.tags || []).some(t => t.toLowerCase().includes(q))
+            );
+            renderDevices(filtered);
+        }
+
+        async function loadWhitelist() {
+            const d = await api('/whitelist');
+            const tbody = document.getElementById('whitelistTable');
+            const items = d.whitelist || [];
+            if (!items.length) {
+                tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No whitelisted devices</td></tr>';
+                return;
+            }
+            tbody.innerHTML = items.map(e => `<tr>
+                <td><span class="mac">${e.mac}</span></td>
+                <td>${e.name || '-'}</td>
+                <td><span class="vendor">${e.vendor || 'Unknown'}</span></td>
+                <td>${e.reason || '-'}</td>
+                <td>${e.added ? new Date(e.added).toLocaleDateString() : '-'}</td>
+                <td><button class="btn btn-sm danger" onclick="removeFromList('whitelist', '${e.mac}')">Remove</button></td>
+            </tr>`).join('');
+        }
+
+        async function loadBlacklist() {
+            const d = await api('/blacklist');
+            const tbody = document.getElementById('blacklistTable');
+            const items = d.blacklist || [];
+            if (!items.length) {
+                tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No blocked devices</td></tr>';
+                return;
+            }
+            tbody.innerHTML = items.map(e => `<tr>
+                <td><span class="mac">${e.mac}</span></td>
+                <td>${e.name || '-'}</td>
+                <td><span class="vendor">${e.vendor || 'Unknown'}</span></td>
+                <td>${e.reason || '-'}</td>
+                <td>${e.added ? new Date(e.added).toLocaleDateString() : '-'}</td>
+                <td><button class="btn btn-sm success" onclick="removeFromList('blacklist', '${e.mac}')">Unblock</button></td>
+            </tr>`).join('');
+        }
+
+        async function loadAlerts() {
+            const d = await api('/alerts?limit=50');
+            const list = document.getElementById('alertsList');
+            const alerts = d.alerts || [];
+            if (!alerts.length) {
+                list.innerHTML = '<div class="empty-state">No alerts</div>';
+                return;
+            }
+            list.innerHTML = alerts.map(a => `
+                <div class="alert-item ${a.acknowledged ? '' : 'unread'}">
+                    <div class="alert-info">
+                        <span class="alert-mac">${a.mac}</span>
+                        <span class="alert-time">${new Date(a.timestamp).toLocaleString()}</span>
+                        <div class="alert-msg">${a.message}</div>
+                    </div>
+                    ${!a.acknowledged ? `<button class="btn btn-sm" onclick="ackAlert('${a.id}')">Ack</button>` : ''}
+                </div>
+            `).join('');
+        }
+
+        async function loadVendorStats() {
+            const d = await api('/vendors');
+            const div = document.getElementById('vendorStats');
+            const vendors = d.vendors || [];
+            if (!vendors.length) {
+                div.innerHTML = '<div class="empty-state">No vendor data</div>';
+                return;
+            }
+            div.innerHTML = `<table>
+                <thead><tr><th>Vendor</th><th>Count</th></tr></thead>
+                <tbody>${vendors.map(v => `<tr><td>${v.name}</td><td>${v.count}</td></tr>`).join('')}</tbody>
+            </table>`;
+        }
+
+        async function loadSettings() {
+            const d = await api('/config');
+            document.getElementById('settingMode').value = d.mode || 'whitelist';
+            document.getElementById('settingAlertUnknown').checked = d.alert_on_unknown !== false;
+            document.getElementById('settingAutoBlock').checked = d.auto_block_unknown === true;
+        }
+
+        async function saveSettings() {
+            const config = {
+                mode: document.getElementById('settingMode').value,
+                alert_on_unknown: document.getElementById('settingAlertUnknown').checked,
+                auto_block_unknown: document.getElementById('settingAutoBlock').checked,
+                scan_interval: 60
+            };
+            await api('/config', { method: 'POST', body: JSON.stringify(config) });
+            alert('Settings saved');
+        }
+
+        async function syncNft() {
+            await api('/sync', { method: 'POST' });
+            alert('nftables synchronized');
+        }
+
+        async function scanNetwork() {
+            const d = await api('/scan', { method: 'POST' });
+            if (d.success) {
+                alert(`Scan complete. Found ${d.devices_found} devices.`);
+                refresh();
+            }
+        }
+
+        function showAddModal(listType) {
+            currentListType = listType;
+            document.getElementById('modalTitle').textContent = listType === 'whitelist' ? 'Add to Whitelist' : 'Add to Blacklist';
+            document.getElementById('modalMac').value = '';
+            document.getElementById('modalName').value = '';
+            document.getElementById('modalReason').value = '';
+            document.getElementById('modalSubmit').className = `btn ${listType === 'whitelist' ? 'primary' : 'danger'}`;
+            document.getElementById('addModal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('addModal').classList.remove('active');
+        }
+
+        async function submitAdd() {
+            const mac = document.getElementById('modalMac').value.trim().toUpperCase();
+            const name = document.getElementById('modalName').value.trim();
+            const reason = document.getElementById('modalReason').value.trim();
+
+            if (!/^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(mac)) {
+                alert('Invalid MAC address format. Use XX:XX:XX:XX:XX:XX');
+                return;
+            }
+
+            await api(`/${currentListType}`, {
+                method: 'POST',
+                body: JSON.stringify({ mac, name, reason })
+            });
+
+            closeModal();
+            refresh();
+            if (currentListType === 'whitelist') loadWhitelist();
+            else loadBlacklist();
+        }
+
+        async function quickAdd(listType, mac) {
+            await api(`/${listType}`, {
+                method: 'POST',
+                body: JSON.stringify({ mac, name: '', reason: 'Quick action' })
+            });
+            refresh();
+        }
+
+        async function removeFromList(listType, mac) {
+            if (!confirm(`Remove ${mac} from ${listType}?`)) return;
+            await api(`/${listType}/${encodeURIComponent(mac)}`, { method: 'DELETE' });
+            refresh();
+            if (listType === 'whitelist') loadWhitelist();
+            else loadBlacklist();
+        }
+
+        async function showDeviceDetail(mac) {
+            currentMac = mac;
+            const d = await api(`/device/${encodeURIComponent(mac)}`);
+            document.getElementById('detailMac').value = d.mac || mac;
+            document.getElementById('detailIp').value = d.ip || '-';
+            document.getElementById('detailVendor').value = d.vendor || 'Unknown';
+            document.getElementById('detailHostname').value = d.hostname || '-';
+            document.getElementById('detailName').value = d.name || '';
+            document.getElementById('detailTags').value = (d.tags || []).join(', ');
+            document.getElementById('detailFirstSeen').value = d.first_seen ? new Date(d.first_seen).toLocaleString() : '-';
+            document.getElementById('deviceModal').classList.add('active');
+        }
+
+        function closeDeviceModal() {
+            document.getElementById('deviceModal').classList.remove('active');
+            currentMac = null;
+        }
+
+        async function saveDeviceTag() {
+            const name = document.getElementById('detailName').value.trim();
+            const tags = document.getElementById('detailTags').value.split(',').map(t => t.trim()).filter(t => t);
+
+            await api(`/device/${encodeURIComponent(currentMac)}/tag`, {
+                method: 'POST',
+                body: JSON.stringify({ mac: currentMac, name, tags })
+            });
+
+            closeDeviceModal();
+            refresh();
+        }
+
+        async function ackAlert(alertId) {
+            await api(`/alerts/${alertId}/acknowledge`, { method: 'POST' });
+            loadAlerts();
+            loadStatus();
+        }
+
+        async function ackAllAlerts() {
+            await api('/alerts/acknowledge_all', { method: 'POST' });
+            loadAlerts();
+            loadStatus();
+        }
+
+        function refresh() {
+            loadStatus();
+            loadDevices();
+        }
+
+        // Initialize
+        refresh();
+        setInterval(refresh, 30000);
+    </script>
+    <script src="/shared/crt-engine.js"></script>
+</body>
+</html>

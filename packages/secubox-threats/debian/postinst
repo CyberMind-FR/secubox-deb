@@ -1,0 +1,25 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = "configure" ]; then
+    # Create data directory
+    mkdir -p /var/lib/secubox/threats
+    chown -R secubox:secubox /var/lib/secubox/threats
+    chmod 750 /var/lib/secubox/threats
+
+    # Create config directory
+    mkdir -p /etc/secubox
+
+    # Reload systemd and enable service
+    systemctl daemon-reload
+    systemctl enable secubox-threats.service || true
+    systemctl start secubox-threats.service || true
+
+    # Reload nginx if running
+    if systemctl is-active --quiet nginx; then
+        systemctl reload nginx || true
+    fi
+fi
+
+#DEBHELPER#
+exit 0

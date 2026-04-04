@@ -1,0 +1,13 @@
+secubox-ai-insights (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release
+  * ML-based threat detection engine
+  * Anomaly detection for network traffic
+  * Threat scoring and classification
+  * CrowdSec and Suricata integration
+  * Model management (train/deploy)
+  * Alert correlation engine
+  * P31 Phosphor light theme dashboard with violet accent
+  * Three-fold architecture (components/status/access)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Apr 2026 10:00:00 +0200

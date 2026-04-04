@@ -1,0 +1,9 @@
+{
+  "id": "dns-provider",
+  "name": "DNS Provider",
+  "category": "network",
+  "icon": "cloud",
+  "path": "/dns-provider/",
+  "order": 706,
+  "description": "Multi-Provider DNS API Management"
+}

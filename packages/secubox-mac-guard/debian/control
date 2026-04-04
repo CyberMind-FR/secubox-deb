@@ -1,0 +1,27 @@
+Source: secubox-mac-guard
+Section: net
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
+
+Package: secubox-mac-guard
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0), nftables, nginx, ieee-data
+Recommends: nmap, arp-scan
+Description: SecuBox MAC Guard - MAC Address Control
+ MAC-based network access control with device discovery, vendor lookup,
+ whitelist/blacklist management, and nftables integration.
+ .
+ Features:
+  - MAC address whitelist/blacklist management
+  - Device discovery and tracking via ARP/DHCP
+  - OUI vendor lookup (ieee-data)
+  - Device naming and tagging
+  - Alert on unknown devices
+  - nftables MAC filtering integration
+  - Real-time device monitoring
+ .
+ Port Debian bookworm SecuBox module (CyberMind.fr).

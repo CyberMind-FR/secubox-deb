@@ -1,0 +1,15 @@
+Source: secubox-dns-provider
+Section: admin
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+
+Package: secubox-dns-provider
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0.0), python3-httpx
+Description: SecuBox DNS Provider Module
+ Multi-provider DNS API management for SecuBox.
+ Supports OVH, Gandi, Cloudflare, and AWS Route53.
+ Features ACME DNS-01 challenge support, Dynamic DNS,
+ zone import/export, and comprehensive audit logging.

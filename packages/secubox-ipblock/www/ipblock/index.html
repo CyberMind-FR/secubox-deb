@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - IP Blocklist Manager</title>
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root {
+            --accent: #ef4444;
+            --accent-dim: rgba(239, 68, 68, 0.3);
+            --accent-glow: 0 0 12px rgba(239, 68, 68, 0.4);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Courier Prime', monospace; background: var(--tube-light); color: var(--tube-dark); display: flex; min-height: 100vh; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
+        .header h1 { font-size: 1.5rem; color: var(--accent); text-shadow: var(--accent-glow); }
+        .header-actions { display: flex; gap: 0.5rem; align-items: center; }
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--p31-dim); background: var(--tube-pale); color: var(--p31-mid); cursor: pointer; font-size: 0.875rem; font-family: 'Courier Prime', monospace; transition: all 0.2s; }
+        .btn:hover { background: var(--tube-bezel); color: var(--p31-peak); }
+        .btn.primary { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+        .btn.primary:hover { background: var(--accent); color: white; }
+        .btn.success { background: rgba(51,255,102,0.15); border-color: var(--p31-peak); color: var(--p31-hot); }
+        .btn.danger { background: rgba(239,68,68,0.1); border-color: var(--accent); color: var(--accent); }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+        .tabs { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+        .tab { padding: 0.5rem 1rem; border: 1px solid var(--tube-soft); border-radius: 6px 6px 0 0; background: var(--tube-pale); color: var(--p31-dim); cursor: pointer; font-family: 'Courier Prime', monospace; }
+        .tab:hover { background: var(--tube-bezel); color: var(--p31-mid); }
+        .tab.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); border-bottom-color: var(--tube-light); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .card { background: var(--tube-pale); border: 1px solid var(--p31-dim); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
+        .card h2 { font-size: 1rem; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; color: var(--accent); }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card { background: var(--tube-pale); border: 1px solid var(--p31-dim); border-radius: 8px; padding: 1rem; text-align: center; }
+        .stat-card .value { font-size: 1.75rem; font-weight: bold; color: var(--accent); text-shadow: var(--accent-glow); }
+        .stat-card .label { font-size: 0.75rem; color: var(--p31-dim); margin-top: 0.25rem; }
+        .stat-card.blocked .value { color: var(--accent); }
+        .stat-card.sources .value { color: var(--p31-peak); text-shadow: var(--bloom-text); }
+        .stat-card.whitelist .value { color: var(--p31-hot); }
+        .stat-card.dropped .value { color: var(--p31-decay); text-shadow: var(--bloom-amber); }
+        table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--p31-ghost); }
+        th { color: var(--p31-dim); font-weight: 500; }
+        tr:hover { background: rgba(239,68,68,0.05); }
+        .badge { padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; }
+        .badge.enabled { background: rgba(51,255,102,0.2); color: var(--p31-peak); }
+        .badge.disabled { background: rgba(15,136,34,0.2); color: var(--p31-dim); }
+        .badge.spam { background: rgba(239,68,68,0.2); color: var(--accent); }
+        .badge.threats { background: rgba(255,179,71,0.2); color: var(--p31-decay); }
+        .badge.botnet { background: rgba(156,39,176,0.2); color: #9c27b0; }
+        .badge.malware { background: rgba(233,30,99,0.2); color: #e91e63; }
+        .badge.anonymizer { background: rgba(103,58,183,0.2); color: #673ab7; }
+        .badge.aggregated { background: rgba(33,150,243,0.2); color: #2196f3; }
+        .badge.attacks { background: rgba(255,87,34,0.2); color: #ff5722; }
+        .badge.imported { background: rgba(0,150,136,0.2); color: #009688; }
+        .badge.general { background: rgba(158,158,158,0.2); color: #9e9e9e; }
+        .badge.manual { background: var(--accent-dim); color: var(--accent); }
+        .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 1000; align-items: center; justify-content: center; }
+        .modal.active { display: flex; }
+        .modal-content { background: var(--tube-pale); border: 1px solid var(--accent); border-radius: 8px; padding: 1.5rem; width: 90%; max-width: 500px; max-height: 80vh; overflow-y: auto; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .modal-header h3 { font-size: 1.1rem; color: var(--accent); }
+        .close-btn { background: none; border: none; color: var(--p31-dim); cursor: pointer; font-size: 1.5rem; }
+        .close-btn:hover { color: var(--accent); }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; color: var(--p31-dim); font-size: 0.875rem; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 0.5rem; border-radius: 4px; border: 1px solid var(--tube-soft); background: var(--tube-light); color: var(--p31-mid); font-family: 'Courier Prime', monospace; }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: var(--accent); box-shadow: var(--accent-glow); }
+        .form-group textarea { min-height: 150px; resize: vertical; }
+        .source-item { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; border: 1px solid var(--tube-soft); border-radius: 6px; margin-bottom: 0.5rem; }
+        .source-item .info { flex: 1; }
+        .source-item .name { font-weight: 500; color: var(--p31-mid); }
+        .source-item .url { font-size: 0.75rem; color: var(--p31-dim); word-break: break-all; }
+        .actions { display: flex; gap: 0.5rem; }
+        .status-indicator { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; border-radius: 6px; font-size: 0.875rem; }
+        .status-indicator.available { background: rgba(51,255,102,0.1); border: 1px solid var(--p31-mid); color: var(--p31-peak); }
+        .status-indicator.unavailable { background: rgba(239,68,68,0.1); border: 1px solid var(--accent); color: var(--accent); }
+        .ip-code { font-family: 'JetBrains Mono', monospace; background: var(--tube-bezel); padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.85rem; }
+        .empty-state { text-align: center; padding: 2rem; color: var(--p31-dim); }
+        .chart-container { height: 200px; display: flex; align-items: flex-end; gap: 2px; padding: 1rem; background: var(--tube-bezel); border-radius: 6px; margin-top: 1rem; }
+        .chart-bar { flex: 1; background: var(--accent); border-radius: 2px 2px 0 0; min-height: 4px; transition: height 0.3s; }
+        .search-box { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+        .search-box input { flex: 1; }
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+    <main class="main">
+        <header class="header">
+            <h1>IP Blocklist Manager</h1>
+            <div class="header-actions">
+                <div id="nftStatus" class="status-indicator">Checking nftables...</div>
+                <button class="btn" onclick="refresh()">Refresh</button>
+                <button class="btn primary" onclick="applyRules()">Apply Rules</button>
+            </div>
+        </header>
+
+        <div class="stats-grid">
+            <div class="stat-card blocked">
+                <div class="value" id="statBlocked">-</div>
+                <div class="label">Total Blocked IPs</div>
+            </div>
+            <div class="stat-card sources">
+                <div class="value" id="statSources">-</div>
+                <div class="label">Active Sources</div>
+            </div>
+            <div class="stat-card whitelist">
+                <div class="value" id="statWhitelist">-</div>
+                <div class="label">Whitelisted</div>
+            </div>
+            <div class="stat-card dropped">
+                <div class="value" id="statDropped">-</div>
+                <div class="label">Packets Dropped</div>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <div class="tab active" onclick="showTab('dashboard')">Dashboard</div>
+            <div class="tab" onclick="showTab('blocklists')">Blocklists</div>
+            <div class="tab" onclick="showTab('blocked')">Blocked IPs</div>
+            <div class="tab" onclick="showTab('whitelist')">Whitelist</div>
+            <div class="tab" onclick="showTab('history')">History</div>
+            <div class="tab" onclick="showTab('settings')">Settings</div>
+        </div>
+
+        <!-- Dashboard Tab -->
+        <div class="tab-content active" id="tab-dashboard">
+            <div class="card">
+                <h2>Active Blocklist Sources</h2>
+                <div id="dashboardSources"></div>
+            </div>
+            <div class="card">
+                <h2>Recent Activity</h2>
+                <table>
+                    <thead>
+                        <tr><th>Time</th><th>Action</th><th>IP</th><th>Source</th></tr>
+                    </thead>
+                    <tbody id="recentActivity"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Blocklists Tab -->
+        <div class="tab-content" id="tab-blocklists">
+            <div class="card">
+                <h2>
+                    Configured Blocklists
+                    <div>
+                        <button class="btn btn-sm" onclick="updateAllLists()">Update All</button>
+                        <button class="btn btn-sm primary" onclick="showModal('addSourceModal')">Add Source</button>
+                    </div>
+                </h2>
+                <table>
+                    <thead>
+                        <tr><th>Name</th><th>Category</th><th>IPs</th><th>Last Updated</th><th>Status</th><th>Actions</th></tr>
+                    </thead>
+                    <tbody id="sourcesList"></tbody>
+                </table>
+            </div>
+            <div class="card">
+                <h2>Available Sources</h2>
+                <div id="availableSources"></div>
+            </div>
+        </div>
+
+        <!-- Blocked IPs Tab -->
+        <div class="tab-content" id="tab-blocked">
+            <div class="card">
+                <h2>
+                    Manually Blocked IPs
+                    <button class="btn btn-sm primary" onclick="showModal('blockModal')">Block IP</button>
+                </h2>
+                <table>
+                    <thead>
+                        <tr><th>IP Address</th><th>Reason</th><th>Added</th><th>Expires</th><th>Actions</th></tr>
+                    </thead>
+                    <tbody id="blockedList"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Whitelist Tab -->
+        <div class="tab-content" id="tab-whitelist">
+            <div class="card">
+                <h2>
+                    Whitelisted IPs
+                    <button class="btn btn-sm primary" onclick="showModal('whitelistModal')">Add to Whitelist</button>
+                </h2>
+                <table>
+                    <thead>
+                        <tr><th>IP Address</th><th>Reason</th><th>Added</th><th>Actions</th></tr>
+                    </thead>
+                    <tbody id="whitelistList"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- History Tab -->
+        <div class="tab-content" id="tab-history">
+            <div class="card">
+                <h2>
+                    Block History
+                    <div>
+                        <button class="btn btn-sm" onclick="showModal('importModal')">Import</button>
+                        <button class="btn btn-sm" onclick="exportList()">Export</button>
+                    </div>
+                </h2>
+                <table>
+                    <thead>
+                        <tr><th>Time</th><th>Action</th><th>IP</th><th>Source</th><th>Reason</th></tr>
+                    </thead>
+                    <tbody id="historyList"></tbody>
+                </table>
+                <div style="margin-top: 1rem; text-align: center;">
+                    <button class="btn btn-sm" id="loadMoreBtn" onclick="loadMoreHistory()">Load More</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Tab -->
+        <div class="tab-content" id="tab-settings">
+            <div class="card">
+                <h2>Configuration</h2>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="cfgAutoUpdate"> Enable Auto-Update
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>Update Interval (hours)</label>
+                    <input type="number" id="cfgInterval" min="1" max="168" value="24">
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="cfgLogBlocked"> Log Blocked Packets
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>Block Action</label>
+                    <select id="cfgAction">
+                        <option value="drop">Drop (silent)</option>
+                        <option value="reject">Reject (with ICMP)</option>
+                    </select>
+                </div>
+                <button class="btn primary" onclick="saveConfig()">Save Configuration</button>
+            </div>
+        </div>
+
+        <!-- Add Source Modal -->
+        <div class="modal" id="addSourceModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Add Blocklist Source</h3>
+                    <button class="close-btn" onclick="closeModal('addSourceModal')">&times;</button>
+                </div>
+                <div class="form-group">
+                    <label>Name</label>
+                    <input type="text" id="srcName" placeholder="e.g., my-blocklist">
+                </div>
+                <div class="form-group">
+                    <label>URL</label>
+                    <input type="text" id="srcUrl" placeholder="https://...">
+                </div>
+                <div class="form-group">
+                    <label>Format</label>
+                    <select id="srcFormat">
+                        <option value="plain">Plain (one IP per line)</option>
+                        <option value="cidr">CIDR notation</option>
+                        <option value="csv">CSV (IP in first column)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Category</label>
+                    <select id="srcCategory">
+                        <option value="general">General</option>
+                        <option value="spam">Spam</option>
+                        <option value="threats">Threats</option>
+                        <option value="botnet">Botnet</option>
+                        <option value="malware">Malware</option>
+                        <option value="attacks">Attacks</option>
+                    </select>
+                </div>
+                <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                    <button class="btn" onclick="closeModal('addSourceModal')">Cancel</button>
+                    <button class="btn primary" onclick="addSource()">Add</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Block IP Modal -->
+        <div class="modal" id="blockModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Block IP Address</h3>
+                    <button class="close-btn" onclick="closeModal('blockModal')">&times;</button>
+                </div>
+                <div class="form-group">
+                    <label>IP Address or CIDR</label>
+                    <input type="text" id="blockIp" placeholder="192.168.1.100 or 10.0.0.0/8">
+                </div>
+                <div class="form-group">
+                    <label>Reason (optional)</label>
+                    <input type="text" id="blockReason" placeholder="e.g., Known attacker">
+                </div>
+                <div class="form-group">
+                    <label>Duration (hours, empty = permanent)</label>
+                    <input type="number" id="blockDuration" min="1" placeholder="Leave empty for permanent">
+                </div>
+                <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                    <button class="btn" onclick="closeModal('blockModal')">Cancel</button>
+                    <button class="btn primary" onclick="blockIP()">Block</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Whitelist Modal -->
+        <div class="modal" id="whitelistModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Add to Whitelist</h3>
+                    <button class="close-btn" onclick="closeModal('whitelistModal')">&times;</button>
+                </div>
+                <div class="form-group">
+                    <label>IP Address or CIDR</label>
+                    <input type="text" id="whitelistIp" placeholder="192.168.1.100 or 10.0.0.0/8">
+                </div>
+                <div class="form-group">
+                    <label>Reason (optional)</label>
+                    <input type="text" id="whitelistReason" placeholder="e.g., Trusted server">
+                </div>
+                <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                    <button class="btn" onclick="closeModal('whitelistModal')">Cancel</button>
+                    <button class="btn primary" onclick="addWhitelist()">Add</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Import Modal -->
+        <div class="modal" id="importModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Import IP List</h3>
+                    <button class="close-btn" onclick="closeModal('importModal')">&times;</button>
+                </div>
+                <div class="form-group">
+                    <label>List Name</label>
+                    <input type="text" id="importName" placeholder="e.g., my-imported-list">
+                </div>
+                <div class="form-group">
+                    <label>Format</label>
+                    <select id="importFormat">
+                        <option value="plain">Plain (one IP per line)</option>
+                        <option value="csv">CSV (IP in first column)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>IP List (one per line)</label>
+                    <textarea id="importContent" placeholder="192.168.1.1&#10;10.0.0.0/8&#10;..."></textarea>
+                </div>
+                <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                    <button class="btn" onclick="closeModal('importModal')">Cancel</button>
+                    <button class="btn primary" onclick="importList()">Import</button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const API = '/api/v1/ipblock';
+        const token = () => localStorage.getItem('sbx_token');
+        const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+        let historyOffset = 0;
+
+        async function api(path, opts = {}) {
+            try {
+                const res = await fetch(API + path, { ...opts, headers: headers() });
+                if (res.status === 401) { window.location = '/portal/login.html'; return {}; }
+                if (!res.ok) return {};
+                const text = await res.text();
+                return text ? JSON.parse(text) : {};
+            } catch { return {}; }
+        }
+
+        function showTab(name) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelector(`.tab:nth-child(${['dashboard','blocklists','blocked','whitelist','history','settings'].indexOf(name) + 1})`).classList.add('active');
+            document.getElementById('tab-' + name).classList.add('active');
+            if (name === 'history') { historyOffset = 0; loadHistory(); }
+        }
+
+        function showModal(id) { document.getElementById(id).classList.add('active'); }
+        function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+
+        async function loadStats() {
+            const d = await api('/stats');
+            document.getElementById('statBlocked').textContent = (d.total_blocked_ips || 0).toLocaleString();
+            document.getElementById('statSources').textContent = d.active_sources || 0;
+            document.getElementById('statWhitelist').textContent = d.whitelisted || 0;
+            document.getElementById('statDropped').textContent = (d.packets_dropped || 0).toLocaleString();
+
+            const nft = document.getElementById('nftStatus');
+            if (d.nftables_available) {
+                nft.className = 'status-indicator available';
+                nft.textContent = 'nftables OK';
+            } else {
+                nft.className = 'status-indicator unavailable';
+                nft.textContent = 'nftables unavailable';
+            }
+        }
+
+        async function loadSources() {
+            const d = await api('/lists');
+            const sources = d.sources || [];
+
+            // Dashboard view
+            const dashDiv = document.getElementById('dashboardSources');
+            dashDiv.innerHTML = sources.slice(0, 5).map(s => `<div class="source-item">
+                <div class="info">
+                    <div class="name">${s.name}</div>
+                    <div class="url">${(s.ip_count || 0).toLocaleString()} IPs - ${s.category || 'general'}</div>
+                </div>
+                <span class="badge ${s.enabled ? 'enabled' : 'disabled'}">${s.enabled ? 'Active' : 'Disabled'}</span>
+            </div>`).join('') || '<div class="empty-state">No blocklists configured</div>';
+
+            // Full list view
+            const tbody = document.getElementById('sourcesList');
+            tbody.innerHTML = sources.map(s => `<tr>
+                <td><strong>${s.name}</strong></td>
+                <td><span class="badge ${s.category || 'general'}">${s.category || 'general'}</span></td>
+                <td>${(s.ip_count || 0).toLocaleString()}</td>
+                <td>${s.last_updated ? new Date(s.last_updated).toLocaleString() : '-'}</td>
+                <td><span class="badge ${s.enabled ? 'enabled' : 'disabled'}">${s.enabled ? 'Active' : 'Disabled'}</span></td>
+                <td class="actions">
+                    <button class="btn btn-sm" onclick="updateList('${s.id}')">Update</button>
+                    <button class="btn btn-sm danger" onclick="removeSource('${s.id}')">Remove</button>
+                </td>
+            </tr>`).join('') || '<tr><td colspan="6" class="empty-state">No blocklists configured</td></tr>';
+        }
+
+        async function loadAvailableSources() {
+            const d = await api('/lists/available');
+            const div = document.getElementById('availableSources');
+            div.innerHTML = (d.sources || []).map(s => `<div class="source-item">
+                <div class="info">
+                    <div class="name">${s.name}</div>
+                    <div class="url"><span class="badge ${s.category}">${s.category}</span> ${s.url}</div>
+                </div>
+                <button class="btn btn-sm primary" onclick="quickAddSource('${s.name}', '${s.url}', '${s.format}', '${s.category}')">Add</button>
+            </div>`).join('');
+        }
+
+        async function loadBlocked() {
+            const d = await api('/blocked');
+            const tbody = document.getElementById('blockedList');
+            tbody.innerHTML = (d.blocked || []).map(b => `<tr>
+                <td><code class="ip-code">${b.ip}</code></td>
+                <td>${b.reason || '-'}</td>
+                <td>${b.added ? new Date(b.added).toLocaleString() : '-'}</td>
+                <td>${b.expires ? new Date(b.expires).toLocaleString() : 'Never'}</td>
+                <td class="actions">
+                    <button class="btn btn-sm" onclick="unblockIP('${b.ip}')">Unblock</button>
+                </td>
+            </tr>`).join('') || '<tr><td colspan="5" class="empty-state">No manually blocked IPs</td></tr>';
+        }
+
+        async function loadWhitelist() {
+            const d = await api('/whitelist');
+            const tbody = document.getElementById('whitelistList');
+            tbody.innerHTML = (d.whitelist || []).map(w => `<tr>
+                <td><code class="ip-code">${w.ip}</code></td>
+                <td>${w.reason || '-'}</td>
+                <td>${w.added ? new Date(w.added).toLocaleString() : '-'}</td>
+                <td class="actions">
+                    <button class="btn btn-sm danger" onclick="removeWhitelist('${w.ip}')">Remove</button>
+                </td>
+            </tr>`).join('') || '<tr><td colspan="4" class="empty-state">No whitelisted IPs</td></tr>';
+        }
+
+        async function loadHistory() {
+            const d = await api('/history?limit=50&offset=' + historyOffset);
+            const tbody = document.getElementById('historyList');
+            const rows = (d.history || []).map(h => `<tr>
+                <td>${new Date(h.timestamp).toLocaleString()}</td>
+                <td><span class="badge ${h.action}">${h.action}</span></td>
+                <td><code class="ip-code">${h.ip}</code></td>
+                <td>${h.source}</td>
+                <td>${h.reason || '-'}</td>
+            </tr>`).join('');
+
+            if (historyOffset === 0) {
+                tbody.innerHTML = rows || '<tr><td colspan="5" class="empty-state">No history</td></tr>';
+            } else {
+                tbody.innerHTML += rows;
+            }
+
+            document.getElementById('loadMoreBtn').style.display = (d.history || []).length < 50 ? 'none' : 'inline-block';
+        }
+
+        function loadMoreHistory() {
+            historyOffset += 50;
+            loadHistory();
+        }
+
+        async function loadRecentActivity() {
+            const d = await api('/history?limit=10');
+            const tbody = document.getElementById('recentActivity');
+            tbody.innerHTML = (d.history || []).map(h => `<tr>
+                <td>${new Date(h.timestamp).toLocaleString()}</td>
+                <td><span class="badge ${h.action}">${h.action}</span></td>
+                <td><code class="ip-code">${h.ip}</code></td>
+                <td>${h.source}</td>
+            </tr>`).join('') || '<tr><td colspan="4" class="empty-state">No recent activity</td></tr>';
+        }
+
+        async function loadConfig() {
+            const d = await api('/config');
+            document.getElementById('cfgAutoUpdate').checked = d.auto_update_enabled !== false;
+            document.getElementById('cfgInterval').value = Math.floor((d.update_interval || 86400) / 3600);
+            document.getElementById('cfgLogBlocked').checked = d.log_blocked !== false;
+            document.getElementById('cfgAction').value = d.block_action || 'drop';
+        }
+
+        async function saveConfig() {
+            const cfg = {
+                auto_update_enabled: document.getElementById('cfgAutoUpdate').checked,
+                update_interval: parseInt(document.getElementById('cfgInterval').value) * 3600,
+                log_blocked: document.getElementById('cfgLogBlocked').checked,
+                block_action: document.getElementById('cfgAction').value
+            };
+            const d = await api('/config', { method: 'POST', body: JSON.stringify(cfg) });
+            if (d.success) alert('Configuration saved');
+            else alert('Failed to save configuration');
+        }
+
+        async function addSource() {
+            const name = document.getElementById('srcName').value.trim();
+            const url = document.getElementById('srcUrl').value.trim();
+            const format = document.getElementById('srcFormat').value;
+            const category = document.getElementById('srcCategory').value;
+            if (!name || !url) return alert('Name and URL required');
+
+            const d = await api('/list/add', { method: 'POST', body: JSON.stringify({ name, url, format, category, enabled: true, auto_update: true }) });
+            if (d.success) {
+                closeModal('addSourceModal');
+                refresh();
+            } else {
+                alert('Failed to add source');
+            }
+        }
+
+        async function quickAddSource(name, url, format, category) {
+            const d = await api('/list/add', { method: 'POST', body: JSON.stringify({ name, url, format, category, enabled: true, auto_update: true }) });
+            if (d.success) refresh();
+            else alert('Failed to add source');
+        }
+
+        async function removeSource(id) {
+            if (!confirm('Remove this blocklist source?')) return;
+            await api('/list/' + id, { method: 'DELETE' });
+            refresh();
+        }
+
+        async function updateList(id) {
+            const d = await api('/list/' + id + '/update', { method: 'POST' });
+            if (d.success) {
+                alert('Updated: ' + d.ip_count + ' IPs');
+                refresh();
+            } else {
+                alert('Failed to update');
+            }
+        }
+
+        async function updateAllLists() {
+            const d = await api('/lists/update-all', { method: 'POST' });
+            if (d.results) {
+                const success = d.results.filter(r => r.success).length;
+                alert(`Updated ${success}/${d.results.length} lists`);
+                refresh();
+            }
+        }
+
+        async function blockIP() {
+            const ip = document.getElementById('blockIp').value.trim();
+            const reason = document.getElementById('blockReason').value.trim() || null;
+            const durationHours = parseInt(document.getElementById('blockDuration').value);
+            const duration = durationHours ? durationHours * 3600 : null;
+
+            if (!ip) return alert('IP address required');
+
+            const d = await api('/block', { method: 'POST', body: JSON.stringify({ ip, reason, duration }) });
+            if (d.success) {
+                closeModal('blockModal');
+                document.getElementById('blockIp').value = '';
+                document.getElementById('blockReason').value = '';
+                document.getElementById('blockDuration').value = '';
+                refresh();
+            } else {
+                alert('Failed to block IP');
+            }
+        }
+
+        async function unblockIP(ip) {
+            if (!confirm('Unblock ' + ip + '?')) return;
+            await api('/block/' + encodeURIComponent(ip), { method: 'DELETE' });
+            refresh();
+        }
+
+        async function addWhitelist() {
+            const ip = document.getElementById('whitelistIp').value.trim();
+            const reason = document.getElementById('whitelistReason').value.trim() || null;
+
+            if (!ip) return alert('IP address required');
+
+            const d = await api('/whitelist', { method: 'POST', body: JSON.stringify({ ip, reason }) });
+            if (d.success) {
+                closeModal('whitelistModal');
+                document.getElementById('whitelistIp').value = '';
+                document.getElementById('whitelistReason').value = '';
+                refresh();
+            } else {
+                alert('Failed to add to whitelist');
+            }
+        }
+
+        async function removeWhitelist(ip) {
+            if (!confirm('Remove ' + ip + ' from whitelist?')) return;
+            await api('/whitelist/' + encodeURIComponent(ip), { method: 'DELETE' });
+            refresh();
+        }
+
+        async function importList() {
+            const name = document.getElementById('importName').value.trim();
+            const format = document.getElementById('importFormat').value;
+            const content = document.getElementById('importContent').value.trim();
+
+            if (!name || !content) return alert('Name and content required');
+
+            const d = await api('/import', { method: 'POST', body: JSON.stringify({ name, format, content }) });
+            if (d.success) {
+                closeModal('importModal');
+                alert('Imported ' + d.imported + ' IPs');
+                refresh();
+            } else {
+                alert('Failed to import');
+            }
+        }
+
+        async function exportList() {
+            const d = await api('/export?include_manual=true&include_lists=true');
+            if (d.content) {
+                const blob = new Blob([d.content], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'ipblock-export-' + new Date().toISOString().slice(0,10) + '.txt';
+                a.click();
+                URL.revokeObjectURL(url);
+            }
+        }
+
+        async function applyRules() {
+            const d = await api('/apply', { method: 'POST' });
+            if (d.success) {
+                alert(`Rules applied! IPv4: ${d.blocked_v4}, IPv6: ${d.blocked_v6}`);
+                refresh();
+            } else {
+                alert('Failed to apply rules');
+            }
+        }
+
+        function refresh() {
+            loadStats();
+            loadSources();
+            loadAvailableSources();
+            loadBlocked();
+            loadWhitelist();
+            loadRecentActivity();
+            loadConfig();
+        }
+
+        refresh();
+    </script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+secubox-cookies (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release
+  * Cookie tracking and analysis
+  * Third-party cookie detection
+  * Known tracker pattern matching
+  * Cookie policy enforcement
+  * GDPR compliance checking
+  * Domain-based filtering
+  * Cookie statistics dashboard
+  * Violation alerts and logging
+  * P31 Phosphor light theme with lime accent
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Apr 2026 10:00:00 +0200

@@ -1,0 +1,9 @@
+{
+  "id": "cookies",
+  "name": "Cookie Tracker",
+  "icon": "cookie",
+  "path": "/cookies/",
+  "category": "privacy",
+  "order": 704,
+  "description": "Cookie tracking and privacy compliance"
+}

@@ -1,0 +1,9 @@
+{
+  "id": "openclaw",
+  "name": "OpenClaw OSINT",
+  "category": "security",
+  "icon": ":::",
+  "path": "/openclaw/",
+  "order": 708,
+  "description": "Open Source Intelligence gathering and reconnaissance"
+}

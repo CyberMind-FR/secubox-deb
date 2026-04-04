@@ -1,0 +1,20 @@
+Source: secubox-ipblock
+Section: admin
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+
+Package: secubox-ipblock
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0.0), nftables, curl
+Description: SecuBox IP Blocklist Manager
+ IP blocklist management module for SecuBox.
+ Features include:
+  - Multiple blocklist sources (Spamhaus, AbuseIPDB, FireHOL, etc.)
+  - Custom blocklist rules
+  - nftables set integration
+  - Whitelist management
+  - Auto-update scheduling
+  - Block statistics and history
+  - Import/export lists

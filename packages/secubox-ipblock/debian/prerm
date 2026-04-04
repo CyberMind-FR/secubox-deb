@@ -1,0 +1,15 @@
+#!/bin/sh
+set -e
+if [ "$1" = "remove" ]; then
+    systemctl stop secubox-ipblock.service || true
+    systemctl disable secubox-ipblock.service || true
+
+    # Remove nftables table
+    nft delete table inet ipblock 2>/dev/null || true
+
+    # Remove nginx config
+    rm -f /etc/nginx/secubox.d/ipblock.conf
+    nginx -t 2>/dev/null && systemctl reload nginx 2>/dev/null || true
+fi
+#DEBHELPER#
+exit 0
