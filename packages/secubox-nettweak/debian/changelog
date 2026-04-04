@@ -1,0 +1,11 @@
+secubox-nettweak (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release - Network tuning module.
+  * FastAPI backend with sysctl management.
+  * Endpoints: status, profiles, tcp, net, apply, reload.
+  * Tuning profiles: default, performance, low-latency, security, router.
+  * Configuration persistence via sysctl.d.
+  * P31 Phosphor light theme frontend.
+  * Tabs: Overview, TCP Settings, Network Settings, Profiles.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Apr 2026 14:00:00 +0200

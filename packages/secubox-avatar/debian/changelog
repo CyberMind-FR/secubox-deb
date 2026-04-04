@@ -1,0 +1,11 @@
+secubox-avatar (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release - Identity and avatar management module.
+  * FastAPI backend with JWT authentication.
+  * Endpoints: identities, identity CRUD, avatar upload/download.
+  * Service sync to Gitea, Nextcloud, Mail, Matrix, LDAP.
+  * P31 Phosphor light theme frontend.
+  * Tabs: Identities, Services.
+  * Avatar upload with drag-and-drop support.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Apr 2026 14:00:00 +0200

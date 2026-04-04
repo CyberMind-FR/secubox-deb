@@ -1,0 +1,9 @@
+{
+  "id": "admin",
+  "name": "Administration",
+  "category": "core",
+  "icon": "gear",
+  "path": "/admin/",
+  "order": 100,
+  "description": "System administration and management"
+}

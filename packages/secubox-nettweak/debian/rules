@@ -1,0 +1,14 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-nettweak/usr/lib/secubox/nettweak/
+	cp -r api debian/secubox-nettweak/usr/lib/secubox/nettweak/
+	install -d debian/secubox-nettweak/usr/share/secubox/www
+	[ -d www ] && cp -r www/. debian/secubox-nettweak/usr/share/secubox/www/ || true
+	install -d debian/secubox-nettweak/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-nettweak/usr/share/secubox/menu.d/ || true
+	# Modular nginx config
+	install -d debian/secubox-nettweak/etc/nginx/secubox.d
+	[ -f nginx/nettweak.conf ] && cp nginx/nettweak.conf debian/secubox-nettweak/etc/nginx/secubox.d/ || true

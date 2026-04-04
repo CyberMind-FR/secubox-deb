@@ -1,0 +1,13 @@
+secubox-admin (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release - System administration module.
+  * FastAPI backend with psutil-based system monitoring.
+  * Endpoints: status, services, logs, storage, processes, updates.
+  * Service control: start, stop, restart systemd units.
+  * System actions: reboot, shutdown with confirmation.
+  * APT updates: check and run system upgrades.
+  * Audit logging for all administrative actions (CSPN compliant).
+  * P31 Phosphor light theme frontend with orange accent.
+  * Tabs: Overview, Services, Logs, Storage, Processes, Updates.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Apr 2026 16:00:00 +0200

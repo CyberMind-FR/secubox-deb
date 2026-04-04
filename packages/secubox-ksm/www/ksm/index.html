@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - KSM Memory Optimization</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root {
+            /* P31 Phosphor spectrum */
+            --p31-peak: #00dd44;
+            --p31-hot: #00ff55;
+            --p31-mid: #009933;
+            --p31-dim: #006622;
+            --p31-ghost: #003311;
+            --p31-decay: #ffb347;
+            --p31-decay-dim: #cc7722;
+            /* Tube glass */
+            --tube-light: #e8f5e9;
+            --tube-pale: #c8e6c9;
+            --tube-soft: #a5d6a7;
+            --tube-dark: #1a3320;
+            /* KSM accent - memory purple */
+            --ksm-accent: #9c27b0;
+            --ksm-accent-dim: #7b1fa2;
+            /* Legacy */
+            --bg-dark: var(--tube-light);
+            --bg-card: var(--tube-pale);
+            --border: var(--tube-soft);
+            --text: var(--tube-dark);
+            --text-dim: var(--p31-dim);
+            --primary: var(--ksm-accent);
+            --cyan: #00bcd4;
+            --green: var(--p31-peak);
+            --red: #ff4466;
+            --yellow: var(--p31-decay);
+            --orange: var(--p31-decay-dim);
+            --purple: var(--ksm-accent);
+            /* Bloom */
+            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-purple: 0 0 6px var(--ksm-accent), 0 0 14px rgba(156,39,176,0.5);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Courier Prime', 'Courier New', monospace;
+            background: var(--tube-light);
+            background-image: radial-gradient(ellipse at 50% 40%, rgba(156,39,176,0.02) 0%, transparent 70%);
+            color: var(--tube-dark);
+            display: flex;
+            min-height: 100vh;
+        }
+        .main { flex: 1; margin-left: 220px; }
+        .header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 1rem 1.5rem; border-bottom: 1px solid var(--border);
+            background: var(--bg-card);
+        }
+        .header-title { display: flex; align-items: center; gap: 1rem; }
+        .header-title h1 {
+            font-size: 1.5rem; font-weight: 600;
+            color: var(--ksm-accent);
+            text-shadow: var(--bloom-purple);
+        }
+        .header-actions { display: flex; gap: 0.75rem; align-items: center; }
+        .badge {
+            padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem;
+            text-transform: uppercase; letter-spacing: 0.1em;
+        }
+        .badge-green { background: rgba(0,221,68,0.1); border: 1px solid var(--p31-peak); color: var(--p31-peak); }
+        .badge-red { background: rgba(255,68,102,0.1); border: 1px solid var(--red); color: var(--red); }
+        .badge-purple { background: rgba(156,39,176,0.1); border: 1px solid var(--purple); color: var(--purple); }
+        .badge-yellow { background: rgba(255,179,71,0.1); border: 1px solid var(--yellow); color: var(--yellow); }
+
+        .btn {
+            padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border);
+            background: var(--bg-card); color: var(--text); cursor: pointer;
+            font-size: 0.875rem; font-family: inherit; letter-spacing: 0.05em;
+            transition: all 0.2s;
+        }
+        .btn:hover { border-color: var(--p31-dim); color: var(--p31-peak); }
+        .btn.primary { background: rgba(156,39,176,0.1); border-color: var(--purple); color: var(--purple); }
+        .btn.primary:hover { background: rgba(156,39,176,0.2); }
+        .btn.success { background: rgba(0,221,68,0.1); border-color: var(--green); color: var(--green); }
+        .btn.danger { background: rgba(255,68,102,0.1); border-color: var(--red); color: var(--red); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .content { padding: 1.5rem; }
+
+        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 8px; padding: 1.25rem; text-align: center;
+        }
+        .stat-card .value { font-size: 2.5rem; font-weight: bold; margin-bottom: 0.25rem; }
+        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.1em; }
+        .stat-card.purple .value { color: var(--purple); text-shadow: var(--bloom-purple); }
+        .stat-card.cyan .value { color: var(--cyan); }
+        .stat-card.green .value { color: var(--green); text-shadow: var(--bloom-soft); }
+        .stat-card.yellow .value { color: var(--yellow); }
+
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+        .card {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem;
+        }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .card-header h2 {
+            font-size: 0.9rem; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 0.1em; color: var(--p31-decay);
+        }
+
+        /* Toggle switch */
+        .toggle-container {
+            display: flex; align-items: center; gap: 1rem;
+            padding: 1rem;
+            background: var(--tube-light); border-radius: 6px;
+        }
+        .toggle-label { font-size: 1.1rem; font-weight: 600; }
+        .toggle {
+            position: relative; width: 60px; height: 30px;
+            background: var(--border); border-radius: 15px;
+            cursor: pointer; transition: background 0.3s;
+        }
+        .toggle.enabled { background: var(--green); }
+        .toggle::after {
+            content: ''; position: absolute;
+            width: 26px; height: 26px; top: 2px; left: 2px;
+            background: white; border-radius: 50%;
+            transition: transform 0.3s;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .toggle.enabled::after { transform: translateX(30px); }
+
+        /* Slider */
+        .slider-container { margin-bottom: 1.5rem; }
+        .slider-header {
+            display: flex; justify-content: space-between;
+            margin-bottom: 0.5rem;
+        }
+        .slider-label { color: var(--text-dim); font-size: 0.85rem; }
+        .slider-value {
+            font-weight: bold; color: var(--purple);
+            background: rgba(156,39,176,0.1);
+            padding: 0.25rem 0.5rem; border-radius: 4px;
+        }
+        .slider {
+            width: 100%; height: 8px;
+            appearance: none; background: var(--border);
+            border-radius: 4px; outline: none;
+        }
+        .slider::-webkit-slider-thumb {
+            appearance: none; width: 20px; height: 20px;
+            background: var(--purple); border-radius: 50%;
+            cursor: pointer; box-shadow: var(--bloom-purple);
+        }
+        .slider::-moz-range-thumb {
+            width: 20px; height: 20px;
+            background: var(--purple); border-radius: 50%;
+            cursor: pointer; border: none;
+        }
+
+        /* Info box */
+        .info-box {
+            background: var(--tube-light); border-radius: 6px;
+            padding: 1rem; margin-top: 1rem;
+        }
+        .info-row {
+            display: flex; justify-content: space-between;
+            padding: 0.5rem 0; border-bottom: 1px solid var(--border);
+        }
+        .info-row:last-child { border-bottom: none; }
+        .info-label { color: var(--text-dim); }
+        .info-value { font-weight: 600; }
+
+        /* Explanation section */
+        .explanation {
+            background: rgba(156,39,176,0.05);
+            border: 1px solid rgba(156,39,176,0.2);
+            border-radius: 8px; padding: 1rem;
+            margin-top: 1rem; font-size: 0.85rem;
+            line-height: 1.6;
+        }
+        .explanation h3 {
+            color: var(--purple); margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+        }
+        .explanation ul {
+            margin-left: 1.5rem; margin-top: 0.5rem;
+        }
+        .explanation li { margin-bottom: 0.25rem; }
+
+        /* Toast */
+        .toast {
+            position: fixed; bottom: 2rem; right: 2rem;
+            padding: 1rem 1.5rem; border-radius: 8px;
+            background: var(--bg-card); border: 1px solid var(--border);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            z-index: 1000; display: none;
+        }
+        .toast.show { display: block; animation: slideIn 0.3s ease; }
+        .toast.success { border-color: var(--green); }
+        .toast.error { border-color: var(--red); }
+        @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        /* Not available state */
+        .not-available {
+            text-align: center; padding: 3rem;
+            background: rgba(255,68,102,0.05);
+            border: 1px solid rgba(255,68,102,0.2);
+            border-radius: 8px;
+        }
+        .not-available h2 { color: var(--red); margin-bottom: 1rem; }
+        .not-available p { color: var(--text-dim); }
+
+        @media (max-width: 1200px) { .stats-row { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } .sidebar { display: none; } .main { margin-left: 0; } }
+        @media (max-width: 768px) { .main { margin-left: 0; } .stats-row { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body class="crt-light">
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+
+    <main class="main">
+        <header class="header">
+            <div class="header-title">
+                <h1>KSM Memory Optimization</h1>
+                <span id="status-badge" class="badge badge-yellow">CHECKING</span>
+                <span id="last-update" style="color: var(--text-dim); font-size: 0.85rem;">-</span>
+            </div>
+            <div class="header-actions">
+                <button class="btn" onclick="refresh()">Refresh</button>
+            </div>
+        </header>
+
+        <div class="content" id="main-content">
+            <!-- Loading state -->
+            <div id="loading" class="card" style="text-align: center; padding: 3rem;">
+                <p style="color: var(--text-dim);">Loading KSM status...</p>
+            </div>
+
+            <!-- Not available state -->
+            <div id="not-available" class="not-available" style="display: none;">
+                <h2>KSM Not Available</h2>
+                <p>Kernel Same-page Merging is not available on this system.</p>
+                <p style="margin-top: 1rem;">KSM requires kernel support. Check if CONFIG_KSM is enabled in your kernel.</p>
+            </div>
+
+            <!-- Main content (shown when KSM is available) -->
+            <div id="ksm-content" style="display: none;">
+                <!-- Stats Row -->
+                <div class="stats-row">
+                    <div class="stat-card purple">
+                        <div class="value" id="memory-saved">-</div>
+                        <div class="label">Memory Saved</div>
+                    </div>
+                    <div class="stat-card cyan">
+                        <div class="value" id="pages-sharing">-</div>
+                        <div class="label">Pages Sharing</div>
+                    </div>
+                    <div class="stat-card green">
+                        <div class="value" id="pages-shared">-</div>
+                        <div class="label">Pages Shared</div>
+                    </div>
+                    <div class="stat-card yellow">
+                        <div class="value" id="full-scans">-</div>
+                        <div class="label">Full Scans</div>
+                    </div>
+                </div>
+
+                <div class="grid-2">
+                    <!-- Status & Control Card -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h2>KSM Control</h2>
+                        </div>
+                        <div class="toggle-container">
+                            <span class="toggle-label">KSM Status:</span>
+                            <div class="toggle" id="ksm-toggle" onclick="toggleKSM()"></div>
+                            <span id="ksm-status-text" style="color: var(--text-dim);">-</span>
+                        </div>
+
+                        <div class="info-box">
+                            <div class="info-row">
+                                <span class="info-label">Pages Unshared</span>
+                                <span class="info-value" id="pages-unshared">-</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Stable Node Chains</span>
+                                <span class="info-value" id="stable-chains">-</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Stable Node Dups</span>
+                                <span class="info-value" id="stable-dups">-</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Configuration Card -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h2>Configuration</h2>
+                        </div>
+
+                        <div class="slider-container">
+                            <div class="slider-header">
+                                <span class="slider-label">Pages to Scan (per cycle)</span>
+                                <span class="slider-value" id="pages-to-scan-value">100</span>
+                            </div>
+                            <input type="range" class="slider" id="pages-to-scan"
+                                   min="100" max="10000" step="100" value="100"
+                                   oninput="updateSliderValue('pages-to-scan')">
+                            <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem;">
+                                <span>100</span>
+                                <span>10000</span>
+                            </div>
+                        </div>
+
+                        <div class="slider-container">
+                            <div class="slider-header">
+                                <span class="slider-label">Sleep Between Scans (ms)</span>
+                                <span class="slider-value" id="sleep-millisecs-value">20</span>
+                            </div>
+                            <input type="range" class="slider" id="sleep-millisecs"
+                                   min="10" max="1000" step="10" value="20"
+                                   oninput="updateSliderValue('sleep-millisecs')">
+                            <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem;">
+                                <span>10ms</span>
+                                <span>1000ms</span>
+                            </div>
+                        </div>
+
+                        <button class="btn primary" onclick="saveConfig()" style="width: 100%;">
+                            Save Configuration
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Explanation Card -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2>About KSM</h2>
+                    </div>
+                    <div class="explanation">
+                        <h3>What is Kernel Same-page Merging?</h3>
+                        <p>KSM is a memory-saving de-duplication feature that scans memory looking for pages with identical content. When identical pages are found, they are merged into a single page, with copy-on-write semantics.</p>
+
+                        <h3>Best For</h3>
+                        <ul>
+                            <li>Virtual machines running similar operating systems</li>
+                            <li>Container environments with shared base images</li>
+                            <li>Systems with many similar processes</li>
+                        </ul>
+
+                        <h3>Configuration Tips</h3>
+                        <ul>
+                            <li><strong>Pages to Scan:</strong> Higher values = faster merging but more CPU usage</li>
+                            <li><strong>Sleep Time:</strong> Lower values = more aggressive scanning but higher CPU usage</li>
+                            <li>Default values (100 pages, 20ms) provide a good balance</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div id="toast" class="toast"></div>
+
+    <script>
+        const API = '/api/v1/ksm';
+        let ksmEnabled = false;
+        let ksmAvailable = false;
+
+        function getToken() {
+            return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token');
+        }
+
+        function checkAuth() {
+            if (!getToken()) {
+                window.location.href = '/portal/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+                return false;
+            }
+            return true;
+        }
+
+        async function api(endpoint, options = {}) {
+            const token = getToken();
+            const headers = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = 'Bearer ' + token;
+
+            try {
+                const res = await fetch(API + endpoint, { ...options, headers });
+                if (res.status === 401) {
+                    window.location.href = '/portal/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+                    return null;
+                }
+                return res.json();
+            } catch (e) {
+                console.error('API error:', e);
+                return null;
+            }
+        }
+
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = 'toast show ' + type;
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+
+        function formatNumber(n) {
+            if (n === null || n === undefined) return '-';
+            return n.toLocaleString();
+        }
+
+        function updateSliderValue(id) {
+            const slider = document.getElementById(id);
+            const valueEl = document.getElementById(id + '-value');
+            valueEl.textContent = slider.value;
+        }
+
+        async function loadStatus() {
+            const data = await api('/status');
+            if (!data) return;
+
+            ksmAvailable = data.available;
+            ksmEnabled = data.enabled;
+
+            document.getElementById('loading').style.display = 'none';
+
+            if (!ksmAvailable) {
+                document.getElementById('not-available').style.display = 'block';
+                document.getElementById('ksm-content').style.display = 'none';
+                document.getElementById('status-badge').textContent = 'UNAVAILABLE';
+                document.getElementById('status-badge').className = 'badge badge-red';
+                return;
+            }
+
+            document.getElementById('not-available').style.display = 'none';
+            document.getElementById('ksm-content').style.display = 'block';
+
+            const badge = document.getElementById('status-badge');
+            const toggle = document.getElementById('ksm-toggle');
+            const statusText = document.getElementById('ksm-status-text');
+
+            if (ksmEnabled) {
+                badge.textContent = 'ENABLED';
+                badge.className = 'badge badge-green';
+                toggle.classList.add('enabled');
+                statusText.textContent = 'Enabled';
+                statusText.style.color = 'var(--green)';
+            } else {
+                badge.textContent = 'DISABLED';
+                badge.className = 'badge badge-red';
+                toggle.classList.remove('enabled');
+                statusText.textContent = 'Disabled';
+                statusText.style.color = 'var(--red)';
+            }
+        }
+
+        async function loadStats() {
+            const data = await api('/stats');
+            if (!data || data.error) return;
+
+            document.getElementById('memory-saved').textContent = data.memory_saved_human || '0 B';
+            document.getElementById('pages-sharing').textContent = formatNumber(data.pages_sharing);
+            document.getElementById('pages-shared').textContent = formatNumber(data.pages_shared);
+            document.getElementById('full-scans').textContent = formatNumber(data.full_scans);
+            document.getElementById('pages-unshared').textContent = formatNumber(data.pages_unshared);
+            document.getElementById('stable-chains').textContent = formatNumber(data.stable_node_chains);
+            document.getElementById('stable-dups').textContent = formatNumber(data.stable_node_dups);
+
+            document.getElementById('last-update').textContent = 'Updated: ' + new Date().toLocaleTimeString();
+        }
+
+        async function loadConfig() {
+            const data = await api('/config');
+            if (!data || data.error) return;
+
+            document.getElementById('pages-to-scan').value = data.pages_to_scan || 100;
+            document.getElementById('pages-to-scan-value').textContent = data.pages_to_scan || 100;
+
+            document.getElementById('sleep-millisecs').value = data.sleep_millisecs || 20;
+            document.getElementById('sleep-millisecs-value').textContent = data.sleep_millisecs || 20;
+        }
+
+        async function toggleKSM() {
+            if (!ksmAvailable) return;
+
+            const endpoint = ksmEnabled ? '/disable' : '/enable';
+            const result = await api(endpoint, { method: 'POST' });
+
+            if (result && result.success) {
+                showToast(result.message || (ksmEnabled ? 'KSM disabled' : 'KSM enabled'));
+                ksmEnabled = !ksmEnabled;
+                await loadStatus();
+            } else {
+                showToast('Failed: ' + (result?.detail || 'Unknown error'), 'error');
+            }
+        }
+
+        async function saveConfig() {
+            const config = {
+                pages_to_scan: parseInt(document.getElementById('pages-to-scan').value),
+                sleep_millisecs: parseInt(document.getElementById('sleep-millisecs').value)
+            };
+
+            const result = await api('/config', {
+                method: 'POST',
+                body: JSON.stringify(config)
+            });
+
+            if (result && result.success) {
+                showToast('Configuration saved');
+            } else {
+                showToast('Failed: ' + (result?.detail || 'Unknown error'), 'error');
+            }
+        }
+
+        function refresh() {
+            loadStatus();
+            loadStats();
+            loadConfig();
+        }
+
+        // Initial load
+        if (checkAuth()) {
+            refresh();
+            // Auto-refresh every 10 seconds
+            setInterval(() => {
+                loadStats();
+            }, 10000);
+        }
+    </script>
+    <script src="/shared/crt-engine.js"></script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+Source: secubox-nettweak
+Section: net
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
+
+Package: secubox-nettweak
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-fastapi, procps
+Description: SecuBox Network Tuning Dashboard
+ Network tuning module for sysctl and TCP/IP stack optimization.
+ Provides web UI and API for managing kernel network parameters.
+ .
+ Features: tuning profiles (default, performance, low-latency, security),
+ TCP settings, network stack settings, persistent configuration.
+ Port Debian bookworm for SecuBox (CyberMind.fr).

@@ -1,0 +1,9 @@
+#!/bin/bash
+set -e
+case "$1" in
+  remove|deconfigure)
+    systemctl stop secubox-admin.service || true
+    systemctl disable secubox-admin.service || true
+    ;;
+esac
+#DEBHELPER#

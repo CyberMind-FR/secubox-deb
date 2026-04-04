@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - System Administration</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root {
+            /* P31 Phosphor spectrum */
+            --p31-peak: #00dd44;
+            --p31-hot: #00ff55;
+            --p31-mid: #009933;
+            --p31-dim: #006622;
+            --p31-ghost: #003311;
+            --p31-decay: #ffb347;
+            --p31-decay-dim: #cc7722;
+            /* Tube glass */
+            --tube-light: #e8f5e9;
+            --tube-pale: #c8e6c9;
+            --tube-soft: #a5d6a7;
+            --tube-dark: #1a3320;
+            /* Admin accent - orange/amber */
+            --admin-accent: #ff8c00;
+            --admin-accent-dim: #cc7000;
+            /* Legacy */
+            --bg-dark: var(--tube-light);
+            --bg-card: var(--tube-pale);
+            --border: var(--tube-soft);
+            --text: var(--tube-dark);
+            --text-dim: var(--p31-dim);
+            --primary: var(--admin-accent);
+            --cyan: #00bcd4;
+            --green: var(--p31-peak);
+            --red: #ff4466;
+            --yellow: var(--p31-decay);
+            --orange: var(--admin-accent);
+            --purple: #a371f7;
+            /* Bloom */
+            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-orange: 0 0 6px var(--admin-accent), 0 0 14px rgba(255,140,0,0.5);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Courier Prime', 'Courier New', monospace;
+            background: var(--tube-light);
+            background-image: radial-gradient(ellipse at 50% 40%, rgba(255,140,0,0.02) 0%, transparent 70%);
+            color: var(--tube-dark);
+            display: flex;
+            min-height: 100vh;
+        }
+        .main { flex: 1; margin-left: 220px; }
+        .header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 1rem 1.5rem; border-bottom: 1px solid var(--border);
+            background: var(--bg-card);
+        }
+        .header-title { display: flex; align-items: center; gap: 1rem; }
+        .header-title h1 {
+            font-size: 1.5rem; font-weight: 600;
+            color: var(--admin-accent);
+            text-shadow: var(--bloom-orange);
+        }
+        .header-actions { display: flex; gap: 0.75rem; align-items: center; }
+        .badge {
+            padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem;
+            text-transform: uppercase; letter-spacing: 0.1em;
+        }
+        .badge-green { background: rgba(0,221,68,0.1); border: 1px solid var(--p31-peak); color: var(--p31-peak); }
+        .badge-red { background: rgba(255,68,102,0.1); border: 1px solid var(--red); color: var(--red); }
+        .badge-orange { background: rgba(255,140,0,0.1); border: 1px solid var(--orange); color: var(--orange); }
+        .badge-cyan { background: rgba(0,188,212,0.1); border: 1px solid var(--cyan); color: var(--cyan); }
+
+        .btn {
+            padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border);
+            background: var(--bg-card); color: var(--text); cursor: pointer;
+            font-size: 0.875rem; font-family: inherit; letter-spacing: 0.05em;
+            transition: all 0.2s;
+        }
+        .btn:hover { border-color: var(--p31-dim); color: var(--p31-peak); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn.primary { background: rgba(255,140,0,0.1); border-color: var(--orange); color: var(--orange); }
+        .btn.primary:hover { background: rgba(255,140,0,0.2); }
+        .btn.success { background: rgba(0,221,68,0.1); border-color: var(--green); color: var(--green); }
+        .btn.danger { background: rgba(255,68,102,0.1); border-color: var(--red); color: var(--red); }
+        .btn.small { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+
+        .tabs {
+            display: flex; gap: 0; padding: 0 1.5rem;
+            background: var(--bg-card); border-bottom: 1px solid var(--border);
+        }
+        .tab {
+            padding: 0.75rem 1.25rem; cursor: pointer;
+            color: var(--text-dim); font-size: 0.85rem;
+            text-transform: uppercase; letter-spacing: 0.1em;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        .tab:hover { color: var(--text); }
+        .tab.active {
+            color: var(--orange); border-bottom-color: var(--orange);
+            text-shadow: var(--bloom-orange);
+        }
+
+        .content { padding: 1.5rem; }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+
+        .stats-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 8px; padding: 1rem; text-align: center;
+        }
+        .stat-card .value { font-size: 1.75rem; font-weight: bold; margin-bottom: 0.25rem; }
+        .stat-card .label { font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.1em; }
+        .stat-card.orange .value { color: var(--orange); text-shadow: var(--bloom-orange); }
+        .stat-card.cyan .value { color: var(--cyan); }
+        .stat-card.purple .value { color: var(--purple); }
+        .stat-card.green .value { color: var(--green); text-shadow: var(--bloom-soft); }
+        .stat-card.yellow .value { color: var(--yellow); }
+
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+        .card {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem;
+        }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .card-header h2 {
+            font-size: 0.9rem; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 0.1em; color: var(--p31-decay);
+        }
+
+        /* Service list */
+        .service-list { max-height: 500px; overflow-y: auto; }
+        .service-item {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0.75rem; border-bottom: 1px solid var(--border);
+            transition: background 0.2s;
+        }
+        .service-item:hover { background: rgba(255,140,0,0.05); }
+        .service-item.secubox { border-left: 3px solid var(--orange); }
+        .service-info { flex: 1; }
+        .service-name { font-weight: bold; font-size: 0.9rem; }
+        .service-desc { font-size: 0.75rem; color: var(--text-dim); }
+        .service-actions { display: flex; gap: 0.5rem; }
+
+        /* Storage bars */
+        .storage-item { margin-bottom: 1rem; }
+        .storage-header { display: flex; justify-content: space-between; margin-bottom: 0.25rem; }
+        .storage-mount { font-size: 0.85rem; }
+        .storage-usage { font-size: 0.75rem; color: var(--text-dim); }
+        .storage-bar { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+        .storage-bar-fill { height: 100%; border-radius: 4px; transition: width 0.3s; }
+        .storage-bar-fill.ok { background: var(--green); }
+        .storage-bar-fill.warn { background: var(--yellow); }
+        .storage-bar-fill.danger { background: var(--red); }
+
+        /* Process table */
+        .scroll-list { max-height: 400px; overflow-y: auto; }
+        .process-table { width: 100%; border-collapse: collapse; }
+        .process-table th {
+            text-align: left; padding: 0.5rem; color: var(--p31-decay);
+            font-size: 0.75rem; text-transform: uppercase;
+            border-bottom: 1px solid var(--border);
+            position: sticky; top: 0; background: var(--bg-card);
+            cursor: pointer;
+        }
+        .process-table th:hover { color: var(--orange); }
+        .process-table td { padding: 0.5rem; border-bottom: 1px solid var(--border); font-size: 0.8rem; }
+        .process-table tr:hover { background: rgba(255,140,0,0.05); }
+
+        /* Log viewer */
+        .log-viewer {
+            max-height: 500px; overflow-y: auto;
+            background: var(--tube-light); padding: 1rem; border-radius: 6px;
+            font-size: 0.75rem; font-family: monospace; white-space: pre-wrap;
+            line-height: 1.4;
+        }
+        .log-filters { display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
+        .log-filters select, .log-filters input {
+            padding: 0.5rem; border: 1px solid var(--border);
+            background: var(--tube-light); border-radius: 4px;
+            font-family: inherit; color: var(--text);
+        }
+
+        /* Updates list */
+        .update-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 0.5rem; border-bottom: 1px solid var(--border);
+        }
+        .update-pkg { font-weight: bold; }
+        .update-version { font-size: 0.75rem; color: var(--text-dim); }
+
+        /* Modal */
+        .modal {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center;
+            z-index: 1000;
+        }
+        .modal.show { display: flex; }
+        .modal-content {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 8px; padding: 1.5rem; max-width: 400px; width: 90%;
+        }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .modal-header h3 { color: var(--orange); }
+        .modal-close { cursor: pointer; font-size: 1.5rem; color: var(--text-dim); }
+        .modal-body { margin-bottom: 1rem; }
+        .modal-footer { display: flex; gap: 1rem; justify-content: flex-end; }
+
+        /* Toast */
+        .toast {
+            position: fixed; bottom: 2rem; right: 2rem;
+            padding: 1rem 1.5rem; border-radius: 8px;
+            background: var(--bg-card); border: 1px solid var(--border);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            z-index: 1000; display: none;
+        }
+        .toast.show { display: block; animation: slideIn 0.3s ease; }
+        .toast.success { border-color: var(--green); }
+        .toast.error { border-color: var(--red); }
+        @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        @media (max-width: 1400px) { .stats-row { grid-template-columns: repeat(3, 1fr); } }
+        @media (max-width: 1200px) { .stats-row { grid-template-columns: repeat(2, 1fr); } .grid-2 { grid-template-columns: 1fr; } }
+        @media (max-width: 768px) { .main { margin-left: 0; } .stats-row { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body class="crt-light">
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+
+    <main class="main">
+        <header class="header">
+            <div class="header-title">
+                <h1>System Administration</h1>
+                <span id="hostname" class="badge badge-orange">-</span>
+                <span id="uptime" style="color: var(--text-dim); font-size: 0.85rem;">-</span>
+            </div>
+            <div class="header-actions">
+                <button class="btn" onclick="refresh()">Refresh</button>
+                <button class="btn danger" onclick="showRebootModal()">Reboot</button>
+                <button class="btn danger" onclick="showShutdownModal()">Shutdown</button>
+            </div>
+        </header>
+
+        <div class="tabs">
+            <div class="tab active" data-tab="overview">Overview</div>
+            <div class="tab" data-tab="services">Services</div>
+            <div class="tab" data-tab="logs">Logs</div>
+            <div class="tab" data-tab="storage">Storage</div>
+            <div class="tab" data-tab="processes">Processes</div>
+            <div class="tab" data-tab="updates">Updates</div>
+        </div>
+
+        <div class="content">
+            <!-- Overview Tab -->
+            <div id="tab-overview" class="tab-panel active">
+                <div class="stats-row">
+                    <div class="stat-card orange">
+                        <div class="value" id="cpu-value">-</div>
+                        <div class="label">CPU Usage</div>
+                    </div>
+                    <div class="stat-card purple">
+                        <div class="value" id="mem-value">-</div>
+                        <div class="label">Memory</div>
+                    </div>
+                    <div class="stat-card green">
+                        <div class="value" id="disk-value">-</div>
+                        <div class="label">Disk</div>
+                    </div>
+                    <div class="stat-card cyan">
+                        <div class="value" id="services-value">-</div>
+                        <div class="label">Services</div>
+                    </div>
+                    <div class="stat-card yellow">
+                        <div class="value" id="updates-value">-</div>
+                        <div class="label">Updates</div>
+                    </div>
+                </div>
+
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="card-header"><h2>System Info</h2></div>
+                        <div id="system-info" style="font-size: 0.9rem;">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                                <div style="color: var(--text-dim);">Hostname:</div>
+                                <div id="info-hostname">-</div>
+                                <div style="color: var(--text-dim);">Kernel:</div>
+                                <div id="info-kernel">-</div>
+                                <div style="color: var(--text-dim);">Debian:</div>
+                                <div id="info-debian">-</div>
+                                <div style="color: var(--text-dim);">Uptime:</div>
+                                <div id="info-uptime">-</div>
+                                <div style="color: var(--text-dim);">Boot Time:</div>
+                                <div id="info-boot">-</div>
+                                <div style="color: var(--text-dim);">Load Average:</div>
+                                <div id="info-load">-</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <h2>SecuBox Services</h2>
+                            <span id="secubox-status" class="badge badge-green">-</span>
+                        </div>
+                        <div id="secubox-services" class="service-list" style="max-height: 200px;">
+                            <p style="color: var(--text-dim);">Loading...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Disk Usage</h2>
+                    </div>
+                    <div id="disk-overview">
+                        <p style="color: var(--text-dim);">Loading...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Services Tab -->
+            <div id="tab-services" class="tab-panel">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>All Services</h2>
+                        <div style="display: flex; gap: 1rem; align-items: center;">
+                            <input type="text" id="service-search" placeholder="Search services..."
+                                   style="padding: 0.5rem; border: 1px solid var(--border); background: var(--tube-light); border-radius: 4px;">
+                            <label style="font-size: 0.85rem;">
+                                <input type="checkbox" id="show-secubox-only"> SecuBox only
+                            </label>
+                        </div>
+                    </div>
+                    <div class="service-list" id="service-list">
+                        <p style="color: var(--text-dim);">Loading...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Logs Tab -->
+            <div id="tab-logs" class="tab-panel">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>System Logs</h2>
+                        <button class="btn" onclick="loadLogs()">Refresh</button>
+                    </div>
+                    <div class="log-filters">
+                        <select id="log-unit">
+                            <option value="">All Units</option>
+                        </select>
+                        <select id="log-priority">
+                            <option value="">All Priorities</option>
+                            <option value="emerg">Emergency</option>
+                            <option value="alert">Alert</option>
+                            <option value="crit">Critical</option>
+                            <option value="err">Error</option>
+                            <option value="warning">Warning</option>
+                            <option value="notice">Notice</option>
+                            <option value="info">Info</option>
+                            <option value="debug">Debug</option>
+                        </select>
+                        <select id="log-lines">
+                            <option value="50">50 lines</option>
+                            <option value="100" selected>100 lines</option>
+                            <option value="200">200 lines</option>
+                            <option value="500">500 lines</option>
+                        </select>
+                    </div>
+                    <div id="log-viewer" class="log-viewer">
+                        Loading...
+                    </div>
+                </div>
+            </div>
+
+            <!-- Storage Tab -->
+            <div id="tab-storage" class="tab-panel">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Disk Partitions</h2>
+                    </div>
+                    <div id="storage-list">
+                        <p style="color: var(--text-dim);">Loading...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Processes Tab -->
+            <div id="tab-processes" class="tab-panel">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Top Processes</h2>
+                        <div style="display: flex; gap: 1rem; align-items: center;">
+                            <select id="process-sort" style="padding: 0.5rem; border: 1px solid var(--border); background: var(--tube-light); border-radius: 4px;">
+                                <option value="cpu">Sort by CPU</option>
+                                <option value="memory">Sort by Memory</option>
+                            </select>
+                            <span id="process-count" style="color: var(--text-dim);">-</span>
+                        </div>
+                    </div>
+                    <div class="scroll-list">
+                        <table class="process-table">
+                            <thead>
+                                <tr>
+                                    <th>Process</th>
+                                    <th>CPU %</th>
+                                    <th>MEM %</th>
+                                    <th>PID</th>
+                                    <th>User</th>
+                                    <th>Threads</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="process-list">
+                                <tr><td colspan="7">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Updates Tab -->
+            <div id="tab-updates" class="tab-panel">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Available Updates</h2>
+                        <div style="display: flex; gap: 1rem;">
+                            <button class="btn" onclick="checkUpdates()">Check Updates</button>
+                            <button class="btn primary" id="btn-update-all" onclick="showUpdateModal()">Update All</button>
+                        </div>
+                    </div>
+                    <div id="update-status" style="margin-bottom: 1rem;">
+                        <span class="badge badge-cyan" id="update-count">Checking...</span>
+                    </div>
+                    <div id="update-list">
+                        <p style="color: var(--text-dim);">Checking for updates...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Reboot Modal -->
+    <div class="modal" id="reboot-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Confirm Reboot</h3>
+                <span class="modal-close" onclick="closeModal('reboot-modal')">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to reboot the system?</p>
+                <p style="color: var(--red); margin-top: 0.5rem;">This will disconnect all users.</p>
+                <div style="margin-top: 1rem;">
+                    <label style="font-size: 0.85rem; color: var(--text-dim);">Reason (optional):</label>
+                    <input type="text" id="reboot-reason" style="width: 100%; padding: 0.5rem; margin-top: 0.25rem; border: 1px solid var(--border); border-radius: 4px;">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="closeModal('reboot-modal')">Cancel</button>
+                <button class="btn danger" onclick="confirmReboot()">Reboot Now</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Shutdown Modal -->
+    <div class="modal" id="shutdown-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Confirm Shutdown</h3>
+                <span class="modal-close" onclick="closeModal('shutdown-modal')">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to shutdown the system?</p>
+                <p style="color: var(--red); margin-top: 0.5rem;">Physical access will be required to restart.</p>
+                <div style="margin-top: 1rem;">
+                    <label style="font-size: 0.85rem; color: var(--text-dim);">Reason (optional):</label>
+                    <input type="text" id="shutdown-reason" style="width: 100%; padding: 0.5rem; margin-top: 0.25rem; border: 1px solid var(--border); border-radius: 4px;">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="closeModal('shutdown-modal')">Cancel</button>
+                <button class="btn danger" onclick="confirmShutdown()">Shutdown Now</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Update Modal -->
+    <div class="modal" id="update-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Confirm Update</h3>
+                <span class="modal-close" onclick="closeModal('update-modal')">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p>This will upgrade all available packages.</p>
+                <p style="color: var(--yellow); margin-top: 0.5rem;">Some services may restart during update.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="closeModal('update-modal')">Cancel</button>
+                <button class="btn primary" onclick="confirmUpdate()">Run Update</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script>
+        const API = '/api/v1/admin';
+        let allServices = [];
+        let availableUpdates = [];
+
+        function getToken() {
+            return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token');
+        }
+
+        function checkAuth() {
+            if (!getToken()) {
+                window.location.href = '/portal/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+                return false;
+            }
+            return true;
+        }
+
+        async function api(endpoint, options = {}) {
+            const token = getToken();
+            const headers = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = 'Bearer ' + token;
+
+            try {
+                const res = await fetch(API + endpoint, { ...options, headers });
+                if (res.status === 401) {
+                    window.location.href = '/portal/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+                    return null;
+                }
+                return res.json();
+            } catch (e) {
+                console.error('API error:', e);
+                return null;
+            }
+        }
+
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = 'toast show ' + type;
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+
+        function showModal(id) { document.getElementById(id).classList.add('show'); }
+        function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+        function showRebootModal() { showModal('reboot-modal'); }
+        function showShutdownModal() { showModal('shutdown-modal'); }
+        function showUpdateModal() { showModal('update-modal'); }
+
+        async function loadStatus() {
+            const data = await api('/status');
+            if (!data || data.error) return;
+
+            document.getElementById('hostname').textContent = data.hostname || '-';
+            document.getElementById('uptime').textContent = 'Uptime: ' + (data.uptime_human || '-');
+            document.getElementById('cpu-value').textContent = (data.cpu_percent || 0) + '%';
+            document.getElementById('mem-value').textContent = (data.memory_percent || 0) + '%';
+            document.getElementById('disk-value').textContent = (data.disk_percent || 0) + '%';
+
+            // System info
+            document.getElementById('info-hostname').textContent = data.hostname || '-';
+            document.getElementById('info-kernel').textContent = data.kernel || '-';
+            document.getElementById('info-debian').textContent = data.debian_version || '-';
+            document.getElementById('info-uptime').textContent = data.uptime_human || '-';
+            document.getElementById('info-boot').textContent = data.boot_time ? new Date(data.boot_time).toLocaleString() : '-';
+            document.getElementById('info-load').textContent = (data.load_avg || []).join(' / ') || '-';
+        }
+
+        async function loadServices() {
+            const data = await api('/services');
+            if (!data) return;
+
+            allServices = data.services || [];
+            document.getElementById('services-value').textContent = data.running_count + '/' + data.count;
+
+            // SecuBox services for overview
+            const secubox = allServices.filter(s => s.is_secubox);
+            document.getElementById('secubox-status').textContent = secubox.filter(s => s.is_running).length + '/' + secubox.length + ' Running';
+
+            renderSecuboxServices(secubox);
+            renderAllServices();
+            updateLogUnitOptions();
+        }
+
+        function renderSecuboxServices(services) {
+            const container = document.getElementById('secubox-services');
+            if (services.length === 0) {
+                container.innerHTML = '<p style="color: var(--text-dim);">No SecuBox services found</p>';
+                return;
+            }
+
+            container.innerHTML = services.map(s => `
+                <div class="service-item secubox">
+                    <div class="service-info">
+                        <div class="service-name">${s.name}</div>
+                        <span class="badge ${s.is_running ? 'badge-green' : 'badge-red'}">${s.sub}</span>
+                    </div>
+                    <div class="service-actions">
+                        ${s.is_running
+                            ? `<button class="btn small danger" onclick="serviceAction('${s.name}', 'restart')">Restart</button>`
+                            : `<button class="btn small success" onclick="serviceAction('${s.name}', 'start')">Start</button>`
+                        }
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderAllServices() {
+            const search = document.getElementById('service-search').value.toLowerCase();
+            const secuboxOnly = document.getElementById('show-secubox-only').checked;
+
+            let filtered = allServices;
+            if (secuboxOnly) filtered = filtered.filter(s => s.is_secubox);
+            if (search) filtered = filtered.filter(s =>
+                s.name.toLowerCase().includes(search) ||
+                (s.description || '').toLowerCase().includes(search)
+            );
+
+            const container = document.getElementById('service-list');
+            container.innerHTML = filtered.map(s => `
+                <div class="service-item ${s.is_secubox ? 'secubox' : ''}">
+                    <div class="service-info">
+                        <div class="service-name">${s.name}</div>
+                        <div class="service-desc">${s.description || ''}</div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 1rem;">
+                        <span class="badge ${s.is_running ? 'badge-green' : 'badge-red'}">${s.sub}</span>
+                        <div class="service-actions">
+                            ${s.is_running
+                                ? `<button class="btn small" onclick="serviceAction('${s.name}', 'stop')">Stop</button>
+                                   <button class="btn small" onclick="serviceAction('${s.name}', 'restart')">Restart</button>`
+                                : `<button class="btn small success" onclick="serviceAction('${s.name}', 'start')">Start</button>`
+                            }
+                        </div>
+                    </div>
+                </div>
+            `).join('') || '<p style="padding: 1rem; color: var(--text-dim);">No services found</p>';
+        }
+
+        async function serviceAction(name, action) {
+            const result = await api(`/service/${name}/${action}`, { method: 'POST' });
+            if (result?.success) {
+                showToast(`Service ${name} ${action} successful`);
+                setTimeout(loadServices, 1000);
+            } else {
+                showToast(`Failed: ${result?.stderr || result?.error || 'Unknown error'}`, 'error');
+            }
+        }
+
+        function updateLogUnitOptions() {
+            const select = document.getElementById('log-unit');
+            const units = [...new Set(allServices.map(s => s.unit))].sort();
+            select.innerHTML = '<option value="">All Units</option>' +
+                units.map(u => `<option value="${u}">${u}</option>`).join('');
+        }
+
+        async function loadLogs() {
+            const unit = document.getElementById('log-unit').value;
+            const priority = document.getElementById('log-priority').value;
+            const lines = document.getElementById('log-lines').value;
+
+            const params = new URLSearchParams({ lines });
+            if (unit) params.append('unit', unit);
+            if (priority) params.append('priority', priority);
+
+            const data = await api('/logs?' + params);
+            if (!data) return;
+
+            const viewer = document.getElementById('log-viewer');
+            viewer.textContent = (data.logs || []).join('\n') || 'No logs found';
+        }
+
+        async function loadStorage() {
+            const data = await api('/storage');
+            if (!data) return;
+
+            const partitions = data.partitions || [];
+
+            // Overview disk bars
+            const overviewContainer = document.getElementById('disk-overview');
+            overviewContainer.innerHTML = partitions.slice(0, 4).map(p => {
+                const cls = p.percent > 90 ? 'danger' : p.percent > 70 ? 'warn' : 'ok';
+                return `
+                    <div class="storage-item">
+                        <div class="storage-header">
+                            <span class="storage-mount">${p.mountpoint}</span>
+                            <span class="storage-usage">${p.used_human} / ${p.total_human} (${p.percent}%)</span>
+                        </div>
+                        <div class="storage-bar">
+                            <div class="storage-bar-fill ${cls}" style="width: ${p.percent}%"></div>
+                        </div>
+                    </div>
+                `;
+            }).join('') || '<p style="color: var(--text-dim);">No partitions found</p>';
+
+            // Full storage list
+            const listContainer = document.getElementById('storage-list');
+            listContainer.innerHTML = partitions.map(p => {
+                const cls = p.percent > 90 ? 'danger' : p.percent > 70 ? 'warn' : 'ok';
+                return `
+                    <div class="storage-item">
+                        <div class="storage-header">
+                            <span class="storage-mount"><strong>${p.device}</strong> mounted at ${p.mountpoint}</span>
+                            <span class="storage-usage">${p.fstype} - ${p.used_human} / ${p.total_human} (${p.percent}%)</span>
+                        </div>
+                        <div class="storage-bar">
+                            <div class="storage-bar-fill ${cls}" style="width: ${p.percent}%"></div>
+                        </div>
+                    </div>
+                `;
+            }).join('') || '<p style="color: var(--text-dim);">No partitions found</p>';
+        }
+
+        async function loadProcesses() {
+            const sort = document.getElementById('process-sort').value;
+            const data = await api(`/processes?sort=${sort}&limit=50`);
+            if (!data) return;
+
+            document.getElementById('process-count').textContent = `${data.processes.length} of ${data.total} processes`;
+
+            const list = document.getElementById('process-list');
+            list.innerHTML = data.processes.map(p => `
+                <tr>
+                    <td title="${p.cmd}">${p.name}</td>
+                    <td style="color: var(--orange);">${p.cpu_percent}%</td>
+                    <td style="color: var(--purple);">${p.memory_percent}%</td>
+                    <td style="color: var(--text-dim);">${p.pid}</td>
+                    <td>${p.user || '-'}</td>
+                    <td>${p.threads || '-'}</td>
+                    <td><span class="badge badge-${p.status === 'running' ? 'green' : 'cyan'}">${p.status}</span></td>
+                </tr>
+            `).join('') || '<tr><td colspan="7">No processes</td></tr>';
+        }
+
+        async function checkUpdates() {
+            document.getElementById('update-count').textContent = 'Checking...';
+            document.getElementById('update-list').innerHTML = '<p style="color: var(--text-dim);">Checking for updates...</p>';
+
+            const data = await api('/updates');
+            if (!data) return;
+
+            availableUpdates = data.packages || [];
+            document.getElementById('updates-value').textContent = data.available || 0;
+
+            const countBadge = document.getElementById('update-count');
+            if (data.available > 0) {
+                countBadge.textContent = `${data.available} available`;
+                countBadge.className = 'badge badge-orange';
+            } else {
+                countBadge.textContent = 'Up to date';
+                countBadge.className = 'badge badge-green';
+            }
+
+            const list = document.getElementById('update-list');
+            if (availableUpdates.length === 0) {
+                list.innerHTML = '<p style="color: var(--green);">System is up to date!</p>';
+                document.getElementById('btn-update-all').disabled = true;
+            } else {
+                list.innerHTML = availableUpdates.map(p => `
+                    <div class="update-item">
+                        <div>
+                            <span class="update-pkg">${p.name}</span>
+                        </div>
+                        <div class="update-version">${p.old_version} -> ${p.new_version}</div>
+                    </div>
+                `).join('');
+                document.getElementById('btn-update-all').disabled = false;
+            }
+        }
+
+        async function confirmReboot() {
+            closeModal('reboot-modal');
+            const reason = document.getElementById('reboot-reason').value;
+            const result = await api('/reboot', {
+                method: 'POST',
+                body: JSON.stringify({ confirm: true, reason })
+            });
+            if (result?.success) {
+                showToast('System is rebooting...');
+            } else {
+                showToast('Reboot failed: ' + (result?.detail || 'Unknown error'), 'error');
+            }
+        }
+
+        async function confirmShutdown() {
+            closeModal('shutdown-modal');
+            const reason = document.getElementById('shutdown-reason').value;
+            const result = await api('/shutdown', {
+                method: 'POST',
+                body: JSON.stringify({ confirm: true, reason })
+            });
+            if (result?.success) {
+                showToast('System is shutting down...');
+            } else {
+                showToast('Shutdown failed: ' + (result?.detail || 'Unknown error'), 'error');
+            }
+        }
+
+        async function confirmUpdate() {
+            closeModal('update-modal');
+            showToast('Running system update...');
+            const result = await api('/update', {
+                method: 'POST',
+                body: JSON.stringify({ confirm: true, packages: [] })
+            });
+            if (result?.success) {
+                showToast('Update completed successfully');
+                checkUpdates();
+            } else {
+                showToast('Update failed: ' + (result?.stderr || result?.error || 'Unknown error'), 'error');
+            }
+        }
+
+        function refresh() {
+            loadStatus();
+            loadServices();
+            loadStorage();
+        }
+
+        // Event listeners
+        document.getElementById('service-search').addEventListener('input', renderAllServices);
+        document.getElementById('show-secubox-only').addEventListener('change', renderAllServices);
+        document.getElementById('log-unit').addEventListener('change', loadLogs);
+        document.getElementById('log-priority').addEventListener('change', loadLogs);
+        document.getElementById('log-lines').addEventListener('change', loadLogs);
+        document.getElementById('process-sort').addEventListener('change', loadProcesses);
+
+        // Tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+
+                const t = tab.dataset.tab;
+                if (t === 'logs') loadLogs();
+                if (t === 'storage') loadStorage();
+                if (t === 'processes') loadProcesses();
+                if (t === 'updates') checkUpdates();
+            });
+        });
+
+        // Initial load
+        if (checkAuth()) {
+            refresh();
+            // Auto-refresh every 30 seconds
+            setInterval(() => {
+                loadStatus();
+                const activeTab = document.querySelector('.tab.active');
+                if (activeTab && activeTab.dataset.tab === 'overview') {
+                    loadServices();
+                    loadStorage();
+                }
+            }, 30000);
+        }
+    </script>
+    <script src="/shared/crt-engine.js"></script>
+</body>
+</html>

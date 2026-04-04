@@ -1,0 +1,9 @@
+{
+  "id": "nettweak",
+  "name": "Network Tuning",
+  "category": "system",
+  "icon": "settings",
+  "path": "/nettweak/",
+  "order": 450,
+  "description": "Sysctl and TCP/IP stack optimization"
+}

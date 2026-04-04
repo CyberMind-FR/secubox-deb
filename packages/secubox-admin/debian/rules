@@ -1,0 +1,14 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-admin/usr/lib/secubox/admin/
+	cp -r api debian/secubox-admin/usr/lib/secubox/admin/
+	install -d debian/secubox-admin/usr/share/secubox/www
+	[ -d www ] && cp -r www/. debian/secubox-admin/usr/share/secubox/www/ || true
+	install -d debian/secubox-admin/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-admin/usr/share/secubox/menu.d/ || true
+	# Modular nginx config
+	install -d debian/secubox-admin/etc/nginx/secubox.d
+	[ -f nginx/admin.conf ] && cp nginx/admin.conf debian/secubox-admin/etc/nginx/secubox.d/ || true
