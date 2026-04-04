@@ -77,7 +77,7 @@ jobs:
 
           ### What's Included
 
-          **93 Packages** across all security domains:
+          **124 Packages** across all security domains:
           - **Core:** hub, core, portal, system, console
           - **Security:** crowdsec, waf, auth, nac, threats, ipblock, mac-guard
           - **Networking:** wireguard, haproxy, dpi, qos, netmodes, vhost, cdn

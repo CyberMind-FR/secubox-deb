@@ -74,6 +74,21 @@ jobs:
             parted dosfstools e2fsprogs rsync \
             gzip pigz xz-utils
 
+      - name: Download package artifacts
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          workflow: build-packages.yml
+          name: secubox-debs-all
+          path: output/debs/
+          if_no_artifact_found: warn
+        continue-on-error: true
+
+      - name: List available packages
+        run: |
+          echo "=== SecuBox packages to slipstream ==="
+          ls output/debs/secubox-*.deb 2>/dev/null | wc -l || echo "0"
+          ls output/debs/secubox-*.deb 2>/dev/null | xargs -I{} basename {} | sed 's/_.*$//' | sort -u || echo "No packages found"
+
       - name: Determine architecture
         id: arch
         run: |
@@ -92,11 +107,19 @@ jobs:
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
+          # Use slipstream if packages are available
+          SLIPSTREAM_OPT=""
+          if ls output/debs/secubox-*.deb >/dev/null 2>&1; then
+            SLIPSTREAM_OPT="--slipstream"
+            echo "Slipstream enabled: $(ls output/debs/secubox-*.deb | wc -l) packages"
+          fi
+
           sudo -E bash image/build-image.sh \
             --board ${{ matrix.board }} \
             --suite ${{ env.DEBIAN_SUITE }} \
             --out output/ \
-            --size ${{ inputs.size || github.event.inputs.size || '8G' }}
+            --size ${{ inputs.size || github.event.inputs.size || '8G' }} \
+            $SLIPSTREAM_OPT
           sudo chown -R $(id -u):$(id -g) output/
         timeout-minutes: 90
 
@@ -210,10 +233,12 @@ jobs:
 
             ### Included Packages
 
-            33 SecuBox packages including:
-            - Security: CrowdSec, WAF, Auth, NAC
-            - Networking: WireGuard, HAProxy, DPI, QoS
-            - Applications: Mail (Postfix/Dovecot), Gitea, Nextcloud
-            - Publishing: Streamlit, MetaBlogizer, Droplet
+            **124 SecuBox packages** across all security domains:
+            - **Core:** hub, core, portal, system, console
+            - **Security:** crowdsec, waf, auth, nac, threats, ipblock, mac-guard
+            - **Networking:** wireguard, haproxy, dpi, qos, netmodes, vhost, cdn
+            - **Applications:** mail, gitea, nextcloud, ollama, jellyfin, matrix
+            - **SOC:** soc-agent, soc-gateway, soc-web
+            - **Intel:** device-intel, vortex-dns, vortex-firewall, ai-insights
           draft: false
           prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
