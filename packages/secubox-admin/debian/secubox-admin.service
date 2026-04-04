@@ -1,0 +1,22 @@
+[Unit]
+Description=SecuBox Admin Dashboard API
+After=network.target secubox-core.service
+Requires=secubox-core.service
+
+[Service]
+UMask=0000
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/usr/lib/secubox/admin
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app \
+    --uds /run/secubox/admin.sock \
+    --log-level warning
+Restart=on-failure
+RestartSec=5
+PrivateTmp=true
+RuntimeDirectory=secubox
+RuntimeDirectoryMode=0775
+
+[Install]
+WantedBy=multi-user.target

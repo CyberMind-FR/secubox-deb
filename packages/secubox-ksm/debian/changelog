@@ -1,0 +1,11 @@
+secubox-ksm (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release - KSM memory optimization module.
+  * FastAPI backend with sysfs-based KSM control.
+  * Endpoints: status, stats, enable, disable, config.
+  * P31 Phosphor light theme frontend.
+  * Toggle for KSM enable/disable.
+  * Sliders for pages_to_scan (100-10000) and sleep_millisecs (10-1000).
+  * Memory savings display.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Apr 2026 15:00:00 +0200

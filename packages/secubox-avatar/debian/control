@@ -1,0 +1,18 @@
+Source: secubox-avatar
+Section: net
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
+
+Package: secubox-avatar
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-fastapi, python3-pil
+Description: SecuBox Identity and Avatar Manager
+ Identity and avatar management module for SecuBox services.
+ Provides unified identity management across Gitea, Nextcloud, Mail, Matrix.
+ .
+ Features: avatar upload, identity sync, service integration, P31 Phosphor theme.
+ Port Debian bookworm for SecuBox (CyberMind.fr).

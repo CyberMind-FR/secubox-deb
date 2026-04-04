@@ -1,0 +1,14 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-ksm/usr/lib/secubox/ksm/
+	cp -r api debian/secubox-ksm/usr/lib/secubox/ksm/
+	install -d debian/secubox-ksm/usr/share/secubox/www
+	[ -d www ] && cp -r www/. debian/secubox-ksm/usr/share/secubox/www/ || true
+	install -d debian/secubox-ksm/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-ksm/usr/share/secubox/menu.d/ || true
+	# Modular nginx config
+	install -d debian/secubox-ksm/etc/nginx/secubox.d
+	[ -f nginx/ksm.conf ] && cp nginx/ksm.conf debian/secubox-ksm/etc/nginx/secubox.d/ || true

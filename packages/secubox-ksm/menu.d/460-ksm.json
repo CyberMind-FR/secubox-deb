@@ -1,0 +1,9 @@
+{
+  "id": "ksm",
+  "name": "KSM Memory",
+  "category": "system",
+  "icon": "memory",
+  "path": "/ksm/",
+  "order": 460,
+  "description": "Kernel Same-page Merging memory optimization"
+}

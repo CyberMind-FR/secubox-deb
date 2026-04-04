@@ -1,0 +1,20 @@
+Source: secubox-ksm
+Section: admin
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
+
+Package: secubox-ksm
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-fastapi
+Description: SecuBox KSM Memory Optimization Dashboard
+ Kernel Same-page Merging (KSM) management module.
+ Provides web UI and API for KSM controls to optimize memory
+ in VMs and containers.
+ .
+ Features: enable/disable KSM, configure pages_to_scan and
+ sleep_millisecs, view memory savings statistics.
+ Port Debian bookworm for SecuBox (CyberMind.fr).

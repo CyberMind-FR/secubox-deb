@@ -776,9 +776,17 @@ fi
 CACHE_DEBS="${REPO_DIR}/cache/repo/pool"
 OUTPUT_DEBS="${REPO_DIR}/output/debs"
 
-# Check both locations for packages
-CACHE_COUNT=$(find "$CACHE_DEBS" -name "secubox-*.deb" 2>/dev/null | wc -l)
-OUTPUT_COUNT=$(find "$OUTPUT_DEBS" -maxdepth 1 -name "secubox-*.deb" 2>/dev/null | wc -l)
+# Check both locations for packages (handle non-existent dirs gracefully)
+if [[ -d "$CACHE_DEBS" ]]; then
+  CACHE_COUNT=$(find "$CACHE_DEBS" -name "secubox-*.deb" 2>/dev/null | wc -l)
+else
+  CACHE_COUNT=0
+fi
+if [[ -d "$OUTPUT_DEBS" ]]; then
+  OUTPUT_COUNT=$(find "$OUTPUT_DEBS" -maxdepth 1 -name "secubox-*.deb" 2>/dev/null | wc -l)
+else
+  OUTPUT_COUNT=0
+fi
 log "Found ${CACHE_COUNT} packages in cache, ${OUTPUT_COUNT} in output/debs"
 
 if [[ $CACHE_COUNT -gt 0 ]] || [[ $OUTPUT_COUNT -gt 0 ]]; then

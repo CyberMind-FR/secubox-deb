@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - Network Tuning</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root {
+            /* P31 Phosphor spectrum */
+            --p31-peak: #00dd44;
+            --p31-hot: #00ff55;
+            --p31-mid: #009933;
+            --p31-dim: #006622;
+            --p31-ghost: #003311;
+            --p31-decay: #ffb347;
+            --p31-decay-dim: #cc7722;
+            /* Tube glass */
+            --tube-light: #e8f5e9;
+            --tube-pale: #c8e6c9;
+            --tube-soft: #a5d6a7;
+            --tube-dark: #1a3320;
+            /* Nettweak accent - orange/amber for tuning */
+            --nettweak-accent: #ff9800;
+            --nettweak-accent-dim: #f57c00;
+            /* Legacy */
+            --bg-dark: var(--tube-light);
+            --bg-card: var(--tube-pale);
+            --border: var(--tube-soft);
+            --text: var(--tube-dark);
+            --text-dim: var(--p31-dim);
+            --primary: var(--nettweak-accent);
+            --cyan: #00bcd4;
+            --green: var(--p31-peak);
+            --red: #ff4466;
+            --yellow: var(--p31-decay);
+            --orange: var(--nettweak-accent);
+            --purple: #a371f7;
+            /* Bloom */
+            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-orange: 0 0 6px var(--nettweak-accent), 0 0 14px rgba(255,152,0,0.5);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Courier Prime', 'Courier New', monospace;
+            background: var(--tube-light);
+            background-image: radial-gradient(ellipse at 50% 40%, rgba(255,152,0,0.02) 0%, transparent 70%);
+            color: var(--tube-dark);
+            display: flex;
+            min-height: 100vh;
+        }
+        .main { flex: 1; margin-left: 220px; }
+        .header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 1rem 1.5rem; border-bottom: 1px solid var(--border);
+            background: var(--bg-card);
+        }
+        .header-title { display: flex; align-items: center; gap: 1rem; }
+        .header-title h1 {
+            font-size: 1.5rem; font-weight: 600;
+            color: var(--nettweak-accent);
+            text-shadow: var(--bloom-orange);
+        }
+        .header-actions { display: flex; gap: 0.75rem; align-items: center; }
+        .badge {
+            padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem;
+            text-transform: uppercase; letter-spacing: 0.1em;
+        }
+        .badge-green { background: rgba(0,221,68,0.1); border: 1px solid var(--p31-peak); color: var(--p31-peak); }
+        .badge-orange { background: rgba(255,152,0,0.1); border: 1px solid var(--orange); color: var(--orange); }
+        .badge-cyan { background: rgba(0,188,212,0.1); border: 1px solid var(--cyan); color: var(--cyan); }
+        .badge-red { background: rgba(255,68,102,0.1); border: 1px solid var(--red); color: var(--red); }
+
+        .btn {
+            padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border);
+            background: var(--bg-card); color: var(--text); cursor: pointer;
+            font-size: 0.875rem; font-family: inherit; letter-spacing: 0.05em;
+            transition: all 0.2s;
+        }
+        .btn:hover { border-color: var(--p31-dim); color: var(--p31-peak); }
+        .btn.primary { background: rgba(255,152,0,0.1); border-color: var(--orange); color: var(--orange); }
+        .btn.primary:hover { background: rgba(255,152,0,0.2); }
+        .btn.success { background: rgba(0,221,68,0.1); border-color: var(--green); color: var(--green); }
+        .btn.danger { background: rgba(255,68,102,0.1); border-color: var(--red); color: var(--red); }
+        .btn.cyan { background: rgba(0,188,212,0.1); border-color: var(--cyan); color: var(--cyan); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .tabs {
+            display: flex; gap: 0; padding: 0 1.5rem;
+            background: var(--bg-card); border-bottom: 1px solid var(--border);
+        }
+        .tab {
+            padding: 0.75rem 1.25rem; cursor: pointer;
+            color: var(--text-dim); font-size: 0.85rem;
+            text-transform: uppercase; letter-spacing: 0.1em;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        .tab:hover { color: var(--text); }
+        .tab.active {
+            color: var(--orange); border-bottom-color: var(--orange);
+            text-shadow: var(--bloom-orange);
+        }
+
+        .content { padding: 1.5rem; }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+
+        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 8px; padding: 1.25rem; text-align: center;
+        }
+        .stat-card .value { font-size: 1.5rem; font-weight: bold; margin-bottom: 0.25rem; }
+        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.1em; }
+        .stat-card.orange .value { color: var(--orange); text-shadow: var(--bloom-orange); }
+        .stat-card.cyan .value { color: var(--cyan); }
+        .stat-card.green .value { color: var(--green); text-shadow: var(--bloom-soft); }
+        .stat-card.purple .value { color: var(--purple); }
+
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+        .card {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem;
+        }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .card-header h2 {
+            font-size: 0.9rem; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 0.1em; color: var(--p31-decay);
+        }
+
+        /* Profile cards */
+        .profile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
+        .profile-card {
+            background: var(--tube-light); border: 1px solid var(--border);
+            border-radius: 8px; padding: 1.25rem;
+            transition: all 0.2s;
+        }
+        .profile-card:hover { border-color: var(--orange); }
+        .profile-card.active { border-color: var(--green); background: rgba(0,221,68,0.05); }
+        .profile-card .title { font-size: 1.1rem; font-weight: bold; margin-bottom: 0.5rem; color: var(--text); }
+        .profile-card .desc { font-size: 0.85rem; color: var(--text-dim); margin-bottom: 1rem; }
+        .profile-card .meta { display: flex; justify-content: space-between; align-items: center; }
+
+        /* Settings table */
+        .settings-table { width: 100%; border-collapse: collapse; }
+        .settings-table th {
+            text-align: left; padding: 0.75rem; color: var(--p31-decay);
+            font-size: 0.75rem; text-transform: uppercase;
+            border-bottom: 1px solid var(--border);
+            position: sticky; top: 0; background: var(--bg-card);
+        }
+        .settings-table td { padding: 0.75rem; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
+        .settings-table tr:hover { background: rgba(255,152,0,0.05); }
+        .settings-table .key { font-family: monospace; color: var(--cyan); }
+        .settings-table .value { font-family: monospace; color: var(--orange); }
+        .settings-table .desc { color: var(--text-dim); font-size: 0.8rem; }
+
+        .scroll-container { max-height: 500px; overflow-y: auto; }
+
+        /* Form elements */
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; color: var(--text-dim); font-size: 0.85rem; }
+        .form-group input, .form-group select {
+            width: 100%; padding: 0.5rem; border: 1px solid var(--border);
+            background: var(--tube-light); border-radius: 4px;
+            font-family: inherit; color: var(--text);
+        }
+        .form-group input:focus, .form-group select:focus {
+            outline: none; border-color: var(--orange);
+        }
+        .form-inline { display: flex; gap: 0.5rem; align-items: center; }
+        .form-inline input { flex: 1; }
+
+        /* Setting row edit */
+        .setting-row { display: flex; align-items: center; gap: 0.5rem; }
+        .setting-row input {
+            width: 150px; padding: 0.25rem 0.5rem; border: 1px solid var(--border);
+            background: var(--tube-light); border-radius: 4px; font-family: monospace;
+        }
+        .setting-row .btn { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+
+        /* Toast */
+        .toast {
+            position: fixed; bottom: 2rem; right: 2rem;
+            padding: 1rem 1.5rem; border-radius: 8px;
+            background: var(--bg-card); border: 1px solid var(--border);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            z-index: 1000; display: none;
+        }
+        .toast.show { display: block; animation: slideIn 0.3s ease; }
+        .toast.success { border-color: var(--green); }
+        .toast.error { border-color: var(--red); }
+        @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center;
+            z-index: 1000;
+        }
+        .modal-overlay.show { display: flex; }
+        .modal {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 12px; padding: 1.5rem; max-width: 500px; width: 90%;
+            max-height: 80vh; overflow-y: auto;
+        }
+        .modal h3 { margin-bottom: 1rem; color: var(--orange); }
+        .modal-actions { display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.5rem; }
+
+        @media (max-width: 1200px) { .stats-row { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } .sidebar { display: none; } .main { margin-left: 0; } }
+        @media (max-width: 768px) { .main { margin-left: 0; } .stats-row { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body class="crt-light">
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+
+    <main class="main">
+        <header class="header">
+            <div class="header-title">
+                <h1>Network Tuning</h1>
+                <span id="profile-badge" class="badge badge-orange">-</span>
+            </div>
+            <div class="header-actions">
+                <button class="btn" onclick="refresh()">Refresh</button>
+                <button class="btn primary" onclick="reloadSysctl()">Reload Sysctl</button>
+                <button class="btn danger" onclick="confirmReset()">Reset to Defaults</button>
+            </div>
+        </header>
+
+        <div class="tabs">
+            <div class="tab active" data-tab="overview">Overview</div>
+            <div class="tab" data-tab="tcp">TCP Settings</div>
+            <div class="tab" data-tab="net">Network Settings</div>
+            <div class="tab" data-tab="profiles">Profiles</div>
+        </div>
+
+        <div class="content">
+            <!-- Overview Tab -->
+            <div id="tab-overview" class="tab-panel active">
+                <div class="stats-row">
+                    <div class="stat-card orange">
+                        <div class="value" id="active-profile">-</div>
+                        <div class="label">Active Profile</div>
+                    </div>
+                    <div class="stat-card cyan">
+                        <div class="value" id="tcp-cc">-</div>
+                        <div class="label">Congestion Control</div>
+                    </div>
+                    <div class="stat-card green">
+                        <div class="value" id="ip-forward">-</div>
+                        <div class="label">IP Forwarding</div>
+                    </div>
+                    <div class="stat-card purple">
+                        <div class="value" id="saved-count">-</div>
+                        <div class="label">Custom Settings</div>
+                    </div>
+                </div>
+
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="card-header"><h2>Quick Actions</h2></div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                            <button class="btn primary" onclick="applyProfile('performance')">Apply Performance</button>
+                            <button class="btn cyan" onclick="applyProfile('low-latency')">Apply Low Latency</button>
+                            <button class="btn success" onclick="applyProfile('security')">Apply Security</button>
+                            <button class="btn" onclick="applyProfile('router')">Apply Router Mode</button>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header"><h2>System Info</h2></div>
+                        <div style="display: grid; gap: 0.5rem;">
+                            <div style="display: flex; justify-content: space-between;">
+                                <span style="color: var(--text-dim);">Config File</span>
+                                <span id="config-file" style="font-family: monospace; font-size: 0.8rem;">-</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between;">
+                                <span style="color: var(--text-dim);">Config Exists</span>
+                                <span id="config-exists">-</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between;">
+                                <span style="color: var(--text-dim);">Available CC Algorithms</span>
+                                <span id="avail-cc" style="font-size: 0.8rem;">-</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Key Settings Overview</h2>
+                        <span id="last-update" style="color: var(--text-dim); font-size: 0.8rem;">-</span>
+                    </div>
+                    <div class="scroll-container" style="max-height: 300px;">
+                        <table class="settings-table">
+                            <thead>
+                                <tr>
+                                    <th>Parameter</th>
+                                    <th>Value</th>
+                                    <th>Description</th>
+                                </tr>
+                            </thead>
+                            <tbody id="overview-settings">
+                                <tr><td colspan="3">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TCP Settings Tab -->
+            <div id="tab-tcp" class="tab-panel">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>TCP Stack Settings</h2>
+                        <button class="btn primary" onclick="saveChanges('tcp')">Save Changes</button>
+                    </div>
+                    <div class="scroll-container">
+                        <table class="settings-table">
+                            <thead>
+                                <tr>
+                                    <th>Parameter</th>
+                                    <th>Current Value</th>
+                                    <th>New Value</th>
+                                    <th>Description</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tcp-settings">
+                                <tr><td colspan="4">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Network Settings Tab -->
+            <div id="tab-net" class="tab-panel">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Network Stack Settings</h2>
+                        <button class="btn primary" onclick="saveChanges('net')">Save Changes</button>
+                    </div>
+                    <div class="scroll-container">
+                        <table class="settings-table">
+                            <thead>
+                                <tr>
+                                    <th>Parameter</th>
+                                    <th>Current Value</th>
+                                    <th>New Value</th>
+                                    <th>Description</th>
+                                </tr>
+                            </thead>
+                            <tbody id="net-settings">
+                                <tr><td colspan="4">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Profiles Tab -->
+            <div id="tab-profiles" class="tab-panel">
+                <div class="card">
+                    <div class="card-header"><h2>Tuning Profiles</h2></div>
+                    <p style="color: var(--text-dim); margin-bottom: 1rem;">
+                        Select a profile to apply pre-configured network tuning settings.
+                    </p>
+                    <div class="profile-grid" id="profiles-list">
+                        <p>Loading...</p>
+                    </div>
+                </div>
+
+                <div class="card" id="profile-detail" style="display: none;">
+                    <div class="card-header">
+                        <h2 id="profile-detail-title">Profile Details</h2>
+                        <button class="btn primary" id="apply-profile-btn">Apply This Profile</button>
+                    </div>
+                    <div class="scroll-container" style="max-height: 400px;">
+                        <table class="settings-table">
+                            <thead>
+                                <tr>
+                                    <th>Parameter</th>
+                                    <th>Profile Value</th>
+                                    <th>Current Value</th>
+                                    <th>Match</th>
+                                </tr>
+                            </thead>
+                            <tbody id="profile-settings">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div id="toast" class="toast"></div>
+
+    <!-- Reset Confirmation Modal -->
+    <div class="modal-overlay" id="reset-modal">
+        <div class="modal">
+            <h3>Reset to Defaults?</h3>
+            <p>This will remove all custom sysctl settings and reload system defaults.</p>
+            <p style="color: var(--red); margin-top: 0.5rem;">This action cannot be undone.</p>
+            <div class="modal-actions">
+                <button class="btn" onclick="closeModal('reset-modal')">Cancel</button>
+                <button class="btn danger" onclick="resetToDefaults()">Reset</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API = '/api/v1/nettweak';
+        let currentProfile = null;
+        let tcpSettings = {};
+        let netSettings = {};
+        let pendingChanges = { tcp: {}, net: {} };
+
+        function getToken() {
+            return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token');
+        }
+
+        function checkAuth() {
+            if (!getToken()) {
+                window.location.href = '/portal/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+                return false;
+            }
+            return true;
+        }
+
+        async function api(endpoint, options = {}) {
+            const token = getToken();
+            const headers = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = 'Bearer ' + token;
+
+            try {
+                const res = await fetch(API + endpoint, { ...options, headers });
+                if (res.status === 401) {
+                    window.location.href = '/portal/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+                    return null;
+                }
+                return res.json();
+            } catch (e) {
+                console.error('API error:', e);
+                return null;
+            }
+        }
+
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = 'toast show ' + type;
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+
+        function showModal(id) {
+            document.getElementById(id).classList.add('show');
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('show');
+        }
+
+        async function loadStatus() {
+            const data = await api('/status');
+            if (!data) return;
+
+            document.getElementById('active-profile').textContent = data.active_profile || 'Custom';
+            document.getElementById('tcp-cc').textContent = data.summary?.tcp_congestion_control || '-';
+            document.getElementById('ip-forward').textContent = data.summary?.ip_forwarding ? 'ON' : 'OFF';
+            document.getElementById('saved-count').textContent = data.saved_settings_count || '0';
+            document.getElementById('config-file').textContent = data.config_file || '-';
+            document.getElementById('config-exists').textContent = data.config_exists ? 'Yes' : 'No';
+            document.getElementById('avail-cc').textContent = (data.available_congestion_controls || []).join(', ');
+
+            const badge = document.getElementById('profile-badge');
+            if (data.active_profile) {
+                badge.textContent = data.active_profile.toUpperCase();
+                badge.className = 'badge badge-green';
+            } else {
+                badge.textContent = 'CUSTOM';
+                badge.className = 'badge badge-orange';
+            }
+
+            currentProfile = data.active_profile;
+        }
+
+        async function loadAllSettings() {
+            const data = await api('/settings');
+            if (!data) return;
+
+            const settings = data.settings || {};
+            const tbody = document.getElementById('overview-settings');
+
+            // Show key settings in overview
+            const keySettings = [
+                'net.ipv4.tcp_congestion_control',
+                'net.ipv4.ip_forward',
+                'net.core.rmem_max',
+                'net.core.wmem_max',
+                'net.ipv4.tcp_fastopen',
+                'net.ipv4.tcp_syncookies',
+                'net.ipv4.conf.all.rp_filter'
+            ];
+
+            tbody.innerHTML = keySettings.map(key => {
+                const s = settings[key] || {};
+                return `
+                    <tr>
+                        <td class="key">${key}</td>
+                        <td class="value">${s.value || '-'}</td>
+                        <td class="desc">${s.description || ''}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            document.getElementById('last-update').textContent = 'Updated: ' + new Date().toLocaleTimeString();
+        }
+
+        async function loadTcpSettings() {
+            const data = await api('/tcp');
+            if (!data) return;
+
+            tcpSettings = data.settings || {};
+            renderSettingsTable('tcp-settings', tcpSettings, 'tcp');
+        }
+
+        async function loadNetSettings() {
+            const data = await api('/net');
+            if (!data) return;
+
+            netSettings = data.settings || {};
+            renderSettingsTable('net-settings', netSettings, 'net');
+        }
+
+        function renderSettingsTable(tableId, settings, category) {
+            const tbody = document.getElementById(tableId);
+            const entries = Object.entries(settings);
+
+            if (entries.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4">No settings found</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = entries.map(([key, s]) => {
+                const inputType = s.type === 'bool' ? 'select' : 'text';
+                const pendingValue = pendingChanges[category][key];
+                const displayValue = pendingValue !== undefined ? pendingValue : '';
+
+                let inputHtml;
+                if (s.type === 'bool') {
+                    inputHtml = `
+                        <select data-key="${key}" data-category="${category}" onchange="trackChange(this)">
+                            <option value="">--</option>
+                            <option value="1" ${pendingValue === '1' ? 'selected' : ''}>Enabled (1)</option>
+                            <option value="0" ${pendingValue === '0' ? 'selected' : ''}>Disabled (0)</option>
+                        </select>
+                    `;
+                } else if (s.options) {
+                    inputHtml = `
+                        <select data-key="${key}" data-category="${category}" onchange="trackChange(this)">
+                            <option value="">--</option>
+                            ${s.options.map(o => `<option value="${o}" ${pendingValue === o ? 'selected' : ''}>${o}</option>`).join('')}
+                        </select>
+                    `;
+                } else {
+                    inputHtml = `
+                        <input type="text" data-key="${key}" data-category="${category}"
+                               placeholder="${s.default || ''}" value="${displayValue}"
+                               onchange="trackChange(this)">
+                    `;
+                }
+
+                return `
+                    <tr>
+                        <td class="key">${key}</td>
+                        <td class="value">${s.value || '-'}</td>
+                        <td>${inputHtml}</td>
+                        <td class="desc">${s.description || ''}${s.unit ? ' (' + s.unit + ')' : ''}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function trackChange(el) {
+            const key = el.dataset.key;
+            const category = el.dataset.category;
+            const value = el.value.trim();
+
+            if (value) {
+                pendingChanges[category][key] = value;
+            } else {
+                delete pendingChanges[category][key];
+            }
+        }
+
+        async function saveChanges(category) {
+            const settings = pendingChanges[category];
+            if (Object.keys(settings).length === 0) {
+                showToast('No changes to save', 'error');
+                return;
+            }
+
+            const result = await api('/apply', {
+                method: 'POST',
+                body: JSON.stringify({ settings, persist: true })
+            });
+
+            if (result?.success) {
+                showToast(`Applied ${result.applied} settings`);
+                pendingChanges[category] = {};
+                refresh();
+            } else {
+                showToast('Failed: ' + (result?.errors || 'Unknown error'), 'error');
+            }
+        }
+
+        async function loadProfiles() {
+            const data = await api('/profiles');
+            if (!data) return;
+
+            const profiles = data.profiles || [];
+            const container = document.getElementById('profiles-list');
+
+            container.innerHTML = profiles.map(p => `
+                <div class="profile-card ${p.active ? 'active' : ''}" data-id="${p.id}" onclick="showProfileDetail('${p.id}')">
+                    <div class="title">${p.name}</div>
+                    <div class="desc">${p.description}</div>
+                    <div class="meta">
+                        <span style="color: var(--text-dim); font-size: 0.8rem;">${p.settings_count} settings</span>
+                        ${p.active ? '<span class="badge badge-green">ACTIVE</span>' : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function showProfileDetail(profileId) {
+            const data = await api('/profile/' + profileId);
+            if (!data) return;
+
+            document.getElementById('profile-detail').style.display = 'block';
+            document.getElementById('profile-detail-title').textContent = data.name;
+            document.getElementById('apply-profile-btn').onclick = () => applyProfile(profileId);
+
+            const settings = data.settings || [];
+            const tbody = document.getElementById('profile-settings');
+
+            if (settings.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4">This profile uses system defaults</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = settings.map(s => `
+                <tr>
+                    <td class="key">${s.key}</td>
+                    <td class="value">${s.profile_value}</td>
+                    <td>${s.current_value || '-'}</td>
+                    <td>
+                        ${s.matches
+                            ? '<span class="badge badge-green">Match</span>'
+                            : '<span class="badge badge-orange">Different</span>'}
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        async function applyProfile(profileId) {
+            const result = await api('/apply', {
+                method: 'POST',
+                body: JSON.stringify({ profile: profileId, persist: true })
+            });
+
+            if (result?.success) {
+                showToast(`Applied profile "${profileId}" (${result.applied} settings)`);
+                refresh();
+            } else {
+                showToast('Failed: ' + (result?.errors || 'Unknown error'), 'error');
+            }
+        }
+
+        async function reloadSysctl() {
+            const result = await api('/reload', { method: 'POST' });
+
+            if (result?.success) {
+                showToast('Sysctl configuration reloaded');
+                refresh();
+            } else {
+                showToast('Reload failed: ' + (result?.error || 'Unknown error'), 'error');
+            }
+        }
+
+        function confirmReset() {
+            showModal('reset-modal');
+        }
+
+        async function resetToDefaults() {
+            closeModal('reset-modal');
+
+            const result = await api('/reset', { method: 'POST' });
+
+            if (result?.success) {
+                showToast('Reset to system defaults');
+                refresh();
+            } else {
+                showToast('Reset failed: ' + (result?.error || 'Unknown error'), 'error');
+            }
+        }
+
+        function refresh() {
+            loadStatus();
+            loadAllSettings();
+            loadProfiles();
+
+            const activeTab = document.querySelector('.tab.active');
+            if (activeTab) {
+                const tab = activeTab.dataset.tab;
+                if (tab === 'tcp') loadTcpSettings();
+                else if (tab === 'net') loadNetSettings();
+            }
+        }
+
+        // Tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+
+                if (tab.dataset.tab === 'tcp') loadTcpSettings();
+                else if (tab.dataset.tab === 'net') loadNetSettings();
+                else if (tab.dataset.tab === 'profiles') loadProfiles();
+            });
+        });
+
+        // Initial load
+        if (checkAuth()) {
+            refresh();
+        }
+    </script>
+    <script src="/shared/crt-engine.js"></script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+Source: secubox-admin
+Section: admin
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
+
+Package: secubox-admin
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-psutil
+Description: SecuBox System Administration Dashboard
+ Advanced system administration module for SecuBox.
+ Provides web UI and API for system management tasks.
+ .
+ Features:
+  - System status overview (CPU, memory, disk, load)
+  - Systemd service management (start, stop, restart)
+  - System logs viewer (journalctl integration)
+  - Disk usage monitoring
+  - Process manager (top processes by CPU/memory)
+  - APT updates management
+  - System reboot/shutdown with confirmation
+ .
+ Port Debian bookworm for SecuBox (CyberMind.fr).
