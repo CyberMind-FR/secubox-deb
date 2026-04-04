@@ -1,8 +1,8 @@
 # SecuBox-DEB
 
-**Security Appliance for Debian** | [Français](Home-FR) | [中文](Home-ZH) | **v1.5.0**
+**Security Appliance for Debian** | [Français](Home-FR) | [中文](Home-ZH) | **v1.5.1**
 
-SecuBox is a complete security appliance solution ported from OpenWrt to Debian bookworm, designed for GlobalScale ARM64 boards (MOCHAbin, ESPRESSObin) and x86_64 systems. Now featuring **93 packages** with **2000+ API endpoints**.
+SecuBox is a complete security appliance solution ported from OpenWrt to Debian bookworm, designed for GlobalScale ARM64 boards (MOCHAbin, ESPRESSObin) and x86_64 systems. Now featuring **124 packages** with **2000+ API endpoints**.
 
 ---
 
@@ -14,7 +14,7 @@ Test SecuBox instantly in VirtualBox - no USB drive needed:
 
 ```bash
 # Download image
-wget https://github.com/CyberMind-FR/secubox-deb/releases/download/v1.5.0/secubox-live-amd64-bookworm.img.gz
+wget https://github.com/CyberMind-FR/secubox-deb/releases/download/v1.5.1/secubox-live-amd64-bookworm.img.gz
 gunzip secubox-live-amd64-bookworm.img.gz
 
 # Convert to VDI format
@@ -50,7 +50,7 @@ Boot directly from USB on physical hardware:
 
 ```bash
 # Download
-wget https://github.com/CyberMind-FR/secubox-deb/releases/download/v1.5.0/secubox-live-amd64-bookworm.img.gz
+wget https://github.com/CyberMind-FR/secubox-deb/releases/download/v1.5.1/secubox-live-amd64-bookworm.img.gz
 
 # Flash to USB drive (replace /dev/sdX)
 zcat secubox-live-amd64-bookworm.img.gz | sudo dd of=/dev/sdX bs=4M status=progress
@@ -118,7 +118,7 @@ Options:
 | **System Tools** | Glances, MQTT, TURN, Vault, Cloner, VM | 22 |
 | **Email & DNS** | Postfix/Dovecot, Webmail, DNS Provider | 9 |
 
-**Total: 93 packages**
+**Total: 124 packages**
 
 ---
 
