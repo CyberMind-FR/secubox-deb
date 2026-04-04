@@ -1,9 +1,26 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-04-04 (Session 37)*
+*Mis à jour : 2026-04-04 (Session 38)*
 
 ---
 
-## ✅ Terminé cette session (Session 37)
+## ✅ Terminé cette session (Session 38)
+
+### Wiki Documentation — VirtualBox Quick Start ✅
+- **wiki/Home.md** — Updated with VirtualBox (2 Minutes) quick start section
+- **wiki/Home-FR.md** — French translation of VirtualBox quick start
+- **wiki/Home-ZH.md** — Chinese translation of VirtualBox quick start
+- **wiki/_Sidebar.md** — Updated with v1.5.0 and improved VirtualBox link
+- All pages updated to v1.5.0 with 93 packages count
+- Complete VM creation script options documented
+- One-liner download commands included
+
+**Commits:**
+- `2265d7c` — docs(wiki): Add VirtualBox quick start to all wiki home pages
+- `5d8c327` — docs(wiki): Update sidebar with v1.5.0 and VirtualBox link text
+
+---
+
+## ✅ Terminé session précédente (Session 37)
 
 ### Phase 10 — Security Extensions COMPLETE (10/10)
 
