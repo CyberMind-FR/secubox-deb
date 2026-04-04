@@ -93,6 +93,27 @@ jobs:
             build-essential dpkg-dev debhelper devscripts fakeroot \
             dh-python python3-all python3-setuptools
 
+      - name: Setup Node.js (for soc-web)
+        if: matrix.package == 'secubox-soc-web'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Go (for daemon)
+        if: matrix.package == 'secubox-daemon'
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Build Go binaries (for daemon)
+        if: matrix.package == 'secubox-daemon'
+        run: |
+          cd daemon
+          mkdir -p build
+          GOOS=linux GOARCH=${{ matrix.arch == 'arm64' && 'arm64' || 'amd64' }} go build -o build/secuboxd ./cmd/secuboxd
+          GOOS=linux GOARCH=${{ matrix.arch == 'arm64' && 'arm64' || 'amd64' }} go build -o build/secuboxctl ./cmd/secuboxctl
+          ls -la build/
+
       - name: Build ${{ matrix.package }} (${{ matrix.arch }})
         if: "!(matrix.arch == 'arm64' && steps.check-arch.outputs.is_arch_all == 'true')"
         run: |
