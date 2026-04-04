@@ -33,7 +33,7 @@ opkg                             →    apt + repo apt.secubox.in
 
 ---
 
-## Packages (30 modules)
+## Packages (93 modules)
 
 ### Core & Dashboard
 | Package | Description |
@@ -97,20 +97,49 @@ opkg                             →    apt + repo apt.secubox.in
 
 ## Quick Start
 
-### Live USB (Recommended)
+### VirtualBox (Fastest)
 
-The fastest way to try SecuBox - boot directly from USB with all packages pre-installed.
+Test SecuBox in VirtualBox in 2 minutes:
+
+```bash
+# One-liner: Download, convert, create VM, and start
+curl -sLO https://github.com/CyberMind-FR/secubox-deb/releases/download/v1.5.0/secubox-live-amd64-bookworm.img.gz && \
+gunzip secubox-live-amd64-bookworm.img.gz && \
+VBoxManage convertfromraw secubox-live-amd64-bookworm.img secubox-live.vdi --format VDI && \
+curl -sL https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/scripts/create-secubox-vm.sh | bash -s -- secubox-live.vdi
+```
+
+Or step by step:
+
+```bash
+# 1. Download and extract
+wget https://github.com/CyberMind-FR/secubox-deb/releases/download/v1.5.0/secubox-live-amd64-bookworm.img.gz
+gunzip secubox-live-amd64-bookworm.img.gz
+
+# 2. Use the VM creation script
+./scripts/create-secubox-vm.sh secubox-live-amd64-bookworm.img
+
+# 3. Access (wait 30-60s for boot)
+ssh -p 2222 root@localhost       # Password: secubox
+firefox https://localhost:9443   # Web UI
+```
+
+See [wiki/Live-USB-VirtualBox.md](wiki/Live-USB-VirtualBox.md) for full documentation.
+
+### Live USB (Hardware)
+
+Boot directly from USB with all packages pre-installed:
 
 ```bash
 # Download latest release
-wget https://github.com/CyberMind-FR/secubox-deb/releases/latest/download/secubox-live-amd64-bookworm.img.gz
+wget https://github.com/CyberMind-FR/secubox-deb/releases/download/v1.5.0/secubox-live-amd64-bookworm.img.gz
 
 # Flash to USB (replace /dev/sdX with your device)
 zcat secubox-live-amd64-bookworm.img.gz | sudo dd of=/dev/sdX bs=4M status=progress
 sync
 
 # Boot from USB and access:
-# Web UI: https://<IP>:8443 (admin / admin)
+# Web UI: https://<IP>:443
 # SSH: root / secubox
 ```
 
