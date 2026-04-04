@@ -1,5 +1,5 @@
 # MIGRATION MAP — SecuBox OpenWrt → Debian
-*Mis à jour : 2026-04-01*
+*Mis à jour : 2026-04-04*
 
 Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 
@@ -101,7 +101,7 @@ Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 | **secubox-soc-gateway** | — | ✅ | ✅ | SOC aggregation gateway v1.0.0 | ✅ |
 | **secubox-soc-web** | ✅ | — | ✅ | React SOC dashboard v1.0.0 | ✅ |
 
-**Total : 61 modules | ~1200+ endpoints API + Go mesh daemon + TUI console + SOC**
+**Total : 72 modules | ~1400+ endpoints API + Go mesh daemon + TUI console + SOC**
 
 *Note: mail-lxc and webmail-lxc are backend components integrated into secubox-mail*
 
@@ -175,7 +175,7 @@ bash scripts/build-add-local.sh secubox-crowdsec bookworm
 6. ~~Phase 6 : CI/CD~~ ✅ Fait
 7. ~~Phase 7 : Documentation + UI Theme~~ ✅ Fait
 8. **Phase 8 : Applications** — 21 modules (ollama, jellyfin, homeassistant, zigbee...)
-9. **Phase 9 : System Tools** — 22 modules (vault, cloner, vm, glances...)
+9. ~~Phase 9 : System Tools~~ ✅ **22/22 modules complete**
 10. **Phase 10 : Security Extensions** — 10 modules (wazuh, ai-insights, interceptor...)
 11. Tests d'intégration sur VM et hardware réel
 12. Déployer apt.secubox.in sur serveur production
