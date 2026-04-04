@@ -1,7 +1,7 @@
-**[Home](Home)** | [FR](Home-FR) | [中文](Home-ZH)
+**[Home](Home)** | [FR](Home-FR) | [中文](Home-ZH) | **v1.5.0**
 
 ### Getting Started
-* [[Live-USB-VirtualBox|VirtualBox Quick Start]] ⭐
+* [[Live-USB-VirtualBox|VirtualBox (2 min)]] ⭐
 * [[Live-USB]] | [FR](Live-USB-FR) | [中文](Live-USB-ZH)
 * [[Installation]] | [FR](Installation-FR) | [中文](Installation-ZH)
 
