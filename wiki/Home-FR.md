@@ -1,8 +1,8 @@
 # SecuBox-DEB
 
-**Appliance de Securite pour Debian** | [English](Home) | [中文](Home-ZH)
+**Appliance de Securite pour Debian** | [English](Home) | [中文](Home-ZH) | **v1.4.0**
 
-SecuBox est une solution d'appliance de securite complete portee d'OpenWrt vers Debian bookworm, concue pour les cartes ARM64 GlobalScale (MOCHAbin, ESPRESSObin) et les systemes x86_64.
+SecuBox est une solution d'appliance de securite complete portee d'OpenWrt vers Debian bookworm, concue pour les cartes ARM64 GlobalScale (MOCHAbin, ESPRESSObin) et les systemes x86_64. Maintenant avec 61 paquets et plus de 1200 points d'API.
 
 ## Demarrage Rapide
 

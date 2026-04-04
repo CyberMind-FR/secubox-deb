@@ -1,8 +1,8 @@
 # SecuBox-DEB
 
-**Debian 安全设备** | [English](Home) | [Francais](Home-FR)
+**Debian 安全设备** | [English](Home) | [Francais](Home-FR) | **v1.4.0**
 
-SecuBox 是一个完整的安全设备解决方案，从 OpenWrt 移植到 Debian bookworm，专为 GlobalScale ARM64 开发板（MOCHAbin、ESPRESSObin）和 x86_64 系统设计。
+SecuBox 是一个完整的安全设备解决方案，从 OpenWrt 移植到 Debian bookworm，专为 GlobalScale ARM64 开发板（MOCHAbin、ESPRESSObin）和 x86_64 系统设计。现在包含 61 个软件包和 1200+ 个 API 端点。
 
 ## 快速开始
 

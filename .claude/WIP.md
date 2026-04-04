@@ -25,6 +25,13 @@
 - Commit: `19ca292`
 - Pushed to: `origin/master`
 
+### Wiki Update ✅
+- Updated `wiki/Home.md` — v1.4.0 version, 61 packages, SOC feature
+- Updated `wiki/Home-FR.md` — French version sync
+- Updated `wiki/Home-ZH.md` — Chinese version sync
+- Updated `wiki/Modules.md` — Added SOC modules, secubox-console, hub v1.2.0 features
+- Updated `.claude/HISTORY.md` — Session 34 entry, statistics (61 packages, v1.4.0)
+
 ---
 
 ## ✅ Terminé session précédente (Session 33)

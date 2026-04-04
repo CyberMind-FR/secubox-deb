@@ -3,6 +3,32 @@
 
 ---
 
+## 2026-04-03
+
+### Session 34 — Build Timestamp & System Fixes
+
+**secubox-hub v1.2.0 — Build Timestamp Display**
+- Added `_get_build_info()` API function to read `/etc/secubox/build-info.json`
+- Dashboard header now displays build timestamp badge (date + time)
+- Tooltip shows git commit hash, branch, and board type on hover
+- Build scripts create `build-info.json` during image generation
+
+**Build System Improvements**
+- Fixed `build-live-usb.sh` package priority (prefers `output/debs` over cache)
+- Fixed secubox-soc-web nginx config (installs to `secubox.d/` not `sites-available/`)
+- Removed broken `secubox-repo.conf` symlink creation from postinst scripts
+
+**Packages Updated**
+- `secubox-hub_1.2.0-1~bookworm1_all.deb` — Build timestamp feature
+- `secubox-soc-web_1.1.0-1_all.deb` — Nginx config path fix
+
+**Release v1.4.0**
+- Tag: `v1.4.0`
+- Commit: `19ca292`
+- All changes pushed to `origin/master`
+
+---
+
 ## 2026-03-30
 
 ### Plymouth Boot Splash & Kiosk Fixes
@@ -216,9 +242,10 @@
 
 | Metric | Value |
 |--------|-------|
-| Debian packages | 57 |
-| API endpoints | ~1100+ |
+| Debian packages | 61 |
+| API endpoints | ~1200+ |
 | OpenWRT packages (total) | 103 |
-| Remaining to port | 50 |
-| Phases completed | 7 of 10 (Phase 8: 3/21) |
+| Remaining to port | 46 |
+| Phases completed | 7 of 10 (Phase 8: 9/21) |
+| Current release | v1.4.0 |
 | Target completion | Phases 8-10 remaining |
