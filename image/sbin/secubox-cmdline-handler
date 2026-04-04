@@ -21,6 +21,7 @@ parse_cmdline() {
     local kiosk="0"
     local mode="kiosk"  # Default display mode: kiosk, tui, or console
     local debug="0"
+    local install="0"
 
     for param in $cmdline; do
         case "$param" in
@@ -36,6 +37,9 @@ parse_cmdline() {
             secubox.debug=*)
                 debug="${param#secubox.debug=}"
                 ;;
+            secubox.install=*)
+                install="${param#secubox.install=}"
+                ;;
         esac
     done
 
@@ -44,6 +48,7 @@ parse_cmdline() {
     echo "SECUBOX_KIOSK=${kiosk}"
     echo "SECUBOX_MODE=${mode}"
     echo "SECUBOX_DEBUG=${debug}"
+    echo "SECUBOX_INSTALL=${install}"
 }
 
 # Apply settings from command line
@@ -142,6 +147,37 @@ EOF
     if [[ "$SECUBOX_DEBUG" == "1" ]]; then
         log "Debug mode enabled"
         touch "${MARKER_DIR}/.debug-enabled"
+    fi
+
+    # Install mode - launch installer on tty1
+    if [[ "$SECUBOX_INSTALL" == "1" ]]; then
+        log "Install mode requested - launching disk installer"
+        touch "${MARKER_DIR}/.install-mode"
+        rm -f "${MARKER_DIR}/.kiosk-enabled"
+        rm -f "${MARKER_DIR}/.tui-enabled"
+
+        # Create installer service
+        cat > /etc/systemd/system/secubox-install.service <<'EOF'
+[Unit]
+Description=SecuBox Disk Installer
+After=basic.target
+Conflicts=getty@tty1.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/secubox-install
+StandardInput=tty
+StandardOutput=tty
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+        systemctl daemon-reload 2>/dev/null || true
+        systemctl enable secubox-install.service 2>/dev/null || true
+        systemctl start secubox-install.service 2>/dev/null &
     fi
 }
 
