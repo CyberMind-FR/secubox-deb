@@ -1,0 +1,10 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+  remove|upgrade|deconfigure)
+    systemctl stop secubox-matrix.service || true
+    systemctl disable secubox-matrix.service || true
+    ;;
+esac
+#DEBHELPER#

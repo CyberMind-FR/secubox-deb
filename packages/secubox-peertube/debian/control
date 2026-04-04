@@ -1,13 +1,27 @@
 Source: secubox-peertube
 Section: net
 Priority: optional
-Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.6.2
 
 Package: secubox-peertube
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn, lxc, lxc-templates
-Description: SecuBox PeerTube - Federated Video Platform
- LXC-based PeerTube video platform for SecuBox.
- ActivityPub-compatible decentralized YouTube alternative.
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn
+Recommends: docker.io | podman
+Description: PeerTube federated video platform management
+ SecuBox module for managing PeerTube video hosting via Docker/Podman.
+ Provides container management, video hosting, channel management,
+ user management, federation (ActivityPub), transcoding settings,
+ plugin management, and storage statistics.
+ .
+ Features:
+  - Docker/Podman container management
+  - Video and channel management
+  - User creation and role assignment
+  - Federation with other PeerTube instances
+  - Transcoding settings (HLS, WebTorrent, resolutions)
+  - Plugin installation from NPM
+  - Storage usage monitoring
+ .
+ Provides FastAPI backend on /api/v1/peertube/ via Unix socket.

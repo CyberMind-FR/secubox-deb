@@ -1,14 +1,23 @@
 Source: secubox-webradio
 Section: sound
 Priority: optional
-Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
-Standards-Version: 4.6.0
+Standards-Version: 4.6.2
 
 Package: secubox-webradio
 Architecture: all
-Depends: secubox-core, python3, python3-uvicorn, python3-fastapi, nginx
-Recommends: icecast2
-Description: SecuBox WebRadio Streaming
- Internet radio streaming server management for SecuBox.
- Manage Icecast2 streams, playlists, and media files.
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn, python3-httpx
+Recommends: ffmpeg, podman | docker.io
+Description: Internet Radio Streaming for SecuBox
+ Debian bookworm port of internet radio management module.
+ Provides FastAPI backend on /api/v1/webradio/ via Unix socket.
+ .
+ Features:
+  - Internet radio station management and favorites
+  - Icecast/Liquidsoap streaming server via containers
+  - Recording functionality (MP3, OGG, AAC)
+  - Schedule programming for playback and recording
+  - Docker/Podman container management
+  - Audio visualizer in web player
+  - CRT-light P31 phosphor theme frontend with violet accents

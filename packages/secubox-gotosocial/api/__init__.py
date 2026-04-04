@@ -1,0 +1,1 @@
+# SecuBox GoToSocial API Module

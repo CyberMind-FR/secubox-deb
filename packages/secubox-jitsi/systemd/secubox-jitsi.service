@@ -1,0 +1,23 @@
+[Unit]
+Description=SecuBox Jitsi API
+After=network.target secubox-core.service secubox-runtime.service docker.service
+Requires=secubox-runtime.service
+Wants=docker.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/usr/lib/secubox/jitsi
+ExecStart=/usr/bin/uvicorn api.main:app --uds /run/secubox/jitsi.sock --log-level warning
+ExecStartPost=-/bin/sleep 1
+ExecStartPost=-/bin/chmod 660 /run/secubox/jitsi.sock
+ExecStartPost=-/bin/chown secubox:secubox /run/secubox/jitsi.sock
+Restart=on-failure
+RestartSec=5
+PrivateTmp=true
+RuntimeDirectory=secubox
+RuntimeDirectoryMode=0775
+
+[Install]
+WantedBy=multi-user.target

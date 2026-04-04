@@ -1,9 +1,36 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-04-04 (Session 36)*
+*Mis à jour : 2026-04-04 (Session 37)*
 
 ---
 
-## ✅ Terminé cette session (Session 36)
+## ✅ Terminé cette session (Session 37)
+
+### Phase 8 — Applications COMPLETE (21/21)
+
+**New Modules Created & Built (13):**
+- `secubox-hexo_1.0.0-1~bookworm1_all.deb` (17KB) — Static blog generator (Hexo)
+- `secubox-webradio_1.0.0-1~bookworm1_all.deb` (16KB) — Internet radio streaming
+- `secubox-torrent_1.0.0-1~bookworm1_all.deb` (18KB) — BitTorrent client (Transmission)
+- `secubox-newsbin_1.0.0-1~bookworm1_all.deb` (17KB) — Usenet downloader (SABnzbd)
+- `secubox-domoticz_1.0.0-1~bookworm1_all.deb` (16KB) — Home automation
+- `secubox-gotosocial_1.0.0-1~bookworm1_all.deb` (16KB) — Fediverse/ActivityPub server
+- `secubox-simplex_1.0.0-2_all.deb` (15KB) — SimpleX secure messaging
+- `secubox-photoprism_1.0.0-1~bookworm1_all.deb` (16KB) — Photo management
+- `secubox-homeassistant_1.0.0-1~bookworm1_all.deb` (16KB) — IoT/Home automation hub
+- `secubox-matrix_1.0.0-1_all.deb` (18KB) — Matrix chat server (Synapse)
+- `secubox-jitsi_1.0.0-1~bookworm1_all.deb` (18KB) — Video conferencing
+- `secubox-peertube_1.0.0-1~bookworm1_all.deb` (17KB) — Video platform
+- `secubox-voip_1.0.0-1~bookworm1_all.deb` (17KB) — VoIP/PBX (Asterisk/FreePBX)
+
+**Phase 8 Summary (21 modules total):**
+- Previously complete: ollama, localai, jellyfin, zigbee, lyrion, jabber, magicmirror, mmpm (8)
+- Session 37: hexo, webradio, torrent, newsbin, domoticz, gotosocial, simplex, photoprism, homeassistant, matrix, jitsi, peertube, voip (13)
+
+**Total Packages: 85** (was 72)
+
+---
+
+## ✅ Terminé session précédente (Session 36)
 
 ### Phase 9 — System Tools COMPLETE (22/22)
 

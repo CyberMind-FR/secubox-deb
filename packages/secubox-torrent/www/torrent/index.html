@@ -3,291 +3,1271 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Torrent - SecuBox</title>
+    <title>SecuBox - Torrent Client</title>
+    <link rel="stylesheet" href="/shared/sidebar.css">
     <link rel="stylesheet" href="/shared/crt-light.css">
-    <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
-        :root { --torrent-green: #27ae60; --torrent-light: #2ecc71; --torrent-dark: #1e8449; }
-        body.dark { --torrent-green: #2ecc71; --torrent-light: #58d68d; --torrent-dark: #27ae60; }
-        .accent { color: var(--torrent-green); }
-        .accent-bg { background-color: var(--torrent-green); }
-        .header { display: flex; justify-content: space-between; align-items: center; padding: 1rem; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
-        .header h1 { margin: 0; font-size: 1.5rem; }
-        .status-badge { padding: 0.25rem 0.75rem; border-radius: 1rem; font-size: 0.875rem; }
-        .status-badge.running { background: var(--success-bg); color: var(--success); }
-        .status-badge.stopped { background: var(--error-bg); color: var(--error); }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem; text-align: center; }
-        .stat-value { font-size: 1.5rem; font-weight: bold; color: var(--torrent-green); }
-        .stat-label { font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; }
-        .action-bar { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
-        .btn { padding: 0.5rem 1rem; border: 1px solid var(--border); border-radius: 0.25rem; background: var(--surface); color: var(--text); cursor: pointer; font-size: 0.875rem; }
-        .btn:hover { background: var(--hover); }
-        .btn.primary { background: var(--torrent-green); color: white; border-color: var(--torrent-green); }
-        .btn.primary:hover { background: var(--torrent-dark); }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .tabs { display: flex; gap: 0.5rem; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
-        .tab { padding: 0.75rem 1rem; border: none; background: none; color: var(--text-secondary); cursor: pointer; border-bottom: 2px solid transparent; }
-        .tab:hover { color: var(--text); }
-        .tab.active { color: var(--torrent-green); border-bottom-color: var(--torrent-green); }
+        :root {
+            --p31-peak: #00dd44;
+            --p31-dim: #006622;
+            --p31-glow: rgba(0, 221, 68, 0.15);
+            --tube-light: #e8f5e9;
+            --tube-mid: #c8e6c9;
+            --tube-dark: #a5d6a7;
+            --text-primary: #1b5e20;
+            --text-secondary: #388e3c;
+            --text-dim: #66bb6a;
+            --surface: #f1f8e9;
+            --surface-alt: #dcedc8;
+            --border: #c5e1a5;
+            --error: #c62828;
+            --warning: #f57c00;
+            --success: #2e7d32;
+            --torrent: #22c55e;
+            --torrent-dark: #16a34a;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            background: linear-gradient(135deg, var(--tube-light) 0%, var(--tube-mid) 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+        }
+        body.crt-light { background: linear-gradient(135deg, var(--tube-light) 0%, var(--tube-mid) 100%); }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; max-width: calc(100% - 220px); }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid var(--torrent);
+        }
+        .header h1 { font-size: 1.5rem; color: var(--torrent); }
+        .header-actions { display: flex; gap: 0.5rem; }
+
+        /* Stats Row */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+            box-shadow: 0 2px 8px var(--p31-glow);
+        }
+        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
+        .stat-card .value { font-size: 1.25rem; font-weight: bold; color: var(--p31-dim); margin-top: 0.25rem; }
+        .stat-card.running .value { color: var(--success); }
+        .stat-card.stopped .value { color: var(--error); }
+        .stat-card .speed { color: var(--torrent); }
+
+        /* Tabs */
+        .tabs { display: flex; gap: 0; margin-bottom: 1.5rem; border-bottom: 2px solid var(--border); overflow-x: auto; }
+        .tab {
+            padding: 0.75rem 1.25rem;
+            cursor: pointer;
+            border: 1px solid transparent;
+            border-bottom: none;
+            border-radius: 8px 8px 0 0;
+            background: transparent;
+            color: var(--text-secondary);
+            font-weight: 500;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+        .tab:hover { background: var(--surface-alt); }
+        .tab.active {
+            background: var(--surface);
+            border-color: var(--border);
+            color: var(--torrent);
+            margin-bottom: -2px;
+            border-bottom: 2px solid var(--surface);
+        }
+
         .tab-content { display: none; }
         .tab-content.active { display: block; }
-        .torrent-list { display: grid; gap: 0.5rem; }
-        .torrent-item { padding: 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; }
-        .torrent-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem; }
-        .torrent-name { font-weight: 500; word-break: break-word; }
-        .torrent-status { font-size: 0.75rem; padding: 0.125rem 0.5rem; border-radius: 0.25rem; background: var(--surface-alt); }
-        .torrent-status.downloading { background: var(--info-bg); color: var(--info); }
-        .torrent-status.seeding { background: var(--success-bg); color: var(--success); }
-        .torrent-status.stopped { background: var(--warning-bg); color: var(--warning); }
-        .progress-bar { height: 6px; background: var(--border); border-radius: 3px; margin: 0.5rem 0; overflow: hidden; }
-        .progress-fill { height: 100%; background: var(--torrent-green); transition: width 0.3s; }
-        .torrent-meta { display: flex; gap: 1rem; font-size: 0.875rem; color: var(--text-secondary); flex-wrap: wrap; }
-        .torrent-actions { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
-        .torrent-actions .btn { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
-        .add-form { max-width: 500px; }
+
+        /* Cards */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 2px 8px var(--p31-glow);
+        }
+        .card h3 {
+            font-size: 1rem;
+            color: var(--torrent);
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            border: 1px solid var(--torrent);
+            background: var(--surface);
+            color: var(--torrent);
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .btn:hover { background: var(--torrent); color: white; }
+        .btn-primary { background: var(--torrent); color: white; }
+        .btn-primary:hover { background: var(--torrent-dark); }
+        .btn-danger { border-color: var(--error); color: var(--error); }
+        .btn-danger:hover { background: var(--error); color: white; }
+        .btn-success { border-color: var(--success); color: var(--success); }
+        .btn-success:hover { background: var(--success); color: white; }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.875rem; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-icon { padding: 0.25rem 0.5rem; font-size: 1rem; }
+
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+        th { color: var(--text-dim); font-weight: 500; font-size: 0.75rem; text-transform: uppercase; }
+        tr:hover { background: var(--surface-alt); }
+
+        /* Forms */
         .form-group { margin-bottom: 1rem; }
-        .form-group label { display: block; margin-bottom: 0.25rem; font-weight: 500; }
-        .form-group input { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 0.25rem; background: var(--surface); color: var(--text); }
-        .download-item { display: flex; align-items: center; gap: 1rem; padding: 0.75rem; background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; margin-bottom: 0.5rem; }
-        .download-icon { font-size: 1.5rem; }
-        .download-info { flex: 1; }
-        .download-name { font-weight: 500; }
-        .download-size { font-size: 0.875rem; color: var(--text-secondary); }
-        .install-section { text-align: center; padding: 3rem; }
-        .hidden { display: none !important; }
+        .form-group label { display: block; margin-bottom: 0.25rem; color: var(--text-secondary); font-size: 0.875rem; }
+        input, select, textarea {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: white;
+            color: var(--text-primary);
+            font-family: inherit;
+        }
+        input:focus, select:focus, textarea:focus { outline: none; border-color: var(--torrent); box-shadow: 0 0 5px rgba(34, 197, 94, 0.3); }
+        .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
+
+        /* Badges */
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        .badge-success { background: #c8e6c9; color: #2e7d32; }
+        .badge-error { background: #ffcdd2; color: #c62828; }
+        .badge-warning { background: #ffe0b2; color: #e65100; }
+        .badge-info { background: #b3e5fc; color: #01579b; }
+        .badge-downloading { background: #bbdefb; color: #1565c0; }
+        .badge-seeding { background: #c8e6c9; color: #2e7d32; }
+        .badge-stopped { background: #e0e0e0; color: #616161; }
+
+        /* Progress bar */
+        .progress-bar {
+            height: 6px;
+            background: var(--border);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 0.25rem;
+        }
+        .progress-bar .fill {
+            height: 100%;
+            background: var(--torrent);
+            transition: width 0.3s;
+        }
+        .progress-bar.seeding .fill { background: var(--success); }
+
+        /* Install Banner */
+        .install-banner {
+            background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+            border: 2px solid var(--torrent);
+            border-radius: 12px;
+            padding: 2rem;
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+        .install-banner h2 { color: var(--torrent); margin-bottom: 1rem; }
+        .install-banner p { color: var(--text-secondary); margin-bottom: 1.5rem; }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal.active { display: flex; }
+        .modal-content {
+            background: var(--surface);
+            border-radius: 12px;
+            padding: 1.5rem;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+        .modal-header h3 { color: var(--torrent); }
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--text-dim);
+        }
+
+        /* Logs */
+        .logs-container {
+            background: #1a1a1a;
+            color: #00dd44;
+            padding: 1rem;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 0.8rem;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        /* Speed graph placeholder */
+        .speed-graph {
+            height: 200px;
+            background: var(--surface-alt);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-dim);
+        }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 1rem;
+            right: 1rem;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            color: white;
+            z-index: 1001;
+            animation: slideIn 0.3s ease;
+        }
+        .toast-success { background: var(--success); }
+        .toast-error { background: var(--error); }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        .spinner {
+            display: inline-block;
+            width: 1rem;
+            height: 1rem;
+            border: 2px solid var(--border);
+            border-top-color: var(--torrent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Torrent name truncation */
+        .torrent-name {
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* File upload */
+        .file-drop {
+            border: 2px dashed var(--border);
+            border-radius: 8px;
+            padding: 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .file-drop:hover, .file-drop.dragover {
+            border-color: var(--torrent);
+            background: rgba(34, 197, 94, 0.05);
+        }
+        .file-drop input { display: none; }
+
+        @media (max-width: 768px) {
+            .main { margin-left: 0; max-width: 100%; padding: 1rem; }
+            .stats-row { grid-template-columns: repeat(2, 1fr); }
+            .torrent-name { max-width: 150px; }
+        }
     </style>
 </head>
 <body class="crt-light">
     <nav class="sidebar" id="sidebar"></nav>
-    <main class="main-content">
-    <div class="container">
-        <div class="header">
-            <h1><span class="accent">Torrent</span> Client</h1>
-            <span id="status-badge" class="status-badge stopped">Stopped</span>
+    <script src="/shared/sidebar.js"></script>
+
+    <main class="main">
+        <header class="header">
+            <h1>Torrent Client</h1>
+            <div class="header-actions">
+                <button class="btn" onclick="openAddModal()">+ Add Torrent</button>
+                <button class="btn" onclick="refresh()">Refresh</button>
+                <button class="btn btn-primary" id="btnToggle" onclick="toggleService()">Start</button>
+            </div>
+        </header>
+
+        <!-- Install Banner -->
+        <div id="installBanner" class="install-banner" style="display: none;">
+            <h2>Welcome to SecuBox Torrent</h2>
+            <p>Download and share files with BitTorrent. Powered by Transmission.</p>
+            <button class="btn btn-primary" onclick="installTorrent()">Install Transmission</button>
         </div>
 
-        <div id="install-section" class="install-section hidden">
-            <p>Transmission is not installed</p>
-            <button class="btn primary" onclick="installTransmission()">Install Transmission</button>
+        <!-- Stats Row -->
+        <div class="stats-row">
+            <div class="stat-card" id="statStatus">
+                <div class="label">Status</div>
+                <div class="value">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Download</div>
+                <div class="value speed" id="statDownload">0 B/s</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Upload</div>
+                <div class="value speed" id="statUpload">0 B/s</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Active</div>
+                <div class="value" id="statActive">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Disk Usage</div>
+                <div class="value" id="statDisk">-</div>
+            </div>
         </div>
 
-        <div id="main-section" class="hidden">
-            <div class="stats-grid">
-                <div class="stat-card"><div class="stat-value" id="download-speed">0</div><div class="stat-label">Download</div></div>
-                <div class="stat-card"><div class="stat-value" id="upload-speed">0</div><div class="stat-label">Upload</div></div>
-                <div class="stat-card"><div class="stat-value" id="active-count">0</div><div class="stat-label">Active</div></div>
-                <div class="stat-card"><div class="stat-value" id="disk-usage">0</div><div class="stat-label">Disk Used</div></div>
-            </div>
+        <!-- Tabs -->
+        <div class="tabs">
+            <div class="tab active" onclick="showTab('torrents')">Torrents</div>
+            <div class="tab" onclick="showTab('stats')">Statistics</div>
+            <div class="tab" onclick="showTab('rss')">RSS Feeds</div>
+            <div class="tab" onclick="showTab('settings')">Settings</div>
+            <div class="tab" onclick="showTab('logs')">Logs</div>
+        </div>
 
-            <div class="action-bar">
-                <button class="btn primary" id="btn-start" onclick="startService()">Start</button>
-                <button class="btn" id="btn-stop" onclick="stopService()" disabled>Stop</button>
-                <button class="btn" id="btn-restart" onclick="restartService()" disabled>Restart</button>
+        <!-- Torrents Tab -->
+        <div id="tab-torrents" class="tab-content active">
+            <div class="card">
+                <h3>Active Torrents</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Size</th>
+                            <th>Progress</th>
+                            <th>Speed</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="torrentsTable">
+                        <tr><td colspan="6">Loading...</td></tr>
+                    </tbody>
+                </table>
             </div>
+        </div>
 
-            <div class="tabs">
-                <button class="tab active" data-tab="torrents">Torrents</button>
-                <button class="tab" data-tab="add">Add Torrent</button>
-                <button class="tab" data-tab="downloads">Downloads</button>
-            </div>
-
-            <div id="tab-torrents" class="tab-content active">
-                <div class="action-bar"><button class="btn" onclick="loadTorrents()">Refresh</button></div>
-                <div id="torrents-list" class="torrent-list"></div>
-            </div>
-
-            <div id="tab-add" class="tab-content">
-                <div class="add-form">
-                    <form onsubmit="addTorrent(event)">
-                        <div class="form-group">
-                            <label>Magnet Link or URL</label>
-                            <input type="text" id="torrent-link" placeholder="magnet:?xt=urn:btih:..." required>
-                        </div>
-                        <button type="submit" class="btn primary">Add Torrent</button>
-                    </form>
-                    <hr style="margin: 2rem 0; border-color: var(--border);">
-                    <form onsubmit="uploadTorrent(event)">
-                        <div class="form-group">
-                            <label>Upload .torrent File</label>
-                            <input type="file" id="torrent-file" accept=".torrent" required>
-                        </div>
-                        <button type="submit" class="btn primary">Upload</button>
-                    </form>
+        <!-- Statistics Tab -->
+        <div id="tab-stats" class="tab-content">
+            <div class="card">
+                <h3>Transfer Statistics</h3>
+                <div class="form-row">
+                    <div class="stat-card">
+                        <div class="label">Total Downloaded</div>
+                        <div class="value" id="totalDownloaded">0 B</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">Total Uploaded</div>
+                        <div class="value" id="totalUploaded">0 B</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">Active Torrents</div>
+                        <div class="value" id="activeTorrents">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">Paused Torrents</div>
+                        <div class="value" id="pausedTorrents">0</div>
+                    </div>
                 </div>
             </div>
+            <div class="card">
+                <h3>Speed History</h3>
+                <div class="speed-graph">Speed graph visualization coming soon</div>
+            </div>
+        </div>
 
-            <div id="tab-downloads" class="tab-content">
-                <div class="action-bar"><button class="btn" onclick="loadDownloads()">Refresh</button></div>
-                <div id="downloads-list"></div>
+        <!-- RSS Feeds Tab -->
+        <div id="tab-rss" class="tab-content">
+            <div class="card">
+                <h3>RSS Feed Subscriptions</h3>
+                <div style="margin-bottom: 1rem;">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Feed Name</label>
+                            <input type="text" id="rssName" placeholder="My RSS Feed">
+                        </div>
+                        <div class="form-group">
+                            <label>Feed URL</label>
+                            <input type="text" id="rssUrl" placeholder="https://...">
+                        </div>
+                        <div class="form-group">
+                            <label>Category</label>
+                            <select id="rssCategory">
+                                <option value="">None</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="display: flex; align-items: flex-end;">
+                            <button class="btn btn-primary" onclick="addRssFeed()">Add Feed</button>
+                        </div>
+                    </div>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>URL</th>
+                            <th>Category</th>
+                            <th>Auto-Download</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="rssTable">
+                        <tr><td colspan="5">No RSS feeds configured</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Settings Tab -->
+        <div id="tab-settings" class="tab-content">
+            <div class="card">
+                <h3>Connection Settings</h3>
+                <form id="settingsForm" onsubmit="saveSettings(event)">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Web UI Port</label>
+                            <input type="number" id="cfgPort" value="9091" min="1024" max="65535">
+                        </div>
+                        <div class="form-group">
+                            <label>Peer Port</label>
+                            <input type="number" id="cfgPeerPort" value="51413" min="1024" max="65535">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Data Path</label>
+                            <input type="text" id="cfgDataPath" value="/srv/torrent">
+                        </div>
+                        <div class="form-group">
+                            <label>Download Directory</label>
+                            <input type="text" id="cfgDownloadDir" value="/srv/torrent/downloads">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Timezone</label>
+                            <select id="cfgTimezone">
+                                <option value="Europe/Paris">Europe/Paris</option>
+                                <option value="Europe/London">Europe/London</option>
+                                <option value="America/New_York">America/New_York</option>
+                                <option value="America/Los_Angeles">America/Los_Angeles</option>
+                                <option value="Asia/Tokyo">Asia/Tokyo</option>
+                                <option value="UTC">UTC</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Docker Image</label>
+                            <input type="text" id="cfgImage" value="linuxserver/transmission:latest">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save Connection Settings</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <h3>Speed Limits</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Download Limit (KB/s, 0 = unlimited)</label>
+                        <input type="number" id="cfgDownloadLimit" value="0" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Upload Limit (KB/s, 0 = unlimited)</label>
+                        <input type="number" id="cfgUploadLimit" value="0" min="0">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Alt Download Limit (KB/s)</label>
+                        <input type="number" id="cfgAltDownloadLimit" value="1000" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Alt Upload Limit (KB/s)</label>
+                        <input type="number" id="cfgAltUploadLimit" value="500" min="0">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="cfgAltSpeedEnabled"> Enable Alternative Speed Limits (Turtle Mode)
+                    </label>
+                </div>
+                <button class="btn" onclick="saveSpeedLimits()">Save Speed Limits</button>
+            </div>
+
+            <div class="card">
+                <h3>Seeding Settings</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Seed Ratio Limit</label>
+                        <input type="number" id="cfgSeedRatio" value="2.0" min="0" step="0.1">
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="cfgSeedRatioEnabled" checked> Enable Seed Ratio Limit
+                        </label>
+                    </div>
+                </div>
+                <button class="btn" onclick="saveSeedingSettings()">Save Seeding Settings</button>
+            </div>
+
+            <div class="card">
+                <h3>Categories</h3>
+                <div style="margin-bottom: 1rem;">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Category Name</label>
+                            <input type="text" id="catName" placeholder="e.g., Movies">
+                        </div>
+                        <div class="form-group">
+                            <label>Save Path (optional)</label>
+                            <input type="text" id="catPath" placeholder="/downloads/movies">
+                        </div>
+                        <div class="form-group" style="display: flex; align-items: flex-end;">
+                            <button class="btn" onclick="addCategory()">Add Category</button>
+                        </div>
+                    </div>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Save Path</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="categoriesTable">
+                        <tr><td colspan="3">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="card">
+                <h3>Maintenance</h3>
+                <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                    <button class="btn" onclick="restartContainer()">Restart Client</button>
+                    <button class="btn btn-danger" onclick="uninstallTorrent()">Uninstall</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Logs Tab -->
+        <div id="tab-logs" class="tab-content">
+            <div class="card">
+                <h3>Container Logs</h3>
+                <div style="margin-bottom: 1rem; display: flex; gap: 0.5rem; align-items: center;">
+                    <label>Lines:</label>
+                    <select id="logLines" onchange="loadLogs()">
+                        <option value="50">50</option>
+                        <option value="100" selected>100</option>
+                        <option value="200">200</option>
+                    </select>
+                    <button class="btn" onclick="loadLogs()">Refresh</button>
+                </div>
+                <div class="logs-container" id="logsContainer">Loading logs...</div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Add Torrent Modal -->
+    <div class="modal" id="addModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add Torrent</h3>
+                <button class="modal-close" onclick="closeAddModal()">&times;</button>
+            </div>
+            <div class="form-group">
+                <label>Magnet Link or URL</label>
+                <textarea id="addMagnet" rows="3" placeholder="magnet:?xt=urn:btih:... or https://..."></textarea>
+            </div>
+            <div class="form-group">
+                <label>Or Upload .torrent File</label>
+                <div class="file-drop" id="fileDrop" onclick="document.getElementById('torrentFile').click()">
+                    <input type="file" id="torrentFile" accept=".torrent" onchange="handleFileSelect(this)">
+                    <p>Click or drag .torrent file here</p>
+                    <span id="fileName"></span>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Category</label>
+                    <select id="addCategory">
+                        <option value="">None</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="addPaused"> Start Paused
+                    </label>
+                </div>
+            </div>
+            <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                <button class="btn" onclick="closeAddModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="addTorrent()">Add Torrent</button>
             </div>
         </div>
     </div>
-    </main>
 
     <script>
         const API = '/api/v1/torrent';
+        let isRunning = false;
+        let containerStatus = 'not_installed';
+        let categories = [];
+
+        function getToken() {
+            return localStorage.getItem('jwt_token') || localStorage.getItem('token') || '';
+        }
 
         async function api(endpoint, options = {}) {
-            const r = await fetch(API + endpoint, { ...options, headers: { 'Authorization': 'Bearer ' + localStorage.getItem('sbx_token'), 'Content-Type': 'application/json', ...options.headers } });
-            if (!r.ok) throw new Error(`HTTP ${r.status}`);
-            return r.json();
+            const token = getToken();
+            const headers = { 'Content-Type': 'application/json', ...options.headers };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+            const res = await fetch(API + endpoint, { ...options, headers, credentials: 'include' });
+            if (res.status === 401) {
+                window.location.href = '/portal/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+                throw new Error('Unauthorized');
+            }
+            return res.json();
         }
 
-        function formatSpeed(bytes) {
-            if (bytes < 1024) return bytes + ' B/s';
-            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB/s';
-            return (bytes / 1024 / 1024).toFixed(1) + ' MB/s';
+        function showTab(name) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            const tabs = ['torrents', 'stats', 'rss', 'settings', 'logs'];
+            const idx = tabs.indexOf(name);
+            if (idx >= 0) {
+                document.querySelectorAll('.tab')[idx].classList.add('active');
+                document.getElementById('tab-' + name).classList.add('active');
+            }
+            if (name === 'logs') loadLogs();
+            if (name === 'stats') loadStats();
         }
 
-        function formatSize(bytes) {
-            if (bytes < 1024) return bytes + ' B';
-            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-            if (bytes < 1024 * 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + ' MB';
-            return (bytes / 1024 / 1024 / 1024).toFixed(2) + ' GB';
+        function toast(msg, type = 'success') {
+            const t = document.createElement('div');
+            t.className = 'toast toast-' + type;
+            t.textContent = msg;
+            document.body.appendChild(t);
+            setTimeout(() => t.remove(), 3000);
         }
 
-        function formatEta(seconds) {
-            if (seconds < 0) return '∞';
-            if (seconds < 60) return seconds + 's';
-            if (seconds < 3600) return Math.floor(seconds / 60) + 'm';
-            if (seconds < 86400) return Math.floor(seconds / 3600) + 'h ' + Math.floor((seconds % 3600) / 60) + 'm';
-            return Math.floor(seconds / 86400) + 'd';
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
         }
 
-        async function loadStatus() {
+        function formatSpeed(bytesPerSec) {
+            return formatBytes(bytesPerSec) + '/s';
+        }
+
+        function getStatusBadge(status) {
+            const classes = {
+                'downloading': 'badge-downloading',
+                'seeding': 'badge-seeding',
+                'stopped': 'badge-stopped',
+                'queued_download': 'badge-info',
+                'queued_seed': 'badge-info',
+                'verifying': 'badge-warning',
+                'queued_verify': 'badge-warning',
+            };
+            return `<span class="badge ${classes[status] || 'badge-info'}">${status}</span>`;
+        }
+
+        async function refresh() {
             try {
-                const d = await api('/status');
-                const badge = document.getElementById('status-badge');
-                if (!d.installed) {
-                    document.getElementById('install-section').classList.remove('hidden');
-                    document.getElementById('main-section').classList.add('hidden');
-                    badge.textContent = 'Not Installed'; badge.className = 'status-badge stopped';
-                    return;
-                }
-                document.getElementById('install-section').classList.add('hidden');
-                document.getElementById('main-section').classList.remove('hidden');
-                if (d.running) {
-                    badge.textContent = 'Running'; badge.className = 'status-badge running';
-                    document.getElementById('btn-start').disabled = true;
-                    document.getElementById('btn-stop').disabled = false;
-                    document.getElementById('btn-restart').disabled = false;
-                    document.getElementById('download-speed').textContent = formatSpeed(d.download_speed || 0);
-                    document.getElementById('upload-speed').textContent = formatSpeed(d.upload_speed || 0);
-                    document.getElementById('active-count').textContent = d.active_torrents || 0;
-                    loadTorrents();
+                const status = await api('/status');
+                containerStatus = status.container_status;
+                isRunning = status.container_status === 'running';
+
+                // Show/hide install banner
+                document.getElementById('installBanner').style.display =
+                    status.container_status === 'not_installed' ? 'block' : 'none';
+
+                // Update stats
+                const statEl = document.getElementById('statStatus');
+                statEl.querySelector('.value').textContent = status.container_status;
+                statEl.className = 'stat-card ' + (isRunning ? 'running' : 'stopped');
+
+                document.getElementById('statDisk').textContent = status.disk_usage || '-';
+
+                // Update toggle button
+                const btn = document.getElementById('btnToggle');
+                if (status.container_status === 'not_installed') {
+                    btn.textContent = 'Install';
+                    btn.className = 'btn btn-primary';
+                    btn.onclick = installTorrent;
+                } else if (isRunning) {
+                    btn.textContent = 'Stop';
+                    btn.className = 'btn btn-danger';
+                    btn.onclick = () => toggleService();
                 } else {
-                    badge.textContent = 'Stopped'; badge.className = 'status-badge stopped';
-                    document.getElementById('btn-start').disabled = false;
-                    document.getElementById('btn-stop').disabled = true;
-                    document.getElementById('btn-restart').disabled = true;
+                    btn.textContent = 'Start';
+                    btn.className = 'btn btn-success';
+                    btn.onclick = () => toggleService();
                 }
-                document.getElementById('disk-usage').textContent = d.download_size || '0';
-            } catch (e) { console.error(e); }
+
+                // Load settings
+                document.getElementById('cfgPort').value = status.port || 9091;
+                document.getElementById('cfgPeerPort').value = status.peer_port || 51413;
+                document.getElementById('cfgDataPath').value = status.data_path || '/srv/torrent';
+                document.getElementById('cfgDownloadDir').value = status.download_dir || '/srv/torrent/downloads';
+                document.getElementById('cfgTimezone').value = status.timezone || 'Europe/Paris';
+                document.getElementById('cfgImage').value = status.image || 'linuxserver/transmission:latest';
+                document.getElementById('cfgDownloadLimit').value = status.download_limit || 0;
+                document.getElementById('cfgUploadLimit').value = status.upload_limit || 0;
+                document.getElementById('cfgAltSpeedEnabled').checked = status.alt_speed_enabled || false;
+
+                // Load torrents
+                await loadTorrents();
+                // Load categories
+                await loadCategories();
+                // Load RSS
+                await loadRssFeeds();
+                // Load stats
+                await loadStats();
+
+            } catch (e) {
+                console.error(e);
+                toast('Failed to load status', 'error');
+            }
         }
 
         async function loadTorrents() {
+            if (!isRunning) {
+                document.getElementById('torrentsTable').innerHTML = '<tr><td colspan="6">Service not running</td></tr>';
+                return;
+            }
+
             try {
-                const d = await api('/torrents');
-                const list = document.getElementById('torrents-list');
-                if (!d.torrents || d.torrents.length === 0) {
-                    list.innerHTML = '<p style="padding:1rem;color:var(--text-secondary);">No torrents. Add one to start downloading.</p>';
+                const data = await api('/torrents');
+                const tbody = document.getElementById('torrentsTable');
+
+                if (data.error) {
+                    tbody.innerHTML = `<tr><td colspan="6">${data.error}</td></tr>`;
                     return;
                 }
-                list.innerHTML = d.torrents.map(t => `
-                    <div class="torrent-item">
-                        <div class="torrent-header">
-                            <span class="torrent-name">${t.name}</span>
-                            <span class="torrent-status ${t.status}">${t.status}</span>
-                        </div>
-                        <div class="progress-bar"><div class="progress-fill" style="width: ${t.progress}%"></div></div>
-                        <div class="torrent-meta">
-                            <span>${t.progress.toFixed(1)}%</span>
-                            <span>↓ ${formatSpeed(t.download_speed)}</span>
-                            <span>↑ ${formatSpeed(t.upload_speed)}</span>
-                            <span>${formatSize(t.size)}</span>
-                            ${t.eta > 0 ? `<span>ETA: ${formatEta(t.eta)}</span>` : ''}
-                        </div>
-                        <div class="torrent-actions">
-                            ${t.status === 'stopped' ? `<button class="btn" onclick="startTorrent(${t.id})">Start</button>` : `<button class="btn" onclick="stopTorrent(${t.id})">Stop</button>`}
-                            <button class="btn" onclick="deleteTorrent(${t.id}, false)">Remove</button>
-                            <button class="btn" onclick="deleteTorrent(${t.id}, true)" style="color:var(--error);">Delete</button>
-                        </div>
-                    </div>
-                `).join('');
-            } catch (e) { console.error(e); }
-        }
 
-        async function loadDownloads() {
-            try {
-                const d = await api('/downloads');
-                const list = document.getElementById('downloads-list');
-                if (!d.downloads || d.downloads.length === 0) {
-                    list.innerHTML = '<p style="padding:1rem;color:var(--text-secondary);">No completed downloads</p>';
+                const torrents = data.torrents || [];
+                if (torrents.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6">No torrents. Click "Add Torrent" to start.</td></tr>';
                     return;
                 }
-                list.innerHTML = d.downloads.map(f => `
-                    <div class="download-item">
-                        <div class="download-icon">${f.is_dir ? '📁' : '📄'}</div>
-                        <div class="download-info">
-                            <div class="download-name">${f.name}</div>
-                            <div class="download-size">${formatSize(f.size)}</div>
-                        </div>
-                    </div>
+
+                // Update speed stats
+                let totalDown = 0, totalUp = 0, active = 0;
+                torrents.forEach(t => {
+                    totalDown += t.download_speed || 0;
+                    totalUp += t.upload_speed || 0;
+                    if (t.status === 'downloading' || t.status === 'seeding') active++;
+                });
+
+                document.getElementById('statDownload').textContent = formatSpeed(totalDown);
+                document.getElementById('statUpload').textContent = formatSpeed(totalUp);
+                document.getElementById('statActive').textContent = active;
+
+                tbody.innerHTML = torrents.map(t => `
+                    <tr>
+                        <td>
+                            <div class="torrent-name" title="${t.name}">${t.name}</div>
+                            <div class="progress-bar ${t.status === 'seeding' ? 'seeding' : ''}">
+                                <div class="fill" style="width: ${t.progress}%"></div>
+                            </div>
+                        </td>
+                        <td>${formatBytes(t.size)}</td>
+                        <td>${t.progress}%</td>
+                        <td>
+                            <div style="font-size: 0.8rem;">
+                                <span style="color: var(--torrent);">${formatSpeed(t.download_speed)}</span><br>
+                                <span style="color: var(--text-dim);">${formatSpeed(t.upload_speed)}</span>
+                            </div>
+                        </td>
+                        <td>${getStatusBadge(t.status)}</td>
+                        <td>
+                            ${t.status === 'stopped' ?
+                                `<button class="btn btn-sm btn-success" onclick="resumeTorrent(${t.id})">Resume</button>` :
+                                `<button class="btn btn-sm" onclick="pauseTorrent(${t.id})">Pause</button>`
+                            }
+                            <button class="btn btn-sm btn-danger" onclick="removeTorrent(${t.id}, false)">Remove</button>
+                        </td>
+                    </tr>
                 `).join('');
-            } catch (e) { console.error(e); }
+
+            } catch (e) {
+                console.error(e);
+            }
         }
 
-        async function installTransmission() {
-            const btn = event.target; btn.disabled = true; btn.textContent = 'Installing...';
-            try { await api('/install', { method: 'POST' }); await loadStatus(); } catch (e) { alert('Failed: ' + e.message); }
-            finally { btn.disabled = false; btn.textContent = 'Install Transmission'; }
-        }
-
-        async function startService() { document.getElementById('btn-start').disabled = true; try { await api('/start', { method: 'POST' }); await loadStatus(); } catch (e) { alert('Failed: ' + e.message); } }
-        async function stopService() { document.getElementById('btn-stop').disabled = true; try { await api('/stop', { method: 'POST' }); await loadStatus(); } catch (e) { alert('Failed: ' + e.message); } }
-        async function restartService() { document.getElementById('btn-restart').disabled = true; try { await api('/restart', { method: 'POST' }); await loadStatus(); } catch (e) { alert('Failed: ' + e.message); } }
-
-        async function addTorrent(e) {
-            e.preventDefault();
-            const link = document.getElementById('torrent-link').value;
-            const isMagnet = link.startsWith('magnet:');
+        async function loadStats() {
+            if (!isRunning) return;
             try {
-                await api(`/torrents?${isMagnet ? 'magnet' : 'url'}=${encodeURIComponent(link)}`, { method: 'POST' });
-                document.getElementById('torrent-link').value = '';
-                loadTorrents();
-            } catch (err) { alert('Failed: ' + err.message); }
+                const data = await api('/stats');
+                document.getElementById('statDownload').textContent = formatSpeed(data.download_speed || 0);
+                document.getElementById('statUpload').textContent = formatSpeed(data.upload_speed || 0);
+                document.getElementById('totalDownloaded').textContent = formatBytes(data.total_downloaded || 0);
+                document.getElementById('totalUploaded').textContent = formatBytes(data.total_uploaded || 0);
+                document.getElementById('activeTorrents').textContent = data.active_torrents || 0;
+                document.getElementById('pausedTorrents').textContent = data.paused_torrents || 0;
+            } catch (e) {
+                console.error(e);
+            }
         }
 
-        async function uploadTorrent(e) {
-            e.preventDefault();
-            const file = document.getElementById('torrent-file').files[0];
-            const formData = new FormData();
-            formData.append('file', file);
+        async function loadCategories() {
             try {
-                await fetch(API + '/torrents/upload', { method: 'POST', headers: { 'Authorization': 'Bearer ' + localStorage.getItem('sbx_token') }, body: formData });
-                document.getElementById('torrent-file').value = '';
-                loadTorrents();
-            } catch (err) { alert('Failed: ' + err.message); }
+                const data = await api('/categories');
+                categories = data.categories || [];
+                
+                // Update categories table
+                const tbody = document.getElementById('categoriesTable');
+                if (categories.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="3">No categories</td></tr>';
+                } else {
+                    tbody.innerHTML = categories.map(c => `
+                        <tr>
+                            <td>${c.name}</td>
+                            <td><code>${c.save_path}</code></td>
+                            <td><button class="btn btn-sm btn-danger" onclick="removeCategory('${c.id}')">Remove</button></td>
+                        </tr>
+                    `).join('');
+                }
+
+                // Update category dropdowns
+                const options = '<option value="">None</option>' + 
+                    categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+                document.getElementById('addCategory').innerHTML = options;
+                document.getElementById('rssCategory').innerHTML = options;
+
+            } catch (e) {
+                console.error(e);
+            }
         }
 
-        async function startTorrent(id) { try { await api(`/torrents/${id}/start`, { method: 'POST' }); loadTorrents(); } catch (e) { alert('Failed: ' + e.message); } }
-        async function stopTorrent(id) { try { await api(`/torrents/${id}/stop`, { method: 'POST' }); loadTorrents(); } catch (e) { alert('Failed: ' + e.message); } }
-        async function deleteTorrent(id, deleteData) { if (!confirm(deleteData ? 'Delete torrent AND data?' : 'Remove torrent?')) return; try { await api(`/torrents/${id}?delete_data=${deleteData}`, { method: 'DELETE' }); loadTorrents(); } catch (e) { alert('Failed: ' + e.message); } }
+        async function loadRssFeeds() {
+            try {
+                const data = await api('/rss/feeds');
+                const feeds = data.feeds || [];
+                const tbody = document.getElementById('rssTable');
+                
+                if (feeds.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5">No RSS feeds configured</td></tr>';
+                } else {
+                    tbody.innerHTML = feeds.map(f => `
+                        <tr>
+                            <td>${f.name}</td>
+                            <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis;">${f.url}</td>
+                            <td>${f.category || '-'}</td>
+                            <td>${f.auto_download ? 'Yes' : 'No'}</td>
+                            <td><button class="btn btn-sm btn-danger" onclick="removeRssFeed('${f.id}')">Remove</button></td>
+                        </tr>
+                    `).join('');
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
 
-        document.querySelectorAll('.tab').forEach(tab => {
-            tab.addEventListener('click', () => {
-                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-                tab.classList.add('active');
-                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
-                if (tab.dataset.tab === 'downloads') loadDownloads();
-            });
+        async function toggleService() {
+            const action = isRunning ? 'stop' : 'start';
+            try {
+                document.getElementById('btnToggle').disabled = true;
+                document.getElementById('btnToggle').innerHTML = '<span class="spinner"></span>';
+                const res = await api('/container/' + action, { method: 'POST' });
+                if (res.success) {
+                    toast(action === 'start' ? 'Torrent client started!' : 'Torrent client stopped!');
+                } else {
+                    toast(res.error || 'Action failed', 'error');
+                }
+                await refresh();
+            } catch (e) {
+                toast('Action failed: ' + e.message, 'error');
+            } finally {
+                document.getElementById('btnToggle').disabled = false;
+            }
+        }
+
+        async function installTorrent() {
+            if (!confirm('Install Transmission? This will download the Docker image.')) return;
+            toast('Installing Transmission... This may take a few minutes.');
+            try {
+                const res = await api('/container/install', { method: 'POST' });
+                if (res.success) {
+                    toast('Transmission installed! Starting...');
+                    await api('/container/start', { method: 'POST' });
+                    await refresh();
+                } else {
+                    toast(res.error || 'Install failed', 'error');
+                }
+            } catch (e) {
+                toast('Install failed: ' + e.message, 'error');
+            }
+        }
+
+        // Modal functions
+        function openAddModal() {
+            document.getElementById('addModal').classList.add('active');
+            document.getElementById('addMagnet').value = '';
+            document.getElementById('torrentFile').value = '';
+            document.getElementById('fileName').textContent = '';
+        }
+
+        function closeAddModal() {
+            document.getElementById('addModal').classList.remove('active');
+        }
+
+        function handleFileSelect(input) {
+            if (input.files.length > 0) {
+                document.getElementById('fileName').textContent = input.files[0].name;
+            }
+        }
+
+        // File drop handling
+        const fileDrop = document.getElementById('fileDrop');
+        fileDrop.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            fileDrop.classList.add('dragover');
+        });
+        fileDrop.addEventListener('dragleave', () => {
+            fileDrop.classList.remove('dragover');
+        });
+        fileDrop.addEventListener('drop', (e) => {
+            e.preventDefault();
+            fileDrop.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0 && files[0].name.endsWith('.torrent')) {
+                document.getElementById('torrentFile').files = files;
+                document.getElementById('fileName').textContent = files[0].name;
+            }
         });
 
-        if (window.matchMedia?.('(prefers-color-scheme: dark)').matches) document.body.classList.add('dark');
-        loadStatus(); setInterval(loadStatus, 5000);
+        async function addTorrent() {
+            const magnet = document.getElementById('addMagnet').value.trim();
+            const fileInput = document.getElementById('torrentFile');
+            const category = document.getElementById('addCategory').value;
+            const paused = document.getElementById('addPaused').checked;
+
+            if (!magnet && fileInput.files.length === 0) {
+                toast('Please enter a magnet link or upload a file', 'error');
+                return;
+            }
+
+            try {
+                let res;
+                if (fileInput.files.length > 0) {
+                    // Upload file
+                    const formData = new FormData();
+                    formData.append('torrent_file', fileInput.files[0]);
+                    const token = getToken();
+                    res = await fetch(API + '/torrent/add', {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${token}` },
+                        body: formData,
+                    }).then(r => r.json());
+                } else {
+                    // Send magnet/URL
+                    res = await api('/torrent/add', {
+                        method: 'POST',
+                        body: JSON.stringify({ magnet, paused, category })
+                    });
+                }
+
+                if (res.success) {
+                    toast('Torrent added: ' + (res.torrent?.name || 'Unknown'));
+                    closeAddModal();
+                    await loadTorrents();
+                } else {
+                    toast(res.error || 'Failed to add torrent', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function pauseTorrent(id) {
+            try {
+                const res = await api(`/torrent/${id}/pause`, { method: 'POST' });
+                if (res.success) {
+                    toast('Torrent paused');
+                    await loadTorrents();
+                } else {
+                    toast(res.error || 'Failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function resumeTorrent(id) {
+            try {
+                const res = await api(`/torrent/${id}/resume`, { method: 'POST' });
+                if (res.success) {
+                    toast('Torrent resumed');
+                    await loadTorrents();
+                } else {
+                    toast(res.error || 'Failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function removeTorrent(id, deleteData) {
+            const msg = deleteData ? 
+                'Remove torrent AND delete files?' : 
+                'Remove torrent? (files will be kept)';
+            if (!confirm(msg)) return;
+
+            try {
+                const res = await api(`/torrent/${id}?delete_data=${deleteData}`, { method: 'DELETE' });
+                if (res.success) {
+                    toast('Torrent removed');
+                    await loadTorrents();
+                } else {
+                    toast(res.error || 'Failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function addCategory() {
+            const name = document.getElementById('catName').value.trim();
+            const path = document.getElementById('catPath').value.trim();
+            if (!name) return toast('Category name required', 'error');
+
+            try {
+                const res = await api('/categories', {
+                    method: 'POST',
+                    body: JSON.stringify({ name, save_path: path || null })
+                });
+                if (res.success) {
+                    toast('Category added');
+                    document.getElementById('catName').value = '';
+                    document.getElementById('catPath').value = '';
+                    await loadCategories();
+                } else {
+                    toast(res.error || 'Failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function removeCategory(id) {
+            if (!confirm('Remove this category?')) return;
+            try {
+                const res = await api(`/categories/${id}`, { method: 'DELETE' });
+                if (res.success) {
+                    toast('Category removed');
+                    await loadCategories();
+                } else {
+                    toast(res.error || 'Failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function addRssFeed() {
+            const name = document.getElementById('rssName').value.trim();
+            const url = document.getElementById('rssUrl').value.trim();
+            const category = document.getElementById('rssCategory').value;
+            
+            if (!name || !url) return toast('Name and URL required', 'error');
+
+            try {
+                const res = await api('/rss/add', {
+                    method: 'POST',
+                    body: JSON.stringify({ name, url, category, auto_download: false })
+                });
+                if (res.success) {
+                    toast('RSS feed added');
+                    document.getElementById('rssName').value = '';
+                    document.getElementById('rssUrl').value = '';
+                    await loadRssFeeds();
+                } else {
+                    toast(res.error || 'Failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function removeRssFeed(id) {
+            if (!confirm('Remove this RSS feed?')) return;
+            try {
+                const res = await api(`/rss/${id}`, { method: 'DELETE' });
+                if (res.success) {
+                    toast('RSS feed removed');
+                    await loadRssFeeds();
+                } else {
+                    toast(res.error || 'Failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function saveSettings(e) {
+            e.preventDefault();
+            try {
+                const res = await api('/config', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        port: parseInt(document.getElementById('cfgPort').value),
+                        peer_port: parseInt(document.getElementById('cfgPeerPort').value),
+                        data_path: document.getElementById('cfgDataPath').value,
+                        download_dir: document.getElementById('cfgDownloadDir').value,
+                        timezone: document.getElementById('cfgTimezone').value,
+                        image: document.getElementById('cfgImage').value,
+                    })
+                });
+                if (res.success) {
+                    toast('Settings saved! Restart client to apply.');
+                } else {
+                    toast('Save failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function saveSpeedLimits() {
+            try {
+                const res = await api('/config', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        download_limit: parseInt(document.getElementById('cfgDownloadLimit').value),
+                        upload_limit: parseInt(document.getElementById('cfgUploadLimit').value),
+                        alt_download_limit: parseInt(document.getElementById('cfgAltDownloadLimit').value),
+                        alt_upload_limit: parseInt(document.getElementById('cfgAltUploadLimit').value),
+                        alt_speed_enabled: document.getElementById('cfgAltSpeedEnabled').checked,
+                    })
+                });
+                if (res.success) {
+                    toast('Speed limits saved');
+                } else {
+                    toast('Save failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function saveSeedingSettings() {
+            try {
+                const res = await api('/config', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        seed_ratio_limit: parseFloat(document.getElementById('cfgSeedRatio').value),
+                        seed_ratio_enabled: document.getElementById('cfgSeedRatioEnabled').checked,
+                    })
+                });
+                if (res.success) {
+                    toast('Seeding settings saved');
+                } else {
+                    toast('Save failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function loadLogs() {
+            const lines = document.getElementById('logLines').value;
+            try {
+                const data = await api('/logs?lines=' + lines);
+                document.getElementById('logsContainer').textContent = data.logs || 'No logs available';
+            } catch (e) {
+                document.getElementById('logsContainer').textContent = 'Error loading logs';
+            }
+        }
+
+        async function restartContainer() {
+            if (!confirm('Restart torrent client?')) return;
+            try {
+                toast('Restarting...');
+                const res = await api('/container/restart', { method: 'POST' });
+                if (res.success) {
+                    toast('Client restarted');
+                    await refresh();
+                } else {
+                    toast(res.error || 'Restart failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function uninstallTorrent() {
+            if (!confirm('Uninstall Transmission? This will remove the container (data is preserved).')) return;
+            try {
+                const res = await api('/container/uninstall', { method: 'POST' });
+                if (res.success) {
+                    toast('Torrent client uninstalled');
+                    await refresh();
+                } else {
+                    toast(res.error || 'Uninstall failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        // Initialize
+        refresh();
+        setInterval(refresh, 15000);
+        // More frequent torrent list refresh when running
+        setInterval(() => { if (isRunning) loadTorrents(); }, 5000);
     </script>
-    <script src="/shared/sidebar.js"></script>
 </body>
 </html>

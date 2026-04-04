@@ -1,21 +1,24 @@
 #!/usr/bin/make -f
-
 %:
 	dh $@
 
 override_dh_auto_install:
-	# Create directories
-	install -d $(CURDIR)/debian/secubox-domoticz/usr/share/secubox/www/domoticz
-	install -d $(CURDIR)/debian/secubox-domoticz/usr/share/secubox/api/domoticz
-	install -d $(CURDIR)/debian/secubox-domoticz/usr/share/secubox/menu.d
-	install -d $(CURDIR)/debian/secubox-domoticz/etc/nginx/secubox.d
-	install -d $(CURDIR)/debian/secubox-domoticz/var/lib/secubox/domoticz
-
-	# Install files
-	cp -r $(CURDIR)/www/domoticz/* $(CURDIR)/debian/secubox-domoticz/usr/share/secubox/www/domoticz/
-	cp -r $(CURDIR)/api/* $(CURDIR)/debian/secubox-domoticz/usr/share/secubox/api/domoticz/
-	cp $(CURDIR)/menu.d/*.json $(CURDIR)/debian/secubox-domoticz/usr/share/secubox/menu.d/
-	cp $(CURDIR)/nginx/*.conf $(CURDIR)/debian/secubox-domoticz/etc/nginx/secubox.d/
+	# API files (to /usr/share/secubox/domoticz for service WorkingDirectory)
+	install -d debian/secubox-domoticz/usr/share/secubox/domoticz/
+	cp -r api debian/secubox-domoticz/usr/share/secubox/domoticz/
+	# Static www files
+	install -d debian/secubox-domoticz/usr/share/secubox/www
+	[ -d www ] && cp -r www/. debian/secubox-domoticz/usr/share/secubox/www/ || true
+	# Menu definitions
+	install -d debian/secubox-domoticz/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-domoticz/usr/share/secubox/menu.d/ || true
+	# Modular nginx config
+	install -d debian/secubox-domoticz/etc/nginx/secubox.d
+	[ -f nginx/domoticz.conf ] && cp nginx/domoticz.conf debian/secubox-domoticz/etc/nginx/secubox.d/ || true
+	# Systemd service
+	install -d debian/secubox-domoticz/usr/lib/systemd/system
+	[ -f systemd/secubox-domoticz.service ] && cp systemd/secubox-domoticz.service debian/secubox-domoticz/usr/lib/systemd/system/ || true
 
 override_dh_installsystemd:
-	dh_installsystemd --name=secubox-domoticz
+	# Skip dh_installsystemd since we handle it manually
+	true

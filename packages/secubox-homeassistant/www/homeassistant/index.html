@@ -3,498 +3,1246 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Home Assistant - SecuBox</title>
+    <title>SecuBox - Home Assistant</title>
+    <link rel="stylesheet" href="/shared/sidebar.css">
     <link rel="stylesheet" href="/shared/crt-light.css">
-    <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
         :root {
+            /* Home Assistant light blue branding */
             --ha-blue: #03a9f4;
-            --ha-light: #4fc3f7;
-            --ha-dark: #0288d1;
+            --ha-blue-dim: #0288d1;
+            --ha-blue-glow: rgba(3, 169, 244, 0.2);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'IBM Plex Mono', 'Consolas', monospace;
+            background: var(--tube-pale, #e3f2fd);
+            color: var(--tube-black, #1a2a3a);
+            display: flex;
+            min-height: 100vh;
         }
 
         body.dark {
-            --ha-blue: #4fc3f7;
-            --ha-light: #b3e5fc;
-            --ha-dark: #29b6f6;
+            background: var(--tube-black, #1a2a3a);
+            color: var(--tube-pale, #c9d5e5);
         }
 
-        .accent { color: var(--ha-blue); }
-        .accent-bg { background-color: var(--ha-blue); }
+        .main {
+            flex: 1;
+            margin-left: 220px;
+            padding: 1.5rem;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 2px,
+                rgba(0,0,0,0.03) 2px,
+                rgba(0,0,0,0.03) 4px
+            );
+        }
 
         .header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 1rem;
-            border-bottom: 1px solid var(--border);
-            margin-bottom: 1rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--ha-blue-dim);
         }
 
         .header h1 {
-            margin: 0;
             font-size: 1.5rem;
+            color: var(--ha-blue);
+            text-shadow: 0 0 10px var(--ha-blue-glow);
         }
 
+        .header-actions { display: flex; gap: 0.5rem; align-items: center; }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            border: 1px solid var(--ha-blue-dim);
+            background: var(--tube-pale, #e3f2fd);
+            color: var(--tube-black, #1a2a3a);
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+
+        body.dark .btn {
+            background: rgba(3,100,150,0.3);
+            color: var(--tube-pale, #c9d5e5);
+        }
+
+        .btn:hover {
+            background: var(--ha-blue-dim);
+            border-color: var(--ha-blue);
+            color: #fff;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: var(--ha-blue-dim);
+            border-color: var(--ha-blue);
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            background: var(--ha-blue);
+        }
+
+        .btn-danger {
+            background: #442222;
+            border-color: #884444;
+            color: #fff;
+        }
+
+        .btn-danger:hover {
+            background: #663333;
+        }
+
+        /* Status badge */
         .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
             padding: 0.25rem 0.75rem;
-            border-radius: 1rem;
-            font-size: 0.875rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
         }
 
-        .status-badge.running { background: var(--success-bg); color: var(--success); }
-        .status-badge.stopped { background: var(--error-bg); color: var(--error); }
+        .status-badge.running {
+            background: rgba(0, 221, 68, 0.1);
+            color: #00dd44;
+            border: 1px solid #006622;
+        }
 
-        .info-grid {
+        .status-badge.stopped {
+            background: rgba(255, 68, 68, 0.1);
+            color: #ff4444;
+            border: 1px solid #884444;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Install Banner */
+        .install-banner {
+            background: linear-gradient(135deg, rgba(3,169,244,0.1) 0%, rgba(3,169,244,0.05) 100%);
+            border: 2px dashed var(--ha-blue);
+            border-radius: 8px;
+            padding: 2rem;
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .install-banner h2 {
+            color: var(--ha-blue);
+            margin-bottom: 1rem;
+        }
+
+        .install-banner p {
+            color: var(--ha-blue-dim);
+            margin-bottom: 1.5rem;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
             gap: 1rem;
             margin-bottom: 1.5rem;
         }
 
-        .info-card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 0.5rem;
+        .stat-card {
+            background: rgba(3,169,244,0.05);
+            border: 1px solid var(--ha-blue-dim);
+            border-radius: 8px;
             padding: 1rem;
+            text-align: center;
         }
 
-        .info-label {
+        body.dark .stat-card {
+            background: rgba(3,100,150,0.2);
+        }
+
+        .stat-card .icon {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-card .value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--ha-blue);
+        }
+
+        .stat-card .label {
             font-size: 0.75rem;
-            color: var(--text-secondary);
+            color: var(--ha-blue-dim);
             text-transform: uppercase;
         }
 
-        .info-value {
-            font-size: 1.25rem;
-            font-weight: 500;
-            margin-top: 0.25rem;
-        }
-
-        .action-bar {
-            display: flex;
-            gap: 0.5rem;
-            margin-bottom: 1rem;
-            flex-wrap: wrap;
-        }
-
-        .btn {
-            padding: 0.5rem 1rem;
-            border: 1px solid var(--border);
-            border-radius: 0.25rem;
-            background: var(--surface);
-            color: var(--text);
-            cursor: pointer;
-            font-size: 0.875rem;
-        }
-
-        .btn:hover { background: var(--hover); }
-        .btn.primary { background: var(--ha-blue); color: white; border-color: var(--ha-blue); }
-        .btn.primary:hover { background: var(--ha-dark); }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
+        /* Tabs */
         .tabs {
             display: flex;
             gap: 0.5rem;
-            border-bottom: 1px solid var(--border);
-            margin-bottom: 1rem;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid var(--ha-blue-dim);
+            padding-bottom: 0.5rem;
+            flex-wrap: wrap;
         }
 
         .tab {
-            padding: 0.75rem 1rem;
+            padding: 0.5rem 1rem;
             border: none;
-            background: none;
-            color: var(--text-secondary);
+            background: transparent;
+            color: var(--ha-blue-dim);
             cursor: pointer;
-            border-bottom: 2px solid transparent;
+            font-family: inherit;
+            border-radius: 4px 4px 0 0;
+            transition: all 0.2s;
         }
 
-        .tab:hover { color: var(--text); }
-        .tab.active { color: var(--ha-blue); border-bottom-color: var(--ha-blue); }
+        .tab:hover { color: var(--tube-black, #1a2a3a); }
+        body.dark .tab:hover { color: var(--tube-pale, #c9d5e5); }
+
+        .tab.active {
+            background: rgba(3,169,244,0.1);
+            color: var(--ha-blue);
+            border: 1px solid var(--ha-blue-dim);
+            border-bottom: none;
+        }
 
         .tab-content { display: none; }
         .tab-content.active { display: block; }
 
-        .device-list {
-            display: grid;
+        /* Cards */
+        .card {
+            background: rgba(3,169,244,0.05);
+            border: 1px solid var(--ha-blue-dim);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+        }
+
+        body.dark .card {
+            background: rgba(3,100,150,0.2);
+        }
+
+        .card h2 {
+            font-size: 1rem;
+            color: var(--ha-blue);
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
             gap: 0.5rem;
         }
 
-        .device-item {
+        /* Entity Grid */
+        .entity-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 0.75rem;
+        }
+
+        .entity-card {
+            background: rgba(3,169,244,0.03);
+            border: 1px solid var(--ha-blue-dim);
+            border-radius: 8px;
+            padding: 0.75rem;
             display: flex;
             align-items: center;
-            gap: 1rem;
-            padding: 0.75rem;
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 0.5rem;
+            gap: 0.75rem;
         }
 
-        .device-icon { font-size: 1.5rem; }
-        .device-info { flex: 1; }
-        .device-name { font-weight: 500; }
-        .device-state { font-size: 0.875rem; color: var(--text-secondary); }
+        body.dark .entity-card {
+            background: rgba(0,0,0,0.2);
+        }
 
-        .log-viewer {
-            background: var(--bg-dark, #1a1a2e);
-            color: var(--text-light, #e0e0e0);
-            font-family: monospace;
+        .entity-icon {
+            font-size: 1.5rem;
+            width: 40px;
+            text-align: center;
+        }
+
+        .entity-info {
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .entity-name {
+            font-weight: bold;
+            color: var(--tube-black, #1a2a3a);
+            font-size: 0.85rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        body.dark .entity-name {
+            color: var(--tube-pale, #c9d5e5);
+        }
+
+        .entity-state {
             font-size: 0.75rem;
-            padding: 1rem;
-            border-radius: 0.5rem;
-            height: 400px;
-            overflow-y: auto;
-            white-space: pre-wrap;
+            color: var(--ha-blue-dim);
         }
 
-        .settings-form {
+        .entity-state.on { color: #00dd44; }
+        .entity-state.off { color: #888; }
+
+        .entity-toggle {
+            width: 40px;
+            height: 22px;
+            background: #666;
+            border-radius: 11px;
+            border: none;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .entity-toggle.on { background: var(--ha-blue); }
+
+        .entity-toggle::after {
+            content: '';
+            position: absolute;
+            width: 18px;
+            height: 18px;
+            background: #fff;
+            border-radius: 50%;
+            top: 2px;
+            left: 2px;
+            transition: left 0.2s;
+        }
+
+        .entity-toggle.on::after {
+            left: 20px;
+        }
+
+        /* Automation List */
+        .automation-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .automation-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem;
+            background: rgba(3,169,244,0.03);
+            border-radius: 4px;
+            border-left: 3px solid var(--ha-blue-dim);
+        }
+
+        body.dark .automation-item {
+            background: rgba(0,0,0,0.2);
+        }
+
+        .automation-info {
+            flex: 1;
+        }
+
+        .automation-name {
+            font-weight: bold;
+            color: var(--tube-black, #1a2a3a);
+        }
+
+        body.dark .automation-name {
+            color: var(--tube-pale, #c9d5e5);
+        }
+
+        .automation-meta {
+            font-size: 0.8rem;
+            color: var(--ha-blue-dim);
+        }
+
+        /* Scene Grid */
+        .scene-grid {
             display: grid;
-            gap: 1rem;
-            max-width: 500px;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 0.75rem;
+        }
+
+        .scene-card {
+            background: rgba(3,169,244,0.03);
+            border: 1px solid var(--ha-blue-dim);
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .scene-card:hover {
+            background: rgba(3,169,244,0.1);
+            border-color: var(--ha-blue);
+        }
+
+        .scene-icon {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .scene-name {
+            font-size: 0.85rem;
+            color: var(--tube-black, #1a2a3a);
+        }
+
+        body.dark .scene-name {
+            color: var(--tube-pale, #c9d5e5);
+        }
+
+        /* Backup List */
+        .backup-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .backup-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem;
+            background: rgba(3,169,244,0.03);
+            border-radius: 4px;
+        }
+
+        .backup-info {
+            flex: 1;
+        }
+
+        .backup-name {
+            font-weight: bold;
+        }
+
+        .backup-meta {
+            font-size: 0.8rem;
+            color: var(--ha-blue-dim);
+        }
+
+        /* Form elements */
+        .form-group {
+            margin-bottom: 1rem;
         }
 
         .form-group label {
             display: block;
-            margin-bottom: 0.25rem;
-            font-weight: 500;
+            margin-bottom: 0.5rem;
+            color: var(--ha-blue-dim);
+            font-size: 0.85rem;
         }
 
         .form-group input, .form-group select {
             width: 100%;
             padding: 0.5rem;
-            border: 1px solid var(--border);
-            border-radius: 0.25rem;
-            background: var(--surface);
-            color: var(--text);
+            background: var(--tube-pale, #e3f2fd);
+            border: 1px solid var(--ha-blue-dim);
+            border-radius: 4px;
+            color: var(--tube-black, #1a2a3a);
+            font-family: inherit;
         }
 
-        .open-app-btn {
-            position: fixed;
-            bottom: 1rem;
-            right: 1rem;
-            padding: 1rem 1.5rem;
-            background: var(--ha-blue);
-            color: white;
-            border: none;
-            border-radius: 2rem;
-            cursor: pointer;
-            font-size: 1rem;
-            box-shadow: 0 4px 12px rgba(3, 169, 244, 0.4);
+        body.dark .form-group input, body.dark .form-group select {
+            background: rgba(0,20,40,0.8);
+            color: var(--tube-pale, #c9d5e5);
         }
 
-        .open-app-btn:hover { background: var(--ha-dark); }
-        .hidden { display: none !important; }
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: var(--ha-blue);
+        }
 
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        /* Logs */
+        .logs-container {
+            background: rgba(0,20,40,0.1);
+            border: 1px solid var(--ha-blue-dim);
+            border-radius: 4px;
+            padding: 1rem;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.8rem;
+        }
+
+        body.dark .logs-container {
+            background: rgba(0,0,0,0.8);
+        }
+
+        .log-line {
+            color: var(--ha-blue-dim);
+            margin-bottom: 0.25rem;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .log-line:hover {
+            color: var(--ha-blue);
+        }
+
+        /* Empty state */
         .empty-state {
             text-align: center;
-            padding: 3rem;
-            color: var(--text-secondary);
+            padding: 2rem;
+            color: var(--ha-blue-dim);
         }
 
-        .empty-state-icon { font-size: 3rem; margin-bottom: 1rem; }
+        .empty-state .icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        /* Loading */
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            color: var(--ha-blue-dim);
+        }
+
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 2px solid var(--ha-blue-dim);
+            border-top-color: var(--ha-blue);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 0.5rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Container status */
+        .container-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 0.75rem;
+        }
+
+        .container-stat {
+            padding: 0.75rem;
+            background: rgba(3,169,244,0.03);
+            border-radius: 4px;
+        }
+
+        .container-stat-label {
+            font-size: 0.75rem;
+            color: var(--ha-blue-dim);
+            text-transform: uppercase;
+        }
+
+        .container-stat-value {
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: var(--ha-blue);
+        }
+
+        @media (max-width: 768px) {
+            .form-row { grid-template-columns: 1fr; }
+            .main { margin-left: 0; padding: 1rem; }
+        }
     </style>
 </head>
 <body class="crt-light">
     <nav class="sidebar" id="sidebar"></nav>
-    <main class="main-content">
-    <div class="container">
-        <div class="header">
-            <h1><span class="accent">Home Assistant</span></h1>
-            <span id="status-badge" class="status-badge stopped">Stopped</span>
-        </div>
+    <script src="/shared/sidebar.js"></script>
 
-        <div class="info-grid">
-            <div class="info-card">
-                <div class="info-label">Version</div>
-                <div class="info-value" id="ha-version">-</div>
+    <main class="main">
+        <header class="header">
+            <div>
+                <h1>Home Assistant</h1>
             </div>
-            <div class="info-card">
-                <div class="info-label">Container IP</div>
-                <div class="info-value" id="ha-ip">-</div>
+            <div class="header-actions">
+                <button class="btn" onclick="openFrontend()" id="openHaBtn" style="display:none;">
+                    Open Home Assistant
+                </button>
+                <span id="statusBadge" class="status-badge stopped">
+                    <span class="status-dot"></span>
+                    <span id="statusText">Stopped</span>
+                </span>
             </div>
-            <div class="info-card">
-                <div class="info-label">Disk Usage</div>
-                <div class="info-value" id="ha-disk">-</div>
-            </div>
-            <div class="info-card">
-                <div class="info-label">USB Devices</div>
-                <div class="info-value" id="ha-usb">0</div>
-            </div>
-        </div>
+        </header>
 
-        <div class="action-bar">
-            <button class="btn primary" id="btn-start" onclick="startService()">Start</button>
-            <button class="btn" id="btn-stop" onclick="stopService()" disabled>Stop</button>
-            <button class="btn" id="btn-restart" onclick="restartService()" disabled>Restart</button>
-            <button class="btn" id="btn-hacs" onclick="installHACS()" disabled>Install HACS</button>
-        </div>
-
-        <div class="tabs">
-            <button class="tab active" data-tab="overview">Overview</button>
-            <button class="tab" data-tab="devices">USB Devices</button>
-            <button class="tab" data-tab="logs">Logs</button>
-            <button class="tab" data-tab="settings">Settings</button>
-        </div>
-
-        <div id="tab-overview" class="tab-content active">
-            <div class="empty-state">
-                <div class="empty-state-icon">🏠</div>
-                <p>Start Home Assistant to begin configuring your smart home</p>
-                <p style="font-size: 0.875rem; margin-top: 1rem;">
-                    After starting, click "Open Home Assistant" to access the full interface
-                </p>
+        <!-- Install Banner -->
+        <div id="installBanner" class="install-banner" style="display:none;">
+            <h2>Home Assistant Not Installed</h2>
+            <p>Install Home Assistant to start building your smart home.</p>
+            <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+                <button class="btn btn-primary" onclick="installHA('docker')">
+                    Install (Docker)
+                </button>
+                <button class="btn" onclick="installHA('lxc')">
+                    Install (LXC)
+                </button>
             </div>
         </div>
 
-        <div id="tab-devices" class="tab-content">
-            <p style="margin-bottom: 1rem; color: var(--text-secondary);">
-                USB devices available for Zigbee/Z-Wave integration:
-            </p>
-            <div id="devices-container" class="device-list"></div>
-        </div>
-
-        <div id="tab-logs" class="tab-content">
-            <div class="action-bar">
-                <button class="btn" onclick="loadLogs()">Refresh</button>
-            </div>
-            <div id="log-viewer" class="log-viewer">Loading logs...</div>
-        </div>
-
-        <div id="tab-settings" class="tab-content">
-            <form class="settings-form" onsubmit="saveSettings(event)">
-                <div class="form-group">
-                    <label>Timezone</label>
-                    <select id="setting-timezone">
-                        <option value="UTC">UTC</option>
-                        <option value="Europe/Paris">Europe/Paris</option>
-                        <option value="Europe/London">Europe/London</option>
-                        <option value="America/New_York">America/New_York</option>
-                        <option value="America/Los_Angeles">America/Los_Angeles</option>
-                        <option value="Asia/Tokyo">Asia/Tokyo</option>
-                        <option value="Asia/Shanghai">Asia/Shanghai</option>
-                    </select>
+        <!-- Main Content -->
+        <div id="mainContent">
+            <!-- Stats Grid -->
+            <div class="stats-grid" id="statsGrid">
+                <div class="stat-card">
+                    <div class="icon">&#127968;</div>
+                    <div class="value" id="entityCount">--</div>
+                    <div class="label">Entities</div>
                 </div>
-                <div class="form-group">
-                    <label>Latitude</label>
-                    <input type="number" id="setting-lat" step="0.0001" placeholder="0.0">
+                <div class="stat-card">
+                    <div class="icon">&#9881;</div>
+                    <div class="value" id="automationCount">--</div>
+                    <div class="label">Automations</div>
                 </div>
-                <div class="form-group">
-                    <label>Longitude</label>
-                    <input type="number" id="setting-lon" step="0.0001" placeholder="0.0">
+                <div class="stat-card">
+                    <div class="icon">&#127912;</div>
+                    <div class="value" id="sceneCount">--</div>
+                    <div class="label">Scenes</div>
                 </div>
-                <div class="form-group">
-                    <label>Unit System</label>
-                    <select id="setting-units">
-                        <option value="metric">Metric</option>
-                        <option value="imperial">Imperial</option>
-                    </select>
+                <div class="stat-card">
+                    <div class="icon">&#128187;</div>
+                    <div class="value" id="containerType">--</div>
+                    <div class="label">Runtime</div>
                 </div>
-                <button type="submit" class="btn primary">Save Settings</button>
-            </form>
-        </div>
-    </div>
+            </div>
 
-    <button id="open-app-btn" class="open-app-btn hidden" onclick="openApp()">
-        Open Home Assistant
-    </button>
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab active" data-tab="dashboard">Dashboard</button>
+                <button class="tab" data-tab="entities">Entities</button>
+                <button class="tab" data-tab="automations">Automations</button>
+                <button class="tab" data-tab="scenes">Scenes</button>
+                <button class="tab" data-tab="addons">Add-ons</button>
+                <button class="tab" data-tab="backup">Backup</button>
+                <button class="tab" data-tab="logs">Logs</button>
+            </div>
+
+            <!-- Dashboard Tab -->
+            <div id="tab-dashboard" class="tab-content active">
+                <div class="card">
+                    <h2>Container Status</h2>
+                    <div id="containerInfo" class="container-info">
+                        <div class="loading"><div class="spinner"></div> Loading...</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>Quick Actions</h2>
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        <button class="btn btn-primary" onclick="controlContainer('start')" id="btnStart">Start</button>
+                        <button class="btn btn-danger" onclick="controlContainer('stop')" id="btnStop">Stop</button>
+                        <button class="btn" onclick="controlContainer('restart')" id="btnRestart">Restart</button>
+                        <button class="btn" onclick="installHACS()">Install HACS</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Entities Tab -->
+            <div id="tab-entities" class="tab-content">
+                <div class="card">
+                    <h2>Entity Browser</h2>
+                    <div style="margin-bottom: 1rem;">
+                        <select id="entityFilter" onchange="loadEntities()">
+                            <option value="">All Domains</option>
+                            <option value="light">Lights</option>
+                            <option value="switch">Switches</option>
+                            <option value="sensor">Sensors</option>
+                            <option value="binary_sensor">Binary Sensors</option>
+                            <option value="climate">Climate</option>
+                            <option value="cover">Covers</option>
+                            <option value="media_player">Media Players</option>
+                        </select>
+                    </div>
+                    <div id="entityGrid" class="entity-grid">
+                        <div class="loading"><div class="spinner"></div> Loading entities...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Automations Tab -->
+            <div id="tab-automations" class="tab-content">
+                <div class="card">
+                    <h2>Automations</h2>
+                    <div id="automationList" class="automation-list">
+                        <div class="loading"><div class="spinner"></div> Loading automations...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Scenes Tab -->
+            <div id="tab-scenes" class="tab-content">
+                <div class="card">
+                    <h2>Scenes</h2>
+                    <div id="sceneGrid" class="scene-grid">
+                        <div class="loading"><div class="spinner"></div> Loading scenes...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Add-ons Tab -->
+            <div id="tab-addons" class="tab-content">
+                <div class="card">
+                    <h2>HACS / Community Add-ons</h2>
+                    <div id="addonInfo">
+                        <p style="color: var(--ha-blue-dim); margin-bottom: 1rem;">
+                            HACS (Home Assistant Community Store) provides access to community integrations and themes.
+                        </p>
+                        <button class="btn btn-primary" onclick="installHACS()" id="hacsInstallBtn">
+                            Install HACS
+                        </button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>Installed Integrations</h2>
+                    <div id="integrationList">
+                        <div class="empty-state">
+                            <p>No custom integrations installed</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Backup Tab -->
+            <div id="tab-backup" class="tab-content">
+                <div class="card">
+                    <h2>Create Backup</h2>
+                    <div class="form-group">
+                        <label>Backup Name (optional)</label>
+                        <input type="text" id="backupName" placeholder="ha_backup_YYYYMMDD">
+                    </div>
+                    <button class="btn btn-primary" onclick="createBackup()">Create Backup</button>
+                </div>
+
+                <div class="card">
+                    <h2>Available Backups</h2>
+                    <div id="backupList" class="backup-list">
+                        <div class="loading"><div class="spinner"></div> Loading backups...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Logs Tab -->
+            <div id="tab-logs" class="tab-content">
+                <div class="card">
+                    <h2>Home Assistant Logs</h2>
+                    <div style="margin-bottom: 1rem;">
+                        <button class="btn" onclick="loadLogs()">Refresh Logs</button>
+                    </div>
+                    <div id="logsContainer" class="logs-container">
+                        <div class="loading"><div class="spinner"></div> Loading logs...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
 
     <script>
-        const API_BASE = '/api/v1/homeassistant';
-        let containerIP = null;
+        const API = '/api/v1/homeassistant';
+        let statusData = null;
 
-        async function apiCall(endpoint, options = {}) {
-            const token = localStorage.getItem('sbx_token');
-            const response = await fetch(API_BASE + endpoint, {
-                ...options,
-                headers: {
-                    'Authorization': 'Bearer ' + token,
-                    'Content-Type': 'application/json',
-                    ...options.headers
-                }
-            });
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            return response.json();
-        }
-
-        async function loadStatus() {
-            try {
-                const data = await apiCall('/status');
-                const badge = document.getElementById('status-badge');
-                const btnStart = document.getElementById('btn-start');
-                const btnStop = document.getElementById('btn-stop');
-                const btnRestart = document.getElementById('btn-restart');
-                const btnHacs = document.getElementById('btn-hacs');
-                const openBtn = document.getElementById('open-app-btn');
-
-                if (data.running) {
-                    badge.textContent = 'Running';
-                    badge.className = 'status-badge running';
-                    btnStart.disabled = true;
-                    btnStop.disabled = false;
-                    btnRestart.disabled = false;
-                    btnHacs.disabled = false;
-                    containerIP = data.container_ip;
-                    openBtn.classList.remove('hidden');
-                } else {
-                    badge.textContent = data.container_exists ? 'Stopped' : 'Not Installed';
-                    badge.className = 'status-badge stopped';
-                    btnStart.disabled = !data.container_exists;
-                    btnStart.textContent = data.container_exists ? 'Start' : 'Install';
-                    btnStop.disabled = true;
-                    btnRestart.disabled = true;
-                    btnHacs.disabled = true;
-                    openBtn.classList.add('hidden');
-                }
-
-                document.getElementById('ha-version').textContent = data.version || '-';
-                document.getElementById('ha-ip').textContent = data.container_ip || '-';
-                document.getElementById('ha-disk').textContent = data.disk_usage || '-';
-                document.getElementById('ha-usb').textContent = data.usb_devices?.length || 0;
-
-                loadDevices(data.usb_devices || []);
-            } catch (e) {
-                console.error('Status load failed:', e);
-            }
-        }
-
-        function loadDevices(devices) {
-            const container = document.getElementById('devices-container');
-            if (devices.length === 0) {
-                container.innerHTML = '<div class="empty-state"><p>No USB devices detected</p></div>';
-                return;
-            }
-
-            container.innerHTML = devices.map(dev => `
-                <div class="device-item">
-                    <div class="device-icon">🔌</div>
-                    <div class="device-info">
-                        <div class="device-name">${dev.product || dev.name || dev.path}</div>
-                        <div class="device-state">${dev.path}</div>
-                    </div>
-                    <button class="btn" onclick="addPassthrough('${dev.path}')">Add</button>
-                </div>
-            `).join('');
-        }
-
-        async function addPassthrough(path) {
-            try {
-                await apiCall(`/usb_passthrough?device_path=${encodeURIComponent(path)}`, { method: 'POST' });
-                alert('Device added. Container will restart.');
-            } catch (e) {
-                alert('Failed: ' + e.message);
-            }
-        }
-
-        async function startService() {
-            const btn = document.getElementById('btn-start');
-            const originalText = btn.textContent;
-            btn.disabled = true;
-            btn.textContent = originalText === 'Install' ? 'Installing...' : 'Starting...';
-
-            try {
-                const endpoint = originalText === 'Install' ? '/install' : '/start';
-                await apiCall(endpoint, { method: 'POST' });
-                await loadStatus();
-            } catch (e) {
-                alert('Failed: ' + e.message);
-            } finally {
-                btn.disabled = false;
-                btn.textContent = originalText;
-            }
-        }
-
-        async function stopService() {
-            document.getElementById('btn-stop').disabled = true;
-            try {
-                await apiCall('/stop', { method: 'POST' });
-                await loadStatus();
-            } catch (e) {
-                alert('Failed: ' + e.message);
-            }
-        }
-
-        async function restartService() {
-            document.getElementById('btn-restart').disabled = true;
-            try {
-                await apiCall('/restart', { method: 'POST' });
-                await loadStatus();
-            } catch (e) {
-                alert('Failed: ' + e.message);
-            }
-        }
-
-        async function installHACS() {
-            if (!confirm('Install HACS (Home Assistant Community Store)?')) return;
-            try {
-                const result = await apiCall('/hacs/install', { method: 'POST' });
-                alert(result.message || 'HACS installed');
-            } catch (e) {
-                alert('Failed: ' + e.message);
-            }
-        }
-
-        async function loadLogs() {
-            try {
-                const data = await apiCall('/logs?lines=200');
-                document.getElementById('log-viewer').textContent = data.logs?.join('\n') || 'No logs';
-            } catch (e) {
-                document.getElementById('log-viewer').textContent = 'Error: ' + e.message;
-            }
-        }
-
-        async function loadConfig() {
-            try {
-                const data = await apiCall('/config');
-                document.getElementById('setting-timezone').value = data.timezone || 'UTC';
-                document.getElementById('setting-lat').value = data.latitude || 0;
-                document.getElementById('setting-lon').value = data.longitude || 0;
-                document.getElementById('setting-units').value = data.unit_system || 'metric';
-            } catch (e) {
-                console.error('Config load failed:', e);
-            }
-        }
-
-        async function saveSettings(e) {
-            e.preventDefault();
-            try {
-                await apiCall('/config', {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        timezone: document.getElementById('setting-timezone').value,
-                        latitude: parseFloat(document.getElementById('setting-lat').value) || 0,
-                        longitude: parseFloat(document.getElementById('setting-lon').value) || 0,
-                        unit_system: document.getElementById('setting-units').value
-                    })
-                });
-                alert('Settings saved');
-            } catch (e) {
-                alert('Failed: ' + e.message);
-            }
-        }
-
-        function openApp() {
-            if (containerIP) window.open(`http://${containerIP}:8123`, '_blank');
-        }
-
+        // Tab switching
         document.querySelectorAll('.tab').forEach(tab => {
             tab.addEventListener('click', () => {
                 document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
                 document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
                 tab.classList.add('active');
                 document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+
                 if (tab.dataset.tab === 'logs') loadLogs();
-                if (tab.dataset.tab === 'settings') loadConfig();
+                if (tab.dataset.tab === 'entities') loadEntities();
+                if (tab.dataset.tab === 'automations') loadAutomations();
+                if (tab.dataset.tab === 'scenes') loadScenes();
+                if (tab.dataset.tab === 'backup') loadBackups();
+                if (tab.dataset.tab === 'addons') loadIntegrations();
             });
         });
 
-        if (window.matchMedia?.('(prefers-color-scheme: dark)').matches) {
-            document.body.classList.add('dark');
+        async function init() {
+            await loadStatus();
+            await loadContainerStatus();
+            setInterval(loadStatus, 15000);
         }
 
-        loadStatus();
-        setInterval(loadStatus, 30000);
+        async function loadStatus() {
+            try {
+                const res = await fetch(API + '/status', { credentials: 'include' });
+                statusData = await res.json();
+                updateUI();
+            } catch(e) {
+                console.error('Status error:', e);
+            }
+        }
+
+        function updateUI() {
+            if (!statusData) return;
+
+            const badge = document.getElementById('statusBadge');
+            const text = document.getElementById('statusText');
+            const openBtn = document.getElementById('openHaBtn');
+            const installBanner = document.getElementById('installBanner');
+
+            if (statusData.running) {
+                badge.className = 'status-badge running';
+                text.textContent = 'Running';
+                openBtn.style.display = 'inline-block';
+                installBanner.style.display = 'none';
+            } else {
+                badge.className = 'status-badge stopped';
+                text.textContent = 'Stopped';
+                openBtn.style.display = 'none';
+
+                // Show install banner if not installed
+                if (statusData.runtime === 'none') {
+                    installBanner.style.display = 'block';
+                } else {
+                    installBanner.style.display = 'none';
+                }
+            }
+
+            // Update stats
+            document.getElementById('entityCount').textContent = statusData.entity_count || 0;
+            document.getElementById('containerType').textContent = statusData.container_type || '--';
+        }
+
+        async function loadContainerStatus() {
+            try {
+                const res = await fetch(API + '/container/status', { credentials: 'include' });
+                const data = await res.json();
+
+                document.getElementById('containerInfo').innerHTML = `
+                    <div class="container-stat">
+                        <div class="container-stat-label">Status</div>
+                        <div class="container-stat-value">${data.running ? 'Running' : 'Stopped'}</div>
+                    </div>
+                    <div class="container-stat">
+                        <div class="container-stat-label">Runtime</div>
+                        <div class="container-stat-value">${data.runtime || 'None'}</div>
+                    </div>
+                    <div class="container-stat">
+                        <div class="container-stat-label">Memory</div>
+                        <div class="container-stat-value">${data.memory || 'N/A'}</div>
+                    </div>
+                    <div class="container-stat">
+                        <div class="container-stat-label">CPU</div>
+                        <div class="container-stat-value">${data.cpu || 'N/A'}</div>
+                    </div>
+                    <div class="container-stat">
+                        <div class="container-stat-label">Container IP</div>
+                        <div class="container-stat-value">${data.container_ip || 'N/A'}</div>
+                    </div>
+                `;
+            } catch(e) {
+                document.getElementById('containerInfo').innerHTML = '<p>Error loading container status</p>';
+            }
+        }
+
+        async function loadEntities() {
+            const container = document.getElementById('entityGrid');
+            const filter = document.getElementById('entityFilter').value;
+            const url = filter ? API + '/entities?domain=' + filter : API + '/entities';
+
+            try {
+                const res = await fetch(url, { credentials: 'include' });
+                const data = await res.json();
+
+                if (data.error) {
+                    container.innerHTML = `<div class="empty-state"><div class="icon">&#127968;</div><p>${data.error}</p></div>`;
+                    return;
+                }
+
+                if (!data.entities || data.entities.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><div class="icon">&#127968;</div><p>No entities found</p></div>';
+                    return;
+                }
+
+                // Update count
+                document.getElementById('entityCount').textContent = data.entities.length;
+
+                container.innerHTML = data.entities.slice(0, 50).map(e => {
+                    const icon = getEntityIcon(e.domain);
+                    const stateClass = e.state === 'on' ? 'on' : (e.state === 'off' ? 'off' : '');
+                    const showToggle = ['light', 'switch', 'input_boolean'].includes(e.domain);
+
+                    return `
+                        <div class="entity-card">
+                            <div class="entity-icon">${icon}</div>
+                            <div class="entity-info">
+                                <div class="entity-name" title="${escapeHtml(e.entity_id)}">${escapeHtml(e.friendly_name)}</div>
+                                <div class="entity-state ${stateClass}">${escapeHtml(e.state)}</div>
+                            </div>
+                            ${showToggle ? `
+                                <button class="entity-toggle ${e.state === 'on' ? 'on' : ''}"
+                                        onclick="toggleEntity('${e.entity_id}', '${e.domain}', '${e.state}')"></button>
+                            ` : ''}
+                        </div>
+                    `;
+                }).join('');
+            } catch(e) {
+                container.innerHTML = '<div class="empty-state"><p>Error loading entities</p></div>';
+            }
+        }
+
+        function getEntityIcon(domain) {
+            const icons = {
+                'light': '&#128161;',
+                'switch': '&#9889;',
+                'sensor': '&#127777;',
+                'binary_sensor': '&#128269;',
+                'climate': '&#127777;',
+                'cover': '&#127978;',
+                'media_player': '&#127911;',
+                'automation': '&#9881;',
+                'scene': '&#127912;',
+                'person': '&#128100;',
+                'device_tracker': '&#128205;',
+                'camera': '&#128247;',
+            };
+            return icons[domain] || '&#128310;';
+        }
+
+        async function toggleEntity(entityId, domain, currentState) {
+            const service = currentState === 'on' ? 'turn_off' : 'turn_on';
+            try {
+                await fetch(API + '/entity/' + encodeURIComponent(entityId) + '/command', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ domain: domain, service: service })
+                });
+                setTimeout(loadEntities, 500);
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        async function loadAutomations() {
+            const container = document.getElementById('automationList');
+            try {
+                const res = await fetch(API + '/automations', { credentials: 'include' });
+                const data = await res.json();
+
+                if (data.error) {
+                    container.innerHTML = `<div class="empty-state"><p>${data.error}</p></div>`;
+                    return;
+                }
+
+                if (!data.automations || data.automations.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><div class="icon">&#9881;</div><p>No automations found</p></div>';
+                    return;
+                }
+
+                // Update count
+                document.getElementById('automationCount').textContent = data.automations.length;
+
+                container.innerHTML = data.automations.map(a => `
+                    <div class="automation-item">
+                        <div class="automation-info">
+                            <div class="automation-name">${escapeHtml(a.name)}</div>
+                            <div class="automation-meta">
+                                ${a.state === 'on' ? '&#9989; Enabled' : '&#10060; Disabled'}
+                                ${a.last_triggered ? ' | Last: ' + new Date(a.last_triggered).toLocaleString() : ''}
+                            </div>
+                        </div>
+                        <button class="entity-toggle ${a.state === 'on' ? 'on' : ''}"
+                                onclick="toggleAutomation('${a.entity_id}', ${a.state === 'on'})"></button>
+                    </div>
+                `).join('');
+            } catch(e) {
+                container.innerHTML = '<div class="empty-state"><p>Error loading automations</p></div>';
+            }
+        }
+
+        async function toggleAutomation(automationId, currentlyEnabled) {
+            try {
+                await fetch(API + '/automation/toggle', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ automation_id: automationId, enabled: !currentlyEnabled })
+                });
+                setTimeout(loadAutomations, 500);
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        async function loadScenes() {
+            const container = document.getElementById('sceneGrid');
+            try {
+                const res = await fetch(API + '/scenes', { credentials: 'include' });
+                const data = await res.json();
+
+                if (data.error) {
+                    container.innerHTML = `<div class="empty-state"><p>${data.error}</p></div>`;
+                    return;
+                }
+
+                if (!data.scenes || data.scenes.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><div class="icon">&#127912;</div><p>No scenes found</p></div>';
+                    return;
+                }
+
+                // Update count
+                document.getElementById('sceneCount').textContent = data.scenes.length;
+
+                container.innerHTML = data.scenes.map(s => `
+                    <div class="scene-card" onclick="activateScene('${s.entity_id}')">
+                        <div class="scene-icon">${s.icon || '&#127912;'}</div>
+                        <div class="scene-name">${escapeHtml(s.name)}</div>
+                    </div>
+                `).join('');
+            } catch(e) {
+                container.innerHTML = '<div class="empty-state"><p>Error loading scenes</p></div>';
+            }
+        }
+
+        async function activateScene(sceneId) {
+            try {
+                await fetch(API + '/scene/' + encodeURIComponent(sceneId) + '/activate', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                alert('Scene activated!');
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        async function loadBackups() {
+            const container = document.getElementById('backupList');
+            try {
+                const res = await fetch(API + '/backups', { credentials: 'include' });
+                const data = await res.json();
+
+                if (!data.backups || data.backups.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><p>No backups available</p></div>';
+                    return;
+                }
+
+                container.innerHTML = data.backups.map(b => `
+                    <div class="backup-item">
+                        <div class="backup-info">
+                            <div class="backup-name">${escapeHtml(b.name)}</div>
+                            <div class="backup-meta">
+                                ${formatSize(b.size)} | ${new Date(b.created).toLocaleString()}
+                            </div>
+                        </div>
+                        <button class="btn" onclick="restoreBackup('${escapeHtml(b.path)}')">Restore</button>
+                    </div>
+                `).join('');
+            } catch(e) {
+                container.innerHTML = '<div class="empty-state"><p>Error loading backups</p></div>';
+            }
+        }
+
+        async function createBackup() {
+            const name = document.getElementById('backupName').value;
+            try {
+                const res = await fetch(API + '/backup/create', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: name || null })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert('Backup created: ' + data.backup_name);
+                    loadBackups();
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown error'));
+                }
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        async function restoreBackup(path) {
+            if (!confirm('Restore from this backup? This will overwrite current configuration.')) return;
+            try {
+                const res = await fetch(API + '/backup/restore?path=' + encodeURIComponent(path), {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert('Backup restored! Restart Home Assistant to apply.');
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown error'));
+                }
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        async function loadIntegrations() {
+            const container = document.getElementById('integrationList');
+            try {
+                const res = await fetch(API + '/integrations', { credentials: 'include' });
+                const data = await res.json();
+
+                if (!data.integrations || data.integrations.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><p>No custom integrations installed</p></div>';
+                    return;
+                }
+
+                container.innerHTML = data.integrations.map(i => `
+                    <div class="automation-item">
+                        <div class="automation-info">
+                            <div class="automation-name">${escapeHtml(i.name || i.domain)}</div>
+                            <div class="automation-meta">v${i.version || '?'} | ${i.type || 'custom'}</div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch(e) {
+                container.innerHTML = '<div class="empty-state"><p>Error loading integrations</p></div>';
+            }
+        }
+
+        async function loadLogs() {
+            const container = document.getElementById('logsContainer');
+            try {
+                const res = await fetch(API + '/logs?lines=100', { credentials: 'include' });
+                const data = await res.json();
+
+                if (!data.logs || data.logs.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><p>No logs available</p></div>';
+                    return;
+                }
+
+                container.innerHTML = data.logs.map(line =>
+                    `<div class="log-line">${escapeHtml(line)}</div>`
+                ).join('');
+                container.scrollTop = container.scrollHeight;
+            } catch(e) {
+                container.innerHTML = '<div class="empty-state"><p>Error loading logs</p></div>';
+            }
+        }
+
+        async function controlContainer(action) {
+            const btn = document.getElementById('btn' + action.charAt(0).toUpperCase() + action.slice(1));
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = action.charAt(0).toUpperCase() + action.slice(1) + 'ing...';
+
+            try {
+                const res = await fetch(API + '/container/' + action, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                const data = await res.json();
+                if (data.success) {
+                    setTimeout(() => {
+                        loadStatus();
+                        loadContainerStatus();
+                    }, 3000);
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown error'));
+                }
+            } catch(e) {
+                alert('Error: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
+        }
+
+        async function installHA(type) {
+            if (!confirm('Install Home Assistant using ' + type + '? This may take several minutes.')) return;
+
+            try {
+                // First set container type
+                await fetch(API + '/config', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ container_type: type })
+                });
+
+                // Then install
+                const res = await fetch(API + '/container/install', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert('Home Assistant installed! Click Start to begin.');
+                    document.getElementById('installBanner').style.display = 'none';
+                    loadStatus();
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown error'));
+                }
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        async function installHACS() {
+            if (!confirm('Install HACS (Home Assistant Community Store)?')) return;
+            try {
+                const res = await fetch(API + '/hacs/install', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert(data.message || 'HACS installed! Restart Home Assistant to complete.');
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown error'));
+                }
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        function openFrontend() {
+            const url = statusData?.ha_url || 'http://127.0.0.1:8123';
+            window.open(url, '_blank');
+        }
+
+        function formatSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+            return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.toString()
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        init();
     </script>
-    </main>
-    <script src="/shared/sidebar.js"></script>
 </body>
 </html>

@@ -1,0 +1,8 @@
+{
+    "name": "Hexo",
+    "path": "/hexo/",
+    "icon": "edit",
+    "category": "apps",
+    "order": 610,
+    "description": "Static blog generator"
+}

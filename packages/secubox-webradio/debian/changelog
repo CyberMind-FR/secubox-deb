@@ -1,7 +1,11 @@
-secubox-webradio (1.0.0-1) bookworm; urgency=medium
+secubox-webradio (1.0.0-1~bookworm1) bookworm; urgency=medium
 
-  * Initial release
-  * Icecast2 management and stream control
-  * Built-in web player with volume control
+  * Initial release.
+  * FastAPI backend with 20+ endpoints
+  * Features: Station management, streaming, recording, scheduling
+  * Icecast container management via Docker/Podman
+  * Recording in MP3, OGG, AAC formats
+  * CRT-light P31 phosphor theme with violet (#8b5cf6) accents
+  * Audio visualizer and player bar
 
- -- Gandalf / CyberMind <gk@cybermind.fr>  Sat, 28 Mar 2026 11:00:00 +0100
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Apr 2026 09:00:00 +0200

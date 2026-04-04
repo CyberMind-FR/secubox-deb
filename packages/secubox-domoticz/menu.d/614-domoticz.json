@@ -1,0 +1,9 @@
+{
+  "id": "domoticz",
+  "name": "Domoticz",
+  "icon": "&#127968;",
+  "path": "/domoticz/",
+  "category": "apps",
+  "order": 614,
+  "description": "Home automation system"
+}

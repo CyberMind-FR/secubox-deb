@@ -3,241 +3,1226 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VoIP - SecuBox</title>
+    <title>SecuBox - VoIP/PBX Management</title>
+    <link rel="stylesheet" href="/shared/sidebar.css">
     <link rel="stylesheet" href="/shared/crt-light.css">
-    <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
-        :root { --voip-blue: #3498db; --voip-light: #5dade2; --voip-dark: #2980b9; }
-        body.dark { --voip-blue: #5dade2; --voip-light: #85c1e9; --voip-dark: #3498db; }
-        .accent { color: var(--voip-blue); }
-        .accent-bg { background-color: var(--voip-blue); }
-        .header { display: flex; justify-content: space-between; align-items: center; padding: 1rem; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
-        .header h1 { margin: 0; font-size: 1.5rem; }
-        .status-badge { padding: 0.25rem 0.75rem; border-radius: 1rem; font-size: 0.875rem; }
-        .status-badge.running { background: var(--success-bg); color: var(--success); }
-        .status-badge.stopped { background: var(--error-bg); color: var(--error); }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem; text-align: center; }
-        .stat-value { font-size: 1.75rem; font-weight: bold; color: var(--voip-blue); }
-        .stat-label { font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; }
-        .action-bar { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
-        .btn { padding: 0.5rem 1rem; border: 1px solid var(--border); border-radius: 0.25rem; background: var(--surface); color: var(--text); cursor: pointer; font-size: 0.875rem; }
-        .btn:hover { background: var(--hover); }
-        .btn.primary { background: var(--voip-blue); color: white; border-color: var(--voip-blue); }
-        .btn.primary:hover { background: var(--voip-dark); }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .tabs { display: flex; gap: 0.5rem; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
-        .tab { padding: 0.75rem 1rem; border: none; background: none; color: var(--text-secondary); cursor: pointer; border-bottom: 2px solid transparent; }
-        .tab:hover { color: var(--text); }
-        .tab.active { color: var(--voip-blue); border-bottom-color: var(--voip-blue); }
+        :root {
+            --p31-peak: #00dd44;
+            --p31-dim: #006622;
+            --p31-glow: rgba(0, 221, 68, 0.15);
+            --tube-light: #e8f5e9;
+            --tube-mid: #c8e6c9;
+            --tube-dark: #a5d6a7;
+            --text-primary: #1b5e20;
+            --text-secondary: #388e3c;
+            --text-dim: #66bb6a;
+            --surface: #f1f8e9;
+            --surface-alt: #dcedc8;
+            --border: #c5e1a5;
+            --error: #c62828;
+            --warning: #f57c00;
+            --success: #2e7d32;
+            --voip: #4caf50;
+            --voip-dark: #388e3c;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            background: linear-gradient(135deg, var(--tube-light) 0%, var(--tube-mid) 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+        }
+        body.crt-light { background: linear-gradient(135deg, var(--tube-light) 0%, var(--tube-mid) 100%); }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; max-width: calc(100% - 220px); }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid var(--voip);
+        }
+        .header h1 { font-size: 1.5rem; color: var(--voip); }
+        .header-actions { display: flex; gap: 0.5rem; }
+
+        /* Stats Row */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+            box-shadow: 0 2px 8px var(--p31-glow);
+        }
+        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
+        .stat-card .value { font-size: 1.25rem; font-weight: bold; color: var(--p31-dim); margin-top: 0.25rem; }
+        .stat-card.running .value { color: var(--success); }
+        .stat-card.stopped .value { color: var(--error); }
+
+        /* Tabs */
+        .tabs { display: flex; gap: 0; margin-bottom: 1.5rem; border-bottom: 2px solid var(--border); flex-wrap: wrap; }
+        .tab {
+            padding: 0.75rem 1rem;
+            cursor: pointer;
+            border: 1px solid transparent;
+            border-bottom: none;
+            border-radius: 8px 8px 0 0;
+            background: transparent;
+            color: var(--text-secondary);
+            font-weight: 500;
+            transition: all 0.2s;
+            font-size: 0.9rem;
+        }
+        .tab:hover { background: var(--surface-alt); }
+        .tab.active {
+            background: var(--surface);
+            border-color: var(--border);
+            color: var(--voip);
+            margin-bottom: -2px;
+            border-bottom: 2px solid var(--surface);
+        }
+
         .tab-content { display: none; }
         .tab-content.active { display: block; }
-        .ext-list { display: grid; gap: 0.5rem; }
-        .ext-item { display: flex; align-items: center; gap: 1rem; padding: 0.75rem; background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; }
-        .ext-icon { font-size: 1.5rem; }
-        .ext-info { flex: 1; }
-        .ext-number { font-weight: 600; font-size: 1.125rem; }
-        .ext-name { font-size: 0.875rem; color: var(--text-secondary); }
-        .ext-status { padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem; }
-        .ext-status.online { background: var(--success-bg); color: var(--success); }
-        .ext-status.offline { background: var(--error-bg); color: var(--error); }
-        .log-viewer { background: var(--bg-dark, #1a1a2e); color: var(--text-light, #e0e0e0); font-family: monospace; font-size: 0.75rem; padding: 1rem; border-radius: 0.5rem; height: 300px; overflow-y: auto; white-space: pre-wrap; }
+
+        /* Cards */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 2px 8px var(--p31-glow);
+        }
+        .card h3 {
+            font-size: 1rem;
+            color: var(--voip);
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            border: 1px solid var(--voip);
+            background: var(--surface);
+            color: var(--voip);
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .btn:hover { background: var(--voip); color: white; }
+        .btn-primary { background: var(--voip); color: white; }
+        .btn-primary:hover { background: var(--voip-dark); }
+        .btn-danger { border-color: var(--error); color: var(--error); }
+        .btn-danger:hover { background: var(--error); color: white; }
+        .btn-success { border-color: var(--success); color: var(--success); }
+        .btn-success:hover { background: var(--success); color: white; }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.875rem; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+        th { color: var(--text-dim); font-weight: 500; font-size: 0.75rem; text-transform: uppercase; }
+        tr:hover { background: var(--surface-alt); }
+
+        /* Forms */
         .form-group { margin-bottom: 1rem; }
-        .form-group label { display: block; margin-bottom: 0.25rem; font-weight: 500; }
-        .form-group input { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 0.25rem; background: var(--surface); color: var(--text); }
-        .add-form { max-width: 400px; background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1rem; }
-        .install-section { text-align: center; padding: 3rem; }
-        .hidden { display: none !important; }
+        .form-group label { display: block; margin-bottom: 0.25rem; color: var(--text-secondary); font-size: 0.875rem; }
+        input, select, textarea {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: white;
+            color: var(--text-primary);
+            font-family: inherit;
+        }
+        input:focus, select:focus, textarea:focus { outline: none; border-color: var(--voip); box-shadow: 0 0 5px rgba(76, 175, 80, 0.3); }
+        .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; }
+
+        /* Badges */
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        .badge-success { background: #c8e6c9; color: #2e7d32; }
+        .badge-error { background: #ffcdd2; color: #c62828; }
+        .badge-warning { background: #ffe0b2; color: #e65100; }
+        .badge-info { background: #b3e5fc; color: #01579b; }
+        .badge-voip { background: #c8e6c9; color: #2e7d32; }
+
+        /* Install Banner */
+        .install-banner {
+            background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+            border: 2px solid var(--voip);
+            border-radius: 12px;
+            padding: 2rem;
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+        .install-banner h2 { color: var(--voip); margin-bottom: 1rem; }
+        .install-banner p { color: var(--text-secondary); margin-bottom: 1.5rem; }
+
+        /* Logs */
+        .logs-container {
+            background: #1a1a1a;
+            color: #00dd44;
+            padding: 1rem;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 0.8rem;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        /* Active Calls */
+        .active-calls {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1rem;
+        }
+        .call-card {
+            background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+            border: 1px solid var(--voip);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+        .call-card .channel { font-weight: bold; color: var(--voip); }
+        .call-card .duration { font-size: 1.25rem; color: var(--text-primary); }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 1rem;
+            right: 1rem;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            color: white;
+            z-index: 1000;
+            animation: slideIn 0.3s ease;
+        }
+        .toast-success { background: var(--success); }
+        .toast-error { background: var(--error); }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        .spinner {
+            display: inline-block;
+            width: 1rem;
+            height: 1rem;
+            border: 2px solid var(--border);
+            border-top-color: var(--voip);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal {
+            background: var(--surface);
+            border-radius: 12px;
+            padding: 1.5rem;
+            max-width: 500px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .modal h3 { color: var(--voip); margin-bottom: 1rem; }
+        .modal-actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem; }
+
+        @media (max-width: 768px) {
+            .main { margin-left: 0; max-width: 100%; }
+            .stats-row { grid-template-columns: repeat(2, 1fr); }
+            .tabs { overflow-x: auto; flex-wrap: nowrap; }
+        }
     </style>
 </head>
 <body class="crt-light">
     <nav class="sidebar" id="sidebar"></nav>
-    <main class="main-content">
-    <div class="container">
-        <div class="header">
-            <h1><span class="accent">VoIP</span> PBX</h1>
-            <span id="status-badge" class="status-badge stopped">Stopped</span>
+    <script src="/shared/sidebar.js"></script>
+
+    <main class="main">
+        <header class="header">
+            <h1>VoIP/PBX Management</h1>
+            <div class="header-actions">
+                <a id="openPBX" href="#" target="_blank" class="btn" style="display: none;">Open FreePBX</a>
+                <button class="btn" onclick="refresh()">Refresh</button>
+                <button class="btn btn-primary" id="btnToggle" onclick="toggleService()">Start</button>
+            </div>
+        </header>
+
+        <!-- Install Banner (shown when not installed) -->
+        <div id="installBanner" class="install-banner" style="display: none;">
+            <h2>Welcome to VoIP/PBX</h2>
+            <p>Enterprise PBX system with Asterisk/FreePBX. Manage extensions, trunks, and call routing.</p>
+            <button class="btn btn-primary" onclick="installPBX()">Install FreePBX</button>
         </div>
 
-        <div id="install-section" class="install-section hidden">
-            <p>Asterisk is not installed</p>
-            <button class="btn primary" onclick="installAsterisk()">Install Asterisk PBX</button>
+        <!-- Stats Row -->
+        <div class="stats-row">
+            <div class="stat-card" id="statStatus">
+                <div class="label">Status</div>
+                <div class="value">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Extensions</div>
+                <div class="value" id="statExtensions">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Trunks</div>
+                <div class="value" id="statTrunks">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Active Calls</div>
+                <div class="value" id="statCalls">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Disk Usage</div>
+                <div class="value" id="statDisk">-</div>
+            </div>
         </div>
 
-        <div id="main-section" class="hidden">
-            <div class="stats-grid">
-                <div class="stat-card"><div class="stat-value" id="calls-count">0</div><div class="stat-label">Active Calls</div></div>
-                <div class="stat-card"><div class="stat-value" id="channels-count">0</div><div class="stat-label">Channels</div></div>
-                <div class="stat-card"><div class="stat-value" id="peers-count">0</div><div class="stat-label">SIP Peers</div></div>
-                <div class="stat-card"><div class="stat-value">5060</div><div class="stat-label">SIP Port</div></div>
-            </div>
+        <!-- Tabs -->
+        <div class="tabs">
+            <div class="tab active" onclick="showTab('dashboard')">Dashboard</div>
+            <div class="tab" onclick="showTab('extensions')">Extensions</div>
+            <div class="tab" onclick="showTab('trunks')">Trunks</div>
+            <div class="tab" onclick="showTab('routes')">Routes</div>
+            <div class="tab" onclick="showTab('ivr')">IVR</div>
+            <div class="tab" onclick="showTab('cdr')">CDR</div>
+            <div class="tab" onclick="showTab('logs')">Logs</div>
+        </div>
 
-            <div class="action-bar">
-                <button class="btn primary" id="btn-start" onclick="startService()">Start</button>
-                <button class="btn" id="btn-stop" onclick="stopService()" disabled>Stop</button>
-                <button class="btn" id="btn-restart" onclick="restartService()" disabled>Restart</button>
-                <button class="btn" onclick="reloadConfig()">Reload Config</button>
-            </div>
-
-            <div class="tabs">
-                <button class="tab active" data-tab="extensions">Extensions</button>
-                <button class="tab" data-tab="peers">Peers</button>
-                <button class="tab" data-tab="logs">Logs</button>
-            </div>
-
-            <div id="tab-extensions" class="tab-content active">
-                <div class="add-form">
-                    <h4 style="margin-top:0;">Add Extension</h4>
-                    <form onsubmit="createExtension(event)">
-                        <div class="form-group"><label>Extension Number</label><input type="text" id="ext-number" pattern="[0-9]+" required></div>
-                        <div class="form-group"><label>Display Name</label><input type="text" id="ext-name" required></div>
-                        <div class="form-group"><label>Password</label><input type="password" id="ext-secret" minlength="6" required></div>
-                        <button type="submit" class="btn primary">Create Extension</button>
-                    </form>
+        <!-- Dashboard Tab -->
+        <div id="tab-dashboard" class="tab-content active">
+            <div class="card">
+                <h3>Active Calls</h3>
+                <div id="activeCalls" class="active-calls">
+                    <p style="color: var(--text-dim);">No active calls</p>
                 </div>
-                <div id="ext-list" class="ext-list"></div>
             </div>
+            <div class="card">
+                <h3>SIP Endpoints</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Endpoint</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="sipPeersTable">
+                        <tr><td colspan="2">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
 
-            <div id="tab-peers" class="tab-content">
-                <div class="action-bar"><button class="btn" onclick="loadPeers()">Refresh</button></div>
-                <div id="peers-list" class="ext-list"></div>
+        <!-- Extensions Tab -->
+        <div id="tab-extensions" class="tab-content">
+            <div class="card">
+                <h3>Extensions</h3>
+                <div style="margin-bottom: 1rem;">
+                    <button class="btn btn-primary" onclick="showExtensionModal()">Add Extension</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Number</th>
+                            <th>Name</th>
+                            <th>Voicemail</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="extensionsTable">
+                        <tr><td colspan="5">Loading...</td></tr>
+                    </tbody>
+                </table>
             </div>
+        </div>
 
-            <div id="tab-logs" class="tab-content">
-                <div class="action-bar"><button class="btn" onclick="loadLogs()">Refresh</button></div>
-                <div id="log-viewer" class="log-viewer">Loading...</div>
+        <!-- Trunks Tab -->
+        <div id="tab-trunks" class="tab-content">
+            <div class="card">
+                <h3>SIP Trunks</h3>
+                <div style="margin-bottom: 1rem;">
+                    <button class="btn btn-primary" onclick="showTrunkModal()">Add Trunk</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Type</th>
+                            <th>Host</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="trunksTable">
+                        <tr><td colspan="5">Loading...</td></tr>
+                    </tbody>
+                </table>
             </div>
+        </div>
+
+        <!-- Routes Tab -->
+        <div id="tab-routes" class="tab-content">
+            <div class="card">
+                <h3>Inbound Routes</h3>
+                <div style="margin-bottom: 1rem;">
+                    <button class="btn btn-primary" onclick="showRouteModal('inbound')">Add Inbound Route</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Pattern</th>
+                            <th>Destination</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="inboundRoutesTable">
+                        <tr><td colspan="4">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="card">
+                <h3>Outbound Routes</h3>
+                <div style="margin-bottom: 1rem;">
+                    <button class="btn btn-primary" onclick="showRouteModal('outbound')">Add Outbound Route</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Pattern</th>
+                            <th>Trunk</th>
+                            <th>Priority</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="outboundRoutesTable">
+                        <tr><td colspan="5">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- IVR Tab -->
+        <div id="tab-ivr" class="tab-content">
+            <div class="card">
+                <h3>IVR Menus</h3>
+                <div style="margin-bottom: 1rem;">
+                    <button class="btn btn-primary" onclick="showIVRModal()">Create IVR Menu</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Description</th>
+                            <th>Timeout</th>
+                            <th>Options</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ivrTable">
+                        <tr><td colspan="5">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- CDR Tab -->
+        <div id="tab-cdr" class="tab-content">
+            <div class="card">
+                <h3>Call Detail Records</h3>
+                <div style="margin-bottom: 1rem; display: flex; gap: 1rem; align-items: center;">
+                    <label>Show last:</label>
+                    <select id="cdrLimit" onchange="loadCDR()">
+                        <option value="50">50 calls</option>
+                        <option value="100">100 calls</option>
+                        <option value="200">200 calls</option>
+                    </select>
+                    <button class="btn" onclick="loadCDR()">Refresh</button>
+                </div>
+                <div style="overflow-x: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Date/Time</th>
+                                <th>Source</th>
+                                <th>Destination</th>
+                                <th>Duration</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cdrTable">
+                            <tr><td colspan="5">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Logs Tab -->
+        <div id="tab-logs" class="tab-content">
+            <div class="card">
+                <h3>Container Logs</h3>
+                <div style="margin-bottom: 1rem; display: flex; gap: 0.5rem; align-items: center;">
+                    <label>Lines:</label>
+                    <select id="logLines" onchange="loadLogs()">
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                        <option value="200">200</option>
+                    </select>
+                    <button class="btn" onclick="loadLogs()">Refresh</button>
+                </div>
+                <div class="logs-container" id="logsContainer">Loading logs...</div>
+            </div>
+            <div class="card">
+                <h3>Settings</h3>
+                <form id="settingsForm" onsubmit="saveSettings(event)">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>HTTP Port</label>
+                            <input type="number" id="cfgHttpPort" value="8180" min="1024" max="65535">
+                        </div>
+                        <div class="form-group">
+                            <label>SIP Port</label>
+                            <input type="number" id="cfgSipPort" value="5060" min="1024" max="65535">
+                        </div>
+                        <div class="form-group">
+                            <label>Data Path</label>
+                            <input type="text" id="cfgDataPath" value="/srv/voip">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>RTP Start Port</label>
+                            <input type="number" id="cfgRtpStart" value="10000">
+                        </div>
+                        <div class="form-group">
+                            <label>RTP End Port</label>
+                            <input type="number" id="cfgRtpEnd" value="20000">
+                        </div>
+                        <div class="form-group">
+                            <label>Timezone</label>
+                            <select id="cfgTimezone">
+                                <option value="Europe/Paris">Europe/Paris</option>
+                                <option value="Europe/London">Europe/London</option>
+                                <option value="America/New_York">America/New_York</option>
+                                <option value="UTC">UTC</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save Settings</button>
+                </form>
+            </div>
+        </div>
+    </main>
+
+    <!-- Extension Modal -->
+    <div class="modal-overlay" id="extensionModal">
+        <div class="modal">
+            <h3>Add Extension</h3>
+            <form id="extensionForm" onsubmit="createExtension(event)">
+                <div class="form-group">
+                    <label>Extension Number</label>
+                    <input type="text" id="extNumber" placeholder="e.g., 100" required>
+                </div>
+                <div class="form-group">
+                    <label>Display Name</label>
+                    <input type="text" id="extName" placeholder="e.g., John Doe" required>
+                </div>
+                <div class="form-group">
+                    <label>SIP Password</label>
+                    <input type="password" id="extPassword" placeholder="SIP password">
+                </div>
+                <div class="form-group">
+                    <label><input type="checkbox" id="extVoicemail"> Enable Voicemail</label>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn" onclick="closeModal('extensionModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create</button>
+                </div>
+            </form>
         </div>
     </div>
-    </main>
+
+    <!-- Trunk Modal -->
+    <div class="modal-overlay" id="trunkModal">
+        <div class="modal">
+            <h3>Add SIP Trunk</h3>
+            <form id="trunkForm" onsubmit="createTrunk(event)">
+                <div class="form-group">
+                    <label>Trunk Name</label>
+                    <input type="text" id="trunkName" placeholder="e.g., MyProvider" required>
+                </div>
+                <div class="form-group">
+                    <label>Type</label>
+                    <select id="trunkType">
+                        <option value="pjsip">PJSIP</option>
+                        <option value="sip">SIP (chan_sip)</option>
+                        <option value="iax2">IAX2</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Host/IP</label>
+                    <input type="text" id="trunkHost" placeholder="sip.provider.com" required>
+                </div>
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="trunkUsername" placeholder="SIP username">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="trunkPassword" placeholder="SIP password">
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn" onclick="closeModal('trunkModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Route Modal -->
+    <div class="modal-overlay" id="routeModal">
+        <div class="modal">
+            <h3 id="routeModalTitle">Add Route</h3>
+            <form id="routeForm" onsubmit="createRoute(event)">
+                <input type="hidden" id="routeDirection" value="outbound">
+                <div class="form-group">
+                    <label>Route Name</label>
+                    <input type="text" id="routeName" placeholder="e.g., Local Calls" required>
+                </div>
+                <div class="form-group">
+                    <label>Pattern</label>
+                    <input type="text" id="routePattern" placeholder="e.g., NXXNXXXXXX" required>
+                </div>
+                <div class="form-group" id="routeTrunkGroup">
+                    <label>Trunk</label>
+                    <select id="routeTrunk">
+                        <option value="">Select trunk...</option>
+                    </select>
+                </div>
+                <div class="form-group" id="routeDestGroup" style="display:none;">
+                    <label>Destination</label>
+                    <input type="text" id="routeDestination" placeholder="Extension or IVR">
+                </div>
+                <div class="form-group">
+                    <label>Priority</label>
+                    <input type="number" id="routePriority" value="1" min="1" max="100">
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn" onclick="closeModal('routeModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- IVR Modal -->
+    <div class="modal-overlay" id="ivrModal">
+        <div class="modal">
+            <h3>Create IVR Menu</h3>
+            <form id="ivrForm" onsubmit="createIVR(event)">
+                <div class="form-group">
+                    <label>IVR Name</label>
+                    <input type="text" id="ivrName" placeholder="e.g., Main Menu" required>
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <input type="text" id="ivrDescription" placeholder="Description">
+                </div>
+                <div class="form-group">
+                    <label>Timeout (seconds)</label>
+                    <input type="number" id="ivrTimeout" value="10" min="1" max="60">
+                </div>
+                <div class="form-group">
+                    <label>Announcement</label>
+                    <input type="text" id="ivrAnnouncement" placeholder="Recording file">
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn" onclick="closeModal('ivrModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <script>
         const API = '/api/v1/voip';
+        let isRunning = false;
+        let containerStatus = 'not_installed';
 
-        async function api(endpoint, options = {}) {
-            const r = await fetch(API + endpoint, { ...options, headers: { 'Authorization': 'Bearer ' + localStorage.getItem('sbx_token'), 'Content-Type': 'application/json', ...options.headers } });
-            if (!r.ok) throw new Error(`HTTP ${r.status}`);
-            return r.json();
+        function getToken() {
+            return localStorage.getItem('jwt_token') || localStorage.getItem('token') || '';
         }
 
-        async function loadStatus() {
+        async function api(endpoint, options = {}) {
+            const token = getToken();
+            const headers = { 'Content-Type': 'application/json', ...options.headers };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+            const res = await fetch(API + endpoint, { ...options, headers, credentials: 'include' });
+            if (res.status === 401) {
+                window.location.href = '/portal/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+                throw new Error('Unauthorized');
+            }
+            return res.json();
+        }
+
+        function showTab(name) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            const tabs = ['dashboard', 'extensions', 'trunks', 'routes', 'ivr', 'cdr', 'logs'];
+            document.querySelector(`.tab:nth-child(${tabs.indexOf(name)+1})`).classList.add('active');
+            document.getElementById('tab-' + name).classList.add('active');
+            if (name === 'logs') loadLogs();
+            if (name === 'cdr') loadCDR();
+            if (name === 'extensions') loadExtensions();
+            if (name === 'trunks') loadTrunks();
+            if (name === 'routes') loadRoutes();
+            if (name === 'ivr') loadIVR();
+            if (name === 'dashboard') loadDashboard();
+        }
+
+        function toast(msg, type = 'success') {
+            const t = document.createElement('div');
+            t.className = 'toast toast-' + type;
+            t.textContent = msg;
+            document.body.appendChild(t);
+            setTimeout(() => t.remove(), 3000);
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('active');
+        }
+
+        function showExtensionModal() {
+            document.getElementById('extensionForm').reset();
+            document.getElementById('extensionModal').classList.add('active');
+        }
+
+        function showTrunkModal() {
+            document.getElementById('trunkForm').reset();
+            document.getElementById('trunkModal').classList.add('active');
+        }
+
+        function showRouteModal(direction) {
+            document.getElementById('routeForm').reset();
+            document.getElementById('routeDirection').value = direction;
+            document.getElementById('routeModalTitle').textContent = direction === 'inbound' ? 'Add Inbound Route' : 'Add Outbound Route';
+            document.getElementById('routeTrunkGroup').style.display = direction === 'outbound' ? 'block' : 'none';
+            document.getElementById('routeDestGroup').style.display = direction === 'inbound' ? 'block' : 'none';
+            loadTrunksForSelect();
+            document.getElementById('routeModal').classList.add('active');
+        }
+
+        function showIVRModal() {
+            document.getElementById('ivrForm').reset();
+            document.getElementById('ivrModal').classList.add('active');
+        }
+
+        async function refresh() {
             try {
-                const d = await api('/status');
-                const badge = document.getElementById('status-badge');
-                if (!d.installed) {
-                    document.getElementById('install-section').classList.remove('hidden');
-                    document.getElementById('main-section').classList.add('hidden');
-                    badge.textContent = 'Not Installed'; badge.className = 'status-badge stopped';
-                    return;
-                }
-                document.getElementById('install-section').classList.add('hidden');
-                document.getElementById('main-section').classList.remove('hidden');
-                if (d.running) {
-                    badge.textContent = 'Running'; badge.className = 'status-badge running';
-                    document.getElementById('btn-start').disabled = true;
-                    document.getElementById('btn-stop').disabled = false;
-                    document.getElementById('btn-restart').disabled = false;
-                    document.getElementById('calls-count').textContent = d.active_calls || 0;
-                    document.getElementById('channels-count').textContent = d.active_channels || 0;
-                    document.getElementById('peers-count').textContent = d.sip_peers || 0;
-                    loadExtensions();
+                const status = await api('/status');
+                containerStatus = status.container_status;
+                isRunning = status.container_status === 'running';
+
+                // Show/hide install banner
+                document.getElementById('installBanner').style.display =
+                    status.container_status === 'not_installed' ? 'block' : 'none';
+
+                // Update stats
+                const statEl = document.getElementById('statStatus');
+                statEl.querySelector('.value').textContent = status.container_status;
+                statEl.className = 'stat-card ' + (isRunning ? 'running' : 'stopped');
+
+                document.getElementById('statExtensions').textContent = status.extensions_count || 0;
+                document.getElementById('statTrunks').textContent = status.trunks_count || 0;
+                document.getElementById('statCalls').textContent = status.active_channels || 0;
+                document.getElementById('statDisk').textContent = status.disk_usage || '-';
+
+                // Update toggle button
+                const btn = document.getElementById('btnToggle');
+                if (status.container_status === 'not_installed') {
+                    btn.textContent = 'Install';
+                    btn.className = 'btn btn-primary';
+                    btn.onclick = installPBX;
+                } else if (isRunning) {
+                    btn.textContent = 'Stop';
+                    btn.className = 'btn btn-danger';
+                    btn.onclick = () => toggleService();
                 } else {
-                    badge.textContent = 'Stopped'; badge.className = 'status-badge stopped';
-                    document.getElementById('btn-start').disabled = false;
-                    document.getElementById('btn-stop').disabled = true;
-                    document.getElementById('btn-restart').disabled = true;
+                    btn.textContent = 'Start';
+                    btn.className = 'btn btn-success';
+                    btn.onclick = () => toggleService();
                 }
-            } catch (e) { console.error(e); }
+
+                // Open FreePBX link
+                const openLink = document.getElementById('openPBX');
+                if (isRunning) {
+                    openLink.style.display = 'inline-flex';
+                    openLink.href = `http://${window.location.hostname}:${status.http_port}`;
+                } else {
+                    openLink.style.display = 'none';
+                }
+
+                // Load settings
+                document.getElementById('cfgHttpPort').value = status.http_port || 8180;
+                document.getElementById('cfgSipPort').value = status.sip_port || 5060;
+                document.getElementById('cfgDataPath').value = status.data_path || '/srv/voip';
+                document.getElementById('cfgTimezone').value = status.timezone || 'Europe/Paris';
+
+                loadDashboard();
+
+            } catch (e) {
+                console.error(e);
+                toast('Failed to load status', 'error');
+            }
+        }
+
+        async function loadDashboard() {
+            if (!isRunning) return;
+
+            // Load active channels
+            try {
+                const data = await api('/channels');
+                const container = document.getElementById('activeCalls');
+                if (data.channels && data.channels.length > 0) {
+                    container.innerHTML = data.channels.map(ch => `
+                        <div class="call-card">
+                            <div class="channel">${ch.channel}</div>
+                            <div>State: ${ch.state}</div>
+                            <div class="duration">${ch.duration || '--:--'}</div>
+                        </div>
+                    `).join('');
+                } else {
+                    container.innerHTML = '<p style="color: var(--text-dim);">No active calls</p>';
+                }
+            } catch (e) {
+                console.error(e);
+            }
+
+            // Load SIP peers
+            try {
+                const data = await api('/sip/peers');
+                const tbody = document.getElementById('sipPeersTable');
+                if (data.peers && data.peers.length > 0) {
+                    tbody.innerHTML = data.peers.map(p => `
+                        <tr>
+                            <td>${p.endpoint}</td>
+                            <td><span class="badge ${p.status.includes('Avail') ? 'badge-success' : 'badge-warning'}">${p.status}</span></td>
+                        </tr>
+                    `).join('');
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="2">No SIP endpoints</td></tr>';
+                }
+            } catch (e) {
+                console.error(e);
+            }
         }
 
         async function loadExtensions() {
             try {
-                const d = await api('/extensions');
-                const list = document.getElementById('ext-list');
-                if (!d.extensions || d.extensions.length === 0) {
-                    list.innerHTML = '<p style="padding:1rem;color:var(--text-secondary);">No extensions configured</p>';
-                    return;
+                const data = await api('/extensions');
+                const tbody = document.getElementById('extensionsTable');
+                if (data.extensions && data.extensions.length > 0) {
+                    tbody.innerHTML = data.extensions.map(e => `
+                        <tr>
+                            <td><strong>${e.number}</strong></td>
+                            <td>${e.name}</td>
+                            <td>${e.voicemail ? '<span class="badge badge-success">Yes</span>' : '<span class="badge badge-info">No</span>'}</td>
+                            <td>${e.registered ? '<span class="badge badge-success">Registered</span>' : '<span class="badge badge-warning">Offline</span>'}</td>
+                            <td><button class="btn btn-sm btn-danger" onclick="deleteExtension('${e.number}')">Delete</button></td>
+                        </tr>
+                    `).join('');
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="5">No extensions configured</td></tr>';
                 }
-                list.innerHTML = d.extensions.map(e => `
-                    <div class="ext-item">
-                        <div class="ext-icon">📞</div>
-                        <div class="ext-info">
-                            <div class="ext-number">${e.number}</div>
-                            <div class="ext-name">${e.name || 'No name'}</div>
-                        </div>
-                        <button class="btn" onclick="deleteExtension('${e.number}')" style="color:var(--error);">Delete</button>
-                    </div>
-                `).join('');
-            } catch (e) { console.error(e); }
+            } catch (e) {
+                console.error(e);
+            }
         }
 
-        async function loadPeers() {
+        async function loadTrunks() {
             try {
-                const d = await api('/peers');
-                const list = document.getElementById('peers-list');
-                if (!d.peers || d.peers.length === 0) {
-                    list.innerHTML = '<p style="padding:1rem;color:var(--text-secondary);">No peers registered</p>';
-                    return;
+                const data = await api('/trunks');
+                const tbody = document.getElementById('trunksTable');
+                if (data.trunks && data.trunks.length > 0) {
+                    tbody.innerHTML = data.trunks.map(t => `
+                        <tr>
+                            <td><strong>${t.name}</strong></td>
+                            <td><span class="badge badge-info">${t.type}</span></td>
+                            <td>${t.host}</td>
+                            <td>${t.status ? `<span class="badge ${t.status === 'Registered' ? 'badge-success' : 'badge-warning'}">${t.status}</span>` : '-'}</td>
+                            <td><button class="btn btn-sm btn-danger" onclick="deleteTrunk('${t.id}')">Delete</button></td>
+                        </tr>
+                    `).join('');
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="5">No trunks configured</td></tr>';
                 }
-                list.innerHTML = d.peers.map(p => `
-                    <div class="ext-item">
-                        <div class="ext-icon">🔗</div>
-                        <div class="ext-info">
-                            <div class="ext-number">${p.name}</div>
-                            <div class="ext-name">${p.host}</div>
-                        </div>
-                        <span class="ext-status ${p.status === 'OK' ? 'online' : 'offline'}">${p.status}</span>
-                    </div>
-                `).join('');
-            } catch (e) { console.error(e); }
+            } catch (e) {
+                console.error(e);
+            }
         }
 
-        async function installAsterisk() {
-            const btn = event.target; btn.disabled = true; btn.textContent = 'Installing...';
-            try { await api('/install', { method: 'POST' }); await loadStatus(); } catch (e) { alert('Failed: ' + e.message); }
-            finally { btn.disabled = false; btn.textContent = 'Install Asterisk PBX'; }
+        async function loadTrunksForSelect() {
+            try {
+                const data = await api('/trunks');
+                const select = document.getElementById('routeTrunk');
+                select.innerHTML = '<option value="">Select trunk...</option>';
+                if (data.trunks) {
+                    data.trunks.forEach(t => {
+                        select.innerHTML += `<option value="${t.name}">${t.name}</option>`;
+                    });
+                }
+            } catch (e) {
+                console.error(e);
+            }
         }
 
-        async function startService() { document.getElementById('btn-start').disabled = true; try { await api('/start', { method: 'POST' }); await loadStatus(); } catch (e) { alert('Failed: ' + e.message); } }
-        async function stopService() { document.getElementById('btn-stop').disabled = true; try { await api('/stop', { method: 'POST' }); await loadStatus(); } catch (e) { alert('Failed: ' + e.message); } }
-        async function restartService() { document.getElementById('btn-restart').disabled = true; try { await api('/restart', { method: 'POST' }); await loadStatus(); } catch (e) { alert('Failed: ' + e.message); } }
-        async function reloadConfig() { try { await api('/reload', { method: 'POST' }); alert('Config reloaded'); } catch (e) { alert('Failed: ' + e.message); } }
+        async function loadRoutes() {
+            try {
+                const inbound = await api('/routes/inbound');
+                const outbound = await api('/routes/outbound');
+
+                const inTable = document.getElementById('inboundRoutesTable');
+                if (inbound.routes && inbound.routes.length > 0) {
+                    inTable.innerHTML = inbound.routes.map(r => `
+                        <tr>
+                            <td>${r.name}</td>
+                            <td><code>${r.pattern}</code></td>
+                            <td>${r.destination || '-'}</td>
+                            <td><button class="btn btn-sm btn-danger" onclick="deleteRoute('${r.id}')">Delete</button></td>
+                        </tr>
+                    `).join('');
+                } else {
+                    inTable.innerHTML = '<tr><td colspan="4">No inbound routes</td></tr>';
+                }
+
+                const outTable = document.getElementById('outboundRoutesTable');
+                if (outbound.routes && outbound.routes.length > 0) {
+                    outTable.innerHTML = outbound.routes.map(r => `
+                        <tr>
+                            <td>${r.name}</td>
+                            <td><code>${r.pattern}</code></td>
+                            <td>${r.trunk || '-'}</td>
+                            <td>${r.priority}</td>
+                            <td><button class="btn btn-sm btn-danger" onclick="deleteRoute('${r.id}')">Delete</button></td>
+                        </tr>
+                    `).join('');
+                } else {
+                    outTable.innerHTML = '<tr><td colspan="5">No outbound routes</td></tr>';
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function loadIVR() {
+            try {
+                const data = await api('/ivr');
+                const tbody = document.getElementById('ivrTable');
+                if (data.ivr && data.ivr.length > 0) {
+                    tbody.innerHTML = data.ivr.map(i => `
+                        <tr>
+                            <td><strong>${i.name}</strong></td>
+                            <td>${i.description || '-'}</td>
+                            <td>${i.timeout}s</td>
+                            <td>${Object.keys(i.options || {}).length}</td>
+                            <td><button class="btn btn-sm btn-danger" onclick="deleteIVR('${i.id}')">Delete</button></td>
+                        </tr>
+                    `).join('');
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="5">No IVR menus configured</td></tr>';
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function loadCDR() {
+            const limit = document.getElementById('cdrLimit').value;
+            try {
+                const data = await api('/cdr?limit=' + limit);
+                const tbody = document.getElementById('cdrTable');
+                if (data.cdr && data.cdr.length > 0) {
+                    tbody.innerHTML = data.cdr.map(c => `
+                        <tr>
+                            <td>${c.calldate || c.start || '-'}</td>
+                            <td>${c.src || c.source || '-'}</td>
+                            <td>${c.dst || c.destination || '-'}</td>
+                            <td>${c.billsec || c.duration || '-'}s</td>
+                            <td><span class="badge ${c.disposition === 'ANSWERED' ? 'badge-success' : 'badge-warning'}">${c.disposition || '-'}</span></td>
+                        </tr>
+                    `).join('');
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="5">No call records found</td></tr>';
+                }
+            } catch (e) {
+                console.error(e);
+                document.getElementById('cdrTable').innerHTML = '<tr><td colspan="5">Error loading CDR</td></tr>';
+            }
+        }
+
+        async function loadLogs() {
+            const lines = document.getElementById('logLines').value;
+            try {
+                const data = await api('/logs?lines=' + lines);
+                document.getElementById('logsContainer').textContent = data.logs || 'No logs available';
+            } catch (e) {
+                document.getElementById('logsContainer').textContent = 'Error loading logs';
+            }
+        }
+
+        async function toggleService() {
+            const action = isRunning ? 'stop' : 'start';
+            try {
+                document.getElementById('btnToggle').disabled = true;
+                document.getElementById('btnToggle').innerHTML = '<span class="spinner"></span>';
+                const res = await api('/container/' + action, { method: 'POST' });
+                if (res.success) {
+                    toast(action === 'start' ? 'FreePBX started!' : 'FreePBX stopped!');
+                } else {
+                    toast(res.error || 'Action failed', 'error');
+                }
+                await refresh();
+            } catch (e) {
+                toast('Action failed: ' + e.message, 'error');
+            } finally {
+                document.getElementById('btnToggle').disabled = false;
+            }
+        }
+
+        async function installPBX() {
+            if (!confirm('Install FreePBX? This will download the Docker image (~2GB).')) return;
+            toast('Installing FreePBX... This may take several minutes.');
+            try {
+                const res = await api('/container/install', { method: 'POST' });
+                if (res.success) {
+                    toast('FreePBX installed! Starting...');
+                    await api('/container/start', { method: 'POST' });
+                    await refresh();
+                } else {
+                    toast(res.error || 'Install failed', 'error');
+                }
+            } catch (e) {
+                toast('Install failed: ' + e.message, 'error');
+            }
+        }
 
         async function createExtension(e) {
             e.preventDefault();
-            const btn = e.target.querySelector('button'); btn.disabled = true;
+            const data = {
+                number: document.getElementById('extNumber').value,
+                name: document.getElementById('extName').value,
+                password: document.getElementById('extPassword').value,
+                voicemail: document.getElementById('extVoicemail').checked,
+            };
             try {
-                await api('/extensions', { method: 'POST', body: JSON.stringify({
-                    number: document.getElementById('ext-number').value,
-                    name: document.getElementById('ext-name').value,
-                    secret: document.getElementById('ext-secret').value
-                })});
-                document.getElementById('ext-number').value = '';
-                document.getElementById('ext-name').value = '';
-                document.getElementById('ext-secret').value = '';
-                loadExtensions();
-            } catch (err) { alert('Failed: ' + err.message); }
-            finally { btn.disabled = false; }
+                const res = await api('/extension', { method: 'POST', body: JSON.stringify(data) });
+                if (res.success) {
+                    toast('Extension created!');
+                    closeModal('extensionModal');
+                    loadExtensions();
+                    refresh();
+                } else {
+                    toast(res.error || 'Failed to create', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
         }
 
-        async function deleteExtension(num) { if (!confirm(`Delete extension ${num}?`)) return; try { await api(`/extensions/${num}`, { method: 'DELETE' }); loadExtensions(); } catch (e) { alert('Failed: ' + e.message); } }
+        async function deleteExtension(number) {
+            if (!confirm('Delete extension ' + number + '?')) return;
+            try {
+                const res = await api('/extension/' + number, { method: 'DELETE' });
+                if (res.success) {
+                    toast('Extension deleted');
+                    loadExtensions();
+                    refresh();
+                } else {
+                    toast(res.error || 'Failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
 
-        async function loadLogs() { try { const d = await api('/logs?lines=200'); document.getElementById('log-viewer').textContent = d.logs?.join('\n') || 'No logs'; } catch (e) { document.getElementById('log-viewer').textContent = 'Error: ' + e.message; } }
+        async function createTrunk(e) {
+            e.preventDefault();
+            const data = {
+                name: document.getElementById('trunkName').value,
+                type: document.getElementById('trunkType').value,
+                host: document.getElementById('trunkHost').value,
+                username: document.getElementById('trunkUsername').value,
+                password: document.getElementById('trunkPassword').value,
+            };
+            try {
+                const res = await api('/trunk', { method: 'POST', body: JSON.stringify(data) });
+                if (res.success) {
+                    toast('Trunk created!');
+                    closeModal('trunkModal');
+                    loadTrunks();
+                    refresh();
+                } else {
+                    toast(res.error || 'Failed to create', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
 
-        document.querySelectorAll('.tab').forEach(tab => {
-            tab.addEventListener('click', () => {
-                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-                tab.classList.add('active');
-                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
-                if (tab.dataset.tab === 'logs') loadLogs();
-                if (tab.dataset.tab === 'peers') loadPeers();
-            });
-        });
+        async function deleteTrunk(id) {
+            if (!confirm('Delete this trunk?')) return;
+            try {
+                const res = await api('/trunk/' + id, { method: 'DELETE' });
+                if (res.success) {
+                    toast('Trunk deleted');
+                    loadTrunks();
+                    refresh();
+                } else {
+                    toast(res.error || 'Failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
 
-        if (window.matchMedia?.('(prefers-color-scheme: dark)').matches) document.body.classList.add('dark');
-        loadStatus(); setInterval(loadStatus, 10000);
+        async function createRoute(e) {
+            e.preventDefault();
+            const direction = document.getElementById('routeDirection').value;
+            const data = {
+                name: document.getElementById('routeName').value,
+                direction: direction,
+                pattern: document.getElementById('routePattern').value,
+                trunk: direction === 'outbound' ? document.getElementById('routeTrunk').value : null,
+                destination: direction === 'inbound' ? document.getElementById('routeDestination').value : null,
+                priority: parseInt(document.getElementById('routePriority').value),
+            };
+            try {
+                const res = await api('/route', { method: 'POST', body: JSON.stringify(data) });
+                if (res.success) {
+                    toast('Route created!');
+                    closeModal('routeModal');
+                    loadRoutes();
+                } else {
+                    toast(res.error || 'Failed to create', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function deleteRoute(id) {
+            if (!confirm('Delete this route?')) return;
+            try {
+                const res = await api('/route/' + id, { method: 'DELETE' });
+                if (res.success) {
+                    toast('Route deleted');
+                    loadRoutes();
+                } else {
+                    toast(res.error || 'Failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function createIVR(e) {
+            e.preventDefault();
+            const data = {
+                name: document.getElementById('ivrName').value,
+                description: document.getElementById('ivrDescription').value,
+                timeout: parseInt(document.getElementById('ivrTimeout').value),
+                announcement: document.getElementById('ivrAnnouncement').value,
+            };
+            try {
+                const res = await api('/ivr', { method: 'POST', body: JSON.stringify(data) });
+                if (res.success) {
+                    toast('IVR menu created!');
+                    closeModal('ivrModal');
+                    loadIVR();
+                } else {
+                    toast(res.error || 'Failed to create', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function deleteIVR(id) {
+            if (!confirm('Delete this IVR menu?')) return;
+            try {
+                const res = await api('/ivr/' + id, { method: 'DELETE' });
+                if (res.success) {
+                    toast('IVR deleted');
+                    loadIVR();
+                } else {
+                    toast(res.error || 'Failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function saveSettings(e) {
+            e.preventDefault();
+            try {
+                const res = await api('/config', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        http_port: parseInt(document.getElementById('cfgHttpPort').value),
+                        sip_port: parseInt(document.getElementById('cfgSipPort').value),
+                        data_path: document.getElementById('cfgDataPath').value,
+                        timezone: document.getElementById('cfgTimezone').value,
+                    })
+                });
+                if (res.success) {
+                    toast('Settings saved! Restart FreePBX to apply.');
+                } else {
+                    toast('Save failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        // Initialize
+        refresh();
+        setInterval(refresh, 30000);
     </script>
-    <script src="/shared/sidebar.js"></script>
 </body>
 </html>

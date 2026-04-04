@@ -1,14 +1,26 @@
 Source: secubox-torrent
 Section: net
 Priority: optional
-Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
-Standards-Version: 4.6.0
+Standards-Version: 4.6.2
 
 Package: secubox-torrent
 Architecture: all
-Depends: secubox-core, python3, python3-uvicorn, python3-fastapi, nginx
-Recommends: transmission-daemon
-Description: SecuBox Torrent Client
- BitTorrent client with Transmission daemon for SecuBox.
- Manage downloads, upload torrents, track transfer speeds.
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn
+Recommends: docker.io | podman
+Description: BitTorrent client management for SecuBox
+ SecuBox module for managing BitTorrent downloads via Transmission.
+ Provides Docker container management, torrent lifecycle (add/remove/
+ pause/resume), RSS feed subscriptions, category management, and
+ speed limiting.
+ .
+ Features:
+  - Transmission daemon via Docker/Podman
+  - Torrent add via magnet links, URLs, or .torrent files
+  - Download/upload speed limiting with scheduling
+  - RSS feed subscriptions for automatic downloads
+  - Category/label management
+  - P31 Phosphor light theme web UI
+ .
+ Provides FastAPI backend on /api/v1/torrent/ via Unix socket.

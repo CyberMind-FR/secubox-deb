@@ -1,12 +1,26 @@
 #!/bin/bash
 set -e
+
 case "$1" in
   configure)
+    # Create data directories
     install -d -o secubox -g secubox -m 750 /var/lib/secubox/simplex
+    install -d -o secubox -g secubox -m 750 /var/lib/secubox/simplex/smp
+    install -d -o secubox -g secubox -m 750 /var/lib/secubox/simplex/backups
+    install -d -o secubox -g secubox -m 750 /var/cache/secubox/simplex
+
+    # Config directories
+    install -d -o secubox -g secubox -m 750 /etc/secubox/simplex
+    install -d -o secubox -g secubox -m 700 /etc/secubox/simplex/tls
+
+    # Enable and start service
     systemctl daemon-reload
     systemctl enable secubox-simplex.service
     systemctl start secubox-simplex.service || true
+
+    # Reload nginx
     systemctl reload nginx 2>/dev/null || true
     ;;
 esac
+
 #DEBHELPER#

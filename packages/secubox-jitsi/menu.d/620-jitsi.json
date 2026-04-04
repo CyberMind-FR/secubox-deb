@@ -1,0 +1,9 @@
+{
+  "id": "jitsi",
+  "name": "Jitsi Meet",
+  "icon": "video",
+  "path": "/jitsi/",
+  "category": "apps",
+  "order": 620,
+  "description": "Video conferencing and meetings"
+}

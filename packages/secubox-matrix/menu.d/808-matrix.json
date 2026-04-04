@@ -1,9 +1,0 @@
-{
-  "id": "matrix",
-  "name": "Matrix Chat",
-  "icon": "💬",
-  "path": "/matrix/",
-  "category": "apps",
-  "order": 808,
-  "description": "Federated encrypted chat server"
-}

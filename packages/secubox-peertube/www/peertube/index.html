@@ -3,188 +3,1152 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PeerTube - SecuBox</title>
+    <title>SecuBox - PeerTube Video Platform</title>
+    <link rel="stylesheet" href="/shared/sidebar.css">
     <link rel="stylesheet" href="/shared/crt-light.css">
-    <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
-        :root { --pt-orange: #f2690d; --pt-light: #ff8533; --pt-dark: #cc5500; }
-        body.dark { --pt-orange: #ff8533; --pt-light: #ffa366; --pt-dark: #f2690d; }
-        .accent { color: var(--pt-orange); }
-        .accent-bg { background-color: var(--pt-orange); }
-        .header { display: flex; justify-content: space-between; align-items: center; padding: 1rem; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
-        .header h1 { margin: 0; font-size: 1.5rem; }
-        .status-badge { padding: 0.25rem 0.75rem; border-radius: 1rem; font-size: 0.875rem; }
-        .status-badge.running { background: var(--success-bg); color: var(--success); }
-        .status-badge.stopped { background: var(--error-bg); color: var(--error); }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem; text-align: center; }
-        .stat-value { font-size: 1.75rem; font-weight: bold; color: var(--pt-orange); }
-        .stat-label { font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; }
-        .action-bar { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
-        .btn { padding: 0.5rem 1rem; border: 1px solid var(--border); border-radius: 0.25rem; background: var(--surface); color: var(--text); cursor: pointer; font-size: 0.875rem; }
-        .btn:hover { background: var(--hover); }
-        .btn.primary { background: var(--pt-orange); color: white; border-color: var(--pt-orange); }
-        .btn.primary:hover { background: var(--pt-dark); }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .tabs { display: flex; gap: 0.5rem; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
-        .tab { padding: 0.75rem 1rem; border: none; background: none; color: var(--text-secondary); cursor: pointer; border-bottom: 2px solid transparent; }
-        .tab:hover { color: var(--text); }
-        .tab.active { color: var(--pt-orange); border-bottom-color: var(--pt-orange); }
+        :root {
+            --p31-peak: #00dd44;
+            --p31-dim: #006622;
+            --p31-glow: rgba(0, 221, 68, 0.15);
+            --tube-light: #e8f5e9;
+            --tube-mid: #c8e6c9;
+            --tube-dark: #a5d6a7;
+            --text-primary: #1b5e20;
+            --text-secondary: #388e3c;
+            --text-dim: #66bb6a;
+            --surface: #f1f8e9;
+            --surface-alt: #dcedc8;
+            --border: #c5e1a5;
+            --error: #c62828;
+            --warning: #f57c00;
+            --success: #2e7d32;
+            --peertube: #f1680d;
+            --peertube-dark: #d45a0a;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            background: linear-gradient(135deg, var(--tube-light) 0%, var(--tube-mid) 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+        }
+        body.crt-light { background: linear-gradient(135deg, var(--tube-light) 0%, var(--tube-mid) 100%); }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; max-width: calc(100% - 220px); }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid var(--peertube);
+        }
+        .header h1 { font-size: 1.5rem; color: var(--peertube); }
+        .header-actions { display: flex; gap: 0.5rem; }
+
+        /* Stats Row */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+            box-shadow: 0 2px 8px var(--p31-glow);
+        }
+        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
+        .stat-card .value { font-size: 1.25rem; font-weight: bold; color: var(--p31-dim); margin-top: 0.25rem; }
+        .stat-card.running .value { color: var(--success); }
+        .stat-card.stopped .value { color: var(--error); }
+
+        /* Tabs */
+        .tabs { display: flex; gap: 0; margin-bottom: 1.5rem; border-bottom: 2px solid var(--border); flex-wrap: wrap; }
+        .tab {
+            padding: 0.75rem 1rem;
+            cursor: pointer;
+            border: 1px solid transparent;
+            border-bottom: none;
+            border-radius: 8px 8px 0 0;
+            background: transparent;
+            color: var(--text-secondary);
+            font-weight: 500;
+            font-size: 0.875rem;
+            transition: all 0.2s;
+        }
+        .tab:hover { background: var(--surface-alt); }
+        .tab.active {
+            background: var(--surface);
+            border-color: var(--border);
+            color: var(--peertube);
+            margin-bottom: -2px;
+            border-bottom: 2px solid var(--surface);
+        }
+
         .tab-content { display: none; }
         .tab-content.active { display: block; }
-        .list-item { display: flex; align-items: center; gap: 1rem; padding: 0.75rem; background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; margin-bottom: 0.5rem; }
-        .item-icon { font-size: 1.5rem; }
-        .item-info { flex: 1; }
-        .item-name { font-weight: 500; }
-        .item-meta { font-size: 0.875rem; color: var(--text-secondary); }
-        .log-viewer { background: var(--bg-dark, #1a1a2e); color: var(--text-light, #e0e0e0); font-family: monospace; font-size: 0.75rem; padding: 1rem; border-radius: 0.5rem; height: 400px; overflow-y: auto; white-space: pre-wrap; }
-        .settings-form { display: grid; gap: 1rem; max-width: 500px; }
-        .form-group label { display: block; margin-bottom: 0.25rem; font-weight: 500; }
-        .form-group input, .form-group select { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 0.25rem; background: var(--surface); color: var(--text); }
-        .open-app-btn { position: fixed; bottom: 1rem; right: 1rem; padding: 1rem 1.5rem; background: var(--pt-orange); color: white; border: none; border-radius: 2rem; cursor: pointer; font-size: 1rem; box-shadow: 0 4px 12px rgba(242, 105, 13, 0.4); }
-        .hidden { display: none !important; }
-        .install-form { max-width: 400px; margin: 2rem auto; padding: 2rem; background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; }
-        .install-form h2 { margin-top: 0; text-align: center; }
+
+        /* Cards */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 2px 8px var(--p31-glow);
+        }
+        .card h3 {
+            font-size: 1rem;
+            color: var(--peertube);
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            border: 1px solid var(--peertube);
+            background: var(--surface);
+            color: var(--peertube);
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s;
+            font-size: 0.875rem;
+        }
+        .btn:hover { background: var(--peertube); color: white; }
+        .btn-primary { background: var(--peertube); color: white; }
+        .btn-primary:hover { background: var(--peertube-dark); }
+        .btn-danger { border-color: var(--error); color: var(--error); }
+        .btn-danger:hover { background: var(--error); color: white; }
+        .btn-success { border-color: var(--success); color: var(--success); }
+        .btn-success:hover { background: var(--success); color: white; }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.8rem; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+        th { color: var(--text-dim); font-weight: 500; font-size: 0.75rem; text-transform: uppercase; }
+        tr:hover { background: var(--surface-alt); }
+
+        /* Forms */
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.25rem; color: var(--text-secondary); font-size: 0.875rem; }
+        input, select, textarea {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: white;
+            color: var(--text-primary);
+            font-family: inherit;
+        }
+        input:focus, select:focus, textarea:focus { outline: none; border-color: var(--peertube); box-shadow: 0 0 5px rgba(241, 104, 13, 0.3); }
+        .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
+        .checkbox-label { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; }
+        .checkbox-label input { width: auto; }
+
+        /* Badges */
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        .badge-success { background: #c8e6c9; color: #2e7d32; }
+        .badge-error { background: #ffcdd2; color: #c62828; }
+        .badge-warning { background: #ffe0b2; color: #e65100; }
+        .badge-info { background: #ffe4d6; color: #d45a0a; }
+
+        /* Install Banner */
+        .install-banner {
+            background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+            border: 2px solid var(--peertube);
+            border-radius: 12px;
+            padding: 2rem;
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+        .install-banner h2 { color: var(--peertube); margin-bottom: 1rem; }
+        .install-banner p { color: var(--text-secondary); margin-bottom: 1.5rem; }
+
+        /* Video Grid */
+        .video-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+        .video-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+            transition: transform 0.2s;
+        }
+        .video-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px var(--p31-glow); }
+        .video-thumb {
+            aspect-ratio: 16/9;
+            background: var(--tube-dark);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-dim);
+            font-size: 2rem;
+        }
+        .video-info { padding: 0.75rem; }
+        .video-info h4 { font-size: 0.875rem; margin-bottom: 0.25rem; color: var(--text-primary); }
+        .video-info .meta { font-size: 0.75rem; color: var(--text-dim); }
+
+        /* Federation peer list */
+        .peer-list { display: flex; flex-direction: column; gap: 0.5rem; }
+        .peer-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem;
+            background: var(--surface-alt);
+            border-radius: 6px;
+        }
+        .peer-item .host { font-weight: 500; }
+        .peer-item .state { font-size: 0.75rem; }
+
+        /* Logs */
+        .logs-container {
+            background: #1a1a1a;
+            color: #f1680d;
+            padding: 1rem;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 0.8rem;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 1rem;
+            right: 1rem;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            color: white;
+            z-index: 1000;
+            animation: slideIn 0.3s ease;
+        }
+        .toast-success { background: var(--success); }
+        .toast-error { background: var(--error); }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        .spinner {
+            display: inline-block;
+            width: 1rem;
+            height: 1rem;
+            border: 2px solid var(--border);
+            border-top-color: var(--peertube);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Storage stats */
+        .storage-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+        }
+        .storage-item {
+            text-align: center;
+            padding: 1rem;
+            background: var(--surface-alt);
+            border-radius: 8px;
+        }
+        .storage-item .size { font-size: 1.5rem; font-weight: bold; color: var(--peertube); }
+        .storage-item .label { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; }
+
+        @media (max-width: 768px) {
+            .main { margin-left: 0; max-width: 100%; }
+            .stats-row { grid-template-columns: repeat(2, 1fr); }
+            .tabs { overflow-x: auto; }
+        }
     </style>
 </head>
 <body class="crt-light">
     <nav class="sidebar" id="sidebar"></nav>
-    <main class="main-content">
-    <div class="container">
-        <div class="header">
-            <h1><span class="accent">PeerTube</span></h1>
-            <span id="status-badge" class="status-badge stopped">Stopped</span>
+    <script src="/shared/sidebar.js"></script>
+
+    <main class="main">
+        <header class="header">
+            <h1>PeerTube Video Platform</h1>
+            <div class="header-actions">
+                <a id="openPeerTube" href="#" target="_blank" class="btn" style="display: none;">Open PeerTube</a>
+                <button class="btn" onclick="refresh()">Refresh</button>
+                <button class="btn btn-primary" id="btnToggle" onclick="toggleService()">Start</button>
+            </div>
+        </header>
+
+        <!-- Install Banner -->
+        <div id="installBanner" class="install-banner" style="display: none;">
+            <h2>Welcome to PeerTube</h2>
+            <p>Free/Libre decentralized video streaming. Take control of your videos.</p>
+            <button class="btn btn-primary" onclick="installPeerTube()">Install PeerTube</button>
         </div>
 
-        <div id="install-section" class="install-form hidden">
-            <h2>Install PeerTube</h2>
-            <form onsubmit="install(event)">
-                <div class="form-group"><label>Domain</label><input type="text" id="install-domain" placeholder="videos.example.com" required></div>
-                <div class="form-group"><label>Admin Email</label><input type="email" id="install-email" required></div>
-                <button type="submit" class="btn primary" style="width: 100%; margin-top: 1rem;">Install</button>
-            </form>
-        </div>
-
-        <div id="main-section" class="hidden">
-            <div class="stats-grid">
-                <div class="stat-card"><div class="stat-value" id="users-count">0</div><div class="stat-label">Users</div></div>
-                <div class="stat-card"><div class="stat-value" id="videos-count">0</div><div class="stat-label">Videos</div></div>
-                <div class="stat-card"><div class="stat-value" id="views-count">0</div><div class="stat-label">Views</div></div>
-                <div class="stat-card"><div class="stat-value" id="storage-used">-</div><div class="stat-label">Storage</div></div>
+        <!-- Stats Row -->
+        <div class="stats-row">
+            <div class="stat-card" id="statStatus">
+                <div class="label">Status</div>
+                <div class="value">-</div>
             </div>
-
-            <div class="action-bar">
-                <button class="btn primary" id="btn-start" onclick="startService()">Start</button>
-                <button class="btn" id="btn-stop" onclick="stopService()" disabled>Stop</button>
-                <button class="btn" id="btn-restart" onclick="restartService()" disabled>Restart</button>
-                <button class="btn" onclick="createBackup()">Backup</button>
+            <div class="stat-card">
+                <div class="label">Runtime</div>
+                <div class="value" id="statRuntime">-</div>
             </div>
-
-            <div class="tabs">
-                <button class="tab active" data-tab="videos">Videos</button>
-                <button class="tab" data-tab="users">Users</button>
-                <button class="tab" data-tab="logs">Logs</button>
+            <div class="stat-card">
+                <div class="label">Videos</div>
+                <div class="value" id="statVideos">-</div>
             </div>
-
-            <div id="tab-videos" class="tab-content active">
-                <div id="videos-list"></div>
+            <div class="stat-card">
+                <div class="label">Storage</div>
+                <div class="value" id="statStorage">-</div>
             </div>
-
-            <div id="tab-users" class="tab-content">
-                <div class="action-bar"><button class="btn primary" onclick="showCreateUser()">Create User</button></div>
-                <div id="users-list"></div>
-            </div>
-
-            <div id="tab-logs" class="tab-content">
-                <div class="action-bar"><button class="btn" onclick="loadLogs()">Refresh</button></div>
-                <div id="log-viewer" class="log-viewer">Loading...</div>
+            <div class="stat-card">
+                <div class="label">Federation</div>
+                <div class="value" id="statFederation">-</div>
             </div>
         </div>
-    </div>
-    <button id="open-app-btn" class="open-app-btn hidden" onclick="openApp()">Open PeerTube</button>
+
+        <!-- Tabs -->
+        <div class="tabs">
+            <div class="tab active" onclick="showTab('videos')">Videos</div>
+            <div class="tab" onclick="showTab('channels')">Channels</div>
+            <div class="tab" onclick="showTab('users')">Users</div>
+            <div class="tab" onclick="showTab('federation')">Federation</div>
+            <div class="tab" onclick="showTab('transcoding')">Transcoding</div>
+            <div class="tab" onclick="showTab('plugins')">Plugins</div>
+            <div class="tab" onclick="showTab('logs')">Logs</div>
+        </div>
+
+        <!-- Videos Tab -->
+        <div id="tab-videos" class="tab-content active">
+            <div class="card">
+                <h3>Videos</h3>
+                <div id="videoGrid" class="video-grid">
+                    <p style="color: var(--text-dim);">Loading videos...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Channels Tab -->
+        <div id="tab-channels" class="tab-content">
+            <div class="card">
+                <h3>Create Channel</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Channel Name (URL)</label>
+                        <input type="text" id="channelName" placeholder="my_channel">
+                    </div>
+                    <div class="form-group">
+                        <label>Display Name</label>
+                        <input type="text" id="channelDisplayName" placeholder="My Channel">
+                    </div>
+                    <div class="form-group">
+                        <label>Description</label>
+                        <input type="text" id="channelDescription" placeholder="Channel description">
+                    </div>
+                    <div class="form-group" style="display: flex; align-items: flex-end;">
+                        <button class="btn btn-primary" onclick="createChannel()">Create</button>
+                    </div>
+                </div>
+            </div>
+            <div class="card">
+                <h3>Channels</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Display Name</th>
+                            <th>Followers</th>
+                            <th>Videos</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="channelsTable">
+                        <tr><td colspan="5">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Users Tab -->
+        <div id="tab-users" class="tab-content">
+            <div class="card">
+                <h3>Create User</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Username</label>
+                        <input type="text" id="userName" placeholder="username">
+                    </div>
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" id="userEmail" placeholder="user@example.com">
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" id="userPassword" placeholder="Min 8 characters">
+                    </div>
+                    <div class="form-group">
+                        <label>Role</label>
+                        <select id="userRole">
+                            <option value="2">User</option>
+                            <option value="1">Moderator</option>
+                            <option value="0">Admin</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="display: flex; align-items: flex-end;">
+                        <button class="btn btn-primary" onclick="createUser()">Create</button>
+                    </div>
+                </div>
+            </div>
+            <div class="card">
+                <h3>Users</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Username</th>
+                            <th>Email</th>
+                            <th>Role</th>
+                            <th>Videos</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="usersTable">
+                        <tr><td colspan="5">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Federation Tab -->
+        <div id="tab-federation" class="tab-content">
+            <div class="card">
+                <h3>Follow Instance</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Instance Host(s) (comma-separated)</label>
+                        <input type="text" id="followHosts" placeholder="video.example.com, peertube.social">
+                    </div>
+                    <div class="form-group" style="display: flex; align-items: flex-end;">
+                        <button class="btn btn-primary" onclick="followInstance()">Follow</button>
+                    </div>
+                </div>
+            </div>
+            <div class="card">
+                <h3>Following</h3>
+                <div id="followingList" class="peer-list">
+                    <p style="color: var(--text-dim);">Loading...</p>
+                </div>
+            </div>
+            <div class="card">
+                <h3>Followers</h3>
+                <div id="followersList" class="peer-list">
+                    <p style="color: var(--text-dim);">Loading...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Transcoding Tab -->
+        <div id="tab-transcoding" class="tab-content">
+            <div class="card">
+                <h3>Transcoding Settings</h3>
+                <form id="transcodingForm" onsubmit="saveTranscoding(event)">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="tcEnabled" checked> Enable Transcoding
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label>Threads</label>
+                            <input type="number" id="tcThreads" value="2" min="1" max="16">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="tcHLS" checked> Enable HLS
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="tcWebTorrent" checked> Enable WebTorrent
+                            </label>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Resolutions</label>
+                        <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                            <label class="checkbox-label"><input type="checkbox" id="res240" checked> 240p</label>
+                            <label class="checkbox-label"><input type="checkbox" id="res360" checked> 360p</label>
+                            <label class="checkbox-label"><input type="checkbox" id="res480" checked> 480p</label>
+                            <label class="checkbox-label"><input type="checkbox" id="res720" checked> 720p</label>
+                            <label class="checkbox-label"><input type="checkbox" id="res1080" checked> 1080p</label>
+                            <label class="checkbox-label"><input type="checkbox" id="res1440"> 1440p</label>
+                            <label class="checkbox-label"><input type="checkbox" id="res2160"> 2160p</label>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save Settings</button>
+                </form>
+            </div>
+            <div class="card">
+                <h3>Transcoding Queue</h3>
+                <div id="transcodingJobs">
+                    <p style="color: var(--text-dim);">Loading jobs...</p>
+                </div>
+            </div>
+            <div class="card">
+                <h3>Storage Usage</h3>
+                <div id="storageStats" class="storage-grid">
+                    <p style="color: var(--text-dim);">Loading...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Plugins Tab -->
+        <div id="tab-plugins" class="tab-content">
+            <div class="card">
+                <h3>Install Plugin</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>NPM Package Name</label>
+                        <input type="text" id="pluginNpm" placeholder="peertube-plugin-auth-ldap">
+                    </div>
+                    <div class="form-group" style="display: flex; align-items: flex-end;">
+                        <button class="btn btn-primary" onclick="installPlugin()">Install</button>
+                    </div>
+                </div>
+                <p style="color: var(--text-dim); font-size: 0.875rem; margin-top: 0.5rem;">
+                    Browse plugins at <a href="https://packages.joinpeertube.org" target="_blank" style="color: var(--peertube);">packages.joinpeertube.org</a>
+                </p>
+            </div>
+            <div class="card">
+                <h3>Installed Plugins</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Version</th>
+                            <th>Type</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="pluginsTable">
+                        <tr><td colspan="4">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Logs Tab -->
+        <div id="tab-logs" class="tab-content">
+            <div class="card">
+                <h3>Container Logs</h3>
+                <div style="margin-bottom: 1rem; display: flex; gap: 0.5rem; align-items: center;">
+                    <label>Lines:</label>
+                    <select id="logLines" onchange="loadLogs()">
+                        <option value="50">50</option>
+                        <option value="100" selected>100</option>
+                        <option value="200">200</option>
+                        <option value="500">500</option>
+                    </select>
+                    <button class="btn" onclick="loadLogs()">Refresh</button>
+                </div>
+                <div class="logs-container" id="logsContainer">Loading logs...</div>
+            </div>
+            <div class="card">
+                <h3>Maintenance</h3>
+                <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                    <button class="btn" onclick="restartPeerTube()">Restart Container</button>
+                    <button class="btn btn-danger" onclick="uninstallPeerTube()">Uninstall</button>
+                </div>
+            </div>
+        </div>
     </main>
 
     <script>
         const API = '/api/v1/peertube';
-        let containerIP = null;
+        let isRunning = false;
+        let containerStatus = 'not_installed';
+
+        function getToken() {
+            return localStorage.getItem('jwt_token') || localStorage.getItem('token') || '';
+        }
 
         async function api(endpoint, options = {}) {
-            const r = await fetch(API + endpoint, { ...options, headers: { 'Authorization': 'Bearer ' + localStorage.getItem('sbx_token'), 'Content-Type': 'application/json', ...options.headers } });
-            if (!r.ok) throw new Error(`HTTP ${r.status}`);
-            return r.json();
+            const token = getToken();
+            const headers = { 'Content-Type': 'application/json', ...options.headers };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+            const res = await fetch(API + endpoint, { ...options, headers, credentials: 'include' });
+            if (res.status === 401) {
+                window.location.href = '/portal/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+                throw new Error('Unauthorized');
+            }
+            return res.json();
         }
 
-        async function loadStatus() {
+        function showTab(name) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            const tabs = ['videos', 'channels', 'users', 'federation', 'transcoding', 'plugins', 'logs'];
+            const idx = tabs.indexOf(name);
+            if (idx >= 0) {
+                document.querySelectorAll('.tab')[idx].classList.add('active');
+            }
+            document.getElementById('tab-' + name).classList.add('active');
+
+            // Load tab-specific data
+            if (name === 'videos') loadVideos();
+            else if (name === 'channels') loadChannels();
+            else if (name === 'users') loadUsers();
+            else if (name === 'federation') { loadFollowing(); loadFollowers(); }
+            else if (name === 'transcoding') { loadTranscoding(); loadJobs(); loadStorage(); }
+            else if (name === 'plugins') loadPlugins();
+            else if (name === 'logs') loadLogs();
+        }
+
+        function toast(msg, type = 'success') {
+            const t = document.createElement('div');
+            t.className = 'toast toast-' + type;
+            t.textContent = msg;
+            document.body.appendChild(t);
+            setTimeout(() => t.remove(), 3000);
+        }
+
+        function getRoleName(role) {
+            const roles = { 0: 'Admin', 1: 'Moderator', 2: 'User' };
+            return roles[role] || 'User';
+        }
+
+        async function refresh() {
             try {
-                const d = await api('/status');
-                const badge = document.getElementById('status-badge');
-                if (!d.container_exists) {
-                    document.getElementById('install-section').classList.remove('hidden');
-                    document.getElementById('main-section').classList.add('hidden');
-                    badge.textContent = 'Not Installed'; badge.className = 'status-badge stopped';
-                    return;
-                }
-                document.getElementById('install-section').classList.add('hidden');
-                document.getElementById('main-section').classList.remove('hidden');
-                if (d.running) {
-                    badge.textContent = 'Running'; badge.className = 'status-badge running';
-                    document.getElementById('btn-start').disabled = true;
-                    document.getElementById('btn-stop').disabled = false;
-                    document.getElementById('btn-restart').disabled = false;
-                    containerIP = d.container_ip;
-                    document.getElementById('open-app-btn').classList.remove('hidden');
-                    loadStats(); loadVideos(); loadUsers();
+                const status = await api('/status');
+                containerStatus = status.container_status;
+                isRunning = status.container_status === 'running';
+
+                // Show/hide install banner
+                document.getElementById('installBanner').style.display =
+                    status.container_status === 'not_installed' ? 'block' : 'none';
+
+                // Update stats
+                const statEl = document.getElementById('statStatus');
+                statEl.querySelector('.value').textContent = status.container_status;
+                statEl.className = 'stat-card ' + (isRunning ? 'running' : 'stopped');
+
+                document.getElementById('statRuntime').textContent = status.runtime || 'none';
+                document.getElementById('statVideos').textContent = status.video_count || 0;
+                document.getElementById('statStorage').textContent = status.disk_usage || '-';
+                document.getElementById('statFederation').textContent = status.federation_enabled ? 'Enabled' : 'Disabled';
+
+                // Update toggle button
+                const btn = document.getElementById('btnToggle');
+                if (status.container_status === 'not_installed') {
+                    btn.textContent = 'Install';
+                    btn.className = 'btn btn-primary';
+                    btn.onclick = installPeerTube;
+                } else if (isRunning) {
+                    btn.textContent = 'Stop';
+                    btn.className = 'btn btn-danger';
+                    btn.onclick = () => toggleService();
                 } else {
-                    badge.textContent = 'Stopped'; badge.className = 'status-badge stopped';
-                    document.getElementById('btn-start').disabled = false;
-                    document.getElementById('btn-stop').disabled = true;
-                    document.getElementById('btn-restart').disabled = true;
-                    document.getElementById('open-app-btn').classList.add('hidden');
+                    btn.textContent = 'Start';
+                    btn.className = 'btn btn-success';
+                    btn.onclick = () => toggleService();
                 }
-                document.getElementById('storage-used').textContent = d.storage_used || '-';
-            } catch (e) { console.error(e); }
+
+                // Open PeerTube link
+                const openLink = document.getElementById('openPeerTube');
+                if (isRunning) {
+                    openLink.style.display = 'inline-flex';
+                    openLink.href = `http://${window.location.hostname}:${status.http_port}`;
+                } else {
+                    openLink.style.display = 'none';
+                }
+
+                // Load current tab data
+                const activeTab = document.querySelector('.tab.active').textContent.toLowerCase();
+                showTab(activeTab);
+
+            } catch (e) {
+                console.error(e);
+                toast('Failed to load status', 'error');
+            }
         }
 
-        async function loadStats() {
+        async function toggleService() {
+            const action = isRunning ? 'container/stop' : 'container/start';
             try {
-                const s = await api('/stats');
-                document.getElementById('users-count').textContent = s.users || 0;
-                document.getElementById('videos-count').textContent = s.videos || 0;
-                document.getElementById('views-count').textContent = s.views || 0;
-                document.getElementById('storage-used').textContent = s.storage || '-';
-            } catch (e) { console.error(e); }
+                document.getElementById('btnToggle').disabled = true;
+                document.getElementById('btnToggle').innerHTML = '<span class="spinner"></span>';
+                const res = await api('/' + action, { method: 'POST' });
+                if (res.success) {
+                    toast(isRunning ? 'PeerTube stopped!' : 'PeerTube started!');
+                } else {
+                    toast(res.error || 'Action failed', 'error');
+                }
+                await refresh();
+            } catch (e) {
+                toast('Action failed: ' + e.message, 'error');
+            } finally {
+                document.getElementById('btnToggle').disabled = false;
+            }
         }
 
+        async function installPeerTube() {
+            if (!confirm('Install PeerTube? This will download the Docker image (~1GB).')) return;
+            toast('Installing PeerTube... This may take several minutes.');
+            try {
+                const res = await api('/container/install', { method: 'POST' });
+                if (res.success) {
+                    toast('PeerTube installed! Starting...');
+                    await api('/container/start', { method: 'POST' });
+                    await refresh();
+                } else {
+                    toast(res.error || 'Install failed', 'error');
+                }
+            } catch (e) {
+                toast('Install failed: ' + e.message, 'error');
+            }
+        }
+
+        // Videos
         async function loadVideos() {
+            if (!isRunning) {
+                document.getElementById('videoGrid').innerHTML = '<p style="color: var(--text-dim);">Container not running</p>';
+                return;
+            }
             try {
-                const d = await api('/videos?limit=20');
-                document.getElementById('videos-list').innerHTML = (d.videos || []).map(v => `<div class="list-item"><div class="item-icon">🎬</div><div class="item-info"><div class="item-name">${v.name}</div><div class="item-meta">${v.views} views · ${v.likes} likes</div></div></div>`).join('') || '<p>No videos</p>';
-            } catch (e) { console.error(e); }
+                const data = await api('/videos?count=20');
+                const videos = data.videos || [];
+                if (videos.length === 0) {
+                    document.getElementById('videoGrid').innerHTML = '<p style="color: var(--text-dim);">No videos uploaded yet</p>';
+                } else {
+                    document.getElementById('videoGrid').innerHTML = videos.map(v => `
+                        <div class="video-card">
+                            <div class="video-thumb">${v.thumbnailPath ? `<img src="${v.thumbnailPath}" style="width:100%;height:100%;object-fit:cover;">` : '&#x1F4F9;'}</div>
+                            <div class="video-info">
+                                <h4>${v.name || v.id}</h4>
+                                <div class="meta">${v.views || 0} views</div>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            } catch (e) {
+                document.getElementById('videoGrid').innerHTML = '<p style="color: var(--error);">Error loading videos</p>';
+            }
         }
 
+        // Channels
+        async function loadChannels() {
+            if (!isRunning) return;
+            try {
+                const data = await api('/channels');
+                const channels = data.channels || [];
+                const tbody = document.getElementById('channelsTable');
+                if (channels.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5">No channels</td></tr>';
+                } else {
+                    tbody.innerHTML = channels.map(c => `
+                        <tr>
+                            <td>${c.name || c.displayName}</td>
+                            <td>${c.displayName || '-'}</td>
+                            <td>${c.followersCount || 0}</td>
+                            <td>${c.videosCount || 0}</td>
+                            <td><button class="btn btn-sm btn-danger" onclick="deleteChannel('${c.name}')">Delete</button></td>
+                        </tr>
+                    `).join('');
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function createChannel() {
+            const name = document.getElementById('channelName').value.trim();
+            const displayName = document.getElementById('channelDisplayName').value.trim();
+            const description = document.getElementById('channelDescription').value.trim();
+            if (!name || !displayName) return toast('Name and display name required', 'error');
+
+            try {
+                const res = await api('/channel', {
+                    method: 'POST',
+                    body: JSON.stringify({ name, display_name: displayName, description })
+                });
+                if (res.success) {
+                    toast('Channel created!');
+                    document.getElementById('channelName').value = '';
+                    document.getElementById('channelDisplayName').value = '';
+                    document.getElementById('channelDescription').value = '';
+                    loadChannels();
+                } else {
+                    toast(res.error || 'Failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function deleteChannel(name) {
+            if (!confirm(`Delete channel ${name}?`)) return;
+            try {
+                const res = await api('/channel/' + name, { method: 'DELETE' });
+                if (res.success) {
+                    toast('Channel deleted');
+                    loadChannels();
+                }
+            } catch (e) {
+                toast('Failed', 'error');
+            }
+        }
+
+        // Users
         async function loadUsers() {
+            if (!isRunning) return;
             try {
-                const d = await api('/users');
-                document.getElementById('users-list').innerHTML = (d.users || []).map(u => `<div class="list-item"><div class="item-icon">👤</div><div class="item-info"><div class="item-name">${u.username}</div><div class="item-meta">${u.email} · ${u.role}</div></div></div>`).join('') || '<p>No users</p>';
-            } catch (e) { console.error(e); }
+                const data = await api('/users');
+                const users = data.users || [];
+                const tbody = document.getElementById('usersTable');
+                if (users.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5">No users</td></tr>';
+                } else {
+                    tbody.innerHTML = users.map(u => `
+                        <tr>
+                            <td>${u.username}</td>
+                            <td>${u.email || '-'}</td>
+                            <td><span class="badge badge-info">${getRoleName(u.role)}</span></td>
+                            <td>${u.videosCount || 0}</td>
+                            <td><button class="btn btn-sm btn-danger" onclick="deleteUser(${u.id})">Delete</button></td>
+                        </tr>
+                    `).join('');
+                }
+            } catch (e) {
+                console.error(e);
+            }
         }
 
-        async function install(e) { e.preventDefault(); const domain = document.getElementById('install-domain').value; const email = document.getElementById('install-email').value; const btn = e.target.querySelector('button'); btn.disabled = true; btn.textContent = 'Installing...'; try { await api(`/install?domain=${encodeURIComponent(domain)}&admin_email=${encodeURIComponent(email)}`, { method: 'POST' }); await loadStatus(); } catch (err) { alert('Failed: ' + err.message); } finally { btn.disabled = false; btn.textContent = 'Install'; } }
-        async function startService() { document.getElementById('btn-start').disabled = true; try { await api('/start', { method: 'POST' }); await loadStatus(); } catch (e) { alert('Failed: ' + e.message); } }
-        async function stopService() { document.getElementById('btn-stop').disabled = true; try { await api('/stop', { method: 'POST' }); await loadStatus(); } catch (e) { alert('Failed: ' + e.message); } }
-        async function restartService() { document.getElementById('btn-restart').disabled = true; try { await api('/restart', { method: 'POST' }); await loadStatus(); } catch (e) { alert('Failed: ' + e.message); } }
+        async function createUser() {
+            const username = document.getElementById('userName').value.trim();
+            const email = document.getElementById('userEmail').value.trim();
+            const password = document.getElementById('userPassword').value;
+            const role = parseInt(document.getElementById('userRole').value);
 
-        function showCreateUser() { const u = prompt('Username:'); if (!u) return; const e = prompt('Email:'); if (!e) return; const p = prompt('Password (8+ chars):'); if (!p || p.length < 8) { alert('Password too short'); return; } createUser(u, e, p); }
-        async function createUser(u, e, p) { try { await api('/users', { method: 'POST', body: JSON.stringify({ username: u, email: e, password: p }) }); loadUsers(); } catch (err) { alert('Failed: ' + err.message); } }
+            if (!username || !email || !password) return toast('All fields required', 'error');
+            if (password.length < 8) return toast('Password must be 8+ characters', 'error');
 
-        async function loadLogs() { try { const d = await api('/logs?lines=200'); document.getElementById('log-viewer').textContent = d.logs?.join('\n') || 'No logs'; } catch (e) { document.getElementById('log-viewer').textContent = 'Error: ' + e.message; } }
-        async function createBackup() { try { const r = await api('/backup', { method: 'POST' }); alert(`Backup: ${r.file} (${r.size})`); } catch (e) { alert('Failed: ' + e.message); } }
-        function openApp() { if (containerIP) window.open(`http://${containerIP}:9000/`, '_blank'); }
+            try {
+                const res = await api('/user', {
+                    method: 'POST',
+                    body: JSON.stringify({ username, email, password, role })
+                });
+                if (res.success) {
+                    toast('User created!');
+                    document.getElementById('userName').value = '';
+                    document.getElementById('userEmail').value = '';
+                    document.getElementById('userPassword').value = '';
+                    loadUsers();
+                } else {
+                    toast(res.error || 'Failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
 
-        document.querySelectorAll('.tab').forEach(tab => { tab.addEventListener('click', () => { document.querySelectorAll('.tab').forEach(t => t.classList.remove('active')); document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active')); tab.classList.add('active'); document.getElementById('tab-' + tab.dataset.tab).classList.add('active'); if (tab.dataset.tab === 'logs') loadLogs(); }); });
-        if (window.matchMedia?.('(prefers-color-scheme: dark)').matches) document.body.classList.add('dark');
-        loadStatus(); setInterval(loadStatus, 30000);
+        async function deleteUser(id) {
+            if (!confirm('Delete this user?')) return;
+            try {
+                const res = await api('/user/' + id, { method: 'DELETE' });
+                if (res.success) {
+                    toast('User deleted');
+                    loadUsers();
+                }
+            } catch (e) {
+                toast('Failed', 'error');
+            }
+        }
+
+        // Federation
+        async function loadFollowing() {
+            if (!isRunning) return;
+            try {
+                const data = await api('/federation/following');
+                const following = data.following || [];
+                const list = document.getElementById('followingList');
+                if (following.length === 0) {
+                    list.innerHTML = '<p style="color: var(--text-dim);">Not following any instances</p>';
+                } else {
+                    list.innerHTML = following.map(f => `
+                        <div class="peer-item">
+                            <span class="host">${f.following?.host || f.host || '-'}</span>
+                            <span class="state badge badge-success">${f.state || 'accepted'}</span>
+                        </div>
+                    `).join('');
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function loadFollowers() {
+            if (!isRunning) return;
+            try {
+                const data = await api('/federation/followers');
+                const followers = data.followers || [];
+                const list = document.getElementById('followersList');
+                if (followers.length === 0) {
+                    list.innerHTML = '<p style="color: var(--text-dim);">No followers yet</p>';
+                } else {
+                    list.innerHTML = followers.map(f => `
+                        <div class="peer-item">
+                            <span class="host">${f.follower?.host || f.host || '-'}</span>
+                            <span class="state badge badge-success">${f.state || 'accepted'}</span>
+                        </div>
+                    `).join('');
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function followInstance() {
+            const input = document.getElementById('followHosts').value.trim();
+            if (!input) return toast('Enter instance host(s)', 'error');
+            const hosts = input.split(',').map(h => h.trim()).filter(h => h);
+
+            try {
+                const res = await api('/federation/follow', {
+                    method: 'POST',
+                    body: JSON.stringify({ hosts })
+                });
+                if (res.success) {
+                    toast('Follow request sent!');
+                    document.getElementById('followHosts').value = '';
+                    loadFollowing();
+                } else {
+                    toast(res.error || 'Failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        // Transcoding
+        async function loadTranscoding() {
+            try {
+                const data = await api('/transcoding/settings');
+                document.getElementById('tcEnabled').checked = data.enabled;
+                document.getElementById('tcThreads').value = data.threads || 2;
+                document.getElementById('tcHLS').checked = data.hls_enabled;
+                document.getElementById('tcWebTorrent').checked = data.webtorrent_enabled;
+
+                const res = data.resolutions || {};
+                document.getElementById('res240').checked = res['240p'] !== false;
+                document.getElementById('res360').checked = res['360p'] !== false;
+                document.getElementById('res480').checked = res['480p'] !== false;
+                document.getElementById('res720').checked = res['720p'] !== false;
+                document.getElementById('res1080').checked = res['1080p'] !== false;
+                document.getElementById('res1440').checked = res['1440p'] === true;
+                document.getElementById('res2160').checked = res['2160p'] === true;
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function saveTranscoding(e) {
+            e.preventDefault();
+            try {
+                const res = await api('/transcoding/settings', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        enabled: document.getElementById('tcEnabled').checked,
+                        threads: parseInt(document.getElementById('tcThreads').value),
+                        hls_enabled: document.getElementById('tcHLS').checked,
+                        webtorrent_enabled: document.getElementById('tcWebTorrent').checked,
+                        resolutions: {
+                            '240p': document.getElementById('res240').checked,
+                            '360p': document.getElementById('res360').checked,
+                            '480p': document.getElementById('res480').checked,
+                            '720p': document.getElementById('res720').checked,
+                            '1080p': document.getElementById('res1080').checked,
+                            '1440p': document.getElementById('res1440').checked,
+                            '2160p': document.getElementById('res2160').checked,
+                        }
+                    })
+                });
+                if (res.success) {
+                    toast('Transcoding settings saved! Restart to apply.');
+                }
+            } catch (e) {
+                toast('Failed', 'error');
+            }
+        }
+
+        async function loadJobs() {
+            if (!isRunning) return;
+            try {
+                const data = await api('/transcoding/jobs');
+                const jobs = data.jobs || [];
+                const container = document.getElementById('transcodingJobs');
+                if (jobs.length === 0) {
+                    container.innerHTML = '<p style="color: var(--text-dim);">No pending jobs</p>';
+                } else {
+                    container.innerHTML = jobs.map(j => `
+                        <div style="display: flex; justify-content: space-between; padding: 0.5rem; border-bottom: 1px solid var(--border);">
+                            <span>${j.type || 'transcoding'}</span>
+                            <span class="badge badge-${j.state === 'completed' ? 'success' : 'info'}">${j.state || 'pending'}</span>
+                        </div>
+                    `).join('');
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function loadStorage() {
+            try {
+                const data = await api('/storage/stats');
+                const stats = data.stats || {};
+                document.getElementById('storageStats').innerHTML = `
+                    <div class="storage-item">
+                        <div class="size">${stats.total || '-'}</div>
+                        <div class="label">Total</div>
+                    </div>
+                    <div class="storage-item">
+                        <div class="size">${stats.videos || '-'}</div>
+                        <div class="label">Videos</div>
+                    </div>
+                    <div class="storage-item">
+                        <div class="size">${stats.thumbnails || '-'}</div>
+                        <div class="label">Thumbnails</div>
+                    </div>
+                    <div class="storage-item">
+                        <div class="size">${stats.streaming_playlists || '-'}</div>
+                        <div class="label">HLS</div>
+                    </div>
+                `;
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        // Plugins
+        async function loadPlugins() {
+            if (!isRunning) return;
+            try {
+                const data = await api('/plugins');
+                const plugins = data.plugins || [];
+                const tbody = document.getElementById('pluginsTable');
+                if (plugins.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4">No plugins installed</td></tr>';
+                } else {
+                    tbody.innerHTML = plugins.map(p => `
+                        <tr>
+                            <td>${p.name}</td>
+                            <td>${p.version || '-'}</td>
+                            <td><span class="badge badge-info">${p.type || 'plugin'}</span></td>
+                            <td><button class="btn btn-sm btn-danger" onclick="uninstallPlugin('${p.npmName || p.name}')">Uninstall</button></td>
+                        </tr>
+                    `).join('');
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function installPlugin() {
+            const npmName = document.getElementById('pluginNpm').value.trim();
+            if (!npmName) return toast('Enter plugin NPM name', 'error');
+
+            toast('Installing plugin...');
+            try {
+                const res = await api('/plugin/install', {
+                    method: 'POST',
+                    body: JSON.stringify({ npm_name: npmName })
+                });
+                if (res.success) {
+                    toast('Plugin installed!');
+                    document.getElementById('pluginNpm').value = '';
+                    loadPlugins();
+                } else {
+                    toast(res.error || 'Failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function uninstallPlugin(name) {
+            if (!confirm(`Uninstall plugin ${name}?`)) return;
+            try {
+                const res = await api('/plugin/' + name, { method: 'DELETE' });
+                if (res.success) {
+                    toast('Plugin uninstalled');
+                    loadPlugins();
+                }
+            } catch (e) {
+                toast('Failed', 'error');
+            }
+        }
+
+        // Logs
+        async function loadLogs() {
+            const lines = document.getElementById('logLines').value;
+            try {
+                const data = await api('/logs?lines=' + lines);
+                document.getElementById('logsContainer').textContent = data.logs || 'No logs available';
+            } catch (e) {
+                document.getElementById('logsContainer').textContent = 'Error loading logs';
+            }
+        }
+
+        async function restartPeerTube() {
+            if (!confirm('Restart PeerTube container?')) return;
+            toast('Restarting...');
+            try {
+                const res = await api('/container/restart', { method: 'POST' });
+                if (res.success) {
+                    toast('PeerTube restarted');
+                    await refresh();
+                }
+            } catch (e) {
+                toast('Failed', 'error');
+            }
+        }
+
+        async function uninstallPeerTube() {
+            if (!confirm('Uninstall PeerTube? Container will be removed but data is preserved.')) return;
+            try {
+                const res = await api('/container/uninstall', { method: 'POST' });
+                if (res.success) {
+                    toast('PeerTube uninstalled');
+                    await refresh();
+                }
+            } catch (e) {
+                toast('Failed', 'error');
+            }
+        }
+
+        // Initialize
+        refresh();
+        setInterval(refresh, 30000);
     </script>
-    <script src="/shared/sidebar.js"></script>
 </body>
 </html>

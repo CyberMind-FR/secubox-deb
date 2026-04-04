@@ -1,18 +1,24 @@
 #!/bin/bash
 set -e
-
 case "$1" in
   configure)
-    # Create data directories
-    install -d -o secubox -g secubox -m 750 /var/lib/secubox/jitsi
-    install -d -o secubox -g secubox -m 750 /var/lib/secubox/jitsi/data
-
+    # Ensure secubox user exists
+    id -u secubox >/dev/null 2>&1 || \
+      adduser --system --group --no-create-home \
+        --home /var/lib/secubox --shell /usr/sbin/nologin secubox
+    # Create runtime directories
+    install -d -o secubox -g secubox -m 750 /run/secubox
+    install -d -o secubox -g secubox -m 750 /var/lib/secubox
+    # Create Jitsi data directory
+    install -d -o root -g root -m 755 /srv/jitsi
+    install -d -o root -g root -m 755 /srv/jitsi/recordings
+    # Ensure nginx secubox.d directory exists
+    install -d -m 755 /etc/nginx/secubox.d
     # Enable and start service
     systemctl daemon-reload
     systemctl enable secubox-jitsi.service
     systemctl start secubox-jitsi.service || true
-
-    # Reload nginx if installed
+    # Reload nginx to pick up new location
     systemctl reload nginx 2>/dev/null || true
     ;;
 esac

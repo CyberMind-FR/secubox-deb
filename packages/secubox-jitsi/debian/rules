@@ -3,14 +3,18 @@
 	dh $@
 
 override_dh_auto_install:
-	install -d $(CURDIR)/debian/secubox-jitsi/usr/lib/secubox/jitsi/api
-	install -m 644 api/main.py $(CURDIR)/debian/secubox-jitsi/usr/lib/secubox/jitsi/api/
-	touch $(CURDIR)/debian/secubox-jitsi/usr/lib/secubox/jitsi/api/__init__.py
-	install -d $(CURDIR)/debian/secubox-jitsi/usr/share/secubox/www/jitsi
-	install -m 644 www/jitsi/index.html $(CURDIR)/debian/secubox-jitsi/usr/share/secubox/www/jitsi/
-	install -d $(CURDIR)/debian/secubox-jitsi/etc/nginx/secubox.d
-	install -m 644 nginx/jitsi.conf $(CURDIR)/debian/secubox-jitsi/etc/nginx/secubox.d/
-	install -d $(CURDIR)/debian/secubox-jitsi/usr/share/secubox/menu.d
-	install -m 644 menu.d/809-jitsi.json $(CURDIR)/debian/secubox-jitsi/usr/share/secubox/menu.d/
-	install -d $(CURDIR)/debian/secubox-jitsi/usr/lib/systemd/system
-	install -m 644 debian/secubox-jitsi.service $(CURDIR)/debian/secubox-jitsi/usr/lib/systemd/system/
+	# API files
+	install -d debian/secubox-jitsi/usr/lib/secubox/jitsi/
+	cp -r api debian/secubox-jitsi/usr/lib/secubox/jitsi/
+	# Static www files
+	install -d debian/secubox-jitsi/usr/share/secubox/www
+	[ -d www ] && cp -r www/. debian/secubox-jitsi/usr/share/secubox/www/ || true
+	# Menu definitions
+	install -d debian/secubox-jitsi/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-jitsi/usr/share/secubox/menu.d/ || true
+	# Modular nginx config
+	install -d debian/secubox-jitsi/etc/nginx/secubox.d
+	[ -f nginx/jitsi.conf ] && cp nginx/jitsi.conf debian/secubox-jitsi/etc/nginx/secubox.d/ || true
+	# Systemd service
+	install -d debian/secubox-jitsi/usr/lib/systemd/system
+	[ -f systemd/secubox-jitsi.service ] && cp systemd/secubox-jitsi.service debian/secubox-jitsi/usr/lib/systemd/system/ || true

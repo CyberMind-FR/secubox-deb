@@ -1,10 +1,15 @@
-secubox-photoprism (1.0.0-1) bookworm; urgency=medium
+secubox-photoprism (1.0.0-1~bookworm1) bookworm; urgency=medium
 
-  * Initial release for SecuBox Debian
-  * FastAPI backend with LXC container management
-  * Theme-aware CRT-light frontend
-  * Photo library statistics
-  * Album and face management
-  * Backup and restore functionality
+  * Initial release.
+  * Features:
+    - Docker/Podman container management
+    - Library indexing and organization
+    - Face recognition toggle
+    - Album management
+    - Storage configuration
+    - Import workflow
+    - User management
+    - Backup/restore functionality
+    - CRT-light P31 phosphor theme
 
- -- SecuBox Team <team@secubox.in>  Sat, 28 Mar 2026 10:00:00 +0000
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Apr 2026 10:00:00 +0100

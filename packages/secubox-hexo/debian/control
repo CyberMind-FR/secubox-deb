@@ -1,14 +1,25 @@
 Source: secubox-hexo
 Section: web
 Priority: optional
-Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
-Standards-Version: 4.6.0
+Standards-Version: 4.6.2
 
 Package: secubox-hexo
 Architecture: all
-Depends: secubox-core, python3, python3-uvicorn, python3-fastapi, nginx
-Recommends: nodejs, npm
-Description: SecuBox Hexo Blog Generator
- Static blog generator management for SecuBox.
- Manage multiple Hexo blogs, posts, themes, and deployments.
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn
+Recommends: docker.io | podman
+Description: Hexo static blog generator management
+ SecuBox module for managing Hexo static site generator via Docker.
+ Provides blog creation, theme/plugin management, post editing,
+ and deployment to various targets.
+ .
+ Features:
+  - Multiple blog management
+  - Theme gallery and installation
+  - Plugin management (sitemap, RSS, etc.)
+  - Post editor with markdown preview
+  - Preview server with live reload
+  - Deploy to Git, rsync, SFTP
+ .
+ Provides FastAPI backend on /api/v1/hexo/ via Unix socket.

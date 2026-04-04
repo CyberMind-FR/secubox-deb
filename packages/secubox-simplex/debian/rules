@@ -3,14 +3,22 @@
 	dh $@
 
 override_dh_auto_install:
+	# API
 	install -d $(CURDIR)/debian/secubox-simplex/usr/lib/secubox/simplex/api
 	install -m 644 api/main.py $(CURDIR)/debian/secubox-simplex/usr/lib/secubox/simplex/api/
 	touch $(CURDIR)/debian/secubox-simplex/usr/lib/secubox/simplex/api/__init__.py
+	# Web UI
 	install -d $(CURDIR)/debian/secubox-simplex/usr/share/secubox/www/simplex
 	install -m 644 www/simplex/index.html $(CURDIR)/debian/secubox-simplex/usr/share/secubox/www/simplex/
+	# Nginx config
 	install -d $(CURDIR)/debian/secubox-simplex/etc/nginx/secubox.d
 	install -m 644 nginx/simplex.conf $(CURDIR)/debian/secubox-simplex/etc/nginx/secubox.d/
+	# Menu entry
 	install -d $(CURDIR)/debian/secubox-simplex/usr/share/secubox/menu.d
 	install -m 644 menu.d/816-simplex.json $(CURDIR)/debian/secubox-simplex/usr/share/secubox/menu.d/
+	# Systemd service
 	install -d $(CURDIR)/debian/secubox-simplex/usr/lib/systemd/system
 	install -m 644 debian/secubox-simplex.service $(CURDIR)/debian/secubox-simplex/usr/lib/systemd/system/
+	# Config directory
+	install -d $(CURDIR)/debian/secubox-simplex/etc/secubox/simplex
+	install -d $(CURDIR)/debian/secubox-simplex/etc/secubox/simplex/tls

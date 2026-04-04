@@ -3,250 +3,1142 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hexo - SecuBox</title>
+    <title>SecuBox - Hexo Static Blog Generator</title>
+    <link rel="stylesheet" href="/shared/sidebar.css">
     <link rel="stylesheet" href="/shared/crt-light.css">
-    <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
-        :root { --hexo-blue: #0e83cd; --hexo-light: #5bc0de; --hexo-dark: #0a5a8a; }
-        body.dark { --hexo-blue: #5bc0de; --hexo-light: #8ed4ed; --hexo-dark: #0e83cd; }
-        .accent { color: var(--hexo-blue); }
-        .accent-bg { background-color: var(--hexo-blue); }
-        .header { display: flex; justify-content: space-between; align-items: center; padding: 1rem; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
-        .header h1 { margin: 0; font-size: 1.5rem; }
-        .status-badge { padding: 0.25rem 0.75rem; border-radius: 1rem; font-size: 0.875rem; }
-        .status-badge.installed { background: var(--success-bg); color: var(--success); }
-        .status-badge.missing { background: var(--error-bg); color: var(--error); }
-        .action-bar { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
-        .btn { padding: 0.5rem 1rem; border: 1px solid var(--border); border-radius: 0.25rem; background: var(--surface); color: var(--text); cursor: pointer; font-size: 0.875rem; }
-        .btn:hover { background: var(--hover); }
-        .btn.primary { background: var(--hexo-blue); color: white; border-color: var(--hexo-blue); }
-        .btn.primary:hover { background: var(--hexo-dark); }
+        :root {
+            --p31-peak: #00dd44;
+            --p31-dim: #006622;
+            --p31-glow: rgba(0, 221, 68, 0.15);
+            --tube-light: #e8f5e9;
+            --tube-mid: #c8e6c9;
+            --tube-dark: #a5d6a7;
+            --text-primary: #1b5e20;
+            --text-secondary: #388e3c;
+            --text-dim: #66bb6a;
+            --surface: #f1f8e9;
+            --surface-alt: #dcedc8;
+            --border: #c5e1a5;
+            --error: #c62828;
+            --warning: #f57c00;
+            --success: #2e7d32;
+            --hexo: #fb923c;
+            --hexo-dark: #ea580c;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            background: linear-gradient(135deg, var(--tube-light) 0%, var(--tube-mid) 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+        }
+        body.crt-light { background: linear-gradient(135deg, var(--tube-light) 0%, var(--tube-mid) 100%); }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; max-width: calc(100% - 220px); }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid var(--hexo);
+        }
+        .header h1 { font-size: 1.5rem; color: var(--hexo); }
+        .header-actions { display: flex; gap: 0.5rem; }
+
+        /* Stats Row */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+            box-shadow: 0 2px 8px var(--p31-glow);
+        }
+        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
+        .stat-card .value { font-size: 1.25rem; font-weight: bold; color: var(--hexo-dark); margin-top: 0.25rem; }
+        .stat-card.running .value { color: var(--success); }
+        .stat-card.stopped .value { color: var(--error); }
+
+        /* Tabs */
+        .tabs { display: flex; gap: 0; margin-bottom: 1.5rem; border-bottom: 2px solid var(--border); }
+        .tab {
+            padding: 0.75rem 1.5rem;
+            cursor: pointer;
+            border: 1px solid transparent;
+            border-bottom: none;
+            border-radius: 8px 8px 0 0;
+            background: transparent;
+            color: var(--text-secondary);
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .tab:hover { background: var(--surface-alt); }
+        .tab.active {
+            background: var(--surface);
+            border-color: var(--border);
+            color: var(--hexo);
+            margin-bottom: -2px;
+            border-bottom: 2px solid var(--surface);
+        }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Cards */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 2px 8px var(--p31-glow);
+        }
+        .card h3 {
+            font-size: 1rem;
+            color: var(--hexo);
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            border: 1px solid var(--hexo);
+            background: var(--surface);
+            color: var(--hexo);
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .btn:hover { background: var(--hexo); color: white; }
+        .btn-primary { background: var(--hexo); color: white; }
+        .btn-primary:hover { background: var(--hexo-dark); }
+        .btn-danger { border-color: var(--error); color: var(--error); }
+        .btn-danger:hover { background: var(--error); color: white; }
+        .btn-success { border-color: var(--success); color: var(--success); }
+        .btn-success:hover { background: var(--success); color: white; }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.875rem; }
         .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .site-list { display: grid; gap: 1rem; }
-        .site-card { background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem; }
-        .site-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
-        .site-name { font-size: 1.25rem; font-weight: 600; }
-        .site-meta { font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.75rem; }
-        .site-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-        .post-list { margin-top: 0.5rem; max-height: 200px; overflow-y: auto; }
-        .post-item { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; border-bottom: 1px solid var(--border); font-size: 0.875rem; }
-        .post-item:last-child { border-bottom: none; }
-        .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
-        .modal.active { display: flex; }
-        .modal-content { background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1.5rem; width: 90%; max-width: 500px; max-height: 90vh; overflow-y: auto; }
-        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-        .modal-close { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-secondary); }
+
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+        th { color: var(--text-dim); font-weight: 500; font-size: 0.75rem; text-transform: uppercase; }
+        tr:hover { background: var(--surface-alt); }
+
+        /* Forms */
         .form-group { margin-bottom: 1rem; }
-        .form-group label { display: block; margin-bottom: 0.25rem; font-weight: 500; }
-        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 0.25rem; background: var(--surface); color: var(--text); }
-        .form-group textarea { min-height: 200px; font-family: monospace; }
-        .empty-state { text-align: center; padding: 3rem; color: var(--text-secondary); }
-        .badge { display: inline-block; padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem; background: var(--hexo-blue); color: white; }
-        .badge.deployed { background: var(--success); }
-        .hidden { display: none !important; }
+        .form-group label { display: block; margin-bottom: 0.25rem; color: var(--text-secondary); font-size: 0.875rem; }
+        input, select, textarea {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: white;
+            color: var(--text-primary);
+            font-family: inherit;
+        }
+        textarea { min-height: 200px; font-family: 'JetBrains Mono', monospace; font-size: 0.875rem; }
+        input:focus, select:focus, textarea:focus { outline: none; border-color: var(--hexo); box-shadow: 0 0 5px rgba(251, 146, 60, 0.3); }
+        .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
+
+        /* Badges */
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        .badge-success { background: #c8e6c9; color: #2e7d32; }
+        .badge-error { background: #ffcdd2; color: #c62828; }
+        .badge-warning { background: #ffe0b2; color: #e65100; }
+        .badge-info { background: #ffe4c4; color: #c2410c; }
+        .badge-draft { background: #e3e3e3; color: #666; }
+
+        /* Install Banner */
+        .install-banner {
+            background: linear-gradient(135deg, #fff7ed 0%, #fed7aa 100%);
+            border: 2px solid var(--hexo);
+            border-radius: 12px;
+            padding: 2rem;
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+        .install-banner h2 { color: var(--hexo-dark); margin-bottom: 1rem; }
+        .install-banner p { color: var(--text-secondary); margin-bottom: 1.5rem; }
+
+        /* Blog Cards */
+        .blog-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1rem;
+        }
+        .blog-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.25rem;
+            transition: all 0.2s;
+        }
+        .blog-card:hover { border-color: var(--hexo); box-shadow: 0 4px 12px rgba(251, 146, 60, 0.2); }
+        .blog-card h4 { color: var(--hexo); margin-bottom: 0.5rem; }
+        .blog-card .meta { color: var(--text-dim); font-size: 0.8rem; margin-bottom: 1rem; }
+        .blog-card .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
+        /* Theme Gallery */
+        .theme-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+        .theme-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+        }
+        .theme-card .icon { font-size: 2rem; margin-bottom: 0.5rem; }
+        .theme-card h4 { color: var(--text-primary); font-size: 0.9rem; margin-bottom: 0.25rem; }
+        .theme-card p { color: var(--text-dim); font-size: 0.75rem; margin-bottom: 0.5rem; }
+
+        /* Logs */
+        .logs-container {
+            background: #1a1a1a;
+            color: #fb923c;
+            padding: 1rem;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 0.8rem;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        /* Editor */
+        .editor-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+        .editor-pane { position: relative; }
+        .editor-pane h4 { margin-bottom: 0.5rem; color: var(--text-secondary); font-size: 0.875rem; }
+        .preview-pane {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 1rem;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal.active { display: flex; }
+        .modal-content {
+            background: var(--surface);
+            border-radius: 12px;
+            padding: 1.5rem;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+        .modal-header h3 { color: var(--hexo); }
+        .modal-close { cursor: pointer; font-size: 1.5rem; color: var(--text-dim); }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 1rem;
+            right: 1rem;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            color: white;
+            z-index: 1001;
+            animation: slideIn 0.3s ease;
+        }
+        .toast-success { background: var(--success); }
+        .toast-error { background: var(--error); }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        .spinner {
+            display: inline-block;
+            width: 1rem;
+            height: 1rem;
+            border: 2px solid var(--border);
+            border-top-color: var(--hexo);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        @media (max-width: 768px) {
+            .main { margin-left: 0; max-width: 100%; }
+            .stats-row { grid-template-columns: repeat(2, 1fr); }
+            .editor-container { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body class="crt-light">
     <nav class="sidebar" id="sidebar"></nav>
-    <main class="main-content">
-    <div class="container">
-        <div class="header">
-            <h1><span class="accent">Hexo</span> Blog Generator</h1>
-            <span id="status-badge" class="status-badge missing">Not Installed</span>
+    <script src="/shared/sidebar.js"></script>
+
+    <main class="main">
+        <header class="header">
+            <h1>Hexo Static Blog Generator</h1>
+            <div class="header-actions">
+                <button class="btn" onclick="refresh()">Refresh</button>
+                <button class="btn btn-primary" onclick="showCreateBlog()">New Blog</button>
+            </div>
+        </header>
+
+        <!-- Install Banner (shown when no container) -->
+        <div id="installBanner" class="install-banner" style="display: none;">
+            <h2>Welcome to Hexo</h2>
+            <p>Fast, simple and powerful blog framework. Create beautiful static sites in minutes.</p>
+            <button class="btn btn-primary" onclick="installHexo()">Setup Hexo Environment</button>
         </div>
 
-        <div id="install-section" class="hidden">
-            <div class="empty-state">
-                <p>Hexo CLI is not installed</p>
-                <button class="btn primary" onclick="installHexo()">Install Hexo CLI</button>
+        <!-- Stats Row -->
+        <div class="stats-row">
+            <div class="stat-card" id="statStatus">
+                <div class="label">Runtime</div>
+                <div class="value">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Blogs</div>
+                <div class="value" id="statBlogs">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Disk Usage</div>
+                <div class="value" id="statDisk">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Preview Port</div>
+                <div class="value" id="statPort">-</div>
             </div>
         </div>
 
-        <div id="main-section" class="hidden">
-            <div class="action-bar">
-                <button class="btn primary" onclick="showCreateSite()">New Site</button>
-                <button class="btn" onclick="loadSites()">Refresh</button>
-            </div>
-
-            <div id="sites-list" class="site-list"></div>
+        <!-- Tabs -->
+        <div class="tabs">
+            <div class="tab active" onclick="showTab('blogs')">Blogs</div>
+            <div class="tab" onclick="showTab('posts')">Posts</div>
+            <div class="tab" onclick="showTab('themes')">Themes</div>
+            <div class="tab" onclick="showTab('plugins')">Plugins</div>
+            <div class="tab" onclick="showTab('logs')">Logs</div>
+            <div class="tab" onclick="showTab('settings')">Settings</div>
         </div>
-    </div>
 
-    <!-- Create Site Modal -->
-    <div id="create-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Create New Site</h3>
-                <button class="modal-close" onclick="closeModal('create-modal')">&times;</button>
+        <!-- Blogs Tab -->
+        <div id="tab-blogs" class="tab-content active">
+            <div class="blog-grid" id="blogsGrid">
+                <div class="blog-card">Loading blogs...</div>
             </div>
-            <form onsubmit="createSite(event)">
-                <div class="form-group"><label>Site Name (slug)</label><input type="text" id="site-name" pattern="[a-z0-9-]+" required></div>
-                <div class="form-group"><label>Site Title</label><input type="text" id="site-title" required></div>
-                <div class="form-group"><label>Author</label><input type="text" id="site-author" value="SecuBox"></div>
-                <div class="form-group">
-                    <label>Theme</label>
-                    <select id="site-theme">
-                        <option value="landscape">Landscape (Default)</option>
-                        <option value="next">Next</option>
-                        <option value="butterfly">Butterfly</option>
-                        <option value="fluid">Fluid</option>
+        </div>
+
+        <!-- Posts Tab -->
+        <div id="tab-posts" class="tab-content">
+            <div class="card">
+                <h3>Blog Posts</h3>
+                <div class="form-group" style="max-width: 300px; margin-bottom: 1rem;">
+                    <label>Select Blog</label>
+                    <select id="postsBlogSelect" onchange="loadPosts()">
+                        <option value="">-- Select a blog --</option>
                     </select>
                 </div>
-                <button type="submit" class="btn primary" style="width: 100%;">Create Site</button>
+                <div style="margin-bottom: 1rem;">
+                    <button class="btn btn-primary" onclick="showCreatePost()">New Post</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>Date</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="postsTable">
+                        <tr><td colspan="4">Select a blog to view posts</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Themes Tab -->
+        <div id="tab-themes" class="tab-content">
+            <div class="card">
+                <h3>Available Themes</h3>
+                <p style="color: var(--text-dim); margin-bottom: 1rem;">Install themes from the Hexo ecosystem. Select a blog first to install.</p>
+                <div class="form-group" style="max-width: 300px; margin-bottom: 1rem;">
+                    <label>Install to Blog</label>
+                    <select id="themesBlogSelect">
+                        <option value="">-- Select a blog --</option>
+                    </select>
+                </div>
+                <div class="theme-grid" id="themesGrid">
+                    Loading themes...
+                </div>
+            </div>
+        </div>
+
+        <!-- Plugins Tab -->
+        <div id="tab-plugins" class="tab-content">
+            <div class="card">
+                <h3>Plugins</h3>
+                <div class="form-group" style="max-width: 300px; margin-bottom: 1rem;">
+                    <label>Select Blog</label>
+                    <select id="pluginsBlogSelect" onchange="loadInstalledPlugins()">
+                        <option value="">-- Select a blog --</option>
+                    </select>
+                </div>
+                <div style="margin-bottom: 1.5rem;">
+                    <h4 style="margin-bottom: 0.5rem; color: var(--text-secondary);">Installed Plugins</h4>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Plugin</th>
+                                <th>Version</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="installedPlugins">
+                            <tr><td colspan="3">Select a blog</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div>
+                    <h4 style="margin-bottom: 0.5rem; color: var(--text-secondary);">Available Plugins</h4>
+                    <div id="availablePlugins">Loading...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Logs Tab -->
+        <div id="tab-logs" class="tab-content">
+            <div class="card">
+                <h3>Container Logs</h3>
+                <div style="margin-bottom: 1rem; display: flex; gap: 0.5rem; align-items: center;">
+                    <label>Lines:</label>
+                    <select id="logLines" onchange="loadLogs()">
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                        <option value="200">200</option>
+                    </select>
+                    <button class="btn" onclick="loadLogs()">Refresh</button>
+                </div>
+                <div class="logs-container" id="logsContainer">Loading logs...</div>
+            </div>
+        </div>
+
+        <!-- Settings Tab -->
+        <div id="tab-settings" class="tab-content">
+            <div class="card">
+                <h3>Configuration</h3>
+                <form id="settingsForm" onsubmit="saveSettings(event)">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Preview Port</label>
+                            <input type="number" id="cfgPort" value="4000" min="1024" max="65535">
+                        </div>
+                        <div class="form-group">
+                            <label>Blogs Path</label>
+                            <input type="text" id="cfgBlogsPath" value="/srv/hexo/blogs">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Docker Image</label>
+                            <input type="text" id="cfgImage" value="node:20-alpine">
+                        </div>
+                        <div class="form-group">
+                            <label>Default Theme</label>
+                            <input type="text" id="cfgDefaultTheme" value="landscape">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save Settings</button>
+                </form>
+            </div>
+        </div>
+    </main>
+
+    <!-- Create Blog Modal -->
+    <div class="modal" id="createBlogModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Create New Blog</h3>
+                <span class="modal-close" onclick="closeModal('createBlogModal')">&times;</span>
+            </div>
+            <form onsubmit="createBlog(event)">
+                <div class="form-group">
+                    <label>Blog Name (slug)</label>
+                    <input type="text" id="newBlogName" required pattern="[a-z0-9-]+" placeholder="my-blog">
+                    <small style="color: var(--text-dim);">Lowercase letters, numbers, and hyphens only</small>
+                </div>
+                <div class="form-group">
+                    <label>Blog Title</label>
+                    <input type="text" id="newBlogTitle" required placeholder="My Awesome Blog">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Author</label>
+                        <input type="text" id="newBlogAuthor" placeholder="Your Name">
+                    </div>
+                    <div class="form-group">
+                        <label>Language</label>
+                        <select id="newBlogLanguage">
+                            <option value="en">English</option>
+                            <option value="fr">French</option>
+                            <option value="de">German</option>
+                            <option value="es">Spanish</option>
+                            <option value="zh-CN">Chinese (Simplified)</option>
+                            <option value="ja">Japanese</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                    <button type="button" class="btn" onclick="closeModal('createBlogModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create Blog</button>
+                </div>
             </form>
         </div>
     </div>
 
     <!-- Create Post Modal -->
-    <div id="post-modal" class="modal">
+    <div class="modal" id="createPostModal">
         <div class="modal-content">
             <div class="modal-header">
                 <h3>Create New Post</h3>
-                <button class="modal-close" onclick="closeModal('post-modal')">&times;</button>
+                <span class="modal-close" onclick="closeModal('createPostModal')">&times;</span>
             </div>
             <form onsubmit="createPost(event)">
-                <input type="hidden" id="post-site">
-                <div class="form-group"><label>Title</label><input type="text" id="post-title" required></div>
-                <div class="form-group"><label>Tags (comma-separated)</label><input type="text" id="post-tags"></div>
-                <div class="form-group"><label>Categories (comma-separated)</label><input type="text" id="post-cats"></div>
-                <div class="form-group"><label>Content (Markdown)</label><textarea id="post-content" placeholder="Write your post in Markdown..."></textarea></div>
-                <button type="submit" class="btn primary" style="width: 100%;">Create Post</button>
+                <div class="form-group">
+                    <label>Title</label>
+                    <input type="text" id="newPostTitle" required placeholder="My First Post">
+                </div>
+                <div class="form-group">
+                    <label>Slug (URL-friendly name, optional)</label>
+                    <input type="text" id="newPostSlug" pattern="[a-z0-9-]+" placeholder="my-first-post">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Tags (comma-separated)</label>
+                        <input type="text" id="newPostTags" placeholder="tech, tutorial">
+                    </div>
+                    <div class="form-group">
+                        <label>Categories (comma-separated)</label>
+                        <input type="text" id="newPostCategories" placeholder="Blog, Tech">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="newPostDraft"> Save as Draft
+                    </label>
+                </div>
+                <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                    <button type="button" class="btn" onclick="closeModal('createPostModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create Post</button>
+                </div>
             </form>
         </div>
     </div>
-    </main>
+
+    <!-- Edit Post Modal -->
+    <div class="modal" id="editPostModal">
+        <div class="modal-content" style="max-width: 900px;">
+            <div class="modal-header">
+                <h3>Edit Post: <span id="editPostTitle"></span></h3>
+                <span class="modal-close" onclick="closeModal('editPostModal')">&times;</span>
+            </div>
+            <div class="editor-container">
+                <div class="editor-pane">
+                    <h4>Markdown</h4>
+                    <textarea id="postEditor" onkeyup="updatePreview()"></textarea>
+                </div>
+                <div class="editor-pane">
+                    <h4>Preview</h4>
+                    <div class="preview-pane" id="postPreview"></div>
+                </div>
+            </div>
+            <div style="display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem;">
+                <button type="button" class="btn" onclick="closeModal('editPostModal')">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="savePost()">Save</button>
+            </div>
+        </div>
+    </div>
 
     <script>
         const API = '/api/v1/hexo';
+        let currentBlog = null;
+        let currentPostFilename = null;
+        let blogs = [];
 
-        async function api(endpoint, options = {}) {
-            const r = await fetch(API + endpoint, { ...options, headers: { 'Authorization': 'Bearer ' + localStorage.getItem('sbx_token'), 'Content-Type': 'application/json', ...options.headers } });
-            if (!r.ok) throw new Error(`HTTP ${r.status}`);
-            return r.json();
+        function getToken() {
+            return localStorage.getItem('jwt_token') || localStorage.getItem('token') || '';
         }
 
-        async function loadStatus() {
-            try {
-                const d = await api('/status');
-                const badge = document.getElementById('status-badge');
-                if (d.installed) {
-                    badge.textContent = 'Installed'; badge.className = 'status-badge installed';
-                    document.getElementById('install-section').classList.add('hidden');
-                    document.getElementById('main-section').classList.remove('hidden');
-                    loadSites();
-                } else {
-                    badge.textContent = 'Not Installed'; badge.className = 'status-badge missing';
-                    document.getElementById('install-section').classList.remove('hidden');
-                    document.getElementById('main-section').classList.add('hidden');
+        async function api(endpoint, options = {}) {
+            const token = getToken();
+            const headers = { 'Content-Type': 'application/json', ...options.headers };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+            const res = await fetch(API + endpoint, { ...options, headers, credentials: 'include' });
+            if (res.status === 401) {
+                window.location.href = '/portal/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+                throw new Error('Unauthorized');
+            }
+            return res.json();
+        }
+
+        function showTab(name) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            const tabs = ['blogs', 'posts', 'themes', 'plugins', 'logs', 'settings'];
+            document.querySelector(`.tab:nth-child(${tabs.indexOf(name)+1})`).classList.add('active');
+            document.getElementById('tab-' + name).classList.add('active');
+            if (name === 'logs') loadLogs();
+            if (name === 'themes') loadThemes();
+            if (name === 'plugins') loadAvailablePlugins();
+        }
+
+        function toast(msg, type = 'success') {
+            const t = document.createElement('div');
+            t.className = 'toast toast-' + type;
+            t.textContent = msg;
+            document.body.appendChild(t);
+            setTimeout(() => t.remove(), 3000);
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('active');
+        }
+
+        function showModal(id) {
+            document.getElementById(id).classList.add('active');
+        }
+
+        function updateBlogSelects() {
+            const selects = ['postsBlogSelect', 'themesBlogSelect', 'pluginsBlogSelect'];
+            selects.forEach(id => {
+                const select = document.getElementById(id);
+                const currentVal = select.value;
+                select.innerHTML = '<option value="">-- Select a blog --</option>';
+                blogs.forEach(b => {
+                    select.innerHTML += `<option value="${b.name}">${b.title || b.name}</option>`;
+                });
+                if (currentVal && blogs.find(b => b.name === currentVal)) {
+                    select.value = currentVal;
                 }
-            } catch (e) { console.error(e); }
+            });
+        }
+
+        async function refresh() {
+            try {
+                const status = await api('/status');
+                blogs = status.blogs || [];
+
+                // Show/hide install banner
+                document.getElementById('installBanner').style.display =
+                    !status.docker_available ? 'block' : 'none';
+
+                // Update stats
+                const statEl = document.getElementById('statStatus');
+                statEl.querySelector('.value').textContent = status.runtime || 'none';
+
+                document.getElementById('statBlogs').textContent = status.blog_count || 0;
+                document.getElementById('statDisk').textContent = status.disk_usage || '-';
+                document.getElementById('statPort').textContent = status.preview_port || 4000;
+
+                // Update blogs grid
+                const grid = document.getElementById('blogsGrid');
+                if (blogs.length === 0) {
+                    grid.innerHTML = '<div class="blog-card"><p>No blogs yet. Create one to get started!</p></div>';
+                } else {
+                    grid.innerHTML = blogs.map(b => `
+                        <div class="blog-card">
+                            <h4>${b.title || b.name}</h4>
+                            <div class="meta">
+                                Theme: ${b.theme} | Posts: ${b.posts}
+                            </div>
+                            <div class="actions">
+                                <button class="btn btn-sm" onclick="openBlog('${b.name}')">Manage</button>
+                                <button class="btn btn-sm" onclick="generateBlog('${b.name}')">Generate</button>
+                                <button class="btn btn-sm" onclick="startPreview('${b.name}')">Preview</button>
+                                <button class="btn btn-sm btn-danger" onclick="deleteBlog('${b.name}')">Delete</button>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+
+                // Update blog selects
+                updateBlogSelects();
+
+                // Load settings
+                document.getElementById('cfgPort').value = status.preview_port || 4000;
+                document.getElementById('cfgBlogsPath').value = status.blogs_path || '/srv/hexo/blogs';
+                document.getElementById('cfgImage').value = status.image || 'node:20-alpine';
+                document.getElementById('cfgDefaultTheme').value = status.default_theme || 'landscape';
+
+            } catch (e) {
+                console.error(e);
+                toast('Failed to load status', 'error');
+            }
         }
 
         async function installHexo() {
-            const btn = event.target; btn.disabled = true; btn.textContent = 'Installing...';
+            toast('Setting up Hexo environment... This may take a few minutes.');
             try {
-                await api('/install', { method: 'POST' });
-                await loadStatus();
-            } catch (e) { alert('Failed: ' + e.message); }
-            finally { btn.disabled = false; btn.textContent = 'Install Hexo CLI'; }
-        }
-
-        async function loadSites() {
-            try {
-                const d = await api('/sites');
-                const list = document.getElementById('sites-list');
-                if (!d.sites || d.sites.length === 0) {
-                    list.innerHTML = '<div class="empty-state"><p>No sites yet. Create your first blog!</p></div>';
-                    return;
+                const res = await api('/container/install', { method: 'POST' });
+                if (res.success) {
+                    toast('Hexo environment ready!');
+                    await refresh();
+                } else {
+                    toast(res.error || 'Setup failed', 'error');
                 }
-                list.innerHTML = d.sites.map(s => `
-                    <div class="site-card">
-                        <div class="site-header">
-                            <span class="site-name">${s.title}</span>
-                            ${s.deployed ? '<span class="badge deployed">Deployed</span>' : '<span class="badge">Draft</span>'}
-                        </div>
-                        <div class="site-meta">${s.post_count} posts · Theme: ${s.theme} · <code>${s.name}</code></div>
-                        <div class="site-actions">
-                            <button class="btn" onclick="showCreatePost('${s.name}')">New Post</button>
-                            <button class="btn" onclick="generateSite('${s.name}')">Generate</button>
-                            <button class="btn primary" onclick="deploySite('${s.name}')">Deploy</button>
-                            ${s.deployed ? `<button class="btn" onclick="window.open('/hexo-sites/${s.name}/', '_blank')">View</button>` : ''}
-                            <button class="btn" onclick="deleteSite('${s.name}')" style="color: var(--error);">Delete</button>
-                        </div>
-                        <div class="post-list" id="posts-${s.name}"></div>
-                    </div>
-                `).join('');
-                d.sites.forEach(s => loadPosts(s.name));
-            } catch (e) { console.error(e); }
+            } catch (e) {
+                toast('Setup failed: ' + e.message, 'error');
+            }
         }
 
-        async function loadPosts(site) {
-            try {
-                const d = await api(`/sites/${site}/posts`);
-                const el = document.getElementById(`posts-${site}`);
-                if (!d.posts || d.posts.length === 0) { el.innerHTML = '<div style="padding:0.5rem;color:var(--text-secondary);font-size:0.875rem;">No posts yet</div>'; return; }
-                el.innerHTML = d.posts.slice(0, 5).map(p => `<div class="post-item"><span>${p.title}</span><span>${p.date?.split(' ')[0] || ''}</span></div>`).join('');
-            } catch (e) { console.error(e); }
+        function showCreateBlog() {
+            document.getElementById('newBlogName').value = '';
+            document.getElementById('newBlogTitle').value = '';
+            document.getElementById('newBlogAuthor').value = '';
+            document.getElementById('newBlogLanguage').value = 'en';
+            showModal('createBlogModal');
         }
 
-        function showCreateSite() { document.getElementById('create-modal').classList.add('active'); }
-        function showCreatePost(site) { document.getElementById('post-site').value = site; document.getElementById('post-modal').classList.add('active'); }
-        function closeModal(id) { document.getElementById(id).classList.remove('active'); }
-
-        async function createSite(e) {
+        async function createBlog(e) {
             e.preventDefault();
-            const btn = e.target.querySelector('button'); btn.disabled = true;
+            const data = {
+                name: document.getElementById('newBlogName').value.trim(),
+                title: document.getElementById('newBlogTitle').value.trim(),
+                author: document.getElementById('newBlogAuthor').value.trim(),
+                language: document.getElementById('newBlogLanguage').value,
+            };
+
+            toast('Creating blog... This may take a minute.');
+            closeModal('createBlogModal');
+
             try {
-                await api('/sites', { method: 'POST', body: JSON.stringify({
-                    name: document.getElementById('site-name').value,
-                    title: document.getElementById('site-title').value,
-                    author: document.getElementById('site-author').value,
-                    theme: document.getElementById('site-theme').value
-                })});
-                closeModal('create-modal'); loadSites();
-            } catch (err) { alert('Failed: ' + err.message); }
-            finally { btn.disabled = false; }
+                const res = await api('/blog/create', {
+                    method: 'POST',
+                    body: JSON.stringify(data)
+                });
+                if (res.success) {
+                    toast('Blog created successfully!');
+                    await refresh();
+                } else {
+                    toast(res.error || 'Creation failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function deleteBlog(name) {
+            if (!confirm(`Delete blog "${name}"? This cannot be undone.`)) return;
+
+            try {
+                const res = await api('/blog/' + name, { method: 'DELETE' });
+                if (res.success) {
+                    toast('Blog deleted');
+                    await refresh();
+                } else {
+                    toast(res.error || 'Delete failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        function openBlog(name) {
+            currentBlog = name;
+            document.getElementById('postsBlogSelect').value = name;
+            showTab('posts');
+            loadPosts();
+        }
+
+        async function generateBlog(name) {
+            toast('Generating static files...');
+            try {
+                const res = await api(`/blog/${name}/generate`, { method: 'POST' });
+                if (res.success) {
+                    toast('Blog generated successfully!');
+                } else {
+                    toast(res.error || 'Generation failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function startPreview(name) {
+            toast('Starting preview server...');
+            try {
+                const res = await api(`/blog/${name}/preview/start`, { method: 'POST' });
+                if (res.success) {
+                    toast('Preview running at: ' + res.url);
+                    window.open(`http://${window.location.hostname}:${res.port}`, '_blank');
+                } else {
+                    toast(res.error || 'Preview failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        // Posts
+        async function loadPosts() {
+            const blog = document.getElementById('postsBlogSelect').value;
+            const tbody = document.getElementById('postsTable');
+
+            if (!blog) {
+                tbody.innerHTML = '<tr><td colspan="4">Select a blog to view posts</td></tr>';
+                return;
+            }
+
+            currentBlog = blog;
+
+            try {
+                const data = await api(`/blog/${blog}/posts`);
+                const posts = data.posts || [];
+
+                if (posts.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4">No posts yet. Create one!</td></tr>';
+                } else {
+                    tbody.innerHTML = posts.map(p => `
+                        <tr>
+                            <td>${p.title}</td>
+                            <td>${p.date || '-'}</td>
+                            <td>${p.draft ? '<span class="badge badge-draft">Draft</span>' : '<span class="badge badge-success">Published</span>'}</td>
+                            <td>
+                                <button class="btn btn-sm" onclick="editPost('${p.filename}')">Edit</button>
+                                ${p.draft ? `<button class="btn btn-sm btn-success" onclick="publishPost('${p.filename}')">Publish</button>` : ''}
+                                <button class="btn btn-sm btn-danger" onclick="deletePost('${p.filename}')">Delete</button>
+                            </td>
+                        </tr>
+                    `).join('');
+                }
+            } catch (e) {
+                tbody.innerHTML = '<tr><td colspan="4">Error loading posts</td></tr>';
+            }
+        }
+
+        function showCreatePost() {
+            if (!currentBlog) {
+                toast('Please select a blog first', 'error');
+                return;
+            }
+            document.getElementById('newPostTitle').value = '';
+            document.getElementById('newPostSlug').value = '';
+            document.getElementById('newPostTags').value = '';
+            document.getElementById('newPostCategories').value = '';
+            document.getElementById('newPostDraft').checked = false;
+            showModal('createPostModal');
         }
 
         async function createPost(e) {
             e.preventDefault();
-            const btn = e.target.querySelector('button'); btn.disabled = true;
-            const site = document.getElementById('post-site').value;
+            const data = {
+                title: document.getElementById('newPostTitle').value.trim(),
+                slug: document.getElementById('newPostSlug').value.trim(),
+                tags: document.getElementById('newPostTags').value.split(',').map(t => t.trim()).filter(t => t),
+                categories: document.getElementById('newPostCategories').value.split(',').map(c => c.trim()).filter(c => c),
+                draft: document.getElementById('newPostDraft').checked,
+            };
+
+            closeModal('createPostModal');
+
             try {
-                await api(`/sites/${site}/posts`, { method: 'POST', body: JSON.stringify({
-                    site: site,
-                    title: document.getElementById('post-title').value,
-                    content: document.getElementById('post-content').value,
-                    tags: document.getElementById('post-tags').value.split(',').map(t => t.trim()).filter(Boolean),
-                    categories: document.getElementById('post-cats').value.split(',').map(c => c.trim()).filter(Boolean)
-                })});
-                closeModal('post-modal'); loadPosts(site);
-            } catch (err) { alert('Failed: ' + err.message); }
-            finally { btn.disabled = false; }
+                const res = await api(`/blog/${currentBlog}/post`, {
+                    method: 'POST',
+                    body: JSON.stringify(data)
+                });
+                if (res.success) {
+                    toast('Post created!');
+                    await loadPosts();
+                    editPost(res.filename);
+                } else {
+                    toast(res.error || 'Creation failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
         }
 
-        async function generateSite(name) {
-            if (!confirm(`Generate static files for ${name}?`)) return;
-            try { await api(`/sites/${name}/generate`, { method: 'POST' }); alert('Generated successfully!'); } catch (e) { alert('Failed: ' + e.message); }
-        }
-
-        async function deploySite(name) {
-            if (!confirm(`Deploy ${name} to web?`)) return;
+        async function editPost(filename) {
+            currentPostFilename = filename;
             try {
-                const r = await api(`/sites/${name}/deploy`, { method: 'POST' });
-                alert(r.message || 'Deployed!'); loadSites();
-            } catch (e) { alert('Failed: ' + e.message); }
+                const data = await api(`/blog/${currentBlog}/post/${filename}`);
+                document.getElementById('editPostTitle').textContent = filename;
+                document.getElementById('postEditor').value = data.content;
+                updatePreview();
+                showModal('editPostModal');
+            } catch (e) {
+                toast('Failed to load post', 'error');
+            }
         }
 
-        async function deleteSite(name) {
-            if (!confirm(`Delete site ${name}? This cannot be undone.`)) return;
-            try { await api(`/sites/${name}`, { method: 'DELETE' }); loadSites(); } catch (e) { alert('Failed: ' + e.message); }
+        function updatePreview() {
+            const content = document.getElementById('postEditor').value;
+            // Simple markdown rendering (just for preview)
+            let html = content
+                .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+                .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+                .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+                .replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>')
+                .replace(/\*(.*)\*/gim, '<em>$1</em>')
+                .replace(/`([^`]+)`/gim, '<code>$1</code>')
+                .replace(/\n/gim, '<br>');
+            document.getElementById('postPreview').innerHTML = html;
         }
 
-        document.querySelectorAll('.modal').forEach(m => m.addEventListener('click', e => { if (e.target === m) closeModal(m.id); }));
-        if (window.matchMedia?.('(prefers-color-scheme: dark)').matches) document.body.classList.add('dark');
-        loadStatus();
+        async function savePost() {
+            try {
+                const res = await api(`/blog/${currentBlog}/post/${currentPostFilename}`, {
+                    method: 'PUT',
+                    body: JSON.stringify({ content: document.getElementById('postEditor').value })
+                });
+                if (res.success) {
+                    toast('Post saved!');
+                    closeModal('editPostModal');
+                } else {
+                    toast(res.error || 'Save failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function publishPost(filename) {
+            try {
+                const res = await api(`/blog/${currentBlog}/post/${filename}/publish`, { method: 'POST' });
+                if (res.success) {
+                    toast('Post published!');
+                    await loadPosts();
+                } else {
+                    toast(res.error || 'Publish failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function deletePost(filename) {
+            if (!confirm(`Delete post "${filename}"?`)) return;
+            try {
+                const res = await api(`/blog/${currentBlog}/post/${filename}`, { method: 'DELETE' });
+                if (res.success) {
+                    toast('Post deleted');
+                    await loadPosts();
+                } else {
+                    toast(res.error || 'Delete failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        // Themes
+        async function loadThemes() {
+            try {
+                const data = await api('/themes');
+                const grid = document.getElementById('themesGrid');
+                grid.innerHTML = (data.themes || []).map(t => `
+                    <div class="theme-card">
+                        <div class="icon">&#127912;</div>
+                        <h4>${t.name}</h4>
+                        <p>${t.description}</p>
+                        <button class="btn btn-sm" onclick="installTheme('${t.name}', '${t.repo}')">Install</button>
+                    </div>
+                `).join('');
+            } catch (e) {
+                document.getElementById('themesGrid').innerHTML = 'Failed to load themes';
+            }
+        }
+
+        async function installTheme(name, repo) {
+            const blog = document.getElementById('themesBlogSelect').value;
+            if (!blog) {
+                toast('Please select a blog first', 'error');
+                return;
+            }
+
+            toast('Installing theme...');
+            try {
+                const res = await api(`/blog/${blog}/theme/install`, {
+                    method: 'POST',
+                    body: JSON.stringify({ name, source: repo })
+                });
+                if (res.success) {
+                    toast('Theme installed! Don\'t forget to switch to it in settings.');
+                } else {
+                    toast(res.error || 'Install failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        // Plugins
+        async function loadAvailablePlugins() {
+            try {
+                const data = await api('/plugins');
+                const container = document.getElementById('availablePlugins');
+                container.innerHTML = (data.plugins || []).map(p => `
+                    <div style="display: inline-block; margin: 0.25rem;">
+                        <button class="btn btn-sm" onclick="installPlugin('${p.name}')" title="${p.description}">
+                            ${p.name}
+                        </button>
+                    </div>
+                `).join('');
+            } catch (e) {
+                document.getElementById('availablePlugins').innerHTML = 'Failed to load plugins';
+            }
+        }
+
+        async function loadInstalledPlugins() {
+            const blog = document.getElementById('pluginsBlogSelect').value;
+            const tbody = document.getElementById('installedPlugins');
+
+            if (!blog) {
+                tbody.innerHTML = '<tr><td colspan="3">Select a blog</td></tr>';
+                return;
+            }
+
+            try {
+                const data = await api(`/blog/${blog}/plugins`);
+                const plugins = data.plugins || [];
+
+                if (plugins.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="3">No plugins installed</td></tr>';
+                } else {
+                    tbody.innerHTML = plugins.map(p => `
+                        <tr>
+                            <td>${p.name}</td>
+                            <td>${p.version}</td>
+                            <td>
+                                <button class="btn btn-sm btn-danger" onclick="removePlugin('${p.name}')">Remove</button>
+                            </td>
+                        </tr>
+                    `).join('');
+                }
+            } catch (e) {
+                tbody.innerHTML = '<tr><td colspan="3">Error loading plugins</td></tr>';
+            }
+        }
+
+        async function installPlugin(name) {
+            const blog = document.getElementById('pluginsBlogSelect').value;
+            if (!blog) {
+                toast('Please select a blog first', 'error');
+                return;
+            }
+
+            toast('Installing plugin...');
+            try {
+                const res = await api(`/blog/${blog}/plugin/install`, {
+                    method: 'POST',
+                    body: JSON.stringify({ name })
+                });
+                if (res.success) {
+                    toast('Plugin installed!');
+                    loadInstalledPlugins();
+                } else {
+                    toast(res.error || 'Install failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function removePlugin(name) {
+            const blog = document.getElementById('pluginsBlogSelect').value;
+            if (!confirm(`Remove plugin "${name}"?`)) return;
+
+            try {
+                const res = await api(`/blog/${blog}/plugin/${name}`, { method: 'DELETE' });
+                if (res.success) {
+                    toast('Plugin removed');
+                    loadInstalledPlugins();
+                } else {
+                    toast(res.error || 'Remove failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        // Logs
+        async function loadLogs() {
+            const lines = document.getElementById('logLines').value;
+            try {
+                const data = await api('/logs?lines=' + lines);
+                document.getElementById('logsContainer').textContent = data.logs || 'No logs available';
+            } catch (e) {
+                document.getElementById('logsContainer').textContent = 'Error loading logs';
+            }
+        }
+
+        // Settings
+        async function saveSettings(e) {
+            e.preventDefault();
+            try {
+                const res = await api('/config', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        preview_port: parseInt(document.getElementById('cfgPort').value),
+                        blogs_path: document.getElementById('cfgBlogsPath').value,
+                        image: document.getElementById('cfgImage').value,
+                        default_theme: document.getElementById('cfgDefaultTheme').value,
+                        enabled: true,
+                    })
+                });
+                if (res.success) {
+                    toast('Settings saved!');
+                } else {
+                    toast('Save failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        // Initialize
+        refresh();
+        setInterval(refresh, 60000);
     </script>
-    <script src="/shared/sidebar.js"></script>
 </body>
 </html>

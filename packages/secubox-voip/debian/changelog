@@ -1,7 +1,14 @@
-secubox-voip (1.0.0-1) bookworm; urgency=medium
+secubox-voip (1.0.0-1~bookworm1) bookworm; urgency=medium
 
-  * Initial release
-  * Asterisk PBX management
-  * SIP extension and peer management
+  * Initial release.
+  * Features:
+    - Asterisk/FreePBX Docker container management
+    - Extension and voicemail management
+    - SIP trunk configuration
+    - Inbound/outbound route builder
+    - IVR menu management
+    - Call detail records (CDR)
+    - Active calls monitoring
+    - CRT-light P31 phosphor theme with green accent
 
- -- Gandalf / CyberMind <gk@cybermind.fr>  Sat, 28 Mar 2026 13:00:00 +0100
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Apr 2026 10:00:00 +0200

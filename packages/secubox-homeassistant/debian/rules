@@ -1,19 +1,24 @@
 #!/usr/bin/make -f
-
 %:
 	dh $@
 
 override_dh_auto_install:
-	install -d $(CURDIR)/debian/secubox-homeassistant/usr/share/secubox/www/homeassistant
-	install -d $(CURDIR)/debian/secubox-homeassistant/usr/share/secubox/api/homeassistant
-	install -d $(CURDIR)/debian/secubox-homeassistant/usr/share/secubox/menu.d
-	install -d $(CURDIR)/debian/secubox-homeassistant/etc/nginx/secubox.d
-	install -d $(CURDIR)/debian/secubox-homeassistant/srv/homeassistant/config
-
-	cp -r $(CURDIR)/www/homeassistant/* $(CURDIR)/debian/secubox-homeassistant/usr/share/secubox/www/homeassistant/
-	cp -r $(CURDIR)/api/* $(CURDIR)/debian/secubox-homeassistant/usr/share/secubox/api/homeassistant/
-	cp $(CURDIR)/menu.d/*.json $(CURDIR)/debian/secubox-homeassistant/usr/share/secubox/menu.d/
-	cp $(CURDIR)/nginx/*.conf $(CURDIR)/debian/secubox-homeassistant/etc/nginx/secubox.d/
+	# API files (to /usr/share/secubox/homeassistant for service WorkingDirectory)
+	install -d debian/secubox-homeassistant/usr/share/secubox/homeassistant/
+	cp -r api debian/secubox-homeassistant/usr/share/secubox/homeassistant/
+	# Static www files
+	install -d debian/secubox-homeassistant/usr/share/secubox/www
+	[ -d www ] && cp -r www/. debian/secubox-homeassistant/usr/share/secubox/www/ || true
+	# Menu definitions
+	install -d debian/secubox-homeassistant/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-homeassistant/usr/share/secubox/menu.d/ || true
+	# Modular nginx config
+	install -d debian/secubox-homeassistant/etc/nginx/secubox.d
+	[ -f nginx/homeassistant.conf ] && cp nginx/homeassistant.conf debian/secubox-homeassistant/etc/nginx/secubox.d/ || true
+	# Systemd service
+	install -d debian/secubox-homeassistant/usr/lib/systemd/system
+	cp systemd/secubox-homeassistant.service debian/secubox-homeassistant/usr/lib/systemd/system/
 
 override_dh_installsystemd:
-	dh_installsystemd --name=secubox-homeassistant
+	# Skip dh_installsystemd since we handle it manually
+	true

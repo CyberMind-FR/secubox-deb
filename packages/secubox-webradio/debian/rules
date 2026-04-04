@@ -3,14 +3,22 @@
 	dh $@
 
 override_dh_auto_install:
-	install -d $(CURDIR)/debian/secubox-webradio/usr/lib/secubox/webradio/api
-	install -m 644 api/main.py $(CURDIR)/debian/secubox-webradio/usr/lib/secubox/webradio/api/
-	touch $(CURDIR)/debian/secubox-webradio/usr/lib/secubox/webradio/api/__init__.py
-	install -d $(CURDIR)/debian/secubox-webradio/usr/share/secubox/www/webradio
-	install -m 644 www/webradio/index.html $(CURDIR)/debian/secubox-webradio/usr/share/secubox/www/webradio/
-	install -d $(CURDIR)/debian/secubox-webradio/etc/nginx/secubox.d
-	install -m 644 nginx/webradio.conf $(CURDIR)/debian/secubox-webradio/etc/nginx/secubox.d/
-	install -d $(CURDIR)/debian/secubox-webradio/usr/share/secubox/menu.d
-	install -m 644 menu.d/813-webradio.json $(CURDIR)/debian/secubox-webradio/usr/share/secubox/menu.d/
-	install -d $(CURDIR)/debian/secubox-webradio/usr/lib/systemd/system
-	install -m 644 debian/secubox-webradio.service $(CURDIR)/debian/secubox-webradio/usr/lib/systemd/system/
+	# API files (to /usr/share/secubox/webradio for service WorkingDirectory)
+	install -d debian/secubox-webradio/usr/share/secubox/webradio/
+	cp -r api debian/secubox-webradio/usr/share/secubox/webradio/
+	# Static www files
+	install -d debian/secubox-webradio/usr/share/secubox/www
+	[ -d www ] && cp -r www/. debian/secubox-webradio/usr/share/secubox/www/ || true
+	# Menu definitions
+	install -d debian/secubox-webradio/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-webradio/usr/share/secubox/menu.d/ || true
+	# Modular nginx config
+	install -d debian/secubox-webradio/etc/nginx/secubox.d
+	[ -f nginx/webradio.conf ] && cp nginx/webradio.conf debian/secubox-webradio/etc/nginx/secubox.d/ || true
+	# Systemd service (use usr/lib for modern systems)
+	install -d debian/secubox-webradio/usr/lib/systemd/system
+	cp debian/secubox-webradio.service debian/secubox-webradio/usr/lib/systemd/system/
+
+override_dh_installsystemd:
+	# Skip dh_installsystemd since we handle it manually
+	true

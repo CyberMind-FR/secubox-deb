@@ -3,228 +3,1173 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Newsbin - SecuBox</title>
+    <title>SecuBox - Newsbin Usenet Downloader</title>
+    <link rel="stylesheet" href="/shared/sidebar.css">
     <link rel="stylesheet" href="/shared/crt-light.css">
-    <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
-        :root { --news-orange: #ff6f00; --news-light: #ffa040; --news-dark: #c43e00; }
-        body.dark { --news-orange: #ffa040; --news-light: #ffcc80; --news-dark: #ff6f00; }
-        .accent { color: var(--news-orange); }
-        .accent-bg { background-color: var(--news-orange); }
-        .header { display: flex; justify-content: space-between; align-items: center; padding: 1rem; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
-        .header h1 { margin: 0; font-size: 1.5rem; }
-        .status-badge { padding: 0.25rem 0.75rem; border-radius: 1rem; font-size: 0.875rem; }
-        .status-badge.running { background: var(--success-bg); color: var(--success); }
-        .status-badge.stopped { background: var(--error-bg); color: var(--error); }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem; text-align: center; }
-        .stat-value { font-size: 1.75rem; font-weight: bold; color: var(--news-orange); }
-        .stat-label { font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; }
-        .action-bar { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
-        .btn { padding: 0.5rem 1rem; border: 1px solid var(--border); border-radius: 0.25rem; background: var(--surface); color: var(--text); cursor: pointer; font-size: 0.875rem; }
-        .btn:hover { background: var(--hover); }
-        .btn.primary { background: var(--news-orange); color: white; border-color: var(--news-orange); }
-        .btn.primary:hover { background: var(--news-dark); }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .tabs { display: flex; gap: 0.5rem; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
-        .tab { padding: 0.75rem 1rem; border: none; background: none; color: var(--text-secondary); cursor: pointer; border-bottom: 2px solid transparent; }
-        .tab:hover { color: var(--text); }
-        .tab.active { color: var(--news-orange); border-bottom-color: var(--news-orange); }
+        :root {
+            --p31-peak: #00dd44;
+            --p31-dim: #006622;
+            --p31-glow: rgba(0, 221, 68, 0.15);
+            --tube-light: #f5f5dc;
+            --tube-mid: #e8e6d9;
+            --tube-dark: #d4d2c5;
+            --text-primary: #1a1a1a;
+            --text-secondary: #4a4a4a;
+            --text-dim: #7a7a7a;
+            --surface: #fafaf5;
+            --surface-alt: #f0efe8;
+            --border: #d0cfc5;
+            --error: #c62828;
+            --warning: #f57c00;
+            --success: #2e7d32;
+            --newsbin: #eab308;
+            --newsbin-dark: #ca9a06;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            background: linear-gradient(135deg, var(--tube-light) 0%, var(--tube-mid) 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+        }
+        body.crt-light { background: linear-gradient(135deg, var(--tube-light) 0%, var(--tube-mid) 100%); }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; max-width: calc(100% - 220px); }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid var(--newsbin);
+        }
+        .header h1 { font-size: 1.5rem; color: var(--newsbin); }
+        .header-actions { display: flex; gap: 0.5rem; }
+
+        /* Stats Row */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+            box-shadow: 0 2px 8px var(--p31-glow);
+        }
+        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
+        .stat-card .value { font-size: 1.25rem; font-weight: bold; color: var(--p31-dim); margin-top: 0.25rem; }
+        .stat-card.running .value { color: var(--success); }
+        .stat-card.stopped .value { color: var(--error); }
+
+        /* Tabs */
+        .tabs { display: flex; gap: 0; margin-bottom: 1.5rem; border-bottom: 2px solid var(--border); }
+        .tab {
+            padding: 0.75rem 1.5rem;
+            cursor: pointer;
+            border: 1px solid transparent;
+            border-bottom: none;
+            border-radius: 8px 8px 0 0;
+            background: transparent;
+            color: var(--text-secondary);
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .tab:hover { background: var(--surface-alt); }
+        .tab.active {
+            background: var(--surface);
+            border-color: var(--border);
+            color: var(--newsbin);
+            margin-bottom: -2px;
+            border-bottom: 2px solid var(--surface);
+        }
+
         .tab-content { display: none; }
         .tab-content.active { display: block; }
-        .entry-list { display: grid; gap: 0.5rem; }
-        .entry-item { padding: 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; }
-        .entry-title { font-weight: 500; margin-bottom: 0.25rem; }
-        .entry-title a { color: var(--text); text-decoration: none; }
-        .entry-title a:hover { color: var(--news-orange); }
-        .entry-meta { font-size: 0.875rem; color: var(--text-secondary); }
-        .feed-item { display: flex; align-items: center; gap: 1rem; padding: 0.75rem; background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; margin-bottom: 0.5rem; }
-        .feed-icon { font-size: 1.25rem; }
-        .feed-info { flex: 1; }
-        .feed-name { font-weight: 500; }
-        .feed-meta { font-size: 0.875rem; color: var(--text-secondary); }
-        .install-form { max-width: 400px; margin: 2rem auto; padding: 2rem; background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; }
-        .install-form h2 { margin-top: 0; text-align: center; }
+
+        /* Cards */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 2px 8px var(--p31-glow);
+        }
+        .card h3 {
+            font-size: 1rem;
+            color: var(--newsbin);
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            border: 1px solid var(--newsbin);
+            background: var(--surface);
+            color: var(--newsbin);
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .btn:hover { background: var(--newsbin); color: white; }
+        .btn-primary { background: var(--newsbin); color: white; }
+        .btn-primary:hover { background: var(--newsbin-dark); }
+        .btn-danger { border-color: var(--error); color: var(--error); }
+        .btn-danger:hover { background: var(--error); color: white; }
+        .btn-success { border-color: var(--success); color: var(--success); }
+        .btn-success:hover { background: var(--success); color: white; }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.875rem; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+        th { color: var(--text-dim); font-weight: 500; font-size: 0.75rem; text-transform: uppercase; }
+        tr:hover { background: var(--surface-alt); }
+
+        /* Forms */
         .form-group { margin-bottom: 1rem; }
-        .form-group label { display: block; margin-bottom: 0.25rem; font-weight: 500; }
-        .form-group input { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 0.25rem; background: var(--surface); color: var(--text); }
-        .open-app-btn { position: fixed; bottom: 1rem; right: 1rem; padding: 1rem 1.5rem; background: var(--news-orange); color: white; border: none; border-radius: 2rem; cursor: pointer; font-size: 1rem; box-shadow: 0 4px 12px rgba(255, 111, 0, 0.4); }
-        .hidden { display: none !important; }
+        .form-group label { display: block; margin-bottom: 0.25rem; color: var(--text-secondary); font-size: 0.875rem; }
+        input, select, textarea {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: white;
+            color: var(--text-primary);
+            font-family: inherit;
+        }
+        input:focus, select:focus, textarea:focus { outline: none; border-color: var(--newsbin); box-shadow: 0 0 5px rgba(234, 179, 8, 0.3); }
+        .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
+        input[type="checkbox"] { width: auto; margin-right: 0.5rem; }
+
+        /* Badges */
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        .badge-success { background: #c8e6c9; color: #2e7d32; }
+        .badge-error { background: #ffcdd2; color: #c62828; }
+        .badge-warning { background: #ffe0b2; color: #e65100; }
+        .badge-info { background: #fff3cd; color: #856404; }
+
+        /* Progress bar */
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: var(--border);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .progress-bar .fill {
+            height: 100%;
+            background: var(--newsbin);
+            transition: width 0.3s;
+        }
+
+        /* Install Banner */
+        .install-banner {
+            background: linear-gradient(135deg, #fef9e7 0%, #fcf3cf 100%);
+            border: 2px solid var(--newsbin);
+            border-radius: 12px;
+            padding: 2rem;
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+        .install-banner h2 { color: var(--newsbin); margin-bottom: 1rem; }
+        .install-banner p { color: var(--text-secondary); margin-bottom: 1.5rem; }
+
+        /* Logs */
+        .logs-container {
+            background: #1a1a1a;
+            color: #eab308;
+            padding: 1rem;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 0.8rem;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 1rem;
+            right: 1rem;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            color: white;
+            z-index: 1000;
+            animation: slideIn 0.3s ease;
+        }
+        .toast-success { background: var(--success); }
+        .toast-error { background: var(--error); }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        .spinner {
+            display: inline-block;
+            width: 1rem;
+            height: 1rem;
+            border: 2px solid var(--border);
+            border-top-color: var(--newsbin);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Queue item */
+        .queue-item {
+            padding: 1rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+            background: var(--surface);
+        }
+        .queue-item .name { font-weight: 500; margin-bottom: 0.5rem; }
+        .queue-item .meta { font-size: 0.875rem; color: var(--text-dim); display: flex; gap: 1rem; flex-wrap: wrap; }
+        .queue-item .actions { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+
+        /* Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal {
+            background: var(--surface);
+            border-radius: 12px;
+            padding: 1.5rem;
+            min-width: 400px;
+            max-width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .modal h3 { color: var(--newsbin); margin-bottom: 1rem; }
+
+        @media (max-width: 768px) {
+            .main { margin-left: 0; max-width: 100%; }
+            .stats-row { grid-template-columns: repeat(2, 1fr); }
+            .modal { min-width: auto; width: 95%; }
+        }
     </style>
 </head>
 <body class="crt-light">
     <nav class="sidebar" id="sidebar"></nav>
-    <main class="main-content">
-    <div class="container">
-        <div class="header">
-            <h1><span class="accent">Newsbin</span> RSS Reader</h1>
-            <span id="status-badge" class="status-badge stopped">Stopped</span>
+    <script src="/shared/sidebar.js"></script>
+
+    <main class="main">
+        <header class="header">
+            <h1>Newsbin - Usenet Downloader</h1>
+            <div class="header-actions">
+                <a id="openSabnzbd" href="#" target="_blank" class="btn" style="display: none;">Open SABnzbd</a>
+                <button class="btn" onclick="refresh()">Refresh</button>
+                <button class="btn btn-primary" id="btnToggle" onclick="toggleService()">Start</button>
+            </div>
+        </header>
+
+        <!-- Install Banner -->
+        <div id="installBanner" class="install-banner" style="display: none;">
+            <h2>Welcome to Newsbin</h2>
+            <p>Usenet downloader powered by SABnzbd. Fast, reliable NZB downloads.</p>
+            <button class="btn btn-primary" onclick="installSabnzbd()">Install SABnzbd</button>
         </div>
 
-        <div id="install-section" class="install-form hidden">
-            <h2>Install Newsbin</h2>
-            <form onsubmit="install(event)">
-                <div class="form-group"><label>Admin Username</label><input type="text" id="admin-user" value="admin" required></div>
-                <div class="form-group"><label>Admin Password</label><input type="password" id="admin-pass" minlength="6" required></div>
-                <button type="submit" class="btn primary" style="width: 100%; margin-top: 1rem;">Install Miniflux</button>
-            </form>
+        <!-- Stats Row -->
+        <div class="stats-row">
+            <div class="stat-card" id="statStatus">
+                <div class="label">Status</div>
+                <div class="value">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Speed</div>
+                <div class="value" id="statSpeed">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Queue</div>
+                <div class="value" id="statQueue">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Remaining</div>
+                <div class="value" id="statRemaining">-</div>
+            </div>
         </div>
 
-        <div id="main-section" class="hidden">
-            <div class="stats-grid">
-                <div class="stat-card"><div class="stat-value" id="feeds-count">0</div><div class="stat-label">Feeds</div></div>
-                <div class="stat-card"><div class="stat-value" id="entries-count">0</div><div class="stat-label">Entries</div></div>
-            </div>
+        <!-- Tabs -->
+        <div class="tabs">
+            <div class="tab active" onclick="showTab('queue')">Queue</div>
+            <div class="tab" onclick="showTab('history')">History</div>
+            <div class="tab" onclick="showTab('servers')">Servers</div>
+            <div class="tab" onclick="showTab('categories')">Categories</div>
+            <div class="tab" onclick="showTab('settings')">Settings</div>
+            <div class="tab" onclick="showTab('logs')">Logs</div>
+        </div>
 
-            <div class="action-bar">
-                <button class="btn primary" id="btn-start" onclick="startService()">Start</button>
-                <button class="btn" id="btn-stop" onclick="stopService()" disabled>Stop</button>
-                <button class="btn" id="btn-restart" onclick="restartService()" disabled>Restart</button>
-                <button class="btn" id="btn-refresh" onclick="refreshFeeds()" disabled>Refresh Feeds</button>
+        <!-- Queue Tab -->
+        <div id="tab-queue" class="tab-content active">
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h3 style="border: none; margin: 0; padding: 0;">Download Queue</h3>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="btn btn-sm" onclick="openAddNzbModal()">+ Add NZB</button>
+                        <button class="btn btn-sm" id="btnPauseQueue" onclick="toggleQueuePause()">Pause All</button>
+                    </div>
+                </div>
+                <div id="queueList">
+                    <p style="color: var(--text-dim); text-align: center; padding: 2rem;">Loading queue...</p>
+                </div>
             </div>
+        </div>
 
-            <div class="tabs">
-                <button class="tab active" data-tab="entries">Unread</button>
-                <button class="tab" data-tab="feeds">Feeds</button>
-                <button class="tab" data-tab="add">Add Feed</button>
+        <!-- History Tab -->
+        <div id="tab-history" class="tab-content">
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h3 style="border: none; margin: 0; padding: 0;">Download History</h3>
+                    <button class="btn btn-sm btn-danger" onclick="clearHistory()">Clear History</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Size</th>
+                            <th>Status</th>
+                            <th>Date</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyTable">
+                        <tr><td colspan="5">Loading...</td></tr>
+                    </tbody>
+                </table>
             </div>
+        </div>
 
-            <div id="tab-entries" class="tab-content active">
-                <div id="entries-list" class="entry-list"></div>
+        <!-- Servers Tab -->
+        <div id="tab-servers" class="tab-content">
+            <div class="card">
+                <h3>Usenet Servers</h3>
+                <div style="margin-bottom: 1rem;">
+                    <button class="btn btn-primary" onclick="openServerModal()">+ Add Server</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Host</th>
+                            <th>Connections</th>
+                            <th>SSL</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="serversTable">
+                        <tr><td colspan="6">No servers configured</td></tr>
+                    </tbody>
+                </table>
             </div>
+        </div>
 
-            <div id="tab-feeds" class="tab-content">
-                <div id="feeds-list"></div>
+        <!-- Categories Tab -->
+        <div id="tab-categories" class="tab-content">
+            <div class="card">
+                <h3>Download Categories</h3>
+                <div style="margin-bottom: 1rem;">
+                    <button class="btn btn-primary" onclick="openCategoryModal()">+ Add Category</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Directory</th>
+                            <th>Priority</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="categoriesTable">
+                        <tr><td colspan="4">Loading...</td></tr>
+                    </tbody>
+                </table>
             </div>
+        </div>
 
-            <div id="tab-add" class="tab-content">
-                <form onsubmit="addFeed(event)" style="max-width: 400px;">
-                    <div class="form-group"><label>Feed URL</label><input type="url" id="feed-url" placeholder="https://example.com/feed.xml" required></div>
-                    <button type="submit" class="btn primary">Add Feed</button>
+        <!-- Settings Tab -->
+        <div id="tab-settings" class="tab-content">
+            <div class="card">
+                <h3>Configuration</h3>
+                <form id="settingsForm" onsubmit="saveSettings(event)">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Port</label>
+                            <input type="number" id="cfgPort" value="8090" min="1024" max="65535">
+                        </div>
+                        <div class="form-group">
+                            <label>Data Path</label>
+                            <input type="text" id="cfgDataPath" value="/srv/newsbin">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Downloads Path</label>
+                            <input type="text" id="cfgDownloadsPath" value="/srv/downloads/usenet">
+                        </div>
+                        <div class="form-group">
+                            <label>Timezone</label>
+                            <select id="cfgTimezone">
+                                <option value="Europe/Paris">Europe/Paris</option>
+                                <option value="Europe/London">Europe/London</option>
+                                <option value="America/New_York">America/New_York</option>
+                                <option value="America/Los_Angeles">America/Los_Angeles</option>
+                                <option value="Asia/Tokyo">Asia/Tokyo</option>
+                                <option value="UTC">UTC</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Docker Image</label>
+                            <input type="text" id="cfgImage" value="lscr.io/linuxserver/sabnzbd:latest">
+                        </div>
+                        <div class="form-group">
+                            <label>Domain (for HAProxy)</label>
+                            <input type="text" id="cfgDomain" value="newsbin.secubox.local">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save Settings</button>
                 </form>
             </div>
+            <div class="card">
+                <h3>Container Management</h3>
+                <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                    <button class="btn" onclick="updateContainer()">Update SABnzbd</button>
+                    <button class="btn" onclick="restartContainer()">Restart Container</button>
+                    <button class="btn btn-danger" onclick="uninstallContainer()">Uninstall</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Logs Tab -->
+        <div id="tab-logs" class="tab-content">
+            <div class="card">
+                <h3>Container Logs</h3>
+                <div style="margin-bottom: 1rem; display: flex; gap: 0.5rem; align-items: center;">
+                    <label>Lines:</label>
+                    <select id="logLines" onchange="loadLogs()">
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                        <option value="200">200</option>
+                    </select>
+                    <button class="btn" onclick="loadLogs()">Refresh</button>
+                </div>
+                <div class="logs-container" id="logsContainer">Loading logs...</div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Add NZB Modal -->
+    <div class="modal-overlay" id="addNzbModal">
+        <div class="modal">
+            <h3>Add NZB</h3>
+            <form onsubmit="addNzb(event)">
+                <div class="form-group">
+                    <label>NZB URL</label>
+                    <input type="url" id="nzbUrl" placeholder="https://example.com/file.nzb">
+                </div>
+                <div class="form-group">
+                    <label>Or Upload File</label>
+                    <input type="file" id="nzbFile" accept=".nzb">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Category</label>
+                        <select id="nzbCategory">
+                            <option value="default">default</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Priority</label>
+                        <select id="nzbPriority">
+                            <option value="2">Force</option>
+                            <option value="1">High</option>
+                            <option value="0" selected>Normal</option>
+                            <option value="-1">Low</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                    <button type="button" class="btn" onclick="closeModal('addNzbModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add</button>
+                </div>
+            </form>
         </div>
     </div>
-    <button id="open-app-btn" class="open-app-btn hidden" onclick="openApp()">Open Miniflux</button>
-    </main>
+
+    <!-- Server Modal -->
+    <div class="modal-overlay" id="serverModal">
+        <div class="modal">
+            <h3 id="serverModalTitle">Add Usenet Server</h3>
+            <form onsubmit="saveServer(event)">
+                <input type="hidden" id="serverEditName">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Server Name</label>
+                        <input type="text" id="serverName" required placeholder="e.g., Newshosting">
+                    </div>
+                    <div class="form-group">
+                        <label>Host</label>
+                        <input type="text" id="serverHost" required placeholder="news.example.com">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Port</label>
+                        <input type="number" id="serverPort" value="563">
+                    </div>
+                    <div class="form-group">
+                        <label>Connections</label>
+                        <input type="number" id="serverConnections" value="10" min="1" max="50">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Username</label>
+                        <input type="text" id="serverUsername">
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" id="serverPassword">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><input type="checkbox" id="serverSsl" checked> Use SSL</label>
+                    </div>
+                    <div class="form-group">
+                        <label><input type="checkbox" id="serverEnabled" checked> Enabled</label>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                    <button type="button" class="btn" onclick="closeModal('serverModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Category Modal -->
+    <div class="modal-overlay" id="categoryModal">
+        <div class="modal">
+            <h3>Add Category</h3>
+            <form onsubmit="saveCategory(event)">
+                <div class="form-group">
+                    <label>Category Name</label>
+                    <input type="text" id="catName" required placeholder="e.g., movies">
+                </div>
+                <div class="form-group">
+                    <label>Directory (relative to downloads)</label>
+                    <input type="text" id="catDirectory" placeholder="e.g., movies">
+                </div>
+                <div class="form-group">
+                    <label>Priority</label>
+                    <select id="catPriority">
+                        <option value="2">Force</option>
+                        <option value="1">High</option>
+                        <option value="0" selected>Normal</option>
+                        <option value="-1">Low</option>
+                    </select>
+                </div>
+                <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                    <button type="button" class="btn" onclick="closeModal('categoryModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <script>
         const API = '/api/v1/newsbin';
-        let containerIP = null;
+        let isRunning = false;
+        let isPaused = false;
+        let containerStatus = 'not_installed';
+
+        function getToken() {
+            return localStorage.getItem('jwt_token') || localStorage.getItem('token') || '';
+        }
 
         async function api(endpoint, options = {}) {
-            const r = await fetch(API + endpoint, { ...options, headers: { 'Authorization': 'Bearer ' + localStorage.getItem('sbx_token'), 'Content-Type': 'application/json', ...options.headers } });
-            if (!r.ok) throw new Error(`HTTP ${r.status}`);
-            return r.json();
+            const token = getToken();
+            const headers = { 'Content-Type': 'application/json', ...options.headers };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+            const res = await fetch(API + endpoint, { ...options, headers, credentials: 'include' });
+            if (res.status === 401) {
+                window.location.href = '/portal/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+                throw new Error('Unauthorized');
+            }
+            return res.json();
         }
 
-        async function loadStatus() {
+        function showTab(name) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            const tabs = ['queue', 'history', 'servers', 'categories', 'settings', 'logs'];
+            document.querySelector(`.tab:nth-child(${tabs.indexOf(name)+1})`).classList.add('active');
+            document.getElementById('tab-' + name).classList.add('active');
+            if (name === 'logs') loadLogs();
+            if (name === 'history') loadHistory();
+            if (name === 'servers') loadServers();
+            if (name === 'categories') loadCategories();
+        }
+
+        function toast(msg, type = 'success') {
+            const t = document.createElement('div');
+            t.className = 'toast toast-' + type;
+            t.textContent = msg;
+            document.body.appendChild(t);
+            setTimeout(() => t.remove(), 3000);
+        }
+
+        function openModal(id) {
+            document.getElementById(id).classList.add('active');
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('active');
+        }
+
+        async function refresh() {
             try {
-                const d = await api('/status');
-                const badge = document.getElementById('status-badge');
-                if (!d.container_exists) {
-                    document.getElementById('install-section').classList.remove('hidden');
-                    document.getElementById('main-section').classList.add('hidden');
-                    badge.textContent = 'Not Installed'; badge.className = 'status-badge stopped';
+                const status = await api('/status');
+                containerStatus = status.container_status;
+                isRunning = status.container_status === 'running';
+
+                // Show/hide install banner
+                document.getElementById('installBanner').style.display =
+                    status.container_status === 'not_installed' ? 'block' : 'none';
+
+                // Update stats
+                const statEl = document.getElementById('statStatus');
+                statEl.querySelector('.value').textContent = status.container_status;
+                statEl.className = 'stat-card ' + (isRunning ? 'running' : 'stopped');
+
+                document.getElementById('statSpeed').textContent = status.queue?.speed || '-';
+                document.getElementById('statQueue').textContent = status.queue?.slots || '0';
+                document.getElementById('statRemaining').textContent = status.queue?.size_left || '-';
+
+                isPaused = status.queue?.paused || false;
+                document.getElementById('btnPauseQueue').textContent = isPaused ? 'Resume All' : 'Pause All';
+
+                // Update toggle button
+                const btn = document.getElementById('btnToggle');
+                if (status.container_status === 'not_installed') {
+                    btn.textContent = 'Install';
+                    btn.className = 'btn btn-primary';
+                    btn.onclick = installSabnzbd;
+                } else if (isRunning) {
+                    btn.textContent = 'Stop';
+                    btn.className = 'btn btn-danger';
+                    btn.onclick = () => toggleService();
+                } else {
+                    btn.textContent = 'Start';
+                    btn.className = 'btn btn-success';
+                    btn.onclick = () => toggleService();
+                }
+
+                // Open SABnzbd link
+                const openLink = document.getElementById('openSabnzbd');
+                if (isRunning) {
+                    openLink.style.display = 'inline-flex';
+                    openLink.href = `http://${window.location.hostname}:${status.port}`;
+                } else {
+                    openLink.style.display = 'none';
+                }
+
+                // Load settings
+                document.getElementById('cfgPort').value = status.port || 8090;
+                document.getElementById('cfgDataPath').value = status.data_path || '/srv/newsbin';
+                document.getElementById('cfgDownloadsPath').value = status.downloads_path || '/srv/downloads/usenet';
+                document.getElementById('cfgTimezone').value = status.timezone || 'Europe/Paris';
+                document.getElementById('cfgImage').value = status.image || 'lscr.io/linuxserver/sabnzbd:latest';
+                document.getElementById('cfgDomain').value = status.domain || 'newsbin.secubox.local';
+
+                if (isRunning) {
+                    loadQueue();
+                }
+
+            } catch (e) {
+                console.error(e);
+                toast('Failed to load status', 'error');
+            }
+        }
+
+        async function loadQueue() {
+            try {
+                const data = await api('/queue');
+                const list = document.getElementById('queueList');
+
+                if (!data.slots || data.slots.length === 0) {
+                    list.innerHTML = '<p style="color: var(--text-dim); text-align: center; padding: 2rem;">Queue is empty. Add an NZB to start downloading.</p>';
                     return;
                 }
-                document.getElementById('install-section').classList.add('hidden');
-                document.getElementById('main-section').classList.remove('hidden');
-                if (d.running) {
-                    badge.textContent = 'Running'; badge.className = 'status-badge running';
-                    document.getElementById('btn-start').disabled = true;
-                    document.getElementById('btn-stop').disabled = false;
-                    document.getElementById('btn-restart').disabled = false;
-                    document.getElementById('btn-refresh').disabled = false;
-                    containerIP = d.container_ip;
-                    document.getElementById('open-app-btn').classList.remove('hidden');
-                    loadEntries(); loadFeeds();
-                } else {
-                    badge.textContent = 'Stopped'; badge.className = 'status-badge stopped';
-                    document.getElementById('btn-start').disabled = false;
-                    document.getElementById('btn-stop').disabled = true;
-                    document.getElementById('btn-restart').disabled = true;
-                    document.getElementById('btn-refresh').disabled = true;
-                    document.getElementById('open-app-btn').classList.add('hidden');
-                }
-                document.getElementById('feeds-count').textContent = d.feeds || 0;
-                document.getElementById('entries-count').textContent = d.entries || 0;
-            } catch (e) { console.error(e); }
-        }
 
-        async function install(e) {
-            e.preventDefault();
-            const btn = e.target.querySelector('button'); btn.disabled = true; btn.textContent = 'Installing...';
-            try {
-                await api(`/install?admin_user=${document.getElementById('admin-user').value}&admin_pass=${document.getElementById('admin-pass').value}`, { method: 'POST' });
-                await loadStatus();
-            } catch (err) { alert('Failed: ' + err.message); }
-            finally { btn.disabled = false; btn.textContent = 'Install Miniflux'; }
-        }
-
-        async function startService() { document.getElementById('btn-start').disabled = true; try { await api('/start', { method: 'POST' }); await loadStatus(); } catch (e) { alert('Failed: ' + e.message); } }
-        async function stopService() { document.getElementById('btn-stop').disabled = true; try { await api('/stop', { method: 'POST' }); await loadStatus(); } catch (e) { alert('Failed: ' + e.message); } }
-        async function restartService() { document.getElementById('btn-restart').disabled = true; try { await api('/restart', { method: 'POST' }); await loadStatus(); } catch (e) { alert('Failed: ' + e.message); } }
-
-        async function loadEntries() {
-            try {
-                const d = await api('/entries?limit=30&unread=true');
-                const list = document.getElementById('entries-list');
-                if (!d.entries || d.entries.length === 0) { list.innerHTML = '<p style="padding:1rem;color:var(--text-secondary);">No unread entries</p>'; return; }
-                list.innerHTML = d.entries.map(e => `
-                    <div class="entry-item">
-                        <div class="entry-title"><a href="${e.url}" target="_blank">${e.title}</a></div>
-                        <div class="entry-meta">${e.feed?.title || ''} · ${new Date(e.published_at).toLocaleDateString()}</div>
-                    </div>
-                `).join('');
-            } catch (e) { console.error(e); }
-        }
-
-        async function loadFeeds() {
-            try {
-                const d = await api('/feeds');
-                const list = document.getElementById('feeds-list');
-                if (!d.feeds || d.feeds.length === 0) { list.innerHTML = '<p style="padding:1rem;color:var(--text-secondary);">No feeds. Add your first RSS feed!</p>'; return; }
-                list.innerHTML = d.feeds.map(f => `
-                    <div class="feed-item">
-                        <div class="feed-icon">📰</div>
-                        <div class="feed-info">
-                            <div class="feed-name">${f.title}</div>
-                            <div class="feed-meta">${f.site_url || f.feed_url}</div>
+                list.innerHTML = data.slots.map(item => `
+                    <div class="queue-item">
+                        <div class="name">${item.filename || item.name}</div>
+                        <div class="progress-bar"><div class="fill" style="width: ${item.percentage || 0}%"></div></div>
+                        <div class="meta">
+                            <span>${item.sizeleft || '?'} / ${item.size || '?'}</span>
+                            <span>${item.percentage || 0}%</span>
+                            <span>ETA: ${item.timeleft || '-'}</span>
+                            <span class="badge badge-info">${item.cat || 'default'}</span>
+                            ${item.status === 'Paused' ? '<span class="badge badge-warning">Paused</span>' : ''}
                         </div>
-                        <button class="btn" onclick="deleteFeed(${f.id})" style="color: var(--error);">Delete</button>
+                        <div class="actions">
+                            ${item.status === 'Paused'
+                                ? `<button class="btn btn-sm btn-success" onclick="resumeItem('${item.nzo_id}')">Resume</button>`
+                                : `<button class="btn btn-sm" onclick="pauseItem('${item.nzo_id}')">Pause</button>`
+                            }
+                            <button class="btn btn-sm btn-danger" onclick="removeFromQueue('${item.nzo_id}')">Remove</button>
+                        </div>
                     </div>
                 `).join('');
-            } catch (e) { console.error(e); }
+            } catch (e) {
+                console.error(e);
+            }
         }
 
-        async function addFeed(e) {
-            e.preventDefault();
-            const btn = e.target.querySelector('button'); btn.disabled = true;
+        async function loadHistory() {
             try {
-                await api(`/feeds?url=${encodeURIComponent(document.getElementById('feed-url').value)}`, { method: 'POST' });
-                document.getElementById('feed-url').value = '';
-                loadFeeds(); loadStatus();
-            } catch (err) { alert('Failed: ' + err.message); }
-            finally { btn.disabled = false; }
+                const data = await api('/history?limit=50');
+                const tbody = document.getElementById('historyTable');
+
+                if (!data.slots || data.slots.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5">No download history</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = data.slots.map(item => `
+                    <tr>
+                        <td>${item.name}</td>
+                        <td>${item.size || '-'}</td>
+                        <td><span class="badge ${item.status === 'Completed' ? 'badge-success' : 'badge-error'}">${item.status}</span></td>
+                        <td>${new Date(item.completed * 1000).toLocaleDateString()}</td>
+                        <td><button class="btn btn-sm btn-danger" onclick="deleteHistoryItem('${item.nzo_id}')">Delete</button></td>
+                    </tr>
+                `).join('');
+            } catch (e) {
+                console.error(e);
+            }
         }
 
-        async function deleteFeed(id) { if (!confirm('Delete this feed?')) return; try { await api(`/feeds/${id}`, { method: 'DELETE' }); loadFeeds(); } catch (e) { alert('Failed: ' + e.message); } }
-        async function refreshFeeds() { try { await api('/refresh', { method: 'POST' }); alert('Refresh triggered'); } catch (e) { alert('Failed: ' + e.message); } }
-        function openApp() { if (containerIP) window.open(`http://${containerIP}:8080/`, '_blank'); }
+        async function loadServers() {
+            try {
+                const data = await api('/servers');
+                const tbody = document.getElementById('serversTable');
 
-        document.querySelectorAll('.tab').forEach(tab => {
-            tab.addEventListener('click', () => {
-                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-                tab.classList.add('active');
-                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
-            });
-        });
+                if (!data.servers || data.servers.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6">No servers configured. Add a Usenet server to start.</td></tr>';
+                    return;
+                }
 
-        if (window.matchMedia?.('(prefers-color-scheme: dark)').matches) document.body.classList.add('dark');
-        loadStatus(); setInterval(loadStatus, 60000);
+                tbody.innerHTML = data.servers.map(s => `
+                    <tr>
+                        <td>${s.name}</td>
+                        <td>${s.host}:${s.port}</td>
+                        <td>${s.connections}</td>
+                        <td>${s.ssl ? '<span class="badge badge-success">Yes</span>' : '<span class="badge badge-warning">No</span>'}</td>
+                        <td>${s.enabled ? '<span class="badge badge-success">Enabled</span>' : '<span class="badge badge-error">Disabled</span>'}</td>
+                        <td>
+                            <button class="btn btn-sm" onclick="editServer('${s.name}')">Edit</button>
+                            <button class="btn btn-sm btn-danger" onclick="deleteServer('${s.name}')">Delete</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function loadCategories() {
+            try {
+                const data = await api('/categories');
+                const tbody = document.getElementById('categoriesTable');
+
+                // Also update the category dropdown
+                const select = document.getElementById('nzbCategory');
+                select.innerHTML = (data.categories || [{name: 'default'}]).map(c =>
+                    `<option value="${c.name}">${c.name}</option>`
+                ).join('');
+
+                tbody.innerHTML = (data.categories || []).map(c => `
+                    <tr>
+                        <td>${c.name}</td>
+                        <td>${c.directory || '-'}</td>
+                        <td>${['Low', 'Normal', 'High', 'Force'][c.priority + 1] || 'Normal'}</td>
+                        <td>
+                            ${c.name !== 'default' ? `<button class="btn btn-sm btn-danger" onclick="deleteCategory('${c.name}')">Delete</button>` : ''}
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function toggleService() {
+            const action = isRunning ? 'stop' : 'start';
+            try {
+                document.getElementById('btnToggle').disabled = true;
+                document.getElementById('btnToggle').innerHTML = '<span class="spinner"></span>';
+                const res = await api('/container/' + action, { method: 'POST' });
+                if (res.success) {
+                    toast(action === 'start' ? 'SABnzbd started!' : 'SABnzbd stopped!');
+                } else {
+                    toast(res.error || 'Action failed', 'error');
+                }
+                await refresh();
+            } catch (e) {
+                toast('Action failed: ' + e.message, 'error');
+            } finally {
+                document.getElementById('btnToggle').disabled = false;
+            }
+        }
+
+        async function installSabnzbd() {
+            if (!confirm('Install SABnzbd? This will download the Docker image.')) return;
+            toast('Installing SABnzbd... This may take a few minutes.');
+            try {
+                const res = await api('/container/install', { method: 'POST' });
+                if (res.success) {
+                    toast('SABnzbd installed! Starting...');
+                    await api('/container/start', { method: 'POST' });
+                    await refresh();
+                } else {
+                    toast(res.error || 'Install failed', 'error');
+                }
+            } catch (e) {
+                toast('Install failed: ' + e.message, 'error');
+            }
+        }
+
+        async function toggleQueuePause() {
+            const action = isPaused ? 'resume' : 'pause';
+            try {
+                await api('/queue/' + action, { method: 'POST' });
+                toast(`Queue ${action}d`);
+                await refresh();
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function pauseItem(id) {
+            try {
+                await api(`/queue/${id}/pause`, { method: 'POST' });
+                await loadQueue();
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function resumeItem(id) {
+            try {
+                await api(`/queue/${id}/resume`, { method: 'POST' });
+                await loadQueue();
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function removeFromQueue(id) {
+            if (!confirm('Remove this item from queue?')) return;
+            try {
+                await api(`/queue/${id}`, { method: 'DELETE' });
+                toast('Item removed');
+                await loadQueue();
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        function openAddNzbModal() {
+            loadCategories();
+            document.getElementById('nzbUrl').value = '';
+            document.getElementById('nzbFile').value = '';
+            openModal('addNzbModal');
+        }
+
+        async function addNzb(e) {
+            e.preventDefault();
+            const url = document.getElementById('nzbUrl').value.trim();
+            const file = document.getElementById('nzbFile').files[0];
+            const category = document.getElementById('nzbCategory').value;
+            const priority = parseInt(document.getElementById('nzbPriority').value);
+
+            try {
+                if (file) {
+                    // Upload file
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    formData.append('category', category);
+                    formData.append('priority', priority);
+
+                    const token = getToken();
+                    const res = await fetch(API + '/nzb/upload', {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${token}` },
+                        body: formData
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        toast('NZB added!');
+                        closeModal('addNzbModal');
+                        await loadQueue();
+                    } else {
+                        toast(data.error || 'Failed to add NZB', 'error');
+                    }
+                } else if (url) {
+                    const res = await api('/nzb/add', {
+                        method: 'POST',
+                        body: JSON.stringify({ url, category, priority })
+                    });
+                    if (res.success) {
+                        toast('NZB added!');
+                        closeModal('addNzbModal');
+                        await loadQueue();
+                    } else {
+                        toast(res.error || 'Failed to add NZB', 'error');
+                    }
+                } else {
+                    toast('Please provide a URL or file', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function deleteHistoryItem(id) {
+            try {
+                await api(`/history/${id}`, { method: 'DELETE' });
+                await loadHistory();
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function clearHistory() {
+            if (!confirm('Clear all download history?')) return;
+            try {
+                await api('/history/clear', { method: 'POST' });
+                toast('History cleared');
+                await loadHistory();
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        function openServerModal(server = null) {
+            document.getElementById('serverModalTitle').textContent = server ? 'Edit Server' : 'Add Usenet Server';
+            document.getElementById('serverEditName').value = server ? server.name : '';
+            document.getElementById('serverName').value = server ? server.name : '';
+            document.getElementById('serverHost').value = server ? server.host : '';
+            document.getElementById('serverPort').value = server ? server.port : 563;
+            document.getElementById('serverConnections').value = server ? server.connections : 10;
+            document.getElementById('serverUsername').value = server ? server.username : '';
+            document.getElementById('serverPassword').value = '';
+            document.getElementById('serverSsl').checked = server ? server.ssl : true;
+            document.getElementById('serverEnabled').checked = server ? server.enabled : true;
+            openModal('serverModal');
+        }
+
+        async function editServer(name) {
+            const data = await api('/servers');
+            const server = (data.servers || []).find(s => s.name === name);
+            if (server) openServerModal(server);
+        }
+
+        async function saveServer(e) {
+            e.preventDefault();
+            try {
+                const res = await api('/server', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        name: document.getElementById('serverName').value,
+                        host: document.getElementById('serverHost').value,
+                        port: parseInt(document.getElementById('serverPort').value),
+                        connections: parseInt(document.getElementById('serverConnections').value),
+                        username: document.getElementById('serverUsername').value,
+                        password: document.getElementById('serverPassword').value,
+                        ssl: document.getElementById('serverSsl').checked,
+                        enabled: document.getElementById('serverEnabled').checked,
+                    })
+                });
+                if (res.success) {
+                    toast('Server saved');
+                    closeModal('serverModal');
+                    await loadServers();
+                } else {
+                    toast(res.error || 'Save failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function deleteServer(name) {
+            if (!confirm(`Delete server "${name}"?`)) return;
+            try {
+                await api(`/server/${name}`, { method: 'DELETE' });
+                toast('Server deleted');
+                await loadServers();
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        function openCategoryModal() {
+            document.getElementById('catName').value = '';
+            document.getElementById('catDirectory').value = '';
+            document.getElementById('catPriority').value = '0';
+            openModal('categoryModal');
+        }
+
+        async function saveCategory(e) {
+            e.preventDefault();
+            try {
+                const res = await api('/category', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        name: document.getElementById('catName').value,
+                        directory: document.getElementById('catDirectory').value,
+                        priority: parseInt(document.getElementById('catPriority').value),
+                    })
+                });
+                if (res.success) {
+                    toast('Category saved');
+                    closeModal('categoryModal');
+                    await loadCategories();
+                } else {
+                    toast(res.error || 'Save failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function deleteCategory(name) {
+            if (!confirm(`Delete category "${name}"?`)) return;
+            try {
+                await api(`/category/${name}`, { method: 'DELETE' });
+                toast('Category deleted');
+                await loadCategories();
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function saveSettings(e) {
+            e.preventDefault();
+            try {
+                const res = await api('/config', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        port: parseInt(document.getElementById('cfgPort').value),
+                        data_path: document.getElementById('cfgDataPath').value,
+                        downloads_path: document.getElementById('cfgDownloadsPath').value,
+                        timezone: document.getElementById('cfgTimezone').value,
+                        image: document.getElementById('cfgImage').value,
+                        domain: document.getElementById('cfgDomain').value,
+                    })
+                });
+                if (res.success) {
+                    toast('Settings saved! Restart SABnzbd to apply.');
+                } else {
+                    toast('Save failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function loadLogs() {
+            const lines = document.getElementById('logLines').value;
+            try {
+                const data = await api('/logs?lines=' + lines);
+                document.getElementById('logsContainer').textContent = data.logs || 'No logs available';
+            } catch (e) {
+                document.getElementById('logsContainer').textContent = 'Error loading logs';
+            }
+        }
+
+        async function updateContainer() {
+            if (!confirm('Update SABnzbd to latest version?')) return;
+            toast('Updating SABnzbd...');
+            try {
+                const res = await api('/container/update', { method: 'POST' });
+                if (res.success) {
+                    toast('Update complete!');
+                    await refresh();
+                } else {
+                    toast(res.error || 'Update failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function restartContainer() {
+            toast('Restarting SABnzbd...');
+            try {
+                const res = await api('/container/restart', { method: 'POST' });
+                if (res.success) {
+                    toast('SABnzbd restarted');
+                    await refresh();
+                } else {
+                    toast(res.error || 'Restart failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function uninstallContainer() {
+            if (!confirm('Uninstall SABnzbd? This will remove the container (data is preserved).')) return;
+            try {
+                const res = await api('/container', { method: 'DELETE' });
+                if (res.success) {
+                    toast('SABnzbd uninstalled');
+                    await refresh();
+                } else {
+                    toast(res.error || 'Uninstall failed', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
+            }
+        }
+
+        // Initialize
+        refresh();
+        setInterval(refresh, 15000);
     </script>
-    <script src="/shared/sidebar.js"></script>
 </body>
 </html>

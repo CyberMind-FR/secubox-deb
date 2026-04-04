@@ -1,18 +1,25 @@
 """
-SecuBox Jitsi API
-LXC-based Jitsi Meet video conferencing management
-"""
-from fastapi import FastAPI, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
-from pathlib import Path
-import subprocess
-import json
-import os
+SecuBox-Deb :: Jitsi Meet API
+CyberMind - https://cybermind.fr
+Author: Gerald Kerma <gandalf@gk2.net>
+License: Proprietary / ANSSI CSPN candidate
 
-# Core imports
+Jitsi Meet video conferencing with Docker-based deployment.
+Provides room management, authentication, recording (Jibri), and streaming.
+"""
+import asyncio
+import json
+import shutil
+import subprocess
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+from fastapi import FastAPI, APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
+
 try:
-    from secubox_core.auth import require_jwt
+    from secubox_core.auth import router as auth_router, require_jwt
     from secubox_core.logger import get_logger
 except ImportError:
     def require_jwt():
@@ -22,635 +29,870 @@ except ImportError:
         def error(self, msg): print(f"ERROR: {msg}")
         def warning(self, msg): print(f"WARN: {msg}")
     def get_logger(name): return Logger()
+    auth_router = None
 
 app = FastAPI(
     title="secubox-jitsi",
-    root_path="/api/v1/jitsi",
+    version="1.0.0",
+    root_path="/api/v1/jitsi"
 )
+if auth_router:
+    app.include_router(auth_router, prefix="/auth")
 
+router = APIRouter()
 log = get_logger("jitsi")
 
-# ══════════════════════════════════════════════════════════════════
+# ============================================================================
 # Configuration
-# ══════════════════════════════════════════════════════════════════
+# ============================================================================
 
-LXC_NAME = "secubox-jitsi"
-CONFIG_DIR = Path("/var/lib/secubox/jitsi")
-DATA_DIR = Path("/var/lib/secubox/jitsi/data")
-JITSI_WEB_PORT = 443
-JITSI_XMPP_PORT = 5222
-JVB_PORT = 10000
+CONFIG_FILE = Path("/etc/secubox/jitsi.toml")
+DATA_DIR = Path("/srv/jitsi")
+RECORDINGS_DIR = DATA_DIR / "recordings"
+CONTAINER_PREFIX = "secbx-jitsi"
+JITSI_CONTAINERS = {
+    "web": f"{CONTAINER_PREFIX}-web",
+    "prosody": f"{CONTAINER_PREFIX}-prosody",
+    "jicofo": f"{CONTAINER_PREFIX}-jicofo",
+    "jvb": f"{CONTAINER_PREFIX}-jvb",
+    "jibri": f"{CONTAINER_PREFIX}-jibri",
+}
 
-
-# ══════════════════════════════════════════════════════════════════
-# LXC Helper Functions
-# ══════════════════════════════════════════════════════════════════
-
-def lxc_exists() -> bool:
-    """Check if LXC container exists."""
-    result = subprocess.run(
-        ["lxc-info", "-n", LXC_NAME],
-        capture_output=True, text=True
-    )
-    return result.returncode == 0
-
-
-def lxc_running() -> bool:
-    """Check if LXC container is running."""
-    try:
-        result = subprocess.run(
-            ["lxc-info", "-n", LXC_NAME, "-s"],
-            capture_output=True, text=True, timeout=10
-        )
-        return "RUNNING" in result.stdout
-    except Exception:
-        return False
-
-
-def lxc_get_ip() -> Optional[str]:
-    """Get LXC container IP address."""
-    try:
-        result = subprocess.run(
-            ["lxc-info", "-n", LXC_NAME, "-iH"],
-            capture_output=True, text=True, timeout=10
-        )
-        if result.returncode == 0 and result.stdout.strip():
-            return result.stdout.strip().split("\n")[0]
-    except Exception:
-        pass
-    return None
+DEFAULT_CONFIG = {
+    "enabled": False,
+    "domain": "meet.secubox.local",
+    "public_url": "https://meet.secubox.local",
+    "timezone": "Europe/Paris",
+    "http_port": 8443,
+    "https_port": 443,
+    "jvb_port": 10000,
+    "auth_enabled": False,
+    "auth_type": "internal",  # internal, jwt, ldap
+    "jwt_secret": "",
+    "jwt_app_id": "secubox",
+    "ldap_url": "",
+    "ldap_base": "",
+    "enable_lobby": True,
+    "enable_breakout_rooms": True,
+    "enable_recording": False,
+    "enable_streaming": False,
+    "jibri_enabled": False,
+    "max_participants": 100,
+    "welcome_message": "Welcome to SecuBox Meeting",
+    "haproxy": False,
+}
 
 
-def lxc_exec(cmd: List[str], timeout: int = 60) -> subprocess.CompletedProcess:
-    """Execute command inside LXC container."""
-    return subprocess.run(
-        ["lxc-attach", "-n", LXC_NAME, "--"] + cmd,
-        capture_output=True, text=True, timeout=timeout
-    )
+# ============================================================================
+# Models
+# ============================================================================
+
+class JitsiConfig(BaseModel):
+    enabled: bool = False
+    domain: str = "meet.secubox.local"
+    public_url: str = "https://meet.secubox.local"
+    timezone: str = "Europe/Paris"
+    http_port: int = 8443
+    https_port: int = 443
+    auth_enabled: bool = False
+    auth_type: str = "internal"
+    jwt_secret: str = ""
+    jwt_app_id: str = "secubox"
+    enable_lobby: bool = True
+    enable_breakout_rooms: bool = True
+    enable_recording: bool = False
+    max_participants: int = 100
+    welcome_message: str = "Welcome to SecuBox Meeting"
 
 
-def lxc_start() -> bool:
-    """Start the LXC container."""
-    result = subprocess.run(
-        ["lxc-start", "-n", LXC_NAME],
-        capture_output=True, text=True
-    )
-    return result.returncode == 0
+class AuthConfig(BaseModel):
+    auth_type: str = "internal"
+    jwt_secret: Optional[str] = None
+    jwt_app_id: str = "secubox"
+    ldap_url: Optional[str] = None
+    ldap_base: Optional[str] = None
 
-
-def lxc_stop() -> bool:
-    """Stop the LXC container."""
-    result = subprocess.run(
-        ["lxc-stop", "-n", LXC_NAME],
-        capture_output=True, text=True
-    )
-    return result.returncode == 0
-
-
-# ══════════════════════════════════════════════════════════════════
-# Request/Response Models
-# ══════════════════════════════════════════════════════════════════
 
 class RoomCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=64)
     password: Optional[str] = None
+    moderator_password: Optional[str] = None
     max_participants: int = Field(default=50, ge=2, le=500)
 
 
-class ConfigUpdate(BaseModel):
-    domain: Optional[str] = None
-    enable_authentication: Optional[bool] = None
-    enable_lobby: Optional[bool] = None
-    enable_recording: Optional[bool] = None
-    max_participants: Optional[int] = None
-    welcome_message: Optional[str] = None
+# ============================================================================
+# Helpers
+# ============================================================================
 
-
-# ══════════════════════════════════════════════════════════════════
-# Status Endpoints
-# ══════════════════════════════════════════════════════════════════
-
-@app.get("/health")
-async def health():
-    return {"status": "ok", "module": "jitsi"}
-
-
-@app.get("/status")
-async def status(user=Depends(require_jwt)):
-    """Get Jitsi Meet status."""
-    container_exists = lxc_exists()
-    running = lxc_running() if container_exists else False
-    container_ip = lxc_get_ip() if running else None
-
-    services = {
-        "prosody": False,
-        "jicofo": False,
-        "jitsi-videobridge": False,
-        "nginx": False,
-    }
-
-    version = None
-    domain = None
-    active_conferences = 0
-    active_participants = 0
-
-    if running:
-        # Check service status
-        for service in services.keys():
-            result = lxc_exec(["systemctl", "is-active", service])
-            services[service] = result.returncode == 0
-
-        # Get domain from config
-        result = lxc_exec(["cat", "/etc/jitsi/meet/config.js"])
-        if result.returncode == 0:
-            for line in result.stdout.splitlines():
-                if "domain:" in line:
-                    domain = line.split("'")[1] if "'" in line else None
-                    break
-
-        # Get JVB stats
-        if container_ip:
-            try:
-                result = lxc_exec(["curl", "-s", "http://localhost:8080/colibri/stats"])
-                if result.returncode == 0:
-                    stats = json.loads(result.stdout)
-                    active_conferences = stats.get("conferences", 0)
-                    active_participants = stats.get("participants", 0)
-                    version = stats.get("version")
-            except Exception:
-                pass
-
-    # Get disk usage
-    disk_usage = None
-    if DATA_DIR.exists():
+def get_config() -> dict:
+    """Load Jitsi configuration."""
+    if CONFIG_FILE.exists():
         try:
-            result = subprocess.run(
-                ["du", "-sh", str(DATA_DIR)],
-                capture_output=True, text=True
-            )
-            if result.returncode == 0:
-                disk_usage = result.stdout.split()[0]
+            import tomllib
+            return {**DEFAULT_CONFIG, **tomllib.loads(CONFIG_FILE.read_text())}
         except Exception:
             pass
-
-    return {
-        "container_exists": container_exists,
-        "running": running,
-        "container_ip": container_ip,
-        "services": services,
-        "version": version,
-        "domain": domain,
-        "active_conferences": active_conferences,
-        "active_participants": active_participants,
-        "disk_usage": disk_usage,
-    }
+    return DEFAULT_CONFIG.copy()
 
 
-# ══════════════════════════════════════════════════════════════════
-# Lifecycle Endpoints
-# ══════════════════════════════════════════════════════════════════
-
-@app.post("/install")
-async def install(
-    domain: str = Query(..., description="Jitsi domain (e.g., meet.example.com)"),
-    user=Depends(require_jwt)
-):
-    """Install Jitsi Meet in LXC container."""
-    if lxc_exists():
-        raise HTTPException(400, "Container already exists")
-
-    log.info(f"Installing Jitsi Meet for {domain}")
-
-    # Create data directories
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-
-    # Create LXC container
-    result = subprocess.run([
-        "lxc-create", "-n", LXC_NAME,
-        "-t", "download",
-        "--",
-        "-d", "debian",
-        "-r", "bookworm",
-        "-a", "amd64"
-    ], capture_output=True, text=True, timeout=600)
-
-    if result.returncode != 0:
-        raise HTTPException(500, f"Failed to create container: {result.stderr}")
-
-    # Configure container
-    lxc_config = f"/var/lib/lxc/{LXC_NAME}/config"
-    with open(lxc_config, "a") as f:
-        f.write(f"\n# SecuBox Jitsi config\n")
-        f.write(f"lxc.mount.entry = {DATA_DIR} data none bind,create=dir 0 0\n")
-        f.write("lxc.start.auto = 1\n")
-
-    # Start container
-    if not lxc_start():
-        raise HTTPException(500, "Failed to start container")
-
-    # Wait for network
-    import time
-    for _ in range(30):
-        if lxc_get_ip():
-            break
-        time.sleep(1)
-
-    # Install Jitsi
-    install_script = f'''#!/bin/bash
-set -e
-
-export DEBIAN_FRONTEND=noninteractive
-
-# Set hostname
-echo "{domain}" > /etc/hostname
-hostname {domain}
-
-# Add hosts entry
-echo "127.0.0.1 {domain}" >> /etc/hosts
-
-# Update and install prerequisites
-apt-get update
-apt-get install -y gnupg2 apt-transport-https curl
-
-# Add Jitsi repository
-curl -fsSL https://download.jitsi.org/jitsi-key.gpg.key | gpg --dearmor -o /usr/share/keyrings/jitsi-keyring.gpg
-echo "deb [signed-by=/usr/share/keyrings/jitsi-keyring.gpg] https://download.jitsi.org stable/" > /etc/apt/sources.list.d/jitsi-stable.list
-
-apt-get update
-
-# Pre-configure Jitsi
-echo "jitsi-videobridge2 jitsi-videobridge/jvb-hostname string {domain}" | debconf-set-selections
-echo "jitsi-meet-web-config jitsi-meet/cert-choice select Generate a new self-signed certificate" | debconf-set-selections
-
-# Install Jitsi Meet
-apt-get install -y jitsi-meet
-
-# Enable services
-systemctl enable prosody jicofo jitsi-videobridge2 nginx
-systemctl start prosody jicofo jitsi-videobridge2 nginx
-
-echo "Jitsi Meet installed successfully"
-'''
-
-    result = lxc_exec(["bash", "-c", install_script], timeout=900)
-
-    if result.returncode != 0:
-        log.error(f"Install failed: {result.stderr}")
-        raise HTTPException(500, f"Installation failed: {result.stderr[:500]}")
-
-    log.info("Jitsi Meet installed successfully")
-    return {"success": True, "message": f"Jitsi installed for {domain}"}
+def save_config(config: dict):
+    """Save Jitsi configuration."""
+    CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    lines = ["# SecuBox Jitsi Meet configuration"]
+    for k, v in config.items():
+        if isinstance(v, bool):
+            lines.append(f"{k} = {str(v).lower()}")
+        elif isinstance(v, int):
+            lines.append(f"{k} = {v}")
+        elif isinstance(v, list):
+            lines.append(f'{k} = {v}')
+        else:
+            lines.append(f'{k} = "{v}"')
+    CONFIG_FILE.write_text("\n".join(lines) + "\n")
 
 
-@app.post("/start")
-async def start(user=Depends(require_jwt)):
-    """Start Jitsi container."""
-    if not lxc_exists():
-        raise HTTPException(400, "Container not installed")
-
-    if lxc_running():
-        return {"success": True, "message": "Already running"}
-
-    if lxc_start():
-        # Start all Jitsi services
-        for service in ["prosody", "jicofo", "jitsi-videobridge2", "nginx"]:
-            lxc_exec(["systemctl", "start", service])
-        return {"success": True}
-
-    raise HTTPException(500, "Failed to start container")
+def detect_runtime() -> Optional[str]:
+    """Detect container runtime (docker or podman)."""
+    if shutil.which("podman"):
+        return "podman"
+    if shutil.which("docker"):
+        return "docker"
+    return None
 
 
-@app.post("/stop")
-async def stop(user=Depends(require_jwt)):
-    """Stop Jitsi container."""
-    if not lxc_running():
-        return {"success": True, "message": "Already stopped"}
+def run_compose(cmd: List[str], timeout: int = 300) -> subprocess.CompletedProcess:
+    """Run docker-compose command."""
+    rt = detect_runtime()
+    if not rt:
+        raise HTTPException(500, "No container runtime found")
 
-    # Stop services gracefully
-    for service in ["nginx", "jitsi-videobridge2", "jicofo", "prosody"]:
-        lxc_exec(["systemctl", "stop", service])
+    compose_cmd = "docker-compose" if rt == "docker" else "podman-compose"
+    compose_file = DATA_DIR / "docker-compose.yml"
 
-    if lxc_stop():
-        return {"success": True}
+    if not compose_file.exists():
+        raise HTTPException(400, "Jitsi not installed")
 
-    raise HTTPException(500, "Failed to stop container")
-
-
-@app.post("/restart")
-async def restart(user=Depends(require_jwt)):
-    """Restart Jitsi services."""
-    if not lxc_running():
-        raise HTTPException(400, "Container not running")
-
-    for service in ["prosody", "jicofo", "jitsi-videobridge2", "nginx"]:
-        lxc_exec(["systemctl", "restart", service])
-
-    return {"success": True}
+    return subprocess.run(
+        [compose_cmd, "-f", str(compose_file)] + cmd,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        cwd=str(DATA_DIR)
+    )
 
 
-@app.delete("/uninstall")
-async def uninstall(user=Depends(require_jwt)):
-    """Remove Jitsi container (keeps data)."""
-    if lxc_running():
-        lxc_stop()
+def get_container_status(name: str) -> dict:
+    """Get specific container status."""
+    rt = detect_runtime()
+    if not rt:
+        return {"status": "no_runtime", "uptime": ""}
 
-    if lxc_exists():
+    try:
         result = subprocess.run(
-            ["lxc-destroy", "-n", LXC_NAME],
-            capture_output=True, text=True
+            [rt, "ps", "--filter", f"name={name}", "--format", "{{.Status}}"],
+            capture_output=True, text=True, timeout=5
         )
-        if result.returncode != 0:
-            raise HTTPException(500, f"Failed to destroy: {result.stderr}")
+        if result.stdout.strip():
+            return {"status": "running", "uptime": result.stdout.strip()}
 
-    return {"success": True, "message": "Container removed, data preserved"}
+        result = subprocess.run(
+            [rt, "ps", "-a", "--filter", f"name={name}", "--format", "{{.Status}}"],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.stdout.strip():
+            return {"status": "stopped", "uptime": ""}
 
-
-# ══════════════════════════════════════════════════════════════════
-# Conference Management
-# ══════════════════════════════════════════════════════════════════
-
-@app.get("/conferences")
-async def list_conferences(user=Depends(require_jwt)):
-    """List active conferences."""
-    if not lxc_running():
-        raise HTTPException(400, "Container not running")
-
-    container_ip = lxc_get_ip()
-    if not container_ip:
-        return {"conferences": []}
-
-    try:
-        result = lxc_exec(["curl", "-s", "http://localhost:8080/colibri/stats"])
-        if result.returncode == 0:
-            stats = json.loads(result.stdout)
-            return {
-                "conferences": stats.get("conferences", 0),
-                "participants": stats.get("participants", 0),
-                "largest_conference": stats.get("largest_conference", 0),
-                "total_conferences_created": stats.get("total_conferences_created", 0),
-            }
+        return {"status": "not_installed", "uptime": ""}
     except Exception:
-        pass
-
-    return {"conferences": [], "error": "Failed to get stats"}
+        return {"status": "error", "uptime": ""}
 
 
-@app.post("/rooms")
-async def create_room(req: RoomCreate, user=Depends(require_jwt)):
-    """Create a meeting room with optional password."""
-    if not lxc_running():
-        raise HTTPException(400, "Container not running")
+def is_jitsi_running() -> bool:
+    """Check if main Jitsi containers are running."""
+    for name in ["web", "prosody", "jicofo", "jvb"]:
+        if get_container_status(JITSI_CONTAINERS[name])["status"] != "running":
+            return False
+    return True
 
-    container_ip = lxc_get_ip()
-    if not container_ip:
-        raise HTTPException(500, "Cannot get container IP")
 
-    # Generate room URL
-    room_name = req.name.replace(" ", "_").lower()
-    room_url = f"https://{container_ip}/{room_name}"
-
-    # Password can only be set when joining the room
+def get_all_container_status() -> Dict[str, dict]:
+    """Get status of all Jitsi containers."""
     return {
-        "success": True,
-        "room_name": room_name,
-        "url": room_url,
-        "password_required": req.password is not None,
+        name: get_container_status(container)
+        for name, container in JITSI_CONTAINERS.items()
     }
 
 
-# ══════════════════════════════════════════════════════════════════
-# Configuration
-# ══════════════════════════════════════════════════════════════════
+def generate_compose_file(config: dict) -> str:
+    """Generate docker-compose.yml for Jitsi."""
+    domain = config.get("domain", "meet.secubox.local")
+    public_url = config.get("public_url", f"https://{domain}")
+    tz = config.get("timezone", "Europe/Paris")
+    http_port = config.get("http_port", 8443)
+    https_port = config.get("https_port", 443)
+    jvb_port = config.get("jvb_port", 10000)
+    auth_enabled = config.get("auth_enabled", False)
+    auth_type = config.get("auth_type", "internal")
+    jibri_enabled = config.get("jibri_enabled", False)
 
-@app.get("/config")
-async def get_config(user=Depends(require_jwt)):
-    """Get Jitsi configuration."""
-    if not lxc_running():
-        return {"error": "Container not running"}
+    auth_env = ""
+    if auth_enabled:
+        if auth_type == "jwt":
+            auth_env = f"""
+      - ENABLE_AUTH=1
+      - AUTH_TYPE=jwt
+      - JWT_APP_ID={config.get('jwt_app_id', 'secubox')}
+      - JWT_APP_SECRET={config.get('jwt_secret', '')}
+      - JWT_ACCEPTED_ISSUERS=secubox
+      - JWT_ACCEPTED_AUDIENCES=secubox"""
+        elif auth_type == "ldap":
+            auth_env = f"""
+      - ENABLE_AUTH=1
+      - AUTH_TYPE=ldap
+      - LDAP_URL={config.get('ldap_url', '')}
+      - LDAP_BASE={config.get('ldap_base', '')}"""
+        else:
+            auth_env = """
+      - ENABLE_AUTH=1
+      - AUTH_TYPE=internal"""
 
-    config = {
-        "domain": None,
-        "enable_authentication": False,
-        "enable_lobby": False,
-        "enable_recording": False,
-        "max_participants": 100,
-        "welcome_message": "",
-    }
+    jibri_service = ""
+    if jibri_enabled:
+        jibri_service = f"""
+  jibri:
+    image: jitsi/jibri:stable
+    container_name: {JITSI_CONTAINERS['jibri']}
+    restart: unless-stopped
+    privileged: true
+    shm_size: 2gb
+    volumes:
+      - ./jibri:/config:Z
+      - ./recordings:/recordings:Z
+    environment:
+      - XMPP_AUTH_DOMAIN=auth.{domain}
+      - XMPP_INTERNAL_MUC_DOMAIN=internal-muc.{domain}
+      - XMPP_RECORDER_DOMAIN=recorder.{domain}
+      - XMPP_SERVER={JITSI_CONTAINERS['prosody']}
+      - JIBRI_XMPP_USER=jibri
+      - JIBRI_RECORDER_USER=recorder
+      - JIBRI_RECORDING_DIR=/recordings
+      - TZ={tz}
+    depends_on:
+      - prosody"""
 
-    # Read interface_config.js
-    result = lxc_exec(["cat", "/etc/jitsi/meet/config.js"])
-    if result.returncode == 0:
-        for line in result.stdout.splitlines():
-            line = line.strip()
-            if "domain:" in line:
-                config["domain"] = line.split("'")[1] if "'" in line else None
-            elif "enableLobby:" in line:
-                config["enable_lobby"] = "true" in line.lower()
-            elif "fileRecordingsEnabled:" in line:
-                config["enable_recording"] = "true" in line.lower()
+    return f"""# SecuBox Jitsi Meet Docker Compose
+# Auto-generated - do not edit manually
 
-    return config
+version: '3.8'
 
+services:
+  web:
+    image: jitsi/web:stable
+    container_name: {JITSI_CONTAINERS['web']}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:{http_port}:80"
+      - "127.0.0.1:{https_port}:443"
+    volumes:
+      - ./web:/config:Z
+      - ./web/crontabs:/var/spool/cron/crontabs:Z
+      - ./transcripts:/usr/share/jitsi-meet/transcripts:Z
+    environment:
+      - ENABLE_COLIBRI_WEBSOCKET=1
+      - ENABLE_FLOC=0
+      - ENABLE_LETSENCRYPT=0
+      - ENABLE_XMPP_WEBSOCKET=1
+      - DISABLE_HTTPS=0
+      - PUBLIC_URL={public_url}
+      - TZ={tz}{auth_env}
+    depends_on:
+      - prosody
+    networks:
+      - jitsi-net
 
-@app.post("/config")
-async def update_config(req: ConfigUpdate, user=Depends(require_jwt)):
-    """Update Jitsi configuration."""
-    if not lxc_running():
-        raise HTTPException(400, "Container not running")
+  prosody:
+    image: jitsi/prosody:stable
+    container_name: {JITSI_CONTAINERS['prosody']}
+    restart: unless-stopped
+    expose:
+      - '5222'
+      - '5347'
+      - '5280'
+    volumes:
+      - ./prosody/config:/config:Z
+      - ./prosody/prosody-plugins-custom:/prosody-plugins-custom:Z
+    environment:
+      - XMPP_DOMAIN={domain}
+      - XMPP_AUTH_DOMAIN=auth.{domain}
+      - XMPP_MUC_DOMAIN=muc.{domain}
+      - XMPP_INTERNAL_MUC_DOMAIN=internal-muc.{domain}
+      - XMPP_GUEST_DOMAIN=guest.{domain}
+      - XMPP_RECORDER_DOMAIN=recorder.{domain}
+      - XMPP_CROSS_DOMAIN=true
+      - TZ={tz}
+      - JICOFO_AUTH_USER=focus
+      - JVB_AUTH_USER=jvb
+      - JIBRI_XMPP_USER=jibri
+      - JIBRI_RECORDER_USER=recorder{auth_env}
+    networks:
+      - jitsi-net
 
-    # Update interface_config.js for UI settings
-    if req.welcome_message is not None:
-        result = lxc_exec([
-            "sed", "-i",
-            f"s/MOBILE_APP_PROMO: .*/MOBILE_APP_PROMO: false,/",
-            "/usr/share/jitsi-meet/interface_config.js"
-        ])
+  jicofo:
+    image: jitsi/jicofo:stable
+    container_name: {JITSI_CONTAINERS['jicofo']}
+    restart: unless-stopped
+    volumes:
+      - ./jicofo:/config:Z
+    environment:
+      - XMPP_DOMAIN={domain}
+      - XMPP_AUTH_DOMAIN=auth.{domain}
+      - XMPP_INTERNAL_MUC_DOMAIN=internal-muc.{domain}
+      - XMPP_MUC_DOMAIN=muc.{domain}
+      - XMPP_SERVER={JITSI_CONTAINERS['prosody']}
+      - JICOFO_AUTH_USER=focus
+      - TZ={tz}
+      - ENABLE_AUTO_OWNER=true
+      - ENABLE_CODEC_VP8=true
+      - ENABLE_CODEC_VP9=true
+      - ENABLE_CODEC_H264=true
+    depends_on:
+      - prosody
+    networks:
+      - jitsi-net
 
-    # Restart services to apply
-    for service in ["prosody", "jicofo", "jitsi-videobridge2"]:
-        lxc_exec(["systemctl", "restart", service])
-
-    return {"success": True, "message": "Configuration updated"}
-
-
-# ══════════════════════════════════════════════════════════════════
-# Authentication
-# ══════════════════════════════════════════════════════════════════
-
-@app.post("/auth/enable")
-async def enable_authentication(user=Depends(require_jwt)):
-    """Enable Prosody authentication for moderators."""
-    if not lxc_running():
-        raise HTTPException(400, "Container not running")
-
-    # Get domain
-    result = lxc_exec(["hostname"])
-    domain = result.stdout.strip() if result.returncode == 0 else "localhost"
-
-    auth_script = f'''#!/bin/bash
-# Enable authentication in Prosody
-sed -i 's/authentication = "anonymous"/authentication = "internal_hashed"/' /etc/prosody/conf.avail/{domain}.cfg.lua
-
-# Add guest virtual host
-cat >> /etc/prosody/conf.avail/{domain}.cfg.lua << EOF
-
-VirtualHost "guest.{domain}"
-    authentication = "anonymous"
-    modules_enabled = {{
-        "turncredentials";
-    }}
-    c2s_require_encryption = false
-EOF
-
-# Update Jitsi config
-sed -i "s/anonymousdomain: .*/anonymousdomain: 'guest.{domain}',/" /etc/jitsi/meet/{domain}-config.js
-
-# Restart services
-systemctl restart prosody jicofo
-'''
-
-    result = lxc_exec(["bash", "-c", auth_script])
-    return {"success": result.returncode == 0, "domain": domain}
-
-
-@app.post("/auth/users")
-async def create_auth_user(
-    username: str = Query(...),
-    password: str = Query(..., min_length=8),
-    user=Depends(require_jwt)
-):
-    """Create a moderator user."""
-    if not lxc_running():
-        raise HTTPException(400, "Container not running")
-
-    result = lxc_exec(["hostname"])
-    domain = result.stdout.strip() if result.returncode == 0 else "localhost"
-
-    result = lxc_exec([
-        "prosodyctl", "register",
-        username, domain, password
-    ])
-
-    return {
-        "success": result.returncode == 0,
-        "username": f"{username}@{domain}"
-    }
-
-
-# ══════════════════════════════════════════════════════════════════
-# Recording (Jibri)
-# ══════════════════════════════════════════════════════════════════
-
-@app.get("/recording")
-async def recording_status(user=Depends(require_jwt)):
-    """Get recording (Jibri) status."""
-    if not lxc_running():
-        raise HTTPException(400, "Container not running")
-
-    result = lxc_exec(["systemctl", "is-active", "jibri"])
-    jibri_installed = result.returncode == 0 or "inactive" in result.stdout
-
-    return {
-        "installed": jibri_installed,
-        "running": result.returncode == 0,
-        "message": "Jibri provides recording and streaming capabilities"
-    }
-
-
-@app.post("/recording/install")
-async def install_jibri(user=Depends(require_jwt)):
-    """Install Jibri for recording support."""
-    if not lxc_running():
-        raise HTTPException(400, "Container not running")
-
-    # Jibri installation is complex and requires X11, Chrome, ffmpeg
-    install_script = '''#!/bin/bash
-set -e
-
-apt-get update
-apt-get install -y jibri
-
-systemctl enable jibri
-systemctl start jibri
-'''
-
-    result = lxc_exec(["bash", "-c", install_script], timeout=600)
-
-    return {
-        "success": result.returncode == 0,
-        "message": "Jibri installed" if result.returncode == 0 else result.stderr[:200]
-    }
-
-
-# ══════════════════════════════════════════════════════════════════
-# Logs
-# ══════════════════════════════════════════════════════════════════
-
-@app.get("/logs")
-async def get_logs(
-    service: str = Query("jicofo", enum=["prosody", "jicofo", "jitsi-videobridge2", "nginx"]),
-    lines: int = Query(100, ge=10, le=1000),
-    user=Depends(require_jwt)
-):
-    """Get Jitsi service logs."""
-    if not lxc_running():
-        raise HTTPException(400, "Container not running")
-
-    result = lxc_exec(["journalctl", "-u", service, "-n", str(lines), "--no-pager"])
-
-    return {"logs": result.stdout.splitlines() if result.returncode == 0 else []}
+  jvb:
+    image: jitsi/jvb:stable
+    container_name: {JITSI_CONTAINERS['jvb']}
+    restart: unless-stopped
+    ports:
+      - "{jvb_port}:{jvb_port}/udp"
+    volumes:
+      - ./jvb:/config:Z
+    environment:
+      - XMPP_AUTH_DOMAIN=auth.{domain}
+      - XMPP_INTERNAL_MUC_DOMAIN=internal-muc.{domain}
+      - XMPP_SERVER={JITSI_CONTAINERS['prosody']}
+      - JVB_AUTH_USER=jvb
+      - JVB_PORT={jvb_port}
+      - JVB_STUN_SERVERS=meet-jit-si-turnrelay.jitsi.net:443
+      - TZ={tz}
+    depends_on:
+      - prosody
+    networks:
+      - jitsi-net
+{jibri_service}
+networks:
+  jitsi-net:
+    driver: bridge
+"""
 
 
-# ══════════════════════════════════════════════════════════════════
-# Stats
-# ══════════════════════════════════════════════════════════════════
-
-@app.get("/stats")
-async def get_stats(user=Depends(require_jwt)):
-    """Get detailed JVB statistics."""
-    if not lxc_running():
-        raise HTTPException(400, "Container not running")
+def get_jvb_stats() -> dict:
+    """Get JVB (Jitsi Videobridge) statistics via colibri."""
+    rt = detect_runtime()
+    if not rt:
+        return {}
 
     try:
-        result = lxc_exec(["curl", "-s", "http://localhost:8080/colibri/stats"])
+        result = subprocess.run(
+            [rt, "exec", JITSI_CONTAINERS["jvb"], "curl", "-s", "http://localhost:8080/colibri/stats"],
+            capture_output=True, text=True, timeout=10
+        )
         if result.returncode == 0:
             return json.loads(result.stdout)
     except Exception:
         pass
+    return {}
 
-    return {"error": "Failed to get stats"}
+
+# ============================================================================
+# Public Endpoints
+# ============================================================================
+
+@router.get("/health")
+async def health():
+    """Health check endpoint."""
+    return {"status": "ok", "module": "jitsi"}
 
 
-# ══════════════════════════════════════════════════════════════════
-# SSL Certificates
-# ══════════════════════════════════════════════════════════════════
+@router.get("/status")
+async def status(user=Depends(require_jwt)):
+    """Get Jitsi Meet comprehensive status."""
+    cfg = get_config()
+    rt = detect_runtime()
+    containers = get_all_container_status()
+    running = is_jitsi_running()
 
-@app.post("/ssl/letsencrypt")
-async def setup_letsencrypt(
-    email: str = Query(...),
-    user=Depends(require_jwt)
-):
-    """Setup Let's Encrypt SSL certificate."""
-    if not lxc_running():
-        raise HTTPException(400, "Container not running")
+    # Get JVB stats
+    jvb_stats = get_jvb_stats() if running else {}
 
-    result = lxc_exec(["hostname"])
-    domain = result.stdout.strip() if result.returncode == 0 else "localhost"
+    # Disk usage
+    disk_usage = ""
+    if DATA_DIR.exists():
+        try:
+            result = subprocess.run(
+                ["du", "-sh", str(DATA_DIR)],
+                capture_output=True, text=True, timeout=10
+            )
+            disk_usage = result.stdout.split()[0] if result.stdout else ""
+        except Exception:
+            pass
 
-    ssl_script = f'''#!/bin/bash
-set -e
-
-apt-get install -y certbot python3-certbot-nginx
-
-certbot --nginx -d {domain} --non-interactive --agree-tos -m {email}
-
-systemctl restart nginx
-'''
-
-    result = lxc_exec(["bash", "-c", ssl_script], timeout=300)
+    # Count recordings
+    recording_count = 0
+    if RECORDINGS_DIR.exists():
+        recording_count = len(list(RECORDINGS_DIR.glob("*.mp4")))
 
     return {
-        "success": result.returncode == 0,
-        "domain": domain,
-        "message": "SSL certificate installed" if result.returncode == 0 else result.stderr[:200]
+        "enabled": cfg.get("enabled", False),
+        "domain": cfg.get("domain", "meet.secubox.local"),
+        "public_url": cfg.get("public_url", "https://meet.secubox.local"),
+        "http_port": cfg.get("http_port", 8443),
+        "https_port": cfg.get("https_port", 443),
+        "jvb_port": cfg.get("jvb_port", 10000),
+        "docker_available": rt is not None,
+        "runtime": rt or "none",
+        "running": running,
+        "containers": containers,
+        "auth_enabled": cfg.get("auth_enabled", False),
+        "auth_type": cfg.get("auth_type", "internal"),
+        "jibri_enabled": cfg.get("jibri_enabled", False),
+        "active_conferences": jvb_stats.get("conferences", 0),
+        "active_participants": jvb_stats.get("participants", 0),
+        "largest_conference": jvb_stats.get("largest_conference", 0),
+        "total_conferences_created": jvb_stats.get("total_conferences_created", 0),
+        "disk_usage": disk_usage,
+        "recording_count": recording_count,
     }
+
+
+# ============================================================================
+# Configuration
+# ============================================================================
+
+@router.get("/config")
+async def get_jitsi_config(user=Depends(require_jwt)):
+    """Get Jitsi configuration."""
+    cfg = get_config()
+    # Remove sensitive fields
+    safe_cfg = {k: v for k, v in cfg.items() if k not in ["jwt_secret"]}
+    if cfg.get("jwt_secret"):
+        safe_cfg["jwt_secret"] = "***configured***"
+    return safe_cfg
+
+
+@router.post("/config")
+async def set_jitsi_config(config: JitsiConfig, user=Depends(require_jwt)):
+    """Update Jitsi configuration."""
+    cfg = get_config()
+    cfg.update(config.dict(exclude_unset=True))
+    save_config(cfg)
+    log.info(f"Config updated by {user.get('sub', 'unknown')}")
+    return {"success": True, "message": "Configuration saved. Restart to apply."}
+
+
+# ============================================================================
+# Room Management
+# ============================================================================
+
+@router.get("/rooms")
+async def list_rooms(user=Depends(require_jwt)):
+    """List active rooms/conferences."""
+    if not is_jitsi_running():
+        return {"rooms": [], "error": "Jitsi not running"}
+
+    stats = get_jvb_stats()
+    return {
+        "total_active": stats.get("conferences", 0),
+        "total_participants": stats.get("participants", 0),
+        "largest_conference": stats.get("largest_conference", 0),
+        # Note: Jitsi doesn't expose individual room names via colibri stats
+        # Room details require SRTP internal API access
+    }
+
+
+@router.get("/room/{name}")
+async def get_room(name: str, user=Depends(require_jwt)):
+    """Get room details."""
+    if not is_jitsi_running():
+        raise HTTPException(400, "Jitsi not running")
+
+    cfg = get_config()
+    domain = cfg.get("domain", "meet.secubox.local")
+
+    return {
+        "name": name,
+        "url": f"https://{domain}/{name}",
+        "status": "Room status not available via API",
+        "message": "Join the room to see participants"
+    }
+
+
+@router.post("/room/{name}/close")
+async def close_room(name: str, user=Depends(require_jwt)):
+    """Request to close a room (requires Prosody mod)."""
+    if not is_jitsi_running():
+        raise HTTPException(400, "Jitsi not running")
+
+    # This requires custom Prosody module for room control
+    log.warning(f"Room close requested for {name} by {user.get('sub', 'unknown')}")
+    return {
+        "success": False,
+        "message": "Room close requires Prosody admin module. Rooms auto-close when empty."
+    }
+
+
+# ============================================================================
+# Statistics
+# ============================================================================
+
+@router.get("/stats")
+async def get_stats(user=Depends(require_jwt)):
+    """Get detailed JVB statistics."""
+    if not is_jitsi_running():
+        raise HTTPException(400, "Jitsi not running")
+
+    stats = get_jvb_stats()
+    if not stats:
+        return {"error": "Stats not available"}
+
+    return {
+        "conferences": stats.get("conferences", 0),
+        "participants": stats.get("participants", 0),
+        "largest_conference": stats.get("largest_conference", 0),
+        "total_conferences_created": stats.get("total_conferences_created", 0),
+        "total_participants": stats.get("total_participants", 0),
+        "version": stats.get("version"),
+        "stress_level": stats.get("stress_level"),
+        "packet_rate_download": stats.get("packet_rate_download", 0),
+        "packet_rate_upload": stats.get("packet_rate_upload", 0),
+        "bit_rate_download": stats.get("bit_rate_download", 0),
+        "bit_rate_upload": stats.get("bit_rate_upload", 0),
+        "loss_rate_download": stats.get("loss_rate_download", 0),
+        "loss_rate_upload": stats.get("loss_rate_upload", 0),
+    }
+
+
+# ============================================================================
+# Recording Management
+# ============================================================================
+
+@router.get("/recordings")
+async def list_recordings(user=Depends(require_jwt)):
+    """List available recordings."""
+    if not RECORDINGS_DIR.exists():
+        return {"recordings": []}
+
+    recordings = []
+    for f in RECORDINGS_DIR.glob("*.mp4"):
+        stat = f.stat()
+        recordings.append({
+            "id": f.stem,
+            "filename": f.name,
+            "size": stat.st_size,
+            "size_human": f"{stat.st_size / 1024 / 1024:.1f} MB",
+            "created": datetime.fromtimestamp(stat.st_ctime).isoformat(),
+            "path": str(f),
+        })
+
+    recordings.sort(key=lambda x: x["created"], reverse=True)
+    return {"recordings": recordings}
+
+
+@router.delete("/recording/{recording_id}")
+async def delete_recording(recording_id: str, user=Depends(require_jwt)):
+    """Delete a recording."""
+    recording_path = RECORDINGS_DIR / f"{recording_id}.mp4"
+
+    if not recording_path.exists():
+        raise HTTPException(404, "Recording not found")
+
+    try:
+        recording_path.unlink()
+        log.info(f"Recording {recording_id} deleted by {user.get('sub', 'unknown')}")
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(500, f"Failed to delete: {e}")
+
+
+# ============================================================================
+# Authentication
+# ============================================================================
+
+@router.get("/auth/config")
+async def get_auth_config(user=Depends(require_jwt)):
+    """Get authentication configuration."""
+    cfg = get_config()
+    return {
+        "auth_enabled": cfg.get("auth_enabled", False),
+        "auth_type": cfg.get("auth_type", "internal"),
+        "jwt_app_id": cfg.get("jwt_app_id", "secubox"),
+        "jwt_configured": bool(cfg.get("jwt_secret")),
+        "ldap_url": cfg.get("ldap_url", ""),
+        "ldap_base": cfg.get("ldap_base", ""),
+    }
+
+
+@router.post("/auth/config")
+async def set_auth_config(auth: AuthConfig, user=Depends(require_jwt)):
+    """Update authentication configuration."""
+    cfg = get_config()
+
+    cfg["auth_type"] = auth.auth_type
+    if auth.jwt_secret:
+        cfg["jwt_secret"] = auth.jwt_secret
+    cfg["jwt_app_id"] = auth.jwt_app_id
+    if auth.ldap_url:
+        cfg["ldap_url"] = auth.ldap_url
+    if auth.ldap_base:
+        cfg["ldap_base"] = auth.ldap_base
+
+    cfg["auth_enabled"] = True
+    save_config(cfg)
+
+    log.info(f"Auth config updated by {user.get('sub', 'unknown')}")
+    return {"success": True, "message": "Auth config saved. Restart to apply."}
+
+
+# ============================================================================
+# Prosody Status
+# ============================================================================
+
+@router.get("/prosody/status")
+async def prosody_status(user=Depends(require_jwt)):
+    """Get Prosody XMPP server status."""
+    container = get_container_status(JITSI_CONTAINERS["prosody"])
+
+    if container["status"] != "running":
+        return {"running": False, "status": container["status"]}
+
+    rt = detect_runtime()
+    users = []
+
+    try:
+        # Get registered users
+        result = subprocess.run(
+            [rt, "exec", JITSI_CONTAINERS["prosody"], "prosodyctl", "mod_listusers"],
+            capture_output=True, text=True, timeout=10
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            users = result.stdout.strip().split("\n")
+    except Exception:
+        pass
+
+    return {
+        "running": True,
+        "uptime": container["uptime"],
+        "registered_users": len(users),
+        "users": users[:20],  # Limit to first 20
+    }
+
+
+# ============================================================================
+# Jibri (Recording Service)
+# ============================================================================
+
+@router.get("/jibri/status")
+async def jibri_status(user=Depends(require_jwt)):
+    """Get Jibri recording service status."""
+    cfg = get_config()
+    container = get_container_status(JITSI_CONTAINERS["jibri"])
+
+    return {
+        "enabled": cfg.get("jibri_enabled", False),
+        "running": container["status"] == "running",
+        "status": container["status"],
+        "uptime": container["uptime"],
+    }
+
+
+@router.post("/jibri/enable")
+async def enable_jibri(user=Depends(require_jwt)):
+    """Enable Jibri recording service."""
+    cfg = get_config()
+    cfg["jibri_enabled"] = True
+    cfg["enable_recording"] = True
+    save_config(cfg)
+
+    # Regenerate docker-compose
+    compose_content = generate_compose_file(cfg)
+    compose_file = DATA_DIR / "docker-compose.yml"
+    compose_file.write_text(compose_content)
+
+    log.info(f"Jibri enabled by {user.get('sub', 'unknown')}")
+    return {"success": True, "message": "Jibri enabled. Restart Jitsi to apply."}
+
+
+@router.post("/jibri/disable")
+async def disable_jibri(user=Depends(require_jwt)):
+    """Disable Jibri recording service."""
+    cfg = get_config()
+    cfg["jibri_enabled"] = False
+    save_config(cfg)
+
+    # Stop Jibri container
+    rt = detect_runtime()
+    if rt:
+        subprocess.run([rt, "stop", JITSI_CONTAINERS["jibri"]], capture_output=True, timeout=30)
+        subprocess.run([rt, "rm", "-f", JITSI_CONTAINERS["jibri"]], capture_output=True, timeout=10)
+
+    # Regenerate docker-compose without Jibri
+    compose_content = generate_compose_file(cfg)
+    compose_file = DATA_DIR / "docker-compose.yml"
+    compose_file.write_text(compose_content)
+
+    log.info(f"Jibri disabled by {user.get('sub', 'unknown')}")
+    return {"success": True, "message": "Jibri disabled"}
+
+
+# ============================================================================
+# Container Management
+# ============================================================================
+
+@router.get("/container/status")
+async def container_status(user=Depends(require_jwt)):
+    """Get detailed container status."""
+    rt = detect_runtime()
+    containers = get_all_container_status()
+
+    return {
+        "runtime": rt or "none",
+        "containers": containers,
+        "all_running": is_jitsi_running(),
+    }
+
+
+@router.post("/container/install")
+async def install_jitsi(user=Depends(require_jwt)):
+    """Install Jitsi Meet Docker stack."""
+    rt = detect_runtime()
+    if not rt:
+        raise HTTPException(500, "No container runtime (docker/podman) found")
+
+    cfg = get_config()
+
+    # Create directories
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    RECORDINGS_DIR.mkdir(parents=True, exist_ok=True)
+    for subdir in ["web", "prosody/config", "prosody/prosody-plugins-custom", "jicofo", "jvb", "jibri", "transcripts"]:
+        (DATA_DIR / subdir).mkdir(parents=True, exist_ok=True)
+
+    # Generate docker-compose
+    compose_content = generate_compose_file(cfg)
+    compose_file = DATA_DIR / "docker-compose.yml"
+    compose_file.write_text(compose_content)
+
+    # Generate .env file
+    env_content = f"""# Jitsi Meet environment
+TZ={cfg.get('timezone', 'Europe/Paris')}
+PUBLIC_URL={cfg.get('public_url', 'https://meet.secubox.local')}
+"""
+    (DATA_DIR / ".env").write_text(env_content)
+
+    log.info(f"Installing Jitsi by {user.get('sub', 'unknown')}")
+
+    # Pull images
+    try:
+        result = run_compose(["pull"], timeout=600)
+        if result.returncode != 0:
+            return {"success": False, "error": result.stderr, "output": result.stdout}
+
+        return {"success": True, "message": "Jitsi installed. Use Start to launch."}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@router.post("/container/start")
+async def start_jitsi(user=Depends(require_jwt)):
+    """Start Jitsi containers."""
+    if is_jitsi_running():
+        return {"success": False, "error": "Already running"}
+
+    log.info(f"Starting Jitsi by {user.get('sub', 'unknown')}")
+
+    try:
+        result = run_compose(["up", "-d"], timeout=120)
+        await asyncio.sleep(5)
+
+        if is_jitsi_running():
+            return {"success": True}
+        else:
+            return {"success": False, "error": result.stderr or "Failed to start"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@router.post("/container/stop")
+async def stop_jitsi(user=Depends(require_jwt)):
+    """Stop Jitsi containers."""
+    log.info(f"Stopping Jitsi by {user.get('sub', 'unknown')}")
+
+    try:
+        result = run_compose(["down"], timeout=60)
+        return {"success": result.returncode == 0, "output": result.stdout}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@router.post("/container/restart")
+async def restart_jitsi(user=Depends(require_jwt)):
+    """Restart Jitsi containers."""
+    log.info(f"Restarting Jitsi by {user.get('sub', 'unknown')}")
+
+    try:
+        result = run_compose(["restart"], timeout=120)
+        await asyncio.sleep(5)
+        return {"success": result.returncode == 0}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@router.post("/container/uninstall")
+async def uninstall_jitsi(user=Depends(require_jwt)):
+    """Uninstall Jitsi (keeps data)."""
+    log.info(f"Uninstalling Jitsi by {user.get('sub', 'unknown')}")
+
+    try:
+        run_compose(["down", "-v"], timeout=60)
+
+        rt = detect_runtime()
+        if rt:
+            for name in JITSI_CONTAINERS.values():
+                subprocess.run([rt, "rm", "-f", name], capture_output=True, timeout=10)
+
+        return {"success": True, "message": "Containers removed, data preserved in /srv/jitsi"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+# ============================================================================
+# Logs
+# ============================================================================
+
+@router.get("/logs")
+async def get_logs(
+    service: str = Query("web", enum=["web", "prosody", "jicofo", "jvb", "jibri"]),
+    lines: int = Query(100, ge=10, le=1000),
+    user=Depends(require_jwt)
+):
+    """Get container logs."""
+    rt = detect_runtime()
+    if not rt:
+        return {"logs": "No container runtime"}
+
+    container = JITSI_CONTAINERS.get(service)
+    if not container:
+        return {"logs": "Unknown service"}
+
+    try:
+        result = subprocess.run(
+            [rt, "logs", "--tail", str(lines), container],
+            capture_output=True, text=True, timeout=10
+        )
+        logs = result.stdout + result.stderr
+        return {"logs": logs, "service": service}
+    except Exception:
+        return {"logs": "Failed to get logs"}
+
+
+app.include_router(router)

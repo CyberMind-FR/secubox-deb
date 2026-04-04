@@ -4,14 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SecuBox - Domoticz</title>
-    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <link rel="stylesheet" href="/shared/sidebar.css">
     <link rel="stylesheet" href="/shared/crt-light.css">
     <style>
         :root {
-            /* Domoticz accent - teal/cyan */
-            --domoticz-teal: #00bcd4;
-            --domoticz-teal-dim: #0097a7;
-            --domoticz-teal-glow: rgba(0, 188, 212, 0.2);
+            /* Domoticz cyan accent (#06b6d4) */
+            --domoticz-cyan: #06b6d4;
+            --domoticz-cyan-dim: #0891b2;
+            --domoticz-cyan-glow: rgba(6, 182, 212, 0.2);
+            --domoticz-cyan-dark: #164e63;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -47,12 +48,37 @@
 
         .header h1 {
             font-size: 1.5rem;
-            color: var(--domoticz-teal);
-            text-shadow: 0 0 10px var(--domoticz-teal-glow);
+            color: var(--domoticz-cyan);
+            text-shadow: 0 0 10px var(--domoticz-cyan-glow);
         }
 
         .header-actions { display: flex; gap: 0.5rem; align-items: center; }
 
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            border: 1px solid var(--p31-dim, #006622);
+            background: var(--tube-pale, #e8f5e9);
+            color: var(--tube-black, #1a2e1a);
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+
+        body.dark .btn { background: rgba(0,50,20,0.5); color: var(--tube-pale, #c9e5c9); }
+
+        .btn:hover { background: var(--p31-dim, #006622); border-color: var(--p31-peak, #00dd44); color: #fff; }
+
+        .btn-primary { background: var(--domoticz-cyan-dim); border-color: var(--domoticz-cyan); color: #fff; }
+        .btn-primary:hover { background: var(--domoticz-cyan); }
+
+        .btn-danger { background: #442222; border-color: #884444; color: #fff; }
+        .btn-danger:hover { background: #663333; }
+
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+
+        /* Status badge */
         .status-badge {
             display: inline-flex;
             align-items: center;
@@ -69,18 +95,20 @@
 
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 
+        /* Install Banner */
         .install-banner {
-            background: linear-gradient(135deg, rgba(0,188,212,0.1) 0%, rgba(0,188,212,0.05) 100%);
-            border: 2px dashed var(--domoticz-teal);
+            background: linear-gradient(135deg, rgba(6,182,212,0.1) 0%, rgba(6,182,212,0.05) 100%);
+            border: 2px dashed var(--domoticz-cyan);
             border-radius: 8px;
             padding: 2rem;
             text-align: center;
             margin-bottom: 1.5rem;
         }
 
-        .install-banner h2 { color: var(--domoticz-teal); margin-bottom: 1rem; }
-        .install-banner p { color: var(--p31-dim); margin-bottom: 1.5rem; }
+        .install-banner h2 { color: var(--domoticz-cyan); margin-bottom: 1rem; }
+        .install-banner p { color: var(--p31-dim, #006622); margin-bottom: 1.5rem; }
 
+        /* Stats Grid */
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
@@ -89,7 +117,7 @@
         }
 
         .stat-card {
-            background: rgba(0,188,212,0.05);
+            background: rgba(6,182,212,0.05);
             border: 1px solid var(--p31-dim, #006622);
             border-radius: 8px;
             padding: 1rem;
@@ -99,44 +127,48 @@
         body.dark .stat-card { background: rgba(0,50,20,0.3); }
 
         .stat-card .icon { font-size: 1.5rem; margin-bottom: 0.5rem; }
-        .stat-card .value { font-size: 1.5rem; font-weight: bold; color: var(--domoticz-teal); }
-        .stat-card .label { font-size: 0.75rem; color: var(--p31-dim); text-transform: uppercase; }
+        .stat-card .value { font-size: 1.5rem; font-weight: bold; color: var(--domoticz-cyan); }
+        .stat-card .label { font-size: 0.75rem; color: var(--p31-dim, #006622); text-transform: uppercase; }
 
+        /* Tabs */
         .tabs {
             display: flex;
-            gap: 0.5rem;
+            gap: 0.25rem;
             margin-bottom: 1.5rem;
-            border-bottom: 1px solid var(--p31-dim);
+            border-bottom: 1px solid var(--p31-dim, #006622);
             padding-bottom: 0.5rem;
+            flex-wrap: wrap;
         }
 
         .tab {
-            padding: 0.5rem 1rem;
+            padding: 0.5rem 0.75rem;
             border: none;
             background: transparent;
-            color: var(--p31-dim);
+            color: var(--p31-dim, #006622);
             cursor: pointer;
             font-family: inherit;
+            font-size: 0.85rem;
             border-radius: 4px 4px 0 0;
             transition: all 0.2s;
         }
 
-        .tab:hover { color: var(--tube-black); }
-        body.dark .tab:hover { color: var(--tube-pale); }
+        .tab:hover { color: var(--tube-black, #1a2e1a); }
+        body.dark .tab:hover { color: var(--tube-pale, #c9e5c9); }
 
         .tab.active {
-            background: rgba(0,188,212,0.1);
-            color: var(--domoticz-teal);
-            border: 1px solid var(--p31-dim);
+            background: rgba(6,182,212,0.1);
+            color: var(--domoticz-cyan);
+            border: 1px solid var(--p31-dim, #006622);
             border-bottom: none;
         }
 
         .tab-content { display: none; }
         .tab-content.active { display: block; }
 
+        /* Cards */
         .card {
-            background: rgba(0,188,212,0.05);
-            border: 1px solid var(--p31-dim);
+            background: rgba(6,182,212,0.05);
+            border: 1px solid var(--p31-dim, #006622);
             border-radius: 8px;
             padding: 1.25rem;
             margin-bottom: 1rem;
@@ -146,31 +178,14 @@
 
         .card h2 {
             font-size: 1rem;
-            color: var(--domoticz-teal);
+            color: var(--domoticz-cyan);
             margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
         }
 
-        .btn {
-            padding: 0.5rem 1rem;
-            border-radius: 4px;
-            border: 1px solid var(--p31-dim);
-            background: var(--tube-pale, #e8f5e9);
-            color: var(--tube-black);
-            cursor: pointer;
-            font-family: inherit;
-            font-size: 0.85rem;
-            transition: all 0.2s;
-        }
-
-        body.dark .btn { background: rgba(0,50,20,0.5); color: var(--tube-pale); }
-
-        .btn:hover { background: var(--p31-dim); color: #fff; }
-
-        .btn-primary { background: var(--domoticz-teal-dim); border-color: var(--domoticz-teal); color: #fff; }
-        .btn-primary:hover { background: var(--domoticz-teal); }
-
-        .btn-danger { background: #442222; border-color: #884444; color: #fff; }
-
+        /* Device Grid */
         .device-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -178,61 +193,163 @@
         }
 
         .device-card {
-            background: rgba(0,188,212,0.03);
-            border: 1px solid var(--p31-dim);
+            background: rgba(6,182,212,0.03);
+            border: 1px solid var(--p31-dim, #006622);
             border-radius: 8px;
             padding: 1rem;
-            border-left: 3px solid var(--domoticz-teal);
+            border-left: 3px solid var(--domoticz-cyan);
         }
 
         body.dark .device-card { background: rgba(0,0,0,0.2); }
 
         .device-card.off { border-left-color: var(--p31-dim); opacity: 0.7; }
+        .device-card.sensor { border-left-color: #22c55e; }
+        .device-card.light { border-left-color: #eab308; }
 
         .device-name { font-weight: bold; margin-bottom: 0.25rem; }
-        .device-type { font-size: 0.75rem; color: var(--p31-dim); margin-bottom: 0.5rem; }
-        .device-data { font-size: 1.2rem; color: var(--domoticz-teal); margin-bottom: 0.5rem; }
-        .device-actions { display: flex; gap: 0.5rem; }
-        .device-actions button { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+        .device-type { font-size: 0.75rem; color: var(--p31-dim, #006622); margin-bottom: 0.5rem; }
+        .device-data { font-size: 1.2rem; color: var(--domoticz-cyan); margin-bottom: 0.5rem; }
+        .device-update { font-size: 0.7rem; color: var(--p31-dim); margin-bottom: 0.5rem; }
+        .device-actions { display: flex; gap: 0.25rem; flex-wrap: wrap; }
 
+        /* Room Cards */
+        .room-card {
+            background: rgba(6,182,212,0.03);
+            border: 1px solid var(--p31-dim);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+
+        .room-name { font-weight: bold; font-size: 1.1rem; color: var(--domoticz-cyan); }
+        .room-devices { font-size: 0.85rem; color: var(--p31-dim); margin-top: 0.5rem; }
+
+        /* Scene Cards */
+        .scene-card {
+            background: rgba(6,182,212,0.03);
+            border: 1px solid var(--p31-dim);
+            border-radius: 8px;
+            padding: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .scene-info { flex: 1; }
+        .scene-name { font-weight: bold; }
+        .scene-type { font-size: 0.75rem; color: var(--p31-dim); }
+        .scene-status { font-size: 0.85rem; color: var(--domoticz-cyan); }
+
+        /* Hardware List */
+        .hardware-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem;
+            background: rgba(6,182,212,0.03);
+            border-radius: 4px;
+            border-left: 3px solid var(--domoticz-cyan);
+            margin-bottom: 0.5rem;
+        }
+
+        .hardware-item.disabled { border-left-color: var(--p31-dim); opacity: 0.6; }
+
+        /* Form elements */
         .form-group { margin-bottom: 1rem; }
-        .form-group label { display: block; margin-bottom: 0.5rem; color: var(--p31-dim); font-size: 0.85rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; color: var(--p31-dim, #006622); font-size: 0.85rem; }
 
-        .form-group input, .form-group select {
+        .form-group input, .form-group select, .form-group textarea {
             width: 100%;
             padding: 0.5rem;
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
+            background: var(--tube-pale, #e8f5e9);
+            border: 1px solid var(--p31-dim, #006622);
             border-radius: 4px;
-            color: var(--tube-black);
+            color: var(--tube-black, #1a2e1a);
             font-family: inherit;
         }
 
-        body.dark .form-group input, body.dark .form-group select { background: rgba(0,20,10,0.8); color: var(--tube-pale); }
+        body.dark .form-group input, body.dark .form-group select, body.dark .form-group textarea {
+            background: rgba(0,20,10,0.8);
+            color: var(--tube-pale, #c9e5c9);
+        }
+
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+            outline: none;
+            border-color: var(--domoticz-cyan);
+        }
 
         .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 
+        .form-group input[type="checkbox"] {
+            width: auto;
+            margin-right: 0.5rem;
+        }
+
+        /* Logs */
         .logs-container {
             background: rgba(0,20,10,0.1);
-            border: 1px solid var(--p31-dim);
+            border: 1px solid var(--p31-dim, #006622);
             border-radius: 4px;
             padding: 1rem;
             max-height: 400px;
             overflow-y: auto;
+            font-family: 'IBM Plex Mono', monospace;
             font-size: 0.8rem;
         }
 
         body.dark .logs-container { background: rgba(0,0,0,0.8); }
 
-        .log-line { color: var(--p31-dim); margin-bottom: 0.25rem; white-space: pre-wrap; }
-        .log-line:hover { color: var(--p31-peak); }
+        .log-line { color: var(--p31-dim, #006622); margin-bottom: 0.25rem; white-space: pre-wrap; word-break: break-all; }
+        .log-line:hover { color: var(--p31-peak, #00dd44); }
 
-        .loading { text-align: center; padding: 2rem; color: var(--p31-dim); }
-        .empty-state { text-align: center; padding: 2rem; color: var(--p31-dim); }
+        /* Events */
+        .event-item {
+            padding: 0.5rem;
+            border-bottom: 1px solid rgba(6,182,212,0.1);
+            font-size: 0.85rem;
+        }
+
+        .event-item:last-child { border-bottom: none; }
+
+        .event-time { color: var(--p31-dim); font-size: 0.75rem; }
+        .event-message { margin-top: 0.25rem; }
+
+        /* Empty/Loading states */
+        .loading { text-align: center; padding: 2rem; color: var(--p31-dim, #006622); }
+        .empty-state { text-align: center; padding: 2rem; color: var(--p31-dim, #006622); }
+        .empty-state .icon { font-size: 3rem; margin-bottom: 1rem; opacity: 0.5; }
+
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 2px solid var(--p31-dim, #006622);
+            border-top-color: var(--domoticz-cyan);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 0.5rem;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Backup list */
+        .backup-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem;
+            background: rgba(6,182,212,0.05);
+            border-radius: 4px;
+            margin-bottom: 0.5rem;
+        }
+
+        .backup-info { flex: 1; }
+        .backup-name { font-weight: bold; }
+        .backup-meta { font-size: 0.75rem; color: var(--p31-dim); }
 
         @media (max-width: 768px) {
             .main { margin-left: 0; padding: 1rem; }
             .form-row { grid-template-columns: 1fr; }
+            .tabs { overflow-x: auto; flex-wrap: nowrap; }
         }
     </style>
 </head>
@@ -242,7 +359,9 @@
 
     <main class="main">
         <header class="header">
-            <h1>Domoticz</h1>
+            <div>
+                <h1>Domoticz</h1>
+            </div>
             <div class="header-actions">
                 <button class="btn" onclick="openDomoticz()">Open Domoticz</button>
                 <span id="statusBadge" class="status-badge stopped">
@@ -252,58 +371,102 @@
             </div>
         </header>
 
+        <!-- Install Banner -->
         <div id="installBanner" class="install-banner" style="display:none;">
             <h2>Domoticz Not Installed</h2>
             <p>Pull the Domoticz container to start managing your smart home devices.</p>
-            <button class="btn btn-primary" onclick="installDomoticz()">Pull Domoticz Container</button>
+            <button class="btn btn-primary" onclick="installDomoticz()">Install Domoticz</button>
         </div>
 
+        <!-- Stats Grid -->
         <div class="stats-grid" id="statsGrid">
             <div class="stat-card">
-                <div class="icon">🏠</div>
+                <div class="icon">&#128161;</div>
                 <div class="value" id="deviceCount">--</div>
                 <div class="label">Devices</div>
             </div>
             <div class="stat-card">
-                <div class="icon">🎭</div>
+                <div class="icon">&#127968;</div>
+                <div class="value" id="roomCount">--</div>
+                <div class="label">Rooms</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon">&#127917;</div>
                 <div class="value" id="sceneCount">--</div>
                 <div class="label">Scenes</div>
             </div>
             <div class="stat-card">
-                <div class="icon">📡</div>
-                <div class="value" id="mqttStatus">--</div>
-                <div class="label">MQTT</div>
-            </div>
-            <div class="stat-card">
-                <div class="icon">💾</div>
-                <div class="value" id="diskUsage">--</div>
-                <div class="label">Storage</div>
+                <div class="icon">&#128225;</div>
+                <div class="value" id="hardwareCount">--</div>
+                <div class="label">Hardware</div>
             </div>
         </div>
 
+        <!-- Tabs -->
         <div class="tabs">
-            <button class="tab active" data-tab="devices">Devices</button>
+            <button class="tab active" data-tab="dashboard">Dashboard</button>
+            <button class="tab" data-tab="devices">Devices</button>
+            <button class="tab" data-tab="rooms">Rooms</button>
             <button class="tab" data-tab="scenes">Scenes</button>
+            <button class="tab" data-tab="automation">Automation</button>
             <button class="tab" data-tab="hardware">Hardware</button>
             <button class="tab" data-tab="logs">Logs</button>
-            <button class="tab" data-tab="settings">Settings</button>
         </div>
 
-        <!-- Devices Tab -->
-        <div id="tab-devices" class="tab-content active">
+        <!-- Dashboard Tab -->
+        <div id="tab-dashboard" class="tab-content active">
             <div class="card">
-                <h2>Smart Devices</h2>
-                <div class="device-grid" id="deviceGrid">
-                    <div class="loading">Loading devices...</div>
+                <h2>Service Control</h2>
+                <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:1rem;">
+                    <button class="btn btn-primary" onclick="controlContainer('start')">Start</button>
+                    <button class="btn btn-danger" onclick="controlContainer('stop')">Stop</button>
+                    <button class="btn" onclick="controlContainer('restart')">Restart</button>
+                </div>
+                <div id="containerStats" style="font-size:0.85rem;color:var(--p31-dim);"></div>
+            </div>
+
+            <div class="card">
+                <h2>Recent Devices</h2>
+                <div class="device-grid" id="recentDevices">
+                    <div class="loading"><div class="spinner"></div> Loading...</div>
                 </div>
             </div>
 
             <div class="card">
-                <h2>Quick Actions</h2>
-                <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
-                    <button class="btn btn-primary" onclick="controlService('start')">Start</button>
-                    <button class="btn btn-danger" onclick="controlService('stop')">Stop</button>
-                    <button class="btn" onclick="controlService('restart')">Restart</button>
+                <h2>Recent Events</h2>
+                <div id="recentEvents">
+                    <div class="loading"><div class="spinner"></div> Loading...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Devices Tab -->
+        <div id="tab-devices" class="tab-content">
+            <div class="card">
+                <h2>All Devices</h2>
+                <div class="device-grid" id="deviceGrid">
+                    <div class="loading"><div class="spinner"></div> Loading devices...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Rooms Tab -->
+        <div id="tab-rooms" class="tab-content">
+            <div class="card">
+                <h2>Add Room</h2>
+                <form id="addRoomForm" style="display:flex;gap:0.5rem;align-items:flex-end;">
+                    <div class="form-group" style="flex:1;margin-bottom:0;">
+                        <label>Room Name</label>
+                        <input type="text" id="newRoomName" placeholder="Living Room" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Add Room</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <h2>Rooms</h2>
+                <div class="device-grid" id="roomList">
+                    <div class="loading"><div class="spinner"></div> Loading rooms...</div>
                 </div>
             </div>
         </div>
@@ -313,8 +476,50 @@
             <div class="card">
                 <h2>Scenes & Groups</h2>
                 <div id="sceneList">
-                    <div class="loading">Loading scenes...</div>
+                    <div class="loading"><div class="spinner"></div> Loading scenes...</div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Automation Tab -->
+        <div id="tab-automation" class="tab-content">
+            <div class="card">
+                <h2>Automation Rules</h2>
+                <p style="color:var(--p31-dim);margin-bottom:1rem;">
+                    Create and manage automation rules in the Domoticz web interface.
+                </p>
+                <button class="btn btn-primary" onclick="openDomoticz('#/Setup')">Open Automation Setup</button>
+            </div>
+
+            <div class="card">
+                <h2>Notifications</h2>
+                <form id="notificationForm">
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="emailEnabled"> Enable Email Notifications
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>Email Address</label>
+                        <input type="email" id="emailAddress" placeholder="user@example.com">
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="telegramEnabled"> Enable Telegram Notifications
+                        </label>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Bot Token</label>
+                            <input type="text" id="telegramToken" placeholder="123456:ABC...">
+                        </div>
+                        <div class="form-group">
+                            <label>Chat ID</label>
+                            <input type="text" id="telegramChat" placeholder="-123456789">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save Notification Settings</button>
+                </form>
             </div>
         </div>
 
@@ -323,15 +528,23 @@
             <div class="card">
                 <h2>Configured Hardware</h2>
                 <div id="hardwareList">
-                    <div class="loading">Loading hardware...</div>
+                    <div class="loading"><div class="spinner"></div> Loading hardware...</div>
                 </div>
             </div>
 
             <div class="card">
                 <h2>USB Devices</h2>
                 <div id="usbList">
-                    <div class="loading">Scanning...</div>
+                    <div class="loading"><div class="spinner"></div> Scanning...</div>
                 </div>
+            </div>
+
+            <div class="card">
+                <h2>Add Hardware</h2>
+                <p style="color:var(--p31-dim);margin-bottom:1rem;">
+                    Add new hardware controllers in the Domoticz web interface.
+                </p>
+                <button class="btn btn-primary" onclick="openDomoticz('#/Hardware')">Open Hardware Setup</button>
             </div>
         </div>
 
@@ -340,38 +553,18 @@
             <div class="card">
                 <h2>Container Logs</h2>
                 <div style="margin-bottom:1rem;">
-                    <button class="btn" onclick="loadLogs()">Refresh</button>
+                    <button class="btn" onclick="loadLogs()">Refresh Logs</button>
                 </div>
                 <div id="logsContainer" class="logs-container">
-                    <div class="loading">Loading logs...</div>
+                    <div class="loading"><div class="spinner"></div> Loading logs...</div>
                 </div>
             </div>
-        </div>
 
-        <!-- Settings Tab -->
-        <div id="tab-settings" class="tab-content">
             <div class="card">
-                <h2>Configuration</h2>
-                <form id="configForm">
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Web Port</label>
-                            <input type="number" id="cfgPort" value="8080" min="1024" max="65535">
-                        </div>
-                        <div class="form-group">
-                            <label>Timezone</label>
-                            <select id="cfgTimezone">
-                                <option value="UTC">UTC</option>
-                                <option value="Europe/Paris">Europe/Paris</option>
-                                <option value="Europe/London">Europe/London</option>
-                                <option value="America/New_York">America/New_York</option>
-                                <option value="America/Los_Angeles">America/Los_Angeles</option>
-                                <option value="Asia/Tokyo">Asia/Tokyo</option>
-                            </select>
-                        </div>
-                    </div>
-                    <button type="submit" class="btn btn-primary">Save Configuration</button>
-                </form>
+                <h2>Event Log</h2>
+                <div id="eventLog">
+                    <div class="loading"><div class="spinner"></div> Loading events...</div>
+                </div>
             </div>
 
             <div class="card">
@@ -382,15 +575,6 @@
                 </div>
                 <div id="backupList"></div>
             </div>
-
-            <div class="card">
-                <h2>Admin Password</h2>
-                <div class="form-group">
-                    <label>New Password</label>
-                    <input type="password" id="newPassword" placeholder="Enter new password">
-                </div>
-                <button class="btn btn-danger" onclick="resetPassword()">Reset Password</button>
-            </div>
         </div>
     </main>
 
@@ -398,6 +582,7 @@
         const API = '/api/v1/domoticz';
         let statusData = null;
 
+        // Tab switching
         document.querySelectorAll('.tab').forEach(tab => {
             tab.addEventListener('click', () => {
                 document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -405,16 +590,18 @@
                 tab.classList.add('active');
                 document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
 
-                if (tab.dataset.tab === 'logs') loadLogs();
+                // Load data for specific tabs
+                if (tab.dataset.tab === 'devices') loadAllDevices();
+                if (tab.dataset.tab === 'rooms') loadRooms();
                 if (tab.dataset.tab === 'scenes') loadScenes();
                 if (tab.dataset.tab === 'hardware') { loadHardware(); loadUSB(); }
-                if (tab.dataset.tab === 'settings') loadConfig();
+                if (tab.dataset.tab === 'logs') { loadLogs(); loadEvents(); }
             });
         });
 
         async function init() {
             await loadStatus();
-            await loadDevices();
+            await loadDashboard();
             setInterval(loadStatus, 10000);
         }
 
@@ -423,11 +610,14 @@
                 const res = await fetch(API + '/status', { credentials: 'include' });
                 statusData = await res.json();
                 updateUI();
-            } catch(e) { console.error('Status error:', e); }
+            } catch(e) {
+                console.error('Status error:', e);
+            }
         }
 
         function updateUI() {
             if (!statusData) return;
+
             const badge = document.getElementById('statusBadge');
             const text = document.getElementById('statusText');
 
@@ -442,42 +632,185 @@
             } else {
                 badge.className = 'status-badge stopped';
                 text.textContent = 'Stopped';
+                document.getElementById('installBanner').style.display = 'none';
             }
 
-            document.getElementById('mqttStatus').textContent = statusData.mosquitto_status || '--';
-            document.getElementById('diskUsage').textContent = statusData.disk_usage || '--';
+            document.getElementById('deviceCount').textContent = statusData.device_count || 0;
+            document.getElementById('sceneCount').textContent = statusData.scene_count || 0;
+
+            // Container stats
+            const statsDiv = document.getElementById('containerStats');
+            if (statusData.running) {
+                statsDiv.innerHTML = `Runtime: ${statusData.runtime} | Port: ${statusData.port} | Storage: ${statusData.disk_usage}`;
+            } else {
+                statsDiv.innerHTML = statusData.runtime !== 'none' ? `Runtime: ${statusData.runtime}` : 'No container runtime detected';
+            }
         }
 
-        async function loadDevices() {
+        async function loadDashboard() {
+            await loadRecentDevices();
+            await loadRecentEvents();
+        }
+
+        async function loadRecentDevices() {
+            const container = document.getElementById('recentDevices');
+            try {
+                const res = await fetch(API + '/devices', { credentials: 'include' });
+                const data = await res.json();
+
+                if (data.error) {
+                    container.innerHTML = `<div class="empty-state"><p>${data.error}</p></div>`;
+                    return;
+                }
+
+                if (!data.devices || data.devices.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><div class="icon">&#128161;</div><p>No devices configured</p></div>';
+                    return;
+                }
+
+                // Show first 6 devices
+                const devices = data.devices.slice(0, 6);
+                container.innerHTML = devices.map(d => renderDeviceCard(d)).join('');
+            } catch(e) {
+                container.innerHTML = '<div class="empty-state"><p>Error loading devices</p></div>';
+            }
+        }
+
+        async function loadAllDevices() {
             const container = document.getElementById('deviceGrid');
             try {
                 const res = await fetch(API + '/devices', { credentials: 'include' });
                 const data = await res.json();
 
-                document.getElementById('deviceCount').textContent = data.count || 0;
-
-                if (!data.devices || data.devices.length === 0) {
-                    container.innerHTML = '<div class="empty-state">No devices configured</div>';
+                if (data.error) {
+                    container.innerHTML = `<div class="empty-state"><p>${data.error}</p></div>`;
                     return;
                 }
 
-                container.innerHTML = data.devices.map(d => {
-                    const isOn = d.data && (d.data.toLowerCase().includes('on') || d.data.includes('Open'));
-                    return `
-                        <div class="device-card ${isOn ? '' : 'off'}">
-                            <div class="device-name">${escapeHtml(d.name)}</div>
-                            <div class="device-type">${d.type} - ${d.subtype || ''}</div>
-                            <div class="device-data">${escapeHtml(d.data || '--')}</div>
-                            <div class="device-actions">
-                                <button class="btn" onclick="switchDevice(${d.idx}, 'On')">On</button>
-                                <button class="btn" onclick="switchDevice(${d.idx}, 'Off')">Off</button>
-                                <button class="btn" onclick="switchDevice(${d.idx}, 'Toggle')">Toggle</button>
-                            </div>
-                        </div>
-                    `;
-                }).join('');
+                if (!data.devices || data.devices.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><div class="icon">&#128161;</div><p>No devices configured</p></div>';
+                    return;
+                }
+
+                container.innerHTML = data.devices.map(d => renderDeviceCard(d)).join('');
             } catch(e) {
-                container.innerHTML = '<div class="empty-state">Error loading devices</div>';
+                container.innerHTML = '<div class="empty-state"><p>Error loading devices</p></div>';
+            }
+        }
+
+        function renderDeviceCard(d) {
+            const isOn = d.data && (d.data.toLowerCase().includes('on') || d.data.includes('Open'));
+            const isSensor = d.type && (d.type.includes('Temp') || d.type.includes('Humidity') || d.type.includes('Sensor'));
+            const isLight = d.type && (d.type.includes('Light') || d.type.includes('Dimmer'));
+            let cardClass = isOn ? '' : 'off';
+            if (isSensor) cardClass = 'sensor';
+            if (isLight && isOn) cardClass = 'light';
+
+            return `
+                <div class="device-card ${cardClass}">
+                    <div class="device-name">${escapeHtml(d.name)}</div>
+                    <div class="device-type">${d.type} - ${d.subtype || ''}</div>
+                    <div class="device-data">${escapeHtml(d.data || d.status || '--')}</div>
+                    <div class="device-update">Last: ${d.last_update || 'N/A'}</div>
+                    <div class="device-actions">
+                        <button class="btn btn-sm" onclick="sendCommand(${d.idx}, 'On')">On</button>
+                        <button class="btn btn-sm" onclick="sendCommand(${d.idx}, 'Off')">Off</button>
+                        <button class="btn btn-sm" onclick="sendCommand(${d.idx}, 'Toggle')">Toggle</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function sendCommand(idx, command) {
+            try {
+                const res = await fetch(API + `/device/${idx}/command`, {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ command })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    setTimeout(() => {
+                        loadRecentDevices();
+                        if (document.querySelector('.tab[data-tab="devices"]').classList.contains('active')) {
+                            loadAllDevices();
+                        }
+                    }, 1000);
+                } else {
+                    alert('Command failed: ' + (data.detail || 'Unknown error'));
+                }
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        async function loadRooms() {
+            const container = document.getElementById('roomList');
+            try {
+                const res = await fetch(API + '/rooms', { credentials: 'include' });
+                const data = await res.json();
+
+                document.getElementById('roomCount').textContent = data.count || 0;
+
+                if (data.error) {
+                    container.innerHTML = `<div class="empty-state"><p>${data.error}</p></div>`;
+                    return;
+                }
+
+                if (!data.rooms || data.rooms.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><div class="icon">&#127968;</div><p>No rooms configured</p></div>';
+                    return;
+                }
+
+                container.innerHTML = data.rooms.map(r => `
+                    <div class="room-card">
+                        <div class="room-name">${escapeHtml(r.name)}</div>
+                        <div class="room-devices">${r.devices} devices</div>
+                        <button class="btn btn-sm btn-danger" onclick="deleteRoom(${r.idx})" style="margin-top:0.5rem;">Delete</button>
+                    </div>
+                `).join('');
+            } catch(e) {
+                container.innerHTML = '<div class="empty-state"><p>Error loading rooms</p></div>';
+            }
+        }
+
+        document.getElementById('addRoomForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const name = document.getElementById('newRoomName').value.trim();
+            if (!name) return;
+
+            try {
+                const res = await fetch(API + '/room', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    document.getElementById('newRoomName').value = '';
+                    loadRooms();
+                } else {
+                    alert('Failed to create room');
+                }
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
+        });
+
+        async function deleteRoom(idx) {
+            if (!confirm('Delete this room?')) return;
+            try {
+                const res = await fetch(API + `/room/${idx}`, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+                const data = await res.json();
+                if (data.success) loadRooms();
+                else alert('Failed to delete room');
+            } catch(e) {
+                alert('Error: ' + e.message);
             }
         }
 
@@ -489,24 +822,45 @@
 
                 document.getElementById('sceneCount').textContent = data.count || 0;
 
-                if (!data.scenes || data.scenes.length === 0) {
-                    container.innerHTML = '<div class="empty-state">No scenes configured</div>';
+                if (data.error) {
+                    container.innerHTML = `<div class="empty-state"><p>${data.error}</p></div>`;
                     return;
                 }
 
-                container.innerHTML = '<div class="device-grid">' + data.scenes.map(s => `
-                    <div class="device-card">
-                        <div class="device-name">${escapeHtml(s.name)}</div>
-                        <div class="device-type">${s.type}</div>
-                        <div class="device-data">${s.status}</div>
-                        <div class="device-actions">
-                            <button class="btn btn-primary" onclick="activateScene(${s.idx}, 'On')">Activate</button>
-                            <button class="btn" onclick="activateScene(${s.idx}, 'Off')">Deactivate</button>
+                if (!data.scenes || data.scenes.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><div class="icon">&#127917;</div><p>No scenes configured</p></div>';
+                    return;
+                }
+
+                container.innerHTML = data.scenes.map(s => `
+                    <div class="scene-card">
+                        <div class="scene-info">
+                            <div class="scene-name">${escapeHtml(s.name)}</div>
+                            <div class="scene-type">${s.type}</div>
+                            <div class="scene-status">${s.status}</div>
+                        </div>
+                        <div style="display:flex;gap:0.25rem;">
+                            <button class="btn btn-sm btn-primary" onclick="activateScene(${s.idx}, 'On')">Activate</button>
+                            <button class="btn btn-sm" onclick="activateScene(${s.idx}, 'Off')">Deactivate</button>
                         </div>
                     </div>
-                `).join('') + '</div>';
+                `).join('');
             } catch(e) {
-                container.innerHTML = '<div class="empty-state">Error loading scenes</div>';
+                container.innerHTML = '<div class="empty-state"><p>Error loading scenes</p></div>';
+            }
+        }
+
+        async function activateScene(idx, command) {
+            try {
+                const res = await fetch(API + `/scene/${idx}/activate?command=${command}`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                const data = await res.json();
+                if (data.success) setTimeout(loadScenes, 1000);
+                else alert('Failed: ' + (data.detail || 'Unknown error'));
+            } catch(e) {
+                alert('Error: ' + e.message);
             }
         }
 
@@ -516,41 +870,103 @@
                 const res = await fetch(API + '/hardware', { credentials: 'include' });
                 const data = await res.json();
 
-                if (!data.hardware || data.hardware.length === 0) {
-                    container.innerHTML = '<div class="empty-state">No hardware configured</div>';
+                document.getElementById('hardwareCount').textContent = data.count || 0;
+
+                if (data.error) {
+                    container.innerHTML = `<div class="empty-state"><p>${data.error}</p></div>`;
                     return;
                 }
 
-                container.innerHTML = '<div class="device-grid">' + data.hardware.map(h => `
-                    <div class="device-card ${h.enabled ? '' : 'off'}">
-                        <div class="device-name">${escapeHtml(h.name)}</div>
-                        <div class="device-type">${h.type}</div>
-                        <div class="device-data">${h.enabled ? 'Enabled' : 'Disabled'}</div>
+                if (!data.hardware || data.hardware.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><div class="icon">&#128225;</div><p>No hardware configured</p></div>';
+                    return;
+                }
+
+                container.innerHTML = data.hardware.map(h => `
+                    <div class="hardware-item ${h.enabled ? '' : 'disabled'}">
+                        <div>
+                            <strong>${escapeHtml(h.name)}</strong>
+                            <div style="font-size:0.8rem;color:var(--p31-dim);">${h.type_name || h.type}</div>
+                        </div>
+                        <span style="color:${h.enabled ? 'var(--p31-peak)' : 'var(--p31-dim)'}">
+                            ${h.enabled ? 'Enabled' : 'Disabled'}
+                        </span>
                     </div>
-                `).join('') + '</div>';
+                `).join('');
             } catch(e) {
-                container.innerHTML = '<div class="empty-state">Error loading hardware</div>';
+                container.innerHTML = '<div class="empty-state"><p>Error loading hardware</p></div>';
             }
         }
 
         async function loadUSB() {
             const container = document.getElementById('usbList');
+            if (!statusData || !statusData.usb_devices) {
+                container.innerHTML = '<div class="empty-state"><p>No USB devices detected</p></div>';
+                return;
+            }
+
+            if (statusData.usb_devices.length === 0) {
+                container.innerHTML = '<div class="empty-state"><p>No USB serial devices detected</p></div>';
+                return;
+            }
+
+            container.innerHTML = statusData.usb_devices.map(d => `
+                <div style="padding:0.5rem;background:rgba(6,182,212,0.05);border-radius:4px;margin-bottom:0.5rem;">
+                    <strong>${d.path}</strong>
+                    ${d.product ? ` - ${d.product}` : ''}
+                </div>
+            `).join('');
+        }
+
+        async function loadRecentEvents() {
+            const container = document.getElementById('recentEvents');
             try {
-                const res = await fetch(API + '/usb_devices', { credentials: 'include' });
+                const res = await fetch(API + '/events?lines=10', { credentials: 'include' });
                 const data = await res.json();
 
-                if (!data.devices || data.devices.length === 0) {
-                    container.innerHTML = '<div class="empty-state">No USB serial devices detected</div>';
+                if (data.error) {
+                    container.innerHTML = `<div class="empty-state"><p>${data.error}</p></div>`;
                     return;
                 }
 
-                container.innerHTML = data.devices.map(d => `
-                    <div style="padding:0.5rem;background:rgba(0,188,212,0.05);border-radius:4px;margin-bottom:0.5rem;">
-                        <strong>${d.path}</strong> - ${d.product || d.type}
+                if (!data.events || data.events.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><p>No recent events</p></div>';
+                    return;
+                }
+
+                container.innerHTML = data.events.slice(-5).reverse().map(e => `
+                    <div class="event-item">
+                        <div class="event-message">${escapeHtml(typeof e === 'string' ? e : JSON.stringify(e))}</div>
                     </div>
                 `).join('');
             } catch(e) {
-                container.innerHTML = '<div class="empty-state">Error scanning USB</div>';
+                container.innerHTML = '<div class="empty-state"><p>Error loading events</p></div>';
+            }
+        }
+
+        async function loadEvents() {
+            const container = document.getElementById('eventLog');
+            try {
+                const res = await fetch(API + '/events?lines=50', { credentials: 'include' });
+                const data = await res.json();
+
+                if (data.error) {
+                    container.innerHTML = `<div class="empty-state"><p>${data.error}</p></div>`;
+                    return;
+                }
+
+                if (!data.events || data.events.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><p>No events</p></div>';
+                    return;
+                }
+
+                container.innerHTML = '<div class="logs-container" style="max-height:300px;">' +
+                    data.events.reverse().map(e => `
+                        <div class="log-line">${escapeHtml(typeof e === 'string' ? e : JSON.stringify(e))}</div>
+                    `).join('') +
+                '</div>';
+            } catch(e) {
+                container.innerHTML = '<div class="empty-state"><p>Error loading events</p></div>';
             }
         }
 
@@ -559,82 +975,86 @@
             try {
                 const res = await fetch(API + '/logs?lines=100', { credentials: 'include' });
                 const data = await res.json();
+
                 if (!data.logs || data.logs.length === 0) {
-                    container.innerHTML = '<div class="empty-state">No logs available</div>';
+                    container.innerHTML = '<div class="empty-state"><p>No logs available</p></div>';
                     return;
                 }
+
                 container.innerHTML = data.logs.map(line => `<div class="log-line">${escapeHtml(line)}</div>`).join('');
                 container.scrollTop = container.scrollHeight;
             } catch(e) {
-                container.innerHTML = '<div class="empty-state">Error loading logs</div>';
+                container.innerHTML = '<div class="empty-state"><p>Error loading logs</p></div>';
             }
         }
 
-        async function loadConfig() {
+        async function controlContainer(action) {
             try {
-                const res = await fetch(API + '/config', { credentials: 'include' });
-                const data = await res.json();
-                document.getElementById('cfgPort').value = data.port || 8080;
-                document.getElementById('cfgTimezone').value = data.timezone || 'UTC';
-            } catch(e) { console.error('Config error:', e); }
-        }
-
-        async function switchDevice(idx, cmd) {
-            try {
-                const res = await fetch(API + `/devices/${idx}/switch?command=${cmd}`, {
-                    method: 'POST', credentials: 'include'
+                const res = await fetch(API + '/container/' + action, {
+                    method: 'POST',
+                    credentials: 'include'
                 });
-                const data = await res.json();
-                if (data.success) setTimeout(loadDevices, 1000);
-                else alert('Error: ' + (data.error || 'Unknown'));
-            } catch(e) { alert('Error: ' + e.message); }
-        }
-
-        async function activateScene(idx, cmd) {
-            try {
-                const res = await fetch(API + `/scenes/${idx}/activate?command=${cmd}`, {
-                    method: 'POST', credentials: 'include'
-                });
-                const data = await res.json();
-                if (data.success) setTimeout(loadScenes, 1000);
-                else alert('Error: ' + (data.error || 'Unknown'));
-            } catch(e) { alert('Error: ' + e.message); }
-        }
-
-        async function controlService(action) {
-            try {
-                const res = await fetch(API + '/' + action, { method: 'POST', credentials: 'include' });
                 const data = await res.json();
                 if (data.success) {
                     setTimeout(loadStatus, 3000);
-                    setTimeout(loadDevices, 5000);
-                } else alert('Error: ' + (data.error || data.detail));
-            } catch(e) { alert('Error: ' + e.message); }
+                    setTimeout(loadDashboard, 5000);
+                } else {
+                    alert('Error: ' + (data.error || data.detail || 'Unknown'));
+                }
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
         }
 
         async function installDomoticz() {
             const btn = event.target;
-            btn.disabled = true; btn.textContent = 'Pulling...';
+            btn.disabled = true;
+            btn.textContent = 'Installing...';
+
             try {
-                const res = await fetch(API + '/install', { method: 'POST', credentials: 'include' });
+                const res = await fetch(API + '/container/install', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
                 const data = await res.json();
                 if (data.success) {
-                    alert('Domoticz installed! Start the service to begin.');
+                    alert('Domoticz installed! Click Start to begin.');
                     document.getElementById('installBanner').style.display = 'none';
-                } else alert('Install failed: ' + (data.error || data.detail));
-            } catch(e) { alert('Error: ' + e.message); }
-            finally { btn.disabled = false; btn.textContent = 'Pull Domoticz Container'; }
+                    loadStatus();
+                } else {
+                    alert('Install failed: ' + (data.error || data.detail || 'Unknown'));
+                }
+            } catch(e) {
+                alert('Error: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Install Domoticz';
+            }
         }
 
         async function createBackup() {
+            const btn = event.target;
+            btn.disabled = true;
+            btn.textContent = 'Creating...';
+
             try {
-                const res = await fetch(API + '/backup', { method: 'POST', credentials: 'include' });
+                const res = await fetch(API + '/backup', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
                 const data = await res.json();
                 if (data.success) {
                     alert('Backup created: ' + data.path);
                     loadBackups();
-                } else alert('Backup failed');
-            } catch(e) { alert('Error: ' + e.message); }
+                } else {
+                    alert('Backup failed: ' + (data.detail || 'Unknown'));
+                }
+            } catch(e) {
+                alert('Error: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Create Backup';
+            }
         }
 
         async function loadBackups() {
@@ -642,70 +1062,92 @@
             try {
                 const res = await fetch(API + '/backups', { credentials: 'include' });
                 const data = await res.json();
+
                 if (!data.backups || data.backups.length === 0) {
                     container.innerHTML = '<p style="color:var(--p31-dim);">No backups found</p>';
                     return;
                 }
+
                 container.innerHTML = data.backups.map(b => `
-                    <div style="display:flex;justify-content:space-between;align-items:center;padding:0.5rem;background:rgba(0,188,212,0.05);border-radius:4px;margin-bottom:0.5rem;">
-                        <span>${b.filename}</span>
-                        <button class="btn" onclick="restoreBackup('${b.path}')">Restore</button>
+                    <div class="backup-item">
+                        <div class="backup-info">
+                            <div class="backup-name">${b.filename}</div>
+                            <div class="backup-meta">${formatSize(b.size)} - ${b.created}</div>
+                        </div>
+                        <button class="btn btn-sm" onclick="restoreBackup('${b.path}')">Restore</button>
                     </div>
                 `).join('');
-            } catch(e) { container.innerHTML = '<p>Error loading backups</p>'; }
+            } catch(e) {
+                container.innerHTML = '<p style="color:var(--p31-dim);">Error loading backups</p>';
+            }
         }
 
         async function restoreBackup(path) {
             if (!confirm('Restore from this backup? Current data will be overwritten.')) return;
+
             try {
                 const res = await fetch(API + '/restore?path=' + encodeURIComponent(path), {
-                    method: 'POST', credentials: 'include'
+                    method: 'POST',
+                    credentials: 'include'
                 });
                 const data = await res.json();
-                if (data.success) alert('Restore complete! Start Domoticz to continue.');
-                else alert('Restore failed');
-            } catch(e) { alert('Error: ' + e.message); }
+                if (data.success) {
+                    alert('Restore complete!');
+                    loadStatus();
+                } else {
+                    alert('Restore failed: ' + (data.detail || 'Unknown'));
+                }
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
         }
 
-        async function resetPassword() {
-            const pwd = document.getElementById('newPassword').value;
-            if (!pwd || pwd.length < 4) { alert('Password must be at least 4 characters'); return; }
-            try {
-                const res = await fetch(API + '/reset_password?password=' + encodeURIComponent(pwd), {
-                    method: 'POST', credentials: 'include'
-                });
-                const data = await res.json();
-                if (data.success) alert('Password reset successfully');
-                else alert('Failed: ' + (data.error || data.detail));
-            } catch(e) { alert('Error: ' + e.message); }
-        }
-
-        document.getElementById('configForm').addEventListener('submit', async (e) => {
+        document.getElementById('notificationForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const config = {
-                port: parseInt(document.getElementById('cfgPort').value),
-                timezone: document.getElementById('cfgTimezone').value
+            const settings = {
+                email_enabled: document.getElementById('emailEnabled').checked,
+                email_address: document.getElementById('emailAddress').value,
+                telegram_enabled: document.getElementById('telegramEnabled').checked,
+                telegram_bot_token: document.getElementById('telegramToken').value,
+                telegram_chat_id: document.getElementById('telegramChat').value,
             };
+
             try {
-                const res = await fetch(API + '/config', {
-                    method: 'POST', credentials: 'include',
+                const res = await fetch(API + '/notifications', {
+                    method: 'POST',
+                    credentials: 'include',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(config)
+                    body: JSON.stringify(settings)
                 });
                 const data = await res.json();
-                if (data.success) alert('Configuration saved! Restart Domoticz to apply.');
-                else alert('Error saving config');
-            } catch(e) { alert('Error: ' + e.message); }
+                if (data.success) {
+                    alert('Notification settings saved!');
+                } else {
+                    alert('Failed to save settings');
+                }
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
         });
 
-        function openDomoticz() {
+        function openDomoticz(path) {
             const port = statusData?.port || 8080;
-            window.open('http://' + window.location.hostname + ':' + port, '_blank');
+            window.open('http://' + window.location.hostname + ':' + port + (path || ''), '_blank');
+        }
+
+        function formatSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / 1048576).toFixed(1) + ' MB';
         }
 
         function escapeHtml(str) {
             if (!str) return '';
-            return str.toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+            return str.toString()
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
         }
 
         init();

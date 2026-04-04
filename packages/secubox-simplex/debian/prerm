@@ -1,0 +1,12 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+  remove|upgrade|deconfigure)
+    # Stop and disable service
+    systemctl stop secubox-simplex.service 2>/dev/null || true
+    systemctl disable secubox-simplex.service 2>/dev/null || true
+    ;;
+esac
+
+#DEBHELPER#
