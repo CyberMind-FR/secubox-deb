@@ -1,6 +1,6 @@
 {
   "id": "mcp-server",
-  "name": "Mcp-server",
+  "name": "MCP Server",
   "category": "security",
   "icon": "🔌",
   "path": "/mcp-server/",

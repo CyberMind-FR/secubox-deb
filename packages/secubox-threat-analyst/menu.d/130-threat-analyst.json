@@ -1,6 +1,6 @@
 {
   "id": "threat-analyst",
-  "name": "Threat-analyst",
+  "name": "Threat Analyst",
   "category": "security",
   "icon": "🕵️",
   "path": "/threat-analyst/",
