@@ -82,11 +82,14 @@ jobs:
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
-          # Copy packages to cache if available
+          # Show packages that will be slipstreamed
+          # Build script looks in output/debs/ automatically
           if ls output/debs/*.deb >/dev/null 2>&1; then
-            mkdir -p .cache/debs
-            cp -v output/debs/*.deb .cache/debs/
-            echo "Slipstream enabled: $(ls .cache/debs/*.deb | wc -l) packages"
+            echo "=== Packages to slipstream ==="
+            ls output/debs/secubox-*.deb | wc -l
+            ls output/debs/secubox-*.deb | xargs -I{} basename {} | sed 's/_.*$//' | sort -u
+          else
+            echo "WARNING: No packages found - image will use APT repo"
           fi
 
           PERSIST_OPT=""
