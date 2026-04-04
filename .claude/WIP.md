@@ -42,16 +42,27 @@
 - Package count updated from 93 to 124
 - Updated Home.md, Home-FR.md, Home-ZH.md, _Sidebar.md
 
-### Release v1.5.1 ⏳
+### Release v1.5.1 ✅
 - Tag created and pushed
-- CI workflow building (124 packages × 2 architectures)
-- Missing secrets for publish step: `GPG_PRIVATE_KEY`, `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS`
+- 248 package build jobs succeeded
+- Only `publish` (APT repo) failed due to missing secrets
+- **Release assets available:**
+  - secubox-live-amd64-bookworm.img.gz (1.1GB)
+  - secubox-vm-x64-bookworm.img.gz
+  - secubox-mochabin-bookworm.img.gz
+  - secubox-espressobin-v7-bookworm.img.gz
+  - secubox-espressobin-ultra-bookworm.img.gz
+  - secubox-installer-amd64-bookworm.img.gz
+  - secubox-installer-amd64-bookworm.iso.gz
+  - SHA256SUMS
 
-### VM Creation Script Test ✅
-- Tested `create-secubox-vm.sh --download`
-- Downloaded v1.5.0 image (before EFI fix)
-- Manually patched with startup.nsh
-- VM boots successfully in Kiosk GUI mode
+### v1.5.1 Image Test ✅
+- Downloaded from GitHub release
+- Verified `startup.nsh` present in ESP partition
+- VirtualBox VM boots successfully with UEFI
+- Kiosk GUI mode working
+- SSH access confirmed
+- **URL:** https://github.com/CyberMind-FR/secubox-deb/releases/tag/v1.5.1
 
 ### CI Workflow Chain (Fixed)
 ```
