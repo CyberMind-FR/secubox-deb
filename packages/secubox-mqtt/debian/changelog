@@ -1,0 +1,13 @@
+secubox-mqtt (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release
+  * FastAPI backend for Mosquitto management
+  * Endpoints: status, health, clients, topics, stats
+  * Service control: start, stop, restart
+  * Configuration management
+  * User management with mosquitto_passwd
+  * ACL management
+  * P31 phosphor light theme frontend
+  * Real-time message statistics via $SYS topics
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Apr 2026 10:00:00 +0200

@@ -1,0 +1,40 @@
+Source: secubox-netdiag
+Section: net
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
+
+Package: secubox-netdiag
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0),
+ iputils-ping,
+ traceroute,
+ dnsutils,
+ whois,
+ mtr-tiny,
+ nmap,
+ net-tools,
+ iproute2
+Recommends: iperf3
+Description: SecuBox Network Diagnostics — Troubleshooting Tools
+ Network diagnostics module for SecuBox providing various troubleshooting
+ tools including ping, traceroute, DNS lookup, WHOIS, MTR, port scanning,
+ and network interface analysis.
+ .
+ Features:
+  - Ping with RTT statistics
+  - Traceroute with hop analysis
+  - DNS lookup (A, AAAA, MX, NS, TXT, CNAME, SOA)
+  - WHOIS domain/IP lookup
+  - MTR (My Traceroute)
+  - Port scanning (local network only)
+  - Network interface listing
+  - Routing table display
+  - ARP table
+  - Active connections (netstat-like)
+  - Bandwidth testing (iperf3)
+ .
+ Part of SecuBox Debian edition.

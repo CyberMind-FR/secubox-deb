@@ -1,0 +1,18 @@
+#!/bin/bash
+set -e
+case "$1" in
+  configure)
+    id -u secubox >/dev/null 2>&1 || \
+      adduser --system --group --no-create-home \
+        --home /var/lib/secubox --shell /usr/sbin/nologin secubox
+    install -d -o secubox -g secubox -m 750 /run/secubox
+    install -d -o secubox -g secubox -m 750 /var/lib/secubox
+    install -d -o secubox -g secubox -m 750 /var/cache/secubox/netdiag
+    systemctl daemon-reload
+    systemctl enable secubox-netdiag.service
+    systemctl start  secubox-netdiag.service || true
+    install -d -m 755 /etc/nginx/secubox.d
+    systemctl reload nginx 2>/dev/null || true
+    ;;
+esac
+#DEBHELPER#

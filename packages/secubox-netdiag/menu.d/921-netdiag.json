@@ -1,0 +1,9 @@
+{
+  "id": "netdiag",
+  "name": "Network Diagnostics",
+  "icon": "&#128268;",
+  "path": "/netdiag/",
+  "category": "network",
+  "order": 921,
+  "description": "Network troubleshooting tools: ping, traceroute, DNS, WHOIS, MTR, port scan"
+}

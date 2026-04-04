@@ -1,0 +1,9 @@
+{
+  "id": "mqtt",
+  "name": "MQTT Broker",
+  "category": "services",
+  "icon": "📡",
+  "path": "/mqtt/",
+  "order": 916,
+  "description": "Mosquitto MQTT broker management"
+}

@@ -1,0 +1,13 @@
+secubox-netdiag (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release — Network Diagnostics Module
+  * FastAPI backend with 16 endpoints
+  * Tools: ping, traceroute, DNS, WHOIS, MTR, nmap, portscan
+  * Network info: interfaces, routes, ARP, connections
+  * Bandwidth testing via iperf3
+  * P31 Phosphor light theme frontend
+  * Tabbed interface: Tools, Interfaces, Routes, Connections
+  * Terminal-style output display
+  * Security: Port scanning restricted to local network
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Apr 2026 10:00:00 +0200

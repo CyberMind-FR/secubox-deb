@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - Glances Monitoring</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root {
+            /* P31 Phosphor spectrum */
+            --p31-peak: #00dd44;
+            --p31-hot: #00ff55;
+            --p31-mid: #009933;
+            --p31-dim: #006622;
+            --p31-ghost: #003311;
+            --p31-decay: #ffb347;
+            --p31-decay-dim: #cc7722;
+            /* Tube glass */
+            --tube-light: #e8f5e9;
+            --tube-pale: #c8e6c9;
+            --tube-soft: #a5d6a7;
+            --tube-dark: #1a3320;
+            /* Glances accent */
+            --glances-accent: #00bcd4;
+            --glances-accent-dim: #0097a7;
+            /* Legacy */
+            --bg-dark: var(--tube-light);
+            --bg-card: var(--tube-pale);
+            --border: var(--tube-soft);
+            --text: var(--tube-dark);
+            --text-dim: var(--p31-dim);
+            --primary: var(--glances-accent);
+            --cyan: var(--glances-accent);
+            --green: var(--p31-peak);
+            --red: #ff4466;
+            --yellow: var(--p31-decay);
+            --orange: var(--p31-decay-dim);
+            --purple: #a371f7;
+            /* Bloom */
+            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-cyan: 0 0 6px var(--glances-accent), 0 0 14px rgba(0,188,212,0.5);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Courier Prime', 'Courier New', monospace;
+            background: var(--tube-light);
+            background-image: radial-gradient(ellipse at 50% 40%, rgba(0,188,212,0.02) 0%, transparent 70%);
+            color: var(--tube-dark);
+            display: flex;
+            min-height: 100vh;
+        }
+        .main { flex: 1; margin-left: 220px; }
+        .header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 1rem 1.5rem; border-bottom: 1px solid var(--border);
+            background: var(--bg-card);
+        }
+        .header-title { display: flex; align-items: center; gap: 1rem; }
+        .header-title h1 {
+            font-size: 1.5rem; font-weight: 600;
+            color: var(--glances-accent);
+            text-shadow: var(--bloom-cyan);
+        }
+        .header-actions { display: flex; gap: 0.75rem; align-items: center; }
+        .badge {
+            padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem;
+            text-transform: uppercase; letter-spacing: 0.1em;
+        }
+        .badge-green { background: rgba(0,221,68,0.1); border: 1px solid var(--p31-peak); color: var(--p31-peak); }
+        .badge-red { background: rgba(255,68,102,0.1); border: 1px solid var(--red); color: var(--red); }
+        .badge-cyan { background: rgba(0,188,212,0.1); border: 1px solid var(--cyan); color: var(--cyan); }
+
+        .btn {
+            padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border);
+            background: var(--bg-card); color: var(--text); cursor: pointer;
+            font-size: 0.875rem; font-family: inherit; letter-spacing: 0.05em;
+            transition: all 0.2s;
+        }
+        .btn:hover { border-color: var(--p31-dim); color: var(--p31-peak); }
+        .btn.primary { background: rgba(0,188,212,0.1); border-color: var(--cyan); color: var(--cyan); }
+        .btn.primary:hover { background: rgba(0,188,212,0.2); }
+        .btn.success { background: rgba(0,221,68,0.1); border-color: var(--green); color: var(--green); }
+        .btn.danger { background: rgba(255,68,102,0.1); border-color: var(--red); color: var(--red); }
+
+        .tabs {
+            display: flex; gap: 0; padding: 0 1.5rem;
+            background: var(--bg-card); border-bottom: 1px solid var(--border);
+        }
+        .tab {
+            padding: 0.75rem 1.25rem; cursor: pointer;
+            color: var(--text-dim); font-size: 0.85rem;
+            text-transform: uppercase; letter-spacing: 0.1em;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        .tab:hover { color: var(--text); }
+        .tab.active {
+            color: var(--cyan); border-bottom-color: var(--cyan);
+            text-shadow: var(--bloom-cyan);
+        }
+
+        .content { padding: 1.5rem; }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+
+        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 8px; padding: 1.25rem; text-align: center;
+        }
+        .stat-card .value { font-size: 2.5rem; font-weight: bold; margin-bottom: 0.25rem; }
+        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.1em; }
+        .stat-card.cyan .value { color: var(--cyan); text-shadow: var(--bloom-cyan); }
+        .stat-card.purple .value { color: var(--purple); }
+        .stat-card.green .value { color: var(--green); text-shadow: var(--bloom-soft); }
+        .stat-card.yellow .value { color: var(--yellow); }
+
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+        .card {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem;
+        }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .card-header h2 {
+            font-size: 0.9rem; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 0.1em; color: var(--p31-decay);
+        }
+
+        .chart-container {
+            height: 180px; position: relative;
+            background: var(--tube-light); border-radius: 6px; padding: 0.5rem;
+        }
+        .chart { width: 100%; height: 100%; }
+
+        .gauge-container { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+        .gauge { text-align: center; }
+        .gauge-ring { width: 100px; height: 100px; margin: 0 auto; position: relative; }
+        .gauge-ring svg { transform: rotate(-90deg); }
+        .gauge-ring circle { fill: none; stroke-width: 8; }
+        .gauge-ring .bg { stroke: var(--border); }
+        .gauge-ring .value { stroke-linecap: round; transition: stroke-dasharray 0.5s; }
+        .gauge-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 1.25rem; font-weight: bold; }
+        .gauge-label { margin-top: 0.5rem; color: var(--text-dim); font-size: 0.85rem; }
+
+        .load-box {
+            display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;
+            text-align: center; padding: 1rem;
+            background: var(--tube-light); border-radius: 6px;
+        }
+        .load-box .value { font-size: 1.75rem; font-weight: bold; color: var(--cyan); }
+        .load-box .label { font-size: 0.75rem; color: var(--text-dim); }
+
+        /* Process table */
+        .scroll-list { max-height: 400px; overflow-y: auto; }
+        .process-table { width: 100%; border-collapse: collapse; }
+        .process-table th {
+            text-align: left; padding: 0.5rem; color: var(--p31-decay);
+            font-size: 0.75rem; text-transform: uppercase;
+            border-bottom: 1px solid var(--border);
+            position: sticky; top: 0; background: var(--bg-card);
+            cursor: pointer;
+        }
+        .process-table th:hover { color: var(--cyan); }
+        .process-table td { padding: 0.5rem; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
+        .process-table tr:hover { background: rgba(0,188,212,0.05); }
+
+        /* Sensors */
+        .sensor-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; }
+        .sensor-card {
+            background: var(--tube-light); border: 1px solid var(--border);
+            border-radius: 8px; padding: 1rem; text-align: center;
+        }
+        .sensor-card .name { font-size: 0.85rem; color: var(--text-dim); margin-bottom: 0.5rem; }
+        .sensor-card .value { font-size: 1.5rem; font-weight: bold; color: var(--cyan); }
+        .sensor-card .unit { font-size: 0.85rem; color: var(--text-dim); }
+        .sensor-card.warning .value { color: var(--yellow); }
+        .sensor-card.critical .value { color: var(--red); }
+
+        /* Config form */
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; color: var(--text-dim); font-size: 0.85rem; }
+        .form-group input, .form-group select {
+            width: 100%; padding: 0.5rem; border: 1px solid var(--border);
+            background: var(--tube-light); border-radius: 4px;
+            font-family: inherit; color: var(--text);
+        }
+        .form-group input:focus, .form-group select:focus {
+            outline: none; border-color: var(--cyan);
+        }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+        .checkbox-label {
+            display: flex; align-items: center; gap: 0.5rem; cursor: pointer;
+        }
+        .checkbox-label input[type="checkbox"] { width: auto; }
+
+        /* Toast */
+        .toast {
+            position: fixed; bottom: 2rem; right: 2rem;
+            padding: 1rem 1.5rem; border-radius: 8px;
+            background: var(--bg-card); border: 1px solid var(--border);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            z-index: 1000; display: none;
+        }
+        .toast.show { display: block; animation: slideIn 0.3s ease; }
+        .toast.success { border-color: var(--green); }
+        .toast.error { border-color: var(--red); }
+        @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        @media (max-width: 1200px) { .stats-row { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } .sidebar { display: none; } .main { margin-left: 0; } }
+        @media (max-width: 768px) { .main { margin-left: 0; } .stats-row { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body class="crt-light">
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+
+    <main class="main">
+        <header class="header">
+            <div class="header-title">
+                <h1>Glances Monitoring</h1>
+                <span id="service-badge" class="badge badge-red">CHECKING</span>
+                <span id="last-update" style="color: var(--text-dim); font-size: 0.85rem;">-</span>
+            </div>
+            <div class="header-actions">
+                <button class="btn" onclick="refresh()">Refresh</button>
+                <button class="btn success" id="btn-start" onclick="serviceAction('start')">Start</button>
+                <button class="btn danger" id="btn-stop" onclick="serviceAction('stop')">Stop</button>
+            </div>
+        </header>
+
+        <div class="tabs">
+            <div class="tab active" data-tab="dashboard">Dashboard</div>
+            <div class="tab" data-tab="processes">Processes</div>
+            <div class="tab" data-tab="sensors">Sensors</div>
+            <div class="tab" data-tab="config">Config</div>
+        </div>
+
+        <div class="content">
+            <!-- Dashboard Tab -->
+            <div id="tab-dashboard" class="tab-panel active">
+                <div class="stats-row">
+                    <div class="stat-card cyan">
+                        <div class="value" id="cpu-value">-</div>
+                        <div class="label">CPU Usage</div>
+                    </div>
+                    <div class="stat-card purple">
+                        <div class="value" id="mem-value">-</div>
+                        <div class="label">Memory</div>
+                    </div>
+                    <div class="stat-card green">
+                        <div class="value" id="disk-value">-</div>
+                        <div class="label">Disk</div>
+                    </div>
+                    <div class="stat-card yellow">
+                        <div class="value" id="net-value">-</div>
+                        <div class="label">Network I/O</div>
+                    </div>
+                </div>
+
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="card-header"><h2>CPU History</h2></div>
+                        <div class="chart-container">
+                            <canvas id="cpu-chart" class="chart"></canvas>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header"><h2>Memory History</h2></div>
+                        <div class="chart-container">
+                            <canvas id="mem-chart" class="chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="card-header"><h2>System Gauges</h2></div>
+                        <div class="gauge-container">
+                            <div class="gauge">
+                                <div class="gauge-ring">
+                                    <svg viewBox="0 0 100 100">
+                                        <circle class="bg" cx="50" cy="50" r="40"/>
+                                        <circle class="value" id="cpu-gauge" cx="50" cy="50" r="40" stroke="var(--cyan)" stroke-dasharray="0 251"/>
+                                    </svg>
+                                    <div class="gauge-text" id="cpu-gauge-text">-</div>
+                                </div>
+                                <div class="gauge-label">CPU</div>
+                            </div>
+                            <div class="gauge">
+                                <div class="gauge-ring">
+                                    <svg viewBox="0 0 100 100">
+                                        <circle class="bg" cx="50" cy="50" r="40"/>
+                                        <circle class="value" id="mem-gauge" cx="50" cy="50" r="40" stroke="var(--purple)" stroke-dasharray="0 251"/>
+                                    </svg>
+                                    <div class="gauge-text" id="mem-gauge-text">-</div>
+                                </div>
+                                <div class="gauge-label">Memory</div>
+                            </div>
+                            <div class="gauge">
+                                <div class="gauge-ring">
+                                    <svg viewBox="0 0 100 100">
+                                        <circle class="bg" cx="50" cy="50" r="40"/>
+                                        <circle class="value" id="disk-gauge" cx="50" cy="50" r="40" stroke="var(--green)" stroke-dasharray="0 251"/>
+                                    </svg>
+                                    <div class="gauge-text" id="disk-gauge-text">-</div>
+                                </div>
+                                <div class="gauge-label">Disk</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header"><h2>Load Average</h2></div>
+                        <div class="load-box">
+                            <div><div class="value" id="load1">-</div><div class="label">1 min</div></div>
+                            <div><div class="value" id="load5">-</div><div class="label">5 min</div></div>
+                            <div><div class="value" id="load15">-</div><div class="label">15 min</div></div>
+                        </div>
+                        <div style="margin-top: 1rem; padding: 1rem; background: var(--tube-light); border-radius: 6px;">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                                <span style="color: var(--text-dim);">Uptime</span>
+                                <span id="uptime">-</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                                <span style="color: var(--text-dim);">CPU Cores</span>
+                                <span id="cpu-cores">-</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between;">
+                                <span style="color: var(--text-dim);">CPU Freq</span>
+                                <span id="cpu-freq">-</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Network Traffic</h2>
+                        <span id="net-total" style="color: var(--text-dim); font-size: 0.85rem;">-</span>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="net-chart" class="chart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Processes Tab -->
+            <div id="tab-processes" class="tab-panel">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Top Processes</h2>
+                        <span id="process-count" style="color: var(--text-dim);">-</span>
+                    </div>
+                    <div class="scroll-list">
+                        <table class="process-table">
+                            <thead>
+                                <tr>
+                                    <th onclick="sortProcesses('name')">Process</th>
+                                    <th onclick="sortProcesses('cpu_percent')">CPU %</th>
+                                    <th onclick="sortProcesses('memory_percent')">MEM %</th>
+                                    <th onclick="sortProcesses('pid')">PID</th>
+                                    <th onclick="sortProcesses('user')">User</th>
+                                    <th onclick="sortProcesses('threads')">Threads</th>
+                                    <th onclick="sortProcesses('status')">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="process-list">
+                                <tr><td colspan="7">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sensors Tab -->
+            <div id="tab-sensors" class="tab-panel">
+                <div class="card">
+                    <div class="card-header"><h2>Temperature Sensors</h2></div>
+                    <div class="sensor-grid" id="temp-sensors">
+                        <p style="color: var(--text-dim);">Loading...</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header"><h2>Fan Sensors</h2></div>
+                    <div class="sensor-grid" id="fan-sensors">
+                        <p style="color: var(--text-dim);">Loading...</p>
+                    </div>
+                </div>
+
+                <div class="card" id="battery-card" style="display: none;">
+                    <div class="card-header"><h2>Battery</h2></div>
+                    <div id="battery-info"></div>
+                </div>
+            </div>
+
+            <!-- Config Tab -->
+            <div id="tab-config" class="tab-panel">
+                <div class="card">
+                    <div class="card-header"><h2>Glances Configuration</h2></div>
+                    <form id="config-form">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Refresh Interval (seconds)</label>
+                                <input type="number" id="cfg-refresh" min="1" max="60" value="3">
+                            </div>
+                            <div class="form-group">
+                                <label>History Size (entries)</label>
+                                <input type="number" id="cfg-history-size" min="60" max="10080" value="1440">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Top N Processes</label>
+                                <input type="number" id="cfg-process-n" min="5" max="50" value="15">
+                            </div>
+                            <div class="form-group">
+                                <label>Disk Paths (comma-separated)</label>
+                                <input type="text" id="cfg-disk-paths" value="/">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="cfg-history" checked>
+                                    Enable History Collection
+                                </label>
+                            </div>
+                            <div class="form-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="cfg-sensors" checked>
+                                    Enable Sensors
+                                </label>
+                            </div>
+                        </div>
+                        <div style="margin-top: 1rem;">
+                            <button type="submit" class="btn primary">Save Configuration</button>
+                            <button type="button" class="btn" onclick="loadConfig()">Reset</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Service Logs</h2>
+                        <button class="btn" onclick="loadLogs()">Refresh Logs</button>
+                    </div>
+                    <div id="logs-container" style="max-height: 300px; overflow-y: auto; background: var(--tube-light); padding: 1rem; border-radius: 6px; font-size: 0.8rem; font-family: monospace; white-space: pre-wrap;">
+                        Loading...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div id="toast" class="toast"></div>
+
+    <script>
+        const API = '/api/v1/glances';
+        let cpuHistory = [], memHistory = [], netRxHistory = [], netTxHistory = [];
+        let processData = [];
+        let sortColumn = 'cpu_percent';
+        let sortAsc = false;
+
+        function getToken() {
+            return localStorage.getItem('sbx_token');
+        }
+
+        async function api(endpoint, options = {}) {
+            const token = getToken();
+            const headers = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = 'Bearer ' + token;
+
+            try {
+                const res = await fetch(API + endpoint, { ...options, headers });
+                if (res.status === 401) {
+                    window.location.href = '/portal/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+                    return null;
+                }
+                return res.json();
+            } catch (e) {
+                console.error('API error:', e);
+                return null;
+            }
+        }
+
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = 'toast show ' + type;
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+
+        function formatBytes(b) {
+            if (!b) return '0';
+            const k = 1024, s = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(b) / Math.log(k));
+            return (b / Math.pow(k, i)).toFixed(1) + s[i];
+        }
+
+        function setGauge(id, percent) {
+            const circumference = 251;
+            const offset = (percent / 100) * circumference;
+            document.getElementById(id).setAttribute('stroke-dasharray', `${offset} ${circumference}`);
+            document.getElementById(id + '-text').textContent = percent.toFixed(0) + '%';
+        }
+
+        function drawChart(canvasId, data, color, fill = true) {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const w = canvas.width = canvas.offsetWidth;
+            const h = canvas.height = canvas.offsetHeight;
+
+            ctx.clearRect(0, 0, w, h);
+
+            // Grid lines
+            ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+            ctx.lineWidth = 1;
+            for (let i = 0; i <= 4; i++) {
+                const y = (i / 4) * h;
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(w, y);
+                ctx.stroke();
+            }
+
+            // Data line
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+
+            const maxVal = Math.max(...data, 100);
+            const step = w / (data.length - 1 || 1);
+            data.forEach((v, i) => {
+                const x = i * step;
+                const y = h - (v / maxVal) * h;
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            });
+            ctx.stroke();
+
+            if (fill) {
+                ctx.lineTo(w, h);
+                ctx.lineTo(0, h);
+                ctx.closePath();
+                ctx.fillStyle = color.replace(')', ', 0.1)').replace('rgb', 'rgba');
+                ctx.fill();
+            }
+        }
+
+        function drawNetChart(canvasId, rxData, txData) {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const w = canvas.width = canvas.offsetWidth;
+            const h = canvas.height = canvas.offsetHeight;
+
+            ctx.clearRect(0, 0, w, h);
+
+            const maxVal = Math.max(...rxData, ...txData, 1024);
+            const step = w / (rxData.length - 1 || 1);
+
+            // RX line
+            ctx.strokeStyle = 'rgb(0, 188, 212)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            rxData.forEach((v, i) => {
+                const x = i * step;
+                const y = h - (v / maxVal) * h;
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            });
+            ctx.stroke();
+
+            // TX line
+            ctx.strokeStyle = 'rgb(163, 113, 247)';
+            ctx.beginPath();
+            txData.forEach((v, i) => {
+                const x = i * step;
+                const y = h - (v / maxVal) * h;
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            });
+            ctx.stroke();
+        }
+
+        async function loadStatus() {
+            const data = await api('/status');
+            if (!data) return;
+
+            const badge = document.getElementById('service-badge');
+            if (data.running) {
+                badge.textContent = 'RUNNING';
+                badge.className = 'badge badge-green';
+            } else {
+                badge.textContent = 'STOPPED';
+                badge.className = 'badge badge-red';
+            }
+        }
+
+        async function loadStats() {
+            const data = await api('/stats');
+            if (!data || data.error) return;
+
+            const cpu = data.cpu?.percent || 0;
+            const mem = data.memory?.percent || 0;
+            const disk = data.disk?.percent || 0;
+            const netRx = data.network?.rx_rate || 0;
+            const netTx = data.network?.tx_rate || 0;
+
+            document.getElementById('cpu-value').textContent = cpu.toFixed(1) + '%';
+            document.getElementById('mem-value').textContent = mem.toFixed(1) + '%';
+            document.getElementById('disk-value').textContent = disk.toFixed(1) + '%';
+            document.getElementById('net-value').textContent = formatBytes(netRx + netTx) + '/s';
+
+            setGauge('cpu-gauge', cpu);
+            setGauge('mem-gauge', mem);
+            setGauge('disk-gauge', disk);
+
+            const load = data.load || {};
+            document.getElementById('load1').textContent = load.avg_1?.toFixed(2) || '-';
+            document.getElementById('load5').textContent = load.avg_5?.toFixed(2) || '-';
+            document.getElementById('load15').textContent = load.avg_15?.toFixed(2) || '-';
+
+            document.getElementById('uptime').textContent = data.uptime?.human || '-';
+            document.getElementById('cpu-cores').textContent = data.cpu?.count_logical || '-';
+            document.getElementById('cpu-freq').textContent = (data.cpu?.freq_current || 0) + ' MHz';
+
+            document.getElementById('net-total').textContent = `RX: ${formatBytes(netRx)}/s | TX: ${formatBytes(netTx)}/s`;
+
+            cpuHistory.push(cpu);
+            memHistory.push(mem);
+            netRxHistory.push(netRx);
+            netTxHistory.push(netTx);
+            if (cpuHistory.length > 60) cpuHistory.shift();
+            if (memHistory.length > 60) memHistory.shift();
+            if (netRxHistory.length > 60) netRxHistory.shift();
+            if (netTxHistory.length > 60) netTxHistory.shift();
+
+            drawChart('cpu-chart', cpuHistory, 'rgb(0, 188, 212)');
+            drawChart('mem-chart', memHistory, 'rgb(163, 113, 247)');
+            drawNetChart('net-chart', netRxHistory, netTxHistory);
+
+            document.getElementById('last-update').textContent = 'Updated: ' + new Date().toLocaleTimeString();
+        }
+
+        async function loadProcesses() {
+            const data = await api('/processes');
+            if (!data) return;
+
+            processData = data.processes || [];
+            document.getElementById('process-count').textContent = `${processData.length} of ${data.total || 0} processes`;
+            renderProcesses();
+        }
+
+        function sortProcesses(column) {
+            if (sortColumn === column) {
+                sortAsc = !sortAsc;
+            } else {
+                sortColumn = column;
+                sortAsc = false;
+            }
+            renderProcesses();
+        }
+
+        function renderProcesses() {
+            const sorted = [...processData].sort((a, b) => {
+                let va = a[sortColumn], vb = b[sortColumn];
+                if (typeof va === 'string') va = va.toLowerCase();
+                if (typeof vb === 'string') vb = vb.toLowerCase();
+                if (sortAsc) return va > vb ? 1 : -1;
+                return va < vb ? 1 : -1;
+            });
+
+            const list = document.getElementById('process-list');
+            list.innerHTML = sorted.map(p => `
+                <tr>
+                    <td>${p.name}</td>
+                    <td style="color: var(--cyan);">${p.cpu_percent?.toFixed(1) || 0}%</td>
+                    <td style="color: var(--purple);">${p.memory_percent?.toFixed(1) || 0}%</td>
+                    <td style="color: var(--text-dim);">${p.pid}</td>
+                    <td>${p.user || '-'}</td>
+                    <td>${p.threads || '-'}</td>
+                    <td><span class="badge badge-${p.status === 'running' ? 'green' : 'cyan'}">${p.status}</span></td>
+                </tr>
+            `).join('') || '<tr><td colspan="7">No processes</td></tr>';
+        }
+
+        async function loadSensors() {
+            const data = await api('/sensors');
+            if (!data) return;
+
+            const temps = data.temperatures || [];
+            const fans = data.fans || [];
+            const battery = data.battery;
+
+            const tempContainer = document.getElementById('temp-sensors');
+            if (temps.length === 0) {
+                tempContainer.innerHTML = '<p style="color: var(--text-dim);">No temperature sensors found</p>';
+            } else {
+                tempContainer.innerHTML = temps.map(s => {
+                    let cls = '';
+                    if (s.critical && s.current >= s.critical) cls = 'critical';
+                    else if (s.high && s.current >= s.high) cls = 'warning';
+                    return `
+                        <div class="sensor-card ${cls}">
+                            <div class="name">${s.name}</div>
+                            <div class="value">${s.current}${s.unit ? '°' + s.unit : ''}</div>
+                            ${s.high ? `<div class="unit">High: ${s.high}°C</div>` : ''}
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            const fanContainer = document.getElementById('fan-sensors');
+            if (fans.length === 0) {
+                fanContainer.innerHTML = '<p style="color: var(--text-dim);">No fan sensors found</p>';
+            } else {
+                fanContainer.innerHTML = fans.map(s => `
+                    <div class="sensor-card">
+                        <div class="name">${s.name}</div>
+                        <div class="value">${s.current} <span class="unit">${s.unit}</span></div>
+                    </div>
+                `).join('');
+            }
+
+            const batteryCard = document.getElementById('battery-card');
+            if (battery) {
+                batteryCard.style.display = 'block';
+                document.getElementById('battery-info').innerHTML = `
+                    <div style="display: flex; justify-content: space-around; text-align: center;">
+                        <div>
+                            <div style="font-size: 2rem; color: var(--cyan);">${battery.percent}%</div>
+                            <div style="color: var(--text-dim);">Charge</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 1.5rem; color: ${battery.plugged ? 'var(--green)' : 'var(--yellow)'};">
+                                ${battery.plugged ? 'Plugged In' : 'On Battery'}
+                            </div>
+                            <div style="color: var(--text-dim);">Status</div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                batteryCard.style.display = 'none';
+            }
+        }
+
+        async function loadConfig() {
+            const data = await api('/config');
+            if (!data) return;
+
+            document.getElementById('cfg-refresh').value = data.refresh_interval || 3;
+            document.getElementById('cfg-history-size').value = data.history_size || 1440;
+            document.getElementById('cfg-process-n').value = data.process_top_n || 15;
+            document.getElementById('cfg-disk-paths').value = (data.disk_paths || ['/']).join(', ');
+            document.getElementById('cfg-history').checked = data.enable_history !== false;
+            document.getElementById('cfg-sensors').checked = data.sensors_enabled !== false;
+        }
+
+        async function saveConfig(e) {
+            e.preventDefault();
+            const config = {
+                refresh_interval: parseInt(document.getElementById('cfg-refresh').value),
+                history_size: parseInt(document.getElementById('cfg-history-size').value),
+                process_top_n: parseInt(document.getElementById('cfg-process-n').value),
+                disk_paths: document.getElementById('cfg-disk-paths').value.split(',').map(s => s.trim()),
+                enable_history: document.getElementById('cfg-history').checked,
+                sensors_enabled: document.getElementById('cfg-sensors').checked,
+                network_interfaces: []
+            };
+
+            const result = await api('/config', {
+                method: 'POST',
+                body: JSON.stringify(config)
+            });
+
+            if (result?.success) {
+                showToast('Configuration saved');
+            } else {
+                showToast('Failed to save: ' + (result?.error || 'Unknown error'), 'error');
+            }
+        }
+
+        async function loadLogs() {
+            const data = await api('/logs?lines=100');
+            if (!data) return;
+
+            const container = document.getElementById('logs-container');
+            container.textContent = (data.lines || []).join('\n') || 'No logs available';
+        }
+
+        async function serviceAction(action) {
+            const result = await api('/' + action, { method: 'POST' });
+            if (result?.success) {
+                showToast('Service ' + action + ' successful');
+                setTimeout(loadStatus, 1000);
+            } else {
+                showToast('Failed: ' + (result?.error || result?.output || 'Unknown error'), 'error');
+            }
+        }
+
+        function refresh() {
+            loadStatus();
+            loadStats();
+            loadProcesses();
+            loadSensors();
+        }
+
+        // Tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+
+                if (tab.dataset.tab === 'processes') loadProcesses();
+                if (tab.dataset.tab === 'sensors') loadSensors();
+                if (tab.dataset.tab === 'config') { loadConfig(); loadLogs(); }
+            });
+        });
+
+        // Config form submit
+        document.getElementById('config-form').addEventListener('submit', saveConfig);
+
+        // Initial load
+        refresh();
+        setInterval(() => {
+            loadStats();
+            if (document.querySelector('.tab[data-tab="processes"]').classList.contains('active')) {
+                loadProcesses();
+            }
+        }, 5000);
+    </script>
+    <script src="/shared/crt-engine.js"></script>
+</body>
+</html>

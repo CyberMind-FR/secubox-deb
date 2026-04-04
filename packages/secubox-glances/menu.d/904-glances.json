@@ -1,0 +1,9 @@
+{
+  "id": "glances",
+  "name": "Glances",
+  "category": "monitoring",
+  "icon": "📈",
+  "path": "/glances/",
+  "order": 904,
+  "description": "System monitoring via Glances"
+}

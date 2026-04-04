@@ -1,9 +1,46 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-04-03 (Session 34)*
+*Mis à jour : 2026-04-04 (Session 35)*
 
 ---
 
-## ✅ Terminé cette session (Session 34)
+## ✅ Terminé cette session (Session 35)
+
+### Phase 9 — System Tools (7/22 complete)
+
+**New Modules Created:**
+- `secubox-glances` v1.0.0 — System monitoring (Glances wrapper)
+  - Real-time CPU/memory/disk/network stats
+  - Process list, sensor readings
+  - Historical data with charts
+- `secubox-mqtt` v1.0.0 — MQTT broker management (Mosquitto)
+  - Client list, topic tree view
+  - User/ACL management
+  - Message statistics
+- `secubox-turn` v1.0.0 — TURN/STUN server (coturn)
+  - Session monitoring
+  - Credential generation (HMAC)
+  - User/realm management
+- `secubox-netdiag` v1.0.0 — Network diagnostics
+  - Ping, traceroute, DNS, WHOIS, MTR
+  - Port scanning, nmap
+  - Interface/route/connection views
+
+**Packages Built:**
+- `secubox-glances_1.0.0-1~bookworm1_all.deb` (15KB)
+- `secubox-mqtt_1.0.0-1~bookworm1_all.deb` (15KB)
+- `secubox-turn_1.0.0-1~bookworm1_all.deb` (14KB)
+- `secubox-netdiag_1.0.0-1~bookworm1_all.deb` (16KB)
+
+**Previously Built (Session 24):**
+- `secubox-vault_1.0.0-1_all.deb` — Config backup/restore
+- `secubox-cloner_1.0.0-1_all.deb` — System imaging
+- `secubox-vm_1.0.0-1_all.deb` — KVM/LXC virtualization
+
+**Total Packages:** 65 (was 61)
+
+---
+
+## ✅ Terminé session précédente (Session 34)
 
 ### Build Timestamp Display — secubox-hub v1.2.0 ✅
 - **API**: Added `_get_build_info()` function to read `/etc/secubox/build-info.json`

@@ -1,0 +1,1007 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - Network Diagnostics</title>
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root {
+            /* P31 Phosphor spectrum */
+            --p31-peak: #00dd44;
+            --p31-hot: #00ff55;
+            --p31-mid: #009933;
+            --p31-dim: #006622;
+            --p31-ghost: #003311;
+            --p31-decay: #ffb347;
+            --p31-decay-dim: #cc7722;
+            /* Tube glass */
+            --tube-light: #e8f5e9;
+            --tube-pale: #c8e6c9;
+            --tube-soft: #a5d6a7;
+            --tube-dark: #1b3d1c;
+            /* Module accent - cyan for network */
+            --netdiag-accent: #00bcd4;
+            --netdiag-accent-dim: #0097a7;
+            /* Bloom effects */
+            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Courier Prime', 'Courier New', monospace;
+            background: var(--tube-light);
+            background-image: radial-gradient(ellipse at 50% 40%, rgba(0,188,212,0.025) 0%, transparent 70%);
+            color: var(--tube-dark);
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .main { flex: 1; margin-left: 220px; }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--tube-soft);
+            background: var(--tube-pale);
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--netdiag-accent);
+            text-shadow: 0 0 8px rgba(0,188,212,0.3);
+        }
+
+        .header-actions { display: flex; gap: 0.75rem; }
+
+        .badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            background: rgba(0,188,212,0.1);
+            border: 1px solid var(--netdiag-accent);
+            color: var(--netdiag-accent);
+        }
+
+        .content { padding: 1.5rem; }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 0;
+            border-bottom: 1px solid var(--tube-soft);
+            margin-bottom: 1.5rem;
+            background: var(--tube-pale);
+            border-radius: 8px 8px 0 0;
+            overflow: hidden;
+        }
+
+        .tab {
+            padding: 0.75rem 1.5rem;
+            cursor: pointer;
+            color: var(--p31-dim);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .tab:hover { color: var(--p31-mid); background: rgba(0,221,68,0.05); }
+
+        .tab.active {
+            color: var(--netdiag-accent);
+            border-bottom-color: var(--netdiag-accent);
+            background: rgba(0,188,212,0.1);
+        }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Cards */
+        .card {
+            background: var(--tube-pale);
+            border: 1px solid var(--tube-soft);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .card-header h2 {
+            color: var(--p31-decay);
+            text-shadow: var(--bloom-amber);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+        }
+
+        /* Form elements */
+        .form-group { margin-bottom: 1rem; }
+
+        .form-group label {
+            display: block;
+            font-size: 0.75rem;
+            color: var(--p31-dim);
+            margin-bottom: 0.25rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 0.6rem;
+            font-family: 'Courier Prime', monospace;
+            background: var(--tube-light);
+            border: 1px solid var(--tube-soft);
+            color: var(--p31-mid);
+            border-radius: 4px;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--netdiag-accent);
+            box-shadow: 0 0 8px rgba(0,188,212,0.2);
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 3fr 1fr;
+            gap: 0.75rem;
+            align-items: end;
+        }
+
+        .btn {
+            padding: 0.6rem 1.25rem;
+            font-family: 'Courier Prime', monospace;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            border: 1px solid var(--tube-soft);
+            background: var(--tube-pale);
+            color: var(--p31-mid);
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+
+        .btn:hover {
+            border-color: var(--netdiag-accent);
+            color: var(--netdiag-accent);
+            box-shadow: 0 0 12px rgba(0,188,212,0.15);
+        }
+
+        .btn.primary {
+            border-color: var(--netdiag-accent);
+            color: var(--netdiag-accent);
+            background: rgba(0,188,212,0.1);
+        }
+
+        .btn.primary:hover {
+            background: rgba(0,188,212,0.2);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Terminal output */
+        .terminal {
+            background: #1a1a1a;
+            color: #00ff41;
+            font-family: 'JetBrains Mono', 'Courier Prime', monospace;
+            font-size: 0.85rem;
+            padding: 1rem;
+            border-radius: 4px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #333;
+        }
+
+        .terminal:empty::before {
+            content: 'Output will appear here...';
+            color: #666;
+        }
+
+        /* Tools grid */
+        .tools-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1rem;
+        }
+
+        .tool-card {
+            background: var(--tube-pale);
+            border: 1px solid var(--tube-soft);
+            border-radius: 8px;
+            padding: 1.25rem;
+        }
+
+        .tool-card h3 {
+            color: var(--netdiag-accent);
+            font-size: 1rem;
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .tool-card h3 .icon { font-size: 1.25rem; }
+
+        /* Interface cards */
+        .iface-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            gap: 1rem;
+        }
+
+        .iface-card {
+            background: var(--tube-pale);
+            border: 1px solid var(--tube-soft);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+
+        .iface-card.up { border-left: 3px solid var(--p31-peak); }
+        .iface-card.down { border-left: 3px solid #ff4466; }
+
+        .iface-name {
+            font-weight: bold;
+            color: var(--netdiag-accent);
+            font-size: 1rem;
+        }
+
+        .iface-mac {
+            font-family: monospace;
+            font-size: 0.75rem;
+            color: var(--p31-dim);
+        }
+
+        .iface-addr {
+            margin-top: 0.5rem;
+            font-family: monospace;
+            font-size: 0.85rem;
+            color: var(--p31-mid);
+        }
+
+        .iface-state {
+            display: inline-block;
+            padding: 0.15rem 0.5rem;
+            border-radius: 3px;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+        }
+
+        .iface-state.up { background: rgba(0,221,68,0.2); color: var(--p31-peak); }
+        .iface-state.down { background: rgba(255,68,102,0.2); color: #ff4466; }
+
+        /* Table */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-family: 'Courier Prime', monospace;
+        }
+
+        th {
+            text-align: left;
+            padding: 0.75rem;
+            color: var(--p31-decay);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            border-bottom: 1px solid var(--p31-ghost);
+        }
+
+        td {
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--tube-soft);
+            color: var(--p31-mid);
+            font-size: 0.85rem;
+        }
+
+        tr:hover { background: rgba(0,188,212,0.05); }
+
+        /* Stats */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .stat-card {
+            text-align: center;
+            padding: 1rem;
+            background: var(--tube-pale);
+            border: 1px solid var(--tube-soft);
+            border-radius: 8px;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--netdiag-accent);
+        }
+
+        .stat-label {
+            font-size: 0.7rem;
+            color: var(--p31-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        /* Loading indicator */
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid var(--tube-soft);
+            border-radius: 50%;
+            border-top-color: var(--netdiag-accent);
+            animation: spin 1s linear infinite;
+            margin-right: 0.5rem;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Filter */
+        .filter-bar {
+            display: flex;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+
+        .filter-bar input { max-width: 300px; }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: var(--tube-light); }
+        ::-webkit-scrollbar-thumb { background: var(--p31-dim); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
+
+        @media (max-width: 768px) {
+            .main { margin-left: 0; }
+            .form-row { grid-template-columns: 1fr; }
+            .tools-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body class="crt-light">
+    <nav class="sidebar" id="sidebar"></nav>
+
+    <main class="main">
+        <header class="header">
+            <div style="display: flex; align-items: center; gap: 1rem;">
+                <h1>Network Diagnostics</h1>
+                <span class="badge" id="tools-count">-- Tools</span>
+            </div>
+            <div class="header-actions">
+                <button class="btn" onclick="refreshAll()">Refresh</button>
+            </div>
+        </header>
+
+        <div class="content">
+            <div class="tabs">
+                <div class="tab active" data-tab="tools">Tools</div>
+                <div class="tab" data-tab="interfaces">Interfaces</div>
+                <div class="tab" data-tab="routes">Routes</div>
+                <div class="tab" data-tab="connections">Connections</div>
+            </div>
+
+            <!-- Tools Tab -->
+            <div id="tools-tab" class="tab-content active">
+                <div class="tools-grid">
+                    <!-- Ping -->
+                    <div class="tool-card">
+                        <h3><span class="icon">&#128225;</span> Ping</h3>
+                        <div class="form-group">
+                            <label>Host / IP</label>
+                            <input type="text" id="ping-host" placeholder="8.8.8.8 or google.com">
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Count</label>
+                                <input type="number" id="ping-count" value="4" min="1" max="20">
+                            </div>
+                            <button class="btn primary" onclick="runPing()">Run</button>
+                        </div>
+                    </div>
+
+                    <!-- Traceroute -->
+                    <div class="tool-card">
+                        <h3><span class="icon">&#128268;</span> Traceroute</h3>
+                        <div class="form-group">
+                            <label>Host / IP</label>
+                            <input type="text" id="trace-host" placeholder="google.com">
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Max Hops</label>
+                                <input type="number" id="trace-hops" value="30" min="1" max="64">
+                            </div>
+                            <button class="btn primary" onclick="runTraceroute()">Run</button>
+                        </div>
+                    </div>
+
+                    <!-- DNS Lookup -->
+                    <div class="tool-card">
+                        <h3><span class="icon">&#127760;</span> DNS Lookup</h3>
+                        <div class="form-group">
+                            <label>Domain</label>
+                            <input type="text" id="dns-domain" placeholder="example.com">
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Record Type</label>
+                                <select id="dns-type">
+                                    <option value="A">A</option>
+                                    <option value="AAAA">AAAA</option>
+                                    <option value="MX">MX</option>
+                                    <option value="NS">NS</option>
+                                    <option value="TXT">TXT</option>
+                                    <option value="CNAME">CNAME</option>
+                                    <option value="SOA">SOA</option>
+                                </select>
+                            </div>
+                            <button class="btn primary" onclick="runDNS()">Run</button>
+                        </div>
+                    </div>
+
+                    <!-- WHOIS -->
+                    <div class="tool-card">
+                        <h3><span class="icon">&#128269;</span> WHOIS</h3>
+                        <div class="form-group">
+                            <label>Domain / IP</label>
+                            <input type="text" id="whois-target" placeholder="example.com">
+                        </div>
+                        <button class="btn primary" onclick="runWhois()" style="width: 100%;">Run</button>
+                    </div>
+
+                    <!-- MTR -->
+                    <div class="tool-card">
+                        <h3><span class="icon">&#128202;</span> MTR</h3>
+                        <div class="form-group">
+                            <label>Host / IP</label>
+                            <input type="text" id="mtr-host" placeholder="8.8.8.8">
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Count</label>
+                                <input type="number" id="mtr-count" value="10" min="1" max="30">
+                            </div>
+                            <button class="btn primary" onclick="runMTR()">Run</button>
+                        </div>
+                    </div>
+
+                    <!-- Port Scan -->
+                    <div class="tool-card">
+                        <h3><span class="icon">&#128272;</span> Port Scan</h3>
+                        <div class="form-group">
+                            <label>Host (Local Only)</label>
+                            <input type="text" id="scan-host" placeholder="192.168.1.1">
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Ports</label>
+                                <input type="text" id="scan-ports" value="1-1024" placeholder="1-1024 or 80,443">
+                            </div>
+                            <button class="btn primary" onclick="runPortScan()">Scan</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Results Terminal -->
+                <div class="card" style="margin-top: 1.5rem;">
+                    <div class="card-header">
+                        <h2>Output</h2>
+                        <button class="btn" onclick="clearOutput()">Clear</button>
+                    </div>
+                    <div class="terminal" id="output"></div>
+                </div>
+            </div>
+
+            <!-- Interfaces Tab -->
+            <div id="interfaces-tab" class="tab-content">
+                <div class="stats-row" id="iface-stats">
+                    <div class="stat-card">
+                        <div class="stat-value" id="iface-count">--</div>
+                        <div class="stat-label">Interfaces</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="iface-up">--</div>
+                        <div class="stat-label">Up</div>
+                    </div>
+                </div>
+
+                <div class="iface-grid" id="interfaces-list">
+                    <p style="color: var(--p31-dim);">Loading...</p>
+                </div>
+            </div>
+
+            <!-- Routes Tab -->
+            <div id="routes-tab" class="tab-content">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>IPv4 Routes</h2>
+                        <button class="btn" onclick="loadRoutes()">Refresh</button>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Destination</th>
+                                <th>Gateway</th>
+                                <th>Device</th>
+                                <th>Metric</th>
+                                <th>Scope</th>
+                            </tr>
+                        </thead>
+                        <tbody id="routes-table">
+                            <tr><td colspan="5">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2>ARP Table</h2>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>IP Address</th>
+                                <th>MAC Address</th>
+                                <th>Interface</th>
+                                <th>State</th>
+                            </tr>
+                        </thead>
+                        <tbody id="arp-table">
+                            <tr><td colspan="4">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Connections Tab -->
+            <div id="connections-tab" class="tab-content">
+                <div class="filter-bar">
+                    <input type="text" id="conn-filter" placeholder="Filter by IP, port, or process..." oninput="filterConnections()">
+                    <button class="btn" onclick="loadConnections()">Refresh</button>
+                </div>
+
+                <div class="stats-row" id="conn-stats">
+                    <div class="stat-card">
+                        <div class="stat-value" id="conn-total">--</div>
+                        <div class="stat-label">Total</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="conn-estab">--</div>
+                        <div class="stat-label">Established</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="conn-listen">--</div>
+                        <div class="stat-label">Listening</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Active Connections</h2>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Proto</th>
+                                <th>State</th>
+                                <th>Local</th>
+                                <th>Remote</th>
+                                <th>Process</th>
+                            </tr>
+                        </thead>
+                        <tbody id="connections-table">
+                            <tr><td colspan="5">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="card" style="margin-top: 1.5rem;">
+                    <div class="card-header">
+                        <h2>Listening Ports</h2>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Proto</th>
+                                <th>Port</th>
+                                <th>Address</th>
+                                <th>Process</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ports-table">
+                            <tr><td colspan="4">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const API = '/api/v1/netdiag';
+        let allConnections = [];
+
+        // Auth helper
+        function getToken() {
+            return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token');
+        }
+
+        async function api(endpoint, method = 'GET', data = null) {
+            const token = getToken();
+            const opts = {
+                method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': 'Bearer ' + token } : {})
+                }
+            };
+            if (data) opts.body = JSON.stringify(data);
+
+            try {
+                const res = await fetch(API + endpoint, opts);
+                if (res.status === 401) {
+                    window.location.href = '/portal/login.html';
+                    return { success: false, error: 'Unauthorized' };
+                }
+                return res.json();
+            } catch (e) {
+                return { success: false, error: e.message };
+            }
+        }
+
+        // Tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById(tab.dataset.tab + '-tab').classList.add('active');
+
+                // Load data for the tab
+                if (tab.dataset.tab === 'interfaces') loadInterfaces();
+                if (tab.dataset.tab === 'routes') { loadRoutes(); loadArp(); }
+                if (tab.dataset.tab === 'connections') { loadConnections(); loadPorts(); }
+            });
+        });
+
+        // Output helpers
+        function output(text, append = true) {
+            const el = document.getElementById('output');
+            if (append) {
+                el.textContent += text + '\n';
+            } else {
+                el.textContent = text;
+            }
+            el.scrollTop = el.scrollHeight;
+        }
+
+        function clearOutput() {
+            document.getElementById('output').textContent = '';
+        }
+
+        function setLoading(btn, loading) {
+            btn.disabled = loading;
+            if (loading) {
+                btn.dataset.text = btn.textContent;
+                btn.innerHTML = '<span class="loading"></span>Running...';
+            } else {
+                btn.textContent = btn.dataset.text || 'Run';
+            }
+        }
+
+        // Tool functions
+        async function runPing() {
+            const host = document.getElementById('ping-host').value.trim();
+            const count = parseInt(document.getElementById('ping-count').value) || 4;
+
+            if (!host) { alert('Please enter a host'); return; }
+
+            output(`\n=== PING ${host} ===\n`, false);
+            const btn = event.target;
+            setLoading(btn, true);
+
+            const data = await api('/ping', 'POST', { host, count });
+            setLoading(btn, false);
+
+            if (data.success) {
+                output(data.output);
+                if (data.stats) {
+                    output(`\n--- Statistics ---`);
+                    output(`Packets: ${data.stats.packets_received}/${data.stats.packets_transmitted}`);
+                    output(`Loss: ${data.stats.packet_loss}%`);
+                    if (data.stats.rtt_avg) {
+                        output(`RTT: min=${data.stats.rtt_min}ms avg=${data.stats.rtt_avg}ms max=${data.stats.rtt_max}ms`);
+                    }
+                }
+            } else {
+                output('Error: ' + (data.error || 'Failed'));
+            }
+        }
+
+        async function runTraceroute() {
+            const host = document.getElementById('trace-host').value.trim();
+            const max_hops = parseInt(document.getElementById('trace-hops').value) || 30;
+
+            if (!host) { alert('Please enter a host'); return; }
+
+            output(`\n=== TRACEROUTE ${host} ===\n`, false);
+            const btn = event.target;
+            setLoading(btn, true);
+
+            const data = await api('/traceroute', 'POST', { host, max_hops });
+            setLoading(btn, false);
+
+            if (data.success !== false) {
+                output(data.output || 'No output');
+            } else {
+                output('Error: ' + (data.error || 'Failed'));
+            }
+        }
+
+        async function runDNS() {
+            const domain = document.getElementById('dns-domain').value.trim();
+            const record_type = document.getElementById('dns-type').value;
+
+            if (!domain) { alert('Please enter a domain'); return; }
+
+            output(`\n=== DNS LOOKUP ${domain} (${record_type}) ===\n`, false);
+            const btn = event.target;
+            setLoading(btn, true);
+
+            const data = await api('/dns', 'POST', { domain, record_type });
+            setLoading(btn, false);
+
+            if (data.success) {
+                output(`Records found: ${data.records.length}`);
+                data.records.forEach(r => output(`  ${r}`));
+                output(`\n--- Verbose ---`);
+                output(data.verbose || '');
+            } else {
+                output('Error: ' + (data.error || 'Failed'));
+            }
+        }
+
+        async function runWhois() {
+            const target = document.getElementById('whois-target').value.trim();
+
+            if (!target) { alert('Please enter a domain or IP'); return; }
+
+            output(`\n=== WHOIS ${target} ===\n`, false);
+            const btn = event.target;
+            setLoading(btn, true);
+
+            const data = await api('/whois', 'POST', { target });
+            setLoading(btn, false);
+
+            if (data.success !== false) {
+                if (data.parsed) {
+                    output('--- Parsed Info ---');
+                    for (const [k, v] of Object.entries(data.parsed)) {
+                        output(`${k}: ${Array.isArray(v) ? v.join(', ') : v}`);
+                    }
+                    output('\n--- Full Output ---');
+                }
+                output(data.output || 'No output');
+            } else {
+                output('Error: ' + (data.error || 'Failed'));
+            }
+        }
+
+        async function runMTR() {
+            const host = document.getElementById('mtr-host').value.trim();
+            const count = parseInt(document.getElementById('mtr-count').value) || 10;
+
+            if (!host) { alert('Please enter a host'); return; }
+
+            output(`\n=== MTR ${host} (${count} probes) ===\n`, false);
+            const btn = event.target;
+            setLoading(btn, true);
+
+            const data = await api('/mtr', 'POST', { host, count });
+            setLoading(btn, false);
+
+            if (data.success !== false) {
+                output(data.output || 'No output');
+            } else {
+                output('Error: ' + (data.error || 'Failed'));
+            }
+        }
+
+        async function runPortScan() {
+            const host = document.getElementById('scan-host').value.trim();
+            const ports = document.getElementById('scan-ports').value.trim() || '1-1024';
+
+            if (!host) { alert('Please enter a host'); return; }
+
+            output(`\n=== PORT SCAN ${host} (${ports}) ===\n`, false);
+            output('Note: Only local network addresses are allowed.\n');
+            const btn = event.target;
+            setLoading(btn, true);
+
+            const data = await api('/portscan', 'POST', { host, ports });
+            setLoading(btn, false);
+
+            if (data.success) {
+                output(`Open ports found: ${data.open_ports.length}`);
+                data.open_ports.forEach(p => {
+                    output(`  ${p.port}/${p.proto} - ${p.service || 'unknown'}`);
+                });
+                if (data.output) {
+                    output('\n--- Full Output ---');
+                    output(data.output);
+                }
+            } else {
+                output('Error: ' + (data.error || 'Failed'));
+            }
+        }
+
+        // Interfaces
+        async function loadInterfaces() {
+            const data = await api('/interfaces');
+            const container = document.getElementById('interfaces-list');
+
+            if (data.success && data.interfaces) {
+                const up = data.interfaces.filter(i => i.state === 'UP').length;
+                document.getElementById('iface-count').textContent = data.count;
+                document.getElementById('iface-up').textContent = up;
+
+                container.innerHTML = data.interfaces.map(iface => `
+                    <div class="iface-card ${iface.state === 'UP' ? 'up' : 'down'}">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span class="iface-name">${iface.name}</span>
+                            <span class="iface-state ${iface.state === 'UP' ? 'up' : 'down'}">${iface.state}</span>
+                        </div>
+                        <div class="iface-mac">${iface.mac || 'N/A'}</div>
+                        <div style="font-size: 0.75rem; color: var(--p31-dim);">
+                            MTU: ${iface.mtu} | Type: ${iface.type}
+                        </div>
+                        <div class="iface-addr">
+                            ${iface.addresses.map(a => `${a.address}/${a.prefix}`).join('<br>') || 'No address'}
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                container.innerHTML = '<p style="color: #ff4466;">Failed to load interfaces</p>';
+            }
+        }
+
+        // Routes
+        async function loadRoutes() {
+            const data = await api('/routes');
+            const tbody = document.getElementById('routes-table');
+
+            if (data.success && data.ipv4) {
+                tbody.innerHTML = data.ipv4.map(r => `
+                    <tr>
+                        <td>${r.dst || 'default'}</td>
+                        <td>${r.gateway || '-'}</td>
+                        <td>${r.dev || '-'}</td>
+                        <td>${r.metric || '-'}</td>
+                        <td>${r.scope || '-'}</td>
+                    </tr>
+                `).join('');
+            } else {
+                tbody.innerHTML = '<tr><td colspan="5">Failed to load routes</td></tr>';
+            }
+        }
+
+        // ARP
+        async function loadArp() {
+            const data = await api('/arp');
+            const tbody = document.getElementById('arp-table');
+
+            if (data.success && data.entries) {
+                tbody.innerHTML = data.entries.map(e => `
+                    <tr>
+                        <td>${e.ip}</td>
+                        <td style="font-family: monospace;">${e.mac || '-'}</td>
+                        <td>${e.interface}</td>
+                        <td>${Array.isArray(e.state) ? e.state.join(', ') : e.state}</td>
+                    </tr>
+                `).join('') || '<tr><td colspan="4">No entries</td></tr>';
+            } else {
+                tbody.innerHTML = '<tr><td colspan="4">Failed to load ARP table</td></tr>';
+            }
+        }
+
+        // Connections
+        async function loadConnections() {
+            const data = await api('/connections');
+
+            if (data.success && data.connections) {
+                allConnections = data.connections;
+                document.getElementById('conn-total').textContent = data.count;
+                document.getElementById('conn-estab').textContent = data.connections.filter(c => c.state === 'ESTAB').length;
+                document.getElementById('conn-listen').textContent = data.connections.filter(c => c.state === 'LISTEN').length;
+                renderConnections(data.connections);
+            }
+        }
+
+        function renderConnections(conns) {
+            const tbody = document.getElementById('connections-table');
+            tbody.innerHTML = conns.slice(0, 100).map(c => `
+                <tr>
+                    <td>${c.proto}</td>
+                    <td>${c.state}</td>
+                    <td style="font-family: monospace;">${c.local}</td>
+                    <td style="font-family: monospace;">${c.remote || '-'}</td>
+                    <td style="font-size: 0.75rem;">${c.process || '-'}</td>
+                </tr>
+            `).join('') || '<tr><td colspan="5">No connections</td></tr>';
+        }
+
+        function filterConnections() {
+            const filter = document.getElementById('conn-filter').value.toLowerCase();
+            const filtered = allConnections.filter(c =>
+                c.local?.toLowerCase().includes(filter) ||
+                c.remote?.toLowerCase().includes(filter) ||
+                c.process?.toLowerCase().includes(filter) ||
+                c.state?.toLowerCase().includes(filter)
+            );
+            renderConnections(filtered);
+        }
+
+        // Ports
+        async function loadPorts() {
+            const data = await api('/ports');
+            const tbody = document.getElementById('ports-table');
+
+            if (data.success && data.ports) {
+                tbody.innerHTML = data.ports.map(p => `
+                    <tr>
+                        <td>${p.proto}</td>
+                        <td style="font-weight: bold; color: var(--netdiag-accent);">${p.local_port}</td>
+                        <td style="font-family: monospace;">${p.local_addr}</td>
+                        <td style="font-size: 0.75rem;">${p.process || '-'}</td>
+                    </tr>
+                `).join('') || '<tr><td colspan="4">No listening ports</td></tr>';
+            }
+        }
+
+        // Status
+        async function loadStatus() {
+            const data = await api('/status');
+            if (data.tools_count !== undefined) {
+                document.getElementById('tools-count').textContent = data.tools_count + ' Tools';
+            }
+        }
+
+        // Refresh all
+        function refreshAll() {
+            loadStatus();
+            const activeTab = document.querySelector('.tab.active').dataset.tab;
+            if (activeTab === 'interfaces') loadInterfaces();
+            if (activeTab === 'routes') { loadRoutes(); loadArp(); }
+            if (activeTab === 'connections') { loadConnections(); loadPorts(); }
+        }
+
+        // Init
+        loadStatus();
+    </script>
+    <script src="/shared/sidebar.js"></script>
+</body>
+</html>

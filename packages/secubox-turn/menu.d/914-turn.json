@@ -1,0 +1,9 @@
+{
+  "id": "turn",
+  "name": "TURN/STUN Server",
+  "icon": "phone",
+  "path": "/turn/",
+  "category": "network",
+  "order": 914,
+  "description": "TURN/STUN server management for WebRTC"
+}

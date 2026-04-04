@@ -1,0 +1,12 @@
+secubox-glances (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release - Glances system monitoring module.
+  * FastAPI backend with psutil-based stats collection.
+  * Endpoints: status, health, stats, processes, sensors, history.
+  * Service control: start, stop, restart glances daemon.
+  * Configuration management via TOML.
+  * P31 Phosphor light theme frontend.
+  * Tabs: Dashboard, Processes, Sensors, Config.
+  * Real-time graphs for CPU/Memory/Network.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Apr 2026 14:00:00 +0200

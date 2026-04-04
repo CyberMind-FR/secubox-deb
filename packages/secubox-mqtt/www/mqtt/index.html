@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MQTT Broker - SecuBox</title>
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        /* MQTT Module Accent Colors */
+        :root {
+            --mqtt-accent: #00897b;
+            --mqtt-accent-dim: #00695c;
+            --mqtt-accent-light: #4db6ac;
+        }
+
+        .mqtt-accent { color: var(--mqtt-accent); }
+        .mqtt-accent-bg { background: var(--mqtt-accent); color: white; }
+
+        /* Status Badge */
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .status-badge.running {
+            background: rgba(0, 170, 51, 0.15);
+            color: var(--status-ok);
+        }
+        .status-badge.stopped {
+            background: rgba(200, 34, 68, 0.15);
+            color: var(--status-err);
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        .running .status-dot { background: var(--status-ok); }
+        .stopped .status-dot { background: var(--status-err); animation: none; }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .stat-card {
+            text-align: center;
+            padding: 1.2rem;
+        }
+        .stat-card .value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--mqtt-accent);
+            text-shadow: var(--bloom-soft);
+        }
+        .stat-card .label {
+            font-size: 0.7rem;
+            color: var(--tube-dark);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-top: 0.3rem;
+        }
+
+        /* Control Buttons */
+        .controls {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        .btn-mqtt {
+            background: var(--mqtt-accent);
+            color: white;
+            border-color: var(--mqtt-accent-dim);
+        }
+        .btn-mqtt:hover {
+            background: var(--mqtt-accent-dim);
+        }
+
+        /* Tables */
+        .data-table {
+            width: 100%;
+            margin-top: 1rem;
+        }
+        .data-table th {
+            text-align: left;
+            padding: 0.8rem;
+            background: var(--tube-pale);
+            border-bottom: 2px solid var(--tube-soft);
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--mqtt-accent-dim);
+        }
+        .data-table td {
+            padding: 0.8rem;
+            border-bottom: 1px solid var(--tube-soft);
+            font-size: 0.85rem;
+        }
+        .data-table tr:hover {
+            background: rgba(0, 137, 123, 0.05);
+        }
+
+        /* Topic Tree */
+        .topic-tree {
+            font-family: var(--font-crt);
+            font-size: 0.85rem;
+        }
+        .topic-item {
+            padding: 0.5rem;
+            border-bottom: 1px solid var(--tube-soft);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .topic-item:hover {
+            background: rgba(0, 137, 123, 0.05);
+        }
+        .topic-name {
+            font-weight: 500;
+            color: var(--tube-dark);
+        }
+        .topic-value {
+            font-family: var(--font-crt);
+            color: var(--mqtt-accent);
+            font-size: 0.8rem;
+        }
+        .topic-type {
+            font-size: 0.65rem;
+            padding: 0.15rem 0.4rem;
+            border-radius: 3px;
+            background: rgba(0, 137, 123, 0.1);
+            color: var(--mqtt-accent);
+            margin-left: 0.5rem;
+        }
+
+        /* Forms */
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        .form-group label {
+            display: block;
+            font-size: 0.75rem;
+            color: var(--tube-dark);
+            margin-bottom: 0.3rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 0.6rem;
+        }
+        .form-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        /* Config Section */
+        .config-section {
+            margin-bottom: 1.5rem;
+        }
+        .config-section h3 {
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--tube-soft);
+        }
+
+        /* User/ACL cards */
+        .user-card, .acl-card {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.8rem 1rem;
+            background: var(--tube-pale);
+            border: 1px solid var(--tube-soft);
+            border-radius: 4px;
+            margin-bottom: 0.5rem;
+        }
+        .user-card:hover, .acl-card:hover {
+            border-color: var(--mqtt-accent-light);
+        }
+        .user-name {
+            font-weight: 600;
+            color: var(--tube-dark);
+        }
+        .acl-info {
+            flex: 1;
+        }
+        .acl-topic {
+            font-family: var(--font-crt);
+            color: var(--mqtt-accent);
+        }
+        .acl-access {
+            font-size: 0.7rem;
+            padding: 0.15rem 0.4rem;
+            border-radius: 3px;
+            margin-left: 0.5rem;
+        }
+        .acl-access.read { background: rgba(0, 170, 51, 0.15); color: var(--status-ok); }
+        .acl-access.write { background: rgba(221, 136, 0, 0.15); color: var(--p31-decay); }
+        .acl-access.readwrite { background: rgba(0, 137, 123, 0.15); color: var(--mqtt-accent); }
+        .acl-access.deny { background: rgba(200, 34, 68, 0.15); color: var(--status-err); }
+
+        /* Delete button */
+        .btn-delete {
+            background: transparent;
+            border: 1px solid var(--status-err);
+            color: var(--status-err);
+            padding: 0.3rem 0.6rem;
+            font-size: 0.75rem;
+        }
+        .btn-delete:hover {
+            background: rgba(200, 34, 68, 0.1);
+        }
+
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: var(--tube-dark);
+            opacity: 0.7;
+        }
+        .loading::after {
+            content: '...';
+            animation: dots 1.5s infinite;
+        }
+        @keyframes dots {
+            0%, 20% { content: '.'; }
+            40% { content: '..'; }
+            60%, 100% { content: '...'; }
+        }
+
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 2rem;
+            color: var(--tube-dark);
+            opacity: 0.6;
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal.active {
+            display: flex;
+        }
+        .modal-content {
+            background: var(--tube-light);
+            border: 1px solid var(--tube-soft);
+            border-radius: 8px;
+            padding: 1.5rem;
+            min-width: 400px;
+            max-width: 90%;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--tube-soft);
+        }
+        .modal-header h3 {
+            margin: 0;
+        }
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--tube-dark);
+        }
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.5rem;
+            margin-top: 1.5rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--tube-soft);
+        }
+    </style>
+</head>
+<body class="crt-light">
+    <nav class="sidebar" id="sidebar"></nav>
+
+    <main class="main-content">
+        <div class="container">
+            <!-- Header -->
+            <div class="header">
+                <div>
+                    <h1 class="crt-h1">MQTT Broker</h1>
+                    <p class="crt-small">Mosquitto Message Queue Management</p>
+                </div>
+                <div id="broker-status">
+                    <span class="status-badge stopped">
+                        <span class="status-dot"></span>
+                        <span class="status-text">Checking...</span>
+                    </span>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab active" data-tab="dashboard">Dashboard</button>
+                <button class="tab" data-tab="clients">Clients</button>
+                <button class="tab" data-tab="topics">Topics</button>
+                <button class="tab" data-tab="users">Users</button>
+                <button class="tab" data-tab="config">Config</button>
+            </div>
+
+            <!-- Dashboard Tab -->
+            <div class="tab-content active" id="tab-dashboard">
+                <div class="controls">
+                    <button class="btn btn-mqtt" onclick="startBroker()">Start</button>
+                    <button class="btn" onclick="stopBroker()">Stop</button>
+                    <button class="btn" onclick="restartBroker()">Restart</button>
+                    <button class="btn" onclick="refreshStatus()">Refresh</button>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="card stat-card">
+                        <div class="value" id="stat-clients">-</div>
+                        <div class="label">Connected Clients</div>
+                    </div>
+                    <div class="card stat-card">
+                        <div class="value" id="stat-received">-</div>
+                        <div class="label">Messages Received</div>
+                    </div>
+                    <div class="card stat-card">
+                        <div class="value" id="stat-sent">-</div>
+                        <div class="label">Messages Sent</div>
+                    </div>
+                    <div class="card stat-card">
+                        <div class="value" id="stat-subscriptions">-</div>
+                        <div class="label">Subscriptions</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3 class="crt-h3">Broker Information</h3>
+                    <table class="data-table">
+                        <tbody id="broker-info">
+                            <tr><td>Version</td><td id="info-version">-</td></tr>
+                            <tr><td>Status</td><td id="info-status">-</td></tr>
+                            <tr><td>Port</td><td id="info-port">1883</td></tr>
+                            <tr><td>Enabled</td><td id="info-enabled">-</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Clients Tab -->
+            <div class="tab-content" id="tab-clients">
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h3 class="crt-h3">Connected Clients</h3>
+                        <button class="btn" onclick="refreshClients()">Refresh</button>
+                    </div>
+                    <div id="clients-list">
+                        <div class="loading">Loading clients</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Topics Tab -->
+            <div class="tab-content" id="tab-topics">
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h3 class="crt-h3">Active Topics</h3>
+                        <button class="btn" onclick="refreshTopics()">Refresh</button>
+                    </div>
+                    <div id="topics-list" class="topic-tree">
+                        <div class="loading">Loading topics</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Users Tab -->
+            <div class="tab-content" id="tab-users">
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h3 class="crt-h3">MQTT Users</h3>
+                        <button class="btn btn-mqtt" onclick="showAddUserModal()">Add User</button>
+                    </div>
+                    <div id="users-list">
+                        <div class="loading">Loading users</div>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-top: 1rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h3 class="crt-h3">Access Control List (ACL)</h3>
+                        <button class="btn btn-mqtt" onclick="showAddAclModal()">Add Rule</button>
+                    </div>
+                    <div id="acl-list">
+                        <div class="loading">Loading ACL</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Config Tab -->
+            <div class="tab-content" id="tab-config">
+                <div class="card">
+                    <h3 class="crt-h3">Mosquitto Configuration</h3>
+
+                    <form id="config-form" onsubmit="saveConfig(event)">
+                        <div class="config-section">
+                            <h3 class="crt-h3" style="font-size: 0.85rem;">Network</h3>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Listener Port</label>
+                                    <input type="number" id="cfg-port" value="1883" min="1" max="65535">
+                                </div>
+                                <div class="form-group">
+                                    <label>Bind Address</label>
+                                    <input type="text" id="cfg-address" value="0.0.0.0" placeholder="0.0.0.0">
+                                </div>
+                                <div class="form-group">
+                                    <label>Max Connections</label>
+                                    <input type="number" id="cfg-max-conn" value="100" min="1" max="10000">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="config-section">
+                            <h3 class="crt-h3" style="font-size: 0.85rem;">Security</h3>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>
+                                        <input type="checkbox" id="cfg-anonymous">
+                                        Allow Anonymous Connections
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="config-section">
+                            <h3 class="crt-h3" style="font-size: 0.85rem;">Performance</h3>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Max Inflight Messages</label>
+                                    <input type="number" id="cfg-inflight" value="20" min="1" max="65535">
+                                </div>
+                                <div class="form-group">
+                                    <label>Max Queued Messages</label>
+                                    <input type="number" id="cfg-queued" value="1000" min="0" max="100000">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>
+                                    <input type="checkbox" id="cfg-persistence" checked>
+                                    Enable Persistence
+                                </label>
+                            </div>
+                        </div>
+
+                        <div style="margin-top: 1.5rem;">
+                            <button type="submit" class="btn btn-mqtt">Save Configuration</button>
+                            <button type="button" class="btn" onclick="loadConfig()">Reset</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Add User Modal -->
+    <div class="modal" id="add-user-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add MQTT User</h3>
+                <button class="modal-close" onclick="closeModal('add-user-modal')">&times;</button>
+            </div>
+            <form id="add-user-form" onsubmit="addUser(event)">
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="new-username" required minlength="1" maxlength="64">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="new-password" required minlength="4">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn" onclick="closeModal('add-user-modal')">Cancel</button>
+                    <button type="submit" class="btn btn-mqtt">Add User</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add ACL Modal -->
+    <div class="modal" id="add-acl-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add ACL Rule</h3>
+                <button class="modal-close" onclick="closeModal('add-acl-modal')">&times;</button>
+            </div>
+            <form id="add-acl-form" onsubmit="addAcl(event)">
+                <div class="form-group">
+                    <label>User (leave empty for all users)</label>
+                    <input type="text" id="acl-user" placeholder="Optional">
+                </div>
+                <div class="form-group">
+                    <label>Topic Pattern</label>
+                    <input type="text" id="acl-topic" required placeholder="sensors/#">
+                </div>
+                <div class="form-group">
+                    <label>Access</label>
+                    <select id="acl-access">
+                        <option value="readwrite">Read/Write</option>
+                        <option value="read">Read Only</option>
+                        <option value="write">Write Only</option>
+                        <option value="deny">Deny</option>
+                    </select>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn" onclick="closeModal('add-acl-modal')">Cancel</button>
+                    <button type="submit" class="btn btn-mqtt">Add Rule</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/shared/sidebar.js"></script>
+    <script>
+        const API_BASE = '/api/v1/mqtt';
+
+        // Get auth token
+        function getToken() {
+            return localStorage.getItem('sbx_token') || '';
+        }
+
+        // API helpers
+        async function api(endpoint, options = {}) {
+            const url = `${API_BASE}${endpoint}`;
+            const headers = {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${getToken()}`
+            };
+            try {
+                const response = await fetch(url, { ...options, headers });
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                return await response.json();
+            } catch (error) {
+                console.error('API error:', error);
+                throw error;
+            }
+        }
+
+        // Tab handling
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById(`tab-${tab.dataset.tab}`).classList.add('active');
+
+                // Load data for tab
+                switch (tab.dataset.tab) {
+                    case 'clients': refreshClients(); break;
+                    case 'topics': refreshTopics(); break;
+                    case 'users': refreshUsers(); loadAcl(); break;
+                    case 'config': loadConfig(); break;
+                }
+            });
+        });
+
+        // Modal handling
+        function showAddUserModal() {
+            document.getElementById('add-user-modal').classList.add('active');
+        }
+
+        function showAddAclModal() {
+            document.getElementById('add-acl-modal').classList.add('active');
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('active');
+        }
+
+        // Status refresh
+        async function refreshStatus() {
+            try {
+                const data = await api('/status');
+                updateStatus(data);
+            } catch (e) {
+                console.error('Failed to refresh status:', e);
+            }
+        }
+
+        function updateStatus(data) {
+            const badge = document.querySelector('#broker-status .status-badge');
+            const text = document.querySelector('#broker-status .status-text');
+
+            if (data.running) {
+                badge.className = 'status-badge running';
+                text.textContent = 'Running';
+            } else {
+                badge.className = 'status-badge stopped';
+                text.textContent = 'Stopped';
+            }
+
+            // Update stats
+            document.getElementById('stat-clients').textContent = data.clients || 0;
+            document.getElementById('stat-received').textContent = formatNumber(data.messages_received || 0);
+            document.getElementById('stat-sent').textContent = formatNumber(data.messages_sent || 0);
+
+            // Update info
+            document.getElementById('info-version').textContent = data.version || 'unknown';
+            document.getElementById('info-status').textContent = data.running ? 'Active' : 'Inactive';
+            document.getElementById('info-enabled').textContent = data.enabled ? 'Yes' : 'No';
+        }
+
+        function formatNumber(n) {
+            if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+            if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+            return n.toString();
+        }
+
+        // Broker control
+        async function startBroker() {
+            try {
+                await api('/start', { method: 'POST' });
+                setTimeout(refreshStatus, 1000);
+            } catch (e) {
+                alert('Failed to start broker');
+            }
+        }
+
+        async function stopBroker() {
+            try {
+                await api('/stop', { method: 'POST' });
+                setTimeout(refreshStatus, 1000);
+            } catch (e) {
+                alert('Failed to stop broker');
+            }
+        }
+
+        async function restartBroker() {
+            try {
+                await api('/restart', { method: 'POST' });
+                setTimeout(refreshStatus, 2000);
+            } catch (e) {
+                alert('Failed to restart broker');
+            }
+        }
+
+        // Clients
+        async function refreshClients() {
+            const container = document.getElementById('clients-list');
+            container.innerHTML = '<div class="loading">Loading clients</div>';
+
+            try {
+                const data = await api('/clients');
+                if (data.clients && data.clients.length > 0) {
+                    let html = `<table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Client ID</th>
+                                <th>Address</th>
+                                <th>Protocol</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>`;
+
+                    data.clients.forEach(client => {
+                        html += `<tr>
+                            <td>${escapeHtml(client.id || '-')}</td>
+                            <td><code>${escapeHtml(client.address || '-')}</code></td>
+                            <td>${escapeHtml(client.protocol || 'mqtt')}</td>
+                            <td><span class="badge open">Connected</span></td>
+                        </tr>`;
+                    });
+
+                    html += '</tbody></table>';
+                    html += `<p class="crt-small" style="margin-top: 1rem;">Total connected: ${data.connected_count || 0}</p>`;
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = '<div class="empty-state">No clients connected</div>';
+                }
+            } catch (e) {
+                container.innerHTML = '<div class="empty-state">Failed to load clients</div>';
+            }
+        }
+
+        // Topics
+        async function refreshTopics() {
+            const container = document.getElementById('topics-list');
+            container.innerHTML = '<div class="loading">Loading topics</div>';
+
+            try {
+                const data = await api('/topics');
+                if (data.topics && data.topics.length > 0) {
+                    let html = '';
+                    data.topics.forEach(topic => {
+                        html += `<div class="topic-item">
+                            <div>
+                                <span class="topic-name">${escapeHtml(topic.name)}</span>
+                                <span class="topic-type">${topic.type}</span>
+                            </div>
+                            <span class="topic-value">${escapeHtml(topic.last_value || '-')}</span>
+                        </div>`;
+                    });
+                    if (data.note) {
+                        html += `<p class="crt-small" style="margin-top: 1rem; opacity: 0.7;">${data.note}</p>`;
+                    }
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = '<div class="empty-state">No topics found</div>';
+                }
+            } catch (e) {
+                container.innerHTML = '<div class="empty-state">Failed to load topics</div>';
+            }
+        }
+
+        // Users
+        async function refreshUsers() {
+            const container = document.getElementById('users-list');
+            container.innerHTML = '<div class="loading">Loading users</div>';
+
+            try {
+                const data = await api('/users');
+                if (data.users && data.users.length > 0) {
+                    let html = '';
+                    data.users.forEach(user => {
+                        html += `<div class="user-card">
+                            <span class="user-name">${escapeHtml(user.username)}</span>
+                            <button class="btn btn-delete" onclick="deleteUser('${escapeHtml(user.username)}')">Delete</button>
+                        </div>`;
+                    });
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = '<div class="empty-state">No users configured</div>';
+                }
+            } catch (e) {
+                container.innerHTML = '<div class="empty-state">Failed to load users</div>';
+            }
+        }
+
+        async function addUser(event) {
+            event.preventDefault();
+            const username = document.getElementById('new-username').value;
+            const password = document.getElementById('new-password').value;
+
+            try {
+                await api('/users', {
+                    method: 'POST',
+                    body: JSON.stringify({ username, password })
+                });
+                closeModal('add-user-modal');
+                document.getElementById('add-user-form').reset();
+                refreshUsers();
+            } catch (e) {
+                alert('Failed to add user');
+            }
+        }
+
+        async function deleteUser(username) {
+            if (!confirm(`Delete user "${username}"?`)) return;
+
+            try {
+                await api(`/users/${encodeURIComponent(username)}`, { method: 'DELETE' });
+                refreshUsers();
+            } catch (e) {
+                alert('Failed to delete user');
+            }
+        }
+
+        // ACL
+        async function loadAcl() {
+            const container = document.getElementById('acl-list');
+            container.innerHTML = '<div class="loading">Loading ACL</div>';
+
+            try {
+                const data = await api('/acl');
+                if (data.entries && data.entries.length > 0) {
+                    let html = '';
+                    data.entries.forEach((entry, i) => {
+                        html += `<div class="acl-card">
+                            <div class="acl-info">
+                                <span class="acl-topic">${escapeHtml(entry.topic)}</span>
+                                <span class="acl-access ${entry.access}">${entry.access}</span>
+                                ${entry.user ? `<span class="crt-small" style="margin-left: 0.5rem;">User: ${escapeHtml(entry.user)}</span>` : '<span class="crt-small" style="margin-left: 0.5rem;">All users</span>'}
+                            </div>
+                            <button class="btn btn-delete" onclick="deleteAcl('${escapeHtml(entry.topic)}', '${escapeHtml(entry.user || '')}')">Delete</button>
+                        </div>`;
+                    });
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = '<div class="empty-state">No ACL rules configured</div>';
+                }
+            } catch (e) {
+                container.innerHTML = '<div class="empty-state">Failed to load ACL</div>';
+            }
+        }
+
+        async function addAcl(event) {
+            event.preventDefault();
+            const user = document.getElementById('acl-user').value || null;
+            const topic = document.getElementById('acl-topic').value;
+            const access = document.getElementById('acl-access').value;
+
+            try {
+                await api('/acl', {
+                    method: 'POST',
+                    body: JSON.stringify({ user, topic, access })
+                });
+                closeModal('add-acl-modal');
+                document.getElementById('add-acl-form').reset();
+                loadAcl();
+            } catch (e) {
+                alert('Failed to add ACL rule');
+            }
+        }
+
+        async function deleteAcl(topic, user) {
+            if (!confirm(`Delete ACL rule for "${topic}"?`)) return;
+
+            try {
+                const params = new URLSearchParams({ topic });
+                if (user) params.append('acl_user', user);
+                await api(`/acl?${params}`, { method: 'DELETE' });
+                loadAcl();
+            } catch (e) {
+                alert('Failed to delete ACL rule');
+            }
+        }
+
+        // Config
+        async function loadConfig() {
+            try {
+                const data = await api('/config');
+                const config = data.config || {};
+
+                document.getElementById('cfg-port').value = config.listener_port || 1883;
+                document.getElementById('cfg-address').value = config.listener_address || '0.0.0.0';
+                document.getElementById('cfg-max-conn').value = config.max_connections || 100;
+                document.getElementById('cfg-anonymous').checked = config.allow_anonymous || false;
+                document.getElementById('cfg-inflight').value = config.max_inflight_messages || 20;
+                document.getElementById('cfg-queued').value = config.max_queued_messages || 1000;
+                document.getElementById('cfg-persistence').checked = config.persistence !== false;
+            } catch (e) {
+                console.error('Failed to load config:', e);
+            }
+        }
+
+        async function saveConfig(event) {
+            event.preventDefault();
+
+            const config = {
+                listener_port: parseInt(document.getElementById('cfg-port').value),
+                listener_address: document.getElementById('cfg-address').value,
+                max_connections: parseInt(document.getElementById('cfg-max-conn').value),
+                allow_anonymous: document.getElementById('cfg-anonymous').checked,
+                max_inflight_messages: parseInt(document.getElementById('cfg-inflight').value),
+                max_queued_messages: parseInt(document.getElementById('cfg-queued').value),
+                persistence: document.getElementById('cfg-persistence').checked,
+                log_type: 'all'
+            };
+
+            try {
+                const result = await api('/config', {
+                    method: 'POST',
+                    body: JSON.stringify(config)
+                });
+                if (result.success) {
+                    alert('Configuration saved successfully');
+                    setTimeout(refreshStatus, 1000);
+                } else {
+                    alert('Failed to save configuration: ' + (result.error || 'Unknown error'));
+                }
+            } catch (e) {
+                alert('Failed to save configuration');
+            }
+        }
+
+        // Utility
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        // Stats update
+        async function updateStats() {
+            try {
+                const data = await api('/stats');
+                if (data.messages) {
+                    document.getElementById('stat-subscriptions').textContent = data.messages.subscriptions || 0;
+                }
+            } catch (e) {
+                // Ignore stats errors
+            }
+        }
+
+        // Init
+        document.addEventListener('DOMContentLoaded', () => {
+            refreshStatus();
+            updateStats();
+            setInterval(refreshStatus, 30000);
+            setInterval(updateStats, 60000);
+        });
+    </script>
+</body>
+</html>
