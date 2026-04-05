@@ -37,12 +37,37 @@
 - New categories: AI, Automation, Communication, Media
 - All 124 packages now have wiki documentation
 
+### eMMC Size Compatibility Fix ✅
+
+#### Board-Specific Image Sizes
+- **Issue:** Default 4GB/8GB images too large for 4GB eMMC ESPRESSObin boards
+- **Solution:** Added `IMG_SIZE` to board configs:
+  - ESPRESSObin v7: **3584M** (3.5GB) — fits 4GB eMMC
+  - ESPRESSObin Ultra: 4G (8GB eMMC)
+  - MOCHAbin: 4G (8GB eMMC + SATA option)
+
+#### CI Workflow Update
+- Removed hardcoded `--size 8G` from build-image.yml
+- CI now uses board-specific sizes from `board/*/config.mk`
+
+#### Documentation
+- Added eMMC storage limits to `wiki/ARM-Installation.md`
+- Created `board/mochabin/README.md` with U-Boot guide
+- Updated `board/espressobin-v7/README.md` with size table
+
+### Release v1.5.2 ✅
+- Tag created and pushed
+- CI building images with correct eMMC-compatible sizes
+- https://github.com/CyberMind-FR/secubox-deb/releases/tag/v1.5.2
+
 **Commits:**
 - `271f27e` fix: Add missing parted/dosfstools deps to live USB image
 - `75f0406` fix: Add parted/dosfstools to RPi 400 image
 - `81fa1d7` docs: Add ESPRESSObin v7 installation guide
 - `b8ab323` docs: Add ARM installation wiki page
 - `37c8d75` docs: Add 73 missing modules to wiki
+- `41011c5` docs: Add eMMC size limits for ESPRESSObin/MOCHAbin
+- `4772fc2` fix: Use board-specific image sizes for eMMC compatibility
 
 ---
 
