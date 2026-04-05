@@ -44,3 +44,6 @@ LAN_IFACES=lan0 lan1 lan2 lan3
 
 DPI_MODE=passive
 SWAP_SIZE=512M
+
+# Image size: 4G for 8GB eMMC (ESPRESSObin Ultra has 8GB eMMC)
+IMG_SIZE="4G"

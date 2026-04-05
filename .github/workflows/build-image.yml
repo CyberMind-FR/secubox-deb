@@ -9,10 +9,10 @@ on:
         type: string
         default: 'all'
       size:
-        description: 'Image size'
+        description: 'Image size (empty = use board default)'
         required: false
         type: string
-        default: '8G'
+        default: ''
     secrets:
       GPG_PRIVATE_KEY:
         required: false
@@ -31,9 +31,9 @@ on:
           - all
         default: vm-x64
       size:
-        description: 'Image size'
+        description: 'Image size (empty = use board default)'
         required: false
-        default: '8G'
+        default: ''
   push:
     tags:
       - 'v*'
@@ -114,11 +114,17 @@ jobs:
             echo "Slipstream enabled: $(ls output/debs/secubox-*.deb | wc -l) packages"
           fi
 
+          # Build with board-specific size (from board/*/config.mk)
+          SIZE_OPT=""
+          if [ -n "${{ inputs.size || github.event.inputs.size }}" ]; then
+            SIZE_OPT="--size ${{ inputs.size || github.event.inputs.size }}"
+          fi
+
           sudo -E bash image/build-image.sh \
             --board ${{ matrix.board }} \
             --suite ${{ env.DEBIAN_SUITE }} \
             --out output/ \
-            --size ${{ inputs.size || github.event.inputs.size || '8G' }} \
+            $SIZE_OPT \
             $SLIPSTREAM_OPT
           sudo chown -R $(id -u):$(id -g) output/
         timeout-minutes: 90
