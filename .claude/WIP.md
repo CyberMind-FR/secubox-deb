@@ -64,6 +64,13 @@
 - SSH access confirmed
 - **URL:** https://github.com/CyberMind-FR/secubox-deb/releases/tag/v1.5.1
 
+### Mode Switching Test ✅
+- **Kiosk → TUI:** `secubox-mode tui --now` ✅
+- **TUI persists after reboot:** ✅
+- **TUI → Kiosk:** `secubox-mode kiosk --now` ✅
+- Both modes work correctly with immediate switching
+- Modes persist across reboots via marker files
+
 ### CI Workflow Chain (Fixed)
 ```
 build-packages.yml → secubox-debs-all (124 packages)
