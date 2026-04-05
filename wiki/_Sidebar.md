@@ -4,6 +4,7 @@
 * [[Live-USB-VirtualBox|VirtualBox (2 min)]] ⭐
 * [[Live-USB]] | [FR](Live-USB-FR) | [中文](Live-USB-ZH)
 * [[Installation]] | [FR](Installation-FR) | [中文](Installation-ZH)
+* [[ARM-Installation|ARM / U-Boot]] ⚡
 
 ### Modules
 * [[MODULES-EN|Modules]] 🇬🇧
