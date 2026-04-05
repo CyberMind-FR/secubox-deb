@@ -1,9 +1,38 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-04-05 (Session 41)*
+*Mis à jour : 2026-04-05 (Session 42)*
 
 ---
 
-## ✅ Terminé cette session (Session 41)
+## ✅ Terminé cette session (Session 42)
+
+### Build Script Fixes
+
+#### Live USB Missing Dependencies ✅
+- **Issue:** `secubox-install` script in live USB image failed — missing `parted`
+- **Root cause:** `build-live-usb.sh` debootstrap didn't include disk tools
+- **Solution:** Added `parted`, `dosfstools`, `grub-pc-bin` to INCLUDE_PKGS
+- **File:** `image/build-live-usb.sh:147`
+
+#### RPi 400 Missing Dependencies ✅
+- **Issue:** Same missing tools in Raspberry Pi image
+- **Solution:** Added `parted`, `dosfstools`, `e2fsprogs`, `pciutils`, `usbutils`
+- **File:** `image/build-rpi-usb.sh:122`
+
+### Documentation
+
+#### ESPRESSObin v7 Installation Guide ✅
+- Created `board/espressobin-v7/README.md`
+- Documented U-Boot flash procedure (USB → eMMC via `gzwrite`)
+- Includes: boot targets, network interfaces, troubleshooting, serial console settings
+
+**Commits:**
+- `271f27e` fix: Add missing parted/dosfstools deps to live USB image
+- `75f0406` fix: Add parted/dosfstools to RPi 400 image
+- `81fa1d7` docs: Add ESPRESSObin v7 installation guide
+
+---
+
+## ✅ Terminé session précédente (Session 41)
 
 ### Phase 9 Modules — 11 New System/Infrastructure Tools ✅
 
