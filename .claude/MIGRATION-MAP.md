@@ -1,5 +1,5 @@
 # MIGRATION MAP — SecuBox OpenWrt → Debian
-*Mis à jour : 2026-04-04*
+*Mis à jour : 2026-04-05*
 
 Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 
@@ -37,7 +37,7 @@ Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 
 ---
 
-## Paquets Debian — 93 modules (80 UI + 3 backend + 10 tools)
+## Paquets Debian — 124 modules (80 UI + 3 backend + 30 tools + 11 infrastructure)
 
 | Module | www/ | API | deb/ | Endpoints | Statut |
 |--------|------|-----|------|-----------|--------|
@@ -126,7 +126,23 @@ Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 | **secubox-threats** | ✅ | ✅ | ✅ | unified threat dashboard, IOCs | ✅ |
 | **secubox-openclaw** | ✅ | ✅ | ✅ | OSINT reconnaissance | ✅ |
 
-**Total : 93 modules | ~2000+ endpoints API + Go mesh daemon + TUI console + SOC**
+### Phase 9+ — System & Infrastructure Tools (11 new)
+
+| Module | www/ | API | deb/ | Endpoints | Statut |
+|--------|------|-----|------|-----------|--------|
+| **secubox-nettweak** | ✅ | ✅ | ✅ | sysctl, profiles, TCP/IP tuning | ✅ |
+| **secubox-ksm** | ✅ | ✅ | ✅ | KSM memory optimization | ✅ |
+| **secubox-avatar** | ✅ | ✅ | ✅ | identity, avatar upload, service sync | ✅ |
+| **secubox-admin** | ✅ | ✅ | ✅ | services, logs, disk, processes, reboot | ✅ |
+| **secubox-metabolizer** | ✅ | ✅ | ✅ | log processing, pattern detection | ✅ |
+| **secubox-metacatalog** | ✅ | ✅ | ✅ | service registry, health, dependencies | ✅ |
+| **secubox-cyberfeed** | ✅ | ✅ | ✅ | threat feeds, nftables/hosts export | ✅ |
+| **secubox-mirror** | ✅ | ✅ | ✅ | APT/NPM/PyPI/Docker cache | ✅ |
+| **secubox-saas-relay** | ✅ | ✅ | ✅ | API proxy, Fernet, rate limiting | ✅ |
+| **secubox-rezapp** | ✅ | ✅ | ✅ | Docker/LXC deployment, templates | ✅ |
+| **secubox-picobrew** | ✅ | ✅ | ✅ | homebrew sensors, fermentation profiles | ✅ |
+
+**Total : 124 modules | ~2000+ endpoints API + Go mesh daemon + TUI console + SOC**
 
 *Note: mail-lxc and webmail-lxc are backend components integrated into secubox-mail*
 
