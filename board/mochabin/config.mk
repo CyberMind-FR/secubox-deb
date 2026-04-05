@@ -59,3 +59,6 @@ SFP_IFACES=eth5 eth6
 # RAM suffisante pour DPI full-line + toutes les fonctions
 DPI_MODE=inline
 SWAP_SIZE=0
+
+# Image size: 4G for 8GB eMMC (MOCHAbin has 8GB eMMC + SATA)
+IMG_SIZE="4G"

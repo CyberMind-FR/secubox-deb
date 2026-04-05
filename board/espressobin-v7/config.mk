@@ -51,3 +51,7 @@ LAN_IFACES=lan0 lan1
 DPI_MODE=passive
 # Swap activé pour ESPRESSObin 1GB
 SWAP_SIZE=512M
+
+# Image size: 3.5G for 4GB eMMC compatibility (some boards have 4GB eMMC)
+# Boards with 8GB eMMC or SD-only can use full 4G
+IMG_SIZE="3584M"
