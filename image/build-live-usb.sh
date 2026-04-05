@@ -144,7 +144,7 @@ INCLUDE_PKGS+=",python3,python3-pip,nginx,curl,wget,ca-certificates,gnupg"
 INCLUDE_PKGS+=",iproute2,iputils-ping,ethtool,net-tools,wireguard-tools"
 INCLUDE_PKGS+=",sudo,less,vim-tiny,logrotate,cron,rsync,jq,dnsmasq"
 INCLUDE_PKGS+=",linux-image-amd64,live-boot,live-boot-initramfs-tools,live-config,live-config-systemd"
-INCLUDE_PKGS+=",grub-efi-amd64,efibootmgr,pciutils,usbutils,lsb-release"
+INCLUDE_PKGS+=",grub-efi-amd64,grub-pc-bin,efibootmgr,pciutils,usbutils,parted,dosfstools,lsb-release"
 INCLUDE_PKGS+=",plymouth,plymouth-themes"
 
 debootstrap --arch=amd64 --include="${INCLUDE_PKGS}" \
