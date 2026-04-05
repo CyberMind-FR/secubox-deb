@@ -2,7 +2,7 @@
 
 *Complete module documentation*
 
-**Total modules:** 48
+**Total modules:** 124
 
 [🇬🇧 English](MODULES-EN.md) | [🇫🇷 Français](MODULES-FR.md) | [🇩🇪 Deutsch](MODULES-DE.md) | [🇨🇳 中文](MODULES-ZH.md)
 
@@ -766,6 +766,958 @@ System and LXC backup
 - Restore
 
 ![Backup Manager](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/backup.png)
+
+---
+
+### 🚫 Ad Guard
+
+**Category:** Security
+
+Ad and tracker detection with per-device statistics
+
+**Features:**
+- Blocklist management
+- Delayed blacklisting workflow
+- Device-type classification
+- Per-device statistics
+
+---
+
+### 🖥️ System Administration
+
+**Category:** System
+
+Advanced system administration dashboard
+
+**Features:**
+- System status overview
+- Systemd service management
+- System logs viewer
+- APT updates management
+
+---
+
+### 🤖 AI Gateway
+
+**Category:** AI
+
+AI Data Sovereignty Gateway
+
+**Features:**
+- Data sovereignty controls
+- AI traffic routing
+- Privacy-preserving AI access
+
+---
+
+### 🧠 AI Insights
+
+**Category:** AI
+
+ML-based threat detection and security insights
+
+**Features:**
+- ML-based threat detection
+- Anomaly detection
+- Log analysis with trained models
+- CrowdSec and Suricata integration
+
+---
+
+### 🎭 Avatar Manager
+
+**Category:** Access
+
+Identity and avatar management
+
+**Features:**
+- Avatar upload
+- Identity sync across services
+- Service integration
+
+---
+
+### 💾 System Cloner
+
+**Category:** System
+
+System backup and restore
+
+**Features:**
+- Compressed backup creation
+- Backup management
+- System restore
+
+---
+
+### 🔧 Config Advisor
+
+**Category:** Security
+
+Security configuration advisor
+
+**Features:**
+- Security configuration analysis
+- Best practices recommendations
+- Configuration scoring
+
+---
+
+### 🖥️ Console TUI
+
+**Category:** System
+
+Terminal-based dashboard
+
+**Features:**
+- Live system metrics
+- Service management
+- Network interface status
+- Real-time log viewer
+
+---
+
+### 🍪 Cookie Tracker
+
+**Category:** Privacy
+
+Cookie tracking and privacy compliance
+
+**Features:**
+- Third-party cookie detection
+- Tracker identification
+- GDPR compliance checking
+
+---
+
+### 🔐 CVE Triage
+
+**Category:** Security
+
+CVE vulnerability triage
+
+**Features:**
+- Vulnerability assessment
+- CVE tracking
+- Risk prioritization
+
+---
+
+### 📡 CyberFeed
+
+**Category:** Security
+
+Threat intelligence feed aggregator
+
+**Features:**
+- Multi-source threat feed aggregation
+- IP and domain blocklist management
+- Export to nftables, unbound, dnsmasq
+
+---
+
+### 🛡️ DNS Guard
+
+**Category:** DNS
+
+DNS anomaly detection
+
+**Features:**
+- DNS traffic analysis
+- Anomaly detection
+- Threat alerting
+
+---
+
+### 🌐 DNS Provider
+
+**Category:** DNS
+
+Multi-provider DNS API management
+
+**Features:**
+- OVH, Gandi, Cloudflare, AWS Route53 support
+- ACME DNS-01 challenge support
+- Dynamic DNS
+
+---
+
+### 🏠 Domoticz
+
+**Category:** Automation
+
+Home automation management
+
+**Features:**
+- Device management
+- Room/scene organization
+- Z-Wave, Zigbee, 433MHz support
+
+---
+
+### 📊 Glances
+
+**Category:** Monitoring
+
+System monitoring with Glances
+
+**Features:**
+- Real-time CPU, memory, disk, network stats
+- Hardware sensors
+- Process list
+
+---
+
+### 🦣 GoToSocial
+
+**Category:** Communication
+
+ActivityPub/Fediverse server
+
+**Features:**
+- Account management
+- Federation controls
+- Moderation tools
+
+---
+
+### 📝 Hexo
+
+**Category:** Publishing
+
+Static blog generator
+
+**Features:**
+- Multiple blog management
+- Theme gallery
+- Plugin management
+
+---
+
+### 🏡 Home Assistant
+
+**Category:** Automation
+
+IoT hub integration
+
+**Features:**
+- Entity and device browser
+- Automation management
+- HACS integration
+
+---
+
+### 🆔 Identity
+
+**Category:** Privacy
+
+Decentralized identity
+
+**Features:**
+- Decentralized identity management
+- Identity verification
+- Privacy-preserving auth
+
+---
+
+### 🔍 Interceptor
+
+**Category:** Security
+
+HTTP/HTTPS traffic interception
+
+**Features:**
+- SSL/TLS inspection
+- Request/response modification
+- Traffic recording
+
+---
+
+### 📱 IoT Guard
+
+**Category:** Security
+
+IoT device security
+
+**Features:**
+- IoT device monitoring
+- Security policy enforcement
+- Threat detection
+
+---
+
+### 🚫 IP Block
+
+**Category:** Security
+
+IP blocklist manager
+
+**Features:**
+- Multiple blocklist sources
+- nftables set integration
+- Auto-update scheduling
+
+---
+
+### 💬 Jabber/XMPP
+
+**Category:** Communication
+
+Prosody XMPP server
+
+**Features:**
+- User accounts
+- Virtual hosts
+- Federation
+
+---
+
+### 🎬 Jellyfin
+
+**Category:** Media
+
+Media server management
+
+**Features:**
+- Library configuration
+- Hardware acceleration
+- Backup/restore
+
+---
+
+### 🎥 Jitsi Meet
+
+**Category:** Communication
+
+Video conferencing
+
+**Features:**
+- JWT, LDAP authentication
+- Recording and streaming
+- Breakout rooms
+
+---
+
+### 💾 KSM
+
+**Category:** System
+
+Kernel Same-page Merging
+
+**Features:**
+- Enable/disable KSM
+- Memory savings statistics
+- Configuration tuning
+
+---
+
+### 🤖 LocalAI
+
+**Category:** AI
+
+Self-hosted LLM inference
+
+**Features:**
+- OpenAI-compatible API
+- Model gallery
+- Chat interface
+
+---
+
+### 🧠 LocalRecall
+
+**Category:** AI
+
+AI memory system
+
+**Features:**
+- AI context storage
+- Memory retrieval
+- Context management
+
+---
+
+### 🎵 Lyrion Music Server
+
+**Category:** Media
+
+Lyrion Music Server for Squeezebox
+
+**Features:**
+- Squeezebox player control
+- Library management
+- Backup and restore
+
+---
+
+### 🔒 MAC Guard
+
+**Category:** Security
+
+MAC address-based network access control
+
+**Features:**
+- MAC address whitelist/blacklist
+- Device discovery
+- Alert on unknown devices
+
+---
+
+### 🪞 MagicMirror
+
+**Category:** Apps
+
+Smart display platform
+
+**Features:**
+- MagicMirror configuration
+- Module management
+- Display controls
+
+---
+
+### 📬 Mail LXC
+
+**Category:** Email
+
+Mail server LXC container
+
+**Features:**
+- Postfix MTA
+- Dovecot IMAP/POP3
+- OpenDKIM signing
+
+---
+
+### 🔗 Master Link
+
+**Category:** Network
+
+Mesh node enrollment
+
+**Features:**
+- Node enrollment
+- Mesh link management
+- Topology coordination
+
+---
+
+### 💬 Matrix Synapse
+
+**Category:** Communication
+
+Federated chat server
+
+**Features:**
+- User and room management
+- Bridge support
+- Federation
+
+---
+
+### 🤖 MCP Server
+
+**Category:** AI
+
+Model Context Protocol server
+
+**Features:**
+- AI context protocol support
+- Model communication
+- Context sharing
+
+---
+
+### 📋 Metabolizer
+
+**Category:** Monitoring
+
+Log processor and analyzer
+
+**Features:**
+- Journalctl log analysis
+- Pattern extraction
+- Error trend analysis
+
+---
+
+### 📚 Metacatalog
+
+**Category:** Services
+
+Service catalog and registry
+
+**Features:**
+- Service health status
+- Dependency mapping
+- API endpoint documentation
+
+---
+
+### 🪞 Mirror/CDN
+
+**Category:** Network
+
+Local mirror and CDN caching
+
+**Features:**
+- Nginx caching proxy
+- Cache statistics
+- Bandwidth optimization
+
+---
+
+### 📦 MMPM
+
+**Category:** Apps
+
+MagicMirror Package Manager
+
+**Features:**
+- Browse MagicMirror modules
+- Install/update/remove modules
+
+---
+
+### 📡 MQTT
+
+**Category:** Automation
+
+Mosquitto MQTT broker
+
+**Features:**
+- Client connection tracking
+- Topic monitoring
+- User and ACL management
+
+---
+
+### 🔬 nDPId
+
+**Category:** Monitoring
+
+Deep Packet Inspection with nDPI
+
+**Features:**
+- JA3/JA4 TLS fingerprinting
+- Protocol detection
+- Risk scoring
+
+---
+
+### 🔧 Network Diagnostics
+
+**Category:** Network
+
+Network troubleshooting tools
+
+**Features:**
+- Ping, traceroute, DNS lookup
+- WHOIS, MTR
+- Port scanning, bandwidth testing
+
+---
+
+### ⚙️ Network Tuning
+
+**Category:** Network
+
+Sysctl and TCP/IP optimization
+
+**Features:**
+- Tuning profiles
+- TCP settings
+- Persistent configuration
+
+---
+
+### 🔍 Network Anomaly
+
+**Category:** Security
+
+Network anomaly detection
+
+**Features:**
+- Traffic analysis
+- Anomaly detection
+- Alert generation
+
+---
+
+### 📰 Newsbin
+
+**Category:** Apps
+
+Usenet downloader (SABnzbd)
+
+**Features:**
+- NZB file handling
+- Download queue
+- Category organization
+
+---
+
+### 🦙 Ollama
+
+**Category:** AI
+
+Local LLM inference
+
+**Features:**
+- Model pulling
+- Chat completion
+- Text generation APIs
+
+---
+
+### 🕵️ OpenClaw OSINT
+
+**Category:** Security
+
+Open Source Intelligence
+
+**Features:**
+- Domain reconnaissance
+- IP intelligence
+- Subdomain discovery
+
+---
+
+### 🛡️ OSSEC HIDS
+
+**Category:** Security
+
+Host-based Intrusion Detection
+
+**Features:**
+- Alert viewing
+- File integrity monitoring
+- Rootkit detection
+
+---
+
+### 📹 PeerTube
+
+**Category:** Media
+
+Federated video platform
+
+**Features:**
+- Video and channel management
+- Federation (ActivityPub)
+- Plugin management
+
+---
+
+### 📸 PhotoPrism
+
+**Category:** Media
+
+AI-powered photo management
+
+**Features:**
+- AI-powered face recognition
+- Photo library indexing
+- Album management
+
+---
+
+### 🍺 PicoBrew
+
+**Category:** Automation
+
+Homebrew/fermentation controller
+
+**Features:**
+- Temperature monitoring
+- Fermentation profiles
+- Recipe management
+
+---
+
+### 📱 Redroid
+
+**Category:** Apps
+
+Android in container
+
+**Features:**
+- Android container management
+- ADB access
+- App installation
+
+---
+
+### 📊 Reporter
+
+**Category:** System
+
+System report generation
+
+**Features:**
+- PDF/HTML reports
+- Scheduled generation
+- Security reports
+
+---
+
+### 📦 RezApp
+
+**Category:** Apps
+
+Application deployment
+
+**Features:**
+- Application templates
+- Docker/LXC deployment
+- Health monitoring
+
+---
+
+### 🛣️ Routes
+
+**Category:** Network
+
+Routing table manager
+
+**Features:**
+- View IPv4/IPv6 routes
+- Add/delete routes
+- Policy routing rules
+
+---
+
+### 🖥️ RTTY
+
+**Category:** System
+
+Remote terminal access
+
+**Features:**
+- Terminal sessions
+- Access token management
+- Web interface
+
+---
+
+### 🔌 SaaS Relay
+
+**Category:** Services
+
+Secure API proxy relay
+
+**Features:**
+- Proxy configuration
+- API key management
+- Rate limiting
+
+---
+
+### 🔐 SimpleX Chat
+
+**Category:** Communication
+
+Privacy-focused messaging
+
+**Features:**
+- Zero-knowledge messaging
+- No user identifiers
+- TLS certificate management
+
+---
+
+### 📧 SMTP Relay
+
+**Category:** Email
+
+Email forwarding
+
+**Features:**
+- Queue management
+- Smarthost configuration
+- Monitoring
+
+---
+
+### 🛡️ SOC Agent
+
+**Category:** Security
+
+Edge node agent
+
+**Features:**
+- Metrics collection
+- Alert aggregation
+- Remote command execution
+
+---
+
+### 🏢 SOC Gateway
+
+**Category:** Security
+
+Central fleet monitoring hub
+
+**Features:**
+- Node registration
+- Fleet-wide metrics
+- Threat correlation
+
+---
+
+### 🌐 SOC Web
+
+**Category:** Dashboard
+
+Fleet monitoring dashboard
+
+**Features:**
+- Fleet overview
+- Real-time alerts
+- Threat visualization
+
+---
+
+### 🤖 Threat Analyst
+
+**Category:** AI
+
+AI threat analysis
+
+**Features:**
+- AI-powered analysis
+- Automated assessment
+- Intelligence correlation
+
+---
+
+### ⚠️ Threats Dashboard
+
+**Category:** Security
+
+Unified security threats
+
+**Features:**
+- Aggregated alerts
+- Threat intelligence
+- Incident tracking
+
+---
+
+### 📥 Torrent
+
+**Category:** Apps
+
+BitTorrent client (Transmission)
+
+**Features:**
+- Magnet links, URLs, files
+- Speed limiting
+- RSS feed subscriptions
+
+---
+
+### 📞 TURN/STUN Server
+
+**Category:** Communication
+
+WebRTC relay server
+
+**Features:**
+- coturn service
+- User management
+- Temporary credentials
+
+---
+
+### 🔐 Vault
+
+**Category:** Security
+
+Encrypted secrets management
+
+**Features:**
+- Secure storage
+- Audit logging
+- Rotation support
+
+---
+
+### 💻 VM Manager
+
+**Category:** System
+
+Virtual machine management
+
+**Features:**
+- KVM/QEMU VMs
+- LXC containers
+- Resource management
+
+---
+
+### 📞 VoIP/PBX
+
+**Category:** Communication
+
+Asterisk/FreePBX management
+
+**Features:**
+- Extension management
+- SIP trunks
+- Call detail records
+
+---
+
+### 🛡️ Wazuh SIEM
+
+**Category:** Security
+
+Wazuh SIEM integration
+
+**Features:**
+- Agent/manager management
+- Alert viewing
+- Security monitoring
+
+---
+
+### 📬 Webmail LXC
+
+**Category:** Email
+
+Roundcube webmail container
+
+**Features:**
+- Roundcube webmail
+- Nginx + PHP-FPM
+- Auto-configuration
+
+---
+
+### 📻 Web Radio
+
+**Category:** Media
+
+Internet radio streaming
+
+**Features:**
+- Station management
+- Icecast/Liquidsoap server
+- Recording functionality
+
+---
+
+### 📡 Zigbee
+
+**Category:** Automation
+
+Zigbee2MQTT gateway
+
+**Features:**
+- Device pairing
+- MQTT integration
+- Network topology
 
 ---
 
