@@ -119,6 +119,7 @@ INCLUDE_PKGS="systemd,systemd-sysv,dbus,nftables,openssh-server"
 INCLUDE_PKGS+=",python3,python3-pip,nginx,curl,wget,ca-certificates,gnupg"
 INCLUDE_PKGS+=",iproute2,iputils-ping,net-tools,wireguard-tools"
 INCLUDE_PKGS+=",sudo,less,vim-tiny,cron,rsync,jq"
+INCLUDE_PKGS+=",parted,dosfstools,e2fsprogs,pciutils,usbutils"
 # Note: linux-image-arm64, plymouth, initramfs-tools installed later
 
 debootstrap --arch=arm64 --foreign --include="${INCLUDE_PKGS}" \
