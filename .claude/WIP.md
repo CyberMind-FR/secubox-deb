@@ -25,10 +25,24 @@
 - Documented U-Boot flash procedure (USB → eMMC via `gzwrite`)
 - Includes: boot targets, network interfaces, troubleshooting, serial console settings
 
+#### Wiki ARM Installation Page ✅
+- Created `wiki/ARM-Installation.md`
+- Complete U-Boot flash guide for all ARM boards
+- Covers ESPRESSObin v7/Ultra and MOCHAbin
+- Added to wiki sidebar
+
+#### Wiki Modules Update ✅
+- Added 73 missing modules to `wiki/MODULES-EN.md`
+- **Total documented modules: 119** (was 46)
+- New categories: AI, Automation, Communication, Media
+- All 124 packages now have wiki documentation
+
 **Commits:**
 - `271f27e` fix: Add missing parted/dosfstools deps to live USB image
 - `75f0406` fix: Add parted/dosfstools to RPi 400 image
 - `81fa1d7` docs: Add ESPRESSObin v7 installation guide
+- `b8ab323` docs: Add ARM installation wiki page
+- `37c8d75` docs: Add 73 missing modules to wiki
 
 ---
 
