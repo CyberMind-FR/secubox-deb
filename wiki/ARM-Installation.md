@@ -12,6 +12,22 @@ This guide covers installing SecuBox on ARM boards (Marvell Armada) using U-Boot
 | ESPRESSObin Ultra | Armada 3720 | 1-4 GB | secubox-lite |
 | MOCHAbin | Armada 7040 | 4 GB | secubox-full |
 
+## eMMC Storage Limits
+
+| Board | eMMC | Max Image | Default |
+|-------|------|-----------|---------|
+| ESPRESSObin v7 (no eMMC) | — | SD only | — |
+| ESPRESSObin v7 (4GB) | 4 GB | **3.5 GB** | Use `--size 3.5G` |
+| ESPRESSObin v7 (8GB) | 8 GB | 6 GB | 4 GB |
+| ESPRESSObin Ultra | 8 GB | 6 GB | 4 GB |
+| MOCHAbin | 8 GB | 6 GB | 4 GB |
+
+**Notes:**
+- Leave ~500MB-2GB free for data partition and wear leveling
+- For 4GB eMMC boards: build with `--size 3.5G`
+- MOCHAbin can use SATA/NVMe for larger installations
+- `gzwrite` requires RAM to decompress (~350MB buffer)
+
 ## Prerequisites
 
 - Serial console adapter (USB-TTL)

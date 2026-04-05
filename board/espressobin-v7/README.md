@@ -4,9 +4,24 @@
 
 - **SoC**: Marvell Armada 3720 (Cortex-A53 Dual-core 1.2GHz)
 - **RAM**: 1-2 GB DDR4
-- **Storage**: eMMC (optionnel) / microSD
+- **Storage**: eMMC (optional) / microSD
 - **Network**: 1x WAN GbE + 2x LAN (Marvell 88E6341 DSA switch)
-- **Profile**: SecuBox Lite (optimisé pour RAM limitée)
+- **Profile**: SecuBox Lite (optimized for limited RAM)
+
+## Storage Limits
+
+| Model | eMMC | microSD | Recommended Image |
+|-------|------|---------|-------------------|
+| ESPRESSObin v7 (no eMMC) | — | Up to 128GB | SD card boot |
+| ESPRESSObin v7 (4GB eMMC) | 4 GB | Up to 128GB | **3.5GB max** |
+| ESPRESSObin v7 (8GB eMMC) | 8 GB | Up to 128GB | 4GB default |
+| ESPRESSObin Ultra | 8 GB | Up to 128GB | 4GB default |
+
+**Important eMMC constraints:**
+- Default image size: **4GB** (fits 8GB eMMC)
+- For 4GB eMMC boards, use `--size 3.5G` when building
+- Leave ~500MB free for data partition and wear leveling
+- U-Boot `gzwrite` requires enough RAM to decompress (~350MB)
 
 ## Pre-requisites
 
