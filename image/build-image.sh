@@ -309,6 +309,16 @@ else
   warn "APT repo SecuBox non disponible — skip (Phase 4)"
 fi
 
+# ── Pre-install Python dependencies (BEFORE slipstream) ───────────────────
+log "Pre-installing Python dependencies for SecuBox modules..."
+install -d -m 755 "${ROOTFS}/usr/lib/systemd/system"
+install -d -m 755 "${ROOTFS}/etc/systemd/system"
+chroot "${ROOTFS}" pip3 install --break-system-packages -q \
+  fastapi uvicorn[standard] python-jose[cryptography] httpx \
+  jinja2 tomli pyroute2 psutil authlib aiosqlite aiofiles \
+  pydantic toml netifaces 2>/dev/null || warn "pip install partiel"
+ok "Python dependencies installed"
+
 # Slipstream: intégrer les .deb locaux directement
 if [[ $SLIPSTREAM_DEBS -eq 1 ]]; then
   # Check both output/ and output/debs/ for packages
@@ -321,28 +331,35 @@ if [[ $SLIPSTREAM_DEBS -eq 1 ]]; then
     log "Slipstream: installation des paquets locaux..."
     install -d "${ROOTFS}/tmp/secubox-debs"
     cp "${DEBS_DIR}"/secubox-*.deb "${ROOTFS}/tmp/secubox-debs/"
+    SLIP_COUNT=$(ls "${DEBS_DIR}"/secubox-*.deb 2>/dev/null | wc -l)
+    log "Slipstream: ${SLIP_COUNT} packages to install"
 
     # Installer secubox-core en premier (dépendance)
-    if [[ -f "${ROOTFS}/tmp/secubox-debs/secubox-core_"*.deb ]]; then
-      chroot "${ROOTFS}" dpkg -i /tmp/secubox-debs/secubox-core_*.deb 2>/dev/null || true
+    if ls "${ROOTFS}/tmp/secubox-debs/secubox-core_"*.deb >/dev/null 2>&1; then
+      log "Installing secubox-core (dependency)..."
+      chroot "${ROOTFS}" bash -c 'dpkg -i --force-depends /tmp/secubox-debs/secubox-core_*.deb' 2>/dev/null || true
     fi
 
     # Installer tous les autres paquets
-    chroot "${ROOTFS}" dpkg -i /tmp/secubox-debs/*.deb 2>/dev/null || true
-    chroot "${ROOTFS}" apt-get install -f -y -q 2>/dev/null || true
+    log "Installing all packages..."
+    chroot "${ROOTFS}" bash -c 'dpkg -i --force-depends --force-overwrite /tmp/secubox-debs/*.deb' 2>&1 | \
+      grep -v "^dpkg: warning" | grep -v "^Selecting\|^Preparing\|^Unpacking\|^Setting up" | head -30 || true
+
+    # Fix dependencies
+    log "Fixing dependencies..."
+    chroot "${ROOTFS}" apt-get install -f -y -q 2>/dev/null || warn "apt-get -f failed"
+    chroot "${ROOTFS}" dpkg --configure -a --force-confold 2>/dev/null || true
+
+    # Count installed
+    INSTALLED_COUNT=$(chroot "${ROOTFS}" dpkg -l 'secubox-*' 2>/dev/null | grep "^ii" | wc -l)
 
     # Nettoyer
     rm -rf "${ROOTFS}/tmp/secubox-debs"
-    ok "Slipstream: $(ls "${DEBS_DIR}"/secubox-*.deb 2>/dev/null | wc -l) paquets installés"
+    ok "Slipstream: ${INSTALLED_COUNT}/${SLIP_COUNT} paquets installés"
   else
     warn "Slipstream: pas de secubox-*.deb dans output/ ou output/debs/"
   fi
 fi
-
-# Python deps communs
-chroot "${ROOTFS}" pip3 install --break-system-packages -q \
-  fastapi uvicorn[standard] python-jose[cryptography] httpx \
-  jinja2 tomli pyroute2 psutil authlib aiosqlite 2>/dev/null || warn "pip install partiel"
 
 # VirtualBox/QEMU Guest Tools pour VM
 if [[ $IS_X64 -eq 1 ]] || [[ "${BOARD}" == "vm-arm64" ]]; then
