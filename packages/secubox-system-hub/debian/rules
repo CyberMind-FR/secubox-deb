@@ -1,0 +1,11 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d $(CURDIR)/debian/secubox-system-hub/usr/share/secubox/system-hub/api
+	install -d $(CURDIR)/debian/secubox-system-hub/usr/share/secubox/system-hub/static
+	install -d $(CURDIR)/debian/secubox-system-hub/usr/share/secubox/system-hub/templates
+	cp -r api/* $(CURDIR)/debian/secubox-system-hub/usr/share/secubox/system-hub/api/ || true
+	cp -r static/* $(CURDIR)/debian/secubox-system-hub/usr/share/secubox/system-hub/static/ || true
+	cp -r templates/* $(CURDIR)/debian/secubox-system-hub/usr/share/secubox/system-hub/templates/ || true
