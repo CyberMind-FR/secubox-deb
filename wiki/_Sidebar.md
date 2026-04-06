@@ -4,8 +4,8 @@
 * [[Live-USB-VirtualBox|VirtualBox (2 min)]] ⭐
 * [[Live-USB]] | [FR](Live-USB-FR) | [中文](Live-USB-ZH)
 * [[Installation]] | [FR](Installation-FR) | [中文](Installation-ZH)
-* [[ARM-Installation|ARM / U-Boot]] ⚡
-* [[ESPRESSObin]] | [FR](ESPRESSObin-FR)
+* [[ARM-Installation|ARM / U-Boot]] | [FR](ARM-Installation-FR) | [中文](ARM-Installation-ZH) ⚡
+* [[ESPRESSObin]] | [FR](ESPRESSObin-FR) | [中文](ESPRESSObin-ZH)
 
 ### Modules
 * [[MODULES-EN|Modules]] 🇬🇧
