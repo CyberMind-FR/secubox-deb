@@ -1,4 +1,6 @@
 [Unit]
+# Only start if explicitly enabled (backend installed)
+ConditionPathExists=/etc/secubox/magicmirror/enabled
 Description=SecuBox MagicMirror API
 After=network.target secubox-core.service
 

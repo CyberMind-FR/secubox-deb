@@ -1,4 +1,6 @@
 [Unit]
+# Only start if explicitly enabled (backend installed)
+ConditionPathExists=/etc/secubox/homeassistant/enabled
 Description=SecuBox Home Assistant IoT Hub API
 After=network.target secubox-runtime.service
 Requires=secubox-runtime.service

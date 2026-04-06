@@ -2,6 +2,8 @@
 Description=SecuBox WebRadio API
 After=network.target secubox-runtime.service
 Requires=secubox-runtime.service
+# Only start if explicitly enabled (Icecast configured)
+ConditionPathExists=/etc/secubox/webradio/enabled
 
 [Service]
 Type=simple

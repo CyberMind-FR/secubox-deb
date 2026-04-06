@@ -829,6 +829,11 @@ chroot "${ROOTFS}" apt-get install -y -q --no-install-recommends \
 
 ok "Firmware installed"
 
+# ── Install critical disk tools (for secubox-install) ─────────────
+log "Installing disk tools..."
+chroot "${ROOTFS}" apt-get install -y -q parted fdisk e2fsprogs dosfstools || warn "Disk tools install failed"
+ok "Disk tools installed (parted, fdisk, e2fsprogs, dosfstools)"
+
 # ── Install fake systemctl for chroot builds ───────────────────────
 # Package postinst scripts call systemctl which fails in chroot.
 # This wrapper silently succeeds for those calls during package install.
@@ -886,9 +891,15 @@ else
   warn "SSL cert generation failed - nginx may not start"
 fi
 
-# Find all .deb files in cache/repo or output/debs
+# Find all .deb files in cache/repo or output/
+# Note: Packages may be in output/ directly OR output/debs/ subdirectory
 CACHE_DEBS="${REPO_DIR}/cache/repo/pool"
-OUTPUT_DEBS="${REPO_DIR}/output/debs"
+# Check both output/ and output/debs/ for packages
+if [[ -d "${REPO_DIR}/output" ]] && ls "${REPO_DIR}/output"/secubox-*.deb >/dev/null 2>&1; then
+  OUTPUT_DEBS="${REPO_DIR}/output"
+else
+  OUTPUT_DEBS="${REPO_DIR}/output/debs"
+fi
 
 # Check both locations for packages (handle non-existent dirs gracefully)
 if [[ -d "$CACHE_DEBS" ]]; then

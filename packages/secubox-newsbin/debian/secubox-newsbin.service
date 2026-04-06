@@ -3,6 +3,8 @@ Description=SecuBox Newsbin API
 After=network.target secubox-core.service secubox-runtime.service docker.service
 Requires=secubox-runtime.service
 Wants=docker.service
+# Only start if explicitly enabled (SABnzbd installed)
+ConditionPathExists=/etc/secubox/newsbin/enabled
 
 [Service]
 Type=simple

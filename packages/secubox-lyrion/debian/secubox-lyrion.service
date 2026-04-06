@@ -2,6 +2,8 @@
 Description=SecuBox Lyrion Music Server API
 After=network.target secubox-runtime.service
 Requires=secubox-runtime.service
+# Only start if explicitly enabled (LMS installed)
+ConditionPathExists=/etc/secubox/lyrion/enabled
 
 [Service]
 Type=simple

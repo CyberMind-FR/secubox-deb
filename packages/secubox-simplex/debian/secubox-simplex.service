@@ -1,4 +1,6 @@
 [Unit]
+# Only start if explicitly enabled (backend installed)
+ConditionPathExists=/etc/secubox/simplex/enabled
 Description=SecuBox SimpleX API
 Documentation=https://simplex.chat/docs/
 After=network.target secubox-core.service docker.service

@@ -3,6 +3,8 @@ Description=SecuBox GoToSocial API
 After=network.target secubox-core.service secubox-runtime.service docker.service
 Requires=secubox-runtime.service
 Wants=docker.service
+# Only start if explicitly enabled (GoToSocial installed)
+ConditionPathExists=/etc/secubox/gotosocial/enabled
 
 [Service]
 Type=simple

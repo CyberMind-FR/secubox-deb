@@ -1,4 +1,6 @@
 [Unit]
+# Only start if explicitly enabled (backend installed)
+ConditionPathExists=/etc/secubox/domoticz/enabled
 Description=SecuBox Domoticz Home Automation API
 After=network.target secubox-runtime.service
 Requires=secubox-runtime.service

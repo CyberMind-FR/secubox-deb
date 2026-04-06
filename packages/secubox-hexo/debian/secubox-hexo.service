@@ -3,6 +3,8 @@ Description=SecuBox Hexo API
 After=network.target secubox-core.service secubox-runtime.service docker.service
 Requires=secubox-runtime.service
 Wants=docker.service
+# Only start if explicitly enabled (Hexo installed)
+ConditionPathExists=/etc/secubox/hexo/enabled
 
 [Service]
 Type=simple

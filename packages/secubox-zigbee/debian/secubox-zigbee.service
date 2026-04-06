@@ -2,6 +2,8 @@
 Description=SecuBox Zigbee2MQTT Gateway API
 After=network.target secubox-runtime.service
 Requires=secubox-runtime.service
+# Only start if explicitly enabled (Zigbee2MQTT configured)
+ConditionPathExists=/etc/secubox/zigbee/enabled
 
 [Service]
 Type=simple
