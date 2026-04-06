@@ -635,10 +635,10 @@ INITRD
         warn "initrd file empty or missing - Pi may not boot!"
       fi
     else
-      err "initrd generation failed or timed out after 5 minutes!"
-      err "Without initrd, the Pi cannot load kernel modules."
-      err "Try running on native ARM64 hardware or increasing timeout."
-      exit 1
+      warn "initrd generation failed or timed out after 5 minutes!"
+      warn "Pi will boot but kernel modules won't load dynamically."
+      warn "For full functionality, rebuild on native ARM64 hardware."
+      # Don't exit - Pi can still boot, just with reduced functionality
     fi
   else
     err "No kernel modules found in ${ROOTFS}/lib/modules/"

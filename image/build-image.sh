@@ -543,22 +543,31 @@ EXTLINUX
   ok "extlinux.conf créé pour ${KERNEL_DTS}"
 
   # Créer boot.scr pour U-Boot (alternative à extlinux)
+  # Note: Boot partition is mmc 1:1, files are at root level (not /boot/)
   cat > "${MNT}/boot/boot.cmd" <<'BOOTCMD'
 # SecuBox U-Boot boot script
 # Auto-generated — do not edit
 
 echo "SecuBox boot script..."
 
-# Detect boot device
+# Boot partition is partition 1 (mmc X:1)
+# Files are at root level of boot partition, not in /boot/
 if test -n "${devnum}"; then
-    setenv bootdev "${devtype} ${devnum}:${distro_bootpart}"
+    setenv bootpart "${devtype} ${devnum}:1"
 else
-    setenv bootdev "mmc 1:2"
+    setenv bootpart "mmc 1:1"
 fi
 
-# Load kernel
-echo "Loading kernel from ${bootdev}..."
-load ${bootdev} ${kernel_addr_r} /boot/Image
+# Rootfs is partition 2 (mmc X:2)
+if test -n "${devnum}"; then
+    setenv rootpart "/dev/mmcblk${devnum}p2"
+else
+    setenv rootpart "/dev/mmcblk1p2"
+fi
+
+# Load kernel from boot partition (files at root level)
+echo "Loading kernel from ${bootpart}..."
+load ${bootpart} ${kernel_addr_r} Image
 
 # Load DTB
 echo "Loading device tree..."
@@ -566,13 +575,13 @@ BOOTCMD
 
   # Ajouter le DTB spécifique au board
   cat >> "${MNT}/boot/boot.cmd" <<BOOTCMD_DTB
-load \${bootdev} \${fdt_addr_r} /boot/dtbs/marvell/${KERNEL_DTS}.dtb
+load \${bootpart} \${fdt_addr_r} dtbs/marvell/${KERNEL_DTS}.dtb
 BOOTCMD_DTB
 
   cat >> "${MNT}/boot/boot.cmd" <<'BOOTCMD_END'
 
-# Set boot args
-setenv bootargs "root=LABEL=rootfs rootfstype=ext4 rootwait console=ttyMV0,115200 net.ifnames=0"
+# Set boot args - use device path since LABEL may not work in all U-Boot versions
+setenv bootargs "root=${rootpart} rootfstype=ext4 rootwait console=ttyMV0,115200 net.ifnames=0"
 
 # Boot
 echo "Booting SecuBox..."
