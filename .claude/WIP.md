@@ -1,9 +1,78 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-04-05 (Session 42)*
+*Mis à jour : 2026-04-06 (Session 43)*
 
 ---
 
-## ✅ Terminé cette session (Session 42)
+## ✅ Terminé cette session (Session 43)
+
+### Critical Bug Fix: ARM Images Missing Kernel ✅
+
+#### Issue Discovered
+- **Problem:** ARM images (ESPRESSObin, MOCHAbin) had empty `/boot` directory
+- **Root cause:** `build-image.sh` only installed `linux-image-arm64` for `vm-arm64`, not physical ARM boards
+- **Impact:** gzwrite flash succeeded but system couldn't boot (no kernel)
+
+#### Solution
+- Modified `image/build-image.sh` to install `linux-image-arm64` for ALL ARM boards
+- Added kernel copy: `/boot/vmlinuz-*` → `/boot/Image` (U-Boot format)
+- Added DTB copy: `/usr/lib/linux-image-*/marvell/` → `/boot/dtbs/marvell/`
+- Generated `extlinux.conf` for distroboot
+- Generated `boot.scr` for U-Boot autoboot (requires `mkimage`)
+
+#### Files Modified
+- `image/build-image.sh:185-191` — Add linux-image-arm64 for all ARM
+- `image/build-image.sh:503-550` — Kernel/DTB copy + bootscript generation
+
+### Wiki ESPRESSObin Pages ✅
+
+#### New Pages Created
+- `wiki/ESPRESSObin.md` — Complete U-Boot guide (EN)
+- `wiki/ESPRESSObin-FR.md` — French translation
+- `wiki/ESPRESSObin-ZH.md` — Chinese translation
+
+#### Content
+- Hardware variants table (v5/v7/Ultra)
+- eMMC storage limits
+- Board layout diagram with UART pinout
+- DIP switches boot modes
+- 4 flash methods: USB gzwrite, SD gzwrite, TFTP, mmc write
+- Automatic boot methods (boot.scr, extlinux.conf, manual)
+- DSA switch network interfaces
+- Troubleshooting & UART recovery
+- Performance comparison ESPRESSObin vs MOCHAbin
+
+### Wiki Translations Complete ✅
+
+#### New Pages
+- `wiki/ARM-Installation-FR.md` — French translation
+- `wiki/ARM-Installation-ZH.md` — Chinese translation
+- `wiki/UI-COMPARISON.md` — Moved from docs/wiki/
+
+#### Sidebar Updated
+- Added multilingual links for ARM-Installation (EN/FR/ZH)
+- Added multilingual links for ESPRESSObin (EN/FR/ZH)
+
+### Wiki Coverage
+
+| Page | EN | FR | ZH | DE |
+|------|:--:|:--:|:--:|:--:|
+| Home | ✅ | ✅ | ✅ | — |
+| Installation | ✅ | ✅ | ✅ | — |
+| Live-USB | ✅ | ✅ | ✅ | — |
+| ARM-Installation | ✅ | ✅ | ✅ | — |
+| ESPRESSObin | ✅ | ✅ | ✅ | — |
+| Modules | ✅ | ✅ | ✅ | ✅ |
+| API-Reference | ✅ | ✅ | ✅ | — |
+| UI-COMPARISON | ✅ | — | — | — |
+
+**Commits:**
+- `1ee6513` docs: Add ESPRESSObin wiki pages (EN/FR)
+- `823a84d` fix: Install linux-image-arm64 for all ARM boards
+- `43b6231` docs: Complete wiki translations (FR/ZH)
+
+---
+
+## ✅ Terminé session précédente (Session 42)
 
 ### Build Script Fixes
 
