@@ -2,6 +2,8 @@
 Description=SecuBox LocalAI Gateway API
 After=network.target secubox-runtime.service
 Requires=secubox-runtime.service
+# Only start if explicitly enabled (LocalAI installed)
+ConditionPathExists=/etc/secubox/localai/enabled
 
 [Service]
 Type=simple

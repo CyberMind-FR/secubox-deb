@@ -311,11 +311,16 @@ fi
 
 # Slipstream: intégrer les .deb locaux directement
 if [[ $SLIPSTREAM_DEBS -eq 1 ]]; then
-  DEBS_DIR="${REPO_DIR}/output/debs"
-  if [[ -d "${DEBS_DIR}" ]] && ls "${DEBS_DIR}"/*.deb >/dev/null 2>&1; then
+  # Check both output/ and output/debs/ for packages
+  if [[ -d "${REPO_DIR}/output" ]] && ls "${REPO_DIR}/output"/secubox-*.deb >/dev/null 2>&1; then
+    DEBS_DIR="${REPO_DIR}/output"
+  else
+    DEBS_DIR="${REPO_DIR}/output/debs"
+  fi
+  if [[ -d "${DEBS_DIR}" ]] && ls "${DEBS_DIR}"/secubox-*.deb >/dev/null 2>&1; then
     log "Slipstream: installation des paquets locaux..."
     install -d "${ROOTFS}/tmp/secubox-debs"
-    cp "${DEBS_DIR}"/*.deb "${ROOTFS}/tmp/secubox-debs/"
+    cp "${DEBS_DIR}"/secubox-*.deb "${ROOTFS}/tmp/secubox-debs/"
 
     # Installer secubox-core en premier (dépendance)
     if [[ -f "${ROOTFS}/tmp/secubox-debs/secubox-core_"*.deb ]]; then
@@ -328,9 +333,9 @@ if [[ $SLIPSTREAM_DEBS -eq 1 ]]; then
 
     # Nettoyer
     rm -rf "${ROOTFS}/tmp/secubox-debs"
-    ok "Slipstream: $(ls "${DEBS_DIR}"/*.deb | wc -l) paquets installés"
+    ok "Slipstream: $(ls "${DEBS_DIR}"/secubox-*.deb 2>/dev/null | wc -l) paquets installés"
   else
-    warn "Slipstream: pas de .deb dans ${DEBS_DIR}"
+    warn "Slipstream: pas de secubox-*.deb dans output/ ou output/debs/"
   fi
 fi
 

@@ -1,4 +1,6 @@
 [Unit]
+# Only start if explicitly enabled (backend installed)
+ConditionPathExists=/etc/secubox/mmpm/enabled
 Description=SecuBox MMPM API
 After=network.target secubox-core.service
 

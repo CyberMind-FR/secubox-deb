@@ -1,4 +1,6 @@
 [Unit]
+# Only start if explicitly enabled (backend installed)
+ConditionPathExists=/etc/secubox/redroid/enabled
 Description=SecuBox Redroid API
 After=network.target secubox-core.service
 

@@ -3,6 +3,8 @@ Description=SecuBox Jellyfin API
 After=network.target secubox-core.service secubox-runtime.service docker.service
 Requires=secubox-runtime.service
 Wants=docker.service
+# Only start if explicitly enabled (LXC/container configured)
+ConditionPathExists=/etc/secubox/jellyfin/enabled
 
 [Service]
 Type=simple

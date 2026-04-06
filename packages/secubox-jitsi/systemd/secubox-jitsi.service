@@ -1,4 +1,6 @@
 [Unit]
+# Only start if explicitly enabled (backend installed)
+ConditionPathExists=/etc/secubox/jitsi/enabled
 Description=SecuBox Jitsi API
 After=network.target secubox-core.service secubox-runtime.service docker.service
 Requires=secubox-runtime.service

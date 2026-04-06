@@ -1,4 +1,6 @@
 [Unit]
+# Only start if explicitly enabled (backend installed)
+ConditionPathExists=/etc/secubox/jabber/enabled
 Description=SecuBox Jabber API
 After=network.target secubox-core.service
 
