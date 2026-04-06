@@ -20,6 +20,7 @@ APT_MIRROR="http://deb.debian.org/debian"
 USE_LOCAL_CACHE=0
 INCLUDE_KIOSK=0
 NO_COMPRESS=0
+SLIPSTREAM_DEBS=0
 
 RED='\033[0;31m'; CYAN='\033[0;36m'; GOLD='\033[0;33m'
 GREEN='\033[0;32m'; NC='\033[0m'; BOLD='\033[1m'
@@ -37,6 +38,7 @@ Usage: sudo bash build-rpi-usb.sh [OPTIONS]
   --out     DIR      Output directory (default: ./output)
   --size    SIZE     Total image size (default: 8G)
   --local-cache      Use local APT cache
+  --slipstream       Install .deb packages from output/debs/
   --kiosk            Include GUI kiosk mode packages
   --no-compress      Skip gzip compression
   --help             Show this help
@@ -57,6 +59,7 @@ while [[ $# -gt 0 ]]; do
     --out)          OUT_DIR="$2";       shift 2 ;;
     --size)         IMG_SIZE="$2";      shift 2 ;;
     --local-cache)  USE_LOCAL_CACHE=1;  shift   ;;
+    --slipstream)   SLIPSTREAM_DEBS=1;  shift   ;;
     --kiosk)        INCLUDE_KIOSK=1;    shift   ;;
     --no-compress)  NO_COMPRESS=1;      shift   ;;
     --help|-h)      usage ;;
@@ -421,26 +424,51 @@ chroot "${ROOTFS}" apt-get install -y -q --no-install-recommends \
   raspi-firmware firmware-brcm80211 firmware-misc-nonfree \
   2>/dev/null || warn "Some firmware unavailable"
 
-# SecuBox packages from local cache
-CACHE_DEBS="${REPO_DIR}/cache/repo/pool"
-if [[ -d "$CACHE_DEBS" ]]; then
-  log "Installing SecuBox packages from cache..."
-  install -d "${ROOTFS}/tmp/secubox-debs"
+# SecuBox packages installation
+install -d "${ROOTFS}/tmp/secubox-debs"
+DEBS_INSTALLED=0
 
-  # Copy ARM64 packages (or all if arch-independent)
-  find "$CACHE_DEBS" -name "secubox-*_all.deb" -exec cp {} "${ROOTFS}/tmp/secubox-debs/" \;
-  find "$CACHE_DEBS" -name "secubox-*_arm64.deb" -exec cp {} "${ROOTFS}/tmp/secubox-debs/" \; 2>/dev/null || true
-
-  DEB_COUNT=$(ls "${ROOTFS}/tmp/secubox-debs/"*.deb 2>/dev/null | wc -l)
-  log "Found ${DEB_COUNT} packages"
-
-  if [[ $DEB_COUNT -gt 0 ]]; then
-    chroot "${ROOTFS}" dpkg -i /tmp/secubox-debs/*.deb 2>/dev/null || true
-    chroot "${ROOTFS}" apt-get install -f -y -q 2>/dev/null || true
+# Method 1: Slipstream from output/debs/ (--slipstream flag)
+if [[ $SLIPSTREAM_DEBS -eq 1 ]]; then
+  DEBS_DIR="${REPO_DIR}/output/debs"
+  if [[ -d "${DEBS_DIR}" ]] && ls "${DEBS_DIR}"/secubox-*.deb >/dev/null 2>&1; then
+    log "Slipstream: installing packages from output/debs/..."
+    cp "${DEBS_DIR}"/secubox-*_all.deb "${ROOTFS}/tmp/secubox-debs/" 2>/dev/null || true
+    cp "${DEBS_DIR}"/secubox-*_arm64.deb "${ROOTFS}/tmp/secubox-debs/" 2>/dev/null || true
+    DEBS_INSTALLED=1
+  else
+    warn "Slipstream: no .deb files found in ${DEBS_DIR}"
   fi
-
-  rm -rf "${ROOTFS}/tmp/secubox-debs"
 fi
+
+# Method 2: Fallback to local cache
+if [[ $DEBS_INSTALLED -eq 0 ]]; then
+  CACHE_DEBS="${REPO_DIR}/cache/repo/pool"
+  if [[ -d "$CACHE_DEBS" ]]; then
+    log "Installing SecuBox packages from cache..."
+    find "$CACHE_DEBS" -name "secubox-*_all.deb" -exec cp {} "${ROOTFS}/tmp/secubox-debs/" \;
+    find "$CACHE_DEBS" -name "secubox-*_arm64.deb" -exec cp {} "${ROOTFS}/tmp/secubox-debs/" \; 2>/dev/null || true
+    DEBS_INSTALLED=1
+  fi
+fi
+
+# Install collected packages
+DEB_COUNT=$(ls "${ROOTFS}/tmp/secubox-debs/"*.deb 2>/dev/null | wc -l)
+if [[ $DEB_COUNT -gt 0 ]]; then
+  log "Installing ${DEB_COUNT} SecuBox packages..."
+  # Install secubox-core first (dependency)
+  if ls "${ROOTFS}/tmp/secubox-debs/secubox-core_"*.deb >/dev/null 2>&1; then
+    chroot "${ROOTFS}" dpkg -i /tmp/secubox-debs/secubox-core_*.deb 2>/dev/null || true
+  fi
+  # Install all packages
+  chroot "${ROOTFS}" dpkg -i /tmp/secubox-debs/*.deb 2>/dev/null || true
+  chroot "${ROOTFS}" apt-get install -f -y -q 2>/dev/null || true
+  ok "Installed ${DEB_COUNT} SecuBox packages"
+else
+  warn "No SecuBox packages found to install"
+fi
+
+rm -rf "${ROOTFS}/tmp/secubox-debs"
 
 # Clean
 chroot "${ROOTFS}" apt-get clean
