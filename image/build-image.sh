@@ -240,7 +240,7 @@ if [[ $IS_X64 -eq 1 ]]; then
 LABEL=rootfs   /       ext4  defaults,noatime,commit=60  0  1
 LABEL=data     /data   ext4  defaults,noatime             0  2
 LABEL=ESP      /boot/efi  vfat  umask=0077              0  0
-tmpfs          /run/secubox  tmpfs  mode=0750,uid=1000,gid=1000  0  0
+tmpfs          /run/secubox  tmpfs  mode=0755  0  0
 EOF
 else
   cat > "${ROOTFS}/etc/fstab" <<EOF
@@ -248,7 +248,7 @@ else
 LABEL=rootfs   /       ext4  defaults,noatime,commit=60  0  1
 LABEL=data     /data   ext4  defaults,noatime             0  2
 LABEL=boot     /boot   vfat  defaults,noatime             0  0
-tmpfs          /run/secubox  tmpfs  mode=0750,uid=secubox,gid=secubox  0  0
+tmpfs          /run/secubox  tmpfs  mode=0755  0  0
 EOF
 fi
 
@@ -355,6 +355,88 @@ if [[ $IS_X64 -eq 1 ]] || [[ "${BOARD}" == "vm-arm64" ]]; then
 fi
 
 ok "Paquets installés"
+
+# ── Initramfs hooks pour ARM (sdhci-xenon pour eMMC + mv88e6xxx blacklist) ──
+if [[ $IS_ARM64 -eq 1 ]] && [[ "${BOARD}" != "vm-arm64" ]]; then
+  log "Installation hooks initramfs (sdhci-xenon + mv88e6xxx blacklist)..."
+
+  # Hook 1: sdhci-xenon pour support eMMC Armada 3720
+  cat > "${ROOTFS}/etc/initramfs-tools/hooks/sdhci-xenon" <<'HOOK'
+#!/bin/sh
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case "$1" in prereqs) prereqs; exit 0;; esac
+. /usr/share/initramfs-tools/hook-functions
+# Armada 3720 eMMC support
+manual_add_modules sdhci_xenon
+manual_add_modules sdhci
+manual_add_modules mmc_block
+manual_add_modules mmc_core
+manual_add_modules phy_mvebu_a3700_comphy
+HOOK
+  chmod +x "${ROOTFS}/etc/initramfs-tools/hooks/sdhci-xenon"
+
+  # Hook 2: Blacklist mv88e6xxx DSA switch driver during initramfs
+  # Prevents probe loop that causes boot failures on ESPRESSObin/MOCHAbin
+  cat > "${ROOTFS}/etc/initramfs-tools/hooks/mv88e6xxx-blacklist" <<'HOOK'
+#!/bin/sh
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case "$1" in prereqs) prereqs; exit 0;; esac
+. /usr/share/initramfs-tools/hook-functions
+# Blacklist DSA switch driver during initramfs to prevent probe loop
+mkdir -p "${DESTDIR}/etc/modprobe.d"
+cat > "${DESTDIR}/etc/modprobe.d/mv88e6xxx-initramfs.conf" <<'MODPROBE'
+# Blacklist DSA switch driver during initramfs
+# Driver loads after rootfs mount via systemd-modules-load
+blacklist mv88e6xxx
+blacklist mv88e6085
+blacklist dsa_core
+MODPROBE
+HOOK
+  chmod +x "${ROOTFS}/etc/initramfs-tools/hooks/mv88e6xxx-blacklist"
+
+  # Also create the modprobe.d config in rootfs for good measure
+  mkdir -p "${ROOTFS}/etc/modprobe.d"
+  cat > "${ROOTFS}/etc/modprobe.d/mv88e6xxx-delay.conf" <<'MODPROBE'
+# Delay mv88e6xxx load to avoid probe loop during boot
+# The driver is blacklisted in initramfs and loads after rootfs mount
+softdep mv88e6xxx pre: mmc_block
+softdep dsa_core pre: mmc_block
+MODPROBE
+
+  # SDHCI quirks for xenon-sdhci DDR timing issues on ESPRESSObin eMMC
+  cat > "${ROOTFS}/etc/modprobe.d/sdhci-xenon-fix.conf" <<'MODPROBE'
+# Fix xenon-sdhci DDR timing issues on Armada 3720 eMMC
+# SDHCI_QUIRK2_BROKEN_DDR50 = 0x40
+options sdhci debug_quirks2=0x40
+MODPROBE
+
+  # Install systemd service to load mv88e6xxx after boot
+  cat > "${ROOTFS}/etc/systemd/system/mv88e6xxx-load.service" <<'SERVICE'
+[Unit]
+Description=Load Marvell DSA switch driver after boot
+DefaultDependencies=no
+After=local-fs.target systemd-modules-load.service
+Before=network-pre.target
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+ExecStart=/sbin/modprobe dsa_core
+ExecStart=/sbin/modprobe mv88e6xxx
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+  chroot "${ROOTFS}" systemctl enable mv88e6xxx-load.service 2>/dev/null || true
+
+  # Regénérer initramfs avec les modules eMMC et blacklist
+  log "Regénération initramfs..."
+  chroot "${ROOTFS}" update-initramfs -u 2>/dev/null || warn "update-initramfs partiel"
+  ok "Hooks initramfs installés (sdhci-xenon + mv88e6xxx blacklist + delayed load service)"
+fi
 
 # ── Étape 4 : firstboot.sh ────────────────────────────────────────
 log "4/7 Installation firstboot..."
@@ -514,6 +596,15 @@ else
     warn "Kernel vmlinuz non trouvé dans /boot"
   fi
 
+  # Copier l'initramfs (requis pour sdhci-xenon sur eMMC)
+  INITRD=$(ls "${MNT}/boot/initrd.img-"* 2>/dev/null | head -1)
+  if [[ -n "$INITRD" ]]; then
+    cp "$INITRD" "${MNT}/boot/initrd.img"
+    ok "Initramfs copié : $(basename $INITRD) → initrd.img"
+  else
+    warn "Initramfs non trouvé dans /boot"
+  fi
+
   # Copier le DTB depuis /usr/lib/linux-image-*/
   DTB_DIR=$(ls -d "${MNT}/usr/lib/linux-image-"*/ 2>/dev/null | head -1)
   if [[ -d "$DTB_DIR" ]]; then
@@ -529,64 +620,110 @@ else
 
   # Créer extlinux.conf pour U-Boot distroboot
   mkdir -p "${MNT}/boot/extlinux"
-  KERNEL_DTS="${KERNEL_DTS:-armada-3720-espressobin-v7}"
+  # Default to eMMC variant DTB for boards with eMMC
+  KERNEL_DTS="${KERNEL_DTS:-armada-3720-espressobin-v7-emmc}"
+
+  # Determine root device based on DTB variant
+  # With -emmc DTB: SD=mmc0/mmcblk0, eMMC=mmc1/mmcblk1
+  # Without -emmc DTB: only SD or eMMC as mmcblk0
+  if [[ "$KERNEL_DTS" == *"-emmc"* ]]; then
+    ROOT_DEV="/dev/mmcblk1p2"
+  else
+    ROOT_DEV="/dev/mmcblk0p2"
+  fi
+
   cat > "${MNT}/boot/extlinux/extlinux.conf" <<EXTLINUX
 DEFAULT secubox
 TIMEOUT 30
 PROMPT 1
 
 LABEL secubox
-    KERNEL /boot/Image
-    FDT /boot/dtbs/marvell/${KERNEL_DTS}.dtb
-    APPEND root=LABEL=rootfs rootfstype=ext4 rootwait console=ttyMV0,115200 net.ifnames=0
+    KERNEL /Image
+    INITRD /initrd.img
+    FDT /dtbs/marvell/${KERNEL_DTS}.dtb
+    APPEND root=${ROOT_DEV} rootfstype=ext4 rootwait rootdelay=5 console=ttyMV0,115200 net.ifnames=0 modprobe.blacklist=mv88e6xxx,dsa_core sdhci.debug_quirks2=0x40
 EXTLINUX
-  ok "extlinux.conf créé pour ${KERNEL_DTS}"
+  ok "extlinux.conf créé pour ${KERNEL_DTS} (root=${ROOT_DEV})"
 
   # Créer boot.scr pour U-Boot (alternative à extlinux)
-  # Note: Boot partition is mmc 1:1, files are at root level (not /boot/)
-  cat > "${MNT}/boot/boot.cmd" <<'BOOTCMD'
+  # Utiliser le boot.cmd spécifique au board s'il existe
+  BOARD_BOOTCMD="${SCRIPT_DIR}/../board/${BOARD}/boot.cmd"
+  if [[ -f "$BOARD_BOOTCMD" ]]; then
+    log "Utilisation du boot.cmd spécifique au board ${BOARD}"
+    cp "$BOARD_BOOTCMD" "${MNT}/boot/boot.cmd"
+  else
+    # Fallback: générer un boot.cmd générique
+    cat > "${MNT}/boot/boot.cmd" <<'BOOTCMD'
 # SecuBox U-Boot boot script
-# Auto-generated — do not edit
+# Auto-generated fallback — board-specific boot.cmd recommended
 
-echo "SecuBox boot script..."
+echo "============================================"
+echo "SecuBox Boot Script"
+echo "============================================"
 
-# Boot partition is partition 1 (mmc X:1)
-# Files are at root level of boot partition, not in /boot/
-if test -n "${devnum}"; then
-    setenv bootpart "${devtype} ${devnum}:1"
+# Detect boot device from U-Boot environment
+if test -n "${devtype}" -a -n "${devnum}"; then
+    echo "Boot device from env: ${devtype} ${devnum}"
+    setenv bootdev "${devnum}"
 else
-    setenv bootpart "mmc 1:1"
+    setenv bootdev 0
+    echo "Using mmc 0 as boot device"
 fi
 
-# Rootfs is partition 2 (mmc X:2)
-if test -n "${devnum}"; then
-    setenv rootpart "/dev/mmcblk${devnum}p2"
-else
-    setenv rootpart "/dev/mmcblk1p2"
-fi
+setenv bootpart "mmc ${bootdev}:1"
+# Linux eMMC is typically mmcblk0 regardless of U-Boot device number
+setenv rootpart "/dev/mmcblk0p2"
 
-# Load kernel from boot partition (files at root level)
+echo "Boot partition: ${bootpart}"
+echo "Root partition: ${rootpart}"
+
+# Load kernel
 echo "Loading kernel from ${bootpart}..."
 load ${bootpart} ${kernel_addr_r} Image
+
+# Load initramfs (required for eMMC support)
+echo "Loading initramfs..."
+if load ${bootpart} ${ramdisk_addr_r} initrd.img; then
+    echo "Initramfs loaded OK"
+    setenv initrd_size ${filesize}
+    setenv use_initrd 1
+else
+    echo "WARNING: No initramfs found"
+    setenv use_initrd 0
+fi
 
 # Load DTB
 echo "Loading device tree..."
 BOOTCMD
 
-  # Ajouter le DTB spécifique au board
-  cat >> "${MNT}/boot/boot.cmd" <<BOOTCMD_DTB
-load \${bootpart} \${fdt_addr_r} dtbs/marvell/${KERNEL_DTS}.dtb
+    # Ajouter le DTB spécifique au board
+    cat >> "${MNT}/boot/boot.cmd" <<BOOTCMD_DTB
+if load \${bootpart} \${fdt_addr_r} dtbs/marvell/${KERNEL_DTS}.dtb; then
+    echo "DTB loaded: ${KERNEL_DTS}.dtb"
+else
+    echo "ERROR: Failed to load DTB ${KERNEL_DTS}.dtb"
+fi
 BOOTCMD_DTB
 
-  cat >> "${MNT}/boot/boot.cmd" <<'BOOTCMD_END'
+    cat >> "${MNT}/boot/boot.cmd" <<'BOOTCMD_END'
 
-# Set boot args - use device path since LABEL may not work in all U-Boot versions
-setenv bootargs "root=${rootpart} rootfstype=ext4 rootwait console=ttyMV0,115200 net.ifnames=0"
+# Set boot args
+# modprobe.blacklist: prevent mv88e6xxx DSA driver from loading during initramfs
+# sdhci.debug_quirks2=0x40: fix xenon-sdhci DDR timing issues
+setenv bootargs "root=${rootpart} rootfstype=ext4 rootwait rootdelay=5 console=ttyMV0,115200 net.ifnames=0 modprobe.blacklist=mv88e6xxx,dsa_core sdhci.debug_quirks2=0x40"
 
-# Boot
+echo "Boot args: ${bootargs}"
+echo "============================================"
 echo "Booting SecuBox..."
-booti ${kernel_addr_r} - ${fdt_addr_r}
+echo "============================================"
+
+if test "${use_initrd}" = "1"; then
+    booti ${kernel_addr_r} ${ramdisk_addr_r}:${initrd_size} ${fdt_addr_r}
+else
+    booti ${kernel_addr_r} - ${fdt_addr_r}
+fi
 BOOTCMD_END
+  fi
 
   # Compiler le bootscript si mkimage est disponible
   if command -v mkimage >/dev/null 2>&1; then
