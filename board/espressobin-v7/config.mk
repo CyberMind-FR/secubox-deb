@@ -11,7 +11,9 @@ CROSS_COMPILE=aarch64-linux-gnu-
 
 # Kernel
 KERNEL_VERSION=6.6
-KERNEL_DTS=armada-3720-espressobin-v7
+# Use eMMC variant DTB - enables second SDHCI controller (d00d8000) for eMMC
+# Non-eMMC boards will still boot but won't have eMMC support
+KERNEL_DTS=armada-3720-espressobin-v7-emmc
 KERNEL_IMAGE=Image
 KERNEL_DEFCONFIG=mvebu_v8_defconfig
 

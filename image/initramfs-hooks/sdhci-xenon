@@ -1,0 +1,21 @@
+#!/bin/sh
+# SecuBox initramfs hook - include sdhci-xenon for Armada 3720 eMMC
+# Required for ESPRESSObin Ultra eMMC boot
+
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+
+case "$1" in
+    prereqs)
+        prereqs
+        exit 0
+        ;;
+esac
+
+. /usr/share/initramfs-tools/hook-functions
+
+# Force include sdhci-xenon and dependencies for eMMC
+manual_add_modules sdhci_xenon
+manual_add_modules sdhci
+manual_add_modules mmc_block
+manual_add_modules mmc_core

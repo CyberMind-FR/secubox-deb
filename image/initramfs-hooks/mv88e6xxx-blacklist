@@ -1,0 +1,25 @@
+#!/bin/sh
+# SecuBox initramfs hook - blacklist mv88e6xxx during boot
+# Prevents DSA switch probe loop on ESPRESSObin/MOCHAbin
+# The module loads normally after rootfs mount
+
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+
+case "$1" in
+    prereqs)
+        prereqs
+        exit 0
+        ;;
+esac
+
+. /usr/share/initramfs-tools/hook-functions
+
+# Create modprobe blacklist for initramfs
+mkdir -p "${DESTDIR}/etc/modprobe.d"
+cat > "${DESTDIR}/etc/modprobe.d/mv88e6xxx-initramfs.conf" <<'EOF'
+# Blacklist DSA switch driver during initramfs to prevent probe loop
+# Driver loads after rootfs mount via systemd-modules-load
+blacklist mv88e6xxx
+blacklist dsa_core
+EOF

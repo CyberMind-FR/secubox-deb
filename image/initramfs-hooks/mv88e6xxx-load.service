@@ -1,0 +1,15 @@
+[Unit]
+Description=Load Marvell DSA switch driver after boot
+DefaultDependencies=no
+After=local-fs.target systemd-modules-load.service
+Before=network-pre.target
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+ExecStart=/sbin/modprobe mv88e6xxx
+ExecStart=/sbin/modprobe dsa_core
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
