@@ -210,6 +210,50 @@ Saving Environment to SPI Flash... done
 => reset
 ```
 
+## Automatic Boot Methods
+
+SecuBox images include two automatic boot methods:
+
+### Method A: boot.scr (Recommended)
+
+U-Boot automatically searches for `boot.scr` on the boot partition:
+
+```
+=> load mmc 1:2 $loadaddr /boot/boot.scr
+=> source $loadaddr
+```
+
+Or manually:
+```
+=> setenv bootcmd "load mmc 1:2 0x1000000 /boot/boot.scr; source 0x1000000"
+=> saveenv
+```
+
+### Method B: extlinux.conf (Distroboot)
+
+If U-Boot has distroboot support:
+
+```
+=> run distro_bootcmd
+```
+
+This searches for `/boot/extlinux/extlinux.conf` automatically.
+
+### Manual Boot (Fallback)
+
+If automatic boot fails:
+
+```
+=> setenv loadaddr 0x1000000
+=> setenv fdt_addr 0x2000000
+
+=> load mmc 1:2 $loadaddr /boot/Image
+=> load mmc 1:2 $fdt_addr /boot/dtbs/marvell/armada-3720-espressobin-v7.dtb
+
+=> setenv bootargs "root=LABEL=rootfs rootfstype=ext4 rootwait console=ttyMV0,115200"
+=> booti $loadaddr - $fdt_addr
+```
+
 ## U-Boot Device Reference
 
 | Device | U-Boot | Linux | Description |
