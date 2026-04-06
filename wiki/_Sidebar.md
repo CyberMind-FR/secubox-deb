@@ -1,4 +1,4 @@
-**[Home](Home)** | [FR](Home-FR) | [中文](Home-ZH) | **v1.5.1**
+**[Home](Home)** | [FR](Home-FR) | [中文](Home-ZH) | **v1.5.3**
 
 ### Getting Started
 * [[Live-USB-VirtualBox|VirtualBox (2 min)]] ⭐
@@ -6,6 +6,10 @@
 * [[Installation]] | [FR](Installation-FR) | [中文](Installation-ZH)
 * [[ARM-Installation|ARM / U-Boot]] | [FR](ARM-Installation-FR) | [中文](ARM-Installation-ZH) ⚡
 * [[ESPRESSObin]] | [FR](ESPRESSObin-FR) | [中文](ESPRESSObin-ZH)
+
+### Configuration
+* [[Configuration]] | [FR](Configuration-FR) | [中文](Configuration-ZH)
+* [[Troubleshooting]] | [FR](Troubleshooting-FR) | [中文](Troubleshooting-ZH)
 
 ### Modules
 * [[MODULES-EN|Modules]] 🇬🇧
