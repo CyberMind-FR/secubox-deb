@@ -956,6 +956,19 @@ if [[ $CACHE_COUNT -gt 0 ]] || [[ $OUTPUT_COUNT -gt 0 ]]; then
       ok "textual installed via pip" || warn "textual pip install failed"
   fi
 
+  # ── Ensure systemd directories exist ─────────────────────────────────────
+  log "Ensuring systemd directories exist..."
+  install -d -m 755 "${ROOTFS}/usr/lib/systemd/system"
+  install -d -m 755 "${ROOTFS}/etc/systemd/system"
+  ok "systemd directories ready"
+
+  # ── Pre-install Python dependencies via pip (not in Debian repos) ───────
+  log "Pre-installing Python dependencies for SecuBox modules..."
+  chroot "${ROOTFS}" pip3 install --break-system-packages \
+    fastapi uvicorn[standard] httpx python-jose aiofiles aiosqlite \
+    pydantic toml jinja2 psutil netifaces 2>/dev/null && \
+    ok "Python dependencies installed via pip" || warn "Some pip packages failed (may be installed by apt later)"
+
   # Install core first (dependency for all)
   if ls "${ROOTFS}/tmp/secubox-debs/secubox-core_"*.deb >/dev/null 2>&1; then
     log "Installing secubox-core (dependency)..."
