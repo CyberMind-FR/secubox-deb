@@ -111,6 +111,7 @@ esac
 
 # Vérifier outils requis
 REQUIRED_TOOLS="debootstrap parted mkfs.fat mkfs.ext4 rsync"
+# mkimage (u-boot-tools) est optionnel mais recommandé pour ARM
 if [[ $IS_ARM64 -eq 1 ]] && [[ $NEED_QEMU -eq 1 ]]; then
   REQUIRED_TOOLS="$REQUIRED_TOOLS qemu-aarch64-static"
 fi
@@ -185,9 +186,13 @@ INCLUDE_PKGS+=",sudo,less,vim-tiny,logrotate,cron,rsync,jq,dnsmasq"
 if [[ $IS_X64 -eq 1 ]]; then
   # x64 : ajouter GRUB EFI + linux-image
   INCLUDE_PKGS+=",grub-efi-amd64,linux-image-amd64,efibootmgr"
-elif [[ "${BOARD}" == "vm-arm64" ]]; then
-  # arm64 VM : ajouter GRUB EFI arm64 + linux-image
-  INCLUDE_PKGS+=",grub-efi-arm64,linux-image-arm64,efibootmgr"
+elif [[ $IS_ARM64 -eq 1 ]]; then
+  # arm64 : ajouter linux-image pour tous les boards ARM
+  INCLUDE_PKGS+=",linux-image-arm64"
+  if [[ "${BOARD}" == "vm-arm64" ]]; then
+    # arm64 VM : ajouter aussi GRUB EFI arm64
+    INCLUDE_PKGS+=",grub-efi-arm64,efibootmgr"
+  fi
 fi
 
 if [[ $NEED_QEMU -eq 1 ]]; then
@@ -497,14 +502,89 @@ if [[ $IS_X64 -eq 1 ]] || [[ "${BOARD}" == "vm-arm64" ]]; then
   umount -lf "${MNT}/proc" 2>/dev/null || true
   umount -lf "${MNT}/dev"  2>/dev/null || true
 else
-  # Copier kernel + DTB pour ARM
-  KERNEL_DIR="${BOARD_DIR}/kernel"
-  if [[ -d "${KERNEL_DIR}" ]]; then
-    cp "${KERNEL_DIR}/Image"       "${MNT}/boot/"  2>/dev/null || warn "Kernel Image manquant"
-    cp "${KERNEL_DIR}"/*.dtb       "${MNT}/boot/"  2>/dev/null || warn "DTB manquant"
-    cp "${KERNEL_DIR}"/u-boot*.bin "${MNT}/boot/"  2>/dev/null || warn "U-Boot binaire manquant"
+  # ARM physique : copier kernel + DTB depuis linux-image-arm64
+  log "Configuration boot U-Boot pour ${BOARD}..."
+
+  # Copier le kernel (vmlinuz → Image pour U-Boot)
+  VMLINUZ=$(ls "${MNT}/boot/vmlinuz-"* 2>/dev/null | head -1)
+  if [[ -n "$VMLINUZ" ]]; then
+    cp "$VMLINUZ" "${MNT}/boot/Image"
+    ok "Kernel copié : $(basename $VMLINUZ) → Image"
   else
-    warn "Pas de kernel pré-compilé dans ${KERNEL_DIR} — À ajouter manuellement"
+    warn "Kernel vmlinuz non trouvé dans /boot"
+  fi
+
+  # Copier le DTB depuis /usr/lib/linux-image-*/
+  DTB_DIR=$(ls -d "${MNT}/usr/lib/linux-image-"*/ 2>/dev/null | head -1)
+  if [[ -d "$DTB_DIR" ]]; then
+    mkdir -p "${MNT}/boot/dtbs"
+    # Copier les DTBs Marvell (Armada)
+    if [[ -d "${DTB_DIR}/marvell" ]]; then
+      cp -r "${DTB_DIR}/marvell" "${MNT}/boot/dtbs/"
+      ok "DTBs Marvell copiés vers /boot/dtbs/marvell/"
+    fi
+  else
+    warn "Répertoire DTB non trouvé dans /usr/lib/linux-image-*/"
+  fi
+
+  # Créer extlinux.conf pour U-Boot distroboot
+  mkdir -p "${MNT}/boot/extlinux"
+  KERNEL_DTS="${KERNEL_DTS:-armada-3720-espressobin-v7}"
+  cat > "${MNT}/boot/extlinux/extlinux.conf" <<EXTLINUX
+DEFAULT secubox
+TIMEOUT 30
+PROMPT 1
+
+LABEL secubox
+    KERNEL /boot/Image
+    FDT /boot/dtbs/marvell/${KERNEL_DTS}.dtb
+    APPEND root=LABEL=rootfs rootfstype=ext4 rootwait console=ttyMV0,115200 net.ifnames=0
+EXTLINUX
+  ok "extlinux.conf créé pour ${KERNEL_DTS}"
+
+  # Créer boot.scr pour U-Boot (alternative à extlinux)
+  cat > "${MNT}/boot/boot.cmd" <<'BOOTCMD'
+# SecuBox U-Boot boot script
+# Auto-generated — do not edit
+
+echo "SecuBox boot script..."
+
+# Detect boot device
+if test -n "${devnum}"; then
+    setenv bootdev "${devtype} ${devnum}:${distro_bootpart}"
+else
+    setenv bootdev "mmc 1:2"
+fi
+
+# Load kernel
+echo "Loading kernel from ${bootdev}..."
+load ${bootdev} ${kernel_addr_r} /boot/Image
+
+# Load DTB
+echo "Loading device tree..."
+BOOTCMD
+
+  # Ajouter le DTB spécifique au board
+  cat >> "${MNT}/boot/boot.cmd" <<BOOTCMD_DTB
+load \${bootdev} \${fdt_addr_r} /boot/dtbs/marvell/${KERNEL_DTS}.dtb
+BOOTCMD_DTB
+
+  cat >> "${MNT}/boot/boot.cmd" <<'BOOTCMD_END'
+
+# Set boot args
+setenv bootargs "root=LABEL=rootfs rootfstype=ext4 rootwait console=ttyMV0,115200 net.ifnames=0"
+
+# Boot
+echo "Booting SecuBox..."
+booti ${kernel_addr_r} - ${fdt_addr_r}
+BOOTCMD_END
+
+  # Compiler le bootscript si mkimage est disponible
+  if command -v mkimage >/dev/null 2>&1; then
+    mkimage -C none -A arm64 -T script -d "${MNT}/boot/boot.cmd" "${MNT}/boot/boot.scr" >/dev/null
+    ok "boot.scr créé (U-Boot bootscript)"
+  else
+    warn "mkimage non disponible — boot.scr non généré (installer u-boot-tools)"
   fi
 fi
 
