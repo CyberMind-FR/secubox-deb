@@ -1,0 +1,5 @@
+secubox-system-hub (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial Debian package
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 06 Apr 2026 10:00:00 +0200
