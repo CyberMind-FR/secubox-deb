@@ -623,8 +623,9 @@ if [[ $DEB_COUNT -gt 0 ]]; then
   fi
 
   # Install all packages with force-depends (pip provides Python deps)
+  # Note: Don't use head with pipefail - causes SIGPIPE failure
   chroot "${ROOTFS}" bash -c 'dpkg -i --force-depends --force-overwrite /tmp/secubox-debs/*.deb' 2>&1 | \
-    grep -v "^dpkg: warning" | head -30 || true
+    grep -v "^dpkg: warning" || true
 
   # Configure packages (skip apt-get -f as pip provides Python deps)
   chroot "${ROOTFS}" dpkg --configure -a --force-confold 2>/dev/null || true
