@@ -26,6 +26,10 @@ override_dh_auto_install:
 	install -m 755 ../../image/firstboot.sh \
 	               debian/secubox-core/usr/bin/secubox-firstboot
 
+	# SecuBox CLI
+	install -m 755 usr/bin/secubox \
+	               debian/secubox-core/usr/bin/secubox
+
 	# Systemd services
 	install -d debian/secubox-core/usr/lib/systemd/system
 	install -m 644 debian/secubox-core.service \
