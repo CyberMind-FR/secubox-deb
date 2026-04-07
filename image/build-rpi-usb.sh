@@ -580,6 +580,30 @@ chroot "${ROOTFS}" apt-get install -y -q --no-install-recommends \
   raspi-firmware firmware-brcm80211 firmware-misc-nonfree \
   2>/dev/null || warn "Some firmware unavailable"
 
+# ── Pre-generate SSL certificates for nginx (BEFORE package install) ────
+# Packages' postinst scripts check for nginx/certs, so create them first
+log "Pre-generating SSL certificates..."
+mkdir -p "${ROOTFS}/etc/secubox/tls"
+mkdir -p "${ROOTFS}/run/secubox"
+mkdir -p "${ROOTFS}/var/lib/secubox"
+mkdir -p "${ROOTFS}/etc/nginx/secubox.d"
+
+# Generate on host system (chroot may lack /dev/urandom)
+openssl req -x509 -newkey rsa:2048 -days 365 \
+  -keyout "${ROOTFS}/etc/secubox/tls/key.pem" \
+  -out "${ROOTFS}/etc/secubox/tls/cert.pem" \
+  -nodes -subj "/CN=secubox-rpi/O=CyberMind SecuBox/C=FR" \
+  -addext "subjectAltName=DNS:localhost,DNS:secubox.local,IP:127.0.0.1,IP:192.168.1.1" \
+  2>/dev/null
+
+if [[ -f "${ROOTFS}/etc/secubox/tls/cert.pem" ]]; then
+  chmod 640 "${ROOTFS}/etc/secubox/tls/key.pem"
+  chmod 644 "${ROOTFS}/etc/secubox/tls/cert.pem"
+  ok "SSL certificates pre-generated"
+else
+  warn "SSL cert generation failed"
+fi
+
 # SecuBox packages installation
 install -d "${ROOTFS}/tmp/secubox-debs"
 DEBS_INSTALLED=0
@@ -645,31 +669,7 @@ rm -rf "${ROOTFS}/var/lib/apt/lists"/*
 
 ok "SecuBox packages installed"
 
-# ── Pre-generate SSL certificates for nginx ─────────────────────────
-# (firstboot normally does this, but nginx needs certs to start)
-# Generate certs on HOST (chroot may lack /dev/urandom) and copy them in
-log "Pre-generating SSL certificates..."
-mkdir -p "${ROOTFS}/etc/secubox/tls"
-mkdir -p "${ROOTFS}/run/secubox"
-mkdir -p "${ROOTFS}/var/lib/secubox"
-
-# Generate on host system
-openssl req -x509 -newkey rsa:2048 -days 365 \
-  -keyout "${ROOTFS}/etc/secubox/tls/key.pem" \
-  -out "${ROOTFS}/etc/secubox/tls/cert.pem" \
-  -nodes -subj "/CN=secubox-rpi/O=CyberMind SecuBox/C=FR" \
-  -addext "subjectAltName=DNS:localhost,DNS:secubox.local,IP:127.0.0.1,IP:192.168.1.1" \
-  2>/dev/null
-
-if [[ -f "${ROOTFS}/etc/secubox/tls/cert.pem" ]]; then
-  chmod 640 "${ROOTFS}/etc/secubox/tls/key.pem"
-  chmod 644 "${ROOTFS}/etc/secubox/tls/cert.pem"
-  ok "SSL certificates pre-generated"
-else
-  warn "SSL cert generation failed - nginx may not start"
-fi
-
-# Enable nginx for API proxying
+# Enable nginx for API proxying (certs already generated earlier)
 ln -sf /usr/lib/systemd/system/nginx.service \
   "${ROOTFS}/etc/systemd/system/multi-user.target.wants/nginx.service" 2>/dev/null || true
 
