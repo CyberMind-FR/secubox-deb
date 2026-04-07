@@ -28,6 +28,7 @@ on:
           - espressobin-ultra
           - vm-x64
           - vm-arm64
+          - rpi400
           - all
         default: vm-x64
       size:
@@ -49,7 +50,7 @@ jobs:
       fail-fast: false
       matrix:
         # Handle all event types: push (tags), workflow_call, workflow_dispatch
-        board: ${{ (github.event_name == 'push' || (inputs.board == 'all' || inputs.board == '')) && fromJson('["mochabin","espressobin-v7","espressobin-ultra","vm-x64"]') || (github.event.inputs.board == 'all' && fromJson('["mochabin","espressobin-v7","espressobin-ultra","vm-x64"]') || fromJson(format('["{0}"]', inputs.board || github.event.inputs.board || 'vm-x64'))) }}
+        board: ${{ (github.event_name == 'push' || (inputs.board == 'all' || inputs.board == '')) && fromJson('["mochabin","espressobin-v7","espressobin-ultra","vm-x64","rpi400"]') || (github.event.inputs.board == 'all' && fromJson('["mochabin","espressobin-v7","espressobin-ultra","vm-x64","rpi400"]') || fromJson(format('["{0}"]', inputs.board || github.event.inputs.board || 'vm-x64'))) }}
 
     steps:
       - name: Checkout

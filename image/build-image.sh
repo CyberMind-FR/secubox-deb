@@ -87,6 +87,14 @@ BOARD_DIR="${REPO_DIR}/board/${BOARD}"
 # Charger config du board
 source "${BOARD_DIR}/config.mk" 2>/dev/null || true
 
+# Redirect to build-rpi-usb.sh for Raspberry Pi boards
+if [[ "${USE_RPI_SCRIPT:-0}" == "1" ]] || [[ "$BOARD" == "rpi400" ]] || [[ "$BOARD" == "rpi4" ]]; then
+  log "Raspberry Pi board detected - using build-rpi-usb.sh"
+  RPI_ARGS="--out ${OUT_DIR}"
+  [[ $SLIPSTREAM_DEBS -eq 1 ]] && RPI_ARGS="$RPI_ARGS --slipstream"
+  exec bash "${SCRIPT_DIR}/build-rpi-usb.sh" $RPI_ARGS
+fi
+
 # Déterminer l'architecture
 DEBIAN_ARCH="${DEBIAN_ARCH:-arm64}"
 IS_X64=0

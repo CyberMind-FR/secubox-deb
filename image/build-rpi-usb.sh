@@ -273,6 +273,160 @@ echo -ne "$RESET"
 SPLASH
 chmod +x "${ROOTFS}/usr/local/bin/secubox-splash"
 
+# ── Boot Menu System ──────���──────────────────────────────────────────
+log "Installing boot menu system..."
+
+# Boot menu script - shows on early boot with timeout
+cat > "${ROOTFS}/usr/local/bin/secubox-bootmenu" <<'BOOTMENU'
+#!/bin/bash
+# SecuBox Boot Menu - Raspberry Pi Edition
+# Runs early in boot to select operating mode
+
+ESC="\033"
+CYAN="${ESC}[36m"
+GREEN="${ESC}[32m"
+GOLD="${ESC}[33m"
+WHITE="${ESC}[97m"
+DIM="${ESC}[2m"
+BOLD="${ESC}[1m"
+RESET="${ESC}[0m"
+CLEAR="${ESC}[2J${ESC}[H"
+
+MODE_FILE="/var/lib/secubox/boot-mode"
+DEFAULT_MODE="normal"
+TIMEOUT=5
+
+# Load saved mode
+[[ -f "$MODE_FILE" ]] && DEFAULT_MODE=$(cat "$MODE_FILE")
+
+show_menu() {
+    echo -ne "$CLEAR"
+    echo -e "${CYAN}${BOLD}"
+    cat << 'LOGO'
+   _____ ______ _____ _    _ ____   ______   __
+  / ____|  ____/ ____| |  | |  _ \ / __ \ \ / /
+ | (___ | |__ | |    | |  | | |_) | |  | \ V /
+  \___ \|  __|| |    | |  | |  _ <| |  | |> <
+  ____) | |___| |____| |__| | |_) | |__| / . \
+ |_____/|______\_____|\____/|____/ \____/_/ \_\
+LOGO
+    echo -e "${RESET}"
+    echo -e "${WHITE}${BOLD}  RASPBERRY PI 400 - BOOT MODE SELECTION${RESET}"
+    echo -e "${DIM}  ───��─────────────────────────────────────${RESET}"
+    echo ""
+    echo -e "  ${GREEN}1)${RESET} ${BOLD}Normal${RESET}      - Standard SecuBox with SSH + Web UI"
+    echo -e "  ${GREEN}2)${RESET} ${BOLD}Kiosk${RESET}       - Fullscreen browser dashboard"
+    echo -e "  ${GREEN}3)${RESET} ${BOLD}Console${RESET}     - Text-based TUI dashboard"
+    echo -e "  ${GREEN}4)${RESET} ${BOLD}Bridge${RESET}      - Transparent inline bridge mode"
+    echo -e "  ${GREEN}5)${RESET} ${BOLD}Minimal${RESET}     - SSH only, no services"
+    echo ""
+    echo -e "${DIM}  ──���───────────────────────────��──────────${RESET}"
+    echo -e "  ${GOLD}Current: ${WHITE}${DEFAULT_MODE}${RESET}"
+    echo ""
+}
+
+apply_mode() {
+    local mode="$1"
+    mkdir -p /var/lib/secubox
+    echo "$mode" > "$MODE_FILE"
+
+    case "$mode" in
+        normal)
+            systemctl set-default multi-user.target
+            systemctl disable secubox-kiosk.service 2>/dev/null || true
+            ;;
+        kiosk)
+            systemctl set-default graphical.target
+            systemctl enable secubox-kiosk.service 2>/dev/null || true
+            ;;
+        console)
+            systemctl set-default multi-user.target
+            systemctl enable secubox-console.service 2>/dev/null || true
+            ;;
+        bridge)
+            systemctl set-default multi-user.target
+            systemctl enable secubox-bridge.service 2>/dev/null || true
+            ;;
+        minimal)
+            systemctl set-default multi-user.target
+            systemctl disable nginx secubox-hub secubox-portal 2>/dev/null || true
+            ;;
+    esac
+}
+
+# Check if we should show menu (hold SHIFT or first boot)
+SHOW_MENU=0
+if [[ ! -f "$MODE_FILE" ]]; then
+    SHOW_MENU=1  # First boot
+elif [[ -f /tmp/secubox-show-menu ]]; then
+    SHOW_MENU=1
+    rm -f /tmp/secubox-show-menu
+fi
+
+# Check for key press (simplified - check if SHIFT held)
+read -t 0.1 -n 1 key 2>/dev/null && SHOW_MENU=1
+
+if [[ $SHOW_MENU -eq 1 ]]; then
+    show_menu
+    echo -ne "  ${WHITE}Select mode [1-5] or ENTER for default (${TIMEOUT}s): ${RESET}"
+
+    read -t $TIMEOUT -n 1 choice
+    echo ""
+
+    case "$choice" in
+        1) apply_mode "normal" ;;
+        2) apply_mode "kiosk" ;;
+        3) apply_mode "console" ;;
+        4) apply_mode "bridge" ;;
+        5) apply_mode "minimal" ;;
+        *) apply_mode "$DEFAULT_MODE" ;;
+    esac
+
+    echo -e "  ${GREEN}Mode set: $(cat $MODE_FILE)${RESET}"
+    sleep 1
+else
+    # Silent apply current mode
+    apply_mode "$DEFAULT_MODE"
+fi
+BOOTMENU
+chmod +x "${ROOTFS}/usr/local/bin/secubox-bootmenu"
+
+# Systemd service to run boot menu early
+cat > "${ROOTFS}/etc/systemd/system/secubox-bootmenu.service" <<'BOOTSVC'
+[Unit]
+Description=SecuBox Boot Mode Selector
+DefaultDependencies=no
+Before=sysinit.target
+After=systemd-vconsole-setup.service
+ConditionPathExists=!/run/secubox/bootmenu-done
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/secubox-bootmenu
+ExecStartPost=/usr/bin/touch /run/secubox/bootmenu-done
+StandardInput=tty
+StandardOutput=tty
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+
+[Install]
+WantedBy=sysinit.target
+BOOTSVC
+
+chroot "${ROOTFS}" systemctl enable secubox-bootmenu.service 2>/dev/null || true
+
+# Script to trigger boot menu on next reboot
+cat > "${ROOTFS}/usr/local/bin/secubox-bootmenu-show" <<'SHOWMENU'
+#!/bin/bash
+touch /tmp/secubox-show-menu
+echo "Boot menu will be shown on next reboot."
+echo "Use 'reboot' to restart now."
+SHOWMENU
+chmod +x "${ROOTFS}/usr/local/bin/secubox-bootmenu-show"
+
+ok "Boot menu system installed"
+
 # Add splash to root's bashrc
 cat >> "${ROOTFS}/root/.bashrc" <<'BASHRC'
 
@@ -416,7 +570,9 @@ chroot "${ROOTFS}" apt-get update -q
 log "Installing Python dependencies..."
 chroot "${ROOTFS}" apt-get install -y -q python3-pip python3-venv 2>/dev/null || true
 chroot "${ROOTFS}" pip3 install --break-system-packages -q \
-  fastapi uvicorn python-jose httpx jinja2 tomli pyroute2 psutil pydantic 2>&1 | tail -5 || true
+  fastapi uvicorn[standard] python-jose[cryptography] httpx \
+  jinja2 tomli pyroute2 psutil pydantic toml netifaces \
+  aiofiles aiosqlite authlib 2>&1 | tail -5 || true
 ok "Python dependencies installed"
 
 # Install firmware and Raspberry Pi boot files
@@ -456,14 +612,26 @@ fi
 DEB_COUNT=$(ls "${ROOTFS}/tmp/secubox-debs/"*.deb 2>/dev/null | wc -l)
 if [[ $DEB_COUNT -gt 0 ]]; then
   log "Installing ${DEB_COUNT} SecuBox packages..."
+
+  # Ensure systemd directories exist before dpkg
+  install -d -m 755 "${ROOTFS}/usr/lib/systemd/system"
+  install -d -m 755 "${ROOTFS}/etc/systemd/system"
+
   # Install secubox-core first (dependency)
   if ls "${ROOTFS}/tmp/secubox-debs/secubox-core_"*.deb >/dev/null 2>&1; then
-    chroot "${ROOTFS}" dpkg -i /tmp/secubox-debs/secubox-core_*.deb 2>/dev/null || true
+    chroot "${ROOTFS}" bash -c 'dpkg -i --force-depends /tmp/secubox-debs/secubox-core_*.deb' 2>/dev/null || true
   fi
-  # Install all packages
-  chroot "${ROOTFS}" dpkg -i /tmp/secubox-debs/*.deb 2>/dev/null || true
-  chroot "${ROOTFS}" apt-get install -f -y -q 2>/dev/null || true
-  ok "Installed ${DEB_COUNT} SecuBox packages"
+
+  # Install all packages with force-depends (pip provides Python deps)
+  chroot "${ROOTFS}" bash -c 'dpkg -i --force-depends --force-overwrite /tmp/secubox-debs/*.deb' 2>&1 | \
+    grep -v "^dpkg: warning" | head -30 || true
+
+  # Configure packages (skip apt-get -f as pip provides Python deps)
+  chroot "${ROOTFS}" dpkg --configure -a --force-confold 2>/dev/null || true
+
+  # Count installed
+  INSTALLED=$(chroot "${ROOTFS}" dpkg -l 'secubox-*' 2>/dev/null | grep "^ii" | wc -l)
+  ok "Installed ${INSTALLED}/${DEB_COUNT} SecuBox packages"
 else
   warn "No SecuBox packages found to install"
 fi
