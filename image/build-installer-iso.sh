@@ -415,7 +415,10 @@ fi
 # Python deps
 chroot "${ROOTFS}" pip3 install --break-system-packages -q \
   fastapi uvicorn[standard] python-jose[cryptography] httpx \
-  jinja2 tomli pyroute2 psutil authlib aiosqlite 2>/dev/null || warn "pip install partial"
+  jinja2 tomli toml pyroute2 psutil pydantic \
+  aiofiles aiosqlite authlib cryptography \
+  python-multipart websockets netifaces \
+  2>/dev/null || warn "pip install partial"
 
 ok "Packages installed"
 
