@@ -1233,6 +1233,34 @@ if [[ ! -f "${ROOTFS}/etc/nginx/sites-available/secubox" ]]; then
   fi
 fi
 
+# Remove bad configs from conf.d (location-only files belong in secubox.d, not conf.d)
+log "Cleaning bad nginx configs from conf.d..."
+for conf in "${ROOTFS}/etc/nginx/conf.d/"*secubox*.conf "${ROOTFS}/etc/nginx/conf.d/secubox-"*; do
+  [[ -f "$conf" ]] || [[ -L "$conf" ]] || continue
+
+  # Resolve symlink if needed
+  real_file="$conf"
+  if [[ -L "$conf" ]]; then
+    target=$(readlink "$conf")
+    if [[ "$target" == /* ]]; then
+      real_file="${ROOTFS}${target}"
+    else
+      real_file="${ROOTFS}/etc/nginx/conf.d/${target}"
+    fi
+  fi
+
+  # If file contains location directive (not inside server block), it's misplaced
+  if [[ -f "$real_file" ]] && grep -q "^location" "$real_file" 2>/dev/null; then
+    base=$(basename "$conf" .conf | sed 's/^secubox-//')
+    # Move content to secubox.d if not already there
+    if [[ ! -f "${ROOTFS}/etc/nginx/secubox.d/${base}.conf" ]]; then
+      cp "$real_file" "${ROOTFS}/etc/nginx/secubox.d/${base}.conf" 2>/dev/null || true
+      log "Moved ${base} from conf.d to secubox.d"
+    fi
+    rm -f "$conf"
+  fi
+done
+
 # Remove bad configs from sites-enabled (location-only files belong in secubox.d)
 log "Cleaning bad nginx configs from sites-enabled..."
 for site in "${ROOTFS}/etc/nginx/sites-enabled/"*; do
