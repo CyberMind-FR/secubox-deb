@@ -113,7 +113,7 @@ log "═════════════════════════
 # ══════════════════════════════════════════════════════════════════
 # Step 1: Debootstrap ARM64
 # ══════════════════════════════════════════════════════════════════
-log "1/6 Debootstrap arm64..."
+log "1/7 Debootstrap arm64..."
 
 # IMPORTANT: Do NOT include kernel/initramfs in debootstrap!
 # initramfs generation under QEMU takes 30+ minutes
@@ -138,7 +138,7 @@ ok "Debootstrap complete"
 # ══════════════════════════════════════════════════════════════════
 # Step 2: Base configuration
 # ══════════════════════════════════════════════════════════════════
-log "2/6 System configuration..."
+log "2/7 System configuration..."
 
 # Hostname
 echo "secubox-rpi" > "${ROOTFS}/etc/hostname"
@@ -521,7 +521,7 @@ ok "System configured"
 # ══════════════════════════════════════════════════════════════════
 # Step 3: Network configuration
 # ══════════════════════════════════════════════════════════════════
-log "3/6 Network configuration..."
+log "3/7 Network configuration..."
 
 # Use systemd-networkd for simplicity
 mkdir -p "${ROOTFS}/etc/systemd/network"
@@ -554,9 +554,9 @@ chroot "${ROOTFS}" systemctl enable systemd-resolved.service 2>/dev/null || true
 ok "Network configured"
 
 # ══════════════════════════════════════════════════════════════════
-# Step 4: SecuBox packages
+# Step 4: Kernel and firmware (BEFORE SecuBox packages to keep apt clean)
 # ══════════════════════════════════════════════════════════════════
-log "4/6 Installing SecuBox packages..."
+log "4/7 Installing kernel and firmware..."
 
 # APT sources
 cat > "${ROOTFS}/etc/apt/sources.list" <<EOF
@@ -566,21 +566,63 @@ EOF
 
 chroot "${ROOTFS}" apt-get update -q
 
-# Install Python dependencies FIRST (required by SecuBox packages)
-log "Installing Python dependencies..."
-chroot "${ROOTFS}" apt-get install -y -q python3-pip python3-venv python3-netifaces 2>/dev/null || true
+# Disable initramfs generation during package install (QEMU is too slow)
+# We'll generate it manually later
+mkdir -p "${ROOTFS}/etc/initramfs-tools"
+cat > "${ROOTFS}/etc/initramfs-tools/update-initramfs.conf" <<EOF
+# Disabled during image build (QEMU too slow)
+# Re-enable on first boot if needed
+update_initramfs=no
+EOF
+
+# Create hook to skip initramfs during kernel install
+mkdir -p "${ROOTFS}/etc/kernel/postinst.d"
+cat > "${ROOTFS}/etc/kernel/postinst.d/zz-skip-initramfs" <<'HOOK'
+#!/bin/sh
+# Skip initramfs during image build
+if [ -f /etc/initramfs-tools/update-initramfs.conf ]; then
+    grep -q "update_initramfs=no" /etc/initramfs-tools/update-initramfs.conf && exit 0
+fi
+HOOK
+chmod +x "${ROOTFS}/etc/kernel/postinst.d/zz-skip-initramfs"
+
+# Install kernel, initramfs-tools, firmware, and Python deps while apt is clean
+log "Installing kernel and base packages..."
+chroot "${ROOTFS}" apt-get install -y -q --no-install-recommends \
+  linux-image-arm64 initramfs-tools plymouth plymouth-themes \
+  raspi-firmware firmware-brcm80211 firmware-misc-nonfree \
+  python3-pip python3-venv python3-netifaces \
+  2>/dev/null || warn "Some packages may have failed (continuing)"
+
+# Remove the skip hook now
+rm -f "${ROOTFS}/etc/kernel/postinst.d/zz-skip-initramfs"
+
+# Re-enable initramfs updates
+cat > "${ROOTFS}/etc/initramfs-tools/update-initramfs.conf" <<EOF
+update_initramfs=yes
+EOF
+
+# Check kernel was installed
+if ls "${ROOTFS}/lib/modules/"* >/dev/null 2>&1; then
+  ok "Kernel and firmware installed"
+else
+  warn "Kernel may not have installed properly"
+fi
+
+# Install Python dependencies via pip
+log "Installing Python dependencies via pip..."
 chroot "${ROOTFS}" pip3 install --break-system-packages -q \
   fastapi uvicorn[standard] python-jose[cryptography] httpx \
   jinja2 tomli pyroute2 psutil pydantic toml \
   aiofiles aiosqlite authlib 2>&1 | tail -5 || true
 ok "Python dependencies installed"
 
-# Install firmware and Raspberry Pi boot files
-chroot "${ROOTFS}" apt-get install -y -q --no-install-recommends \
-  raspi-firmware firmware-brcm80211 firmware-misc-nonfree \
-  2>/dev/null || warn "Some firmware unavailable"
+# ══════════════════════════════════════════════════════════════════
+# Step 5: SecuBox packages
+# ══════════════════════════════════════════════════════════════════
+log "5/7 Installing SecuBox packages..."
 
-# ── Pre-generate SSL certificates for nginx (BEFORE package install) ────
+# Pre-generate SSL certificates for nginx (BEFORE package install)
 # Packages' postinst scripts check for nginx/certs, so create them first
 log "Pre-generating SSL certificates..."
 mkdir -p "${ROOTFS}/etc/secubox/tls"
@@ -663,60 +705,19 @@ fi
 
 rm -rf "${ROOTFS}/tmp/secubox-debs"
 
-# Clean
+# Clean apt cache (keep lists for potential future use)
 chroot "${ROOTFS}" apt-get clean
-rm -rf "${ROOTFS}/var/lib/apt/lists"/*
-
-ok "SecuBox packages installed"
 
 # Enable nginx for API proxying (certs already generated earlier)
 ln -sf /usr/lib/systemd/system/nginx.service \
   "${ROOTFS}/etc/systemd/system/multi-user.target.wants/nginx.service" 2>/dev/null || true
 
-# ══════════════════════════════════════════════════════════════════
-# Step 4b: Install kernel (with initramfs disabled to avoid QEMU slowness)
-# ══════════════════════════════════════════════════════════════════
-log "4b/6 Installing kernel (initramfs disabled for speed)..."
-
-# Disable initramfs generation during package install (QEMU is too slow)
-# We'll copy kernel/initrd manually from the installed files
-cat > "${ROOTFS}/etc/initramfs-tools/update-initramfs.conf" <<EOF
-# Disabled during image build (QEMU too slow)
-# Re-enable on first boot if needed
-update_initramfs=no
-EOF
-
-# Also create a hook to skip initramfs generation
-mkdir -p "${ROOTFS}/etc/kernel/postinst.d"
-cat > "${ROOTFS}/etc/kernel/postinst.d/zz-skip-initramfs" <<'HOOK'
-#!/bin/sh
-# Skip initramfs during image build
-if [ -f /etc/initramfs-tools/update-initramfs.conf ]; then
-    grep -q "update_initramfs=no" /etc/initramfs-tools/update-initramfs.conf && exit 0
-fi
-HOOK
-chmod +x "${ROOTFS}/etc/kernel/postinst.d/zz-skip-initramfs"
-
-# Now install kernel and plymouth
-chroot "${ROOTFS}" apt-get update -q
-chroot "${ROOTFS}" apt-get install -y -q --no-install-recommends \
-    linux-image-arm64 initramfs-tools plymouth plymouth-themes \
-    2>/dev/null || warn "Kernel install issues (may be OK)"
-
-# Remove the skip hook
-rm -f "${ROOTFS}/etc/kernel/postinst.d/zz-skip-initramfs"
-
-# Re-enable initramfs updates for runtime
-cat > "${ROOTFS}/etc/initramfs-tools/update-initramfs.conf" <<EOF
-update_initramfs=yes
-EOF
-
-ok "Kernel installed"
+ok "SecuBox packages installed"
 
 # ══════════════════════════════════════════════════════════════════
-# Step 5: Raspberry Pi boot configuration
+# Step 6: Raspberry Pi boot configuration
 # ══════════════════════════════════════════════════════════════════
-log "5/6 Configuring Pi bootloader..."
+log "6/7 Configuring Pi bootloader..."
 
 # config.txt for Pi 400
 mkdir -p "${ROOTFS}/boot/firmware"
@@ -818,9 +819,9 @@ fi
 ok "Pi bootloader configured"
 
 # ══════════════════════════════════════════════════════════════════
-# Step 6: Create image
+# Step 7: Create image
 # ══════════════════════════════════════════════════════════════════
-log "6/6 Creating bootable image..."
+log "7/7 Creating bootable image..."
 
 rm -f "${IMG_FILE}" "${IMG_FILE}.gz"
 truncate -s "${IMG_SIZE}" "${IMG_FILE}"
