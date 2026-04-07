@@ -1233,14 +1233,49 @@ if [[ ! -f "${ROOTFS}/etc/nginx/sites-available/secubox" ]]; then
   fi
 fi
 
+# Remove bad configs from sites-enabled (location-only files belong in secubox.d)
+log "Cleaning bad nginx configs from sites-enabled..."
+for site in "${ROOTFS}/etc/nginx/sites-enabled/"*; do
+  [[ -f "$site" ]] || [[ -L "$site" ]] || continue
+  [[ "$(basename "$site")" == "secubox" ]] && continue  # Keep main secubox config
+
+  # Check if file exists (resolve symlink)
+  real_file="$site"
+  [[ -L "$site" ]] && real_file=$(readlink -f "$site") && real_file="${ROOTFS}${real_file#${ROOTFS}}"
+  [[ -f "$real_file" ]] || { rm -f "$site"; continue; }
+
+  # If it starts with location (not server), move to secubox.d
+  if grep -q "^location" "$real_file" 2>/dev/null && ! grep -q "^server" "$real_file" 2>/dev/null; then
+    base=$(basename "$site" | sed 's/^secubox-//')
+    cp "$real_file" "${ROOTFS}/etc/nginx/secubox.d/${base}.conf" 2>/dev/null || true
+    rm -f "$site"
+    log "Moved $(basename "$site") to secubox.d/ (was location-only)"
+  fi
+done
+
 # Test nginx configuration in chroot
 log "Testing nginx configuration..."
 if chroot "${ROOTFS}" nginx -t 2>&1; then
   ok "nginx configuration valid"
 else
-  warn "nginx config test failed - checking for issues..."
+  warn "nginx config test failed - attempting auto-fix..."
   # Show specific error
-  chroot "${ROOTFS}" nginx -t 2>&1 | head -10 || true
+  error_output=$(chroot "${ROOTFS}" nginx -t 2>&1 | head -5)
+  echo "$error_output"
+
+  # Extract problematic file from error message
+  bad_file=$(echo "$error_output" | grep -oP '/etc/nginx/[^:]+' | head -1)
+  if [[ -n "$bad_file" ]] && [[ -f "${ROOTFS}${bad_file}" ]]; then
+    log "Disabling problematic config: $bad_file"
+    mv "${ROOTFS}${bad_file}" "${ROOTFS}${bad_file}.disabled" 2>/dev/null || rm -f "${ROOTFS}${bad_file}"
+
+    # Test again
+    if chroot "${ROOTFS}" nginx -t 2>&1; then
+      ok "nginx configuration fixed by disabling $bad_file"
+    else
+      warn "nginx still failing, may need manual fix at runtime"
+    fi
+  fi
 
   # If SSL certs missing, regenerate
   if [[ ! -f "${ROOTFS}/etc/secubox/tls/cert.pem" ]]; then
