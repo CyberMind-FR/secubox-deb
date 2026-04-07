@@ -1192,6 +1192,67 @@ ok "Enabled ${ENABLED_COUNT} SecuBox services"
 ln -sf /usr/lib/systemd/system/nginx.service \
   "${ROOTFS}/etc/systemd/system/multi-user.target.wants/nginx.service" 2>/dev/null || true
 
+# ── Fix nginx configuration to ensure it starts ─────────────────────
+log "Fixing nginx configuration..."
+
+# Ensure snippets directory exists
+mkdir -p "${ROOTFS}/etc/nginx/snippets"
+mkdir -p "${ROOTFS}/etc/nginx/secubox.d"
+
+# Install secubox-proxy.conf snippet if missing
+if [[ ! -f "${ROOTFS}/etc/nginx/snippets/secubox-proxy.conf" ]]; then
+  if [[ -f "${ROOTFS}/usr/share/secubox-core/nginx/secubox-proxy.conf" ]]; then
+    cp "${ROOTFS}/usr/share/secubox-core/nginx/secubox-proxy.conf" \
+       "${ROOTFS}/etc/nginx/snippets/secubox-proxy.conf"
+    log "Installed secubox-proxy.conf snippet"
+  else
+    # Create minimal proxy config
+    cat > "${ROOTFS}/etc/nginx/snippets/secubox-proxy.conf" << 'PROXYEOF'
+proxy_http_version 1.1;
+proxy_set_header Host $host;
+proxy_set_header X-Real-IP $remote_addr;
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+proxy_set_header X-Forwarded-Proto $scheme;
+proxy_read_timeout 30s;
+proxy_connect_timeout 5s;
+proxy_buffering off;
+PROXYEOF
+    log "Created minimal secubox-proxy.conf snippet"
+  fi
+fi
+
+# Install main secubox nginx config if missing
+if [[ ! -f "${ROOTFS}/etc/nginx/sites-available/secubox" ]]; then
+  if [[ -f "${ROOTFS}/usr/share/secubox-core/nginx/secubox.conf" ]]; then
+    cp "${ROOTFS}/usr/share/secubox-core/nginx/secubox.conf" \
+       "${ROOTFS}/etc/nginx/sites-available/secubox"
+    ln -sf /etc/nginx/sites-available/secubox \
+       "${ROOTFS}/etc/nginx/sites-enabled/secubox"
+    rm -f "${ROOTFS}/etc/nginx/sites-enabled/default"
+    log "Installed secubox nginx site config"
+  fi
+fi
+
+# Test nginx configuration in chroot
+log "Testing nginx configuration..."
+if chroot "${ROOTFS}" nginx -t 2>&1; then
+  ok "nginx configuration valid"
+else
+  warn "nginx config test failed - checking for issues..."
+  # Show specific error
+  chroot "${ROOTFS}" nginx -t 2>&1 | head -10 || true
+
+  # If SSL certs missing, regenerate
+  if [[ ! -f "${ROOTFS}/etc/secubox/tls/cert.pem" ]]; then
+    warn "SSL certificates missing, regenerating..."
+    mkdir -p "${ROOTFS}/etc/secubox/tls"
+    openssl req -x509 -newkey rsa:2048 -days 365 \
+      -keyout "${ROOTFS}/etc/secubox/tls/key.pem" \
+      -out "${ROOTFS}/etc/secubox/tls/cert.pem" \
+      -nodes -subj "/CN=secubox-live/O=CyberMind SecuBox/C=FR" 2>/dev/null
+  fi
+fi
+
 # Note: SSL certs were already generated before package installation
 
 # ══════════════════════════════════════════════════════════════════
