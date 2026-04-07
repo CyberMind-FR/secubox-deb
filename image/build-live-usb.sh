@@ -981,10 +981,7 @@ if [[ $CACHE_COUNT -gt 0 ]] || [[ $OUTPUT_COUNT -gt 0 ]]; then
   chroot "${ROOTFS}" bash -c 'dpkg -i --force-depends --force-overwrite /tmp/secubox-debs/*.deb 2>&1' | \
     grep -v "^dpkg: warning" | grep -v "^Selecting\|^Preparing\|^Unpacking\|^Setting up" | head -50 || true
 
-  # Fix dependencies with apt
-  log "Fixing dependencies..."
-  chroot "${ROOTFS}" apt-get install -f -y --fix-broken || warn "apt-get -f failed"
-
+  # Configure packages (skip apt-get -f as pip provides Python deps)
   # Second pass: reconfigure any packages that failed
   log "Reconfiguring packages..."
   chroot "${ROOTFS}" dpkg --configure -a --force-confold 2>/dev/null || true
