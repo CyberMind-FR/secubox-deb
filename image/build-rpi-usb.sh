@@ -568,10 +568,10 @@ chroot "${ROOTFS}" apt-get update -q
 
 # Install Python dependencies FIRST (required by SecuBox packages)
 log "Installing Python dependencies..."
-chroot "${ROOTFS}" apt-get install -y -q python3-pip python3-venv 2>/dev/null || true
+chroot "${ROOTFS}" apt-get install -y -q python3-pip python3-venv python3-netifaces 2>/dev/null || true
 chroot "${ROOTFS}" pip3 install --break-system-packages -q \
   fastapi uvicorn[standard] python-jose[cryptography] httpx \
-  jinja2 tomli pyroute2 psutil pydantic toml netifaces \
+  jinja2 tomli pyroute2 psutil pydantic toml \
   aiofiles aiosqlite authlib 2>&1 | tail -5 || true
 ok "Python dependencies installed"
 
