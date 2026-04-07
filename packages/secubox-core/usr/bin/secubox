@@ -1,0 +1,215 @@
+#!/bin/bash
+# SecuBox CLI - Main command interface
+# CyberMind - https://cybermind.fr
+
+set -euo pipefail
+
+VERSION="1.5.5"
+SECUBOX_SERVICES=$(systemctl list-units --type=service --all 'secubox-*' --no-legend 2>/dev/null | awk '{print $1}' | sed 's/.service$//')
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+usage() {
+    cat <<EOF
+${CYAN}SecuBox${NC} - Security Appliance CLI v${VERSION}
+
+${YELLOW}Usage:${NC}
+    secubox <command> [options]
+
+${YELLOW}Commands:${NC}
+    status          Show system and services status
+    services        List all SecuBox services
+    version         Show version information
+    logs [service]  View logs (all or specific service)
+    restart <svc>   Restart a SecuBox service
+    start <svc>     Start a SecuBox service
+    stop <svc>      Stop a SecuBox service
+    info            Show system information
+    network         Show network configuration
+    help            Show this help message
+
+${YELLOW}Examples:${NC}
+    secubox status
+    secubox logs crowdsec
+    secubox restart wireguard
+
+EOF
+}
+
+cmd_version() {
+    echo -e "${CYAN}SecuBox${NC} v${VERSION}"
+    echo -e "Debian $(cat /etc/debian_version 2>/dev/null || echo 'unknown')"
+    echo -e "Kernel $(uname -r)"
+    if [[ -f /etc/secubox/board ]]; then
+        echo -e "Board: $(cat /etc/secubox/board)"
+    fi
+}
+
+cmd_status() {
+    echo -e "${CYAN}=== SecuBox Status ===${NC}"
+    echo
+
+    # Uptime
+    echo -e "${YELLOW}Uptime:${NC} $(uptime -p 2>/dev/null || uptime)"
+
+    # Memory
+    echo -e "${YELLOW}Memory:${NC} $(free -h | awk '/^Mem:/ {print $3 "/" $2}')"
+
+    # Disk
+    echo -e "${YELLOW}Disk:${NC} $(df -h / | awk 'NR==2 {print $3 "/" $2 " (" $5 " used)"}')"
+
+    # Load
+    echo -e "${YELLOW}Load:${NC} $(cat /proc/loadavg | awk '{print $1, $2, $3}')"
+
+    echo
+    echo -e "${CYAN}=== Services ===${NC}"
+
+    # List secubox services status
+    systemctl list-units --type=service 'secubox-*' --no-legend 2>/dev/null | while read -r line; do
+        unit=$(echo "$line" | awk '{print $1}')
+        state=$(echo "$line" | awk '{print $3}')
+        sub=$(echo "$line" | awk '{print $4}')
+        name=$(echo "$unit" | sed 's/secubox-//' | sed 's/.service$//')
+
+        if [[ "$state" == "active" ]]; then
+            echo -e "  ${GREEN}●${NC} ${name}: ${GREEN}${sub}${NC}"
+        else
+            echo -e "  ${RED}○${NC} ${name}: ${RED}${state}${NC}"
+        fi
+    done
+
+    # Count
+    total=$(systemctl list-units --type=service --all 'secubox-*' --no-legend 2>/dev/null | wc -l)
+    active=$(systemctl list-units --type=service 'secubox-*' --no-legend 2>/dev/null | grep -c "active running" || true)
+    echo
+    echo -e "${YELLOW}Total:${NC} ${active}/${total} services running"
+}
+
+cmd_services() {
+    echo -e "${CYAN}=== SecuBox Services ===${NC}"
+    systemctl list-units --type=service --all 'secubox-*' --no-pager 2>/dev/null || echo "No services found"
+}
+
+cmd_logs() {
+    local service="${1:-}"
+    if [[ -z "$service" ]]; then
+        journalctl -u 'secubox-*' -f --no-pager
+    else
+        journalctl -u "secubox-${service}.service" -f --no-pager
+    fi
+}
+
+cmd_restart() {
+    local service="${1:-}"
+    if [[ -z "$service" ]]; then
+        echo -e "${RED}Error:${NC} Service name required"
+        echo "Usage: secubox restart <service>"
+        exit 1
+    fi
+    echo -e "${YELLOW}Restarting${NC} secubox-${service}..."
+    systemctl restart "secubox-${service}.service"
+    echo -e "${GREEN}Done${NC}"
+}
+
+cmd_start() {
+    local service="${1:-}"
+    if [[ -z "$service" ]]; then
+        echo -e "${RED}Error:${NC} Service name required"
+        exit 1
+    fi
+    echo -e "${YELLOW}Starting${NC} secubox-${service}..."
+    systemctl start "secubox-${service}.service"
+    echo -e "${GREEN}Done${NC}"
+}
+
+cmd_stop() {
+    local service="${1:-}"
+    if [[ -z "$service" ]]; then
+        echo -e "${RED}Error:${NC} Service name required"
+        exit 1
+    fi
+    echo -e "${YELLOW}Stopping${NC} secubox-${service}..."
+    systemctl stop "secubox-${service}.service"
+    echo -e "${GREEN}Done${NC}"
+}
+
+cmd_info() {
+    echo -e "${CYAN}=== System Information ===${NC}"
+    echo
+    echo -e "${YELLOW}Hostname:${NC} $(hostname)"
+    echo -e "${YELLOW}OS:${NC} $(cat /etc/os-release | grep PRETTY_NAME | cut -d= -f2 | tr -d '"')"
+    echo -e "${YELLOW}Kernel:${NC} $(uname -r)"
+    echo -e "${YELLOW}Architecture:${NC} $(uname -m)"
+
+    if [[ -f /etc/secubox/board ]]; then
+        echo -e "${YELLOW}Board:${NC} $(cat /etc/secubox/board)"
+    fi
+
+    if command -v lscpu &>/dev/null; then
+        echo -e "${YELLOW}CPU:${NC} $(lscpu | grep 'Model name' | cut -d: -f2 | xargs)"
+        echo -e "${YELLOW}Cores:${NC} $(nproc)"
+    fi
+
+    echo -e "${YELLOW}Memory:${NC} $(free -h | awk '/^Mem:/ {print $2}')"
+    echo -e "${YELLOW}Disk:${NC} $(df -h / | awk 'NR==2 {print $2}')"
+}
+
+cmd_network() {
+    echo -e "${CYAN}=== Network Configuration ===${NC}"
+    echo
+
+    # IP addresses
+    echo -e "${YELLOW}IP Addresses:${NC}"
+    ip -4 addr show | grep inet | grep -v '127.0.0.1' | awk '{print "  " $NF ": " $2}'
+
+    echo
+    echo -e "${YELLOW}Default Route:${NC}"
+    ip route show default 2>/dev/null | head -1 || echo "  No default route"
+
+    echo
+    echo -e "${YELLOW}DNS:${NC}"
+    grep -v '^#' /etc/resolv.conf 2>/dev/null | grep nameserver | awk '{print "  " $2}' || echo "  Not configured"
+
+    echo
+    echo -e "${YELLOW}Interfaces:${NC}"
+    ip link show | grep -E '^[0-9]+:' | awk -F: '{print "  " $2}' | xargs -n1
+}
+
+# Main
+case "${1:-help}" in
+    status)
+        cmd_status
+        ;;
+    services)
+        cmd_services
+        ;;
+    version|-v|--version)
+        cmd_version
+        ;;
+    logs|log)
+        cmd_logs "${2:-}"
+        ;;
+    restart)
+        cmd_restart "${2:-}"
+        ;;
+    start)
+        cmd_start "${2:-}"
+        ;;
+    stop)
+        cmd_stop "${2:-}"
+        ;;
+    info)
+        cmd_info
+        ;;
+    network|net)
+        cmd_network
+        ;;
+    help|-h|--help|*)
+        usage
+        ;;
+esac
