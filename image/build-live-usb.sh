@@ -864,7 +864,11 @@ log "4/8 Installing ALL SecuBox packages..."
 log "Installing Python dependencies..."
 chroot "${ROOTFS}" apt-get install -y -q python3-pip python3-venv 2>/dev/null || true
 chroot "${ROOTFS}" pip3 install --break-system-packages -q \
-  fastapi uvicorn python-jose httpx jinja2 tomli pyroute2 psutil pydantic 2>&1 | tail -5 || true
+  fastapi uvicorn[standard] python-jose[cryptography] httpx \
+  jinja2 tomli toml pyroute2 psutil pydantic \
+  aiofiles aiosqlite authlib cryptography \
+  python-multipart websockets netifaces \
+  2>&1 | tail -10 || true
 ok "Python dependencies installed"
 
 # ── Pre-generate SSL certificates for nginx BEFORE installing packages ──
