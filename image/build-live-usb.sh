@@ -1535,10 +1535,11 @@ umount ${TARGET}* 2>/dev/null || true
 parted -s "$TARGET" mklabel gpt
 
 # Create partitions: ESP (512MB) + Root (rest - 4GB) + Data (4GB)
-parted -s "$TARGET" mkpart ESP fat32 1MiB 513MiB
+# Note: Use -- to stop option parsing (otherwise -4GiB is parsed as options)
+parted -s "$TARGET" -- mkpart ESP fat32 1MiB 513MiB
 parted -s "$TARGET" set 1 esp on
-parted -s "$TARGET" mkpart root ext4 513MiB -4GiB
-parted -s "$TARGET" mkpart data ext4 -4GiB 100%
+parted -s "$TARGET" -- mkpart root ext4 513MiB -4GiB
+parted -s "$TARGET" -- mkpart data ext4 -4GiB 100%
 
 partprobe "$TARGET"
 sleep 2
