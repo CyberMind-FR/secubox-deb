@@ -213,19 +213,26 @@ jobs:
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
         run: |
+          if [ -z "$GPG_PRIVATE_KEY" ]; then
+            echo "⚠ GPG_PRIVATE_KEY secret not set - skipping signing"
+            echo "SKIP_SIGN=true" >> $GITHUB_ENV
+            exit 0
+          fi
           echo "$GPG_PRIVATE_KEY" | gpg --batch --import
           gpg --list-keys
 
       - name: Setup repository
+        if: env.SKIP_SIGN != 'true'
         run: |
           mkdir -p repo/conf
-          cp repo/conf/distributions repo/conf/
+          cp repo/conf/distributions repo/conf/ 2>/dev/null || true
           cat > repo/conf/options << EOF
           verbose
           basedir $(pwd)/repo
           EOF
 
       - name: Add packages to repository
+        if: env.SKIP_SIGN != 'true'
         run: |
           for deb in debs/*.deb; do
             [ -f "$deb" ] || continue
@@ -234,14 +241,20 @@ jobs:
           done
 
       - name: Export public key
+        if: env.SKIP_SIGN != 'true'
         run: |
           gpg --armor --export packages@secubox.in > repo/secubox-keyring.gpg
 
       - name: Deploy to server
+        if: env.SKIP_SIGN != 'true'
         env:
           SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
         run: |
+          if [ -z "$SSH_PRIVATE_KEY" ]; then
+            echo "⚠ DEPLOY_SSH_KEY not set - skipping deploy"
+            exit 0
+          fi
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
