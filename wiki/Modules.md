@@ -1,6 +1,6 @@
 # SecuBox Modules
 
-**CyberMind · Gondwana** | [FR](MODULES-FR) | [DE](MODULES-DE) | [中文](MODULES-ZH) | **v1.5.9**
+**CyberMind · Gondwana** | [FR](MODULES-FR) | [DE](MODULES-DE) | [中文](MODULES-ZH) | **v1.5.10**
 
 Complete list of SecuBox packages organized by the **Six-Stack Architecture**.
 

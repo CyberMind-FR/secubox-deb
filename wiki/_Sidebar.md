@@ -1,4 +1,4 @@
-**[SecuBox](Home)** | [FR](Home-FR) | [中文](Home-ZH) | **v1.5.9**
+**[SecuBox](Home)** | [FR](Home-FR) | [中文](Home-ZH) | **v1.5.10**
 
 ### 🔴 BOOT — Getting Started
 * [[Live-USB-VirtualBox|VirtualBox (2 min)]] ⭐
