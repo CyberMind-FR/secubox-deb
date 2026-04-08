@@ -100,6 +100,8 @@
 }
 
 /* Schedule form styles */
+@import url('../../../shared/design-tokens.css');
+
 .sh-schedule-form {
 	margin-top: 16px;
 }
@@ -116,7 +118,7 @@
 .sh-toggle-main input[type="checkbox"] {
 	width: 20px;
 	height: 20px;
-	accent-color: var(--sh-accent, #6366f1);
+	accent-color: var(--sh-accent, var(--mind-light));
 }
 
 .sh-schedule-options {
@@ -148,7 +150,7 @@
 
 .sh-select:focus {
 	outline: none;
-	border-color: var(--sh-accent, #6366f1);
+	border-color: var(--sh-accent, var(--mind-light));
 }
 
 .sh-select-time {
@@ -168,7 +170,7 @@
 
 .sh-badge-success {
 	background: linear-gradient(135deg, rgba(34,197,94,0.2), rgba(22,163,74,0.2)) !important;
-	color: #22c55e !important;
+	color: var(--root-light) !important;
 	border: 1px solid rgba(34,197,94,0.3) !important;
 }
 

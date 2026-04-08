@@ -17,19 +17,19 @@
 	--nm-text-secondary: #a8a29e;
 	--nm-text-muted: #78716c;
 	
-	--nm-accent-orange: #f97316;
-	--nm-accent-amber: #f59e0b;
+	--nm-accent-orange: var(--auth-light);
+	--nm-accent-amber: var(--wall-light);
 	--nm-accent-yellow: #eab308;
-	--nm-accent-green: #22c55e;
-	--nm-accent-blue: #3b82f6;
+	--nm-accent-green: var(--root-light);
+	--nm-accent-blue: var(--mesh-light);
 	--nm-accent-purple: #a855f7;
-	--nm-accent-red: #ef4444;
+	--nm-accent-red: var(--boot-light);
 	
-	--nm-mode-gradient: linear-gradient(135deg, #f97316, #f59e0b, #eab308);
-	--nm-sniffer-color: #8b5cf6;
-	--nm-ap-color: #06b6d4;
-	--nm-relay-color: #10b981;
-	--nm-router-color: #f97316;
+	--nm-mode-gradient: linear-gradient(135deg, var(--auth-light), var(--wall-light), #eab308);
+	--nm-sniffer-color: var(--mind-light);
+	--nm-ap-color: var(--mesh-light);
+	--nm-relay-color: var(--root-light);
+	--nm-router-color: var(--auth-light);
 	
 	--nm-font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
 	--nm-font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -52,7 +52,7 @@
 	--nm-text-secondary: #475569;
 	--nm-text-muted: #94a3b8;
 
-	--nm-mode-gradient: linear-gradient(135deg,#4f46e5,#7c3aed);
+	--nm-mode-gradient: linear-gradient(135deg,#4f46e5,var(--mind-light));
 	--nm-shadow: 0 12px 25px rgba(79,70,229,0.15);
 	--nm-shadow-glow: 0 0 30px rgba(79,70,229,0.25);
 }
@@ -1060,7 +1060,7 @@
 	font-size: 32px;
 	font-weight: 700;
 	margin: 0;
-	background: linear-gradient(135deg, #6366f1, #8b5cf6);
+	background: linear-gradient(135deg, var(--mind-light), var(--mind-light));
 	-webkit-background-clip: text;
 	-webkit-text-fill-color: transparent;
 	background-clip: text;
@@ -1104,7 +1104,7 @@
 }
 
 .nm-change-mode-btn {
-	background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+	background: linear-gradient(135deg, var(--mind-light) 0%, var(--mind-light) 100%);
 	color: white;
 	border: none;
 	padding: 14px 28px;
@@ -1170,7 +1170,7 @@
 }
 
 .nm-comparison-table thead th.active-mode {
-	background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+	background: linear-gradient(135deg, var(--mind-light) 0%, var(--mind-light) 100%);
 	color: white;
 	position: relative;
 }
@@ -1214,6 +1214,8 @@
 }
 
 /* === Responsive Design === */
+@import url('../../../shared/design-tokens.css');
+
 @media (max-width: 768px) {
 	.nm-current-mode-header {
 		flex-direction: column;

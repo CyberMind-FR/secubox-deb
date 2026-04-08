@@ -1,9 +1,60 @@
 /**
  * ═══════════════════════════════════════════════════════════════
- *  CRT COMPONENTS v1.0 — SecuBox Edition
- *  Reusable encapsulated Web Components
+ *  SECUBOX COMPONENTS v2.0
+ *  Based on Charte Graphique Six-Module Color System
+ *  CyberMind · Gondwana · Notre-Dame-du-Cruet · Savoie
  * ═══════════════════════════════════════════════════════════════
  */
+
+// ══════════════════════════════════════════════════════════════
+//  DESIGN TOKEN HELPER
+//  Gets computed CSS custom property values from document
+// ══════════════════════════════════════════════════════════════
+const getToken = (name, fallback) => {
+  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return value || fallback;
+};
+
+// 6-Module Color System fallbacks (in case design-tokens.css not loaded)
+const TOKENS = {
+  // Module colors
+  authMain: '#C04E24',
+  authLight: '#E8845A',
+  authXlt: '#FAECE7',
+  authDark: '#7A2A10',
+
+  wallMain: '#9A6010',
+  wallLight: '#CC8820',
+  wallXlt: '#FDF3E0',
+  wallDark: '#5A3808',
+
+  bootMain: '#803018',
+  bootLight: '#C06040',
+  bootXlt: '#FAECE7',
+  bootDark: '#5A1E0A',
+
+  mindMain: '#3D35A0',
+  mindLight: '#7068D0',
+  mindXlt: '#EEEDFE',
+  mindDark: '#241D6A',
+
+  rootMain: '#0A5840',
+  rootLight: '#148C66',
+  rootXlt: '#E1F5EE',
+  rootDark: '#063828',
+
+  meshMain: '#104A88',
+  meshLight: '#2C70C0',
+  meshXlt: '#E6F1FB',
+  meshDark: '#08305A',
+
+  // Base colors
+  bgDark: '#0A0E14',
+  surfaceDark: '#141A24',
+  borderDark: '#2A3444',
+  textDark: '#E8E6E0',
+  mutedDark: '#8A9AA8'
+};
 
 // ══════════════════════════════════════════════════════════════
 //  TYPEWRITER ENGINE
@@ -11,7 +62,7 @@
 class CRTTypewriter {
   constructor(element, options = {}) {
     this.el = element;
-    this.speed = options.speed || 40; // ms per char
+    this.speed = options.speed || 40;
     this.delay = options.delay || 0;
     this.cursor = options.cursor !== false;
     this.onComplete = options.onComplete || (() => {});
@@ -42,11 +93,58 @@ class CRTTypewriter {
 }
 
 // ══════════════════════════════════════════════════════════════
+//  SHARED STYLES (imported into all shadow DOMs)
+// ══════════════════════════════════════════════════════════════
+const sharedStyles = `
+  /* Inherit design tokens from document */
+  :host {
+    --root-main: var(--root-main, ${TOKENS.rootMain});
+    --root-light: var(--root-light, ${TOKENS.rootLight});
+    --root-xlt: var(--root-xlt, ${TOKENS.rootXlt});
+    --root-dark: var(--root-dark, ${TOKENS.rootDark});
+
+    --wall-main: var(--wall-main, ${TOKENS.wallMain});
+    --wall-light: var(--wall-light, ${TOKENS.wallLight});
+    --wall-xlt: var(--wall-xlt, ${TOKENS.wallXlt});
+    --wall-dark: var(--wall-dark, ${TOKENS.wallDark});
+
+    --boot-main: var(--boot-main, ${TOKENS.bootMain});
+    --boot-light: var(--boot-light, ${TOKENS.bootLight});
+    --boot-xlt: var(--boot-xlt, ${TOKENS.bootXlt});
+    --boot-dark: var(--boot-dark, ${TOKENS.bootDark});
+
+    --mind-main: var(--mind-main, ${TOKENS.mindMain});
+    --mind-light: var(--mind-light, ${TOKENS.mindLight});
+    --mind-xlt: var(--mind-xlt, ${TOKENS.mindXlt});
+    --mind-dark: var(--mind-dark, ${TOKENS.mindDark});
+
+    --auth-main: var(--auth-main, ${TOKENS.authMain});
+    --auth-light: var(--auth-light, ${TOKENS.authLight});
+    --auth-xlt: var(--auth-xlt, ${TOKENS.authXlt});
+    --auth-dark: var(--auth-dark, ${TOKENS.authDark});
+
+    --mesh-main: var(--mesh-main, ${TOKENS.meshMain});
+    --mesh-light: var(--mesh-light, ${TOKENS.meshLight});
+    --mesh-xlt: var(--mesh-xlt, ${TOKENS.meshXlt});
+    --mesh-dark: var(--mesh-dark, ${TOKENS.meshDark});
+
+    --bg-dark: var(--bg-dark, ${TOKENS.bgDark});
+    --surface-dark: var(--surface-dark, ${TOKENS.surfaceDark});
+    --border-dark: var(--border-dark, ${TOKENS.borderDark});
+    --text-dark: var(--text-dark, ${TOKENS.textDark});
+    --muted-dark: var(--muted-dark, ${TOKENS.mutedDark});
+
+    --font-mono: var(--font-mono, 'JetBrains Mono', monospace);
+    --font-display: var(--font-display, 'Space Grotesk', sans-serif);
+  }
+`;
+
+// ══════════════════════════════════════════════════════════════
 //  CRT BUTTON COMPONENT
 // ══════════════════════════════════════════════════════════════
 class CRTButton extends HTMLElement {
   static get observedAttributes() {
-    return ['variant', 'size', 'disabled', 'loading'];
+    return ['variant', 'size', 'disabled', 'loading', 'module'];
   }
 
   constructor() {
@@ -64,38 +162,40 @@ class CRTButton extends HTMLElement {
 
   render() {
     const variant = this.getAttribute('variant') || 'default';
+    const module = this.getAttribute('module') || 'root';
     const size = this.getAttribute('size') || 'md';
     const disabled = this.hasAttribute('disabled');
     const loading = this.hasAttribute('loading');
 
     this.shadowRoot.innerHTML = `
       <style>
+        ${sharedStyles}
         :host { display: inline-block; }
 
         button {
-          font-family: 'Courier Prime', monospace;
-          border: 1px solid var(--p31-dim, #0f8822);
-          background: var(--tube-deep, #080d05);
-          color: var(--p31-mid, #22cc44);
+          font-family: var(--font-display);
+          border: 1px solid var(--border-dark);
+          background: var(--surface-dark);
+          color: var(--text-dark);
           padding: ${size === 'sm' ? '0.25rem 0.5rem' : size === 'lg' ? '0.75rem 1.5rem' : '0.5rem 1rem'};
           font-size: ${size === 'sm' ? '0.75rem' : size === 'lg' ? '1rem' : '0.875rem'};
-          letter-spacing: 0.1em;
+          letter-spacing: 0.05em;
           cursor: pointer;
           transition: all 0.2s ease;
           text-transform: uppercase;
           position: relative;
           overflow: hidden;
+          border-radius: 6px;
         }
 
         button:hover:not(:disabled) {
-          border-color: var(--p31-peak, #33ff66);
-          color: var(--p31-peak, #33ff66);
-          text-shadow: 0 0 6px var(--p31-peak, #33ff66);
-          box-shadow: 0 0 12px rgba(51,255,102,0.15);
+          border-color: var(--root-main);
+          color: var(--root-light);
+          box-shadow: 0 0 12px rgba(20,140,102,0.15);
         }
 
         button:active:not(:disabled) {
-          background: rgba(51,255,102,0.1);
+          background: rgba(20,140,102,0.1);
         }
 
         button:disabled {
@@ -103,34 +203,65 @@ class CRTButton extends HTMLElement {
           cursor: not-allowed;
         }
 
-        /* Variants */
+        /* Primary - ROOT green */
         button.primary {
-          border-color: var(--p31-peak, #33ff66);
-          color: var(--p31-peak, #33ff66);
-          text-shadow: 0 0 4px var(--p31-peak, #33ff66);
+          border-color: var(--root-main);
+          background: rgba(20,140,102,0.15);
+          color: var(--root-light);
         }
         button.primary:hover:not(:disabled) {
-          background: rgba(51,255,102,0.15);
-          box-shadow: 0 0 20px rgba(51,255,102,0.25);
+          background: rgba(20,140,102,0.25);
+          box-shadow: 0 0 20px rgba(20,140,102,0.2);
         }
 
-        button.amber {
-          border-color: var(--p31-decay, #ffb347);
-          color: var(--p31-decay, #ffb347);
-          text-shadow: 0 0 4px var(--p31-decay, #ffb347);
+        /* Warning - WALL amber */
+        button.amber, button.warning {
+          border-color: var(--wall-main);
+          color: var(--wall-light);
         }
-        button.amber:hover:not(:disabled) {
-          background: rgba(255,179,71,0.1);
-          box-shadow: 0 0 16px rgba(255,179,71,0.2);
+        button.amber:hover:not(:disabled), button.warning:hover:not(:disabled) {
+          background: rgba(204,136,32,0.15);
+          box-shadow: 0 0 16px rgba(204,136,32,0.2);
         }
 
+        /* Danger - BOOT red */
         button.danger {
-          border-color: #ff4466;
-          color: #ff4466;
+          border-color: var(--boot-main);
+          color: var(--boot-light);
         }
         button.danger:hover:not(:disabled) {
-          background: rgba(255,68,102,0.1);
-          box-shadow: 0 0 16px rgba(255,68,102,0.2);
+          background: rgba(192,96,64,0.15);
+          box-shadow: 0 0 16px rgba(192,96,64,0.2);
+        }
+
+        /* Info - MESH blue */
+        button.info {
+          border-color: var(--mesh-main);
+          color: var(--mesh-light);
+        }
+        button.info:hover:not(:disabled) {
+          background: rgba(44,112,192,0.15);
+          box-shadow: 0 0 16px rgba(44,112,192,0.2);
+        }
+
+        /* Mind - MIND violet */
+        button.mind {
+          border-color: var(--mind-main);
+          color: var(--mind-light);
+        }
+        button.mind:hover:not(:disabled) {
+          background: rgba(112,104,208,0.15);
+          box-shadow: 0 0 16px rgba(112,104,208,0.2);
+        }
+
+        /* Auth - AUTH orange */
+        button.auth {
+          border-color: var(--auth-main);
+          color: var(--auth-light);
+        }
+        button.auth:hover:not(:disabled) {
+          background: rgba(232,132,90,0.15);
+          box-shadow: 0 0 16px rgba(232,132,90,0.2);
         }
 
         /* Loading spinner */
@@ -162,7 +293,7 @@ class CRTButton extends HTMLElement {
 // ══════════════════════════════════════════════════════════════
 class CRTCard extends HTMLElement {
   static get observedAttributes() {
-    return ['variant', 'glow'];
+    return ['variant', 'glow', 'module'];
   }
 
   constructor() {
@@ -180,62 +311,71 @@ class CRTCard extends HTMLElement {
 
   render() {
     const variant = this.getAttribute('variant') || 'default';
+    const module = this.getAttribute('module') || '';
     const glow = this.hasAttribute('glow');
 
     this.shadowRoot.innerHTML = `
       <style>
-        :host {
-          display: block;
-        }
+        ${sharedStyles}
+        :host { display: block; }
 
         .card {
-          background: var(--tube-deep, #080d05);
-          border: 1px solid var(--p31-ghost, #052210);
+          background: var(--surface-dark);
+          border: 1px solid var(--border-dark);
           padding: 1.25rem;
-          box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
+          border-radius: 14px;
+          box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
         }
 
         .card.lit {
-          border-color: var(--p31-dim, #0f8822);
-          box-shadow: 0 0 8px rgba(51,255,102,0.08), inset 0 0 20px rgba(0,0,0,0.4);
+          border-color: var(--root-dark);
+          box-shadow: 0 0 8px rgba(20,140,102,0.1), inset 0 0 20px rgba(0,0,0,0.2);
         }
 
         .card.hot {
-          border-color: var(--p31-mid, #22cc44);
-          box-shadow: 0 0 12px rgba(51,255,102,0.15), 0 0 30px rgba(51,255,102,0.06), inset 0 0 20px rgba(0,0,0,0.3);
+          border-color: var(--root-main);
+          box-shadow: 0 0 12px rgba(20,140,102,0.15), 0 0 30px rgba(20,140,102,0.06), inset 0 0 20px rgba(0,0,0,0.2);
         }
 
         .card.glow {
           animation: pulse-glow 3s ease-in-out infinite;
         }
 
+        /* Module-specific borders */
+        .card.auth { border-left: 4px solid var(--auth-main); }
+        .card.wall { border-left: 4px solid var(--wall-main); }
+        .card.boot { border-left: 4px solid var(--boot-main); }
+        .card.mind { border-left: 4px solid var(--mind-main); }
+        .card.root { border-left: 4px solid var(--root-main); }
+        .card.mesh { border-left: 4px solid var(--mesh-main); }
+
         @keyframes pulse-glow {
-          0%, 100% { box-shadow: 0 0 8px rgba(51,255,102,0.08), inset 0 0 20px rgba(0,0,0,0.4); }
-          50% { box-shadow: 0 0 16px rgba(51,255,102,0.15), inset 0 0 20px rgba(0,0,0,0.3); }
+          0%, 100% { box-shadow: 0 0 8px rgba(20,140,102,0.08), inset 0 0 20px rgba(0,0,0,0.3); }
+          50% { box-shadow: 0 0 16px rgba(20,140,102,0.15), inset 0 0 20px rgba(0,0,0,0.2); }
         }
 
         .header {
           font-size: 0.75rem;
-          letter-spacing: 0.2em;
+          letter-spacing: 0.15em;
           text-transform: uppercase;
-          color: var(--p31-decay, #ffb347);
-          text-shadow: 0 0 6px rgba(255,179,71,0.4);
+          color: var(--wall-light);
           margin-bottom: 1rem;
           padding-bottom: 0.5rem;
-          border-bottom: 1px solid var(--p31-ghost, #052210);
+          border-bottom: 1px solid var(--border-dark);
+          font-family: var(--font-mono);
         }
 
         .content {
-          color: var(--p31-mid, #22cc44);
+          color: var(--text-dark);
         }
 
         .footer {
           margin-top: 1rem;
           padding-top: 0.5rem;
-          border-top: 1px solid var(--p31-ghost, #052210);
+          border-top: 1px solid var(--border-dark);
         }
       </style>
-      <div class="card ${variant} ${glow ? 'glow' : ''}">
+      <div class="card ${variant} ${module} ${glow ? 'glow' : ''}">
         <div class="header"><slot name="header"></slot></div>
         <div class="content"><slot></slot></div>
         <div class="footer"><slot name="footer"></slot></div>
@@ -249,7 +389,7 @@ class CRTCard extends HTMLElement {
 // ══════════════════════════════════════════════════════════════
 class CRTBadge extends HTMLElement {
   static get observedAttributes() {
-    return ['variant', 'pulse'];
+    return ['variant', 'pulse', 'module'];
   }
 
   constructor() {
@@ -267,35 +407,82 @@ class CRTBadge extends HTMLElement {
 
   render() {
     const variant = this.getAttribute('variant') || 'default';
+    const module = this.getAttribute('module') || '';
     const pulse = this.hasAttribute('pulse');
-
-    const colors = {
-      default: { bg: 'rgba(51,255,102,0.15)', color: '#33ff66', shadow: 'rgba(51,255,102,0.4)' },
-      amber: { bg: 'rgba(255,179,71,0.15)', color: '#ffb347', shadow: 'rgba(255,179,71,0.4)' },
-      danger: { bg: 'rgba(255,68,102,0.15)', color: '#ff4466', shadow: 'rgba(255,68,102,0.4)' },
-      dim: { bg: 'rgba(51,255,102,0.05)', color: '#0f8822', shadow: 'none' }
-    };
-
-    const c = colors[variant] || colors.default;
 
     this.shadowRoot.innerHTML = `
       <style>
+        ${sharedStyles}
         :host { display: inline-block; }
 
         .badge {
-          background: ${c.bg};
-          color: ${c.color};
-          text-shadow: 0 0 6px ${c.shadow};
           padding: 0.2rem 0.6rem;
           font-size: 0.7rem;
-          font-family: 'Courier Prime', monospace;
-          letter-spacing: 0.15em;
+          font-family: var(--font-mono);
+          letter-spacing: 0.1em;
           text-transform: uppercase;
-          border: 1px solid ${c.color}33;
+          border-radius: 3px;
         }
 
         .badge.pulse {
           animation: badge-pulse 2s ease-in-out infinite;
+        }
+
+        /* Default - ROOT green */
+        .badge.default, .badge.success {
+          background: rgba(20,140,102,0.2);
+          color: var(--root-light);
+          border: 1px solid rgba(20,140,102,0.3);
+        }
+
+        /* Warning - WALL amber */
+        .badge.amber, .badge.warning {
+          background: rgba(204,136,32,0.2);
+          color: var(--wall-light);
+          border: 1px solid rgba(204,136,32,0.3);
+        }
+
+        /* Danger - BOOT red */
+        .badge.danger, .badge.error {
+          background: rgba(192,96,64,0.2);
+          color: var(--boot-light);
+          border: 1px solid rgba(192,96,64,0.3);
+        }
+
+        /* Info - MESH blue */
+        .badge.info {
+          background: rgba(44,112,192,0.2);
+          color: var(--mesh-light);
+          border: 1px solid rgba(44,112,192,0.3);
+        }
+
+        /* Mind - MIND violet */
+        .badge.mind {
+          background: rgba(112,104,208,0.2);
+          color: var(--mind-light);
+          border: 1px solid rgba(112,104,208,0.3);
+        }
+
+        /* Auth - AUTH orange */
+        .badge.auth {
+          background: rgba(232,132,90,0.2);
+          color: var(--auth-light);
+          border: 1px solid rgba(232,132,90,0.3);
+        }
+
+        /* Module-specific badges */
+        .badge.root { background: var(--root-xlt); color: var(--root-dark); border: 1px solid var(--root-light); }
+        .badge.wall-mod { background: var(--wall-xlt); color: var(--wall-dark); border: 1px solid var(--wall-light); }
+        .badge.boot-mod { background: var(--boot-xlt); color: var(--boot-dark); border: 1px solid var(--boot-light); }
+        .badge.mind-mod { background: var(--mind-xlt); color: var(--mind-dark); border: 1px solid var(--mind-light); }
+        .badge.auth-mod { background: var(--auth-xlt); color: var(--auth-dark); border: 1px solid var(--auth-light); }
+        .badge.mesh-mod { background: var(--mesh-xlt); color: var(--mesh-dark); border: 1px solid var(--mesh-light); }
+
+        /* Dim */
+        .badge.dim {
+          background: rgba(20,140,102,0.08);
+          color: var(--muted-dark);
+          border: 1px solid var(--border-dark);
         }
 
         @keyframes badge-pulse {
@@ -303,7 +490,7 @@ class CRTBadge extends HTMLElement {
           50% { opacity: 0.6; }
         }
       </style>
-      <span class="badge ${pulse ? 'pulse' : ''}"><slot></slot></span>
+      <span class="badge ${variant} ${module} ${pulse ? 'pulse' : ''}"><slot></slot></span>
     `;
   }
 }
@@ -313,7 +500,7 @@ class CRTBadge extends HTMLElement {
 // ══════════════════════════════════════════════════════════════
 class CRTProgress extends HTMLElement {
   static get observedAttributes() {
-    return ['value', 'max', 'variant', 'animated'];
+    return ['value', 'max', 'variant', 'animated', 'module'];
   }
 
   constructor() {
@@ -336,37 +523,44 @@ class CRTProgress extends HTMLElement {
     const animated = this.hasAttribute('animated');
     const percent = Math.min(100, (value / max) * 100);
 
-    const colors = {
-      default: { fill: '#22cc44', glow: 'rgba(51,255,102,0.4)' },
-      amber: { fill: '#ffb347', glow: 'rgba(255,179,71,0.4)' },
-      danger: { fill: '#ff4466', glow: 'rgba(255,68,102,0.4)' }
-    };
-
-    const c = colors[variant] || colors.default;
-
     this.shadowRoot.innerHTML = `
       <style>
+        ${sharedStyles}
         :host { display: block; }
 
         .track {
-          background: rgba(51,255,102,0.06);
-          border: 1px solid var(--p31-ghost, #052210);
+          background: rgba(20,140,102,0.08);
+          border: 1px solid var(--border-dark);
           height: 12px;
           position: relative;
           overflow: hidden;
+          border-radius: 6px;
         }
 
         .fill {
           height: 100%;
           width: ${percent}%;
-          background: ${c.fill};
-          box-shadow: 0 0 8px ${c.glow};
           transition: width 0.8s ease;
+          border-radius: 4px;
         }
+
+        /* Default - ROOT green */
+        .fill.default { background: var(--root-main); box-shadow: 0 0 8px rgba(20,140,102,0.4); }
+
+        /* Warning - WALL amber */
+        .fill.amber, .fill.warning { background: var(--wall-main); box-shadow: 0 0 8px rgba(204,136,32,0.4); }
+
+        /* Danger - BOOT red */
+        .fill.danger { background: var(--boot-main); box-shadow: 0 0 8px rgba(192,96,64,0.4); }
+
+        /* Info - MESH blue */
+        .fill.info { background: var(--mesh-main); box-shadow: 0 0 8px rgba(44,112,192,0.4); }
+
+        /* Mind - MIND violet */
+        .fill.mind { background: var(--mind-main); box-shadow: 0 0 8px rgba(112,104,208,0.4); }
 
         .fill.animated {
           animation: fill-scan 2s linear infinite;
-          background: linear-gradient(90deg, ${c.fill} 0%, ${c.fill}88 50%, ${c.fill} 100%);
           background-size: 200% 100%;
         }
 
@@ -381,13 +575,13 @@ class CRTProgress extends HTMLElement {
           top: 50%;
           transform: translateY(-50%);
           font-size: 0.6rem;
-          font-family: 'Courier Prime', monospace;
-          color: var(--p31-dim, #0f8822);
+          font-family: var(--font-mono);
+          color: var(--muted-dark);
           letter-spacing: 0.1em;
         }
       </style>
       <div class="track">
-        <div class="fill ${animated ? 'animated' : ''}"></div>
+        <div class="fill ${variant} ${animated ? 'animated' : ''}"></div>
         <span class="label">${Math.round(percent)}%</span>
       </div>
     `;
@@ -399,7 +593,7 @@ class CRTProgress extends HTMLElement {
 // ══════════════════════════════════════════════════════════════
 class CRTStat extends HTMLElement {
   static get observedAttributes() {
-    return ['value', 'label', 'variant', 'icon'];
+    return ['value', 'label', 'variant', 'icon', 'module'];
   }
 
   constructor() {
@@ -421,22 +615,17 @@ class CRTStat extends HTMLElement {
     const variant = this.getAttribute('variant') || 'default';
     const icon = this.getAttribute('icon') || '';
 
-    const colors = {
-      default: '#33ff66',
-      amber: '#ffb347',
-      danger: '#ff4466',
-      dim: '#0f8822'
-    };
-
     this.shadowRoot.innerHTML = `
       <style>
+        ${sharedStyles}
         :host { display: block; }
 
         .stat {
-          background: var(--tube-deep, #080d05);
-          border: 1px solid var(--p31-ghost, #052210);
+          background: var(--surface-dark);
+          border: 1px solid var(--border-dark);
           padding: 1rem;
           text-align: center;
+          border-radius: 14px;
         }
 
         .icon {
@@ -448,23 +637,43 @@ class CRTStat extends HTMLElement {
         .value {
           font-size: 2rem;
           font-weight: bold;
-          font-family: 'Courier Prime', monospace;
-          color: ${colors[variant] || colors.default};
-          text-shadow: 0 0 10px ${colors[variant] || colors.default}66;
+          font-family: var(--font-mono);
           line-height: 1;
         }
 
+        /* Default - ROOT green */
+        .value.default { color: var(--root-light); text-shadow: 0 0 10px rgba(20,140,102,0.5); }
+
+        /* Warning - WALL amber */
+        .value.amber, .value.warning { color: var(--wall-light); text-shadow: 0 0 10px rgba(204,136,32,0.5); }
+
+        /* Danger - BOOT red */
+        .value.danger { color: var(--boot-light); text-shadow: 0 0 10px rgba(192,96,64,0.5); }
+
+        /* Info - MESH blue */
+        .value.info { color: var(--mesh-light); text-shadow: 0 0 10px rgba(44,112,192,0.5); }
+
+        /* Mind - MIND violet */
+        .value.mind { color: var(--mind-light); text-shadow: 0 0 10px rgba(112,104,208,0.5); }
+
+        /* Auth - AUTH orange */
+        .value.auth { color: var(--auth-light); text-shadow: 0 0 10px rgba(232,132,90,0.5); }
+
+        /* Dim */
+        .value.dim { color: var(--muted-dark); text-shadow: none; }
+
         .label {
           font-size: 0.7rem;
-          letter-spacing: 0.2em;
+          letter-spacing: 0.15em;
           text-transform: uppercase;
-          color: var(--p31-dim, #0f8822);
+          color: var(--muted-dark);
           margin-top: 0.5rem;
+          font-family: var(--font-mono);
         }
       </style>
       <div class="stat">
         ${icon ? `<div class="icon">${icon}</div>` : ''}
-        <div class="value">${value}</div>
+        <div class="value ${variant}">${value}</div>
         <div class="label">${label}</div>
       </div>
     `;
@@ -499,6 +708,7 @@ class CRTModal extends HTMLElement {
   render() {
     this.shadowRoot.innerHTML = `
       <style>
+        ${sharedStyles}
         :host {
           display: none;
         }
@@ -524,13 +734,14 @@ class CRTModal extends HTMLElement {
         }
 
         .modal {
-          background: var(--tube-deep, #080d05);
-          border: 1px solid var(--p31-dim, #0f8822);
-          box-shadow: 0 0 30px rgba(51,255,102,0.1), inset 0 0 30px rgba(0,0,0,0.5);
+          background: var(--surface-dark);
+          border: 1px solid var(--root-dark);
+          box-shadow: 0 0 30px rgba(20,140,102,0.1), inset 0 0 30px rgba(0,0,0,0.3);
           max-width: 90vw;
           max-height: 90vh;
           overflow: auto;
           animation: modal-in 0.3s ease;
+          border-radius: 14px;
         }
 
         @keyframes modal-in {
@@ -540,7 +751,7 @@ class CRTModal extends HTMLElement {
 
         .header {
           padding: 1rem 1.5rem;
-          border-bottom: 1px solid var(--p31-ghost, #052210);
+          border-bottom: 1px solid var(--border-dark);
           display: flex;
           justify-content: space-between;
           align-items: center;
@@ -548,37 +759,38 @@ class CRTModal extends HTMLElement {
 
         .title {
           font-size: 0.85rem;
-          letter-spacing: 0.15em;
+          letter-spacing: 0.1em;
           text-transform: uppercase;
-          color: var(--p31-decay, #ffb347);
-          text-shadow: 0 0 6px rgba(255,179,71,0.4);
+          color: var(--wall-light);
+          font-family: var(--font-mono);
         }
 
         .close {
           background: none;
-          border: 1px solid var(--p31-ghost, #052210);
-          color: var(--p31-dim, #0f8822);
+          border: 1px solid var(--border-dark);
+          color: var(--muted-dark);
           width: 28px;
           height: 28px;
           cursor: pointer;
           font-family: monospace;
           font-size: 1rem;
           line-height: 1;
+          border-radius: 4px;
         }
 
         .close:hover {
-          border-color: #ff4466;
-          color: #ff4466;
+          border-color: var(--boot-main);
+          color: var(--boot-light);
         }
 
         .body {
           padding: 1.5rem;
-          color: var(--p31-mid, #22cc44);
+          color: var(--text-dark);
         }
 
         .footer {
           padding: 1rem 1.5rem;
-          border-top: 1px solid var(--p31-ghost, #052210);
+          border-top: 1px solid var(--border-dark);
           display: flex;
           justify-content: flex-end;
           gap: 0.75rem;
@@ -628,27 +840,29 @@ class CRTToast {
   static show(message, type = 'info', duration = 3000) {
     this.init();
 
+    // Use 6-module colors
     const colors = {
-      info: { border: '#33ff66', text: '#33ff66', bg: 'rgba(51,255,102,0.1)' },
-      success: { border: '#33ff66', text: '#33ff66', bg: 'rgba(51,255,102,0.15)' },
-      warning: { border: '#ffb347', text: '#ffb347', bg: 'rgba(255,179,71,0.1)' },
-      error: { border: '#ff4466', text: '#ff4466', bg: 'rgba(255,68,102,0.1)' }
+      info: { border: TOKENS.meshLight, text: TOKENS.meshLight, bg: 'rgba(44,112,192,0.15)' },
+      success: { border: TOKENS.rootLight, text: TOKENS.rootLight, bg: 'rgba(20,140,102,0.15)' },
+      warning: { border: TOKENS.wallLight, text: TOKENS.wallLight, bg: 'rgba(204,136,32,0.15)' },
+      error: { border: TOKENS.bootLight, text: TOKENS.bootLight, bg: 'rgba(192,96,64,0.15)' }
     };
 
     const c = colors[type] || colors.info;
 
     const toast = document.createElement('div');
     toast.style.cssText = `
-      background: var(--tube-deep, #080d05);
+      background: var(--surface-dark, ${TOKENS.surfaceDark});
       border: 1px solid ${c.border};
       color: ${c.text};
       padding: 0.75rem 1.25rem;
-      font-family: 'Courier Prime', monospace;
+      font-family: var(--font-mono, 'JetBrains Mono', monospace);
       font-size: 0.85rem;
       letter-spacing: 0.05em;
       box-shadow: 0 0 15px ${c.border}44;
       animation: toast-in 0.3s ease;
       max-width: 400px;
+      border-radius: 6px;
     `;
     toast.textContent = message;
 
@@ -696,26 +910,5 @@ customElements.define('crt-modal', CRTModal);
 window.CRT = {
   Typewriter: CRTTypewriter,
   Toast: CRTToast,
-
-  // Initialize CRT overlays
-  init(options = {}) {
-    document.body.classList.add('crt-body');
-
-    if (options.scanlines !== false) {
-      document.body.classList.add('crt-scanlines');
-    }
-    if (options.flicker !== false) {
-      document.body.classList.add('crt-screen');
-    }
-    if (options.bloom) {
-      const bloom = document.createElement('div');
-      bloom.className = 'crt-bloom';
-      document.body.appendChild(bloom);
-    }
-    if (options.noise) {
-      const noise = document.createElement('div');
-      noise.className = 'crt-noise';
-      document.body.appendChild(noise);
-    }
-  }
+  TOKENS: TOKENS
 };

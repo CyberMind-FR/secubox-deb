@@ -1,3 +1,5 @@
+@import url('../../../shared/design-tokens.css');
+
 .sh-health-view { padding: 28px; }
 .sh-health-hero {
 	display: flex;
@@ -45,7 +47,7 @@
 }
 .sh-health-bar-fill {
 	height: 100%;
-	background: linear-gradient(90deg,#22c55e,#3b82f6);
+	background: linear-gradient(90deg,var(--root-light),var(--mesh-light));
 	transition: width 0.3s ease;
 }
 .sh-summary-grid {

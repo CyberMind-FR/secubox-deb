@@ -837,6 +837,8 @@
 .nd-disk-fill.danger { background: var(--nd-accent-red); }
 
 /* Connections counter */
+@import url('../../../shared/design-tokens.css');
+
 .nd-connections {
 	display: flex;
 	align-items: center;

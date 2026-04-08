@@ -2,17 +2,17 @@
  */
 
 :root {
-    --bw-primary: #8b5cf6;
-    --bw-secondary: #6366f1;
+    --bw-primary: var(--mind-light);
+    --bw-secondary: var(--mind-light);
     --bw-dark: #0a0a0f;
     --bw-darker: #050508;
     --bw-light: #15151a;
     --bw-border: #25252f;
-    --bw-success: #10b981;
-    --bw-warning: #f59e0b;
-    --bw-danger: #ef4444;
-    --bw-info: #3b82f6;
-    --bw-gradient: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+    --bw-success: var(--root-light);
+    --bw-warning: var(--wall-light);
+    --bw-danger: var(--boot-light);
+    --bw-info: var(--mesh-light);
+    --bw-gradient: linear-gradient(135deg, var(--mind-light) 0%, var(--mind-light) 100%);
 }
 
 /* Main Container  * Version: 0.3.0
@@ -188,19 +188,19 @@
 
 /* Priority Color Variations */
 .qos-class[data-priority="1"] .qos-priority {
-    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    background: linear-gradient(135deg, var(--boot-light) 0%, var(--boot-main) 100%);
 }
 
 .qos-class[data-priority="2"] .qos-priority {
-    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    background: linear-gradient(135deg, var(--wall-light) 0%, var(--wall-main) 100%);
 }
 
 .qos-class[data-priority="3"] .qos-priority {
-    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    background: linear-gradient(135deg, var(--root-light) 0%, #059669 100%);
 }
 
 .qos-class[data-priority="4"] .qos-priority {
-    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    background: linear-gradient(135deg, var(--mesh-light) 0%, var(--mesh-light) 100%);
 }
 
 /* Bandwidth Quotas */
@@ -272,11 +272,11 @@
 }
 
 .quota-progress-fill.warning {
-    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    background: linear-gradient(135deg, var(--wall-light) 0%, var(--wall-main) 100%);
 }
 
 .quota-progress-fill.danger {
-    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    background: linear-gradient(135deg, var(--boot-light) 0%, var(--boot-main) 100%);
 }
 
 .quota-details {
@@ -534,6 +534,8 @@
 }
 
 /* Real-time Update Indicator */
+@import url('../../../shared/design-tokens.css');
+
 .live-indicator {
     display: inline-flex;
     align-items: center;

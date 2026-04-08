@@ -8,11 +8,11 @@
 
 /* Common colors (theme-independent) */
 :root {
-  --sb-primary: #3b82f6;
+  --sb-primary: var(--mesh-light);
   --sb-primary-dark: #1e40af;
-  --sb-success: #22c55e;
-  --sb-warning: #f59e0b;
-  --sb-danger: #ef4444;
+  --sb-success: var(--root-light);
+  --sb-warning: var(--wall-light);
+  --sb-danger: var(--boot-light);
 }
 
 /* Dark theme (default) */
@@ -92,14 +92,14 @@
 }
 
 /* SecuBox brand colors for each module */
-.sb-color-crowdsec { --module-color: #22c55e; }
+.sb-color-crowdsec { --module-color: var(--root-light); }
 .sb-color-netdata { --module-color: #00ab44; }
-.sb-color-netifyd { --module-color: #8b5cf6; }
-.sb-color-wireguard { --module-color: #06b6d4; }
-.sb-color-network-modes { --module-color: #f97316; }
-.sb-color-client-guardian { --module-color: #ef4444; }
-.sb-color-system-hub { --module-color: #6366f1; }
-.sb-color-cdn-cache { --module-color: #06b6d4; }
+.sb-color-netifyd { --module-color: var(--mind-light); }
+.sb-color-wireguard { --module-color: var(--mesh-light); }
+.sb-color-network-modes { --module-color: var(--auth-light); }
+.sb-color-client-guardian { --module-color: var(--boot-light); }
+.sb-color-system-hub { --module-color: var(--mind-light); }
+.sb-color-cdn-cache { --module-color: var(--mesh-light); }
 
 /* System Health Section */
 .secubox-health-section {
@@ -212,7 +212,7 @@
 .secubox-alert-warning {
   background: rgba(245, 158, 11, 0.1);
   border-left-color: var(--sb-warning);
-  color: #fbbf24;
+  color: var(--wall-light);
 }
 
 .secubox-alert-error {
@@ -423,7 +423,7 @@
 }
 
 .secubox-help-cta {
-  background: linear-gradient(135deg, #22c55e 0%, #15803d 100%) !important;
+  background: linear-gradient(135deg, var(--root-light) 0%, var(--root-main) 100%) !important;
   box-shadow: 0 10px 30px rgba(21, 128, 61, 0.45);
 }
 
@@ -744,6 +744,8 @@
 }
 
 /* Responsive Design */
+@import url('../../../shared/design-tokens.css');
+
 @media (max-width: 768px) {
   .secubox-health-grid {
     grid-template-columns: repeat(2, 1fr);

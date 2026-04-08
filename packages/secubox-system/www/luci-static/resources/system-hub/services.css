@@ -1,3 +1,5 @@
+@import url('../../../shared/design-tokens.css');
+
 .sh-services-view {
 	padding: 28px;
 	background: radial-gradient(circle at top, rgba(15,118,255,0.12), transparent),
@@ -59,11 +61,11 @@
 }
 
 .sh-service-stat.success .value {
-	color: #22c55e;
+	color: var(--root-light);
 }
 
 .sh-service-stat.danger .value {
-	color: #ef4444;
+	color: var(--boot-light);
 }
 
 .sh-service-controls {
@@ -108,11 +110,11 @@
 }
 
 .sh-service-card.running {
-	border-left: 4px solid #22c55e;
+	border-left: 4px solid var(--root-light);
 }
 
 .sh-service-card.stopped {
-	border-left: 4px solid #ef4444;
+	border-left: 4px solid var(--boot-light);
 }
 
 .sh-service-head {
@@ -139,12 +141,12 @@
 
 .sh-service-status.running {
 	background: rgba(34,197,94,0.18);
-	color: #22c55e;
+	color: var(--root-light);
 }
 
 .sh-service-status.stopped {
 	background: rgba(239,68,68,0.18);
-	color: #ef4444;
+	color: var(--boot-light);
 }
 
 .sh-service-actions {

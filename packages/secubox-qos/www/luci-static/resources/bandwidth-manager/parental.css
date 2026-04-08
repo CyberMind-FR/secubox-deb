@@ -23,13 +23,13 @@
 }
 
 .preset-mode-card:hover {
-	border-color: var(--bw-primary, #8b5cf6);
+	border-color: var(--bw-primary, var(--mind-light));
 	transform: translateY(-4px);
 	box-shadow: 0 8px 24px rgba(139, 92, 246, 0.2);
 }
 
 .preset-mode-card.active {
-	border-color: #10b981;
+	border-color: var(--root-light);
 	background: rgba(16, 185, 129, 0.1);
 }
 
@@ -40,7 +40,7 @@
 	right: 8px;
 	width: 24px;
 	height: 24px;
-	background: #10b981;
+	background: var(--root-light);
 	border-radius: 50%;
 	color: white;
 	font-size: 14px;
@@ -145,7 +145,7 @@
 }
 
 .parental-schedule-item:hover {
-	border-color: var(--bw-primary, #8b5cf6);
+	border-color: var(--bw-primary, var(--mind-light));
 }
 
 .parental-schedule-item.disabled {
@@ -181,17 +181,17 @@
 
 .schedule-name .action-badge.allow {
 	background: rgba(16, 185, 129, 0.2);
-	color: #10b981;
+	color: var(--root-light);
 }
 
 .schedule-name .action-badge.limit {
 	background: rgba(245, 158, 11, 0.2);
-	color: #f59e0b;
+	color: var(--wall-light);
 }
 
 .schedule-time-range {
 	font-size: 13px;
-	color: #06b6d4;
+	color: var(--mesh-light);
 	font-family: monospace;
 	margin-bottom: 4px;
 }
@@ -222,7 +222,7 @@
 }
 
 .day-indicator.active {
-	background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+	background: linear-gradient(135deg, var(--mind-light) 0%, var(--mind-light) 100%);
 	color: white;
 	border-color: transparent;
 }
@@ -252,7 +252,7 @@
 }
 
 .filter-category:hover {
-	border-color: var(--bw-primary, #8b5cf6);
+	border-color: var(--bw-primary, var(--mind-light));
 }
 
 .filter-category.blocked {
@@ -314,11 +314,11 @@
 }
 
 .target-type-btn:hover {
-	border-color: var(--bw-primary, #8b5cf6);
+	border-color: var(--bw-primary, var(--mind-light));
 }
 
 .target-type-btn.active {
-	border-color: var(--bw-primary, #8b5cf6);
+	border-color: var(--bw-primary, var(--mind-light));
 	background: rgba(139, 92, 246, 0.1);
 	color: #fff;
 }
@@ -353,11 +353,11 @@
 }
 
 .day-selector-btn:hover {
-	border-color: var(--bw-primary, #8b5cf6);
+	border-color: var(--bw-primary, var(--mind-light));
 }
 
 .day-selector-btn.selected {
-	background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+	background: linear-gradient(135deg, var(--mind-light) 0%, var(--mind-light) 100%);
 	color: white;
 	border-color: transparent;
 }
@@ -392,7 +392,7 @@
 }
 
 .time-picker input[type="time"]:focus {
-	border-color: var(--bw-primary, #8b5cf6);
+	border-color: var(--bw-primary, var(--mind-light));
 	outline: none;
 }
 
@@ -415,7 +415,7 @@
 }
 
 .time-preset-btn:hover {
-	border-color: var(--bw-primary, #8b5cf6);
+	border-color: var(--bw-primary, var(--mind-light));
 	color: #fff;
 }
 
@@ -516,7 +516,7 @@
 }
 
 .parental-form-input:focus {
-	border-color: var(--bw-primary, #8b5cf6);
+	border-color: var(--bw-primary, var(--mind-light));
 	outline: none;
 }
 
@@ -532,7 +532,7 @@
 }
 
 .parental-form-select:focus {
-	border-color: var(--bw-primary, #8b5cf6);
+	border-color: var(--bw-primary, var(--mind-light));
 	outline: none;
 }
 
@@ -554,7 +554,7 @@
 }
 
 .action-selector-btn:hover {
-	border-color: var(--bw-primary, #8b5cf6);
+	border-color: var(--bw-primary, var(--mind-light));
 }
 
 .action-selector-btn.selected.block {
@@ -563,12 +563,12 @@
 }
 
 .action-selector-btn.selected.allow {
-	border-color: #10b981;
+	border-color: var(--root-light);
 	background: rgba(16, 185, 129, 0.1);
 }
 
 .action-selector-btn.selected.limit {
-	border-color: #f59e0b;
+	border-color: var(--wall-light);
 	background: rgba(245, 158, 11, 0.1);
 }
 
@@ -613,6 +613,8 @@
 }
 
 /* Responsive */
+@import url('../../../shared/design-tokens.css');
+
 @media (max-width: 768px) {
 	.preset-modes-grid {
 		grid-template-columns: repeat(2, 1fr);

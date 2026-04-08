@@ -4,312 +4,400 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SecuBox Control Center</title>
+    <link rel="stylesheet" href="/shared/design-tokens.css">
     <link rel="stylesheet" href="/shared/crt-light.css">
     <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
-        :root {
-            /* P31 Phosphor spectrum */
-            --p31-peak: #00dd44;
-            --p31-hot: #00ff55;
-            --p31-mid: #009933;
-            --p31-dim: #006622;
-            --p31-ghost: #003311;
-            --p31-decay: #ffb347;
-            --p31-decay-dim: #cc7722;
-            /* Tube glass */
-            --tube-light: #e8f5e9;
-            --tube-pale: #c8e6c9;
-            --tube-soft: #a5d6a7;
-            /* Legacy mappings */
-            --bg-dark: var(--tube-light);
-            --bg-card: var(--tube-pale);
-            --bg-sidebar: var(--tube-black);
-            --border: var(--tube-soft);
-            --text: var(--tube-dark);
-            --text-dim: var(--p31-dim);
-            --primary: var(--p31-peak);
-            --cyan: var(--p31-peak);
-            --green: var(--p31-peak);
-            --red: #ff4466;
-            --yellow: var(--p31-decay);
-            --orange: var(--p31-decay-dim);
-            --purple: #a371f7;
-            /* Bloom effects */
-            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
-        }
+        /**
+         * SecuBox Control Center — 6-Module Design System v2.0
+         * Overrides and dashboard-specific styles
+         */
         * { box-sizing: border-box; margin: 0; padding: 0; }
+
         body {
-            font-family: 'Courier Prime', 'Courier New', monospace;
-            background: var(--tube-light);
-            background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
-            color: var(--tube-dark);
+            font-family: var(--font-body);
+            background: var(--bg);
+            background-image: radial-gradient(ellipse at 50% 40%, rgba(10,88,64,0.02) 0%, transparent 70%);
+            color: var(--text);
             display: flex;
             min-height: 100vh;
         }
 
         /* Main content */
         .main { flex: 1; margin-left: 220px; }
-        .header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); background: var(--bg-card); }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface);
+        }
+
         .header-title { display: flex; align-items: center; gap: 1rem; }
-        .header-title h1 { font-size: 1.5rem; font-weight: 600; }
-        .badge { padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.75rem; font-weight: 500; }
-        .badge.version { background: var(--bg-dark); border: 1px solid var(--border); color: var(--text-dim); }
-        .badge.active { background: rgba(63,185,80,0.2); color: var(--green); }
-        .header-actions { display: flex; gap: 0.75rem; }
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; }
-        .btn:hover { background: var(--bg-dark); }
-        .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
 
-        .content { padding: 1.5rem; }
-        .subtitle { color: var(--text-dim); font-size: 0.9rem; margin-bottom: 1.5rem; }
-
-        /* Stats row */
-        .stats-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; text-align: center; }
-        .stat-card .value { font-size: 2rem; font-weight: bold; margin-bottom: 0.25rem; }
-        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
-        .stat-card.cyan .value { color: var(--cyan); }
-        .stat-card.green .value { color: var(--green); }
-        .stat-card.yellow .value { color: var(--yellow); }
-        .stat-card.red .value { color: var(--red); }
-
-        /* Grid layout */
-        .grid-2 { display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; }
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
-        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-        .card-header h2 { font-size: 1rem; font-weight: 600; }
-        .card-header a { color: var(--green); font-size: 0.875rem; text-decoration: none; }
-
-        /* Module table */
-        .module-table { width: 100%; border-collapse: collapse; }
-        .module-table th { text-align: left; padding: 0.75rem; color: var(--text-dim); font-size: 0.75rem; text-transform: uppercase; border-bottom: 1px solid var(--border); }
-        .module-table td { padding: 0.75rem; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
-        .module-table tr:hover { background: rgba(255,255,255,0.02); }
-        .module-icon { width: 24px; height: 24px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; margin-right: 0.5rem; font-size: 0.8rem; }
-        .status-badge { padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-family: monospace; }
-        .status-badge.active { background: rgba(63,185,80,0.2); color: var(--green); }
-        .status-badge.inactive { background: rgba(248,81,73,0.2); color: var(--red); }
-
-        /* Network addresses */
-        .network-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-        .network-item { text-align: center; padding: 1rem; background: var(--bg-dark); border-radius: 6px; }
-        .network-item .label { font-size: 0.75rem; color: var(--text-dim); margin-bottom: 0.25rem; }
-        .network-item .value { color: var(--cyan); font-family: monospace; }
-
-        /* Quick actions */
-        .quick-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
-        .action-btn { padding: 0.75rem; background: rgba(88,166,255,0.1); border: 1px solid var(--primary); border-radius: 6px; color: var(--primary); cursor: pointer; text-align: left; font-size: 0.875rem; }
-        .action-btn:hover { background: rgba(88,166,255,0.2); }
-        .action-btn.green { background: rgba(63,185,80,0.1); border-color: var(--green); color: var(--green); }
-
-        /* Alert timeline */
-        .alert-item { padding: 0.75rem; border-left: 3px solid var(--yellow); background: rgba(210,153,34,0.1); margin-bottom: 0.5rem; border-radius: 0 6px 6px 0; }
-        .alert-item .time { font-size: 0.75rem; color: var(--text-dim); }
-        .alert-item .message { font-size: 0.9rem; }
-
-        /* System health */
-        .health-item { margin-bottom: 1rem; }
-        .health-header { display: flex; justify-content: space-between; margin-bottom: 0.25rem; font-size: 0.9rem; }
-        .health-bar { height: 8px; background: var(--bg-dark); border-radius: 4px; overflow: hidden; }
-        .health-bar .fill { height: 100%; border-radius: 4px; transition: width 0.3s; }
-        .health-bar .fill.red { background: var(--red); }
-        .health-bar .fill.yellow { background: var(--yellow); }
-        .health-bar .fill.green { background: var(--green); }
-        .health-bar .fill.cyan { background: var(--cyan); }
-        .health-percent { font-size: 0.75rem; color: var(--text-dim); text-align: right; margin-top: 0.25rem; }
-
-        @media (max-width: 1200px) { .stats-row { grid-template-columns: repeat(3, 1fr); } }
-        @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } .sidebar { display: none; } .main { margin-left: 0; } }
-    
-        /* CRT Enhancements */
-        .main { margin-left: 220px; padding: 1.5rem; }
-
-        .header h1 {
-            color: var(--p31-hot);
-            text-shadow: var(--bloom-text);
+        .header-title h1 {
+            font-size: 1.5rem;
             font-weight: 700;
-            letter-spacing: 0.05em;
+            color: var(--root-main);
+            letter-spacing: 0.03em;
         }
 
         .badge {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.1em;
+            padding: 0.25rem 0.75rem;
+            border-radius: var(--radius-sm);
+            font-size: var(--size-xs);
+            font-weight: 600;
+            font-family: var(--font-mono);
+            letter-spacing: 0.08em;
             text-transform: uppercase;
             border: 1px solid;
         }
-        .badge-blue, .badge-primary { background: rgba(51,255,102,0.1); border-color: var(--p31-peak); color: var(--p31-peak); }
-        .badge-green { background: rgba(51,255,102,0.15); border-color: var(--p31-peak); color: var(--p31-peak); text-shadow: var(--bloom-soft); }
-        .badge-cyan { background: rgba(51,255,102,0.1); border-color: var(--p31-mid); color: var(--p31-mid); }
-        .badge-purple { background: rgba(163,113,247,0.1); border-color: #a371f7; color: #a371f7; }
-        .badge-yellow, .badge-amber { background: rgba(255,179,71,0.1); border-color: var(--p31-decay); color: var(--p31-decay); }
-        .badge-red { background: rgba(255,68,102,0.1); border-color: #ff4466; color: #ff4466; }
+
+        .badge.version {
+            background: var(--bg);
+            border-color: var(--border);
+            color: var(--muted);
+        }
+
+        .badge.active {
+            background: rgba(10,88,64,0.15);
+            border-color: var(--root-main);
+            color: var(--root-main);
+        }
+
+        .header-actions { display: flex; gap: 0.75rem; }
 
         .btn {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            border: 1px solid var(--tube-soft);
-            background: var(--tube-pale);
-            color: var(--p31-mid);
-            transition: all 0.2s;
-        }
-        .btn:hover {
-            border-color: var(--p31-dim);
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            box-shadow: 0 0 12px rgba(51,255,102,0.1);
-        }
-        .btn-green, .btn-primary, .btn.primary, .btn.success {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-            background: rgba(51,255,102,0.1);
-        }
-        .btn-green:hover, .btn-primary:hover, .btn.primary:hover, .btn.success:hover {
-            background: rgba(51,255,102,0.2);
-            box-shadow: 0 0 16px rgba(51,255,102,0.2);
-        }
-        .btn-red, .btn.danger {
-            border-color: #ff4466;
-            color: #ff4466;
-            background: rgba(255,68,102,0.1);
-        }
-        .btn-red:hover, .btn.danger:hover {
-            background: rgba(255,68,102,0.2);
-        }
-        .btn-blue {
-            border-color: var(--p31-mid);
-            color: var(--p31-mid);
-            background: rgba(51,255,102,0.05);
-        }
-        .btn-blue:hover {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
+            padding: 0.5rem 1rem;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--text);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: var(--size-sm);
+            font-family: var(--font-body);
+            transition: all var(--transition-fast);
         }
 
-        .card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
+        .btn:hover {
+            border-color: var(--root-main);
+            color: var(--root-main);
         }
-        .card:hover {
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.05), inset 0 0 20px rgba(0,0,0,0.3);
+
+        .btn.danger {
+            background: rgba(128,48,24,0.1);
+            border-color: var(--boot-main);
+            color: var(--boot-main);
         }
-        .card-title, .card-header h2 {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.85rem;
+
+        .btn.danger:hover {
+            background: rgba(128,48,24,0.2);
+        }
+
+        .btn.primary {
+            background: rgba(10,88,64,0.1);
+            border-color: var(--root-main);
+            color: var(--root-main);
+        }
+
+        .btn.primary:hover {
+            background: rgba(10,88,64,0.2);
+        }
+
+        .content { padding: 1.5rem; }
+
+        .subtitle {
+            color: var(--muted);
+            font-size: var(--size-sm);
+            margin-bottom: 1.5rem;
+        }
+
+        /* Stats row - 6-module color coding */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 1rem;
+            margin-bottom: 1.5rem;
         }
 
         .stat-card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-        }
-        .stat-value, .stat-card .value {
-            text-shadow: 0 0 10px currentColor;
-        }
-        .stat-label, .stat-card .label {
-            color: var(--p31-dim);
-            letter-spacing: 0.15em;
-        }
-        .stat-card.cyan .value, .stat-card.green .value { color: var(--p31-peak); }
-        .stat-card.yellow .value { color: var(--p31-decay); }
-        .stat-card.red .value { color: #ff4466; }
-
-        table, .table {
-            font-family: 'Courier Prime', monospace;
-        }
-        th, .table th {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.15em;
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        td, .table td {
-            border-bottom: 1px solid var(--p31-ghost);
-            color: var(--p31-mid);
-        }
-        tr:hover, .table tr:hover {
-            background: rgba(51,255,102,0.03);
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 1.25rem;
+            text-align: center;
+            transition: all var(--transition-fast);
         }
 
-        .status-dot.active, .status-running {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-        }
-        .status-dot.active {
-            background: var(--p31-peak);
-            box-shadow: 0 0 8px var(--p31-peak);
+        .stat-card:hover {
+            border-color: var(--border2);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
         }
 
-        .toast {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            font-family: 'Courier Prime', monospace;
+        .stat-card .value {
+            font-size: 2rem;
+            font-weight: 700;
+            font-family: var(--font-mono);
+            margin-bottom: 0.25rem;
         }
-        .toast-success { border-color: var(--p31-peak); }
-        .toast-error { border-color: #ff4466; }
 
-        .modal {
-            background: rgba(0,0,0,0.85);
-        }
-        .modal-content {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            box-shadow: 0 0 30px rgba(51,255,102,0.1);
-        }
-        .modal-title {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
+        .stat-card .label {
+            font-size: var(--size-xs);
+            color: var(--muted);
+            text-transform: uppercase;
             letter-spacing: 0.1em;
+            font-family: var(--font-mono);
         }
 
-        .tabs {
-            background: var(--tube-pale);
-            border-bottom: 1px solid var(--p31-ghost);
+        /* 6-Module stat colors */
+        .stat-card.mesh .value { color: var(--mesh-main); }
+        .stat-card.root .value { color: var(--root-main); }
+        .stat-card.wall .value { color: var(--wall-main); }
+        .stat-card.boot .value { color: var(--boot-main); }
+        .stat-card.mind .value { color: var(--mind-main); }
+        .stat-card.auth .value { color: var(--auth-main); }
+        /* Legacy compat */
+        .stat-card.cyan .value { color: var(--mesh-main); }
+        .stat-card.green .value { color: var(--root-main); }
+        .stat-card.yellow .value { color: var(--wall-main); }
+        .stat-card.red .value { color: var(--boot-main); }
+
+        /* Grid layout */
+        .grid-2 { display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 1.25rem;
+            margin-bottom: 1.5rem;
+            transition: all var(--transition-fast);
         }
-        .tab {
-            color: var(--p31-dim);
+
+        .card:hover {
+            border-color: var(--border2);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .card-header h2 {
+            font-size: var(--size-sm);
+            font-weight: 700;
+            color: var(--wall-main);
             letter-spacing: 0.1em;
             text-transform: uppercase;
-            font-size: 0.8rem;
-        }
-        .tab:hover { color: var(--p31-mid); }
-        .tab.active {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            border-bottom-color: var(--p31-peak);
+            font-family: var(--font-mono);
         }
 
-        input, select, textarea {
-            font-family: 'Courier Prime', monospace;
-            background: var(--tube-light);
-            border: 1px solid var(--tube-soft);
-            color: var(--p31-mid);
-            padding: 0.5rem;
+        .card-header a {
+            color: var(--root-main);
+            font-size: var(--size-sm);
+            text-decoration: none;
+            transition: color var(--transition-fast);
         }
+
+        .card-header a:hover { color: var(--root-light); }
+
+        /* Module table */
+        .module-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-family: var(--font-mono);
+        }
+
+        .module-table th {
+            text-align: left;
+            padding: 0.75rem;
+            color: var(--wall-main);
+            font-size: var(--size-xs);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .module-table td {
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border);
+            font-size: var(--size-sm);
+            color: var(--text);
+        }
+
+        .module-table tr:hover {
+            background: rgba(10,88,64,0.03);
+        }
+
+        .module-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: var(--radius-sm);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 0.5rem;
+            font-size: 0.8rem;
+        }
+
+        .status-badge {
+            padding: 0.2rem 0.5rem;
+            border-radius: var(--radius-sm);
+            font-size: var(--size-xs);
+            font-family: var(--font-mono);
+        }
+
+        .status-badge.active {
+            background: rgba(10,88,64,0.15);
+            color: var(--root-main);
+        }
+
+        .status-badge.inactive {
+            background: rgba(128,48,24,0.15);
+            color: var(--boot-main);
+        }
+
+        /* Network addresses */
+        .network-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+
+        .network-item {
+            text-align: center;
+            padding: 1rem;
+            background: var(--bg);
+            border-radius: var(--radius-md);
+        }
+
+        .network-item .label {
+            font-size: var(--size-xs);
+            color: var(--muted);
+            margin-bottom: 0.25rem;
+            font-family: var(--font-mono);
+            letter-spacing: 0.1em;
+        }
+
+        .network-item .value {
+            color: var(--mesh-main);
+            font-family: var(--font-mono);
+        }
+
+        /* Quick actions */
+        .quick-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+
+        .action-btn {
+            padding: 0.75rem;
+            background: rgba(16,74,136,0.1);
+            border: 1px solid var(--mesh-main);
+            border-radius: var(--radius-md);
+            color: var(--mesh-main);
+            cursor: pointer;
+            text-align: left;
+            font-size: var(--size-sm);
+            font-family: var(--font-body);
+            transition: all var(--transition-fast);
+        }
+
+        .action-btn:hover {
+            background: rgba(16,74,136,0.2);
+        }
+
+        .action-btn.green {
+            background: rgba(10,88,64,0.1);
+            border-color: var(--root-main);
+            color: var(--root-main);
+        }
+
+        .action-btn.green:hover {
+            background: rgba(10,88,64,0.2);
+        }
+
+        /* Alert timeline */
+        .alert-item {
+            padding: 0.75rem;
+            border-left: 3px solid var(--wall-main);
+            background: rgba(154,96,16,0.1);
+            margin-bottom: 0.5rem;
+            border-radius: 0 var(--radius-md) var(--radius-md) 0;
+        }
+
+        .alert-item .time {
+            font-size: var(--size-xs);
+            color: var(--muted);
+            font-family: var(--font-mono);
+        }
+
+        .alert-item .message {
+            font-size: var(--size-sm);
+        }
+
+        /* System health */
+        .health-item { margin-bottom: 1rem; }
+
+        .health-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.25rem;
+            font-size: var(--size-sm);
+        }
+
+        .health-bar {
+            height: 8px;
+            background: var(--bg);
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+        }
+
+        .health-bar .fill {
+            height: 100%;
+            border-radius: var(--radius-sm);
+            transition: width 0.3s;
+        }
+
+        .health-bar .fill.red { background: var(--boot-main); }
+        .health-bar .fill.yellow { background: var(--wall-main); }
+        .health-bar .fill.green { background: var(--root-main); }
+        .health-bar .fill.cyan { background: var(--mesh-main); }
+
+        .health-percent {
+            font-size: var(--size-xs);
+            color: var(--muted);
+            text-align: right;
+            margin-top: 0.25rem;
+            font-family: var(--font-mono);
+        }
+
+        /* Form elements */
+        input, select, textarea {
+            font-family: var(--font-mono);
+            background: var(--bg);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 0.5rem;
+            border-radius: var(--radius-sm);
+        }
+
         input:focus, select:focus, textarea:focus {
             outline: none;
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.1);
+            border-color: var(--root-main);
+            box-shadow: 0 0 0 2px rgba(10,88,64,0.1);
         }
 
         /* Scrollbar */
         ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: var(--tube-light); }
-        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
-        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
+        ::-webkit-scrollbar-track { background: var(--bg); }
+        ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
 
-        /* Empty states */
-        .empty { color: var(--p31-dim); }
-
-        @media (max-width: 768px) {
-            .main { margin-left: 0; }
-        }
+        @media (max-width: 1200px) { .stats-row { grid-template-columns: repeat(3, 1fr); } }
+        @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } }
+        @media (max-width: 768px) { .sidebar { display: none; } .main { margin-left: 0; } }
     </style>
 </head>
 <body class="crt-light">
@@ -319,37 +407,37 @@
         <header class="header">
             <div class="header-title">
                 <h1>SecuBox Control Center</h1>
-                <span class="badge version" id="version">v1.0.0</span>
+                <span class="badge version" id="version">v1.5.9</span>
                 <span class="badge version" id="build-info" title="Build timestamp">Build: --</span>
                 <span class="badge active" id="status-badge">-/- Active</span>
             </div>
             <div class="header-actions">
-                <button class="btn" onclick="location.href='/system/'">⚙️ Settings</button>
-                <button class="btn danger" onclick="logout()">🚪 Logout</button>
+                <button class="btn" onclick="location.href='/system/'">Settings</button>
+                <button class="btn danger" onclick="logout()">Logout</button>
             </div>
         </header>
 
         <div class="content">
-            <p class="subtitle">Security · Network · System automation</p>
+            <p class="subtitle">Security | Network | System automation</p>
 
             <div class="stats-row">
-                <div class="stat-card cyan">
+                <div class="stat-card mesh">
                     <div class="value" id="total-modules">-</div>
                     <div class="label">Modules</div>
                 </div>
-                <div class="stat-card cyan">
+                <div class="stat-card mesh">
                     <div class="value" id="installed-modules">-</div>
                     <div class="label">Installed</div>
                 </div>
-                <div class="stat-card green">
+                <div class="stat-card root">
                     <div class="value" id="active-modules">-</div>
                     <div class="label">Active</div>
                 </div>
-                <div class="stat-card yellow">
+                <div class="stat-card wall">
                     <div class="value" id="health-score">-%</div>
                     <div class="label">Health</div>
                 </div>
-                <div class="stat-card red">
+                <div class="stat-card boot">
                     <div class="value" id="alerts-count">0</div>
                     <div class="label">Alerts</div>
                 </div>
@@ -360,7 +448,7 @@
                     <div class="card">
                         <div class="card-header">
                             <h2>Modules Overview</h2>
-                            <a href="/system/">View All →</a>
+                            <a href="/system/">View All</a>
                         </div>
                         <table class="module-table">
                             <thead>
@@ -404,30 +492,30 @@
                     <div class="card">
                         <div class="card-header">
                             <h2>Network Mode</h2>
-                            <a href="/netmodes/" style="font-size: 0.8rem;">Configure →</a>
+                            <a href="/netmodes/">Configure</a>
                         </div>
                         <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem;">
                             <span style="font-size: 2rem;" id="mode-icon">🔀</span>
                             <div>
-                                <div style="font-weight: bold; color: var(--p31-peak);" id="current-mode-name">Router</div>
-                                <div style="font-size: 0.8rem; color: var(--text-dim);" id="current-mode-desc">Loading...</div>
+                                <div style="font-weight: bold; color: var(--root-main);" id="current-mode-name">Router</div>
+                                <div style="font-size: 0.8rem; color: var(--muted);" id="current-mode-desc">Loading...</div>
                             </div>
                         </div>
                         <div style="margin-bottom: 0.75rem;">
-                            <label style="font-size: 0.75rem; color: var(--text-dim); margin-bottom: 0.25rem; display: block;">Change Mode:</label>
+                            <label style="font-size: 0.75rem; color: var(--muted); margin-bottom: 0.25rem; display: block;">Change Mode:</label>
                             <select id="mode-select" style="width: 100%; padding: 0.5rem; border-radius: 4px;">
-                                <option value="router">🔀 Router (NAT + DHCP)</option>
-                                <option value="sniffer-inline">🔍 Inline Sniffer</option>
-                                <option value="sniffer-passive">👁️ Passive Sniffer</option>
-                                <option value="access-point">📡 Access Point</option>
-                                <option value="relay">🔗 VPN Relay</option>
+                                <option value="router">Router (NAT + DHCP)</option>
+                                <option value="sniffer-inline">Inline Sniffer</option>
+                                <option value="sniffer-passive">Passive Sniffer</option>
+                                <option value="access-point">Access Point</option>
+                                <option value="relay">VPN Relay</option>
                             </select>
                         </div>
                         <div style="display: flex; gap: 0.5rem;">
                             <button class="btn" onclick="previewMode()" style="flex: 1;">Preview</button>
                             <button class="btn primary" onclick="applyMode()" style="flex: 1;">Apply</button>
                         </div>
-                        <div id="mode-interfaces" style="margin-top: 0.75rem; font-size: 0.8rem; color: var(--text-dim);"></div>
+                        <div id="mode-interfaces" style="margin-top: 0.75rem; font-size: 0.8rem; color: var(--muted);"></div>
                     </div>
 
                     <div class="card">
@@ -493,26 +581,18 @@
             return true;
         }
 
-        // Check auth immediately on page load
         if (!checkAuth()) {
-            document.body.innerHTML = '<div style="padding:2rem;color:var(--p31-peak);">Redirecting to login...</div>';
+            document.body.innerHTML = '<div style="padding:2rem;color:var(--root-main);">Redirecting to login...</div>';
         }
 
-        // Dynamic menu cache
         let menuData = null;
 
         async function api(endpoint, method = 'GET', data = null) {
             const token = getToken();
-            if (!token) {
-                checkAuth();
-                return {};
-            }
+            if (!token) { checkAuth(); return {}; }
             const opts = {
                 method,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': 'Bearer ' + token
-                }
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }
             };
             if (data) opts.body = JSON.stringify(data);
             try {
@@ -534,18 +614,13 @@
             return (b / Math.pow(k, i)).toFixed(1) + ' ' + s[i];
         }
 
-        // ── Dynamic Menu (handled by sidebar.js) ────────────────────
         async function loadMenu() {
             try {
                 const data = await api('/menu');
                 if (!data || !data.categories) return;
                 menuData = data;
-                // Update header badge
-                document.getElementById('status-badge').textContent =
-                    `${data.total_active}/${data.total_installed} Active`;
-            } catch (e) {
-                console.error('Failed to load menu:', e);
-            }
+                document.getElementById('status-badge').textContent = `${data.total_active}/${data.total_installed} Active`;
+            } catch (e) { console.error('Failed to load menu:', e); }
         }
 
         async function loadDashboard() {
@@ -556,7 +631,6 @@
             const total = Object.keys(modules).length;
             const active = Object.values(modules).filter(m => m.active).length;
 
-            // Update build info
             if (data.build_info) {
                 const bi = data.build_info;
                 const buildEl = document.getElementById('build-info');
@@ -565,16 +639,13 @@
                     buildEl.textContent = 'Build: ' + d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
                     buildEl.title = `Built: ${bi.build_timestamp}\nCommit: ${bi.git_commit || 'N/A'}\nBoard: ${bi.board || 'generic'}`;
                 }
-                if (bi.version) {
-                    document.getElementById('version').textContent = 'v' + bi.version;
-                }
+                if (bi.version) document.getElementById('version').textContent = 'v' + bi.version;
             }
 
             document.getElementById('total-modules').textContent = total;
             document.getElementById('installed-modules').textContent = menuData?.total_installed || total;
             document.getElementById('active-modules').textContent = menuData?.total_active || active;
 
-            // CPU/Memory/Disk
             const cpu = data.cpu_percent || 0;
             const mem = data.memory_percent || 0;
             const disk = data.disk_percent || 0;
@@ -583,14 +654,11 @@
             document.getElementById('cpu-info').textContent = 'Load: ' + load[0]?.toFixed(2);
             document.getElementById('cpu-bar').style.width = cpu + '%';
             document.getElementById('cpu-percent').textContent = cpu.toFixed(0) + '%';
-
             document.getElementById('mem-bar').style.width = mem + '%';
             document.getElementById('mem-percent').textContent = mem.toFixed(0) + '%';
-
             document.getElementById('disk-bar').style.width = disk + '%';
             document.getElementById('disk-percent').textContent = disk.toFixed(0) + '%';
 
-            // Modules table - use menu data if available
             const tbody = document.getElementById('modules-table');
             if (menuData && menuData.categories) {
                 const allItems = menuData.categories.flatMap(c => c.items);
@@ -648,6 +716,7 @@
         function checkUpdates() { location.href = '/system/'; }
         function viewLogs() { location.href = '/system/'; }
         function exportConfig() { alert('Export started'); }
+
         async function logout() {
             await fetch('/api/v1/portal/logout', { method: 'POST', credentials: 'include' });
             localStorage.removeItem('secubox_token');
@@ -655,41 +724,33 @@
             window.location.href = '/login.html';
         }
 
-        // ── Network Mode Functions ────────────────────────────────────
         async function loadNetworkMode() {
             const data = await api('/network_mode');
             if (!data || data.detail) return;
 
-            // Update current mode display
             document.getElementById('mode-icon').textContent = data.mode_icon || '🔀';
             document.getElementById('current-mode-name').textContent = data.mode_name || data.current_mode || 'Router';
             document.getElementById('current-mode-desc').textContent = data.mode_desc || '';
 
-            // Update select to show current mode
             const select = document.getElementById('mode-select');
-            if (select && data.current_mode) {
-                select.value = data.current_mode;
-            }
+            if (select && data.current_mode) select.value = data.current_mode;
 
-            // Update available modes in select
             if (data.available_modes && data.available_modes.length > 0) {
                 select.innerHTML = data.available_modes.map(m =>
                     `<option value="${m.id}" ${m.id === data.current_mode ? 'selected' : ''}>${m.icon || '📦'} ${m.name}</option>`
                 ).join('');
             }
 
-            // Show interface info
             const ifacesDiv = document.getElementById('mode-interfaces');
             if (data.interfaces && ifacesDiv) {
                 const wan = (data.interfaces.wan || []).join(', ') || 'N/A';
                 const lan = (data.interfaces.lan || []).join(', ') || 'N/A';
-                ifacesDiv.innerHTML = `<span style="color: var(--p31-decay);">WAN:</span> ${wan} | <span style="color: var(--p31-peak);">LAN:</span> ${lan}`;
+                ifacesDiv.innerHTML = `<span style="color: var(--wall-main);">WAN:</span> ${wan} | <span style="color: var(--root-main);">LAN:</span> ${lan}`;
             }
 
-            // Show pending mode warning
             if (data.pending_mode) {
                 document.getElementById('current-mode-desc').innerHTML =
-                    `<span style="color: var(--yellow);">⚠️ Pending: ${data.pending_mode}</span>`;
+                    `<span style="color: var(--wall-main);">Pending: ${data.pending_mode}</span>`;
             }
         }
 
@@ -703,25 +764,15 @@
 
         async function applyMode() {
             const mode = document.getElementById('mode-select').value;
-            const currentMode = document.getElementById('current-mode-name').textContent.toLowerCase();
-
-            if (!confirm(`Change network mode to "${mode}"?\n\nThis will reconfigure network interfaces and may disconnect you temporarily.`)) {
-                return;
-            }
+            if (!confirm(`Change network mode to "${mode}"?\n\nThis will reconfigure network interfaces and may disconnect you temporarily.`)) return;
 
             const token = getToken();
-            if (!token) {
-                checkAuth();
-                return;
-            }
+            if (!token) { checkAuth(); return; }
 
             try {
                 const res = await fetch(API + '/network_mode', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': 'Bearer ' + token
-                    },
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
                     body: JSON.stringify({ mode: mode, dry_run: false })
                 });
                 const data = await res.json();
@@ -732,9 +783,7 @@
                 } else {
                     alert('Failed to change mode: ' + (data.error || 'Unknown error'));
                 }
-            } catch (e) {
-                alert('Error: ' + e.message);
-            }
+            } catch (e) { alert('Error: ' + e.message); }
 
             loadNetworkMode();
         }
@@ -748,7 +797,6 @@
             loadNetworkMode();
         }
 
-        // Only initialize if authenticated
         if (checkAuth()) {
             refresh();
             setInterval(refresh, 30000);

@@ -12,7 +12,7 @@
 	align-items: center;
 	gap: 0.5rem;
 	padding: 0.5rem 1rem;
-	background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+	background: linear-gradient(135deg, #667eea 0%, var(--mind-main) 100%);
 	color: white !important;
 	border-radius: 8px;
 	text-decoration: none;
@@ -78,7 +78,7 @@
 	padding: 0.3rem 0.6rem;
 	font-size: 0.8rem;
 	border-radius: 4px;
-	background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+	background: linear-gradient(135deg, #667eea 0%, var(--mind-main) 100%);
 	color: white !important;
 	text-decoration: none;
 	transition: all 0.3s ease;
@@ -145,7 +145,7 @@
 	width: 18px;
 	height: 18px;
 	border-radius: 50%;
-	background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+	background: linear-gradient(135deg, #667eea 0%, var(--mind-main) 100%);
 	color: white;
 	font-size: 12px;
 	cursor: help;
@@ -307,6 +307,8 @@
 	}
 
 	/* Stack label vertically on very small screens if needed */
+@import url('../../../shared/design-tokens.css');
+
 	.sb-help-btn.sb-help-stacked {
 		flex-direction: column;
 		gap: 0.2rem;

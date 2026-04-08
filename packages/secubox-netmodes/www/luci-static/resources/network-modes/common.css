@@ -21,13 +21,13 @@
 	--sh-border: #e2e8f0;
 	--sh-hover-bg: #f8fafc;
 	--sh-hover-shadow: rgba(0, 0, 0, 0.1);
-	--sh-primary: #6366f1;
-	--sh-primary-end: #8b5cf6;
+	--sh-primary: var(--mind-light);
+	--sh-primary-end: var(--mind-light);
 	--sh-shadow: rgba(0, 0, 0, 0.08);
-	--sh-success: #22c55e;
-	--sh-danger: #ef4444;
-	--sh-warning: #f59e0b;
-	--sh-info: #3b82f6;
+	--sh-success: var(--root-light);
+	--sh-danger: var(--boot-light);
+	--sh-warning: var(--wall-light);
+	--sh-info: var(--mesh-light);
 }
 
 [data-theme="dark"],
@@ -43,13 +43,13 @@
 	--sh-border: #2a2a35;
 	--sh-hover-bg: #1a1a24;
 	--sh-hover-shadow: rgba(0, 0, 0, 0.6);
-	--sh-primary: #6366f1;
-	--sh-primary-end: #8b5cf6;
+	--sh-primary: var(--mind-light);
+	--sh-primary-end: var(--mind-light);
 	--sh-shadow: rgba(0, 0, 0, 0.4);
-	--sh-success: #22c55e;
-	--sh-danger: #ef4444;
-	--sh-warning: #f59e0b;
-	--sh-info: #3b82f6;
+	--sh-success: var(--root-light);
+	--sh-danger: var(--boot-light);
+	--sh-warning: var(--wall-light);
+	--sh-info: var(--mesh-light);
 }
 
 /* === Global Typography === */
@@ -87,7 +87,7 @@ pre {
 	font-size: 20px;
 	font-weight: 700;
 	margin: 0;
-	background: linear-gradient(135deg, var(--sh-primary), var(--sh-primary-end));
+	background: linear-gradient(135deg, var(--mind-light), var(--mind-main));
 	-webkit-background-clip: text;
 	-webkit-text-fill-color: transparent;
 	background-clip: text;
@@ -128,7 +128,7 @@ pre {
 .sh-stat-badge:hover {
 	transform: translateY(-2px);
 	box-shadow: 0 4px 12px var(--sh-shadow);
-	border-color: var(--sh-primary);
+	border-color: var(--mind-light);
 }
 
 .sh-stat-value {
@@ -167,7 +167,7 @@ pre {
 	left: 0;
 	right: 0;
 	height: 3px;
-	background: linear-gradient(90deg, var(--sh-primary), var(--sh-primary-end));
+	background: linear-gradient(90deg, var(--mind-light), var(--mind-main));
 	opacity: 0;
 	transition: opacity 0.3s ease;
 }
@@ -179,7 +179,7 @@ pre {
 .sh-card:hover {
 	transform: translateY(-2px);
 	box-shadow: 0 4px 12px var(--sh-shadow);
-	border-color: var(--sh-primary);
+	border-color: var(--mind-light);
 }
 
 .sh-card-header {
@@ -211,7 +211,7 @@ pre {
 
 /* === Buttons === */
 .sh-btn-primary {
-	background: linear-gradient(135deg, var(--sh-primary), var(--sh-primary-end));
+	background: linear-gradient(135deg, var(--mind-light), var(--mind-main));
 	color: white;
 	border: none;
 	padding: 10px 20px;
@@ -244,7 +244,7 @@ pre {
 
 .sh-btn-secondary:hover {
 	background: var(--sh-hover-bg);
-	border-color: var(--sh-primary);
+	border-color: var(--mind-light);
 }
 
 /* === Navigation Tabs === */
@@ -288,7 +288,7 @@ body[data-page^="admin-secubox-network-modes"] .nav-tabs {
 }
 
 .sh-nav-tab.active {
-	color: var(--sh-primary);
+	color: var(--mind-light);
 	background: var(--sh-bg-card);
 	box-shadow: 0 2px 4px var(--sh-shadow);
 }
@@ -300,7 +300,7 @@ body[data-page^="admin-secubox-network-modes"] .nav-tabs {
 	left: 20%;
 	right: 20%;
 	height: 2px;
-	background: linear-gradient(90deg, var(--sh-primary), var(--sh-primary-end));
+	background: linear-gradient(90deg, var(--mind-light), var(--mind-main));
 	border-radius: 2px;
 }
 
@@ -325,12 +325,12 @@ body[data-page^="admin-secubox-network-modes"] .nav-tabs {
 }
 
 .sh-filter-tab:hover {
-	border-color: var(--sh-primary);
+	border-color: var(--mind-light);
 	color: var(--sh-text-primary);
 }
 
 .sh-filter-tab.active {
-	background: linear-gradient(135deg, var(--sh-primary), var(--sh-primary-end));
+	background: linear-gradient(135deg, var(--mind-light), var(--mind-main));
 	color: white;
 	border-color: transparent;
 }
@@ -350,25 +350,25 @@ body[data-page^="admin-secubox-network-modes"] .nav-tabs {
 
 .sh-badge-success {
 	background: rgba(34, 197, 94, 0.15);
-	color: var(--sh-success);
+	color: var(--root-light);
 	border: 1px solid rgba(34, 197, 94, 0.3);
 }
 
 .sh-badge-danger {
 	background: rgba(239, 68, 68, 0.15);
-	color: var(--sh-danger);
+	color: var(--boot-light);
 	border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
 .sh-badge-warning {
 	background: rgba(245, 158, 11, 0.15);
-	color: var(--sh-warning);
+	color: var(--wall-light);
 	border: 1px solid rgba(245, 158, 11, 0.3);
 }
 
 .sh-badge-info {
 	background: rgba(59, 130, 246, 0.15);
-	color: var(--sh-info);
+	color: var(--mesh-light);
 	border: 1px solid rgba(59, 130, 246, 0.3);
 }
 
@@ -404,15 +404,15 @@ body[data-page^="admin-secubox-network-modes"] .nav-tabs {
 }
 
 .sh-text-success {
-	color: var(--sh-success);
+	color: var(--root-light);
 }
 
 .sh-text-danger {
-	color: var(--sh-danger);
+	color: var(--boot-light);
 }
 
 .sh-text-warning {
-	color: var(--sh-warning);
+	color: var(--wall-light);
 }
 
 /* === Responsive === */
@@ -444,6 +444,8 @@ body[data-page^="admin-secubox-network-modes"] .nav-tabs {
 
 
 /* Slim header utility */
+@import url('../../../shared/design-tokens.css');
+
 .sh-page-header-lite {
     background: #f7f9fc;
     border: 1px solid rgba(148, 163, 184, 0.35);
@@ -502,17 +504,17 @@ body[data-page^="admin-secubox-network-modes"] .nav-tabs {
 .sh-header-chip.success {
     background: rgba(34, 197, 94, 0.12);
     border-color: rgba(34, 197, 94, 0.4);
-    color: #15803d;
+    color: var(--root-main);
 }
 
 .sh-header-chip.danger {
     background: rgba(239, 68, 68, 0.12);
     border-color: rgba(239, 68, 68, 0.45);
-    color: #b91c1c;
+    color: var(--boot-dark);
 }
 
 .sh-header-chip.warn {
     background: rgba(245, 158, 11, 0.12);
     border-color: rgba(245, 158, 11, 0.45);
-    color: #b45309;
+    color: var(--wall-dark);
 }

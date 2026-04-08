@@ -6,9 +6,9 @@
 	--cs-text: var(--cyber-text-primary, #e2e8f0);
 	--cs-muted: var(--cyber-text-muted, #718096);
 	--cs-accent: var(--cyber-accent-primary, #667eea);
-	--cs-success: var(--cyber-success, #10b981);
-	--cs-warning: var(--cyber-warning, #f59e0b);
-	--cs-danger: var(--cyber-danger, #ef4444);
+	--cs-success: var(--cyber-success, var(--root-light));
+	--cs-warning: var(--cyber-warning, var(--wall-light));
+	--cs-danger: var(--cyber-danger, var(--boot-light));
 }
 
 .cs-view { max-width: 1200px; margin: 0 auto; padding: 1rem; }
@@ -120,6 +120,8 @@
 .cs-country { font-size: 0.625rem; color: var(--cs-muted); }
 
 /* Heatmap */
+@import url('../../../shared/design-tokens.css');
+
 .cs-heatmap-container {
 	position: relative;
 	width: 100%;

@@ -77,12 +77,12 @@
 
 .app-status.status-stable {
 	background: rgba(34, 197, 94, 0.2);
-	color: #22c55e;
+	color: var(--root-light);
 }
 
 .app-status.status-beta {
 	background: rgba(59, 130, 246, 0.2);
-	color: #3b82f6;
+	color: var(--mesh-light);
 }
 
 .app-status.status-alpha {
@@ -104,7 +104,7 @@
 
 .app-notes {
 	background: rgba(251, 191, 36, 0.1);
-	border-left: 3px solid #fbbf24;
+	border-left: 3px solid var(--wall-light);
 	padding: 0.75rem;
 	margin: 1rem 0;
 	border-radius: 4px;
@@ -113,7 +113,7 @@
 }
 
 .app-notes strong {
-	color: #fbbf24;
+	color: var(--wall-light);
 }
 
 .app-luci {
@@ -161,8 +161,8 @@
 
 .app-actions .btn-secondary {
 	background: rgba(239, 68, 68, 0.2);
-	color: #ef4444;
-	border: 1px solid #ef4444;
+	color: var(--boot-light);
+	border: 1px solid var(--boot-light);
 }
 
 .app-actions .btn-secondary:hover {
@@ -240,14 +240,14 @@
 
 .app-notes-box {
 	background: rgba(251, 191, 36, 0.1);
-	border-left: 3px solid #fbbf24;
+	border-left: 3px solid var(--wall-light);
 	padding: 1rem;
 	margin: 1.5rem 0;
 	border-radius: 4px;
 }
 
 .app-notes-box strong {
-	color: #fbbf24;
+	color: var(--wall-light);
 	display: block;
 	margin-bottom: 0.5rem;
 }
@@ -351,6 +351,8 @@
 }
 
 /* Responsive */
+@import url('../../../shared/design-tokens.css');
+
 @media (max-width: 768px) {
 	.secubox-apps-grid {
 		grid-template-columns: 1fr;

@@ -1,0 +1,169 @@
+/**
+ * SecuBox Plymouth Theme — 6-Module Design System
+ * CyberMind Security Platform Boot Animation
+ * Based on Charte Graphique Six-Module Color System
+ */
+
+// 6-Module Colors (RGB values 0-1)
+// BOOT  #803018 -> 0.50, 0.19, 0.09
+// AUTH  #C04E24 -> 0.75, 0.31, 0.14
+// ROOT  #0A5840 -> 0.04, 0.35, 0.25
+// MIND  #3D35A0 -> 0.24, 0.21, 0.63
+// MESH  #104A88 -> 0.06, 0.29, 0.53
+// WALL  #9A6010 -> 0.60, 0.38, 0.06
+
+// Window dimensions
+Window.GetWidth = fun() { return Window.GetWidth(); };
+Window.GetHeight = fun() { return Window.GetHeight(); };
+
+// Background - dark theme base #0B0F14
+Window.SetBackgroundTopColor(0.04, 0.06, 0.08);
+Window.SetBackgroundBottomColor(0.02, 0.03, 0.04);
+
+// Logo sprite
+logo_image = Image("logo.png");
+logo_sprite = Sprite(logo_image);
+logo_sprite.SetX(Window.GetWidth() / 2 - logo_image.GetWidth() / 2);
+logo_sprite.SetY(Window.GetHeight() / 2 - logo_image.GetHeight() / 2 - 80);
+logo_sprite.SetOpacity(1);
+
+// SecuBox text
+secubox_text = Image.Text("SecuBox", 1.0, 1.0, 1.0, "Sans 48");
+secubox_sprite = Sprite(secubox_text);
+secubox_sprite.SetX(Window.GetWidth() / 2 - secubox_text.GetWidth() / 2);
+secubox_sprite.SetY(Window.GetHeight() / 2 + 20);
+secubox_sprite.SetOpacity(1);
+
+// Subtitle
+subtitle_text = Image.Text("CyberMind Security Platform", 0.6, 0.6, 0.7, "Sans 16");
+subtitle_sprite = Sprite(subtitle_text);
+subtitle_sprite.SetX(Window.GetWidth() / 2 - subtitle_text.GetWidth() / 2);
+subtitle_sprite.SetY(Window.GetHeight() / 2 + 80);
+subtitle_sprite.SetOpacity(0.8);
+
+// Progress bar background
+progress_box_image = Image("progress-box.png");
+progress_box_sprite = Sprite(progress_box_image);
+progress_box_sprite.SetX(Window.GetWidth() / 2 - progress_box_image.GetWidth() / 2);
+progress_box_sprite.SetY(Window.GetHeight() / 2 + 140);
+progress_box_sprite.SetOpacity(0.8);
+
+// Progress bar fill
+progress_fill_image = Image("progress-fill.png");
+
+// 6-Module indicator dots
+module_colors = [
+    [0.50, 0.19, 0.09], // BOOT
+    [0.75, 0.31, 0.14], // AUTH
+    [0.04, 0.35, 0.25], // ROOT
+    [0.24, 0.21, 0.63], // MIND
+    [0.06, 0.29, 0.53], // MESH
+    [0.60, 0.38, 0.06]  // WALL
+];
+
+module_names = ["BOOT", "AUTH", "ROOT", "MIND", "MESH", "WALL"];
+module_sprites = [];
+
+for (i = 0; i < 6; i++) {
+    module_dot = Image("dot.png");
+    module_sprite = Sprite(module_dot);
+
+    // Position dots horizontally centered
+    dot_x = Window.GetWidth() / 2 - 100 + (i * 40);
+    dot_y = Window.GetHeight() / 2 + 200;
+
+    module_sprite.SetX(dot_x);
+    module_sprite.SetY(dot_y);
+    module_sprite.SetOpacity(0.3);
+    module_sprites[i] = module_sprite;
+}
+
+// Progress tracking
+progress = 0;
+current_module = 0;
+
+fun refresh_callback() {
+    // Animate module dots based on progress
+    module_index = Math.Int(progress * 6);
+
+    for (i = 0; i < 6; i++) {
+        if (i < module_index) {
+            module_sprites[i].SetOpacity(1.0);
+        } else if (i == module_index) {
+            // Pulse current module
+            pulse = Math.Sin(Plymouth.GetTime() * 4) * 0.3 + 0.7;
+            module_sprites[i].SetOpacity(pulse);
+        } else {
+            module_sprites[i].SetOpacity(0.3);
+        }
+    }
+}
+
+Plymouth.SetRefreshFunction(refresh_callback);
+
+// Boot progress callback
+fun boot_progress_callback(duration, progress_value) {
+    progress = progress_value;
+
+    // Scale progress fill
+    if (progress_value > 0) {
+        fill_width = Math.Int(progress_box_image.GetWidth() * progress_value);
+        scaled_fill = progress_fill_image.Scale(fill_width, progress_fill_image.GetHeight());
+        progress_fill_sprite = Sprite(scaled_fill);
+        progress_fill_sprite.SetX(Window.GetWidth() / 2 - progress_box_image.GetWidth() / 2);
+        progress_fill_sprite.SetY(Window.GetHeight() / 2 + 140);
+        progress_fill_sprite.SetOpacity(1);
+    }
+}
+
+Plymouth.SetBootProgressFunction(boot_progress_callback);
+
+// Message display
+message_sprite = NULL;
+
+fun message_callback(text) {
+    if (message_sprite) message_sprite = NULL;
+
+    message_image = Image.Text(text, 0.6, 0.7, 0.8, "Mono 12");
+    message_sprite = Sprite(message_image);
+    message_sprite.SetX(Window.GetWidth() / 2 - message_image.GetWidth() / 2);
+    message_sprite.SetY(Window.GetHeight() - 60);
+    message_sprite.SetOpacity(0.8);
+}
+
+Plymouth.SetMessageFunction(message_callback);
+
+// Password prompt (for encrypted disks)
+fun display_password_callback(prompt, bullets) {
+    password_image = Image.Text(prompt, 0.8, 0.8, 0.8, "Sans 14");
+    password_sprite = Sprite(password_image);
+    password_sprite.SetX(Window.GetWidth() / 2 - password_image.GetWidth() / 2);
+    password_sprite.SetY(Window.GetHeight() / 2 + 260);
+    password_sprite.SetOpacity(1);
+
+    // Show bullet points for password
+    bullet_text = "";
+    for (i = 0; i < bullets; i++) {
+        bullet_text += "*";
+    }
+
+    if (bullets > 0) {
+        bullet_image = Image.Text(bullet_text, 0.04, 0.35, 0.25, "Mono 18");
+        bullet_sprite = Sprite(bullet_image);
+        bullet_sprite.SetX(Window.GetWidth() / 2 - bullet_image.GetWidth() / 2);
+        bullet_sprite.SetY(Window.GetHeight() / 2 + 290);
+        bullet_sprite.SetOpacity(1);
+    }
+}
+
+Plymouth.SetDisplayPasswordFunction(display_password_callback);
+
+// Quit callback
+fun quit_callback() {
+    // Fade out animation
+    logo_sprite.SetOpacity(0);
+    secubox_sprite.SetOpacity(0);
+    subtitle_sprite.SetOpacity(0);
+}
+
+Plymouth.SetQuitFunction(quit_callback);

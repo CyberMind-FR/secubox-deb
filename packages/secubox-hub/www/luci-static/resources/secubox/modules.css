@@ -33,12 +33,12 @@
 }
 
 .secubox-stat-badge.secubox-stat-success {
-	border-color: var(--sh-success);
+	border-color: var(--root-light);
 	background: linear-gradient(135deg, var(--sb-bg-card) 0%, rgba(34, 197, 94, 0.1) 100%);
 }
 
 .secubox-stat-badge.secubox-stat-warning {
-	border-color: var(--sh-warning);
+	border-color: var(--wall-light);
 	background: linear-gradient(135deg, var(--sb-bg-card) 0%, rgba(245, 158, 11, 0.1) 100%);
 }
 
@@ -164,13 +164,13 @@
 }
 
 .secubox-status-indicator.secubox-status-running {
-	background: var(--sh-success);
-	box-shadow: 0 0 8px var(--sh-success);
+	background: var(--root-light);
+	box-shadow: 0 0 8px var(--root-light);
 	animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
 .secubox-status-indicator.secubox-status-stopped {
-	background: var(--sh-warning);
+	background: var(--wall-light);
 }
 
 .secubox-status-indicator.secubox-status-not-installed {
@@ -236,12 +236,12 @@
 }
 
 .secubox-status-text-running {
-	color: var(--sh-success);
+	color: var(--root-light);
 	font-weight: 600;
 }
 
 .secubox-status-text-stopped {
-	color: var(--sh-warning);
+	color: var(--wall-light);
 	font-weight: 600;
 }
 
@@ -298,7 +298,7 @@
 }
 
 .secubox-btn-success {
-	background: var(--sh-success);
+	background: var(--root-light);
 	color: white;
 }
 
@@ -307,21 +307,21 @@
 }
 
 .secubox-btn-danger {
-	background: var(--sh-danger);
+	background: var(--boot-light);
 	color: white;
 }
 
 .secubox-btn-danger:hover {
-	background: #dc2626;
+	background: var(--boot-main);
 }
 
 .secubox-btn-warning {
-	background: var(--sh-warning);
+	background: var(--wall-light);
 	color: white;
 }
 
 .secubox-btn-warning:hover {
-	background: #d97706;
+	background: var(--wall-main);
 }
 
 .secubox-btn-secondary {
@@ -409,6 +409,8 @@
 }
 
 /* === Cyberpunk Theme Support === */
+@import url('../../../shared/design-tokens.css');
+
 
 [data-secubox-theme="cyberpunk"] .secubox-module-card {
 	background: var(--cyber-bg-secondary);
