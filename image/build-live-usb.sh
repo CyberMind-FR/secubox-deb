@@ -13,6 +13,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 
+# ── Version & Build Info ──────────────────────────────────────────
+SECUBOX_VERSION="1.5.10"
+BUILD_TIMESTAMP=$(date '+%Y-%m-%d %H:%M')
+BUILD_DATE=$(date '+%Y%m%d')
+
 # ── Defaults ──────────────────────────────────────────────────────
 SUITE="bookworm"
 IMG_SIZE="8G"
@@ -1883,7 +1888,7 @@ rm -rf "${ROOTFS}/tmp"/*
 log "Creating colorful boot banners..."
 
 # Pre-login banner (/etc/issue) - shown before login prompt
-cat > "${ROOTFS}/etc/issue" <<'ISSUE'
+cat > "${ROOTFS}/etc/issue" <<ISSUE
 [38;5;214m
    ██████ ███████  ██████ ██    ██ ██████   ██████  ██   ██
   ██      ██      ██      ██    ██ ██   ██ ██    ██  ██ ██
@@ -1891,7 +1896,8 @@ cat > "${ROOTFS}/etc/issue" <<'ISSUE'
        ██ ██      ██      ██    ██ ██   ██ ██    ██  ██ ██
   ███████ ███████  ██████  ██████  ██████   ██████  ██   ██
 [0m
-[38;5;45m  ⚡ CyberMind Security Platform[0m         [38;5;242m\l @ \n[0m
+[38;5;45m  ⚡ CyberMind Security Platform[0m  [38;5;82mv${SECUBOX_VERSION}[0m  [38;5;242m\l @ \n[0m
+[38;5;242m  Build: ${BUILD_TIMESTAMP}[0m
 
 [38;5;250m  🔐 Default: [38;5;214mroot[38;5;250m / [38;5;214msecubox[0m
 [38;5;250m  🌐 Web UI: [38;5;45mhttps://<IP>:9443[0m
@@ -1902,7 +1908,7 @@ cat > "${ROOTFS}/etc/issue" <<'ISSUE'
 ISSUE
 
 # Post-login MOTD with dynamic info (/etc/motd)
-cat > "${ROOTFS}/etc/motd" <<'MOTD'
+cat > "${ROOTFS}/etc/motd" <<MOTD
 [38;5;214m
   ╔═══════════════════════════════════════════════════════════════╗
   ║[38;5;45m   ███████╗███████╗ ██████╗██╗   ██╗██████╗  ██████╗ ██╗  ██╗  [38;5;214m║
@@ -1911,8 +1917,10 @@ cat > "${ROOTFS}/etc/motd" <<'MOTD'
   ║[38;5;45m   ╚════██║██╔══╝  ██║     ██║   ██║██╔══██╗██║   ██║ ██╔██╗   [38;5;214m║
   ║[38;5;45m   ███████║███████╗╚██████╗╚██████╔╝██████╔╝╚██████╔╝██╔╝ ██╗  [38;5;214m║
   ║[38;5;45m   ╚══════╝╚══════╝ ╚═════╝ ╚═════╝ ╚═════╝  ╚═════╝ ╚═╝  ╚═╝  [38;5;214m║
-  ║[38;5;82m                    ⚡ LIVE USB MODE ⚡                       [38;5;214m║
+  ║[38;5;82m            ⚡ LIVE USB MODE ⚡  v${SECUBOX_VERSION}               [38;5;214m║
   ╚═══════════════════════════════════════════════════════════════╝[0m
+
+[38;5;242m  Build: ${BUILD_TIMESTAMP}[0m
 
 [38;5;250m  🌐 Web UI:     [38;5;45mhttps://<IP>:9443[0m
 [38;5;250m  🔐 Credentials: [38;5;214mroot[38;5;250m / [38;5;214msecubox[0m
@@ -2343,12 +2351,17 @@ search --no-floppy --label LIVE --set=live
 set menu_color_normal=cyan/black
 set menu_color_highlight=yellow/blue
 
-menuentry "⚡ SecuBox Live" {
+# Version header
+set pager=1
+echo "SecuBox v${SECUBOX_VERSION} - Build ${BUILD_TIMESTAMP}"
+echo ""
+
+menuentry "⚡ SecuBox Live v${SECUBOX_VERSION}" {
     linux (\$live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components persistence quiet splash
     initrd (\$live)/live/initrd.img
 }
 
-menuentry "🖼️ SecuBox Live (Kiosk GUI) [DEFAULT]" {
+menuentry "🖼️ SecuBox Live v${SECUBOX_VERSION} (Kiosk GUI) [DEFAULT]" {
     linux (\$live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components persistence quiet splash secubox.kiosk=1 systemd.unit=graphical.target
     initrd (\$live)/live/initrd.img
 }
