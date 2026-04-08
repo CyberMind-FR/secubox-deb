@@ -84,7 +84,7 @@ VBoxManage modifyvm "${VM_NAME}" \
   --firmware efi64 \
   --graphicscontroller vmsvga \
   --vram 32 \
-  --audio none \
+  --audio-driver none \
   --boot1 disk --boot2 none --boot3 none --boot4 none
 
 # Configurer réseau : 2 interfaces
