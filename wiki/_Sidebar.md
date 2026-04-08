@@ -6,6 +6,7 @@
 * [[Installation]] | [FR](Installation-FR) | [中文](Installation-ZH)
 * [[ARM-Installation|ARM / U-Boot]] | [FR](ARM-Installation-FR) | [中文](ARM-Installation-ZH) ⚡
 * [[ESPRESSObin]] | [FR](ESPRESSObin-FR) | [中文](ESPRESSObin-ZH)
+* [[QEMU-ARM64]] 🖥️
 
 ### Configuration
 * [[Configuration]] | [FR](Configuration-FR) | [中文](Configuration-ZH)

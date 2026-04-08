@@ -183,6 +183,11 @@ jobs:
             mv SHA256SUMS.asc SHA256SUMS.gpg
           fi
 
+      - name: Checkout for scripts
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: image
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
@@ -190,6 +195,8 @@ jobs:
             images/*.img.gz
             images/SHA256SUMS
             images/SHA256SUMS.gpg
+            image/create-qemu-arm64-vm.sh
+            image/create-vbox-vm.sh
           body: |
             ## SecuBox-DEB ${{ github.ref_name }} System Images
 
@@ -202,7 +209,9 @@ jobs:
             | `secubox-mochabin-bookworm.img.gz` | MOCHAbin | arm64 | Marvell Armada 7040 (Pro) |
             | `secubox-espressobin-v7-bookworm.img.gz` | ESPRESSObin v7 | arm64 | Marvell Armada 3720 (Lite) |
             | `secubox-espressobin-ultra-bookworm.img.gz` | ESPRESSObin Ultra | arm64 | Marvell Armada 3720 (Lite+) |
+            | `secubox-rpi400-bookworm.img.gz` | Raspberry Pi 400 | arm64 | Pi 400 / Pi 4 |
             | `secubox-vm-x64-bookworm.img.gz` | VirtualBox/QEMU | amd64 | VM for testing |
+            | `create-qemu-arm64-vm.sh` | QEMU ARM64 | script | Run ARM64 on x86 hosts |
 
             ### Installation
 
