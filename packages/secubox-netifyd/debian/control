@@ -1,0 +1,26 @@
+Source: secubox-netifyd
+Section: net
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
+
+Package: secubox-netifyd
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0), netifyd
+Recommends: iproute2
+Description: SecuBox Netifyd - Network Intelligence Daemon Dashboard
+ Deep Packet Inspection daemon management for netifyd. Provides a web
+ dashboard for network flow analysis, protocol detection, application
+ classification, and device discovery.
+ .
+ Features:
+  - Real-time network flow visualization
+  - Protocol and application breakdown
+  - Device/host discovery and tracking
+  - Bandwidth monitoring per app/device
+  - DPI alerts and notifications
+ .
+ Port Debian bookworm from SecuBox OpenWrt netifyd integration.

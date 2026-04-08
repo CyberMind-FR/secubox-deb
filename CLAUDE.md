@@ -8,10 +8,11 @@
 
 **À chaque session, lire dans cet ordre :**
 
-1. `.claude/WIP.md`         → ce qui est en cours, le prochain à faire
-2. `.claude/TODO.md`        → backlog priorisé par phase
-3. `.claude/MIGRATION-MAP.md` → état de chaque module (✅ / 🔄 / ⬜)
-4. `.claude/PATTERNS.md`    → patterns RPCD→FastAPI avec exemples réels
+1. `.claude/WIP.md`             → ce qui est en cours, le prochain à faire
+2. `.claude/TODO.md`            → backlog priorisé par phase
+3. `.claude/MIGRATION-MAP.md`   → état de chaque module (✅ / 🔄 / ⬜)
+4. `.claude/PATTERNS.md`        → patterns RPCD→FastAPI avec exemples réels
+5. `.claude/MODULE-COMPLIANCE.md` → **règles de conformité obligatoires**
 
 **Quand l'utilisateur dit "continue" / "suivant" / "next" :**
 Consulter `WIP.md` → prendre le premier item "⬜ Next Up" → l'implémenter → mettre à jour les fichiers `.claude/`.

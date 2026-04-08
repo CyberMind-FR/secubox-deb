@@ -1,0 +1,14 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-netifyd/usr/lib/secubox/netifyd/
+	cp -r api debian/secubox-netifyd/usr/lib/secubox/netifyd/
+	install -d debian/secubox-netifyd/usr/share/secubox/www
+	[ -d www ] && cp -r www/. debian/secubox-netifyd/usr/share/secubox/www/ || true
+	install -d debian/secubox-netifyd/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-netifyd/usr/share/secubox/menu.d/ || true
+	# Modular nginx config
+	install -d debian/secubox-netifyd/etc/nginx/secubox.d
+	[ -f nginx/netifyd.conf ] && cp nginx/netifyd.conf debian/secubox-netifyd/etc/nginx/secubox.d/ || true

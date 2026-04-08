@@ -1,0 +1,21 @@
+[Unit]
+Description=SecuBox Netifyd Dashboard API
+After=network.target secubox-core.service netifyd.service
+Requires=secubox-core.service
+Wants=netifyd.service
+
+[Service]
+UMask=0000
+Type=simple
+User=secubox
+Group=secubox
+WorkingDirectory=/usr/lib/secubox/netifyd
+ExecStart=/usr/local/bin/uvicorn api.main:app \
+    --uds /run/secubox/netifyd.sock \
+    --log-level warning
+Restart=on-failure
+RestartSec=5
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
