@@ -2058,6 +2058,27 @@ umount -lf "${ROOTFS}/dev"  2>/dev/null || true
 
 ok "Rootfs cleaned"
 
+# ── Final nginx fix (MUST run after ALL package installs) ──────────────────
+log "Final nginx configuration cleanup..."
+
+# Remove any location-only configs from conf.d (they belong in secubox.d)
+for conf in "${ROOTFS}/etc/nginx/conf.d/"*secubox*.conf "${ROOTFS}/etc/nginx/conf.d/"*repo*.conf; do
+  [[ -e "$conf" ]] || [[ -L "$conf" ]] || continue
+  log "Removing bad config from conf.d: $(basename "$conf")"
+  rm -f "$conf"
+done
+
+# Verify nginx config is valid
+if [[ -x "${ROOTFS}/usr/sbin/nginx" ]]; then
+  if ! chroot "${ROOTFS}" nginx -t 2>&1 | grep -q "syntax is ok"; then
+    warn "nginx config still invalid after final cleanup"
+    # Show the error
+    chroot "${ROOTFS}" nginx -t 2>&1 | head -5 || true
+  else
+    ok "Final nginx configuration valid"
+  fi
+fi
+
 # ── Final permission fixes (MUST be done after all setup, before squashfs) ──
 log "Final permission fixes..."
 
