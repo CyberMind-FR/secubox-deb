@@ -654,6 +654,21 @@ if [[ $IS_X64 -eq 1 ]] || [[ "${BOARD}" == "vm-arm64" ]]; then
     --bootloader-id=secubox --no-nvram --removable 2>/dev/null || warn "grub-install partiel"
   chroot "${MNT}" update-grub 2>/dev/null || warn "update-grub partiel"
 
+  # Create EFI grub.cfg that chains to main config (fix for VirtualBox/OVMF)
+  ROOT_UUID=$(chroot "${MNT}" blkid -s UUID -o value /dev/disk/by-label/rootfs 2>/dev/null || \
+              grep -oP 'root=UUID=\K[^ ]+' "${MNT}/boot/grub/grub.cfg" | head -1)
+  if [[ -n "$ROOT_UUID" ]]; then
+    cat > "${MNT}/boot/efi/EFI/BOOT/grub.cfg" << EOFGRUB
+# SecuBox GRUB EFI config - search and chain to main config
+search --no-floppy --fs-uuid --set=root ${ROOT_UUID}
+set prefix=(\$root)/boot/grub
+configfile \$prefix/grub.cfg
+EOFGRUB
+    ok "EFI grub.cfg créé (UUID: ${ROOT_UUID})"
+  else
+    warn "Impossible de créer EFI grub.cfg - UUID rootfs non trouvé"
+  fi
+
   umount -lf "${MNT}/sys"  2>/dev/null || true
   umount -lf "${MNT}/proc" 2>/dev/null || true
   umount -lf "${MNT}/dev"  2>/dev/null || true
