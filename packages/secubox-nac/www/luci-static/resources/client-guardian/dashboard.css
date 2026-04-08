@@ -15,33 +15,33 @@
 	--cg-text-muted: #8a7575;
 
 	/* SecuBox Brand Colors (Indigo/Purple) */
-	--cg-primary: #6366f1;
-	--cg-primary-end: #8b5cf6;
+	--cg-primary: var(--mind-light);
+	--cg-primary-end: var(--mind-light);
 
 	/* Accent Colors */
-	--cg-accent-orange: #f97316;
-	--cg-accent-amber: #f59e0b;
-	--cg-accent-green: #22c55e;
-	--cg-accent-blue: #3b82f6;
-	--cg-accent-purple: #8b5cf6;
-	--cg-accent-cyan: #06b6d4;
+	--cg-accent-orange: var(--auth-light);
+	--cg-accent-amber: var(--wall-light);
+	--cg-accent-green: var(--root-light);
+	--cg-accent-blue: var(--mesh-light);
+	--cg-accent-purple: var(--mind-light);
+	--cg-accent-cyan: var(--mesh-light);
 
 	/* State Colors */
-	--cg-danger: #ef4444;
-	--cg-warning: #f59e0b;
+	--cg-danger: var(--boot-light);
+	--cg-warning: var(--wall-light);
 	--cg-success: #16a34a;
-	--cg-info: #0284c7;
+	--cg-info: var(--mesh-light);
 
 	/* Primary Gradients (SecuBox Indigo/Purple) */
-	--cg-gradient: linear-gradient(135deg, #6366f1, #8b5cf6);
+	--cg-gradient: linear-gradient(135deg, var(--mind-light), var(--mind-light));
 	--cg-gradient-soft: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(139, 92, 246, 0.1));
 
 	/* Zone Colors (Keep as-is) */
-	--cg-zone-private: #22c55e;
-	--cg-zone-iot: #f59e0b;
-	--cg-zone-kids: #06b6d4;
-	--cg-zone-guest: #8b5cf6;
-	--cg-zone-quarantine: #ef4444;
+	--cg-zone-private: var(--root-light);
+	--cg-zone-iot: var(--wall-light);
+	--cg-zone-kids: var(--mesh-light);
+	--cg-zone-guest: var(--mind-light);
+	--cg-zone-quarantine: var(--boot-light);
 	--cg-zone-blocked: #6b7280;
 
 	/* Typography */
@@ -1140,22 +1140,22 @@
 
 .cg-log-error .cg-log-level {
 	background: rgba(239, 68, 68, 0.15);
-	color: #ef4444;
+	color: var(--boot-light);
 }
 
 .cg-log-warn .cg-log-level {
 	background: rgba(245, 158, 11, 0.15);
-	color: #f59e0b;
+	color: var(--wall-light);
 }
 
 .cg-log-info .cg-log-level {
 	background: rgba(59, 130, 246, 0.15);
-	color: #3b82f6;
+	color: var(--mesh-light);
 }
 
 .cg-log-debug .cg-log-level {
 	background: rgba(139, 92, 246, 0.15);
-	color: #8b5cf6;
+	color: var(--mind-light);
 }
 
 .cg-log-trace .cg-log-level {
@@ -1202,6 +1202,8 @@
 }
 
 /* Scrollbar styling for log container */
+@import url('../../../shared/design-tokens.css');
+
 .cg-log-container::-webkit-scrollbar {
 	width: 8px;
 }

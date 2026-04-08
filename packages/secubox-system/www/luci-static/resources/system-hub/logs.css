@@ -60,11 +60,11 @@
 }
 
 .sh-log-stat.danger .value {
-	color: #f87171;
+	color: var(--boot-light);
 }
 
 .sh-log-stat.warn .value {
-	color: #fbbf24;
+	color: var(--wall-light);
 }
 
 .sh-log-controls {
@@ -128,21 +128,23 @@
 }
 
 .sh-btn-primary {
-	background: linear-gradient(135deg,#6366f1,#a855f7);
+	background: linear-gradient(135deg,var(--mind-light),#a855f7);
 	border-color: transparent;
 }
 
 .sh-btn-success {
-	background: linear-gradient(135deg,#22c55e,#16a34a);
+	background: linear-gradient(135deg,var(--root-light),#16a34a);
 	border-color: transparent;
 }
 
 .sh-btn-danger {
-	background: linear-gradient(135deg,#ef4444,#dc2626);
+	background: linear-gradient(135deg,var(--boot-light),var(--boot-main));
 	border-color: transparent;
 }
 
 /* Live indicator animations */
+@import url('../../../shared/design-tokens.css');
+
 @keyframes pulse {
 	0%, 100% { opacity: 1; }
 	50% { opacity: 0.7; }
@@ -154,7 +156,7 @@
 }
 
 .sh-log-new {
-	border-left: 3px solid #22c55e;
+	border-left: 3px solid var(--root-light);
 }
 
 .sh-logs-body {

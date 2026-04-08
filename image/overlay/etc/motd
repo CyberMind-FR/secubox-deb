@@ -1,0 +1,27 @@
+
+[0;32m======================================================[0m
+[0;32m   ____                  ____            [0m
+[0;32m  / ___|  ___  ___ _   _| __ )  _____  __[0m
+[0;32m  \___ \ / _ \/ __| | | |  _ \ / _ \ \/ /[0m
+[0;32m   ___) |  __/ (__| |_| | |_) | (_) >  <[0m
+[0;32m  |____/ \___|\___|\__,_|____/ \___/_/\_\[0m
+[0;32m======================================================[0m
+
+  [0;36mCyberMind Security Platform[0m - [0;35mDebian ARM64[0m
+
+  [0;33m+-------------------------------------------+[0m
+  [0;33m|[0m [0;31m BOOT[0m  System Init & Kernel         [0;31m[0m     [0;33m|[0m
+  [0;33m|[0m [0;38;5;208m AUTH[0m  Authentication & Access    [0;38;5;208m[0m     [0;33m|[0m
+  [0;33m|[0m [0;32m ROOT[0m  Firewall & Security Core   [0;32m[0m     [0;33m|[0m
+  [0;33m|[0m [0;35m MIND[0m  AI & Traffic Analysis      [0;35m[0m     [0;33m|[0m
+  [0;33m|[0m [0;34m MESH[0m  VPN & Mesh Networking      [0;34m[0m     [0;33m|[0m
+  [0;33m|[0m [0;33m WALL[0m  WAF & Proxy Protection     [0;33m[0m     [0;33m|[0m
+  [0;33m+-------------------------------------------+[0m
+
+  [0;34mWeb Interface:[0m  https://[local-ip]/
+  [0;34mDocumentation:[0m  https://secubox.in/docs
+  [0;34mSupport:[0m        https://cybermind.fr
+
+[0;90m  Type 'secubox status' for system overview[0m
+[0;90m  Type 'secubox help' for available commands[0m
+

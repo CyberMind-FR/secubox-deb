@@ -99,7 +99,7 @@
 }
 
 .sh-component-version {
-	background: var(--sh-primary, #6366f1);
+	background: var(--sh-primary, var(--mind-light));
 	color: #ffffff;
 }
 
@@ -119,12 +119,12 @@
 }
 
 .sh-status-running {
-	background: #22c55e;
+	background: var(--root-light);
 	animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
 .sh-status-stopped {
-	background: #f59e0b;
+	background: var(--wall-light);
 }
 
 .sh-status-not-installed {
@@ -176,7 +176,7 @@
 }
 
 .sh-btn-success {
-	background: #22c55e;
+	background: var(--root-light);
 	color: #ffffff;
 }
 
@@ -186,27 +186,27 @@
 }
 
 .sh-btn-danger {
-	background: #ef4444;
+	background: var(--boot-light);
 	color: #ffffff;
 }
 
 .sh-btn-danger:hover {
-	background: #dc2626;
+	background: var(--boot-main);
 	transform: translateY(-2px);
 }
 
 .sh-btn-warning {
-	background: #f59e0b;
+	background: var(--wall-light);
 	color: #ffffff;
 }
 
 .sh-btn-warning:hover {
-	background: #d97706;
+	background: var(--wall-main);
 	transform: translateY(-2px);
 }
 
 .sh-btn-primary {
-	background: var(--sh-primary, #6366f1);
+	background: var(--sh-primary, var(--mind-light));
 	color: #ffffff;
 }
 
@@ -246,6 +246,8 @@
 }
 
 /* === Dark Mode Support === */
+@import url('../../../shared/design-tokens.css');
+
 [data-theme="dark"] {
 	--sh-text-primary: #f1f5f9;
 	--sh-text-secondary: #cbd5e1;

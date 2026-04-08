@@ -6,20 +6,20 @@
 
 /* Common variables (theme-independent) */
 :root {
-	--sh-accent-indigo: #6366f1;
-	--sh-accent-violet: #8b5cf6;
-	--sh-accent-blue: #3b82f6;
-	--sh-accent-cyan: #06b6d4;
-	--sh-accent-green: #22c55e;
-	--sh-accent-amber: #f59e0b;
-	--sh-accent-red: #ef4444;
+	--sh-accent-indigo: var(--mind-light);
+	--sh-accent-violet: var(--mind-light);
+	--sh-accent-blue: var(--mesh-light);
+	--sh-accent-cyan: var(--mesh-light);
+	--sh-accent-green: var(--root-light);
+	--sh-accent-amber: var(--wall-light);
+	--sh-accent-red: var(--boot-light);
 
-	--sh-success: #22c55e;
-	--sh-warning: #f59e0b;
-	--sh-danger: #ef4444;
-	--sh-info: #3b82f6;
+	--sh-success: var(--root-light);
+	--sh-warning: var(--wall-light);
+	--sh-danger: var(--boot-light);
+	--sh-info: var(--mesh-light);
 
-	--sh-gradient: linear-gradient(135deg, #6366f1, #8b5cf6, #a855f7);
+	--sh-gradient: linear-gradient(135deg, var(--mind-light), var(--mind-light), #a855f7);
 	--sh-gradient-soft: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(139, 92, 246, 0.1));
 
 	--sh-font-mono: 'JetBrains Mono', 'Fira Code', monospace;
@@ -158,9 +158,9 @@
 	border: 4px solid var(--sh-border);
 }
 
-.sh-score-circle.healthy { background: rgba(34, 197, 94, 0.15); color: var(--sh-success); border-color: var(--sh-success); }
-.sh-score-circle.warning { background: rgba(245, 158, 11, 0.15); color: var(--sh-warning); border-color: var(--sh-warning); }
-.sh-score-circle.critical { background: rgba(239, 68, 68, 0.15); color: var(--sh-danger); border-color: var(--sh-danger); }
+.sh-score-circle.healthy { background: rgba(34, 197, 94, 0.15); color: var(--root-light); border-color: var(--root-light); }
+.sh-score-circle.warning { background: rgba(245, 158, 11, 0.15); color: var(--wall-light); border-color: var(--wall-light); }
+.sh-score-circle.critical { background: rgba(239, 68, 68, 0.15); color: var(--boot-light); border-color: var(--boot-light); }
 
 .sh-score-circle::before {
 	border-color: currentColor;
@@ -303,7 +303,7 @@
 
 .sh-input:focus {
 	outline: none;
-	border-color: var(--sh-primary);
+	border-color: var(--mind-light);
 	box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
 }
 
@@ -451,12 +451,12 @@
 
 .sh-component-status.running {
 	background: rgba(34, 197, 94, 0.15);
-	color: var(--sh-success);
+	color: var(--root-light);
 }
 
 .sh-component-status.stopped {
 	background: rgba(239, 68, 68, 0.15);
-	color: var(--sh-danger);
+	color: var(--boot-light);
 }
 
 .sh-component-status.planned {
@@ -528,9 +528,9 @@
 	font-weight: 600;
 }
 
-.sh-metric-value.ok { color: var(--sh-success); }
-.sh-metric-value.warning { color: var(--sh-warning); }
-.sh-metric-value.critical { color: var(--sh-danger); }
+.sh-metric-value.ok { color: var(--root-light); }
+.sh-metric-value.warning { color: var(--wall-light); }
+.sh-metric-value.critical { color: var(--boot-light); }
 
 .sh-progress-bar {
 	height: 8px;
@@ -545,9 +545,9 @@
 	transition: width 0.5s;
 }
 
-.sh-progress-fill.ok { background: var(--sh-success); }
-.sh-progress-fill.warning { background: var(--sh-warning); }
-.sh-progress-fill.critical { background: var(--sh-danger); }
+.sh-progress-fill.ok { background: var(--root-light); }
+.sh-progress-fill.warning { background: var(--wall-light); }
+.sh-progress-fill.critical { background: var(--boot-light); }
 
 /* Remote Section */
 .sh-remote-card {
@@ -632,9 +632,9 @@
 	text-align: center;
 }
 
-.sh-log-level.info { background: rgba(59, 130, 246, 0.15); color: var(--sh-info); }
-.sh-log-level.warning { background: rgba(245, 158, 11, 0.15); color: var(--sh-warning); }
-.sh-log-level.error { background: rgba(239, 68, 68, 0.15); color: var(--sh-danger); }
+.sh-log-level.info { background: rgba(59, 130, 246, 0.15); color: var(--mesh-light); }
+.sh-log-level.warning { background: rgba(245, 158, 11, 0.15); color: var(--wall-light); }
+.sh-log-level.error { background: rgba(239, 68, 68, 0.15); color: var(--boot-light); }
 
 .sh-log-message { flex: 1; color: var(--sh-text-secondary); }
 
@@ -733,8 +733,8 @@
 	transform: translateY(-2px);
 }
 
-.sh-btn-success { background: var(--sh-success); border: none; color: white; }
-.sh-btn-danger { background: var(--sh-danger); border: none; color: white; }
+.sh-btn-success { background: var(--root-light); border: none; color: white; }
+.sh-btn-danger { background: var(--boot-light); border: none; color: white; }
 
 .sh-btn-group { display: flex; gap: 12px; flex-wrap: wrap; }
 
@@ -819,6 +819,8 @@
 .system-hub-dashboard ::-webkit-scrollbar-thumb:hover { background: var(--sh-text-muted); }
 
 /* Animations */
+@import url('../../../shared/design-tokens.css');
+
 @keyframes pulse-sh {
 	0%, 100% { opacity: 1; }
 	50% { opacity: 0.6; }
@@ -831,6 +833,6 @@
 	animation: pulse-sh 1.5s ease-in-out infinite;
 }
 
-.sh-status-dot.running { background: var(--sh-success); }
-.sh-status-dot.stopped { background: var(--sh-danger); }
-.sh-status-dot.warning { background: var(--sh-warning); }
+.sh-status-dot.running { background: var(--root-light); }
+.sh-status-dot.stopped { background: var(--boot-light); }
+.sh-status-dot.warning { background: var(--wall-light); }

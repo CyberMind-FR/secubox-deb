@@ -1,0 +1,124 @@
+/**
+ * SecuBox Plymouth Text Theme
+ * Minimal text-based boot splash for serial consoles
+ * 6-Module Color System
+ */
+
+// Background
+Window.SetBackgroundTopColor(0.04, 0.06, 0.08);
+Window.SetBackgroundBottomColor(0.02, 0.03, 0.04);
+
+// ASCII Art Logo
+ascii_lines = [
+    "  ____                  ____            ",
+    " / ___|  ___  ___ _   _| __ )  _____  __",
+    " \\___ \\ / _ \\/ __| | | |  _ \\ / _ \\ \\/ /",
+    "  ___) |  __/ (__| |_| | |_) | (_) >  <",
+    " |____/ \\___|\\___|\\___|____/ \\___/_/\\_\\"
+];
+
+logo_sprites = [];
+y_start = Window.GetHeight() / 2 - 100;
+
+for (i = 0; i < 5; i++) {
+    line_image = Image.Text(ascii_lines[i], 0.04, 0.35, 0.25, "Mono 14");
+    line_sprite = Sprite(line_image);
+    line_sprite.SetX(Window.GetWidth() / 2 - line_image.GetWidth() / 2);
+    line_sprite.SetY(y_start + (i * 18));
+    line_sprite.SetOpacity(1);
+    logo_sprites[i] = line_sprite;
+}
+
+// Subtitle
+subtitle_text = Image.Text("CyberMind Security Platform", 0.6, 0.6, 0.7, "Mono 12");
+subtitle_sprite = Sprite(subtitle_text);
+subtitle_sprite.SetX(Window.GetWidth() / 2 - subtitle_text.GetWidth() / 2);
+subtitle_sprite.SetY(y_start + 120);
+subtitle_sprite.SetOpacity(0.8);
+
+// Progress text
+progress_text = "Initializing...";
+progress_image = Image.Text(progress_text, 0.5, 0.5, 0.6, "Mono 11");
+progress_sprite = Sprite(progress_image);
+progress_sprite.SetX(Window.GetWidth() / 2 - progress_image.GetWidth() / 2);
+progress_sprite.SetY(y_start + 160);
+
+// Module status line
+module_names = "[BOOT] [AUTH] [ROOT] [MIND] [MESH] [WALL]";
+module_image = Image.Text(module_names, 0.3, 0.3, 0.4, "Mono 10");
+module_sprite = Sprite(module_image);
+module_sprite.SetX(Window.GetWidth() / 2 - module_image.GetWidth() / 2);
+module_sprite.SetY(y_start + 200);
+module_sprite.SetOpacity(0.5);
+
+// Progress bar (text-based)
+progress_bar_bg = "[                              ]";
+progress_bar_fg = "";
+
+bar_bg_image = Image.Text(progress_bar_bg, 0.2, 0.2, 0.25, "Mono 14");
+bar_bg_sprite = Sprite(bar_bg_image);
+bar_bg_sprite.SetX(Window.GetWidth() / 2 - bar_bg_image.GetWidth() / 2);
+bar_bg_sprite.SetY(y_start + 240);
+
+bar_fg_sprite = NULL;
+
+fun boot_progress_callback(duration, progress_value) {
+    // Update text progress bar
+    filled = Math.Int(progress_value * 30);
+    bar_text = "[";
+    for (i = 0; i < 30; i++) {
+        if (i < filled) bar_text += "#";
+        else bar_text += " ";
+    }
+    bar_text += "]";
+
+    if (bar_fg_sprite) bar_fg_sprite = NULL;
+    bar_fg_image = Image.Text(bar_text, 0.04, 0.35, 0.25, "Mono 14");
+    bar_fg_sprite = Sprite(bar_fg_image);
+    bar_fg_sprite.SetX(Window.GetWidth() / 2 - bar_fg_image.GetWidth() / 2);
+    bar_fg_sprite.SetY(y_start + 240);
+
+    // Update percentage
+    pct_text = Math.Int(progress_value * 100) + "%";
+    if (progress_sprite) progress_sprite = NULL;
+    progress_image = Image.Text(pct_text, 0.5, 0.5, 0.6, "Mono 11");
+    progress_sprite = Sprite(progress_image);
+    progress_sprite.SetX(Window.GetWidth() / 2 - progress_image.GetWidth() / 2);
+    progress_sprite.SetY(y_start + 160);
+}
+
+Plymouth.SetBootProgressFunction(boot_progress_callback);
+
+// Message callback
+message_sprite = NULL;
+
+fun message_callback(text) {
+    if (message_sprite) message_sprite = NULL;
+    message_image = Image.Text(text, 0.4, 0.5, 0.6, "Mono 10");
+    message_sprite = Sprite(message_image);
+    message_sprite.SetX(Window.GetWidth() / 2 - message_image.GetWidth() / 2);
+    message_sprite.SetY(Window.GetHeight() - 40);
+    message_sprite.SetOpacity(0.7);
+}
+
+Plymouth.SetMessageFunction(message_callback);
+
+// Password prompt
+fun display_password_callback(prompt, bullets) {
+    pwd_image = Image.Text(prompt, 0.7, 0.7, 0.75, "Mono 12");
+    pwd_sprite = Sprite(pwd_image);
+    pwd_sprite.SetX(Window.GetWidth() / 2 - pwd_image.GetWidth() / 2);
+    pwd_sprite.SetY(y_start + 280);
+
+    bullet_text = "";
+    for (i = 0; i < bullets; i++) bullet_text += "*";
+
+    if (bullets > 0) {
+        blt_image = Image.Text(bullet_text, 0.04, 0.35, 0.25, "Mono 14");
+        blt_sprite = Sprite(blt_image);
+        blt_sprite.SetX(Window.GetWidth() / 2 - blt_image.GetWidth() / 2);
+        blt_sprite.SetY(y_start + 310);
+    }
+}
+
+Plymouth.SetDisplayPasswordFunction(display_password_callback);

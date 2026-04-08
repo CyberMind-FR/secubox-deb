@@ -15,17 +15,17 @@
 	--wg-text-secondary: #94a3b8;
 	--wg-text-muted: #64748b;
 	
-	--wg-accent-cyan: #06b6d4;
+	--wg-accent-cyan: var(--mesh-light);
 	--wg-accent-cyan-light: #22d3ee;
 	--wg-accent-cyan-glow: rgba(6, 182, 212, 0.4);
 	--wg-accent-blue: #0ea5e9;
-	--wg-accent-indigo: #6366f1;
-	--wg-accent-green: #10b981;
-	--wg-accent-yellow: #f59e0b;
-	--wg-accent-red: #ef4444;
+	--wg-accent-indigo: var(--mind-light);
+	--wg-accent-green: var(--root-light);
+	--wg-accent-yellow: var(--wall-light);
+	--wg-accent-red: var(--boot-light);
 	--wg-accent-purple: #a855f7;
 	
-	--wg-tunnel-gradient: linear-gradient(135deg, #06b6d4, #0ea5e9, #6366f1);
+	--wg-tunnel-gradient: linear-gradient(135deg, var(--mesh-light), #0ea5e9, var(--mind-light));
 	
 	--wg-font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
 	--wg-font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -546,7 +546,7 @@
 
 .wg-traffic-bar-rx {
 	height: 100%;
-	background: linear-gradient(90deg, #10b981, #34d399);
+	background: linear-gradient(90deg, var(--root-light), #34d399);
 	transition: width 0.5s ease;
 }
 
@@ -833,7 +833,7 @@
 }
 
 .wg-btn-warning {
-	background: linear-gradient(135deg, var(--wg-accent-yellow), #d97706);
+	background: linear-gradient(135deg, var(--wg-accent-yellow), var(--wall-main));
 	border: none;
 	color: white;
 }
@@ -843,7 +843,7 @@
 }
 
 .wg-btn-danger {
-	background: linear-gradient(135deg, var(--wg-accent-red), #dc2626);
+	background: linear-gradient(135deg, var(--wg-accent-red), var(--boot-main));
 	border: none;
 	color: white;
 }
@@ -1703,6 +1703,8 @@
 }
 
 /* Endpoint detection */
+@import url('../../../shared/design-tokens.css');
+
 .wg-endpoint-detect {
 	display: flex;
 	gap: 10px;

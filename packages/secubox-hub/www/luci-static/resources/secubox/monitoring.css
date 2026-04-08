@@ -132,7 +132,7 @@
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: var(--sh-primary);
+    background: var(--mind-light);
     opacity: 0.3;
     animation: dotPulse 1.5s ease-in-out infinite;
 }
@@ -166,7 +166,7 @@
 .secubox-current-value {
     font-size: 24px;
     font-weight: 700;
-    color: var(--sh-primary);
+    color: var(--mind-light);
 }
 
 .secubox-chart-unit {
@@ -256,6 +256,8 @@
 }
 
 /* === Cyberpunk Theme Support === */
+@import url('../../../shared/design-tokens.css');
+
 
 [data-secubox-theme="cyberpunk"] .secubox-chart-card {
 	background: var(--cyber-bg-secondary);

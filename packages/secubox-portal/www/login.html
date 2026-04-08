@@ -4,113 +4,335 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SecuBox — Login</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
+/**
+ * SecuBox Login — 6-Module Design System v2.0
+ * Based on Charte Graphique Six-Module Color System
+ * CyberMind · Gondwana · Notre-Dame-du-Cruet · Savoie
+ */
+
 :root {
-  /* Default theme - will be overridden by device-specific theme */
-  --bg: #0d1117;
-  --surface: #161b22;
-  --border: #30363d;
-  --accent: #58a6ff;
-  --accent-glow: rgba(88,166,255,0.2);
-  --accent-dark: #1f6feb;
-  --gradient-start: #58a6ff;
-  --gradient-end: #1f6feb;
-  --text: #c9d1d9;
-  --muted: #8b949e;
-  --success: #3fb950;
-  --warning: #d29922;
-  --error: #f85149;
+  /* 6-MODULE COLOR SYSTEM */
+  --auth-main:  #C04E24;  /* Orange — Auth stack */
+  --auth-light: #E8845A;
+  --wall-main:  #9A6010;  /* Yellow — Wall stack */
+  --wall-light: #CC8820;
+  --boot-main:  #803018;  /* Red — Boot stack */
+  --boot-light: #C06040;
+  --mind-main:  #3D35A0;  /* Violet — Mind stack */
+  --mind-light: #6366F1;
+  --root-main:  #0A5840;  /* Green — Root stack */
+  --root-light: #148C66;
+  --mesh-main:  #104A88;  /* Blue — Mesh stack */
+  --mesh-light: #2080C0;
+
+  /* DARK THEME */
+  --bg-dark:      #0B0F14;
+  --surface-dark: #141A24;
+  --border-dark:  #1E2A38;
+  --text-dark:    #E8ECF2;
+  --muted-dark:   #6B7A8C;
+
+  /* Active theme */
+  --bg:       var(--bg-dark);
+  --surface:  var(--surface-dark);
+  --border:   var(--border-dark);
+  --text:     var(--text-dark);
+  --muted:    var(--muted-dark);
+  --accent:   var(--root-main);
+  --accent-light: var(--root-light);
+
+  /* Typography */
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono', monospace;
 }
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
+
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-display);
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 20px;
 }
+
+/* Animated grid background */
 body::before {
   content: "";
   position: fixed;
   inset: 0;
   background-image:
-    linear-gradient(rgba(88,166,255,0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(88,166,255,0.03) 1px, transparent 1px);
+    linear-gradient(rgba(10,88,64,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(10,88,64,0.04) 1px, transparent 1px);
   background-size: 50px 50px;
-  animation: gridMove 30s linear infinite;
+  animation: gridMove 40s linear infinite;
   pointer-events: none;
 }
-@keyframes gridMove { 0% { transform: translate(0,0); } 100% { transform: translate(50px,50px); } }
-.container { width: 100%; max-width: 400px; position: relative; z-index: 1; }
+
+@keyframes gridMove {
+  0% { transform: translate(0,0); }
+  100% { transform: translate(50px,50px); }
+}
+
+/* Left accent stripe effect */
+body::after {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: linear-gradient(180deg, var(--root-main), var(--mesh-main), var(--mind-main));
+  z-index: 1000;
+}
+
+.container {
+  width: 100%;
+  max-width: 420px;
+  position: relative;
+  z-index: 1;
+}
+
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 40px;
-  box-shadow: 0 16px 48px rgba(0,0,0,0.4);
-}
-.logo-section { text-align: center; margin-bottom: 32px; }
-.logo {
-  width: 72px; height: 72px;
-  background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
   border-radius: 16px;
-  display: inline-flex; align-items: center; justify-content: center;
-  font-size: 2rem; font-weight: 900; color: #fff;
-  margin-bottom: 16px;
-  box-shadow: 0 8px 24px var(--accent-glow);
+  padding: 48px 40px;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.4);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Top accent gradient bar */
+.card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--root-main), var(--mesh-main), var(--mind-main));
+}
+
+.logo-section {
+  text-align: center;
+  margin-bottom: 36px;
+}
+
+.logo {
+  width: 80px;
+  height: 80px;
+  background: linear-gradient(135deg, var(--root-main), var(--root-light));
+  border-radius: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.2rem;
+  font-weight: 800;
+  color: #fff;
+  margin-bottom: 20px;
+  box-shadow: 0 12px 32px rgba(10,88,64,0.3);
   transition: all 0.3s ease;
 }
+
+.logo:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 40px rgba(10,88,64,0.4);
+}
+
 .badge-device {
   display: inline-block;
-  padding: 2px 8px;
-  background: var(--accent-glow);
-  border: 1px solid var(--accent);
-  border-radius: 4px;
+  padding: 3px 10px;
+  background: rgba(10,88,64,0.15);
+  border: 1px solid var(--root-main);
+  border-radius: 6px;
   font-size: 0.65rem;
   font-weight: 600;
-  color: var(--accent);
-  margin-left: 8px;
+  color: var(--root-light);
+  margin-left: 10px;
   vertical-align: middle;
-  letter-spacing: 1px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
 }
-.logo-title { font-size: 1.6rem; font-weight: 600; }
-.logo-title span { color: var(--accent); }
-.logo-sub { color: var(--muted); font-size: 0.8rem; margin-top: 4px; }
-.form-group { margin-bottom: 20px; }
+
+.logo-title {
+  font-size: 1.8rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.logo-title span {
+  color: var(--root-light);
+}
+
+.logo-sub {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-top: 6px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+}
+
+.form-group {
+  margin-bottom: 24px;
+}
+
 .form-label {
-  display: block; font-size: 0.75rem; font-weight: 500;
-  text-transform: uppercase; letter-spacing: 1px;
-  color: var(--muted); margin-bottom: 8px;
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--muted);
+  margin-bottom: 10px;
+  font-family: var(--font-mono);
 }
+
 .form-input {
-  width: 100%; padding: 12px 14px;
-  background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
-  color: var(--text); font-size: 1rem; transition: all 0.2s;
+  width: 100%;
+  padding: 14px 16px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  font-size: 1rem;
+  font-family: var(--font-display);
+  transition: all 0.2s ease;
 }
-.form-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
-.form-input::placeholder { color: #484f58; }
+
+.form-input:focus {
+  outline: none;
+  border-color: var(--root-main);
+  box-shadow: 0 0 0 3px rgba(10,88,64,0.2);
+}
+
+.form-input::placeholder {
+  color: var(--muted);
+  opacity: 0.6;
+}
+
 .btn {
-  width: 100%; padding: 12px;
-  background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
-  border: none; border-radius: 8px;
-  color: #fff; font-size: 1rem; font-weight: 600;
-  cursor: pointer; transition: all 0.2s;
-  box-shadow: 0 4px 12px var(--accent-glow);
+  width: 100%;
+  padding: 14px;
+  background: linear-gradient(135deg, var(--root-main), var(--root-light));
+  border: none;
+  border-radius: 10px;
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 600;
+  font-family: var(--font-display);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 6px 20px rgba(10,88,64,0.3);
+  letter-spacing: 0.03em;
 }
-.btn:hover { background: var(--accent-dark); transform: translateY(-1px); box-shadow: 0 6px 16px var(--accent-glow); }
-.btn:active { transform: translateY(0); }
-.btn.loading { opacity: 0.7; pointer-events: none; }
+
+.btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 28px rgba(10,88,64,0.4);
+}
+
+.btn:active {
+  transform: translateY(0);
+}
+
+.btn.loading {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
 .msg {
-  padding: 12px; border-radius: 8px; font-size: 0.9rem;
-  margin-bottom: 16px; display: none;
+  padding: 14px;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  margin-bottom: 20px;
+  display: none;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
 }
-.msg.error { background: rgba(248,81,73,0.1); border: 1px solid var(--error); color: var(--error); display: block; }
-.msg.success { background: rgba(63,185,80,0.1); border: 1px solid var(--success); color: var(--success); display: block; }
-.footer { text-align: center; margin-top: 24px; font-size: 0.8rem; color: var(--muted); }
-.footer a { color: var(--accent); text-decoration: none; }
+
+.msg.error {
+  background: rgba(128,48,24,0.15);
+  border: 1px solid var(--boot-main);
+  color: var(--boot-light);
+  display: block;
+}
+
+.msg.success {
+  background: rgba(10,88,64,0.15);
+  border: 1px solid var(--root-main);
+  color: var(--root-light);
+  display: block;
+}
+
+.footer {
+  text-align: center;
+  margin-top: 28px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.footer a {
+  color: var(--root-light);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.footer a:hover {
+  color: var(--text);
+}
+
+/* 6-Module indicator dots */
+.module-dots {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.module-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  opacity: 0.6;
+  transition: all 0.3s ease;
+}
+
+.module-dot:hover {
+  opacity: 1;
+  transform: scale(1.3);
+}
+
+.module-dot.boot { background: var(--boot-main); }
+.module-dot.auth { background: var(--auth-main); }
+.module-dot.root { background: var(--root-main); }
+.module-dot.mind { background: var(--mind-main); }
+.module-dot.mesh { background: var(--mesh-main); }
+.module-dot.wall { background: var(--wall-main); }
+
+/* Responsive */
+@media (max-width: 480px) {
+  .card {
+    padding: 36px 24px;
+  }
+  .logo {
+    width: 64px;
+    height: 64px;
+    font-size: 1.8rem;
+  }
+  .logo-title {
+    font-size: 1.5rem;
+  }
+}
 </style>
 </head>
 <body>
@@ -120,6 +342,14 @@ body::before {
       <div class="logo" id="logo-icon">S</div>
       <h1 class="logo-title" id="logo-title">Secu<span>Box</span><span class="badge-device" id="device-badge" style="display:none;"></span></h1>
       <p class="logo-sub" id="logo-sub">Secure Network Appliance</p>
+      <div class="module-dots">
+        <span class="module-dot boot" title="BOOT"></span>
+        <span class="module-dot auth" title="AUTH"></span>
+        <span class="module-dot root" title="ROOT"></span>
+        <span class="module-dot mind" title="MIND"></span>
+        <span class="module-dot mesh" title="MESH"></span>
+        <span class="module-dot wall" title="WALL"></span>
+      </div>
     </div>
 
     <div id="msg" class="msg"></div>
@@ -143,7 +373,7 @@ body::before {
 </div>
 
 <script>
-var API = '/api/v1/hub/auth';
+var API = '/api/v1/hub';
 
 function showMsg(text, type) {
   var msg = document.getElementById('msg');
@@ -172,7 +402,6 @@ function handleLogin(e) {
   })
   .then(function(data) {
     if (data.access_token) {
-      // Store JWT token for API authentication
       localStorage.setItem('sbx_token', data.access_token);
       localStorage.setItem('secubox_token', data.access_token);
       localStorage.setItem('secubox_user', username);
@@ -199,15 +428,6 @@ function loadTheme() {
   fetch('/api/v1/portal/theme')
   .then(function(r) { return r.json(); })
   .then(function(theme) {
-    if (theme && theme.colors) {
-      var root = document.documentElement;
-      var c = theme.colors;
-      if (c.accent) root.style.setProperty('--accent', c.accent);
-      if (c.accent_glow) root.style.setProperty('--accent-glow', c.accent_glow);
-      if (c.accent_dark) root.style.setProperty('--accent-dark', c.accent_dark);
-      if (c.gradient_start) root.style.setProperty('--gradient-start', c.gradient_start);
-      if (c.gradient_end) root.style.setProperty('--gradient-end', c.gradient_end);
-    }
     if (theme && theme.name) {
       var sub = document.getElementById('logo-sub');
       if (sub) sub.textContent = 'SecuBox ' + theme.name + ' Edition';
@@ -220,9 +440,7 @@ function loadTheme() {
       }
     }
   })
-  .catch(function() {
-    // Use default theme on error
-  });
+  .catch(function() {});
 }
 
 // Check if already authenticated
@@ -237,7 +455,6 @@ if (token) {
   .catch(function() {});
 }
 
-// Load theme on page load
 loadTheme();
 </script>
 </body>

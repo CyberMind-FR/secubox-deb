@@ -10,7 +10,7 @@
 /* Page Header  * Version: 0.3.0
  */
 .secubox-page-header {
-    background: linear-gradient(135deg, var(--sh-warning) 0%, var(--sh-danger) 100%);
+    background: linear-gradient(135deg, var(--wall-light) 0%, var(--boot-light) 100%);
     border-radius: 12px;
     padding: 24px;
     margin-bottom: 24px;
@@ -133,17 +133,17 @@
 }
 
 .secubox-alert-item.secubox-alert-error {
-    border-left: 4px solid var(--sh-danger);
+    border-left: 4px solid var(--boot-light);
     background: #fef2f2;
 }
 
 .secubox-alert-item.secubox-alert-warning {
-    border-left: 4px solid var(--sh-warning);
+    border-left: 4px solid var(--wall-light);
     background: #fffbeb;
 }
 
 .secubox-alert-item.secubox-alert-info {
-    border-left: 4px solid var(--sh-primary);
+    border-left: 4px solid var(--mind-light);
     background: #eff6ff;
 }
 
@@ -238,7 +238,7 @@
 }
 
 .secubox-alert-dismiss:hover {
-    background: var(--sh-danger);
+    background: var(--boot-light);
     color: white;
 }
 
@@ -283,6 +283,8 @@
 }
 
 /* === Cyberpunk Theme Support === */
+@import url('../../../shared/design-tokens.css');
+
 
 [data-secubox-theme="cyberpunk"] .secubox-page-header {
 	background: var(--cyber-gradient-primary);

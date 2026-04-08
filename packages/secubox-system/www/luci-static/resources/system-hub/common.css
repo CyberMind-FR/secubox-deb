@@ -19,12 +19,12 @@
 	--sh-border: #2a2a35;
 	--sh-hover-bg: #1a1a24;
 	--sh-hover-shadow: rgba(0, 0, 0, 0.6);
-	--sh-primary: #6366f1;
-	--sh-primary-end: #8b5cf6;
+	--sh-primary: var(--mind-light);
+	--sh-primary-end: var(--mind-light);
 	--sh-shadow: rgba(0, 0, 0, 0.4);
-	--sh-success: #22c55e;
-	--sh-danger: #ef4444;
-	--sh-warning: #f59e0b;
+	--sh-success: var(--root-light);
+	--sh-danger: var(--boot-light);
+	--sh-warning: var(--wall-light);
 }
 
 [data-secubox-theme="light"] {
@@ -38,12 +38,12 @@
 	--sh-border: #e2e8f0;
 	--sh-hover-bg: #f8fafc;
 	--sh-hover-shadow: rgba(0, 0, 0, 0.1);
-	--sh-primary: #6366f1;
-	--sh-primary-end: #8b5cf6;
+	--sh-primary: var(--mind-light);
+	--sh-primary-end: var(--mind-light);
 	--sh-shadow: rgba(0, 0, 0, 0.08);
-	--sh-success: #22c55e;
-	--sh-danger: #ef4444;
-	--sh-warning: #f59e0b;
+	--sh-success: var(--root-light);
+	--sh-danger: var(--boot-light);
+	--sh-warning: var(--wall-light);
 }
 
 /* === Global Typography === */
@@ -79,7 +79,7 @@ pre {
 	font-size: 20px;
 	font-weight: 700;
 	margin: 0;
-	background: linear-gradient(135deg, var(--sh-primary), var(--sh-primary-end));
+	background: linear-gradient(135deg, var(--mind-light), var(--mind-main));
 	-webkit-background-clip: text;
 	-webkit-text-fill-color: transparent;
 	background-clip: text;
@@ -129,7 +129,7 @@ pre {
 	left: 0;
 	right: 0;
 	height: 3px;
-	background: linear-gradient(90deg, var(--sh-primary), var(--sh-primary-end));
+	background: linear-gradient(90deg, var(--mind-light), var(--mind-main));
 	opacity: 0;
 	transition: opacity 0.3s ease;
 }
@@ -137,7 +137,7 @@ pre {
 .sh-stat-badge:hover {
 	transform: translateY(-3px);
 	box-shadow: 0 8px 20px var(--sh-shadow);
-	border-color: var(--sh-primary);
+	border-color: var(--mind-light);
 }
 
 .sh-stat-badge:hover::before {
@@ -208,7 +208,7 @@ body[data-page^="admin-secubox-system-system-hub"] .nav-tabs {
 }
 
 .sh-nav-tab.active {
-	color: var(--sh-primary);
+	color: var(--mind-light);
 	background: rgba(99, 102, 241, 0.1);
 }
 
@@ -219,7 +219,7 @@ body[data-page^="admin-secubox-system-system-hub"] .nav-tabs {
 	left: 10%;
 	right: 10%;
 	height: 2px;
-	background: linear-gradient(90deg, var(--sh-primary), var(--sh-primary-end));
+	background: linear-gradient(90deg, var(--mind-light), var(--mind-main));
 	border-radius: 2px;
 }
 
@@ -247,7 +247,7 @@ body[data-page^="admin-secubox-system-system-hub"] .nav-tabs {
 	left: 0;
 	right: 0;
 	height: 3px;
-	background: linear-gradient(90deg, var(--sh-primary), var(--sh-primary-end));
+	background: linear-gradient(90deg, var(--mind-light), var(--mind-main));
 	opacity: 0;
 	transition: opacity 0.3s ease;
 }
@@ -264,17 +264,17 @@ body[data-page^="admin-secubox-system-system-hub"] .nav-tabs {
 
 /* Colored borders for different card types */
 .sh-card-success::before {
-	background: var(--sh-success);
+	background: var(--root-light);
 	opacity: 1;
 }
 
 .sh-card-danger::before {
-	background: var(--sh-danger);
+	background: var(--boot-light);
 	opacity: 1;
 }
 
 .sh-card-warning::before {
-	background: var(--sh-warning);
+	background: var(--wall-light);
 	opacity: 1;
 }
 
@@ -304,7 +304,7 @@ body[data-page^="admin-secubox-system-system-hub"] .nav-tabs {
 
 .sh-card-badge {
 	padding: 6px 14px;
-	background: linear-gradient(135deg, var(--sh-primary), var(--sh-primary-end));
+	background: linear-gradient(135deg, var(--mind-light), var(--mind-main));
 	color: #ffffff;
 	border-radius: 20px;
 	font-size: 12px;
@@ -355,7 +355,7 @@ body[data-page^="admin-secubox-system-system-hub"] .nav-tabs {
 }
 
 .sh-btn-primary {
-	background: linear-gradient(135deg, var(--sh-primary), var(--sh-primary-end));
+	background: linear-gradient(135deg, var(--mind-light), var(--mind-main));
 	color: #ffffff;
 	box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
 }
@@ -366,7 +366,7 @@ body[data-page^="admin-secubox-system-system-hub"] .nav-tabs {
 }
 
 .sh-btn-success {
-	background: var(--sh-success);
+	background: var(--root-light);
 	color: #ffffff;
 	box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
 }
@@ -378,25 +378,25 @@ body[data-page^="admin-secubox-system-system-hub"] .nav-tabs {
 }
 
 .sh-btn-danger {
-	background: var(--sh-danger);
+	background: var(--boot-light);
 	color: #ffffff;
 	box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
 }
 
 .sh-btn-danger:hover {
-	background: #dc2626;
+	background: var(--boot-main);
 	transform: translateY(-2px);
 	box-shadow: 0 8px 20px rgba(239, 68, 68, 0.5);
 }
 
 .sh-btn-warning {
-	background: var(--sh-warning);
+	background: var(--wall-light);
 	color: #ffffff;
 	box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
 }
 
 .sh-btn-warning:hover {
-	background: #d97706;
+	background: var(--wall-main);
 	transform: translateY(-2px);
 	box-shadow: 0 8px 20px rgba(245, 158, 11, 0.5);
 }
@@ -409,7 +409,7 @@ body[data-page^="admin-secubox-system-system-hub"] .nav-tabs {
 
 .sh-btn-secondary:hover {
 	background: var(--sh-hover-bg);
-	border-color: var(--sh-primary);
+	border-color: var(--mind-light);
 	transform: translateY(-2px);
 }
 
@@ -429,7 +429,7 @@ body[data-page^="admin-secubox-system-system-hub"] .nav-tabs {
 
 /* === Gradient Text Utility === */
 .sh-gradient-text {
-	background: linear-gradient(135deg, var(--sh-primary), var(--sh-primary-end));
+	background: linear-gradient(135deg, var(--mind-light), var(--mind-main));
 	-webkit-background-clip: text;
 	-webkit-text-fill-color: transparent;
 	background-clip: text;
@@ -485,7 +485,7 @@ body[data-page^="admin-secubox-system-system-hub"] .nav-tabs {
 
 .sh-page-insight-sub {
 	font-size: 13px;
-	color: var(--sh-primary);
+	color: var(--mind-light);
 	font-family: 'JetBrains Mono', monospace;
 }
 
@@ -560,6 +560,8 @@ body[data-page^="admin-secubox-system-system-hub"] .nav-tabs {
 
 
 /* Slim header utility */
+@import url('../../../shared/design-tokens.css');
+
 .sh-page-header-lite {
     background: #f7f9fc;
     border: 1px solid rgba(148, 163, 184, 0.35);
@@ -618,17 +620,17 @@ body[data-page^="admin-secubox-system-system-hub"] .nav-tabs {
 .sh-header-chip.success {
     background: rgba(34, 197, 94, 0.12);
     border-color: rgba(34, 197, 94, 0.4);
-    color: #15803d;
+    color: var(--root-main);
 }
 
 .sh-header-chip.danger {
     background: rgba(239, 68, 68, 0.12);
     border-color: rgba(239, 68, 68, 0.45);
-    color: #b91c1c;
+    color: var(--boot-dark);
 }
 
 .sh-header-chip.warn {
     background: rgba(245, 158, 11, 0.12);
     border-color: rgba(245, 158, 11, 0.45);
-    color: #b45309;
+    color: var(--wall-dark);
 }

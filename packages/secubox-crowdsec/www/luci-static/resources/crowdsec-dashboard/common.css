@@ -40,12 +40,12 @@
 	--sh-hover-bg: var(--cyber-surface-light, #2d3454);
 	--sh-hover-shadow: var(--cyber-glass-shadow, 0 8px 32px rgba(0, 0, 0, 0.37));
 	--sh-primary: var(--cyber-accent-primary, #667eea);
-	--sh-primary-end: var(--cyber-accent-primary-end, #764ba2);
+	--sh-primary-end: var(--cyber-accent-primary-end, var(--mind-main));
 	--sh-shadow: var(--cyber-shadow-soft, 0 8px 24px rgba(2, 6, 23, 0.35));
-	--sh-success: var(--cyber-success, #10b981);
-	--sh-danger: var(--cyber-danger, #ef4444);
-	--sh-warning: var(--cyber-warning, #f59e0b);
-	--sh-info: var(--cyber-info, #06b6d4);
+	--sh-success: var(--cyber-success, var(--root-light));
+	--sh-danger: var(--cyber-danger, var(--boot-light));
+	--sh-warning: var(--cyber-warning, var(--wall-light));
+	--sh-info: var(--cyber-info, var(--mesh-light));
 }
 
 /* === Global Typography === */
@@ -83,7 +83,7 @@ pre {
 	font-size: 20px;
 	font-weight: 700;
 	margin: 0;
-	background: linear-gradient(135deg, var(--sh-primary), var(--sh-primary-end));
+	background: linear-gradient(135deg, var(--mind-light), var(--mind-main));
 	-webkit-background-clip: text;
 	-webkit-text-fill-color: transparent;
 	background-clip: text;
@@ -124,7 +124,7 @@ pre {
 .sh-stat-badge:hover {
 	transform: translateY(-2px);
 	box-shadow: 0 4px 12px var(--sh-shadow);
-	border-color: var(--sh-primary);
+	border-color: var(--mind-light);
 }
 
 .sh-stat-value {
@@ -163,7 +163,7 @@ pre {
 	left: 0;
 	right: 0;
 	height: 3px;
-	background: linear-gradient(90deg, var(--sh-primary), var(--sh-primary-end));
+	background: linear-gradient(90deg, var(--mind-light), var(--mind-main));
 	opacity: 0;
 	transition: opacity 0.3s ease;
 }
@@ -175,7 +175,7 @@ pre {
 .sh-card:hover {
 	transform: translateY(-2px);
 	box-shadow: 0 4px 12px var(--sh-shadow);
-	border-color: var(--sh-primary);
+	border-color: var(--mind-light);
 }
 
 .sh-card-header {
@@ -207,7 +207,7 @@ pre {
 
 /* === Buttons === */
 .sh-btn-primary {
-	background: linear-gradient(135deg, var(--sh-primary), var(--sh-primary-end));
+	background: linear-gradient(135deg, var(--mind-light), var(--mind-main));
 	color: white;
 	border: none;
 	padding: 10px 20px;
@@ -240,7 +240,7 @@ pre {
 
 .sh-btn-secondary:hover {
 	background: var(--sh-hover-bg);
-	border-color: var(--sh-primary);
+	border-color: var(--mind-light);
 }
 
 /* === Navigation Tabs === */
@@ -277,7 +277,7 @@ pre {
 }
 
 .sh-nav-tab.active {
-	color: var(--sh-primary);
+	color: var(--mind-light);
 	background: var(--sh-bg-card);
 	box-shadow: 0 2px 4px var(--sh-shadow);
 }
@@ -289,7 +289,7 @@ pre {
 	left: 20%;
 	right: 20%;
 	height: 2px;
-	background: linear-gradient(90deg, var(--sh-primary), var(--sh-primary-end));
+	background: linear-gradient(90deg, var(--mind-light), var(--mind-main));
 	border-radius: 2px;
 }
 
@@ -314,12 +314,12 @@ pre {
 }
 
 .sh-filter-tab:hover {
-	border-color: var(--sh-primary);
+	border-color: var(--mind-light);
 	color: var(--sh-text-primary);
 }
 
 .sh-filter-tab.active {
-	background: linear-gradient(135deg, var(--sh-primary), var(--sh-primary-end));
+	background: linear-gradient(135deg, var(--mind-light), var(--mind-main));
 	color: white;
 	border-color: transparent;
 }
@@ -339,25 +339,25 @@ pre {
 
 .sh-badge-success {
 	background: rgba(34, 197, 94, 0.15);
-	color: var(--sh-success);
+	color: var(--root-light);
 	border: 1px solid rgba(34, 197, 94, 0.3);
 }
 
 .sh-badge-danger {
 	background: rgba(239, 68, 68, 0.15);
-	color: var(--sh-danger);
+	color: var(--boot-light);
 	border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
 .sh-badge-warning {
 	background: rgba(245, 158, 11, 0.15);
-	color: var(--sh-warning);
+	color: var(--wall-light);
 	border: 1px solid rgba(245, 158, 11, 0.3);
 }
 
 .sh-badge-info {
 	background: rgba(59, 130, 246, 0.15);
-	color: var(--sh-info);
+	color: var(--mesh-light);
 	border: 1px solid rgba(59, 130, 246, 0.3);
 }
 
@@ -393,18 +393,20 @@ pre {
 }
 
 .sh-text-success {
-	color: var(--sh-success);
+	color: var(--root-light);
 }
 
 .sh-text-danger {
-	color: var(--sh-danger);
+	color: var(--boot-light);
 }
 
 .sh-text-warning {
-	color: var(--sh-warning);
+	color: var(--wall-light);
 }
 
 /* === Responsive === */
+@import url('../../../shared/design-tokens.css');
+
 @media (max-width: 768px) {
 	.sh-page-header {
 		flex-direction: column;

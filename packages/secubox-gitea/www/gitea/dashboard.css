@@ -449,6 +449,8 @@
 }
 
 /* Responsive */
+@import url('../shared/design-tokens.css');
+
 @media (max-width: 768px) {
 	.gt-header-content {
 		flex-direction: column;

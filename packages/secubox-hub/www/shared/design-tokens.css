@@ -1,0 +1,309 @@
+/**
+ * SecuBox Design Tokens
+ * Based on Charte Graphique v1.0 — April 2026
+ * CyberMind · Gondwana · Notre-Dame-du-Cruet · Savoie
+ *
+ * Six-Module Color System with Complementary Pairs:
+ * - Red ↔ Green (BOOT ↔ ROOT)
+ * - Yellow ↔ Violet (WALL ↔ MIND)
+ * - Blue ↔ Orange (MESH ↔ AUTH)
+ */
+
+:root {
+  /* ═══════════════════════════════════════════════════════════════
+     MODULE 01: AUTH — Orange (Coral Auth)
+     Authentication, zero-trust, MFA, ZKP
+     ═══════════════════════════════════════════════════════════════ */
+  --auth-main:  #C04E24;
+  --auth-light: #E8845A;
+  --auth-xlt:   #FAECE7;
+  --auth-dark:  #7A2A10;
+
+  /* ═══════════════════════════════════════════════════════════════
+     MODULE 02: WALL — Yellow/Amber (Amber Shield)
+     Firewall, nftables, CrowdSec, IDS/IPS
+     ═══════════════════════════════════════════════════════════════ */
+  --wall-main:  #9A6010;
+  --wall-light: #CC8820;
+  --wall-xlt:   #FDF3E0;
+  --wall-dark:  #5A3808;
+
+  /* ═══════════════════════════════════════════════════════════════
+     MODULE 03: BOOT — Red (Coral Launch)
+     Deployment, provisioning, installation
+     ═══════════════════════════════════════════════════════════════ */
+  --boot-main:  #803018;
+  --boot-light: #C06040;
+  --boot-xlt:   #FAECE7;
+  --boot-dark:  #5A1E0A;
+
+  /* ═══════════════════════════════════════════════════════════════
+     MODULE 04: MIND — Violet (Violet Mind)
+     AI, behavioral analysis, nDPId, ML, SIEM
+     ═══════════════════════════════════════════════════════════════ */
+  --mind-main:  #3D35A0;
+  --mind-light: #7068D0;
+  --mind-xlt:   #EEEDFE;
+  --mind-dark:  #241D6A;
+
+  /* ═══════════════════════════════════════════════════════════════
+     MODULE 05: ROOT — Green/Teal (Teal Root)
+     Terminal CLI, Debian system, hardening
+     PRIMARY BRAND COLOR (SecuBox)
+     ═══════════════════════════════════════════════════════════════ */
+  --root-main:  #0A5840;
+  --root-light: #148C66;
+  --root-xlt:   #E1F5EE;
+  --root-dark:  #063828;
+
+  /* ═══════════════════════════════════════════════════════════════
+     MODULE 06: MESH — Blue (Blue Mesh)
+     Network, WireGuard, Tailscale, mesh topology
+     ═══════════════════════════════════════════════════════════════ */
+  --mesh-main:  #104A88;
+  --mesh-light: #2C70C0;
+  --mesh-xlt:   #E6F1FB;
+  --mesh-dark:  #08305A;
+
+  /* ═══════════════════════════════════════════════════════════════
+     LIGHT THEME BASE COLORS
+     ═══════════════════════════════════════════════════════════════ */
+  --bg:         #FFFFFF;
+  --surface:    #FAFAF8;
+  --surface2:   #F4F3EF;
+  --border:     #E2E0D8;
+  --border2:    #C8C6BE;
+  --text:       #1A1A18;
+  --muted:      #6B6963;
+
+  /* ═══════════════════════════════════════════════════════════════
+     DARK THEME BASE COLORS
+     ═══════════════════════════════════════════════════════════════ */
+  --bg-dark:       #0A0E14;
+  --surface-dark:  #141A24;
+  --surface2-dark: #1E2632;
+  --border-dark:   #2A3444;
+  --border2-dark:  #3A4858;
+  --text-dark:     #E8E6E0;
+  --muted-dark:    #8A9AA8;
+
+  /* ═══════════════════════════════════════════════════════════════
+     SEMANTIC COLORS
+     ═══════════════════════════════════════════════════════════════ */
+  --color-success:    var(--root-main);
+  --color-success-bg: var(--root-xlt);
+  --color-warning:    var(--wall-main);
+  --color-warning-bg: var(--wall-xlt);
+  --color-danger:     var(--boot-main);
+  --color-danger-bg:  var(--boot-xlt);
+  --color-info:       var(--mesh-main);
+  --color-info-bg:    var(--mesh-xlt);
+  --color-primary:    var(--root-main);
+  --color-primary-bg: var(--root-xlt);
+  --color-accent:     var(--mind-main);
+  --color-accent-bg:  var(--mind-xlt);
+
+  /* ═══════════════════════════════════════════════════════════════
+     BRAND COLORS
+     ═══════════════════════════════════════════════════════════════ */
+  --brand-secubox:   var(--root-main);   /* Green - Main product */
+  --brand-gondwana:  var(--mind-main);   /* Violet - Public/external */
+  --brand-cybermind: var(--auth-main);   /* Orange - Internal */
+
+  /* ═══════════════════════════════════════════════════════════════
+     TYPOGRAPHY
+     ═══════════════════════════════════════════════════════════════ */
+  --font-display: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-body:    'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono:    'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+
+  /* Font weights */
+  --weight-light:    300;
+  --weight-regular:  400;
+  --weight-medium:   500;
+  --weight-semibold: 600;
+  --weight-bold:     700;
+
+  /* Font sizes */
+  --size-xs:   10px;
+  --size-sm:   12px;
+  --size-base: 14px;
+  --size-md:   16px;
+  --size-lg:   18px;
+  --size-xl:   24px;
+  --size-2xl:  32px;
+  --size-3xl:  48px;
+  --size-4xl:  56px;
+
+  /* Line heights */
+  --leading-tight:  1.2;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.65;
+  --leading-loose:  1.8;
+
+  /* Letter spacing */
+  --tracking-tight:  -2px;
+  --tracking-normal: -0.4px;
+  --tracking-wide:   0.5px;
+  --tracking-wider:  2px;
+  --tracking-widest: 4px;
+
+  /* ═══════════════════════════════════════════════════════════════
+     SPACING SYSTEM
+     ═══════════════════════════════════════════════════════════════ */
+  --space-xs:  4px;
+  --space-s:   8px;
+  --space-m:   16px;
+  --space-l:   24px;
+  --space-xl:  40px;
+  --space-2xl: 56px;
+
+  /* ═══════════════════════════════════════════════════════════════
+     BORDER RADIUS
+     ═══════════════════════════════════════════════════════════════ */
+  --radius-sm:   3px;
+  --radius-md:   6px;
+  --radius-lg:   14px;
+  --radius-xl:   20px;
+  --radius-full: 9999px;
+
+  /* ═══════════════════════════════════════════════════════════════
+     SHADOWS
+     ═══════════════════════════════════════════════════════════════ */
+  --shadow-sm:  0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md:  0 4px 6px rgba(0, 0, 0, 0.07);
+  --shadow-lg:  0 10px 15px rgba(0, 0, 0, 0.1);
+  --shadow-xl:  0 20px 25px rgba(0, 0, 0, 0.15);
+
+  /* ═══════════════════════════════════════════════════════════════
+     TRANSITIONS
+     ═══════════════════════════════════════════════════════════════ */
+  --transition-fast:   150ms ease;
+  --transition-normal: 250ms ease;
+  --transition-slow:   400ms ease;
+
+  /* ═══════════════════════════════════════════════════════════════
+     Z-INDEX LAYERS
+     ═══════════════════════════════════════════════════════════════ */
+  --z-dropdown:  100;
+  --z-sticky:    200;
+  --z-fixed:     300;
+  --z-modal:     400;
+  --z-popover:   500;
+  --z-tooltip:   600;
+
+  /* ═══════════════════════════════════════════════════════════════
+     GRID
+     ═══════════════════════════════════════════════════════════════ */
+  --grid-columns: 12;
+  --grid-gap:     8px;
+
+  /* ═══════════════════════════════════════════════════════════════
+     LEGACY P31 PHOSPHOR MAPPING (for gradual migration)
+     Maps old P31 colors to new 6-module system
+     ═══════════════════════════════════════════════════════════════ */
+  --p31-peak:    var(--root-light);   /* Was #00dd44 → now Teal Root light */
+  --p31-hot:     var(--root-main);    /* Was #00ff55 → now Teal Root main */
+  --p31-mid:     var(--root-main);    /* Was #22cc44 → now Teal Root main */
+  --p31-dim:     var(--root-dark);    /* Was #0f8822 → now Teal Root dark */
+  --p31-ghost:   var(--root-dark);    /* Was #0a4420 → now Teal Root dark */
+  --p31-decay:   var(--wall-light);   /* Was #ffb347 → now Amber Shield light */
+  --p31-amber:   var(--wall-main);    /* Was #dd8800 → now Amber Shield main */
+  --p31-red:     var(--boot-main);    /* Was #ff4466 → now Coral Launch main */
+
+  /* Tube glass backgrounds mapping */
+  --tube-glass:  var(--root-xlt);     /* Was #e8f5e9 → now Root extra-light */
+  --tube-pale:   var(--surface);      /* Was #c8e6c9 → now Surface */
+  --tube-deep:   var(--surface-dark); /* Was #1a1f2e → now Surface dark */
+  --tube-black:  var(--bg-dark);      /* Was #0a0e14 → now Background dark */
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   DARK THEME OVERRIDE
+   Apply with class="dark" on <html> or <body>
+   ═══════════════════════════════════════════════════════════════ */
+.dark,
+[data-theme="dark"] {
+  --bg:       var(--bg-dark);
+  --surface:  var(--surface-dark);
+  --surface2: var(--surface2-dark);
+  --border:   var(--border-dark);
+  --border2:  var(--border2-dark);
+  --text:     var(--text-dark);
+  --muted:    var(--muted-dark);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MODULE-SPECIFIC UTILITY CLASSES
+   ═══════════════════════════════════════════════════════════════ */
+
+/* AUTH - Orange */
+.module-auth { --module-main: var(--auth-main); --module-light: var(--auth-light); --module-xlt: var(--auth-xlt); --module-dark: var(--auth-dark); }
+.bg-auth { background-color: var(--auth-main); }
+.bg-auth-light { background-color: var(--auth-xlt); }
+.text-auth { color: var(--auth-main); }
+.border-auth { border-color: var(--auth-main); }
+
+/* WALL - Yellow/Amber */
+.module-wall { --module-main: var(--wall-main); --module-light: var(--wall-light); --module-xlt: var(--wall-xlt); --module-dark: var(--wall-dark); }
+.bg-wall { background-color: var(--wall-main); }
+.bg-wall-light { background-color: var(--wall-xlt); }
+.text-wall { color: var(--wall-main); }
+.border-wall { border-color: var(--wall-main); }
+
+/* BOOT - Red */
+.module-boot { --module-main: var(--boot-main); --module-light: var(--boot-light); --module-xlt: var(--boot-xlt); --module-dark: var(--boot-dark); }
+.bg-boot { background-color: var(--boot-main); }
+.bg-boot-light { background-color: var(--boot-xlt); }
+.text-boot { color: var(--boot-main); }
+.border-boot { border-color: var(--boot-main); }
+
+/* MIND - Violet */
+.module-mind { --module-main: var(--mind-main); --module-light: var(--mind-light); --module-xlt: var(--mind-xlt); --module-dark: var(--mind-dark); }
+.bg-mind { background-color: var(--mind-main); }
+.bg-mind-light { background-color: var(--mind-xlt); }
+.text-mind { color: var(--mind-main); }
+.border-mind { border-color: var(--mind-main); }
+
+/* ROOT - Green/Teal (Primary) */
+.module-root { --module-main: var(--root-main); --module-light: var(--root-light); --module-xlt: var(--root-xlt); --module-dark: var(--root-dark); }
+.bg-root { background-color: var(--root-main); }
+.bg-root-light { background-color: var(--root-xlt); }
+.text-root { color: var(--root-main); }
+.border-root { border-color: var(--root-main); }
+
+/* MESH - Blue */
+.module-mesh { --module-main: var(--mesh-main); --module-light: var(--mesh-light); --module-xlt: var(--mesh-xlt); --module-dark: var(--mesh-dark); }
+.bg-mesh { background-color: var(--mesh-main); }
+.bg-mesh-light { background-color: var(--mesh-xlt); }
+.text-mesh { color: var(--mesh-main); }
+.border-mesh { border-color: var(--mesh-main); }
+
+/* ═══════════════════════════════════════════════════════════════
+   SEMANTIC UTILITY CLASSES
+   ═══════════════════════════════════════════════════════════════ */
+.bg-success { background-color: var(--color-success-bg); color: var(--color-success); }
+.bg-warning { background-color: var(--color-warning-bg); color: var(--color-warning); }
+.bg-danger { background-color: var(--color-danger-bg); color: var(--color-danger); }
+.bg-info { background-color: var(--color-info-bg); color: var(--color-info); }
+
+.text-success { color: var(--color-success); }
+.text-warning { color: var(--color-warning); }
+.text-danger { color: var(--color-danger); }
+.text-info { color: var(--color-info); }
+.text-muted { color: var(--muted); }
+
+/* ═══════════════════════════════════════════════════════════════
+   CARD STRIPE GRADIENTS (for module cards)
+   ═══════════════════════════════════════════════════════════════ */
+.stripe-auth { background: linear-gradient(90deg, var(--auth-main), var(--auth-light)); }
+.stripe-wall { background: linear-gradient(90deg, var(--wall-main), var(--wall-light)); }
+.stripe-boot { background: linear-gradient(90deg, var(--boot-main), var(--boot-light)); }
+.stripe-mind { background: linear-gradient(90deg, var(--mind-main), var(--mind-light)); }
+.stripe-root { background: linear-gradient(90deg, var(--root-main), var(--root-light)); }
+.stripe-mesh { background: linear-gradient(90deg, var(--mesh-main), var(--mesh-light)); }
+
+/* Vertical gradient for sidebar/header accents */
+.accent-gradient {
+  background: linear-gradient(180deg, var(--root-main), var(--mesh-main), var(--mind-main));
+}

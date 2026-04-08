@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=SecuBox Text
+Description=SecuBox Text-Mode Boot Theme - For serial consoles and minimal displays
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/secubox-text
+ScriptFile=/usr/share/plymouth/themes/secubox-text/secubox-text.script

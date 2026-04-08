@@ -2,16 +2,16 @@
  */
 
 :root {
-    --ag-primary: #ef4444;
-    --ag-secondary: #f97316;
+    --ag-primary: var(--boot-light);
+    --ag-secondary: var(--auth-light);
     --ag-dark: #0f0a0a;
     --ag-darker: #080505;
     --ag-light: #1a1515;
     --ag-border: #2a2020;
-    --ag-success: #10b981;
-    --ag-warning: #f59e0b;
-    --ag-danger: #dc2626;
-    --ag-info: #3b82f6;
+    --ag-success: var(--root-light);
+    --ag-warning: var(--wall-light);
+    --ag-danger: var(--boot-main);
+    --ag-info: var(--mesh-light);
 }
 
 /* Main Container  * Version: 0.3.0
@@ -329,7 +329,7 @@
 }
 
 .ag-btn-primary:hover {
-    background: #dc2626;
+    background: var(--boot-main);
     box-shadow: 0 4px 8px rgba(239, 68, 68, 0.3);
 }
 
@@ -349,7 +349,7 @@
 }
 
 .ag-btn-danger:hover {
-    background: #b91c1c;
+    background: var(--boot-dark);
 }
 
 /* Form Elements */
@@ -418,6 +418,8 @@
 }
 
 /* Loading State */
+@import url('../../../shared/design-tokens.css');
+
 .ag-loading {
     text-align: center;
     padding: 40px;
