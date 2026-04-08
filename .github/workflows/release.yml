@@ -161,8 +161,28 @@ jobs:
           cp image/create-qemu-arm64-vm.sh release/
           cp image/create-vbox-vm.sh release/
 
+      - name: Delete existing release assets (for retry)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ github.ref_name || github.event.inputs.version }}"
+          # Check if release exists and delete conflicting assets
+          if gh release view "$VERSION" &>/dev/null; then
+            echo "Release exists, cleaning up for retry..."
+            # Get existing asset names
+            existing=$(gh release view "$VERSION" --json assets --jq '.assets[].name')
+            for asset in release/packages/*.deb release/images/*.img.gz release/images/*.img.xz; do
+              [ -f "$asset" ] || continue
+              name=$(basename "$asset")
+              if echo "$existing" | grep -qF "$name"; then
+                echo "Deleting existing asset: $name"
+                gh release delete-asset "$VERSION" "$name" --yes 2>/dev/null || true
+              fi
+            done
+          fi
+
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           name: SecuBox-DEB ${{ github.ref_name || github.event.inputs.version }}
           body_path: release/RELEASE_NOTES.md
@@ -175,4 +195,5 @@ jobs:
             release/SHA256SUMS
             release/SHA256SUMS.gpg
           draft: false
+          fail_on_unmatched_files: false
           prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
