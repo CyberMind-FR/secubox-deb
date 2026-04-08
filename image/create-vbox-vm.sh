@@ -88,11 +88,12 @@ VBoxManage modifyvm "${VM_NAME}" \
   --boot1 disk --boot2 none --boot3 none --boot4 none
 
 # Configurer réseau : 2 interfaces
-# Adapter 1 : NAT (WAN)
+# Adapter 1 : NAT (WAN) - PXE boot disabled
 VBoxManage modifyvm "${VM_NAME}" \
   --nic1 nat \
   --nictype1 virtio \
-  --cableconnected1 on
+  --cableconnected1 on \
+  --nicbootprio1 0
 
 # Adapter 2 : Host-Only (LAN) - créer si nécessaire
 HOSTONLY_NET=$(VBoxManage list hostonlyifs | grep "^Name:" | head -1 | awk '{print $2}')
@@ -106,7 +107,8 @@ VBoxManage modifyvm "${VM_NAME}" \
   --nic2 hostonly \
   --hostonlyadapter2 "${HOSTONLY_NET}" \
   --nictype2 virtio \
-  --cableconnected2 on
+  --cableconnected2 on \
+  --nicbootprio2 0
 
 log "Réseau configuré : NAT (WAN) + Host-Only (LAN)"
 
