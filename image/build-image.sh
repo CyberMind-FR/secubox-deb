@@ -362,6 +362,52 @@ if [[ $SLIPSTREAM_DEBS -eq 1 ]]; then
     # Nettoyer
     rm -rf "${ROOTFS}/tmp/secubox-debs"
     ok "Slipstream: ${INSTALLED_COUNT}/${SLIP_COUNT} paquets installés"
+
+    # ── Nginx cleanup after package install ──────────────────────────────────
+    log "Cleaning bad nginx configs from conf.d..."
+    for conf in "${ROOTFS}/etc/nginx/conf.d/"*secubox*.conf "${ROOTFS}/etc/nginx/conf.d/secubox-"*; do
+      [[ -f "$conf" ]] || [[ -L "$conf" ]] || continue
+      real_file="$conf"
+      if [[ -L "$conf" ]]; then
+        target=$(readlink "$conf")
+        if [[ "$target" == /* ]]; then
+          real_file="${ROOTFS}${target}"
+        else
+          real_file="${ROOTFS}/etc/nginx/conf.d/${target}"
+        fi
+      fi
+      if [[ -f "$real_file" ]] && grep -q "^location" "$real_file" 2>/dev/null; then
+        base=$(basename "$conf" .conf | sed 's/^secubox-//')
+        mkdir -p "${ROOTFS}/etc/nginx/secubox.d"
+        if [[ ! -f "${ROOTFS}/etc/nginx/secubox.d/${base}.conf" ]]; then
+          cp "$real_file" "${ROOTFS}/etc/nginx/secubox.d/${base}.conf" 2>/dev/null || true
+        fi
+        rm -f "$conf"
+      fi
+    done
+
+    log "Cleaning bad nginx configs from sites-enabled..."
+    for site in "${ROOTFS}/etc/nginx/sites-enabled/"*; do
+      [[ -f "$site" ]] || [[ -L "$site" ]] || continue
+      [[ "$(basename "$site")" == "secubox" ]] && continue
+      real_file="$site"
+      [[ -L "$site" ]] && real_file=$(readlink -f "$site") && real_file="${ROOTFS}${real_file#${ROOTFS}}"
+      [[ -f "$real_file" ]] || { rm -f "$site"; continue; }
+      if grep -q "^location" "$real_file" 2>/dev/null && ! grep -q "^server" "$real_file" 2>/dev/null; then
+        base=$(basename "$site" | sed 's/^secubox-//')
+        mkdir -p "${ROOTFS}/etc/nginx/secubox.d"
+        cp "$real_file" "${ROOTFS}/etc/nginx/secubox.d/${base}.conf" 2>/dev/null || true
+        rm -f "$site"
+      fi
+    done
+
+    # Test nginx configuration
+    if chroot "${ROOTFS}" nginx -t 2>&1; then
+      ok "Nginx configuration valid"
+    else
+      warn "Nginx configuration has errors (will be fixed at firstboot)"
+    fi
+
   else
     warn "Slipstream: pas de secubox-*.deb dans output/ ou output/debs/"
   fi
