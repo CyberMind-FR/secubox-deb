@@ -89,7 +89,9 @@ jobs:
           - MOCHAbin (Marvell Armada 7040) - arm64
           - ESPRESSObin v7 (Marvell Armada 3720) - arm64
           - ESPRESSObin Ultra (Marvell Armada 3720) - arm64
+          - Raspberry Pi 400 - arm64
           - VM x64 (VirtualBox/QEMU) - amd64
+          - QEMU ARM64 emulation script (x86 hosts)
 
           ### Boot Options
           - ⚡ **SecuBox Live** - Normal boot with persistence
@@ -154,6 +156,11 @@ jobs:
             mv SHA256SUMS.asc SHA256SUMS.gpg
           fi
 
+      - name: Copy VM scripts to release
+        run: |
+          cp image/create-qemu-arm64-vm.sh release/
+          cp image/create-vbox-vm.sh release/
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
@@ -163,6 +170,8 @@ jobs:
             release/packages/*.deb
             release/images/*.img.gz
             release/images/*.img.xz
+            release/create-qemu-arm64-vm.sh
+            release/create-vbox-vm.sh
             release/SHA256SUMS
             release/SHA256SUMS.gpg
           draft: false
