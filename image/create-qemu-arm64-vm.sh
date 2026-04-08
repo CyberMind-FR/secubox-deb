@@ -85,18 +85,22 @@ done
 # Check dependencies
 command -v qemu-system-aarch64 >/dev/null || fail "qemu-system-aarch64 not found. Install: apt install qemu-system-arm"
 
-# Find UEFI firmware
+# Find UEFI firmware (prefer AAVMF which has consistent 64MB size)
 UEFI_CODE=""
-UEFI_VARS=""
-for path in /usr/share/qemu-efi-aarch64/QEMU_EFI.fd \
-            /usr/share/AAVMF/AAVMF_CODE.fd \
-            /usr/share/edk2/aarch64/QEMU_EFI.fd; do
+UEFI_VARS_TEMPLATE=""
+for path in /usr/share/AAVMF/AAVMF_CODE.fd \
+            /usr/share/edk2/aarch64/QEMU_EFI.fd \
+            /usr/share/qemu-efi-aarch64/QEMU_EFI.fd; do
     if [[ -f "$path" ]]; then
         UEFI_CODE="$path"
+        # Get matching VARS template if AAVMF
+        if [[ "$path" == *AAVMF* ]]; then
+            UEFI_VARS_TEMPLATE="${path%_CODE.fd}_VARS.fd"
+        fi
         break
     fi
 done
-[[ -z "$UEFI_CODE" ]] && fail "UEFI firmware not found. Install: apt install qemu-efi-aarch64"
+[[ -z "$UEFI_CODE" ]] && fail "UEFI firmware not found. Install: apt install qemu-efi-aarch64 ovmf"
 
 # Prepare image
 log "Preparing image: $IMAGE"
@@ -127,9 +131,14 @@ fi
 
 # Create UEFI vars file (writable copy)
 VARS_FILE="/tmp/${VM_NAME}-uefi-vars.fd"
-if [[ ! -f "$VARS_FILE" ]]; then
-    # Create empty 64MB file for UEFI variables
-    truncate -s 64M "$VARS_FILE"
+if [[ ! -f "$VARS_FILE" ]] || [[ $(stat -c%s "$VARS_FILE") -ne $(stat -c%s "$UEFI_CODE") ]]; then
+    if [[ -n "$UEFI_VARS_TEMPLATE" ]] && [[ -f "$UEFI_VARS_TEMPLATE" ]]; then
+        cp "$UEFI_VARS_TEMPLATE" "$VARS_FILE"
+        log "Using UEFI vars template: $UEFI_VARS_TEMPLATE"
+    else
+        # Create file matching firmware size
+        truncate -s "$(stat -c%s "$UEFI_CODE")" "$VARS_FILE"
+    fi
 fi
 
 # Build QEMU command
@@ -146,7 +155,7 @@ QEMU_CMD=(
     -drive "if=pflash,format=raw,file=$VARS_FILE"
 
     # Boot disk
-    -drive "if=virtio,format=$(qemu-img info --output=json "$IMAGE" | grep -o '"format": "[^"]*"' | cut -d'"' -f4),file=$IMAGE"
+    -drive "if=virtio,format=$(qemu-img info --output=json "$IMAGE" | jq -r '.format'),file=$IMAGE"
 
     # Network with port forwarding
     -netdev "user,id=net0,hostfwd=tcp::${SSH_PORT}-:22,hostfwd=tcp::${HTTP_PORT}-:80,hostfwd=tcp::$((HTTP_PORT+363))-:443"
