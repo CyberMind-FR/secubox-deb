@@ -1,0 +1,13 @@
+secubox-netifyd (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release - SecuBox Netifyd Dashboard
+  * FastAPI backend wrapping netifyd Unix socket
+  * P31 Phosphor light theme web dashboard
+  * Real-time flow visualization
+  * Protocol and application detection
+  * Device discovery and tracking
+  * Service control endpoints
+  * DPI alerts management
+  * Three-fold architecture endpoints
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 08 Apr 2026 10:00:00 +0100

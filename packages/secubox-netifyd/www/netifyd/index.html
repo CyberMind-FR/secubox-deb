@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - Netifyd DPI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root {
+            /* P31 Phosphor spectrum */
+            --p31-peak: #00dd44;
+            --p31-hot: #00ff55;
+            --p31-mid: #009933;
+            --p31-dim: #006622;
+            --p31-ghost: #003311;
+            --p31-decay: #ffb347;
+            --p31-decay-dim: #cc7722;
+            /* Tube glass */
+            --tube-light: #e8f5e9;
+            --tube-pale: #c8e6c9;
+            --tube-soft: #a5d6a7;
+            --tube-dark: #1a2e1a;
+            /* Legacy mappings */
+            --bg-dark: var(--tube-light);
+            --bg-card: var(--tube-pale);
+            --border: var(--tube-soft);
+            --text: var(--tube-dark);
+            --text-dim: var(--p31-dim);
+            --primary: var(--p31-peak);
+            --cyan: var(--p31-peak);
+            --green: var(--p31-peak);
+            --red: #ff4466;
+            --yellow: var(--p31-decay);
+            --orange: var(--p31-decay-dim);
+            --purple: #a371f7;
+            /* Bloom effects */
+            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Courier Prime', 'Courier New', monospace;
+            background: var(--tube-light);
+            background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
+            color: var(--tube-dark);
+            display: flex;
+            min-height: 100vh;
+        }
+        .sidebar { width: 220px; position: fixed; height: 100vh; overflow-y: auto; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border);
+            background: var(--bg-card);
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+        }
+        .header h1 {
+            font-size: 1.5rem;
+            color: var(--p31-hot);
+            text-shadow: var(--bloom-text);
+            letter-spacing: 0.05em;
+        }
+        .badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-family: 'Courier Prime', monospace;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            border: 1px solid;
+        }
+        .badge.active { background: rgba(51,255,102,0.15); border-color: var(--p31-peak); color: var(--p31-peak); }
+        .badge.inactive { background: rgba(255,68,102,0.1); border-color: #ff4466; color: #ff4466; }
+        .header-actions { display: flex; gap: 0.75rem; }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            border: 1px solid var(--tube-soft);
+            background: var(--tube-pale);
+            color: var(--p31-mid);
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-family: 'Courier Prime', monospace;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            transition: all 0.2s;
+        }
+        .btn:hover {
+            border-color: var(--p31-dim);
+            color: var(--p31-peak);
+            text-shadow: var(--bloom-soft);
+        }
+        .btn.primary {
+            border-color: var(--p31-peak);
+            color: var(--p31-peak);
+            background: rgba(51,255,102,0.1);
+        }
+        .btn.danger {
+            border-color: #ff4466;
+            color: #ff4466;
+            background: rgba(255,68,102,0.1);
+        }
+
+        .status-bar {
+            display: flex;
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+            padding: 1rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            flex-wrap: wrap;
+        }
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+        .status-dot.active { background: var(--p31-peak); box-shadow: 0 0 8px var(--p31-peak); }
+        .status-dot.inactive { background: #ff4466; }
+
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .stat-card {
+            background: var(--tube-pale);
+            border: 1px solid var(--tube-soft);
+            border-radius: 8px;
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .stat-card .value {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 0.25rem;
+            text-shadow: 0 0 10px currentColor;
+        }
+        .stat-card .label {
+            font-size: 0.75rem;
+            color: var(--p31-dim);
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+        }
+        .stat-card.cyan .value { color: var(--p31-peak); }
+        .stat-card.green .value { color: var(--p31-peak); }
+        .stat-card.yellow .value { color: var(--p31-decay); }
+        .stat-card.purple .value { color: var(--purple); }
+
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+        .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5rem; }
+
+        .card {
+            background: var(--tube-pale);
+            border: 1px solid var(--tube-soft);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-bottom: 1.5rem;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.1);
+        }
+        .card:hover {
+            border-color: var(--p31-dim);
+        }
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        .card-header h2 {
+            font-size: 0.85rem;
+            color: var(--p31-decay);
+            text-shadow: var(--bloom-amber);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+
+        .list { max-height: 300px; overflow-y: auto; }
+        .list-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.6rem;
+            border-bottom: 1px solid var(--p31-ghost);
+        }
+        .list-item:hover { background: rgba(51,255,102,0.03); }
+        .list-item:last-child { border-bottom: none; }
+
+        .bytes { font-family: monospace; color: var(--p31-peak); }
+        .flow-count { font-family: monospace; color: var(--purple); font-size: 0.85rem; }
+
+        .progress-bar {
+            height: 6px;
+            background: var(--tube-soft);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 0.5rem;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--p31-dim), var(--p31-peak));
+            border-radius: 3px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            border-bottom: 1px solid var(--p31-ghost);
+            padding-bottom: 0.5rem;
+        }
+        .tab {
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            color: var(--p31-dim);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        .tab:hover { color: var(--p31-mid); }
+        .tab.active {
+            color: var(--p31-peak);
+            text-shadow: var(--bloom-soft);
+            border-bottom-color: var(--p31-peak);
+        }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .alert-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: 0.75rem;
+            background: rgba(255,68,102,0.05);
+            border-left: 3px solid #ff4466;
+            margin-bottom: 0.5rem;
+            border-radius: 0 4px 4px 0;
+        }
+        .alert-item.warning {
+            background: rgba(255,179,71,0.1);
+            border-left-color: var(--p31-decay);
+        }
+        .alert-item.info {
+            background: rgba(51,255,102,0.05);
+            border-left-color: var(--p31-peak);
+        }
+
+        .empty { color: var(--p31-dim); text-align: center; padding: 2rem; }
+
+        table { width: 100%; border-collapse: collapse; font-family: 'Courier Prime', monospace; }
+        th {
+            text-align: left;
+            padding: 0.75rem;
+            color: var(--p31-decay);
+            text-shadow: var(--bloom-amber);
+            letter-spacing: 0.15em;
+            border-bottom: 1px solid var(--p31-ghost);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+        }
+        td {
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--p31-ghost);
+            color: var(--p31-mid);
+            font-size: 0.85rem;
+        }
+        tr:hover { background: rgba(51,255,102,0.03); }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: var(--tube-light); }
+        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
+        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
+
+        @media (max-width: 1200px) { .stats-row { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 900px) {
+            .grid-2, .grid-3 { grid-template-columns: 1fr; }
+            .sidebar { display: none; }
+            .main { margin-left: 0; }
+        }
+    </style>
+</head>
+<body class="crt-light">
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+
+    <main class="main">
+        <header class="header">
+            <div style="display: flex; align-items: center; gap: 1rem;">
+                <h1>Netifyd DPI</h1>
+                <span class="badge" id="status-badge">-</span>
+            </div>
+            <div class="header-actions">
+                <button class="btn" onclick="refreshAll()">Refresh</button>
+                <button class="btn primary" onclick="restartService()">Restart</button>
+            </div>
+        </header>
+
+        <div class="status-bar">
+            <div class="status-item">
+                <div class="status-dot" id="daemon-status"></div>
+                <span>netifyd</span>
+            </div>
+            <div class="status-item">
+                <span>Version:</span>
+                <span id="daemon-version" style="color: var(--cyan);">-</span>
+            </div>
+            <div class="status-item">
+                <span>Interface:</span>
+                <span id="daemon-interface" style="color: var(--cyan);">-</span>
+            </div>
+            <div class="status-item">
+                <span>Socket:</span>
+                <span id="socket-status" style="color: var(--text-dim);">-</span>
+            </div>
+        </div>
+
+        <div class="stats-row">
+            <div class="stat-card cyan">
+                <div class="value" id="flow-count">0</div>
+                <div class="label">Active Flows</div>
+            </div>
+            <div class="stat-card green">
+                <div class="value" id="app-count">0</div>
+                <div class="label">Applications</div>
+            </div>
+            <div class="stat-card purple">
+                <div class="value" id="proto-count">0</div>
+                <div class="label">Protocols</div>
+            </div>
+            <div class="stat-card yellow">
+                <div class="value" id="device-count">0</div>
+                <div class="label">Devices</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="tabs">
+                <div class="tab active" data-tab="flows">Flows</div>
+                <div class="tab" data-tab="apps">Applications</div>
+                <div class="tab" data-tab="protocols">Protocols</div>
+                <div class="tab" data-tab="devices">Devices</div>
+                <div class="tab" data-tab="alerts">Alerts</div>
+            </div>
+
+            <div id="tab-flows" class="tab-content active">
+                <div class="card-header">
+                    <h2>Top Network Flows</h2>
+                    <button class="btn" onclick="loadFlows()">Refresh</button>
+                </div>
+                <div style="overflow-x: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Application</th>
+                                <th>Protocol</th>
+                                <th>Local</th>
+                                <th>Remote</th>
+                                <th>Bandwidth</th>
+                            </tr>
+                        </thead>
+                        <tbody id="flows-table">
+                            <tr><td colspan="5" class="empty">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="tab-apps" class="tab-content">
+                <div class="card-header">
+                    <h2>Detected Applications</h2>
+                </div>
+                <div class="list" id="apps-list">
+                    <p class="empty">Loading...</p>
+                </div>
+            </div>
+
+            <div id="tab-protocols" class="tab-content">
+                <div class="card-header">
+                    <h2>Detected Protocols</h2>
+                </div>
+                <div class="list" id="protocols-list">
+                    <p class="empty">Loading...</p>
+                </div>
+            </div>
+
+            <div id="tab-devices" class="tab-content">
+                <div class="card-header">
+                    <h2>Network Devices</h2>
+                </div>
+                <div class="list" id="devices-list">
+                    <p class="empty">Loading...</p>
+                </div>
+            </div>
+
+            <div id="tab-alerts" class="tab-content">
+                <div class="card-header">
+                    <h2>DPI Alerts</h2>
+                    <button class="btn" onclick="dismissAllAlerts()">Dismiss All</button>
+                </div>
+                <div class="list" id="alerts-list">
+                    <p class="empty">No alerts</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid-2">
+            <div class="card">
+                <div class="card-header">
+                    <h2>Real-Time Traffic</h2>
+                </div>
+                <div class="list">
+                    <div class="list-item">
+                        <span>RX Bytes</span>
+                        <span class="bytes" id="rx-bytes">0 B</span>
+                    </div>
+                    <div class="list-item">
+                        <span>TX Bytes</span>
+                        <span class="bytes" id="tx-bytes">0 B</span>
+                    </div>
+                    <div class="list-item">
+                        <span>RX Packets</span>
+                        <span class="flow-count" id="rx-packets">0</span>
+                    </div>
+                    <div class="list-item">
+                        <span>TX Packets</span>
+                        <span class="flow-count" id="tx-packets">0</span>
+                    </div>
+                    <div class="list-item">
+                        <span>RX Errors</span>
+                        <span style="color: var(--red);" id="rx-errors">0</span>
+                    </div>
+                    <div class="list-item">
+                        <span>TX Errors</span>
+                        <span style="color: var(--red);" id="tx-errors">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2>Service Controls</h2>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                    <button class="btn primary" onclick="startService()" style="width: 100%;">Start Service</button>
+                    <button class="btn danger" onclick="stopService()" style="width: 100%;">Stop Service</button>
+                    <button class="btn" onclick="restartService()" style="width: 100%;">Restart Service</button>
+                    <button class="btn" onclick="viewLogs()" style="width: 100%;">View Logs</button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Logs Modal -->
+    <div id="logs-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 1000; justify-content: center; align-items: center;">
+        <div style="background: var(--tube-pale); border: 1px solid var(--p31-dim); border-radius: 8px; width: 90%; max-width: 800px; max-height: 80vh; overflow: hidden; display: flex; flex-direction: column;">
+            <div style="padding: 1rem; border-bottom: 1px solid var(--p31-ghost); display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="color: var(--p31-decay); text-shadow: var(--bloom-amber);">Service Logs</h3>
+                <button class="btn" onclick="closeLogsModal()">Close</button>
+            </div>
+            <pre id="logs-content" style="flex: 1; overflow: auto; padding: 1rem; margin: 0; font-size: 0.8rem; color: var(--p31-mid); white-space: pre-wrap;"></pre>
+        </div>
+    </div>
+
+    <script>
+        const API = '/api/v1/netifyd';
+
+        async function api(endpoint, method = 'GET', data = null) {
+            const opts = { method, headers: { 'Content-Type': 'application/json' } };
+            if (data) opts.body = JSON.stringify(data);
+            try {
+                const res = await fetch(API + endpoint, opts);
+                return res.json();
+            } catch (e) {
+                console.error('API error:', e);
+                return { error: e.message };
+            }
+        }
+
+        function formatBytes(bytes) {
+            if (!bytes || bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return (bytes / Math.pow(k, i)).toFixed(1) + ' ' + sizes[i];
+        }
+
+        function formatNumber(num) {
+            if (!num) return '0';
+            return num.toLocaleString();
+        }
+
+        // Tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+            });
+        });
+
+        async function loadStatus() {
+            const data = await api('/status');
+            const running = data.running || false;
+
+            document.getElementById('daemon-status').className = 'status-dot ' + (running ? 'active' : 'inactive');
+            document.getElementById('status-badge').className = 'badge ' + (running ? 'active' : 'inactive');
+            document.getElementById('status-badge').textContent = running ? 'Running' : 'Stopped';
+            document.getElementById('daemon-version').textContent = data.version || '-';
+            document.getElementById('daemon-interface').textContent = data.interface || '-';
+            document.getElementById('socket-status').textContent = data.socket_available ? 'Connected' : 'Unavailable';
+            document.getElementById('socket-status').style.color = data.socket_available ? 'var(--green)' : 'var(--red)';
+        }
+
+        async function loadStats() {
+            const data = await api('/stats');
+            if (data.active_flows !== undefined) {
+                document.getElementById('flow-count').textContent = data.active_flows || 0;
+                document.getElementById('app-count').textContent = data.unique_apps || 0;
+                document.getElementById('proto-count').textContent = data.unique_protocols || 0;
+                document.getElementById('device-count').textContent = data.unique_devices || 0;
+            }
+        }
+
+        async function loadRealtime() {
+            const data = await api('/stats/realtime');
+            if (!data.error) {
+                document.getElementById('rx-bytes').textContent = formatBytes(data.rx_bytes);
+                document.getElementById('tx-bytes').textContent = formatBytes(data.tx_bytes);
+                document.getElementById('rx-packets').textContent = formatNumber(data.rx_packets);
+                document.getElementById('tx-packets').textContent = formatNumber(data.tx_packets);
+                document.getElementById('rx-errors').textContent = formatNumber(data.rx_errors);
+                document.getElementById('tx-errors').textContent = formatNumber(data.tx_errors);
+            }
+        }
+
+        async function loadFlows() {
+            const data = await api('/flows/top?limit=20');
+            const tbody = document.getElementById('flows-table');
+            const flows = data.flows || [];
+            document.getElementById('flow-count').textContent = data.total || flows.length;
+
+            if (flows.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="empty">No active flows</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = flows.map(f => `
+                <tr>
+                    <td>${f.detected_application_name || 'unknown'}</td>
+                    <td>${f.detected_protocol_name || f.protocol || '-'}</td>
+                    <td style="font-family: monospace; font-size: 0.8rem;">${f.local_ip || '-'}:${f.local_port || '-'}</td>
+                    <td style="font-family: monospace; font-size: 0.8rem;">${f.other_ip || '-'}:${f.other_port || '-'}</td>
+                    <td class="bytes">${formatBytes(f.bytes || 0)}</td>
+                </tr>
+            `).join('');
+        }
+
+        async function loadApplications() {
+            const data = await api('/applications');
+            const container = document.getElementById('apps-list');
+            const apps = data.applications || [];
+            document.getElementById('app-count').textContent = apps.length;
+
+            if (apps.length === 0) {
+                container.innerHTML = '<p class="empty">No applications detected</p>';
+                return;
+            }
+
+            const maxBytes = Math.max(...apps.map(a => a.bytes_total || 0));
+            container.innerHTML = apps.map(a => `
+                <div class="list-item">
+                    <div style="flex: 1;">
+                        <div>${a.name}</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: ${maxBytes ? ((a.bytes_total || 0) / maxBytes * 100) : 0}%"></div>
+                        </div>
+                    </div>
+                    <div style="text-align: right;">
+                        <span class="bytes">${formatBytes(a.bytes_total || 0)}</span>
+                        <div class="flow-count">${a.flow_count || 0} flows</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function loadProtocols() {
+            const data = await api('/protocols');
+            const container = document.getElementById('protocols-list');
+            const protocols = data.protocols || [];
+            document.getElementById('proto-count').textContent = protocols.length;
+
+            if (protocols.length === 0) {
+                container.innerHTML = '<p class="empty">No protocols detected</p>';
+                return;
+            }
+
+            const maxBytes = Math.max(...protocols.map(p => p.bytes_total || 0));
+            container.innerHTML = protocols.map(p => `
+                <div class="list-item">
+                    <div style="flex: 1;">
+                        <div>${p.name}</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: ${maxBytes ? ((p.bytes_total || 0) / maxBytes * 100) : 0}%"></div>
+                        </div>
+                    </div>
+                    <div style="text-align: right;">
+                        <span class="bytes">${formatBytes(p.bytes_total || 0)}</span>
+                        <div class="flow-count">${p.flow_count || 0} flows</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function loadDevices() {
+            const data = await api('/hosts');
+            const container = document.getElementById('devices-list');
+            const hosts = data.hosts || [];
+            document.getElementById('device-count').textContent = hosts.length;
+
+            if (hosts.length === 0) {
+                container.innerHTML = '<p class="empty">No devices discovered</p>';
+                return;
+            }
+
+            container.innerHTML = hosts.map(h => `
+                <div class="list-item">
+                    <div>
+                        <div style="font-family: monospace;">${h.mac || '-'}</div>
+                        <div style="font-size: 0.8rem; color: var(--text-dim);">${h.ip || ''} ${h.hostname ? '(' + h.hostname + ')' : ''}</div>
+                    </div>
+                    <div style="text-align: right;">
+                        <span class="bytes">${formatBytes(h.bytes_total || 0)}</span>
+                        <div class="flow-count">${h.flow_count || 0} flows</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function loadAlerts() {
+            const data = await api('/alerts?limit=50');
+            const container = document.getElementById('alerts-list');
+            const alerts = data.alerts || [];
+
+            if (alerts.length === 0) {
+                container.innerHTML = '<p class="empty">No alerts</p>';
+                return;
+            }
+
+            container.innerHTML = alerts.map(a => `
+                <div class="alert-item ${a.severity || 'info'}">
+                    <div>
+                        <div style="font-weight: bold;">${a.type || 'Alert'}</div>
+                        <div>${a.message}</div>
+                        <div style="font-size: 0.75rem; color: var(--text-dim);">${a.timestamp || ''}</div>
+                    </div>
+                    <button class="btn" onclick="dismissAlert('${a.id}')">Dismiss</button>
+                </div>
+            `).join('');
+        }
+
+        async function startService() {
+            const r = await api('/start', 'POST');
+            alert(r.error ? 'Error: ' + r.error : 'Service started');
+            loadStatus();
+        }
+
+        async function stopService() {
+            const r = await api('/stop', 'POST');
+            alert(r.error ? 'Error: ' + r.error : 'Service stopped');
+            loadStatus();
+        }
+
+        async function restartService() {
+            const r = await api('/restart', 'POST');
+            alert(r.error ? 'Error: ' + r.error : 'Service restarted');
+            loadStatus();
+        }
+
+        async function dismissAlert(alertId) {
+            await api('/alerts/dismiss?alert_id=' + alertId, 'POST');
+            loadAlerts();
+        }
+
+        async function dismissAllAlerts() {
+            await api('/alerts/dismiss_all', 'POST');
+            loadAlerts();
+        }
+
+        async function viewLogs() {
+            const data = await api('/logs?lines=200');
+            const modal = document.getElementById('logs-modal');
+            const content = document.getElementById('logs-content');
+            content.textContent = (data.lines || []).join('\n') || 'No logs available';
+            modal.style.display = 'flex';
+        }
+
+        function closeLogsModal() {
+            document.getElementById('logs-modal').style.display = 'none';
+        }
+
+        function refreshAll() {
+            loadStatus();
+            loadStats();
+            loadRealtime();
+            loadFlows();
+            loadApplications();
+            loadProtocols();
+            loadDevices();
+            loadAlerts();
+        }
+
+        // Initial load
+        refreshAll();
+
+        // Auto-refresh every 10 seconds
+        setInterval(() => {
+            loadStatus();
+            loadStats();
+            loadRealtime();
+            loadFlows();
+        }, 10000);
+    </script>
+    <script src="/shared/crt-engine.js"></script>
+</body>
+</html>

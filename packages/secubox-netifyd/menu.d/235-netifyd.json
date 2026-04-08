@@ -1,0 +1,9 @@
+{
+  "id": "netifyd",
+  "name": "Netifyd",
+  "category": "network",
+  "icon": "N",
+  "path": "/netifyd/",
+  "order": 235,
+  "description": "Network Intelligence Daemon - DPI"
+}
