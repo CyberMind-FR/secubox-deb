@@ -495,7 +495,7 @@ secubox-kiosk-setup {install|enable|disable|console|no-console|status} [--x11|--
 - Cursor hidden after 3 seconds
 - Screen blanking disabled
 - Console access on TTY2 (Ctrl+Alt+F2)
-- Connects to `https://192.168.255.1:9443/`
+- Connects to `https://localhost/` (works without network)
 
 **Example:**
 ```bash

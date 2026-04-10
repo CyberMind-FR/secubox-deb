@@ -1480,8 +1480,8 @@ echo "Starting kiosk session..."
 xset s off 2>/dev/null
 xset -dpms 2>/dev/null
 
-# URL to display
-URL="https://192.168.255.1:9443/"
+# URL to display - use localhost for universal compatibility (works without network)
+URL="https://localhost/"
 
 # Try Chromium with minimal flags
 exec chromium \
@@ -1554,7 +1554,7 @@ XCONF
 # Start X11 in background, switch to VT7 after 3 seconds
 (
     sleep 2
-    URL="https://192.168.255.1:9443/"
+    URL="https://localhost/"
     export DISPLAY=:0
     xinit /bin/bash -c "
         xset s off 2>/dev/null
@@ -2589,6 +2589,6 @@ echo -e "    ${FLASH_CMD}"
 echo ""
 echo -e "  ${BOLD}Credentials:${NC}"
 echo -e "    SSH/Console: root / secubox"
-echo -e "    Web UI: https://192.168.255.1:9443"
+echo -e "    Web UI: https://localhost (or real LAN IP)"
 echo ""
 echo -e "${GREEN}${BOLD}════════════════════════════════════════════════════════════${NC}"
