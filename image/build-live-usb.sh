@@ -855,6 +855,26 @@ ok "Base configuration complete"
 # ══════════════════════════════════════════════════════════════════
 log "3/8 Installing firmware..."
 
+# Mount special filesystems for chroot (required for apt)
+mount_chroot_fs() {
+  mount --bind /dev "${ROOTFS}/dev"
+  mount --bind /dev/pts "${ROOTFS}/dev/pts" 2>/dev/null || true
+  mount -t proc proc "${ROOTFS}/proc"
+  mount -t sysfs sysfs "${ROOTFS}/sys"
+}
+
+umount_chroot_fs() {
+  umount -lf "${ROOTFS}/dev/pts" 2>/dev/null || true
+  umount -lf "${ROOTFS}/dev" 2>/dev/null || true
+  umount -lf "${ROOTFS}/proc" 2>/dev/null || true
+  umount -lf "${ROOTFS}/sys" 2>/dev/null || true
+}
+
+# Ensure mounts are cleaned up on exit
+trap 'umount_chroot_fs; cleanup' EXIT
+
+mount_chroot_fs
+
 cat > "${ROOTFS}/etc/apt/sources.list" <<EOF
 deb ${APT_MIRROR} ${SUITE} main contrib non-free non-free-firmware
 deb ${APT_MIRROR} ${SUITE}-updates main contrib non-free non-free-firmware
@@ -2321,6 +2341,10 @@ ok "Permissions fixed"
 # ══════════════════════════════════════════════════════════════════
 # Step 7: Create SquashFS
 # ══════════════════════════════════════════════════════════════════
+
+# Unmount special filesystems before creating squashfs
+umount_chroot_fs
+
 log "7/8 Creating SquashFS filesystem..."
 mkdir -p "${LIVE_DIR}/live"
 
