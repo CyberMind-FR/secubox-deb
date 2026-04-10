@@ -94,8 +94,8 @@ determine_url() {
     log "Determining kiosk URL..."
 
     local url=""
+    # localhost first - always works regardless of network state
     local urls=(
-        "https://192.168.255.1/"
         "https://localhost/"
         "https://127.0.0.1/"
         "http://localhost/"
@@ -116,7 +116,7 @@ determine_url() {
         fi
     done
 
-    echo "${url:-http://localhost/}"
+    echo "${url:-https://localhost/}"
 }
 
 # ══════════════════════════════════════════════════════════════════
