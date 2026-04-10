@@ -1,9 +1,50 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-04-10 (Session 45)*
+*Mis à jour : 2026-04-10 (Session 46)*
 
 ---
 
-## ✅ Terminé cette session (Session 45)
+## ✅ Terminé cette session (Session 46)
+
+### Kiosk "Can't Be Reached" Fix ✅
+
+#### Problem
+- Kiosk on real hardware (Lenovo) showed "secubox.local" URL that couldn't be reached
+- nginx config was invalid due to missing/broken symlinks in `secubox.d/`
+
+#### Fixes Applied
+1. **Kiosk URL** → Changed from `https://localhost/` to `https://127.0.0.1/`
+   - Avoids DNS resolution issues on fresh systems
+   - File: `image/kiosk/secubox-kiosk.sh`
+
+2. **`/etc/hosts`** → Added `secubox.local` to all build scripts
+   - Files: `build-live-usb.sh`, `build-image.sh`, `build-rpi-usb.sh`, `build-installer-iso.sh`
+
+3. **nginx config cleanup** → Aggressive broken symlink removal
+   - Uses `find` to remove ALL broken symlinks in `secubox.d/`
+   - Creates placeholder `repo.conf` if missing
+   - Auto-detects missing configs from nginx error output
+   - File: `image/build-live-usb.sh`
+
+#### Commits
+- `09526c4` — fix(kiosk): Use IP address and add secubox.local to hosts
+- `1ff368c` — fix(build): Add aggressive nginx config cleanup for live image
+
+#### Verified
+- ✅ QEMU KVM test passed — kiosk displays dashboard correctly
+- ✅ nginx config valid in build log
+- ✅ USB flashed and ready for Lenovo hardware test
+
+---
+
+## ⬜ Next Up
+
+1. Test USB on Lenovo hardware
+2. Run full integration test suite
+3. Prepare release v1.6.1 with all fixes
+
+---
+
+## ✅ Terminé session précédente (Session 45)
 
 ### Wiki Cleanup & German Translations ✅
 
@@ -41,14 +82,6 @@
 | UI-COMPARISON | ✅ | — | — | — |
 
 **Translation coverage:** EN 100%, FR 100%, ZH 100%, DE 100%
-
----
-
-## ⬜ Next Up
-
-1. Boot USB on physical hardware and validate
-2. Run full integration test suite
-3. Prepare release v1.6.1 with all fixes
 
 ---
 
