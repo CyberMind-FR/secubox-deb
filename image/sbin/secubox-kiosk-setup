@@ -8,7 +8,7 @@ set -euo pipefail
 
 KIOSK_USER="secubox-kiosk"
 KIOSK_HOME="/home/${KIOSK_USER}"
-KIOSK_URL="https://192.168.255.1:9443/"
+KIOSK_URL="https://192.168.255.1/"
 MARKER="/var/lib/secubox/.kiosk-installed"
 ENABLED_MARKER="/var/lib/secubox/.kiosk-enabled"
 CONSOLE_MARKER="/var/lib/secubox/.console-enabled"
@@ -162,7 +162,7 @@ create_wayland_script() {
 # Note: secubox-kiosk-launcher already waits for services before starting
 
 # URL from environment (set by launcher) or fallback
-URL="${KIOSK_URL:-https://192.168.255.1:9443/}"
+URL="${KIOSK_URL:-https://192.168.255.1/}"
 
 # Log startup
 logger -t secubox-kiosk "Starting Chromium Wayland kiosk: $URL"
@@ -208,7 +208,7 @@ create_x11_xinitrc() {
 # Note: secubox-kiosk-launcher already waits for services before starting
 
 # URL from environment (set by launcher) or fallback
-URL="${KIOSK_URL:-https://192.168.255.1:9443/}"
+URL="${KIOSK_URL:-https://192.168.255.1/}"
 
 # Log startup
 logger -t secubox-kiosk "Starting Chromium X11 kiosk: $URL"
