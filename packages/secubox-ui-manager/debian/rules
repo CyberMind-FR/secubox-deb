@@ -1,0 +1,18 @@
+#!/usr/bin/make -f
+
+export DH_VERBOSE = 1
+export PYBUILD_NAME = secubox-ui-manager
+
+%:
+	dh $@ --with python3 --buildsystem=pybuild
+
+override_dh_auto_install:
+	dh_auto_install
+	# Install binary
+	install -D -m 755 bin/secubox-ui-manager debian/secubox-ui-manager/usr/bin/secubox-ui-manager
+	# Install config
+	install -D -m 644 ui/config/ui.toml debian/secubox-ui-manager/usr/lib/secubox/ui/config/ui.toml
+	# Install systemd service
+	install -D -m 644 debian/secubox-ui-manager.service debian/secubox-ui-manager/usr/lib/systemd/system/secubox-ui-manager.service
+	# Create config directory
+	install -d debian/secubox-ui-manager/etc/secubox/ui

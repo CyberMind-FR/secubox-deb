@@ -1,0 +1,123 @@
+# SecuBox UI Manager Configuration
+# =================================
+#
+# Copy to /etc/secubox/ui/ui.toml for customization.
+# Values here are defaults.
+
+[general]
+# Default UI mode: kui, tui, console, auto
+# "auto" uses the fallback chain based on detected capabilities
+default_mode = "auto"
+
+# State persistence file
+state_file = "/run/secubox/ui/state.json"
+
+# Health status file
+health_file = "/run/secubox/ui/health.json"
+
+
+[fallback]
+# Mode priority order (first available wins)
+priority = ["kui", "tui", "console"]
+
+# Timeout for each mode startup (seconds)
+timeout_seconds = 30
+
+# Max retry attempts per mode before falling back
+max_retries = 2
+
+
+[debug]
+# Debug level: 0=silent, 1=error, 2=warn, 3=info, 4=debug, 5=trace
+# Can also be set via SECUBOX_UI_DEBUG environment variable
+level = 1
+
+# Components to log (empty = all)
+# Can also be set via SECUBOX_UI_DEBUG_COMPONENTS
+# Available: state, kui, tui, console, hypervisor, health, display, fallback
+components = []
+
+# Enable debug FIFO for external tools
+enable_fifo = true
+fifo_path = "/run/secubox/ui/debug.fifo"
+
+
+[kui]
+# Kiosk UI (X11 + Chromium) settings
+
+# User to run kiosk as
+user = "kiosk"
+home = "/home/kiosk"
+
+# URL to open in kiosk mode
+url = "http://127.0.0.1:8080/"
+
+# Virtual terminal for X11
+vt = 7
+
+# Startup timeout (seconds)
+startup_timeout = 30
+
+# Chromium flags
+chromium_flags = [
+    "--kiosk",
+    "--noerrdialogs",
+    "--disable-infobars",
+    "--disable-session-crashed-bubble",
+    "--disable-restore-session-state",
+    "--disable-translate",
+    "--no-first-run",
+    "--start-maximized",
+]
+
+# Disable GPU acceleration (recommended for VMs)
+disable_gpu = true
+
+
+[tui]
+# Terminal UI settings
+
+# TTY to use
+tty = "/dev/tty1"
+
+# Textual app module (Python path)
+textual_app = "secubox_console.app:SecuBoxConsole"
+
+# Fallback bash TUI script
+bash_fallback = "/usr/sbin/secubox-console-tui"
+
+
+[console]
+# Console fallback settings
+
+# Primary TTY
+tty = "tty1"
+
+# Enable getty on multiple TTYs for recovery
+enable_multiple_ttys = true
+
+
+[health]
+# Health monitoring settings
+
+# Check interval (seconds)
+check_interval = 10.0
+
+# Consecutive failures before triggering fallback
+failure_threshold = 3
+
+
+[hypervisor]
+# Hypervisor-specific overrides
+# These override auto-detected settings
+
+# Force a specific X11 driver (empty = auto)
+# Options: modesetting, vmware, fbdev, amdgpu
+force_driver = ""
+
+# Force disable 3D acceleration
+force_disable_3d = false
+
+# Force a specific resolution (empty = auto)
+# Format: "WIDTHxHEIGHT" e.g. "1280x720"
+force_resolution = ""

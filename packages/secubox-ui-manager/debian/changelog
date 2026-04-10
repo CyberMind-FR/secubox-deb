@@ -1,0 +1,10 @@
+secubox-ui-manager (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release
+  * Unified UI manager with three modes (KUI/TUI/Console)
+  * Automatic hypervisor detection and optimization
+  * Graceful fallback chain with health monitoring
+  * Modular debug system with 6 verbosity levels
+  * Per-VM graphics configuration (VirtualBox, QEMU/KVM, VMware)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 10 Apr 2025 12:00:00 +0200

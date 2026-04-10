@@ -1,0 +1,59 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+    configure)
+        # Create kiosk user if not exists
+        if ! id -u kiosk >/dev/null 2>&1; then
+            useradd -r -m -s /bin/bash -d /home/kiosk -G video,audio,input kiosk
+        fi
+
+        # Create runtime directory
+        mkdir -p /run/secubox/ui
+        chown root:root /run/secubox/ui
+        chmod 755 /run/secubox/ui
+
+        # Create log directory
+        mkdir -p /var/log/secubox
+        chmod 750 /var/log/secubox
+
+        # Create config directory
+        mkdir -p /etc/secubox/ui
+        chmod 755 /etc/secubox/ui
+
+        # Copy default config if not exists
+        if [ ! -f /etc/secubox/ui/ui.toml ]; then
+            cp /usr/lib/secubox/ui/config/ui.toml /etc/secubox/ui/ui.toml
+        fi
+
+        # Enable getty on multiple TTYs for recovery
+        for tty in 2 3 4 5 6; do
+            systemctl enable "getty@tty${tty}.service" 2>/dev/null || true
+        done
+
+        # Reload systemd
+        systemctl daemon-reload
+
+        # Enable services
+        systemctl enable secubox-ui-manager.service
+        systemctl enable secubox-ui-health.timer
+
+        # Start if not in chroot
+        if [ -z "$DPKG_ROOT" ] && systemctl is-system-running --quiet 2>/dev/null; then
+            systemctl start secubox-ui-manager.service || true
+            systemctl start secubox-ui-health.timer || true
+        fi
+        ;;
+
+    abort-upgrade|abort-remove|abort-deconfigure)
+        ;;
+
+    *)
+        echo "postinst called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

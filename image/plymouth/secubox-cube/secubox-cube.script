@@ -1,0 +1,169 @@
+/* SecuBox Cube - Plymouth Theme Script
+ * 3D Rotating Cube with Module Icons
+ * CyberMind - https://cybermind.fr
+ */
+
+/* Screen setup */
+Window.SetBackgroundTopColor(0.0, 0.0, 0.0);
+Window.SetBackgroundBottomColor(0.02, 0.04, 0.02);
+
+screen_width = Window.GetWidth();
+screen_height = Window.GetHeight();
+center_x = screen_width / 2;
+center_y = screen_height / 2;
+
+/* Load images */
+logo = Image("logo.png");
+scanlines = Image("scanlines.png");
+
+/* Module icons - 6 faces of the cube */
+icon_root = Image("icon-root.png");
+icon_boot = Image("icon-boot.png");
+icon_mesh = Image("icon-mesh.png");
+icon_wall = Image("icon-wall.png");
+icon_auth = Image("icon-auth.png");
+icon_mind = Image("icon-mind.png");
+
+/* Progress bar images */
+progress_bg = Image("progress-bg.png");
+progress_fg = Image("progress-fg.png");
+
+/* Create sprites */
+logo_sprite = Sprite(logo);
+logo_sprite.SetX(center_x - logo.GetWidth() / 2);
+logo_sprite.SetY(center_y - 180);
+logo_sprite.SetZ(10);
+
+/* Scanline overlay */
+scanline_sprite = Sprite(scanlines);
+scanline_sprite.SetX(0);
+scanline_sprite.SetY(0);
+scanline_sprite.SetZ(100);
+scanline_sprite.SetOpacity(0.15);
+
+/* Module icon sprites - arranged in hexagon */
+icon_size = 64;
+radius = 100;
+icons[0] = Sprite(icon_root);
+icons[1] = Sprite(icon_boot);
+icons[2] = Sprite(icon_mesh);
+icons[3] = Sprite(icon_wall);
+icons[4] = Sprite(icon_auth);
+icons[5] = Sprite(icon_mind);
+
+/* Initial positions */
+for (i = 0; i < 6; i++) {
+    icons[i].SetZ(5);
+    icons[i].SetOpacity(0.8);
+}
+
+/* Progress bar */
+progress_bg_sprite = Sprite(progress_bg);
+progress_bg_sprite.SetX(center_x - 150);
+progress_bg_sprite.SetY(center_y + 140);
+progress_bg_sprite.SetZ(8);
+
+progress_sprite = Sprite(progress_fg);
+progress_sprite.SetX(center_x - 148);
+progress_sprite.SetY(center_y + 142);
+progress_sprite.SetZ(9);
+
+/* Status text */
+status_text = "";
+message_sprite = Sprite();
+message_sprite.SetPosition(center_x, center_y + 180, 10);
+
+/* Animation state */
+angle = 0;
+frame = 0;
+progress = 0;
+
+/* Animation function - rotate icons in 3D-like pattern */
+fun animate_cube() {
+    global.angle += 0.02;
+    global.frame++;
+
+    for (i = 0; i < 6; i++) {
+        /* Calculate 3D-like position */
+        base_angle = global.angle + (i * 3.14159 / 3);
+
+        /* X position - circular motion */
+        x = center_x + Math.Sin(base_angle) * radius - icon_size / 2;
+
+        /* Y position - elliptical for 3D effect */
+        y = center_y + Math.Cos(base_angle) * (radius * 0.4) - icon_size / 2;
+
+        /* Z-depth simulation via opacity and scale */
+        depth = Math.Cos(base_angle);
+        opacity = 0.4 + (depth + 1) * 0.3;
+
+        icons[i].SetX(x);
+        icons[i].SetY(y);
+        icons[i].SetOpacity(opacity);
+
+        /* Bring front icons to top */
+        if (depth > 0) {
+            icons[i].SetZ(6);
+        } else {
+            icons[i].SetZ(4);
+        }
+    }
+}
+
+/* Progress callback */
+fun refresh_callback() {
+    animate_cube();
+}
+
+Plymouth.SetRefreshFunction(refresh_callback);
+
+/* Boot progress */
+fun boot_progress_callback(duration, progress_val) {
+    global.progress = progress_val;
+
+    /* Scale progress bar */
+    if (progress_fg) {
+        scaled = progress_fg.Scale(progress_val * 296, 16);
+        progress_sprite.SetImage(scaled);
+    }
+}
+
+Plymouth.SetBootProgressFunction(boot_progress_callback);
+
+/* Message display */
+fun message_callback(text) {
+    global.status_text = text;
+
+    msg_image = Image.Text(text, 0, 1, 0.61, "JetBrains Mono");
+    message_sprite.SetImage(msg_image);
+    message_sprite.SetX(center_x - msg_image.GetWidth() / 2);
+    message_sprite.SetY(center_y + 180);
+}
+
+Plymouth.SetMessageFunction(message_callback);
+
+/* Display normal/password prompts */
+fun display_normal_callback() {
+    /* Nothing special */
+}
+
+fun display_password_callback(prompt, bullets) {
+    /* Show password prompt */
+    prompt_image = Image.Text(prompt, 0, 1, 0.61, "JetBrains Mono");
+    message_sprite.SetImage(prompt_image);
+    message_sprite.SetX(center_x - prompt_image.GetWidth() / 2);
+}
+
+Plymouth.SetDisplayNormalFunction(display_normal_callback);
+Plymouth.SetDisplayPasswordFunction(display_password_callback);
+
+/* Quit callback */
+fun quit_callback() {
+    /* Fade out */
+    for (i = 0; i < 6; i++) {
+        icons[i].SetOpacity(0);
+    }
+    logo_sprite.SetOpacity(0);
+}
+
+Plymouth.SetQuitFunction(quit_callback);

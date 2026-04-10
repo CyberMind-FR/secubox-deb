@@ -1,0 +1,11 @@
+[Unit]
+Description=SecuBox UI Health Check Timer
+Documentation=https://secubox.in/docs/ui-manager
+
+[Timer]
+OnBootSec=30
+OnUnitActiveSec=30
+Unit=secubox-ui-health.service
+
+[Install]
+WantedBy=timers.target

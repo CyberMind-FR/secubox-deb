@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="620" viewBox="0 0 680 620"
+     style="background:#FFFFFF; font-family: 'Space Grotesk', 'JetBrains Mono', sans-serif;">
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#6B6963" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="arrow-teal" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#0F6E56" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+
+    <!-- Lateral band gradient ROOT→MESH→MIND (left 6px) -->
+    <linearGradient id="lateral" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#0A5840"/>
+      <stop offset="50%"  stop-color="#104A88"/>
+      <stop offset="100%" stop-color="#3D35A0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- ─── Lateral band 6px (ROOT→MESH→MIND) ─── -->
+  <rect x="0" y="0" width="6" height="620" fill="url(#lateral)"/>
+
+  <!-- ─── Background surface ─── -->
+  <rect x="6" y="0" width="674" height="620" fill="#FFFFFF"/>
+
+  <!-- ─── Header ─── -->
+  <text x="340" y="30" text-anchor="middle"
+        font-family="'Space Grotesk', sans-serif" font-size="15" font-weight="600"
+        fill="#1A1A18">SecuBox-Deb — chaîne de boot &amp; modes d'exécution</text>
+  <text x="340" y="46" text-anchor="middle"
+        font-family="'JetBrains Mono', monospace" font-size="10"
+        fill="#6B6963">v1.5.0 · Debian · ANSSI CSPN</text>
+
+  <!-- ══════════════════════════════════════════
+       COUCHE 1 : HW / BootLoader  (BOOT #803018)
+  ══════════════════════════════════════════ -->
+  <rect x="200" y="58" width="280" height="48" rx="8"
+        fill="#FFF3EE" stroke="#803018" stroke-width="0.8"/>
+  <text x="340" y="78" text-anchor="middle" dominant-baseline="central"
+        font-family="'Space Grotesk', sans-serif" font-size="14" font-weight="600"
+        fill="#803018">HW — BootLoader</text>
+  <text x="340" y="96" text-anchor="middle" dominant-baseline="central"
+        font-family="'JetBrains Mono', monospace" font-size="11"
+        fill="#9A4018">BIOS / coreboot / U-Boot (MOCHAbin)</text>
+
+  <!-- Arrow HW → UEFI -->
+  <line x1="340" y1="106" x2="340" y2="124" stroke="#6B6963" stroke-width="1.2"
+        marker-end="url(#arrow)"/>
+
+  <!-- ══════════════════════════════════════════
+       COUCHE 2 : OS — UEFI  (WALL #9A6010)
+  ══════════════════════════════════════════ -->
+  <rect x="200" y="124" width="280" height="48" rx="8"
+        fill="#FFFAEE" stroke="#9A6010" stroke-width="0.8"/>
+  <text x="340" y="144" text-anchor="middle" dominant-baseline="central"
+        font-family="'Space Grotesk', sans-serif" font-size="14" font-weight="600"
+        fill="#9A6010">OS — UEFI</text>
+  <text x="340" y="162" text-anchor="middle" dominant-baseline="central"
+        font-family="'JetBrains Mono', monospace" font-size="11"
+        fill="#7A4A08">GRUB2 / Secure Boot / TPM2 seal</text>
+
+  <!-- Arrow UEFI → container -->
+  <line x1="340" y1="172" x2="340" y2="190" stroke="#6B6963" stroke-width="1.2"
+        marker-end="url(#arrow)"/>
+
+  <!-- ─── Container dashed : Kernel + InitRamfs ─── -->
+  <rect x="100" y="190" width="480" height="136" rx="12"
+        fill="#FAFAF8" stroke="#B4B2A9" stroke-width="0.8" stroke-dasharray="5 3"/>
+  <text x="114" y="208"
+        font-family="'Space Grotesk', sans-serif" font-size="10"
+        fill="#6B6963">chargement initial (pre-pivot)</text>
+
+  <!-- ── Kernel (MIND #3D35A0) ── -->
+  <rect x="120" y="216" width="210" height="52" rx="8"
+        fill="#EEEDFE" stroke="#3D35A0" stroke-width="0.8"/>
+  <text x="225" y="236" text-anchor="middle" dominant-baseline="central"
+        font-family="'Space Grotesk', sans-serif" font-size="14" font-weight="600"
+        fill="#3D35A0">Kernel</text>
+  <text x="225" y="254" text-anchor="middle" dominant-baseline="central"
+        font-family="'JetBrains Mono', monospace" font-size="11"
+        fill="#534AB7">Linux hardened · nftables · WG</text>
+
+  <!-- ── InitRamfs (MIND) ── -->
+  <rect x="350" y="216" width="210" height="52" rx="8"
+        fill="#EEEDFE" stroke="#3D35A0" stroke-width="0.8"/>
+  <text x="455" y="236" text-anchor="middle" dominant-baseline="central"
+        font-family="'Space Grotesk', sans-serif" font-size="14" font-weight="600"
+        fill="#3D35A0">InitRamfs</text>
+  <text x="455" y="254" text-anchor="middle" dominant-baseline="central"
+        font-family="'JetBrains Mono', monospace" font-size="11"
+        fill="#534AB7">LUKS unlock · ZKP pre-mount</text>
+
+  <!-- flèche interne Kernel → InitRamfs -->
+  <line x1="330" y1="242" x2="348" y2="242" stroke="#3D35A0" stroke-width="1"
+        stroke-dasharray="4 3" marker-end="url(#arrow-teal)"/>
+
+  <!-- Label container bas -->
+  <text x="340" y="316" text-anchor="middle"
+        font-family="'JetBrains Mono', monospace" font-size="10"
+        fill="#6B6963">initrd.img → pivot_root</text>
+
+  <!-- Arrow container → Rootfs -->
+  <line x1="340" y1="326" x2="340" y2="350" stroke="#6B6963" stroke-width="1.2"
+        marker-end="url(#arrow)"/>
+
+  <!-- ══════════════════════════════════════════
+       COUCHE 3 : Rootfs — INIT  (ROOT #0A5840)
+  ══════════════════════════════════════════ -->
+  <rect x="180" y="350" width="320" height="52" rx="8"
+        fill="#E1F5EE" stroke="#0A5840" stroke-width="0.8"/>
+  <text x="340" y="370" text-anchor="middle" dominant-baseline="central"
+        font-family="'Space Grotesk', sans-serif" font-size="14" font-weight="600"
+        fill="#0A5840">Rootfs — INIT (systemd)</text>
+  <text x="340" y="388" text-anchor="middle" dominant-baseline="central"
+        font-family="'JetBrains Mono', monospace" font-size="11"
+        fill="#0F6E56">pivot_root · 93 packages · 10 phases</text>
+
+  <!-- ─── Séparateur ─── -->
+  <line x1="100" y1="434" x2="580" y2="434"
+        stroke="#E2E0D8" stroke-width="0.5" stroke-dasharray="3 4"/>
+  <text x="340" y="448" text-anchor="middle"
+        font-family="'Space Grotesk', sans-serif" font-size="10"
+        fill="#6B6963">modes d'exécution post-boot</text>
+
+  <!-- Branches vers 3 modes -->
+  <path d="M 260 402 L 260 420 L 155 420 L 155 462"
+        fill="none" stroke="#6B6963" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <path d="M 340 402 L 340 462"
+        fill="none" stroke="#6B6963" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <path d="M 420 402 L 420 420 L 525 420 L 525 462"
+        fill="none" stroke="#6B6963" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+  <!-- ══════════════════════════════════════════
+       MODE 1 : PROMPT <LOG>  (neutre #6B6963)
+  ══════════════════════════════════════════ -->
+  <rect x="58" y="462" width="194" height="72" rx="8"
+        fill="#F4F3EF" stroke="#888780" stroke-width="0.8"/>
+  <text x="155" y="482" text-anchor="middle" dominant-baseline="central"
+        font-family="'Space Grotesk', sans-serif" font-size="13" font-weight="600"
+        fill="#1A1A18">PROMPT &lt;LOG&gt;</text>
+  <text x="155" y="500" text-anchor="middle" dominant-baseline="central"
+        font-family="'JetBrains Mono', monospace" font-size="11"
+        fill="#5F5E5A">Shell maintenance</text>
+  <text x="155" y="516" text-anchor="middle" dominant-baseline="central"
+        font-family="'JetBrains Mono', monospace" font-size="11"
+        fill="#5F5E5A">audit trail ANSSI/CSPN</text>
+
+  <!-- ══════════════════════════════════════════
+       MODE 2 : KIOSK [UI]  (MESH #104A88)
+  ══════════════════════════════════════════ -->
+  <rect x="245" y="462" width="190" height="72" rx="8"
+        fill="#E6F1FB" stroke="#104A88" stroke-width="0.8"/>
+  <text x="340" y="482" text-anchor="middle" dominant-baseline="central"
+        font-family="'Space Grotesk', sans-serif" font-size="13" font-weight="600"
+        fill="#104A88">KIOSK [UI]</text>
+  <text x="340" y="500" text-anchor="middle" dominant-baseline="central"
+        font-family="'JetBrains Mono', monospace" font-size="11"
+        fill="#185FA5">HyperPixel / MOCHAbin</text>
+  <text x="340" y="516" text-anchor="middle" dominant-baseline="central"
+        font-family="'JetBrains Mono', monospace" font-size="11"
+        fill="#185FA5">RPi Zero 2W · SPI/UART</text>
+
+  <!-- ══════════════════════════════════════════
+       MODE 3 : API (RT)  (ROOT #0A5840)
+  ══════════════════════════════════════════ -->
+  <rect x="428" y="462" width="194" height="72" rx="8"
+        fill="#E1F5EE" stroke="#0A5840" stroke-width="0.8"/>
+  <text x="525" y="482" text-anchor="middle" dominant-baseline="central"
+        font-family="'Space Grotesk', sans-serif" font-size="13" font-weight="600"
+        fill="#0A5840">API (RT)</text>
+  <text x="525" y="500" text-anchor="middle" dominant-baseline="central"
+        font-family="'JetBrains Mono', monospace" font-size="11"
+        fill="#0F6E56">FastAPI / Uvicorn headless</text>
+  <text x="525" y="516" text-anchor="middle" dominant-baseline="central"
+        font-family="'JetBrains Mono', monospace" font-size="11"
+        fill="#0F6E56">double-buffer 4R · PARAMETERS</text>
+
+  <!-- ══════════════════════════════════════════
+       PAIRES + AUTH layer
+  ══════════════════════════════════════════ -->
+  <rect x="80" y="566" width="520" height="38" rx="8"
+        fill="#FAFAF8" stroke="#E2E0D8" stroke-width="0.5"/>
+  <text x="340" y="581" text-anchor="middle"
+        font-family="'Space Grotesk', sans-serif" font-size="10"
+        fill="#6B6963">Paires SecuBox :  BOOT↔ROOT  ·  WALL↔MIND  ·  MESH↔AUTH</text>
+  <text x="340" y="597" text-anchor="middle"
+        font-family="'JetBrains Mono', monospace" font-size="10"
+        fill="#6B6963">PROMPT=BOOT  ·  KIOSK=MESH  ·  API(RT)=ROOT</text>
+
+  <!-- ─── Watermark CyberMind ─── -->
+  <text x="674" y="614" text-anchor="end"
+        font-family="'Space Grotesk', sans-serif" font-size="9"
+        fill="#B4B2A9">CyberMind © 2026</text>
+
+</svg>

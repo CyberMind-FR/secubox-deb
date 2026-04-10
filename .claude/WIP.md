@@ -1933,3 +1933,21 @@ curl -sk https://localhost:8443/api/v1/hub/menu | jq '.total_modules'
   - Phase 4 complete: apt.secubox.in (reprepro, GPG, CI)
   - Local cache build system added
   - Image VM x64 built successfully
+
+## VirtualBox Kiosk Fix (2026-04-08)
+
+**Problem**: Kiosk mode causes black screen in VirtualBox due to X11/graphics driver issues.
+
+**Solution**: 
+1. Skip kiosk service on VirtualBox (detect via `systemd-detect-virt | grep oracle`)
+2. Default target set to `multi-user.target` (console) instead of `graphical.target`
+3. Users access via SSH or web UI when testing in VirtualBox
+4. Kiosk works normally on real hardware
+
+**Files modified**:
+- `image/systemd/secubox-kiosk.service` - Added VirtualBox skip check
+- `image/build-live-usb.sh` - Changed default target to multi-user
+
+**Testing**:
+- VirtualBox: Boot to console, access via SSH (port 2222) or web UI (port 9443)
+- Real hardware: Kiosk starts automatically as before
