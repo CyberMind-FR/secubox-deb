@@ -1,0 +1,31 @@
+[Unit]
+Description=SecuBox UI Manager
+Documentation=https://secubox.in/docs/ui-manager
+After=multi-user.target nginx.service
+Wants=secubox-ui-health.timer
+ConditionPathExists=/usr/bin/secubox-ui-manager
+
+[Service]
+Type=notify
+ExecStart=/usr/bin/secubox-ui-manager
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=3
+WatchdogSec=60
+
+# Environment
+Environment=SECUBOX_UI_DEBUG=1
+EnvironmentFile=-/etc/secubox/ui/environment
+
+# Security hardening
+NoNewPrivileges=no
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/run/secubox /var/log/secubox /home/kiosk
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+
+[Install]
+WantedBy=multi-user.target

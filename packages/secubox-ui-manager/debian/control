@@ -1,0 +1,41 @@
+Source: secubox-ui-manager
+Section: admin
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13), dh-python, python3-all
+Standards-Version: 4.6.2
+Homepage: https://secubox.in
+Rules-Requires-Root: no
+
+Package: secubox-ui-manager
+Architecture: all
+Depends:
+ ${python3:Depends},
+ ${misc:Depends},
+ python3 (>= 3.11),
+ kbd,
+ xinit,
+ xserver-xorg-core,
+ chromium | chromium-browser,
+ unclutter,
+ x11-xserver-utils
+Recommends:
+ python3-textual,
+ secubox-console
+Suggests:
+ xserver-xorg-video-vmware,
+ xserver-xorg-video-qxl
+Description: SecuBox Unified UI Manager
+ Manages the SecuBox user interface with automatic mode selection
+ and graceful fallback support.
+ .
+ Features:
+  - KUI: Kiosk UI mode (X11 + Chromium fullscreen)
+  - TUI: Terminal UI mode (Textual-based console)
+  - Console: Fallback to standard getty login
+  - Automatic hypervisor detection (VirtualBox, QEMU/KVM, VMware)
+  - Per-hypervisor graphics optimization
+  - Modular debug system with 6 verbosity levels
+  - Health monitoring with automatic fallback on failure
+ .
+ This package is part of the SecuBox security appliance.

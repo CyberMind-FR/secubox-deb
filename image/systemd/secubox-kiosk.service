@@ -2,50 +2,39 @@
 Description=SecuBox Kiosk Mode (X11/Chromium)
 Documentation=https://secubox.in/docs/kiosk
 
-# Wait for cmdline handler to decide display mode FIRST
-After=secubox-cmdline.service
-Requires=secubox-cmdline.service
-
-# Proper dependency chain - wait for everything to be ready
+# Start after multi-user (not graphical - we ARE the graphical part)
+After=multi-user.target
 After=systemd-user-sessions.service
-After=plymouth-quit-wait.service
-After=network-online.target
-After=nginx.service
-After=systemd-networkd.service
-After=secubox-firstboot.service
 
-# Soft dependencies (don't fail if missing)
-Wants=network-online.target
+# Soft dependency on nginx (works without it)
 Wants=nginx.service
+After=nginx.service
 
-# Conflicts with console on tty1
-Conflicts=getty@tty1.service
-
-# Only start if graphical target is active
-PartOf=graphical.target
+# Take over VT7
+Conflicts=getty@tty7.service
 
 [Service]
 Type=simple
 
-# Check if kiosk is enabled (run as root with + prefix)
+# Check if kiosk is enabled
 ExecStartPre=+/bin/sh -c '[ -f /var/lib/secubox/.kiosk-enabled ] || exit 1'
 
-# Use the robust launcher script (runs as root, handles user switching internally)
-ExecStart=/usr/sbin/secubox-kiosk-launcher x11 7
+# Run the launcher (execs to xinit, keeps running)
+ExecStart=/usr/sbin/secubox-kiosk-launcher
 
-# Restart policy
+# Use VT7 for X11
+TTYPath=/dev/tty7
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+
+# Restart on failure (X crash, etc)
 Restart=on-failure
-RestartSec=10
-StartLimitInterval=300
-StartLimitBurst=5
+RestartSec=5
 
-# Generous timeout for slow hardware/VMs
-TimeoutStartSec=180
-TimeoutStopSec=30
-
-# Resource limits
-MemoryMax=1G
-TasksMax=200
+# Give X time to start
+TimeoutStartSec=120
+TimeoutStopSec=10
 
 # Logging
 StandardOutput=journal
@@ -53,4 +42,5 @@ StandardError=journal
 SyslogIdentifier=secubox-kiosk
 
 [Install]
-WantedBy=graphical.target
+# Install into multi-user.target, not graphical.target
+WantedBy=multi-user.target

@@ -1,0 +1,10 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: secubox-ui-manager
+Upstream-Contact: Gerald KERMA <devel@cybermind.fr>
+Source: https://secubox.in
+
+Files: *
+Copyright: 2024-2025 CyberMind / Gerald KERMA
+License: Proprietary
+ This software is proprietary and subject to ANSSI CSPN certification.
+ All rights reserved.

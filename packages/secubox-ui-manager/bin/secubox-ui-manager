@@ -1,0 +1,174 @@
+#!/usr/bin/env python3
+"""
+SecuBox UI Manager - Main Entry Point
+=====================================
+
+Usage:
+    secubox-ui-manager [options]
+
+Options:
+    --mode MODE      Force specific mode (kui, tui, console)
+    --debug LEVEL    Set debug level (0-5)
+    --config PATH    Use custom config file
+    --status         Show current status and exit
+    --reset          Reset state machine and exit
+    -h, --help       Show this help
+
+Environment:
+    SECUBOX_UI_DEBUG           Debug level (0-5)
+    SECUBOX_UI_DEBUG_COMPONENTS  Comma-separated component filter
+
+Examples:
+    secubox-ui-manager                  # Auto-detect and start
+    secubox-ui-manager --mode tui       # Force TUI mode
+    secubox-ui-manager --debug 4        # Start with debug logging
+    secubox-ui-manager --status         # Show status
+"""
+
+import argparse
+import asyncio
+import json
+import os
+import sys
+from pathlib import Path
+
+# Add package to path if running from source
+pkg_dir = Path(__file__).resolve().parent.parent
+if (pkg_dir / "ui").exists():
+    sys.path.insert(0, str(pkg_dir))
+
+from ui import UIManager, set_debug_level, UIStateMachine
+from ui.lib.debug import DebugLevel
+
+
+def parse_args():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(
+        description="SecuBox UI Manager",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=__doc__,
+    )
+
+    parser.add_argument(
+        "--mode",
+        choices=["kui", "tui", "console"],
+        help="Force specific UI mode",
+    )
+
+    parser.add_argument(
+        "--debug",
+        type=int,
+        choices=[0, 1, 2, 3, 4, 5],
+        help="Debug level (0=silent, 5=trace)",
+    )
+
+    parser.add_argument(
+        "--config",
+        type=Path,
+        help="Path to config file",
+    )
+
+    parser.add_argument(
+        "--status",
+        action="store_true",
+        help="Show current status and exit",
+    )
+
+    parser.add_argument(
+        "--reset",
+        action="store_true",
+        help="Reset state machine and exit",
+    )
+
+    return parser.parse_args()
+
+
+def show_status():
+    """Show current UI manager status."""
+    state_machine = UIStateMachine()
+    status = state_machine.status()
+
+    print("SecuBox UI Manager Status")
+    print("=" * 40)
+    print(f"State:       {status['state']}")
+    print(f"Mode:        {status['mode'] or 'none'}")
+    print(f"Active:      {status['active_mode'] or 'none'}")
+    print(f"OK:          {status['is_ok']}")
+    print(f"Attempts:    {status['attempts']}")
+    print(f"Last Error:  {status['last_error'] or 'none'}")
+    print(f"Uptime:      {status['uptime']:.1f}s")
+
+    # Also show health if available
+    health_file = Path("/run/secubox/ui/health.json")
+    if health_file.exists():
+        try:
+            health = json.loads(health_file.read_text())
+            print()
+            print("Health Status")
+            print("-" * 40)
+            print(f"Healthy:     {health['healthy']}")
+            print(f"Checks OK:   {health['checks_passed']}")
+            print(f"Checks Fail: {health['checks_failed']}")
+        except Exception:
+            pass
+
+
+def reset_state():
+    """Reset the state machine."""
+    state_machine = UIStateMachine()
+    state_machine.reset()
+    print("State machine reset to INIT")
+
+
+async def run_manager(args):
+    """Run the UI manager."""
+    # Apply debug level from args or environment
+    if args.debug is not None:
+        os.environ["SECUBOX_UI_DEBUG"] = str(args.debug)
+        set_debug_level(args.debug)
+    elif "SECUBOX_UI_DEBUG" in os.environ:
+        try:
+            set_debug_level(int(os.environ["SECUBOX_UI_DEBUG"]))
+        except ValueError:
+            pass
+
+    # Apply forced mode via environment (manager will read it)
+    if args.mode:
+        # Write to kernel cmdline simulation for FallbackConfig
+        os.environ["SECUBOX_UI_MODE"] = args.mode
+
+    # Create and run manager
+    manager = UIManager(config_path=args.config)
+
+    # If mode forced, override fallback chain
+    if args.mode:
+        manager._fallback.config.priority = [args.mode, "console"]
+
+    await manager.run()
+
+
+def main():
+    """Main entry point."""
+    args = parse_args()
+
+    if args.status:
+        show_status()
+        return 0
+
+    if args.reset:
+        reset_state()
+        return 0
+
+    try:
+        asyncio.run(run_manager(args))
+        return 0
+    except KeyboardInterrupt:
+        print("\nInterrupted")
+        return 130
+    except Exception as e:
+        print(f"Fatal error: {e}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

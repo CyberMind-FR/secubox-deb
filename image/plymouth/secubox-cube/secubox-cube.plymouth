@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=SecuBox Cube
+Description=SecuBox 3D Rotating Cube Boot Splash
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/secubox-cube
+ScriptFile=/usr/share/plymouth/themes/secubox-cube/secubox-cube.script

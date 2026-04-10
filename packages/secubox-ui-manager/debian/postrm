@@ -1,0 +1,26 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+    purge)
+        # Remove config
+        rm -rf /etc/secubox/ui
+        # Remove runtime state
+        rm -rf /run/secubox/ui
+        # Disable services
+        systemctl disable secubox-ui-manager.service 2>/dev/null || true
+        systemctl disable secubox-ui-health.timer 2>/dev/null || true
+        ;;
+
+    remove|upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
+        ;;
+
+    *)
+        echo "postrm called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

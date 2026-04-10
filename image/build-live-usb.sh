@@ -203,7 +203,9 @@ cat > "${ROOTFS}/etc/systemd/system/getty@tty1.service.d/override.conf" <<EOF
 [Service]
 ExecStart=
 ExecStart=-/sbin/agetty --autologin root --noclear %I \$TERM
-Type=idle
+StandardInput=tty
+StandardOutput=tty
+TTYVTDisallocate=no
 EOF
 
 # Enable getty@tty1 and set default target
@@ -1332,7 +1334,7 @@ mkdir -p "${ROOTFS}/usr/sbin"
 mkdir -p "${ROOTFS}/usr/lib/secubox"
 
 # Copy scripts (including kiosk-launcher for robust startup, TUI, and mode switcher)
-for script in secubox-net-detect secubox-kiosk-setup secubox-cmdline-handler secubox-kiosk-launcher secubox-console-tui secubox-mode; do
+for script in secubox-net-detect secubox-kiosk-setup secubox-cmdline-handler secubox-kiosk-launcher secubox-x11-splash secubox-console-tui secubox-mode; do
   if [[ -f "${SCRIPT_DIR}/sbin/${script}" ]]; then
     cp "${SCRIPT_DIR}/sbin/${script}" "${ROOTFS}/usr/sbin/"
     chmod +x "${ROOTFS}/usr/sbin/${script}"
@@ -1392,16 +1394,19 @@ if [[ $INCLUDE_KIOSK -eq 1 ]]; then
   chroot "${ROOTFS}" dpkg --configure -a --force-confold 2>/dev/null || true
 
   # Install X11 packages non-interactively (avoid keyboard-configuration prompt)
+  # nodm = minimal display manager designed for kiosk/embedded systems
   chroot "${ROOTFS}" env DEBIAN_FRONTEND=noninteractive apt-get install -y -q \
     xorg xinit x11-xserver-utils x11-utils \
+    nodm \
     xserver-xorg-video-fbdev \
     xserver-xorg-video-vmware \
+    xserver-xorg-video-vesa \
     fonts-dejavu-core unclutter kbd \
     libinput10 xdg-utils \
     virtualbox-guest-x11 virtualbox-guest-utils 2>/dev/null || warn "Some X11 packages failed"
 
-  # Ensure xinit specifically is installed (critical for kiosk)
-  chroot "${ROOTFS}" env DEBIAN_FRONTEND=noninteractive apt-get install -y -q xinit || warn "xinit install failed"
+  # Ensure critical kiosk packages are installed
+  chroot "${ROOTFS}" env DEBIAN_FRONTEND=noninteractive apt-get install -y -q xinit kbd || warn "xinit/kbd install failed"
 
   # Fix any broken dependencies before installing chromium
   chroot "${ROOTFS}" dpkg --configure -a --force-confold 2>/dev/null || true
@@ -1462,63 +1467,35 @@ XCONF
     ok "Created kiosk user"
   fi
 
-  # Create X11 .xinitrc for kiosk
+  # Create X11 .xsession for kiosk (used by nodm and xinit)
   mkdir -p "${ROOTFS}/home/secubox-kiosk/.config"
-  cat > "${ROOTFS}/home/secubox-kiosk/.xinitrc" <<'XINITRC'
+  cat > "${ROOTFS}/home/secubox-kiosk/.xsession" <<'XSESSION'
 #!/bin/bash
-# SecuBox Kiosk X11 Launcher
-# Note: secubox-kiosk-launcher already waits for services before starting
+# SecuBox Kiosk X Session - Minimal version
+exec 2>&1 | logger -t secubox-kiosk &
 
-# URL from environment (set by launcher) or fallback
-URL="${KIOSK_URL:-https://localhost/}"
+echo "Starting kiosk session..."
 
-# Log startup
-logger -t secubox-kiosk "Starting Chromium X11 kiosk: $URL"
+# Basic X settings (ignore errors)
+xset s off 2>/dev/null
+xset -dpms 2>/dev/null
 
-# Disable screen blanking (ignore errors on headless)
-xset s off 2>/dev/null || true
-xset -dpms 2>/dev/null || true
-xset s noblank 2>/dev/null || true
+# URL to display
+URL="https://192.168.255.1:9443/"
 
-# Hide cursor after 3 seconds of inactivity
-if command -v unclutter &>/dev/null; then
-    unclutter -idle 3 -root &
-fi
-
-# Set background to black
-xsetroot -solid black 2>/dev/null || true
-
-# Chromium flags for kiosk mode (X11)
-CHROMIUM_FLAGS=(
-    --kiosk
-    --no-first-run
-    --no-sandbox
-    --disable-gpu-sandbox
-    --disable-translate
-    --disable-infobars
-    --disable-session-crashed-bubble
-    --disable-restore-background-contents
-    --disable-sync
-    --disable-features=TranslateUI
-    --ignore-certificate-errors
-    --noerrdialogs
-    --enable-features=OverlayScrollbar
-    --start-fullscreen
-    --window-position=0,0
-    --check-for-update-interval=604800
-    --disable-component-update
-    --disable-default-apps
-    --disable-extensions
-    --disable-background-networking
-    --disable-domain-reliability
-    --disable-client-side-phishing-detection
-    "$URL"
-)
-
-# Run Chromium
-exec chromium "${CHROMIUM_FLAGS[@]}"
-XINITRC
-  chmod +x "${ROOTFS}/home/secubox-kiosk/.xinitrc"
+# Try Chromium with minimal flags
+exec chromium \
+    --kiosk \
+    --no-first-run \
+    --no-sandbox \
+    --disable-gpu \
+    --ignore-certificate-errors \
+    --window-position=0,0 \
+    "$URL" || exec xterm -fullscreen -e "echo 'Chromium failed'; sleep 999"
+XSESSION
+  chmod +x "${ROOTFS}/home/secubox-kiosk/.xsession"
+  # Create symlink for xinit compatibility
+  ln -sf .xsession "${ROOTFS}/home/secubox-kiosk/.xinitrc"
   chroot "${ROOTFS}" chown -R secubox-kiosk:secubox-kiosk /home/secubox-kiosk
 
   # Mark as installed AND enabled (so kiosk starts on first boot)
@@ -1527,35 +1504,91 @@ XINITRC
   touch "${ROOTFS}/var/lib/secubox/.kiosk-enabled"
   echo "x11" > "${ROOTFS}/var/lib/secubox/.kiosk-mode"
 
-  # Use the fixed kiosk service (already copied from systemd/ directory)
-  # The service uses secubox-kiosk-launcher which handles:
-  # - Dynamic UID detection (no hardcoded 1000)
-  # - Proper dependency waiting (nginx, network)
-  # - User creation if needed
-  # - Fallback URL handling
-  log "Kiosk service already copied from systemd/ directory"
+  # Configure nodm display manager for reliable kiosk startup
+  cat > "${ROOTFS}/etc/default/nodm" <<'NODM'
+# nodm configuration for SecuBox Kiosk
+NODM_ENABLED=true
+NODM_USER=secubox-kiosk
+NODM_FIRST_VT=7
+NODM_XSESSION=/home/secubox-kiosk/.xsession
+NODM_X_OPTIONS="-nolisten tcp"
+NODM_MIN_SESSION_TIME=60
+NODM
 
-  # Enable kiosk service using symlink and set graphical target
-  mkdir -p "${ROOTFS}/etc/systemd/system/graphical.target.wants"
-  ln -sf /etc/systemd/system/secubox-kiosk.service \
-    "${ROOTFS}/etc/systemd/system/graphical.target.wants/secubox-kiosk.service"
-  # Set graphical target as default
-  ln -sf /usr/lib/systemd/system/graphical.target \
-    "${ROOTFS}/etc/systemd/system/default.target"
-  chroot "${ROOTFS}" systemctl disable getty@tty1.service 2>/dev/null || true
+  # Disable nodm systemd service (we use secubox-kiosk.service instead)
+  chroot "${ROOTFS}" systemctl disable nodm 2>/dev/null || true
+  ok "nodm configured for kiosk"
 
-  # Setup root autologin on tty2 (console access while kiosk runs on tty7)
-  mkdir -p "${ROOTFS}/etc/systemd/system/getty@tty2.service.d"
-  cat > "${ROOTFS}/etc/systemd/system/getty@tty2.service.d/autologin.conf" <<EOF
-[Service]
-ExecStart=
-ExecStart=-/sbin/agetty --autologin root --noclear %I \$TERM
-Type=idle
-EOF
-  ln -sf /usr/lib/systemd/system/getty@.service \
-    "${ROOTFS}/etc/systemd/system/getty.target.wants/getty@tty2.service" 2>/dev/null || true
+  # NEW APPROACH: Start kiosk from root's .bash_profile after autologin
+  # This is more reliable because:
+  # 1. Console always works first
+  # 2. User can see errors
+  # 3. Ctrl+C can stop X11 if it fails
+  log "Setting up kiosk to start from .bash_profile..."
 
-  ok "Kiosk X11 packages and user installed (console on tty2)"
+  # Create kiosk startup script (non-blocking)
+  cat > "${ROOTFS}/usr/local/bin/start-kiosk" <<'KIOSKSTART'
+#!/bin/bash
+# Start SecuBox Kiosk Mode - NON-BLOCKING
+# Runs in background, user always gets prompt
+
+# Only run once
+[[ -f /tmp/.kiosk-starting ]] && exit 0
+touch /tmp/.kiosk-starting
+
+# Check if kiosk is enabled
+[[ ! -f /var/lib/secubox/.kiosk-enabled ]] && exit 0
+
+echo "[Kiosk] Starting X11 in background..."
+echo "[Kiosk] Use 'pkill xinit' to stop, Alt+F1 for console"
+
+# Configure X11
+mkdir -p /etc/X11/xorg.conf.d
+cat > /etc/X11/xorg.conf.d/10-kiosk.conf <<'XCONF'
+Section "Device"
+    Identifier "Kiosk Graphics"
+    Driver "modesetting"
+EndSection
+XCONF
+
+# Start X11 in background, switch to VT7 after 3 seconds
+(
+    sleep 2
+    URL="https://192.168.255.1:9443/"
+    export DISPLAY=:0
+    xinit /bin/bash -c "
+        xset s off 2>/dev/null
+        xset -dpms 2>/dev/null
+        exec chromium --kiosk --no-first-run --no-sandbox --disable-gpu \
+            --ignore-certificate-errors --window-position=0,0 '$URL'
+    " -- :0 vt7 -nolisten tcp 2>/dev/null &
+    sleep 3
+    chvt 7 2>/dev/null
+) &
+
+# Return immediately - user gets prompt
+KIOSKSTART
+  chmod +x "${ROOTFS}/usr/local/bin/start-kiosk"
+
+  # Add to root's .bash_profile (runs kiosk in background)
+  cat >> "${ROOTFS}/root/.bash_profile" <<'PROFILE'
+
+# Auto-start kiosk mode if enabled (non-blocking)
+if [[ -f /var/lib/secubox/.kiosk-enabled ]] && [[ "$(tty)" == "/dev/tty1" ]]; then
+    /usr/local/bin/start-kiosk &
+fi
+PROFILE
+
+  # Enable getty on tty2-6 for VT switching (essential for recovery)
+  # Note: tty1 autologin already configured in override.conf earlier
+  mkdir -p "${ROOTFS}/etc/systemd/system/getty.target.wants"
+  for tty in 2 3 4 5 6; do
+    ln -sf /usr/lib/systemd/system/getty@.service \
+      "${ROOTFS}/etc/systemd/system/getty.target.wants/getty@tty${tty}.service"
+  done
+  log "Getty enabled on tty2-6 for recovery"
+
+  ok "Kiosk configured to start from .bash_profile (Ctrl+C to skip)"
 else
   # ── No kiosk: Enable console TUI mode instead ─────────────────────
   log "Kiosk disabled - enabling console TUI mode..."
@@ -1571,16 +1604,13 @@ else
     log "secubox-console not installed - standard shell login"
   fi
 
-  # Setup root autologin on tty1 for console access
-  mkdir -p "${ROOTFS}/etc/systemd/system/getty@tty1.service.d"
-  cat > "${ROOTFS}/etc/systemd/system/getty@tty1.service.d/autologin.conf" <<'AUTOLOGIN'
-[Service]
-ExecStart=
-ExecStart=-/sbin/agetty --autologin root --noclear %I $TERM
-AUTOLOGIN
+  # Note: tty1 autologin already configured in override.conf earlier
+  # Enable getty on tty2-6 for VT switching
   mkdir -p "${ROOTFS}/etc/systemd/system/getty.target.wants"
-  ln -sf /usr/lib/systemd/system/getty@.service \
-    "${ROOTFS}/etc/systemd/system/getty.target.wants/getty@tty1.service" 2>/dev/null || true
+  for tty in 2 3 4 5 6; do
+    ln -sf /usr/lib/systemd/system/getty@.service \
+      "${ROOTFS}/etc/systemd/system/getty.target.wants/getty@tty${tty}.service"
+  done
 fi
 
 ok "Scripts installed"
@@ -1843,7 +1873,7 @@ mkdir -p "${ROOTFS}/etc/initramfs-tools/conf.d"
 echo "FRAMEBUFFER=y" > "${ROOTFS}/etc/initramfs-tools/conf.d/plymouth"
 
 # CRITICAL FIX: Force load squashfs module early via init-top script
-# The standard initramfs module loading doesn't always work for squashfs
+# Use insmod directly since modprobe requires modules.dep which may not work
 mkdir -p "${ROOTFS}/etc/initramfs-tools/scripts/init-top"
 cat > "${ROOTFS}/etc/initramfs-tools/scripts/init-top/load-squashfs" <<'EOFSQ'
 #!/bin/sh
@@ -1852,7 +1882,31 @@ prereqs() { echo "$PREREQ"; }
 case "$1" in
     prereqs) prereqs; exit 0;;
 esac
-# Force load squashfs module for live-boot
+
+# Find and load squashfs module using insmod (more reliable than modprobe)
+KVER=$(uname -r)
+for path in \
+    /usr/lib/modules/${KVER}/kernel/fs/squashfs/squashfs.ko \
+    /lib/modules/${KVER}/kernel/fs/squashfs/squashfs.ko \
+    $(find /usr/lib/modules /lib/modules -name "squashfs.ko*" 2>/dev/null | head -1)
+do
+    if [ -f "$path" ]; then
+        insmod "$path" 2>/dev/null && break
+    fi
+    # Try with .xz or .zst extension
+    for ext in .xz .zst .gz; do
+        if [ -f "${path}${ext}" ]; then
+            # Decompress and load
+            case "$ext" in
+                .xz) xz -d -c "${path}${ext}" > /tmp/squashfs.ko && insmod /tmp/squashfs.ko 2>/dev/null && break 2 ;;
+                .zst) zstd -d -c "${path}${ext}" > /tmp/squashfs.ko && insmod /tmp/squashfs.ko 2>/dev/null && break 2 ;;
+                .gz) gzip -d -c "${path}${ext}" > /tmp/squashfs.ko && insmod /tmp/squashfs.ko 2>/dev/null && break 2 ;;
+            esac
+        fi
+    done
+done
+
+# Fallback to modprobe
 modprobe -q squashfs 2>/dev/null || true
 modprobe -q loop 2>/dev/null || true
 modprobe -q overlay 2>/dev/null || true
@@ -1869,14 +1923,46 @@ case "$1" in
     prereqs) prereqs; exit 0;;
 esac
 . /usr/share/initramfs-tools/hook-functions
-# Ensure squashfs module is included
+# Ensure squashfs module is included - CRITICAL for live-boot
 manual_add_modules squashfs loop overlay
+# Also copy the module directly to be safe
+copy_modules_dir kernel/fs/squashfs
 EOFHOOK
 chmod +x "${ROOTFS}/etc/initramfs-tools/hooks/live-squashfs"
+
+# Force MODULES=most to include filesystem modules
+sed -i 's/^MODULES=.*/MODULES=most/' "${ROOTFS}/etc/initramfs-tools/initramfs.conf" 2>/dev/null || \
+  echo "MODULES=most" >> "${ROOTFS}/etc/initramfs-tools/initramfs.conf"
+
+# CRITICAL: Run depmod to update modules.dep BEFORE update-initramfs
+# This ensures squashfs is properly indexed and can be loaded
+log "Running depmod to index kernel modules..."
+KVER=$(ls "${ROOTFS}/lib/modules/" | head -1)
+chroot "${ROOTFS}" depmod -a "${KVER}" || warn "depmod failed"
+
+# Verify squashfs is in modules.dep
+if grep -q squashfs "${ROOTFS}/lib/modules/${KVER}/modules.dep"; then
+  ok "squashfs in modules.dep"
+else
+  warn "squashfs NOT in modules.dep - adding manually"
+  echo "kernel/fs/squashfs/squashfs.ko:" >> "${ROOTFS}/lib/modules/${KVER}/modules.dep"
+fi
 
 # Regenerate initramfs with live-boot and Plymouth hooks
 log "Regenerating initramfs with live-boot hooks..."
 chroot "${ROOTFS}" update-initramfs -u -k all || warn "initramfs update failed"
+
+# VERIFY squashfs is in initramfs
+log "Verifying squashfs module in initramfs..."
+INITRD=$(ls "${ROOTFS}"/boot/initrd.img-* 2>/dev/null | head -1)
+if [[ -f "$INITRD" ]]; then
+  if lsinitramfs "$INITRD" 2>/dev/null | grep -q "squashfs.ko"; then
+    ok "squashfs module confirmed in initramfs"
+  else
+    warn "squashfs NOT in initramfs - forcing rebuild with verbose"
+    chroot "${ROOTFS}" update-initramfs -u -k all -v 2>&1 | grep -i squash || true
+  fi
+fi
 
 # Clean APT
 chroot "${ROOTFS}" apt-get clean

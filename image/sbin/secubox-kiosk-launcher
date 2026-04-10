@@ -1,449 +1,217 @@
 #!/bin/bash
 # ══════════════════════════════════════════════════════════════════
-#  secubox-kiosk-launcher — Robust Kiosk Startup Wrapper
-#  Handles all dependencies before starting X11/Chromium
-#  Fixes race conditions and provides proper error handling
-#  VirtualBox/VMware/QEMU compatible
+#  secubox-kiosk-launcher — X11 Kiosk via nodm
+#  Uses nodm display manager for reliable X11 startup
+#  Compatible with VirtualBox, VMware, QEMU, bare metal
 # ══════════════════════════════════════════════════════════════════
-set -u
+set -euo pipefail
 
-# Configuration
-KIOSK_USER="${KIOSK_USER:-secubox-kiosk}"
-KIOSK_HOME="${KIOSK_HOME:-/home/secubox-kiosk}"
-# Default to HTTP for kiosk (more reliable, no SSL cert issues)
-KIOSK_URL="${KIOSK_URL:-http://localhost/}"
-FALLBACK_URL="${FALLBACK_URL:-https://127.0.0.1:9443/}"
-MAX_WAIT="${MAX_WAIT:-60}"
-LOG_TAG="secubox-kiosk"
-VM_TYPE=""
+readonly KIOSK_USER="secubox-kiosk"
+readonly KIOSK_HOME="/home/secubox-kiosk"
+readonly LOG_TAG="secubox-kiosk"
 
-# Logging
-log() {
-    echo "[kiosk-launcher] $*"
-    logger -t "$LOG_TAG" "$*" 2>/dev/null || true
-}
+log() { echo "[kiosk] $*"; logger -t "$LOG_TAG" "$*" 2>/dev/null || true; }
+err() { echo "[kiosk] ERROR: $*" >&2; logger -t "$LOG_TAG" -p err "$*" 2>/dev/null || true; }
 
-err() {
-    echo "[kiosk-launcher] ERROR: $*" >&2
-    logger -t "$LOG_TAG" -p err "$*" 2>/dev/null || true
-}
+# ══════════════════════════════════════════════════════════════════
+# STEP 1: Verify prerequisites
+# ══════════════════════════════════════════════════════════════════
+check_prerequisites() {
+    log "Checking prerequisites..."
 
-# ── Detect VM environment ────────────────────────────────────────
-detect_vm() {
-    VM_TYPE=$(systemd-detect-virt 2>/dev/null || echo "none")
-    VBOX_GRAPHICS=""
+    [[ -f /var/lib/secubox/.kiosk-enabled ]] || {
+        err "Kiosk not enabled (/var/lib/secubox/.kiosk-enabled missing)"
+        exit 1
+    }
 
-    # Additional detection for VirtualBox
-    if [[ "$VM_TYPE" == "oracle" ]] || lspci 2>/dev/null | grep -qi "virtualbox"; then
-        VM_TYPE="virtualbox"
-        # Check if VirtualBox is using VMSVGA (appears as VMware graphics)
-        if lspci 2>/dev/null | grep -qi "VMware SVGA"; then
-            VBOX_GRAPHICS="vmsvga"
-            log "VirtualBox with VMSVGA detected - will use vmware driver"
-        elif lspci 2>/dev/null | grep -qi "VirtualBox Graphics"; then
-            VBOX_GRAPHICS="vboxvga"
-        fi
-    elif [[ "$VM_TYPE" == "vmware" ]] || lspci 2>/dev/null | grep -qi "vmware"; then
-        # Could be real VMware or VirtualBox with VMSVGA
-        if [[ "$VM_TYPE" == "oracle" ]]; then
-            VM_TYPE="virtualbox"
-            VBOX_GRAPHICS="vmsvga"
-        else
-            VM_TYPE="vmware"
-        fi
-    elif [[ "$VM_TYPE" == "kvm" ]] || [[ "$VM_TYPE" == "qemu" ]]; then
-        VM_TYPE="qemu"
+    # Ensure user exists
+    if ! id "$KIOSK_USER" &>/dev/null; then
+        log "Creating kiosk user..."
+        useradd -m -d "$KIOSK_HOME" -s /bin/bash \
+            -G video,audio,input,tty,render "$KIOSK_USER" 2>/dev/null || true
     fi
 
-    log "VM detection: $VM_TYPE (graphics: ${VBOX_GRAPHICS:-native})"
-    export VM_TYPE VBOX_GRAPHICS
+    log "Prerequisites OK"
 }
 
-# ── Configure X11 for VM compatibility ───────────────────────────
-configure_x11_for_vm() {
-    log "Configuring X11 for VM: $VM_TYPE"
+# ══════════════════════════════════════════════════════════════════
+# STEP 2: Detect VM and configure X11 driver
+# ══════════════════════════════════════════════════════════════════
+configure_x11() {
+    log "Configuring X11..."
 
+    local vm_type driver="modesetting"
+    vm_type=$(systemd-detect-virt 2>/dev/null || echo "none")
+
+    # Detect graphics hardware
+    if lspci 2>/dev/null | grep -qi "VMware SVGA\|VMSVGA"; then
+        driver="vmware"
+        log "Detected VMSVGA graphics → vmware driver"
+    elif lspci 2>/dev/null | grep -qi "VirtualBox"; then
+        driver="vboxvideo"
+        modprobe vboxvideo 2>/dev/null || driver="modesetting"
+        log "Detected VirtualBox → $driver driver"
+    elif lspci 2>/dev/null | grep -qi "QXL\|Virtio"; then
+        driver="modesetting"
+        log "Detected QEMU/KVM → modesetting driver"
+    else
+        log "Using default modesetting driver"
+    fi
+
+    # Clean existing configs
+    rm -f /etc/X11/xorg.conf /etc/X11/xorg.conf.d/*.conf
     mkdir -p /etc/X11/xorg.conf.d
 
-    case "$VM_TYPE" in
-        virtualbox)
-            # VirtualBox: use vmware driver for VMSVGA, vboxvideo for VBoxVGA
-            log "Configuring for VirtualBox (graphics: ${VBOX_GRAPHICS:-unknown})..."
-
-            if [[ "$VBOX_GRAPHICS" == "vmsvga" ]]; then
-                # VMSVGA uses VMware-compatible graphics - use vmware driver
-                log "Using vmware driver for VMSVGA"
-                cat > /etc/X11/xorg.conf.d/10-vbox-kiosk.conf <<'XCONF'
+    # Write minimal X11 config
+    cat > /etc/X11/xorg.conf.d/10-kiosk.conf <<XCONF
 Section "Device"
-    Identifier "VBox VMSVGA"
-    Driver "vmware"
-EndSection
-XCONF
-            else
-                # Traditional VBoxVGA - try vboxvideo (requires Guest Additions)
-                log "Using vboxvideo driver for VBoxVGA"
-
-                # Load vboxvideo if available
-                modprobe vboxvideo 2>/dev/null || true
-
-                # X11 config for VirtualBox VBoxVGA
-                cat > /etc/X11/xorg.conf.d/10-vbox-kiosk.conf <<'XCONF'
-Section "Device"
-    Identifier "VBox Graphics"
-    Driver "vboxvideo"
-    Option "ShadowFB" "true"
-EndSection
-
-Section "Screen"
-    Identifier "Default Screen"
-    Device "VBox Graphics"
-    DefaultDepth 24
-    SubSection "Display"
-        Depth 24
-        Modes "1024x768" "800x600"
-    EndSubSection
+    Identifier "Kiosk Graphics"
+    Driver "$driver"
 EndSection
 
 Section "ServerFlags"
-    Option "AutoAddDevices" "true"
-    Option "AutoEnableDevices" "true"
-    Option "DontZap" "true"
+    Option "DontZap" "false"
+    Option "BlankTime" "0"
+    Option "StandbyTime" "0"
+    Option "SuspendTime" "0"
+    Option "OffTime" "0"
 EndSection
 XCONF
-            fi
-            ;;
 
-        vmware)
-            log "Configuring for VMware..."
-            cat > /etc/X11/xorg.conf.d/10-vmware-kiosk.conf <<'XCONF'
-Section "Device"
-    Identifier "VMware Graphics"
-    Driver "vmware"
-EndSection
-XCONF
-            ;;
+    # Xwrapper permissions
+    cat > /etc/X11/Xwrapper.config <<'XWRAP'
+allowed_users=anybody
+needs_root_rights=yes
+XWRAP
 
-        qemu)
-            log "Configuring for QEMU/KVM..."
-            # QEMU works well with fbdev or modesetting
-            cat > /etc/X11/xorg.conf.d/10-qemu-kiosk.conf <<'XCONF'
-Section "Device"
-    Identifier "QEMU Graphics"
-    Driver "modesetting"
-EndSection
-XCONF
-            ;;
-
-        *)
-            # Bare metal or unknown - use modesetting (universal)
-            log "Using modesetting driver (bare metal or unknown VM)"
-            cat > /etc/X11/xorg.conf.d/10-kiosk.conf <<'XCONF'
-Section "Device"
-    Identifier "Graphics"
-    Driver "modesetting"
-EndSection
-XCONF
-            ;;
-    esac
-
-    # Only add fbdev fallback for bare metal (not VMs where it causes conflicts)
-    if [[ "$VM_TYPE" == "none" ]] && [[ -c /dev/fb0 ]]; then
-        cat > /etc/X11/xorg.conf.d/99-fbdev-fallback.conf <<'XCONF'
-# Fallback to fbdev if other drivers fail (bare metal only)
-Section "Device"
-    Identifier "Fallback fbdev"
-    Driver "fbdev"
-    Option "fbdev" "/dev/fb0"
-EndSection
-XCONF
-    else
-        # Remove fbdev fallback in VMs (causes conflicts)
-        rm -f /etc/X11/xorg.conf.d/99-fbdev-fallback.conf
-    fi
-
-    log "X11 configuration complete"
+    log "X11 configured with $driver driver"
 }
 
-# ── Step 1: Verify kiosk user exists ─────────────────────────────
-verify_user() {
-    log "Checking kiosk user..."
+# ══════════════════════════════════════════════════════════════════
+# STEP 3: Determine kiosk URL
+# ══════════════════════════════════════════════════════════════════
+determine_url() {
+    log "Determining kiosk URL..."
 
-    if ! id "$KIOSK_USER" &>/dev/null; then
-        log "Creating kiosk user $KIOSK_USER..."
-        useradd -r -m -d "$KIOSK_HOME" -s /usr/sbin/nologin \
-            -G video,audio,input,render,tty "$KIOSK_USER" 2>/dev/null || {
-            err "Failed to create kiosk user"
-            return 1
-        }
-    fi
-
-    # Get actual UID
-    KIOSK_UID=$(id -u "$KIOSK_USER")
-    KIOSK_GID=$(id -g "$KIOSK_USER")
-    export KIOSK_UID KIOSK_GID
-
-    log "Kiosk user: $KIOSK_USER (UID=$KIOSK_UID)"
-    return 0
-}
-
-# ── Step 2: Setup XDG runtime directory ──────────────────────────
-setup_runtime_dir() {
-    local runtime_dir="/run/user/${KIOSK_UID}"
-
-    log "Setting up XDG_RUNTIME_DIR: $runtime_dir"
-
-    mkdir -p "$runtime_dir"
-    chown "${KIOSK_UID}:${KIOSK_GID}" "$runtime_dir"
-    chmod 700 "$runtime_dir"
-
-    export XDG_RUNTIME_DIR="$runtime_dir"
-    return 0
-}
-
-# ── Step 3: Wait for network interface ───────────────────────────
-wait_for_network() {
-    log "Waiting for dummy0 interface..."
-
-    local count=0
-    while [[ $count -lt 30 ]]; do
-        # Check if dummy0 has the expected IP
-        if ip addr show dummy0 2>/dev/null | grep -q "192.168.255.1"; then
-            log "dummy0 interface ready"
-            return 0
-        fi
-
-        # Also check if any interface has connectivity
-        if ip route get 8.8.8.8 &>/dev/null; then
-            log "Network connectivity available"
-            break
-        fi
-
-        sleep 1
-        ((count++))
-    done
-
-    # Don't fail - we might still work with localhost
-    log "Network check complete (dummy0 may not be ready)"
-    return 0
-}
-
-# ── Step 4: Wait for nginx/webui ─────────────────────────────────
-wait_for_webui() {
-    log "Waiting for SecuBox WebUI..."
-
-    local count=0
-    local url_to_use="$KIOSK_URL"
-
-    # Build list of URLs to try (HTTPS first, then HTTP fallbacks)
-    local urls_to_try=(
-        "$KIOSK_URL"
-        "$FALLBACK_URL"
-        "https://localhost/"
-        "https://127.0.0.1/"
+    local url=""
+    local urls=(
+        "https://192.168.255.1:9443/"
+        "https://localhost:9443/"
+        "https://127.0.0.1:9443/"
         "http://localhost/"
         "http://127.0.0.1/"
-        "http://192.168.255.1/"
     )
 
-    while [[ $count -lt $MAX_WAIT ]]; do
-        for url in "${urls_to_try[@]}"; do
-            if curl -sk --connect-timeout 2 "$url" >/dev/null 2>&1; then
-                log "WebUI ready at $url"
-                export KIOSK_URL="$url"
-                return 0
-            fi
-        done
-
-        # Check if nginx is at least running (after initial wait)
-        if [[ $count -gt 5 ]] && systemctl is-active nginx &>/dev/null; then
-            # nginx is running but no URL works yet - try HTTP directly
-            for url in "http://localhost/" "http://127.0.0.1/"; do
-                if curl -s --connect-timeout 2 "$url" >/dev/null 2>&1; then
-                    log "WebUI ready at $url (HTTP fallback)"
-                    export KIOSK_URL="$url"
-                    return 0
-                fi
-            done
-        fi
-
+    # Wait for nginx (max 20s)
+    for i in {1..20}; do
+        systemctl is-active nginx &>/dev/null && break
         sleep 1
-        ((count++))
     done
 
-    # Last resort: use HTTP localhost (nginx default)
-    if systemctl is-active nginx &>/dev/null; then
-        log "Using http://localhost/ as last resort"
-        export KIOSK_URL="http://localhost/"
-        return 0
-    fi
+    # Find working URL
+    for test_url in "${urls[@]}"; do
+        if curl -sk --connect-timeout 2 "$test_url" >/dev/null 2>&1; then
+            url="$test_url"
+            break
+        fi
+    done
 
-    # Final fallback: use original URL, chromium will show error
-    err "WebUI not responding after ${MAX_WAIT}s, proceeding anyway"
-    export KIOSK_URL
-    return 0
+    echo "${url:-http://localhost/}"
 }
 
-# ── Step 5: Setup VT (virtual terminal) ──────────────────────────
-setup_vt() {
-    local target_vt="${1:-7}"
+# ══════════════════════════════════════════════════════════════════
+# STEP 4: Create kiosk session script (minimal, no optional deps)
+# ══════════════════════════════════════════════════════════════════
+create_session() {
+    local url="$1"
+    log "Creating kiosk session (URL: $url)..."
 
-    log "Setting up VT${target_vt}..."
+    mkdir -p "$KIOSK_HOME/.config"
 
-    # Ensure tty device exists
-    if [[ ! -c "/dev/tty${target_vt}" ]]; then
-        log "Creating /dev/tty${target_vt}..."
-        mknod "/dev/tty${target_vt}" c 4 "$target_vt" 2>/dev/null || true
-    fi
+    # Chromium profile directory
+    mkdir -p "$KIOSK_HOME/.config/chromium"
+    chown -R "$KIOSK_USER:$KIOSK_USER" "$KIOSK_HOME/.config"
 
-    # Don't switch VT here - let X11 handle it with vt7 parameter
-    # chvt before X starts can cause issues
-
-    return 0
-}
-
-# ── Step 6: Create/verify xinitrc ────────────────────────────────
-setup_xinitrc() {
-    local xinitrc="${KIOSK_HOME}/.xinitrc"
-
-    if [[ ! -f "$xinitrc" ]]; then
-        log "Creating .xinitrc..."
-
-        mkdir -p "${KIOSK_HOME}/.config"
-
-        cat > "$xinitrc" <<'XINITRC'
+    # Minimal session script - just Chromium, no optional tools
+    cat > "$KIOSK_HOME/.xsession" <<XSESSION
 #!/bin/bash
-# SecuBox Kiosk X11 Launcher (generated by kiosk-launcher)
+# SecuBox Kiosk - Minimal X Session
+export DISPLAY=\${DISPLAY:-:0}
 
-# URL from environment (set by launcher)
-URL="${KIOSK_URL:-https://192.168.255.1:9443/}"
+# Log
+logger -t secubox-kiosk "Starting Chromium kiosk: $url"
 
-# Disable screen blanking
+# Disable screensaver (ignore errors)
 xset s off 2>/dev/null || true
 xset -dpms 2>/dev/null || true
-xset s noblank 2>/dev/null || true
 
-# Hide cursor after 3 seconds of inactivity
-if command -v unclutter &>/dev/null; then
-    unclutter -idle 3 -root &
-fi
+# Launch Chromium directly
+exec chromium \\
+    --kiosk \\
+    --no-first-run \\
+    --no-sandbox \\
+    --disable-gpu \\
+    --disable-software-rasterizer \\
+    --ignore-certificate-errors \\
+    --disable-features=TranslateUI \\
+    --window-position=0,0 \\
+    "$url"
+XSESSION
 
-# Set background to black
-xsetroot -solid black 2>/dev/null || true
+    chmod +x "$KIOSK_HOME/.xsession"
+    ln -sf .xsession "$KIOSK_HOME/.xinitrc"
+    chown -R "$KIOSK_USER:$KIOSK_USER" "$KIOSK_HOME"
 
-# Chromium flags for kiosk mode
-CHROMIUM_FLAGS=(
-    --kiosk
-    --no-first-run
-    --no-sandbox
-    --disable-gpu-sandbox
-    --disable-translate
-    --disable-infobars
-    --disable-session-crashed-bubble
-    --disable-restore-background-contents
-    --disable-sync
-    --disable-features=TranslateUI
-    --ignore-certificate-errors
-    --noerrdialogs
-    --enable-features=OverlayScrollbar
-    --start-fullscreen
-    --window-position=0,0
-    --check-for-update-interval=604800
-    --disable-component-update
-    --disable-default-apps
-    --disable-extensions
-    --disable-background-networking
-    --disable-domain-reliability
-    --disable-client-side-phishing-detection
-    "$URL"
-)
-
-# Run Chromium
-exec chromium "${CHROMIUM_FLAGS[@]}"
-XINITRC
-
-        chmod +x "$xinitrc"
-        chown "${KIOSK_UID}:${KIOSK_GID}" "$xinitrc"
-    fi
-
-    return 0
+    log "Session script created"
 }
 
-# ── Step 7: Launch X11 ───────────────────────────────────────────
-launch_x11() {
-    local vt="${1:-7}"
-    local display="${2:-:0}"
+# ══════════════════════════════════════════════════════════════════
+# STEP 5: Start X11 with xinit (direct, reliable)
+# ══════════════════════════════════════════════════════════════════
+start_display() {
+    log "Starting X11 display with xinit..."
 
-    log "Launching X11 on VT${vt} display ${display}..."
-    log "KIOSK_URL=$KIOSK_URL"
+    local kiosk_uid kiosk_gid runtime_dir
+    kiosk_uid=$(id -u "$KIOSK_USER")
+    kiosk_gid=$(id -g "$KIOSK_USER")
+    runtime_dir="/run/user/$kiosk_uid"
 
-    # Export environment for xinitrc
-    export HOME="$KIOSK_HOME"
-    export DISPLAY="$display"
-    export XDG_SESSION_TYPE=x11
-    export KIOSK_URL
+    # Setup XDG runtime directory
+    mkdir -p "$runtime_dir"
+    chown "$kiosk_uid:$kiosk_gid" "$runtime_dir"
+    chmod 700 "$runtime_dir"
 
-    # Switch to kiosk user and run startx
-    exec su -s /bin/bash "$KIOSK_USER" -c \
-        "export HOME='$KIOSK_HOME' DISPLAY='$display' XDG_RUNTIME_DIR='$XDG_RUNTIME_DIR' XDG_SESSION_TYPE=x11 KIOSK_URL='$KIOSK_URL'; exec /usr/bin/startx '$KIOSK_HOME/.xinitrc' -- $display vt${vt} -nolisten tcp -keeptty"
+    # Give X server permissions to kiosk user
+    # VT7 is used to not conflict with console TTYs
+    log "Launching xinit as $KIOSK_USER on VT7..."
+
+    # Use exec to replace this process with xinit
+    # This keeps systemd happy (Type=simple expects long-running process)
+    exec su -l "$KIOSK_USER" -c "
+        export XDG_RUNTIME_DIR='$runtime_dir'
+        export HOME='$KIOSK_HOME'
+        export DISPLAY=:0
+        cd '$KIOSK_HOME'
+        exec xinit '$KIOSK_HOME/.xsession' -- :0 vt7 -nolisten tcp -keeptty
+    "
 }
 
-# ── Main ─────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════
+# MAIN
+# ══════════════════════════════════════════════════════════════════
 main() {
-    local mode="${1:-x11}"
-    local vt="${2:-7}"
+    log "════════════════════════════════════════════════"
+    log "SecuBox Kiosk Launcher v2.0"
+    log "════════════════════════════════════════════════"
 
-    log "════════════════════════════════════════════════════"
-    log "SecuBox Kiosk Launcher starting (mode=$mode, vt=$vt)"
-    log "════════════════════════════════════════════════════"
+    check_prerequisites
+    configure_x11
 
-    # Check if enabled
-    if [[ ! -f /var/lib/secubox/.kiosk-enabled ]]; then
-        err "Kiosk not enabled (missing /var/lib/secubox/.kiosk-enabled)"
-        exit 1
-    fi
+    local url
+    url=$(determine_url)
 
-    # Detect VM and configure X11 for compatibility
-    detect_vm
-    if [[ "$mode" == "x11" ]]; then
-        configure_x11_for_vm
-    fi
-
-    # Run setup steps
-    verify_user || exit 1
-    setup_runtime_dir || exit 1
-    wait_for_network
-    wait_for_webui
-    setup_vt "$vt"
-    setup_xinitrc
-
-    # Launch based on mode
-    case "$mode" in
-        x11)
-            launch_x11 "$vt" ":0"
-            ;;
-        wayland)
-            log "Launching Cage/Wayland..."
-            export HOME="$KIOSK_HOME"
-            export XDG_SESSION_TYPE=wayland
-            export KIOSK_URL
-            export WLR_LIBINPUT_NO_DEVICES=1
-            export WLR_NO_HARDWARE_CURSORS=1
-            export WLR_RENDERER_ALLOW_SOFTWARE=1
-            export WLR_RENDERER=pixman
-
-            exec su -s /bin/bash "$KIOSK_USER" -c \
-                "export HOME='$KIOSK_HOME' XDG_RUNTIME_DIR='$XDG_RUNTIME_DIR' XDG_SESSION_TYPE=wayland KIOSK_URL='$KIOSK_URL' WLR_LIBINPUT_NO_DEVICES=1 WLR_NO_HARDWARE_CURSORS=1 WLR_RENDERER_ALLOW_SOFTWARE=1 WLR_RENDERER=pixman; exec /usr/bin/cage -s -- '$KIOSK_HOME/start-kiosk.sh'"
-            ;;
-        tui)
-            log "Launching SecuBox Console TUI..."
-            # Run the TUI interface on console
-            exec /usr/sbin/secubox-console-tui
-            ;;
-        *)
-            err "Unknown mode: $mode"
-            exit 1
-            ;;
-    esac
+    create_session "$url"
+    start_display
 }
 
 main "$@"

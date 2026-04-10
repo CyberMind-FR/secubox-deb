@@ -1,0 +1,8 @@
+[Unit]
+Description=SecuBox UI Health Check
+Documentation=https://secubox.in/docs/ui-manager
+After=secubox-ui-manager.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/secubox-ui-manager --status
