@@ -156,8 +156,8 @@ trap cleanup EXIT
 log "1/8 Debootstrap ${SUITE} amd64..."
 mkdir -p "${ROOTFS}"
 
-INCLUDE_PKGS="systemd,systemd-sysv,dbus,netplan.io,nftables,openssh-server"
-INCLUDE_PKGS+=",python3,python3-pip,nginx,curl,wget,ca-certificates,gnupg"
+INCLUDE_PKGS="systemd,systemd-sysv,dbus,netplan.io,nftables,openssh-server,locales"
+INCLUDE_PKGS+=",python3,python3-pip,nginx,curl,wget,ca-certificates,gnupg,console-setup"
 INCLUDE_PKGS+=",iproute2,iputils-ping,ethtool,net-tools,wireguard-tools"
 INCLUDE_PKGS+=",sudo,less,vim-tiny,logrotate,cron,rsync,jq,dnsmasq"
 INCLUDE_PKGS+=",linux-image-amd64,live-boot,live-boot-initramfs-tools,live-config,live-config-systemd"
@@ -174,9 +174,10 @@ ok "Debootstrap complete"
 # ══════════════════════════════════════════════════════════════════
 log "2/8 System configuration..."
 
-mount -t proc proc   "${ROOTFS}/proc"
-mount -t sysfs sysfs "${ROOTFS}/sys"
-mount --bind /dev    "${ROOTFS}/dev"
+# Only mount if not already mounted
+mountpoint -q "${ROOTFS}/proc" || mount -t proc proc   "${ROOTFS}/proc"
+mountpoint -q "${ROOTFS}/sys"  || mount -t sysfs sysfs "${ROOTFS}/sys"
+mountpoint -q "${ROOTFS}/dev"  || mount --bind /dev    "${ROOTFS}/dev"
 
 # Hostname
 echo "secubox-live" > "${ROOTFS}/etc/hostname"
@@ -871,10 +872,11 @@ log "3/8 Installing firmware..."
 # Cleanup is handled by the cleanup() function at script exit
 mount_chroot_fs() {
   log "Mounting special filesystems in chroot..."
-  mount --bind /dev "${ROOTFS}/dev"
-  mount --bind /dev/pts "${ROOTFS}/dev/pts" 2>/dev/null || true
-  mount -t proc proc "${ROOTFS}/proc"
-  mount -t sysfs sysfs "${ROOTFS}/sys"
+  # Only mount if not already mounted
+  mountpoint -q "${ROOTFS}/dev"     || mount --bind /dev "${ROOTFS}/dev"
+  mountpoint -q "${ROOTFS}/dev/pts" || mount --bind /dev/pts "${ROOTFS}/dev/pts" 2>/dev/null || true
+  mountpoint -q "${ROOTFS}/proc"    || mount -t proc proc "${ROOTFS}/proc"
+  mountpoint -q "${ROOTFS}/sys"     || mount -t sysfs sysfs "${ROOTFS}/sys"
 }
 
 mount_chroot_fs
