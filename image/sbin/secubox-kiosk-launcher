@@ -10,7 +10,7 @@ readonly KIOSK_USER="secubox-kiosk"
 readonly KIOSK_HOME="/home/secubox-kiosk"
 readonly LOG_TAG="secubox-kiosk"
 
-log() { echo "[kiosk] $*"; logger -t "$LOG_TAG" "$*" 2>/dev/null || true; }
+log() { echo "[kiosk] $*" >&2; logger -t "$LOG_TAG" "$*" 2>/dev/null || true; }
 err() { echo "[kiosk] ERROR: $*" >&2; logger -t "$LOG_TAG" -p err "$*" 2>/dev/null || true; }
 
 # ══════════════════════════════════════════════════════════════════
