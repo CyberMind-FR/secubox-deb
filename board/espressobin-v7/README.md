@@ -113,6 +113,48 @@ Or set eMMC as default boot:
 => reset
 ```
 
+## USB Boot Scripts (Recommended)
+
+Pre-compiled U-Boot scripts simplify the boot process:
+
+| Script | Purpose |
+|--------|---------|
+| `boot-usb.scr` | Boot live system from USB |
+| `flash-emmc.scr` | Flash image to eMMC |
+| `boot.scr` | Boot from eMMC (post-install) |
+
+### Prepare USB Drive (FAT32)
+
+```bash
+# Format USB as FAT32
+mkfs.vfat -F 32 /dev/sdX1
+
+# Mount and copy files
+mount /dev/sdX1 /mnt
+cp output/secubox-espressobin-v7-bookworm.img.gz /mnt/
+cp board/espressobin-v7/boot-usb.scr /mnt/boot.scr
+cp board/espressobin-v7/flash-emmc.scr /mnt/
+umount /mnt
+```
+
+### Boot from USB (Live)
+
+```
+Marvell>> usb start
+Marvell>> load usb 0:1 $loadaddr boot.scr
+Marvell>> source $loadaddr
+```
+
+### Flash to eMMC
+
+```
+Marvell>> usb start
+Marvell>> load usb 0:1 $loadaddr flash-emmc.scr
+Marvell>> source $loadaddr
+# Follow prompts, then:
+Marvell>> reset
+```
+
 ## Alternative: Flash from SD Card
 
 If using SD card instead of USB:
