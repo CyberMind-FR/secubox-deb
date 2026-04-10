@@ -32,7 +32,13 @@ import os
 import sys
 from pathlib import Path
 
-# Add package to path if running from source
+# Add package to path
+# First try installed location
+INSTALLED_PATH = Path("/usr/lib/secubox")
+if INSTALLED_PATH.exists():
+    sys.path.insert(0, str(INSTALLED_PATH))
+
+# Then try source location (for development)
 pkg_dir = Path(__file__).resolve().parent.parent
 if (pkg_dir / "ui").exists():
     sys.path.insert(0, str(pkg_dir))

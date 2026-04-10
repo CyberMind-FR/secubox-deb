@@ -95,9 +95,9 @@ determine_url() {
 
     local url=""
     local urls=(
-        "https://192.168.255.1:9443/"
-        "https://localhost:9443/"
-        "https://127.0.0.1:9443/"
+        "https://192.168.255.1/"
+        "https://localhost/"
+        "https://127.0.0.1/"
         "http://localhost/"
         "http://127.0.0.1/"
     )
