@@ -1,9 +1,60 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-04-10 (Session 44)*
+*Mis à jour : 2026-04-10 (Session 45)*
 
 ---
 
-## ✅ Terminé cette session (Session 44)
+## ✅ Terminé cette session (Session 45)
+
+### Wiki Cleanup & German Translations ✅
+
+#### Cleanup Completed
+- **Removed `docs/wiki/`** — Eliminated duplicate wiki folder
+- **Removed old module docs** — Deleted fragmented `Modules.md`, `Modules-FR.md`, `Modules-ZH.md`
+- **Consolidated** — Now only `MODULES-*.md` (comprehensive versions) remain
+
+#### German Translations Created (8 new files)
+- `wiki/Home-DE.md` — Hauptseite
+- `wiki/Installation-DE.md` — Installationsanleitung
+- `wiki/Live-USB-DE.md` — Live USB Anleitung
+- `wiki/ARM-Installation-DE.md` — ARM U-Boot Installation
+- `wiki/ESPRESSObin-DE.md` — ESPRESSObin Guide
+- `wiki/Configuration-DE.md` — Konfiguration
+- `wiki/Troubleshooting-DE.md` — Fehlerbehebung
+- `wiki/API-Reference-DE.md` — API-Referenz
+
+#### Sidebar Updated
+- Added German (DE) links to all pages in `wiki/_Sidebar.md`
+
+#### Translation Coverage (Updated)
+
+| Page | EN | FR | ZH | DE |
+|------|:--:|:--:|:--:|:--:|
+| Home | ✅ | ✅ | ✅ | ✅ |
+| Installation | ✅ | ✅ | ✅ | ✅ |
+| Live-USB | ✅ | ✅ | ✅ | ✅ |
+| ARM-Installation | ✅ | ✅ | ✅ | ✅ |
+| ESPRESSObin | ✅ | ✅ | ✅ | ✅ |
+| Configuration | ✅ | ✅ | ✅ | ✅ |
+| Troubleshooting | ✅ | ✅ | ✅ | ✅ |
+| API-Reference | ✅ | ✅ | ✅ | ✅ |
+| MODULES | ✅ | ✅ | ✅ | ✅ |
+| UI-COMPARISON | ✅ | — | — | — |
+
+**Translation coverage:** EN 100%, FR 100%, ZH 100%, DE 100%
+
+---
+
+## ⬜ Next Up
+
+1. ~~Fix 13 modules missing sidebar container~~ ✅ Done (11 fixed, 3 excluded)
+2. ~~Complete German wiki translations~~ ✅ Done
+3. ~~Consolidate module documentation~~ ✅ Done
+4. Run integration tests on VM
+5. Rebuild all packages with UI fixes
+
+---
+
+## ✅ Terminé session précédente (Session 44)
 
 ### UI Audit & Documentation Review ✅
 
@@ -11,7 +62,6 @@
 - Created `REPORT-2026-04-10.md` — Comprehensive board/financer report
 - **124 modules** complete (100%)
 - **147 documentation files** total
-- **Translation coverage:** EN 100%, FR 80%, ZH 80%, DE 10%
 
 #### UI Compliance Audit
 - Created `scripts/ui-screenshot-capture.py` — Playwright-based screenshot capture
@@ -29,21 +79,6 @@
 - secubox-portal (login.html) — login pages don't need nav
 - secubox-system (dev-status-standalone.html) — standalone embed
 - secubox-p2p (master-link/index.html) — mesh onboarding wizard
-
-#### Wiki Issues Identified
-1. **Module doc fragmentation** — 4 different versions (Modules.md vs MODULES-EN.md)
-2. **German translation incomplete** — Only MODULES-DE.md exists
-3. **docs/wiki duplication** — Redundant copies need consolidation
-
----
-
-## ⬜ Next Up
-
-1. ~~Fix 13 modules missing sidebar container~~ ✅ Done (11 fixed, 3 excluded)
-2. Complete German wiki translations
-3. Consolidate module documentation
-4. Run integration tests on VM
-5. Rebuild all packages with UI fixes
 
 ---
 
