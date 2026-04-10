@@ -114,7 +114,70 @@ The 5-position DIP switch controls boot source and CPU speed.
 
 **For normal SecuBox operation:** All switches OFF (boot from SPI NOR which loads U-Boot → then boot from eMMC/SD)
 
-## U-Boot Flash Procedure
+## U-Boot Boot Scripts (Easiest Method)
+
+Pre-compiled U-Boot scripts automate the boot and flash process.
+
+### Available Scripts
+
+| Script | Purpose | Description |
+|--------|---------|-------------|
+| `boot-usb.scr` | Live USB boot | Boot system directly from USB |
+| `flash-emmc.scr` | Flash to eMMC | Write image to internal storage |
+| `boot.scr` | eMMC boot | Normal boot after installation |
+
+### Prepare USB Drive
+
+```bash
+# Download scripts and image
+wget https://github.com/CyberMind-FR/secubox-deb/releases/latest/download/secubox-espressobin-v7-bookworm.img.gz
+wget https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/board/espressobin-v7/boot-usb.scr
+wget https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/board/espressobin-v7/flash-emmc.scr
+
+# Format USB as FAT32
+sudo mkfs.vfat -F 32 /dev/sdb1
+
+# Copy files
+sudo mount /dev/sdb1 /mnt
+sudo cp secubox-espressobin-v7-bookworm.img.gz /mnt/
+sudo cp boot-usb.scr /mnt/boot.scr
+sudo cp flash-emmc.scr /mnt/
+sudo umount /mnt
+```
+
+### Live USB Boot (No Installation)
+
+Boot directly from USB to test SecuBox:
+
+```
+Marvell>> usb start
+Marvell>> load usb 0:1 $loadaddr boot.scr
+Marvell>> source $loadaddr
+```
+
+The system boots from USB. Data is not persistent.
+
+### Install to eMMC
+
+Flash SecuBox to internal eMMC storage:
+
+```
+Marvell>> usb start
+Marvell>> load usb 0:1 $loadaddr flash-emmc.scr
+Marvell>> source $loadaddr
+```
+
+Follow the prompts, wait for flash to complete (~3 min), then:
+
+```
+Marvell>> reset
+```
+
+Remove USB drive. SecuBox will boot from eMMC.
+
+---
+
+## U-Boot Manual Flash Procedure
 
 ### Method 1: USB Drive with gzwrite (Recommended)
 
