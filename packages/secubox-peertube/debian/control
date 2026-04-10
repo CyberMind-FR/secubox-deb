@@ -7,7 +7,7 @@ Standards-Version: 4.6.2
 
 Package: secubox-peertube
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn | python3-pip
 Recommends: docker.io | podman
 Description: PeerTube federated video platform management
  SecuBox module for managing PeerTube video hosting via Docker/Podman.

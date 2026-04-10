@@ -7,7 +7,7 @@ Standards-Version: 4.6.2
 
 Package: secubox-lyrion
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn, python3-httpx
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn | python3-pip, python3-httpx | python3-pip
 Description: Lyrion Music Server (LMS) for SecuBox
  Debian bookworm port of the OpenWRT luci-app-lyrion module.
  Provides FastAPI backend on /api/v1/lyrion/ via Unix socket.

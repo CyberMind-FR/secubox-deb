@@ -7,7 +7,7 @@ Standards-Version: 4.6.2
 
 Package: secubox-picobrew
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn | python3-pip
 Description: Homebrew/Fermentation Controller for SecuBox
  SecuBox-DEB Phase 9 IoT module for homebrewing and fermentation.
  Provides FastAPI backend on /api/v1/picobrew/ via Unix socket.

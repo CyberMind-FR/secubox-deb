@@ -7,7 +7,7 @@ Standards-Version: 4.6.2
 
 Package: secubox-photoprism
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn | python3-pip
 Recommends: docker.io | podman
 Description: PhotoPrism photo management for SecuBox
  SecuBox module for managing PhotoPrism photo server via Docker.

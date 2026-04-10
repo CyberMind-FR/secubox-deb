@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=SecuBox
+Description=SecuBox Debian Cybersecurity Platform boot theme
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/secubox
+ScriptFile=/usr/share/plymouth/themes/secubox/secubox.script

@@ -9,7 +9,7 @@ Rules-Requires-Root: no
 
 Package: secubox-mirror
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0), nginx, python3-fastapi, python3-uvicorn, curl
+Depends: ${misc:Depends}, secubox-core (>= 1.0), nginx, python3-fastapi | python3-pip, python3-uvicorn | python3-pip, curl
 Description: SecuBox Mirror/CDN Cache
  Local mirror and CDN caching service for APT repositories and other content.
  Features nginx caching proxy, mirror sync status, cache statistics, and

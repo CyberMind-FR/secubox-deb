@@ -10,8 +10,8 @@ Package: secubox-matrix
 Architecture: all
 Depends: ${misc:Depends},
  secubox-core (>= 1.0),
- python3-uvicorn,
- python3-httpx,
+ python3-uvicorn | python3-pip,
+ python3-httpx | python3-pip,
  lxc,
  lxc-templates
 Recommends: nginx

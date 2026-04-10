@@ -7,6 +7,6 @@ Standards-Version: 4.6.2
 
 Package: secubox-zkp
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0), python3, python3-fastapi, python3-uvicorn
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3, python3-fastapi | python3-pip, python3-uvicorn | python3-pip
 Description: SecuBox ZKP - Zero-Knowledge Proof Dashboard
  Zero-Knowledge Proof Hamiltonian management for SecuBox.

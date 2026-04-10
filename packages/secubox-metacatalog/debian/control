@@ -9,7 +9,7 @@ Rules-Requires-Root: no
 
 Package: secubox-metacatalog
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-fastapi, python3-uvicorn
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-fastapi | python3-pip, python3-uvicorn | python3-pip
 Description: SecuBox Metacatalog - Service catalog and registry
  SecuBox module for discovering and monitoring installed SecuBox services.
  Provides a centralized view of all services, their health status,

@@ -10,8 +10,8 @@ Package: secubox-repo
 Architecture: all
 Depends: ${misc:Depends}, ${python3:Depends},
  secubox-core,
- python3-fastapi,
- python3-uvicorn,
+ python3-fastapi | python3-pip,
+ python3-uvicorn | python3-pip,
  python3-aiofiles,
  reprepro,
  gnupg,

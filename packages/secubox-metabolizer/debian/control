@@ -9,7 +9,7 @@ Rules-Requires-Root: no
 
 Package: secubox-metabolizer
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-fastapi, python3-uvicorn
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-fastapi | python3-pip, python3-uvicorn | python3-pip
 Description: SecuBox Metabolizer - Log processor and analyzer
  Log processing module that analyzes journalctl logs, extracts patterns,
  calculates statistics, and monitors log rotation for SecuBox.
