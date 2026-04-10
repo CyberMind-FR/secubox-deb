@@ -1,0 +1,18 @@
+#!/bin/bash
+# SecuBox-DEB :: X Session initialization for kiosk mode
+# CyberMind - https://cybermind.fr
+
+# Source user profile if exists
+[[ -f ~/.profile ]] && . ~/.profile
+
+# Set environment
+export DISPLAY=:0
+export KIOSK_URL="https://localhost/"
+
+# Start window manager (minimal)
+if command -v openbox &>/dev/null; then
+    openbox &
+fi
+
+# Run kiosk script
+exec /usr/share/secubox/kiosk/secubox-kiosk.sh
