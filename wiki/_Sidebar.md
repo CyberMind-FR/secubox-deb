@@ -1,7 +1,8 @@
-**[SecuBox](Home)** | [FR](Home-FR) | [中文](Home-ZH) | **v1.5.10**
+**[SecuBox](Home)** | [FR](Home-FR) | [中文](Home-ZH) | **v1.6.0**
 
 ### 🔴 BOOT — Getting Started
-* [[Live-USB-VirtualBox|VirtualBox (2 min)]] ⭐
+* [[Live-USB-VirtualBox|VirtualBox]] ⭐ `run-vbox.sh`
+* [[Live-USB-QEMU|QEMU]] 🖥️ `run-qemu.sh`
 * [[Live-USB]] | [FR](Live-USB-FR) | [中文](Live-USB-ZH)
 * [[Installation]] | [FR](Installation-FR) | [中文](Installation-ZH)
 * [[ARM-Installation|ARM / U-Boot]] | [FR](ARM-Installation-FR) | [中文](ARM-Installation-ZH) ⚡
