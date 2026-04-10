@@ -129,12 +129,24 @@ log "═════════════════════════
 
 cleanup() {
   log "Cleaning up..."
+  # Unmount in reverse order of mounting
+  umount -lf "${ROOTFS}/dev/pts" 2>/dev/null || true
   umount -lf "${ROOTFS}/proc" 2>/dev/null || true
   umount -lf "${ROOTFS}/sys"  2>/dev/null || true
-  umount -lf "${ROOTFS}/dev"  2>/dev/null || true
+  # Wait and force umount /dev last (critical to not destroy host /dev)
+  sync
+  sleep 1
+  if mountpoint -q "${ROOTFS}/dev" 2>/dev/null; then
+    umount -f "${ROOTFS}/dev" 2>/dev/null || umount -lf "${ROOTFS}/dev" 2>/dev/null || true
+  fi
   umount -lf "${WORK_DIR}/mnt/"* 2>/dev/null || true
   [[ -n "${LOOP:-}" ]] && losetup -d "${LOOP}" 2>/dev/null || true
-  rm -rf "${WORK_DIR}" 2>/dev/null || true
+  # Only remove if no mounts are active
+  if ! mount | grep -q "${WORK_DIR}"; then
+    rm -rf "${WORK_DIR}" 2>/dev/null || true
+  else
+    log "WARNING: ${WORK_DIR} still has active mounts, not removing"
+  fi
 }
 trap cleanup EXIT
 
@@ -856,22 +868,14 @@ ok "Base configuration complete"
 log "3/8 Installing firmware..."
 
 # Mount special filesystems for chroot (required for apt)
+# Cleanup is handled by the cleanup() function at script exit
 mount_chroot_fs() {
+  log "Mounting special filesystems in chroot..."
   mount --bind /dev "${ROOTFS}/dev"
   mount --bind /dev/pts "${ROOTFS}/dev/pts" 2>/dev/null || true
   mount -t proc proc "${ROOTFS}/proc"
   mount -t sysfs sysfs "${ROOTFS}/sys"
 }
-
-umount_chroot_fs() {
-  umount -lf "${ROOTFS}/dev/pts" 2>/dev/null || true
-  umount -lf "${ROOTFS}/dev" 2>/dev/null || true
-  umount -lf "${ROOTFS}/proc" 2>/dev/null || true
-  umount -lf "${ROOTFS}/sys" 2>/dev/null || true
-}
-
-# Ensure mounts are cleaned up on exit
-trap 'umount_chroot_fs; cleanup' EXIT
 
 mount_chroot_fs
 
@@ -2343,7 +2347,13 @@ ok "Permissions fixed"
 # ══════════════════════════════════════════════════════════════════
 
 # Unmount special filesystems before creating squashfs
-umount_chroot_fs
+log "Unmounting chroot filesystems..."
+umount -lf "${ROOTFS}/dev/pts" 2>/dev/null || true
+sync
+sleep 1
+umount -f "${ROOTFS}/dev" 2>/dev/null || umount -lf "${ROOTFS}/dev" 2>/dev/null || true
+umount -lf "${ROOTFS}/proc" 2>/dev/null || true
+umount -lf "${ROOTFS}/sys" 2>/dev/null || true
 
 log "7/8 Creating SquashFS filesystem..."
 mkdir -p "${LIVE_DIR}/live"
