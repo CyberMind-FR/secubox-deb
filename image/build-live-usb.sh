@@ -182,7 +182,7 @@ mountpoint -q "${ROOTFS}/dev"  || mount --bind /dev    "${ROOTFS}/dev"
 # Hostname
 echo "secubox-live" > "${ROOTFS}/etc/hostname"
 cat > "${ROOTFS}/etc/hosts" <<EOF
-127.0.0.1  localhost secubox-live secubox
+127.0.0.1  localhost secubox-live secubox secubox.local
 ::1        localhost ip6-localhost ip6-loopback
 EOF
 

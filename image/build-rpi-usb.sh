@@ -143,7 +143,7 @@ log "2/7 System configuration..."
 # Hostname
 echo "secubox-rpi" > "${ROOTFS}/etc/hostname"
 cat > "${ROOTFS}/etc/hosts" <<EOF
-127.0.0.1   localhost
+127.0.0.1   localhost secubox.local
 127.0.1.1   secubox-rpi
 ::1         localhost ip6-localhost ip6-loopback
 EOF

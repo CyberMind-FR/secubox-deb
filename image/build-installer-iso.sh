@@ -173,7 +173,7 @@ echo "secubox" > "${ROOTFS}/etc/hostname"
 
 # /etc/hosts
 cat > "${ROOTFS}/etc/hosts" <<EOF
-127.0.0.1  localhost
+127.0.0.1  localhost secubox.local
 127.0.1.1  secubox
 ::1        localhost ip6-localhost ip6-loopback
 EOF
