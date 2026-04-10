@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SecuBox nDPId - Deep Packet Inspection</title>
     <link rel="stylesheet" href="/static/css/secubox.css">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
         .dashboard-grid {
             display: grid;
@@ -179,8 +181,9 @@
         }
     </style>
 </head>
-<body>
-    <div class="container">
+<body class="crt-light">
+    <nav class="sidebar" id="sidebar"></nav>
+    <div class="container main" style="margin-left: 220px;">
         <h1>nDPId - Deep Packet Inspection</h1>
         <p class="subtitle">JA3/JA4 Fingerprinting, Protocol Detection & Risk Analysis</p>
 
@@ -633,5 +636,6 @@
 
         setInterval(fetchRealtimeStats, 5000);
     </script>
+    <script src="/shared/sidebar.js"></script>
 </body>
 </html>
