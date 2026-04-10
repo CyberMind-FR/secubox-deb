@@ -2220,12 +2220,39 @@ for conf in "${ROOTFS}/etc/nginx/conf.d/"*secubox*.conf "${ROOTFS}/etc/nginx/con
   rm -f "$conf"
 done
 
+# Remove ALL broken symlinks in secubox.d (more aggressive cleanup)
+log "Removing broken symlinks from secubox.d..."
+find "${ROOTFS}/etc/nginx/secubox.d/" -maxdepth 1 -type l ! -exec test -e {} \; -delete 2>/dev/null || true
+
+# Also check for any file that the glob matches but can't be read
+for f in "${ROOTFS}/etc/nginx/secubox.d/"*.conf; do
+  [[ -e "$f" ]] && continue  # File exists, skip
+  [[ -L "$f" ]] && { rm -f "$f"; log "Removed broken symlink: $(basename "$f")"; }
+done
+
+# Create empty placeholder if secubox-repo.conf is missing (some packages reference it)
+if [[ ! -f "${ROOTFS}/etc/nginx/secubox.d/secubox-repo.conf" ]] && \
+   [[ ! -f "${ROOTFS}/etc/nginx/secubox.d/repo.conf" ]]; then
+  # Create minimal repo config to satisfy nginx
+  cat > "${ROOTFS}/etc/nginx/secubox.d/repo.conf" << 'REPOCONF'
+# Placeholder - repo module not installed
+REPOCONF
+  log "Created placeholder repo.conf"
+fi
+
 # Verify nginx config is valid
 if [[ -x "${ROOTFS}/usr/sbin/nginx" ]]; then
   if ! chroot "${ROOTFS}" nginx -t 2>&1 | grep -q "syntax is ok"; then
     warn "nginx config still invalid after final cleanup"
-    # Show the error
-    chroot "${ROOTFS}" nginx -t 2>&1 | head -5 || true
+    # Show the error and try to fix
+    nginx_error=$(chroot "${ROOTFS}" nginx -t 2>&1 | head -5)
+    echo "$nginx_error"
+    # Extract missing file from error message and create empty config
+    missing_file=$(echo "$nginx_error" | grep -oP '"/etc/nginx/secubox\.d/\K[^"]+')
+    if [[ -n "$missing_file" ]]; then
+      log "Creating missing config: $missing_file"
+      touch "${ROOTFS}/etc/nginx/secubox.d/${missing_file}"
+    fi
   else
     ok "Final nginx configuration valid"
   fi
