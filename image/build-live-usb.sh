@@ -596,20 +596,21 @@ chroot "${ROOTFS}" systemctl enable secubox-hwcheck.service 2>/dev/null || true
 mkdir -p "${ROOTFS}/etc/netplan"
 
 # Main netplan config - DHCP on all interfaces, optional so no boot block
+# Matches all common interface naming schemes for universal hardware compatibility
 cat > "${ROOTFS}/etc/netplan/00-secubox.yaml" <<'NETPLAN'
 network:
   version: 2
   renderer: networkd
   ethernets:
-    all-en:
+    # All Intel/Realtek/etc wired interfaces (enp*, eno*, enx*, ens*)
+    all-wired:
       match:
-        name: "en*"
+        name: "e*"
+        driver: "*"
       dhcp4: true
-      optional: true
-    all-eth:
-      match:
-        name: "eth*"
-      dhcp4: true
+      dhcp4-overrides:
+        use-dns: true
+        use-routes: true
       optional: true
 NETPLAN
 chmod 600 "${ROOTFS}/etc/netplan/00-secubox.yaml"
@@ -629,24 +630,55 @@ Name=dummy0
 Address=192.168.255.1/24
 EOF
 
-# Fallback network script - runs after boot, adds link-local if no IP
+# Fallback network script - runs after boot, retries DHCP and adds link-local if failed
 cat > "${ROOTFS}/usr/sbin/secubox-net-fallback" <<'FALLBACK'
 #!/bin/bash
-# SecuBox Network Fallback - adds link-local IP if DHCP failed
-sleep 10
+# SecuBox Network Fallback - retries DHCP on all interfaces, adds link-local if failed
+logger -t secubox-net "Network fallback starting..."
 
-for iface in /sys/class/net/en* /sys/class/net/eth*; do
+# Wait a bit for interfaces to come up
+sleep 5
+
+# Find all physical network interfaces (exclude lo, docker, veth, dummy, etc)
+for iface in /sys/class/net/*; do
     [ -e "$iface" ] || continue
     IFACE=$(basename "$iface")
-    [ "$IFACE" = "lo" ] && continue
+
+    # Skip non-physical interfaces
+    case "$IFACE" in
+        lo|dummy*|docker*|veth*|br-*|virbr*) continue ;;
+    esac
+
+    # Only process interfaces starting with e (ethernet) or w (wifi)
+    case "$IFACE" in
+        e*|w*) ;;
+        *) continue ;;
+    esac
+
+    # Bring interface up
+    ip link set "$IFACE" up 2>/dev/null
 
     # Check if interface has an IP
     if ! ip addr show "$IFACE" | grep -q "inet "; then
-        echo "[net-fallback] No IP on $IFACE, adding fallback 169.254.1.1/16"
-        ip addr add 169.254.1.1/16 dev "$IFACE" 2>/dev/null || true
-        ip link set "$IFACE" up
+        logger -t secubox-net "No IP on $IFACE, triggering DHCP..."
+
+        # Try DHCP via networkctl
+        networkctl reconfigure "$IFACE" 2>/dev/null || true
+        sleep 10
+
+        # Check again
+        if ! ip addr show "$IFACE" | grep -q "inet "; then
+            logger -t secubox-net "DHCP failed on $IFACE, adding link-local"
+            ip addr add 169.254.1.1/16 dev "$IFACE" 2>/dev/null || true
+        else
+            logger -t secubox-net "DHCP succeeded on $IFACE"
+        fi
+    else
+        logger -t secubox-net "Interface $IFACE already has IP"
     fi
 done
+
+logger -t secubox-net "Network fallback complete"
 FALLBACK
 chmod +x "${ROOTFS}/usr/sbin/secubox-net-fallback"
 
