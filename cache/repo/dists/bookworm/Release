@@ -2,36 +2,36 @@ Origin: SecuBox-Local
 Label: SecuBox Local Build Cache
 Suite: bookworm
 Codename: bookworm
-Date: Mon, 30 Mar 2026 04:52:59 UTC
+Date: Fri, 10 Apr 2026 08:32:37 UTC
 Architectures: arm64 amd64
 Components: main
 Description: Local SecuBox packages for build testing
 MD5Sum:
- 2e0618f8d4d4ee54c7c21a6f56a54494 64904 main/binary-arm64/Packages
- 05892737f01bf3c1abd6b0f126ede140 19021 main/binary-arm64/Packages.gz
+ 3a44cca188d4a956e2812fbf643f90d5 97408 main/binary-arm64/Packages
+ 7e498f34d50929d13d03b60e5cee964d 28613 main/binary-arm64/Packages.gz
  89021d25d0382e8e7500bfac7ae6d5ae 163 main/binary-arm64/Release
- 8bade0db1db87b06fe53184235314415 65803 main/binary-amd64/Packages
- 866111530c358b4ac249a88bb4b98b76 19352 main/binary-amd64/Packages.gz
+ 6077c88e92cb56dd7037eb8dabe611fe 98307 main/binary-amd64/Packages
+ a374ab3a6a6cc5451e91fdc1b09ac8ae 28944 main/binary-amd64/Packages.gz
  48919ce031baa9b92065ddeee1d0ebcb 163 main/binary-amd64/Release
  d41d8cd98f00b204e9800998ecf8427e 0 main/source/Sources
  7029066c27ac6f5ef18d660d5741979a 20 main/source/Sources.gz
  66799a66fdc7c2f024d5bf47960a5dae 164 main/source/Release
 SHA1:
- bb499ca7c3beee4bd0946d1e0c414aae7261079b 64904 main/binary-arm64/Packages
- 7aa26bda2f4bb398ff88cf9dc187c9c531ffd157 19021 main/binary-arm64/Packages.gz
+ a55c2a2a896e78936afabf9ed95759a66f5ab1a9 97408 main/binary-arm64/Packages
+ 1fa4c39a7105051ea252045720e7175ce17bf3b1 28613 main/binary-arm64/Packages.gz
  2e546ac3cc4a8340644c79553a7fe6994527e002 163 main/binary-arm64/Release
- 8b3affec6bb9c0c9ba83ffa0e8bd5be1246c6e7e 65803 main/binary-amd64/Packages
- efc36227479c5ea3d4271c4e1a39d1cb1560f491 19352 main/binary-amd64/Packages.gz
+ d701ad7ef08dcd4419f824d8b11eb2922177c7d2 98307 main/binary-amd64/Packages
+ 6c3e22a84664a94678ec8d85349f20ec88fac553 28944 main/binary-amd64/Packages.gz
  6bd47610caa2ab17472f10789d144f3fbae1ec31 163 main/binary-amd64/Release
  da39a3ee5e6b4b0d3255bfef95601890afd80709 0 main/source/Sources
  46c6643f07aa7f6bfe7118de926b86defc5087c4 20 main/source/Sources.gz
  fb88e06690ef274d6cea3983c44e303101865d83 164 main/source/Release
 SHA256:
- fc56a85c83f5d86a6d58b8f7d51d0aaf68afa5285fac71dea58951e047fd4bbf 64904 main/binary-arm64/Packages
- 8641de9138362b79394f512ba689de116e6cf2fd1e5be6437826d85b080cea2b 19021 main/binary-arm64/Packages.gz
+ f0b827ceb929fcd451ad5ef4a3f01d2c7f254ed7d48ef18ef6f9b2ed9adc3483 97408 main/binary-arm64/Packages
+ 31d960eb49564863730d982fd7516555e72cd3a52feca39bd40650724e8c2297 28613 main/binary-arm64/Packages.gz
  bae2017f309123f713fb839984c794a69c0d3455d7d2e5a3e73d8bcfcd5b0d6b 163 main/binary-arm64/Release
- f81bace6d987c4642bcb9f682ccba9c2b9d83bad6b100f3f0850f0dbc14561db 65803 main/binary-amd64/Packages
- d8ff6d38818446d066bae009fefe2bc09fcb50694ef8c2f0037984ab9a1d16db 19352 main/binary-amd64/Packages.gz
+ 9d7384ac6580405bb37f8ef64efdb0cb0abb3c0f71b56245a41d923a0be6a851 98307 main/binary-amd64/Packages
+ 49c627b8faba4621b1ceb17c6cd9ecee35ecded75e5966c824d64d845aa001c7 28944 main/binary-amd64/Packages.gz
  afd4e7aab2c507c4cc031f7907c6749272fdbc11426fbb080e25365547ba5f49 163 main/binary-amd64/Release
  e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 0 main/source/Sources
  59869db34853933b239f1e2219cf7d431da006aa919635478511fabbfc8849d2 20 main/source/Sources.gz

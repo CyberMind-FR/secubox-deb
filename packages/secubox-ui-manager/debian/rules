@@ -1,18 +1,56 @@
 #!/usr/bin/make -f
 
 export DH_VERBOSE = 1
-export PYBUILD_NAME = secubox-ui-manager
 
 %:
-	dh $@ --with python3 --buildsystem=pybuild
+	dh $@
+
+override_dh_auto_configure:
+	# No configure needed
+
+override_dh_auto_build:
+	# No build needed - pure Python
 
 override_dh_auto_install:
-	dh_auto_install
-	# Install binary
+	# Install main binary
 	install -D -m 755 bin/secubox-ui-manager debian/secubox-ui-manager/usr/bin/secubox-ui-manager
-	# Install config
+
+	# Install Python modules
+	install -d debian/secubox-ui-manager/usr/lib/secubox/ui
+	install -d debian/secubox-ui-manager/usr/lib/secubox/ui/lib
+	install -d debian/secubox-ui-manager/usr/lib/secubox/ui/drivers
+	install -d debian/secubox-ui-manager/usr/lib/secubox/ui/config
+
+	install -m 644 ui/__init__.py debian/secubox-ui-manager/usr/lib/secubox/ui/
+	install -m 644 ui/manager.py debian/secubox-ui-manager/usr/lib/secubox/ui/
+
+	install -m 644 ui/lib/__init__.py debian/secubox-ui-manager/usr/lib/secubox/ui/lib/
+	install -m 644 ui/lib/state_machine.py debian/secubox-ui-manager/usr/lib/secubox/ui/lib/
+	install -m 644 ui/lib/hypervisor.py debian/secubox-ui-manager/usr/lib/secubox/ui/lib/
+	install -m 644 ui/lib/display.py debian/secubox-ui-manager/usr/lib/secubox/ui/lib/
+	install -m 644 ui/lib/health.py debian/secubox-ui-manager/usr/lib/secubox/ui/lib/
+	install -m 644 ui/lib/debug.py debian/secubox-ui-manager/usr/lib/secubox/ui/lib/
+	install -m 644 ui/lib/fallback.py debian/secubox-ui-manager/usr/lib/secubox/ui/lib/
+
+	install -m 644 ui/drivers/__init__.py debian/secubox-ui-manager/usr/lib/secubox/ui/drivers/
+	install -m 644 ui/drivers/kui_driver.py debian/secubox-ui-manager/usr/lib/secubox/ui/drivers/
+	install -m 644 ui/drivers/tui_driver.py debian/secubox-ui-manager/usr/lib/secubox/ui/drivers/
+	install -m 644 ui/drivers/console_driver.py debian/secubox-ui-manager/usr/lib/secubox/ui/drivers/
+
+	# Install default config
 	install -D -m 644 ui/config/ui.toml debian/secubox-ui-manager/usr/lib/secubox/ui/config/ui.toml
-	# Install systemd service
+
+	# Install systemd units
 	install -D -m 644 debian/secubox-ui-manager.service debian/secubox-ui-manager/usr/lib/systemd/system/secubox-ui-manager.service
+	install -D -m 644 debian/secubox-ui-health.timer debian/secubox-ui-manager/usr/lib/systemd/system/secubox-ui-health.timer
+	install -D -m 644 debian/secubox-ui-health.service debian/secubox-ui-manager/usr/lib/systemd/system/secubox-ui-health.service
+
 	# Create config directory
 	install -d debian/secubox-ui-manager/etc/secubox/ui
+	install -d debian/secubox-ui-manager/run/secubox/ui
+
+override_dh_auto_clean:
+	# Nothing to clean
+
+override_dh_auto_test:
+	# Skip tests during build
