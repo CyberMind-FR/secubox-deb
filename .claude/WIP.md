@@ -46,11 +46,43 @@
 
 ## ⬜ Next Up
 
+1. Boot USB on physical hardware and validate
+2. Run full integration test suite
+3. Prepare release v1.6.1 with all fixes
+
+---
+
+## ✅ Also Completed This Session
+
+### Package Rebuild & USB Flash ✅
+
+#### 11 Packages Rebuilt with UI Fixes
+- secubox-cloner, secubox-magicmirror, secubox-mmpm
+- secubox-ndpid, secubox-ossec, secubox-p2p
+- secubox-redroid, secubox-rezapp
+- secubox-vault, secubox-vm, secubox-wazuh
+
+#### Live Image Rebuilt
+- `output/secubox-live-amd64-bookworm.img.gz` (1.2GB)
+- Includes all 11 UI-fixed packages
+
+#### USB Flash Completed
+- Target: `/dev/sda` (28.8GB DataTraveler 3.0)
+- Written: 8.6GB in ~5.8 minutes
+- Partitions verified:
+  - sda1: 2M (BIOS boot)
+  - sda2: 512M vfat ESP
+  - sda3: 5.5G ext4 LIVE
+  - sda4: 2G ext4 persistence
+- Boot credentials: `root` / `secubox`
+- Web UI: `https://<IP>:8443`
+
+### Previous Tasks Completed
 1. ~~Fix 13 modules missing sidebar container~~ ✅ Done (11 fixed, 3 excluded)
 2. ~~Complete German wiki translations~~ ✅ Done
 3. ~~Consolidate module documentation~~ ✅ Done
-4. Run integration tests on VM
-5. Rebuild all packages with UI fixes
+4. ~~Run integration tests on VM~~ ✅ QEMU tested
+5. ~~Rebuild all packages with UI fixes~~ ✅ Done
 
 ---
 
