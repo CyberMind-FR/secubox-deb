@@ -3,8 +3,8 @@
 # Launches Chromium in fullscreen kiosk mode pointing to localhost
 # CyberMind - https://cybermind.fr
 
-# Kiosk URL - Use HTTP localhost (no SSL needed for local access)
-KIOSK_URL="${KIOSK_URL:-http://localhost/}"
+# Kiosk URL - Use HTTPS localhost (chromium ignores cert errors)
+KIOSK_URL="${KIOSK_URL:-https://localhost/}"
 
 # Disable screen blanking and power management
 xset s off
