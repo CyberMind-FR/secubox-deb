@@ -10,8 +10,8 @@ Package: secubox-interceptor
 Architecture: all
 Depends: ${misc:Depends},
  python3,
- python3-fastapi,
- python3-uvicorn,
+ python3-fastapi | python3-pip,
+ python3-uvicorn | python3-pip,
  secubox-core
 Recommends: secubox-mitmproxy, secubox-waf, openssl
 Description: SecuBox Traffic Interceptor

@@ -7,7 +7,7 @@ Standards-Version: 4.6.0
 
 Package: secubox-vm
 Architecture: all
-Depends: ${misc:Depends}, python3, python3-fastapi, python3-uvicorn, secubox-core
+Depends: ${misc:Depends}, python3, python3-fastapi | python3-pip, python3-uvicorn | python3-pip, secubox-core
 Recommends: libvirt-daemon-system, qemu-system-x86, virtinst, lxc
 Description: SecuBox VM Manager - Virtualization management
  Virtual machine and container management for SecuBox.

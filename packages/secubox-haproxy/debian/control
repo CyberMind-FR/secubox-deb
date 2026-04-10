@@ -7,7 +7,7 @@ Standards-Version: 4.6.2
 
 Package: secubox-haproxy
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn, python3-httpx
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn | python3-pip, python3-httpx | python3-pip
 Recommends: haproxy, secubox-waf
 Description: SecuBox HAProxy Dashboard
  Dashboard HAProxy avec gestion des vhosts et backends.

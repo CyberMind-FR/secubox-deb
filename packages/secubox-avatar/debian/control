@@ -9,7 +9,7 @@ Rules-Requires-Root: no
 
 Package: secubox-avatar
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-fastapi, python3-pil
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-fastapi | python3-pip, python3-pil
 Description: SecuBox Identity and Avatar Manager
  Identity and avatar management module for SecuBox services.
  Provides unified identity management across Gitea, Nextcloud, Mail, Matrix.

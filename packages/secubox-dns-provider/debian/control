@@ -7,7 +7,7 @@ Standards-Version: 4.6.2
 
 Package: secubox-dns-provider
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0.0), python3-httpx
+Depends: ${misc:Depends}, secubox-core (>= 1.0.0), python3-httpx | python3-pip
 Description: SecuBox DNS Provider Module
  Multi-provider DNS API management for SecuBox.
  Supports OVH, Gandi, Cloudflare, and AWS Route53.

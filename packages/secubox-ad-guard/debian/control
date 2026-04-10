@@ -7,7 +7,7 @@ Standards-Version: 4.6.2
 
 Package: secubox-ad-guard
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0.0), python3-httpx
+Depends: ${misc:Depends}, secubox-core (>= 1.0.0), python3-httpx | python3-pip
 Description: SecuBox Ad Guard Module
  Ad and tracker detection with per-device statistics.
  Features blocklist management, delayed blacklisting workflow,

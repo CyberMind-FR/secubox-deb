@@ -9,8 +9,8 @@ Package: secubox-simplex
 Architecture: all
 Depends: secubox-core,
          python3,
-         python3-uvicorn,
-         python3-fastapi,
+         python3-uvicorn | python3-pip,
+         python3-fastapi | python3-pip,
          python3-pydantic,
          nginx,
          openssl,

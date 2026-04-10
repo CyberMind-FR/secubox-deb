@@ -9,7 +9,7 @@ Rules-Requires-Root: no
 
 Package: secubox-ksm
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-fastapi
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-fastapi | python3-pip
 Description: SecuBox KSM Memory Optimization Dashboard
  Kernel Same-page Merging (KSM) management module.
  Provides web UI and API for KSM controls to optimize memory

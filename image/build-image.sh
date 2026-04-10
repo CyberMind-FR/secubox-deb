@@ -329,8 +329,10 @@ ok "Python dependencies installed"
 
 # Slipstream: intégrer les .deb locaux directement
 if [[ $SLIPSTREAM_DEBS -eq 1 ]]; then
-  # Check both output/ and output/debs/ for packages
-  if [[ -d "${REPO_DIR}/output" ]] && ls "${REPO_DIR}/output"/secubox-*.deb >/dev/null 2>&1; then
+  # Check output/debs/ first (fresh builds), then output/
+  if [[ -d "${REPO_DIR}/output/debs" ]] && ls "${REPO_DIR}/output/debs"/secubox-*.deb >/dev/null 2>&1; then
+    DEBS_DIR="${REPO_DIR}/output/debs"
+  elif [[ -d "${REPO_DIR}/output" ]] && ls "${REPO_DIR}/output"/secubox-*.deb >/dev/null 2>&1; then
     DEBS_DIR="${REPO_DIR}/output"
   else
     DEBS_DIR="${REPO_DIR}/output/debs"

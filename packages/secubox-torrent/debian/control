@@ -7,7 +7,7 @@ Standards-Version: 4.6.2
 
 Package: secubox-torrent
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn | python3-pip
 Recommends: docker.io | podman
 Description: BitTorrent client management for SecuBox
  SecuBox module for managing BitTorrent downloads via Transmission.

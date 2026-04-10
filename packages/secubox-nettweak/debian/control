@@ -9,7 +9,7 @@ Rules-Requires-Root: no
 
 Package: secubox-nettweak
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-fastapi, procps
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-fastapi | python3-pip, procps
 Description: SecuBox Network Tuning Dashboard
  Network tuning module for sysctl and TCP/IP stack optimization.
  Provides web UI and API for managing kernel network parameters.

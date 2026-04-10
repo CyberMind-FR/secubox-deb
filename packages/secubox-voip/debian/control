@@ -7,7 +7,7 @@ Standards-Version: 4.6.2
 
 Package: secubox-voip
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn | python3-pip
 Recommends: docker.io | podman
 Description: VoIP/PBX management module for SecuBox
  SecuBox module for managing Asterisk/FreePBX PBX system via Docker.

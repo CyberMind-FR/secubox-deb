@@ -12,8 +12,8 @@ Architecture: all
 Depends: ${misc:Depends},
          python3 (>= 3.11),
          secubox-core (>= 1.1.0),
-         python3-httpx,
-         python3-fastapi,
+         python3-httpx | python3-pip,
+         python3-fastapi | python3-pip,
          python3-websockets,
          uvicorn
 Suggests: secubox-soc-agent,

@@ -7,7 +7,7 @@ Standards-Version: 4.6.2
 
 Package: secubox-cyberfeed
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0.0), python3-httpx
+Depends: ${misc:Depends}, secubox-core (>= 1.0.0), python3-httpx | python3-pip
 Description: SecuBox CyberFeed - Threat Intelligence Feed Aggregator
  Aggregates threat feeds from multiple sources (abuse.ch, Spamhaus, etc.)
  and provides unified blocklist management for IPs, domains, and IoCs.
