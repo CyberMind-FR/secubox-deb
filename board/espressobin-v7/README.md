@@ -113,7 +113,27 @@ Or set eMMC as default boot:
 => reset
 ```
 
-## USB Boot Scripts (Recommended)
+## Live USB Quick Flash (Recommended)
+
+The SecuBox Live USB image includes an embedded eMMC image and U-Boot flash script.
+Boot from USB and flash to eMMC directly from U-Boot:
+
+```bash
+# At U-Boot prompt
+Marvell>> usb start
+Marvell>> load usb 0:1 $loadaddr flash-emmc.scr
+Marvell>> source $loadaddr
+# Wait for flash to complete, then:
+Marvell>> reset
+```
+
+The flash script will:
+1. Load `secubox-espressobin-v7-bookworm.img.gz` from USB
+2. Display a 5-second warning before erasing eMMC
+3. Flash the image using `gzwrite`
+4. Display completion message
+
+## USB Boot Scripts (Alternative)
 
 Pre-compiled U-Boot scripts simplify the boot process:
 

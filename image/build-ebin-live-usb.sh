@@ -10,7 +10,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 
 # ── Version & Build Info ──────────────────────────────────────────
-SECUBOX_VERSION="1.5.10"
+SECUBOX_VERSION="1.6.1"
 BUILD_DATE=$(date '+%Y-%m-%d')
 BUILD_TIMESTAMP=$(date '+%Y-%m-%d %H:%M')
 
@@ -160,7 +160,7 @@ INCLUDE_PKGS+=",iproute2,iputils-ping,ethtool,net-tools,wireguard-tools"
 INCLUDE_PKGS+=",sudo,less,vim-tiny,logrotate,cron,rsync,jq,dnsmasq"
 INCLUDE_PKGS+=",linux-image-arm64,live-boot,live-boot-initramfs-tools,live-config,live-config-systemd"
 INCLUDE_PKGS+=",pciutils,usbutils,parted,dosfstools,lsb-release"
-INCLUDE_PKGS+=",pv,dialog"
+INCLUDE_PKGS+=",pv,dialog,fonts-terminus,kbd"
 
 # Cross-architecture debootstrap with QEMU
 debootstrap --arch=arm64 --foreign --include="${INCLUDE_PKGS}" \
@@ -201,6 +201,22 @@ chroot "${ROOTFS}" dpkg-reconfigure -f noninteractive tzdata 2>/dev/null || true
 # Locale
 chroot "${ROOTFS}" bash -c "locale-gen en_US.UTF-8 fr_FR.UTF-8 || true"
 echo 'LANG=fr_FR.UTF-8' > "${ROOTFS}/etc/default/locale"
+
+# Console font with UTF-8 box-drawing character support (Terminus)
+mkdir -p "${ROOTFS}/etc/console-setup"
+cat > "${ROOTFS}/etc/default/console-setup" <<EOF
+ACTIVE_CONSOLES="/dev/tty[1-6]"
+CHARMAP="UTF-8"
+CODESET="Uni2"
+FONTFACE="Terminus"
+FONTSIZE="16"
+EOF
+
+# vconsole for systemd
+cat > "${ROOTFS}/etc/vconsole.conf" <<EOF
+KEYMAP=fr
+FONT=ter-v16n
+EOF
 
 # Serial console
 mkdir -p "${ROOTFS}/etc/systemd/system/serial-getty@ttyMV0.service.d"
@@ -401,6 +417,16 @@ if [[ -f "${REPO_DIR}/board/espressobin-v7/boot-live-usb.cmd" ]]; then
     fi
 fi
 
+# Copy U-Boot flash script (for flashing eMMC from U-Boot prompt)
+if [[ -f "${REPO_DIR}/board/espressobin-v7/flash-emmc.cmd" ]]; then
+    cp "${REPO_DIR}/board/espressobin-v7/flash-emmc.cmd" "${LIVE_DIR}/boot/"
+    if command -v mkimage >/dev/null; then
+        mkimage -C none -A arm64 -T script \
+            -d "${LIVE_DIR}/boot/flash-emmc.cmd" \
+            "${LIVE_DIR}/boot/flash-emmc.scr" 2>/dev/null || true
+    fi
+fi
+
 # Copy embedded image to live directory (accessible at boot)
 if [[ -f "${ROOTFS}/secubox/secubox-ebin-v7.img.gz" ]]; then
     cp "${ROOTFS}/secubox/"* "${LIVE_DIR}/secubox/"
@@ -438,6 +464,13 @@ mount "${LOOP}p2" "${WORK_DIR}/mnt/live"
 
 # Copy boot files
 cp -a "${LIVE_DIR}/boot/"* "${WORK_DIR}/mnt/boot/"
+
+# Copy embedded eMMC image to boot partition for U-Boot flash
+# This allows flashing from U-Boot with: load usb 0:1 $loadaddr flash-emmc.scr && source $loadaddr
+if [[ -d "${LIVE_DIR}/secubox" ]] && ls "${LIVE_DIR}/secubox/"*.img.gz >/dev/null 2>&1; then
+    cp "${LIVE_DIR}/secubox/"*.img.gz "${WORK_DIR}/mnt/boot/"
+    log "Embedded image copied to boot partition for U-Boot flash"
+fi
 
 # Copy live filesystem
 cp -a "${LIVE_DIR}/live/"* "${WORK_DIR}/mnt/live/"

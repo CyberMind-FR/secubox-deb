@@ -20,7 +20,7 @@ ${GO}║${RS}   ${G1}╚════██║${G2}██╔══╝  ██║ 
 ${GO}║${RS}   ${G1}███████║${G2}███████╗╚██████╗${G1}╚██████╔╝${G2}██████╔╝╚██████╔╝██╔╝ ██╗${RS}          ${GO}║${RS}
 ${GO}║${RS}   ${G1}╚══════╝${G2}╚══════╝ ╚═════╝${G1} ╚═════╝ ${G2}╚═════╝  ╚═════╝ ╚═╝  ╚═╝${RS}          ${GO}║${RS}
 ${GO}║${RS}                                                                          ${GO}║${RS}
-${GO}║${RS}              ${CY}Debian Cybersecurity Platform v1.6.0${RS}                      ${GO}║${RS}
+${GO}║${RS}              ${CY}Debian Cybersecurity Platform v1.6.1${RS}                      ${GO}║${RS}
 ${GO}║${RS}                                                                          ${GO}║${RS}
 ${GO}║${RS}                    ${GR}CyberMind — cybermind.fr${RS}                            ${GO}║${RS}
 ${GO}║${RS}                                                                          ${GO}║${RS}
