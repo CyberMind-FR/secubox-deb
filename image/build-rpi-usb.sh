@@ -437,84 +437,72 @@ if [ -t 0 ] && [ -z "$SECUBOX_SPLASH_SHOWN" ]; then
 fi
 BASHRC
 
-# ── Plymouth Boot Splash Theme ─────────────────────────────────────
-log "Installing Plymouth boot splash..."
+# ── Plymouth Boot Splash Theme (SecuBox Cube) ──────────────────────
+log "Installing Plymouth SecuBox-Cube boot splash..."
 
-PLYMOUTH_DIR="${ROOTFS}/usr/share/plymouth/themes/secubox"
+PLYMOUTH_DIR="${ROOTFS}/usr/share/plymouth/themes/secubox-cube"
 mkdir -p "${PLYMOUTH_DIR}"
 
-cat > "${PLYMOUTH_DIR}/secubox.plymouth" <<'PLYTHEME'
+# Copy theme assets from source
+CUBE_SRC="${SCRIPT_DIR}/plymouth/secubox-cube"
+if [[ -d "${CUBE_SRC}" ]]; then
+    cp "${CUBE_SRC}/secubox-cube.plymouth" "${PLYMOUTH_DIR}/"
+    cp "${CUBE_SRC}/secubox-cube.script" "${PLYMOUTH_DIR}/"
+    cp "${CUBE_SRC}/logo.png" "${PLYMOUTH_DIR}/"
+    cp "${CUBE_SRC}/scanlines.png" "${PLYMOUTH_DIR}/"
+    cp "${CUBE_SRC}/progress-bg.png" "${PLYMOUTH_DIR}/"
+    cp "${CUBE_SRC}/progress-fg.png" "${PLYMOUTH_DIR}/"
+    cp "${CUBE_SRC}"/icon-*.png "${PLYMOUTH_DIR}/"
+    log "  Copied cube theme assets from ${CUBE_SRC}"
+else
+    warn "Cube theme source not found, creating minimal theme..."
+    cat > "${PLYMOUTH_DIR}/secubox-cube.plymouth" <<'PLYTHEME'
 [Plymouth Theme]
-Name=SecuBox Cyber
-Description=SecuBox VT100/DEC PDP-11 style boot splash
+Name=SecuBox Cube
+Description=SecuBox 3D Rotating Cube Boot Splash
 ModuleName=script
 
 [script]
-ImageDir=/usr/share/plymouth/themes/secubox
-ScriptFile=/usr/share/plymouth/themes/secubox/secubox.script
+ImageDir=/usr/share/plymouth/themes/secubox-cube
+ScriptFile=/usr/share/plymouth/themes/secubox-cube/secubox-cube.script
 PLYTHEME
 
-cat > "${PLYMOUTH_DIR}/secubox.script" <<'PLYSCRIPT'
-# SecuBox Plymouth Theme - Raspberry Pi Edition
+    cat > "${PLYMOUTH_DIR}/secubox-cube.script" <<'PLYSCRIPT'
 Window.SetBackgroundTopColor(0.0, 0.0, 0.0);
-Window.SetBackgroundBottomColor(0.0, 0.05, 0.0);
-
+Window.SetBackgroundBottomColor(0.02, 0.04, 0.02);
 screen_width = Window.GetWidth();
 screen_height = Window.GetHeight();
 center_x = screen_width / 2;
 center_y = screen_height / 2;
-
-banner_text = "SECUBOX CYBER DEFENSE SYSTEM";
-banner_sprite = Sprite();
-banner_image = Image.Text(banner_text, 0.0, 1.0, 0.0, "Fixed");
-banner_sprite.SetImage(banner_image);
-banner_sprite.SetPosition(center_x - banner_image.GetWidth() / 2, center_y - 100, 1);
-
-version_text = "RASPBERRY PI 400 - SECURE BOOT SEQUENCE";
-version_sprite = Sprite();
-version_image = Image.Text(version_text, 0.0, 0.8, 0.0, "Fixed");
-version_sprite.SetImage(version_image);
-version_sprite.SetPosition(center_x - version_image.GetWidth() / 2, center_y - 60, 1);
-
-progress_sprite = Sprite();
-
+banner_image = Image.Text("SECUBOX", 0.0, 1.0, 0.61, "Sans Bold 48");
+banner_sprite = Sprite(banner_image);
+banner_sprite.SetPosition(center_x - banner_image.GetWidth() / 2, center_y - 50, 1);
 fun boot_progress_callback(duration, progress) {
-    fill_count = Math.Int(progress * 30);
-    fill_text = "";
-    for (i = 0; i < fill_count; i++) { fill_text = fill_text + "#"; }
-    for (i = fill_count; i < 30; i++) { fill_text = fill_text + " "; }
-    progress_text = "[" + fill_text + "]";
-    progress_image = Image.Text(progress_text, 0.0, 1.0, 0.0, "Fixed");
-    progress_sprite.SetImage(progress_image);
-    progress_sprite.SetPosition(center_x - progress_image.GetWidth() / 2, center_y + 20, 1);
+    bar_text = "";
+    for (i = 0; i < Math.Int(progress * 30); i++) bar_text = bar_text + "█";
+    for (i = Math.Int(progress * 30); i < 30; i++) bar_text = bar_text + "░";
+    bar_image = Image.Text(bar_text, 0.0, 0.8, 0.4, "Mono 12");
+    bar_sprite = Sprite(bar_image);
+    bar_sprite.SetPosition(center_x - bar_image.GetWidth() / 2, center_y + 80, 1);
 }
-
 Plymouth.SetBootProgressFunction(boot_progress_callback);
-
-message_sprite = Sprite();
-
-fun message_callback(text) {
-    message_image = Image.Text("> " + text, 0.0, 0.7, 0.0, "Fixed");
-    message_sprite.SetImage(message_image);
-    message_sprite.SetPosition(center_x - 200, center_y + 60, 1);
-}
-
-Plymouth.SetMessageFunction(message_callback);
 PLYSCRIPT
+fi
 
 mkdir -p "${ROOTFS}/etc/plymouth"
 cat > "${ROOTFS}/etc/plymouth/plymouthd.conf" <<EOF
 [Daemon]
-Theme=secubox
+Theme=secubox-cube
 ShowDelay=0
+DeviceTimeout=8
 EOF
 
-chroot "${ROOTFS}" plymouth-set-default-theme secubox 2>/dev/null || true
+chroot "${ROOTFS}" plymouth-set-default-theme secubox-cube 2>/dev/null || true
 
 mkdir -p "${ROOTFS}/etc/initramfs-tools/conf.d"
 echo "FRAMEBUFFER=y" > "${ROOTFS}/etc/initramfs-tools/conf.d/plymouth"
 
-ok "Plymouth theme installed"
+ok "Plymouth SecuBox-Cube theme installed"
 
 ok "System configured"
 
