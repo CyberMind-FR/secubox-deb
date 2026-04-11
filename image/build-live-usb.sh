@@ -1330,10 +1330,13 @@ if [[ ! -f "${ROOTFS}/etc/nginx/sites-available/secubox" ]]; then
        "${ROOTFS}/etc/nginx/sites-available/secubox"
     ln -sf /etc/nginx/sites-available/secubox \
        "${ROOTFS}/etc/nginx/sites-enabled/secubox"
-    rm -f "${ROOTFS}/etc/nginx/sites-enabled/default"
     log "Installed secubox nginx site config"
   fi
 fi
+
+# ALWAYS remove default nginx site to avoid duplicate default_server conflict
+rm -f "${ROOTFS}/etc/nginx/sites-enabled/default"
+log "Removed default nginx site (conflicts with secubox)"
 
 # Remove bad configs from conf.d (location-only files belong in secubox.d, not conf.d)
 log "Cleaning bad nginx configs from conf.d..."
