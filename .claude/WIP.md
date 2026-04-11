@@ -1,9 +1,53 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-04-11 (Session 47)*
+*Mis à jour : 2026-04-11 (Session 48)*
 
 ---
 
-## ✅ Terminé cette session (Session 47)
+## ✅ Terminé cette session (Session 48)
+
+### Plymouth Cube Theme Integration ✅
+
+- **Integrated** secubox-cube theme with 3D rotating module icons
+- **Updated** `build-live-usb.sh` and `build-rpi-usb.sh` to use cube theme
+- **Assets**: logo, scanlines, progress-bar, 6 module icons (BOOT, AUTH, ROOT, MIND, MESH, WALL)
+
+### Portal Authentication Fix ✅
+
+- **Problem**: admin/secubox login not working (users.json missing)
+- **Fix**: Build script now creates `/etc/secubox/users.json` with SHA256 hashed passwords
+- **Credentials**: admin/secubox, root/secubox
+
+### secubox-flash-disk Script Fix ✅
+
+- **Problem**: `line 236: local: can only be used in a function`
+- **Fix**: Removed `local` keyword from variables outside function scope
+
+### x64-live Netplan Update ✅
+
+- **Added** br-lan/wan structure similar to ARM boards
+- **WAN**: DHCP on first interface
+- **br-lan**: Static 192.168.1.1/24 for LAN gateway
+
+### Commit
+- `3898816` — fix(live): Plymouth cube theme, auth, flash-disk, netplan
+
+### Status
+- ✅ Kiosk working on Lenovo hardware (v1.6.1)
+- ✅ USB flashed with v1.6.2 fixes
+- ⚠️ QEMU test frozen (KVM issue, real hardware OK)
+
+---
+
+## ⬜ Next Up
+
+1. Test v1.6.2 on real hardware (Lenovo)
+2. Verify portal login with admin/secubox
+3. Test secubox-flash-disk on real hardware
+4. Prepare release v1.6.2
+
+---
+
+## ✅ Terminé session précédente (Session 47)
 
 ### Kiosk Service Systemd Enable Fix ✅
 
