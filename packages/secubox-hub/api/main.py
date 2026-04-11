@@ -13,7 +13,8 @@ import json
 from pathlib import Path
 
 app = FastAPI(title="secubox-hub", version="1.1.0", root_path="/api/v1/hub")
-app.include_router(auth_router, prefix="/auth")
+# Note: auth_router already has prefix="/auth" in secubox_core.auth
+app.include_router(auth_router)
 router = APIRouter()
 log = get_logger("hub")
 
