@@ -35,6 +35,14 @@ jobs:
       size: '8G'
     secrets: inherit
 
+  # Build Live USB images (all platforms)
+  build-live-usb:
+    needs: build-packages
+    uses: ./.github/workflows/build-all-live-usb.yml
+    with:
+      platform: all
+    secrets: inherit
+
   # Publish to APT repository
   publish:
     if: ${{ github.event.inputs.publish != 'false' }}
@@ -44,7 +52,7 @@ jobs:
 
   # Create unified release
   create-release:
-    needs: [build-packages, build-images]
+    needs: [build-packages, build-images, build-live-usb]
     if: always() && needs.build-packages.result == 'success'
     runs-on: ubuntu-latest
 
@@ -66,6 +74,14 @@ jobs:
           path: release/images/
           merge-multiple: true
 
+      - name: Download Live USB artifacts
+        if: needs.build-live-usb.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: secubox-*-bookworm
+          path: release/live-usb/
+          merge-multiple: true
+
       - name: Generate release notes
         run: |
           VERSION="${{ github.ref_name || github.event.inputs.version }}"
@@ -85,13 +101,18 @@ jobs:
           - **SOC:** soc-agent, soc-gateway, soc-web (hierarchical security operations)
           - **Intel:** device-intel, vortex-dns, vortex-firewall, ai-insights
 
-          ### System Images
+          ### System Images (Disk Install)
           - MOCHAbin (Marvell Armada 7040) - arm64
           - ESPRESSObin v7 (Marvell Armada 3720) - arm64
           - ESPRESSObin Ultra (Marvell Armada 3720) - arm64
           - Raspberry Pi 400 - arm64
           - VM x64 (VirtualBox/QEMU) - amd64
           - QEMU ARM64 emulation script (x86 hosts)
+
+          ### Live USB Images (Bootable + Flasher)
+          - x64 Live USB (GRUB UEFI/BIOS) - amd64
+          - EspressoBin V7 Live USB (U-Boot) - arm64
+          - Raspberry Pi 400 Live USB - arm64
 
           ### Boot Options
           - ⚡ **SecuBox Live** - Normal boot with persistence
@@ -142,7 +163,7 @@ jobs:
       - name: Generate combined checksums
         run: |
           cd release/
-          find . -name "*.deb" -o -name "*.img.gz" -o -name "*.img.xz" | \
+          find . -name "*.deb" -o -name "*.img.gz" -o -name "*.img.xz" -o -name "*.img" | \
             xargs sha256sum 2>/dev/null | sort > SHA256SUMS || true
 
       - name: Sign checksums
@@ -171,7 +192,7 @@ jobs:
             echo "Release exists, cleaning up for retry..."
             # Get existing asset names
             existing=$(gh release view "$VERSION" --json assets --jq '.assets[].name')
-            for asset in release/packages/*.deb release/images/*.img.gz release/images/*.img.xz; do
+            for asset in release/packages/*.deb release/images/*.img.gz release/images/*.img.xz release/live-usb/*.img*; do
               [ -f "$asset" ] || continue
               name=$(basename "$asset")
               if echo "$existing" | grep -qF "$name"; then
@@ -190,6 +211,7 @@ jobs:
             release/packages/*.deb
             release/images/*.img.gz
             release/images/*.img.xz
+            release/live-usb/*.img*
             release/create-qemu-arm64-vm.sh
             release/create-vbox-vm.sh
             release/SHA256SUMS

@@ -1,0 +1,31 @@
+# SecuBox Netplan Configuration for Raspberry Pi 400
+# Network auto-configuration with Ethernet and WiFi support
+
+network:
+  version: 2
+  renderer: networkd
+
+  ethernets:
+    # Raspberry Pi built-in Ethernet (BCM2711)
+    eth0:
+      dhcp4: true
+      dhcp6: false
+      optional: true
+
+    # USB Ethernet adapter (if connected)
+    eth1:
+      dhcp4: true
+      dhcp6: false
+      optional: true
+
+  wifis:
+    # Raspberry Pi built-in WiFi
+    wlan0:
+      dhcp4: true
+      dhcp6: false
+      optional: true
+      # Default access point for initial setup
+      # Can be overridden via /boot/firmware/wifi.txt
+      access-points:
+        "SecuBox-Setup":
+          password: "secubox123"
