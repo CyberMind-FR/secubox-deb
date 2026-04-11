@@ -208,7 +208,65 @@ draw_menu() {
     echo -e "  $(draw_line '─' 60)"
     echo -e "  ${WHITE}r${NC} Refresh    ${WHITE}s${NC} Services    ${WHITE}n${NC} Network    ${WHITE}l${NC} Logs"
     echo -e "  ${WHITE}w${NC} Web UI     ${WHITE}c${NC} Config      ${WHITE}h${NC} Help       ${WHITE}q${NC} Quit"
+    # Show flash option only if running from USB (not eMMC)
+    if is_live_usb; then
+        echo -e "  ${RED}f${NC} ${RED}Flash to eMMC${NC}"
+    fi
     echo
+}
+
+# Check if running from live USB (not eMMC)
+is_live_usb() {
+    local boot_dev=$(findmnt -no SOURCE / 2>/dev/null | sed 's/[0-9]*$//' | sed 's/p$//')
+    # EspressoBin eMMC is /dev/mmcblk1
+    [[ "$boot_dev" != "/dev/mmcblk1" ]]
+}
+
+# Flash to eMMC
+flash_emmc() {
+    clear
+    draw_header
+    echo -e "${RED}${BOLD}  Flash SecuBox to eMMC${NC}"
+    echo -e "  $(draw_line '─' 60)"
+    echo
+
+    if ! is_live_usb; then
+        echo -e "  ${RED}ERROR: Cannot flash while running from eMMC!${NC}"
+        echo -e "  Boot from USB first, then run this option."
+        echo
+        echo -e "  Press any key to return..."
+        read -rsn1
+        return
+    fi
+
+    if [[ ! -x /usr/sbin/secubox-flash-emmc ]]; then
+        echo -e "  ${RED}ERROR: Flash tool not found!${NC}"
+        echo -e "  /usr/sbin/secubox-flash-emmc is missing."
+        echo
+        echo -e "  Press any key to return..."
+        read -rsn1
+        return
+    fi
+
+    echo -e "  ${YELLOW}WARNING: This will ERASE ALL DATA on the eMMC!${NC}"
+    echo
+    echo -e "  The flash process will:"
+    echo -e "    1. Detect the eMMC device"
+    echo -e "    2. Write the SecuBox image"
+    echo -e "    3. Verify the write"
+    echo -e "    4. Optionally reboot"
+    echo
+    echo -e "  ${WHITE}Press 'y' to proceed, any other key to cancel...${NC}"
+    read -rsn1 confirm
+
+    if [[ "$confirm" == "y" ]] || [[ "$confirm" == "Y" ]]; then
+        tput cnorm 2>/dev/null  # Show cursor
+        /usr/sbin/secubox-flash-emmc
+        tput civis 2>/dev/null  # Hide cursor again
+    else
+        echo -e "  ${CYAN}Flash cancelled.${NC}"
+        sleep 1
+    fi
 }
 
 # Draw footer
@@ -340,6 +398,7 @@ main() {
                 l|L) show_logs ;;
                 h|H) show_help ;;
                 w|W) open_web ;;
+                f|F) flash_emmc ;;
                 q|Q) break ;;
                 *) continue ;;
             esac

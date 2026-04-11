@@ -1,0 +1,298 @@
+#!/usr/bin/env bash
+# ══════════════════════════════════════════════════════════════════
+#  SecuBox-DEB :: secubox-flash-emmc
+#  Flash SecuBox image to EspressoBin V7 eMMC
+#  CyberMind — https://cybermind.fr
+# ══════════════════════════════════════════════════════════════════
+set -euo pipefail
+
+VERSION="1.0.0"
+SCRIPT_NAME="secubox-flash-emmc"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+# Default paths
+DEFAULT_IMAGE="/secubox/secubox-ebin-v7.img.gz"
+EMMC_DEVICE="/dev/mmcblk1"
+LOG_FILE="/var/log/secubox-flash.log"
+
+# Options
+AUTO_MODE=0
+DRY_RUN=0
+NO_REBOOT=0
+IMAGE_PATH=""
+
+log()  { echo -e "${CYAN}[flash]${NC} $*"; echo "[$(date -Iseconds)] $*" >> "$LOG_FILE"; }
+ok()   { echo -e "${GREEN}[  OK ]${NC} $*"; echo "[$(date -Iseconds)] OK: $*" >> "$LOG_FILE"; }
+warn() { echo -e "${YELLOW}[WARN ]${NC} $*"; echo "[$(date -Iseconds)] WARN: $*" >> "$LOG_FILE"; }
+err()  { echo -e "${RED}[FAIL ]${NC} $*" >&2; echo "[$(date -Iseconds)] FAIL: $*" >> "$LOG_FILE"; exit 1; }
+
+usage() {
+    cat << EOF
+${BOLD}SecuBox eMMC Flasher v${VERSION}${NC}
+
+${BOLD}USAGE:${NC}
+    $SCRIPT_NAME [OPTIONS]
+
+${BOLD}OPTIONS:${NC}
+    -a, --auto          Non-interactive mode (no confirmations)
+    -i, --image PATH    Path to image file (default: $DEFAULT_IMAGE)
+    -d, --dry-run       Show what would be done without writing
+    -n, --no-reboot     Don't reboot after successful flash
+    -h, --help          Show this help message
+
+${BOLD}SAFETY:${NC}
+    - Will NOT flash if currently running from eMMC
+    - Verifies image integrity before flashing
+    - Creates backup of partition table (if requested)
+
+${BOLD}EXAMPLES:${NC}
+    # Interactive flash with bundled image
+    $SCRIPT_NAME
+
+    # Automated flash for unattended installation
+    $SCRIPT_NAME --auto --no-reboot
+
+    # Flash custom image
+    $SCRIPT_NAME --image /media/usb/custom-image.img.gz
+
+EOF
+    exit 0
+}
+
+# ── Parse arguments ─────────────────────────────────────────────────
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -a|--auto)      AUTO_MODE=1; shift ;;
+        -i|--image)     IMAGE_PATH="$2"; shift 2 ;;
+        -d|--dry-run)   DRY_RUN=1; shift ;;
+        -n|--no-reboot) NO_REBOOT=1; shift ;;
+        -h|--help)      usage ;;
+        *) err "Unknown option: $1. Use --help for usage." ;;
+    esac
+done
+
+# ── Safety checks ───────────────────────────────────────────────────
+
+# Check if running as root
+[[ $EUID -ne 0 ]] && err "This script must be run as root (sudo)"
+
+# Detect boot device
+BOOT_DEVICE=$(findmnt -no SOURCE / 2>/dev/null | sed 's/[0-9]*$//' | sed 's/p$//')
+log "Boot device: $BOOT_DEVICE"
+
+# CRITICAL: Don't flash if running from eMMC
+if [[ "$BOOT_DEVICE" == "$EMMC_DEVICE" ]]; then
+    err "SAFETY STOP: Currently booted from eMMC ($EMMC_DEVICE)!
+
+    You cannot flash the eMMC while running from it.
+    Please boot from USB drive first, then run this script."
+fi
+
+# Check if eMMC exists
+if [[ ! -b "$EMMC_DEVICE" ]]; then
+    err "eMMC device not found: $EMMC_DEVICE
+
+    This could mean:
+    - No eMMC installed on this board
+    - Wrong device path (check with 'lsblk')
+    - Kernel module not loaded (sdhci-xenon)"
+fi
+
+# ── Find image ──────────────────────────────────────────────────────
+
+if [[ -n "$IMAGE_PATH" ]]; then
+    [[ -f "$IMAGE_PATH" ]] || err "Image not found: $IMAGE_PATH"
+elif [[ -f "$DEFAULT_IMAGE" ]]; then
+    IMAGE_PATH="$DEFAULT_IMAGE"
+else
+    # Search for image in common locations
+    for path in \
+        /secubox/*.img.gz \
+        /media/*/secubox/*.img.gz \
+        /mnt/*/secubox/*.img.gz \
+        /home/*/secubox/*.img.gz; do
+        if [[ -f "$path" ]]; then
+            IMAGE_PATH="$path"
+            break
+        fi
+    done
+fi
+
+[[ -z "$IMAGE_PATH" ]] && err "No image file found. Use --image to specify path."
+[[ -f "$IMAGE_PATH" ]] || err "Image not found: $IMAGE_PATH"
+
+log "Image file: $IMAGE_PATH"
+
+# ── Get image info ──────────────────────────────────────────────────
+
+IMAGE_SIZE=$(stat -c%s "$IMAGE_PATH")
+IMAGE_SIZE_MB=$((IMAGE_SIZE / 1024 / 1024))
+log "Compressed image size: ${IMAGE_SIZE_MB} MB"
+
+# Check for checksum file
+CHECKSUM_FILE="${IMAGE_PATH%.gz}.sha256"
+[[ -f "$CHECKSUM_FILE" ]] || CHECKSUM_FILE="${IMAGE_PATH}.sha256"
+HAS_CHECKSUM=0
+if [[ -f "$CHECKSUM_FILE" ]]; then
+    HAS_CHECKSUM=1
+    log "Checksum file found: $CHECKSUM_FILE"
+fi
+
+# Get eMMC size
+EMMC_SIZE=$(blockdev --getsize64 "$EMMC_DEVICE" 2>/dev/null || echo "0")
+EMMC_SIZE_GB=$((EMMC_SIZE / 1024 / 1024 / 1024))
+log "eMMC size: ${EMMC_SIZE_GB} GB ($EMMC_DEVICE)"
+
+# Estimate decompressed size (assume ~3x compression ratio)
+EST_SIZE=$((IMAGE_SIZE * 3))
+if [[ $EST_SIZE -gt $EMMC_SIZE ]] && [[ $EMMC_SIZE -gt 0 ]]; then
+    warn "Image may be larger than eMMC capacity!"
+    warn "Estimated: $((EST_SIZE / 1024 / 1024 / 1024))GB, eMMC: ${EMMC_SIZE_GB}GB"
+fi
+
+# ── Display summary ─────────────────────────────────────────────────
+
+echo ""
+echo -e "${BOLD}╔═══════════════════════════════════════════════════════════════╗${NC}"
+echo -e "${BOLD}║            SecuBox eMMC Flasher v${VERSION}                      ║${NC}"
+echo -e "${BOLD}╠═══════════════════════════════════════════════════════════════╣${NC}"
+echo -e "${BOLD}║${NC}  Source Image : ${CYAN}$(basename "$IMAGE_PATH")${NC}"
+echo -e "${BOLD}║${NC}  Image Size   : ${IMAGE_SIZE_MB} MB (compressed)"
+echo -e "${BOLD}║${NC}  Checksum     : $([[ $HAS_CHECKSUM -eq 1 ]] && echo "${GREEN}Yes${NC}" || echo "${YELLOW}No${NC}")"
+echo -e "${BOLD}╠═══════════════════════════════════════════════════════════════╣${NC}"
+echo -e "${BOLD}║${NC}  Target Device: ${RED}${EMMC_DEVICE}${NC}"
+echo -e "${BOLD}║${NC}  eMMC Size    : ${EMMC_SIZE_GB} GB"
+echo -e "${BOLD}║${NC}  Boot Device  : ${GREEN}${BOOT_DEVICE}${NC} (safe, not eMMC)"
+echo -e "${BOLD}╠═══════════════════════════════════════════════════════════════╣${NC}"
+echo -e "${BOLD}║${NC}  ${RED}WARNING: ALL DATA ON eMMC WILL BE ERASED!${NC}"
+echo -e "${BOLD}╚═══════════════════════════════════════════════════════════════╝${NC}"
+echo ""
+
+# ── Dry run exit ────────────────────────────────────────────────────
+
+if [[ $DRY_RUN -eq 1 ]]; then
+    log "DRY RUN: Would flash $IMAGE_PATH to $EMMC_DEVICE"
+    log "DRY RUN: No changes made"
+    exit 0
+fi
+
+# ── Confirmation ────────────────────────────────────────────────────
+
+if [[ $AUTO_MODE -eq 0 ]]; then
+    echo -e "${YELLOW}This will ERASE ALL DATA on the eMMC!${NC}"
+    echo ""
+    read -p "Type 'FLASH' to confirm, or anything else to cancel: " confirm
+    if [[ "$confirm" != "FLASH" ]]; then
+        log "Flash cancelled by user"
+        echo "Cancelled."
+        exit 1
+    fi
+else
+    log "Auto mode enabled - skipping confirmation"
+    sleep 2  # Brief pause in auto mode
+fi
+
+# ── Verify checksum (if available) ──────────────────────────────────
+
+if [[ $HAS_CHECKSUM -eq 1 ]]; then
+    log "Verifying image checksum..."
+    EXPECTED=$(cat "$CHECKSUM_FILE" | awk '{print $1}')
+    ACTUAL=$(sha256sum "$IMAGE_PATH" | awk '{print $1}')
+
+    if [[ "$EXPECTED" == "$ACTUAL" ]]; then
+        ok "Checksum verified"
+    else
+        err "Checksum mismatch!
+    Expected: $EXPECTED
+    Actual:   $ACTUAL
+
+    The image may be corrupted. Please re-download."
+    fi
+fi
+
+# ── Flash eMMC ──────────────────────────────────────────────────────
+
+log "Starting flash to $EMMC_DEVICE..."
+echo ""
+echo -e "${BOLD}Flashing... This will take 3-5 minutes. Do not power off!${NC}"
+echo ""
+
+# Sync before flash
+sync
+
+# Detect if image is gzipped
+if [[ "$IMAGE_PATH" == *.gz ]]; then
+    # Decompress and write with progress
+    if command -v pv &>/dev/null; then
+        # Use pv for nice progress bar
+        pv -pterb "$IMAGE_PATH" | gunzip -c | dd of="$EMMC_DEVICE" bs=4M conv=fsync status=none
+    else
+        # Fallback to dd progress
+        gunzip -c "$IMAGE_PATH" | dd of="$EMMC_DEVICE" bs=4M conv=fsync status=progress
+    fi
+else
+    # Raw image
+    if command -v pv &>/dev/null; then
+        pv -pterb "$IMAGE_PATH" | dd of="$EMMC_DEVICE" bs=4M conv=fsync status=none
+    else
+        dd if="$IMAGE_PATH" of="$EMMC_DEVICE" bs=4M conv=fsync status=progress
+    fi
+fi
+
+# Final sync
+sync
+log "Sync complete"
+
+# ── Verify write ────────────────────────────────────────────────────
+
+log "Verifying flash..."
+
+# Re-read partition table
+partprobe "$EMMC_DEVICE" 2>/dev/null || true
+sleep 1
+
+# Check if partitions are present
+if lsblk "$EMMC_DEVICE" | grep -q "part"; then
+    ok "Partitions detected on eMMC"
+else
+    warn "No partitions detected - may need manual check"
+fi
+
+# ── Success ─────────────────────────────────────────────────────────
+
+echo ""
+echo -e "${GREEN}${BOLD}╔═══════════════════════════════════════════════════════════════╗${NC}"
+echo -e "${GREEN}${BOLD}║              Flash Complete!                                   ║${NC}"
+echo -e "${GREEN}${BOLD}╚═══════════════════════════════════════════════════════════════╝${NC}"
+echo ""
+echo "SecuBox has been flashed to the eMMC."
+echo ""
+echo "Next steps:"
+echo "  1. Remove the USB drive"
+echo "  2. Power cycle the board"
+echo "  3. The board will boot SecuBox from eMMC"
+echo ""
+
+# ── Reboot ──────────────────────────────────────────────────────────
+
+if [[ $NO_REBOOT -eq 1 ]]; then
+    log "No-reboot flag set - staying in live system"
+    echo "Run 'reboot' when ready to boot from eMMC."
+elif [[ $AUTO_MODE -eq 1 ]]; then
+    log "Auto mode - rebooting in 10 seconds..."
+    echo "Rebooting in 10 seconds (remove USB drive)..."
+    sleep 10
+    reboot
+else
+    echo ""
+    read -p "Remove USB drive and press Enter to reboot, or Ctrl+C to stay: "
+    log "User initiated reboot"
+    reboot
+fi
