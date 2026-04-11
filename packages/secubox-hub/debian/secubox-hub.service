@@ -1,14 +1,19 @@
 [Unit]
-Description=SecuBox SecuBox Hub — Tableau de bord central API
-After=network.target secubox-core.service
-Requires=secubox-core.service
+Description=SecuBox Hub — Dashboard Central API
+After=network.target secubox-core.service secubox-runtime.service
+Wants=secubox-core.service secubox-runtime.service
 
 [Service]
-UMask=0000
+UMask=0002
 Type=simple
 User=secubox
 Group=secubox
 WorkingDirectory=/usr/lib/secubox/hub
+# Ensure /run/secubox exists before starting (fallback if secubox-core didn't run)
+# + prefix runs as root regardless of User= setting
+ExecStartPre=+/bin/mkdir -p /run/secubox
+ExecStartPre=+/bin/chown secubox:secubox /run/secubox
+ExecStartPre=+/bin/chmod 775 /run/secubox
 ExecStart=/usr/bin/python3 -m uvicorn api.main:app \
     --uds /run/secubox/hub.sock \
     --log-level warning

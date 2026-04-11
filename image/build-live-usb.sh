@@ -960,6 +960,39 @@ else
   warn "SSL cert generation failed - nginx may not start"
 fi
 
+# ══════════════════════════════════════════════════════════════════
+# CRITICAL: Create secubox user BEFORE installing packages
+# ══════════════════════════════════════════════════════════════════
+# Package postinst scripts assume this user exists. Creating it here
+# ensures it's available during package install and at boot time.
+log "Creating secubox system user..."
+if ! chroot "${ROOTFS}" id -u secubox >/dev/null 2>&1; then
+  chroot "${ROOTFS}" adduser --system --group --no-create-home \
+    --home /var/lib/secubox --shell /usr/sbin/nologin secubox
+  ok "Created secubox user"
+else
+  log "secubox user already exists"
+fi
+
+# Create directories with correct ownership
+chroot "${ROOTFS}" install -d -o secubox -g secubox -m 750 /etc/secubox
+chroot "${ROOTFS}" install -d -o secubox -g secubox -m 775 /run/secubox
+chroot "${ROOTFS}" install -d -o secubox -g secubox -m 750 /var/lib/secubox
+chroot "${ROOTFS}" install -d -m 755 /usr/share/secubox/www
+
+# Make sure TLS key is readable by secubox group (for hub service)
+chroot "${ROOTFS}" chgrp secubox /etc/secubox/tls/key.pem 2>/dev/null || true
+
+# Create tmpfiles.d entry that runs at boot to recreate /run/secubox
+# (since /run is tmpfs and wiped on each boot)
+mkdir -p "${ROOTFS}/etc/tmpfiles.d"
+cat > "${ROOTFS}/etc/tmpfiles.d/secubox.conf" << 'TMPFILES'
+# SecuBox runtime directory for Unix sockets
+# Created by tmpfiles.d at boot (before services start)
+d /run/secubox 0775 secubox secubox -
+TMPFILES
+log "tmpfiles.d configured for /run/secubox"
+
 # Find all .deb files in cache/repo or output/
 # Note: Packages may be in output/ directly OR output/debs/ subdirectory
 CACHE_DEBS="${REPO_DIR}/cache/repo/pool"
@@ -1263,12 +1296,15 @@ log "Enabling SecuBox services..."
 # Create wants directory if missing
 mkdir -p "${ROOTFS}/etc/systemd/system/multi-user.target.wants"
 
-# First, enable secubox-runtime (creates /run/secubox socket directory)
-if [[ -f "${ROOTFS}/usr/lib/systemd/system/secubox-runtime.service" ]]; then
-  ln -sf /usr/lib/systemd/system/secubox-runtime.service \
-    "${ROOTFS}/etc/systemd/system/multi-user.target.wants/secubox-runtime.service"
-  ok "secubox-runtime enabled (socket directory)"
-fi
+# First, enable critical setup services (creates /run/secubox socket directory)
+# These must run before any other SecuBox service
+for setup_svc in secubox-runtime.service secubox-core.service; do
+  if [[ -f "${ROOTFS}/usr/lib/systemd/system/${setup_svc}" ]]; then
+    ln -sf "/usr/lib/systemd/system/${setup_svc}" \
+      "${ROOTFS}/etc/systemd/system/multi-user.target.wants/${setup_svc}"
+    ok "${setup_svc} enabled (setup service)"
+  fi
+done
 
 # Enable all SecuBox API services by creating symlinks
 ENABLED_COUNT=0
@@ -1385,6 +1421,21 @@ for site in "${ROOTFS}/etc/nginx/sites-enabled/"*; do
     log "Moved $(basename "$site") to secubox.d/ (was location-only)"
   fi
 done
+
+# ── Ensure hub.conf exists for the Hub API ────────────────────────────
+# This is critical for authentication to work
+if [[ ! -f "${ROOTFS}/etc/nginx/secubox.d/hub.conf" ]]; then
+  log "Creating hub.conf for Hub API..."
+  cat > "${ROOTFS}/etc/nginx/secubox.d/hub.conf" << 'HUBCONF'
+# /etc/nginx/secubox.d/hub.conf
+# SecuBox Hub API - Authentication and Dashboard
+location /api/v1/hub/ {
+    proxy_pass http://unix:/run/secubox/hub.sock:/;
+    include /etc/nginx/snippets/secubox-proxy.conf;
+}
+HUBCONF
+  ok "Created hub.conf"
+fi
 
 # Test nginx configuration in chroot
 log "Testing nginx configuration..."
