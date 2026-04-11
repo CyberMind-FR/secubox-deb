@@ -1,0 +1,285 @@
+name: Build SecuBox Live USB (All Platforms)
+
+on:
+  workflow_call:
+    inputs:
+      platform:
+        description: 'Target platform(s)'
+        type: string
+        default: 'all'
+    secrets:
+      GPG_PRIVATE_KEY:
+        required: false
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'Target platform'
+        type: choice
+        options:
+          - all
+          - x64
+          - espressobin-v7
+          - rpi400
+        default: all
+      compress:
+        description: 'Compress output (gzip)'
+        type: boolean
+        default: true
+  push:
+    tags:
+      - 'v*'
+
+env:
+  DEBIAN_SUITE: bookworm
+
+jobs:
+  # Matrix build for all platforms
+  build-live-usb:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # x64 (amd64) - GRUB UEFI/BIOS boot
+          - platform: x64
+            arch: amd64
+            script: build-live-usb.sh
+            artifact_name: secubox-live-amd64
+            output_pattern: "secubox-live-amd64-*.img*"
+            needs_qemu: false
+            embed_image: false
+
+          # EspressoBin V7 (arm64) - U-Boot distroboot
+          - platform: espressobin-v7
+            arch: arm64
+            script: build-ebin-live-usb.sh
+            artifact_name: secubox-espressobin-v7-live-usb
+            output_pattern: "secubox-espressobin-v7-live-usb.img*"
+            needs_qemu: true
+            embed_image: true
+
+          # Raspberry Pi 400 (arm64) - Native Pi firmware boot
+          - platform: rpi400
+            arch: arm64
+            script: build-rpi-usb.sh
+            artifact_name: secubox-rpi-arm64
+            output_pattern: "secubox-rpi-arm64-*.img*"
+            needs_qemu: true
+            embed_image: false
+
+    # Filter matrix based on platform input
+    if: >-
+      github.event_name == 'push' ||
+      inputs.platform == 'all' ||
+      inputs.platform == '' ||
+      inputs.platform == matrix.platform
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost
+          sudo apt-get clean
+          df -h
+
+      - name: Setup QEMU for ARM64 cross-compilation
+        if: matrix.needs_qemu
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            debootstrap qemu-user-static binfmt-support \
+            parted dosfstools e2fsprogs squashfs-tools \
+            grub-efi-amd64-bin grub-pc-bin grub-efi-amd64-signed shim-signed \
+            mtools rsync pv xorriso curl wget u-boot-tools
+
+      - name: Download SecuBox packages
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          workflow: build-packages.yml
+          name: secubox-debs-all
+          path: output/debs/
+          if_no_artifact_found: warn
+        continue-on-error: true
+
+      - name: List available packages
+        run: |
+          echo "=== Available SecuBox packages ==="
+          ls output/debs/secubox-*.deb 2>/dev/null | wc -l || echo "0"
+          ls output/debs/secubox-*.deb 2>/dev/null | xargs -I{} basename {} | sed 's/_.*$//' | sort -u || echo "No packages found"
+
+      - name: Build embedded eMMC image (EspressoBin only)
+        if: matrix.embed_image
+        run: |
+          echo "=== Building embedded eMMC target image ==="
+          sudo -E bash image/build-image.sh \
+            --board espressobin-v7 \
+            --suite ${{ env.DEBIAN_SUITE }} \
+            --out output/ \
+            --slipstream
+          echo "=== Compressing for embedding ==="
+          gzip -k output/secubox-espressobin-v7-bookworm.img
+          ls -lh output/secubox-espressobin-v7-bookworm.img.gz
+        timeout-minutes: 60
+
+      - name: Build ${{ matrix.platform }} Live USB
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          echo "=== Building ${{ matrix.platform }} Live USB ==="
+
+          COMPRESS_OPT=""
+          if [[ "${{ inputs.compress }}" == "false" ]]; then
+            COMPRESS_OPT="--no-compress"
+          fi
+
+          SLIPSTREAM_OPT=""
+          if ls output/debs/secubox-*.deb >/dev/null 2>&1; then
+            SLIPSTREAM_OPT="--slipstream"
+            echo "Slipstream enabled: $(ls output/debs/secubox-*.deb | wc -l) packages"
+          fi
+
+          sudo -E bash image/${{ matrix.script }} \
+            --suite ${{ env.DEBIAN_SUITE }} \
+            $SLIPSTREAM_OPT \
+            $COMPRESS_OPT
+
+          sudo chown -R $(id -u):$(id -g) output/
+        timeout-minutes: 120
+
+      - name: List output files
+        run: |
+          echo "=== Build output ==="
+          ls -lh output/
+
+      - name: Generate checksums
+        run: |
+          cd output/
+          echo "=== Generating SHA256 checksums ==="
+          for f in ${{ matrix.output_pattern }}; do
+            if [[ -f "$f" ]]; then
+              sha256sum "$f" >> SHA256SUMS
+              echo "  $f"
+            fi
+          done
+          cat SHA256SUMS
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}-${{ env.DEBIAN_SUITE }}
+          path: |
+            output/${{ matrix.output_pattern }}
+            output/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 30
+
+  # Collect all artifacts and create release on tags
+  release:
+    needs: build-live-usb
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: live-usb/
+          merge-multiple: true
+
+      - name: List downloaded files
+        run: |
+          echo "=== Downloaded artifacts ==="
+          ls -lh live-usb/
+
+      - name: Generate combined checksums
+        run: |
+          cd live-usb/
+          rm -f SHA256SUMS
+          echo "=== Generating combined SHA256SUMS ==="
+          sha256sum *.img* 2>/dev/null | sort > SHA256SUMS || echo "No images found"
+          cat SHA256SUMS
+
+      - name: Sign checksums
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        if: env.GPG_PRIVATE_KEY != ''
+        run: |
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          cd live-usb/
+          gpg --clearsign SHA256SUMS
+          mv SHA256SUMS.asc SHA256SUMS.gpg
+          echo "=== Checksums signed ==="
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            live-usb/*.img*
+            live-usb/SHA256SUMS
+            live-usb/SHA256SUMS.gpg
+          body: |
+            ## SecuBox Live USB Images ${{ github.ref_name }}
+
+            Bootable live USB images with integrated disk flasher tools for permanent installation.
+
+            ### Available Images
+
+            | Image | Platform | Architecture | Boot Method | Flasher Tool |
+            |-------|----------|--------------|-------------|--------------|
+            | `secubox-live-amd64-bookworm.img.gz` | x64 PC | amd64 | GRUB UEFI/BIOS | `secubox-flash-disk` (press `d`) |
+            | `secubox-espressobin-v7-live-usb.img` | EspressoBin V7 | arm64 | U-Boot extlinux | `secubox-flash-emmc` (press `f`) |
+            | `secubox-rpi-arm64-bookworm.img.gz` | Raspberry Pi 400 | arm64 | Pi firmware | Manual install |
+
+            ### Flash to USB Drive
+
+            ```bash
+            # x64 PC
+            zcat secubox-live-amd64-bookworm.img.gz | sudo dd of=/dev/sdX bs=4M status=progress
+
+            # EspressoBin V7
+            sudo dd if=secubox-espressobin-v7-live-usb.img of=/dev/sdX bs=4M status=progress
+
+            # Raspberry Pi 400
+            zcat secubox-rpi-arm64-bookworm.img.gz | sudo dd of=/dev/sdX bs=4M status=progress
+            ```
+
+            ### Boot & Install to Internal Storage
+
+            | Platform | Boot Method | Install Command |
+            |----------|-------------|-----------------|
+            | **x64** | Boot USB, select "SecuBox Live" | Press `d` in TUI or run `secubox-flash-disk` |
+            | **EspressoBin** | Serial console (115200 8N1), U-Boot auto-boots | Press `f` in TUI or run `secubox-flash-emmc` |
+            | **Raspberry Pi** | HDMI/serial console, auto-boots | Manual: `dd` to SD card |
+
+            ### Default Credentials
+
+            - **Console/SSH:** `root` / `secubox`
+            - **Web UI:** `https://localhost` (or LAN IP)
+
+            ### Verification
+
+            ```bash
+            # Verify checksums
+            sha256sum -c SHA256SUMS
+
+            # Verify GPG signature (if available)
+            gpg --verify SHA256SUMS.gpg
+            ```
+
+            ### Features
+
+            - **All SecuBox packages** pre-installed (40+ security modules)
+            - **Persistent storage** partition for configuration
+            - **Kiosk mode** with Chromium dashboard
+            - **Console TUI** for headless operation
+            - **Network auto-detection** (DHCP on all interfaces)
+
+          draft: false
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
