@@ -1209,6 +1209,26 @@ cat > "${ROOTFS}/etc/secubox/build-info.json" <<EOF
 EOF
 log "Build metadata: ${BUILD_DATE} (${GIT_COMMIT})"
 
+# ── Default auth config for demo ────────────────────────────────────
+# Credentials: admin / secubox (for live USB demo purposes)
+cat > "${ROOTFS}/etc/secubox/auth.toml" <<'AUTHTOML'
+# SecuBox Authentication Configuration
+# Live USB Demo Credentials
+
+[api]
+jwt_secret = "live-usb-demo-secret-change-in-production"
+
+[users.admin]
+password = "secubox"
+role = "admin"
+
+[users.root]
+password = "secubox"
+role = "admin"
+AUTHTOML
+chmod 600 "${ROOTFS}/etc/secubox/auth.toml"
+log "Created default auth.toml (admin/secubox)"
+
 # ── Restore real systemctl ─────────────────────────────────────────
 if [[ ${SYSTEMCTL_DIVERTED:-0} -eq 1 ]] && [[ -x "${ROOTFS}/bin/systemctl.real" ]]; then
   rm -f "${ROOTFS}/bin/systemctl"
