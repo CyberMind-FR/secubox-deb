@@ -7,7 +7,8 @@
 
 # Set environment
 export DISPLAY=:0
-export KIOSK_URL="https://localhost/"
+# Use HTTP for localhost (nginx serves HTTPS only on secubox.local)
+export KIOSK_URL="http://localhost/"
 
 # Start window manager (minimal)
 if command -v openbox &>/dev/null; then
