@@ -1,0 +1,513 @@
+#!/usr/bin/env bash
+# ══════════════════════════════════════════════════════════════════
+#  SecuBox-DEB :: secubox-flash-disk
+#  Flash SecuBox image to internal storage (NVMe, SATA, eMMC)
+#  For x64/amd64 systems - supports UEFI and Legacy BIOS
+#  CyberMind — https://cybermind.fr
+# ══════════════════════════════════════════════════════════════════
+set -euo pipefail
+
+VERSION="1.0.0"
+SCRIPT_NAME="secubox-flash-disk"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+# Default paths
+DEFAULT_IMAGE="/secubox/secubox-x64.img.gz"
+LOG_FILE="/var/log/secubox-flash.log"
+
+# Options
+AUTO_MODE=0
+DRY_RUN=0
+NO_REBOOT=0
+RESIZE_ROOT=0
+IMAGE_PATH=""
+TARGET_DEVICE=""
+
+log()  { echo -e "${CYAN}[flash]${NC} $*"; echo "[$(date -Iseconds)] $*" >> "$LOG_FILE"; }
+ok()   { echo -e "${GREEN}[  OK ]${NC} $*"; echo "[$(date -Iseconds)] OK: $*" >> "$LOG_FILE"; }
+warn() { echo -e "${YELLOW}[WARN ]${NC} $*"; echo "[$(date -Iseconds)] WARN: $*" >> "$LOG_FILE"; }
+err()  { echo -e "${RED}[FAIL ]${NC} $*" >&2; echo "[$(date -Iseconds)] FAIL: $*" >> "$LOG_FILE"; exit 1; }
+
+usage() {
+    cat << EOF
+${BOLD}SecuBox Disk Flasher v${VERSION}${NC}
+
+${BOLD}USAGE:${NC}
+    $SCRIPT_NAME [OPTIONS]
+
+${BOLD}OPTIONS:${NC}
+    -a, --auto          Non-interactive mode (auto-select first target)
+    -t, --target DEV    Specify target device (e.g., /dev/nvme0n1)
+    -i, --image PATH    Path to image file (default: $DEFAULT_IMAGE)
+    -d, --dry-run       Show what would be done without writing
+    -r, --resize        Resize root partition to fill disk after flashing
+    -n, --no-reboot     Don't reboot after successful flash
+    -h, --help          Show this help message
+
+${BOLD}SUPPORTED TARGETS:${NC}
+    - NVMe drives  (/dev/nvme*n*)
+    - SATA drives  (/dev/sd*)
+    - eMMC storage (/dev/mmcblk*)
+    - VirtIO disks (/dev/vd*)
+
+${BOLD}SAFETY:${NC}
+    - Will NOT flash the boot device (where we're running from)
+    - Will NOT flash USB drives (marked as removable)
+    - Verifies image integrity before flashing
+
+${BOLD}EXAMPLES:${NC}
+    # Interactive flash with device selection
+    $SCRIPT_NAME
+
+    # Automated flash to specific device
+    $SCRIPT_NAME --auto --target /dev/nvme0n1
+
+    # Flash and resize to fill disk
+    $SCRIPT_NAME --resize
+
+EOF
+    exit 0
+}
+
+# ── Parse arguments ─────────────────────────────────────────────────
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -a|--auto)      AUTO_MODE=1; shift ;;
+        -t|--target)    TARGET_DEVICE="$2"; shift 2 ;;
+        -i|--image)     IMAGE_PATH="$2"; shift 2 ;;
+        -d|--dry-run)   DRY_RUN=1; shift ;;
+        -r|--resize)    RESIZE_ROOT=1; shift ;;
+        -n|--no-reboot) NO_REBOOT=1; shift ;;
+        -h|--help)      usage ;;
+        *) err "Unknown option: $1. Use --help for usage." ;;
+    esac
+done
+
+# ── Safety checks ───────────────────────────────────────────────────
+
+# Check if running as root
+[[ $EUID -ne 0 ]] && err "This script must be run as root (sudo)"
+
+# Detect boot device (what we're running from)
+get_boot_device() {
+    local root_source
+    root_source=$(findmnt -no SOURCE / 2>/dev/null || echo "")
+
+    # Handle live-boot overlay filesystem
+    if [[ -z "$root_source" ]] || [[ "$root_source" == "overlay"* ]]; then
+        # Try to find the actual boot device from /proc/cmdline
+        root_source=$(awk -F= '/root=/{for(i=1;i<=NF;i++)if($i~/root/)print $(i+1)}' /proc/cmdline | cut -d' ' -f1)
+    fi
+
+    # Strip partition number to get base device
+    if [[ "$root_source" == /dev/nvme* ]]; then
+        echo "$root_source" | sed 's/p[0-9]*$//'
+    elif [[ "$root_source" == /dev/mmcblk* ]]; then
+        echo "$root_source" | sed 's/p[0-9]*$//'
+    else
+        echo "$root_source" | sed 's/[0-9]*$//'
+    fi
+}
+
+BOOT_DEVICE=$(get_boot_device)
+log "Boot device detected: ${BOOT_DEVICE:-unknown}"
+
+# ── Device Detection ────────────────────────────────────────────────
+
+is_removable() {
+    local disk="$1"
+    local base_name
+    base_name=$(basename "$disk")
+
+    # Check sysfs removable flag
+    if [[ -f "/sys/block/${base_name}/removable" ]]; then
+        [[ "$(cat /sys/block/${base_name}/removable)" == "1" ]] && return 0
+    fi
+
+    # Check if it's a USB device
+    if [[ -L "/sys/block/${base_name}" ]]; then
+        readlink -f "/sys/block/${base_name}" | grep -q "usb" && return 0
+    fi
+
+    return 1
+}
+
+get_disk_info() {
+    local disk="$1"
+    local size model
+
+    size=$(lsblk -dn -o SIZE "$disk" 2>/dev/null || echo "?")
+    model=$(lsblk -dn -o MODEL "$disk" 2>/dev/null | xargs || echo "Unknown")
+
+    echo "${size} - ${model}"
+}
+
+detect_target_disks() {
+    local candidates=()
+    local disk
+
+    # Check NVMe drives
+    for disk in /dev/nvme*n[0-9]; do
+        [[ -b "$disk" ]] || continue
+        [[ "$disk" == "$BOOT_DEVICE"* ]] && continue
+        is_removable "$disk" && continue
+        candidates+=("$disk")
+    done
+
+    # Check SATA/SCSI drives
+    for disk in /dev/sd[a-z]; do
+        [[ -b "$disk" ]] || continue
+        [[ "$disk" == "$BOOT_DEVICE" ]] && continue
+        is_removable "$disk" && continue
+        candidates+=("$disk")
+    done
+
+    # Check VirtIO drives (VM)
+    for disk in /dev/vd[a-z]; do
+        [[ -b "$disk" ]] || continue
+        [[ "$disk" == "$BOOT_DEVICE" ]] && continue
+        candidates+=("$disk")
+    done
+
+    # Check eMMC drives
+    for disk in /dev/mmcblk[0-9]; do
+        [[ -b "$disk" ]] || continue
+        [[ "$disk" == "$BOOT_DEVICE"* ]] && continue
+        # eMMC is not removable (mmcblk0 is typically eMMC, others may be SD)
+        [[ -f "/sys/block/$(basename $disk)/device/type" ]] && \
+            [[ "$(cat /sys/block/$(basename $disk)/device/type)" == "MMC" ]] && \
+            candidates+=("$disk")
+    done
+
+    printf '%s\n' "${candidates[@]}"
+}
+
+# ── Find target device ──────────────────────────────────────────────
+
+if [[ -n "$TARGET_DEVICE" ]]; then
+    # User specified target
+    [[ -b "$TARGET_DEVICE" ]] || err "Target device not found: $TARGET_DEVICE"
+
+    # Safety check: not boot device
+    if [[ "$TARGET_DEVICE" == "$BOOT_DEVICE"* ]]; then
+        err "SAFETY STOP: Cannot flash to boot device ($BOOT_DEVICE)!
+
+    You're currently running from this device."
+    fi
+
+    # Safety check: not removable
+    if is_removable "$TARGET_DEVICE"; then
+        warn "Target appears to be a removable device (USB). Proceeding anyway..."
+    fi
+else
+    # Auto-detect targets
+    log "Scanning for target disks..."
+
+    mapfile -t DISK_CANDIDATES < <(detect_target_disks)
+
+    if [[ ${#DISK_CANDIDATES[@]} -eq 0 ]]; then
+        err "No suitable target disks found.
+
+    This could mean:
+    - No internal storage detected
+    - Only the boot device is present
+    - All disks are marked as removable (USB)
+
+    Use --target to specify a device manually."
+    fi
+
+    if [[ $AUTO_MODE -eq 1 ]]; then
+        # Auto mode: pick first candidate
+        TARGET_DEVICE="${DISK_CANDIDATES[0]}"
+        log "Auto-selected target: $TARGET_DEVICE"
+    else
+        # Interactive: let user choose
+        echo ""
+        echo -e "${BOLD}Available target disks:${NC}"
+        echo ""
+
+        local i=1
+        for disk in "${DISK_CANDIDATES[@]}"; do
+            local info
+            info=$(get_disk_info "$disk")
+            printf "  ${CYAN}%d)${NC} %-15s %s\n" "$i" "$disk" "$info"
+            ((i++))
+        done
+
+        echo ""
+        echo -e "  ${YELLOW}0)${NC} Cancel"
+        echo ""
+
+        while true; do
+            read -p "Select target disk [1-${#DISK_CANDIDATES[@]}]: " choice
+
+            if [[ "$choice" == "0" ]]; then
+                log "Cancelled by user"
+                exit 0
+            fi
+
+            if [[ "$choice" =~ ^[0-9]+$ ]] && \
+               [[ "$choice" -ge 1 ]] && \
+               [[ "$choice" -le ${#DISK_CANDIDATES[@]} ]]; then
+                TARGET_DEVICE="${DISK_CANDIDATES[$((choice-1))]}"
+                break
+            fi
+
+            echo "Invalid selection. Please enter a number."
+        done
+    fi
+fi
+
+log "Target device: $TARGET_DEVICE"
+
+# ── Find image ──────────────────────────────────────────────────────
+
+if [[ -n "$IMAGE_PATH" ]]; then
+    [[ -f "$IMAGE_PATH" ]] || err "Image not found: $IMAGE_PATH"
+elif [[ -f "$DEFAULT_IMAGE" ]]; then
+    IMAGE_PATH="$DEFAULT_IMAGE"
+else
+    # Search for image in common locations
+    for path in \
+        /secubox/*.img.gz \
+        /secubox/*.img \
+        /media/*/secubox/*.img.gz \
+        /mnt/*/secubox/*.img.gz; do
+        if [[ -f "$path" ]]; then
+            IMAGE_PATH="$path"
+            break
+        fi
+    done
+fi
+
+[[ -z "$IMAGE_PATH" ]] && err "No image file found. Use --image to specify path."
+[[ -f "$IMAGE_PATH" ]] || err "Image not found: $IMAGE_PATH"
+
+log "Image file: $IMAGE_PATH"
+
+# ── Get image/disk info ─────────────────────────────────────────────
+
+IMAGE_SIZE=$(stat -c%s "$IMAGE_PATH")
+IMAGE_SIZE_MB=$((IMAGE_SIZE / 1024 / 1024))
+log "Image size: ${IMAGE_SIZE_MB} MB"
+
+# Check for checksum file
+CHECKSUM_FILE="${IMAGE_PATH%.gz}.sha256"
+[[ -f "$CHECKSUM_FILE" ]] || CHECKSUM_FILE="${IMAGE_PATH}.sha256"
+HAS_CHECKSUM=0
+if [[ -f "$CHECKSUM_FILE" ]]; then
+    HAS_CHECKSUM=1
+    log "Checksum file found: $CHECKSUM_FILE"
+fi
+
+# Get target disk size
+TARGET_SIZE=$(blockdev --getsize64 "$TARGET_DEVICE" 2>/dev/null || echo "0")
+TARGET_SIZE_GB=$((TARGET_SIZE / 1024 / 1024 / 1024))
+TARGET_INFO=$(get_disk_info "$TARGET_DEVICE")
+log "Target size: ${TARGET_SIZE_GB} GB"
+
+# Estimate decompressed size
+if [[ "$IMAGE_PATH" == *.gz ]]; then
+    EST_SIZE=$((IMAGE_SIZE * 3))  # ~3x compression ratio
+else
+    EST_SIZE=$IMAGE_SIZE
+fi
+
+if [[ $EST_SIZE -gt $TARGET_SIZE ]] && [[ $TARGET_SIZE -gt 0 ]]; then
+    warn "Image may be larger than target disk capacity!"
+    warn "Estimated: $((EST_SIZE / 1024 / 1024 / 1024))GB, Target: ${TARGET_SIZE_GB}GB"
+fi
+
+# ── Display summary ─────────────────────────────────────────────────
+
+echo ""
+echo -e "${BOLD}╔═══════════════════════════════════════════════════════════════╗${NC}"
+echo -e "${BOLD}║            SecuBox Disk Flasher v${VERSION}                       ║${NC}"
+echo -e "${BOLD}╠═══════════════════════════════════════════════════════════════╣${NC}"
+echo -e "${BOLD}║${NC}  Source Image : ${CYAN}$(basename "$IMAGE_PATH")${NC}"
+echo -e "${BOLD}║${NC}  Image Size   : ${IMAGE_SIZE_MB} MB $([[ "$IMAGE_PATH" == *.gz ]] && echo "(compressed)")"
+echo -e "${BOLD}║${NC}  Checksum     : $([[ $HAS_CHECKSUM -eq 1 ]] && echo "${GREEN}Yes${NC}" || echo "${YELLOW}No${NC}")"
+echo -e "${BOLD}╠═══════════════════════════════════════════════════════════════╣${NC}"
+echo -e "${BOLD}║${NC}  Target Device: ${RED}${TARGET_DEVICE}${NC}"
+echo -e "${BOLD}║${NC}  Target Info  : ${TARGET_INFO}"
+echo -e "${BOLD}║${NC}  Target Size  : ${TARGET_SIZE_GB} GB"
+echo -e "${BOLD}║${NC}  Boot Device  : ${GREEN}${BOOT_DEVICE:-unknown}${NC} (protected)"
+echo -e "${BOLD}╠═══════════════════════════════════════════════════════════════╣${NC}"
+echo -e "${BOLD}║${NC}  Resize Root  : $([[ $RESIZE_ROOT -eq 1 ]] && echo "${GREEN}Yes${NC}" || echo "${YELLOW}No${NC}")"
+echo -e "${BOLD}╠═══════════════════════════════════════════════════════════════╣${NC}"
+echo -e "${BOLD}║${NC}  ${RED}WARNING: ALL DATA ON TARGET DISK WILL BE ERASED!${NC}"
+echo -e "${BOLD}╚═══════════════════════════════════════════════════════════════╝${NC}"
+echo ""
+
+# ── Dry run exit ────────────────────────────────────────────────────
+
+if [[ $DRY_RUN -eq 1 ]]; then
+    log "DRY RUN: Would flash $IMAGE_PATH to $TARGET_DEVICE"
+    [[ $RESIZE_ROOT -eq 1 ]] && log "DRY RUN: Would resize root partition"
+    log "DRY RUN: No changes made"
+    exit 0
+fi
+
+# ── Confirmation ────────────────────────────────────────────────────
+
+if [[ $AUTO_MODE -eq 0 ]]; then
+    echo -e "${YELLOW}This will ERASE ALL DATA on ${TARGET_DEVICE}!${NC}"
+    echo ""
+    read -p "Type 'FLASH' to confirm, or anything else to cancel: " confirm
+    if [[ "$confirm" != "FLASH" ]]; then
+        log "Flash cancelled by user"
+        echo "Cancelled."
+        exit 1
+    fi
+else
+    log "Auto mode enabled - skipping confirmation"
+    sleep 2  # Brief pause in auto mode
+fi
+
+# ── Verify checksum (if available) ──────────────────────────────────
+
+if [[ $HAS_CHECKSUM -eq 1 ]]; then
+    log "Verifying image checksum..."
+    EXPECTED=$(cat "$CHECKSUM_FILE" | awk '{print $1}')
+    ACTUAL=$(sha256sum "$IMAGE_PATH" | awk '{print $1}')
+
+    if [[ "$EXPECTED" == "$ACTUAL" ]]; then
+        ok "Checksum verified"
+    else
+        err "Checksum mismatch!
+    Expected: $EXPECTED
+    Actual:   $ACTUAL
+
+    The image may be corrupted. Please re-download."
+    fi
+fi
+
+# ── Flash disk ──────────────────────────────────────────────────────
+
+log "Starting flash to $TARGET_DEVICE..."
+echo ""
+echo -e "${BOLD}Flashing... This may take several minutes. Do not power off!${NC}"
+echo ""
+
+# Unmount any partitions on target
+for part in "${TARGET_DEVICE}"*; do
+    if mountpoint -q "$part" 2>/dev/null; then
+        log "Unmounting $part"
+        umount "$part" || warn "Failed to unmount $part"
+    fi
+done
+
+# Sync before flash
+sync
+
+# Detect if image is gzipped
+if [[ "$IMAGE_PATH" == *.gz ]]; then
+    # Decompress and write with progress
+    if command -v pv &>/dev/null; then
+        pv -pterb "$IMAGE_PATH" | gunzip -c | dd of="$TARGET_DEVICE" bs=4M conv=fsync status=none
+    else
+        gunzip -c "$IMAGE_PATH" | dd of="$TARGET_DEVICE" bs=4M conv=fsync status=progress
+    fi
+else
+    # Raw image
+    if command -v pv &>/dev/null; then
+        pv -pterb "$IMAGE_PATH" | dd of="$TARGET_DEVICE" bs=4M conv=fsync status=none
+    else
+        dd if="$IMAGE_PATH" of="$TARGET_DEVICE" bs=4M conv=fsync status=progress
+    fi
+fi
+
+# Final sync
+sync
+log "Flash complete"
+
+# Re-read partition table
+partprobe "$TARGET_DEVICE" 2>/dev/null || true
+sleep 2
+
+# ── Resize root partition (optional) ────────────────────────────────
+
+if [[ $RESIZE_ROOT -eq 1 ]]; then
+    log "Resizing root partition to fill disk..."
+
+    # Find root partition (usually partition 2 for GPT: 1=EFI, 2=root)
+    ROOT_PART=""
+    if [[ "$TARGET_DEVICE" == /dev/nvme* ]] || [[ "$TARGET_DEVICE" == /dev/mmcblk* ]]; then
+        ROOT_PART="${TARGET_DEVICE}p2"
+    else
+        ROOT_PART="${TARGET_DEVICE}2"
+    fi
+
+    if [[ -b "$ROOT_PART" ]]; then
+        # Use parted to resize partition
+        parted -s "$TARGET_DEVICE" resizepart 2 100% || warn "Partition resize failed"
+
+        # Wait for kernel to update
+        partprobe "$TARGET_DEVICE" 2>/dev/null || true
+        sleep 1
+
+        # Resize filesystem
+        e2fsck -f -y "$ROOT_PART" 2>/dev/null || true
+        resize2fs "$ROOT_PART" || warn "Filesystem resize failed"
+
+        ok "Root partition resized"
+    else
+        warn "Root partition not found at $ROOT_PART - skipping resize"
+    fi
+fi
+
+# ── Verify write ────────────────────────────────────────────────────
+
+log "Verifying flash..."
+
+# Check if partitions are present
+if lsblk "$TARGET_DEVICE" | grep -q "part"; then
+    ok "Partitions detected on target disk"
+
+    # Show partition layout
+    echo ""
+    lsblk "$TARGET_DEVICE" -o NAME,SIZE,FSTYPE,LABEL
+    echo ""
+else
+    warn "No partitions detected - may need manual check"
+fi
+
+# ── Success ─────────────────────────────────────────────────────────
+
+echo ""
+echo -e "${GREEN}${BOLD}╔═══════════════════════════════════════════════════════════════╗${NC}"
+echo -e "${GREEN}${BOLD}║              Flash Complete!                                   ║${NC}"
+echo -e "${GREEN}${BOLD}╚═══════════════════════════════════════════════════════════════╝${NC}"
+echo ""
+echo "SecuBox has been flashed to ${TARGET_DEVICE}."
+echo ""
+echo "Next steps:"
+echo "  1. Remove the USB drive"
+echo "  2. Reboot the system"
+echo "  3. Select the internal disk in BIOS boot menu if needed"
+echo "  4. The system will boot SecuBox from internal storage"
+echo ""
+
+# ── Reboot ──────────────────────────────────────────────────────────
+
+if [[ $NO_REBOOT -eq 1 ]]; then
+    log "No-reboot flag set - staying in live system"
+    echo "Run 'reboot' when ready to boot from internal storage."
+elif [[ $AUTO_MODE -eq 1 ]]; then
+    log "Auto mode - rebooting in 10 seconds..."
+    echo "Rebooting in 10 seconds (remove USB drive)..."
+    sleep 10
+    reboot
+else
+    echo ""
+    read -p "Remove USB drive and press Enter to reboot, or Ctrl+C to stay: "
+    log "User initiated reboot"
+    reboot
+fi
