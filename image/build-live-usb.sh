@@ -1562,6 +1562,18 @@ XSESSION
   touch "${ROOTFS}/var/lib/secubox/.kiosk-enabled"
   echo "x11" > "${ROOTFS}/var/lib/secubox/.kiosk-mode"
 
+  # CRITICAL: Enable secubox-kiosk.service for systemd startup
+  # This ensures kiosk starts even if .bash_profile times out
+  # Note: Service is in /etc/systemd/system/ (not /usr/lib/)
+  mkdir -p "${ROOTFS}/etc/systemd/system/multi-user.target.wants"
+  if [[ -f "${ROOTFS}/etc/systemd/system/secubox-kiosk.service" ]]; then
+    ln -sf /etc/systemd/system/secubox-kiosk.service \
+      "${ROOTFS}/etc/systemd/system/multi-user.target.wants/secubox-kiosk.service"
+    log "Enabled secubox-kiosk.service for systemd startup"
+  else
+    err "secubox-kiosk.service not found in /etc/systemd/system/ - kiosk will NOT auto-start!"
+  fi
+
   # Configure nodm display manager for reliable kiosk startup
   cat > "${ROOTFS}/etc/default/nodm" <<'NODM'
 # nodm configuration for SecuBox Kiosk

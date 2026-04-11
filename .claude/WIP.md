@@ -1,9 +1,54 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-04-10 (Session 46)*
+*Mis à jour : 2026-04-11 (Session 47)*
 
 ---
 
-## ✅ Terminé cette session (Session 46)
+## ✅ Terminé cette session (Session 47)
+
+### Kiosk Service Systemd Enable Fix ✅
+
+#### Problem
+- Kiosk service was not starting automatically despite being configured
+- User reported "ko pareil" (still not working) after previous fixes
+- Root cause: Wrong path in service symlink creation
+
+#### Root Cause Found
+The `build-live-usb.sh` script:
+- **Copied** service file to: `/etc/systemd/system/secubox-kiosk.service` (line 1412)
+- **Checked and symlinked** from: `/usr/lib/systemd/system/secubox-kiosk.service` (line 1567)
+- The condition was **never true** because the file doesn't exist at that path
+
+#### Fix Applied
+Fixed symlink paths in `image/build-live-usb.sh`:
+```bash
+# BEFORE (wrong path):
+if [[ -f "${ROOTFS}/usr/lib/systemd/system/secubox-kiosk.service" ]]; then
+    ln -sf /usr/lib/systemd/system/secubox-kiosk.service ...
+
+# AFTER (correct path):
+if [[ -f "${ROOTFS}/etc/systemd/system/secubox-kiosk.service" ]]; then
+    ln -sf /etc/systemd/system/secubox-kiosk.service ...
+```
+
+#### Verification
+- ✅ Rebuilt live USB image
+- ✅ Booted in QEMU KVM
+- ✅ `secubox-kiosk.service` is **active (running)** and **enabled**
+- ✅ Xorg running on VT7 with modesetting driver
+- ✅ Chromium in kiosk mode displaying `https://localhost/`
+
+---
+
+## ⬜ Next Up
+
+1. Commit and push the kiosk service fix
+2. Flash USB and test on Lenovo hardware
+3. Run full integration test suite
+4. Prepare release v1.6.2 with all fixes
+
+---
+
+## ✅ Terminé session précédente (Session 46)
 
 ### Kiosk "Can't Be Reached" Fix ✅
 
@@ -33,14 +78,6 @@
 - ✅ QEMU KVM test passed — kiosk displays dashboard correctly
 - ✅ nginx config valid in build log
 - ✅ USB flashed and ready for Lenovo hardware test
-
----
-
-## ⬜ Next Up
-
-1. Test USB on Lenovo hardware
-2. Run full integration test suite
-3. Prepare release v1.6.1 with all fixes
 
 ---
 
