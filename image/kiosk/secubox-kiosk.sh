@@ -3,9 +3,9 @@
 # Launches Chromium in fullscreen kiosk mode pointing to localhost
 # CyberMind - https://cybermind.fr
 
-# Kiosk URL - Use HTTPS with IP to avoid DNS issues
-# Using 127.0.0.1 directly instead of localhost/secubox.local
-KIOSK_URL="${KIOSK_URL:-https://127.0.0.1/}"
+# Kiosk URL - Use HTTP for localhost (nginx serves HTTPS only on secubox.local)
+# HTTP redirects to local dashboard, HTTPS requires proper hostname
+KIOSK_URL="${KIOSK_URL:-http://127.0.0.1/}"
 
 # Disable screen blanking and power management
 xset s off
