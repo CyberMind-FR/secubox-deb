@@ -233,9 +233,8 @@ else
         echo -e "${BOLD}Available target disks:${NC}"
         echo ""
 
-        local i=1
+        i=1
         for disk in "${DISK_CANDIDATES[@]}"; do
-            local info
             info=$(get_disk_info "$disk")
             printf "  ${CYAN}%d)${NC} %-15s %s\n" "$i" "$disk" "$info"
             ((i++))

@@ -1,34 +1,46 @@
-# /etc/netplan/00-secubox.yaml — x64 Live — Mode Router (défaut)
-# Auto-détection des interfaces au premier démarrage par secubox-net-detect
-# Ce fichier est un template, remplacé dynamiquement au firstboot
+# /etc/netplan/00-secubox.yaml — x64 Live — Mode Router
+# WAN: First interface with DHCP (internet uplink)
+# br-lan: Bridge for LAN ports with static IP + DHCP server
 network:
   version: 2
   renderer: networkd
 
   ethernets:
-    # WAN — première interface détectée avec lien
-    eth0:
+    # WAN — DHCP from upstream router/modem
+    # Common x64 naming: eno1, enp0s3 (VirtualBox), eth0, ens3
+    wan:
+      match:
+        name: "e*"
+        driver: "*"
       dhcp4: true
       dhcp6: false
-      optional: true
+      optional: false
+      routes:
+        - to: default
+          via: 0.0.0.0
+          on-link: true
 
-    # Interfaces alternatives (VM/Baremetal)
-    enp0s3:
-      dhcp4: true
-      optional: true
+    # LAN interfaces (to be bridged if multiple)
     enp0s8:
-      optional: true
-    enp1s0:
-      dhcp4: true
-      optional: true
-    eno1:
-      dhcp4: true
       optional: true
     eno2:
       optional: true
+    eth1:
+      optional: true
+    enp1s0:
+      optional: true
 
-  # Bridge LAN créé dynamiquement si plusieurs interfaces
-  # bridges:
-  #   br-lan:
-  #     interfaces: [enp0s8, eno2]
-  #     addresses: [192.168.1.1/24]
+  bridges:
+    # Bridge LAN — local network gateway
+    br-lan:
+      interfaces: []
+      addresses:
+        - 192.168.1.1/24
+      dhcp4: false
+      optional: true
+      parameters:
+        stp: false
+        forward-delay: 0
+
+# Note: secubox-netmodes dynamically reconfigures this based on detected hardware
+# DHCP server on br-lan managed by dnsmasq (secubox-nac)

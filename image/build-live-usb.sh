@@ -738,150 +738,94 @@ chroot "${ROOTFS}" systemctl enable secubox-net-fallback.service 2>/dev/null || 
 chroot "${ROOTFS}" systemctl disable systemd-networkd-wait-online.service 2>/dev/null || true
 chroot "${ROOTFS}" systemctl mask systemd-networkd-wait-online.service 2>/dev/null || true
 
-# ── Plymouth Boot Splash Theme ─────────────────────────────────────
-log "Installing Plymouth boot splash..."
+# ── Plymouth Boot Splash Theme (SecuBox Cube) ──────────────────────
+log "Installing Plymouth SecuBox-Cube boot splash..."
 
-# Create SecuBox Plymouth theme directory
-PLYMOUTH_DIR="${ROOTFS}/usr/share/plymouth/themes/secubox"
+# Create SecuBox-Cube Plymouth theme directory
+PLYMOUTH_DIR="${ROOTFS}/usr/share/plymouth/themes/secubox-cube"
 mkdir -p "${PLYMOUTH_DIR}"
 
-# Create theme descriptor
-cat > "${PLYMOUTH_DIR}/secubox.plymouth" <<'PLYTHEME'
+# Copy theme assets from source
+CUBE_SRC="${SCRIPT_DIR}/plymouth/secubox-cube"
+if [[ -d "${CUBE_SRC}" ]]; then
+    cp "${CUBE_SRC}/secubox-cube.plymouth" "${PLYMOUTH_DIR}/"
+    cp "${CUBE_SRC}/secubox-cube.script" "${PLYMOUTH_DIR}/"
+    cp "${CUBE_SRC}/logo.png" "${PLYMOUTH_DIR}/"
+    cp "${CUBE_SRC}/scanlines.png" "${PLYMOUTH_DIR}/"
+    cp "${CUBE_SRC}/progress-bg.png" "${PLYMOUTH_DIR}/"
+    cp "${CUBE_SRC}/progress-fg.png" "${PLYMOUTH_DIR}/"
+    cp "${CUBE_SRC}"/icon-*.png "${PLYMOUTH_DIR}/"
+    log "  Copied cube theme assets from ${CUBE_SRC}"
+else
+    warn "Cube theme source not found at ${CUBE_SRC}, creating minimal theme..."
+    # Fallback: create minimal theme descriptor
+    cat > "${PLYMOUTH_DIR}/secubox-cube.plymouth" <<'PLYTHEME'
 [Plymouth Theme]
-Name=SecuBox Cyber
-Description=SecuBox VT100/DEC PDP-11 style boot splash
+Name=SecuBox Cube
+Description=SecuBox 3D Rotating Cube Boot Splash
 ModuleName=script
 
 [script]
-ImageDir=/usr/share/plymouth/themes/secubox
-ScriptFile=/usr/share/plymouth/themes/secubox/secubox.script
+ImageDir=/usr/share/plymouth/themes/secubox-cube
+ScriptFile=/usr/share/plymouth/themes/secubox-cube/secubox-cube.script
 PLYTHEME
 
-# Create Plymouth script (text-based retro look)
-cat > "${PLYMOUTH_DIR}/secubox.script" <<'PLYSCRIPT'
-# SecuBox Plymouth Theme - VT100/DEC PDP-11 Style
-# Green phosphor terminal aesthetic
-
-# Colors
+    # Minimal fallback script
+    cat > "${PLYMOUTH_DIR}/secubox-cube.script" <<'PLYSCRIPT'
+/* SecuBox Cube - Minimal Fallback */
 Window.SetBackgroundTopColor(0.0, 0.0, 0.0);
-Window.SetBackgroundBottomColor(0.0, 0.05, 0.0);
+Window.SetBackgroundBottomColor(0.02, 0.04, 0.02);
 
-# Logo and text positioning
 screen_width = Window.GetWidth();
 screen_height = Window.GetHeight();
 center_x = screen_width / 2;
 center_y = screen_height / 2;
 
-# Banner text (ASCII art simulation)
-banner_text = "SECUBOX CYBER DEFENSE SYSTEM";
-banner_sprite = Sprite();
-banner_image = Image.Text(banner_text, 0.0, 1.0, 0.0, "Fixed");
-banner_sprite.SetImage(banner_image);
-banner_sprite.SetPosition(center_x - banner_image.GetWidth() / 2, center_y - 100, 1);
+banner_text = "SECUBOX";
+banner_image = Image.Text(banner_text, 0.0, 1.0, 0.61, "Sans Bold 48");
+banner_sprite = Sprite(banner_image);
+banner_sprite.SetPosition(center_x - banner_image.GetWidth() / 2, center_y - 50, 1);
 
-# Version line
-version_text = "DEC PDP-11/70 COMPATIBLE - SECURE BOOT SEQUENCE";
-version_sprite = Sprite();
-version_image = Image.Text(version_text, 0.0, 0.8, 0.0, "Fixed");
-version_sprite.SetImage(version_image);
-version_sprite.SetPosition(center_x - version_image.GetWidth() / 2, center_y - 60, 1);
-
-# Separator line
-sep_text = "================================================================";
-sep_sprite = Sprite();
-sep_image = Image.Text(sep_text, 0.0, 0.6, 0.0, "Fixed");
-sep_sprite.SetImage(sep_image);
-sep_sprite.SetPosition(center_x - sep_image.GetWidth() / 2, center_y - 40, 1);
-
-# Progress indicator
-progress_sprite = Sprite();
-
-fun refresh_callback() {
-    # Blinking cursor effect
-    time = Plymouth.GetTime();
-    if (Math.Int(time * 2) % 2 == 0) {
-        cursor_text = "_";
-    } else {
-        cursor_text = " ";
-    }
-    cursor_image = Image.Text(cursor_text, 0.0, 1.0, 0.0, "Fixed");
-    cursor_sprite = Sprite(cursor_image);
-    cursor_sprite.SetPosition(center_x + 100, center_y + 60, 2);
-}
-
-Plymouth.SetRefreshFunction(refresh_callback);
-
-# Boot progress bar
-progress_box_image = Image.Text("[                              ]", 0.0, 0.8, 0.0, "Fixed");
-progress_box_sprite = Sprite(progress_box_image);
-progress_box_sprite.SetPosition(center_x - progress_box_image.GetWidth() / 2, center_y + 20, 1);
+subtitle_text = "CyberMind Security Platform";
+subtitle_image = Image.Text(subtitle_text, 0.4, 0.6, 0.4, "Sans 16");
+subtitle_sprite = Sprite(subtitle_image);
+subtitle_sprite.SetPosition(center_x - subtitle_image.GetWidth() / 2, center_y + 20, 1);
 
 fun boot_progress_callback(duration, progress) {
-    # Update progress bar fill
-    fill_count = Math.Int(progress * 30);
-    fill_text = "";
-    for (i = 0; i < fill_count; i++) {
-        fill_text = fill_text + "#";
-    }
-    for (i = fill_count; i < 30; i++) {
-        fill_text = fill_text + " ";
-    }
-    progress_text = "[" + fill_text + "]";
-    progress_image = Image.Text(progress_text, 0.0, 1.0, 0.0, "Fixed");
-    progress_sprite.SetImage(progress_image);
-    progress_sprite.SetPosition(center_x - progress_image.GetWidth() / 2, center_y + 20, 1);
+    bar_width = 300;
+    fill = Math.Int(progress * bar_width);
+    bar_text = "";
+    for (i = 0; i < fill / 10; i++) bar_text = bar_text + "█";
+    for (i = fill / 10; i < bar_width / 10; i++) bar_text = bar_text + "░";
+    bar_image = Image.Text(bar_text, 0.0, 0.8, 0.4, "Mono 12");
+    bar_sprite = Sprite(bar_image);
+    bar_sprite.SetPosition(center_x - bar_image.GetWidth() / 2, center_y + 80, 1);
 }
-
 Plymouth.SetBootProgressFunction(boot_progress_callback);
 
-# Status message display
 message_sprite = Sprite();
-
 fun message_callback(text) {
-    message_image = Image.Text("> " + text, 0.0, 0.7, 0.0, "Fixed");
-    message_sprite.SetImage(message_image);
-    message_sprite.SetPosition(center_x - 200, center_y + 60, 1);
+    msg_image = Image.Text(text, 0.0, 0.7, 0.3, "Mono 12");
+    message_sprite.SetImage(msg_image);
+    message_sprite.SetPosition(center_x - msg_image.GetWidth() / 2, center_y + 120, 1);
 }
-
 Plymouth.SetMessageFunction(message_callback);
-
-# Display mode change
-fun display_normal_callback() {
-    # Normal boot display
-}
-
-fun display_password_callback(prompt, bullets) {
-    # Password entry (for encrypted disks)
-    password_sprite = Sprite();
-    password_image = Image.Text(prompt + " " + bullets, 0.0, 1.0, 0.0, "Fixed");
-    password_sprite.SetImage(password_image);
-    password_sprite.SetPosition(center_x - password_image.GetWidth() / 2, center_y + 100, 1);
-}
-
-Plymouth.SetDisplayNormalFunction(display_normal_callback);
-Plymouth.SetDisplayPasswordFunction(display_password_callback);
-
-# System update messages
-fun system_update_callback(progress) {
-    update_text = "SYSTEM UPDATE: " + Math.Int(progress * 100) + "%";
-    update_image = Image.Text(update_text, 0.0, 0.8, 0.0, "Fixed");
-    update_sprite = Sprite(update_image);
-    update_sprite.SetPosition(center_x - update_image.GetWidth() / 2, center_y + 80, 1);
-}
-
-Plymouth.SetSystemUpdateFunction(system_update_callback);
 PLYSCRIPT
+fi
 
-# Set SecuBox theme as default
+# Set SecuBox-Cube theme as default
 mkdir -p "${ROOTFS}/etc/plymouth"
-echo "[Daemon]" > "${ROOTFS}/etc/plymouth/plymouthd.conf"
-echo "Theme=secubox" >> "${ROOTFS}/etc/plymouth/plymouthd.conf"
-echo "ShowDelay=0" >> "${ROOTFS}/etc/plymouth/plymouthd.conf"
+cat > "${ROOTFS}/etc/plymouth/plymouthd.conf" <<EOF
+[Daemon]
+Theme=secubox-cube
+ShowDelay=0
+DeviceTimeout=8
+EOF
 
 # Update alternatives to use our theme
-chroot "${ROOTFS}" plymouth-set-default-theme secubox 2>/dev/null || true
+chroot "${ROOTFS}" plymouth-set-default-theme secubox-cube 2>/dev/null || true
 
-ok "Plymouth SecuBox theme installed"
+ok "Plymouth SecuBox-Cube theme installed"
 
 ok "Base configuration complete"
 
@@ -1300,6 +1244,28 @@ listen_port = 51820
 SECUBOXCONF
 chmod 640 "${ROOTFS}/etc/secubox/secubox.conf"
 log "Created default secubox.conf (admin/secubox)"
+
+# Create users.json for portal authentication
+# Password: secubox -> SHA256 hash
+ADMIN_PASS_HASH="b8780673264e05b9dc557d371bd7cee0dd32a478205f63f5c55c1c037d9e6c22"
+cat > "${ROOTFS}/etc/secubox/users.json" <<EOF
+{
+  "admin": {
+    "password_hash": "${ADMIN_PASS_HASH}",
+    "email": "admin@secubox.local",
+    "role": "admin",
+    "created": "$(date -Iseconds)"
+  },
+  "root": {
+    "password_hash": "${ADMIN_PASS_HASH}",
+    "email": "root@secubox.local",
+    "role": "admin",
+    "created": "$(date -Iseconds)"
+  }
+}
+EOF
+chmod 640 "${ROOTFS}/etc/secubox/users.json"
+log "Created users.json (admin/secubox, root/secubox)"
 
 # ── Restore real systemctl ─────────────────────────────────────────
 if [[ ${SYSTEMCTL_DIVERTED:-0} -eq 1 ]] && [[ -x "${ROOTFS}/bin/systemctl.real" ]]; then
