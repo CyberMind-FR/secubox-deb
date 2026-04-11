@@ -14,7 +14,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 
 # ── Version & Build Info ──────────────────────────────────────────
-SECUBOX_VERSION="1.5.10"
+SECUBOX_VERSION="1.6.1"
 BUILD_TIMESTAMP=$(date '+%Y-%m-%d %H:%M')
 BUILD_DATE=$(date '+%Y%m%d')
 
@@ -167,6 +167,7 @@ INCLUDE_PKGS+=",sudo,less,vim-tiny,logrotate,cron,rsync,jq,dnsmasq"
 INCLUDE_PKGS+=",linux-image-amd64,live-boot,live-boot-initramfs-tools,live-config,live-config-systemd"
 INCLUDE_PKGS+=",grub-efi-amd64,grub-pc-bin,efibootmgr,pciutils,usbutils,parted,dosfstools,lsb-release"
 INCLUDE_PKGS+=",plymouth,plymouth-themes"
+INCLUDE_PKGS+=",fonts-terminus,kbd"
 
 debootstrap --arch=amd64 --include="${INCLUDE_PKGS}" \
   "${SUITE}" "${ROOTFS}" "${APT_MIRROR}"
@@ -208,6 +209,23 @@ XKBLAYOUT="fr"
 XKBVARIANT="latin9"
 EOF
 echo 'KEYMAP=fr' > "${ROOTFS}/etc/vconsole.conf"
+
+# Console font with UTF-8 box-drawing character support (Terminus)
+mkdir -p "${ROOTFS}/etc/console-setup"
+cat > "${ROOTFS}/etc/default/console-setup" <<EOF
+ACTIVE_CONSOLES="/dev/tty[1-6]"
+CHARMAP="UTF-8"
+CODESET="Uni2"
+FONTFACE="Terminus"
+FONTSIZE="16"
+EOF
+
+# Also set vconsole for systemd
+cat > "${ROOTFS}/etc/vconsole.conf" <<EOF
+KEYMAP=fr
+FONT=ter-v16n
+FONT_MAP=
+EOF
 
 # Enable SSH root login with password
 sed -i 's/#PermitRootLogin.*/PermitRootLogin yes/' "${ROOTFS}/etc/ssh/sshd_config"
