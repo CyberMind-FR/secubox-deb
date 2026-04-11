@@ -208,18 +208,44 @@ draw_menu() {
     echo -e "  $(draw_line '─' 60)"
     echo -e "  ${WHITE}r${NC} Refresh    ${WHITE}s${NC} Services    ${WHITE}n${NC} Network    ${WHITE}l${NC} Logs"
     echo -e "  ${WHITE}w${NC} Web UI     ${WHITE}c${NC} Config      ${WHITE}h${NC} Help       ${WHITE}q${NC} Quit"
-    # Show flash option only if running from USB (not eMMC)
-    if is_live_usb; then
+    # Show flash option based on architecture and boot mode
+    if is_live_x64; then
+        echo -e "  ${RED}d${NC} ${RED}Flash to Disk${NC}"
+    elif is_live_usb; then
         echo -e "  ${RED}f${NC} ${RED}Flash to eMMC${NC}"
     fi
     echo
 }
 
-# Check if running from live USB (not eMMC)
+# Check if running from live USB (not eMMC) - for ARM/EspressoBin
 is_live_usb() {
     local boot_dev=$(findmnt -no SOURCE / 2>/dev/null | sed 's/[0-9]*$//' | sed 's/p$//')
     # EspressoBin eMMC is /dev/mmcblk1
     [[ "$boot_dev" != "/dev/mmcblk1" ]]
+}
+
+# Check if running x64 live system (detects live-boot or USB boot on x64)
+is_live_x64() {
+    local arch=$(uname -m)
+    [[ "$arch" != "x86_64" ]] && return 1
+
+    # Check for live-boot overlay filesystem
+    if findmnt -no FSTYPE / 2>/dev/null | grep -q "overlay"; then
+        return 0
+    fi
+
+    # Check for live-boot in kernel cmdline
+    if grep -q "boot=live" /proc/cmdline 2>/dev/null; then
+        return 0
+    fi
+
+    # Check if booted from removable device
+    local root_dev=$(findmnt -no SOURCE / 2>/dev/null | sed 's/[0-9]*$//')
+    if [[ -n "$root_dev" ]] && [[ -f "/sys/block/$(basename $root_dev)/removable" ]]; then
+        [[ "$(cat /sys/block/$(basename $root_dev)/removable)" == "1" ]] && return 0
+    fi
+
+    return 1
 }
 
 # Flash to eMMC
@@ -262,6 +288,54 @@ flash_emmc() {
     if [[ "$confirm" == "y" ]] || [[ "$confirm" == "Y" ]]; then
         tput cnorm 2>/dev/null  # Show cursor
         /usr/sbin/secubox-flash-emmc
+        tput civis 2>/dev/null  # Hide cursor again
+    else
+        echo -e "  ${CYAN}Flash cancelled.${NC}"
+        sleep 1
+    fi
+}
+
+# Flash to internal disk (x64)
+flash_disk() {
+    clear
+    draw_header
+    echo -e "${RED}${BOLD}  Flash SecuBox to Internal Storage${NC}"
+    echo -e "  $(draw_line '─' 60)"
+    echo
+
+    if ! is_live_x64; then
+        echo -e "  ${RED}ERROR: Cannot flash while running from internal disk!${NC}"
+        echo -e "  Boot from USB first, then run this option."
+        echo
+        echo -e "  Press any key to return..."
+        read -rsn1
+        return
+    fi
+
+    if [[ ! -x /usr/sbin/secubox-flash-disk ]]; then
+        echo -e "  ${RED}ERROR: Flash tool not found!${NC}"
+        echo -e "  /usr/sbin/secubox-flash-disk is missing."
+        echo
+        echo -e "  Press any key to return..."
+        read -rsn1
+        return
+    fi
+
+    echo -e "  ${YELLOW}WARNING: This will ERASE ALL DATA on the target disk!${NC}"
+    echo
+    echo -e "  The flash process will:"
+    echo -e "    1. Detect available internal disks"
+    echo -e "    2. Let you select the target"
+    echo -e "    3. Write the SecuBox image"
+    echo -e "    4. Optionally resize to fill disk"
+    echo -e "    5. Reboot to new installation"
+    echo
+    echo -e "  ${WHITE}Press 'y' to proceed, any other key to cancel...${NC}"
+    read -rsn1 confirm
+
+    if [[ "$confirm" == "y" ]] || [[ "$confirm" == "Y" ]]; then
+        tput cnorm 2>/dev/null  # Show cursor
+        /usr/sbin/secubox-flash-disk --resize
         tput civis 2>/dev/null  # Hide cursor again
     else
         echo -e "  ${CYAN}Flash cancelled.${NC}"
@@ -399,6 +473,7 @@ main() {
                 h|H) show_help ;;
                 w|W) open_web ;;
                 f|F) flash_emmc ;;
+                d|D) flash_disk ;;
                 q|Q) break ;;
                 *) continue ;;
             esac

@@ -30,6 +30,7 @@ INCLUDE_PERSISTENCE=1
 INCLUDE_KIOSK=1
 PRESEED_FILE=""
 NO_COMPRESS=0
+EMBED_IMAGE=""
 
 RED='\033[0;31m'; CYAN='\033[0;36m'; GOLD='\033[0;33m'
 GREEN='\033[0;32m'; NC='\033[0m'; BOLD='\033[1m'
@@ -52,6 +53,7 @@ Usage: sudo bash build-live-usb.sh [OPTIONS]
   --no-persistence   Don't include persistent storage partition
   --no-compress      Skip gzip compression (faster, for local testing)
   --preseed FILE     Include preseed config archive
+  --embed-image IMG  Embed image for disk flashing (creates installer USB)
   --help             Show this help
 
 Features:
@@ -60,6 +62,7 @@ Features:
   - Root autologin on console
   - Network auto-detection at first boot
   - GUI kiosk mode included by default (--no-kiosk to disable)
+  - Disk flasher tool for installing to internal storage
 
 Output:
   secubox-live-amd64-bookworm.img     - Raw bootable image
@@ -82,6 +85,7 @@ while [[ $# -gt 0 ]]; do
     --no-persistence) INCLUDE_PERSISTENCE=0; shift   ;;
     --no-compress)    NO_COMPRESS=1;        shift   ;;
     --preseed)        PRESEED_FILE="$2";    shift 2 ;;
+    --embed-image)    EMBED_IMAGE="$2";     shift 2 ;;
     --help|-h)        usage ;;
     *) err "Unknown argument: $1" ;;
   esac
@@ -1482,13 +1486,31 @@ log "5/8 Installing SecuBox scripts..."
 mkdir -p "${ROOTFS}/usr/sbin"
 mkdir -p "${ROOTFS}/usr/lib/secubox"
 
-# Copy scripts (including kiosk-launcher for robust startup, TUI, and mode switcher)
-for script in secubox-net-detect secubox-kiosk-setup secubox-cmdline-handler secubox-kiosk-launcher secubox-x11-splash secubox-console-tui secubox-mode; do
+# Copy scripts (including kiosk-launcher for robust startup, TUI, mode switcher, and disk flasher)
+for script in secubox-net-detect secubox-kiosk-setup secubox-cmdline-handler secubox-kiosk-launcher secubox-x11-splash secubox-console-tui secubox-mode secubox-flash-disk; do
   if [[ -f "${SCRIPT_DIR}/sbin/${script}" ]]; then
     cp "${SCRIPT_DIR}/sbin/${script}" "${ROOTFS}/usr/sbin/"
     chmod +x "${ROOTFS}/usr/sbin/${script}"
   fi
 done
+
+# Embed target image for disk flashing (if specified)
+if [[ -n "${EMBED_IMAGE}" ]]; then
+  if [[ -f "${EMBED_IMAGE}" ]]; then
+    log "Embedding target image for disk flashing..."
+    mkdir -p "${ROOTFS}/secubox"
+    cp "${EMBED_IMAGE}" "${ROOTFS}/secubox/secubox-x64.img.gz"
+    # Create checksum if not present
+    if [[ -f "${EMBED_IMAGE}.sha256" ]]; then
+      cp "${EMBED_IMAGE}.sha256" "${ROOTFS}/secubox/secubox-x64.img.gz.sha256"
+    else
+      sha256sum "${EMBED_IMAGE}" | awk '{print $1}' > "${ROOTFS}/secubox/secubox-x64.img.gz.sha256"
+    fi
+    ok "Embedded image: $(basename ${EMBED_IMAGE}) ($(du -sh ${EMBED_IMAGE} | cut -f1))"
+  else
+    err "Embed image not found: ${EMBED_IMAGE}"
+  fi
+fi
 
 # Copy firstboot
 if [[ -f "${SCRIPT_DIR}/firstboot.sh" ]]; then
