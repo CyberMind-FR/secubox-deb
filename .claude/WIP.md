@@ -1,9 +1,39 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-04-11 (Session 48)*
+*Mis à jour : 2026-04-12 (Session 49)*
 
 ---
 
-## ✅ Terminé cette session (Session 48)
+## ✅ Terminé cette session (Session 49)
+
+### SecuBox Live v1.6.5 x64 Fixes ✅
+
+#### Problems Fixed
+1. **Sandbox warning banner**: `--no-sandbox` flag caused warning at top of screen
+2. **No keyboard/mouse input**: X11 wasn't detecting input devices
+3. **Plymouth splash**: Re-enabled after v1.6.4 disabled it for boot freeze debugging
+
+#### Fixes Applied
+- **Removed** `--no-sandbox` from Chromium flags
+- **Added** `--disable-infobars` to hide any remaining info bars
+- **Added** X11 InputClass sections for libinput keyboard/pointer/touchpad
+- **Added** ServerFlags: `AutoAddDevices=true`, `AllowEmptyInput=false`
+- **Restored** `splash` to kernel cmdline in GRUB entries
+
+#### Files Modified
+- `image/build-live-usb.sh` — version bump + splash restored
+- `image/sbin/secubox-kiosk-launcher` — input devices + Chromium flags
+- `image/plymouth/secubox-simple/secubox-simple.script` — version update
+
+#### Commit
+- `f8d8bac` — fix(live): v1.6.5 remove sandbox warning, fix input devices, restore splash
+
+#### Status
+- ✅ USB flashed with v1.6.5
+- ⬜ Test on real hardware pending
+
+---
+
+## ✅ Terminé session précédente (Session 48)
 
 ### Plymouth Cube Theme Integration ✅
 
@@ -40,10 +70,10 @@
 
 ## ⬜ Next Up
 
-1. Test v1.6.2 on real hardware (Lenovo)
-2. Verify portal login with admin/secubox
-3. Test secubox-flash-disk on real hardware
-4. Prepare release v1.6.2
+1. Test v1.6.5 on real hardware (Lenovo)
+2. Verify Plymouth splash appears during boot
+3. Verify keyboard/mouse work in kiosk mode
+4. Verify no warning banner in Chromium
 
 ---
 
