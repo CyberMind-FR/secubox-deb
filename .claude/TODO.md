@@ -1,5 +1,5 @@
 # TODO — SecuBox-DEB Backlog
-*Mis à jour : 2026-04-04*
+*Mis à jour : 2026-04-12*
 
 ---
 
@@ -232,6 +232,25 @@ Advanced security features:
 - [x] **P10-08** `secubox-threats` — Threat dashboard ✅
 - [x] **P10-09** `secubox-openclaw` — OSINT tool ✅
 - [x] **P10-10** `secubox-netifyd` — DPI daemon ✅
+
+---
+
+## 🔄 PHASE 11 — Live USB Enhancements (v1.7.0)
+
+### Kiosk Mode
+- [ ] **P11-01** Display SecuBox version in kiosk mode header/footer
+- [ ] **P11-02** Show current authentication mode (ZKP/standard) in kiosk UI
+- [ ] **P11-03** Add boot mode indicator (kiosk/console/bridge) on splash
+
+### Authentication Feedback
+- [ ] **P11-04** Visual feedback for auth mode in portal login page
+- [ ] **P11-05** Auth mode toggle in system settings
+- [ ] **P11-06** ZKP status indicator in dashboard
+
+### Boot Experience
+- [ ] **P11-07** Plymouth theme with version number
+- [ ] **P11-08** GRUB menu version display
+- [ ] **P11-09** Boot mode selection with descriptions
 
 ---
 
