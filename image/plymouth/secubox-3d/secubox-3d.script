@@ -1,0 +1,429 @@
+/* SecuBox 3D - Plymouth Theme Script
+ * Triple Lemniscate + Nested Cubes (gigognes)
+ * Matching secubox_v5_stereo.html aesthetic
+ * CyberMind - https://cybermind.fr
+ */
+
+/* ═══════════════════════════════════════════════════════════════
+ * SecuBox Color Palette (from FD[] face definitions)
+ * ═══════════════════════════════════════════════════════════════ */
+/* AUTH #FF6910 */ col_auth_r = 1.000; col_auth_g = 0.412; col_auth_b = 0.063;
+/* WALL #FFB300 */ col_wall_r = 1.000; col_wall_g = 0.702; col_wall_b = 0.000;
+/* BOOT #FF3333 */ col_boot_r = 1.000; col_boot_g = 0.200; col_boot_b = 0.200;
+/* MIND #9B7EFF */ col_mind_r = 0.608; col_mind_g = 0.494; col_mind_b = 1.000;
+/* ROOT #33FF33 */ col_root_r = 0.200; col_root_g = 1.000; col_root_b = 0.200;
+/* MESH #3AB4FF */ col_mesh_r = 0.227; col_mesh_g = 0.706; col_mesh_b = 1.000;
+
+/* ═══════════════════════════════════════════════════════════════
+ * Screen Setup - Dark cyber background (#07080f)
+ * ═══════════════════════════════════════════════════════════════ */
+Window.SetBackgroundTopColor(0.027, 0.031, 0.059);
+Window.SetBackgroundBottomColor(0.012, 0.016, 0.035);
+
+screen_width = Window.GetWidth();
+screen_height = Window.GetHeight();
+center_x = screen_width / 2;
+center_y = screen_height / 2;
+
+/* ═══════════════════════════════════════════════════════════════
+ * Load Assets
+ * ═══════════════════════════════════════════════════════════════ */
+progress_bg = Image("progress-bg.png");
+progress_fg = Image("progress-fg.png");
+
+/* ═══════════════════════════════════════════════════════════════
+ * 3 Nested Cubes Configuration (gigognes)
+ * Outer=0, Middle=1, Inner=2
+ * ═══════════════════════════════════════════════════════════════ */
+
+/* Cube sizes (matching web: 256/2, 128/2, 64/2 scaled for plymouth) */
+cube_size[0] = 110;  /* Outer - largest */
+cube_size[1] = 70;   /* Middle */
+cube_size[2] = 40;   /* Inner - smallest */
+
+/* Desynchronized rotation speeds (BASE_SPD from web) */
+/* Outer: slowest, most majestic */
+spd_x[0] = 0.004;  spd_y[0] = 0.006;  spd_z[0] = 0.003;
+/* Middle: medium */
+spd_x[1] = 0.007;  spd_y[1] = 0.005;  spd_z[1] = 0.006;
+/* Inner: fastest, most dynamic */
+spd_x[2] = 0.012;  spd_y[2] = 0.010;  spd_z[2] = 0.008;
+
+/* Rotation angles (offset for visual interest at start) */
+rot_x[0] = 0.0;  rot_y[0] = 0.0;  rot_z[0] = 0.0;
+rot_x[1] = 0.8;  rot_y[1] = 0.4;  rot_z[1] = 0.2;
+rot_x[2] = 1.6;  rot_y[2] = 1.2;  rot_z[2] = 0.6;
+
+/* Cube edge colors (gradient from outer to inner) */
+/* Outer: dim green-cyan */
+cube_r[0] = 0.15;  cube_g[0] = 0.45;  cube_b[0] = 0.35;
+/* Middle: brighter cyan */
+cube_r[1] = 0.20;  cube_g[1] = 0.60;  cube_b[1] = 0.50;
+/* Inner: bright SecuBox green */
+cube_r[2] = 0.25;  cube_g[2] = 0.85;  cube_b[2] = 0.45;
+
+/* 8 vertices per cube × 3 cubes = 24 vertex sprites */
+for (c = 0; c < 3; c++) {
+    for (v = 0; v < 8; v++) {
+        idx = c * 8 + v;
+        cube_verts[idx] = Sprite();
+        cube_verts[idx].SetZ(10 + c * 3);
+    }
+}
+
+/* 12 edges per cube × 3 cubes = 36 edge midpoint sprites */
+for (c = 0; c < 3; c++) {
+    for (e = 0; e < 12; e++) {
+        idx = c * 12 + e;
+        cube_edges[idx] = Sprite();
+        cube_edges[idx].SetZ(9 + c * 3);
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * Triple Lemniscate Configuration
+ * 3 branches: AUTH (orange), MIND (purple), MESH (blue)
+ * ═══════════════════════════════════════════════════════════════ */
+lemniscate_scale = 95;
+
+/* Branch colors */
+lem_r[0] = col_auth_r;  lem_g[0] = col_auth_g;  lem_b[0] = col_auth_b;  /* AUTH orange */
+lem_r[1] = col_mind_r;  lem_g[1] = col_mind_g;  lem_b[1] = col_mind_b;  /* MIND purple */
+lem_r[2] = col_mesh_r;  lem_g[2] = col_mesh_g;  lem_b[2] = col_mesh_b;  /* MESH blue */
+
+/* Head speeds (desynchronized) */
+lem_speed[0] = 0.028;
+lem_speed[1] = 0.022;
+lem_speed[2] = 0.019;
+
+/* Head positions (start offset for visual variety) */
+lem_pos[0] = 0.0;
+lem_pos[1] = 2.094;   /* 2π/3 */
+lem_pos[2] = 4.188;   /* 4π/3 */
+
+/* Trail dots per branch */
+trail_len = 15;
+
+/* Lemniscate sprites: 3 branches × (trail_len + 1 head) */
+for (b = 0; b < 3; b++) {
+    for (d = 0; d < trail_len; d++) {
+        idx = b * trail_len + d;
+        lem_trail[idx] = Sprite();
+        lem_trail[idx].SetZ(5);
+    }
+    lem_head[b] = Sprite();
+    lem_head[b].SetZ(8);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * Progress Bar
+ * ═══════════════════════════════════════════════════════════════ */
+progress_bg_sprite = Sprite();
+progress_fg_sprite = Sprite();
+if (progress_bg) {
+    progress_bg_sprite.SetImage(progress_bg);
+}
+progress_bg_sprite.SetX(center_x - 130);
+progress_bg_sprite.SetY(center_y + 170);
+progress_bg_sprite.SetZ(50);
+
+if (progress_fg) {
+    progress_fg_sprite.SetImage(progress_fg);
+}
+progress_fg_sprite.SetX(center_x - 128);
+progress_fg_sprite.SetY(center_y + 172);
+progress_fg_sprite.SetZ(51);
+
+/* Status message */
+message_sprite = Sprite();
+message_sprite.SetZ(52);
+
+/* ═══════════════════════════════════════════════════════════════
+ * Animation State
+ * ═══════════════════════════════════════════════════════════════ */
+frame = 0;
+boot_progress = 0;
+
+/* ═══════════════════════════════════════════════════════════════
+ * Unit Cube Vertices (±1, ±1, ±1)
+ * ═══════════════════════════════════════════════════════════════ */
+uv_x[0] = -1; uv_y[0] = -1; uv_z[0] = -1;
+uv_x[1] =  1; uv_y[1] = -1; uv_z[1] = -1;
+uv_x[2] =  1; uv_y[2] =  1; uv_z[2] = -1;
+uv_x[3] = -1; uv_y[3] =  1; uv_z[3] = -1;
+uv_x[4] = -1; uv_y[4] = -1; uv_z[4] =  1;
+uv_x[5] =  1; uv_y[5] = -1; uv_z[5] =  1;
+uv_x[6] =  1; uv_y[6] =  1; uv_z[6] =  1;
+uv_x[7] = -1; uv_y[7] =  1; uv_z[7] =  1;
+
+/* Edge definitions (vertex pairs) */
+edge_a[0]=0; edge_b[0]=1;   edge_a[1]=1; edge_b[1]=2;   edge_a[2]=2; edge_b[2]=3;   edge_a[3]=3; edge_b[3]=0;
+edge_a[4]=4; edge_b[4]=5;   edge_a[5]=5; edge_b[5]=6;   edge_a[6]=6; edge_b[6]=7;   edge_a[7]=7; edge_b[7]=4;
+edge_a[8]=0; edge_b[8]=4;   edge_a[9]=1; edge_b[9]=5;   edge_a[10]=2; edge_b[10]=6; edge_a[11]=3; edge_b[11]=7;
+
+/* ═══════════════════════════════════════════════════════════════
+ * 3D Rotation Function
+ * ═══════════════════════════════════════════════════════════════ */
+fun rotate3d(px, py, pz, ax, ay, az) {
+    /* Rotate X */
+    cx = Math.Cos(ax); sx = Math.Sin(ax);
+    y1 = py * cx - pz * sx;
+    z1 = py * sx + pz * cx;
+
+    /* Rotate Y */
+    cy = Math.Cos(ay); sy = Math.Sin(ay);
+    x2 = px * cy + z1 * sy;
+    z2 = -px * sy + z1 * cy;
+
+    /* Rotate Z */
+    cz = Math.Cos(az); sz = Math.Sin(az);
+    x3 = x2 * cz - y1 * sz;
+    y3 = x2 * sz + y1 * cz;
+
+    result[0] = x3;
+    result[1] = y3;
+    result[2] = z2;
+    return result;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * Lemniscate Parametric (Bernoulli)
+ * x = a * cos(t) / (1 + sin²(t))
+ * y = a * sin(t) * cos(t) / (1 + sin²(t))
+ * ═══════════════════════════════════════════════════════════════ */
+fun lem_x(t, scale) {
+    st = Math.Sin(t);
+    ct = Math.Cos(t);
+    d = 1 + st * st;
+    return scale * ct / d;
+}
+
+fun lem_y(t, scale) {
+    st = Math.Sin(t);
+    ct = Math.Cos(t);
+    d = 1 + st * st;
+    return scale * st * ct / d;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * Draw Single Cube
+ * ═══════════════════════════════════════════════════════════════ */
+fun draw_cube(cube_idx) {
+    ax = global.rot_x[cube_idx];
+    ay = global.rot_y[cube_idx];
+    az = global.rot_z[cube_idx];
+    size = global.cube_size[cube_idx] / 2;
+
+    cr = global.cube_r[cube_idx];
+    cg = global.cube_g[cube_idx];
+    cb = global.cube_b[cube_idx];
+
+    /* Compute projected vertices */
+    for (v = 0; v < 8; v++) {
+        px = global.uv_x[v] * size;
+        py = global.uv_y[v] * size;
+        pz = global.uv_z[v] * size;
+
+        rot = rotate3d(px, py, pz, ax, ay, az);
+
+        /* Store projected coords */
+        proj_x[v] = global.center_x + rot[0];
+        proj_y[v] = global.center_y + rot[1];
+        proj_z[v] = rot[2];
+
+        /* Depth-based brightness */
+        depth = (rot[2] + size) / (size * 2);
+        bright = 0.4 + depth * 0.6;
+
+        /* Draw vertex dot */
+        idx = cube_idx * 8 + v;
+        dot_img = Image.Text("●", cr * bright, cg * bright, cb * bright, 1);
+        global.cube_verts[idx].SetImage(dot_img);
+        global.cube_verts[idx].SetX(proj_x[v] - 4);
+        global.cube_verts[idx].SetY(proj_y[v] - 4);
+        global.cube_verts[idx].SetOpacity(0.6 + depth * 0.4);
+    }
+
+    /* Draw edges (midpoints) */
+    for (e = 0; e < 12; e++) {
+        va = global.edge_a[e];
+        vb = global.edge_b[e];
+
+        /* Edge midpoint */
+        mx = (proj_x[va] + proj_x[vb]) / 2;
+        my = (proj_y[va] + proj_y[vb]) / 2;
+        mz = (proj_z[va] + proj_z[vb]) / 2;
+
+        depth = (mz + size) / (size * 2);
+        bright = 0.3 + depth * 0.5;
+
+        idx = cube_idx * 12 + e;
+        edge_img = Image.Text("·", cr * bright, cg * bright, cb * bright, 1);
+        global.cube_edges[idx].SetImage(edge_img);
+        global.cube_edges[idx].SetX(mx - 2);
+        global.cube_edges[idx].SetY(my - 2);
+        global.cube_edges[idx].SetOpacity(0.4 + depth * 0.3);
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * Draw Triple Lemniscate
+ * ═══════════════════════════════════════════════════════════════ */
+fun draw_lemniscates() {
+    /* Gentle twist animation */
+    twist = Math.Sin(global.frame * 0.008) * 0.3;
+
+    for (b = 0; b < 3; b++) {
+        /* Update head position */
+        global.lem_pos[b] += global.lem_speed[b];
+        if (global.lem_pos[b] > 6.28318) {
+            global.lem_pos[b] -= 6.28318;
+        }
+
+        lr = global.lem_r[b];
+        lg = global.lem_g[b];
+        lb = global.lem_b[b];
+
+        /* Draw trail */
+        for (d = 0; d < global.trail_len; d++) {
+            t = global.lem_pos[b] - d * 0.25;
+
+            /* 3D lemniscate with twist */
+            lx = lem_x(t, global.lemniscate_scale);
+            ly = lem_y(t, global.lemniscate_scale);
+            lz = Math.Sin(t * 2 + twist) * 15;  /* Z oscillation */
+
+            /* Simple rotation for 3D effect */
+            rot = rotate3d(lx, ly, lz, twist * 0.5, global.frame * 0.003, 0);
+
+            sx = global.center_x + rot[0];
+            sy = global.center_y + rot[1];
+
+            /* Fade trail */
+            fade = 1.0 - (d / global.trail_len);
+
+            idx = b * global.trail_len + d;
+            dot_img = Image.Text("•", lr * fade, lg * fade, lb * fade, 1);
+            global.lem_trail[idx].SetImage(dot_img);
+            global.lem_trail[idx].SetX(sx - 3);
+            global.lem_trail[idx].SetY(sy - 3);
+            global.lem_trail[idx].SetOpacity(fade * 0.7);
+        }
+
+        /* Draw glowing head */
+        ht = global.lem_pos[b];
+        hx = lem_x(ht, global.lemniscate_scale);
+        hy = lem_y(ht, global.lemniscate_scale);
+        hz = Math.Sin(ht * 2 + twist) * 15;
+
+        hrot = rotate3d(hx, hy, hz, twist * 0.5, global.frame * 0.003, 0);
+
+        hsx = global.center_x + hrot[0];
+        hsy = global.center_y + hrot[1];
+
+        /* Pulsing glow */
+        pulse = 0.85 + Math.Sin(global.frame * 0.15 + b) * 0.15;
+
+        head_img = Image.Text("◉", lr * pulse, lg * pulse, lb * pulse, 1);
+        global.lem_head[b].SetImage(head_img);
+        global.lem_head[b].SetX(hsx - 5);
+        global.lem_head[b].SetY(hsy - 5);
+        global.lem_head[b].SetOpacity(1.0);
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * Main Animation Loop
+ * ═══════════════════════════════════════════════════════════════ */
+fun refresh_callback() {
+    global.frame++;
+
+    /* Update cube rotations (desynchronized) */
+    for (c = 0; c < 3; c++) {
+        global.rot_x[c] += global.spd_x[c];
+        global.rot_y[c] += global.spd_y[c];
+        global.rot_z[c] += global.spd_z[c];
+
+        if (global.rot_x[c] > 6.28318) global.rot_x[c] -= 6.28318;
+        if (global.rot_y[c] > 6.28318) global.rot_y[c] -= 6.28318;
+        if (global.rot_z[c] > 6.28318) global.rot_z[c] -= 6.28318;
+
+        draw_cube(c);
+    }
+
+    /* Draw triple lemniscate */
+    draw_lemniscates();
+}
+
+Plymouth.SetRefreshFunction(refresh_callback);
+
+/* ═══════════════════════════════════════════════════════════════
+ * Plymouth Callbacks
+ * ═══════════════════════════════════════════════════════════════ */
+
+fun boot_progress_callback(duration, progress_val) {
+    global.boot_progress = progress_val;
+
+    if (progress_fg) {
+        bar_width = Math.Int(progress_val * 256);
+        if (bar_width > 0) {
+            scaled = progress_fg.Scale(bar_width, 12);
+            progress_fg_sprite.SetImage(scaled);
+        }
+    }
+}
+
+Plymouth.SetBootProgressFunction(boot_progress_callback);
+
+fun message_callback(text) {
+    /* SecuBox green text */
+    msg_img = Image.Text(text, 0.2, 0.85, 0.4, "Mono 10");
+    message_sprite.SetImage(msg_img);
+    message_sprite.SetX(center_x - msg_img.GetWidth() / 2);
+    message_sprite.SetY(center_y + 195);
+}
+
+Plymouth.SetMessageFunction(message_callback);
+
+fun display_normal_callback() {
+    /* Normal boot display */
+}
+
+fun display_password_callback(prompt, bullets) {
+    /* LUKS password prompt */
+    prompt_img = Image.Text(prompt, col_mesh_r, col_mesh_g, col_mesh_b, "Sans Bold 11");
+    message_sprite.SetImage(prompt_img);
+    message_sprite.SetX(center_x - prompt_img.GetWidth() / 2);
+    message_sprite.SetY(center_y + 150);
+}
+
+Plymouth.SetDisplayNormalFunction(display_normal_callback);
+Plymouth.SetDisplayPasswordFunction(display_password_callback);
+
+fun quit_callback() {
+    /* Fade out */
+    for (c = 0; c < 3; c++) {
+        for (v = 0; v < 8; v++) {
+            idx = c * 8 + v;
+            global.cube_verts[idx].SetOpacity(0);
+        }
+        for (e = 0; e < 12; e++) {
+            idx = c * 12 + e;
+            global.cube_edges[idx].SetOpacity(0);
+        }
+    }
+
+    for (b = 0; b < 3; b++) {
+        for (d = 0; d < global.trail_len; d++) {
+            idx = b * global.trail_len + d;
+            global.lem_trail[idx].SetOpacity(0);
+        }
+        global.lem_head[b].SetOpacity(0);
+    }
+
+    progress_bg_sprite.SetOpacity(0);
+    progress_fg_sprite.SetOpacity(0);
+    message_sprite.SetOpacity(0);
+}
+
+Plymouth.SetQuitFunction(quit_callback);

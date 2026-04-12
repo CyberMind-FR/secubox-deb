@@ -1,127 +1,266 @@
-/* SecuBox Cube - Plymouth Theme Script
- * 3D Rotating Cube with Module Icons
+/* SecuBox Dice 3D - Plymouth Theme Script
+ * Rotating 3D Cube with Module Icons on Faces
+ * Nintendo 3DS aesthetic - dark blue autostereoscopic style
  * CyberMind - https://cybermind.fr
  */
 
-/* Screen setup */
-Window.SetBackgroundTopColor(0.0, 0.0, 0.0);
-Window.SetBackgroundBottomColor(0.02, 0.04, 0.02);
+/* ═══════════════════════════════════════════════════════════════
+ * Screen Setup - 3DS dark blue gradient background
+ * ═══════════════════════════════════════════════════════════════ */
+Window.SetBackgroundTopColor(0.063, 0.082, 0.165);     /* #101529 - 3DS top screen dark */
+Window.SetBackgroundBottomColor(0.039, 0.055, 0.118);  /* #0a0e1e - 3DS deeper blue */
 
 screen_width = Window.GetWidth();
 screen_height = Window.GetHeight();
 center_x = screen_width / 2;
 center_y = screen_height / 2;
 
-/* Load images */
+/* ═══════════════════════════════════════════════════════════════
+ * Load Assets
+ * ═══════════════════════════════════════════════════════════════ */
 logo = Image("logo.png");
 scanlines = Image("scanlines.png");
-
-/* Module icons - 6 faces of the cube */
-icon_root = Image("icon-root.png");
-icon_boot = Image("icon-boot.png");
-icon_mesh = Image("icon-mesh.png");
-icon_wall = Image("icon-wall.png");
-icon_auth = Image("icon-auth.png");
-icon_mind = Image("icon-mind.png");
-
-/* Progress bar images */
 progress_bg = Image("progress-bg.png");
 progress_fg = Image("progress-fg.png");
 
-/* Create sprites */
+/* 6 face icons - one per cube face */
+face_images[0] = Image("icon-root.png");   /* Front  - Root/System */
+face_images[1] = Image("icon-wall.png");   /* Back   - Firewall */
+face_images[2] = Image("icon-boot.png");   /* Top    - Boot */
+face_images[3] = Image("icon-mesh.png");   /* Bottom - Mesh Network */
+face_images[4] = Image("icon-auth.png");   /* Right  - Auth */
+face_images[5] = Image("icon-mind.png");   /* Left   - CyberMind */
+
+/* ═══════════════════════════════════════════════════════════════
+ * Create Sprites
+ * ═══════════════════════════════════════════════════════════════ */
+
+/* Logo at top */
 logo_sprite = Sprite(logo);
 logo_sprite.SetX(center_x - logo.GetWidth() / 2);
-logo_sprite.SetY(center_y - 180);
+logo_sprite.SetY(center_y - 200);
 logo_sprite.SetZ(10);
 
-/* Scanline overlay */
+/* Scanline overlay - subtle 3DS parallax barrier simulation */
 scanline_sprite = Sprite(scanlines);
 scanline_sprite.SetX(0);
 scanline_sprite.SetY(0);
 scanline_sprite.SetZ(100);
-scanline_sprite.SetOpacity(0.15);
+scanline_sprite.SetOpacity(0.04);  /* Lighter for 3DS glass effect */
 
-/* Module icon sprites - arranged in hexagon */
-icon_size = 64;
-radius = 100;
-icons[0] = Sprite(icon_root);
-icons[1] = Sprite(icon_boot);
-icons[2] = Sprite(icon_mesh);
-icons[3] = Sprite(icon_wall);
-icons[4] = Sprite(icon_auth);
-icons[5] = Sprite(icon_mind);
-
-/* Initial positions */
+/* Face sprites - we'll show up to 3 visible faces */
 for (i = 0; i < 6; i++) {
-    icons[i].SetZ(5);
-    icons[i].SetOpacity(0.8);
+    face_sprites[i] = Sprite(face_images[i]);
+    face_sprites[i].SetOpacity(0);
+    face_sprites[i].SetZ(5);
 }
+
+/* Edge glow sprites - green wireframe effect */
+/* We'll draw edges as thin colored lines using scaled images */
 
 /* Progress bar */
 progress_bg_sprite = Sprite(progress_bg);
 progress_bg_sprite.SetX(center_x - 150);
-progress_bg_sprite.SetY(center_y + 140);
+progress_bg_sprite.SetY(center_y + 160);
 progress_bg_sprite.SetZ(8);
 
 progress_sprite = Sprite(progress_fg);
 progress_sprite.SetX(center_x - 148);
-progress_sprite.SetY(center_y + 142);
+progress_sprite.SetY(center_y + 162);
 progress_sprite.SetZ(9);
 
-/* Status text */
-status_text = "";
+/* Status message */
 message_sprite = Sprite();
-message_sprite.SetPosition(center_x, center_y + 180, 10);
+message_sprite.SetPosition(center_x, center_y + 195, 10);
 
-/* Animation state */
-angle = 0;
+/* ═══════════════════════════════════════════════════════════════
+ * Animation State
+ * ═══════════════════════════════════════════════════════════════ */
+angle_x = 0;
+angle_y = 0;
+angle_z = 0;
 frame = 0;
 progress = 0;
 
-/* Animation function - rotate icons in 3D-like pattern */
-fun animate_cube() {
-    global.angle += 0.02;
-    global.frame++;
+/* Cube size */
+cube_size = 80;
 
-    for (i = 0; i < 6; i++) {
-        /* Calculate 3D-like position */
-        base_angle = global.angle + (i * 3.14159 / 3);
+/* Rotation speeds - 3DS-style smooth, elegant rotation */
+speed_x = 0.006;
+speed_y = 0.012;
+speed_z = 0.004;
 
-        /* X position - circular motion */
-        x = center_x + Math.Sin(base_angle) * radius - icon_size / 2;
+/* ═══════════════════════════════════════════════════════════════
+ * 3D Math Functions
+ * ═══════════════════════════════════════════════════════════════ */
 
-        /* Y position - elliptical for 3D effect */
-        y = center_y + Math.Cos(base_angle) * (radius * 0.4) - icon_size / 2;
+/* Face normals in local space (which way each face points) */
+/* Face 0: Front  (+Z) */
+/* Face 1: Back   (-Z) */
+/* Face 2: Top    (+Y) */
+/* Face 3: Bottom (-Y) */
+/* Face 4: Right  (+X) */
+/* Face 5: Left   (-X) */
 
-        /* Z-depth simulation via opacity and scale */
-        depth = Math.Cos(base_angle);
-        opacity = 0.4 + (depth + 1) * 0.3;
+fun get_face_visibility(face_index, ax, ay, az) {
+    /* Calculate if face is visible (normal pointing toward camera) */
+    /* Camera is at +Z looking at origin */
 
-        icons[i].SetX(x);
-        icons[i].SetY(y);
-        icons[i].SetOpacity(opacity);
+    /* Simplified: calculate rotated normal Z component */
+    /* If > 0, face is visible (pointing toward us) */
 
-        /* Bring front icons to top */
-        if (depth > 0) {
-            icons[i].SetZ(6);
-        } else {
-            icons[i].SetZ(4);
-        }
+    cos_x = Math.Cos(ax);
+    sin_x = Math.Sin(ax);
+    cos_y = Math.Cos(ay);
+    sin_y = Math.Sin(ay);
+    cos_z = Math.Cos(az);
+    sin_z = Math.Sin(az);
+
+    /* Normal vectors for each face */
+    if (face_index == 0) {
+        /* Front (+Z): normal = (0, 0, 1) */
+        nz = cos_x * cos_y;
+    } else if (face_index == 1) {
+        /* Back (-Z): normal = (0, 0, -1) */
+        nz = -cos_x * cos_y;
+    } else if (face_index == 2) {
+        /* Top (+Y): normal = (0, 1, 0) */
+        nz = sin_x;
+    } else if (face_index == 3) {
+        /* Bottom (-Y): normal = (0, -1, 0) */
+        nz = -sin_x;
+    } else if (face_index == 4) {
+        /* Right (+X): normal = (1, 0, 0) */
+        nz = -sin_y * cos_x;
+    } else {
+        /* Left (-X): normal = (-1, 0, 0) */
+        nz = sin_y * cos_x;
     }
+
+    return nz;
 }
 
-/* Progress callback */
+fun get_face_center(face_index, ax, ay, size) {
+    /* Calculate projected 2D center of each face */
+    cos_x = Math.Cos(ax);
+    sin_x = Math.Sin(ax);
+    cos_y = Math.Cos(ay);
+    sin_y = Math.Sin(ay);
+
+    half = size / 2;
+
+    if (face_index == 0) {
+        /* Front: center at (0, 0, +half) */
+        x = sin_y * half;
+        y = -sin_x * cos_y * half;
+        z = cos_x * cos_y * half;
+    } else if (face_index == 1) {
+        /* Back: center at (0, 0, -half) */
+        x = -sin_y * half;
+        y = sin_x * cos_y * half;
+        z = -cos_x * cos_y * half;
+    } else if (face_index == 2) {
+        /* Top: center at (0, +half, 0) */
+        x = 0;
+        y = cos_x * half;
+        z = sin_x * half;
+    } else if (face_index == 3) {
+        /* Bottom: center at (0, -half, 0) */
+        x = 0;
+        y = -cos_x * half;
+        z = -sin_x * half;
+    } else if (face_index == 4) {
+        /* Right: center at (+half, 0, 0) */
+        x = cos_y * half;
+        y = 0;
+        z = -sin_y * half;
+    } else {
+        /* Left: center at (-half, 0, 0) */
+        x = -cos_y * half;
+        y = 0;
+        z = sin_y * half;
+    }
+
+    /* Return as pseudo-struct (array) */
+    result[0] = x;
+    result[1] = y;
+    result[2] = z;
+    return result;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * Animation Loop
+ * ═══════════════════════════════════════════════════════════════ */
+fun animate_cube() {
+    /* Update rotation angles */
+    global.angle_x += global.speed_x;
+    global.angle_y += global.speed_y;
+    global.angle_z += global.speed_z;
+    global.frame++;
+
+    /* Keep angles in bounds */
+    if (global.angle_x > 6.28318) global.angle_x -= 6.28318;
+    if (global.angle_y > 6.28318) global.angle_y -= 6.28318;
+    if (global.angle_z > 6.28318) global.angle_z -= 6.28318;
+
+    /* Update each face */
+    for (i = 0; i < 6; i++) {
+        /* Check visibility */
+        visibility = get_face_visibility(i, global.angle_x, global.angle_y, global.angle_z);
+
+        if (visibility > 0) {
+            /* Face is visible */
+            pos = get_face_center(i, global.angle_x, global.angle_y, global.cube_size);
+
+            /* Project to screen (orthographic with slight perspective feel) */
+            depth_scale = 0.8 + (pos[2] / global.cube_size) * 0.2;
+
+            /* Scale icon based on depth */
+            icon_scale = 0.6 + visibility * 0.4;
+            icon_size = 64 * icon_scale * depth_scale;
+
+            /* Calculate screen position */
+            screen_x = center_x + pos[0] * 1.5 - icon_size / 2;
+            screen_y = center_y + pos[1] * 1.5 - icon_size / 2;
+
+            /* Scale the image */
+            scaled = face_images[i].Scale(icon_size, icon_size);
+            face_sprites[i].SetImage(scaled);
+
+            /* Position */
+            face_sprites[i].SetX(screen_x);
+            face_sprites[i].SetY(screen_y);
+
+            /* Opacity based on how directly it faces us + green tint simulation */
+            opacity = 0.5 + visibility * 0.5;
+            face_sprites[i].SetOpacity(opacity);
+
+            /* Z-order based on depth */
+            face_sprites[i].SetZ(5 + pos[2] / 10);
+        } else {
+            /* Face not visible */
+            face_sprites[i].SetOpacity(0);
+        }
+    }
+
+    /* 3DS-style gentle glow pulse - slower, more elegant */
+    pulse = 0.90 + Math.Sin(global.frame * 0.03) * 0.10;
+    logo_sprite.SetOpacity(pulse);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * Plymouth Callbacks
+ * ═══════════════════════════════════════════════════════════════ */
+
 fun refresh_callback() {
     animate_cube();
 }
 
 Plymouth.SetRefreshFunction(refresh_callback);
 
-/* Boot progress */
 fun boot_progress_callback(duration, progress_val) {
     global.progress = progress_val;
 
-    /* Scale progress bar */
     if (progress_fg) {
         scaled = progress_fg.Scale(progress_val * 296, 16);
         progress_sprite.SetImage(scaled);
@@ -130,26 +269,23 @@ fun boot_progress_callback(duration, progress_val) {
 
 Plymouth.SetBootProgressFunction(boot_progress_callback);
 
-/* Message display */
 fun message_callback(text) {
-    global.status_text = text;
-
-    msg_image = Image.Text(text, 0, 1, 0.61, "JetBrains Mono");
+    /* 3DS cyan/light blue text */
+    msg_image = Image.Text(text, 0.400, 0.753, 0.925, "JetBrains Mono");  /* #66c0ec */
     message_sprite.SetImage(msg_image);
     message_sprite.SetX(center_x - msg_image.GetWidth() / 2);
-    message_sprite.SetY(center_y + 180);
+    message_sprite.SetY(center_y + 195);
 }
 
 Plymouth.SetMessageFunction(message_callback);
 
-/* Display normal/password prompts */
 fun display_normal_callback() {
-    /* Nothing special */
+    /* Normal display mode */
 }
 
 fun display_password_callback(prompt, bullets) {
-    /* Show password prompt */
-    prompt_image = Image.Text(prompt, 0, 1, 0.61, "JetBrains Mono");
+    /* Password prompt - 3DS cyan accent */
+    prompt_image = Image.Text(prompt, 0.400, 0.753, 0.925, "JetBrains Mono");  /* #66c0ec */
     message_sprite.SetImage(prompt_image);
     message_sprite.SetX(center_x - prompt_image.GetWidth() / 2);
 }
@@ -157,13 +293,13 @@ fun display_password_callback(prompt, bullets) {
 Plymouth.SetDisplayNormalFunction(display_normal_callback);
 Plymouth.SetDisplayPasswordFunction(display_password_callback);
 
-/* Quit callback */
 fun quit_callback() {
-    /* Fade out */
+    /* Fade out all elements */
     for (i = 0; i < 6; i++) {
-        icons[i].SetOpacity(0);
+        face_sprites[i].SetOpacity(0);
     }
     logo_sprite.SetOpacity(0);
+    scanline_sprite.SetOpacity(0);
 }
 
 Plymouth.SetQuitFunction(quit_callback);

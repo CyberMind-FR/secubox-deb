@@ -14,7 +14,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 
 # ── Version & Build Info ──────────────────────────────────────────
-SECUBOX_VERSION="1.6.1"
+SECUBOX_VERSION="1.6.3"
 BUILD_TIMESTAMP=$(date '+%Y-%m-%d %H:%M')
 BUILD_DATE=$(date '+%Y%m%d')
 
@@ -260,11 +260,12 @@ DefaultTimeoutStartSec=30s
 DefaultTimeoutStopSec=30s
 EOF
 
-# Disable console spam
+# Disable console spam + enable SysRq for emergency recovery
 cat > "${ROOTFS}/etc/sysctl.d/99-secubox.conf" <<EOF
 kernel.consoleblank=0
 net.ipv4.conf.all.log_martians=0
 kernel.printk=1 1 1 1
+kernel.sysrq=1
 EOF
 
 # ── Hardware Check Service ──────────────────────────────────────────
@@ -738,23 +739,34 @@ chroot "${ROOTFS}" systemctl enable secubox-net-fallback.service 2>/dev/null || 
 chroot "${ROOTFS}" systemctl disable systemd-networkd-wait-online.service 2>/dev/null || true
 chroot "${ROOTFS}" systemctl mask systemd-networkd-wait-online.service 2>/dev/null || true
 
-# ── Plymouth Boot Splash Theme (SecuBox Cube) ──────────────────────
-log "Installing Plymouth SecuBox-Cube boot splash..."
+# ── Plymouth Boot Splash Theme (SecuBox 3DS) ──────────────────────
+log "Installing Plymouth SecuBox-3DS boot splash..."
 
-# Create SecuBox-Cube Plymouth theme directory
-PLYMOUTH_DIR="${ROOTFS}/usr/share/plymouth/themes/secubox-cube"
+# Create SecuBox-3DS Plymouth theme directory (primary theme)
+PLYMOUTH_DIR="${ROOTFS}/usr/share/plymouth/themes/secubox-3d"
 mkdir -p "${PLYMOUTH_DIR}"
 
-# Copy theme assets from source
+# Copy 3DS theme assets from source
+DS_SRC="${SCRIPT_DIR}/plymouth/secubox-3d"
+if [[ -d "${DS_SRC}" ]]; then
+    cp "${DS_SRC}/secubox-3d.plymouth" "${PLYMOUTH_DIR}/"
+    cp "${DS_SRC}/secubox-3d.script" "${PLYMOUTH_DIR}/"
+    cp "${DS_SRC}"/*.png "${PLYMOUTH_DIR}/" 2>/dev/null || true
+    log "  Copied 3DS theme assets from ${DS_SRC}"
+fi
+
+# Also install legacy cube theme as fallback
+CUBE_DIR="${ROOTFS}/usr/share/plymouth/themes/secubox-cube"
+mkdir -p "${CUBE_DIR}"
 CUBE_SRC="${SCRIPT_DIR}/plymouth/secubox-cube"
 if [[ -d "${CUBE_SRC}" ]]; then
-    cp "${CUBE_SRC}/secubox-cube.plymouth" "${PLYMOUTH_DIR}/"
-    cp "${CUBE_SRC}/secubox-cube.script" "${PLYMOUTH_DIR}/"
-    cp "${CUBE_SRC}/logo.png" "${PLYMOUTH_DIR}/"
-    cp "${CUBE_SRC}/scanlines.png" "${PLYMOUTH_DIR}/"
-    cp "${CUBE_SRC}/progress-bg.png" "${PLYMOUTH_DIR}/"
-    cp "${CUBE_SRC}/progress-fg.png" "${PLYMOUTH_DIR}/"
-    cp "${CUBE_SRC}"/icon-*.png "${PLYMOUTH_DIR}/"
+    cp "${CUBE_SRC}/secubox-cube.plymouth" "${CUBE_DIR}/"
+    cp "${CUBE_SRC}/secubox-cube.script" "${CUBE_DIR}/"
+    cp "${CUBE_SRC}/logo.png" "${CUBE_DIR}/"
+    cp "${CUBE_SRC}/scanlines.png" "${CUBE_DIR}/"
+    cp "${CUBE_SRC}/progress-bg.png" "${CUBE_DIR}/"
+    cp "${CUBE_SRC}/progress-fg.png" "${CUBE_DIR}/"
+    cp "${CUBE_SRC}"/icon-*.png "${CUBE_DIR}/"
     log "  Copied cube theme assets from ${CUBE_SRC}"
 else
     warn "Cube theme source not found at ${CUBE_SRC}, creating minimal theme..."
@@ -813,19 +825,19 @@ Plymouth.SetMessageFunction(message_callback);
 PLYSCRIPT
 fi
 
-# Set SecuBox-Cube theme as default
+# Set SecuBox-3DS theme as default
 mkdir -p "${ROOTFS}/etc/plymouth"
 cat > "${ROOTFS}/etc/plymouth/plymouthd.conf" <<EOF
 [Daemon]
-Theme=secubox-cube
+Theme=secubox-3d
 ShowDelay=0
 DeviceTimeout=8
 EOF
 
 # Update alternatives to use our theme
-chroot "${ROOTFS}" plymouth-set-default-theme secubox-cube 2>/dev/null || true
+chroot "${ROOTFS}" plymouth-set-default-theme secubox-3d 2>/dev/null || true
 
-ok "Plymouth SecuBox-Cube theme installed"
+ok "Plymouth SecuBox-3DS theme installed"
 
 ok "Base configuration complete"
 
@@ -1242,7 +1254,8 @@ lapi_key = ""
 interface = "wg0"
 listen_port = 51820
 SECUBOXCONF
-chmod 640 "${ROOTFS}/etc/secubox/secubox.conf"
+chmod 644 "${ROOTFS}/etc/secubox/secubox.conf"
+chroot "${ROOTFS}" chown root:secubox /etc/secubox/secubox.conf 2>/dev/null || true
 log "Created default secubox.conf (admin/secubox)"
 
 # Create users.json for portal authentication
@@ -1264,7 +1277,8 @@ cat > "${ROOTFS}/etc/secubox/users.json" <<EOF
   }
 }
 EOF
-chmod 640 "${ROOTFS}/etc/secubox/users.json"
+chmod 644 "${ROOTFS}/etc/secubox/users.json"
+chroot "${ROOTFS}" chown root:secubox /etc/secubox/users.json 2>/dev/null || true
 log "Created users.json (admin/secubox, root/secubox)"
 
 # ── Restore real systemctl ─────────────────────────────────────────
@@ -1626,27 +1640,33 @@ XCONF
   mkdir -p "${ROOTFS}/home/secubox-kiosk/.config"
   cat > "${ROOTFS}/home/secubox-kiosk/.xsession" <<'XSESSION'
 #!/bin/bash
-# SecuBox Kiosk X Session - Minimal version
-exec 2>&1 | logger -t secubox-kiosk &
+# SecuBox Kiosk X Session v1.6.3
+export DISPLAY=${DISPLAY:-:0}
 
-echo "Starting kiosk session..."
+logger -t secubox-kiosk "Starting kiosk session..."
 
 # Basic X settings (ignore errors)
-xset s off 2>/dev/null
-xset -dpms 2>/dev/null
+xset s off 2>/dev/null || true
+xset -dpms 2>/dev/null || true
+xset s noblank 2>/dev/null || true
 
-# URL to display - use localhost for universal compatibility (works without network)
+# URL to display - use localhost for universal compatibility
 URL="https://localhost/"
 
-# Try Chromium with minimal flags
+# Chromium with VT-switch-friendly flags (--start-fullscreen, not --kiosk)
+# exec replaces shell with chromium - on exit, X session ends
 exec chromium \
-    --kiosk \
+    --start-fullscreen \
     --no-first-run \
     --no-sandbox \
     --disable-gpu \
+    --disable-pinch \
+    --noerrdialogs \
+    --disable-translate \
     --ignore-certificate-errors \
+    --disable-features=TranslateUI \
     --window-position=0,0 \
-    "$URL" || exec xterm -fullscreen -e "echo 'Chromium failed'; sleep 999"
+    "$URL"
 XSESSION
   chmod +x "${ROOTFS}/home/secubox-kiosk/.xsession"
   # Create symlink for xinit compatibility
@@ -1726,9 +1746,10 @@ XCONF
     xinit /bin/bash -c "
         xset s off 2>/dev/null
         xset -dpms 2>/dev/null
-        exec chromium --kiosk --no-first-run --no-sandbox --disable-gpu \
+        exec chromium --start-fullscreen --no-first-run --no-sandbox --disable-gpu \
+            --disable-pinch --noerrdialogs --disable-translate \
             --ignore-certificate-errors --window-position=0,0 '$URL'
-    " -- :0 vt7 -nolisten tcp 2>/dev/null &
+    " -- :0 vt7 -nolisten tcp -keeptty 2>/dev/null &
     sleep 3
     chvt 7 2>/dev/null
 ) &
@@ -2140,48 +2161,46 @@ rm -rf "${ROOTFS}/tmp"/*
 # ── CRT-Style Boot Banner with Colors and Emojis ──────────────────────────────
 log "Creating colorful boot banners..."
 
-# Pre-login banner (/etc/issue) - shown before login prompt
-cat > "${ROOTFS}/etc/issue" <<ISSUE
-[38;5;214m
+# Pre-login banner (/etc/issue) - use printf %b for real escape sequences
+printf '%b' "\e[38;5;214m
    ██████ ███████  ██████ ██    ██ ██████   ██████  ██   ██
   ██      ██      ██      ██    ██ ██   ██ ██    ██  ██ ██
   ███████ █████   ██      ██    ██ ██████  ██    ██   ███
        ██ ██      ██      ██    ██ ██   ██ ██    ██  ██ ██
   ███████ ███████  ██████  ██████  ██████   ██████  ██   ██
-[0m
-[38;5;45m  ⚡ CyberMind Security Platform[0m  [38;5;82mv${SECUBOX_VERSION}[0m  [38;5;242m\l @ \n[0m
-[38;5;242m  Build: ${BUILD_TIMESTAMP}[0m
+\e[0m
+\e[38;5;45m  ⚡ CyberMind Security Platform\e[0m  \e[38;5;82mv${SECUBOX_VERSION}\e[0m  \e[38;5;242m\\l @ \\n\e[0m
+\e[38;5;242m  Build: ${BUILD_TIMESTAMP}\e[0m
 
-[38;5;250m  🔐 Default: [38;5;214mroot[38;5;250m / [38;5;214msecubox[0m
-[38;5;250m  🌐 Web UI: [38;5;45mhttps://<IP>:9443[0m
-[38;5;250m  📡 SSH:    [38;5;45mport 22[0m
+\e[38;5;250m  🔐 Default: \e[38;5;214mroot\e[38;5;250m / \e[38;5;214msecubox\e[0m
+\e[38;5;250m  🌐 Web UI: \e[38;5;45mhttps://<IP>:9443\e[0m
+\e[38;5;250m  📡 SSH:    \e[38;5;45mport 22\e[0m
 
-[38;5;242m─────────────────────────────────────────────────────────────[0m
+\e[38;5;242m─────────────────────────────────────────────────────────────\e[0m
 
-ISSUE
+" > "${ROOTFS}/etc/issue"
 
-# Post-login MOTD with dynamic info (/etc/motd)
-cat > "${ROOTFS}/etc/motd" <<MOTD
-[38;5;214m
+# Post-login MOTD - use printf %b for real escape sequences
+printf '%b' "\e[38;5;214m
   ╔═══════════════════════════════════════════════════════════════╗
-  ║[38;5;45m   ███████╗███████╗ ██████╗██╗   ██╗██████╗  ██████╗ ██╗  ██╗  [38;5;214m║
-  ║[38;5;45m   ██╔════╝██╔════╝██╔════╝██║   ██║██╔══██╗██╔═══██╗╚██╗██╔╝  [38;5;214m║
-  ║[38;5;45m   ███████╗█████╗  ██║     ██║   ██║██████╔╝██║   ██║ ╚███╔╝   [38;5;214m║
-  ║[38;5;45m   ╚════██║██╔══╝  ██║     ██║   ██║██╔══██╗██║   ██║ ██╔██╗   [38;5;214m║
-  ║[38;5;45m   ███████║███████╗╚██████╗╚██████╔╝██████╔╝╚██████╔╝██╔╝ ██╗  [38;5;214m║
-  ║[38;5;45m   ╚══════╝╚══════╝ ╚═════╝ ╚═════╝ ╚═════╝  ╚═════╝ ╚═╝  ╚═╝  [38;5;214m║
-  ║[38;5;82m            ⚡ LIVE USB MODE ⚡  v${SECUBOX_VERSION}               [38;5;214m║
-  ╚═══════════════════════════════════════════════════════════════╝[0m
+  ║\e[38;5;45m   ███████╗███████╗ ██████╗██╗   ██╗██████╗  ██████╗ ██╗  ██╗  \e[38;5;214m║
+  ║\e[38;5;45m   ██╔════╝██╔════╝██╔════╝██║   ██║██╔══██╗██╔═══██╗╚██╗██╔╝  \e[38;5;214m║
+  ║\e[38;5;45m   ███████╗█████╗  ██║     ██║   ██║██████╔╝██║   ██║ ╚███╔╝   \e[38;5;214m║
+  ║\e[38;5;45m   ╚════██║██╔══╝  ██║     ██║   ██║██╔══██╗██║   ██║ ██╔██╗   \e[38;5;214m║
+  ║\e[38;5;45m   ███████║███████╗╚██████╗╚██████╔╝██████╔╝╚██████╔╝██╔╝ ██╗  \e[38;5;214m║
+  ║\e[38;5;45m   ╚══════╝╚══════╝ ╚═════╝ ╚═════╝ ╚═════╝  ╚═════╝ ╚═╝  ╚═╝  \e[38;5;214m║
+  ║\e[38;5;82m            ⚡ LIVE USB MODE ⚡  v${SECUBOX_VERSION}               \e[38;5;214m║
+  ╚═══════════════════════════════════════════════════════════════╝\e[0m
 
-[38;5;242m  Build: ${BUILD_TIMESTAMP}[0m
+\e[38;5;242m  Build: ${BUILD_TIMESTAMP}\e[0m
 
-[38;5;250m  🌐 Web UI:     [38;5;45mhttps://<IP>:9443[0m
-[38;5;250m  🔐 Credentials: [38;5;214mroot[38;5;250m / [38;5;214msecubox[0m
-[38;5;250m  📖 Docs:       [38;5;45mhttps://secubox.in/docs[0m
+\e[38;5;250m  🌐 Web UI:     \e[38;5;45mhttps://<IP>:9443\e[0m
+\e[38;5;250m  🔐 Credentials: \e[38;5;214mroot\e[38;5;250m / \e[38;5;214msecubox\e[0m
+\e[38;5;250m  📖 Docs:       \e[38;5;45mhttps://secubox.in/docs\e[0m
 
-[38;5;242m  Type [38;5;82msecubox-status[38;5;242m for system overview[0m
+\e[38;5;242m  Type \e[38;5;82msecubox-status\e[38;5;242m for system overview\e[0m
 
-MOTD
+" > "${ROOTFS}/etc/motd"
 
 # Dynamic status script for interactive use
 cat > "${ROOTFS}/usr/bin/secubox-status" <<'STATUS_SCRIPT'
@@ -2260,6 +2279,34 @@ echo -e "     ${GRAY}Admin API:${RESET}  ${CYAN}https://${IP:-localhost}:9443/ap
 echo ""
 STATUS_SCRIPT
 chmod +x "${ROOTFS}/usr/bin/secubox-status"
+
+# Password reset script for TTY recovery
+cat > "${ROOTFS}/usr/bin/secubox-passwd" <<'PASSWD_SCRIPT'
+#!/bin/bash
+# SecuBox Password Reset
+set -e
+USERS_FILE="/etc/secubox/users.json"
+CONF_FILE="/etc/secubox/secubox.conf"
+echo "SecuBox Password Reset"
+[[ $EUID -ne 0 ]] && echo "Error: Run as root" && exit 1
+read -sp "New password for admin: " NEW_PASS && echo
+read -sp "Confirm password: " CONFIRM && echo
+[[ "$NEW_PASS" != "$CONFIRM" ]] && echo "Passwords don't match" && exit 1
+[[ ${#NEW_PASS} -lt 4 ]] && echo "Password too short" && exit 1
+NEW_HASH=$(echo -n "$NEW_PASS" | sha256sum | cut -d' ' -f1)
+if [[ -f "$USERS_FILE" ]]; then
+    sed -i "s/\"password_hash\": \"[^\"]*\"/\"password_hash\": \"${NEW_HASH}\"/g" "$USERS_FILE"
+    echo "Updated users.json"
+fi
+if [[ -f "$CONF_FILE" ]]; then
+    sed -i "s/^password = .*/password = \"${NEW_PASS}\"/" "$CONF_FILE"
+    echo "Updated secubox.conf"
+fi
+systemctl restart secubox-portal secubox-hub 2>/dev/null || true
+echo "Password reset complete!"
+PASSWD_SCRIPT
+chmod +x "${ROOTFS}/usr/bin/secubox-passwd"
+ok "Password reset script installed (secubox-passwd)"
 
 # Also add a boot-time banner display script
 cat > "${ROOTFS}/usr/sbin/secubox-boot-banner" <<'BOOT_BANNER'

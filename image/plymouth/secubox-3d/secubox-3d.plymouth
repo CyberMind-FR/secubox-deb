@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=SecuBox 3D
+Description=Triple lemniscate + nested cubes boot splash
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/secubox-3d
+ScriptFile=/usr/share/plymouth/themes/secubox-3d/secubox-3d.script

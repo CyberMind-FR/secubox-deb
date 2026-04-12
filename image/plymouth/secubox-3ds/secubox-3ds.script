@@ -1,0 +1,506 @@
+/* SecuBox 3DS - Plymouth Theme Script
+ * Nintendo 3DS dual-screen aesthetic
+ * Upper: 3 nested cubes + 2 lemniscates
+ * Lower: Kernel log + progress bar
+ * CyberMind - https://cybermind.fr
+ */
+
+/* ═══════════════════════════════════════════════════════════════
+ * 3DS Color Palette
+ * ═══════════════════════════════════════════════════════════════ */
+/* Deep blue gradient: #0033aa (dark) → #1a6fff (bright) */
+blue_dark_r = 0.000;  blue_dark_g = 0.200;  blue_dark_b = 0.667;   /* #0033aa */
+blue_mid_r  = 0.082;  blue_mid_g  = 0.333;  blue_mid_b = 0.835;    /* #1555d5 */
+blue_bright_r = 0.102; blue_bright_g = 0.435; blue_bright_b = 1.0; /* #1a6fff */
+
+/* Log colors */
+log_blue_r = 0.4; log_blue_g = 0.6; log_blue_b = 1.0;    /* info */
+log_green_r = 0.4; log_green_g = 1.0; log_green_b = 0.6; /* ok */
+log_amber_r = 1.0; log_amber_g = 0.8; log_amber_b = 0.3; /* warn */
+
+/* ═══════════════════════════════════════════════════════════════
+ * Screen Setup - Dual screen simulation
+ * ═══════════════════════════════════════════════════════════════ */
+Window.SetBackgroundTopColor(0.02, 0.02, 0.04);    /* Near black */
+Window.SetBackgroundBottomColor(0.01, 0.01, 0.02);
+
+screen_width = Window.GetWidth();
+screen_height = Window.GetHeight();
+
+/* 3DS aspect simulation - upper screen takes 55% height */
+upper_height = screen_height * 0.55;
+lower_height = screen_height * 0.45;
+divider_y = upper_height;
+
+/* Centers for each "screen" */
+upper_center_x = screen_width / 2;
+upper_center_y = upper_height / 2;
+lower_center_x = screen_width / 2;
+lower_center_y = divider_y + (lower_height / 2);
+
+/* ═══════════════════════════════════════════════════════════════
+ * Load Assets
+ * ═══════════════════════════════════════════════════════════════ */
+/* Cube wireframe edges - rendered as sprites */
+cube_edge = Image("cube-edge.png");
+cube_corner = Image("cube-corner.png");
+lemniscate_dot = Image("lemniscate-dot.png");
+divider_line = Image("divider.png");
+progress_bg = Image("progress-bg.png");
+progress_fg = Image("progress-fg.png");
+
+/* ═══════════════════════════════════════════════════════════════
+ * Screen Divider (3DS hinge simulation)
+ * ═══════════════════════════════════════════════════════════════ */
+divider_sprite = Sprite();
+divider_img = Image.Text("", 1, 1, 1, 1);  /* Placeholder if no image */
+if (divider_line) {
+    divider_sprite.SetImage(divider_line);
+} else {
+    /* Create a simple dark blue line */
+    divider_sprite.SetImage(divider_img);
+}
+divider_sprite.SetX(0);
+divider_sprite.SetY(divider_y - 2);
+divider_sprite.SetZ(50);
+divider_sprite.SetOpacity(0.8);
+
+/* ═══════════════════════════════════════════════════════════════
+ * UPPER SCREEN - 3 Nested Cubes
+ * ═══════════════════════════════════════════════════════════════ */
+
+/* Cube sizes (nested: large → medium → small) */
+cube_sizes[0] = 100;  /* Outer */
+cube_sizes[1] = 65;   /* Middle */
+cube_sizes[2] = 35;   /* Inner */
+
+/* Rotation speeds (desynchronized) */
+cube_speed_x[0] = 0.004;  cube_speed_y[0] = 0.007;  cube_speed_z[0] = 0.003;
+cube_speed_x[1] = 0.009;  cube_speed_y[1] = 0.005;  cube_speed_z[1] = 0.008;
+cube_speed_x[2] = 0.015;  cube_speed_y[2] = 0.012;  cube_speed_z[2] = 0.006;
+
+/* Rotation angles */
+cube_angle_x[0] = 0;  cube_angle_y[0] = 0;  cube_angle_z[0] = 0;
+cube_angle_x[1] = 1.0;  cube_angle_y[1] = 0.5;  cube_angle_z[1] = 0.3;
+cube_angle_x[2] = 2.0;  cube_angle_y[2] = 1.5;  cube_angle_z[2] = 1.0;
+
+/* Cube edge sprites (12 edges × 3 cubes = 36 sprites) */
+/* We'll draw simplified: 8 corner dots per cube */
+for (c = 0; c < 3; c++) {
+    for (v = 0; v < 8; v++) {
+        idx = c * 8 + v;
+        cube_vertices[idx] = Sprite();
+        cube_vertices[idx].SetZ(20 + c * 5);
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * UPPER SCREEN - 2 Lemniscates (∞ curves)
+ * ═══════════════════════════════════════════════════════════════ */
+
+/* Lemniscate parameters */
+lemniscate_scale = 80;  /* Size of the infinity symbol */
+lemniscate_y_offset[0] = -30;  /* Above center */
+lemniscate_y_offset[1] = 30;   /* Below center */
+
+/* Each lemniscate has multiple trail dots + 1 bright head */
+dots_per_curve = 12;
+head_speed[0] = 0.025;
+head_speed[1] = 0.018;  /* Different speed for visual interest */
+head_pos[0] = 0;
+head_pos[1] = 3.14159;  /* Start opposite */
+
+/* Lemniscate dot sprites */
+for (l = 0; l < 2; l++) {
+    for (d = 0; d < dots_per_curve; d++) {
+        idx = l * dots_per_curve + d;
+        lem_dots[idx] = Sprite();
+        lem_dots[idx].SetZ(15);
+    }
+    /* Bright head */
+    lem_heads[l] = Sprite();
+    lem_heads[l].SetZ(18);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * LOWER SCREEN - Kernel Log Area
+ * ═══════════════════════════════════════════════════════════════ */
+
+/* Log line sprites (scrolling buffer) */
+max_log_lines = 8;
+for (i = 0; i < max_log_lines; i++) {
+    log_sprites[i] = Sprite();
+    log_sprites[i].SetZ(30);
+}
+log_texts[0] = "";
+log_texts[1] = "";
+log_texts[2] = "";
+log_texts[3] = "";
+log_texts[4] = "";
+log_texts[5] = "";
+log_texts[6] = "";
+log_texts[7] = "";
+log_index = 0;
+
+/* Progress bar */
+progress_bg_sprite = Sprite();
+progress_fg_sprite = Sprite();
+if (progress_bg) {
+    progress_bg_sprite.SetImage(progress_bg);
+}
+progress_bg_sprite.SetX(lower_center_x - 120);
+progress_bg_sprite.SetY(lower_center_y + 70);
+progress_bg_sprite.SetZ(35);
+
+if (progress_fg) {
+    progress_fg_sprite.SetImage(progress_fg);
+}
+progress_fg_sprite.SetX(lower_center_x - 118);
+progress_fg_sprite.SetY(lower_center_y + 72);
+progress_fg_sprite.SetZ(36);
+
+/* Phase message */
+phase_sprite = Sprite();
+phase_sprite.SetZ(40);
+current_phase = "Initializing...";
+
+/* ═══════════════════════════════════════════════════════════════
+ * Animation State
+ * ═══════════════════════════════════════════════════════════════ */
+frame = 0;
+boot_progress = 0;
+
+/* ═══════════════════════════════════════════════════════════════
+ * 3D Math - Cube vertex projection
+ * ═══════════════════════════════════════════════════════════════ */
+
+/* Unit cube vertices (±1, ±1, ±1) */
+unit_cube_x[0] = -1; unit_cube_y[0] = -1; unit_cube_z[0] = -1;
+unit_cube_x[1] =  1; unit_cube_y[1] = -1; unit_cube_z[1] = -1;
+unit_cube_x[2] =  1; unit_cube_y[2] =  1; unit_cube_z[2] = -1;
+unit_cube_x[3] = -1; unit_cube_y[3] =  1; unit_cube_z[3] = -1;
+unit_cube_x[4] = -1; unit_cube_y[4] = -1; unit_cube_z[4] =  1;
+unit_cube_x[5] =  1; unit_cube_y[5] = -1; unit_cube_z[5] =  1;
+unit_cube_x[6] =  1; unit_cube_y[6] =  1; unit_cube_z[6] =  1;
+unit_cube_x[7] = -1; unit_cube_y[7] =  1; unit_cube_z[7] =  1;
+
+fun rotate_point(px, py, pz, ax, ay, az) {
+    /* Rotate around X */
+    cos_x = Math.Cos(ax);
+    sin_x = Math.Sin(ax);
+    y1 = py * cos_x - pz * sin_x;
+    z1 = py * sin_x + pz * cos_x;
+
+    /* Rotate around Y */
+    cos_y = Math.Cos(ay);
+    sin_y = Math.Sin(ay);
+    x2 = px * cos_y + z1 * sin_y;
+    z2 = -px * sin_y + z1 * cos_y;
+
+    /* Rotate around Z */
+    cos_z = Math.Cos(az);
+    sin_z = Math.Sin(az);
+    x3 = x2 * cos_z - y1 * sin_z;
+    y3 = x2 * sin_z + y1 * cos_z;
+
+    result[0] = x3;
+    result[1] = y3;
+    result[2] = z2;
+    return result;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * Lemniscate parametric curve (Bernoulli lemniscate)
+ * x = a * cos(t) / (1 + sin²(t))
+ * y = a * sin(t) * cos(t) / (1 + sin²(t))
+ * ═══════════════════════════════════════════════════════════════ */
+
+fun lemniscate_x(t, scale) {
+    sin_t = Math.Sin(t);
+    cos_t = Math.Cos(t);
+    denom = 1 + sin_t * sin_t;
+    return scale * cos_t / denom;
+}
+
+fun lemniscate_y(t, scale) {
+    sin_t = Math.Sin(t);
+    cos_t = Math.Cos(t);
+    denom = 1 + sin_t * sin_t;
+    return scale * sin_t * cos_t / denom;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * Animation Functions
+ * ═══════════════════════════════════════════════════════════════ */
+
+fun draw_cube(cube_idx) {
+    ax = global.cube_angle_x[cube_idx];
+    ay = global.cube_angle_y[cube_idx];
+    az = global.cube_angle_z[cube_idx];
+    size = global.cube_sizes[cube_idx] / 2;
+
+    /* Brightness based on cube layer (inner = brightest) */
+    brightness = 0.3 + (2 - cube_idx) * 0.3;
+
+    for (v = 0; v < 8; v++) {
+        /* Get unit cube vertex */
+        px = global.unit_cube_x[v] * size;
+        py = global.unit_cube_y[v] * size;
+        pz = global.unit_cube_z[v] * size;
+
+        /* Rotate */
+        rotated = rotate_point(px, py, pz, ax, ay, az);
+
+        /* Project to screen (simple orthographic) */
+        screen_x = global.upper_center_x + rotated[0];
+        screen_y = global.upper_center_y + rotated[1];
+
+        /* Depth-based opacity */
+        depth = (rotated[2] + size) / (size * 2);
+        opacity = brightness * (0.5 + depth * 0.5);
+
+        /* Create vertex dot */
+        idx = cube_idx * 8 + v;
+        dot_size = 4 + (2 - cube_idx) * 2;  /* Inner cube has bigger dots */
+
+        dot_img = Image.Text("*", global.blue_mid_r * brightness,
+                                   global.blue_mid_g * brightness,
+                                   global.blue_bright_b * brightness, 1);
+        global.cube_vertices[idx].SetImage(dot_img);
+        global.cube_vertices[idx].SetX(screen_x - dot_size/2);
+        global.cube_vertices[idx].SetY(screen_y - dot_size/2);
+        global.cube_vertices[idx].SetOpacity(opacity);
+    }
+}
+
+fun draw_lemniscates() {
+    for (l = 0; l < 2; l++) {
+        /* Update head position */
+        global.head_pos[l] += global.head_speed[l];
+        if (global.head_pos[l] > 6.28318) {
+            global.head_pos[l] -= 6.28318;
+        }
+
+        y_off = global.lemniscate_y_offset[l];
+
+        /* Draw trail dots */
+        for (d = 0; d < global.dots_per_curve; d++) {
+            /* Position along curve (behind the head) */
+            t = global.head_pos[l] - d * 0.4;
+
+            lx = lemniscate_x(t, global.lemniscate_scale);
+            ly = lemniscate_y(t, global.lemniscate_scale);
+
+            screen_x = global.upper_center_x + lx;
+            screen_y = global.upper_center_y + y_off + ly;
+
+            /* Fade trail */
+            fade = 1.0 - (d / global.dots_per_curve) * 0.8;
+
+            idx = l * global.dots_per_curve + d;
+            dot_img = Image.Text(".", global.blue_dark_r + fade * 0.1,
+                                       global.blue_dark_g + fade * 0.2,
+                                       global.blue_bright_b * fade, 1);
+            global.lem_dots[idx].SetImage(dot_img);
+            global.lem_dots[idx].SetX(screen_x - 2);
+            global.lem_dots[idx].SetY(screen_y - 2);
+            global.lem_dots[idx].SetOpacity(fade * 0.7);
+        }
+
+        /* Draw bright head */
+        hx = lemniscate_x(global.head_pos[l], global.lemniscate_scale);
+        hy = lemniscate_y(global.head_pos[l], global.lemniscate_scale);
+
+        head_screen_x = global.upper_center_x + hx;
+        head_screen_y = global.upper_center_y + y_off + hy;
+
+        /* Pulsing head */
+        pulse = 0.8 + Math.Sin(global.frame * 0.2) * 0.2;
+        head_img = Image.Text("O", global.blue_bright_r * pulse,
+                                    global.blue_bright_g * pulse,
+                                    global.blue_bright_b, 1);
+        global.lem_heads[l].SetImage(head_img);
+        global.lem_heads[l].SetX(head_screen_x - 4);
+        global.lem_heads[l].SetY(head_screen_y - 4);
+        global.lem_heads[l].SetOpacity(1.0);
+    }
+}
+
+fun update_log_display() {
+    line_height = 16;
+    start_y = global.divider_y + 15;
+    left_margin = 30;
+
+    for (i = 0; i < global.max_log_lines; i++) {
+        if (global.log_texts[i] != "") {
+            /* Simple color based on content */
+            if (String(global.log_texts[i]).Find("OK") >= 0 ||
+                String(global.log_texts[i]).Find("Started") >= 0) {
+                r = global.log_green_r;
+                g = global.log_green_g;
+                b = global.log_green_b;
+            } else if (String(global.log_texts[i]).Find("warn") >= 0 ||
+                       String(global.log_texts[i]).Find("WARN") >= 0) {
+                r = global.log_amber_r;
+                g = global.log_amber_g;
+                b = global.log_amber_b;
+            } else {
+                r = global.log_blue_r;
+                g = global.log_blue_g;
+                b = global.log_blue_b;
+            }
+
+            txt_img = Image.Text(global.log_texts[i], r, g, b, "Mono 9");
+            global.log_sprites[i].SetImage(txt_img);
+            global.log_sprites[i].SetX(left_margin);
+            global.log_sprites[i].SetY(start_y + i * line_height);
+            global.log_sprites[i].SetOpacity(0.9);
+        }
+    }
+}
+
+fun update_phase() {
+    phase_img = Image.Text(global.current_phase,
+                           global.blue_bright_r,
+                           global.blue_bright_g,
+                           global.blue_bright_b, "Sans Bold 11");
+    global.phase_sprite.SetImage(phase_img);
+    global.phase_sprite.SetX(global.lower_center_x - phase_img.GetWidth() / 2);
+    global.phase_sprite.SetY(global.lower_center_y + 50);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * Main Animation Loop
+ * ═══════════════════════════════════════════════════════════════ */
+
+fun refresh_callback() {
+    global.frame++;
+
+    /* Update cube rotations */
+    for (c = 0; c < 3; c++) {
+        global.cube_angle_x[c] += global.cube_speed_x[c];
+        global.cube_angle_y[c] += global.cube_speed_y[c];
+        global.cube_angle_z[c] += global.cube_speed_z[c];
+
+        /* Keep in bounds */
+        if (global.cube_angle_x[c] > 6.28318) global.cube_angle_x[c] -= 6.28318;
+        if (global.cube_angle_y[c] > 6.28318) global.cube_angle_y[c] -= 6.28318;
+        if (global.cube_angle_z[c] > 6.28318) global.cube_angle_z[c] -= 6.28318;
+
+        draw_cube(c);
+    }
+
+    /* Draw lemniscates */
+    draw_lemniscates();
+
+    /* Update phase display */
+    update_phase();
+}
+
+Plymouth.SetRefreshFunction(refresh_callback);
+
+/* ═══════════════════════════════════════════════════════════════
+ * Plymouth Callbacks
+ * ═══════════════════════════════════════════════════════════════ */
+
+fun boot_progress_callback(duration, progress_val) {
+    global.boot_progress = progress_val;
+
+    /* Update progress bar */
+    if (progress_fg) {
+        bar_width = Math.Int(progress_val * 236);
+        if (bar_width > 0) {
+            scaled = progress_fg.Scale(bar_width, 12);
+            progress_fg_sprite.SetImage(scaled);
+        }
+    }
+
+    /* Update phase message based on progress */
+    if (progress_val < 0.15) {
+        global.current_phase = "Loading kernel modules...";
+    } else if (progress_val < 0.30) {
+        global.current_phase = "Initializing hardware...";
+    } else if (progress_val < 0.50) {
+        global.current_phase = "Starting system services...";
+    } else if (progress_val < 0.70) {
+        global.current_phase = "Configuring network...";
+    } else if (progress_val < 0.90) {
+        global.current_phase = "Starting SecuBox modules...";
+    } else {
+        global.current_phase = "System ready";
+    }
+}
+
+Plymouth.SetBootProgressFunction(boot_progress_callback);
+
+fun message_callback(text) {
+    /* Add to log buffer (scrolling) */
+    /* Shift existing lines up */
+    for (i = global.max_log_lines - 1; i > 0; i--) {
+        global.log_texts[i] = global.log_texts[i-1];
+    }
+
+    /* Add timestamp prefix */
+    timestamp = Math.Int(global.frame / 60);
+    ts_str = "[" + timestamp + "] ";
+    global.log_texts[0] = ts_str + text;
+
+    update_log_display();
+}
+
+Plymouth.SetMessageFunction(message_callback);
+
+fun display_normal_callback() {
+    /* Normal boot display */
+}
+
+fun display_password_callback(prompt, bullets) {
+    /* LUKS password prompt */
+    prompt_img = Image.Text(prompt,
+                            global.blue_bright_r,
+                            global.blue_bright_g,
+                            global.blue_bright_b, "Sans Bold 12");
+    global.phase_sprite.SetImage(prompt_img);
+    global.phase_sprite.SetX(global.lower_center_x - prompt_img.GetWidth() / 2);
+    global.phase_sprite.SetY(global.lower_center_y + 30);
+
+    /* Show bullet dots for password */
+    bullet_str = "";
+    for (i = 0; i < bullets; i++) {
+        bullet_str += "*";
+    }
+    bullet_img = Image.Text(bullet_str, 1.0, 1.0, 1.0, "Mono 14");
+    /* Could add another sprite for bullets */
+}
+
+Plymouth.SetDisplayNormalFunction(display_normal_callback);
+Plymouth.SetDisplayPasswordFunction(display_password_callback);
+
+fun quit_callback() {
+    /* Fade out animation */
+    for (c = 0; c < 3; c++) {
+        for (v = 0; v < 8; v++) {
+            idx = c * 8 + v;
+            global.cube_vertices[idx].SetOpacity(0);
+        }
+    }
+
+    for (l = 0; l < 2; l++) {
+        for (d = 0; d < global.dots_per_curve; d++) {
+            idx = l * global.dots_per_curve + d;
+            global.lem_dots[idx].SetOpacity(0);
+        }
+        global.lem_heads[l].SetOpacity(0);
+    }
+
+    global.phase_sprite.SetOpacity(0);
+    progress_bg_sprite.SetOpacity(0);
+    progress_fg_sprite.SetOpacity(0);
+    divider_sprite.SetOpacity(0);
+
+    for (i = 0; i < global.max_log_lines; i++) {
+        global.log_sprites[i].SetOpacity(0);
+    }
+}
+
+Plymouth.SetQuitFunction(quit_callback);
