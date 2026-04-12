@@ -14,7 +14,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 
 # ── Version & Build Info ──────────────────────────────────────────
-SECUBOX_VERSION="1.6.7"
+SECUBOX_VERSION="1.6.7.1"
 BUILD_TIMESTAMP=$(date '+%Y-%m-%d %H:%M')
 BUILD_DATE=$(date '+%Y%m%d')
 
@@ -749,7 +749,9 @@ SIMPLE_SRC="${SCRIPT_DIR}/plymouth/secubox-simple"
 if [[ -d "${SIMPLE_SRC}" ]]; then
     cp "${SIMPLE_SRC}/secubox-simple.plymouth" "${SIMPLE_DIR}/"
     cp "${SIMPLE_SRC}/secubox-simple.script" "${SIMPLE_DIR}/"
-    log "  Copied simple theme from ${SIMPLE_SRC}"
+    # Inject version dynamically
+    sed -i "s/v[0-9]\+\.[0-9]\+\.[0-9]\+\(\.[0-9]\+\)\?/v${SECUBOX_VERSION}/g" "${SIMPLE_DIR}/secubox-simple.script"
+    log "  Copied simple theme from ${SIMPLE_SRC} (version: v${SECUBOX_VERSION})"
 fi
 
 # Install secubox-3d theme (advanced, optional)
@@ -1176,6 +1178,125 @@ set -e
 
 ok "SecuBox packages installed"
 
+# ── Fallback: Install core services if packages missing ────────────
+# If secubox-core wasn't installed via deb, install the critical components manually
+log "Installing core services fallback..."
+
+# Create secubox user/group if missing
+if ! chroot "${ROOTFS}" id -u secubox >/dev/null 2>&1; then
+  chroot "${ROOTFS}" adduser --system --group --no-create-home \
+    --home /var/lib/secubox --shell /usr/sbin/nologin secubox 2>/dev/null || true
+  ok "Created secubox user"
+fi
+
+# Install secubox_core Python module
+CORE_PY_SRC="${SCRIPT_DIR}/../common/secubox_core"
+if [[ -d "${CORE_PY_SRC}" ]]; then
+  CORE_PY_DST="${ROOTFS}/usr/lib/python3/dist-packages/secubox_core"
+  mkdir -p "${CORE_PY_DST}"
+  cp -r "${CORE_PY_SRC}/"*.py "${CORE_PY_DST}/" 2>/dev/null || true
+  ok "Installed secubox_core Python module"
+fi
+
+# Install secubox-runtime.service (creates /run/secubox)
+if [[ ! -f "${ROOTFS}/usr/lib/systemd/system/secubox-runtime.service" ]]; then
+  cat > "${ROOTFS}/usr/lib/systemd/system/secubox-runtime.service" <<'RTMSVC'
+[Unit]
+Description=SecuBox Runtime Directory Setup
+DefaultDependencies=no
+Before=secubox-hub.service secubox-portal.service
+After=local-fs.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/mkdir -p /run/secubox
+ExecStart=/bin/chown secubox:secubox /run/secubox
+ExecStart=/bin/chmod 775 /run/secubox
+
+[Install]
+WantedBy=multi-user.target
+RTMSVC
+  ln -sf /usr/lib/systemd/system/secubox-runtime.service \
+    "${ROOTFS}/etc/systemd/system/multi-user.target.wants/secubox-runtime.service"
+  ok "Installed secubox-runtime.service"
+fi
+
+# Install secubox-core.service
+if [[ ! -f "${ROOTFS}/usr/lib/systemd/system/secubox-core.service" ]]; then
+  cat > "${ROOTFS}/usr/lib/systemd/system/secubox-core.service" <<'CORESVC'
+[Unit]
+Description=SecuBox Core Setup
+After=network.target secubox-runtime.service
+Requires=secubox-runtime.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/mkdir -p /run/secubox
+ExecStart=/bin/chown secubox:secubox /run/secubox
+ExecStart=/bin/chmod 775 /run/secubox
+ExecStart=/bin/sh -c "id -nG www-data | grep -q secubox || usermod -aG secubox www-data"
+
+[Install]
+WantedBy=multi-user.target
+CORESVC
+  ln -sf /usr/lib/systemd/system/secubox-core.service \
+    "${ROOTFS}/etc/systemd/system/multi-user.target.wants/secubox-core.service"
+  ok "Installed secubox-core.service"
+fi
+
+# Install secubox-hub.service if package didn't install it
+if [[ ! -f "${ROOTFS}/usr/lib/systemd/system/secubox-hub.service" ]]; then
+  cat > "${ROOTFS}/usr/lib/systemd/system/secubox-hub.service" <<'HUBSVC'
+[Unit]
+Description=SecuBox Hub — Dashboard Central API
+After=network.target secubox-core.service secubox-runtime.service
+Wants=secubox-core.service secubox-runtime.service
+
+[Service]
+UMask=0002
+Type=simple
+User=secubox
+Group=secubox
+WorkingDirectory=/usr/lib/secubox/hub
+ExecStartPre=+/bin/mkdir -p /run/secubox
+ExecStartPre=+/bin/chown secubox:secubox /run/secubox
+ExecStartPre=+/bin/chmod 775 /run/secubox
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app \
+    --uds /run/secubox/hub.sock \
+    --log-level warning
+Restart=on-failure
+RestartSec=5
+PrivateTmp=true
+NoNewPrivileges=true
+RuntimeDirectory=secubox
+RuntimeDirectoryMode=0775
+ProtectSystem=full
+ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox
+
+[Install]
+WantedBy=multi-user.target
+HUBSVC
+  ok "Installed secubox-hub.service"
+fi
+
+# Install hub API if missing
+if [[ ! -d "${ROOTFS}/usr/lib/secubox/hub/api" ]]; then
+  HUB_API_SRC="${SCRIPT_DIR}/../packages/secubox-hub/api"
+  if [[ -d "${HUB_API_SRC}" ]]; then
+    mkdir -p "${ROOTFS}/usr/lib/secubox/hub/api"
+    cp -r "${HUB_API_SRC}/"* "${ROOTFS}/usr/lib/secubox/hub/api/"
+    ok "Installed hub API from packages/secubox-hub/api"
+  fi
+fi
+
+# Enable secubox-hub.service
+ln -sf /usr/lib/systemd/system/secubox-hub.service \
+  "${ROOTFS}/etc/systemd/system/multi-user.target.wants/secubox-hub.service" 2>/dev/null || true
+
+ok "Core services fallback complete"
+
 # ── Fix systemd service namespaces for /run/secubox ────────────────
 # Services with ProtectSystem=strict create mount namespaces that prevent
 # socket creation in /run/secubox. Add RuntimeDirectory and tmpfiles.d.
@@ -1222,7 +1343,7 @@ cat > "${ROOTFS}/etc/secubox/build-info.json" <<EOF
   "git_commit": "${GIT_COMMIT}",
   "git_branch": "${GIT_BRANCH}",
   "board": "amd64-live",
-  "version": "1.0.0",
+  "version": "${SECUBOX_VERSION}",
   "builder": "$(whoami)@$(hostname)"
 }
 EOF

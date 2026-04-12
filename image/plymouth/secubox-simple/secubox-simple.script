@@ -28,7 +28,7 @@ subtitle_sprite.SetY(center_y - 20);
 subtitle_sprite.SetZ(10);
 
 /* Version */
-version = Image.Text("v1.6.6", 0.2, 0.5, 0.3, "Sans 12");
+version = Image.Text("v1.6.7.1", 0.2, 0.5, 0.3, "Sans 12");
 version_sprite = Sprite(version);
 version_sprite.SetX(center_x - version.GetWidth() / 2);
 version_sprite.SetY(center_y + 10);
