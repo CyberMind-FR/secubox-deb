@@ -14,7 +14,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 
 # ── Version & Build Info ──────────────────────────────────────────
-SECUBOX_VERSION="1.6.4"
+SECUBOX_VERSION="1.6.5"
 BUILD_TIMESTAMP=$(date '+%Y-%m-%d %H:%M')
 BUILD_DATE=$(date '+%Y%m%d')
 
@@ -2702,12 +2702,12 @@ echo "SecuBox v${SECUBOX_VERSION} - Build ${BUILD_TIMESTAMP}"
 echo ""
 
 menuentry "⚡ SecuBox Live v${SECUBOX_VERSION}" {
-    linux (\$live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components persistence quiet
+    linux (\$live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components persistence quiet splash
     initrd (\$live)/live/initrd.img
 }
 
 menuentry "🖼️ SecuBox Live v${SECUBOX_VERSION} (Kiosk GUI) [DEFAULT]" {
-    linux (\$live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components persistence quiet secubox.kiosk=1 systemd.unit=graphical.target
+    linux (\$live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components persistence quiet splash secubox.kiosk=1 systemd.unit=graphical.target
     initrd (\$live)/live/initrd.img
 }
 GRUBCFG
