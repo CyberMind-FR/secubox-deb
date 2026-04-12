@@ -152,39 +152,65 @@ create_session() {
     mkdir -p "$KIOSK_HOME/.config/chromium"
     chown -R "$KIOSK_USER:$KIOSK_USER" "$KIOSK_HOME/.config"
 
-    # Minimal session script - just Chromium, no optional tools
-    # Use --start-fullscreen (not --kiosk) for better VT switching compatibility
-    cat > "$KIOSK_HOME/.xsession" <<XSESSION
+    # Session script with simple splash and debug logging
+    cat > "$KIOSK_HOME/.xsession" <<'XSESSION'
 #!/bin/bash
-# SecuBox Kiosk - Minimal X Session (v1.6.5)
-export DISPLAY=\${DISPLAY:-:0}
+# SecuBox Kiosk - X Session (v1.6.6)
+exec >> /tmp/kiosk-session.log 2>&1
+echo "=== X Session Start: $(date) ==="
 
-# Log startup
-logger -t secubox-kiosk "Starting Chromium kiosk: $url"
+export DISPLAY=${DISPLAY:-:0}
+echo "DISPLAY=$DISPLAY"
 
-# Disable screensaver and power management (ignore errors)
-xset s off 2>/dev/null || true
-xset -dpms 2>/dev/null || true
-xset s noblank 2>/dev/null || true
+# Log to syslog too
+logger -t secubox-kiosk "X session starting on $DISPLAY"
 
-# Chromium flags for kiosk mode
-# --start-fullscreen: allows Ctrl+Alt+Fn VT switching (better than --kiosk)
-# --disable-gpu: avoid GPU issues in VMs
-# Removed --no-sandbox to avoid warning banner
-# exec replaces shell with chromium - on exit, X session ends
-exec chromium \\
-    --start-fullscreen \\
-    --no-first-run \\
-    --disable-gpu \\
-    --disable-software-rasterizer \\
-    --disable-pinch \\
-    --noerrdialogs \\
-    --disable-translate \\
-    --ignore-certificate-errors \\
-    --disable-features=TranslateUI \\
-    --disable-infobars \\
-    --window-position=0,0 \\
-    "$url"
+# Disable screensaver
+xset s off 2>/dev/null || echo "xset s off failed"
+xset -dpms 2>/dev/null || echo "xset -dpms failed"
+xset s noblank 2>/dev/null || echo "xset s noblank failed"
+
+# Set dark green background as splash
+xsetroot -solid "#0a1a0a" 2>/dev/null || echo "xsetroot failed"
+echo "Background set"
+
+# Wait for nginx (max 10s, non-blocking visual)
+echo "Waiting for nginx..."
+for i in {1..10}; do
+    if curl -sk --connect-timeout 1 https://localhost/ >/dev/null 2>&1; then
+        echo "nginx ready after ${i}s"
+        break
+    fi
+    echo "  waiting... $i"
+    sleep 1
+done
+
+# Determine URL
+URL="https://localhost/"
+for test_url in "https://localhost/" "https://127.0.0.1/" "http://localhost/"; do
+    if curl -sk --connect-timeout 2 "$test_url" >/dev/null 2>&1; then
+        URL="$test_url"
+        echo "URL found: $URL"
+        break
+    fi
+done
+
+logger -t secubox-kiosk "Launching Chromium: $URL"
+echo "Launching Chromium: $URL"
+
+# Chromium with minimal flags
+exec chromium \
+    --start-fullscreen \
+    --no-first-run \
+    --disable-gpu \
+    --disable-software-rasterizer \
+    --noerrdialogs \
+    --disable-translate \
+    --ignore-certificate-errors \
+    --disable-features=TranslateUI \
+    --disable-infobars \
+    --window-position=0,0 \
+    "$URL"
 XSESSION
 
     chmod +x "$KIOSK_HOME/.xsession"
@@ -195,33 +221,109 @@ XSESSION
 }
 
 # ══════════════════════════════════════════════════════════════════
-# STEP 5: Start X11 with xinit (direct, reliable)
+# STEP 5: Start X11 display
+# Strategy: Start Xorg as root, then run session as kiosk user
+# This is the most reliable approach for kiosk systems
 # ══════════════════════════════════════════════════════════════════
 start_display() {
-    log "Starting X11 display with xinit..."
+    log "Starting X11 display..."
 
-    local kiosk_uid kiosk_gid runtime_dir
+    local kiosk_uid kiosk_gid runtime_dir xauth_file x_log
     kiosk_uid=$(id -u "$KIOSK_USER")
     kiosk_gid=$(id -g "$KIOSK_USER")
     runtime_dir="/run/user/$kiosk_uid"
+    xauth_file="$KIOSK_HOME/.Xauthority"
+    x_log="/var/log/Xorg.0.log"
 
     # Setup XDG runtime directory
     mkdir -p "$runtime_dir"
     chown "$kiosk_uid:$kiosk_gid" "$runtime_dir"
     chmod 700 "$runtime_dir"
 
-    # Give X server permissions to kiosk user
-    # VT7 is used to not conflict with console TTYs
-    log "Launching xinit as $KIOSK_USER on VT7..."
+    # Create Xauthority with magic cookie
+    log "Setting up Xauthority..."
+    rm -f "$xauth_file"
+    touch "$xauth_file"
 
-    # Use exec to replace this process with xinit
-    # This keeps systemd happy (Type=simple expects long-running process)
+    # Generate X auth cookie (mcookie or fallback)
+    local cookie
+    cookie=$(mcookie 2>/dev/null || od -An -tx1 -N16 /dev/urandom | tr -d ' \n')
+    xauth -f "$xauth_file" add :0 . "$cookie" 2>/dev/null || true
+    chown "$KIOSK_USER:$KIOSK_USER" "$xauth_file"
+    chmod 600 "$xauth_file"
+    log "Xauthority created"
+
+    # Pre-flight checks
+    log "Pre-flight checks:"
+    log "  - User: $KIOSK_USER (uid=$kiosk_uid)"
+    log "  - Xauthority: $xauth_file"
+    log "  - Session: $KIOSK_HOME/.xsession"
+
+    # Check X server
+    if ! command -v Xorg >/dev/null 2>&1; then
+        err "Xorg not found!"
+        exit 1
+    fi
+    log "  - X server: $(which Xorg)"
+
+    # Kill any existing X server
+    pkill -9 Xorg 2>/dev/null || true
+    pkill -9 X 2>/dev/null || true
+    sleep 1
+
+    log "Starting Xorg on :0 vt7..."
+
+    # Start X server as root in background
+    # -auth uses our Xauthority so kiosk user can connect
+    # -noreset keeps X running even if last client disconnects
+    Xorg :0 vt7 \
+        -nolisten tcp \
+        -auth "$xauth_file" \
+        -noreset \
+        -logfile "$x_log" \
+        2>&1 &
+
+    local x_pid=$!
+    log "Xorg started with PID $x_pid"
+
+    # Wait for X to be ready (check for socket)
+    local attempts=0
+    while [[ $attempts -lt 30 ]]; do
+        if [[ -S /tmp/.X11-unix/X0 ]]; then
+            log "X11 socket ready after ${attempts}s"
+            break
+        fi
+        sleep 1
+        ((attempts++))
+    done
+
+    # Verify X is running
+    if ! kill -0 "$x_pid" 2>/dev/null; then
+        err "Xorg process died! Check $x_log"
+        tail -50 "$x_log" 2>/dev/null || true
+        exit 1
+    fi
+
+    if [[ ! -S /tmp/.X11-unix/X0 ]]; then
+        err "X11 socket not created after 30s"
+        tail -50 "$x_log" 2>/dev/null || true
+        exit 1
+    fi
+
+    log "X server running, launching session as $KIOSK_USER..."
+
+    # Switch to VT7 explicitly
+    chvt 7 2>/dev/null || true
+
+    # Run the session as kiosk user
+    # exec replaces this process - systemd keeps tracking the session
     exec su -l "$KIOSK_USER" -c "
+        export DISPLAY=:0
+        export XAUTHORITY='$xauth_file'
         export XDG_RUNTIME_DIR='$runtime_dir'
         export HOME='$KIOSK_HOME'
-        export DISPLAY=:0
         cd '$KIOSK_HOME'
-        exec xinit '$KIOSK_HOME/.xsession' -- :0 vt7 -nolisten tcp -keeptty
+        exec '$KIOSK_HOME/.xsession'
     "
 }
 
@@ -230,7 +332,7 @@ start_display() {
 # ══════════════════════════════════════════════════════════════════
 main() {
     log "════════════════════════════════════════════════"
-    log "SecuBox Kiosk Launcher v2.2 (1.6.5)"
+    log "SecuBox Kiosk Launcher v2.4 (1.6.6)"
     log "════════════════════════════════════════════════"
 
     check_prerequisites
