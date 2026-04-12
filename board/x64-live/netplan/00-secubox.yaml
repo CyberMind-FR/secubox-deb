@@ -1,37 +1,26 @@
 # /etc/netplan/00-secubox.yaml — x64 Live — Mode Router
-# WAN: First interface with DHCP (internet uplink)
-# br-lan: Bridge for LAN ports with static IP + DHCP server
+# WAN: First ethernet interface with DHCP (internet uplink)
+# br-lan: Bridge for LAN ports with static IP (DHCP server via dnsmasq)
 network:
   version: 2
   renderer: networkd
 
   ethernets:
     # WAN — DHCP from upstream router/modem
-    # Common x64 naming: eno1, enp0s3 (VirtualBox), eth0, ens3
-    wan:
+    # Matches first ethernet interface (eno1, enp0s3, eth0, ens3, etc.)
+    wan0:
       match:
         name: "e*"
-        driver: "*"
       dhcp4: true
       dhcp6: false
+      dhcp4-overrides:
+        use-dns: true
+        use-routes: true
       optional: false
-      routes:
-        - to: default
-          via: 0.0.0.0
-          on-link: true
-
-    # LAN interfaces (to be bridged if multiple)
-    enp0s8:
-      optional: true
-    eno2:
-      optional: true
-    eth1:
-      optional: true
-    enp1s0:
-      optional: true
 
   bridges:
-    # Bridge LAN — local network gateway
+    # Bridge LAN — local network gateway (192.168.1.1)
+    # secubox-netmodes adds interfaces dynamically
     br-lan:
       interfaces: []
       addresses:

@@ -462,6 +462,114 @@ if [[ $RESIZE_ROOT -eq 1 ]]; then
     fi
 fi
 
+# ── Install Bootloader ──────────────────────────────────────────────
+
+log "Installing GRUB bootloader..."
+
+# Determine partition naming scheme
+if [[ "$TARGET_DEVICE" == /dev/nvme* ]] || [[ "$TARGET_DEVICE" == /dev/mmcblk* ]]; then
+    ESP_PART="${TARGET_DEVICE}p1"
+    ROOT_PART="${TARGET_DEVICE}p2"
+else
+    ESP_PART="${TARGET_DEVICE}1"
+    ROOT_PART="${TARGET_DEVICE}2"
+fi
+
+# Create mount point
+MOUNT_ROOT="/mnt/secubox-flash"
+mkdir -p "$MOUNT_ROOT"
+
+EFI_INSTALLED=0
+BIOS_INSTALLED=0
+
+# Mount root partition
+if mount "$ROOT_PART" "$MOUNT_ROOT" 2>/dev/null; then
+    # Mount ESP
+    mkdir -p "$MOUNT_ROOT/boot/efi"
+    if mount "$ESP_PART" "$MOUNT_ROOT/boot/efi" 2>/dev/null; then
+        # Mount required filesystems for chroot
+        mount --bind /dev "$MOUNT_ROOT/dev" 2>/dev/null || true
+        mount --bind /dev/pts "$MOUNT_ROOT/dev/pts" 2>/dev/null || true
+        mount --bind /proc "$MOUNT_ROOT/proc" 2>/dev/null || true
+        mount --bind /sys "$MOUNT_ROOT/sys" 2>/dev/null || true
+
+        # Mount efivars if EFI system
+        if [[ -d /sys/firmware/efi/efivars ]]; then
+            mount --bind /sys/firmware/efi/efivars "$MOUNT_ROOT/sys/firmware/efi/efivars" 2>/dev/null || \
+                warn "Could not mount efivars - EFI entry may not be created"
+        fi
+
+        # Install GRUB for UEFI
+        if [[ -d /sys/firmware/efi ]]; then
+            log "Installing UEFI bootloader (target: $TARGET_DEVICE)..."
+            if chroot "$MOUNT_ROOT" grub-install --target=x86_64-efi \
+                --efi-directory=/boot/efi \
+                --bootloader-id=SecuBox \
+                --recheck "$TARGET_DEVICE" 2>&1 | tee -a "$LOG_FILE"; then
+                ok "UEFI GRUB installed"
+                EFI_INSTALLED=1
+            else
+                warn "UEFI GRUB install failed"
+            fi
+
+            # Verify EFI boot entry was created
+            if command -v efibootmgr &>/dev/null; then
+                if efibootmgr -v 2>/dev/null | grep -qi "secubox"; then
+                    ok "EFI boot entry 'SecuBox' registered in NVRAM"
+                else
+                    warn "EFI boot entry NOT found in NVRAM!"
+                    echo ""
+                    echo -e "${YELLOW}Manual fix may be required:${NC}"
+                    echo "  1. Reboot to USB Live (F12)"
+                    echo "  2. Mount: mount $ROOT_PART /mnt && mount $ESP_PART /mnt/boot/efi"
+                    echo "  3. Bind: mount --bind /dev /mnt/dev && mount --bind /sys /mnt/sys"
+                    echo "  4. Bind: mount --bind /sys/firmware/efi/efivars /mnt/sys/firmware/efi/efivars"
+                    echo "  5. Chroot: chroot /mnt grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=SecuBox"
+                    echo "  6. Verify: efibootmgr -v | grep -i secubox"
+                    echo ""
+                fi
+            fi
+        fi
+
+        # Install GRUB for BIOS (only if not pure EFI system)
+        # Skip on systems that are EFI-only (no legacy boot support)
+        if [[ ! -d /sys/firmware/efi ]] || [[ -f "$MOUNT_ROOT/usr/lib/grub/i386-pc/boot.img" ]]; then
+            if chroot "$MOUNT_ROOT" grub-install --target=i386-pc "$TARGET_DEVICE" 2>/dev/null; then
+                ok "BIOS GRUB installed"
+                BIOS_INSTALLED=1
+            else
+                # Don't warn on EFI-only systems - this is expected
+                [[ -d /sys/firmware/efi ]] || warn "BIOS GRUB install failed"
+            fi
+        fi
+
+        # Update GRUB config with new UUIDs
+        chroot "$MOUNT_ROOT" update-grub 2>/dev/null && ok "GRUB config updated" || warn "GRUB update failed"
+
+        # Cleanup mounts (reverse order)
+        umount "$MOUNT_ROOT/sys/firmware/efi/efivars" 2>/dev/null || true
+        umount "$MOUNT_ROOT/sys" 2>/dev/null || true
+        umount "$MOUNT_ROOT/proc" 2>/dev/null || true
+        umount "$MOUNT_ROOT/dev/pts" 2>/dev/null || true
+        umount "$MOUNT_ROOT/dev" 2>/dev/null || true
+        umount "$MOUNT_ROOT/boot/efi" 2>/dev/null || true
+    else
+        warn "Could not mount ESP partition ($ESP_PART) - bootloader not installed"
+    fi
+    umount "$MOUNT_ROOT" 2>/dev/null || true
+else
+    warn "Could not mount root partition ($ROOT_PART) - bootloader not installed"
+fi
+
+rmdir "$MOUNT_ROOT" 2>/dev/null || true
+
+# Summary
+if [[ $EFI_INSTALLED -eq 1 ]] || [[ $BIOS_INSTALLED -eq 1 ]]; then
+    ok "Bootloader installation complete"
+else
+    warn "No bootloader was installed - system may not boot!"
+fi
+
 # ── Verify write ────────────────────────────────────────────────────
 
 log "Verifying flash..."
