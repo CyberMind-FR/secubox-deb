@@ -12,9 +12,9 @@ import subprocess
 import json
 from pathlib import Path
 
-app = FastAPI(title="secubox-hub", version="1.1.0", root_path="/api/v1/hub")
-# Note: auth_router already has prefix="/auth" in secubox_core.auth
-app.include_router(auth_router)
+app = FastAPI(title="secubox-hub", version="1.6.7.1", root_path="/api/v1/hub")
+# Auth router - prefix applied here
+app.include_router(auth_router, prefix="/auth")
 router = APIRouter()
 log = get_logger("hub")
 
@@ -266,7 +266,7 @@ async def version(user=Depends(require_jwt)):
     return {
         "version": version_str,
         "codename": "Armada",
-        "build_date": "2025-01",
+        "build_date": "2026-04",
     }
 
 
@@ -275,7 +275,7 @@ async def about(user=Depends(require_jwt)):
     board = get_board_info()
     return {
         "product": "SecuBox",
-        "version": "1.0.0",
+        "version": "1.6.7.1",
         "board": board,
         "project_url": "https://secubox.gondwana.systems",
         "support_email": "support@cybermind.fr",
@@ -466,7 +466,7 @@ async def apply_updates(user=Depends(require_jwt)):
 
 @router.get("/health")
 async def health():
-    return {"status": "ok", "module": "hub", "version": "1.1.0"}
+    return {"status": "ok", "module": "hub", "version": "1.6.7.1"}
 
 
 # ══════════════════════════════════════════════════════════════════

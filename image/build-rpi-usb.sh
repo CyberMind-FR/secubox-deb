@@ -12,6 +12,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 
+# ── Version ───────────────────────────────────────────────────────
+SECUBOX_VERSION="1.6.7.1"
+
 # ── Defaults ──────────────────────────────────────────────────────
 SUITE="bookworm"
 IMG_SIZE="8G"

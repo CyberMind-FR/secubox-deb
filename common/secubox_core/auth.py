@@ -74,7 +74,7 @@ async def require_jwt(
 
 # ── Login endpoint ─────────────────────────────────────────────────
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+router = APIRouter(tags=["auth"])  # No prefix - let the app decide
 
 
 class LoginRequest(BaseModel):
