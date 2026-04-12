@@ -133,25 +133,33 @@ create_session() {
     chown -R "$KIOSK_USER:$KIOSK_USER" "$KIOSK_HOME/.config"
 
     # Minimal session script - just Chromium, no optional tools
+    # Use --start-fullscreen (not --kiosk) for better VT switching compatibility
     cat > "$KIOSK_HOME/.xsession" <<XSESSION
 #!/bin/bash
-# SecuBox Kiosk - Minimal X Session
+# SecuBox Kiosk - Minimal X Session (v1.6.3)
 export DISPLAY=\${DISPLAY:-:0}
 
-# Log
+# Log startup
 logger -t secubox-kiosk "Starting Chromium kiosk: $url"
 
-# Disable screensaver (ignore errors)
+# Disable screensaver and power management (ignore errors)
 xset s off 2>/dev/null || true
 xset -dpms 2>/dev/null || true
+xset s noblank 2>/dev/null || true
 
-# Launch Chromium directly
+# Chromium flags for kiosk mode
+# --start-fullscreen: allows Ctrl+Alt+Fn VT switching (better than --kiosk)
+# --disable-gpu: avoid GPU issues in VMs
+# --no-sandbox: required in chroot/container environments
+# exec replaces shell with chromium - on exit, X session ends
 exec chromium \\
-    --kiosk \\
+    --start-fullscreen \\
     --no-first-run \\
     --no-sandbox \\
     --disable-gpu \\
-    --disable-software-rasterizer \\
+    --disable-pinch \\
+    --noerrdialogs \\
+    --disable-translate \\
     --ignore-certificate-errors \\
     --disable-features=TranslateUI \\
     --window-position=0,0 \\
@@ -201,7 +209,7 @@ start_display() {
 # ══════════════════════════════════════════════════════════════════
 main() {
     log "════════════════════════════════════════════════"
-    log "SecuBox Kiosk Launcher v2.0"
+    log "SecuBox Kiosk Launcher v2.1 (1.6.3)"
     log "════════════════════════════════════════════════"
 
     check_prerequisites

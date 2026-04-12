@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=SecuBox 3DS
+Description=Nintendo 3DS dual-screen aesthetic with nested cubes and lemniscates
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/secubox-3ds
+ScriptFile=/usr/share/plymouth/themes/secubox-3ds/secubox-3ds.script
