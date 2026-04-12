@@ -1,0 +1,131 @@
+/* SecuBox Simple - Plymouth Theme
+ * Minimal fallback theme for compatibility
+ * CyberMind - https://cybermind.fr
+ */
+
+/* Dark background */
+Window.SetBackgroundTopColor(0.02, 0.04, 0.02);
+Window.SetBackgroundBottomColor(0.01, 0.02, 0.01);
+
+/* Screen dimensions */
+screen_width = Window.GetWidth();
+screen_height = Window.GetHeight();
+center_x = screen_width / 2;
+center_y = screen_height / 2;
+
+/* Title text */
+title = Image.Text("SECUBOX", 0.2, 1.0, 0.4, "Sans Bold 48");
+title_sprite = Sprite(title);
+title_sprite.SetX(center_x - title.GetWidth() / 2);
+title_sprite.SetY(center_y - 80);
+title_sprite.SetZ(10);
+
+/* Subtitle */
+subtitle = Image.Text("CyberMind Security Platform", 0.3, 0.7, 0.4, "Sans 14");
+subtitle_sprite = Sprite(subtitle);
+subtitle_sprite.SetX(center_x - subtitle.GetWidth() / 2);
+subtitle_sprite.SetY(center_y - 20);
+subtitle_sprite.SetZ(10);
+
+/* Version */
+version = Image.Text("v1.6.4", 0.2, 0.5, 0.3, "Sans 12");
+version_sprite = Sprite(version);
+version_sprite.SetX(center_x - version.GetWidth() / 2);
+version_sprite.SetY(center_y + 10);
+version_sprite.SetZ(10);
+
+/* Progress bar background */
+progress_box = Image.Text("[                              ]", 0.2, 0.6, 0.3, "Mono 12");
+progress_box_sprite = Sprite(progress_box);
+progress_box_sprite.SetX(center_x - progress_box.GetWidth() / 2);
+progress_box_sprite.SetY(center_y + 60);
+progress_box_sprite.SetZ(10);
+
+/* Progress indicator */
+progress_sprite = Sprite();
+progress_sprite.SetZ(11);
+
+/* Status message */
+message_sprite = Sprite();
+message_sprite.SetZ(10);
+
+/* Animation counter */
+frame = 0;
+
+/* Simple spinner characters */
+spinner_chars = "/-\\|";
+spinner_sprite = Sprite();
+spinner_sprite.SetZ(12);
+
+/* Refresh callback - simple spinner animation */
+fun refresh_callback() {
+    global.frame++;
+
+    /* Spinner rotation every 5 frames */
+    spin_idx = Math.Int(global.frame / 5) % 4;
+
+    if (spin_idx == 0) spin_char = "/";
+    else if (spin_idx == 1) spin_char = "-";
+    else if (spin_idx == 2) spin_char = "\\";
+    else spin_char = "|";
+
+    spin_img = Image.Text(spin_char, 0.2, 1.0, 0.4, "Mono Bold 24");
+    spinner_sprite.SetImage(spin_img);
+    spinner_sprite.SetX(center_x - 8);
+    spinner_sprite.SetY(center_y + 100);
+}
+
+Plymouth.SetRefreshFunction(refresh_callback);
+
+/* Boot progress callback */
+fun boot_progress_callback(duration, progress_val) {
+    /* Build progress bar */
+    bar_len = Math.Int(progress_val * 30);
+    bar_str = "[";
+
+    for (i = 0; i < 30; i++) {
+        if (i < bar_len) bar_str += "=";
+        else bar_str += " ";
+    }
+    bar_str += "]";
+
+    bar_img = Image.Text(bar_str, 0.2, 1.0, 0.4, "Mono 12");
+    progress_sprite.SetImage(bar_img);
+    progress_sprite.SetX(center_x - bar_img.GetWidth() / 2);
+    progress_sprite.SetY(center_y + 60);
+}
+
+Plymouth.SetBootProgressFunction(boot_progress_callback);
+
+/* Message callback */
+fun message_callback(text) {
+    msg_img = Image.Text(text, 0.3, 0.8, 0.4, "Mono 10");
+    message_sprite.SetImage(msg_img);
+    message_sprite.SetX(center_x - msg_img.GetWidth() / 2);
+    message_sprite.SetY(center_y + 140);
+}
+
+Plymouth.SetMessageFunction(message_callback);
+
+/* Password prompt */
+fun display_password_callback(prompt, bullets) {
+    prompt_img = Image.Text(prompt, 0.3, 0.9, 0.5, "Sans Bold 14");
+    message_sprite.SetImage(prompt_img);
+    message_sprite.SetX(center_x - prompt_img.GetWidth() / 2);
+    message_sprite.SetY(center_y + 140);
+}
+
+Plymouth.SetDisplayPasswordFunction(display_password_callback);
+
+/* Quit */
+fun quit_callback() {
+    title_sprite.SetOpacity(0);
+    subtitle_sprite.SetOpacity(0);
+    version_sprite.SetOpacity(0);
+    progress_box_sprite.SetOpacity(0);
+    progress_sprite.SetOpacity(0);
+    spinner_sprite.SetOpacity(0);
+    message_sprite.SetOpacity(0);
+}
+
+Plymouth.SetQuitFunction(quit_callback);
