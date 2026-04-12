@@ -199,6 +199,7 @@ logger -t secubox-kiosk "Launching Chromium: $URL"
 echo "Launching Chromium: $URL"
 
 # Chromium with minimal flags
+# --test-type suppresses the "unsupported flag" warning banner
 exec chromium \
     --start-fullscreen \
     --no-first-run \
@@ -207,6 +208,7 @@ exec chromium \
     --noerrdialogs \
     --disable-translate \
     --ignore-certificate-errors \
+    --test-type \
     --disable-features=TranslateUI \
     --disable-infobars \
     --window-position=0,0 \
