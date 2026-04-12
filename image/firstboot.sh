@@ -68,13 +68,13 @@ JWT_SECRET=$(openssl rand -hex 32)
 ok "JWT secret généré"
 
 # ── 6. Mot de passe admin par défaut ──────────────────────────────
-# Lire depuis /boot/admin_password si présent, sinon générer un aléatoire
+# Lire depuis /boot/admin_password si présent, sinon utiliser "secubox"
 if [[ -f "${BOOT_DIR}/admin_password" ]]; then
   ADMIN_PASS=$(cat "${BOOT_DIR}/admin_password" | tr -d '\n')
+  log "Mot de passe admin lu depuis ${BOOT_DIR}/admin_password"
 else
-  ADMIN_PASS=$(openssl rand -base64 12)
-  echo "ADMIN PASSWORD: ${ADMIN_PASS}" > "${BOOT_DIR}/admin_password_generated.txt"
-  log "Mot de passe admin généré — voir ${BOOT_DIR}/admin_password_generated.txt"
+  ADMIN_PASS="secubox"
+  log "Mot de passe admin par défaut: secubox"
 fi
 
 # ── 7. Écrire /etc/secubox/secubox.conf ──────────────────────────
@@ -131,7 +131,24 @@ chown secubox:secubox "${SECUBOX_DIR}/secubox.conf"
 chmod 640 "${SECUBOX_DIR}/secubox.conf"
 ok "/etc/secubox/secubox.conf créé"
 
-# ── 8. Certificat TLS autosigné ──────────────────────────────────
+# ── 8. Portal users.json avec admin par défaut ───────────────────
+# Utilise le mot de passe de secubox.conf, hashé SHA256
+ADMIN_HASH=$(echo -n "${ADMIN_PASS}" | sha256sum | cut -d' ' -f1)
+cat > "${SECUBOX_DIR}/users.json" <<EOF
+{
+  "admin": {
+    "password_hash": "${ADMIN_HASH}",
+    "email": "admin@secubox.local",
+    "role": "admin",
+    "created": "$(date -Iseconds)"
+  }
+}
+EOF
+chown secubox:secubox "${SECUBOX_DIR}/users.json"
+chmod 640 "${SECUBOX_DIR}/users.json"
+ok "Portal users.json créé (admin / ${ADMIN_PASS})"
+
+# ── 9. Certificat TLS autosigné ───────────────────────────────────
 if [[ ! -f "${TLS_DIR}/cert.pem" ]]; then
   openssl req -x509 -newkey rsa:4096 -days 3650 \
     -keyout "${TLS_DIR}/key.pem" \
@@ -144,14 +161,14 @@ if [[ ! -f "${TLS_DIR}/cert.pem" ]]; then
   ok "Certificat TLS autosigné généré"
 fi
 
-# ── 9. Activer nginx ──────────────────────────────────────────────
+# ── 10. Activer nginx ─────────────────────────────────────────────
 if [[ -f /etc/nginx/sites-available/secubox ]]; then
   ln -sf /etc/nginx/sites-available/secubox /etc/nginx/sites-enabled/secubox 2>/dev/null || true
   rm -f /etc/nginx/sites-enabled/default
   nginx -t && systemctl reload nginx 2>/dev/null || true
 fi
 
-# ── 10. Network Auto-Detection ──────────────────────────────────
+# ── 11. Network Auto-Detection ──────────────────────────────────
 log "=== Network Detection ==="
 if [[ -x /usr/sbin/secubox-net-detect ]]; then
   # Run detection
@@ -187,7 +204,7 @@ fi
 # Mark network as configured
 touch /var/lib/secubox/.net-configured
 
-# ── 11. nftables — règles de base ────────────────────────────────
+# ── 12. nftables — règles de base ────────────────────────────────
 cat > /etc/nftables.conf <<'NFTEOF'
 #!/usr/sbin/nft -f
 # SecuBox nftables — généré par firstboot
