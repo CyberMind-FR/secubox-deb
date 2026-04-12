@@ -62,7 +62,7 @@ configure_x11() {
     rm -f /etc/X11/xorg.conf /etc/X11/xorg.conf.d/*.conf
     mkdir -p /etc/X11/xorg.conf.d
 
-    # Write minimal X11 config
+    # Write minimal X11 config with input devices
     cat > /etc/X11/xorg.conf.d/10-kiosk.conf <<XCONF
 Section "Device"
     Identifier "Kiosk Graphics"
@@ -75,6 +75,26 @@ Section "ServerFlags"
     Option "StandbyTime" "0"
     Option "SuspendTime" "0"
     Option "OffTime" "0"
+    Option "AutoAddDevices" "true"
+    Option "AllowEmptyInput" "false"
+EndSection
+
+Section "InputClass"
+    Identifier "libinput keyboard"
+    MatchIsKeyboard "on"
+    Driver "libinput"
+EndSection
+
+Section "InputClass"
+    Identifier "libinput pointer"
+    MatchIsPointer "on"
+    Driver "libinput"
+EndSection
+
+Section "InputClass"
+    Identifier "libinput touchpad"
+    MatchIsTouchpad "on"
+    Driver "libinput"
 EndSection
 XCONF
 
@@ -136,7 +156,7 @@ create_session() {
     # Use --start-fullscreen (not --kiosk) for better VT switching compatibility
     cat > "$KIOSK_HOME/.xsession" <<XSESSION
 #!/bin/bash
-# SecuBox Kiosk - Minimal X Session (v1.6.3)
+# SecuBox Kiosk - Minimal X Session (v1.6.5)
 export DISPLAY=\${DISPLAY:-:0}
 
 # Log startup
@@ -150,18 +170,19 @@ xset s noblank 2>/dev/null || true
 # Chromium flags for kiosk mode
 # --start-fullscreen: allows Ctrl+Alt+Fn VT switching (better than --kiosk)
 # --disable-gpu: avoid GPU issues in VMs
-# --no-sandbox: required in chroot/container environments
+# Removed --no-sandbox to avoid warning banner
 # exec replaces shell with chromium - on exit, X session ends
 exec chromium \\
     --start-fullscreen \\
     --no-first-run \\
-    --no-sandbox \\
     --disable-gpu \\
+    --disable-software-rasterizer \\
     --disable-pinch \\
     --noerrdialogs \\
     --disable-translate \\
     --ignore-certificate-errors \\
     --disable-features=TranslateUI \\
+    --disable-infobars \\
     --window-position=0,0 \\
     "$url"
 XSESSION
@@ -209,7 +230,7 @@ start_display() {
 # ══════════════════════════════════════════════════════════════════
 main() {
     log "════════════════════════════════════════════════"
-    log "SecuBox Kiosk Launcher v2.1 (1.6.3)"
+    log "SecuBox Kiosk Launcher v2.2 (1.6.5)"
     log "════════════════════════════════════════════════"
 
     check_prerequisites
