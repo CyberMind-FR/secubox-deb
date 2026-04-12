@@ -14,7 +14,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 
 # ── Version & Build Info ──────────────────────────────────────────
-SECUBOX_VERSION="1.6.3"
+SECUBOX_VERSION="1.6.4"
 BUILD_TIMESTAMP=$(date '+%Y-%m-%d %H:%M')
 BUILD_DATE=$(date '+%Y%m%d')
 
@@ -739,20 +739,28 @@ chroot "${ROOTFS}" systemctl enable secubox-net-fallback.service 2>/dev/null || 
 chroot "${ROOTFS}" systemctl disable systemd-networkd-wait-online.service 2>/dev/null || true
 chroot "${ROOTFS}" systemctl mask systemd-networkd-wait-online.service 2>/dev/null || true
 
-# ── Plymouth Boot Splash Theme (SecuBox 3DS) ──────────────────────
-log "Installing Plymouth SecuBox-3DS boot splash..."
+# ── Plymouth Boot Splash Themes ──────────────────────
+log "Installing Plymouth boot splash themes..."
 
-# Create SecuBox-3DS Plymouth theme directory (primary theme)
+# Install secubox-simple theme (DEFAULT - most compatible)
+SIMPLE_DIR="${ROOTFS}/usr/share/plymouth/themes/secubox-simple"
+mkdir -p "${SIMPLE_DIR}"
+SIMPLE_SRC="${SCRIPT_DIR}/plymouth/secubox-simple"
+if [[ -d "${SIMPLE_SRC}" ]]; then
+    cp "${SIMPLE_SRC}/secubox-simple.plymouth" "${SIMPLE_DIR}/"
+    cp "${SIMPLE_SRC}/secubox-simple.script" "${SIMPLE_DIR}/"
+    log "  Copied simple theme from ${SIMPLE_SRC}"
+fi
+
+# Install secubox-3d theme (advanced, optional)
 PLYMOUTH_DIR="${ROOTFS}/usr/share/plymouth/themes/secubox-3d"
 mkdir -p "${PLYMOUTH_DIR}"
-
-# Copy 3DS theme assets from source
 DS_SRC="${SCRIPT_DIR}/plymouth/secubox-3d"
 if [[ -d "${DS_SRC}" ]]; then
     cp "${DS_SRC}/secubox-3d.plymouth" "${PLYMOUTH_DIR}/"
     cp "${DS_SRC}/secubox-3d.script" "${PLYMOUTH_DIR}/"
     cp "${DS_SRC}"/*.png "${PLYMOUTH_DIR}/" 2>/dev/null || true
-    log "  Copied 3DS theme assets from ${DS_SRC}"
+    log "  Copied 3D theme from ${DS_SRC}"
 fi
 
 # Also install legacy cube theme as fallback
@@ -825,19 +833,19 @@ Plymouth.SetMessageFunction(message_callback);
 PLYSCRIPT
 fi
 
-# Set SecuBox-3DS theme as default
+# Set secubox-simple as default theme (most compatible)
 mkdir -p "${ROOTFS}/etc/plymouth"
 cat > "${ROOTFS}/etc/plymouth/plymouthd.conf" <<EOF
 [Daemon]
-Theme=secubox-3d
+Theme=secubox-simple
 ShowDelay=0
 DeviceTimeout=8
 EOF
 
 # Update alternatives to use our theme
-chroot "${ROOTFS}" plymouth-set-default-theme secubox-3d 2>/dev/null || true
+chroot "${ROOTFS}" plymouth-set-default-theme secubox-simple 2>/dev/null || true
 
-ok "Plymouth SecuBox-3DS theme installed"
+ok "Plymouth themes installed (default: secubox-simple)"
 
 ok "Base configuration complete"
 
@@ -2694,12 +2702,12 @@ echo "SecuBox v${SECUBOX_VERSION} - Build ${BUILD_TIMESTAMP}"
 echo ""
 
 menuentry "⚡ SecuBox Live v${SECUBOX_VERSION}" {
-    linux (\$live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components persistence quiet splash
+    linux (\$live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components persistence quiet
     initrd (\$live)/live/initrd.img
 }
 
 menuentry "🖼️ SecuBox Live v${SECUBOX_VERSION} (Kiosk GUI) [DEFAULT]" {
-    linux (\$live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components persistence quiet splash secubox.kiosk=1 systemd.unit=graphical.target
+    linux (\$live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components persistence quiet secubox.kiosk=1 systemd.unit=graphical.target
     initrd (\$live)/live/initrd.img
 }
 GRUBCFG
@@ -2708,12 +2716,12 @@ GRUBCFG
 cat >> "${MNT}/esp/boot/grub/grub.cfg" <<'GRUBCFG'
 
 menuentry "📟 SecuBox Live (Console TUI)" {
-    linux ($live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components persistence quiet splash secubox.mode=tui
+    linux ($live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components persistence quiet secubox.mode=tui
     initrd ($live)/live/initrd.img
 }
 
 menuentry "🌉 SecuBox Live (Bridge Mode)" {
-    linux ($live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components persistence quiet splash secubox.netmode=bridge
+    linux ($live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components persistence quiet secubox.netmode=bridge
     initrd ($live)/live/initrd.img
 }
 
@@ -2728,12 +2736,12 @@ menuentry "💾 Install SecuBox to Disk" {
 }
 
 menuentry "🚀 SecuBox Live (To RAM)" {
-    linux ($live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components toram quiet splash
+    linux ($live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components toram quiet
     initrd ($live)/live/initrd.img
 }
 
 menuentry "🔧 SecuBox Live (HW Check)" {
-    linux ($live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components persistence quiet splash secubox.hwcheck=1
+    linux ($live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components persistence quiet secubox.hwcheck=1
     initrd ($live)/live/initrd.img
 }
 
