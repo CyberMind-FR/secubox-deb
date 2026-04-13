@@ -10,13 +10,26 @@ from secubox_core.kiosk import (
 )
 import subprocess
 import json
+import asyncio
+import time
 from pathlib import Path
 
-app = FastAPI(title="secubox-hub", version="1.6.7.1", root_path="/api/v1/hub")
+app = FastAPI(title="secubox-hub", version="1.6.7.2", root_path="/api/v1/hub")
 # Auth router - prefix applied here
 app.include_router(auth_router, prefix="/auth")
 router = APIRouter()
 log = get_logger("hub")
+
+# ══════════════════════════════════════════════════════════════════
+# Performance Cache — Avoid repeated subprocess calls
+# ══════════════════════════════════════════════════════════════════
+_cache = {
+    "services": {},       # module_id -> {name, active, socket}
+    "menu": None,         # Full menu response
+    "system_stats": {},   # CPU, memory, disk
+    "last_refresh": 0,
+}
+CACHE_TTL = 5  # seconds - cache valid for 5 seconds
 
 MODULES = {
     "crowdsec": "secubox-crowdsec",
@@ -33,8 +46,73 @@ MODULES = {
     "cdn":      "secubox-cdn",
 }
 
+
+def _refresh_services_cache():
+    """Refresh all service statuses in one batch (called by background task)."""
+    # Get all service statuses in parallel using a single systemctl call
+    all_services = list(MODULES.values())
+    try:
+        # Single call to get all service states
+        r = subprocess.run(
+            ["systemctl", "is-active", "--"] + all_services,
+            capture_output=True, text=True, timeout=5
+        )
+        states = r.stdout.strip().split("\n")
+        for i, svc in enumerate(all_services):
+            state = states[i] if i < len(states) else "unknown"
+            sock = Path(f"/run/secubox/{svc.replace('secubox-','')}.sock")
+            _cache["services"][svc] = {
+                "name": svc,
+                "active": state == "active",
+                "socket": sock.exists()
+            }
+    except Exception as e:
+        log.warning("Cache refresh failed: %s", e)
+
+
+def _refresh_system_stats():
+    """Refresh system stats (CPU, memory, disk)."""
+    try:
+        import psutil
+        _cache["system_stats"] = {
+            "cpu_percent": psutil.cpu_percent(interval=None),  # Non-blocking
+            "memory_percent": psutil.virtual_memory().percent,
+            "disk_percent": psutil.disk_usage("/").percent,
+            "load_avg": list(psutil.getloadavg()),
+        }
+    except Exception as e:
+        log.warning("System stats refresh failed: %s", e)
+
+
+async def _background_cache_refresh():
+    """Background task to refresh cache every CACHE_TTL seconds."""
+    while True:
+        try:
+            _refresh_services_cache()
+            _refresh_system_stats()
+            _cache["last_refresh"] = time.time()
+        except Exception as e:
+            log.error("Background cache error: %s", e)
+        await asyncio.sleep(CACHE_TTL)
+
+
+@app.on_event("startup")
+async def startup():
+    """Start background cache refresh task."""
+    # Initial sync refresh
+    _refresh_services_cache()
+    _refresh_system_stats()
+    _cache["last_refresh"] = time.time()
+    # Start background task
+    asyncio.create_task(_background_cache_refresh())
+
+
 def _svc(name: str) -> dict:
-    r = subprocess.run(["systemctl", "is-active", name], capture_output=True, text=True)
+    """Get service status from cache (fast) or direct call (fallback)."""
+    if name in _cache["services"] and (time.time() - _cache["last_refresh"]) < CACHE_TTL * 2:
+        return _cache["services"][name]
+    # Fallback to direct call if cache miss
+    r = subprocess.run(["systemctl", "is-active", name], capture_output=True, text=True, timeout=2)
     sock = Path(f"/run/secubox/{name.replace('secubox-','')}.sock")
     return {"name": name, "active": r.stdout.strip() == "active",
             "socket": sock.exists()}
@@ -63,10 +141,13 @@ async def alerts(user=Depends(require_jwt)):
 
 @router.get("/monitoring")
 async def monitoring(user=Depends(require_jwt)):
-    import psutil
-    return {"cpu": psutil.cpu_percent(0.1),
-            "mem": psutil.virtual_memory().percent,
-            "load": list(psutil.getloadavg())}
+    # Use cached stats (non-blocking)
+    stats = _cache.get("system_stats", {})
+    return {
+        "cpu": stats.get("cpu_percent", 0),
+        "mem": stats.get("memory_percent", 0),
+        "load": stats.get("load_avg", [0, 0, 0])
+    }
 
 @router.get("/settings")
 async def settings(user=Depends(require_jwt)):
@@ -86,22 +167,24 @@ def _get_build_info() -> dict:
 
 @router.get("/dashboard")
 async def dashboard(user=Depends(require_jwt)):
-    """Données complètes du dashboard."""
-    import psutil
+    """Données complètes du dashboard (uses cached stats for speed)."""
     board = get_board_info()
     modules_status = {k: _svc(v) for k, v in MODULES.items()}
     active = sum(1 for m in modules_status.values() if m["active"])
     build_info = _get_build_info()
+
+    # Use cached system stats (non-blocking)
+    stats = _cache.get("system_stats", {})
 
     return {
         "board": board,
         "modules": modules_status,
         "active_modules": active,
         "total_modules": len(MODULES),
-        "cpu_percent": psutil.cpu_percent(0.1),
-        "memory_percent": psutil.virtual_memory().percent,
-        "disk_percent": psutil.disk_usage("/").percent,
-        "load_avg": list(psutil.getloadavg()),
+        "cpu_percent": stats.get("cpu_percent", 0),
+        "memory_percent": stats.get("memory_percent", 0),
+        "disk_percent": stats.get("disk_percent", 0),
+        "load_avg": stats.get("load_avg", [0, 0, 0]),
         "uptime": int(float(Path("/proc/uptime").read_text().split()[0])),
         "build_info": build_info,
     }
@@ -275,7 +358,7 @@ async def about(user=Depends(require_jwt)):
     board = get_board_info()
     return {
         "product": "SecuBox",
-        "version": "1.6.7.1",
+        "version": "1.6.7.2",
         "board": board,
         "project_url": "https://secubox.gondwana.systems",
         "support_email": "support@cybermind.fr",
@@ -339,8 +422,10 @@ async def uptime(user=Depends(require_jwt)):
 @router.get("/cpu")
 async def cpu(user=Depends(require_jwt)):
     import psutil
+    # Use cached CPU percent (non-blocking)
+    stats = _cache.get("system_stats", {})
     return {
-        "percent": psutil.cpu_percent(0.5),
+        "percent": stats.get("cpu_percent", 0),
         "count": psutil.cpu_count(),
         "freq_mhz": psutil.cpu_freq().current if psutil.cpu_freq() else 0,
     }
@@ -390,11 +475,12 @@ async def recent_events(user=Depends(require_jwt)):
 
 @router.get("/system_health")
 async def system_health(user=Depends(require_jwt)):
-    """Score de santé système."""
-    import psutil
-    cpu = psutil.cpu_percent(0.1)
-    mem = psutil.virtual_memory().percent
-    disk = psutil.disk_usage("/").percent
+    """Score de santé système (uses cached stats)."""
+    # Use cached stats (non-blocking)
+    stats = _cache.get("system_stats", {})
+    cpu = stats.get("cpu_percent", 0)
+    mem = stats.get("memory_percent", 0)
+    disk = stats.get("disk_percent", 0)
 
     modules_status = [_svc(v) for v in MODULES.values()]
     active = sum(1 for m in modules_status if m["active"])
@@ -466,7 +552,7 @@ async def apply_updates(user=Depends(require_jwt)):
 
 @router.get("/health")
 async def health():
-    return {"status": "ok", "module": "hub", "version": "1.6.7.1"}
+    return {"status": "ok", "module": "hub", "version": "1.6.7.2"}
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -776,28 +862,38 @@ def _load_menu_definitions() -> list:
 
 
 def _check_module_installed(module_id: str) -> bool:
-    """Check if a module is installed by checking for its socket or service."""
-    # Check for socket
+    """Check if a module is installed (uses cache for service check)."""
+    # Check for socket first (fast)
     sock = Path(f"/run/secubox/{module_id}.sock")
     if sock.exists():
         return True
 
-    # Check for service
+    # Check cache for service
     svc_name = f"secubox-{module_id}"
-    result = subprocess.run(
-        ["systemctl", "list-unit-files", f"{svc_name}.service"],
-        capture_output=True, text=True
-    )
-    return svc_name in result.stdout
+    if svc_name in _cache["services"]:
+        return True  # If in cache, it was found during refresh
+
+    # Check for www directory (static modules)
+    www_path = Path(f"/var/www/secubox/{module_id}")
+    if www_path.exists():
+        return True
+
+    return False
 
 
 def _check_module_active(module_id: str) -> bool:
-    """Check if a module's service is active."""
+    """Check if a module's service is active (uses cache)."""
+    # Check for socket first (fast)
     sock = Path(f"/run/secubox/{module_id}.sock")
     if sock.exists():
         return True
 
+    # Check cache
     svc_name = f"secubox-{module_id}"
+    if svc_name in _cache["services"]:
+        return _cache["services"][svc_name].get("active", False)
+
+    # Fallback - but this shouldn't be called often
     result = subprocess.run(
         ["systemctl", "is-active", svc_name],
         capture_output=True, text=True

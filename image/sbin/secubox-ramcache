@@ -1,0 +1,364 @@
+#!/usr/bin/env bash
+# ══════════════════════════════════════════════════════════════════
+#  SecuBox-DEB :: secubox-ramcache
+#  Preload frequently accessed files to RAM for fast access
+#  CyberMind — https://cybermind.fr
+# ══════════════════════════════════════════════════════════════════
+set -euo pipefail
+
+readonly VERSION="1.0.0"
+readonly SCRIPT_NAME="secubox-ramcache"
+
+# RAM cache mount point (tmpfs)
+readonly RAM_CACHE="/ram/cache"
+
+# Paths to preload to RAM for fast access
+# Format: "source_path:cache_name"
+readonly CACHE_PATHS=(
+    "/usr/share/secubox/www:www"              # Web UI static files
+    "/etc/nginx:nginx"                         # Nginx config
+    "/var/cache/secubox:api-cache"            # API response cache
+    "/usr/share/fonts:fonts"                   # System fonts (for rendering)
+)
+
+# Bind mount configuration
+readonly BIND_MOUNTS=(
+    "/usr/share/secubox/www"
+    "/etc/nginx/secubox.d"
+)
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+log()  { echo -e "${CYAN}[ramcache]${NC} $*"; }
+ok()   { echo -e "${GREEN}[  OK  ]${NC} $*"; }
+warn() { echo -e "${YELLOW}[ WARN ]${NC} $*"; }
+err()  { echo -e "${RED}[FAIL  ]${NC} $*" >&2; exit 1; }
+
+usage() {
+    cat << EOF
+${BOLD}SecuBox RAM Cache v${VERSION}${NC}
+
+Preload frequently accessed files to RAM (tmpfs) for faster access.
+Reduces USB/disk I/O and improves UI responsiveness.
+
+${BOLD}USAGE:${NC}
+    $SCRIPT_NAME <COMMAND> [OPTIONS]
+
+${BOLD}COMMANDS:${NC}
+    start               Preload files to RAM and enable caching
+    stop                Disable RAM cache (files served from disk)
+    reload              Refresh cache from disk
+    status              Show cache status and memory usage
+    warm                Pre-fetch files into page cache (no copy)
+
+${BOLD}OPTIONS:${NC}
+    --size SIZE         RAM cache size (default: 256M)
+    --paths PATH,...    Additional paths to cache
+    -q, --quiet         Minimal output
+    -h, --help          Show this help
+
+${BOLD}CACHED PATHS:${NC}
+$(for p in "${CACHE_PATHS[@]}"; do echo "    - ${p%%:*}"; done)
+
+${BOLD}EXAMPLES:${NC}
+    # Start RAM cache with defaults
+    sudo $SCRIPT_NAME start
+
+    # Start with larger cache
+    sudo $SCRIPT_NAME start --size 512M
+
+    # Check cache status
+    $SCRIPT_NAME status
+
+    # Warm page cache without copying
+    $SCRIPT_NAME warm
+
+EOF
+    exit 0
+}
+
+# Check if running as root
+check_root() {
+    [[ $EUID -ne 0 ]] && err "Must run as root: sudo $SCRIPT_NAME $*"
+}
+
+# Get available RAM
+get_available_ram() {
+    awk '/MemAvailable/ {print $2}' /proc/meminfo
+}
+
+# Calculate cache size used
+get_cache_size() {
+    if [[ -d "$RAM_CACHE" ]]; then
+        du -sb "$RAM_CACHE" 2>/dev/null | cut -f1 || echo 0
+    else
+        echo 0
+    fi
+}
+
+# Format bytes to human readable
+human_size() {
+    local bytes="$1"
+    numfmt --to=iec "$bytes" 2>/dev/null || echo "${bytes}B"
+}
+
+# Start RAM cache
+cmd_start() {
+    local cache_size="256M"
+    local quiet=0
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --size)    cache_size="$2"; shift 2 ;;
+            -q|--quiet) quiet=1; shift ;;
+            *) shift ;;
+        esac
+    done
+
+    check_root
+
+    # Check if already running
+    if mountpoint -q "$RAM_CACHE" 2>/dev/null; then
+        [[ $quiet -eq 0 ]] && warn "RAM cache already active"
+        return 0
+    fi
+
+    [[ $quiet -eq 0 ]] && log "Starting RAM cache (size: $cache_size)"
+
+    # Create cache mount point
+    mkdir -p "$RAM_CACHE"
+
+    # Mount tmpfs
+    mount -t tmpfs -o "size=$cache_size,mode=0755" ramcache "$RAM_CACHE"
+    [[ $quiet -eq 0 ]] && ok "tmpfs mounted at $RAM_CACHE"
+
+    # Copy files to RAM cache
+    for entry in "${CACHE_PATHS[@]}"; do
+        local src="${entry%%:*}"
+        local name="${entry##*:}"
+        local dest="$RAM_CACHE/$name"
+
+        if [[ -d "$src" ]]; then
+            [[ $quiet -eq 0 ]] && log "Caching: $src → $dest"
+            mkdir -p "$dest"
+            cp -a "$src/." "$dest/" 2>/dev/null || \
+                [[ $quiet -eq 0 ]] && warn "Some files in $src could not be cached"
+        elif [[ -f "$src" ]]; then
+            mkdir -p "$(dirname "$dest")"
+            cp -a "$src" "$dest"
+        else
+            [[ $quiet -eq 0 ]] && warn "Source not found: $src"
+        fi
+    done
+
+    # Create bind mounts for transparent access
+    for mount_path in "${BIND_MOUNTS[@]}"; do
+        local cache_path=""
+
+        # Find matching cache entry
+        for entry in "${CACHE_PATHS[@]}"; do
+            local src="${entry%%:*}"
+            local name="${entry##*:}"
+
+            if [[ "$mount_path" == "$src"* ]]; then
+                local subpath="${mount_path#$src}"
+                cache_path="$RAM_CACHE/$name$subpath"
+                break
+            fi
+        done
+
+        if [[ -n "$cache_path" ]] && [[ -d "$cache_path" ]] && [[ -d "$mount_path" ]]; then
+            # Only bind mount if cache has content
+            if [[ "$(ls -A "$cache_path" 2>/dev/null)" ]]; then
+                mount --bind "$cache_path" "$mount_path" 2>/dev/null && \
+                    [[ $quiet -eq 0 ]] && ok "Bind mount: $mount_path → $cache_path"
+            fi
+        fi
+    done
+
+    local cache_used=$(get_cache_size)
+    [[ $quiet -eq 0 ]] && echo ""
+    [[ $quiet -eq 0 ]] && ok "RAM cache active - $(human_size "$cache_used") cached"
+}
+
+# Stop RAM cache
+cmd_stop() {
+    local quiet=0
+    [[ "${1:-}" == "-q" || "${1:-}" == "--quiet" ]] && quiet=1
+
+    check_root
+
+    if ! mountpoint -q "$RAM_CACHE" 2>/dev/null; then
+        [[ $quiet -eq 0 ]] && warn "RAM cache not active"
+        return 0
+    fi
+
+    [[ $quiet -eq 0 ]] && log "Stopping RAM cache..."
+
+    # Unmount bind mounts first
+    for mount_path in "${BIND_MOUNTS[@]}"; do
+        if mountpoint -q "$mount_path" 2>/dev/null; then
+            umount "$mount_path" 2>/dev/null || \
+                umount -l "$mount_path" 2>/dev/null || true
+            [[ $quiet -eq 0 ]] && log "Unmounted: $mount_path"
+        fi
+    done
+
+    # Unmount tmpfs
+    umount "$RAM_CACHE" 2>/dev/null || umount -l "$RAM_CACHE" 2>/dev/null || true
+    rmdir "$RAM_CACHE" 2>/dev/null || true
+
+    [[ $quiet -eq 0 ]] && ok "RAM cache stopped"
+}
+
+# Reload cache from disk
+cmd_reload() {
+    log "Reloading RAM cache..."
+    cmd_stop -q
+    cmd_start "$@"
+}
+
+# Show status
+cmd_status() {
+    echo ""
+    echo -e "${BOLD}SecuBox RAM Cache Status${NC}"
+    echo "═══════════════════════════════════════════════════════"
+
+    # Check if cache is active
+    if mountpoint -q "$RAM_CACHE" 2>/dev/null; then
+        echo -e "Status:        ${GREEN}ACTIVE${NC}"
+
+        # Get cache stats
+        local cache_size=$(df -B1 "$RAM_CACHE" 2>/dev/null | tail -1 | awk '{print $2}')
+        local cache_used=$(df -B1 "$RAM_CACHE" 2>/dev/null | tail -1 | awk '{print $3}')
+        local cache_avail=$(df -B1 "$RAM_CACHE" 2>/dev/null | tail -1 | awk '{print $4}')
+        local cache_pct=$(df "$RAM_CACHE" 2>/dev/null | tail -1 | awk '{print $5}')
+
+        echo "Mount point:   $RAM_CACHE"
+        echo "Total size:    $(human_size "$cache_size")"
+        echo "Used:          $(human_size "$cache_used") ($cache_pct)"
+        echo "Available:     $(human_size "$cache_avail")"
+    else
+        echo -e "Status:        ${YELLOW}INACTIVE${NC}"
+    fi
+
+    echo ""
+    echo "System Memory:"
+    local mem_total=$(awk '/MemTotal/ {print $2 * 1024}' /proc/meminfo)
+    local mem_avail=$(awk '/MemAvailable/ {print $2 * 1024}' /proc/meminfo)
+    local mem_cached=$(awk '/^Cached/ {print $2 * 1024}' /proc/meminfo)
+    echo "  Total:       $(human_size "$mem_total")"
+    echo "  Available:   $(human_size "$mem_avail")"
+    echo "  Page cache:  $(human_size "$mem_cached")"
+
+    echo ""
+    echo "Cached Paths:"
+    for entry in "${CACHE_PATHS[@]}"; do
+        local src="${entry%%:*}"
+        local name="${entry##*:}"
+        local dest="$RAM_CACHE/$name"
+
+        if [[ -d "$dest" ]]; then
+            local size=$(du -sb "$dest" 2>/dev/null | cut -f1 || echo 0)
+            echo -e "  ${GREEN}●${NC} $name: $(human_size "$size")"
+        else
+            echo -e "  ${YELLOW}○${NC} $name: not cached"
+        fi
+    done
+
+    echo ""
+    echo "Bind Mounts:"
+    for mount_path in "${BIND_MOUNTS[@]}"; do
+        if mountpoint -q "$mount_path" 2>/dev/null; then
+            echo -e "  ${GREEN}●${NC} $mount_path"
+        else
+            echo -e "  ${YELLOW}○${NC} $mount_path (not mounted)"
+        fi
+    done
+    echo ""
+}
+
+# Warm page cache (without copying)
+cmd_warm() {
+    log "Warming page cache..."
+
+    for entry in "${CACHE_PATHS[@]}"; do
+        local src="${entry%%:*}"
+
+        if [[ -d "$src" ]]; then
+            log "Reading: $src"
+            # Use cat to read files into page cache
+            find "$src" -type f -print0 2>/dev/null | \
+                xargs -0 -n 100 cat >/dev/null 2>&1 || true
+        fi
+    done
+
+    ok "Page cache warmed"
+
+    # Show cache stats
+    local mem_cached=$(awk '/^Cached/ {print $2 * 1024}' /proc/meminfo)
+    echo "Page cache size: $(human_size "$mem_cached")"
+}
+
+# Systemd service integration
+cmd_systemd() {
+    case "${1:-}" in
+        install)
+            check_root
+            cat > /etc/systemd/system/secubox-ramcache.service << 'EOF'
+[Unit]
+Description=SecuBox RAM Cache
+After=local-fs.target
+Before=nginx.service secubox-hub.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/secubox-ramcache start -q
+ExecStop=/usr/sbin/secubox-ramcache stop -q
+ExecReload=/usr/sbin/secubox-ramcache reload -q
+
+[Install]
+WantedBy=multi-user.target
+EOF
+            systemctl daemon-reload
+            systemctl enable secubox-ramcache.service
+            ok "Systemd service installed"
+            ;;
+        uninstall)
+            check_root
+            systemctl disable secubox-ramcache.service 2>/dev/null || true
+            rm -f /etc/systemd/system/secubox-ramcache.service
+            systemctl daemon-reload
+            ok "Systemd service removed"
+            ;;
+        *)
+            echo "Usage: $SCRIPT_NAME systemd [install|uninstall]"
+            ;;
+    esac
+}
+
+# Main
+main() {
+    local command="${1:-}"
+
+    case "$command" in
+        start)    shift; cmd_start "$@" ;;
+        stop)     shift; cmd_stop "$@" ;;
+        reload)   shift; cmd_reload "$@" ;;
+        status)   cmd_status ;;
+        warm)     cmd_warm ;;
+        systemd)  shift; cmd_systemd "$@" ;;
+        -h|--help|help) usage ;;
+        "")       cmd_status ;;
+        *)        err "Unknown command: $command. Use --help for usage." ;;
+    esac
+}
+
+main "$@"

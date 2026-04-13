@@ -1,0 +1,47 @@
+#!/bin/sh
+# ══════════════════════════════════════════════════════════════════
+#  SecuBox-DEB :: initramfs hooks installer
+#  Ensures overlay modules and scripts are in initramfs
+#  CyberMind — https://cybermind.fr
+# ══════════════════════════════════════════════════════════════════
+# This file is an initramfs hook script that gets run during
+# initramfs generation (update-initramfs -u)
+
+PREREQ=""
+
+prereqs() {
+    echo "$PREREQ"
+}
+
+case "$1" in
+    prereqs)
+        prereqs
+        exit 0
+        ;;
+esac
+
+# Import initramfs hook functions
+. /usr/share/initramfs-tools/hook-functions
+
+# Include required kernel modules
+manual_add_modules overlay
+manual_add_modules squashfs
+manual_add_modules loop
+
+# Include filesystem modules
+copy_modules_dir kernel/fs/overlayfs
+copy_modules_dir kernel/fs/squashfs
+
+# Include blkid for partition detection
+copy_exec /sbin/blkid /sbin
+copy_exec /sbin/swapon /sbin
+
+# Include SecuBox overlay init script if present
+if [ -x /usr/sbin/secubox-overlay-init ]; then
+    copy_exec /usr/sbin/secubox-overlay-init /sbin
+fi
+
+# Include partition tools
+copy_exec /sbin/findfs /sbin 2>/dev/null || true
+
+exit 0

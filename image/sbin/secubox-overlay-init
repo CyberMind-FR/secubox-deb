@@ -1,0 +1,350 @@
+#!/bin/sh
+# ══════════════════════════════════════════════════════════════════
+#  SecuBox-DEB :: secubox-overlay-init
+#  Boot-time overlay filesystem composer
+#  Runs from initramfs to compose multi-layer overlay root
+#  CyberMind — https://cybermind.fr
+# ══════════════════════════════════════════════════════════════════
+# This script is called from initramfs to:
+# 1. Mount base squashfs read-only
+# 2. Create tmpfs RAM layer
+# 3. Mount config/data partitions
+# 4. Compose overlay filesystem
+# 5. Pivot root to overlay
+#
+# Kernel cmdline options:
+#   secubox.persist=no      - RAM-only mode (no persistence)
+#   secubox.recovery=1      - Minimal recovery mode
+#   secubox.factory-reset=1 - Wipe config/data on boot
+# ══════════════════════════════════════════════════════════════════
+
+# Exit on error
+set -e
+
+# Logging to kernel ring buffer
+log() {
+    echo "secubox-overlay: $*" > /dev/kmsg 2>/dev/null || echo "$*"
+}
+
+log_err() {
+    echo "secubox-overlay: ERROR: $*" > /dev/kmsg 2>/dev/null
+    echo "ERROR: $*" >&2
+}
+
+# Parse kernel cmdline
+parse_cmdline() {
+    PERSIST=1
+    RECOVERY=0
+    FACTORY_RESET=0
+    RAM_SIZE="50%"
+
+    for param in $(cat /proc/cmdline); do
+        case "$param" in
+            secubox.persist=no|secubox.persist=0)
+                PERSIST=0
+                log "Persistence disabled - RAM-only mode"
+                ;;
+            secubox.recovery=1|secubox.recovery=yes)
+                RECOVERY=1
+                log "Recovery mode enabled"
+                ;;
+            secubox.factory-reset=1|secubox.factory-reset=yes)
+                FACTORY_RESET=1
+                log "Factory reset requested"
+                ;;
+            secubox.ram=*)
+                RAM_SIZE="${param#secubox.ram=}"
+                log "RAM size: $RAM_SIZE"
+                ;;
+        esac
+    done
+}
+
+# Find partition by label
+find_partition() {
+    local label="$1"
+    local dev=""
+
+    # Try blkid first
+    dev=$(blkid -L "$label" 2>/dev/null || true)
+    if [ -n "$dev" ] && [ -b "$dev" ]; then
+        echo "$dev"
+        return 0
+    fi
+
+    # Fallback: search /dev/disk/by-label
+    if [ -L "/dev/disk/by-label/$label" ]; then
+        dev=$(readlink -f "/dev/disk/by-label/$label")
+        if [ -b "$dev" ]; then
+            echo "$dev"
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
+# Mount base system (squashfs or partition 2)
+mount_base() {
+    local system_dev
+    local squashfs_found=0
+
+    # Find SYSTEM partition
+    system_dev=$(find_partition "SYSTEM" || true)
+
+    if [ -z "$system_dev" ]; then
+        # Fallback: try to find squashfs in /live (live-boot style)
+        if [ -f "/live/filesystem.squashfs" ]; then
+            log "Using live-boot squashfs"
+            mount -t squashfs -o loop,ro "/live/filesystem.squashfs" /ro
+            squashfs_found=1
+        else
+            log_err "No SYSTEM partition or squashfs found"
+            return 1
+        fi
+    fi
+
+    if [ $squashfs_found -eq 0 ]; then
+        # Check if SYSTEM partition contains squashfs or is ext4
+        local fstype
+        fstype=$(blkid -o value -s TYPE "$system_dev" 2>/dev/null || echo "unknown")
+
+        case "$fstype" in
+            squashfs)
+                log "Mounting squashfs from $system_dev"
+                mount -t squashfs -o ro "$system_dev" /ro
+                ;;
+            ext4)
+                # SYSTEM partition is ext4 - look for squashfs inside
+                log "Mounting SYSTEM partition (ext4) from $system_dev"
+                mount -t ext4 -o ro "$system_dev" /mnt/system
+                if [ -f "/mnt/system/filesystem.squashfs" ]; then
+                    mount -t squashfs -o loop,ro "/mnt/system/filesystem.squashfs" /ro
+                elif [ -f "/mnt/system/live/filesystem.squashfs" ]; then
+                    mount -t squashfs -o loop,ro "/mnt/system/live/filesystem.squashfs" /ro
+                else
+                    log_err "No squashfs found in SYSTEM partition"
+                    umount /mnt/system
+                    return 1
+                fi
+                ;;
+            *)
+                log_err "Unknown filesystem type on SYSTEM: $fstype"
+                return 1
+                ;;
+        esac
+    fi
+
+    log "Base system mounted on /ro"
+    return 0
+}
+
+# Mount RAM layer (tmpfs)
+mount_ram() {
+    log "Creating RAM layer ($RAM_SIZE)"
+    mount -t tmpfs -o "size=$RAM_SIZE,mode=0755" tmpfs /ram
+
+    # Create overlay work directory
+    mkdir -p /ram/.work /ram/.upper
+    log "RAM layer ready"
+}
+
+# Mount persistent partitions
+mount_persistent() {
+    local config_dev data_dev snap_dev
+
+    if [ $PERSIST -eq 0 ]; then
+        log "Persistence disabled - skipping partition mounts"
+        return 0
+    fi
+
+    # Find and mount CONFIG
+    config_dev=$(find_partition "CONFIG" || true)
+    if [ -n "$config_dev" ] && [ -b "$config_dev" ]; then
+        log "Mounting CONFIG from $config_dev"
+        mount -t ext4 -o defaults "$config_dev" /persist/config
+    else
+        log "CONFIG partition not found - config changes will not persist"
+        mkdir -p /persist/config
+    fi
+
+    # Find and mount DATA
+    data_dev=$(find_partition "DATA" || true)
+    if [ -n "$data_dev" ] && [ -b "$data_dev" ]; then
+        log "Mounting DATA from $data_dev"
+        mount -t ext4 -o defaults "$data_dev" /persist/data
+    else
+        log "DATA partition not found - data changes will not persist"
+        mkdir -p /persist/data
+    fi
+
+    # Find and mount SNAPSHOTS
+    snap_dev=$(find_partition "SNAPSHOTS" || true)
+    if [ -n "$snap_dev" ] && [ -b "$snap_dev" ]; then
+        log "Mounting SNAPSHOTS from $snap_dev"
+        mount -t ext4 -o defaults "$snap_dev" /persist/snapshots
+    else
+        log "SNAPSHOTS partition not found - snapshots disabled"
+        mkdir -p /persist/snapshots
+    fi
+
+    # Find and enable SWAP (optional)
+    local swap_dev
+    swap_dev=$(find_partition "SWAP" || true)
+    if [ -n "$swap_dev" ] && [ -b "$swap_dev" ]; then
+        log "Enabling swap from $swap_dev"
+        swapon "$swap_dev" 2>/dev/null || log "Swap enable failed (non-critical)"
+    fi
+
+    log "Persistent mounts complete"
+}
+
+# Factory reset - wipe config and data
+do_factory_reset() {
+    if [ $FACTORY_RESET -eq 0 ]; then
+        return 0
+    fi
+
+    log "FACTORY RESET: Wiping CONFIG and DATA partitions"
+
+    # Mount partitions temporarily
+    local config_dev data_dev
+    config_dev=$(find_partition "CONFIG" || true)
+    data_dev=$(find_partition "DATA" || true)
+
+    if [ -n "$config_dev" ]; then
+        mount -t ext4 "$config_dev" /mnt/reset-config
+        rm -rf /mnt/reset-config/*
+        touch /mnt/reset-config/.factory-reset-$(date +%Y%m%d%H%M%S)
+        umount /mnt/reset-config
+        log "CONFIG partition wiped"
+    fi
+
+    if [ -n "$data_dev" ]; then
+        mount -t ext4 "$data_dev" /mnt/reset-data
+        rm -rf /mnt/reset-data/*
+        touch /mnt/reset-data/.factory-reset-$(date +%Y%m%d%H%M%S)
+        umount /mnt/reset-data
+        log "DATA partition wiped"
+    fi
+
+    log "FACTORY RESET complete - system will boot fresh"
+}
+
+# Compose overlay filesystem
+compose_overlay() {
+    log "Composing overlay filesystem..."
+
+    # Overlay layers (bottom to top):
+    # 1. /ro (squashfs base - read-only)
+    # 2. /persist/config (persistent config - merged)
+    # 3. /persist/data (persistent data - merged via bind mounts)
+    # 4. /ram/.upper (RAM writes - volatile)
+
+    # For standard overlay:
+    # lowerdir = base read-only layers (colon-separated, right is bottom)
+    # upperdir = writable layer (RAM)
+    # workdir = overlay work directory
+
+    if [ $PERSIST -eq 1 ] && mountpoint -q /persist/config 2>/dev/null; then
+        # Full overlay with persistence
+        LOWER="/persist/config:/ro"
+    else
+        # RAM-only overlay (no persistence)
+        LOWER="/ro"
+    fi
+
+    log "Overlay: lower=$LOWER upper=/ram/.upper work=/ram/.work"
+
+    mount -t overlay overlay \
+        -o "lowerdir=$LOWER,upperdir=/ram/.upper,workdir=/ram/.work" \
+        /newroot
+
+    if [ $? -ne 0 ]; then
+        log_err "Overlay mount failed!"
+        return 1
+    fi
+
+    log "Overlay mounted on /newroot"
+
+    # Bind mount persistent directories into overlay
+    if [ $PERSIST -eq 1 ]; then
+        # Bind /persist/data subdirectories to appropriate locations
+        if mountpoint -q /persist/data 2>/dev/null; then
+            mkdir -p /newroot/var/lib/secubox
+            mkdir -p /newroot/var/log/secubox
+            mkdir -p /newroot/var/cache/secubox
+
+            # Move mount /persist/data to inside overlay
+            mkdir -p /newroot/persist/data
+            mount --move /persist/data /newroot/persist/data
+
+            # Create bind mounts for data directories
+            mount --bind /newroot/persist/data/var/lib/secubox /newroot/var/lib/secubox 2>/dev/null || true
+            mount --bind /newroot/persist/data/var/log/secubox /newroot/var/log/secubox 2>/dev/null || true
+            mount --bind /newroot/persist/data/var/cache/secubox /newroot/var/cache/secubox 2>/dev/null || true
+        fi
+
+        # Move other mounts into overlay
+        if mountpoint -q /persist/config 2>/dev/null; then
+            mkdir -p /newroot/persist/config
+            mount --move /persist/config /newroot/persist/config
+        fi
+
+        if mountpoint -q /persist/snapshots 2>/dev/null; then
+            mkdir -p /newroot/persist/snapshots
+            mount --move /persist/snapshots /newroot/persist/snapshots
+        fi
+    fi
+
+    # Create essential directories
+    mkdir -p /newroot/proc /newroot/sys /newroot/dev /newroot/run /newroot/tmp
+
+    log "Overlay composition complete"
+    return 0
+}
+
+# Main entry point
+main() {
+    log "SecuBox Overlay Init starting..."
+
+    # Create mount points
+    mkdir -p /ro /ram /persist/config /persist/data /persist/snapshots
+    mkdir -p /newroot /mnt/system /mnt/reset-config /mnt/reset-data
+
+    # Parse kernel cmdline
+    parse_cmdline
+
+    # Factory reset if requested
+    do_factory_reset
+
+    # Mount base squashfs
+    if ! mount_base; then
+        log_err "Failed to mount base system - falling back to shell"
+        exec /bin/sh
+    fi
+
+    # Mount RAM layer
+    mount_ram
+
+    # Mount persistent partitions (if enabled)
+    mount_persistent
+
+    # Compose overlay
+    if ! compose_overlay; then
+        log_err "Failed to compose overlay - falling back to shell"
+        exec /bin/sh
+    fi
+
+    log "SecuBox Overlay Init complete - ready for pivot_root"
+
+    # Return success - caller (initramfs) will do pivot_root
+    return 0
+}
+
+# Run main if executed directly (not sourced)
+case "${0##*/}" in
+    secubox-overlay-init)
+        main "$@"
+        ;;
+esac

@@ -14,6 +14,109 @@ log() { echo "[kiosk] $*" >&2; logger -t "$LOG_TAG" "$*" 2>/dev/null || true; }
 err() { echo "[kiosk] ERROR: $*" >&2; logger -t "$LOG_TAG" -p err "$*" 2>/dev/null || true; }
 
 # ══════════════════════════════════════════════════════════════════
+# DEBUG: Generate diagnostic report for VirtualBox/VM troubleshooting
+# ══════════════════════════════════════════════════════════════════
+readonly DEBUG_REPORT="/tmp/kiosk-debug-$(date +%Y%m%d-%H%M%S).log"
+
+generate_debug_report() {
+    local report="$DEBUG_REPORT"
+    {
+        echo "═══════════════════════════════════════════════════════════════"
+        echo "SecuBox Kiosk Debug Report - $(date -Iseconds)"
+        echo "═══════════════════════════════════════════════════════════════"
+        echo ""
+
+        echo "▶ SYSTEM INFO:"
+        echo "  Hostname: $(hostname)"
+        echo "  Kernel: $(uname -r)"
+        echo "  Architecture: $(uname -m)"
+        echo ""
+
+        echo "▶ VIRTUALIZATION:"
+        echo "  systemd-detect-virt: $(systemd-detect-virt 2>/dev/null || echo 'N/A')"
+        echo "  DMI Product: $(cat /sys/class/dmi/id/product_name 2>/dev/null || echo 'N/A')"
+        echo "  DMI Vendor: $(cat /sys/class/dmi/id/sys_vendor 2>/dev/null || echo 'N/A')"
+        echo ""
+
+        echo "▶ GRAPHICS HARDWARE:"
+        lspci 2>/dev/null | grep -iE "vga|display|graphics|3d" || echo "  No PCI graphics found"
+        echo ""
+
+        echo "▶ DRM/KMS DEVICES:"
+        ls -la /dev/dri/ 2>/dev/null || echo "  No DRM devices"
+        echo ""
+
+        echo "▶ FRAMEBUFFER:"
+        ls -la /dev/fb* 2>/dev/null || echo "  No framebuffer devices"
+        cat /sys/class/graphics/fb0/virtual_size 2>/dev/null && echo "(fb0 virtual size)"
+        echo ""
+
+        echo "▶ TTY STATUS:"
+        fgconsole 2>/dev/null && echo "(current VT)"
+        cat /sys/class/tty/tty0/active 2>/dev/null && echo "(active tty)"
+        who 2>/dev/null | head -5
+        echo ""
+
+        echo "▶ KIOSK FLAG FILES:"
+        ls -la /var/lib/secubox/.kiosk* 2>/dev/null || echo "  No kiosk flags found"
+        echo ""
+
+        echo "▶ KIOSK USER:"
+        id "$KIOSK_USER" 2>/dev/null || echo "  User not found: $KIOSK_USER"
+        ls -la "$KIOSK_HOME"/.x* 2>/dev/null || echo "  No xsession files"
+        echo ""
+
+        echo "▶ X11 CONFIG:"
+        ls -la /etc/X11/xorg.conf.d/ 2>/dev/null || echo "  No xorg.conf.d"
+        cat /etc/X11/xorg.conf.d/*.conf 2>/dev/null || true
+        cat /etc/X11/Xwrapper.config 2>/dev/null || echo "  No Xwrapper.config"
+        echo ""
+
+        echo "▶ LOADED KERNEL MODULES (video-related):"
+        lsmod 2>/dev/null | grep -iE "drm|vmware|vbox|i915|nouveau|amdgpu|fb" || echo "  None"
+        echo ""
+
+        echo "▶ X11 BINARIES:"
+        which Xorg 2>/dev/null || echo "  Xorg not found!"
+        which xinit 2>/dev/null || echo "  xinit not found!"
+        which chromium 2>/dev/null || echo "  chromium not found!"
+        echo ""
+
+        echo "▶ SYSTEMD KIOSK SERVICE:"
+        systemctl status secubox-kiosk.service --no-pager 2>&1 | head -20
+        echo ""
+
+        echo "▶ RELEVANT JOURNAL LOGS (last 50 lines):"
+        journalctl -t secubox-kiosk --no-pager -n 50 2>/dev/null || echo "  No journal entries"
+        echo ""
+
+        echo "▶ XORG LOG (if exists):"
+        tail -100 /var/log/Xorg.0.log 2>/dev/null || echo "  No Xorg.0.log yet"
+        echo ""
+
+        echo "═══════════════════════════════════════════════════════════════"
+        echo "End of Debug Report"
+        echo "═══════════════════════════════════════════════════════════════"
+    } >> "$report" 2>&1
+
+    log "Debug report written to: $report"
+
+    # Also symlink as latest
+    ln -sf "$report" /tmp/kiosk-debug-latest.log 2>/dev/null || true
+}
+
+# ══════════════════════════════════════════════════════════════════
+# LOCK: Prevent .bash_profile's start-kiosk from running in parallel
+# ══════════════════════════════════════════════════════════════════
+readonly LOCK_FILE="/tmp/.kiosk-starting"
+if [[ -f "$LOCK_FILE" ]]; then
+    log "Lock file exists - kiosk already starting/running"
+    exit 0
+fi
+touch "$LOCK_FILE"
+trap 'rm -f "$LOCK_FILE"' EXIT
+
+# ══════════════════════════════════════════════════════════════════
 # STEP 1: Verify prerequisites
 # ══════════════════════════════════════════════════════════════════
 check_prerequisites() {
@@ -155,7 +258,7 @@ create_session() {
     # Session script with simple splash and debug logging
     cat > "$KIOSK_HOME/.xsession" <<'XSESSION'
 #!/bin/bash
-# SecuBox Kiosk - X Session (v1.6.7.1)
+# SecuBox Kiosk - X Session (v1.6.7.2)
 exec >> /tmp/kiosk-session.log 2>&1
 echo "=== X Session Start: $(date) ==="
 
@@ -195,13 +298,30 @@ for test_url in "https://localhost/" "https://127.0.0.1/" "http://localhost/"; d
     fi
 done
 
-logger -t secubox-kiosk "Launching Chromium: $URL"
+# Detect screen resolution for explicit window sizing
+# xrandr returns something like "1920x1080+0+0" for connected displays
+RESOLUTION=$(xrandr 2>/dev/null | grep -oP '\d+x\d+\+0\+0' | head -1 | cut -d'+' -f1)
+if [[ -z "$RESOLUTION" ]]; then
+    # Fallback: try to get from primary display
+    RESOLUTION=$(xrandr 2>/dev/null | grep ' connected' | head -1 | grep -oP '\d+x\d+' | head -1)
+fi
+if [[ -z "$RESOLUTION" ]]; then
+    RESOLUTION="1920x1080"  # Ultimate fallback
+fi
+WIDTH=$(echo "$RESOLUTION" | cut -dx -f1)
+HEIGHT=$(echo "$RESOLUTION" | cut -dx -f2)
+echo "Screen resolution: ${WIDTH}x${HEIGHT}"
+
+logger -t secubox-kiosk "Launching Chromium: $URL (${WIDTH}x${HEIGHT})"
 echo "Launching Chromium: $URL"
 
-# Chromium with minimal flags
+# Chromium with explicit window size for reliable fullscreen
+# --kiosk is more reliable than --start-fullscreen for embedded systems
 # --test-type suppresses the "unsupported flag" warning banner
 exec chromium \
-    --start-fullscreen \
+    --kiosk \
+    --window-size=${WIDTH},${HEIGHT} \
+    --window-position=0,0 \
     --no-first-run \
     --disable-gpu \
     --disable-software-rasterizer \
@@ -211,7 +331,6 @@ exec chromium \
     --test-type \
     --disable-features=TranslateUI \
     --disable-infobars \
-    --window-position=0,0 \
     "$URL"
 XSESSION
 
@@ -236,6 +355,12 @@ start_display() {
     runtime_dir="/run/user/$kiosk_uid"
     xauth_file="$KIOSK_HOME/.Xauthority"
     x_log="/var/log/Xorg.0.log"
+
+    # DEBUG: Log VM environment
+    log "▶ VM Detection:"
+    log "  - systemd-detect-virt: $(systemd-detect-virt 2>/dev/null || echo 'unknown')"
+    log "  - /dev/dri contents: $(ls /dev/dri/ 2>/dev/null || echo 'empty')"
+    log "  - DRM modules: $(lsmod | grep -E 'drm|vmware|vbox' 2>/dev/null | awk '{print $1}' | tr '\n' ' ')"
 
     # Setup XDG runtime directory
     mkdir -p "$runtime_dir"
@@ -302,13 +427,46 @@ start_display() {
     # Verify X is running
     if ! kill -0 "$x_pid" 2>/dev/null; then
         err "Xorg process died! Check $x_log"
-        tail -50 "$x_log" 2>/dev/null || true
+        err "▶ XORG FAILURE DEBUG:"
+        {
+            echo ""
+            echo "════════ XORG FAILURE REPORT ════════"
+            echo "Timestamp: $(date -Iseconds)"
+            echo ""
+            echo "▶ Xorg.0.log (last 100 lines):"
+            tail -100 "$x_log" 2>/dev/null || echo "No log file"
+            echo ""
+            echo "▶ dmesg (graphics related):"
+            dmesg 2>/dev/null | grep -iE "drm|gpu|vbox|vmware|display" | tail -30
+            echo ""
+            echo "▶ Kernel modules:"
+            lsmod | grep -iE "drm|vbox|vmware|i915|nouveau" || echo "None found"
+            echo ""
+        } >> "$DEBUG_REPORT" 2>&1
+        log "Debug info appended to: $DEBUG_REPORT"
         exit 1
     fi
 
     if [[ ! -S /tmp/.X11-unix/X0 ]]; then
         err "X11 socket not created after 30s"
-        tail -50 "$x_log" 2>/dev/null || true
+        err "▶ X11 SOCKET DEBUG:"
+        {
+            echo ""
+            echo "════════ X11 SOCKET FAILURE ════════"
+            echo "Timestamp: $(date -Iseconds)"
+            echo "Xorg PID: $x_pid ($(kill -0 $x_pid 2>&1 && echo 'running' || echo 'dead'))"
+            echo ""
+            echo "▶ /tmp/.X11-unix/:"
+            ls -la /tmp/.X11-unix/ 2>/dev/null || echo "Directory doesn't exist"
+            echo ""
+            echo "▶ Xorg.0.log:"
+            tail -100 "$x_log" 2>/dev/null || echo "No log file"
+            echo ""
+            echo "▶ VT status:"
+            fgconsole 2>/dev/null && echo "(fgconsole)"
+            cat /sys/class/tty/tty0/active 2>/dev/null && echo "(active tty)"
+        } >> "$DEBUG_REPORT" 2>&1
+        log "Debug info appended to: $DEBUG_REPORT"
         exit 1
     fi
 
@@ -334,8 +492,11 @@ start_display() {
 # ══════════════════════════════════════════════════════════════════
 main() {
     log "════════════════════════════════════════════════"
-    log "SecuBox Kiosk Launcher v2.4 (1.6.7.1)"
+    log "SecuBox Kiosk Launcher v2.5 (1.6.7.2) - Debug Enabled"
     log "════════════════════════════════════════════════"
+
+    # Generate debug report FIRST for troubleshooting
+    generate_debug_report
 
     check_prerequisites
     configure_x11

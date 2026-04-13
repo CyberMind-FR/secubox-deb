@@ -191,6 +191,8 @@
   font-size: 0.95rem;
   width: 1.3rem;
   text-align: center;
+  font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji', sans-serif;
+  line-height: 1;
 }
 
 .nav-item span:not(.icon):not(.status-dot) {
