@@ -1,5 +1,37 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-04-13 (Session 52)*
+*Mis à jour : 2026-04-13 (Session 53)*
+
+---
+
+## ✅ Terminé cette session (Session 53)
+
+### v1.6.7.4 — Fix Boot Input Freeze (Critical) ✅
+
+#### Problem
+Both VirtualBox AND real hardware frozen at boot:
+- No keyboard input working
+- No login prompt visible
+- No VT switching
+- Kiosk not starting
+
+#### Root Cause (ACTUAL)
+GRUB Kiosk entry used `systemd.unit=graphical.target` but **no display manager** was installed.
+systemd waited forever for graphical.target → getty never started → no input.
+
+#### Fix Applied (v1.6.7.4)
+**`image/build-live-usb.sh`** — Removed `systemd.unit=graphical.target` from Kiosk GRUB entry:
+```bash
+# BROKEN:
+linux ... secubox.kiosk=1 systemd.unit=graphical.target
+
+# FIXED:
+linux ... secubox.kiosk=1
+# (kiosk service is in multi-user.target, not graphical.target)
+```
+
+Also applied in v1.6.7.3:
+- Reverted getty `Type=idle` to simple service
+- Enabled backup TTYs (tty2-6) for emergency access
 
 ---
 

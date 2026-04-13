@@ -258,7 +258,7 @@ create_session() {
     # Session script with simple splash and debug logging
     cat > "$KIOSK_HOME/.xsession" <<'XSESSION'
 #!/bin/bash
-# SecuBox Kiosk - X Session (v1.6.7.2)
+# SecuBox Kiosk - X Session (v1.6.7.3)
 exec >> /tmp/kiosk-session.log 2>&1
 echo "=== X Session Start: $(date) ==="
 
@@ -492,7 +492,7 @@ start_display() {
 # ══════════════════════════════════════════════════════════════════
 main() {
     log "════════════════════════════════════════════════"
-    log "SecuBox Kiosk Launcher v2.5 (1.6.7.2) - Debug Enabled"
+    log "SecuBox Kiosk Launcher v2.6 (1.6.7.3) - Debug Enabled"
     log "════════════════════════════════════════════════"
 
     # Generate debug report FIRST for troubleshooting
