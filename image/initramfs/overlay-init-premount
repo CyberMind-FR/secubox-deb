@@ -1,0 +1,59 @@
+#!/bin/sh
+# ══════════════════════════════════════════════════════════════════
+#  SecuBox-DEB :: initramfs init-premount hook
+#  Prepare overlay filesystem before live-boot mounts root
+#  CyberMind — https://cybermind.fr
+# ══════════════════════════════════════════════════════════════════
+# This script runs in initramfs at the init-premount phase
+# It prepares the overlay mount points and loads required modules
+
+PREREQ=""
+
+prereqs() {
+    echo "$PREREQ"
+}
+
+case "$1" in
+    prereqs)
+        prereqs
+        exit 0
+        ;;
+esac
+
+# Import initramfs functions
+. /scripts/functions
+
+log_begin_msg "SecuBox: Preparing overlay filesystem"
+
+# Load required modules
+modprobe -q overlay 2>/dev/null || true
+modprobe -q squashfs 2>/dev/null || true
+modprobe -q loop 2>/dev/null || true
+
+# Create overlay mount points
+# These will be used by secubox-overlay-init or live-boot
+mkdir -p /ro          # Read-only base (squashfs)
+mkdir -p /ram         # RAM layer (tmpfs)
+mkdir -p /persist     # Persistent storage root
+mkdir -p /persist/config
+mkdir -p /persist/data
+mkdir -p /persist/snapshots
+mkdir -p /newroot     # Final overlay root
+
+# Check for SecuBox overlay mode in cmdline
+SECUBOX_OVERLAY=0
+for param in $(cat /proc/cmdline); do
+    case "$param" in
+        root=overlay|secubox.overlay=1|secubox.overlay=yes)
+            SECUBOX_OVERLAY=1
+            ;;
+    esac
+done
+
+if [ "$SECUBOX_OVERLAY" = "1" ]; then
+    log_success_msg "SecuBox overlay mode enabled"
+else
+    log_success_msg "SecuBox overlay mode standby (using live-boot)"
+fi
+
+exit 0

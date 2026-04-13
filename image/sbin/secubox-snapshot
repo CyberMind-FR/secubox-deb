@@ -1,0 +1,580 @@
+#!/usr/bin/env bash
+# ══════════════════════════════════════════════════════════════════
+#  SecuBox-DEB :: secubox-snapshot
+#  Versioned snapshot manager for config and data partitions
+#  CyberMind — https://cybermind.fr
+# ══════════════════════════════════════════════════════════════════
+set -euo pipefail
+
+readonly VERSION="1.0.0"
+readonly SCRIPT_NAME="secubox-snapshot"
+
+# Directories
+readonly SNAPSHOT_DIR="/persist/snapshots"
+readonly CONFIG_DIR="/persist/config"
+readonly DATA_DIR="/persist/data"
+readonly METADATA_FILE="metadata.json"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+DIM='\033[2m'
+NC='\033[0m'
+
+log()  { echo -e "${CYAN}[snapshot]${NC} $*"; }
+ok()   { echo -e "${GREEN}[  OK  ]${NC} $*"; }
+warn() { echo -e "${YELLOW}[ WARN ]${NC} $*"; }
+err()  { echo -e "${RED}[FAIL  ]${NC} $*" >&2; exit 1; }
+
+usage() {
+    cat << EOF
+${BOLD}SecuBox Snapshot Manager v${VERSION}${NC}
+
+Manage versioned backups of CONFIG and DATA partitions for rollback capability.
+
+${BOLD}USAGE:${NC}
+    $SCRIPT_NAME <COMMAND> [OPTIONS]
+
+${BOLD}COMMANDS:${NC}
+    create [NAME]       Create a new snapshot (auto-named if not specified)
+    list                List all available snapshots
+    show <NAME>         Show details of a specific snapshot
+    restore <NAME>      Restore system to a snapshot
+    delete <NAME>       Delete a snapshot
+    factory-reset       Reset to factory state (first snapshot or clean)
+    prune [--keep N]    Delete old snapshots, keeping N most recent (default: 5)
+
+${BOLD}OPTIONS:${NC}
+    -f, --force         Skip confirmation prompts
+    -q, --quiet         Minimal output
+    --no-reboot         Don't reboot after restore (manual restart required)
+    --config-only       Only backup/restore CONFIG partition
+    --data-only         Only backup/restore DATA partition
+    -h, --help          Show this help
+
+${BOLD}SNAPSHOT FORMAT:${NC}
+    /persist/snapshots/<name>/
+    ├── config.tar.gz      # /persist/config backup
+    ├── data.tar.gz        # /persist/data backup
+    └── metadata.json      # timestamp, version, description
+
+${BOLD}EXAMPLES:${NC}
+    # Create snapshot before system update
+    $SCRIPT_NAME create pre-update
+
+    # List all snapshots
+    $SCRIPT_NAME list
+
+    # Restore to previous state
+    $SCRIPT_NAME restore pre-update
+
+    # Clean reset to factory
+    $SCRIPT_NAME factory-reset
+
+    # Keep only 3 most recent snapshots
+    $SCRIPT_NAME prune --keep 3
+
+EOF
+    exit 0
+}
+
+# Check if running as root
+check_root() {
+    [[ $EUID -ne 0 ]] && err "Must run as root: sudo $SCRIPT_NAME $*"
+}
+
+# Check if overlay system is active
+check_overlay() {
+    if ! mountpoint -q "$CONFIG_DIR" 2>/dev/null; then
+        warn "CONFIG partition not mounted at $CONFIG_DIR"
+        return 1
+    fi
+    if ! mountpoint -q "$DATA_DIR" 2>/dev/null; then
+        warn "DATA partition not mounted at $DATA_DIR"
+        return 1
+    fi
+    if ! mountpoint -q "$SNAPSHOT_DIR" 2>/dev/null; then
+        warn "SNAPSHOTS partition not mounted at $SNAPSHOT_DIR"
+        return 1
+    fi
+    return 0
+}
+
+# Get current SecuBox version
+get_version() {
+    if [[ -f /etc/secubox/build-info.json ]]; then
+        grep -o '"version"[[:space:]]*:[[:space:]]*"[^"]*"' /etc/secubox/build-info.json | \
+            cut -d'"' -f4
+    else
+        echo "unknown"
+    fi
+}
+
+# Generate snapshot name
+generate_name() {
+    local version
+    version=$(get_version)
+    echo "v${version}-$(date +%Y%m%d-%H%M%S)"
+}
+
+# Create metadata JSON
+create_metadata() {
+    local name="$1"
+    local description="${2:-Manual snapshot}"
+    local config_size="${3:-0}"
+    local data_size="${4:-0}"
+
+    cat << EOF
+{
+    "name": "$name",
+    "timestamp": "$(date -Iseconds)",
+    "version": "$(get_version)",
+    "description": "$description",
+    "hostname": "$(hostname)",
+    "config_size": $config_size,
+    "data_size": $data_size,
+    "created_by": "${SUDO_USER:-root}"
+}
+EOF
+}
+
+# Create a snapshot
+cmd_create() {
+    local name="${1:-}"
+    local description=""
+    local config_only=0
+    local data_only=0
+
+    # Parse additional arguments
+    shift || true
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --config-only) config_only=1; shift ;;
+            --data-only)   data_only=1; shift ;;
+            --desc)        description="$2"; shift 2 ;;
+            *) shift ;;
+        esac
+    done
+
+    check_root
+    check_overlay || err "Overlay system not active"
+
+    # Generate name if not provided
+    [[ -z "$name" ]] && name=$(generate_name)
+
+    local snap_path="$SNAPSHOT_DIR/$name"
+
+    # Check if snapshot exists
+    [[ -d "$snap_path" ]] && err "Snapshot '$name' already exists. Delete it first or use a different name."
+
+    log "Creating snapshot: $name"
+    mkdir -p "$snap_path"
+
+    local config_size=0
+    local data_size=0
+
+    # Backup CONFIG
+    if [[ $data_only -eq 0 ]]; then
+        log "Backing up CONFIG partition..."
+        tar -czf "$snap_path/config.tar.gz" -C "$CONFIG_DIR" . 2>/dev/null || \
+            warn "Some files in CONFIG could not be archived"
+        config_size=$(stat -c%s "$snap_path/config.tar.gz" 2>/dev/null || echo 0)
+        ok "CONFIG: $(numfmt --to=iec $config_size)"
+    fi
+
+    # Backup DATA
+    if [[ $config_only -eq 0 ]]; then
+        log "Backing up DATA partition..."
+        tar -czf "$snap_path/data.tar.gz" -C "$DATA_DIR" . 2>/dev/null || \
+            warn "Some files in DATA could not be archived"
+        data_size=$(stat -c%s "$snap_path/data.tar.gz" 2>/dev/null || echo 0)
+        ok "DATA: $(numfmt --to=iec $data_size)"
+    fi
+
+    # Create metadata
+    [[ -z "$description" ]] && description="Manual snapshot created $(date '+%Y-%m-%d %H:%M')"
+    create_metadata "$name" "$description" "$config_size" "$data_size" > "$snap_path/$METADATA_FILE"
+
+    # Calculate total size
+    local total_size=$((config_size + data_size))
+
+    echo ""
+    echo -e "${GREEN}${BOLD}Snapshot created successfully!${NC}"
+    echo ""
+    echo "  Name: $name"
+    echo "  Size: $(numfmt --to=iec $total_size)"
+    echo "  Path: $snap_path"
+    echo ""
+    echo "Restore with: $SCRIPT_NAME restore $name"
+}
+
+# List all snapshots
+cmd_list() {
+    local quiet=0
+    [[ "${1:-}" == "-q" || "${1:-}" == "--quiet" ]] && quiet=1
+
+    if [[ ! -d "$SNAPSHOT_DIR" ]] || [[ -z "$(ls -A "$SNAPSHOT_DIR" 2>/dev/null)" ]]; then
+        if [[ $quiet -eq 0 ]]; then
+            echo "No snapshots found."
+            echo ""
+            echo "Create one with: $SCRIPT_NAME create [name]"
+        fi
+        return 0
+    fi
+
+    if [[ $quiet -eq 1 ]]; then
+        ls -1 "$SNAPSHOT_DIR"
+        return 0
+    fi
+
+    echo ""
+    echo -e "${BOLD}Available Snapshots${NC}"
+    echo "══════════════════════════════════════════════════════════════════"
+    printf "%-25s %-20s %-12s %s\n" "NAME" "DATE" "SIZE" "VERSION"
+    echo "──────────────────────────────────────────────────────────────────"
+
+    for snap in "$SNAPSHOT_DIR"/*/; do
+        [[ -d "$snap" ]] || continue
+        local name=$(basename "$snap")
+        local meta="$snap/$METADATA_FILE"
+
+        if [[ -f "$meta" ]]; then
+            local timestamp version
+            timestamp=$(grep -o '"timestamp"[[:space:]]*:[[:space:]]*"[^"]*"' "$meta" | cut -d'"' -f4 | cut -dT -f1)
+            version=$(grep -o '"version"[[:space:]]*:[[:space:]]*"[^"]*"' "$meta" | cut -d'"' -f4)
+
+            # Calculate size
+            local size=0
+            [[ -f "$snap/config.tar.gz" ]] && size=$((size + $(stat -c%s "$snap/config.tar.gz")))
+            [[ -f "$snap/data.tar.gz" ]] && size=$((size + $(stat -c%s "$snap/data.tar.gz")))
+            local size_human=$(numfmt --to=iec $size)
+
+            printf "%-25s %-20s %-12s %s\n" "$name" "${timestamp:-unknown}" "$size_human" "v${version:-?}"
+        else
+            printf "%-25s %-20s %-12s %s\n" "$name" "unknown" "?" "?"
+        fi
+    done
+    echo "══════════════════════════════════════════════════════════════════"
+    echo ""
+}
+
+# Show snapshot details
+cmd_show() {
+    local name="${1:-}"
+    [[ -z "$name" ]] && err "Snapshot name required: $SCRIPT_NAME show <name>"
+
+    local snap_path="$SNAPSHOT_DIR/$name"
+    [[ ! -d "$snap_path" ]] && err "Snapshot not found: $name"
+
+    echo ""
+    echo -e "${BOLD}Snapshot: $name${NC}"
+    echo "═══════════════════════════════════════════════════════"
+
+    if [[ -f "$snap_path/$METADATA_FILE" ]]; then
+        cat "$snap_path/$METADATA_FILE" | python3 -m json.tool 2>/dev/null || \
+            cat "$snap_path/$METADATA_FILE"
+    else
+        echo "No metadata available"
+    fi
+
+    echo ""
+    echo "Contents:"
+    ls -lh "$snap_path/"
+    echo ""
+}
+
+# Restore from snapshot
+cmd_restore() {
+    local name="${1:-}"
+    local force=0
+    local no_reboot=0
+    local config_only=0
+    local data_only=0
+
+    # Parse arguments
+    shift || true
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -f|--force)    force=1; shift ;;
+            --no-reboot)   no_reboot=1; shift ;;
+            --config-only) config_only=1; shift ;;
+            --data-only)   data_only=1; shift ;;
+            *) shift ;;
+        esac
+    done
+
+    [[ -z "$name" ]] && err "Snapshot name required: $SCRIPT_NAME restore <name>"
+
+    check_root
+    check_overlay || err "Overlay system not active"
+
+    local snap_path="$SNAPSHOT_DIR/$name"
+    [[ ! -d "$snap_path" ]] && err "Snapshot not found: $name"
+
+    # Confirmation
+    if [[ $force -eq 0 ]]; then
+        echo ""
+        echo -e "${YELLOW}${BOLD}WARNING: This will replace current config/data with snapshot '$name'${NC}"
+        echo ""
+        cmd_show "$name"
+        echo ""
+        read -p "Type 'RESTORE' to confirm: " confirm
+        [[ "$confirm" != "RESTORE" ]] && err "Cancelled"
+    fi
+
+    log "Restoring snapshot: $name"
+
+    # Stop SecuBox services
+    log "Stopping SecuBox services..."
+    systemctl stop 'secubox-*' 2>/dev/null || true
+
+    # Restore CONFIG
+    if [[ $data_only -eq 0 ]] && [[ -f "$snap_path/config.tar.gz" ]]; then
+        log "Restoring CONFIG partition..."
+        # Backup current config first
+        local backup_name="pre-restore-$(date +%Y%m%d-%H%M%S)"
+        mkdir -p "$SNAPSHOT_DIR/$backup_name"
+        tar -czf "$SNAPSHOT_DIR/$backup_name/config.tar.gz" -C "$CONFIG_DIR" . 2>/dev/null || true
+
+        # Clear and restore
+        rm -rf "$CONFIG_DIR"/*
+        tar -xzf "$snap_path/config.tar.gz" -C "$CONFIG_DIR"
+        ok "CONFIG restored"
+    fi
+
+    # Restore DATA
+    if [[ $config_only -eq 0 ]] && [[ -f "$snap_path/data.tar.gz" ]]; then
+        log "Restoring DATA partition..."
+        # Backup current data first
+        local backup_name="${backup_name:-pre-restore-$(date +%Y%m%d-%H%M%S)}"
+        mkdir -p "$SNAPSHOT_DIR/$backup_name"
+        tar -czf "$SNAPSHOT_DIR/$backup_name/data.tar.gz" -C "$DATA_DIR" . 2>/dev/null || true
+
+        # Clear and restore
+        rm -rf "$DATA_DIR"/*
+        tar -xzf "$snap_path/data.tar.gz" -C "$DATA_DIR"
+        ok "DATA restored"
+    fi
+
+    # Create metadata for the auto-backup
+    if [[ -n "${backup_name:-}" ]]; then
+        create_metadata "$backup_name" "Auto-backup before restore to $name" 0 0 \
+            > "$SNAPSHOT_DIR/$backup_name/$METADATA_FILE"
+        log "Previous state saved to: $backup_name"
+    fi
+
+    echo ""
+    echo -e "${GREEN}${BOLD}Restore complete!${NC}"
+    echo ""
+
+    if [[ $no_reboot -eq 0 ]]; then
+        echo "System will reboot in 5 seconds..."
+        echo "Press Ctrl+C to cancel reboot"
+        sleep 5
+        reboot
+    else
+        echo "Reboot required to apply changes."
+        echo "Run: sudo reboot"
+    fi
+}
+
+# Delete a snapshot
+cmd_delete() {
+    local name="${1:-}"
+    local force=0
+    [[ "${2:-}" == "-f" || "${2:-}" == "--force" ]] && force=1
+
+    [[ -z "$name" ]] && err "Snapshot name required: $SCRIPT_NAME delete <name>"
+
+    check_root
+
+    local snap_path="$SNAPSHOT_DIR/$name"
+    [[ ! -d "$snap_path" ]] && err "Snapshot not found: $name"
+
+    # Prevent deleting factory snapshot
+    if [[ "$name" == "factory" ]]; then
+        err "Cannot delete factory snapshot. Use factory-reset to restore it."
+    fi
+
+    if [[ $force -eq 0 ]]; then
+        echo ""
+        cmd_show "$name"
+        read -p "Delete this snapshot? [y/N]: " confirm
+        [[ "${confirm,,}" != "y" ]] && err "Cancelled"
+    fi
+
+    log "Deleting snapshot: $name"
+    rm -rf "$snap_path"
+    ok "Snapshot deleted"
+}
+
+# Factory reset
+cmd_factory_reset() {
+    local force=0
+    local no_reboot=0
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -f|--force)  force=1; shift ;;
+            --no-reboot) no_reboot=1; shift ;;
+            *) shift ;;
+        esac
+    done
+
+    check_root
+    check_overlay || err "Overlay system not active"
+
+    if [[ $force -eq 0 ]]; then
+        echo ""
+        echo -e "${RED}${BOLD}╔═══════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "${RED}${BOLD}║                    FACTORY RESET                              ║${NC}"
+        echo -e "${RED}${BOLD}╠═══════════════════════════════════════════════════════════════╣${NC}"
+        echo -e "${RED}${BOLD}║${NC}  This will:                                                   ${RED}${BOLD}║${NC}"
+        echo -e "${RED}${BOLD}║${NC}    - Stop all SecuBox services                                ${RED}${BOLD}║${NC}"
+        echo -e "${RED}${BOLD}║${NC}    - Erase ALL user configuration                             ${RED}${BOLD}║${NC}"
+        echo -e "${RED}${BOLD}║${NC}    - Erase ALL user data and logs                             ${RED}${BOLD}║${NC}"
+        echo -e "${RED}${BOLD}║${NC}    - Restore factory defaults (if available)                  ${RED}${BOLD}║${NC}"
+        echo -e "${RED}${BOLD}║${NC}    - Reboot the system                                        ${RED}${BOLD}║${NC}"
+        echo -e "${RED}${BOLD}╚═══════════════════════════════════════════════════════════════╝${NC}"
+        echo ""
+        read -p "Type 'FACTORY RESET' to confirm: " confirm
+        [[ "$confirm" != "FACTORY RESET" ]] && err "Cancelled"
+    fi
+
+    log "FACTORY RESET starting..."
+
+    # Stop services
+    log "Stopping all SecuBox services..."
+    systemctl stop 'secubox-*' 2>/dev/null || true
+    systemctl stop nginx 2>/dev/null || true
+
+    # Create backup of current state
+    local backup_name="pre-factory-reset-$(date +%Y%m%d-%H%M%S)"
+    log "Creating backup: $backup_name"
+    mkdir -p "$SNAPSHOT_DIR/$backup_name"
+    tar -czf "$SNAPSHOT_DIR/$backup_name/config.tar.gz" -C "$CONFIG_DIR" . 2>/dev/null || true
+    tar -czf "$SNAPSHOT_DIR/$backup_name/data.tar.gz" -C "$DATA_DIR" . 2>/dev/null || true
+    create_metadata "$backup_name" "Auto-backup before factory reset" 0 0 \
+        > "$SNAPSHOT_DIR/$backup_name/$METADATA_FILE"
+    ok "Backup created"
+
+    # Wipe CONFIG
+    log "Wiping CONFIG partition..."
+    rm -rf "$CONFIG_DIR"/*
+    ok "CONFIG wiped"
+
+    # Wipe DATA
+    log "Wiping DATA partition..."
+    rm -rf "$DATA_DIR"/*
+    ok "DATA wiped"
+
+    # Restore factory snapshot if exists
+    if [[ -d "$SNAPSHOT_DIR/factory" ]]; then
+        log "Restoring factory snapshot..."
+        if [[ -f "$SNAPSHOT_DIR/factory/config.tar.gz" ]]; then
+            tar -xzf "$SNAPSHOT_DIR/factory/config.tar.gz" -C "$CONFIG_DIR"
+        fi
+        if [[ -f "$SNAPSHOT_DIR/factory/data.tar.gz" ]]; then
+            tar -xzf "$SNAPSHOT_DIR/factory/data.tar.gz" -C "$DATA_DIR"
+        fi
+        ok "Factory snapshot restored"
+    else
+        log "No factory snapshot - starting fresh"
+    fi
+
+    # Create firstboot marker
+    mkdir -p "$DATA_DIR/var/lib/secubox"
+    touch "$DATA_DIR/var/lib/secubox/.firstboot"
+    rm -f "$DATA_DIR/var/lib/secubox/.setup-complete"
+
+    echo ""
+    echo -e "${GREEN}${BOLD}Factory reset complete!${NC}"
+    echo ""
+
+    if [[ $no_reboot -eq 0 ]]; then
+        echo "System will reboot in 5 seconds..."
+        sleep 5
+        reboot
+    else
+        echo "Reboot required to complete reset."
+        echo "Run: sudo reboot"
+    fi
+}
+
+# Prune old snapshots
+cmd_prune() {
+    local keep=5
+    local force=0
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --keep)      keep="$2"; shift 2 ;;
+            -f|--force)  force=1; shift ;;
+            *) shift ;;
+        esac
+    done
+
+    check_root
+
+    # Get list of snapshots sorted by date (oldest first)
+    local snapshots=()
+    while IFS= read -r snap; do
+        [[ -d "$snap" ]] || continue
+        # Skip factory snapshot
+        [[ "$(basename "$snap")" == "factory" ]] && continue
+        snapshots+=("$snap")
+    done < <(ls -1dt "$SNAPSHOT_DIR"/*/ 2>/dev/null | tac)
+
+    local total=${#snapshots[@]}
+    local to_delete=$((total - keep))
+
+    if [[ $to_delete -le 0 ]]; then
+        echo "Nothing to prune. Have $total snapshots, keeping $keep."
+        return 0
+    fi
+
+    echo ""
+    echo "Found $total snapshots, will delete $to_delete (keeping $keep most recent)"
+    echo ""
+    echo "Snapshots to delete:"
+    for ((i=0; i<to_delete; i++)); do
+        echo "  - $(basename "${snapshots[$i]}")"
+    done
+    echo ""
+
+    if [[ $force -eq 0 ]]; then
+        read -p "Delete these snapshots? [y/N]: " confirm
+        [[ "${confirm,,}" != "y" ]] && err "Cancelled"
+    fi
+
+    for ((i=0; i<to_delete; i++)); do
+        local name=$(basename "${snapshots[$i]}")
+        log "Deleting: $name"
+        rm -rf "${snapshots[$i]}"
+    done
+
+    ok "Pruned $to_delete snapshots"
+}
+
+# Main
+main() {
+    local command="${1:-}"
+
+    case "$command" in
+        create)       shift; cmd_create "$@" ;;
+        list|ls)      shift; cmd_list "$@" ;;
+        show|info)    shift; cmd_show "$@" ;;
+        restore)      shift; cmd_restore "$@" ;;
+        delete|rm)    shift; cmd_delete "$@" ;;
+        factory-reset|reset) shift; cmd_factory_reset "$@" ;;
+        prune)        shift; cmd_prune "$@" ;;
+        -h|--help|help) usage ;;
+        "")           usage ;;
+        *)            err "Unknown command: $command. Use --help for usage." ;;
+    esac
+}
+
+main "$@"

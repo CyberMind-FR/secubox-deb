@@ -1,0 +1,409 @@
+#!/usr/bin/env bash
+# ══════════════════════════════════════════════════════════════════
+#  SecuBox-DEB :: secubox-factory-reset
+#  Reset system to factory defaults without reflashing
+#  CyberMind — https://cybermind.fr
+# ══════════════════════════════════════════════════════════════════
+set -euo pipefail
+
+readonly VERSION="1.0.0"
+readonly SCRIPT_NAME="secubox-factory-reset"
+
+# Partition paths
+readonly CONFIG_DIR="/persist/config"
+readonly DATA_DIR="/persist/data"
+readonly SNAPSHOT_DIR="/persist/snapshots"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+log()  { echo -e "${CYAN}[reset]${NC} $*"; }
+ok()   { echo -e "${GREEN}[  OK ]${NC} $*"; }
+warn() { echo -e "${YELLOW}[ WARN]${NC} $*"; }
+err()  { echo -e "${RED}[FAIL ]${NC} $*" >&2; exit 1; }
+
+usage() {
+    cat << EOF
+${BOLD}SecuBox Factory Reset v${VERSION}${NC}
+
+Reset SecuBox to factory defaults without reflashing the USB/disk.
+This preserves the base system (squashfs) and only wipes user data.
+
+${BOLD}USAGE:${NC}
+    $SCRIPT_NAME [OPTIONS]
+
+${BOLD}OPTIONS:${NC}
+    --config-only       Only reset configuration (keep data/logs)
+    --data-only         Only reset data/logs (keep configuration)
+    --no-backup         Don't create backup before reset
+    --no-reboot         Don't reboot after reset
+    --preserve-network  Keep network configuration
+    --preserve-ssh      Keep SSH keys
+    -f, --force         Skip confirmation prompt
+    -h, --help          Show this help
+
+${BOLD}WHAT GETS RESET:${NC}
+    CONFIG partition:
+      - /etc/secubox/* (all module configs)
+      - /etc/nginx/secubox.d/* (nginx includes)
+      - /etc/systemd/system/secubox-*.d/* (service overrides)
+      - /home/* (user home directories)
+
+    DATA partition:
+      - /var/lib/secubox/* (application state)
+      - /var/log/secubox/* (logs)
+      - /var/cache/secubox/* (cache)
+      - /srv/secubox/* (user data)
+
+${BOLD}WHAT IS PRESERVED:${NC}
+    - Base system (squashfs)
+    - Snapshots (unless deleted manually)
+    - Factory snapshot (restored if exists)
+
+${BOLD}EXAMPLES:${NC}
+    # Full factory reset
+    sudo $SCRIPT_NAME
+
+    # Reset config only, keep logs and data
+    sudo $SCRIPT_NAME --config-only
+
+    # Reset without backup or confirmation
+    sudo $SCRIPT_NAME --no-backup --force
+
+EOF
+    exit 0
+}
+
+# Check root
+check_root() {
+    [[ $EUID -ne 0 ]] && err "Must run as root: sudo $SCRIPT_NAME"
+}
+
+# Check overlay system
+check_overlay() {
+    local errors=0
+
+    if ! mountpoint -q "$CONFIG_DIR" 2>/dev/null; then
+        warn "CONFIG partition not mounted at $CONFIG_DIR"
+        errors=$((errors + 1))
+    fi
+
+    if ! mountpoint -q "$DATA_DIR" 2>/dev/null; then
+        warn "DATA partition not mounted at $DATA_DIR"
+        errors=$((errors + 1))
+    fi
+
+    # Allow reset even without snapshots partition
+    if ! mountpoint -q "$SNAPSHOT_DIR" 2>/dev/null; then
+        warn "SNAPSHOTS partition not mounted - backup will be skipped"
+    fi
+
+    return $errors
+}
+
+# Create backup before reset
+create_backup() {
+    if ! mountpoint -q "$SNAPSHOT_DIR" 2>/dev/null; then
+        log "Snapshots partition not available - skipping backup"
+        return 0
+    fi
+
+    local backup_name="pre-factory-reset-$(date +%Y%m%d-%H%M%S)"
+    local backup_path="$SNAPSHOT_DIR/$backup_name"
+
+    log "Creating backup: $backup_name"
+    mkdir -p "$backup_path"
+
+    # Backup CONFIG
+    if mountpoint -q "$CONFIG_DIR" 2>/dev/null; then
+        tar -czf "$backup_path/config.tar.gz" -C "$CONFIG_DIR" . 2>/dev/null || \
+            warn "Some CONFIG files could not be backed up"
+    fi
+
+    # Backup DATA
+    if mountpoint -q "$DATA_DIR" 2>/dev/null; then
+        tar -czf "$backup_path/data.tar.gz" -C "$DATA_DIR" . 2>/dev/null || \
+            warn "Some DATA files could not be backed up"
+    fi
+
+    # Create metadata
+    cat > "$backup_path/metadata.json" << EOF
+{
+    "name": "$backup_name",
+    "timestamp": "$(date -Iseconds)",
+    "type": "pre-factory-reset",
+    "hostname": "$(hostname)",
+    "created_by": "${SUDO_USER:-root}"
+}
+EOF
+
+    ok "Backup created: $backup_name"
+}
+
+# Stop services
+stop_services() {
+    log "Stopping SecuBox services..."
+
+    # Stop all SecuBox services
+    systemctl stop 'secubox-*' 2>/dev/null || true
+
+    # Stop nginx
+    systemctl stop nginx 2>/dev/null || true
+
+    # Wait for services to stop
+    sleep 2
+
+    ok "Services stopped"
+}
+
+# Reset CONFIG partition
+reset_config() {
+    local preserve_network="${1:-0}"
+    local preserve_ssh="${2:-0}"
+
+    if ! mountpoint -q "$CONFIG_DIR" 2>/dev/null; then
+        warn "CONFIG partition not mounted - skipping config reset"
+        return 0
+    fi
+
+    log "Resetting CONFIG partition..."
+
+    # Preserve network config if requested
+    local network_backup=""
+    if [[ $preserve_network -eq 1 ]] && [[ -f "$CONFIG_DIR/etc/netplan/00-secubox.yaml" ]]; then
+        network_backup=$(mktemp)
+        cp "$CONFIG_DIR/etc/netplan/00-secubox.yaml" "$network_backup"
+        log "Preserving network configuration"
+    fi
+
+    # Preserve SSH keys if requested
+    local ssh_backup=""
+    if [[ $preserve_ssh -eq 1 ]] && [[ -d "$CONFIG_DIR/etc/ssh" ]]; then
+        ssh_backup=$(mktemp -d)
+        cp -a "$CONFIG_DIR/etc/ssh/"* "$ssh_backup/" 2>/dev/null || true
+        log "Preserving SSH keys"
+    fi
+
+    # Clear CONFIG partition
+    rm -rf "$CONFIG_DIR"/* 2>/dev/null || true
+
+    # Recreate directory structure
+    mkdir -p "$CONFIG_DIR/etc/secubox"
+    mkdir -p "$CONFIG_DIR/etc/nginx/secubox.d"
+    mkdir -p "$CONFIG_DIR/etc/systemd/system"
+    mkdir -p "$CONFIG_DIR/etc/ssh"
+    mkdir -p "$CONFIG_DIR/etc/netplan"
+    mkdir -p "$CONFIG_DIR/home"
+
+    # Restore network config if preserved
+    if [[ -n "$network_backup" ]] && [[ -f "$network_backup" ]]; then
+        mkdir -p "$CONFIG_DIR/etc/netplan"
+        cp "$network_backup" "$CONFIG_DIR/etc/netplan/00-secubox.yaml"
+        rm -f "$network_backup"
+        ok "Network configuration preserved"
+    fi
+
+    # Restore SSH keys if preserved
+    if [[ -n "$ssh_backup" ]] && [[ -d "$ssh_backup" ]]; then
+        mkdir -p "$CONFIG_DIR/etc/ssh"
+        cp -a "$ssh_backup/"* "$CONFIG_DIR/etc/ssh/" 2>/dev/null || true
+        rm -rf "$ssh_backup"
+        ok "SSH keys preserved"
+    fi
+
+    ok "CONFIG partition reset"
+}
+
+# Reset DATA partition
+reset_data() {
+    if ! mountpoint -q "$DATA_DIR" 2>/dev/null; then
+        warn "DATA partition not mounted - skipping data reset"
+        return 0
+    fi
+
+    log "Resetting DATA partition..."
+
+    # Clear DATA partition
+    rm -rf "$DATA_DIR"/* 2>/dev/null || true
+
+    # Recreate directory structure
+    mkdir -p "$DATA_DIR/var/lib/secubox"
+    mkdir -p "$DATA_DIR/var/log/secubox"
+    mkdir -p "$DATA_DIR/var/cache/secubox"
+    mkdir -p "$DATA_DIR/etc/secubox/tls"
+    mkdir -p "$DATA_DIR/srv/secubox"
+
+    ok "DATA partition reset"
+}
+
+# Restore factory snapshot if available
+restore_factory() {
+    local factory_path="$SNAPSHOT_DIR/factory"
+
+    if [[ ! -d "$factory_path" ]]; then
+        log "No factory snapshot found - starting fresh"
+        return 0
+    fi
+
+    log "Restoring factory snapshot..."
+
+    # Restore CONFIG from factory
+    if [[ -f "$factory_path/config.tar.gz" ]] && mountpoint -q "$CONFIG_DIR" 2>/dev/null; then
+        tar -xzf "$factory_path/config.tar.gz" -C "$CONFIG_DIR"
+        ok "Factory CONFIG restored"
+    fi
+
+    # Restore DATA from factory
+    if [[ -f "$factory_path/data.tar.gz" ]] && mountpoint -q "$DATA_DIR" 2>/dev/null; then
+        tar -xzf "$factory_path/data.tar.gz" -C "$DATA_DIR"
+        ok "Factory DATA restored"
+    fi
+}
+
+# Trigger firstboot
+trigger_firstboot() {
+    log "Triggering firstboot..."
+
+    # Create firstboot marker
+    local secubox_dir="$DATA_DIR/var/lib/secubox"
+    mkdir -p "$secubox_dir"
+    touch "$secubox_dir/.firstboot"
+    rm -f "$secubox_dir/.setup-complete"
+
+    # Mark reset timestamp
+    date -Iseconds > "$secubox_dir/.factory-reset"
+
+    ok "Firstboot will run on next boot"
+}
+
+# Main reset function
+do_reset() {
+    local config_only=0
+    local data_only=0
+    local no_backup=0
+    local no_reboot=0
+    local preserve_network=0
+    local preserve_ssh=0
+    local force=0
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --config-only)       config_only=1; shift ;;
+            --data-only)         data_only=1; shift ;;
+            --no-backup)         no_backup=1; shift ;;
+            --no-reboot)         no_reboot=1; shift ;;
+            --preserve-network)  preserve_network=1; shift ;;
+            --preserve-ssh)      preserve_ssh=1; shift ;;
+            -f|--force)          force=1; shift ;;
+            -h|--help)           usage ;;
+            *) err "Unknown option: $1" ;;
+        esac
+    done
+
+    check_root
+
+    # Check overlay system
+    if ! check_overlay; then
+        err "Overlay system not properly mounted"
+    fi
+
+    # Confirmation
+    if [[ $force -eq 0 ]]; then
+        echo ""
+        echo -e "${RED}${BOLD}╔═══════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "${RED}${BOLD}║                    FACTORY RESET                              ║${NC}"
+        echo -e "${RED}${BOLD}╠═══════════════════════════════════════════════════════════════╣${NC}"
+        echo -e "${RED}${BOLD}║${NC}                                                               ${RED}${BOLD}║${NC}"
+        if [[ $config_only -eq 1 ]]; then
+            echo -e "${RED}${BOLD}║${NC}  Mode: CONFIG ONLY                                            ${RED}${BOLD}║${NC}"
+            echo -e "${RED}${BOLD}║${NC}  - All configuration will be erased                           ${RED}${BOLD}║${NC}"
+            echo -e "${RED}${BOLD}║${NC}  - Data and logs will be preserved                            ${RED}${BOLD}║${NC}"
+        elif [[ $data_only -eq 1 ]]; then
+            echo -e "${RED}${BOLD}║${NC}  Mode: DATA ONLY                                              ${RED}${BOLD}║${NC}"
+            echo -e "${RED}${BOLD}║${NC}  - Configuration will be preserved                            ${RED}${BOLD}║${NC}"
+            echo -e "${RED}${BOLD}║${NC}  - All data and logs will be erased                           ${RED}${BOLD}║${NC}"
+        else
+            echo -e "${RED}${BOLD}║${NC}  Mode: FULL RESET                                             ${RED}${BOLD}║${NC}"
+            echo -e "${RED}${BOLD}║${NC}  - ALL configuration will be erased                           ${RED}${BOLD}║${NC}"
+            echo -e "${RED}${BOLD}║${NC}  - ALL data and logs will be erased                           ${RED}${BOLD}║${NC}"
+        fi
+        echo -e "${RED}${BOLD}║${NC}                                                               ${RED}${BOLD}║${NC}"
+        if [[ $preserve_network -eq 1 ]]; then
+            echo -e "${RED}${BOLD}║${NC}  ${GREEN}✓${NC} Network configuration will be preserved                     ${RED}${BOLD}║${NC}"
+        fi
+        if [[ $preserve_ssh -eq 1 ]]; then
+            echo -e "${RED}${BOLD}║${NC}  ${GREEN}✓${NC} SSH keys will be preserved                                  ${RED}${BOLD}║${NC}"
+        fi
+        if [[ $no_backup -eq 0 ]]; then
+            echo -e "${RED}${BOLD}║${NC}  ${GREEN}✓${NC} Backup will be created before reset                        ${RED}${BOLD}║${NC}"
+        else
+            echo -e "${RED}${BOLD}║${NC}  ${YELLOW}!${NC} NO BACKUP will be created                                   ${RED}${BOLD}║${NC}"
+        fi
+        echo -e "${RED}${BOLD}║${NC}                                                               ${RED}${BOLD}║${NC}"
+        echo -e "${RED}${BOLD}╚═══════════════════════════════════════════════════════════════╝${NC}"
+        echo ""
+
+        read -p "Type 'FACTORY RESET' to confirm: " confirm
+        [[ "$confirm" != "FACTORY RESET" ]] && err "Cancelled"
+        echo ""
+    fi
+
+    # Start reset process
+    log "Starting factory reset..."
+
+    # Create backup
+    if [[ $no_backup -eq 0 ]]; then
+        create_backup
+    fi
+
+    # Stop services
+    stop_services
+
+    # Reset partitions
+    if [[ $data_only -eq 0 ]]; then
+        reset_config "$preserve_network" "$preserve_ssh"
+    fi
+
+    if [[ $config_only -eq 0 ]]; then
+        reset_data
+    fi
+
+    # Restore factory snapshot
+    restore_factory
+
+    # Trigger firstboot
+    trigger_firstboot
+
+    # Success message
+    echo ""
+    echo -e "${GREEN}${BOLD}╔═══════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${GREEN}${BOLD}║              Factory Reset Complete!                          ║${NC}"
+    echo -e "${GREEN}${BOLD}╚═══════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+
+    if [[ $no_reboot -eq 0 ]]; then
+        echo "System will reboot in 5 seconds..."
+        echo "Press Ctrl+C to cancel"
+        sleep 5
+        reboot
+    else
+        echo "Reboot required to complete reset."
+        echo "Run: sudo reboot"
+    fi
+}
+
+# Main
+main() {
+    case "${1:-}" in
+        -h|--help|help) usage ;;
+        *) do_reset "$@" ;;
+    esac
+}
+
+main "$@"

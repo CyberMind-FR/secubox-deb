@@ -1,9 +1,192 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-04-12 (Session 49)*
+*Mis à jour : 2026-04-13 (Session 52)*
 
 ---
 
-## ✅ Terminé cette session (Session 49)
+## ✅ Terminé cette session (Session 52)
+
+### VirtualBox Debug Logging ✅
+
+#### Problem
+VirtualBox VM boots to console instead of kiosk, while real hardware works fine.
+Need diagnostic info to trace X11/graphics issues in VirtualBox.
+
+#### Fix Applied
+**`image/sbin/secubox-kiosk-launcher`** — Added comprehensive debug logging:
+1. `generate_debug_report()` function creates `/tmp/kiosk-debug-YYYYMMDD-HHMMSS.log`
+2. Debug report captures:
+   - System info (hostname, kernel, arch)
+   - Virtualization detection (systemd-detect-virt, DMI)
+   - Graphics hardware (lspci VGA/display)
+   - DRM/KMS devices (/dev/dri/)
+   - Framebuffer status
+   - TTY status
+   - Kiosk flag files
+   - X11 config and binaries
+   - Loaded kernel modules (video-related)
+   - Systemd kiosk service status
+   - Journal logs
+   - Xorg.0.log (when available)
+3. VM detection logging at X11 start
+4. Enhanced error reporting when Xorg fails:
+   - Appends failure details to debug report
+   - Logs dmesg graphics entries
+   - Captures VT status
+
+#### Debug Report Location
+```
+/tmp/kiosk-debug-latest.log → symlink to most recent
+/tmp/kiosk-debug-YYYYMMDD-HHMMSS.log → timestamped reports
+```
+
+#### To Read Debug Info After Failed Boot
+1. Login via TTY1 (autologin)
+2. Run: `cat /tmp/kiosk-debug-latest.log`
+3. Or check journalctl: `journalctl -t secubox-kiosk`
+
+---
+
+## ✅ Terminé cette session (Session 51)
+
+### SecuBox v1.6.7.2 — Advanced Overlay Installer ✅
+
+#### Overview
+Transformed SecuBox from a simple live-boot system to a production-grade appliance with:
+- Multi-layer overlay architecture for clean separation of system/config/data
+- Versioned snapshots for rollback capability
+- RAM acceleration for responsive UI
+- Factory reset without full reinstall
+
+#### Files Created
+1. **`image/partition-overlay.sh`** — GPT partition layout script for overlay mode
+2. **`image/sbin/secubox-overlay-init`** — Boot-time overlay filesystem composer
+3. **`image/sbin/secubox-snapshot`** — Versioned snapshot manager (create/restore/delete/prune)
+4. **`image/sbin/secubox-ramcache`** — RAM cache preload utility for fast UI
+5. **`image/sbin/secubox-factory-reset`** — Clean reset without reflashing
+6. **`image/initramfs/overlay-hooks`** — Initramfs hooks installer
+7. **`image/initramfs/overlay-init-premount`** — Early boot overlay preparation
+8. **`image/initramfs/overlay-local-bottom`** — Persistent mount setup
+
+#### Files Modified
+- **`image/build-live-usb.sh`** — Added `--overlay` flag, overlay partition layout, initramfs hooks
+- **`packages/secubox-hub/api/main.py`** — Version bump to 1.6.7.2
+- **`image/sbin/secubox-kiosk-launcher`** — Version bump
+
+#### Overlay Partition Layout (--overlay flag)
+```
+ESP (512MB)      — UEFI boot
+SYSTEM (2GB)     — SquashFS read-only base
+CONFIG (512MB)   — Persistent config (/etc/secubox, nginx, systemd)
+DATA (2GB)       — Persistent data/logs (/var/lib/secubox, /var/log)
+SNAPSHOTS (1GB)  — Versioned config/data backups
+SWAP (512MB)     — RAM extension
+```
+
+#### GRUB Boot Options Added
+- `secubox.persist=no` — RAM-only mode
+- `secubox.factory-reset=1` — Factory reset on boot
+- `secubox.recovery=1` — Recovery mode
+
+#### Status
+- ✅ All scripts created and made executable
+- ✅ Build script updated with --overlay option
+- ✅ Version bumped to 1.6.7.2
+- ⬜ Test overlay mode build pending
+
+---
+
+### Navbar Icons Fix ✅
+
+#### Problem
+Sidebar menu items showing small colored squares instead of emoji icons
+
+#### Root Cause
+- Noto Color Emoji font installed but not configured in fontconfig
+- Chromium not finding emoji glyphs
+
+#### Fix Applied
+1. **sidebar.css / sidebar-light.css** — Added emoji font-family to `.nav-item .icon`
+2. **design-tokens.css** — Added `--font-emoji` variable
+3. **debian/control** — Added `fonts-noto-color-emoji` dependency
+4. **build-live-usb.sh** — Added fontconfig setup for Noto Color Emoji
+5. **scripts/fix-emoji-fonts.sh** — Quick-fix script for existing VMs
+
+#### To Apply on Running VM
+```bash
+bash /tmp/fix-emoji-fonts.sh
+pkill chromium
+```
+
+---
+
+### Kiosk Mode Race Condition Fix ✅
+
+#### Problem
+Kiosk mode stopped working since v1.6.7.1 - VM boots to console instead of Chromium kiosk
+
+#### Root Cause
+Race condition between two competing kiosk startup mechanisms:
+1. `secubox-kiosk.service` (systemd) runs `/usr/sbin/secubox-kiosk-launcher`
+2. `.bash_profile` runs `/usr/local/bin/start-kiosk` on tty1 autologin
+
+Both could try to start X11 simultaneously because `start-kiosk` checks for `/tmp/.kiosk-starting` lock file, but `secubox-kiosk-launcher` never created it.
+
+#### Fix Applied
+1. **`image/sbin/secubox-kiosk-launcher`** — Added lock file creation at startup
+   - Creates `/tmp/.kiosk-starting` before doing anything
+   - Checks if lock exists to avoid double-start
+   - Uses trap to clean up on exit
+
+2. **`image/build-live-usb.sh`** (start-kiosk script) — Added systemd service checks
+   - Checks if `secubox-kiosk.service` is active before starting
+   - Checks if service is activating to avoid race
+   - Only runs as fallback when systemd service isn't handling it
+
+#### Files Modified
+- `image/sbin/secubox-kiosk-launcher` — Lock file mechanism
+- `image/build-live-usb.sh` — Updated start-kiosk and .xsession version
+
+---
+
+## ✅ Terminé session précédente (Session 50)
+
+### Auth Login 404 Fix ✅
+
+#### Problem
+- Login page showing 404 for `POST /api/v1/hub/auth/login`
+- Browser console: `https://localhost/api/v1/hub/auth/login 404 (Not Found)`
+
+#### Root Cause Investigation
+1. **Initial suspicion**: nginx not routing to hub socket — **WRONG**
+2. **Second suspicion**: secubox-hub service not running — **PARTIALLY RIGHT** (permission error crash loop)
+3. **Third suspicion**: Socket permission issue — **FIXED** with `chown secubox:secubox /run/secubox/`
+4. **Final root cause**: Double `/auth` prefix — route was `/auth/auth/login` not `/auth/login`
+
+#### Diagnostic Steps
+- `systemctl status secubox-hub` → crash loop with PermissionError
+- `curl --unix-socket /run/secubox/hub.sock http://localhost/health` → `{"status":"ok"}`
+- `curl --unix-socket /run/secubox/hub.sock http://localhost/auth/login` → `{"detail":"Not Found"}`
+- OpenAPI inspection revealed route at `/auth/auth/login` (double prefix!)
+
+#### Fix Applied
+- **Removed** `prefix="/auth"` from `common/secubox_core/auth.py` router definition
+- **Added** `prefix="/auth"` to `app.include_router(auth_router, prefix="/auth")` in `packages/secubox-hub/api/main.py`
+
+#### Files Modified
+- `common/secubox_core/auth.py` — removed router prefix
+- `packages/secubox-hub/api/main.py` — added prefix on include
+
+#### Commit
+- `35c9340` — fix(auth): Remove duplicate /auth prefix from login endpoint
+
+#### Status
+- ✅ Image rebuilt with fix
+- ✅ USB flashed and tested
+- ✅ Login working with root/secubox
+
+---
+
+## ✅ Terminé session précédente (Session 49)
 
 ### SecuBox Live v1.6.5 x64 Fixes ✅
 
@@ -70,10 +253,10 @@
 
 ## ⬜ Next Up
 
-1. Test v1.6.5 on real hardware (Lenovo)
-2. Verify Plymouth splash appears during boot
-3. Verify keyboard/mouse work in kiosk mode
-4. Verify no warning banner in Chromium
+1. Test full dashboard functionality after login
+2. Verify all API endpoints work via authenticated requests
+3. Test module status/control from dashboard
+4. Verify JWT token persistence across page refreshes
 
 ---
 

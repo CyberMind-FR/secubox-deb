@@ -1,0 +1,134 @@
+#!/bin/sh
+# ══════════════════════════════════════════════════════════════════
+#  SecuBox-DEB :: initramfs local-bottom hook
+#  Finalize overlay filesystem after live-boot setup
+#  CyberMind — https://cybermind.fr
+# ══════════════════════════════════════════════════════════════════
+# This script runs after live-boot has set up the root filesystem
+# It mounts persistent partitions and sets up bind mounts
+
+PREREQ=""
+
+prereqs() {
+    echo "$PREREQ"
+}
+
+case "$1" in
+    prereqs)
+        prereqs
+        exit 0
+        ;;
+esac
+
+# Import initramfs functions
+. /scripts/functions
+
+# Check if we should run
+for param in $(cat /proc/cmdline); do
+    case "$param" in
+        secubox.persist=no|secubox.persist=0)
+            log_warning_msg "SecuBox: Persistence disabled - skipping mounts"
+            exit 0
+            ;;
+    esac
+done
+
+log_begin_msg "SecuBox: Setting up persistent mounts"
+
+# Find partition by label
+find_partition() {
+    local label="$1"
+
+    # Try blkid
+    blkid -L "$label" 2>/dev/null && return 0
+
+    # Fallback to /dev/disk/by-label
+    [ -L "/dev/disk/by-label/$label" ] && readlink -f "/dev/disk/by-label/$label" && return 0
+
+    return 1
+}
+
+# Mount CONFIG partition
+CONFIG_DEV=$(find_partition "CONFIG" || true)
+if [ -n "$CONFIG_DEV" ] && [ -b "$CONFIG_DEV" ]; then
+    log_begin_msg "Mounting CONFIG partition"
+    mkdir -p /persist/config
+    mount -t ext4 -o defaults "$CONFIG_DEV" /persist/config 2>/dev/null && \
+        log_success_msg "CONFIG mounted" || \
+        log_warning_msg "CONFIG mount failed"
+fi
+
+# Mount DATA partition
+DATA_DEV=$(find_partition "DATA" || true)
+if [ -n "$DATA_DEV" ] && [ -b "$DATA_DEV" ]; then
+    log_begin_msg "Mounting DATA partition"
+    mkdir -p /persist/data
+    mount -t ext4 -o defaults "$DATA_DEV" /persist/data 2>/dev/null && \
+        log_success_msg "DATA mounted" || \
+        log_warning_msg "DATA mount failed"
+fi
+
+# Mount SNAPSHOTS partition
+SNAP_DEV=$(find_partition "SNAPSHOTS" || true)
+if [ -n "$SNAP_DEV" ] && [ -b "$SNAP_DEV" ]; then
+    log_begin_msg "Mounting SNAPSHOTS partition"
+    mkdir -p /persist/snapshots
+    mount -t ext4 -o defaults "$SNAP_DEV" /persist/snapshots 2>/dev/null && \
+        log_success_msg "SNAPSHOTS mounted" || \
+        log_warning_msg "SNAPSHOTS mount failed"
+fi
+
+# Enable SWAP
+SWAP_DEV=$(find_partition "SWAP" || true)
+if [ -n "$SWAP_DEV" ] && [ -b "$SWAP_DEV" ]; then
+    swapon "$SWAP_DEV" 2>/dev/null && \
+        log_success_msg "SWAP enabled" || \
+        log_warning_msg "SWAP enable failed"
+fi
+
+# Handle factory reset boot parameter
+for param in $(cat /proc/cmdline); do
+    case "$param" in
+        secubox.factory-reset=1|secubox.factory-reset=yes)
+            log_warning_msg "SecuBox: Factory reset requested"
+
+            if [ -d /persist/config ]; then
+                rm -rf /persist/config/* 2>/dev/null || true
+                echo "Factory reset performed at $(date)" > /persist/config/.factory-reset
+            fi
+
+            if [ -d /persist/data ]; then
+                rm -rf /persist/data/* 2>/dev/null || true
+                mkdir -p /persist/data/var/lib/secubox
+                touch /persist/data/var/lib/secubox/.firstboot
+                echo "Factory reset performed at $(date)" > /persist/data/.factory-reset
+            fi
+
+            log_success_msg "Factory reset complete"
+            ;;
+    esac
+done
+
+# Create mount points in root for persistent directories
+# These will be moved or bind-mounted after pivot_root
+if [ -d "${rootmnt}" ]; then
+    mkdir -p "${rootmnt}/persist"
+    mkdir -p "${rootmnt}/persist/config"
+    mkdir -p "${rootmnt}/persist/data"
+    mkdir -p "${rootmnt}/persist/snapshots"
+
+    # Move persistent mounts into the new root
+    if mountpoint -q /persist/config 2>/dev/null; then
+        mount --move /persist/config "${rootmnt}/persist/config" 2>/dev/null || true
+    fi
+    if mountpoint -q /persist/data 2>/dev/null; then
+        mount --move /persist/data "${rootmnt}/persist/data" 2>/dev/null || true
+    fi
+    if mountpoint -q /persist/snapshots 2>/dev/null; then
+        mount --move /persist/snapshots "${rootmnt}/persist/snapshots" 2>/dev/null || true
+    fi
+fi
+
+log_success_msg "SecuBox persistent mounts ready"
+
+exit 0

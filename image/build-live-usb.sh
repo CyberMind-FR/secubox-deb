@@ -14,7 +14,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 
 # ── Version & Build Info ──────────────────────────────────────────
-SECUBOX_VERSION="1.6.7.1"
+SECUBOX_VERSION="1.6.7.2"
 BUILD_TIMESTAMP=$(date '+%Y-%m-%d %H:%M')
 BUILD_DATE=$(date '+%Y%m%d')
 
@@ -31,6 +31,7 @@ INCLUDE_KIOSK=1
 PRESEED_FILE=""
 NO_COMPRESS=0
 EMBED_IMAGE=""
+OVERLAY_MODE=0
 
 RED='\033[0;31m'; CYAN='\033[0;36m'; GOLD='\033[0;33m'
 GREEN='\033[0;32m'; NC='\033[0m'; BOLD='\033[1m'
@@ -54,6 +55,7 @@ Usage: sudo bash build-live-usb.sh [OPTIONS]
   --no-compress      Skip gzip compression (faster, for local testing)
   --preseed FILE     Include preseed config archive
   --embed-image IMG  Embed image for disk flashing (creates installer USB)
+  --overlay          Use advanced overlay partition layout (v1.6.7.2+)
   --help             Show this help
 
 Features:
@@ -86,6 +88,7 @@ while [[ $# -gt 0 ]]; do
     --no-compress)    NO_COMPRESS=1;        shift   ;;
     --preseed)        PRESEED_FILE="$2";    shift 2 ;;
     --embed-image)    EMBED_IMAGE="$2";     shift 2 ;;
+    --overlay)        OVERLAY_MODE=1;       shift   ;;
     --help|-h)        usage ;;
     *) err "Unknown argument: $1" ;;
   esac
@@ -233,15 +236,20 @@ sed -i 's/#PasswordAuthentication.*/PasswordAuthentication yes/' "${ROOTFS}/etc/
 sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/' "${ROOTFS}/etc/ssh/sshd_config"
 
 # ── Autologin root on tty1 ────────────────────────────────────────
+# Use -o to pass login options explicitly for reliable autologin
+# -p preserves environment, -f skips auth, -- \\u passes username
 mkdir -p "${ROOTFS}/etc/systemd/system/getty@tty1.service.d"
-cat > "${ROOTFS}/etc/systemd/system/getty@tty1.service.d/override.conf" <<EOF
+cat > "${ROOTFS}/etc/systemd/system/getty@tty1.service.d/override.conf" <<'EOF'
 [Service]
 ExecStart=
-ExecStart=-/sbin/agetty --autologin root --noclear %I \$TERM
-StandardInput=tty
-StandardOutput=tty
-TTYVTDisallocate=no
+ExecStart=-/sbin/agetty -o '-p -f -- \\u' --noclear --autologin root %I $TERM
+Type=idle
 EOF
+
+# Disable login timeout (default 60s breaks autologin sessions)
+sed -i 's/^LOGIN_TIMEOUT.*/LOGIN_TIMEOUT 0/' "${ROOTFS}/etc/login.defs"
+# Also ensure no TMOUT in profile
+echo 'unset TMOUT' >> "${ROOTFS}/etc/profile.d/secubox.sh"
 
 # Enable getty@tty1 and set default target
 chroot "${ROOTFS}" systemctl enable getty@tty1.service 2>/dev/null || true
@@ -1621,6 +1629,15 @@ for script in secubox-net-detect secubox-kiosk-setup secubox-cmdline-handler sec
   fi
 done
 
+# Copy overlay tools (v1.6.7.2+ - always included for factory reset capability)
+for script in secubox-overlay-init secubox-snapshot secubox-ramcache secubox-factory-reset; do
+  if [[ -f "${SCRIPT_DIR}/sbin/${script}" ]]; then
+    cp "${SCRIPT_DIR}/sbin/${script}" "${ROOTFS}/usr/sbin/"
+    chmod +x "${ROOTFS}/usr/sbin/${script}"
+    log "  + ${script}"
+  fi
+done
+
 # Embed target image for disk flashing (if specified)
 if [[ -n "${EMBED_IMAGE}" ]]; then
   if [[ -f "${EMBED_IMAGE}" ]]; then
@@ -1699,9 +1716,46 @@ if [[ $INCLUDE_KIOSK -eq 1 ]]; then
     xserver-xorg-video-fbdev \
     xserver-xorg-video-vmware \
     xserver-xorg-video-vesa \
-    fonts-dejavu-core unclutter kbd \
+    fonts-dejavu-core fonts-noto-color-emoji unclutter kbd \
     libinput10 xdg-utils \
     virtualbox-guest-x11 virtualbox-guest-utils 2>/dev/null || warn "Some X11 packages failed"
+
+  # Configure fontconfig to use Noto Color Emoji for emojis (sidebar icons)
+  log "Configuring fontconfig for emoji support..."
+  mkdir -p "${ROOTFS}/etc/fonts/conf.d"
+  cat > "${ROOTFS}/etc/fonts/conf.d/99-noto-emoji.conf" <<'FONTCONF'
+<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+<fontconfig>
+  <!-- Use Noto Color Emoji for emoji characters -->
+  <match target="pattern">
+    <test name="family"><string>emoji</string></test>
+    <edit name="family" mode="prepend" binding="strong">
+      <string>Noto Color Emoji</string>
+    </edit>
+  </match>
+
+  <!-- Add Noto Color Emoji as fallback for all fonts -->
+  <match target="pattern">
+    <edit name="family" mode="append">
+      <string>Noto Color Emoji</string>
+    </edit>
+  </match>
+
+  <!-- Prefer color emoji over text emoji -->
+  <selectfont>
+    <acceptfont>
+      <pattern>
+        <patelt name="family"><string>Noto Color Emoji</string></patelt>
+      </pattern>
+    </acceptfont>
+  </selectfont>
+</fontconfig>
+FONTCONF
+
+  # Rebuild font cache
+  chroot "${ROOTFS}" fc-cache -f 2>/dev/null || warn "fc-cache failed"
+  ok "Emoji fontconfig configured"
 
   # Ensure critical kiosk packages are installed
   chroot "${ROOTFS}" env DEBIAN_FRONTEND=noninteractive apt-get install -y -q xinit kbd || warn "xinit/kbd install failed"
@@ -1766,10 +1820,11 @@ XCONF
   fi
 
   # Create X11 .xsession for kiosk (used by nodm and xinit)
+  # Note: secubox-kiosk-launcher overwrites this with a more complete version at runtime
   mkdir -p "${ROOTFS}/home/secubox-kiosk/.config"
   cat > "${ROOTFS}/home/secubox-kiosk/.xsession" <<'XSESSION'
 #!/bin/bash
-# SecuBox Kiosk X Session v1.6.3
+# SecuBox Kiosk X Session v1.6.7.2 (fallback)
 export DISPLAY=${DISPLAY:-:0}
 
 logger -t secubox-kiosk "Starting kiosk session..."
@@ -1846,16 +1901,28 @@ NODM
   cat > "${ROOTFS}/usr/local/bin/start-kiosk" <<'KIOSKSTART'
 #!/bin/bash
 # Start SecuBox Kiosk Mode - NON-BLOCKING
+# Fallback for when secubox-kiosk.service doesn't start
 # Runs in background, user always gets prompt
 
-# Only run once
+# Only run once (check lock file)
 [[ -f /tmp/.kiosk-starting ]] && exit 0
+
+# Don't run if systemd kiosk service is already active/activating
+if systemctl is-active --quiet secubox-kiosk.service 2>/dev/null; then
+    echo "[Kiosk] Managed by systemd service"
+    exit 0
+fi
+if systemctl is-activating --quiet secubox-kiosk.service 2>/dev/null; then
+    echo "[Kiosk] Systemd service starting..."
+    exit 0
+fi
+
 touch /tmp/.kiosk-starting
 
 # Check if kiosk is enabled
 [[ ! -f /var/lib/secubox/.kiosk-enabled ]] && exit 0
 
-echo "[Kiosk] Starting X11 in background..."
+echo "[Kiosk] Starting X11 in background (fallback mode)..."
 echo "[Kiosk] Use 'pkill xinit' to stop, Alt+F1 for console"
 
 # Configure X11
@@ -2246,6 +2313,35 @@ manual_add_modules squashfs loop overlay
 copy_modules_dir kernel/fs/squashfs
 EOFHOOK
 chmod +x "${ROOTFS}/etc/initramfs-tools/hooks/live-squashfs"
+
+# Copy overlay initramfs hooks (v1.6.7.2+ - for advanced partition layout)
+if [[ -d "${SCRIPT_DIR}/initramfs" ]]; then
+  log "Installing overlay initramfs hooks..."
+
+  # Copy hooks
+  if [[ -f "${SCRIPT_DIR}/initramfs/overlay-hooks" ]]; then
+    cp "${SCRIPT_DIR}/initramfs/overlay-hooks" "${ROOTFS}/etc/initramfs-tools/hooks/"
+    chmod +x "${ROOTFS}/etc/initramfs-tools/hooks/overlay-hooks"
+  fi
+
+  # Copy init-premount script
+  mkdir -p "${ROOTFS}/etc/initramfs-tools/scripts/init-premount"
+  if [[ -f "${SCRIPT_DIR}/initramfs/overlay-init-premount" ]]; then
+    cp "${SCRIPT_DIR}/initramfs/overlay-init-premount" \
+      "${ROOTFS}/etc/initramfs-tools/scripts/init-premount/secubox-overlay"
+    chmod +x "${ROOTFS}/etc/initramfs-tools/scripts/init-premount/secubox-overlay"
+  fi
+
+  # Copy local-bottom script
+  mkdir -p "${ROOTFS}/etc/initramfs-tools/scripts/local-bottom"
+  if [[ -f "${SCRIPT_DIR}/initramfs/overlay-local-bottom" ]]; then
+    cp "${SCRIPT_DIR}/initramfs/overlay-local-bottom" \
+      "${ROOTFS}/etc/initramfs-tools/scripts/local-bottom/secubox-persist"
+    chmod +x "${ROOTFS}/etc/initramfs-tools/scripts/local-bottom/secubox-persist"
+  fi
+
+  ok "Overlay initramfs hooks installed"
+fi
 
 # Force MODULES=most to include filesystem modules
 sed -i 's/^MODULES=.*/MODULES=most/' "${ROOTFS}/etc/initramfs-tools/initramfs.conf" 2>/dev/null || \
@@ -2713,9 +2809,57 @@ fi
 # 2: ESP (512MB) - UEFI
 # 3: LIVE - squashfs + grub + kernels (dynamic, leaves room for persistence)
 # 4: persistence (optional, ~1/3 of total for 8G+, or rest)
+#
+# OVERLAY MODE (v1.6.7.2+):
+# 1: BIOS boot (2MB)
+# 2: ESP (512MB)
+# 3: SYSTEM (2GB) - squashfs read-only base
+# 4: CONFIG (512MB) - persistent config
+# 5: DATA (2GB) - persistent data/logs
+# 6: SNAPSHOTS (1GB) - versioned backups
+# 7: SWAP (512MB)
 
 ESP_END=515  # 3 + 512 = 515 MiB
-if [[ $INCLUDE_PERSISTENCE -eq 1 ]]; then
+
+if [[ $OVERLAY_MODE -eq 1 ]]; then
+  # Advanced overlay partition layout (v1.6.7.2+)
+  # Requires minimum 8GB image
+  if [[ $IMG_SIZE_MIB -lt 7168 ]]; then
+    warn "Overlay mode requires at least 7GB image, got ${IMG_SIZE}"
+    warn "Falling back to standard layout"
+    OVERLAY_MODE=0
+  else
+    # Calculate partition boundaries
+    SYSTEM_END=$((ESP_END + 2048))        # 2GB for squashfs
+    CONFIG_END=$((SYSTEM_END + 512))       # 512MB for config
+    DATA_END=$((CONFIG_END + 2048))        # 2GB for data
+    SNAP_END=$((DATA_END + 1024))          # 1GB for snapshots
+    # SWAP uses remaining space (at least 512MB)
+
+    log "Overlay partition layout (v1.6.7.2):"
+    log "  ESP:       3-${ESP_END}MiB (512MB)"
+    log "  SYSTEM:    ${ESP_END}-${SYSTEM_END}MiB (2GB)"
+    log "  CONFIG:    ${SYSTEM_END}-${CONFIG_END}MiB (512MB)"
+    log "  DATA:      ${CONFIG_END}-${DATA_END}MiB (2GB)"
+    log "  SNAPSHOTS: ${DATA_END}-${SNAP_END}MiB (1GB)"
+    log "  SWAP:      ${SNAP_END}MiB-100%"
+
+    parted -s "${IMG_FILE}" \
+      mklabel gpt \
+      mkpart bios 1MiB 3MiB \
+      mkpart ESP fat32 3MiB ${ESP_END}MiB \
+      mkpart SYSTEM ext4 ${ESP_END}MiB ${SYSTEM_END}MiB \
+      mkpart CONFIG ext4 ${SYSTEM_END}MiB ${CONFIG_END}MiB \
+      mkpart DATA ext4 ${CONFIG_END}MiB ${DATA_END}MiB \
+      mkpart SNAPSHOTS ext4 ${DATA_END}MiB ${SNAP_END}MiB \
+      mkpart SWAP linux-swap ${SNAP_END}MiB 100% \
+      set 1 bios_grub on \
+      set 2 esp on \
+      set 2 boot on
+  fi
+fi
+
+if [[ $OVERLAY_MODE -ne 1 ]] && [[ $INCLUDE_PERSISTENCE -eq 1 ]]; then
   # For persistence, leave 25% of image for persistence (min 512MB)
   PERSIST_SIZE=$(( IMG_SIZE_MIB / 4 ))
   [[ $PERSIST_SIZE -lt 512 ]] && PERSIST_SIZE=512
@@ -2760,18 +2904,65 @@ sleep 1
 # Verify partitions exist
 [[ -b "${LOOP}p2" ]] || err "Partition ${LOOP}p2 not found"
 
-# Format
-mkfs.fat -F32 -n ESP "${LOOP}p2"
-mkfs.ext4 -L LIVE -q "${LOOP}p3"
-if [[ $INCLUDE_PERSISTENCE -eq 1 ]] && [[ -b "${LOOP}p4" ]]; then
-  mkfs.ext4 -L persistence -q "${LOOP}p4"
+# Format partitions based on mode
+if [[ $OVERLAY_MODE -eq 1 ]]; then
+  log "Formatting overlay partitions..."
+  mkfs.fat -F32 -n ESP "${LOOP}p2"
+  mkfs.ext4 -L SYSTEM -q "${LOOP}p3"
+  mkfs.ext4 -L CONFIG -q "${LOOP}p4"
+  mkfs.ext4 -L DATA -q "${LOOP}p5"
+  mkfs.ext4 -L SNAPSHOTS -q "${LOOP}p6"
+  mkswap -L SWAP "${LOOP}p7"
+
+  # Create initial directory structure on CONFIG
+  MNT_CONFIG="${WORK_DIR}/mnt-config"
+  mkdir -p "${MNT_CONFIG}"
+  mount "${LOOP}p4" "${MNT_CONFIG}"
+  mkdir -p "${MNT_CONFIG}/etc/secubox"
+  mkdir -p "${MNT_CONFIG}/etc/nginx/secubox.d"
+  mkdir -p "${MNT_CONFIG}/etc/systemd/system"
+  mkdir -p "${MNT_CONFIG}/home"
+  umount "${MNT_CONFIG}"
+
+  # Create initial directory structure on DATA
+  MNT_DATA="${WORK_DIR}/mnt-data"
+  mkdir -p "${MNT_DATA}"
+  mount "${LOOP}p5" "${MNT_DATA}"
+  mkdir -p "${MNT_DATA}/var/lib/secubox"
+  mkdir -p "${MNT_DATA}/var/log/secubox"
+  mkdir -p "${MNT_DATA}/var/cache/secubox"
+  mkdir -p "${MNT_DATA}/srv/secubox"
+  touch "${MNT_DATA}/var/lib/secubox/.firstboot"
+  umount "${MNT_DATA}"
+
+  # Create factory snapshot directory
+  MNT_SNAP="${WORK_DIR}/mnt-snap"
+  mkdir -p "${MNT_SNAP}"
+  mount "${LOOP}p6" "${MNT_SNAP}"
+  mkdir -p "${MNT_SNAP}/factory"
+  echo '{"name":"factory","timestamp":"'$(date -Iseconds)'","type":"factory","version":"'${SECUBOX_VERSION}'"}' \
+    > "${MNT_SNAP}/factory/metadata.json"
+  umount "${MNT_SNAP}"
+
+  ok "Overlay partitions formatted"
+else
+  # Standard partition format
+  mkfs.fat -F32 -n ESP "${LOOP}p2"
+  mkfs.ext4 -L LIVE -q "${LOOP}p3"
+  if [[ $INCLUDE_PERSISTENCE -eq 1 ]] && [[ -b "${LOOP}p4" ]]; then
+    mkfs.ext4 -L persistence -q "${LOOP}p4"
+  fi
 fi
 
-# Mount
+# Mount for file copy
 MNT="${WORK_DIR}/mnt"
 mkdir -p "${MNT}/esp" "${MNT}/live"
 mount "${LOOP}p2" "${MNT}/esp"
-mount "${LOOP}p3" "${MNT}/live"
+if [[ $OVERLAY_MODE -eq 1 ]]; then
+  mount "${LOOP}p3" "${MNT}/live"  # SYSTEM partition
+else
+  mount "${LOOP}p3" "${MNT}/live"
+fi
 
 # Copy live files to root of LIVE partition
 # GRUB looks for ($live)/live/* and live-boot looks for /live/filesystem.squashfs
@@ -2886,6 +3077,31 @@ menuentry "🐛 Debug (Break at Premount)" {
     initrd ($live)/live/initrd.img
 }
 GRUBCFG
+
+# Add overlay-specific boot entries if overlay mode is enabled
+if [[ $OVERLAY_MODE -eq 1 ]]; then
+  cat >> "${MNT}/esp/boot/grub/grub.cfg" <<'GRUBCFG_OVERLAY'
+
+submenu "🔧 Overlay Advanced Options" {
+
+    menuentry "💾 SecuBox (RAM Only - No Persistence)" {
+        linux ($live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components quiet splash secubox.persist=no
+        initrd ($live)/live/initrd.img
+    }
+
+    menuentry "🔄 SecuBox (Factory Reset)" {
+        linux ($live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components quiet splash secubox.factory-reset=1
+        initrd ($live)/live/initrd.img
+    }
+
+    menuentry "📸 SecuBox (Recovery from Snapshot)" {
+        linux ($live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components nomodeset console=tty0 secubox.recovery=1
+        initrd ($live)/live/initrd.img
+    }
+}
+GRUBCFG_OVERLAY
+  log "Added overlay boot menu entries"
+fi
 
 cp "${MNT}/esp/boot/grub/grub.cfg" "${MNT}/esp/EFI/BOOT/grub.cfg"
 

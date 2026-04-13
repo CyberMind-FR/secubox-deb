@@ -9,7 +9,7 @@ Rules-Requires-Root: no
 
 Package: secubox-hub
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0)
+Depends: ${misc:Depends}, secubox-core (>= 1.0), fonts-noto-color-emoji
 Description: SecuBox Hub — Tableau de bord central
  Hub central SecuBox : lanceur de modules, état des services, alertes consolidées.
  .
