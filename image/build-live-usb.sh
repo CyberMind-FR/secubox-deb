@@ -14,7 +14,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 
 # ── Version & Build Info ──────────────────────────────────────────
-SECUBOX_VERSION="1.6.7.2"
+SECUBOX_VERSION="1.6.7.4"
 BUILD_TIMESTAMP=$(date '+%Y-%m-%d %H:%M')
 BUILD_DATE=$(date '+%Y%m%d')
 
@@ -236,14 +236,15 @@ sed -i 's/#PasswordAuthentication.*/PasswordAuthentication yes/' "${ROOTFS}/etc/
 sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/' "${ROOTFS}/etc/ssh/sshd_config"
 
 # ── Autologin root on tty1 ────────────────────────────────────────
-# Use -o to pass login options explicitly for reliable autologin
-# -p preserves environment, -f skips auth, -- \\u passes username
+# Simple autologin - DO NOT use Type=idle (blocks until all jobs done = no input)
 mkdir -p "${ROOTFS}/etc/systemd/system/getty@tty1.service.d"
 cat > "${ROOTFS}/etc/systemd/system/getty@tty1.service.d/override.conf" <<'EOF'
 [Service]
 ExecStart=
-ExecStart=-/sbin/agetty -o '-p -f -- \\u' --noclear --autologin root %I $TERM
-Type=idle
+ExecStart=-/sbin/agetty --autologin root --noclear %I linux
+StandardInput=tty
+StandardOutput=tty
+TTYVTDisallocate=no
 EOF
 
 # Disable login timeout (default 60s breaks autologin sessions)
@@ -251,8 +252,10 @@ sed -i 's/^LOGIN_TIMEOUT.*/LOGIN_TIMEOUT 0/' "${ROOTFS}/etc/login.defs"
 # Also ensure no TMOUT in profile
 echo 'unset TMOUT' >> "${ROOTFS}/etc/profile.d/secubox.sh"
 
-# Enable getty@tty1 and set default target
+# Enable gettys - tty1 (autologin), tty2-3 (backup login prompts)
 chroot "${ROOTFS}" systemctl enable getty@tty1.service 2>/dev/null || true
+chroot "${ROOTFS}" systemctl enable getty@tty2.service 2>/dev/null || true
+chroot "${ROOTFS}" systemctl enable getty@tty3.service 2>/dev/null || true
 chroot "${ROOTFS}" systemctl set-default multi-user.target 2>/dev/null || true
 
 # Disable live-config autologin
@@ -3019,7 +3022,7 @@ menuentry "⚡ SecuBox Live v${SECUBOX_VERSION}" {
 }
 
 menuentry "🖼️ SecuBox Live v${SECUBOX_VERSION} (Kiosk GUI) [DEFAULT]" {
-    linux (\$live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components persistence quiet splash secubox.kiosk=1 systemd.unit=graphical.target
+    linux (\$live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components persistence quiet splash secubox.kiosk=1
     initrd (\$live)/live/initrd.img
 }
 GRUBCFG
