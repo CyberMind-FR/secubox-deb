@@ -67,30 +67,39 @@ jobs:
             needs_qemu: true
             embed_image: false
 
-    # Filter matrix based on platform input
-    if: >-
-      github.event_name == 'push' ||
-      inputs.platform == 'all' ||
-      inputs.platform == '' ||
-      inputs.platform == matrix.platform
-
     steps:
+      # Skip job if platform doesn't match (workflow_dispatch only)
+      - name: Check platform filter
+        id: filter
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            echo "skip=false" >> $GITHUB_OUTPUT
+          elif [[ "${{ inputs.platform }}" == "all" || "${{ inputs.platform }}" == "" || "${{ inputs.platform }}" == "${{ matrix.platform }}" ]]; then
+            echo "skip=false" >> $GITHUB_OUTPUT
+          else
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "Skipping ${{ matrix.platform }} (requested: ${{ inputs.platform }})"
+          fi
+
       - name: Checkout
+        if: steps.filter.outputs.skip != 'true'
         uses: actions/checkout@v4
 
       - name: Free disk space
+        if: steps.filter.outputs.skip != 'true'
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost
           sudo apt-get clean
           df -h
 
       - name: Setup QEMU for ARM64 cross-compilation
-        if: matrix.needs_qemu
+        if: steps.filter.outputs.skip != 'true' && matrix.needs_qemu
         uses: docker/setup-qemu-action@v3
         with:
           platforms: arm64
 
       - name: Install build dependencies
+        if: steps.filter.outputs.skip != 'true'
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq \
@@ -100,6 +109,7 @@ jobs:
             mtools rsync pv xorriso curl wget u-boot-tools
 
       - name: Download SecuBox packages
+        if: steps.filter.outputs.skip != 'true'
         uses: dawidd6/action-download-artifact@v3
         with:
           workflow: build-packages.yml
@@ -109,13 +119,14 @@ jobs:
         continue-on-error: true
 
       - name: List available packages
+        if: steps.filter.outputs.skip != 'true'
         run: |
           echo "=== Available SecuBox packages ==="
           ls output/debs/secubox-*.deb 2>/dev/null | wc -l || echo "0"
           ls output/debs/secubox-*.deb 2>/dev/null | xargs -I{} basename {} | sed 's/_.*$//' | sort -u || echo "No packages found"
 
       - name: Build embedded eMMC image (EspressoBin only)
-        if: matrix.embed_image
+        if: steps.filter.outputs.skip != 'true' && matrix.embed_image
         run: |
           echo "=== Building embedded eMMC target image ==="
           sudo -E bash image/build-image.sh \
@@ -129,6 +140,7 @@ jobs:
         timeout-minutes: 60
 
       - name: Build ${{ matrix.platform }} Live USB
+        if: steps.filter.outputs.skip != 'true'
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
@@ -154,11 +166,13 @@ jobs:
         timeout-minutes: 120
 
       - name: List output files
+        if: steps.filter.outputs.skip != 'true'
         run: |
           echo "=== Build output ==="
           ls -lh output/
 
       - name: Generate checksums
+        if: steps.filter.outputs.skip != 'true'
         run: |
           cd output/
           echo "=== Generating SHA256 checksums ==="
@@ -171,6 +185,7 @@ jobs:
           cat SHA256SUMS
 
       - name: Upload artifact
+        if: steps.filter.outputs.skip != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}-${{ env.DEBIAN_SUITE }}
