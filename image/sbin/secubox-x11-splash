@@ -1,99 +1,153 @@
 #!/bin/bash
 # ══════════════════════════════════════════════════════════════════
-#  secubox-x11-splash — Debug splash screen before Chromium
-#  Shows boot stage progress using xmessage/zenity
+#  secubox-x11-splash — Loading splash with progress bar
+#  Shows boot stages using zenity progress or feh fallback
 # ══════════════════════════════════════════════════════════════════
 
-SPLASH_PID=""
 LOG_TAG="secubox-splash"
+log() { logger -t "$LOG_TAG" "$*" 2>/dev/null || true; }
 
-log() {
-    echo "[x11-splash] $*"
-    logger -t "$LOG_TAG" "$*" 2>/dev/null || true
+# Main splash with zenity progress bar
+show_zenity_progress() {
+    log "Starting zenity progress splash"
+
+    (
+        echo "10"
+        echo "# ⚡ X11 Display Server... OK"
+        sleep 1
+
+        echo "25"
+        echo "# 🌐 Checking network interface..."
+        sleep 1
+
+        # Check network
+        if ip addr show 2>/dev/null | grep -q "inet.*192"; then
+            echo "40"
+            echo "# ✅ Network ready"
+        else
+            echo "40"
+            echo "# ⏳ Network initializing..."
+        fi
+        sleep 1
+
+        echo "55"
+        echo "# 🔒 Checking SecuBox services..."
+        sleep 1
+
+        # Check nginx
+        echo "70"
+        if systemctl is-active nginx &>/dev/null; then
+            echo "# ✅ nginx running"
+        else
+            echo "# ⏳ Waiting for nginx..."
+            # Wait up to 10s for nginx
+            for i in {1..10}; do
+                systemctl is-active nginx &>/dev/null && break
+                sleep 1
+            done
+        fi
+
+        echo "85"
+        echo "# 🚀 Preparing Chromium kiosk..."
+        sleep 1
+
+        echo "100"
+        echo "# ✨ SecuBox Ready!"
+        sleep 0.5
+
+    ) | zenity --progress \
+        --title="SecuBox Kiosk" \
+        --text="Initializing SecuBox..." \
+        --percentage=0 \
+        --auto-close \
+        --no-cancel \
+        --width=400 \
+        --height=150 \
+        2>/dev/null
+
+    log "Zenity progress complete"
 }
 
-# Kill splash when done
-cleanup() {
-    [[ -n "$SPLASH_PID" ]] && kill "$SPLASH_PID" 2>/dev/null
+# Fallback: feh with splash image
+show_feh_splash() {
+    local splash_img="/usr/share/secubox/splash/boot.png"
+
+    if [[ -f "$splash_img" ]]; then
+        log "Showing feh splash: $splash_img"
+        feh --fullscreen --hide-pointer "$splash_img" &
+        local pid=$!
+
+        # Wait for nginx (max 15s)
+        for i in {1..15}; do
+            systemctl is-active nginx &>/dev/null && break
+            sleep 1
+        done
+
+        kill $pid 2>/dev/null
+    fi
 }
-trap cleanup EXIT
 
-# Show splash using feh (image) or xmessage (text fallback)
-show_splash() {
-    local stage="$1"
-    local message="$2"
+# Fallback: xmessage text splash
+show_xmessage_splash() {
+    log "Using xmessage fallback"
 
-    # Kill previous splash
-    [[ -n "$SPLASH_PID" ]] && kill "$SPLASH_PID" 2>/dev/null
-
-    log "Stage: $stage - $message"
-
-    # Try feh with splash image
-    if command -v feh &>/dev/null && [[ -f /usr/share/secubox/splash/boot.png ]]; then
-        feh --fullscreen --hide-pointer /usr/share/secubox/splash/boot.png &
-        SPLASH_PID=$!
-    # Try zenity
-    elif command -v zenity &>/dev/null; then
-        zenity --info --no-wrap --title="SecuBox" --text="<span size='xx-large'>SecuBox Kiosk</span>\n\n<b>$stage</b>\n$message" --width=400 --height=200 &
-        SPLASH_PID=$!
-    # Fallback to xmessage
-    elif command -v xmessage &>/dev/null; then
-        xmessage -center -timeout 30 "
-═══════════════════════════════════
-        SecuBox Kiosk Boot
-═══════════════════════════════════
-
-  Stage: $stage
-
-  $message
-
-═══════════════════════════════════
+    xmessage -center -buttons "" -timeout 10 "
+╔═══════════════════════════════════════╗
+║                                       ║
+║        ⚡ SecuBox Kiosk ⚡            ║
+║                                       ║
+║      Initializing services...         ║
+║                                       ║
+║      Please wait...                   ║
+║                                       ║
+╚═══════════════════════════════════════╝
 " &
-        SPLASH_PID=$!
-    # Ultimate fallback: xsetroot color
-    else
-        case "$stage" in
-            1) xsetroot -solid "#001100" ;;  # Dark green - X11 started
-            2) xsetroot -solid "#003300" ;;  # Green - waiting network
-            3) xsetroot -solid "#005500" ;;  # Bright green - waiting nginx
-            4) xsetroot -solid "#007700" ;;  # Brighter - starting chromium
-            *) xsetroot -solid "#00FF9C" ;;  # P31 green - ready
-        esac
-    fi
+    local pid=$!
+
+    # Wait for nginx
+    for i in {1..15}; do
+        systemctl is-active nginx &>/dev/null && break
+        sleep 1
+    done
+
+    kill $pid 2>/dev/null
 }
 
-# Main debug sequence
+# Color gradient fallback (no deps)
+show_color_progress() {
+    log "Using color gradient fallback"
+
+    local colors=("#001100" "#002200" "#003300" "#004400" "#005500" "#006600" "#007700" "#008800")
+
+    for color in "${colors[@]}"; do
+        xsetroot -solid "$color" 2>/dev/null
+        systemctl is-active nginx &>/dev/null && break
+        sleep 1
+    done
+
+    # Final color
+    xsetroot -solid "#00AA00" 2>/dev/null
+}
+
+# Main
 main() {
-    log "X11 Splash Debug starting..."
+    log "X11 Splash starting (DISPLAY=$DISPLAY)"
 
-    # Stage 1: X11 is working
-    show_splash "1/4" "X11 Display Server OK"
-    sleep 2
-
-    # Stage 2: Check network
-    show_splash "2/4" "Checking network..."
-    if ip addr show dummy0 2>/dev/null | grep -q "192.168.255.1"; then
-        show_splash "2/4" "Network: dummy0 ready (192.168.255.1)"
+    # Try zenity first (best UX)
+    if command -v zenity &>/dev/null; then
+        show_zenity_progress
+    # Try feh with image
+    elif command -v feh &>/dev/null; then
+        show_feh_splash
+    # Try xmessage
+    elif command -v xmessage &>/dev/null; then
+        show_xmessage_splash
+    # Ultimate fallback: color changes
     else
-        show_splash "2/4" "Network: Waiting for interface..."
+        show_color_progress
     fi
-    sleep 2
 
-    # Stage 3: Check nginx
-    show_splash "3/4" "Checking nginx..."
-    if systemctl is-active nginx &>/dev/null; then
-        show_splash "3/4" "nginx: RUNNING"
-    else
-        show_splash "3/4" "nginx: waiting..."
-    fi
-    sleep 2
-
-    # Stage 4: Ready for Chromium
-    show_splash "4/4" "Starting Chromium browser..."
-    sleep 1
-
-    cleanup
-    log "Splash complete, handing off to Chromium"
+    log "X11 Splash complete"
 }
 
 main "$@"
