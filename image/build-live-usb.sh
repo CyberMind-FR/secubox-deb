@@ -14,7 +14,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 
 # ── Version & Build Info ──────────────────────────────────────────
-SECUBOX_VERSION="1.6.7.4"
+SECUBOX_VERSION="1.6.7.5"
 BUILD_TIMESTAMP=$(date '+%Y-%m-%d %H:%M')
 BUILD_DATE=$(date '+%Y%m%d')
 
@@ -1721,6 +1721,7 @@ if [[ $INCLUDE_KIOSK -eq 1 ]]; then
     xserver-xorg-video-vesa \
     fonts-dejavu-core fonts-noto-color-emoji unclutter kbd \
     libinput10 xdg-utils \
+    feh zenity \
     virtualbox-guest-x11 virtualbox-guest-utils 2>/dev/null || warn "Some X11 packages failed"
 
   # Configure fontconfig to use Noto Color Emoji for emojis (sidebar icons)
