@@ -4,14 +4,44 @@
 #  Uses nodm display manager for reliable X11 startup
 #  Compatible with VirtualBox, VMware, QEMU, bare metal
 # ══════════════════════════════════════════════════════════════════
-set -euo pipefail
+# NOTE: Not using pipefail - we need graceful degradation on real HW
+set -u
 
 readonly KIOSK_USER="secubox-kiosk"
 readonly KIOSK_HOME="/home/secubox-kiosk"
 readonly LOG_TAG="secubox-kiosk"
+readonly FAIL_COUNT_FILE="/tmp/.kiosk-fail-count"
+readonly MAX_FAILURES=3
 
 log() { echo "[kiosk] $*" >&2; logger -t "$LOG_TAG" "$*" 2>/dev/null || true; }
 err() { echo "[kiosk] ERROR: $*" >&2; logger -t "$LOG_TAG" -p err "$*" 2>/dev/null || true; }
+
+# Track failures to prevent infinite restart loop
+track_failure() {
+    local count=0
+    [[ -f "$FAIL_COUNT_FILE" ]] && count=$(cat "$FAIL_COUNT_FILE" 2>/dev/null || echo 0)
+    count=$((count + 1))
+    echo "$count" > "$FAIL_COUNT_FILE"
+
+    if [[ $count -ge $MAX_FAILURES ]]; then
+        err "Too many failures ($count). Disabling kiosk to prevent boot loop."
+        rm -f /var/lib/secubox/.kiosk-enabled
+        # Show message on console
+        echo ""
+        echo "╔═══════════════════════════════════════════════════════════╗"
+        echo "║  KIOSK DISABLED - Too many X11 failures                   ║"
+        echo "║  Check: journalctl -u secubox-kiosk                       ║"
+        echo "║  Re-enable: touch /var/lib/secubox/.kiosk-enabled         ║"
+        echo "╚═══════════════════════════════════════════════════════════╝"
+        echo ""
+        exit 1
+    fi
+    log "Failure $count of $MAX_FAILURES"
+}
+
+clear_failures() {
+    rm -f "$FAIL_COUNT_FILE"
+}
 
 # ══════════════════════════════════════════════════════════════════
 # DEBUG: Generate diagnostic report for VirtualBox/VM troubleshooting
@@ -109,11 +139,21 @@ generate_debug_report() {
 # LOCK: Prevent .bash_profile's start-kiosk from running in parallel
 # ══════════════════════════════════════════════════════════════════
 readonly LOCK_FILE="/tmp/.kiosk-starting"
+
+# Clean up stale lock files (PID no longer running or fresh boot)
 if [[ -f "$LOCK_FILE" ]]; then
-    log "Lock file exists - kiosk already starting/running"
-    exit 0
+    old_pid=$(cat "$LOCK_FILE" 2>/dev/null || echo "")
+    if [[ -n "$old_pid" ]] && kill -0 "$old_pid" 2>/dev/null; then
+        log "Lock file exists - kiosk already starting/running (PID $old_pid)"
+        exit 0
+    else
+        log "Removing stale lock file (old PID: $old_pid)"
+        rm -f "$LOCK_FILE"
+    fi
 fi
-touch "$LOCK_FILE"
+
+# Create lock file with our PID
+echo "$$" > "$LOCK_FILE"
 trap 'rm -f "$LOCK_FILE"' EXIT
 
 # ══════════════════════════════════════════════════════════════════
@@ -146,19 +186,48 @@ configure_x11() {
     local vm_type driver="modesetting"
     vm_type=$(systemd-detect-virt 2>/dev/null || echo "none")
 
-    # Detect graphics hardware
-    if lspci 2>/dev/null | grep -qi "VMware SVGA\|VMSVGA"; then
+    # Detect graphics hardware - VMs first, then real hardware
+    local gpu_info
+    gpu_info=$(lspci 2>/dev/null | grep -iE "vga|display|3d" || echo "")
+    log "GPU detected: $gpu_info"
+
+    if echo "$gpu_info" | grep -qi "VMware SVGA\|VMSVGA"; then
         driver="vmware"
         log "Detected VMSVGA graphics → vmware driver"
-    elif lspci 2>/dev/null | grep -qi "VirtualBox"; then
+    elif echo "$gpu_info" | grep -qi "VirtualBox"; then
         driver="vboxvideo"
         modprobe vboxvideo 2>/dev/null || driver="modesetting"
         log "Detected VirtualBox → $driver driver"
-    elif lspci 2>/dev/null | grep -qi "QXL\|Virtio"; then
+    elif echo "$gpu_info" | grep -qi "QXL\|Virtio"; then
         driver="modesetting"
         log "Detected QEMU/KVM → modesetting driver"
+    elif echo "$gpu_info" | grep -qi "Intel"; then
+        # Intel integrated - use modesetting (i915 DRM)
+        modprobe i915 2>/dev/null || true
+        driver="modesetting"
+        log "Detected Intel GPU → modesetting driver"
+    elif echo "$gpu_info" | grep -qi "AMD\|ATI\|Radeon"; then
+        # AMD/ATI - use modesetting (amdgpu/radeon DRM)
+        modprobe amdgpu 2>/dev/null || modprobe radeon 2>/dev/null || true
+        driver="modesetting"
+        log "Detected AMD/ATI GPU → modesetting driver"
+    elif echo "$gpu_info" | grep -qi "NVIDIA"; then
+        # NVIDIA - nouveau (open) or fallback
+        modprobe nouveau 2>/dev/null || true
+        driver="modesetting"
+        log "Detected NVIDIA GPU → modesetting driver (nouveau)"
+    elif [[ -d /dev/dri ]] && ls /dev/dri/card* 2>/dev/null; then
+        # DRM device exists - use modesetting
+        driver="modesetting"
+        log "DRM device found → modesetting driver"
+    elif [[ -e /dev/fb0 ]]; then
+        # Framebuffer exists - use fbdev as fallback
+        driver="fbdev"
+        log "Framebuffer found → fbdev driver (fallback)"
     else
-        log "Using default modesetting driver"
+        # Ultimate fallback
+        driver="vesa"
+        log "No GPU detected → vesa driver (safe mode)"
     fi
 
     # Clean existing configs
@@ -255,6 +324,24 @@ create_session() {
     mkdir -p "$KIOSK_HOME/.config/chromium"
     chown -R "$KIOSK_USER:$KIOSK_USER" "$KIOSK_HOME/.config"
 
+    # Detect if we're in a VM or on real hardware
+    local vm_type chromium_gpu_flags
+    vm_type=$(systemd-detect-virt 2>/dev/null | tr -d '\n' || echo "none")
+
+    if [[ "$vm_type" == "none" ]]; then
+        # Real hardware - enable GPU acceleration
+        chromium_gpu_flags="--enable-features=VaapiVideoDecoder"
+        log "Real hardware detected - GPU acceleration enabled"
+    else
+        # VM - disable GPU to prevent crashes
+        chromium_gpu_flags="--disable-gpu --disable-gpu-compositing --disable-software-rasterizer"
+        log "VM detected ($vm_type) - GPU disabled"
+    fi
+
+    # Write GPU flags for session to read
+    echo "$chromium_gpu_flags" > "$KIOSK_HOME/.chromium-gpu-flags"
+    chown "$KIOSK_USER:$KIOSK_USER" "$KIOSK_HOME/.chromium-gpu-flags"
+
     # Session script with simple splash and debug logging
     cat > "$KIOSK_HOME/.xsession" <<'XSESSION'
 #!/bin/bash
@@ -274,29 +361,49 @@ xset -dpms 2>/dev/null || echo "xset -dpms failed"
 xset s noblank 2>/dev/null || echo "xset s noblank failed"
 
 # Set dark background immediately
-xsetroot -solid "#0a1a0a" 2>/dev/null || echo "xsetroot failed"
+xsetroot -solid "#001100" 2>/dev/null || echo "xsetroot failed"
 echo "Background set"
 
-# Show X11 splash screen while waiting for services
-if [[ -x /usr/sbin/secubox-x11-splash ]]; then
-    echo "Running X11 splash..."
-    /usr/sbin/secubox-x11-splash &
-    SPLASH_PID=$!
-fi
+# DEBUG: Show visible status on screen using xmessage (non-blocking)
+# This helps diagnose where the freeze happens
+show_debug() {
+    local msg="$1"
+    echo "[DEBUG] $msg"
+    logger -t secubox-kiosk "[DEBUG] $msg"
+    # Show on screen if xmessage available
+    if command -v xmessage &>/dev/null; then
+        pkill -f "xmessage.*SecuBox" 2>/dev/null || true
+        xmessage -center -timeout 3 -buttons "" "SecuBox: $msg" &
+    fi
+}
 
-# Wait for nginx (max 15s)
+show_debug "X11 started, waiting for nginx..."
+
+# SPLASH DISABLED - was causing freezes
+# if [[ -x /usr/sbin/secubox-x11-splash ]]; then
+#     /usr/sbin/secubox-x11-splash &
+#     SPLASH_PID=$!
+# fi
+
+# Wait for nginx (max 15s) with visible feedback
 echo "Waiting for nginx..."
 for i in {1..15}; do
     if curl -sk --connect-timeout 1 https://localhost/ >/dev/null 2>&1; then
         echo "nginx ready after ${i}s"
+        show_debug "nginx ready! Starting browser..."
         break
     fi
+    # Change background color as visual progress indicator
+    case $((i % 3)) in
+        0) xsetroot -solid "#002200" 2>/dev/null ;;
+        1) xsetroot -solid "#003300" 2>/dev/null ;;
+        2) xsetroot -solid "#004400" 2>/dev/null ;;
+    esac
     sleep 1
 done
 
-# Kill splash before starting Chromium
-[[ -n "$SPLASH_PID" ]] && kill "$SPLASH_PID" 2>/dev/null
-sleep 0.5
+# Brief pause before Chromium
+sleep 1
 
 # Determine URL
 URL="https://localhost/"
@@ -325,22 +432,30 @@ echo "Screen resolution: ${WIDTH}x${HEIGHT}"
 logger -t secubox-kiosk "Launching Chromium: $URL (${WIDTH}x${HEIGHT})"
 echo "Launching Chromium: $URL"
 
-# Chromium with explicit window size for reliable fullscreen
-# --kiosk is more reliable than --start-fullscreen for embedded systems
-# --test-type suppresses the "unsupported flag" warning banner
+# Read GPU flags (set by launcher based on VM/hardware detection)
+GPU_FLAGS=""
+if [[ -f "$HOME/.chromium-gpu-flags" ]]; then
+    GPU_FLAGS=$(cat "$HOME/.chromium-gpu-flags")
+    echo "GPU flags: $GPU_FLAGS"
+fi
+
+# Chromium kiosk mode
+# --start-fullscreen instead of --kiosk (allows Escape to exit if stuck)
+# GPU flags are dynamic based on hardware detection
 exec chromium \
-    --kiosk \
+    --start-fullscreen \
     --window-size=${WIDTH},${HEIGHT} \
     --window-position=0,0 \
     --no-first-run \
-    --disable-gpu \
-    --disable-software-rasterizer \
+    $GPU_FLAGS \
+    --disable-background-networking \
+    --disable-dev-shm-usage \
     --noerrdialogs \
     --disable-translate \
     --ignore-certificate-errors \
     --test-type \
-    --disable-features=TranslateUI \
     --disable-infobars \
+    --disable-hang-monitor \
     "$URL"
 XSESSION
 
@@ -436,6 +551,7 @@ start_display() {
 
     # Verify X is running
     if ! kill -0 "$x_pid" 2>/dev/null; then
+        track_failure
         err "Xorg process died! Check $x_log"
         err "▶ XORG FAILURE DEBUG:"
         {
@@ -458,6 +574,7 @@ start_display() {
     fi
 
     if [[ ! -S /tmp/.X11-unix/X0 ]]; then
+        track_failure
         err "X11 socket not created after 30s"
         err "▶ X11 SOCKET DEBUG:"
         {
@@ -482,6 +599,9 @@ start_display() {
 
     log "X server running, launching session as $KIOSK_USER..."
 
+    # X started successfully - clear failure count
+    clear_failures
+
     # Switch to VT7 explicitly
     chvt 7 2>/dev/null || true
 
@@ -501,11 +621,32 @@ start_display() {
 # MAIN
 # ══════════════════════════════════════════════════════════════════
 main() {
+    # Console banner FIRST - visible to user before X starts
+    echo ""
+    echo "╔═══════════════════════════════════════════════════════════╗"
+    echo "║     SecuBox Kiosk Launcher v3.2 (1.6.7.11)                ║"
+    echo "╚═══════════════════════════════════════════════════════════╝"
+    echo ""
+
     log "════════════════════════════════════════════════"
-    log "SecuBox Kiosk Launcher v2.7 (1.6.7.5) - Splash Enabled"
+    log "SecuBox Kiosk Launcher v3.2 (1.6.7.11)"
     log "════════════════════════════════════════════════"
 
-    # Generate debug report FIRST for troubleshooting
+    # Show hardware info on console
+    local vm_type platform_name gpu_info
+    vm_type=$(systemd-detect-virt 2>/dev/null || echo "none")
+    if [[ "$vm_type" == "none" ]]; then
+        platform_name="bare-metal (native)"
+    else
+        platform_name="$vm_type (VM)"
+    fi
+    gpu_info=$(lspci 2>/dev/null | grep -iE "vga|display" | head -1 || echo "unknown")
+
+    echo "  Platform: $platform_name"
+    echo "  GPU: $gpu_info"
+    echo ""
+
+    # Generate debug report for troubleshooting
     generate_debug_report
 
     check_prerequisites
@@ -515,6 +656,11 @@ main() {
     url=$(determine_url)
 
     create_session "$url"
+
+    echo "  Starting X11 on VT7..."
+    echo "  (If screen stays black, press Ctrl+Alt+F1 for console)"
+    echo ""
+
     start_display
 }
 

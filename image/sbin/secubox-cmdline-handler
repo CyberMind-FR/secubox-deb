@@ -143,21 +143,29 @@ apply_settings() {
         touch "${MARKER_DIR}/.kiosk-enabled"
 
         # Check if kiosk packages are already installed (pre-baked in image)
-        if command -v cage >/dev/null 2>&1 && command -v chromium >/dev/null 2>&1; then
+        # Support both X11 (xinit/Xorg) and Wayland (cage)
+        local has_display=0
+        if command -v xinit >/dev/null 2>&1 || command -v Xorg >/dev/null 2>&1; then
+            log "X11 kiosk environment detected"
+            has_display=1
+        elif command -v cage >/dev/null 2>&1; then
+            log "Wayland (cage) kiosk environment detected"
+            has_display=1
+        fi
+
+        if [[ "$has_display" == "1" ]] && command -v chromium >/dev/null 2>&1; then
             log "Kiosk packages present, enabling kiosk mode"
 
             # Setup user and scripts if needed (this doesn't require network)
             if [[ -x /usr/sbin/secubox-kiosk-setup ]]; then
                 # Just setup user/scripts, don't try apt-get install
-                /usr/sbin/secubox-kiosk-setup enable 2>/dev/null || log "Kiosk enable deferred to graphical.target"
+                /usr/sbin/secubox-kiosk-setup enable 2>/dev/null || log "Kiosk enable deferred"
             fi
 
-            # Set graphical target for this boot
-            systemctl set-default graphical.target 2>/dev/null || true
+            # NOTE: Do NOT set graphical.target - kiosk service runs in multi-user.target
+            # The service is enabled and will start automatically
 
-            # Explicitly start kiosk service (condition was already evaluated by systemd)
-            log "Starting kiosk service..."
-            systemctl start secubox-kiosk.service 2>/dev/null || log "Kiosk service start deferred"
+            log "Kiosk mode enabled - service will start via multi-user.target"
         else
             log "Kiosk packages NOT present - use --kiosk flag when building live USB"
             log "Will attempt installation when network is available"

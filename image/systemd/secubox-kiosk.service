@@ -13,8 +13,16 @@ After=nginx.service
 # Take over VT7
 Conflicts=getty@tty7.service
 
+# Rate-limit restarts to prevent VT freeze from rapid cycling
+StartLimitBurst=3
+StartLimitIntervalSec=120
+
 [Service]
 Type=simple
+
+# Clean VT state before starting
+ExecStartPre=+/usr/bin/chvt 7
+ExecStartPre=+/usr/bin/clear
 
 # Check if kiosk is enabled
 ExecStartPre=+/bin/sh -c '[ -f /var/lib/secubox/.kiosk-enabled ] || exit 1'
@@ -22,15 +30,19 @@ ExecStartPre=+/bin/sh -c '[ -f /var/lib/secubox/.kiosk-enabled ] || exit 1'
 # Run the launcher (execs to xinit, keeps running)
 ExecStart=/usr/sbin/secubox-kiosk-launcher
 
+# Clean up X on stop
+ExecStopPost=-/usr/bin/pkill -9 Xorg
+ExecStopPost=-/usr/bin/chvt 1
+
 # Use VT7 for X11
 TTYPath=/dev/tty7
 TTYReset=yes
 TTYVHangup=yes
 TTYVTDisallocate=yes
 
-# Restart on failure (X crash, etc)
+# Restart on failure but with longer delay
 Restart=on-failure
-RestartSec=5
+RestartSec=15
 
 # Give X time to start
 TimeoutStartSec=120
