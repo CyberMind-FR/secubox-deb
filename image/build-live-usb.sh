@@ -1775,6 +1775,10 @@ if [[ $INCLUDE_KIOSK -eq 1 ]]; then
     feh zenity \
     virtualbox-guest-x11 virtualbox-guest-utils 2>/dev/null || warn "Some X11 packages failed"
 
+  # Explicitly install emoji font (critical for sidebar icons)
+  log "Installing emoji font package..."
+  chroot "${ROOTFS}" env DEBIAN_FRONTEND=noninteractive apt-get install -y -q fonts-noto-color-emoji || warn "Emoji font install failed"
+
   # Configure fontconfig to use Noto Color Emoji for emojis (sidebar icons)
   log "Configuring fontconfig for emoji support..."
   mkdir -p "${ROOTFS}/etc/fonts/conf.d"
