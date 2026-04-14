@@ -9,6 +9,20 @@
 /* ── IMPORT DESIGN TOKENS ── */
 @import url('./design-tokens.css');
 
+/* ── EMOJI FONT FALLBACK ── */
+/* Force browser to use system emoji fonts with explicit fallback */
+@font-face {
+  font-family: 'Emoji';
+  src: local('Noto Color Emoji'),
+       local('Apple Color Emoji'),
+       local('Segoe UI Emoji'),
+       local('Segoe UI Symbol'),
+       local('Symbola'),
+       local('EmojiOne Color'),
+       local('Twemoji Mozilla');
+  unicode-range: U+1F000-1F9FF, U+2600-26FF, U+2700-27BF, U+FE00-FE0F, U+1F100-1F1FF;
+}
+
 /* ── SIDEBAR CONTAINER ── */
 .sidebar {
   position: fixed;
@@ -64,7 +78,9 @@
 .logo-icon {
   font-size: 1.3rem;
   filter: drop-shadow(0 0 6px rgba(20,140,102,0.5));
-  font-family: 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', sans-serif;
+  font-family: 'Emoji', 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Symbola', sans-serif;
+  font-style: normal;
+  -webkit-font-smoothing: antialiased;
 }
 
 .logo-version {
@@ -127,9 +143,11 @@
 }
 
 .nav-section-title .cat-icon {
-  font-family: 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', sans-serif;
+  font-family: 'Emoji', 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Symbola', sans-serif;
   font-size: 0.9rem;
   line-height: 1;
+  font-style: normal;
+  -webkit-font-smoothing: antialiased;
 }
 
 .nav-section-title .toggle-icon {
@@ -198,8 +216,10 @@
   font-size: 0.95rem;
   width: 1.3rem;
   text-align: center;
-  font-family: 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', sans-serif;
+  font-family: 'Emoji', 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Symbola', sans-serif;
   line-height: 1;
+  font-style: normal;
+  -webkit-font-smoothing: antialiased;
 }
 
 .nav-item span:not(.icon):not(.status-dot) {

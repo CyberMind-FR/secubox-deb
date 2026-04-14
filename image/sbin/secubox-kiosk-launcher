@@ -459,9 +459,21 @@ if [[ -f "$HOME/.chromium-gpu-flags" ]]; then
     echo "GPU flags: $GPU_FLAGS"
 fi
 
+# Rebuild font cache to ensure emoji fonts are registered
+echo "Rebuilding font cache..."
+fc-cache -f 2>/dev/null || echo "fc-cache failed (non-fatal)"
+
+# Verify emoji font is available
+if fc-list 2>/dev/null | grep -qi "noto.*emoji"; then
+    echo "✓ Noto Color Emoji font available"
+else
+    echo "⚠ Emoji font not found - icons may appear as boxes"
+fi
+
 # Chromium kiosk mode
 # --start-fullscreen instead of --kiosk (allows Escape to exit if stuck)
 # GPU flags are dynamic based on hardware detection
+# Font flags ensure proper emoji/Unicode rendering
 exec chromium \
     --start-fullscreen \
     --window-size=${WIDTH},${HEIGHT} \
@@ -476,6 +488,9 @@ exec chromium \
     --test-type \
     --disable-infobars \
     --disable-hang-monitor \
+    --enable-features=UseOzonePlatform \
+    --ozone-platform=x11 \
+    --force-color-profile=srgb \
     "$URL"
 XSESSION
 

@@ -4,16 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SecuBox Control Center</title>
-    <!-- Force browser to use system fonts including emoji -->
-    <style>
-        /* Ensure emoji rendering with system fonts */
-        @font-face {
-            font-family: 'SystemEmoji';
-            src: local('Noto Color Emoji'), local('Apple Color Emoji'),
-                 local('Segoe UI Emoji'), local('Symbola'), local('EmojiOne Color');
-            unicode-range: U+1F000-1F9FF, U+2600-26FF, U+2700-27BF, U+FE00-FE0F;
-        }
-    </style>
     <link rel="stylesheet" href="/shared/design-tokens.css">
     <link rel="stylesheet" href="/shared/crt-light.css">
     <link rel="stylesheet" href="/shared/sidebar-light.css">
@@ -408,33 +398,6 @@
         @media (max-width: 1200px) { .stats-row { grid-template-columns: repeat(3, 1fr); } }
         @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } }
         @media (max-width: 768px) { .sidebar { display: none; } .main { margin-left: 0; } }
-
-        /* Footer — Kiosk mode version display */
-        .footer {
-            position: fixed;
-            bottom: 0;
-            left: 220px;
-            right: 0;
-            padding: 0.5rem 1.5rem;
-            background: var(--surface);
-            border-top: 1px solid var(--border);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: var(--size-xs);
-            font-family: var(--font-mono);
-            color: var(--muted);
-            z-index: 100;
-        }
-        .footer-left, .footer-right { display: flex; gap: 1.5rem; align-items: center; }
-        .footer-item { display: flex; align-items: center; gap: 0.5rem; }
-        .footer-item .label { color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
-        .footer-item .value { color: var(--text); }
-        .footer-item .value.kiosk { color: var(--mesh-main); }
-        .footer-item .value.console { color: var(--wall-main); }
-        .footer-item .value.zkp { color: var(--root-main); }
-        .footer-item .value.standard { color: var(--muted); }
-        @media (max-width: 768px) { .footer { left: 0; } }
     </style>
 </head>
 <body class="crt-light">
@@ -601,32 +564,6 @@
 
         </div>
     </main>
-
-    <footer class="footer" id="footer">
-        <div class="footer-left">
-            <div class="footer-item">
-                <span class="label">SecuBox</span>
-                <span class="value" id="footer-version">v1.7.0</span>
-            </div>
-            <div class="footer-item">
-                <span class="label">Mode</span>
-                <span class="value" id="footer-boot-mode">--</span>
-            </div>
-            <div class="footer-item">
-                <span class="label">Auth</span>
-                <span class="value" id="footer-auth-mode">--</span>
-            </div>
-        </div>
-        <div class="footer-right">
-            <div class="footer-item">
-                <span class="label">Uptime</span>
-                <span class="value" id="footer-uptime">--</span>
-            </div>
-            <div class="footer-item">
-                <span class="value" style="color: var(--muted);">CyberMind</span>
-            </div>
-        </div>
-    </footer>
 
     <script>
         const API = '/api/v1/hub';
@@ -851,57 +788,6 @@
             loadNetworkMode();
         }
 
-        async function loadFooter() {
-            // Load version and build info
-            const data = await api('/dashboard');
-            if (data && data.build_info) {
-                const bi = data.build_info;
-                document.getElementById('footer-version').textContent = 'v' + (bi.version || '1.7.0');
-            }
-
-            // Load boot mode (kiosk vs console)
-            const bootModeEl = document.getElementById('footer-boot-mode');
-            try {
-                const modeRes = await api('/boot_mode');
-                if (modeRes && modeRes.mode) {
-                    const mode = modeRes.mode;
-                    bootModeEl.textContent = mode.charAt(0).toUpperCase() + mode.slice(1);
-                    bootModeEl.className = 'value ' + mode;
-                } else {
-                    bootModeEl.textContent = 'Console';
-                    bootModeEl.className = 'value console';
-                }
-            } catch (e) {
-                bootModeEl.textContent = 'Console';
-                bootModeEl.className = 'value console';
-            }
-
-            // Load auth mode (ZKP vs standard)
-            const authModeEl = document.getElementById('footer-auth-mode');
-            try {
-                const authRes = await api('/auth_mode');
-                if (authRes && authRes.mode) {
-                    const mode = authRes.mode.toLowerCase();
-                    authModeEl.textContent = authRes.mode;
-                    authModeEl.className = 'value ' + (mode === 'zkp' ? 'zkp' : 'standard');
-                } else {
-                    authModeEl.textContent = 'Standard';
-                    authModeEl.className = 'value standard';
-                }
-            } catch (e) {
-                authModeEl.textContent = 'Standard';
-                authModeEl.className = 'value standard';
-            }
-
-            // Load uptime
-            try {
-                const uptimeRes = await api('/uptime');
-                if (uptimeRes && uptimeRes.uptime) {
-                    document.getElementById('footer-uptime').textContent = uptimeRes.uptime;
-                }
-            } catch (e) { /* ignore */ }
-        }
-
         async function refresh() {
             await loadMenu();
             loadDashboard();
@@ -909,7 +795,6 @@
             loadAlerts();
             loadNetwork();
             loadNetworkMode();
-            loadFooter();
         }
 
         if (checkAuth()) {

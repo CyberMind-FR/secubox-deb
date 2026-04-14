@@ -23,7 +23,7 @@ die()  { err "$*"; cleanup; exit 1; }
 
 # ── Build Configuration ────────────────────────────────────────────
 # These can be overridden by profiles
-BUILD_VERSION="${BUILD_VERSION:-1.6.1}"
+BUILD_VERSION="${BUILD_VERSION:-1.7.0}"
 BUILD_DATE=$(date +%Y%m%d)
 DEBIAN_RELEASE="${DEBIAN_RELEASE:-bookworm}"
 DEBIAN_MIRROR="${DEBIAN_MIRROR:-http://deb.debian.org/debian}"

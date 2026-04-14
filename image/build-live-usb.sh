@@ -169,7 +169,7 @@ mkdir -p "${ROOTFS}"
 
 INCLUDE_PKGS="systemd,systemd-sysv,dbus,netplan.io,nftables,openssh-server,locales"
 INCLUDE_PKGS+=",python3,python3-pip,nginx,curl,wget,ca-certificates,gnupg,console-setup"
-INCLUDE_PKGS+=",iproute2,iputils-ping,ethtool,net-tools,wireguard-tools"
+INCLUDE_PKGS+=",iproute2,iputils-ping,ethtool,net-tools,wireguard-tools,isc-dhcp-client"
 INCLUDE_PKGS+=",sudo,less,vim-tiny,logrotate,cron,rsync,jq,dnsmasq"
 INCLUDE_PKGS+=",linux-image-amd64,live-boot,live-boot-initramfs-tools,live-config,live-config-systemd"
 INCLUDE_PKGS+=",grub-efi-amd64,grub-pc-bin,efibootmgr,pciutils,usbutils,parted,dosfstools,lsb-release"
@@ -653,16 +653,30 @@ network:
   version: 2
   renderer: networkd
   ethernets:
-    # All Intel/Realtek/etc wired interfaces (enp*, eno*, enx*, ens*)
+    # All wired interfaces (enp*, eno*, enx*, ens*, eth*)
     all-wired:
       match:
         name: "e*"
-        driver: "*"
       dhcp4: true
       dhcp4-overrides:
+        route-metric: 100
         use-dns: true
         use-routes: true
       optional: true
+  wifis:
+    # All WiFi interfaces (wlp*, wlan*, wl*)
+    all-wifi:
+      match:
+        name: "w*"
+      dhcp4: true
+      dhcp4-overrides:
+        route-metric: 200
+        use-dns: true
+        use-routes: true
+      optional: true
+      access-points:
+        # Open networks (fallback)
+        "": {}
 NETPLAN
 chmod 600 "${ROOTFS}/etc/netplan/00-secubox.yaml"
 
@@ -724,8 +738,11 @@ discover_lan() {
     return 1
 }
 
-# Wait a bit for interfaces to come up
-sleep 5
+# Wait for networkd to fully initialize
+sleep 10
+
+# Track if any interface got a real IP
+GOT_IP=0
 
 # Find all physical network interfaces (exclude lo, docker, veth, dummy, etc)
 for iface in /sys/class/net/*; do
@@ -746,51 +763,73 @@ for iface in /sys/class/net/*; do
     # Bring interface up
     ip link set "$IFACE" up 2>/dev/null
 
-    # Check if interface has an IP (not link-local)
-    if ip addr show "$IFACE" | grep -q "inet " | grep -v "169.254"; then
-        logger -t secubox-net "Interface $IFACE already has IP"
+    # Check if interface has a valid IP (not link-local 169.254)
+    CURRENT_IP=$(ip -4 addr show "$IFACE" 2>/dev/null | grep -oP 'inet \K[0-9.]+' | grep -v '^169\.254\.' | head -1)
+    if [[ -n "$CURRENT_IP" ]]; then
+        logger -t secubox-net "Interface $IFACE has IP $CURRENT_IP"
+        GOT_IP=1
         continue
     fi
 
-    logger -t secubox-net "No IP on $IFACE, triggering DHCP..."
+    logger -t secubox-net "No valid IP on $IFACE, requesting DHCP..."
 
-    # Try DHCP via networkctl
-    networkctl reconfigure "$IFACE" 2>/dev/null || true
-    sleep 10
-
-    # Check again for valid IP (not link-local)
-    if ip addr show "$IFACE" | grep "inet " | grep -qv "169.254"; then
-        logger -t secubox-net "DHCP succeeded on $IFACE"
-        continue
-    fi
-
-    # DHCP failed - try auto-discovery
-    logger -t secubox-net "DHCP failed on $IFACE, trying LAN auto-discovery..."
-
-    if discover_lan "$IFACE"; then
-        logger -t secubox-net "LAN auto-discovery succeeded on $IFACE"
+    # Try dhclient for more reliable DHCP (if available)
+    if command -v dhclient &>/dev/null; then
+        timeout 30 dhclient -1 -v "$IFACE" 2>&1 | logger -t secubox-net || true
     else
-        # Ultimate fallback: link-local
-        logger -t secubox-net "LAN discovery failed, using link-local on $IFACE"
-        ip addr add 169.254.1.1/16 dev "$IFACE" 2>/dev/null || true
+        # Fallback to networkctl
+        networkctl reconfigure "$IFACE" 2>/dev/null || true
+        sleep 15
+    fi
+
+    # Check if DHCP succeeded
+    CURRENT_IP=$(ip -4 addr show "$IFACE" 2>/dev/null | grep -oP 'inet \K[0-9.]+' | grep -v '^169\.254\.' | head -1)
+    if [[ -n "$CURRENT_IP" ]]; then
+        logger -t secubox-net "DHCP succeeded on $IFACE: $CURRENT_IP"
+        GOT_IP=1
+        continue
+    fi
+
+    # DHCP failed - try auto-discovery on wired interfaces only
+    if [[ "$IFACE" == e* ]]; then
+        logger -t secubox-net "DHCP failed on $IFACE, trying LAN auto-discovery..."
+        if discover_lan "$IFACE"; then
+            logger -t secubox-net "LAN auto-discovery succeeded on $IFACE"
+            GOT_IP=1
+        fi
     fi
 done
+
+# Only assign link-local to first interface without IP if NO interface got a real IP
+# This preserves dummy0's 192.168.255.1 for local access
+if [[ "$GOT_IP" -eq 0 ]]; then
+    FIRST_IFACE=$(ls -1 /sys/class/net/ | grep -E '^e' | head -1)
+    if [[ -n "$FIRST_IFACE" ]]; then
+        logger -t secubox-net "No DHCP anywhere, assigning link-local to $FIRST_IFACE"
+        ip addr add 169.254.1.1/16 dev "$FIRST_IFACE" 2>/dev/null || true
+    fi
+fi
 
 logger -t secubox-net "Network fallback complete"
 FALLBACK
 chmod +x "${ROOTFS}/usr/sbin/secubox-net-fallback"
 
-# Systemd service for fallback
+# Systemd service for fallback - runs late to give DHCP time
 cat > "${ROOTFS}/etc/systemd/system/secubox-net-fallback.service" <<EOF
 [Unit]
 Description=SecuBox Network Fallback
-After=network-online.target
+After=network-online.target systemd-networkd.service
 Wants=network-online.target
+# Give networkd 30 seconds to complete DHCP before running fallback
+ConditionPathExists=!/var/lib/secubox/.network-ok
 
 [Service]
 Type=oneshot
+# Initial delay to let DHCP complete
+ExecStartPre=/bin/sleep 15
 ExecStart=/usr/sbin/secubox-net-fallback
 RemainAfterExit=yes
+TimeoutStartSec=120
 
 [Install]
 WantedBy=multi-user.target
@@ -980,11 +1019,17 @@ log "Installing Python dependencies..."
 chroot "${ROOTFS}" apt-get install -y -q python3-pip python3-venv 2>/dev/null || true
 chroot "${ROOTFS}" pip3 install --break-system-packages -q \
   fastapi uvicorn[standard] python-jose[cryptography] httpx \
-  jinja2 tomli toml pyroute2 psutil pydantic \
+  jinja2 tomli toml pyroute2 psutil 'pydantic[email]' \
   aiofiles aiosqlite authlib cryptography \
-  python-multipart websockets netifaces \
+  python-multipart websockets netifaces email-validator \
   2>&1 | tail -10 || true
 ok "Python dependencies installed"
+
+# Create symlinks for uvicorn to ensure all service files can find it
+# pip installs to /usr/local/bin/, but some services expect /usr/bin/
+log "Creating uvicorn symlinks for service compatibility..."
+chroot "${ROOTFS}" ln -sf /usr/local/bin/uvicorn /usr/bin/uvicorn 2>/dev/null || true
+ok "uvicorn symlinks created"
 
 # ── Pre-generate SSL certificates for nginx BEFORE installing packages ──
 # (Package postinst scripts test nginx, which needs certs to exist)
@@ -1042,6 +1087,32 @@ cat > "${ROOTFS}/etc/tmpfiles.d/secubox.conf" << 'TMPFILES'
 d /run/secubox 0775 secubox secubox -
 TMPFILES
 log "tmpfiles.d configured for /run/secubox"
+
+# Create systemd mount unit for /var/lib/secubox tmpfs (required for live boot)
+# This overlays the read-only squashfs with a writable tmpfs
+log "Creating tmpfs mount for /var/lib/secubox (live boot writable layer)..."
+mkdir -p "${ROOTFS}/etc/systemd/system"
+cat > "${ROOTFS}/etc/systemd/system/var-lib-secubox.mount" << 'MOUNTUNIT'
+[Unit]
+Description=SecuBox writable data directory (tmpfs overlay for live boot)
+DefaultDependencies=no
+After=local-fs.target
+Before=sysinit.target
+ConditionPathExists=!/var/lib/secubox/.persistent
+
+[Mount]
+What=tmpfs
+Where=/var/lib/secubox
+Type=tmpfs
+Options=mode=0755,uid=secubox,gid=secubox,size=100M
+
+[Install]
+WantedBy=local-fs.target
+MOUNTUNIT
+
+# Enable the mount unit
+chroot "${ROOTFS}" systemctl enable var-lib-secubox.mount 2>/dev/null || true
+log "tmpfs mount unit created for /var/lib/secubox"
 
 # Find all .deb files in cache/repo or output/
 # Note: Packages may be in output/ directly OR output/debs/ subdirectory
@@ -1770,14 +1841,18 @@ if [[ $INCLUDE_KIOSK -eq 1 ]]; then
     xserver-xorg-video-fbdev \
     xserver-xorg-video-vmware \
     xserver-xorg-video-vesa \
-    fonts-dejavu-core fonts-noto-color-emoji unclutter kbd \
+    fonts-dejavu-core fonts-noto-color-emoji fonts-symbola unclutter kbd \
     libinput10 xdg-utils \
     feh zenity \
     virtualbox-guest-x11 virtualbox-guest-utils 2>/dev/null || warn "Some X11 packages failed"
 
-  # Explicitly install emoji font (critical for sidebar icons)
-  log "Installing emoji font package..."
-  chroot "${ROOTFS}" env DEBIAN_FRONTEND=noninteractive apt-get install -y -q fonts-noto-color-emoji || warn "Emoji font install failed"
+  # Explicitly install emoji/symbol fonts (critical for sidebar icons)
+  log "Installing emoji and symbol font packages..."
+  chroot "${ROOTFS}" env DEBIAN_FRONTEND=noninteractive apt-get install -y -q \
+      fonts-noto-color-emoji fonts-symbola fonts-noto-core 2>/dev/null || warn "Some font packages failed"
+
+  # Also try to install fonts-noto-extra for better Unicode coverage
+  chroot "${ROOTFS}" env DEBIAN_FRONTEND=noninteractive apt-get install -y -q fonts-noto 2>/dev/null || true
 
   # Configure fontconfig to use Noto Color Emoji for emojis (sidebar icons)
   log "Configuring fontconfig for emoji support..."
@@ -1794,18 +1869,22 @@ if [[ $INCLUDE_KIOSK -eq 1 ]]; then
     </edit>
   </match>
 
-  <!-- Add Noto Color Emoji as fallback for all fonts -->
+  <!-- Add Noto Color Emoji and Symbola as fallback for all fonts -->
   <match target="pattern">
     <edit name="family" mode="append">
       <string>Noto Color Emoji</string>
+      <string>Symbola</string>
     </edit>
   </match>
 
-  <!-- Prefer color emoji over text emoji -->
+  <!-- Accept both color and monochrome emoji fonts -->
   <selectfont>
     <acceptfont>
       <pattern>
         <patelt name="family"><string>Noto Color Emoji</string></patelt>
+      </pattern>
+      <pattern>
+        <patelt name="family"><string>Symbola</string></patelt>
       </pattern>
     </acceptfont>
   </selectfont>

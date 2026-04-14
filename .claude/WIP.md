@@ -97,6 +97,90 @@
 
 ---
 
+### Emoji Icon Fix ✅
+
+**Status:** ✅ Implemented — USB ready for testing
+
+#### Issue
+- Icons/emojis in sidebar menus rendering as empty boxes (□)
+- Missing emoji font-family CSS declarations
+
+#### Fix Applied
+- Added `Noto Color Emoji` as first font in font-family stack
+- Wrapped category icons in `.cat-icon` span element with emoji font
+- Updated both `sidebar.css` (dark) and `sidebar-light.css` (light) themes
+- Added explicit `fonts-noto-color-emoji` installation in build script
+- Applied to: `.logo-icon`, `.nav-section-title .cat-icon`, `.nav-item .icon`
+
+#### Files Modified
+- `packages/secubox-hub/www/shared/sidebar.css` — Emoji font-family for icons
+- `packages/secubox-hub/www/shared/sidebar-light.css` — Same for light theme
+- `packages/secubox-hub/www/shared/sidebar.js` — Cat-icon wrapper span
+- `image/build-live-usb.sh` — Explicit emoji font installation
+
+#### Build & Flash
+- ✅ Image built: `output/secubox-live-amd64-bookworm.img.gz` (1.2G)
+- ✅ USB flashed to `/dev/sda` (DataTraveler 3.0, 28.8G)
+- ❌ Hardware test revealed service crashes (see below)
+
+---
+
+### Boot Service Crashes — v1.7.0.1 Fix 🔄
+
+**Status:** 🔄 Building with fixes
+
+#### Issues Found (from USB boot test screenshots)
+
+| Service | Error | Root Cause |
+|---------|-------|------------|
+| `secubox-avatar.service` | `ImportError: email-validator is not installed` | pydantic `EmailStr` requires `email-validator` |
+| `secubox-hardening.service` | `OSError: [Errno 30] Read-only file system: /var/lib/secubox/` | Live squashfs is read-only |
+| `secubox-jitsi/matrix/mesh.service` | `Failed to locate executable /usr/bin/uvicorn` | pip installs to `/usr/local/bin/` |
+| `secubox-haproxy/threats/metrics.service` | `Failed at step NAMESPACE` | Sandboxing on read-only fs |
+
+#### Fixes Applied
+
+1. **Missing email-validator** — Added to pip install:
+   ```bash
+   pip3 install 'pydantic[email]' email-validator
+   ```
+
+2. **Read-only filesystem** — Created systemd tmpfs mount:
+   ```ini
+   # /etc/systemd/system/var-lib-secubox.mount
+   [Mount]
+   What=tmpfs
+   Where=/var/lib/secubox
+   Type=tmpfs
+   Options=mode=0755,uid=secubox,gid=secubox,size=100M
+   ```
+
+3. **uvicorn PATH mismatch** — Added symlink:
+   ```bash
+   ln -sf /usr/local/bin/uvicorn /usr/bin/uvicorn
+   ```
+
+4. **Network still getting 169.254.x.x** — Fixed grep bug in fallback script:
+   ```bash
+   # BUG: grep -q produces no output to pipe
+   if ip addr show "$IFACE" | grep -q "inet " | grep -v "169.254"; then
+   # FIX: Remove -q from first grep
+   if ip addr show "$IFACE" | grep "inet " | grep -qv "169.254"; then
+   ```
+
+5. **Enhanced emoji font support** — Added:
+   - `fonts-symbola`, `fonts-noto-core`, `fonts-noto` packages
+   - Symbola as fontconfig fallback
+   - @font-face with system emoji fallback in CSS
+
+#### Files Modified
+- `image/build-live-usb.sh` — pip packages, symlinks, tmpfs mount unit, fonts
+
+#### Build Status
+- 🔄 Rebuilding image with fixes...
+
+---
+
 ### ⬜ Next Up (Phase 11)
 
 | ID | Task | Status |

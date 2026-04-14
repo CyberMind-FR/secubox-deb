@@ -25,6 +25,10 @@ LOCAL_CACHE_PORT="3142"
 LOCAL_REPO_PORT="8080"
 SLIPSTREAM_DEBS=0     # Intégrer les .deb locaux dans l'image
 
+# SecuBox versioning
+SECUBOX_VERSION="1.7.0"
+BUILD_TIMESTAMP=$(date '+%Y-%m-%d %H:%M')
+
 RED='\033[0;31m'; CYAN='\033[0;36m'; GOLD='\033[0;33m'
 GREEN='\033[0;32m'; NC='\033[0m'; BOLD='\033[1m'
 
@@ -280,6 +284,268 @@ chroot "${ROOTFS}" dpkg-reconfigure -f noninteractive tzdata 2>/dev/null || true
 # netplan de base
 install -d "${ROOTFS}/etc/netplan"
 cp "${BOARD_DIR}/netplan/00-secubox.yaml" "${ROOTFS}/etc/netplan/"
+
+# Dummy interface with fixed IP - always available for kiosk/local access
+cat > "${ROOTFS}/etc/systemd/network/10-dummy0.netdev" <<EOF
+[NetDev]
+Name=dummy0
+Kind=dummy
+EOF
+
+cat > "${ROOTFS}/etc/systemd/network/10-dummy0.network" <<EOF
+[Match]
+Name=dummy0
+
+[Network]
+Address=192.168.255.1/24
+EOF
+
+# Network fallback script - DHCP with smart auto-IP collision avoidance
+cat > "${ROOTFS}/usr/sbin/secubox-net-fallback" <<'FALLBACK'
+#!/bin/bash
+# SecuBox Network Fallback - DHCP first, then smart auto-IP with ARP collision detection
+# Avoids IP conflicts when multiple SecuBox devices are on same network
+logger -t secubox-net "Network fallback starting..."
+
+# Fallback network (SecuBox default when no DHCP)
+FALLBACK_NETWORK="192.168.255"
+FALLBACK_GW="192.168.255.1"
+# IP range for auto-assignment (avoid .1 gateway and .255 broadcast)
+IP_START=100
+IP_END=250
+
+# Check if IP is in use via ARP probe (RFC 5227)
+# Returns 0 if IP is FREE, 1 if IP is TAKEN
+check_ip_free() {
+    local ip="$1"
+    local iface="$2"
+
+    # Send ARP probe (src=0.0.0.0, dst=target IP)
+    # If we get a reply, the IP is taken
+    if command -v arping &>/dev/null; then
+        # arping returns 0 if reply received (IP taken), 1 if no reply (IP free)
+        if arping -D -q -c 2 -w 2 -I "$iface" "$ip" 2>/dev/null; then
+            return 0  # No reply = IP is free
+        else
+            return 1  # Got reply = IP is taken
+        fi
+    else
+        # Fallback: ping check (less reliable but works)
+        if ping -c 1 -W 1 "$ip" &>/dev/null; then
+            return 1  # Got reply = IP is taken
+        else
+            return 0  # No reply = probably free
+        fi
+    fi
+}
+
+# Find a free IP in the fallback range using ARP probing
+find_free_ip() {
+    local iface="$1"
+    local mac=$(cat /sys/class/net/$iface/address 2>/dev/null | tr -d ':')
+
+    # Generate a pseudo-random starting point based on MAC address
+    # This spreads devices across the range to reduce collision probability
+    local mac_seed=$(printf "%d" "0x${mac:8:4}" 2>/dev/null || echo "12345")
+    local range=$((IP_END - IP_START))
+    local start_offset=$((mac_seed % range))
+
+    logger -t secubox-net "Searching for free IP in ${FALLBACK_NETWORK}.${IP_START}-${IP_END} (seed offset: $start_offset)"
+
+    # Try IPs starting from our MAC-based offset, wrapping around
+    for ((i=0; i<range; i++)); do
+        local offset=$(( (start_offset + i) % range ))
+        local test_suffix=$((IP_START + offset))
+        local test_ip="${FALLBACK_NETWORK}.${test_suffix}"
+
+        if check_ip_free "$test_ip" "$iface"; then
+            logger -t secubox-net "Found free IP: $test_ip"
+            echo "$test_ip"
+            return 0
+        else
+            logger -t secubox-net "IP $test_ip is in use, trying next..."
+        fi
+    done
+
+    logger -t secubox-net "ERROR: No free IP found in range!"
+    return 1
+}
+
+# Announce our IP via gratuitous ARP (alert other devices)
+announce_ip() {
+    local ip="$1"
+    local iface="$2"
+
+    if command -v arping &>/dev/null; then
+        # Send gratuitous ARP to announce our presence
+        arping -A -c 3 -I "$iface" "$ip" 2>/dev/null &
+        logger -t secubox-net "Announced IP $ip via gratuitous ARP"
+    fi
+}
+
+# Common gateway IPs to probe for existing networks
+GATEWAYS="192.168.1.1 192.168.0.1 192.168.2.1 192.168.255.1 10.0.0.1 10.0.1.1 172.16.0.1"
+
+discover_lan() {
+    local iface="$1"
+    for gw in $GATEWAYS; do
+        local subnet_base="${gw%.*}"
+
+        # Find a free IP in this subnet
+        local test_ip
+        for suffix in 250 249 248 251 252; do
+            test_ip="${subnet_base}.${suffix}"
+            if check_ip_free "$test_ip" "$iface"; then
+                break
+            fi
+        done
+
+        # Temporarily add IP to test gateway reachability
+        ip addr add "${test_ip}/24" dev "$iface" 2>/dev/null
+
+        if ping -c 1 -W 1 -I "$iface" "$gw" &>/dev/null; then
+            logger -t secubox-net "Discovered gateway $gw on $iface"
+            ip route add default via "$gw" dev "$iface" 2>/dev/null || true
+            echo "nameserver $gw" > /etc/resolv.conf
+            echo "nameserver 8.8.8.8" >> /etc/resolv.conf
+            echo "nameserver 1.1.1.1" >> /etc/resolv.conf
+            announce_ip "$test_ip" "$iface"
+            logger -t secubox-net "Auto-configured $iface: ${test_ip}/24 via $gw"
+            return 0
+        fi
+
+        ip addr del "${test_ip}/24" dev "$iface" 2>/dev/null
+    done
+    return 1
+}
+
+# Configure fallback network with collision-free IP
+configure_fallback() {
+    local iface="$1"
+
+    logger -t secubox-net "Configuring fallback network on $iface"
+
+    # Find a free IP in the fallback range
+    local free_ip
+    free_ip=$(find_free_ip "$iface")
+
+    if [[ -z "$free_ip" ]]; then
+        # Last resort: use MAC-based IP
+        local mac=$(cat /sys/class/net/$iface/address 2>/dev/null | tr -d ':')
+        local mac_suffix=$(printf "%d" "0x${mac:8:4}" 2>/dev/null || echo "200")
+        mac_suffix=$((100 + (mac_suffix % 150)))
+        free_ip="${FALLBACK_NETWORK}.${mac_suffix}"
+        logger -t secubox-net "Using MAC-based fallback IP: $free_ip"
+    fi
+
+    # Configure the IP
+    ip addr add "${free_ip}/24" dev "$iface" 2>/dev/null
+
+    # Check if gateway exists
+    if ping -c 1 -W 1 "$FALLBACK_GW" &>/dev/null; then
+        ip route add default via "$FALLBACK_GW" dev "$iface" 2>/dev/null || true
+        echo "nameserver $FALLBACK_GW" > /etc/resolv.conf
+    fi
+    echo "nameserver 8.8.8.8" >> /etc/resolv.conf
+    echo "nameserver 1.1.1.1" >> /etc/resolv.conf
+
+    # Announce our IP
+    announce_ip "$free_ip" "$iface"
+
+    logger -t secubox-net "Fallback configured: $iface = $free_ip"
+    return 0
+}
+
+# Wait for system to settle
+sleep 10
+GOT_IP=0
+
+# Process each network interface
+for iface in /sys/class/net/*; do
+    [ -e "$iface" ] || continue
+    IFACE=$(basename "$iface")
+
+    # Skip virtual interfaces
+    case "$IFACE" in
+        lo|dummy*|docker*|veth*|br-*|virbr*) continue ;;
+    esac
+
+    # Only process physical network interfaces
+    case "$IFACE" in
+        e*|w*|lan*|eth*|wan*) ;;
+        *) continue ;;
+    esac
+
+    ip link set "$IFACE" up 2>/dev/null
+    sleep 2  # Wait for link
+
+    # Check if already has valid IP
+    CURRENT_IP=$(ip -4 addr show "$IFACE" 2>/dev/null | grep -oP 'inet \K[0-9.]+' | grep -v '^169\.254\.' | head -1)
+    if [[ -n "$CURRENT_IP" ]]; then
+        logger -t secubox-net "Interface $IFACE already has IP $CURRENT_IP"
+        GOT_IP=1
+        continue
+    fi
+
+    # Try DHCP first
+    logger -t secubox-net "Requesting DHCP on $IFACE..."
+    if command -v dhclient &>/dev/null; then
+        timeout 30 dhclient -1 -v "$IFACE" 2>&1 | logger -t secubox-net || true
+    else
+        networkctl reconfigure "$IFACE" 2>/dev/null || true
+        sleep 15
+    fi
+
+    # Check if DHCP succeeded
+    CURRENT_IP=$(ip -4 addr show "$IFACE" 2>/dev/null | grep -oP 'inet \K[0-9.]+' | grep -v '^169\.254\.' | head -1)
+    if [[ -n "$CURRENT_IP" ]]; then
+        logger -t secubox-net "DHCP succeeded on $IFACE: $CURRENT_IP"
+        GOT_IP=1
+        continue
+    fi
+
+    # DHCP failed - try auto-discovery then fallback
+    if [[ "$IFACE" == e* ]] || [[ "$IFACE" == lan* ]] || [[ "$IFACE" == eth* ]] || [[ "$IFACE" == wan* ]]; then
+        logger -t secubox-net "DHCP failed on $IFACE, trying LAN auto-discovery..."
+        if discover_lan "$IFACE"; then
+            logger -t secubox-net "LAN auto-discovery succeeded on $IFACE"
+            GOT_IP=1
+        else
+            logger -t secubox-net "Auto-discovery failed, using fallback network..."
+            if configure_fallback "$IFACE"; then
+                GOT_IP=1
+            fi
+        fi
+    fi
+done
+
+# Final status
+if [[ "$GOT_IP" -eq 1 ]]; then
+    logger -t secubox-net "Network configuration complete"
+else
+    logger -t secubox-net "WARNING: No network configured!"
+fi
+FALLBACK
+chmod +x "${ROOTFS}/usr/sbin/secubox-net-fallback"
+
+# Systemd service for network fallback
+cat > "${ROOTFS}/etc/systemd/system/secubox-net-fallback.service" <<'NETSVC'
+[Unit]
+Description=SecuBox Network Fallback
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-net-fallback
+RemainAfterExit=yes
+TimeoutStartSec=120
+
+[Install]
+WantedBy=multi-user.target
+NETSVC
+chroot "${ROOTFS}" systemctl enable secubox-net-fallback.service 2>/dev/null || true
+
 ok "Configuration base terminée"
 
 # ── Étape 3 : APT SecuBox + paquets ──────────────────────────────
@@ -561,6 +827,276 @@ else
   warn "SSL cert generation failed - nginx may not start"
 fi
 
+# ── SecuBox Profile and Status Scripts ─────────────────────────────
+log "Installing SecuBox profile scripts..."
+
+# Profile.d script for login status display
+mkdir -p "${ROOTFS}/etc/profile.d"
+cat > "${ROOTFS}/etc/profile.d/secubox-login.sh" <<'PROFILE'
+#!/bin/bash
+# SecuBox Login Status Display
+# Shows quick system status on interactive shell login
+
+# Only run on interactive terminals
+[[ $- != *i* ]] && return
+[[ -z "$PS1" ]] && return
+
+# Avoid double display with splash
+[[ -n "$SECUBOX_STATUS_SHOWN" ]] && return
+export SECUBOX_STATUS_SHOWN=1
+
+# Colors
+GOLD='\033[38;5;214m'
+CYAN='\033[38;5;45m'
+GREEN='\033[38;5;82m'
+RED='\033[38;5;196m'
+GRAY='\033[38;5;242m'
+WHITE='\033[38;5;250m'
+RESET='\033[0m'
+
+# Quick status line after MOTD
+show_quick_status() {
+    local ip=$(hostname -I 2>/dev/null | awk '{print $1}')
+    local services_ok=0
+    local services_fail=0
+
+    for svc in nginx secubox-api nftables; do
+        if systemctl is-active --quiet "$svc" 2>/dev/null; then
+            ((services_ok++))
+        else
+            ((services_fail++))
+        fi
+    done
+
+    # Mode indicator
+    local mode_icon="🖥️"
+    local mode_text="Console"
+    if [[ -f /var/lib/secubox/.kiosk-enabled ]]; then
+        mode_icon="🖼️"
+        mode_text="Kiosk"
+    elif [[ -f /var/lib/secubox/.tui-enabled ]]; then
+        mode_icon="📟"
+        mode_text="TUI"
+    fi
+
+    echo ""
+    echo -e "${GRAY}────────────────────────────────────────────────────────────${RESET}"
+    echo -e "  ${mode_icon} ${CYAN}${mode_text}${RESET}  │  ${GREEN}●${RESET} ${services_ok} services  │  🌐 ${CYAN}${ip:-no-ip}${RESET}"
+    echo -e "${GRAY}────────────────────────────────────────────────────────────${RESET}"
+    echo -e "  ${GRAY}Type ${WHITE}secubox-status${GRAY} for details  •  ${WHITE}secubox-help${GRAY} for commands${RESET}"
+    echo ""
+}
+
+# Only show on tty login, not in SSH or within screen/tmux
+if [[ -z "$SSH_TTY" ]] && [[ -z "$TMUX" ]] && [[ -z "$STY" ]]; then
+    show_quick_status
+fi
+PROFILE
+chmod +x "${ROOTFS}/etc/profile.d/secubox-login.sh"
+
+# SecuBox help command
+cat > "${ROOTFS}/usr/bin/secubox-help" <<'HELP_CMD'
+#!/bin/bash
+# SecuBox Quick Help
+GOLD='\033[38;5;214m'
+CYAN='\033[38;5;45m'
+WHITE='\033[38;5;250m'
+GRAY='\033[38;5;242m'
+RESET='\033[0m'
+
+echo -e "${GOLD}"
+echo '  ╭─────────────────────────────────────────────────────────╮'
+echo '  │             ⚡ SecuBox Quick Commands                   │'
+echo '  ╰─────────────────────────────────────────────────────────╯'
+echo -e "${RESET}"
+
+echo -e "  ${WHITE}System${RESET}"
+echo -e "    ${CYAN}secubox-status${GRAY}        System overview with services${RESET}"
+echo -e "    ${CYAN}secubox-logs${GRAY}          Live security logs${RESET}"
+echo -e "    ${CYAN}secubox-services${GRAY}      Manage services${RESET}"
+echo ""
+echo -e "  ${WHITE}Network${RESET}"
+echo -e "    ${CYAN}secubox-network${GRAY}       Network configuration${RESET}"
+echo -e "    ${CYAN}secubox-firewall${GRAY}      Firewall rules status${RESET}"
+echo ""
+echo -e "  ${WHITE}Security${RESET}"
+echo -e "    ${CYAN}secubox-threats${GRAY}       View blocked threats${RESET}"
+echo -e "    ${CYAN}secubox-waf-status${GRAY}    WAF inspection status${RESET}"
+echo ""
+echo -e "  ${WHITE}Modes${RESET}"
+echo -e "    ${CYAN}secubox-mode kiosk${GRAY}    Switch to Kiosk GUI${RESET}"
+echo -e "    ${CYAN}secubox-mode tui${GRAY}      Switch to TUI dashboard${RESET}"
+echo -e "    ${CYAN}secubox-mode console${GRAY}  Switch to shell console${RESET}"
+echo ""
+echo -e "  ${GRAY}Web UI: https://$(hostname -I 2>/dev/null | awk '{print $1}' || echo 'localhost'):9443${RESET}"
+echo ""
+HELP_CMD
+chmod +x "${ROOTFS}/usr/bin/secubox-help"
+
+# SecuBox logs command
+cat > "${ROOTFS}/usr/bin/secubox-logs" <<'LOGS_CMD'
+#!/bin/bash
+# SecuBox Live Security Logs
+echo "📋 SecuBox Security Logs (Ctrl+C to exit)"
+echo "─────────────────────────────────────────"
+journalctl -f -u 'secubox-*' -u crowdsec -u suricata -u nginx --no-pager 2>/dev/null || \
+journalctl -f --no-pager
+LOGS_CMD
+chmod +x "${ROOTFS}/usr/bin/secubox-logs"
+
+# SecuBox status command
+cat > "${ROOTFS}/usr/bin/secubox-status" <<'STATUS_SCRIPT'
+#!/bin/bash
+# SecuBox Status - CRT-style system overview
+# CyberMind — https://cybermind.fr
+
+# Colors
+GOLD='\033[38;5;214m'
+CYAN='\033[38;5;45m'
+GREEN='\033[38;5;82m'
+RED='\033[38;5;196m'
+GRAY='\033[38;5;242m'
+WHITE='\033[38;5;250m'
+RESET='\033[0m'
+
+# Status indicators
+ok="${GREEN}●${RESET}"
+fail="${RED}●${RESET}"
+warn="${GOLD}●${RESET}"
+
+# Header
+echo -e "${CYAN}"
+echo '  ╭──────────────────────────────────────────────────────────╮'
+echo '  │           ⚡ SecuBox System Status ⚡                   │'
+echo '  ╰──────────────────────────────────────────────────────────╯'
+echo -e "${RESET}"
+
+# System info
+echo -e "${WHITE}  📊 System Info${RESET}"
+echo -e "     ${GRAY}Hostname:${RESET}  $(hostname)"
+echo -e "     ${GRAY}Uptime:${RESET}    $(uptime -p 2>/dev/null || echo 'N/A')"
+echo -e "     ${GRAY}Memory:${RESET}    $(free -h | awk '/^Mem:/{printf "%s / %s (%.1f%%)", $3, $2, $3/$2*100}')"
+echo -e "     ${GRAY}Disk:${RESET}      $(df -h / | awk 'NR==2{printf "%s / %s (%s)", $3, $2, $5}')"
+echo ""
+
+# Network info
+echo -e "${WHITE}  🌐 Network${RESET}"
+for iface in $(ip -o link show | awk -F': ' '{print $2}' | grep -v '^lo$'); do
+    ip_addr=$(ip -4 addr show "$iface" 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -1)
+    if [[ -n "$ip_addr" ]]; then
+        echo -e "     ${GREEN}●${RESET} ${GRAY}${iface}:${RESET}  ${CYAN}${ip_addr}${RESET}"
+    fi
+done
+echo ""
+
+# Core services
+echo -e "${WHITE}  🔧 Core Services${RESET}"
+services=(nginx haproxy secubox-api secubox-hub crowdsec suricata)
+for svc in "${services[@]}"; do
+    if systemctl is-active --quiet "$svc" 2>/dev/null; then
+        echo -e "     ${ok} ${GRAY}${svc}${RESET}"
+    elif systemctl list-unit-files "${svc}.service" 2>/dev/null | grep -q "$svc"; then
+        echo -e "     ${fail} ${GRAY}${svc}${RESET} (stopped)"
+    fi
+done
+echo ""
+
+# Mode detection
+echo -e "${WHITE}  🎮 Display Mode${RESET}"
+if [[ -f /var/lib/secubox/.kiosk-enabled ]]; then
+    echo -e "     ${ok} ${CYAN}Kiosk GUI${RESET} (Web browser on tty7)"
+elif [[ -f /var/lib/secubox/.tui-enabled ]]; then
+    echo -e "     ${ok} ${CYAN}Console TUI${RESET} (Text dashboard on tty1)"
+else
+    echo -e "     ${warn} ${CYAN}Console Shell${RESET} (Standard login)"
+fi
+echo ""
+
+# Quick links
+echo -e "${GOLD}  ────────────────────────────────────────────────────────────${RESET}"
+echo -e "${WHITE}  🔗 Quick Access${RESET}"
+IP=$(hostname -I | awk '{print $1}')
+echo -e "     ${GRAY}Dashboard:${RESET}  ${CYAN}https://${IP:-localhost}:9443${RESET}"
+echo -e "     ${GRAY}Admin API:${RESET}  ${CYAN}https://${IP:-localhost}:9443/api/v1/${RESET}"
+echo ""
+STATUS_SCRIPT
+chmod +x "${ROOTFS}/usr/bin/secubox-status"
+
+# SecuBox password reset command
+cat > "${ROOTFS}/usr/bin/secubox-passwd" <<'PASSWD_SCRIPT'
+#!/bin/bash
+# SecuBox Password Reset
+set -e
+USERS_FILE="/etc/secubox/users.json"
+CONF_FILE="/etc/secubox/secubox.conf"
+echo "SecuBox Password Reset"
+[[ $EUID -ne 0 ]] && echo "Error: Run as root" && exit 1
+read -sp "New password for admin: " NEW_PASS && echo
+read -sp "Confirm password: " CONFIRM && echo
+[[ "$NEW_PASS" != "$CONFIRM" ]] && echo "Passwords don't match" && exit 1
+[[ ${#NEW_PASS} -lt 4 ]] && echo "Password too short" && exit 1
+NEW_HASH=$(echo -n "$NEW_PASS" | sha256sum | cut -d' ' -f1)
+if [[ -f "$USERS_FILE" ]]; then
+    sed -i "s/\"password_hash\": \"[^\"]*\"/\"password_hash\": \"${NEW_HASH}\"/g" "$USERS_FILE"
+    echo "Updated users.json"
+fi
+if [[ -f "$CONF_FILE" ]]; then
+    sed -i "s/^password = .*/password = \"${NEW_PASS}\"/" "$CONF_FILE"
+    echo "Updated secubox.conf"
+fi
+systemctl restart secubox-portal secubox-hub 2>/dev/null || true
+echo "Password reset complete!"
+PASSWD_SCRIPT
+chmod +x "${ROOTFS}/usr/bin/secubox-passwd"
+
+ok "SecuBox profile scripts installed"
+
+# ── CRT-Style Boot Banners ─────────────────────────────────────────
+log "Creating boot banners..."
+
+# Pre-login banner (/etc/issue)
+printf '%b' "\e[38;5;214m
+   ██████ ███████  ██████ ██    ██ ██████   ██████  ██   ██
+  ██      ██      ██      ██    ██ ██   ██ ██    ██  ██ ██
+  ███████ █████   ██      ██    ██ ██████  ██    ██   ███
+       ██ ██      ██      ██    ██ ██   ██ ██    ██  ██ ██
+  ███████ ███████  ██████  ██████  ██████   ██████  ██   ██
+\e[0m
+\e[38;5;45m  ⚡ CyberMind Security Platform\e[0m  \e[38;5;82mv${SECUBOX_VERSION}\e[0m  \e[38;5;242m\\\\l @ \\\\n\e[0m
+\e[38;5;242m  Build: ${BUILD_TIMESTAMP}\e[0m
+
+\e[38;5;250m  🔐 Default: \e[38;5;214mroot\e[38;5;250m / \e[38;5;214msecubox\e[0m
+\e[38;5;250m  🌐 Web UI: \e[38;5;45mhttps://<IP>:9443\e[0m
+\e[38;5;250m  📡 SSH:    \e[38;5;45mport 22\e[0m
+
+\e[38;5;242m─────────────────────────────────────────────────────────────\e[0m
+
+" > "${ROOTFS}/etc/issue"
+
+# Post-login MOTD
+printf '%b' "\e[38;5;214m
+  ╔═══════════════════════════════════════════════════════════════╗
+  ║\e[38;5;45m   ███████╗███████╗ ██████╗██╗   ██╗██████╗  ██████╗ ██╗  ██╗  \e[38;5;214m║
+  ║\e[38;5;45m   ██╔════╝██╔════╝██╔════╝██║   ██║██╔══██╗██╔═══██╗╚██╗██╔╝  \e[38;5;214m║
+  ║\e[38;5;45m   ███████╗█████╗  ██║     ██║   ██║██████╔╝██║   ██║ ╚███╔╝   \e[38;5;214m║
+  ║\e[38;5;45m   ╚════██║██╔══╝  ██║     ██║   ██║██╔══██╗██║   ██║ ██╔██╗   \e[38;5;214m║
+  ║\e[38;5;45m   ███████║███████╗╚██████╗╚██████╔╝██████╔╝╚██████╔╝██╔╝ ██╗  \e[38;5;214m║
+  ║\e[38;5;45m   ╚══════╝╚══════╝ ╚═════╝ ╚═════╝ ╚═════╝  ╚═════╝ ╚═╝  ╚═╝  \e[38;5;214m║
+  ║\e[38;5;82m            ⚡ eMMC / SD IMAGE ⚡  v${SECUBOX_VERSION}               \e[38;5;214m║
+  ╚═══════════════════════════════════════════════════════════════╝\e[0m
+
+\e[38;5;242m  Build: ${BUILD_TIMESTAMP}\e[0m
+
+\e[38;5;250m  🌐 Web UI:     \e[38;5;45mhttps://<IP>:9443\e[0m
+\e[38;5;250m  🔐 Credentials: \e[38;5;214mroot\e[38;5;250m / \e[38;5;214msecubox\e[0m
+\e[38;5;250m  📖 Docs:       \e[38;5;45mhttps://secubox.in/docs\e[0m
+
+\e[38;5;242m  Type \e[38;5;82msecubox-status\e[38;5;242m for system overview\e[0m
+
+" > "${ROOTFS}/etc/motd"
+
+ok "Boot banners installed"
+
 # ── Étape 5 : Configuration bootloader ────────────────────────────
 log "5/7 Configuration bootloader..."
 
@@ -714,14 +1250,8 @@ else
   # Default to eMMC variant DTB for boards with eMMC
   KERNEL_DTS="${KERNEL_DTS:-armada-3720-espressobin-v7-emmc}"
 
-  # Determine root device based on DTB variant
-  # With -emmc DTB: SD=mmc0/mmcblk0, eMMC=mmc1/mmcblk1
-  # Without -emmc DTB: only SD or eMMC as mmcblk0
-  if [[ "$KERNEL_DTS" == *"-emmc"* ]]; then
-    ROOT_DEV="/dev/mmcblk1p2"
-  else
-    ROOT_DEV="/dev/mmcblk0p2"
-  fi
+  # Use LABEL for reliable root identification (device names change based on connected storage)
+  ROOT_DEV="LABEL=rootfs"
 
   cat > "${MNT}/boot/extlinux/extlinux.conf" <<EXTLINUX
 DEFAULT secubox
