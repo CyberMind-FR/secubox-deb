@@ -3,32 +3,69 @@
 
 ---
 
-## 🔄 En cours (Session 57)
+## ✅ Terminé (Session 57)
 
-### v1.6.7.13 — VirtualBox Kiosk Fix (GitHub Issue #27)
+### v1.6.7.14 — Network Auto-Discovery (GitHub Issue #28)
 
-**Status:** 🔄 Testing VBox X11 fix
+**Status:** ✅ Released
+
+#### Fix Applied
+- **LAN auto-discovery** when DHCP fails
+- Probes common gateways: `192.168.1.1`, `192.168.0.1`, `192.168.255.1`, `10.0.0.1`...
+- If gateway responds → auto-configure IP `.250` on that subnet
+- Only falls back to `169.254.1.1` as last resort
+
+#### Files Modified
+- `image/build-live-usb.sh` — Enhanced `secubox-net-fallback` script
+
+---
+
+### v1.6.7.13 — VirtualBox Kiosk Fix (GitHub Issue #27) ✅
+
+**Status:** ✅ Closed (semi-fixed)
+
+#### Test Results
+- ✅ **Real hardware kiosk** — Works perfectly
+- ✅ **VirtualBox WebUI** — Works (https://localhost:9443)
+- ❌ **VirtualBox kiosk** — Console only (acceptable limitation)
 
 #### Fix Applied
 - **VirtualBox detection** — Use `systemd-detect-virt` ("oracle") instead of lspci
 - VBox with VMSVGA was incorrectly detected as VMware
-- Now properly loads vboxvideo/vboxsf modules when running in VirtualBox
-
-#### Files Modified
-- `image/sbin/secubox-kiosk-launcher` — VBox detection fix + v1.6.7.13
-- `image/build-live-usb.sh` — version bump to 1.6.7.13
 
 ---
 
-## ✅ Terminé (Session 57)
-
 ### v1.6.7.12 — Lenovo Boot Fix (GitHub Issue #26) ✅
 
-**Status:** Released and tested
+**Status:** ✅ Released and tested
 
 #### Test Results
 - ✅ **Kiosk on real hardware** — Works!
 - ✅ **Lenovo install test** — PASSED! Error 1962 fix confirmed
+
+#### Fixes
+- Fallback EFI bootloader at `/EFI/BOOT/BOOTX64.EFI`
+- CI `--slipstream` flag fix
+- Wiki updated to use `/releases/latest/` URLs
+
+---
+
+### Builds Completed ✅
+
+| Build | Image | Size |
+|-------|-------|------|
+| x64 | `secubox-live-amd64-bookworm.img` | 8.0G |
+| ARM64 | `secubox-espressobin-v7-live-usb.img` | 539M |
+
+---
+
+### GitHub Issues (Session 57)
+
+| Issue | Title | Status |
+|-------|-------|--------|
+| #26 | Lenovo Error 1962 boot fix | ✅ Closed |
+| #27 | VBox kiosk not starting | ✅ Closed |
+| #28 | Network fallback 169.254.1.1 | 📝 Addressed |
 
 ---
 
