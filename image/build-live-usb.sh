@@ -681,11 +681,48 @@ Name=dummy0
 Address=192.168.255.1/24
 EOF
 
-# Fallback network script - runs after boot, retries DHCP and adds link-local if failed
+# Fallback network script - runs after boot, retries DHCP and auto-discovers LAN
 cat > "${ROOTFS}/usr/sbin/secubox-net-fallback" <<'FALLBACK'
 #!/bin/bash
-# SecuBox Network Fallback - retries DHCP on all interfaces, adds link-local if failed
+# SecuBox Network Fallback - retries DHCP, auto-discovers LAN subnet as fallback
 logger -t secubox-net "Network fallback starting..."
+
+# Common gateway IPs to probe (most common first)
+GATEWAYS="192.168.1.1 192.168.0.1 192.168.2.1 192.168.255.1 10.0.0.1 10.0.1.1 172.16.0.1"
+# Fallback IP suffix to use (high number to avoid conflicts)
+FALLBACK_SUFFIX="250"
+
+# Discover LAN subnet by probing common gateways
+discover_lan() {
+    local iface="$1"
+
+    for gw in $GATEWAYS; do
+        # Extract subnet base (e.g., 192.168.1)
+        local subnet_base="${gw%.*}"
+        local test_ip="${subnet_base}.${FALLBACK_SUFFIX}"
+
+        # Temporarily add IP to probe the network
+        ip addr add "${test_ip}/24" dev "$iface" 2>/dev/null
+
+        # Try to ping gateway (1 packet, 1 second timeout)
+        if ping -c 1 -W 1 -I "$iface" "$gw" &>/dev/null; then
+            logger -t secubox-net "Discovered gateway $gw on $iface"
+            # Add default route
+            ip route add default via "$gw" dev "$iface" 2>/dev/null || true
+            # Add DNS (use gateway as DNS, fallback to public)
+            echo "nameserver $gw" > /etc/resolv.conf
+            echo "nameserver 8.8.8.8" >> /etc/resolv.conf
+            echo "nameserver 1.1.1.1" >> /etc/resolv.conf
+            logger -t secubox-net "Auto-configured $iface: ${test_ip}/24 via $gw"
+            return 0
+        fi
+
+        # Remove test IP if gateway not found
+        ip addr del "${test_ip}/24" dev "$iface" 2>/dev/null
+    done
+
+    return 1
+}
 
 # Wait a bit for interfaces to come up
 sleep 5
@@ -709,23 +746,33 @@ for iface in /sys/class/net/*; do
     # Bring interface up
     ip link set "$IFACE" up 2>/dev/null
 
-    # Check if interface has an IP
-    if ! ip addr show "$IFACE" | grep -q "inet "; then
-        logger -t secubox-net "No IP on $IFACE, triggering DHCP..."
-
-        # Try DHCP via networkctl
-        networkctl reconfigure "$IFACE" 2>/dev/null || true
-        sleep 10
-
-        # Check again
-        if ! ip addr show "$IFACE" | grep -q "inet "; then
-            logger -t secubox-net "DHCP failed on $IFACE, adding link-local"
-            ip addr add 169.254.1.1/16 dev "$IFACE" 2>/dev/null || true
-        else
-            logger -t secubox-net "DHCP succeeded on $IFACE"
-        fi
-    else
+    # Check if interface has an IP (not link-local)
+    if ip addr show "$IFACE" | grep -q "inet " | grep -v "169.254"; then
         logger -t secubox-net "Interface $IFACE already has IP"
+        continue
+    fi
+
+    logger -t secubox-net "No IP on $IFACE, triggering DHCP..."
+
+    # Try DHCP via networkctl
+    networkctl reconfigure "$IFACE" 2>/dev/null || true
+    sleep 10
+
+    # Check again for valid IP (not link-local)
+    if ip addr show "$IFACE" | grep "inet " | grep -qv "169.254"; then
+        logger -t secubox-net "DHCP succeeded on $IFACE"
+        continue
+    fi
+
+    # DHCP failed - try auto-discovery
+    logger -t secubox-net "DHCP failed on $IFACE, trying LAN auto-discovery..."
+
+    if discover_lan "$IFACE"; then
+        logger -t secubox-net "LAN auto-discovery succeeded on $IFACE"
+    else
+        # Ultimate fallback: link-local
+        logger -t secubox-net "LAN discovery failed, using link-local on $IFACE"
+        ip addr add 169.254.1.1/16 dev "$IFACE" 2>/dev/null || true
     fi
 done
 
