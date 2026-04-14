@@ -12,10 +12,10 @@ Test SecuBox on VirtualBox in minutes using the pre-built live image.
 
 ```bash
 # Download and create VM in one command
-curl -sL https://github.com/CyberMind-FR/secubox-deb/releases/download/v1.5.0/secubox-live-amd64-bookworm.img.gz | \
+curl -sL https://github.com/CyberMind-FR/secubox-deb/releases/latest/download/secubox-live-amd64-bookworm.img.gz | \
   gunzip > secubox-live.img && \
   VBoxManage convertfromraw secubox-live.img secubox-live.vdi --format VDI && \
-  bash <(curl -sL https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/scripts/create-secubox-vm.sh) secubox-live.vdi
+  bash <(curl -sL https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/image/create-vbox-vm.sh) secubox-live.vdi
 ```
 
 ## Step-by-Step Guide
@@ -24,7 +24,7 @@ curl -sL https://github.com/CyberMind-FR/secubox-deb/releases/download/v1.5.0/se
 
 ```bash
 # From GitHub Releases
-wget https://github.com/CyberMind-FR/secubox-deb/releases/download/v1.5.0/secubox-live-amd64-bookworm.img.gz
+wget https://github.com/CyberMind-FR/secubox-deb/releases/latest/download/secubox-live-amd64-bookworm.img.gz
 
 # Extract
 gunzip secubox-live-amd64-bookworm.img.gz
@@ -44,7 +44,7 @@ VBoxManage convertfromraw secubox-live-amd64-bookworm.img secubox-live.vdi --for
 
 ```bash
 # Download and run the VM creation script
-curl -sLO https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/scripts/create-secubox-vm.sh
+curl -sLO https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/image/create-vbox-vm.sh
 chmod +x create-secubox-vm.sh
 ./create-secubox-vm.sh secubox-live.vdi
 ```
@@ -114,7 +114,7 @@ VM_NAME="SecuBox-Live-$(date +%Y%m%d)"
 if [[ ! -f "$IMG" ]]; then
     echo "Downloading SecuBox Live image..."
     wget -q --show-progress \
-        https://github.com/CyberMind-FR/secubox-deb/releases/download/v1.5.0/secubox-live-amd64-bookworm.img.gz
+        https://github.com/CyberMind-FR/secubox-deb/releases/latest/download/secubox-live-amd64-bookworm.img.gz
     gunzip secubox-live-amd64-bookworm.img.gz
     IMG="secubox-live-amd64-bookworm.img"
     VDI="${IMG%.img}.vdi"

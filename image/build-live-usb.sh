@@ -14,7 +14,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 
 # ── Version & Build Info ──────────────────────────────────────────
-SECUBOX_VERSION="1.6.7.11"
+SECUBOX_VERSION="1.6.7.12"
 BUILD_TIMESTAMP=$(date '+%Y-%m-%d %H:%M')
 BUILD_DATE=$(date '+%Y%m%d')
 
@@ -53,6 +53,8 @@ Usage: sudo bash build-live-usb.sh [OPTIONS]
   --no-kiosk         Disable GUI kiosk mode (enabled by default)
   --no-persistence   Don't include persistent storage partition
   --no-compress      Skip gzip compression (faster, for local testing)
+  --slipstream       Include .deb packages from output/debs/ (default: enabled)
+  --no-slipstream    Don't include local .deb packages
   --preseed FILE     Include preseed config archive
   --embed-image IMG  Embed image for disk flashing (creates installer USB)
   --overlay          Use advanced overlay partition layout (v1.6.7.2+)
@@ -86,6 +88,8 @@ while [[ $# -gt 0 ]]; do
     --no-kiosk)       INCLUDE_KIOSK=0;      shift   ;;
     --no-persistence) INCLUDE_PERSISTENCE=0; shift   ;;
     --no-compress)    NO_COMPRESS=1;        shift   ;;
+    --slipstream)     SLIPSTREAM_DEBS=1;    shift   ;;
+    --no-slipstream)  SLIPSTREAM_DEBS=0;    shift   ;;
     --preseed)        PRESEED_FILE="$2";    shift 2 ;;
     --embed-image)    EMBED_IMAGE="$2";     shift 2 ;;
     --overlay)        OVERLAY_MODE=1;       shift   ;;
@@ -2165,6 +2169,15 @@ mount --bind /sys "$MNT/sys"
 
 chroot "$MNT" grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=SecuBox --recheck 2>/dev/null || \
     warn "EFI GRUB install failed (may be BIOS system)"
+
+# Create fallback bootloader for Lenovo/HP/Dell compatibility (Error 1962 fix)
+# These systems only look at /EFI/BOOT/BOOTX64.EFI
+if [[ -f "$MNT/boot/efi/EFI/SecuBox/grubx64.efi" ]]; then
+    mkdir -p "$MNT/boot/efi/EFI/BOOT"
+    cp "$MNT/boot/efi/EFI/SecuBox/grubx64.efi" "$MNT/boot/efi/EFI/BOOT/BOOTX64.EFI"
+    ok "Fallback EFI bootloader created (Lenovo/HP/Dell compatible)"
+fi
+
 chroot "$MNT" grub-install --target=i386-pc "$TARGET" 2>/dev/null || \
     warn "BIOS GRUB install failed (may be EFI-only)"
 chroot "$MNT" update-grub

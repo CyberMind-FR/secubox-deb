@@ -1,6 +1,6 @@
 # SecuBox
 
-**CyberMind · Gondwana · Notre-Dame-du-Cruet · Savoie** | [EN](Home) | [FR](Home-FR) | [中文](Home-ZH) | **v1.5.10**
+**CyberMind · Gondwana · Notre-Dame-du-Cruet · Savoie** | [EN](Home) | [FR](Home-FR) | [中文](Home-ZH)
 
 Vollständige Sicherheitsappliance-Lösung, portiert von OpenWrt auf Debian bookworm. Entwickelt für GlobalScale ARM64-Boards (MOCHAbin, ESPRESSObin) und x86_64-Systeme. **125 Pakete** mit **2000+ API-Endpunkten**.
 
@@ -13,8 +13,8 @@ Vollständige Sicherheitsappliance-Lösung, portiert von OpenWrt auf Debian book
 Testen Sie SecuBox sofort in VirtualBox — kein USB-Laufwerk erforderlich:
 
 ```bash
-# Image herunterladen
-wget https://github.com/CyberMind-FR/secubox-deb/releases/download/v1.5.10/secubox-live-amd64-bookworm.img.gz
+# Neuestes Image herunterladen
+wget https://github.com/CyberMind-FR/secubox-deb/releases/latest/download/secubox-live-amd64-bookworm.img.gz
 gunzip secubox-live-amd64-bookworm.img.gz
 
 # In VDI-Format konvertieren
@@ -39,7 +39,7 @@ Siehe [[Live-USB-VirtualBox]] für vollständige Dokumentation.
 Direkt von USB auf physischer Hardware booten:
 
 ```bash
-wget https://github.com/CyberMind-FR/secubox-deb/releases/download/v1.5.10/secubox-live-amd64-bookworm.img.gz
+wget https://github.com/CyberMind-FR/secubox-deb/releases/latest/download/secubox-live-amd64-bookworm.img.gz
 zcat secubox-live-amd64-bookworm.img.gz | sudo dd of=/dev/sdX bs=4M status=progress
 ```
 

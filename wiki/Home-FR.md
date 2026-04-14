@@ -1,6 +1,6 @@
 # SecuBox
 
-**CyberMind · Gondwana · Notre-Dame-du-Cruet · Savoie** | [EN](Home) | [中文](Home-ZH) | **v1.5.10**
+**CyberMind · Gondwana · Notre-Dame-du-Cruet · Savoie** | [EN](Home) | [中文](Home-ZH)
 
 Solution complète d'appliance de sécurité portée d'OpenWrt vers Debian bookworm. Conçue pour les cartes ARM64 GlobalScale (MOCHAbin, ESPRESSObin) et les systèmes x86_64. **125 paquets** avec plus de **2000+ points d'API**.
 
@@ -13,8 +13,8 @@ Solution complète d'appliance de sécurité portée d'OpenWrt vers Debian bookw
 Testez SecuBox instantanément dans VirtualBox — aucune clé USB requise :
 
 ```bash
-# Télécharger l'image
-wget https://github.com/CyberMind-FR/secubox-deb/releases/download/v1.5.10/secubox-live-amd64-bookworm.img.gz
+# Télécharger la dernière image
+wget https://github.com/CyberMind-FR/secubox-deb/releases/latest/download/secubox-live-amd64-bookworm.img.gz
 gunzip secubox-live-amd64-bookworm.img.gz
 
 # Convertir au format VDI
@@ -39,7 +39,7 @@ Voir [[Live-USB-VirtualBox]] pour la documentation complète.
 Démarrez directement depuis USB sur du matériel physique :
 
 ```bash
-wget https://github.com/CyberMind-FR/secubox-deb/releases/download/v1.5.10/secubox-live-amd64-bookworm.img.gz
+wget https://github.com/CyberMind-FR/secubox-deb/releases/latest/download/secubox-live-amd64-bookworm.img.gz
 zcat secubox-live-amd64-bookworm.img.gz | sudo dd of=/dev/sdX bs=4M status=progress
 ```
 
