@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - System Hub</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root {
+            /* P31 Phosphor spectrum */
+            --p31-peak: #00dd44;
+            --p31-hot: #00ff55;
+            --p31-mid: #009933;
+            --p31-dim: #006622;
+            --p31-ghost: #003311;
+            --p31-decay: #ffb347;
+            --p31-decay-dim: #cc7722;
+            /* Tube glass */
+            --tube-light: #e8f5e9;
+            --tube-pale: #c8e6c9;
+            --tube-soft: #a5d6a7;
+            /* Legacy mappings */
+            --bg-dark: var(--tube-light);
+            --bg-card: var(--tube-pale);
+            --bg-sidebar: var(--tube-black);
+            --border: var(--tube-soft);
+            --text: var(--tube-dark);
+            --text-dim: var(--p31-dim);
+            --primary: var(--p31-peak);
+            --cyan: var(--p31-peak);
+            --green: var(--p31-peak);
+            --red: #ff4466;
+            --yellow: var(--p31-decay);
+            --orange: var(--p31-decay-dim);
+            --purple: #a371f7;
+            /* Bloom effects */
+            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Courier Prime', 'Courier New', monospace;
+            background: var(--tube-light);
+            background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
+            color: var(--tube-dark);
+            display: flex;
+            min-height: 100vh;
+        }
+        .sidebar { width: 220px; background: var(--bg-sidebar); border-right: 1px solid var(--border); position: fixed; height: 100vh; overflow-y: auto; }
+        .sidebar-header { padding: 1rem; border-bottom: 1px solid var(--border); }
+        .logo { font-weight: bold; font-size: 1.2rem; }
+        .logo span:nth-child(1) { color: var(--cyan); } .logo span:nth-child(2) { color: var(--red); } .logo span:nth-child(3) { color: var(--green); } .logo span:nth-child(4) { color: var(--yellow); }
+        .nav-section { padding: 0.5rem 0; }
+        .nav-section-title { padding: 0.5rem 1rem; font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
+        .nav-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 1rem; color: var(--text-dim); text-decoration: none; font-size: 0.9rem; border-left: 3px solid transparent; }
+        .nav-item:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+        .nav-item.active { background: rgba(88,166,255,0.1); color: var(--primary); border-left-color: var(--primary); }
+        .nav-item .icon { width: 20px; text-align: center; }
+        .main { flex: 1; margin-left: 220px; }
+        .header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); background: var(--bg-card); }
+        .header-title h1 { font-size: 1.5rem; font-weight: 600; }
+        .header-actions { display: flex; gap: 0.75rem; }
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.875rem; }
+        .btn:hover { background: var(--bg-dark); }
+        .btn.primary { background: rgba(88,166,255,0.1); border-color: var(--primary); color: var(--primary); }
+        .btn.success { background: rgba(63,185,80,0.1); border-color: var(--green); color: var(--green); }
+        .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
+        .btn.warning { background: rgba(210,153,34,0.1); border-color: var(--yellow); color: var(--yellow); }
+        .content { padding: 1.5rem; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+        .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5rem; }
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .card-header h2 { font-size: 1rem; font-weight: 600; }
+        .info-row { display: flex; justify-content: space-between; padding: 0.6rem 0; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+        .info-row:last-child { border-bottom: none; }
+        .info-row .label { color: var(--text-dim); }
+        .health-item { margin-bottom: 1rem; }
+        .health-header { display: flex; justify-content: space-between; margin-bottom: 0.25rem; font-size: 0.9rem; }
+        .health-bar { height: 8px; background: var(--bg-dark); border-radius: 4px; overflow: hidden; }
+        .health-bar .fill { height: 100%; border-radius: 4px; }
+        .health-bar .fill.red { background: var(--red); }
+        .health-bar .fill.yellow { background: var(--yellow); }
+        .health-bar .fill.green { background: var(--green); }
+        .health-bar .fill.cyan { background: var(--cyan); }
+        .health-percent { font-size: 0.75rem; color: var(--text-dim); text-align: right; margin-top: 0.25rem; }
+        .service-item { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; background: rgba(255,255,255,0.02); border-radius: 6px; margin-bottom: 0.5rem; }
+        .service-item .name { font-weight: 500; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 0.5rem; }
+        .status-dot.running { background: var(--green); }
+        .status-dot.stopped { background: var(--red); }
+        .log-box { background: var(--bg-dark); border: 1px solid var(--border); border-radius: 6px; padding: 1rem; font-family: monospace; font-size: 0.8rem; max-height: 250px; overflow-y: auto; white-space: pre-wrap; }
+        .scroll-list { max-height: 300px; overflow-y: auto; }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.25rem; color: var(--text-dim); font-size: 0.9rem; }
+        .form-group input, .form-group select { width: 100%; padding: 0.5rem; border: 1px solid var(--border); background: var(--bg-dark); color: var(--text); border-radius: 6px; }
+        .quick-btn { width: 100%; margin-bottom: 0.5rem; }
+        @media (max-width: 1200px) { .grid-3 { grid-template-columns: 1fr 1fr; } }
+        @media (max-width: 900px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } .sidebar { display: none; } .main { margin-left: 0; } }
+    
+        /* CRT Enhancements */
+        .main { margin-left: 220px; padding: 1.5rem; }
+
+        .header h1 {
+            color: var(--p31-hot);
+            text-shadow: var(--bloom-text);
+            font-weight: 700;
+            letter-spacing: 0.05em;
+        }
+
+        .badge {
+            font-family: 'Courier Prime', monospace;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            border: 1px solid;
+        }
+        .badge-blue, .badge-primary { background: rgba(51,255,102,0.1); border-color: var(--p31-peak); color: var(--p31-peak); }
+        .badge-green { background: rgba(51,255,102,0.15); border-color: var(--p31-peak); color: var(--p31-peak); text-shadow: var(--bloom-soft); }
+        .badge-cyan { background: rgba(51,255,102,0.1); border-color: var(--p31-mid); color: var(--p31-mid); }
+        .badge-purple { background: rgba(163,113,247,0.1); border-color: #a371f7; color: #a371f7; }
+        .badge-yellow, .badge-amber { background: rgba(255,179,71,0.1); border-color: var(--p31-decay); color: var(--p31-decay); }
+        .badge-red { background: rgba(255,68,102,0.1); border-color: #ff4466; color: #ff4466; }
+
+        .btn {
+            font-family: 'Courier Prime', monospace;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            border: 1px solid var(--tube-soft);
+            background: var(--tube-pale);
+            color: var(--p31-mid);
+            transition: all 0.2s;
+        }
+        .btn:hover {
+            border-color: var(--p31-dim);
+            color: var(--p31-peak);
+            text-shadow: var(--bloom-soft);
+            box-shadow: 0 0 12px rgba(51,255,102,0.1);
+        }
+        .btn-green, .btn-primary, .btn.primary, .btn.success {
+            border-color: var(--p31-peak);
+            color: var(--p31-peak);
+            background: rgba(51,255,102,0.1);
+        }
+        .btn-green:hover, .btn-primary:hover, .btn.primary:hover, .btn.success:hover {
+            background: rgba(51,255,102,0.2);
+            box-shadow: 0 0 16px rgba(51,255,102,0.2);
+        }
+        .btn-red, .btn.danger {
+            border-color: #ff4466;
+            color: #ff4466;
+            background: rgba(255,68,102,0.1);
+        }
+        .btn-red:hover, .btn.danger:hover {
+            background: rgba(255,68,102,0.2);
+        }
+        .btn-blue {
+            border-color: var(--p31-mid);
+            color: var(--p31-mid);
+            background: rgba(51,255,102,0.05);
+        }
+        .btn-blue:hover {
+            border-color: var(--p31-peak);
+            color: var(--p31-peak);
+        }
+
+        .card {
+            background: var(--tube-pale);
+            border: 1px solid var(--tube-soft);
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
+        }
+        .card:hover {
+            border-color: var(--p31-dim);
+            box-shadow: 0 0 8px rgba(51,255,102,0.05), inset 0 0 20px rgba(0,0,0,0.3);
+        }
+        .card-title, .card-header h2 {
+            color: var(--p31-decay);
+            text-shadow: var(--bloom-amber);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+        }
+
+        .stat-card {
+            background: var(--tube-pale);
+            border: 1px solid var(--tube-soft);
+        }
+        .stat-value, .stat-card .value {
+            text-shadow: 0 0 10px currentColor;
+        }
+        .stat-label, .stat-card .label {
+            color: var(--p31-dim);
+            letter-spacing: 0.15em;
+        }
+        .stat-card.cyan .value, .stat-card.green .value { color: var(--p31-peak); }
+        .stat-card.yellow .value { color: var(--p31-decay); }
+        .stat-card.red .value { color: #ff4466; }
+
+        table, .table {
+            font-family: 'Courier Prime', monospace;
+        }
+        th, .table th {
+            color: var(--p31-decay);
+            text-shadow: var(--bloom-amber);
+            letter-spacing: 0.15em;
+            border-bottom: 1px solid var(--p31-ghost);
+        }
+        td, .table td {
+            border-bottom: 1px solid var(--p31-ghost);
+            color: var(--p31-mid);
+        }
+        tr:hover, .table tr:hover {
+            background: rgba(51,255,102,0.03);
+        }
+
+        .status-dot.active, .status-running {
+            color: var(--p31-peak);
+            text-shadow: var(--bloom-soft);
+        }
+        .status-dot.active {
+            background: var(--p31-peak);
+            box-shadow: 0 0 8px var(--p31-peak);
+        }
+
+        .toast {
+            background: var(--tube-pale);
+            border: 1px solid var(--p31-dim);
+            font-family: 'Courier Prime', monospace;
+        }
+        .toast-success { border-color: var(--p31-peak); }
+        .toast-error { border-color: #ff4466; }
+
+        .modal {
+            background: rgba(0,0,0,0.85);
+        }
+        .modal-content {
+            background: var(--tube-pale);
+            border: 1px solid var(--p31-dim);
+            box-shadow: 0 0 30px rgba(51,255,102,0.1);
+        }
+        .modal-title {
+            color: var(--p31-decay);
+            text-shadow: var(--bloom-amber);
+            letter-spacing: 0.1em;
+        }
+
+        .tabs {
+            background: var(--tube-pale);
+            border-bottom: 1px solid var(--p31-ghost);
+        }
+        .tab {
+            color: var(--p31-dim);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+        }
+        .tab:hover { color: var(--p31-mid); }
+        .tab.active {
+            color: var(--p31-peak);
+            text-shadow: var(--bloom-soft);
+            border-bottom-color: var(--p31-peak);
+        }
+
+        input, select, textarea {
+            font-family: 'Courier Prime', monospace;
+            background: var(--tube-light);
+            border: 1px solid var(--tube-soft);
+            color: var(--p31-mid);
+            padding: 0.5rem;
+        }
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--p31-dim);
+            box-shadow: 0 0 8px rgba(51,255,102,0.1);
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: var(--tube-light); }
+        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
+        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
+
+        /* Empty states */
+        .empty { color: var(--p31-dim); }
+
+        @media (max-width: 768px) {
+            .main { margin-left: 0; }
+        }
+    </style>
+</head>
+<body class="crt-light">
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+
+    <main class="main">
+        <header class="header">
+            <div class="header-title"><h1>🔧 System Hub</h1></div>
+            <div class="header-actions">
+                <button class="btn" onclick="checkUpdates()">📥 Check Updates</button>
+                <button class="btn warning" onclick="reboot()">🔃 Reboot</button>
+                <button class="btn danger" onclick="shutdown()">⏻ Shutdown</button>
+            </div>
+        </header>
+
+        <div class="content">
+            <div class="grid-3">
+                <div class="card">
+                    <div class="card-header"><h2>💻 System Info</h2></div>
+                    <div class="info-row"><span class="label">Hostname</span><span id="hostname">-</span></div>
+                    <div class="info-row"><span class="label">Board</span><span id="board">-</span></div>
+                    <div class="info-row"><span class="label">Architecture</span><span id="arch">-</span></div>
+                    <div class="info-row"><span class="label">Kernel</span><span id="kernel">-</span></div>
+                    <div class="info-row"><span class="label">Uptime</span><span id="uptime">-</span></div>
+                    <div class="info-row"><span class="label">Local Time</span><span id="time">-</span></div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header"><h2>📊 Resources</h2></div>
+                    <div class="health-item">
+                        <div class="health-header"><span>CPU</span><span id="cpu">-</span></div>
+                        <div class="health-bar"><div class="fill red" id="cpu-bar" style="width: 0%"></div></div>
+                    </div>
+                    <div class="health-item">
+                        <div class="health-header"><span>Memory</span><span id="memory">-</span></div>
+                        <div class="health-bar"><div class="fill yellow" id="mem-bar" style="width: 0%"></div></div>
+                    </div>
+                    <div class="health-item">
+                        <div class="health-header"><span>Disk /</span><span id="disk">-</span></div>
+                        <div class="health-bar"><div class="fill red" id="disk-bar" style="width: 0%"></div></div>
+                    </div>
+                    <div class="health-item">
+                        <div class="health-header"><span>Load Average</span><span id="load">-</span></div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header"><h2>🔐 Security</h2></div>
+                    <div class="info-row"><span class="label">Firewall</span><span id="firewall" style="color: var(--green);">-</span></div>
+                    <div class="info-row"><span class="label">SSH</span><span id="ssh">-</span></div>
+                    <div class="info-row"><span class="label">AppArmor</span><span id="apparmor">-</span></div>
+                    <div class="info-row"><span class="label">CrowdSec</span><span id="crowdsec">-</span></div>
+                </div>
+            </div>
+
+            <!-- Board Detection Card -->
+            <div class="card" style="margin-bottom: 1.5rem;">
+                <div class="card-header">
+                    <h2>🔍 Board Detection</h2>
+                    <button class="btn" onclick="refreshBoardDetection()">Refresh</button>
+                </div>
+                <div class="grid-3" style="margin-bottom: 0;">
+                    <div>
+                        <div class="info-row"><span class="label">Board Type</span><span id="board-type" style="color: var(--p31-peak);">-</span></div>
+                        <div class="info-row"><span class="label">Profile</span><span id="board-profile">-</span></div>
+                        <div class="info-row"><span class="label">CPU Model</span><span id="cpu-model">-</span></div>
+                        <div class="info-row"><span class="label">Cores/Threads</span><span id="cpu-cores">-</span></div>
+                    </div>
+                    <div>
+                        <div class="info-row"><span class="label">WAN Interface</span><span id="wan-iface" style="color: var(--p31-decay);">-</span></div>
+                        <div class="info-row"><span class="label">LAN Interfaces</span><span id="lan-ifaces">-</span></div>
+                        <div class="info-row"><span class="label">SFP Ports</span><span id="sfp-ifaces">-</span></div>
+                    </div>
+                    <div id="iface-details">
+                        <p style="color: var(--text-dim); font-size: 0.85rem;">Interface details loading...</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="card">
+                    <div class="card-header"><h2>🔧 Services</h2></div>
+                    <div class="scroll-list" id="services-list">
+                        <p style="color: var(--text-dim);">Loading...</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header"><h2>🌐 Network Interfaces</h2></div>
+                    <div id="network-info">
+                        <p style="color: var(--text-dim);">Loading...</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2>📝 System Logs</h2>
+                        <div>
+                            <button class="btn" onclick="loadLogs(50)">50</button>
+                            <button class="btn" onclick="loadLogs(100)">100</button>
+                        </div>
+                    </div>
+                    <div class="log-box" id="logs">Loading...</div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header"><h2>⚡ Quick Actions</h2></div>
+                    <button class="btn primary quick-btn" onclick="restartServices()">🔄 Restart Services</button>
+                    <button class="btn quick-btn" onclick="reloadFirewall()">🛡️ Reload Firewall</button>
+                    <button class="btn quick-btn" onclick="syncTime()">🕐 Sync Time</button>
+                    <button class="btn quick-btn" onclick="clearCache()">🧹 Clear Cache</button>
+                    <button class="btn success quick-btn" onclick="createBackup()">📥 Create Backup</button>
+                </div>
+
+                <div class="card">
+                    <div class="card-header"><h2>📦 Packages</h2></div>
+                    <div class="scroll-list" id="packages-list">
+                        <p style="color: var(--text-dim);">Loading...</p>
+                    </div>
+                    <div style="margin-top: 1rem;">
+                        <button class="btn primary" onclick="checkUpdates()">Check Updates</button>
+                        <button class="btn success" onclick="applyUpdates()">Apply Updates</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header"><h2>⚙️ Settings</h2></div>
+                    <div class="form-group">
+                        <label>Hostname</label>
+                        <input type="text" id="new-hostname" placeholder="secubox">
+                    </div>
+                    <div class="form-group">
+                        <label>Timezone</label>
+                        <select id="timezone">
+                            <option value="Europe/Paris">Europe/Paris</option>
+                            <option value="UTC">UTC</option>
+                            <option value="America/New_York">America/New_York</option>
+                        </select>
+                    </div>
+                    <button class="btn primary" onclick="saveSettings()">Save Settings</button>
+                </div>
+
+                <div class="card">
+                    <div class="card-header"><h2>🖥️ Kiosk Mode</h2></div>
+                    <div class="info-row">
+                        <span class="label">Status</span>
+                        <span id="kiosk-status" style="color: var(--text-dim);">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="label">Display Mode</span>
+                        <span id="kiosk-mode">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="label">Service</span>
+                        <span id="kiosk-service">-</span>
+                    </div>
+                    <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
+                        <select id="kiosk-mode-select" style="flex: 1;">
+                            <option value="x11">X11 (VMs)</option>
+                            <option value="wayland">Wayland (Native)</option>
+                        </select>
+                        <button class="btn success" onclick="enableKiosk()">Enable</button>
+                        <button class="btn danger" onclick="disableKiosk()">Disable</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const API = '/api/v1/system';
+
+        async function api(endpoint, method = 'GET', data = null) {
+            const opts = { method, headers: { 'Content-Type': 'application/json' } };
+            if (data) opts.body = JSON.stringify(data);
+            try { const res = await fetch(API + endpoint, opts); return res.json(); } catch (e) { return {}; }
+        }
+
+        function formatBytes(b) {
+            if (!b) return '0';
+            const k = 1024, s = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(b) / Math.log(k));
+            return (b / Math.pow(k, i)).toFixed(1) + ' ' + s[i];
+        }
+
+        async function loadSystemInfo() {
+            const data = await api('/info');
+            document.getElementById('hostname').textContent = data.hostname || '-';
+            document.getElementById('board').textContent = data.board || 'SecuBox';
+            document.getElementById('arch').textContent = data.arch || '-';
+            document.getElementById('kernel').textContent = data.kernel || '-';
+            document.getElementById('uptime').textContent = data.uptime_formatted || '-';
+            document.getElementById('time').textContent = data.local_time || new Date().toLocaleString();
+        }
+
+        async function loadResources() {
+            const data = await api('/resources');
+            const cpu = data.cpu_percent || 0;
+            const mem = data.memory_percent || 0;
+            const disk = data.disk_percent || 0;
+
+            document.getElementById('cpu').textContent = cpu.toFixed(1) + '%';
+            document.getElementById('cpu-bar').style.width = cpu + '%';
+            document.getElementById('memory').textContent = `${formatBytes(data.memory_used)} / ${formatBytes(data.memory_total)}`;
+            document.getElementById('mem-bar').style.width = mem + '%';
+            document.getElementById('disk').textContent = `${formatBytes(data.disk_used)} / ${formatBytes(data.disk_total)}`;
+            document.getElementById('disk-bar').style.width = disk + '%';
+            document.getElementById('load').textContent = (data.load_avg || [0, 0, 0]).map(l => l.toFixed(2)).join(' ');
+        }
+
+        async function loadServices() {
+            const data = await api('/services');
+            const list = document.getElementById('services-list');
+            const services = data.services || [];
+
+            list.innerHTML = services.slice(0, 15).map(s => `
+                <div class="service-item">
+                    <span><span class="status-dot ${s.active ? 'running' : 'stopped'}"></span>${s.name}</span>
+                    <button class="btn ${s.active ? 'danger' : 'success'}" onclick="toggleService('${s.name}', ${!s.active})">${s.active ? 'Stop' : 'Start'}</button>
+                </div>
+            `).join('') || '<p style="color: var(--text-dim);">No services</p>';
+        }
+
+        async function loadNetwork() {
+            const data = await api('/network');
+            const info = document.getElementById('network-info');
+            const interfaces = data.interfaces || [];
+
+            info.innerHTML = interfaces.map(i => `
+                <div class="info-row">
+                    <span class="label">${i.name}</span>
+                    <span style="color: ${i.up ? 'var(--green)' : 'var(--red)'};">${i.addresses?.[0] || 'no IP'} ${i.up ? '▲' : '▼'}</span>
+                </div>
+            `).join('') || '<p style="color: var(--text-dim);">No interfaces</p>';
+        }
+
+        async function loadLogs(lines = 50) {
+            const data = await api('/logs?lines=' + lines);
+            document.getElementById('logs').textContent = (data.lines || []).join('\n') || 'No logs';
+        }
+
+        async function loadSecurity() {
+            const data = await api('/security');
+            document.getElementById('firewall').textContent = data.firewall || 'Unknown';
+            document.getElementById('ssh').textContent = data.ssh_status || 'Unknown';
+            document.getElementById('apparmor').textContent = data.apparmor || 'Unknown';
+            document.getElementById('crowdsec').textContent = data.crowdsec || 'Unknown';
+        }
+
+        async function loadPackages() {
+            const data = await api('/packages');
+            const list = document.getElementById('packages-list');
+            const packages = data.packages || [];
+
+            list.innerHTML = packages.slice(0, 20).map(p => `
+                <div class="info-row">
+                    <span>${p.name}</span>
+                    <span style="color: var(--text-dim);">${p.version}</span>
+                </div>
+            `).join('') || '<p style="color: var(--text-dim);">No packages</p>';
+        }
+
+        async function toggleService(name, start) { await api('/service_control', 'POST', { service: name, action: start ? 'start' : 'stop' }); loadServices(); }
+        async function restartServices() { await api('/restart_services', 'POST'); alert('Services restarted'); loadServices(); }
+        async function reloadFirewall() { await api('/reload_firewall', 'POST'); alert('Firewall reloaded'); }
+        async function syncTime() { await api('/sync_time', 'POST'); alert('Time synchronized'); loadSystemInfo(); }
+        async function clearCache() { await api('/clear_cache', 'POST'); alert('Cache cleared'); }
+        async function createBackup() { const data = await api('/backup', 'POST'); alert('Backup created: ' + (data.filename || 'backup.tar.gz')); }
+        async function checkUpdates() { const data = await api('/check_updates'); alert('Updates: ' + (data.packages?.length || 0)); }
+        async function applyUpdates() { if (confirm('Apply updates?')) { await api('/apply_updates', 'POST'); alert('Updates applied'); } }
+        async function reboot() { if (confirm('Reboot?')) { await api('/reboot', 'POST'); alert('Rebooting...'); } }
+        async function shutdown() { if (confirm('Shutdown?')) { await api('/shutdown', 'POST'); alert('Shutting down...'); } }
+        async function saveSettings() {
+            await api('/settings', 'POST', { hostname: document.getElementById('new-hostname').value, timezone: document.getElementById('timezone').value });
+            alert('Settings saved'); loadSystemInfo();
+        }
+
+        async function loadKioskStatus() {
+            const data = await api('/kiosk/status');
+            const enabled = data.enabled || false;
+            const mode = data.mode || 'disabled';
+            const active = data.service_active || false;
+
+            document.getElementById('kiosk-status').textContent = enabled ? 'Enabled' : 'Disabled';
+            document.getElementById('kiosk-status').style.color = enabled ? 'var(--p31-peak)' : 'var(--text-dim)';
+            document.getElementById('kiosk-mode').textContent = mode.toUpperCase();
+            document.getElementById('kiosk-service').textContent = active ? 'Running' : 'Stopped';
+            document.getElementById('kiosk-service').style.color = active ? 'var(--p31-peak)' : 'var(--red)';
+        }
+
+        async function enableKiosk() {
+            const mode = document.getElementById('kiosk-mode-select').value;
+            const token = localStorage.getItem('secubox_token');
+            if (!token) { alert('Authentication required'); return; }
+
+            const res = await fetch(API + '/kiosk/enable?mode=' + mode, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            if (data.success) {
+                alert('Kiosk mode enabled (' + mode + ')');
+                loadKioskStatus();
+            } else {
+                alert('Failed: ' + (data.error || 'Unknown error'));
+            }
+        }
+
+        async function disableKiosk() {
+            const token = localStorage.getItem('secubox_token');
+            if (!token) { alert('Authentication required'); return; }
+
+            const res = await fetch(API + '/kiosk/disable', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            if (data.success) {
+                alert('Kiosk mode disabled');
+                loadKioskStatus();
+            } else {
+                alert('Failed: ' + (data.error || 'Unknown error'));
+            }
+        }
+
+        async function loadBoardDetection() {
+            const data = await api('/board');
+
+            // Board type and profile
+            document.getElementById('board-type').textContent = data.board_type || 'Unknown';
+            document.getElementById('board-profile').textContent = (data.profile || 'lite').toUpperCase();
+            document.getElementById('cpu-model').textContent = data.cpu_model || 'Unknown';
+            document.getElementById('cpu-cores').textContent = `${data.cpu_cores || '?'} / ${data.cpu_threads || '?'}`;
+
+            // Interface classification
+            const ifaces = data.interfaces || {};
+            document.getElementById('wan-iface').textContent = (ifaces.wan || []).join(', ') || 'None';
+            document.getElementById('lan-ifaces').textContent = (ifaces.lan || []).join(', ') || 'None';
+            document.getElementById('sfp-ifaces').textContent = (ifaces.sfp || []).length > 0 ? ifaces.sfp.join(', ') : 'N/A';
+
+            // Interface details with carrier status
+            const details = data.interface_details || [];
+            const detailsDiv = document.getElementById('iface-details');
+            if (details.length > 0) {
+                detailsDiv.innerHTML = details.slice(0, 4).map(i => `
+                    <div class="info-row" style="font-size: 0.85rem;">
+                        <span class="label">${i.name}</span>
+                        <span style="color: ${i.carrier ? 'var(--p31-peak)' : 'var(--red)'};">
+                            ${i.addresses?.[0] || 'No IP'} ${i.carrier ? '●' : '○'} ${i.speed ? i.speed + 'Mbps' : ''}
+                        </span>
+                    </div>
+                `).join('');
+            }
+        }
+
+        async function refreshBoardDetection() {
+            // Call the detection endpoint (requires auth)
+            const token = localStorage.getItem('secubox_token');
+            if (!token) {
+                alert('Authentication required for board detection refresh');
+                return;
+            }
+
+            const opts = {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                }
+            };
+
+            try {
+                const res = await fetch(API + '/board/detect', opts);
+                const data = await res.json();
+                if (data.success) {
+                    alert('Board detection refreshed');
+                    loadBoardDetection();
+                } else {
+                    alert('Detection failed: ' + (data.error || 'Unknown error'));
+                }
+            } catch (e) {
+                alert('Detection failed: ' + e.message);
+            }
+        }
+
+        function refresh() { loadSystemInfo(); loadResources(); loadServices(); loadNetwork(); loadSecurity(); loadBoardDetection(); loadKioskStatus(); }
+        refresh();
+        loadLogs();
+        loadPackages();
+        setInterval(refresh, 15000);
+    </script>
+    <script src="/shared/crt-engine.js"></script>
+</body>
+</html>

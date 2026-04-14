@@ -188,6 +188,20 @@ jobs:
         with:
           sparse-checkout: image
 
+      - name: Delete existing release assets (if any)
+        run: |
+          VERSION="${{ github.ref_name }}"
+          if gh release view "$VERSION" &>/dev/null; then
+            echo "Release $VERSION exists, deleting duplicate assets..."
+            for file in images/*.img.gz images/SHA256SUMS images/SHA256SUMS.gpg image/create-qemu-arm64-vm.sh image/create-vbox-vm.sh; do
+              [ -f "$file" ] || continue
+              name=$(basename "$file")
+              gh release delete-asset "$VERSION" "$name" --yes 2>/dev/null || true
+            done
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:

@@ -1,15 +1,40 @@
 # /etc/netplan/00-secubox.yaml — ESPRESSObin v7 — Mode Router
-# Marvell Armada 3720 : mvneta WAN + DSA 88E6341 (lan0/lan1)
+# Marvell Armada 3720 : mvneta eth0 (CPU port) + DSA 88E6341 (wan/lan0/lan1)
+#
+# DSA topology on ESPRESSObin v7:
+#   eth0       - CPU port (master, do not configure directly)
+#   wan@eth0   - WAN port (DSA slave, static IP for upstream)
+#   lan0@eth0  - LAN port 1 (DSA slave, bridged)
+#   lan1@eth0  - LAN port 2 (DSA slave, bridged)
+#
+# Default: Static IP on 192.168.255.x network (SecuBox dev network)
+# Change addresses/routes to match your network or use DHCP
+#
 network:
   version: 2
   renderer: networkd
 
   ethernets:
+    # CPU port - must be up for DSA to work but no IP
     eth0:
-      dhcp4: true
+      dhcp4: false
       dhcp6: false
       optional: true
-    # Ports DSA du switch 88E6341
+
+    # WAN port - static IP (change to dhcp4: true if needed)
+    wan:
+      addresses:
+        - 192.168.255.250/24
+      routes:
+        - to: default
+          via: 192.168.255.1
+      nameservers:
+        addresses:
+          - 192.168.255.1
+          - 8.8.8.8
+      optional: true
+
+    # LAN ports - part of bridge, no individual config
     lan0:
       optional: true
     lan1:

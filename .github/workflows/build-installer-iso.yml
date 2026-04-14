@@ -255,6 +255,20 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "date=$(date -u +%Y-%m-%d)" >> $GITHUB_OUTPUT
 
+      - name: Delete existing release assets (if any)
+        run: |
+          VERSION="${{ github.ref_name }}"
+          if gh release view "$VERSION" &>/dev/null; then
+            echo "Release $VERSION exists, deleting duplicate assets..."
+            for file in release/*.iso.gz release/*.img.gz release/SHA256SUMS release/SHA256SUMS.gpg; do
+              [ -f "$file" ] || continue
+              name=$(basename "$file")
+              gh release delete-asset "$VERSION" "$name" --yes 2>/dev/null || true
+            done
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:

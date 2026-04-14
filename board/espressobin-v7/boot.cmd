@@ -20,11 +20,10 @@ fi
 
 setenv bootpart "mmc ${bootdev}:1"
 
-# With the v7-emmc DTB, both SDHCI controllers are enabled:
-# - mmc0 (d00d0000) = SD card slot → mmcblk0 (if card present)
-# - mmc1 (d00d8000) = eMMC → mmcblk1
-# So eMMC rootfs is on mmcblk1p2
-setenv rootpart "/dev/mmcblk1p2"
+# Use LABEL for reliable root device identification
+# Device names (mmcblk0/mmcblk1) change based on what's connected
+# LABEL=rootfs is always consistent
+setenv rootpart "LABEL=rootfs"
 
 echo "Boot partition: ${bootpart}"
 echo "Root partition: ${rootpart}"
