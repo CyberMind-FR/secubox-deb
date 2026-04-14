@@ -14,7 +14,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 
 # ── Version & Build Info ──────────────────────────────────────────
-SECUBOX_VERSION="1.6.7.13"
+SECUBOX_VERSION="1.7.0"
 BUILD_TIMESTAMP=$(date '+%Y-%m-%d %H:%M')
 BUILD_DATE=$(date '+%Y%m%d')
 
@@ -3109,12 +3109,16 @@ set pager=1
 echo "SecuBox v${SECUBOX_VERSION} - Build ${BUILD_TIMESTAMP}"
 echo ""
 
-menuentry "⚡ SecuBox Live v${SECUBOX_VERSION}" {
+menuentry "⚡ SecuBox Live v${SECUBOX_VERSION}" --class secubox {
+    echo "SecuBox Live: Console mode with persistence"
+    echo "Access via: SSH or Web UI at https://<ip>:443"
     linux (\$live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components persistence quiet splash
     initrd (\$live)/live/initrd.img
 }
 
-menuentry "🖼️ SecuBox Live v${SECUBOX_VERSION} (Kiosk GUI) [DEFAULT]" {
+menuentry "🖼️ SecuBox Live v${SECUBOX_VERSION} (Kiosk GUI) [DEFAULT]" --class secubox {
+    echo "SecuBox Kiosk: Fullscreen GUI on HDMI/display"
+    echo "Touch/mouse friendly dashboard interface"
     linux (\$live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components persistence quiet splash secubox.kiosk=1
     initrd (\$live)/live/initrd.img
 }
@@ -3123,27 +3127,37 @@ GRUBCFG
 # Append the rest of the menu entries with emoji indicators
 cat >> "${MNT}/esp/boot/grub/grub.cfg" <<'GRUBCFG'
 
-menuentry "📟 SecuBox Live (Console TUI)" {
+menuentry "📟 SecuBox Live (Console TUI)" --class secubox {
+    echo "Text User Interface mode - keyboard navigation"
+    echo "Low resource usage, works on any display"
     linux ($live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components persistence quiet secubox.mode=tui
     initrd ($live)/live/initrd.img
 }
 
-menuentry "🌉 SecuBox Live (Bridge Mode)" {
+menuentry "🌉 SecuBox Live (Bridge Mode)" --class secubox {
+    echo "Bridge Mode: Transparent inline sniffer"
+    echo "Traffic passes through for monitoring/analysis"
     linux ($live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components persistence quiet secubox.netmode=bridge
     initrd ($live)/live/initrd.img
 }
 
-menuentry "🛡️ SecuBox Live (Safe Mode)" {
+menuentry "🛡️ SecuBox Live (Safe Mode)" --class secubox {
+    echo "Safe Mode: Basic video driver, no persistence"
+    echo "Use if graphics issues prevent normal boot"
     linux ($live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components nomodeset console=tty0
     initrd ($live)/live/initrd.img
 }
 
-menuentry "💾 Install SecuBox to Disk" {
+menuentry "💾 Install SecuBox to Disk" --class secubox {
+    echo "Install SecuBox to internal drive"
+    echo "WARNING: This will erase the target disk!"
     linux ($live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components nomodeset console=tty0 secubox.install=1
     initrd ($live)/live/initrd.img
 }
 
-menuentry "🚀 SecuBox Live (To RAM)" {
+menuentry "🚀 SecuBox Live (To RAM)" --class secubox {
+    echo "Load entire system into RAM"
+    echo "Faster operation, USB can be removed after boot"
     linux ($live)/live/vmlinuz boot=live live-media-path=/live rootdelay=10 components toram quiet
     initrd ($live)/live/initrd.img
 }

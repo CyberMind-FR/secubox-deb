@@ -12,7 +12,7 @@
 
 (function() {
     const MENU_API = '/api/v1/hub/menu';
-    const VERSION = 'v1.2.0';
+    const VERSION = 'v1.7.0';
     const THEME_KEY = 'sbx_theme';
 
     // Theme configuration

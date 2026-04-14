@@ -131,6 +131,39 @@
             color: #00ff41;
         }
 
+        .auth-mode {
+            text-align: center;
+            margin-top: 15px;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .auth-mode.standard {
+            background: rgba(107, 107, 122, 0.2);
+            border: 1px solid #6b6b7a;
+            color: #6b6b7a;
+        }
+
+        .auth-mode.zkp {
+            background: rgba(0, 255, 65, 0.15);
+            border: 1px solid #00ff41;
+            color: #00ff41;
+        }
+
+        .auth-mode .mode-label {
+            font-weight: bold;
+        }
+
+        .version-badge {
+            text-align: center;
+            margin-top: 10px;
+            font-size: 10px;
+            color: #6b6b7a;
+        }
+
         /* CRT effect */
         .login-container::before {
             content: '';
@@ -177,6 +210,12 @@
         <div class="hint">
             Demo credentials: <strong>admin</strong> / <strong>secubox</strong>
         </div>
+
+        <div class="auth-mode standard" id="auth-mode">
+            <span class="mode-label">Auth:</span> <span id="auth-mode-text">Standard</span>
+        </div>
+
+        <div class="version-badge" id="version-badge">SecuBox v1.7.0</div>
     </div>
 
     <script>
@@ -225,6 +264,33 @@
         if (document.getElementById('username').value) {
             document.getElementById('password').focus();
         }
+
+        // Load auth mode and version info (public endpoint)
+        async function loadPublicInfo() {
+            try {
+                const res = await fetch('/api/v1/hub/public/info');
+                if (res.ok) {
+                    const data = await res.json();
+
+                    // Update auth mode
+                    const authModeEl = document.getElementById('auth-mode');
+                    const authModeText = document.getElementById('auth-mode-text');
+                    if (data.auth_mode) {
+                        authModeText.textContent = data.auth_mode;
+                        authModeEl.className = 'auth-mode ' + (data.auth_mode.toLowerCase() === 'zkp' ? 'zkp' : 'standard');
+                    }
+
+                    // Update version
+                    if (data.version) {
+                        document.getElementById('version-badge').textContent = 'SecuBox v' + data.version;
+                    }
+                }
+            } catch (e) {
+                // Silently fail - use defaults
+            }
+        }
+
+        loadPublicInfo();
     </script>
 </body>
 </html>
