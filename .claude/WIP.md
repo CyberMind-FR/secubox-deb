@@ -5,26 +5,30 @@
 
 ## 🔄 En cours (Session 57)
 
-### v1.6.7.12 — Lenovo Boot Fix (GitHub Issue #26)
+### v1.6.7.13 — VirtualBox Kiosk Fix (GitHub Issue #27)
 
-**Status:** ✅ READY FOR RELEASE
+**Status:** 🔄 Testing VBox X11 fix
 
-#### Test Results
-- ✅ **Kiosk on real hardware** — Works! (slow startup but functional)
-- ✅ **Lenovo install test** — PASSED! Error 1962 fix confirmed working
-- ❌ **VBox kiosk** — Still console-only (VM-specific issue #27)
-
-#### Fixes Applied
-1. ✅ **Lenovo Error 1962** — Added fallback EFI bootloader at `/EFI/BOOT/BOOTX64.EFI`
-2. ✅ **CI `--slipstream` flag** — Added to `build-live-usb.sh` argument parser
-3. ✅ **Alignment fix** — Fixed banner alignment in secubox-flash-disk
-4. ✅ **Version bump** — Kiosk launcher updated to v1.6.7.12
+#### Fix Applied
+- **VirtualBox detection** — Use `systemd-detect-virt` ("oracle") instead of lspci
+- VBox with VMSVGA was incorrectly detected as VMware
+- Now properly loads vboxvideo/vboxsf modules when running in VirtualBox
 
 #### Files Modified
-- `image/build-live-usb.sh` — slipstream flag + secubox-install fallback boot
-- `image/sbin/secubox-flash-disk` — fallback EFI bootloader + alignment fix
-- `image/sbin/secubox-kiosk-launcher` — version bump + alignment fix
-- `image/build-ebin-live-usb.sh` — version bump
+- `image/sbin/secubox-kiosk-launcher` — VBox detection fix + v1.6.7.13
+- `image/build-live-usb.sh` — version bump to 1.6.7.13
+
+---
+
+## ✅ Terminé (Session 57)
+
+### v1.6.7.12 — Lenovo Boot Fix (GitHub Issue #26) ✅
+
+**Status:** Released and tested
+
+#### Test Results
+- ✅ **Kiosk on real hardware** — Works!
+- ✅ **Lenovo install test** — PASSED! Error 1962 fix confirmed
 
 ---
 

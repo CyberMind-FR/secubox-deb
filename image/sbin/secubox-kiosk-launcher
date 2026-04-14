@@ -185,19 +185,39 @@ configure_x11() {
 
     local vm_type driver="modesetting"
     vm_type=$(systemd-detect-virt 2>/dev/null || echo "none")
+    log "VM type: $vm_type"
 
-    # Detect graphics hardware - VMs first, then real hardware
+    # Detect graphics hardware
     local gpu_info
     gpu_info=$(lspci 2>/dev/null | grep -iE "vga|display|3d" || echo "")
     log "GPU detected: $gpu_info"
 
-    if echo "$gpu_info" | grep -qi "VMware SVGA\|VMSVGA"; then
+    # PRIORITY 1: Use systemd-detect-virt for accurate VM detection
+    # VirtualBox with VMSVGA shows as "VMware" in lspci but "oracle" in detect-virt
+    if [[ "$vm_type" == "oracle" ]]; then
+        # VirtualBox detected - try vboxvideo first, fall back to modesetting
+        modprobe vboxvideo 2>/dev/null || true
+        modprobe vboxsf 2>/dev/null || true  # Shared folders
+        if lsmod | grep -q vboxvideo; then
+            driver="vboxvideo"
+        else
+            driver="modesetting"
+        fi
+        log "VirtualBox (oracle) → $driver driver"
+    elif [[ "$vm_type" == "vmware" ]]; then
+        driver="vmware"
+        log "VMware detected → vmware driver"
+    elif [[ "$vm_type" == "kvm" ]] || [[ "$vm_type" == "qemu" ]]; then
+        driver="modesetting"
+        log "KVM/QEMU detected → modesetting driver"
+    # PRIORITY 2: Fall back to lspci detection for bare metal or unknown VMs
+    elif echo "$gpu_info" | grep -qi "VMware SVGA\|VMSVGA"; then
         driver="vmware"
         log "Detected VMSVGA graphics → vmware driver"
     elif echo "$gpu_info" | grep -qi "VirtualBox"; then
         driver="vboxvideo"
         modprobe vboxvideo 2>/dev/null || driver="modesetting"
-        log "Detected VirtualBox → $driver driver"
+        log "Detected VirtualBox GPU → $driver driver"
     elif echo "$gpu_info" | grep -qi "QXL\|Virtio"; then
         driver="modesetting"
         log "Detected QEMU/KVM → modesetting driver"
@@ -624,12 +644,12 @@ main() {
     # Console banner FIRST - visible to user before X starts
     echo ""
     echo "╔═══════════════════════════════════════════════════════════╗"
-    echo "║       SecuBox Kiosk Launcher v3.2 (1.6.7.12)              ║"
+    echo "║       SecuBox Kiosk Launcher v3.2 (1.6.7.13)              ║"
     echo "╚═══════════════════════════════════════════════════════════╝"
     echo ""
 
     log "════════════════════════════════════════════════"
-    log "SecuBox Kiosk Launcher v3.2 (1.6.7.12)"
+    log "SecuBox Kiosk Launcher v3.2 (1.6.7.13)"
     log "════════════════════════════════════════════════"
 
     # Show hardware info on console
