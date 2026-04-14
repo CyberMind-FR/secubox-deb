@@ -303,7 +303,7 @@
                 return `
                 <div class="nav-section${collapsedClass}">
                     <div class="nav-section-title" onclick="this.closest('.nav-section').classList.toggle('collapsed'); this.querySelector('.toggle-icon').textContent = this.closest('.nav-section').classList.contains('collapsed') ? '▶' : '▼';">
-                        <span>${cat.icon} ${cat.name.toUpperCase()}</span>
+                        <span><span class="cat-icon">${cat.icon}</span> ${cat.name.toUpperCase()}</span>
                         <span class="toggle-icon">${toggleIcon}</span>
                     </div>
                     <div class="nav-items">

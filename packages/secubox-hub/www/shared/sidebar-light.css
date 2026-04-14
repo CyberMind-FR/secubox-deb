@@ -64,6 +64,7 @@
 .logo-icon {
   font-size: 1.3rem;
   filter: drop-shadow(0 0 4px rgba(10,88,64,0.3));
+  font-family: 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', sans-serif;
 }
 
 .logo-version {
@@ -123,6 +124,12 @@
   color: var(--wall-dark);
   background: rgba(154,96,16,0.05);
   border-left-color: var(--wall-main);
+}
+
+.nav-section-title .cat-icon {
+  font-family: 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', sans-serif;
+  font-size: 0.9rem;
+  line-height: 1;
 }
 
 .nav-section-title .toggle-icon {
@@ -191,7 +198,7 @@
   font-size: 0.95rem;
   width: 1.3rem;
   text-align: center;
-  font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji', sans-serif;
+  font-family: 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', sans-serif;
   line-height: 1;
 }
 
