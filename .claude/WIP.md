@@ -1,17 +1,34 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-04-13 (Session 55)*
+*Mis à jour : 2026-04-14 (Session 56)*
 
 ---
 
-## 🔄 En cours (Session 55)
+## 🔄 En cours (Session 56)
 
-### v1.6.7.11 — Bug Fixes for Kiosk
+*Rien en cours — Kiosk stable sur v1.6.7.11*
 
-#### Bugs from v1.6.7.10 to fix
-1. **systemd `StartLimitIntervalSec`** — wrong section, should be in `[Unit]` not `[Service]`
-2. **GPU detection message** — says "disabled" when should say "enabled" for real hardware
-3. **Lock file blocking** — lock file left behind prevents restart
-4. **More services to mask** — picobrew, voip, zigbee, newsbin
+---
+
+## ✅ Terminé (Session 56)
+
+### v1.6.7.11 — Kiosk Bug Fixes ✅ (GitHub Issue #24 CLOSED)
+
+**Tested on real hardware: KIOSK LOADING OK ✅**
+
+#### Fixes Applied
+1. ✅ **systemd `StartLimitIntervalSec`** — fixed syntax (was `StartLimitInterval`)
+2. ✅ **Platform detection message** — shows "bare-metal (native)" instead of "none"
+3. ✅ **Lock file cleanup** — PID-based tracking, auto-removes stale locks
+4. ✅ **Services masked** — picobrew, voip, zigbee, newsbin (already in build script)
+
+#### Files Modified
+- `image/systemd/secubox-kiosk.service` — StartLimitIntervalSec fix
+- `image/sbin/secubox-kiosk-launcher` — v3.2 with platform name + PID lock
+
+#### Release
+- Git commit: `66ad146`
+- Git tag: `v1.6.7.11` pushed to origin
+- USB image built and tested successfully
 
 ---
 
