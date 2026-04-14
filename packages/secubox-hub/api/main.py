@@ -157,15 +157,31 @@ async def startup():
     asyncio.create_task(_background_cache_refresh())
 
 
+def _get_package_version(pkg_name: str) -> str:
+    """Get installed package version via dpkg."""
+    try:
+        r = subprocess.run(["dpkg-query", "-W", "-f=${Version}", pkg_name],
+                          capture_output=True, text=True, timeout=2)
+        if r.returncode == 0 and r.stdout.strip():
+            return r.stdout.strip().split('-')[0]  # Return just the version, not debian revision
+    except Exception:
+        pass
+    return "-"
+
+
 def _svc(name: str) -> dict:
     """Get service status from cache (fast) or direct call (fallback)."""
     if name in _cache["services"] and (time.time() - _cache["last_refresh"]) < CACHE_TTL * 2:
-        return _cache["services"][name]
+        svc_data = _cache["services"][name].copy()
+        # Add version if not already present
+        if "version" not in svc_data:
+            svc_data["version"] = _get_package_version(name)
+        return svc_data
     # Fallback to direct call if cache miss
     r = subprocess.run(["systemctl", "is-active", name], capture_output=True, text=True, timeout=2)
     sock = Path(f"/run/secubox/{name.replace('secubox-','')}.sock")
     return {"name": name, "active": r.stdout.strip() == "active",
-            "socket": sock.exists()}
+            "socket": sock.exists(), "version": _get_package_version(name)}
 
 @router.get("/status")
 async def status(user=Depends(require_jwt)):
@@ -282,21 +298,60 @@ async def security_summary(user=Depends(require_jwt)):
 
 @router.get("/network_summary")
 async def network_summary(user=Depends(require_jwt)):
-    """Résumé réseau."""
+    """Résumé réseau with IP addresses."""
     import json
+
+    # Get interface states
     r = subprocess.run(["ip", "-j", "link", "show"], capture_output=True, text=True)
     try:
         links = json.loads(r.stdout)
         ifaces = [l for l in links if l.get("ifname") != "lo"]
         up_count = sum(1 for l in ifaces if "UP" in l.get("flags", []))
-        return {
-            "interfaces": len(ifaces),
-            "interfaces_up": up_count,
-            "wan_status": "connected",
-            "lan_clients": 0,
-        }
     except Exception:
-        return {"interfaces": 0, "interfaces_up": 0}
+        ifaces = []
+        up_count = 0
+
+    # Get IP addresses for common interfaces
+    lan_ip = None
+    wan_ip = None
+
+    # Try to get IP addresses using ip -j addr
+    r2 = subprocess.run(["ip", "-j", "addr", "show"], capture_output=True, text=True)
+    try:
+        addrs = json.loads(r2.stdout)
+        for iface in addrs:
+            ifname = iface.get("ifname", "")
+            addr_info = iface.get("addr_info", [])
+            for ai in addr_info:
+                if ai.get("family") == "inet":
+                    ip = ai.get("local")
+                    if ip:
+                        # LAN interfaces
+                        if ifname in ("br-lan", "br0", "lan0", "lan"):
+                            lan_ip = ip
+                        # WAN interfaces
+                        elif ifname in ("br-wan", "wan", "eth0", "wan0", "enp1s0"):
+                            wan_ip = ip
+                        # If no LAN yet, use any bridged interface
+                        elif ifname.startswith("br") and not lan_ip:
+                            lan_ip = ip
+    except Exception:
+        pass
+
+    # Fallback to default network
+    if not lan_ip:
+        lan_ip = "192.168.10.1"
+    if not wan_ip:
+        wan_ip = "N/A"
+
+    return {
+        "interfaces": len(ifaces),
+        "interfaces_up": up_count,
+        "wan_status": "connected" if wan_ip and wan_ip != "N/A" else "disconnected",
+        "lan_clients": 0,
+        "lan_ip": lan_ip,
+        "wan_ip": wan_ip,
+    }
 
 
 @router.get("/quick_actions")

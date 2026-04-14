@@ -276,14 +276,57 @@ chroot "${ROOTFS}" pip3 install --break-system-packages -q \
 # Slipstream local packages if available
 if [[ $SLIPSTREAM_DEBS -eq 1 ]]; then
     OUTPUT_DEBS="${REPO_DIR}/output/debs"
-    if [[ -d "$OUTPUT_DEBS" ]] && ls "${OUTPUT_DEBS}"/secubox-*.deb >/dev/null 2>&1; then
+    CACHE_DEBS="${HOME}/.cache/secubox/debs"
+
+    # Count available packages
+    CACHE_COUNT=$(find "$CACHE_DEBS" -name "secubox-*.deb" 2>/dev/null | wc -l)
+    OUTPUT_COUNT=$(ls "${OUTPUT_DEBS}"/secubox-*.deb 2>/dev/null | wc -l)
+    log "Found ${CACHE_COUNT} packages in cache, ${OUTPUT_COUNT} in output/debs"
+
+    if [[ $CACHE_COUNT -gt 0 ]] || [[ $OUTPUT_COUNT -gt 0 ]]; then
         log "Slipstreaming local packages..."
         install -d "${ROOTFS}/tmp/secubox-debs"
-        cp "${OUTPUT_DEBS}"/secubox-*.deb "${ROOTFS}/tmp/secubox-debs/" 2>/dev/null || true
 
-        # Install packages (ignore failures)
-        chroot "${ROOTFS}" bash -c "dpkg -i /tmp/secubox-debs/*.deb 2>/dev/null || true"
+        # Copy from output/debs FIRST (prefer newer local builds over cache)
+        if [[ -d "$OUTPUT_DEBS" ]]; then
+            for deb in "${OUTPUT_DEBS}"/secubox-*.deb; do
+                [[ -f "$deb" ]] || continue
+                cp "$deb" "${ROOTFS}/tmp/secubox-debs/"
+            done
+            log "Copied ${OUTPUT_COUNT} packages from output/debs"
+        fi
+
+        # Then add from cache for packages not in output/debs
+        if [[ $CACHE_COUNT -gt 0 ]]; then
+            for deb in $(find "$CACHE_DEBS" -name "secubox-*.deb"); do
+                pkg_name=$(basename "$deb" | sed 's/_.*$//')
+                # Only copy if not already present (prefer output/debs version)
+                if ! ls "${ROOTFS}/tmp/secubox-debs/${pkg_name}_"*.deb >/dev/null 2>&1; then
+                    cp "$deb" "${ROOTFS}/tmp/secubox-debs/"
+                    log "Added ${pkg_name} from cache"
+                fi
+            done
+        fi
+
+        DEB_COUNT=$(ls "${ROOTFS}/tmp/secubox-debs/"*.deb 2>/dev/null | wc -l)
+        log "Installing ${DEB_COUNT} packages..."
+
+        # Install core first (dependency for all)
+        if ls "${ROOTFS}/tmp/secubox-debs/secubox-core_"*.deb >/dev/null 2>&1; then
+            chroot "${ROOTFS}" bash -c 'dpkg -i --force-depends /tmp/secubox-debs/secubox-core_*.deb' || warn "secubox-core install failed"
+        fi
+
+        # Install all packages (force overwrite for duplicate files)
+        chroot "${ROOTFS}" bash -c 'dpkg -i --force-depends --force-overwrite /tmp/secubox-debs/*.deb 2>&1' | \
+            grep -v "^dpkg: warning" | head -30 || true
+
+        # Fix broken dependencies
         chroot "${ROOTFS}" apt-get -f install -y --fix-broken 2>/dev/null || true
+
+        # Verify installations
+        INSTALLED_COUNT=$(chroot "${ROOTFS}" dpkg -l 'secubox-*' 2>/dev/null | grep "^ii" | wc -l)
+        log "Installed ${INSTALLED_COUNT}/${DEB_COUNT} packages"
+
         rm -rf "${ROOTFS}/tmp/secubox-debs"
         ok "Local packages installed"
     fi

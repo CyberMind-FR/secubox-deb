@@ -725,21 +725,25 @@
             const tbody = document.getElementById('modules-table');
             if (menuData && menuData.categories) {
                 const allItems = menuData.categories.flatMap(c => c.items);
-                tbody.innerHTML = allItems.slice(0, 10).map(item => `
+                tbody.innerHTML = allItems.slice(0, 10).map(item => {
+                    // Look up version from modules data if available
+                    const modData = modules[item.id] || {};
+                    const version = modData.version || '-';
+                    return `
                     <tr onclick="location.href='${item.path}'" style="cursor:pointer">
                         <td><span class="module-icon">${item.icon}</span>${item.name}</td>
                         <td>${item.category}</td>
                         <td><span class="status-badge ${item.active ? 'active' : 'inactive'}">${item.active ? 'Active' : 'Inactive'}</span></td>
-                        <td>-</td>
-                    </tr>
-                `).join('');
+                        <td>${version}</td>
+                    </tr>`;
+                }).join('');
             } else {
                 tbody.innerHTML = Object.entries(modules).map(([name, m]) => `
                     <tr>
                         <td><span class="module-icon">📦</span>${name.charAt(0).toUpperCase() + name.slice(1)}</td>
                         <td>-</td>
                         <td><span class="status-badge ${m.active ? 'active' : 'inactive'}">${m.active ? 'Active' : 'Inactive'}</span></td>
-                        <td>-</td>
+                        <td>${m.version || '-'}</td>
                     </tr>
                 `).join('');
             }
@@ -771,8 +775,32 @@
         async function loadNetwork() {
             const data = await api('/network_summary');
             document.getElementById('net-info').textContent = data?.wan_status || 'Unknown';
-            document.getElementById('lan-ip').textContent = '192.168.10.1';
-            document.getElementById('wan-ip').textContent = '192.168.1.1';
+            document.getElementById('lan-ip').textContent = data?.lan_ip || '-';
+            document.getElementById('wan-ip').textContent = data?.wan_ip || '-';
+            if (data?.interfaces_up) {
+                const pct = Math.round((data.interfaces_up / Math.max(data.interfaces, 1)) * 100);
+                document.getElementById('net-bar').style.width = pct + '%';
+                document.getElementById('net-percent').textContent = pct + '%';
+            }
+        }
+
+        async function loadMemory() {
+            const data = await api('/memory');
+            if (data && data.total_mb) {
+                const used = data.used_mb || 0;
+                const total = data.total_mb || 1;
+                document.getElementById('mem-info').textContent =
+                    Math.round(used / 1024 * 10) / 10 + ' / ' + Math.round(total / 1024 * 10) / 10 + ' GB';
+            }
+        }
+
+        async function loadDisk() {
+            const data = await api('/disk');
+            if (data && data.total_gb) {
+                const used = data.used_gb || 0;
+                const total = data.total_gb || 1;
+                document.getElementById('disk-info').textContent = used + ' / ' + total + ' GB';
+            }
         }
 
         function restartServices() { api('/execute_action', 'POST', { action: 'restart_services' }).then(() => alert('Services restarted')); }
@@ -908,6 +936,8 @@
             loadHealth();
             loadAlerts();
             loadNetwork();
+            loadMemory();
+            loadDisk();
             loadNetworkMode();
             loadFooter();
         }
