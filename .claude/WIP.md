@@ -1,11 +1,30 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-04-14 (Session 56)*
+*Mis à jour : 2026-04-14 (Session 57)*
 
 ---
 
-## 🔄 En cours (Session 56)
+## 🔄 En cours (Session 57)
 
-*Rien en cours — Kiosk stable sur v1.6.7.11*
+### v1.6.7.12 — Lenovo Boot Fix (GitHub Issue #26)
+
+**Status:** ✅ READY FOR RELEASE
+
+#### Test Results
+- ✅ **Kiosk on real hardware** — Works! (slow startup but functional)
+- ✅ **Lenovo install test** — PASSED! Error 1962 fix confirmed working
+- ❌ **VBox kiosk** — Still console-only (VM-specific issue #27)
+
+#### Fixes Applied
+1. ✅ **Lenovo Error 1962** — Added fallback EFI bootloader at `/EFI/BOOT/BOOTX64.EFI`
+2. ✅ **CI `--slipstream` flag** — Added to `build-live-usb.sh` argument parser
+3. ✅ **Alignment fix** — Fixed banner alignment in secubox-flash-disk
+4. ✅ **Version bump** — Kiosk launcher updated to v1.6.7.12
+
+#### Files Modified
+- `image/build-live-usb.sh` — slipstream flag + secubox-install fallback boot
+- `image/sbin/secubox-flash-disk` — fallback EFI bootloader + alignment fix
+- `image/sbin/secubox-kiosk-launcher` — version bump + alignment fix
+- `image/build-ebin-live-usb.sh` — version bump
 
 ---
 

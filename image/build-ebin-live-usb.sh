@@ -10,7 +10,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 
 # ── Version & Build Info ──────────────────────────────────────────
-SECUBOX_VERSION="1.6.7.8"
+SECUBOX_VERSION="1.6.7.12"
 BUILD_DATE=$(date '+%Y-%m-%d')
 BUILD_TIMESTAMP=$(date '+%Y-%m-%d %H:%M')
 

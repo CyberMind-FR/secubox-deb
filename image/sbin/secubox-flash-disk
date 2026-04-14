@@ -328,7 +328,7 @@ fi
 
 echo ""
 echo -e "${BOLD}╔═══════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${BOLD}║            SecuBox Disk Flasher v${VERSION}                       ║${NC}"
+echo -e "${BOLD}║            SecuBox Disk Flasher v${VERSION}                        ║${NC}"
 echo -e "${BOLD}╠═══════════════════════════════════════════════════════════════╣${NC}"
 echo -e "${BOLD}║${NC}  Source Image : ${CYAN}$(basename "$IMAGE_PATH")${NC}"
 echo -e "${BOLD}║${NC}  Image Size   : ${IMAGE_SIZE_MB} MB $([[ "$IMAGE_PATH" == *.gz ]] && echo "(compressed)")"
@@ -512,6 +512,14 @@ if mount "$ROOT_PART" "$MOUNT_ROOT" 2>/dev/null; then
                 warn "UEFI GRUB install failed"
             fi
 
+            # Create fallback bootloader for Lenovo/HP/Dell compatibility (Error 1962 fix)
+            # These systems only look at /EFI/BOOT/BOOTX64.EFI
+            if [[ -f "$MOUNT_ROOT/boot/efi/EFI/SecuBox/grubx64.efi" ]]; then
+                mkdir -p "$MOUNT_ROOT/boot/efi/EFI/BOOT"
+                cp "$MOUNT_ROOT/boot/efi/EFI/SecuBox/grubx64.efi" "$MOUNT_ROOT/boot/efi/EFI/BOOT/BOOTX64.EFI"
+                ok "Fallback EFI bootloader created (Lenovo/HP/Dell compatible)"
+            fi
+
             # Verify EFI boot entry was created
             if command -v efibootmgr &>/dev/null; then
                 if efibootmgr -v 2>/dev/null | grep -qi "secubox"; then
@@ -590,7 +598,7 @@ fi
 
 echo ""
 echo -e "${GREEN}${BOLD}╔═══════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${GREEN}${BOLD}║              Flash Complete!                                   ║${NC}"
+echo -e "${GREEN}${BOLD}║                        Flash Complete!                        ║${NC}"
 echo -e "${GREEN}${BOLD}╚═══════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 echo "SecuBox has been flashed to ${TARGET_DEVICE}."

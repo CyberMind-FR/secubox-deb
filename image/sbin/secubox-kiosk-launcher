@@ -624,12 +624,12 @@ main() {
     # Console banner FIRST - visible to user before X starts
     echo ""
     echo "╔═══════════════════════════════════════════════════════════╗"
-    echo "║     SecuBox Kiosk Launcher v3.2 (1.6.7.11)                ║"
+    echo "║       SecuBox Kiosk Launcher v3.2 (1.6.7.12)              ║"
     echo "╚═══════════════════════════════════════════════════════════╝"
     echo ""
 
     log "════════════════════════════════════════════════"
-    log "SecuBox Kiosk Launcher v3.2 (1.6.7.11)"
+    log "SecuBox Kiosk Launcher v3.2 (1.6.7.12)"
     log "════════════════════════════════════════════════"
 
     # Show hardware info on console
