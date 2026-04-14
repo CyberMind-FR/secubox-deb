@@ -3180,6 +3180,8 @@ insmod part_gpt
 insmod fat
 insmod ext2
 insmod all_video
+insmod echo
+insmod gfxterm
 
 search --no-floppy --label LIVE --set=live
 

@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - Login</title>
+    <link rel="stylesheet" href="/shared/design-tokens.css">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <style>
+        body {
+            font-family: var(--font-body, system-ui);
+            background: var(--bg, #e8f5e9);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .login-card {
+            background: var(--card-bg, #fff);
+            border: 2px solid var(--border, #a5d6a7);
+            border-radius: 12px;
+            padding: 2rem;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        .login-card h1 {
+            color: var(--primary, #00aa44);
+            margin: 0 0 1.5rem 0;
+            text-align: center;
+            font-size: 1.5rem;
+        }
+        .login-card .logo {
+            text-align: center;
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: var(--text, #333);
+            font-weight: 600;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid var(--border, #a5d6a7);
+            border-radius: 6px;
+            font-size: 1rem;
+            box-sizing: border-box;
+        }
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--primary, #00aa44);
+        }
+        .btn-login {
+            width: 100%;
+            padding: 0.75rem;
+            background: var(--primary, #00aa44);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 1rem;
+        }
+        .btn-login:hover {
+            opacity: 0.9;
+        }
+        .btn-login:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .error {
+            color: #d32f2f;
+            text-align: center;
+            margin-top: 1rem;
+            display: none;
+        }
+        .version {
+            text-align: center;
+            color: var(--text-muted, #666);
+            font-size: 0.8rem;
+            margin-top: 1.5rem;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            margin-top: 1rem;
+            color: var(--primary, #00aa44);
+        }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <div class="logo">&#128274;</div>
+        <h1>SecuBox Login</h1>
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" required autocomplete="username" autofocus>
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required autocomplete="current-password">
+            </div>
+            <button type="submit" class="btn-login" id="submitBtn">Login</button>
+        </form>
+        <div class="loading" id="loading">Authenticating...</div>
+        <div class="error" id="error">Invalid credentials</div>
+        <div class="version">SecuBox v1.7.0</div>
+    </div>
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const errorEl = document.getElementById('error');
+            const loadingEl = document.getElementById('loading');
+            const submitBtn = document.getElementById('submitBtn');
+
+            errorEl.style.display = 'none';
+            loadingEl.style.display = 'block';
+            submitBtn.disabled = true;
+
+            try {
+                const res = await fetch('/api/v1/auth/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    // Store token in both keys for compatibility
+                    localStorage.setItem('sbx_token', data.access_token);
+                    localStorage.setItem('secubox_token', data.access_token);
+                    // Redirect to original page or home
+                    const params = new URLSearchParams(window.location.search);
+                    const redirect = params.get('redirect') || '/';
+                    window.location.href = redirect;
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    errorEl.textContent = err.detail || 'Invalid username or password';
+                    errorEl.style.display = 'block';
+                }
+            } catch (err) {
+                errorEl.textContent = 'Connection error: ' + err.message;
+                errorEl.style.display = 'block';
+            } finally {
+                loadingEl.style.display = 'none';
+                submitBtn.disabled = false;
+            }
+        });
+
+        // Auto-redirect if already logged in
+        const token = localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token');
+        if (token) {
+            const params = new URLSearchParams(window.location.search);
+            const redirect = params.get('redirect') || '/';
+            window.location.href = redirect;
+        }
+    </script>
+</body>
+</html>
