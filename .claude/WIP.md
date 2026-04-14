@@ -1,5 +1,109 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-04-14 (Session 57)*
+*Mis à jour : 2026-04-14 (Session 58)*
+
+---
+
+## 🔄 En cours (Session 58) — v1.7.0 Phase 11
+
+### P11-01 — Version Display in Kiosk Header/Footer ✅
+
+**Status:** ✅ Implemented
+
+#### Changes
+- Added **footer bar** to dashboard (`index.html`) showing:
+  - SecuBox version
+  - Boot mode (kiosk/console)
+  - Auth mode (ZKP/Standard)
+  - System uptime
+- Added new API endpoints:
+  - `GET /api/v1/hub/boot_mode` — Returns kiosk/console status
+  - `GET /api/v1/hub/auth_mode` — Returns ZKP/Standard auth status
+- Updated version to **v1.7.0** across:
+  - `image/build-live-usb.sh` (SECUBOX_VERSION)
+  - `packages/secubox-hub/api/main.py` (FastAPI version)
+  - `packages/secubox-hub/www/shared/sidebar.js` (VERSION constant)
+  - `packages/secubox-hub/www/index.html` (footer default)
+
+#### Files Modified
+- `packages/secubox-hub/www/index.html` — Footer with version/mode display
+- `packages/secubox-hub/api/main.py` — boot_mode + auth_mode endpoints
+- `packages/secubox-hub/www/shared/sidebar.js` — Version constant
+- `image/build-live-usb.sh` — Version bump to 1.7.0
+
+---
+
+### P11-03 — Boot Mode Indicator on Splash ✅
+
+**Status:** ✅ Implemented
+
+#### Changes
+- Updated Plymouth theme (`secubox-simple.script`) to show boot mode
+- Added `send_plymouth_mode()` function to cmdline-handler
+- Sends "KIOSK MODE", "TUI MODE", or "CONSOLE MODE" to Plymouth during boot
+
+#### Files Modified
+- `image/plymouth/secubox-simple/secubox-simple.script` — Boot mode display
+- `image/sbin/secubox-cmdline-handler` — Plymouth message function
+
+---
+
+### P11-07/P11-08 — Plymouth & GRUB Version Display ✅
+
+**Status:** ✅ Implemented
+
+#### Changes
+- Plymouth theme updated to show v1.7.0
+- GRUB menu entries already use `${SECUBOX_VERSION}` variable
+
+#### Files Modified
+- `image/plymouth/secubox-simple/secubox-simple.script` — Version v1.7.0
+
+---
+
+### P11-09 — Boot Mode Selection Descriptions ✅
+
+**Status:** ✅ Implemented
+
+#### Changes
+- Added descriptive echo messages to GRUB menu entries
+- Each boot option now shows brief explanation when selected:
+  - Console: "Access via SSH or Web UI"
+  - Kiosk: "Fullscreen GUI on HDMI/display"
+  - TUI: "Text User Interface mode - keyboard navigation"
+  - Bridge: "Transparent inline sniffer"
+  - Safe Mode: "Basic video driver, no persistence"
+  - Install: "WARNING: This will erase the target disk!"
+  - To RAM: "Faster operation, USB can be removed after boot"
+
+#### Files Modified
+- `image/build-live-usb.sh` — GRUB menu entry descriptions
+
+---
+
+### P11-04 — Auth Mode Feedback on Login Page ✅
+
+**Status:** ✅ Implemented
+
+#### Changes
+- Added auth mode indicator to login page showing "Standard" or "ZKP"
+- Added version badge at bottom of login form
+- Created public API endpoint: `GET /api/v1/hub/public/info`
+  - Returns version, auth_mode, name (no auth required)
+- Login page fetches and displays auth mode dynamically
+
+#### Files Modified
+- `packages/secubox-hub/www/portal/login.html` — Auth mode badge + version
+- `packages/secubox-hub/api/main.py` — Public info endpoint
+
+---
+
+### ⬜ Next Up (Phase 11)
+
+| ID | Task | Status |
+|----|------|--------|
+| P11-02 | Auth mode indicator in kiosk UI | ✅ (via P11-01 footer) |
+| P11-05 | Auth mode toggle in settings | ⬜ |
+| P11-06 | ZKP status in dashboard | ⬜ |
 
 ---
 

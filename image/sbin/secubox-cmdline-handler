@@ -51,6 +51,25 @@ parse_cmdline() {
     echo "SECUBOX_INSTALL=${install}"
 }
 
+# Send boot mode to Plymouth splash
+send_plymouth_mode() {
+    local mode="$1"
+    local mode_text=""
+
+    case "$mode" in
+        kiosk)   mode_text="KIOSK MODE" ;;
+        tui)     mode_text="TUI MODE" ;;
+        console) mode_text="CONSOLE MODE" ;;
+        *)       mode_text="BOOTING..." ;;
+    esac
+
+    # Send message to Plymouth if available
+    if command -v plymouth &>/dev/null && plymouth --ping 2>/dev/null; then
+        plymouth message --text="$mode_text"
+        log "Plymouth: $mode_text"
+    fi
+}
+
 # Apply settings from command line
 apply_settings() {
     mkdir -p "$MARKER_DIR"
@@ -60,6 +79,9 @@ apply_settings() {
 
     log "Network mode: $SECUBOX_NETMODE"
     log "Display mode: $SECUBOX_MODE"
+
+    # Send boot mode to Plymouth
+    send_plymouth_mode "$SECUBOX_MODE"
 
     # Handle display mode (kiosk/tui/console)
     case "$SECUBOX_MODE" in

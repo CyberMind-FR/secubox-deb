@@ -14,11 +14,61 @@ import asyncio
 import time
 from pathlib import Path
 
-app = FastAPI(title="secubox-hub", version="1.6.7.2", root_path="/api/v1/hub")
+app = FastAPI(title="secubox-hub", version="1.7.0", root_path="/api/v1/hub")
 # Auth router - prefix applied here
 app.include_router(auth_router, prefix="/auth")
 router = APIRouter()
+public_router = APIRouter(prefix="/public", tags=["public"])
 log = get_logger("hub")
+
+
+# ══════════════════════════════════════════════════════════════════
+# Public Endpoints — No authentication required
+# ══════════════════════════════════════════════════════════════════
+@public_router.get("/info")
+async def public_info():
+    """Public info endpoint for login page (no auth required)."""
+    # Get version from build-info.json
+    version = "1.7.0"
+    build_info_path = Path("/etc/secubox/build-info.json")
+    if build_info_path.exists():
+        try:
+            import json
+            data = json.loads(build_info_path.read_text())
+            version = data.get("version", version)
+        except Exception:
+            pass
+
+    # Check auth mode
+    auth_mode = "Standard"
+    config_path = Path("/etc/secubox/secubox.conf")
+    if config_path.exists():
+        try:
+            import tomllib
+            with open(config_path, "rb") as f:
+                config = tomllib.load(f)
+                if config.get("auth", {}).get("zkp_enabled", False):
+                    auth_mode = "ZKP"
+        except Exception:
+            pass
+
+    # Check for ZKP service
+    try:
+        r = subprocess.run(["systemctl", "is-active", "secubox-zkp"],
+                          capture_output=True, text=True, timeout=2)
+        if r.stdout.strip() == "active":
+            auth_mode = "ZKP"
+    except Exception:
+        pass
+
+    return {
+        "version": version,
+        "auth_mode": auth_mode,
+        "name": "SecuBox",
+    }
+
+
+app.include_router(public_router)
 
 # ══════════════════════════════════════════════════════════════════
 # Performance Cache — Avoid repeated subprocess calls
@@ -358,7 +408,7 @@ async def about(user=Depends(require_jwt)):
     board = get_board_info()
     return {
         "product": "SecuBox",
-        "version": "1.6.7.2",
+        "version": "1.7.0",
         "board": board,
         "project_url": "https://secubox.gondwana.systems",
         "support_email": "support@cybermind.fr",
@@ -415,7 +465,67 @@ async def uptime(user=Depends(require_jwt)):
         "days": days,
         "hours": hours,
         "minutes": mins,
+        "uptime": f"{days}d {hours}h {mins}m",
         "formatted": f"{days}d {hours}h {mins}m",
+    }
+
+
+@router.get("/boot_mode")
+async def boot_mode(user=Depends(require_jwt)):
+    """Get current boot mode (kiosk or console)."""
+    kiosk_enabled = Path("/var/lib/secubox/.kiosk-enabled").exists()
+    kiosk_running = False
+    try:
+        import subprocess
+        r = subprocess.run(["systemctl", "is-active", "secubox-kiosk"], capture_output=True, text=True)
+        kiosk_running = r.stdout.strip() == "active"
+    except Exception:
+        pass
+
+    if kiosk_enabled and kiosk_running:
+        mode = "kiosk"
+    elif kiosk_enabled:
+        mode = "kiosk-pending"
+    else:
+        mode = "console"
+
+    return {
+        "mode": mode,
+        "kiosk_enabled": kiosk_enabled,
+        "kiosk_running": kiosk_running,
+    }
+
+
+@router.get("/auth_mode")
+async def auth_mode(user=Depends(require_jwt)):
+    """Get current authentication mode (ZKP or standard)."""
+    # Check if ZKP authentication is enabled
+    zkp_enabled = False
+    config_path = Path("/etc/secubox/secubox.conf")
+    if config_path.exists():
+        try:
+            import tomllib
+            with open(config_path, "rb") as f:
+                config = tomllib.load(f)
+                zkp_enabled = config.get("auth", {}).get("zkp_enabled", False)
+        except Exception:
+            pass
+
+    # Also check for ZKP service
+    zkp_running = False
+    try:
+        import subprocess
+        r = subprocess.run(["systemctl", "is-active", "secubox-zkp"], capture_output=True, text=True)
+        zkp_running = r.stdout.strip() == "active"
+    except Exception:
+        pass
+
+    mode = "ZKP" if (zkp_enabled or zkp_running) else "Standard"
+
+    return {
+        "mode": mode,
+        "zkp_enabled": zkp_enabled,
+        "zkp_running": zkp_running,
     }
 
 
@@ -552,7 +662,7 @@ async def apply_updates(user=Depends(require_jwt)):
 
 @router.get("/health")
 async def health():
-    return {"status": "ok", "module": "hub", "version": "1.6.7.2"}
+    return {"status": "ok", "module": "hub", "version": "1.7.0"}
 
 
 # ══════════════════════════════════════════════════════════════════

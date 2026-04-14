@@ -3,6 +3,45 @@
 
 ---
 
+## 2026-04-14
+
+### Session 57 — Live USB Fixes & VirtualBox Testing
+
+**v1.6.7.12 — Lenovo Boot Fix (Issue #26)**
+- Added fallback EFI bootloader at `/EFI/BOOT/BOOTX64.EFI` for Lenovo/HP/Dell
+- Fixed CI `--slipstream` flag in build-live-usb.sh
+- Fixed banner alignment in secubox-flash-disk
+- Tested and confirmed working on real Lenovo hardware
+
+**v1.6.7.13 — VirtualBox Detection Fix (Issue #27)**
+- Fixed VM detection using `systemd-detect-virt` ("oracle") instead of lspci
+- VBox with VMSVGA was incorrectly detected as VMware
+- Result: WebUI works in VBox, kiosk works on real hardware
+
+**v1.6.7.14 — Network Auto-Discovery (Issue #28)**
+- Enhanced `secubox-net-fallback` with LAN auto-discovery
+- Probes common gateways (192.168.1.1, 192.168.0.1, 192.168.255.1, 10.0.0.1...)
+- Auto-configures IP .250 on discovered subnet when DHCP fails
+- Only uses 169.254.1.1 as last resort
+
+**Wiki Updates**
+- All Home pages (EN, FR, DE, ZH) now use `/releases/latest/download/` URLs
+- Fixed script paths (scripts/ → image/)
+- Removed hardcoded version numbers
+
+**Builds Completed**
+- x64: `secubox-live-amd64-bookworm.img` (8GB)
+- ARM64: `secubox-espressobin-v7-live-usb.img` (539MB)
+
+**GitHub Issues Closed**
+- #26 Lenovo Error 1962 boot fix ✅
+- #27 VBox kiosk not starting ✅
+- #28 Network fallback 169.254.1.1 ✅
+
+**Tags:** v1.6.7.12, v1.6.7.13, v1.6.7.14
+
+---
+
 ## 2026-04-03
 
 ### Session 34 — Build Timestamp & System Fixes

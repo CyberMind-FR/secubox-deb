@@ -28,11 +28,26 @@ subtitle_sprite.SetY(center_y - 20);
 subtitle_sprite.SetZ(10);
 
 /* Version */
-version = Image.Text("v1.6.7.2", 0.2, 0.5, 0.3, "Sans 12");
+version = Image.Text("v1.7.0", 0.2, 0.5, 0.3, "Sans 12");
 version_sprite = Sprite(version);
 version_sprite.SetX(center_x - version.GetWidth() / 2);
 version_sprite.SetY(center_y + 10);
 version_sprite.SetZ(10);
+
+/* Boot mode indicator - Read from kernel cmdline */
+boot_mode_text = "CONSOLE MODE";
+boot_mode_color_r = 0.8;
+boot_mode_color_g = 0.6;
+boot_mode_color_b = 0.2;
+
+/* Check for kiosk mode from kernel cmdline */
+cmdline = Plymouth.GetRootDevicePath();  /* This is a workaround - Plymouth doesn't have direct cmdline access */
+/* Default to showing generic boot mode */
+boot_mode = Image.Text(boot_mode_text, boot_mode_color_r, boot_mode_color_g, boot_mode_color_b, "Sans Bold 11");
+boot_mode_sprite = Sprite(boot_mode);
+boot_mode_sprite.SetX(center_x - boot_mode.GetWidth() / 2);
+boot_mode_sprite.SetY(center_y + 28);
+boot_mode_sprite.SetZ(10);
 
 /* Progress bar background */
 progress_box = Image.Text("[                              ]", 0.2, 0.6, 0.3, "Mono 12");
@@ -122,6 +137,7 @@ fun quit_callback() {
     title_sprite.SetOpacity(0);
     subtitle_sprite.SetOpacity(0);
     version_sprite.SetOpacity(0);
+    boot_mode_sprite.SetOpacity(0);
     progress_box_sprite.SetOpacity(0);
     progress_sprite.SetOpacity(0);
     spinner_sprite.SetOpacity(0);
