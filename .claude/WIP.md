@@ -2743,3 +2743,48 @@ curl -sk https://localhost:8443/api/v1/hub/menu | jq '.total_modules'
 **Testing**:
 - VirtualBox: Boot to console, access via SSH (port 2222) or web UI (port 9443)
 - Real hardware: Kiosk starts automatically as before
+
+## Dashboard Real Data Fix (2026-04-14)
+
+**Problem**: Dashboard showing placeholder values:
+- Memory: -/-
+- Storage: -/-
+- LAN/BR-WAN: -
+- Module versions: all showing "-"
+
+**Root Causes**:
+1. `loadNetwork()` had hardcoded IP addresses instead of using API data
+2. No calls to `/memory` and `/disk` endpoints for actual used/total values
+3. `network_summary` API didn't return IP addresses
+4. Module version info wasn't included in service status data
+
+**Solutions**:
+1. Updated `network_summary` API to return actual LAN/WAN IP addresses
+2. Added `loadMemory()` and `loadDisk()` functions to fetch real data
+3. Updated `loadNetwork()` to use API response for IP addresses
+4. Added `_get_package_version()` helper to fetch installed package versions
+5. Updated modules table to display actual versions from dpkg
+
+**Files Modified**:
+- `packages/secubox-hub/api/main.py`:
+  - Enhanced `network_summary` endpoint with IP address discovery
+  - Added `_get_package_version()` function
+  - Updated `_svc()` to include package versions
+- `packages/secubox-hub/www/index.html`:
+  - Fixed `loadNetwork()` to use API data instead of hardcoded IPs
+  - Added `loadMemory()` and `loadDisk()` functions
+  - Updated modules table to show real versions
+  - Added new functions to refresh cycle
+
+## EspressoBin Slipstream Consistency (2026-04-14)
+
+**Problem**: EspressoBin build only checked `output/debs` while AMD64 also checked cache.
+
+**Solution**: Updated `build-ebin-live-usb.sh` to:
+- Check both `output/debs` and `~/.cache/secubox/debs`
+- Prefer output/debs over cache (for newer local builds)
+- Install secubox-core first as dependency
+- Use `--force-overwrite` for duplicate files
+
+**Files Modified**:
+- `image/build-ebin-live-usb.sh` - Consistent slipstream with AMD64 build
