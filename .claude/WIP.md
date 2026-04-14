@@ -1,5 +1,62 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-04-13 (Session 53)*
+*Mis à jour : 2026-04-13 (Session 55)*
+
+---
+
+## 🔄 En cours (Session 55)
+
+### v1.6.7.11 — Bug Fixes for Kiosk
+
+#### Bugs from v1.6.7.10 to fix
+1. **systemd `StartLimitIntervalSec`** — wrong section, should be in `[Unit]` not `[Service]`
+2. **GPU detection message** — says "disabled" when should say "enabled" for real hardware
+3. **Lock file blocking** — lock file left behind prevents restart
+4. **More services to mask** — picobrew, voip, zigbee, newsbin
+
+---
+
+## ✅ Terminé (Session 55)
+
+### v1.6.7.10 — KIOSK WORKING ON REAL HARDWARE ✅
+
+**Tested on real hardware (Intel HD Graphics 630):**
+- ✅ X.Org started with modesetting driver
+- ✅ Chromium launched in fullscreen kiosk mode
+- ✅ WebUI loaded and displayed
+- ✅ Authentication worked
+- ✅ No VT freeze
+- ✅ VT switching works (Ctrl+Alt+F1/F7)
+
+**Key fixes that worked:**
+- VM vs real hardware GPU detection
+- Systemd restart rate limiting (even with syntax warning)
+- Longer restart delay (15s)
+- Console feedback before X11 start
+- Lock file mechanism (though needs cleanup fix)
+
+### v1.6.7.9 — Real Hardware Kiosk Fix (Partial)
+
+#### Fixes Applied
+**`image/sbin/secubox-kiosk-launcher`**:
+- Removed `pipefail` for graceful degradation
+- Added **failure tracking** with 3-attempt limit
+- Auto-disables kiosk after 3 failures (prevents boot loop)
+- Added real hardware GPU detection (Intel, AMD, NVIDIA, fbdev, vesa)
+
+**`image/build-live-usb.sh`**:
+- Added `secubox-ui-manager` and `secubox-ui-health` to masked services
+
+---
+
+## ✅ Terminé (Session 54-55)
+
+### v1.6.7.8 — Kiosk Improvements ❌
+- Built and flashed to USB
+- Tested on VirtualBox: FAILED (same issues as real HW)
+- Tested on real hardware: FAILED (VT freeze)
+- **Both environments:** Kiosk not starting at all
+
+### v1.6.7.6 — cmdline-handler Fix for X11 ✅
 
 ---
 

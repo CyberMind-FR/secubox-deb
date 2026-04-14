@@ -14,7 +14,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 
 # ── Version & Build Info ──────────────────────────────────────────
-SECUBOX_VERSION="1.6.7.5"
+SECUBOX_VERSION="1.6.7.11"
 BUILD_TIMESTAMP=$(date '+%Y-%m-%d %H:%M')
 BUILD_DATE=$(date '+%Y%m%d')
 
@@ -2217,6 +2217,38 @@ for svc in lxc-net lxc; do
   chroot "${ROOTFS}" systemctl disable ${svc}.service 2>/dev/null || true
   chroot "${ROOTFS}" systemctl mask ${svc}.service 2>/dev/null || true
 done
+
+# Mask incomplete/optional SecuBox modules (apps not installed in live image)
+# These services are enabled by packages but their backend apps are not installed
+log "Masking incomplete SecuBox modules..."
+INCOMPLETE_MODULES=(
+  secubox-jabber
+  secubox-torrent
+  secubox-osip
+  secubox-openclaw
+  secubox-jellyfin
+  secubox-localai
+  secubox-cipher
+  secubox-lyrion
+  secubox-peertube
+  secubox-ollama
+  secubox-gotosocial
+  secubox-hexo
+  secubox-mealie
+  secubox-webradio
+  secubox-piobeer
+  secubox-picobrew
+  secubox-voip
+  secubox-zigbee
+  secubox-newsbin
+  secubox-ui-manager
+  secubox-ui-health
+)
+for svc in "${INCOMPLETE_MODULES[@]}"; do
+  chroot "${ROOTFS}" systemctl disable ${svc}.service 2>/dev/null || true
+  chroot "${ROOTFS}" systemctl mask ${svc}.service 2>/dev/null || true
+done
+ok "Incomplete modules masked"
 
 # Ensure squashfs module loads at boot (runtime)
 echo "squashfs" >> "${ROOTFS}/etc/modules-load.d/live.conf"
