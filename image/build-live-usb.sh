@@ -800,13 +800,20 @@ for iface in /sys/class/net/*; do
     fi
 done
 
-# Only assign link-local to first interface without IP if NO interface got a real IP
-# This preserves dummy0's 192.168.255.1 for local access
+# If no interface got DHCP, try gateway discovery (smart auto-IP)
 if [[ "$GOT_IP" -eq 0 ]]; then
     FIRST_IFACE=$(ls -1 /sys/class/net/ | grep -E '^e' | head -1)
     if [[ -n "$FIRST_IFACE" ]]; then
-        logger -t secubox-net "No DHCP anywhere, assigning link-local to $FIRST_IFACE"
-        ip addr add 169.254.1.1/16 dev "$FIRST_IFACE" 2>/dev/null || true
+        logger -t secubox-net "No DHCP anywhere, trying gateway discovery on $FIRST_IFACE..."
+
+        # Try to discover LAN by probing common gateways
+        if discover_lan "$FIRST_IFACE"; then
+            logger -t secubox-net "Gateway discovery successful on $FIRST_IFACE"
+            GOT_IP=1
+        else
+            logger -t secubox-net "Gateway discovery failed, assigning link-local to $FIRST_IFACE"
+            ip addr add 169.254.1.1/16 dev "$FIRST_IFACE" 2>/dev/null || true
+        fi
     fi
 fi
 
