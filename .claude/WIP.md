@@ -1,9 +1,106 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-04-14 (Session 58)*
+*Mis à jour : 2026-04-15 (Session 59)*
 
 ---
 
-## 🔄 En cours (Session 58) — v1.7.0 Phase 11
+## 🔄 En cours (Session 59) — v1.7.0 Image Builds & Fixes
+
+### S59-01 — EspressoBin Live USB with eMMC Flasher ✅
+
+**Status:** ✅ Complete
+
+#### Changes
+- Built EspressoBin V7 live USB image with embedded eMMC flasher
+- Fixed SquashFS path issue (`/filesystem.squashfs` → `/live/filesystem.squashfs`)
+- Fixed boot partition sizing for embedded images (dynamic sizing based on embed size)
+- Successfully booted live USB and flashed to eMMC on real hardware
+- Added `secubox-flash-emmc` command for easy eMMC flashing
+
+#### Files Modified
+- `image/build-ebin-live-usb.sh` — Dynamic boot partition sizing, fixed SquashFS copy path
+- `board/espressobin-v7/boot-live-usb.cmd` — Boot script for live USB
+
+---
+
+### S59-02 — Slipstream Packages by Default ✅
+
+**Status:** ✅ Complete
+
+#### Changes
+- Changed `SLIPSTREAM_DEBS` default from 0 to 1 in `build-image.sh`
+- All images now include 126 SecuBox packages by default
+- Rebuilding EspressoBin eMMC image with full package set (in progress)
+
+#### Files Modified
+- `image/build-image.sh` — Default SLIPSTREAM_DEBS=1
+
+---
+
+### S59-03 — VirtualBox AMD64 Image Test ✅
+
+**Status:** ✅ Working (console mode)
+
+#### Notes
+- AMD64 live USB boots in VirtualBox with bridged networking
+- All 30+ SecuBox services start successfully
+- Kiosk mode doesn't launch (expected - VirtualBox graphics drivers)
+- Console mode works, Web UI accessible via port forwarding
+
+---
+
+### S59-04 — VBox Kiosk/WebUI Fix 🔄
+
+**Status:** 🔄 In Progress (v1.6.7.14)
+
+#### Issue
+- Kiosk (Chromium) didn't launch in VirtualBox
+- Root cause: VirtualBox VMSVGA controller needs `vmware` X11 driver, not `modesetting`
+- The `systemd-detect-virt` returns "oracle" but lspci shows "VMware SVGA"
+
+#### Fix Applied
+1. Created `secubox-x11-setup.service` — runs before kiosk, auto-detects VM and configures X11 driver
+2. Updated `build-live-usb.sh`:
+   - Install `xserver-xorg-video-vmware` for VMSVGA support
+   - Create `/usr/local/bin/secubox-x11-setup` for boot-time detection
+   - Enable `secubox-x11-setup.service` in multi-user.target
+3. Updated `secubox-kiosk.service`:
+   - Added dependency: `After=secubox-x11-setup.service`
+4. Updated `secubox-kiosk-launcher` (v3.3):
+   - Defers to X11 setup service if config exists
+   - VirtualBox + VMSVGA → `vmware` driver
+   - VirtualBox + VBoxVGA → `modesetting` driver
+
+#### Driver Selection Logic
+| VM Type | GPU in lspci | X11 Driver |
+|---------|--------------|------------|
+| VirtualBox (oracle) | VMware SVGA | vmware |
+| VirtualBox (oracle) | VBox VGA | modesetting |
+| VMware | * | vmware |
+| KVM/QEMU | * | modesetting |
+| Bare metal | Intel/AMD/NVIDIA | modesetting |
+
+#### Files Modified
+- `image/build-live-usb.sh` — X11 auto-setup service
+- `image/sbin/secubox-kiosk-launcher` — v3.3, vmware driver for VBox VMSVGA
+- `image/systemd/secubox-kiosk.service` — depends on x11-setup service
+
+#### Testing
+- Rebuilding AMD64 live USB (in progress)
+- Will test in VirtualBox with VMSVGA controller
+
+---
+
+## ⬜ Next Up
+
+1. **Rebuild EspressoBin eMMC with 126 packages** — In progress (kernel config stage)
+2. **Rebuild AMD64 live USB with VBox fix** — In progress (debootstrap stage)
+3. **Test VBox kiosk after rebuild** — Verify vmware driver works
+4. **Rebuild EspressoBin Live USB with new eMMC image** — After eMMC rebuild
+5. **Dashboard real data display** — Memory, storage, IPs, versions
+
+---
+
+## ✅ Fait (Session 58) — v1.7.0 Phase 11
 
 ### P11-01 — Version Display in Kiosk Header/Footer ✅
 

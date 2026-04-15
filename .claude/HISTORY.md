@@ -3,6 +3,41 @@
 
 ---
 
+## 2026-04-15
+
+### Session 59 — EspressoBin eMMC Flasher & VirtualBox Graphics Fix
+
+**v1.7.0 — EspressoBin Live USB with eMMC Flasher**
+- Built EspressoBin V7 live USB image with embedded eMMC flasher
+- Fixed SquashFS path issue (`/filesystem.squashfs` → `/live/filesystem.squashfs`)
+- Fixed boot partition sizing for embedded images (dynamic sizing)
+- Added `secubox-flash-emmc` command for easy eMMC flashing
+- Successfully booted live USB and flashed to eMMC on real hardware
+
+**v1.6.7.14 — VirtualBox VMSVGA Graphics Fix (Issue #29)**
+- Root cause: VirtualBox with VMSVGA controller (default since VBox 6) needs `vmware` X11 driver
+- `systemd-detect-virt` returns "oracle" but GPU shows "VMware SVGA" in lspci
+- Created `secubox-x11-setup.service` for boot-time VM detection and X11 driver selection
+- Updated kiosk launcher (v3.3) to defer to X11 setup service
+- Driver selection: VBox+VMSVGA→vmware, VBox+VBoxVGA→modesetting, VMware→vmware, KVM→modesetting
+
+**Slipstream Default Change**
+- Changed `SLIPSTREAM_DEBS` default from 0 to 1 in `build-image.sh`
+- All images now include 126 SecuBox packages by default
+
+**Files Modified**
+- `image/build-live-usb.sh` — X11 auto-setup service, vmware driver install
+- `image/build-ebin-live-usb.sh` — Dynamic boot partition sizing, SquashFS path fix
+- `image/build-image.sh` — SLIPSTREAM_DEBS=1 default
+- `image/sbin/secubox-kiosk-launcher` — v3.3, vmware driver for VBox VMSVGA
+- `image/systemd/secubox-kiosk.service` — depends on x11-setup service
+
+**Builds In Progress**
+- AMD64 live USB with VBox graphics fix
+- EspressoBin eMMC image with 126 packages
+
+---
+
 ## 2026-04-14
 
 ### Session 57 — Live USB Fixes & VirtualBox Testing

@@ -498,9 +498,17 @@ log "6/7 Creating bootable image (${IMG_SIZE})..."
 truncate -s "${IMG_SIZE}" "${IMG_FILE}"
 
 # Partition: boot (FAT32) + live (ext4)
+# Calculate boot partition size: 256MB base + embedded image size if present
+BOOT_SIZE_MB=257
+if [[ -n "$EMBED_IMAGE" ]] && [[ -f "$EMBED_IMAGE" ]]; then
+    EMBED_SIZE_MB=$(( $(stat -c%s "$EMBED_IMAGE") / 1024 / 1024 + 150 ))  # +150MB headroom
+    BOOT_SIZE_MB=$(( 100 + EMBED_SIZE_MB ))  # 100MB for kernel/initrd + embedded image
+    log "Boot partition sized for embedded image: ${BOOT_SIZE_MB}MiB"
+fi
+
 parted -s "${IMG_FILE}" mklabel gpt
-parted -s "${IMG_FILE}" mkpart boot fat32 1MiB 257MiB
-parted -s "${IMG_FILE}" mkpart live ext4 257MiB 100%
+parted -s "${IMG_FILE}" mkpart boot fat32 1MiB ${BOOT_SIZE_MB}MiB
+parted -s "${IMG_FILE}" mkpart live ext4 ${BOOT_SIZE_MB}MiB 100%
 parted -s "${IMG_FILE}" set 1 boot on
 
 # Setup loop device
@@ -527,8 +535,8 @@ if [[ -d "${LIVE_DIR}/secubox" ]] && ls "${LIVE_DIR}/secubox/"*.img.gz >/dev/nul
     log "Embedded image copied to boot partition for U-Boot flash"
 fi
 
-# Copy live filesystem
-cp -a "${LIVE_DIR}/live/"* "${WORK_DIR}/mnt/live/"
+# Copy live filesystem (preserve /live/ directory structure for live-boot)
+cp -a "${LIVE_DIR}/live" "${WORK_DIR}/mnt/live/"
 mkdir -p "${WORK_DIR}/mnt/live/secubox"
 [[ -d "${LIVE_DIR}/secubox" ]] && cp -a "${LIVE_DIR}/secubox/"* "${WORK_DIR}/mnt/live/secubox/" 2>/dev/null || true
 
