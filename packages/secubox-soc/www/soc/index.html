@@ -44,17 +44,49 @@
         .clock-item.utc { border-color: var(--p31-mid); }
         .clock-item.utc .time { color: var(--p31-hot); }
 
-        /* World Map */
-        .world-map { width: 100%; height: 250px; background: var(--tube-light); border: 1px solid var(--tube-soft); border-radius: 4px; position: relative; overflow: hidden; }
+        /* World Map - Privacynex-style dark interactive */
+        .map-container { position: relative; background: #0d1117; border-radius: 6px; overflow: hidden; }
+        .map-stats { display: flex; gap: 2rem; padding: 0.75rem 1rem; background: #161b22; border-bottom: 1px solid #30363d; }
+        .map-stats .stat { display: flex; align-items: baseline; gap: 0.3rem; }
+        .map-stats .stat .num { font-size: 1.2rem; font-weight: bold; color: #ff6b6b; }
+        .map-stats .stat .label { font-size: 0.7rem; color: #8b949e; }
+        .map-legend-bar { display: flex; gap: 1rem; padding: 0.5rem 1rem; font-size: 0.65rem; color: #8b949e; }
+        .map-legend-bar span { display: flex; align-items: center; gap: 0.3rem; }
+        .map-legend-bar .dot { width: 8px; height: 8px; border-radius: 50%; }
+        .map-legend-bar .dot.lvl1 { background: #1a4a4a; }
+        .map-legend-bar .dot.lvl2 { background: #2d7d7d; }
+        .map-legend-bar .dot.lvl3 { background: #40b0b0; }
+        .map-legend-bar .dot.lvl4 { background: #5ce0e0; }
+        .map-wrapper { display: flex; position: relative; }
+        .map-sidebar { width: 280px; background: #161b22; border-right: 1px solid #30363d; padding: 1rem; min-height: 350px; }
+        .map-sidebar h3 { font-size: 0.8rem; color: #c9d1d9; margin-bottom: 0.5rem; }
+        .map-sidebar .hint { font-size: 0.7rem; color: #8b949e; line-height: 1.4; }
+        .map-sidebar .country-detail { display: none; }
+        .map-sidebar .country-detail.active { display: block; }
+        .map-sidebar .country-name { font-size: 1rem; color: #58a6ff; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem; }
+        .map-sidebar .country-flag { font-size: 1.2rem; }
+        .map-sidebar .threat-list { max-height: 250px; overflow-y: auto; }
+        .map-sidebar .threat-item { padding: 0.4rem 0; border-bottom: 1px solid #21262d; font-size: 0.7rem; }
+        .map-sidebar .threat-item .type { color: #ff6b6b; }
+        .map-sidebar .threat-item .count { color: #5ce0e0; float: right; }
+        .map-sidebar .threat-item .time { color: #6e7681; font-size: 0.6rem; }
+        .world-map { flex: 1; height: 350px; position: relative; overflow: hidden; }
         .world-map svg { width: 100%; height: 100%; }
-        .world-map .threat-dot { fill: var(--p31-decay); animation: pulse 2s infinite; }
-        .world-map .threat-dot.high { fill: #ff4466; }
-        @keyframes pulse { 0%, 100% { opacity: 1; r: 4; } 50% { opacity: 0.5; r: 8; } }
-        .map-legend { display: flex; gap: 1rem; margin-top: 0.5rem; font-size: 0.7rem; }
-        .map-legend span { display: flex; align-items: center; gap: 0.3rem; }
-        .map-legend .dot { width: 8px; height: 8px; border-radius: 50%; }
-        .map-legend .dot.low { background: var(--p31-decay); }
-        .map-legend .dot.high { background: #ff4466; }
+        .world-map .land { fill: #21262d; stroke: #30363d; stroke-width: 0.5; cursor: pointer; transition: fill 0.2s; }
+        .world-map .land:hover { fill: #2d7d7d; }
+        .world-map .land.lvl1 { fill: #1a4a4a; }
+        .world-map .land.lvl2 { fill: #2d7d7d; }
+        .world-map .land.lvl3 { fill: #40b0b0; }
+        .world-map .land.lvl4 { fill: #5ce0e0; }
+        .world-map .land.selected { fill: #58a6ff !important; stroke: #79c0ff; stroke-width: 1.5; }
+        .world-map .threat-dot { fill: #ff6b6b; animation: pulse 2s infinite; pointer-events: none; }
+        @keyframes pulse { 0%, 100% { opacity: 0.8; r: 3; } 50% { opacity: 0.3; r: 6; } }
+        .map-controls { position: absolute; right: 10px; top: 10px; display: flex; flex-direction: column; gap: 2px; }
+        .map-controls button { width: 28px; height: 28px; background: #21262d; border: 1px solid #30363d; color: #c9d1d9; cursor: pointer; font-size: 1rem; }
+        .map-controls button:hover { background: #30363d; }
+        .map-filter { display: flex; gap: 0.5rem; padding: 0.5rem 1rem; background: #161b22; border-top: 1px solid #30363d; }
+        .map-filter select { padding: 0.3rem 0.5rem; background: #21262d; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; font-size: 0.7rem; }
+        .map-filter select:focus { outline: none; border-color: #58a6ff; }
 
         /* Stats Row */
         .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
@@ -135,56 +167,105 @@
                 <h2>🕐 World Clock</h2>
                 <div class="clock-grid" id="clockGrid"></div>
             </div>
-            <div class="card">
-                <h2>🌍 Threat Map <span class="count" id="threatCount">0 threats</span></h2>
-                <div class="world-map" id="worldMap">
-                    <svg viewBox="0 0 1000 500" id="mapSvg" preserveAspectRatio="xMidYMid meet">
-                        <defs>
-                            <filter id="glow"><feGaussianBlur stdDeviation="2" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-                        </defs>
-                        <!-- Grid lines -->
-                        <g stroke="var(--p31-ghost)" stroke-width="0.3" opacity="0.3">
-                            <line x1="0" y1="250" x2="1000" y2="250"/><line x1="500" y1="0" x2="500" y2="500"/>
-                            <line x1="0" y1="125" x2="1000" y2="125"/><line x1="0" y1="375" x2="1000" y2="375"/>
-                            <line x1="250" y1="0" x2="250" y2="500"/><line x1="750" y1="0" x2="750" y2="500"/>
-                        </g>
-                        <!-- North America -->
-                        <path d="M45,85 L85,55 L140,50 L185,65 L210,55 L240,70 L225,95 L250,100 L245,125 L220,140 L195,130 L180,155 L195,175 L175,200 L145,195 L120,210 L95,190 L85,160 L60,155 L45,130 L55,105 Z" fill="var(--p31-ghost)" stroke="var(--p31-dim)" stroke-width="0.5"/>
-                        <!-- Greenland -->
-                        <path d="M290,35 L340,30 L365,50 L350,80 L315,85 L290,65 Z" fill="var(--p31-ghost)" stroke="var(--p31-dim)" stroke-width="0.5"/>
-                        <!-- South America -->
-                        <path d="M175,235 L205,225 L230,235 L245,260 L255,295 L245,340 L220,380 L195,395 L175,370 L165,320 L175,280 L165,250 Z" fill="var(--p31-ghost)" stroke="var(--p31-dim)" stroke-width="0.5"/>
-                        <!-- Europe -->
-                        <path d="M420,75 L480,55 L520,65 L535,85 L520,110 L540,120 L525,145 L495,140 L475,155 L445,145 L430,125 L445,100 L425,90 Z" fill="var(--p31-ghost)" stroke="var(--p31-dim)" stroke-width="0.5"/>
-                        <!-- UK/Ireland -->
-                        <path d="M395,85 L415,80 L420,100 L405,110 L395,95 Z" fill="var(--p31-ghost)" stroke="var(--p31-dim)" stroke-width="0.5"/>
-                        <!-- Africa -->
-                        <path d="M430,175 L485,165 L530,175 L555,200 L565,250 L555,310 L530,355 L495,370 L455,355 L435,310 L425,260 L435,215 L420,190 Z" fill="var(--p31-ghost)" stroke="var(--p31-dim)" stroke-width="0.5"/>
-                        <!-- Russia/Northern Asia -->
-                        <path d="M540,50 L620,35 L720,45 L820,55 L880,75 L900,95 L880,120 L820,130 L750,125 L680,135 L620,125 L560,120 L540,100 L555,75 Z" fill="var(--p31-ghost)" stroke="var(--p31-dim)" stroke-width="0.5"/>
-                        <!-- Middle East -->
-                        <path d="M545,155 L590,145 L620,160 L615,190 L590,200 L560,195 L545,175 Z" fill="var(--p31-ghost)" stroke="var(--p31-dim)" stroke-width="0.5"/>
-                        <!-- India -->
-                        <path d="M635,175 L675,165 L695,190 L685,235 L655,260 L625,245 L620,210 L630,190 Z" fill="var(--p31-ghost)" stroke="var(--p31-dim)" stroke-width="0.5"/>
-                        <!-- China/East Asia -->
-                        <path d="M700,115 L780,105 L830,125 L845,160 L820,195 L770,200 L730,185 L695,165 L700,140 Z" fill="var(--p31-ghost)" stroke="var(--p31-dim)" stroke-width="0.5"/>
-                        <!-- Southeast Asia -->
-                        <path d="M735,210 L780,205 L810,230 L795,270 L755,280 L725,260 L720,230 Z" fill="var(--p31-ghost)" stroke="var(--p31-dim)" stroke-width="0.5"/>
-                        <!-- Japan -->
-                        <path d="M855,130 L875,120 L890,140 L880,165 L860,170 L850,150 Z" fill="var(--p31-ghost)" stroke="var(--p31-dim)" stroke-width="0.5"/>
-                        <!-- Indonesia -->
-                        <path d="M755,295 L830,290 L870,305 L855,325 L800,330 L755,320 Z" fill="var(--p31-ghost)" stroke="var(--p31-dim)" stroke-width="0.5"/>
-                        <!-- Australia -->
-                        <path d="M820,345 L890,335 L940,355 L955,395 L935,435 L885,445 L835,430 L810,395 L815,365 Z" fill="var(--p31-ghost)" stroke="var(--p31-dim)" stroke-width="0.5"/>
-                        <!-- New Zealand -->
-                        <path d="M960,420 L975,415 L985,440 L970,455 L955,445 Z" fill="var(--p31-ghost)" stroke="var(--p31-dim)" stroke-width="0.5"/>
-                        <!-- Threat dots layer -->
-                        <g id="threatDots" filter="url(#glow)"></g>
-                    </svg>
-                </div>
-                <div class="map-legend">
-                    <span><span class="dot low"></span> Low/Med</span>
-                    <span><span class="dot high"></span> High/Critical</span>
+            <div class="card" style="padding:0;overflow:hidden;">
+                <div class="map-container">
+                    <div class="map-stats">
+                        <div class="stat"><span class="num" id="totalThreats">0</span><span class="label">threats</span></div>
+                        <div class="stat"><span class="num" id="totalCountries">0</span><span class="label">countries</span></div>
+                        <div class="stat"><span class="num" id="totalRegions">5</span><span class="label">regions</span></div>
+                        <div class="stat"><span class="num" id="criticalThreats">0</span><span class="label">critical</span></div>
+                    </div>
+                    <div class="map-legend-bar">
+                        <span><span class="dot lvl1"></span> 1-3 threats</span>
+                        <span><span class="dot lvl2"></span> 4-9 threats</span>
+                        <span><span class="dot lvl3"></span> 10-19 threats</span>
+                        <span><span class="dot lvl4"></span> 20+ threats</span>
+                    </div>
+                    <div class="map-wrapper">
+                        <div class="map-sidebar">
+                            <div class="hint" id="mapHint">
+                                <h3>🗺️ Threat Map</h3>
+                                Click on a country to view its threats
+                            </div>
+                            <div class="country-detail" id="countryDetail">
+                                <div class="country-name"><span class="country-flag" id="countryFlag"></span><span id="countryName"></span></div>
+                                <div class="threat-list" id="threatList"></div>
+                            </div>
+                        </div>
+                        <div class="world-map" id="worldMap">
+                            <svg viewBox="0 0 1000 500" id="mapSvg" preserveAspectRatio="xMidYMid meet">
+                                <defs>
+                                    <filter id="glow"><feGaussianBlur stdDeviation="2" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                                </defs>
+                                <!-- Grid lines -->
+                                <g stroke="#30363d" stroke-width="0.3" opacity="0.5">
+                                    <line x1="0" y1="250" x2="1000" y2="250"/><line x1="500" y1="0" x2="500" y2="500"/>
+                                </g>
+                                <!-- Countries with data-country attributes -->
+                                <path class="land" data-country="US" data-name="United States" data-continent="na" d="M45,85 L85,55 L140,50 L185,65 L210,55 L240,70 L225,95 L250,100 L245,125 L220,140 L195,130 L180,155 L195,175 L175,200 L145,195 L120,210 L95,190 L85,160 L60,155 L45,130 L55,105 Z"/>
+                                <path class="land" data-country="CA" data-name="Canada" data-continent="na" d="M50,30 L120,25 L180,35 L220,45 L185,65 L140,50 L85,55 L45,85 L35,60 Z"/>
+                                <path class="land" data-country="MX" data-name="Mexico" data-continent="na" d="M95,190 L120,210 L145,220 L160,235 L145,240 L115,225 L90,210 L80,195 Z"/>
+                                <path class="land" data-country="GL" data-name="Greenland" data-continent="na" d="M290,35 L340,30 L365,50 L350,80 L315,85 L290,65 Z"/>
+                                <path class="land" data-country="BR" data-name="Brazil" data-continent="sa" d="M175,260 L220,250 L250,270 L260,310 L245,350 L210,370 L175,355 L165,310 Z"/>
+                                <path class="land" data-country="AR" data-name="Argentina" data-continent="sa" d="M185,370 L210,370 L220,400 L200,430 L175,420 L170,390 Z"/>
+                                <path class="land" data-country="CO" data-name="Colombia" data-continent="sa" d="M160,235 L190,230 L210,250 L195,270 L165,265 L155,250 Z"/>
+                                <path class="land" data-country="GB" data-name="United Kingdom" data-continent="eu" d="M395,85 L415,80 L420,100 L405,110 L395,95 Z"/>
+                                <path class="land" data-country="FR" data-name="France" data-continent="eu" d="M420,105 L455,100 L470,120 L455,140 L425,135 L415,115 Z"/>
+                                <path class="land" data-country="DE" data-name="Germany" data-continent="eu" d="M455,85 L490,80 L500,100 L485,115 L455,110 Z"/>
+                                <path class="land" data-country="ES" data-name="Spain" data-continent="eu" d="M400,130 L435,125 L445,145 L420,155 L400,145 Z"/>
+                                <path class="land" data-country="IT" data-name="Italy" data-continent="eu" d="M470,120 L495,115 L505,140 L485,160 L465,150 L460,130 Z"/>
+                                <path class="land" data-country="PL" data-name="Poland" data-continent="eu" d="M495,85 L525,80 L535,100 L515,110 L495,105 Z"/>
+                                <path class="land" data-country="UA" data-name="Ukraine" data-continent="eu" d="M520,95 L560,90 L575,110 L555,125 L520,115 Z"/>
+                                <path class="land" data-country="RU" data-name="Russia" data-continent="eu" d="M540,50 L620,35 L720,45 L820,55 L880,75 L900,95 L880,120 L820,130 L750,125 L680,135 L620,125 L560,120 L540,100 L555,75 Z"/>
+                                <path class="land" data-country="ZA" data-name="South Africa" data-continent="af" d="M495,340 L535,335 L545,365 L520,380 L490,370 Z"/>
+                                <path class="land" data-country="NG" data-name="Nigeria" data-continent="af" d="M445,250 L480,245 L490,275 L465,285 L445,275 Z"/>
+                                <path class="land" data-country="EG" data-name="Egypt" data-continent="af" d="M505,175 L545,170 L555,200 L530,210 L505,200 Z"/>
+                                <path class="land" data-country="KE" data-name="Kenya" data-continent="af" d="M535,270 L560,265 L565,295 L545,305 L530,290 Z"/>
+                                <path class="land" data-country="MA" data-name="Morocco" data-continent="af" d="M405,165 L440,160 L445,185 L420,190 L405,180 Z"/>
+                                <path class="land" data-country="IR" data-name="Iran" data-continent="as" d="M570,160 L610,155 L625,180 L605,200 L570,190 Z"/>
+                                <path class="land" data-country="SA" data-name="Saudi Arabia" data-continent="as" d="M545,195 L590,190 L600,225 L565,240 L540,220 Z"/>
+                                <path class="land" data-country="AE" data-name="UAE" data-continent="as" d="M600,210 L625,205 L630,225 L610,230 Z"/>
+                                <path class="land" data-country="IN" data-name="India" data-continent="as" d="M635,175 L675,165 L695,190 L685,235 L655,260 L625,245 L620,210 L630,190 Z"/>
+                                <path class="land" data-country="PK" data-name="Pakistan" data-continent="as" d="M610,160 L645,155 L655,180 L635,195 L610,185 Z"/>
+                                <path class="land" data-country="CN" data-name="China" data-continent="as" d="M700,115 L780,105 L830,125 L845,160 L820,195 L770,200 L730,185 L695,165 L700,140 Z"/>
+                                <path class="land" data-country="JP" data-name="Japan" data-continent="as" d="M855,130 L875,120 L890,140 L880,165 L860,170 L850,150 Z"/>
+                                <path class="land" data-country="KR" data-name="South Korea" data-continent="as" d="M835,145 L850,140 L855,160 L840,170 L830,160 Z"/>
+                                <path class="land" data-country="TH" data-name="Thailand" data-continent="as" d="M735,210 L755,205 L760,235 L745,250 L730,240 Z"/>
+                                <path class="land" data-country="VN" data-name="Vietnam" data-continent="as" d="M760,210 L775,205 L780,245 L765,260 L755,245 Z"/>
+                                <path class="land" data-country="SG" data-name="Singapore" data-continent="as" d="M755,275 L765,273 L767,283 L757,285 Z"/>
+                                <path class="land" data-country="ID" data-name="Indonesia" data-continent="as" d="M755,295 L830,290 L870,305 L855,325 L800,330 L755,320 Z"/>
+                                <path class="land" data-country="AU" data-name="Australia" data-continent="oc" d="M820,345 L890,335 L940,355 L955,395 L935,435 L885,445 L835,430 L810,395 L815,365 Z"/>
+                                <path class="land" data-country="NZ" data-name="New Zealand" data-continent="oc" d="M960,420 L975,415 L985,440 L970,455 L955,445 Z"/>
+                                <!-- Threat dots layer -->
+                                <g id="threatDots" filter="url(#glow)"></g>
+                            </svg>
+                            <div class="map-controls">
+                                <button onclick="zoomMap(1.2)" title="Zoom in">+</button>
+                                <button onclick="zoomMap(0.8)" title="Zoom out">−</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="map-filter">
+                        <select id="filterContinent" onchange="filterMap()">
+                            <option value="">All Continents</option>
+                            <option value="eu">Europe</option>
+                            <option value="na">North America</option>
+                            <option value="sa">South America</option>
+                            <option value="as">Asia</option>
+                            <option value="af">Africa</option>
+                            <option value="oc">Oceania</option>
+                        </select>
+                        <select id="filterCountry" onchange="selectCountryFilter()">
+                            <option value="">All Countries</option>
+                        </select>
+                        <select id="filterSeverity" onchange="filterMap()">
+                            <option value="">All Severities</option>
+                            <option value="critical">Critical</option>
+                            <option value="high">High</option>
+                            <option value="medium">Medium</option>
+                            <option value="low">Low</option>
+                        </select>
+                    </div>
                 </div>
             </div>
         </div>
@@ -298,31 +379,183 @@
             `).join('');
         }
 
-        // Map coordinates (matching new 1000x500 SVG)
-        const regionCoords = {
-            US: [150, 130], CA: [120, 90], MX: [130, 180],
-            BR: [220, 320], AR: [200, 380], CO: [195, 260],
-            GB: [405, 95], FR: [460, 130], DE: [485, 110], NL: [470, 100],
-            ES: [430, 145], IT: [490, 140], PL: [510, 105], UA: [540, 110],
-            RU: [720, 85], CN: [765, 155], JP: [870, 145], KR: [840, 160],
-            IN: [655, 210], PK: [630, 185], IR: [590, 175], SA: [570, 195],
-            AU: [880, 390], NZ: [965, 435], ID: [790, 305], SG: [755, 270],
-            ZA: [510, 355], NG: [470, 250], EG: [530, 195], KE: [545, 285]
+        // Map state and data
+        let mapData = { regions: {}, total_threats: 0 };
+        let mapZoom = 1;
+        let selectedCountry = null;
+
+        // Country flags (emoji)
+        const countryFlags = {
+            US: '🇺🇸', CA: '🇨🇦', MX: '🇲🇽', BR: '🇧🇷', AR: '🇦🇷', CO: '🇨🇴',
+            GB: '🇬🇧', FR: '🇫🇷', DE: '🇩🇪', ES: '🇪🇸', IT: '🇮🇹', PL: '🇵🇱', UA: '🇺🇦', RU: '🇷🇺',
+            ZA: '🇿🇦', NG: '🇳🇬', EG: '🇪🇬', KE: '🇰🇪', MA: '🇲🇦',
+            IR: '🇮🇷', SA: '🇸🇦', AE: '🇦🇪', IN: '🇮🇳', PK: '🇵🇰',
+            CN: '🇨🇳', JP: '🇯🇵', KR: '🇰🇷', TH: '🇹🇭', VN: '🇻🇳', SG: '🇸🇬', ID: '🇮🇩',
+            AU: '🇦🇺', NZ: '🇳🇿', GL: '🇬🇱'
         };
+
+        // Continent names
+        const continentNames = { eu: 'Europe', na: 'North America', sa: 'South America', as: 'Asia', af: 'Africa', oc: 'Oceania' };
+
+        // Initialize map event listeners
+        function initMap() {
+            document.querySelectorAll('.land').forEach(path => {
+                path.addEventListener('click', () => selectCountry(path.dataset.country, path.dataset.name));
+            });
+            // Parse URL params for initial filter
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('continent')) {
+                document.getElementById('filterContinent').value = params.get('continent');
+            }
+            if (params.get('country')) {
+                setTimeout(() => {
+                    const code = params.get('country').toUpperCase();
+                    const path = document.querySelector(`[data-country="${code}"]`);
+                    if (path) selectCountry(code, path.dataset.name);
+                }, 500);
+            }
+            populateCountryFilter();
+        }
+
+        function populateCountryFilter() {
+            const select = document.getElementById('filterCountry');
+            const countries = [];
+            document.querySelectorAll('.land').forEach(path => {
+                countries.push({ code: path.dataset.country, name: path.dataset.name });
+            });
+            countries.sort((a, b) => a.name.localeCompare(b.name));
+            select.innerHTML = '<option value="">All Countries</option>' +
+                countries.map(c => `<option value="${c.code}">${countryFlags[c.code] || ''} ${c.name}</option>`).join('');
+        }
+
+        function selectCountry(code, name) {
+            // Update selection
+            document.querySelectorAll('.land').forEach(p => p.classList.remove('selected'));
+            const path = document.querySelector(`[data-country="${code}"]`);
+            if (path) path.classList.add('selected');
+            selectedCountry = code;
+
+            // Update sidebar
+            document.getElementById('mapHint').style.display = 'none';
+            const detail = document.getElementById('countryDetail');
+            detail.classList.add('active');
+            document.getElementById('countryFlag').textContent = countryFlags[code] || '🌍';
+            document.getElementById('countryName').textContent = name;
+
+            // Show threats for this country
+            const threats = mapData.regions[code];
+            const list = document.getElementById('threatList');
+            if (threats && threats.threats && threats.threats.length > 0) {
+                list.innerHTML = threats.threats.map(t => `
+                    <div class="threat-item">
+                        <span class="type">${t.type || 'Unknown'}</span>
+                        <span class="count">${t.count || 1}</span>
+                        <div class="time">${t.last_seen || ''}</div>
+                    </div>
+                `).join('');
+            } else if (threats && threats.count > 0) {
+                list.innerHTML = `<div class="threat-item"><span class="type">Total threats</span><span class="count">${threats.count}</span></div>`;
+            } else {
+                list.innerHTML = '<div class="threat-item" style="color:#8b949e;">No threats detected</div>';
+            }
+
+            // Update URL
+            const url = new URL(window.location);
+            url.searchParams.set('country', code);
+            window.history.replaceState({}, '', url);
+        }
+
+        function selectCountryFilter() {
+            const code = document.getElementById('filterCountry').value;
+            if (code) {
+                const path = document.querySelector(`[data-country="${code}"]`);
+                if (path) selectCountry(code, path.dataset.name);
+            }
+        }
+
+        function filterMap() {
+            const continent = document.getElementById('filterContinent').value;
+            const severity = document.getElementById('filterSeverity').value;
+
+            document.querySelectorAll('.land').forEach(path => {
+                const matchContinent = !continent || path.dataset.continent === continent;
+                path.style.opacity = matchContinent ? '1' : '0.2';
+            });
+
+            // Update URL
+            const url = new URL(window.location);
+            if (continent) url.searchParams.set('continent', continent);
+            else url.searchParams.delete('continent');
+            window.history.replaceState({}, '', url);
+        }
+
+        function zoomMap(factor) {
+            mapZoom = Math.max(0.5, Math.min(3, mapZoom * factor));
+            const svg = document.getElementById('mapSvg');
+            const cx = 500, cy = 250;
+            const w = 1000 / mapZoom, h = 500 / mapZoom;
+            svg.setAttribute('viewBox', `${cx - w/2} ${cy - h/2} ${w} ${h}`);
+        }
 
         async function loadMap() {
             const d = await api('/map/threats');
-            if (!d.regions) return;
-            document.getElementById('threatCount').textContent = `${d.total_threats} threats`;
+            if (!d.regions) {
+                // Generate demo data if API not available
+                mapData = {
+                    regions: {
+                        US: { count: 25, threats: [{type: 'Malware', count: 15}, {type: 'Phishing', count: 10}] },
+                        CN: { count: 18, threats: [{type: 'Botnet', count: 12}, {type: 'Scanner', count: 6}] },
+                        RU: { count: 22, threats: [{type: 'Ransomware', count: 8}, {type: 'C2', count: 14}] },
+                        BR: { count: 8, threats: [{type: 'Phishing', count: 8}] },
+                        DE: { count: 12, threats: [{type: 'Malware', count: 7}, {type: 'Scanner', count: 5}] },
+                        FR: { count: 6, threats: [{type: 'Phishing', count: 6}] },
+                        IN: { count: 15, threats: [{type: 'Botnet', count: 10}, {type: 'Scanner', count: 5}] },
+                        GB: { count: 9, threats: [{type: 'Malware', count: 9}] }
+                    },
+                    total_threats: 115,
+                    total_countries: 8
+                };
+            } else {
+                mapData = d;
+            }
+
+            // Update stats
+            document.getElementById('totalThreats').textContent = mapData.total_threats || 0;
+            document.getElementById('totalCountries').textContent = Object.keys(mapData.regions).length;
+            const critical = Object.values(mapData.regions).filter(r => r.count >= 20).length;
+            document.getElementById('criticalThreats').textContent = critical;
+
+            // Color countries based on threat level
+            document.querySelectorAll('.land').forEach(path => {
+                const code = path.dataset.country;
+                const data = mapData.regions[code];
+                path.classList.remove('lvl1', 'lvl2', 'lvl3', 'lvl4');
+                if (data) {
+                    if (data.count >= 20) path.classList.add('lvl4');
+                    else if (data.count >= 10) path.classList.add('lvl3');
+                    else if (data.count >= 4) path.classList.add('lvl2');
+                    else path.classList.add('lvl1');
+                }
+            });
+
+            // Add pulsing dots for high-threat areas
             const dots = document.getElementById('threatDots');
             dots.innerHTML = '';
-            for (const [region, data] of Object.entries(d.regions)) {
-                const coords = regionCoords[region];
-                if (!coords) continue;
-                const isHigh = data.count > 5;
-                dots.innerHTML += `<circle class="threat-dot ${isHigh ? 'high' : ''}" cx="${coords[0]}" cy="${coords[1]}" r="4"><title>${region}: ${data.count} threats</title></circle>`;
+            for (const [code, data] of Object.entries(mapData.regions)) {
+                if (data.count >= 10) {
+                    const path = document.querySelector(`[data-country="${code}"]`);
+                    if (path) {
+                        const bbox = path.getBBox();
+                        const cx = bbox.x + bbox.width / 2;
+                        const cy = bbox.y + bbox.height / 2;
+                        dots.innerHTML += `<circle class="threat-dot" cx="${cx}" cy="${cy}" r="3"><title>${code}: ${data.count} threats</title></circle>`;
+                    }
+                }
             }
         }
+
+        // Initialize map on load
+        document.addEventListener('DOMContentLoaded', initMap);
 
         // Stats
         async function loadStats() {

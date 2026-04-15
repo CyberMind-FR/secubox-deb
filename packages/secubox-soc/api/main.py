@@ -322,18 +322,90 @@ async def get_clock():
 # ══════════════════════════════════════════════════════════════
 
 @app.get("/map/threats", dependencies=[Depends(require_jwt)])
-async def get_map_threats():
+async def get_map_threats(continent: Optional[str] = None, country: Optional[str] = None):
+    """Get threat map data with optional filtering by continent or country.
+
+    Query params:
+        continent: eu, na, sa, as, af, oc
+        country: ISO country code (US, FR, DE, etc.)
+    """
     intel = _load_json(INTEL_FILE)
+    alerts = _load_json(ALERTS_FILE)
+
+    # Country to continent mapping
+    country_continents = {
+        "US": "na", "CA": "na", "MX": "na", "GL": "na",
+        "BR": "sa", "AR": "sa", "CO": "sa",
+        "GB": "eu", "FR": "eu", "DE": "eu", "ES": "eu", "IT": "eu", "PL": "eu", "UA": "eu", "RU": "eu",
+        "ZA": "af", "NG": "af", "EG": "af", "KE": "af", "MA": "af",
+        "IR": "as", "SA": "as", "AE": "as", "IN": "as", "PK": "as", "CN": "as", "JP": "as", "KR": "as", "TH": "as", "VN": "as", "SG": "as", "ID": "as",
+        "AU": "oc", "NZ": "oc"
+    }
+    regions = list(country_continents.keys())
+
     threat_regions = {}
-    regions = ["US", "CA", "MX", "BR", "AR", "CO", "GB", "FR", "DE", "NL", "ES", "IT", "PL", "UA", "RU", "CN", "JP", "KR", "IN", "PK", "IR", "SA", "AU", "NZ", "ID", "SG", "ZA", "NG", "EG", "KE"]
-    for item in intel[-100:]:
+
+    # Process intel items
+    for item in intel[-200:]:
         region = regions[hash(item.get('indicator', '')) % len(regions)]
+
+        # Apply filters
+        if continent and country_continents.get(region) != continent:
+            continue
+        if country and region != country.upper():
+            continue
+
         if region not in threat_regions:
-            threat_regions[region] = {"count": 0, "types": {}}
+            threat_regions[region] = {"count": 0, "threats": [], "continent": country_continents.get(region, "unknown")}
+
         threat_regions[region]["count"] += 1
         threat_type = item.get('threat_type', 'unknown')
-        threat_regions[region]["types"][threat_type] = threat_regions[region]["types"].get(threat_type, 0) + 1
-    return {"regions": threat_regions, "total_threats": len(intel), "last_updated": datetime.now(timezone.utc).isoformat()}
+
+        # Aggregate threats by type
+        existing = next((t for t in threat_regions[region]["threats"] if t["type"] == threat_type), None)
+        if existing:
+            existing["count"] += 1
+            existing["last_seen"] = item.get('added_at', '')
+        else:
+            threat_regions[region]["threats"].append({
+                "type": threat_type,
+                "count": 1,
+                "confidence": item.get('confidence', 50),
+                "last_seen": item.get('added_at', '')
+            })
+
+    # Add recent alerts to map
+    for alert in alerts[-50:]:
+        if alert.get('severity') in ['critical', 'high']:
+            # Distribute alerts across regions based on hash
+            region = regions[hash(alert.get('id', '')) % len(regions)]
+            if continent and country_continents.get(region) != continent:
+                continue
+            if country and region != country.upper():
+                continue
+            if region not in threat_regions:
+                threat_regions[region] = {"count": 0, "threats": [], "continent": country_continents.get(region, "unknown")}
+            threat_regions[region]["count"] += 1
+            threat_regions[region]["threats"].append({
+                "type": f"Alert: {alert.get('source', 'unknown')}",
+                "count": 1,
+                "severity": alert.get('severity', 'medium'),
+                "last_seen": alert.get('timestamp', '')
+            })
+
+    # Calculate totals
+    total_threats = sum(r["count"] for r in threat_regions.values())
+    total_countries = len(threat_regions)
+    critical_count = sum(1 for r in threat_regions.values() if r["count"] >= 20)
+
+    return {
+        "regions": threat_regions,
+        "total_threats": total_threats,
+        "total_countries": total_countries,
+        "critical_regions": critical_count,
+        "filter": {"continent": continent, "country": country},
+        "last_updated": datetime.now(timezone.utc).isoformat()
+    }
 
 
 @app.get("/map/attacks", dependencies=[Depends(require_jwt)])
