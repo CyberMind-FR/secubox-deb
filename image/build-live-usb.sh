@@ -732,7 +732,8 @@ discover_lan() {
     # First try ARP discovery (faster and more reliable)
     local arp_gw
     arp_gw=$(arp_discover "$iface" 2>/dev/null)
-    if [[ -n "$arp_gw" ]]; then
+    # Verify ARP result is not a local IP (avoid self-discovery)
+    if [[ -n "$arp_gw" ]] && ! ip addr show 2>/dev/null | grep -q "inet ${arp_gw}/"; then
         local subnet_base="${arp_gw%.*}"
         local test_ip="${subnet_base}.${FALLBACK_SUFFIX}"
         ip addr add "${test_ip}/24" dev "$iface" 2>/dev/null
@@ -745,6 +746,12 @@ discover_lan() {
 
     # Fall back to gateway probing
     for gw in $GATEWAYS; do
+        # Skip if this IP is already assigned to any local interface (avoid self-ping)
+        if ip addr show 2>/dev/null | grep -q "inet ${gw}/"; then
+            logger -t secubox-net "Skipping $gw - it's a local IP"
+            continue
+        fi
+
         # Extract subnet base (e.g., 192.168.1)
         local subnet_base="${gw%.*}"
         local test_ip="${subnet_base}.${FALLBACK_SUFFIX}"
