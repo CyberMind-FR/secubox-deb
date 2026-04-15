@@ -1,17 +1,126 @@
-# SecuBox-DEB
+# SecuBox
 
-## Migration OpenWrt → Debian · GlobalScale Technologies
-**CyberMind · Gandalf · v1.7.0 · April 2026**
-
-Port complet de [SecuBox OpenWrt](https://github.com/gkerma/secubox-openwrt) vers **Debian bookworm arm64/amd64** pour les boards **MOCHAbin** (Armada 7040), **ESPRESSObin** (Armada 3720), **Raspberry Pi**, et **VMs x86_64**.
+**Your Network Security Appliance — Plug, Protect, Peace of Mind**
 
 [![Build Status](https://github.com/CyberMind-FR/secubox-deb/actions/workflows/build-all-live-usb.yml/badge.svg)](https://github.com/CyberMind-FR/secubox-deb/actions)
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-1.7.0-green.svg)](https://github.com/CyberMind-FR/secubox-deb/releases)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+
+SecuBox transforms any compatible device into a complete network security appliance with VPN, firewall, intrusion detection, and web dashboard — all preconfigured and ready to use.
 
 ---
 
-## Architecture
+## What You Get
+
+- **VPN Server** — WireGuard with QR codes for mobile devices
+- **Intrusion Detection** — CrowdSec IDS/IPS with automatic threat blocking
+- **Network Monitoring** — Real-time traffic analysis and bandwidth control
+- **Web Dashboard** — Modern dark-themed interface accessible from any browser
+- **Automatic Updates** — Security patches applied automatically
+
+---
+
+## Quick Start
+
+### Option 1: VirtualBox (Try It Now)
+
+Download and run in VirtualBox — no hardware required:
+
+```bash
+# Download the image
+wget https://github.com/CyberMind-FR/secubox-deb/releases/latest/download/secubox-live-amd64-bookworm.img.gz
+
+# Extract
+gunzip secubox-live-amd64-bookworm.img.gz
+
+# Create VM (requires VBoxManage)
+./scripts/create-secubox-vm.sh secubox-live-amd64-bookworm.img
+```
+
+**Access:** Open https://localhost:9443 in your browser
+**Login:** `admin` / `secubox`
+
+### Option 2: Live USB (Any PC)
+
+Boot from USB on any x86_64 computer:
+
+```bash
+# Download
+wget https://github.com/CyberMind-FR/secubox-deb/releases/latest/download/secubox-live-amd64-bookworm.img.gz
+
+# Flash to USB (replace /dev/sdX with your USB device)
+zcat secubox-live-amd64-bookworm.img.gz | sudo dd of=/dev/sdX bs=4M status=progress
+```
+
+Boot from USB, then access the dashboard at `https://<device-ip>/`
+
+### Option 3: Dedicated Hardware
+
+For 24/7 operation, flash to dedicated hardware:
+
+| Device | Best For | Image |
+|--------|----------|-------|
+| Raspberry Pi 4/5 | Home use | `secubox-rpi-arm64-*.img.gz` |
+| ESPRESSObin | Small office | `secubox-espressobin-v7-*.img.gz` |
+| MOCHAbin | Enterprise | `secubox-mochabin-*.img.gz` |
+| Any x86_64 PC | Repurposed hardware | `secubox-live-amd64-*.img.gz` |
+
+---
+
+## Features
+
+### Security Dashboard
+Central control panel showing system health, active threats, and quick actions.
+
+### VPN (WireGuard)
+Create VPN connections with one click. Scan QR codes on mobile devices.
+
+### Intrusion Detection (CrowdSec)
+Automatic threat detection and IP blocking with community threat intelligence.
+
+### Network Control
+- Bandwidth management (QoS)
+- Device access control
+- Deep packet inspection
+- Virtual hosts with SSL
+
+### System Management
+- Service control
+- Log viewer
+- Automatic backups
+- Easy updates
+
+---
+
+## Default Credentials
+
+| Service | Username | Password |
+|---------|----------|----------|
+| Web Dashboard | `admin` | `secubox` |
+| SSH | `root` | `secubox` |
+
+**Change these immediately after first login!**
+
+---
+
+## Support
+
+- **Wiki:** [github.com/CyberMind-FR/secubox-deb/wiki](https://github.com/CyberMind-FR/secubox-deb/wiki)
+- **Issues:** [github.com/CyberMind-FR/secubox-deb/issues](https://github.com/CyberMind-FR/secubox-deb/issues)
+- **Email:** support@secubox.in
+
+---
+
+## License
+
+Apache-2.0 © 2026 [CyberMind](https://cybermind.fr) · Gérald Kerma
+
+---
+
+<details>
+<summary><h2>Technical Reference (Click to Expand)</h2></summary>
+
+### Architecture
 
 ```
 OpenWrt / LuCI                   →    Debian bookworm
@@ -23,172 +132,34 @@ OpenWrt packages (.ipk)          →    Paquets Debian (.deb)
 opkg                             →    apt + repo apt.secubox.in
 ```
 
-**Boards supportés :**
+### Supported Hardware
 
-| Board | SoC | RAM | Réseau | Profil |
-|-------|-----|-----|--------|--------|
-| MOCHAbin | Armada 7040 Quad 1.8GHz | 4 GB | 2× SFP+ 10GbE + 4× GbE | SecuBox Pro |
-| ESPRESSObin v7 | Armada 3720 Dual 1.2GHz | 1–2 GB | WAN + 2× LAN DSA | SecuBox Lite |
-| ESPRESSObin Ultra | Armada 3720 Dual 1.2GHz | 2 GB | WAN PoE + 4× LAN + Wi-Fi | SecuBox Lite+ |
-| Raspberry Pi 4 | BCM2711 Quad 1.5GHz | 2-8 GB | GbE + USB | SecuBox Lite |
-| Raspberry Pi 400 | BCM2711 Quad 1.8GHz | 4 GB | GbE + USB | SecuBox Lite |
-| Raspberry Pi 5 | BCM2712 Quad 2.4GHz | 4-8 GB | GbE + USB | SecuBox Full |
-| VM x86_64 | Any | 2+ GB | Virtio/NAT | SecuBox Full |
+| Board | SoC | RAM | Network | Profile |
+|-------|-----|-----|---------|---------|
+| MOCHAbin | Armada 7040 Quad 1.8GHz | 4 GB | 2× SFP+ 10GbE + 4× GbE | Pro |
+| ESPRESSObin v7 | Armada 3720 Dual 1.2GHz | 1–2 GB | WAN + 2× LAN DSA | Lite |
+| ESPRESSObin Ultra | Armada 3720 Dual 1.2GHz | 2 GB | WAN PoE + 4× LAN + Wi-Fi | Lite+ |
+| Raspberry Pi 4/400 | BCM2711 Quad 1.5-1.8GHz | 2-8 GB | GbE + USB | Lite |
+| Raspberry Pi 5 | BCM2712 Quad 2.4GHz | 4-8 GB | GbE + USB | Full |
+| VM x86_64 | Any | 2+ GB | Virtio/NAT | Full |
 
----
+### Packages (126 modules)
 
-## Packages (126 modules)
+**Core:** secubox-core, secubox-hub, secubox-portal, secubox-system
 
-### Core & Dashboard
-| Package | Description |
-|---------|-------------|
-| `secubox-core` | Python lib, nginx config, auth framework |
-| `secubox-hub` | Central dashboard with roadmap, system health |
-| `secubox-portal` | Web authentication, JWT login/logout |
-| `secubox-system` | System control (services, logs, updates) |
+**Security:** secubox-crowdsec, secubox-wireguard, secubox-auth, secubox-nac, secubox-waf, secubox-users
 
-### Security (6 modules)
-| Package | Description |
-|---------|-------------|
-| `secubox-crowdsec` | IDS/IPS with CrowdSec, decisions, bouncers |
-| `secubox-wireguard` | VPN dashboard, peers, keys, QR codes |
-| `secubox-auth` | OAuth2 + captive portal vouchers |
-| `secubox-nac` | Network Access Control, device guardian |
-| `secubox-waf` | Web Application Firewall (300+ rules) |
-| `secubox-users` | Unified identity (7 services sync) |
+**Network:** secubox-netmodes, secubox-dpi, secubox-qos, secubox-vhost, secubox-haproxy
 
-### Network (5 modules)
-| Package | Description |
-|---------|-------------|
-| `secubox-netmodes` | Network modes (router, bridge, AP) |
-| `secubox-dpi` | Deep Packet Inspection (netifyd) |
-| `secubox-qos` | QoS / Bandwidth manager (HTB) |
-| `secubox-vhost` | Virtual hosts nginx + ACME |
-| `secubox-haproxy` | HAProxy dashboard, backends, ACLs |
+**Monitoring:** secubox-netdata, secubox-mediaflow, secubox-cdn
 
-### Monitoring (3 modules)
-| Package | Description |
-|---------|-------------|
-| `secubox-netdata` | Real-time monitoring dashboard |
-| `secubox-mediaflow` | Media streaming detection |
-| `secubox-cdn` | CDN cache (Squid/nginx) |
+**DNS/Email:** secubox-dns, secubox-mail, secubox-webmail
 
-### DNS & Email (6 modules)
-| Package | Description |
-|---------|-------------|
-| `secubox-dns` | DNS Master / BIND zones, DNSSEC |
-| `secubox-mail` | Postfix/Dovecot email server |
-| `secubox-mail-lxc` | LXC container for mail |
-| `secubox-webmail` | Roundcube/SOGo webmail |
-| `secubox-webmail-lxc` | LXC container for webmail |
+**Publishing:** secubox-droplet, secubox-streamlit, secubox-metablogizer, secubox-publish
 
-### Publishing (5 modules)
-| Package | Description |
-|---------|-------------|
-| `secubox-droplet` | File publisher |
-| `secubox-streamlit` | Streamlit app platform |
-| `secubox-streamforge` | Streamlit app manager |
-| `secubox-metablogizer` | Static site generator + Tor |
-| `secubox-publish` | Unified publishing dashboard |
+### API Reference
 
-### Metapackages
-| Package | Description |
-|---------|-------------|
-| `secubox-full` | All modules for MOCHAbin/VM |
-| `secubox-lite` | Core modules for ESPRESSObin |
-
----
-
-## Quick Start
-
-### VirtualBox (Fastest)
-
-Test SecuBox in VirtualBox in 2 minutes:
-
-```bash
-# One-liner: Download, convert, create VM, and start
-curl -sLO https://github.com/CyberMind-FR/secubox-deb/releases/download/v1.7.0/secubox-live-amd64-bookworm.img.gz && \
-gunzip secubox-live-amd64-bookworm.img.gz && \
-VBoxManage convertfromraw secubox-live-amd64-bookworm.img secubox-live.vdi --format VDI && \
-curl -sL https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/scripts/create-secubox-vm.sh | bash -s -- secubox-live.vdi
-```
-
-Or step by step:
-
-```bash
-# 1. Download and extract
-wget https://github.com/CyberMind-FR/secubox-deb/releases/download/v1.7.0/secubox-live-amd64-bookworm.img.gz
-gunzip secubox-live-amd64-bookworm.img.gz
-
-# 2. Use the VM creation script
-./scripts/create-secubox-vm.sh secubox-live-amd64-bookworm.img
-
-# 3. Access (wait 30-60s for boot)
-ssh -p 2222 root@localhost       # Password: secubox
-firefox https://localhost:9443   # Web UI
-```
-
-See [wiki/Live-USB-VirtualBox.md](wiki/Live-USB-VirtualBox.md) for full documentation.
-
-### Live USB (Hardware)
-
-Boot directly from USB with all packages pre-installed:
-
-```bash
-# Download latest release
-wget https://github.com/CyberMind-FR/secubox-deb/releases/download/v1.7.0/secubox-live-amd64-bookworm.img.gz
-
-# Flash to USB (replace /dev/sdX with your device)
-zcat secubox-live-amd64-bookworm.img.gz | sudo dd of=/dev/sdX bs=4M status=progress
-sync
-
-# Boot from USB and access:
-# Web UI: https://<IP>:443
-# SSH: root / secubox
-```
-
-See [docs/LIVE-USB.md](docs/LIVE-USB.md) for full documentation.
-
-### Installation (from APT repo)
-
-```bash
-# Add SecuBox repository
-curl -fsSL https://apt.secubox.in/gpg.key | gpg --dearmor -o /etc/apt/keyrings/secubox.gpg
-echo "deb [signed-by=/etc/apt/keyrings/secubox.gpg] https://apt.secubox.in bookworm main" \
-  > /etc/apt/sources.list.d/secubox.list
-
-# Install
-apt update
-apt install secubox-full   # or secubox-lite for minimal
-
-# Access dashboard
-firefox https://localhost/
-# Login: admin / secubox
-```
-
-### Build from source
-
-```bash
-git clone https://github.com/gkerma/secubox-deb
-cd secubox-deb
-
-# Build all packages
-bash scripts/build-all-local.sh bookworm amd64
-
-# Build image for VM
-sudo bash image/build-image.sh --board vm-x64 --vdi
-
-# Create VirtualBox VM
-bash image/create-vbox-vm.sh output/secubox-vm-x64-bookworm.vdi
-```
-
----
-
-## API Reference
-
-All modules expose REST APIs via Unix sockets proxied by nginx at `/api/v1/<module>/`.
-
-### Authentication
+All modules expose REST APIs at `/api/v1/<module>/`
 
 ```bash
 # Login
@@ -196,65 +167,25 @@ curl -X POST https://localhost/api/v1/portal/login \
   -H 'Content-Type: application/json' \
   -d '{"username":"admin","password":"secubox"}'
 
-# Response: {"success":true,"token":"eyJ...","username":"admin","role":"admin"}
-
-# Use token for protected endpoints
+# Use token
 curl https://localhost/api/v1/hub/status \
   -H 'Authorization: Bearer <token>'
 ```
 
-### Common Endpoints (all modules)
+**Key Endpoints:**
+- `GET /api/v1/hub/dashboard` — Dashboard data
+- `GET /api/v1/crowdsec/decisions` — Active bans
+- `POST /api/v1/crowdsec/ban` — Ban IP
+- `GET /api/v1/wireguard/peers` — VPN peers
+- `GET /api/v1/wireguard/qrcode/{peer}` — Peer QR code
 
-| Endpoint | Method | Auth | Description |
-|----------|--------|------|-------------|
-| `/status` | GET | No | Module status |
-| `/health` | GET | No | Health check |
+### Configuration
 
-### Hub API (`/api/v1/hub/`)
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/dashboard` | GET | Full dashboard data |
-| `/menu` | GET | Dynamic sidebar menu |
-| `/modules` | GET | Module status list |
-| `/alerts` | GET | Active alerts |
-| `/roadmap` | GET | Migration progress |
-| `/system_health` | GET | System health score |
-| `/network_summary` | GET | Network status |
-
-### CrowdSec API (`/api/v1/crowdsec/`)
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/metrics` | GET | CrowdSec metrics |
-| `/decisions` | GET | Active decisions |
-| `/alerts` | GET | Security alerts |
-| `/bouncers` | GET | Bouncer status |
-| `/ban` | POST | Ban IP address |
-| `/unban` | POST | Unban IP address |
-
-### WireGuard API (`/api/v1/wireguard/`)
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/interfaces` | GET | WG interfaces |
-| `/peers` | GET | Peer list |
-| `/peer` | POST | Add peer |
-| `/peer/{id}` | DELETE | Remove peer |
-| `/qrcode/{peer}` | GET | Peer QR code |
-
-See [docs/API-REFERENCE.md](docs/API-REFERENCE.md) for complete API documentation.
-
----
-
-## Configuration
-
-Main configuration: `/etc/secubox/secubox.conf` (TOML)
+Main config: `/etc/secubox/secubox.conf` (TOML)
 
 ```toml
 [general]
 hostname = "secubox"
-domain = "local"
 timezone = "Europe/Paris"
 
 [auth]
@@ -264,104 +195,47 @@ session_timeout = 86400
 [network]
 wan_interface = "eth0"
 lan_interface = "eth1"
-
-[crowdsec]
-api_url = "http://127.0.0.1:8080"
 ```
 
----
-
-## Development
+### Development
 
 ```bash
-# Setup dev environment
-bash setup-dev.sh
-source .venv/bin/activate
+# Setup
+bash setup-dev.sh && source .venv/bin/activate
 
-# Run single module API
+# Run module API
 cd packages/secubox-crowdsec
-uvicorn api.main:app --reload --host 127.0.0.1 --port 8001
+uvicorn api.main:app --reload --port 8001
 
-# Build single package
+# Build package
 dpkg-buildpackage -us -uc -b
 
-# Deploy to VM
-scp -P 2222 *.deb root@localhost:/tmp/
-ssh -p 2222 root@localhost "dpkg -i /tmp/*.deb"
+# Build image
+sudo bash image/build-image.sh --board vm-x64 --vdi
 ```
 
----
+### UI Design Guidelines
 
-## Documentation
-
-- [Live USB Guide](docs/LIVE-USB.md) — Bootable USB image, quick start
-- [User Guide](docs/USER-GUIDE.md) — Installation, configuration, usage
-- [API Reference](docs/API-REFERENCE.md) — Complete REST API documentation
-- [Migration Map](.claude/MIGRATION-MAP.md) — Module status tracking
-- [CLAUDE.md](CLAUDE.md) — Instructions for Claude Code
-
----
-
-## UI Design Guidelines
-
-SecuBox uses a **cyberpunk/hermetic** visual identity inspired by esoteric symbolism and matrix aesthetics.
-
-### Color Palette (C3BOX Dashboard)
+**Color Palette (Cyberpunk/Hermetic):**
 
 | Variable | Color | Usage |
 |----------|-------|-------|
-| `--cosmos-black` | `#0a0a0f` | Primary background |
-| `--gold-hermetic` | `#c9a84c` | Accents, titles, active states |
-| `--cinnabar` | `#e63946` | Alerts, errors, danger |
-| `--matrix-green` | `#00ff41` | Success, active connections |
-| `--void-purple` | `#6e40c9` | Secondary accents, links |
-| `--cyber-cyan` | `#00d4ff` | Info, hover states |
+| `--cosmos-black` | `#0a0a0f` | Background |
+| `--gold-hermetic` | `#c9a84c` | Accents, titles |
+| `--cinnabar` | `#e63946` | Alerts, errors |
+| `--matrix-green` | `#00ff41` | Success |
+| `--void-purple` | `#6e40c9` | Links |
+| `--cyber-cyan` | `#00d4ff` | Info, hover |
 | `--text-primary` | `#e8e6d9` | Main text |
-| `--text-muted` | `#6b6b7a` | Secondary text, labels |
 
-### Typography
+**Typography:** Cinzel (titles), IM Fell English (body), JetBrains Mono (code)
 
-| Font | Usage |
-|------|-------|
-| **Cinzel** | Titles, headers, navigation |
-| **IM Fell English** | Body text (hermetic style) |
-| **JetBrains Mono** | Code, terminal, monospace |
+### Documentation
 
-### CSS Variables
+- [Live USB Guide](docs/LIVE-USB.md)
+- [User Guide](docs/USER-GUIDE.md)
+- [API Reference](docs/API-REFERENCE.md)
+- [Migration Map](.claude/MIGRATION-MAP.md)
+- [Developer Guide](CLAUDE.md)
 
-```css
-:root {
-  /* Colors */
-  --cosmos-black: #0a0a0f;
-  --gold-hermetic: #c9a84c;
-  --cinnabar: #e63946;
-  --matrix-green: #00ff41;
-  --void-purple: #6e40c9;
-  --cyber-cyan: #00d4ff;
-  --text-primary: #e8e6d9;
-  --text-muted: #6b6b7a;
-
-  /* Sidebar */
-  --sidebar-bg: #0d0d12;
-  --sidebar-hover: #1a1a24;
-  --sidebar-active: #2a2a3a;
-
-  /* Cards */
-  --card-bg: #12121a;
-  --card-border: #2a2a3a;
-}
-```
-
-### Design Principles
-
-1. **Dark-first** — All interfaces use dark backgrounds for reduced eye strain
-2. **Gold accents** — Important elements highlighted with hermetic gold
-3. **Matrix green** — Security/success states use terminal green
-4. **Minimal chrome** — Focus on content, not decorative elements
-5. **Responsive** — All dashboards work on mobile and desktop
-
----
-
-## License
-
-Apache-2.0 © 2026 CyberMind · Gandalf / gkerma
+</details>
