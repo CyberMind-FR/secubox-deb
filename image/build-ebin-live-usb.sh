@@ -446,9 +446,14 @@ ok "SquashFS: ${SQUASH_SIZE}"
 cp "${ROOTFS}/boot/vmlinuz-"* "${LIVE_DIR}/boot/Image"
 cp "${ROOTFS}/boot/initrd.img-"* "${LIVE_DIR}/boot/initrd.img"
 
-# Copy device trees
-if [[ -d "${ROOTFS}/usr/lib/linux-image-"*"/marvell" ]]; then
-    cp "${ROOTFS}/usr/lib/linux-image-"*"/marvell/"* "${LIVE_DIR}/boot/dtbs/marvell/"
+# Copy device trees (use find to handle glob expansion properly)
+DTB_DIR=$(find "${ROOTFS}/usr/lib" -maxdepth 2 -type d -name "marvell" -path "*/linux-image-*" 2>/dev/null | head -1)
+if [[ -n "$DTB_DIR" ]] && [[ -d "$DTB_DIR" ]]; then
+    cp "$DTB_DIR"/armada-3720-espressobin*.dtb "${LIVE_DIR}/boot/dtbs/marvell/" 2>/dev/null || true
+    DTB_COUNT=$(ls "${LIVE_DIR}/boot/dtbs/marvell/"*.dtb 2>/dev/null | wc -l)
+    log "Copied ${DTB_COUNT} EspressoBin DTBs"
+else
+    warn "No DTB directory found - boot may fail!"
 fi
 
 # Copy extlinux config
