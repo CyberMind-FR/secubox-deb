@@ -26,6 +26,22 @@ app.include_router(auth_router, prefix="/auth")
 router = APIRouter()
 log = get_logger("system")
 
+# Import et inclusion du router metrics (léger, sans psutil)
+try:
+    from api.routers.metrics import router as metrics_router
+    app.include_router(metrics_router)
+    log.info("Router metrics (léger) chargé")
+except ImportError:
+    log.warning("Router metrics non disponible")
+
+# Import et inclusion du router remote-ui (OTG + WiFi)
+try:
+    from api.routers.remote_ui import router as remote_ui_router
+    app.include_router(remote_ui_router)
+    log.info("Router remote-ui chargé")
+except ImportError:
+    log.warning("Router remote-ui non disponible")
+
 # ══════════════════════════════════════════════════════════════════
 # System Preferences & ACL Configuration
 # ══════════════════════════════════════════════════════════════════

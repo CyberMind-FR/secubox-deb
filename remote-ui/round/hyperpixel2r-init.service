@@ -1,0 +1,11 @@
+[Unit]
+Description=HyperPixel 2.0" Round LCD Display Initialization
+DefaultDependencies=no
+After=basic.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/hyperpixel2r-init
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,72 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# SecuBox Remote UI — 90-secubox-otg.rules
+# Règles udev pour la détection du RPi Zero W connecté en OTG
+#
+# Installe dans : /etc/udev/rules.d/90-secubox-otg.rules
+#
+# CyberMind — https://cybermind.fr
+# Author: Gérald Kerma <gandalf@gk2.net>
+# License: Proprietary / ANSSI CSPN candidate
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Interface réseau CDC-ECM (Ethernet over USB)
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Reconnaître le gadget SecuBox par ses IDs USB
+# idVendor=1d6b (Linux Foundation), idProduct=0104 (Multifunction Composite)
+# L'interface réseau est renommée "secubox-round" pour identification facile
+
+SUBSYSTEM=="net", \
+    ATTR{address}=="02:sb:*", \
+    DRIVERS=="cdc_ether", \
+    NAME="secubox-round", \
+    TAG+="systemd", \
+    ENV{SYSTEMD_WANTS}="secubox-otg-host@%k.service", \
+    RUN+="/usr/local/sbin/secubox-otg-host-up.sh up"
+
+# Alternative: détection par attributs USB parents
+SUBSYSTEM=="net", \
+    ATTRS{idVendor}=="1d6b", \
+    ATTRS{idProduct}=="0104", \
+    DRIVERS=="cdc_ether", \
+    NAME="secubox-round", \
+    TAG+="systemd", \
+    RUN+="/usr/local/sbin/secubox-otg-host-up.sh up"
+
+# Événement de déconnexion
+SUBSYSTEM=="net", \
+    ACTION=="remove", \
+    ENV{ID_NET_NAME}=="secubox-round", \
+    RUN+="/usr/local/sbin/secubox-otg-host-up.sh down"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Console série CDC-ACM (ttyACM)
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Créer un lien symbolique /dev/secubox-console vers le bon ttyACM
+SUBSYSTEM=="tty", \
+    ATTRS{idVendor}=="1d6b", \
+    ATTRS{idProduct}=="0104", \
+    KERNEL=="ttyACM*", \
+    SYMLINK+="secubox-console", \
+    MODE="0660", \
+    GROUP="dialout", \
+    TAG+="systemd"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Tags pour intégration systemd
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Permettre à systemd de créer des unités .device
+SUBSYSTEM=="net", \
+    ENV{ID_NET_NAME}=="secubox-round", \
+    TAG+="systemd", \
+    ENV{SYSTEMD_ALIAS}="/sys/subsystem/net/devices/secubox-round"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Debug (décommenter pour journaliser les événements)
+# ──────────────────────────────────────────────────────────────────────────────
+
+# SUBSYSTEM=="net", ATTRS{idVendor}=="1d6b", RUN+="/bin/sh -c 'echo SecuBox OTG: %k >> /tmp/secubox-udev.log'"
+# SUBSYSTEM=="tty", ATTRS{idVendor}=="1d6b", RUN+="/bin/sh -c 'echo SecuBox ACM: %k >> /tmp/secubox-udev.log'"

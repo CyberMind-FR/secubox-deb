@@ -94,3 +94,62 @@ confirm_timeout = 300           # Secondes avant rollback auto si pas confirmé
 # [notifications.webhook]
 # url     = "https://hooks.example.com/secubox"
 # secret  = ""
+
+# ── Remote UI / HyperPixel Dashboard ─────────────────────────────
+# Configuration du dashboard kiosk HyperPixel 2.1 Round (480×480 px)
+# sur RPi Zero W — Affichage des métriques SecuBox en temps réel.
+#
+# Déploiement :
+#   bash remote-ui/round/deploy.sh -h <rpi-ip> --api-url http://<secubox-ip>:8000
+#
+# Service systemd sur le RPi : secubox-remote-ui.service
+# Ressources limitées : MemoryMax=256M, CPUQuota=80%
+[remote_ui]
+enabled       = true
+api_base      = "/api/v1/system"     # Endpoint métriques (servi par secubox-system)
+refresh_ms    = 5000                 # Intervalle de rafraîchissement (ms)
+simulate      = false                # Mode simulation (données fictives)
+
+# Seuils d'alerte — CPU (%)
+[remote_ui.thresholds.cpu]
+warn = 70                            # Niveau warning
+crit = 85                            # Niveau critique
+
+# Seuils d'alerte — Mémoire (%)
+[remote_ui.thresholds.mem]
+warn = 75
+crit = 90
+
+# Seuils d'alerte — Disque (%)
+[remote_ui.thresholds.disk]
+warn = 80
+crit = 95
+
+# Seuils d'alerte — Température CPU (°C)
+[remote_ui.thresholds.temp]
+warn = 65
+crit = 75
+
+# Seuils d'alerte — WiFi RSSI (dBm, valeurs négatives)
+[remote_ui.thresholds.wifi]
+warn = -70                           # Signal faible
+crit = -80                           # Signal critique
+
+# Mapping services SecuBox vers les anneaux du dashboard
+# Ordre : centre vers extérieur = AUTH → WALL → BOOT → MIND → ROOT → MESH
+[remote_ui.modules]
+AUTH = "secubox-auth"                # Authentification / SSO
+WALL = "secubox-crowdsec"            # WAF / IDS / CrowdSec
+BOOT = "secubox-hub"                 # Dashboard principal
+MIND = "secubox-ai-insights"         # IA / Insights
+ROOT = "secubox-system"              # Système / Métriques
+MESH = "secubox-p2p"                 # Réseau mesh P2P
+
+# Palette de couleurs (hex)
+[remote_ui.colors]
+AUTH = "#C04E24"                     # Rouge-orange
+WALL = "#9A6010"                     # Bronze
+BOOT = "#803018"                     # Marron foncé
+MIND = "#3D35A0"                     # Violet/indigo
+ROOT = "#0A5840"                     # Vert foncé
+MESH = "#104A88"                     # Bleu marine

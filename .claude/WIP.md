@@ -90,13 +90,164 @@
 
 ---
 
+### S59-05 — Remote UI / HyperPixel 2.1 Round Dashboard ✅
+
+**Status:** ✅ Complete
+
+#### Summary
+Complete implementation of the SecuBox Remote UI — Round Edition dashboard for HyperPixel 2.1 Round Touch (480×480 px) on RPi Zero W. Provides real-time metrics visualization via concentric rings UI.
+
+#### Deliverables (10/10)
+1. ✅ **Backend metrics** — `packages/secubox-system/core/metrics.py` (no psutil, /proc only)
+2. ✅ **Alerts engine** — `packages/secubox-system/core/alerts.py` (configurable thresholds)
+3. ✅ **Pydantic schemas** — `packages/secubox-system/models/system.py` (AlertLevel, AlertItem, etc.)
+4. ✅ **FastAPI router** — `packages/secubox-system/api/routers/metrics.py` (5 endpoints)
+5. ✅ **Frontend dashboard** — `remote-ui/round/index.html` (480×480 SVG rings)
+6. ✅ **Installation script** — `remote-ui/round/install_zerow.sh` (safe SD flash)
+7. ✅ **Deployment script** — `remote-ui/round/deploy.sh` (SSH + nginx patch)
+8. ✅ **systemd service** — `remote-ui/round/secubox-remote-ui.service` (memory limited)
+9. ✅ **API integration** — Already in `api/main.py` (metrics router included)
+10. ✅ **Documentation** — `[remote_ui]` section in `secubox.conf.example`
+
+#### Key Features
+- Lightweight metrics collection via /proc filesystem (no psutil overhead)
+- 6-ring concentric display: AUTH → WALL → BOOT → MIND → ROOT → MESH
+- Central CPU percentage with color-coded alerts (nominal/warn/crit)
+- JWT authentication with scope-based access control
+- Simulation mode for offline testing
+- Safe install script (refuses /dev/sda, /dev/nvme0n1, /dev/mmcblk0)
+
+#### Files Created/Modified
+- `packages/secubox-system/core/metrics.py` — SystemMetrics class
+- `packages/secubox-system/core/alerts.py` — AlertsEngine class
+- `packages/secubox-system/models/system.py` — Pydantic response models
+- `packages/secubox-system/models/__init__.py` — Exports
+- `packages/secubox-system/api/routers/metrics.py` — 5 FastAPI endpoints
+- `packages/secubox-system/api/routers/__init__.py` — Router exports
+- `remote-ui/round/index.html` — Full circular dashboard
+- `remote-ui/round/install_zerow.sh` — SD card flash script
+- `remote-ui/round/deploy.sh` — SSH deployment script
+- `remote-ui/round/secubox-remote-ui.service` — systemd unit
+- `secubox.conf.example` — Added [remote_ui] section with thresholds config
+
+---
+
+### S59-06 — Remote UI OTG Composite Connection ✅
+
+**Status:** ✅ Complete
+
+#### Summary
+Implemented USB OTG composite gadget connection between RPi Zero W (Remote UI) and SecuBox host. Provides CDC-ECM (Ethernet over USB @ 10.55.0.0/30) plus CDC-ACM (serial console @ 115200 baud) with automatic WiFi fallback.
+
+#### Deliverables
+
+**Gadget Side (RPi Zero W):**
+1. ✅ `remote-ui/round/secubox-otg-gadget.sh` — configfs libcomposite setup script
+2. ✅ `remote-ui/round/secubox-otg-gadget.service` — systemd oneshot (loads libcomposite, usb_f_ecm, usb_f_acm)
+3. ✅ `remote-ui/round/secubox-serial-console.service` — Getty on /dev/ttyGS0 @ 115200
+
+**Host Side (SecuBox):**
+4. ✅ `remote-ui/round/90-secubox-otg.rules` — udev rules (renames interface to secubox-round, creates /dev/secubox-console symlink)
+5. ✅ `remote-ui/round/secubox-otg-host-up.sh` — udev hook (configures 10.55.0.1/30, notifies API)
+
+**Backend API:**
+6. ✅ `packages/secubox-system/models/system.py` — TransportType enum, RemoteUIConnectedRequest, RemoteUIStatusResponse
+7. ✅ `packages/secubox-system/core/remote_ui.py` — RemoteUIManager singleton with probe/failover logic
+8. ✅ `packages/secubox-system/api/routers/remote_ui.py` — REST endpoints (/status, /connected, /disconnected, /probe, /serial/info)
+
+**Frontend:**
+9. ✅ `remote-ui/round/index.html` — TransportManager class with OTG/WiFi failover, transport badge UI
+
+**Documentation:**
+10. ✅ `remote-ui/round/README.md` — Quick-start guide
+11. ✅ `remote-ui/round/WIKI.md` — Comprehensive technical documentation
+
+#### Key Features
+- **Deterministic MAC addresses** from RPi serial number (02:sb:xx:xx:xx:xx)
+- **OTG priority transport** with 3-timeout failover to WiFi
+- **Separate JWT tokens** per transport
+- **30-second reprobe** interval to resume OTG when reconnected
+- **Transport badge** visual indicator (green OTG / blue WiFi / gray SIM)
+
+#### Files Created/Modified
+- `remote-ui/round/secubox-otg-gadget.sh` (new)
+- `remote-ui/round/secubox-otg-gadget.service` (new)
+- `remote-ui/round/secubox-serial-console.service` (new)
+- `remote-ui/round/90-secubox-otg.rules` (new)
+- `remote-ui/round/secubox-otg-host-up.sh` (new)
+- `packages/secubox-system/models/system.py` (updated)
+- `packages/secubox-system/models/__init__.py` (updated)
+- `packages/secubox-system/core/remote_ui.py` (new)
+- `packages/secubox-system/api/routers/remote_ui.py` (new)
+- `packages/secubox-system/api/routers/__init__.py` (updated)
+- `packages/secubox-system/api/main.py` (updated)
+- `remote-ui/round/index.html` (updated - TransportManager)
+- `remote-ui/round/README.md` (new)
+- `remote-ui/round/WIKI.md` (new)
+- `secubox.conf.example` (updated - [remote_ui] section)
+
+---
+
+### S59-07 — Remote UI RPi Zero W + HyperPixel Debugging ✅
+
+**Status:** ✅ Complete (April 15, 2026)
+
+#### Issues Discovered & Fixed
+
+1. **Wrong RPi image (64-bit)** — Zero W requires 32-bit armhf, not arm64
+   - Correct URL: `https://downloads.raspberrypi.com/raspios_lite_armhf/images/raspios_lite_armhf-2024-11-19/2024-11-19-raspios-bookworm-armhf-lite.img.xz`
+
+2. **HyperPixel black screen — KMS overlay is the solution!**
+   - Non-KMS overlay (hyperpixel2r) has GPIO conflicts on Bookworm
+   - The non-KMS overlay's i2c@0 claims GPIO 10,11 which are needed for SPI init
+   - The backlight driver also has pinctrl conflicts with SPI/I2C
+   - **SOLUTION:** Use KMS overlay (`vc4-kms-v3d` + `vc4-kms-dpi-hyperpixel2r`)
+   - KMS handles panel init in kernel — no userspace script needed
+   - Config.txt:
+     ```
+     dtoverlay=vc4-kms-v3d
+     dtoverlay=vc4-kms-dpi-hyperpixel2r
+     display_auto_detect=0
+     hdmi_blanking=2
+     gpu_mem=128
+     ```
+
+3. **USB OTG network NO-CARRIER**
+   - NetworkManager ignores ifupdown config on Bookworm
+   - Fix: Created `usb0-up.sh` script that directly configures the interface
+   - Service: `usb0-up.service` runs after `secubox-otg-gadget.service`
+
+4. **SSH Permission denied**
+   - RPi OS Bookworm requires `userconf` file in boot partition
+   - Format: `user:hashed_password`
+   - Default: `pi:raspberry` (hash in install script)
+
+5. **install_zerow.sh refusing mmcblk0**
+   - Script's FORBIDDEN_DEVICES check too conservative
+   - Fix: Smart detection based on actual root filesystem location
+
+6. **Host IP keeps disappearing**
+   - NetworkManager removes manually added IPs on USB interfaces
+   - Fix: `sudo nmcli device set enxXXXX managed no` before adding IP
+
+#### Files Modified
+- `remote-ui/round/install_zerow.sh` — Use KMS overlay by default, all fixes integrated
+- `remote-ui/round/README.md` — Updated troubleshooting for KMS overlay
+
+#### Testing Status
+- [x] SD card flashing works
+- [x] USB OTG interface appears on host
+- [x] SSH connection works (pi:raspberry via userconf)
+- [x] HyperPixel display works with KMS overlay
+
+---
+
 ## ⬜ Next Up
 
-1. **Rebuild EspressoBin eMMC with 126 packages** — In progress (kernel config stage)
-2. **Rebuild AMD64 live USB with VBox fix** — In progress (debootstrap stage)
+1. **Deploy dashboard to Zero W** — Now that display works
+2. **Rebuild EspressoBin eMMC with 126 packages** — In progress
 3. **Test VBox kiosk after rebuild** — Verify vmware driver works
-4. **Rebuild EspressoBin Live USB with new eMMC image** — After eMMC rebuild
-5. **Dashboard real data display** — Memory, storage, IPs, versions
+4. **Dashboard real data display** — Memory, storage, IPs, versions
 
 ---
 

@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=480, initial-scale=1.0, user-scalable=no">
+<title>SecuBox · Round Dashboard</title>
+<style>
+/* ── Reset & base ─────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  width: 480px;
+  height: 480px;
+  overflow: hidden;
+  background: #080808;
+  font-family: 'JetBrains Mono', 'Fira Mono', 'Courier New', monospace;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ── Écran rond ───────────────────────────────────────── */
+#screen {
+  position: relative;
+  width: 480px;
+  height: 480px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #080808;
+}
+
+/* ── Canvas anneaux ───────────────────────────────────── */
+#ring-canvas {
+  position: absolute;
+  top: 0; left: 0;
+  width: 480px; height: 480px;
+  pointer-events: none;
+}
+
+/* ── Horloge centrale ─────────────────────────────────── */
+#center {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  pointer-events: none;
+}
+#time {
+  font-size: 40px;
+  font-weight: 600;
+  color: #ffffff;
+  letter-spacing: 3px;
+  line-height: 1;
+  text-shadow: 0 0 20px rgba(255,255,255,0.15);
+}
+#date {
+  font-size: 11px;
+  color: #4a4a4a;
+  margin-top: 5px;
+  letter-spacing: 1.5px;
+}
+#hostname {
+  font-size: 10px;
+  color: #333;
+  margin-top: 4px;
+  letter-spacing: 1px;
+}
+#uptime {
+  font-size: 10px;
+  color: #2a5a3a;
+  margin-top: 3px;
+  letter-spacing: 0.5px;
+}
+
+/* ── Pods métriques ───────────────────────────────────── */
+.pod {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.pod:active { transform: scale(0.92); }
+.pod-label {
+  font-size: 9px;
+  color: #444;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+.pod-val {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1;
+  transition: color 0.4s ease;
+}
+.pod-unit {
+  font-size: 8px;
+  color: inherit;
+  opacity: 0.6;
+  letter-spacing: 0.5px;
+}
+
+/* ── Barre température ────────────────────────────────── */
+#temp-zone {
+  position: absolute;
+  bottom: 44px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+.temp-label { font-size: 9px; color: #444; letter-spacing: 1px; }
+.temp-track {
+  width: 88px; height: 3px;
+  background: #1a1a1a;
+  border-radius: 2px;
+  overflow: hidden;
+}
+.temp-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 1s ease, background 0.5s ease;
+}
+#temp-val { font-size: 10px; min-width: 36px; }
+
+/* ── Barre statut / alertes ───────────────────────────── */
+#status-bar {
+  position: absolute;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 9px;
+  letter-spacing: 1px;
+  white-space: nowrap;
+  pointer-events: none;
+  transition: color 0.4s ease;
+}
+
+/* ── Indicateurs de connexion ─────────────────────────── */
+#conn-dots {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 5px;
+  pointer-events: none;
+}
+.cdot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  transition: opacity 0.4s ease;
+}
+.cdot.on  { opacity: 1; }
+.cdot.off { opacity: 0.15; }
+
+/* ── Indicateur API JWT ───────────────────────────────── */
+#jwt-badge {
+  position: absolute;
+  top: 14px;
+  right: 134px;
+  font-size: 8px;
+  letter-spacing: 1px;
+  color: #2a5a3a;
+  pointer-events: none;
+}
+
+/* ── Splash auth ──────────────────────────────────────── */
+#auth-overlay {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  border-radius: 50%;
+  background: #080808;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  z-index: 100;
+  transition: opacity 0.6s ease;
+}
+#auth-overlay.hidden { opacity: 0; pointer-events: none; }
+#auth-logo {
+  font-size: 28px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 4px;
+}
+#auth-sub {
+  font-size: 10px;
+  color: #555;
+  letter-spacing: 2px;
+}
+#auth-spinner {
+  width: 24px; height: 24px;
+  border: 2px solid #1a1a1a;
+  border-top-color: #FF6B35;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+#auth-msg { font-size: 10px; color: #444; letter-spacing: 1px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Animations dots ──────────────────────────────────── */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.2; }
+}
+</style>
+</head>
+<body>
+
+<div id="screen">
+
+  <canvas id="ring-canvas" width="480" height="480"></canvas>
+
+  <!-- Horloge centrale -->
+  <div id="center">
+    <div id="time">--:--:--</div>
+    <div id="date">· · ·</div>
+    <div id="hostname">secubox-zero</div>
+    <div id="uptime">up --:--</div>
+  </div>
+
+  <!-- Badge JWT -->
+  <div id="jwt-badge">● JWT</div>
+
+  <!-- Pods métriques — positionnés sur le cercle -->
+  <!-- CPU : haut centre -->
+  <div class="pod" id="pod-cpu"
+       style="top:58px; left:50%; transform:translateX(-50%)"
+       ontouchstart="podTap('cpu')">
+    <div class="pod-label">CPU</div>
+    <div class="pod-val" id="v-cpu" style="color:#FF6B35">--</div>
+    <div class="pod-unit" style="color:#FF6B35">%</div>
+  </div>
+
+  <!-- MEM : droite haute -->
+  <div class="pod" id="pod-mem"
+       style="top:148px; right:44px"
+       ontouchstart="podTap('mem')">
+    <div class="pod-label">MEM</div>
+    <div class="pod-val" id="v-mem" style="color:#A8E63D">--</div>
+    <div class="pod-unit" style="color:#A8E63D">%</div>
+  </div>
+
+  <!-- DISK : droite basse -->
+  <div class="pod" id="pod-disk"
+       style="top:288px; right:50px"
+       ontouchstart="podTap('disk')">
+    <div class="pod-label">DISK</div>
+    <div class="pod-val" id="v-disk" style="color:#3DE6E6">--</div>
+    <div class="pod-unit" style="color:#3DE6E6">%</div>
+  </div>
+
+  <!-- NET : gauche basse -->
+  <div class="pod" id="pod-net"
+       style="top:288px; left:50px"
+       ontouchstart="podTap('net')">
+    <div class="pod-label">WiFi</div>
+    <div class="pod-val" id="v-net" style="color:#C97EFF">--</div>
+    <div class="pod-unit" style="color:#C97EFF">dBm</div>
+  </div>
+
+  <!-- LOAD : gauche haute -->
+  <div class="pod" id="pod-load"
+       style="top:148px; left:44px"
+       ontouchstart="podTap('load')">
+    <div class="pod-label">LOAD</div>
+    <div class="pod-val" id="v-load" style="color:#FFD93D">--</div>
+    <div class="pod-unit" style="color:#FFD93D">×</div>
+  </div>
+
+  <!-- Barre température -->
+  <div id="temp-zone">
+    <span class="temp-label">TEMP</span>
+    <div class="temp-track">
+      <div class="temp-fill" id="temp-fill" style="width:0%;background:#FF6B35"></div>
+    </div>
+    <span class="temp-label" id="temp-val" style="color:#FF6B35">--°C</span>
+  </div>
+
+  <!-- Statut -->
+  <div id="status-bar" style="color:#2a5a3a">● SYSTEM NOMINAL</div>
+
+  <!-- Dots connexion : API · WiFi · CPU · MEM · DISK -->
+  <div id="conn-dots">
+    <div class="cdot on"  id="dot-api"  style="background:#FF6B35"></div>
+    <div class="cdot off" id="dot-wifi" style="background:#C97EFF"></div>
+    <div class="cdot off" id="dot-cpu"  style="background:#FF6B35"></div>
+    <div class="cdot off" id="dot-mem"  style="background:#A8E63D"></div>
+    <div class="cdot off" id="dot-disk" style="background:#3DE6E6"></div>
+  </div>
+
+  <!-- Splash authentification -->
+  <div id="auth-overlay">
+    <div id="auth-logo">SECUBOX</div>
+    <div id="auth-sub">ROUND · DASHBOARD</div>
+    <div id="auth-spinner"></div>
+    <div id="auth-msg">Authentification JWT…</div>
+  </div>
+
+</div><!-- #screen -->
+
+<script>
+/* ═══════════════════════════════════════════════════════════
+   CONFIG — adapter selon l'environnement SecuBox-Deb
+   ═══════════════════════════════════════════════════════════ */
+const CFG = {
+  /* URL de base de l'API FastAPI/Uvicorn SecuBox-Deb */
+  API_BASE: 'http://localhost:8000',
+
+  /* Endpoint metrics — GET /api/v1/system/metrics */
+  ENDPOINT_METRICS: '/api/v1/system/metrics',
+
+  /* Endpoint login — POST /api/v1/auth/token */
+  ENDPOINT_LOGIN:   '/api/v1/auth/token',
+
+  /* Credentiels dashboard (read-only, scope: metrics) */
+  LOGIN_USER: 'dashboard',
+  LOGIN_PASS: 'secubox-round',
+
+  /* Intervalle de rafraîchissement des métriques (ms) */
+  REFRESH_INTERVAL: 2000,
+
+  /* Intervalle renouvellement JWT avant expiry (ms avant exp) */
+  JWT_RENEW_BEFORE_MS: 30000,
+
+  /* Hostname affiché (fallback si API muette) */
+  HOSTNAME_FALLBACK: 'rpi-zero-round',
+
+  /* Mode simulation : true = pas d'API, données simulées */
+  SIMULATE: true,
+};
+
+/* ═══════════════════════════════════════════════════════════
+   ÉTAT
+   ═══════════════════════════════════════════════════════════ */
+const STATE = {
+  jwt: null,
+  jwtExp: 0,
+  connected: false,
+  lastMetrics: null,
+  sim: { cpu:12, mem:41, disk:27, net:-64, load:0.15, temp:43, uptime:0 },
+  alertActive: false,
+};
+
+/* ═══════════════════════════════════════════════════════════
+   JWT — Authentification
+   ═══════════════════════════════════════════════════════════ */
+async function jwtLogin() {
+  if (CFG.SIMULATE) {
+    STATE.jwt = 'SIMULATED';
+    STATE.jwtExp = Date.now() + 3600000;
+    STATE.connected = true;
+    return true;
+  }
+  try {
+    const body = new URLSearchParams({
+      username: CFG.LOGIN_USER,
+      password: CFG.LOGIN_PASS,
+      grant_type: 'password',
+    });
+    const r = await fetch(CFG.API_BASE + CFG.ENDPOINT_LOGIN, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    STATE.jwt = d.access_token;
+    /* Décoder exp depuis le payload JWT (base64url) */
+    const payload = JSON.parse(atob(d.access_token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+    STATE.jwtExp = payload.exp * 1000;
+    STATE.connected = true;
+    return true;
+  } catch(e) {
+    console.error('JWT login error:', e);
+    STATE.connected = false;
+    return false;
+  }
+}
+
+async function jwtEnsureValid() {
+  if (!STATE.jwt) return await jwtLogin();
+  if (Date.now() >= STATE.jwtExp - CFG.JWT_RENEW_BEFORE_MS) {
+    return await jwtLogin();
+  }
+  return true;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   API — Fetch métriques
+   Réponse attendue du endpoint FastAPI :
+   {
+     cpu_percent: 23.5,
+     mem_percent: 41.2,
+     disk_percent: 28.7,
+     wifi_rssi: -62,
+     load_avg_1: 0.18,
+     cpu_temp: 44.2,
+     uptime_seconds: 86400,
+     hostname: "rpi-zero-round"
+   }
+   ═══════════════════════════════════════════════════════════ */
+async function fetchMetrics() {
+  if (CFG.SIMULATE) return simStep();
+
+  const ok = await jwtEnsureValid();
+  if (!ok) return null;
+
+  try {
+    const r = await fetch(CFG.API_BASE + CFG.ENDPOINT_METRICS, {
+      headers: {
+        'Authorization': 'Bearer ' + STATE.jwt,
+        'Accept': 'application/json',
+      },
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    STATE.connected = true;
+    STATE.lastMetrics = d;
+
+    /* Normaliser vers STATE.sim pour réutiliser le même pipeline */
+    STATE.sim.cpu    = d.cpu_percent ?? 0;
+    STATE.sim.mem    = d.mem_percent ?? 0;
+    STATE.sim.disk   = d.disk_percent ?? 0;
+    STATE.sim.net    = d.wifi_rssi ?? -90;
+    STATE.sim.load   = d.load_avg_1 ?? 0;
+    STATE.sim.temp   = d.cpu_temp ?? 0;
+    STATE.sim.uptime = d.uptime_seconds ?? 0;
+
+    if (d.hostname) document.getElementById('hostname').textContent = d.hostname;
+    return STATE.sim;
+  } catch(e) {
+    console.warn('fetchMetrics error:', e);
+    STATE.connected = false;
+    return null;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SIMULATION (CFG.SIMULATE = true)
+   ═══════════════════════════════════════════════════════════ */
+function simStep() {
+  const s = STATE.sim;
+  const rnd = (v, d, mn, mx) => Math.min(mx, Math.max(mn, v + (Math.random()-0.5)*d));
+  s.cpu    = rnd(s.cpu,   14,  0, 100);
+  s.mem    = rnd(s.mem,    3, 20, 100);
+  s.disk   = rnd(s.disk,   0.8,  5, 100);
+  s.net    = rnd(s.net,    5, -90, -20);
+  s.load   = rnd(s.load, 0.12, 0,  4);
+  s.temp   = rnd(s.temp,  1.5, 35, 85);
+  s.uptime += CFG.REFRESH_INTERVAL / 1000;
+  return s;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CANVAS — Anneaux
+   ═══════════════════════════════════════════════════════════ */
+const canvas = document.getElementById('ring-canvas');
+const ctx = canvas.getContext('2d');
+const CX = 240, CY = 240;
+const START = -Math.PI / 2;
+
+const RINGS = [
+  { key:'cpu',  r:213, w:5, color:'#FF6B35', fn: s => s.cpu / 100 },
+  { key:'mem',  r:200, w:5, color:'#A8E63D', fn: s => s.mem / 100 },
+  { key:'disk', r:187, w:5, color:'#3DE6E6', fn: s => s.disk / 100 },
+  { key:'net',  r:174, w:5, color:'#C97EFF', fn: s => Math.min(1, Math.max(0, (s.net + 90) / 70)) },
+  { key:'load', r:161, w:5, color:'#FFD93D', fn: s => Math.min(1, s.load / 4) },
+];
+
+function drawRings(sim) {
+  ctx.clearRect(0, 0, 480, 480);
+
+  /* Clip circulaire */
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(CX, CY, 237, 0, Math.PI * 2);
+  ctx.clip();
+
+  RINGS.forEach(ring => {
+    const pct = ring.fn(sim);
+
+    /* Track gris foncé */
+    ctx.beginPath();
+    ctx.arc(CX, CY, ring.r, 0, Math.PI * 2);
+    ctx.strokeStyle = '#181818';
+    ctx.lineWidth = ring.w + 2;
+    ctx.stroke();
+
+    /* Arc coloré */
+    if (pct > 0.005) {
+      ctx.beginPath();
+      ctx.arc(CX, CY, ring.r, START, START + Math.PI * 2 * pct);
+      ctx.strokeStyle = ring.color;
+      ctx.lineWidth = ring.w;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+      ctx.lineCap = 'butt';
+    }
+  });
+
+  /* Cercle de bord intérieur subtil */
+  ctx.beginPath();
+  ctx.arc(CX, CY, 145, 0, Math.PI * 2);
+  ctx.strokeStyle = '#141414';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  ctx.restore();
+
+  /* Bord extérieur de l'écran */
+  ctx.beginPath();
+  ctx.arc(CX, CY, 236, 0, Math.PI * 2);
+  ctx.strokeStyle = '#1e1e1e';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+}
+
+/* ═══════════════════════════════════════════════════════════
+   DOM — Mise à jour des valeurs
+   ═══════════════════════════════════════════════════════════ */
+function updateDOM(s) {
+  document.getElementById('v-cpu').textContent  = Math.round(s.cpu);
+  document.getElementById('v-mem').textContent  = Math.round(s.mem);
+  document.getElementById('v-disk').textContent = Math.round(s.disk);
+  document.getElementById('v-net').textContent  = Math.round(s.net);
+  document.getElementById('v-load').textContent = s.load.toFixed(2);
+
+  /* Température */
+  const tPct = Math.min(1, Math.max(0, (s.temp - 35) / 50));
+  const tColor = s.temp > 72 ? '#E24B4A' : s.temp > 60 ? '#EF9F27' : '#FF6B35';
+  document.getElementById('temp-fill').style.width = (tPct * 100).toFixed(0) + '%';
+  document.getElementById('temp-fill').style.background = tColor;
+  document.getElementById('temp-val').style.color = tColor;
+  document.getElementById('temp-val').textContent = Math.round(s.temp) + '°C';
+
+  /* Uptime */
+  const ut = Math.round(s.uptime);
+  const uh = Math.floor(ut / 3600);
+  const um = Math.floor((ut % 3600) / 60);
+  document.getElementById('uptime').textContent =
+    'up ' + String(uh).padStart(2,'0') + 'h' + String(um).padStart(2,'0');
+
+  /* Alertes */
+  const statusEl = document.getElementById('status-bar');
+  const alerts = [];
+  if (s.cpu > 80)   alerts.push('CPU ' + Math.round(s.cpu) + '%');
+  if (s.temp > 72)  alerts.push('TEMP ' + Math.round(s.temp) + '°C');
+  if (s.mem > 85)   alerts.push('MEM ' + Math.round(s.mem) + '%');
+  if (s.disk > 90)  alerts.push('DISK ' + Math.round(s.disk) + '%');
+
+  if (alerts.length > 0) {
+    statusEl.style.color = '#E24B4A';
+    statusEl.textContent = '▲ ' + alerts.join(' · ');
+    STATE.alertActive = true;
+  } else {
+    statusEl.style.color = STATE.connected ? '#2a5a3a' : '#5a2a2a';
+    statusEl.textContent = STATE.connected ? '● SYSTEM NOMINAL' : '◌ API UNREACHABLE';
+    STATE.alertActive = false;
+  }
+
+  /* Dots de connexion */
+  const dotApi  = document.getElementById('dot-api');
+  const dotWifi = document.getElementById('dot-wifi');
+  dotApi.className  = 'cdot ' + (STATE.connected ? 'on' : 'off');
+  dotWifi.className = 'cdot ' + (s.net > -75 ? 'on' : 'off');
+  document.getElementById('dot-cpu').className  = 'cdot ' + (s.cpu  > 60 ? 'on' : 'off');
+  document.getElementById('dot-mem').className  = 'cdot ' + (s.mem  > 70 ? 'on' : 'off');
+  document.getElementById('dot-disk').className = 'cdot ' + (s.disk > 70 ? 'on' : 'off');
+
+  /* Badge JWT */
+  const badge = document.getElementById('jwt-badge');
+  badge.style.color = STATE.connected ? '#2a5a3a' : '#5a2a2a';
+  badge.textContent = STATE.connected ? '● JWT' : '○ JWT';
+
+  /* Couleur CPU selon charge */
+  const cpuEl = document.getElementById('v-cpu');
+  cpuEl.style.color = s.cpu > 80 ? '#E24B4A' : s.cpu > 60 ? '#EF9F27' : '#FF6B35';
+}
+
+/* ═══════════════════════════════════════════════════════════
+   HORLOGE
+   ═══════════════════════════════════════════════════════════ */
+function updateClock() {
+  const now = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  document.getElementById('time').textContent =
+    pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
+
+  const days   = ['dim.','lun.','mar.','mer.','jeu.','ven.','sam.'];
+  const months = ['jan.','fév.','mar.','avr.','mai','juin','juil.','août','sep.','oct.','nov.','déc.'];
+  document.getElementById('date').textContent =
+    days[now.getDay()] + ' ' + now.getDate() + ' ' + months[now.getMonth()] + ' ' + now.getFullYear();
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TOUCH — Pod tap
+   ═══════════════════════════════════════════════════════════ */
+function podTap(key) {
+  const s = STATE.sim;
+  const details = {
+    cpu:  `CPU: ${Math.round(s.cpu)}% · load: ${s.load.toFixed(2)} · temp: ${Math.round(s.temp)}°C`,
+    mem:  `Mémoire: ${Math.round(s.mem)}% utilisée`,
+    disk: `Disque: ${Math.round(s.disk)}% utilisé`,
+    net:  `WiFi RSSI: ${Math.round(s.net)} dBm`,
+    load: `Load avg 1min: ${s.load.toFixed(2)}`,
+  };
+  /* Sur le vrai Zero W : peut déclencher une page de détail */
+  console.log('[SecuBox Round] Pod tap:', key, '—', details[key]);
+  /* Flash visuel */
+  const pod = document.getElementById('pod-' + key);
+  pod.style.opacity = '0.4';
+  setTimeout(() => pod.style.opacity = '1', 200);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   BOUCLE PRINCIPALE
+   ═══════════════════════════════════════════════════════════ */
+async function tick() {
+  const s = await fetchMetrics();
+  if (s) {
+    drawRings(s);
+    updateDOM(s);
+  }
+}
+
+async function init() {
+  /* Auth */
+  const authMsg = document.getElementById('auth-msg');
+  authMsg.textContent = 'Authentification JWT…';
+
+  const ok = await jwtLogin();
+
+  if (ok) {
+    authMsg.textContent = 'Connexion établie';
+    setTimeout(() => {
+      document.getElementById('auth-overlay').classList.add('hidden');
+    }, 600);
+  } else {
+    authMsg.textContent = 'Mode hors-ligne (simulation)';
+    CFG.SIMULATE = true;
+    STATE.connected = false;
+    setTimeout(() => {
+      document.getElementById('auth-overlay').classList.add('hidden');
+    }, 1200);
+  }
+
+  /* Horloge toutes les secondes */
+  updateClock();
+  setInterval(updateClock, 1000);
+
+  /* Métriques */
+  await tick();
+  setInterval(tick, CFG.REFRESH_INTERVAL);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   BOOT
+   ═══════════════════════════════════════════════════════════ */
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>

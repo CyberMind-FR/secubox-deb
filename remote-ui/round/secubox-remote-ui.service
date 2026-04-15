@@ -1,0 +1,71 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# SecuBox Remote UI — secubox-remote-ui.service
+# Service systemd pour le dashboard kiosk HyperPixel 2.1 Round
+#
+# CyberMind — https://cybermind.fr
+# Author: Gérald Kerma <gandalf@gk2.net>
+# License: Proprietary / ANSSI CSPN candidate
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[Unit]
+Description=SecuBox Remote UI — Round Dashboard
+Documentation=https://github.com/CyberMind-FR/secubox-deb
+After=graphical.target nginx.service network-online.target
+Wants=network-online.target
+Requires=nginx.service
+
+[Service]
+Type=simple
+User=secubox
+Group=secubox
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/secubox/.Xauthority
+
+# Attendre que X soit prêt
+ExecStartPre=/bin/sleep 5
+
+# Lancer Chromium en mode kiosk sur l'écran HyperPixel
+ExecStart=/usr/bin/chromium-browser \
+    --kiosk \
+    --noerrdialogs \
+    --disable-infobars \
+    --disable-session-crashed-bubble \
+    --disable-restore-session-state \
+    --disable-translate \
+    --no-first-run \
+    --start-fullscreen \
+    --window-size=480,480 \
+    --window-position=0,0 \
+    --check-for-update-interval=31536000 \
+    --disable-background-networking \
+    --disable-client-side-phishing-detection \
+    --disable-default-apps \
+    --disable-extensions \
+    --disable-hang-monitor \
+    --disable-popup-blocking \
+    --disable-prompt-on-repost \
+    --disable-sync \
+    --metrics-recording-only \
+    --no-pings \
+    --password-store=basic \
+    --use-mock-keychain \
+    --enable-features=OverlayScrollbar \
+    http://localhost:8080
+
+# Redémarrer en cas de crash
+Restart=always
+RestartSec=10
+
+# Ressources limitées (Zero W = 512MB RAM)
+MemoryMax=256M
+CPUQuota=80%
+
+# Sécurité
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/secubox/.cache /home/secubox/.config
+PrivateTmp=true
+
+[Install]
+WantedBy=graphical.target
