@@ -16,9 +16,10 @@ ExecStart=/usr/bin/python3 -m uvicorn api.main:app \
     --log-level warning
 Restart=on-failure
 RestartSec=5
-PrivateTmp=true
+# Sandboxing disabled - causes namespace errors with Python symlinks on some kernels
+# PrivateTmp=true
+# ProtectSystem=full
 NoNewPrivileges=true
-ProtectSystem=full
 ReadWritePaths=/run/secubox /tmp/secubox
 
 [Install]

@@ -12,11 +12,12 @@ ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/threats.so
 Restart=on-failure
 RestartSec=5
 UMask=0000
-PrivateTmp=true
+# Sandboxing disabled - causes namespace errors with Python symlinks on some kernels
+# PrivateTmp=true
+# ProtectSystem=full
 NoNewPrivileges=true
 RuntimeDirectory=secubox
 RuntimeDirectoryMode=0775
-ProtectSystem=full
 ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox /var/log/suricata /var/log/secubox
 
 [Install]
