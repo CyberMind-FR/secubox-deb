@@ -936,20 +936,23 @@ if ls "${MNT}/usr/lib/linux-image-"*/broadcom/*.dtb >/dev/null 2>&1; then
 fi
 
 # Copy kernel and initrd to boot partition
-if ls "${MNT}/boot/vmlinuz-"* >/dev/null 2>&1; then
-  cp "${MNT}/boot/vmlinuz-"* "${MNT}/boot/firmware/vmlinuz"
-  ok "Kernel copied"
+# Use ls | sort -V | tail -1 to get the latest version if multiple exist
+VMLINUZ=$(ls "${MNT}/boot/vmlinuz-"* 2>/dev/null | sort -V | tail -1)
+if [[ -n "$VMLINUZ" ]] && [[ -f "$VMLINUZ" ]]; then
+  cp "$VMLINUZ" "${MNT}/boot/firmware/vmlinuz"
+  ok "Kernel copied: $(basename $VMLINUZ)"
 else
   err "No kernel found in rootfs"
 fi
 
-if ls "${MNT}/boot/initrd.img-"* >/dev/null 2>&1; then
-  cp "${MNT}/boot/initrd.img-"* "${MNT}/boot/firmware/initrd.img"
+INITRD=$(ls "${MNT}/boot/initrd.img-"* 2>/dev/null | sort -V | tail -1)
+if [[ -n "$INITRD" ]] && [[ -f "$INITRD" ]]; then
+  cp "$INITRD" "${MNT}/boot/firmware/initrd.img"
   # Add initramfs line to config.txt since we have an initrd
   if ! grep -q "^initramfs" "${MNT}/boot/firmware/config.txt"; then
     sed -i '/^kernel=vmlinuz/a initramfs initrd.img followkernel' "${MNT}/boot/firmware/config.txt"
   fi
-  ok "Initrd copied and config.txt updated"
+  ok "Initrd copied: $(basename $INITRD)"
 else
   log "No initrd - Pi will boot directly (this is OK)"
   # Ensure no initramfs line in config.txt
