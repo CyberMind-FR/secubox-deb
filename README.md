@@ -1,9 +1,13 @@
 # SecuBox-DEB
 
 ## Migration OpenWrt → Debian · GlobalScale Technologies
-**CyberMind · Gandalf · Mars 2026**
+**CyberMind · Gandalf · v1.7.0 · April 2026**
 
-Port complet de [SecuBox OpenWrt](https://github.com/gkerma/secubox-openwrt) vers **Debian bookworm arm64/amd64** pour les boards **MOCHAbin** (Armada 7040), **ESPRESSObin** (Armada 3720), et **VMs x86_64**.
+Port complet de [SecuBox OpenWrt](https://github.com/gkerma/secubox-openwrt) vers **Debian bookworm arm64/amd64** pour les boards **MOCHAbin** (Armada 7040), **ESPRESSObin** (Armada 3720), **Raspberry Pi**, et **VMs x86_64**.
+
+[![Build Status](https://github.com/CyberMind-FR/secubox-deb/actions/workflows/build-all-live-usb.yml/badge.svg)](https://github.com/CyberMind-FR/secubox-deb/actions)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/version-1.7.0-green.svg)](https://github.com/CyberMind-FR/secubox-deb/releases)
 
 ---
 
@@ -33,7 +37,7 @@ opkg                             →    apt + repo apt.secubox.in
 
 ---
 
-## Packages (93 modules)
+## Packages (126 modules)
 
 ### Core & Dashboard
 | Package | Description |
@@ -103,7 +107,7 @@ Test SecuBox in VirtualBox in 2 minutes:
 
 ```bash
 # One-liner: Download, convert, create VM, and start
-curl -sLO https://github.com/CyberMind-FR/secubox-deb/releases/download/v1.5.0/secubox-live-amd64-bookworm.img.gz && \
+curl -sLO https://github.com/CyberMind-FR/secubox-deb/releases/download/v1.7.0/secubox-live-amd64-bookworm.img.gz && \
 gunzip secubox-live-amd64-bookworm.img.gz && \
 VBoxManage convertfromraw secubox-live-amd64-bookworm.img secubox-live.vdi --format VDI && \
 curl -sL https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/scripts/create-secubox-vm.sh | bash -s -- secubox-live.vdi
@@ -113,7 +117,7 @@ Or step by step:
 
 ```bash
 # 1. Download and extract
-wget https://github.com/CyberMind-FR/secubox-deb/releases/download/v1.5.0/secubox-live-amd64-bookworm.img.gz
+wget https://github.com/CyberMind-FR/secubox-deb/releases/download/v1.7.0/secubox-live-amd64-bookworm.img.gz
 gunzip secubox-live-amd64-bookworm.img.gz
 
 # 2. Use the VM creation script
@@ -132,7 +136,7 @@ Boot directly from USB with all packages pre-installed:
 
 ```bash
 # Download latest release
-wget https://github.com/CyberMind-FR/secubox-deb/releases/download/v1.5.0/secubox-live-amd64-bookworm.img.gz
+wget https://github.com/CyberMind-FR/secubox-deb/releases/download/v1.7.0/secubox-live-amd64-bookworm.img.gz
 
 # Flash to USB (replace /dev/sdX with your device)
 zcat secubox-live-amd64-bookworm.img.gz | sudo dd of=/dev/sdX bs=4M status=progress
@@ -295,6 +299,66 @@ ssh -p 2222 root@localhost "dpkg -i /tmp/*.deb"
 - [API Reference](docs/API-REFERENCE.md) — Complete REST API documentation
 - [Migration Map](.claude/MIGRATION-MAP.md) — Module status tracking
 - [CLAUDE.md](CLAUDE.md) — Instructions for Claude Code
+
+---
+
+## UI Design Guidelines
+
+SecuBox uses a **cyberpunk/hermetic** visual identity inspired by esoteric symbolism and matrix aesthetics.
+
+### Color Palette (C3BOX Dashboard)
+
+| Variable | Color | Usage |
+|----------|-------|-------|
+| `--cosmos-black` | `#0a0a0f` | Primary background |
+| `--gold-hermetic` | `#c9a84c` | Accents, titles, active states |
+| `--cinnabar` | `#e63946` | Alerts, errors, danger |
+| `--matrix-green` | `#00ff41` | Success, active connections |
+| `--void-purple` | `#6e40c9` | Secondary accents, links |
+| `--cyber-cyan` | `#00d4ff` | Info, hover states |
+| `--text-primary` | `#e8e6d9` | Main text |
+| `--text-muted` | `#6b6b7a` | Secondary text, labels |
+
+### Typography
+
+| Font | Usage |
+|------|-------|
+| **Cinzel** | Titles, headers, navigation |
+| **IM Fell English** | Body text (hermetic style) |
+| **JetBrains Mono** | Code, terminal, monospace |
+
+### CSS Variables
+
+```css
+:root {
+  /* Colors */
+  --cosmos-black: #0a0a0f;
+  --gold-hermetic: #c9a84c;
+  --cinnabar: #e63946;
+  --matrix-green: #00ff41;
+  --void-purple: #6e40c9;
+  --cyber-cyan: #00d4ff;
+  --text-primary: #e8e6d9;
+  --text-muted: #6b6b7a;
+
+  /* Sidebar */
+  --sidebar-bg: #0d0d12;
+  --sidebar-hover: #1a1a24;
+  --sidebar-active: #2a2a3a;
+
+  /* Cards */
+  --card-bg: #12121a;
+  --card-border: #2a2a3a;
+}
+```
+
+### Design Principles
+
+1. **Dark-first** — All interfaces use dark backgrounds for reduced eye strain
+2. **Gold accents** — Important elements highlighted with hermetic gold
+3. **Matrix green** — Security/success states use terminal green
+4. **Minimal chrome** — Focus on content, not decorative elements
+5. **Responsive** — All dashboards work on mobile and desktop
 
 ---
 
