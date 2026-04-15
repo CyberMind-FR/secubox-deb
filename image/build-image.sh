@@ -23,7 +23,7 @@ CONVERT_VDI=0         # Convertir en VDI pour VirtualBox
 USE_LOCAL_CACHE=0     # Utiliser cache APT local
 LOCAL_CACHE_PORT="3142"
 LOCAL_REPO_PORT="8080"
-SLIPSTREAM_DEBS=0     # Intégrer les .deb locaux dans l'image
+SLIPSTREAM_DEBS=1     # Intégrer les .deb locaux dans l'image (default: ON)
 
 # SecuBox versioning
 SECUBOX_VERSION="1.7.0"

@@ -6,6 +6,10 @@ Documentation=https://secubox.in/docs/kiosk
 After=multi-user.target
 After=systemd-user-sessions.service
 
+# CRITICAL: Wait for X11 driver auto-detection (VirtualBox VMSVGA, etc.)
+Wants=secubox-x11-setup.service
+After=secubox-x11-setup.service
+
 # Soft dependency on nginx (works without it)
 Wants=nginx.service
 After=nginx.service
