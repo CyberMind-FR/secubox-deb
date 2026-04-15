@@ -2788,3 +2788,70 @@ curl -sk https://localhost:8443/api/v1/hub/menu | jq '.total_modules'
 
 **Files Modified**:
 - `image/build-ebin-live-usb.sh` - Consistent slipstream with AMD64 build
+
+## EspressoBin Build Fix - $HOME Issue (2026-04-14)
+
+**Problem**: EspressoBin live USB build failed after step 3/7, jumping to cleanup. The slipstream step couldn't find packages.
+
+**Root Cause**: When running with `sudo`, `$HOME` becomes `/root` instead of `/home/reepost`. The script used `${HOME}/.cache/secubox/debs` which resolved to `/root/.cache/secubox/debs` (non-existent).
+
+**Solution**: Updated `build-ebin-live-usb.sh`:
+1. Added `SUDO_USER` detection to get original user's home directory
+2. Changed `ls` to `find` to avoid `set -e` failures when no files match
+
+```bash
+# Get original user's home when running with sudo
+if [[ -n "${SUDO_USER:-}" ]]; then
+    USER_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
+else
+    USER_HOME="$HOME"
+fi
+CACHE_DEBS="${USER_HOME}/.cache/secubox/debs"
+```
+
+**Files Modified**:
+- `image/build-ebin-live-usb.sh` - Fixed slipstream $HOME handling
+
+## Build Status (2026-04-14 18:20)
+
+- **AMD64 Live USB**: ✅ Complete (8GB image)
+  - Location: `output/secubox-live-amd64-bookworm.img`
+  - 126 packages slipstreamed
+
+- **EspressoBin Live USB**: 🔄 Building (ARM64/QEMU emulation)
+  - Build restarted with fixed script
+  - Progress: Debootstrap phase
+
+## Build Complete (2026-04-14 22:45)
+
+### AMD64 Live USB ✅
+- **Image**: `output/secubox-live-amd64-bookworm.img` (8.0 GB)
+- **SHA256**: Available at `.img.sha256`
+- All 126 SecuBox packages slipstreamed
+
+### EspressoBin V7 Live USB ✅
+- **Image**: `output/secubox-espressobin-v7-live-usb.img` (2.0 GB)
+- **SHA256**: Available at `.img.sha256`
+- All SecuBox packages slipstreamed
+- Includes secubox-flash-emmc tool
+
+### Fixes Applied:
+1. Fixed `$HOME` issue in EspressoBin build when running with sudo
+2. Changed `ls` to `find` to avoid `set -e` failures
+3. Added error handling for dpkg installation step
+4. Fixed grep in package count verification
+
+### How to Use:
+
+**AMD64 (x86_64):**
+```bash
+sudo dd if=output/secubox-live-amd64-bookworm.img of=/dev/sdX bs=4M status=progress
+```
+
+**EspressoBin V7:**
+```bash
+sudo dd if=output/secubox-espressobin-v7-live-usb.img of=/dev/sdX bs=4M status=progress
+# Boot from USB, then run:
+secubox-flash-emmc
+```
+
