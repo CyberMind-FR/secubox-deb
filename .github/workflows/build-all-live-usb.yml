@@ -134,9 +134,19 @@ jobs:
             --suite ${{ env.DEBIAN_SUITE }} \
             --out output/ \
             --slipstream
-          echo "=== Compressing for embedding ==="
-          gzip -k output/secubox-espressobin-v7-bookworm.img
-          ls -lh output/secubox-espressobin-v7-bookworm.img.gz
+          echo "=== Checking eMMC image for embedding ==="
+          # build-image.sh already compresses to .img.gz, just verify it exists
+          if [[ -f output/secubox-espressobin-v7-bookworm.img.gz ]]; then
+            ls -lh output/secubox-espressobin-v7-bookworm.img.gz
+          elif [[ -f output/secubox-espressobin-v7-bookworm.img ]]; then
+            echo "Compressing uncompressed image..."
+            gzip -k output/secubox-espressobin-v7-bookworm.img
+            ls -lh output/secubox-espressobin-v7-bookworm.img.gz
+          else
+            echo "ERROR: No eMMC image found!"
+            ls -la output/
+            exit 1
+          fi
         timeout-minutes: 60
 
       - name: Build ${{ matrix.platform }} Live USB
