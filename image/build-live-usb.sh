@@ -169,7 +169,7 @@ mkdir -p "${ROOTFS}"
 
 INCLUDE_PKGS="systemd,systemd-sysv,dbus,netplan.io,nftables,openssh-server,locales"
 INCLUDE_PKGS+=",python3,python3-pip,nginx,curl,wget,ca-certificates,gnupg,console-setup"
-INCLUDE_PKGS+=",iproute2,iputils-ping,ethtool,net-tools,wireguard-tools,isc-dhcp-client"
+INCLUDE_PKGS+=",iproute2,iputils-ping,iputils-arping,ethtool,net-tools,wireguard-tools,isc-dhcp-client"
 INCLUDE_PKGS+=",sudo,less,vim-tiny,logrotate,cron,rsync,jq,dnsmasq"
 INCLUDE_PKGS+=",linux-image-amd64,live-boot,live-boot-initramfs-tools,live-config,live-config-systemd"
 INCLUDE_PKGS+=",grub-efi-amd64,grub-pc-bin,efibootmgr,pciutils,usbutils,parted,dosfstools,lsb-release"
@@ -701,15 +701,49 @@ cat > "${ROOTFS}/usr/sbin/secubox-net-fallback" <<'FALLBACK'
 # SecuBox Network Fallback - retries DHCP, auto-discovers LAN subnet as fallback
 logger -t secubox-net "Network fallback starting..."
 
-# Common gateway IPs to probe (most common first)
-GATEWAYS="192.168.1.1 192.168.0.1 192.168.2.1 192.168.255.1 10.0.0.1 10.0.1.1 172.16.0.1"
+# Common gateway IPs to probe (most common first, including .254 variants)
+GATEWAYS="192.168.1.1 192.168.1.254 192.168.0.1 192.168.0.254 192.168.2.1 10.0.0.1 10.0.0.254"
+GATEWAYS+=" 10.0.1.1 10.1.1.1 172.16.0.1 172.16.1.1 192.168.10.1 192.168.100.1"
 # Fallback IP suffix to use (high number to avoid conflicts)
 FALLBACK_SUFFIX="250"
+
+# Try to discover gateway using ARP scan (if arping available)
+arp_discover() {
+    local iface="$1"
+    command -v arping &>/dev/null || return 1
+
+    # Scan common subnets for any responding device
+    for subnet in "192.168.1" "192.168.0" "10.0.0" "172.16.0"; do
+        # Quick arping to .1 and .254
+        for gw in "${subnet}.1" "${subnet}.254"; do
+            if arping -c 1 -w 1 -I "$iface" "$gw" &>/dev/null; then
+                echo "$gw"
+                return 0
+            fi
+        done
+    done
+    return 1
+}
 
 # Discover LAN subnet by probing common gateways
 discover_lan() {
     local iface="$1"
 
+    # First try ARP discovery (faster and more reliable)
+    local arp_gw
+    arp_gw=$(arp_discover "$iface" 2>/dev/null)
+    if [[ -n "$arp_gw" ]]; then
+        local subnet_base="${arp_gw%.*}"
+        local test_ip="${subnet_base}.${FALLBACK_SUFFIX}"
+        ip addr add "${test_ip}/24" dev "$iface" 2>/dev/null
+        ip route add default via "$arp_gw" dev "$iface" 2>/dev/null || true
+        echo "nameserver $arp_gw" > /etc/resolv.conf
+        echo "nameserver 8.8.8.8" >> /etc/resolv.conf
+        logger -t secubox-net "ARP discovered gateway $arp_gw, configured ${test_ip}/24"
+        return 0
+    fi
+
+    # Fall back to gateway probing
     for gw in $GATEWAYS; do
         # Extract subnet base (e.g., 192.168.1)
         local subnet_base="${gw%.*}"
