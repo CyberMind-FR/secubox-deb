@@ -187,13 +187,22 @@ configure_x11() {
 
     # Check if secubox-x11-setup.service already created the config
     if [[ -f /etc/X11/xorg.conf.d/10-secubox-driver.conf ]]; then
-        log "X11 config already exists (from secubox-x11-setup.service)"
-        # Just ensure Xwrapper is configured
-        cat > /etc/X11/Xwrapper.config <<'XWRAP'
+        # Validate the config file syntax - Xorg -validate would be ideal but not always available
+        # Simple check: ensure it has proper Section/EndSection pairs
+        if grep -q "Parse error\|syntax error" /var/log/Xorg.0.log 2>/dev/null || \
+           ! grep -q "EndSection" /etc/X11/xorg.conf.d/10-secubox-driver.conf 2>/dev/null; then
+            log "WARNING: X11 config has errors - removing broken config"
+            rm -f /etc/X11/xorg.conf.d/10-secubox-driver.conf
+            rm -f /etc/X11/xorg.conf.d/10-*.conf
+        else
+            log "X11 config already exists (from secubox-x11-setup.service)"
+            # Just ensure Xwrapper is configured
+            cat > /etc/X11/Xwrapper.config <<'XWRAP'
 allowed_users=anybody
 needs_root_rights=yes
 XWRAP
-        return 0
+            return 0
+        fi
     fi
 
     log "No X11 config found - creating one..."
@@ -265,16 +274,40 @@ XWRAP
     rm -f /etc/X11/xorg.conf /etc/X11/xorg.conf.d/*.conf
     mkdir -p /etc/X11/xorg.conf.d
 
-    # BARE METAL: Skip X11 config entirely - auto-detection works best
-    # Intel/AMD/NVIDIA drivers work perfectly without explicit config
+    # BARE METAL: Check if we have working DRM/GPU before relying on auto-detection
     if [[ "$vm_type" == "none" ]]; then
-        log "Bare metal detected - skipping X11 config (auto-detection is best)"
-        # Just ensure Xwrapper is configured
-        cat > /etc/X11/Xwrapper.config <<'XWRAP'
+        log "Bare metal detected - checking GPU status..."
+
+        # Try to load common GPU drivers if not already loaded
+        modprobe i915 2>/dev/null || true
+        modprobe amdgpu 2>/dev/null || true
+        modprobe radeon 2>/dev/null || true
+        modprobe nouveau 2>/dev/null || true
+        sleep 1
+
+        # Check if we have a working DRM device
+        if ls /dev/dri/card* &>/dev/null; then
+            log "DRM device found - auto-detection should work"
+            driver="modesetting"
+        elif [[ -e /dev/fb0 ]]; then
+            log "No DRM but framebuffer exists - using fbdev"
+            driver="fbdev"
+        else
+            log "No DRM/FB - trying VESA safe mode"
+            driver="vesa"
+        fi
+
+        # Only skip config if DRM is working
+        if ls /dev/dri/card* &>/dev/null; then
+            log "DRM device found - skipping X11 config (auto-detection)"
+            cat > /etc/X11/Xwrapper.config <<'XWRAP'
 allowed_users=anybody
 needs_root_rights=yes
 XWRAP
-        return 0
+            return 0
+        fi
+        # Otherwise fall through to create explicit config
+        log "Creating explicit X11 config for bare metal (driver: $driver)"
     fi
 
     # VMs only: Write X11 config with explicit driver
@@ -298,7 +331,11 @@ Section "Screen"
     DefaultDepth 24
     SubSection "Display"
         Depth 24
-        Modes "1920x1080" "1280x720" "1024x768" "800x600"
+        Modes "1920x1080" "1280x720" "1024x768" "800x600" "640x480"
+    EndSubSection
+    SubSection "Display"
+        Depth 16
+        Modes "1024x768" "800x600" "640x480"
     EndSubSection
 EndSection
 

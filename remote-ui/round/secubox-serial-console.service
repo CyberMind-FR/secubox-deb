@@ -1,0 +1,54 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# SecuBox Remote UI — secubox-serial-console.service
+# Service systemd pour la console série sur ttyGS0 (CDC-ACM côté gadget)
+#
+# Permet l'accès console via USB sans réseau (rescue, debug, config initiale)
+#
+# CyberMind — https://cybermind.fr
+# Author: Gérald Kerma <gandalf@gk2.net>
+# License: Proprietary / ANSSI CSPN candidate
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[Unit]
+Description=SecuBox Console série USB (ttyGS0)
+Documentation=https://github.com/CyberMind-FR/secubox-deb
+
+# Dépendances
+BindsTo=secubox-otg-gadget.service
+After=secubox-otg-gadget.service
+After=systemd-user-sessions.service
+After=plymouth-quit-wait.service
+After=rc-local.service
+
+# Condition : le device ttyGS0 doit exister
+ConditionPathExists=/dev/ttyGS0
+
+[Service]
+Type=idle
+
+# Getty sur ttyGS0 @ 115200 bauds
+ExecStart=-/sbin/agetty -L 115200 ttyGS0 vt100
+
+# Restart automatique si déconnexion
+Restart=always
+RestartSec=2
+
+# TTY settings
+TTYPath=/dev/ttyGS0
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+
+# Environnement
+Environment=TERM=vt100
+StandardInput=tty
+StandardOutput=tty
+
+# Sécurité
+UtmpIdentifier=ttyGS0
+KillMode=process
+IgnoreSIGPIPE=no
+SendSIGHUP=yes
+
+[Install]
+WantedBy=multi-user.target

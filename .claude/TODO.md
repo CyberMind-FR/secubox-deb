@@ -237,6 +237,16 @@ Advanced security features:
 
 ## 🔄 PHASE 11 — Live USB Enhancements (v1.7.0)
 
+### Remote UI / HyperPixel 2.1 Round
+- [x] **P11-R01** USB OTG composite gadget (ECM + ACM)
+- [x] **P11-R02** TransportManager with OTG/WiFi failover
+- [x] **P11-R03** install_zerow.sh with safe device check
+- [x] **P11-R04** Fix vc4-kms-v3d conflict with HyperPixel
+- [x] **P11-R05** Bookworm userconf file for pi:raspberry
+- [x] **P11-R06** usb0-up.sh bypass NetworkManager
+- [ ] **P11-R07** Test HyperPixel display on real hardware
+- [ ] **P11-R08** Deploy dashboard and verify metrics display
+
 ### Kiosk Mode
 - [ ] **P11-01** Display SecuBox version in kiosk mode header/footer
 - [ ] **P11-02** Show current authentication mode (ZKP/standard) in kiosk UI

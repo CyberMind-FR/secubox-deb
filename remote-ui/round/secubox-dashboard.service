@@ -1,0 +1,16 @@
+[Unit]
+Description=SecuBox Round Dashboard
+Documentation=https://github.com/CyberMind-FR/secubox-deb
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /home/pi/secubox_dashboard.py
+Restart=always
+RestartSec=5
+User=root
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

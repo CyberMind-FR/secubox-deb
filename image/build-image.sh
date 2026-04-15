@@ -297,7 +297,7 @@ cat > "${ROOTFS}/etc/systemd/network/10-dummy0.network" <<EOF
 Name=dummy0
 
 [Network]
-Address=192.168.255.1/24
+Address=10.55.255.1/24
 EOF
 
 # Network fallback script - DHCP with smart auto-IP collision avoidance
@@ -308,8 +308,8 @@ cat > "${ROOTFS}/usr/sbin/secubox-net-fallback" <<'FALLBACK'
 logger -t secubox-net "Network fallback starting..."
 
 # Fallback network (SecuBox default when no DHCP)
-FALLBACK_NETWORK="192.168.255"
-FALLBACK_GW="192.168.255.1"
+FALLBACK_NETWORK="10.55.255"
+FALLBACK_GW="10.55.255.1"
 # IP range for auto-assignment (avoid .1 gateway and .255 broadcast)
 IP_START=100
 IP_END=250
@@ -384,7 +384,7 @@ announce_ip() {
 }
 
 # Common gateway IPs to probe for existing networks
-GATEWAYS="192.168.1.1 192.168.0.1 192.168.2.1 192.168.255.1 10.0.0.1 10.0.1.1 172.16.0.1"
+GATEWAYS="192.168.1.1 192.168.0.1 192.168.2.1 10.55.255.1 10.0.0.1 10.0.1.1 172.16.0.1"
 
 discover_lan() {
     local iface="$1"

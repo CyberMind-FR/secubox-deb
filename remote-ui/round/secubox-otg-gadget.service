@@ -1,0 +1,52 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# SecuBox Remote UI — secubox-otg-gadget.service
+# Service systemd pour le gadget USB composé (ECM + ACM) sur RPi Zero W
+#
+# CyberMind — https://cybermind.fr
+# Author: Gérald Kerma <gandalf@gk2.net>
+# License: Proprietary / ANSSI CSPN candidate
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[Unit]
+Description=SecuBox OTG Gadget composé (ECM + ACM)
+Documentation=https://github.com/CyberMind-FR/secubox-deb
+
+# Dépendances
+After=sys-kernel-config.mount
+After=systemd-modules-load.service
+Before=network-pre.target
+Wants=network-pre.target
+
+# Conditions : seulement sur un périphérique avec UDC (RPi Zero W)
+ConditionPathIsDirectory=/sys/class/udc
+ConditionPathExists=/sys/kernel/config
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+
+# Chargement des modules nécessaires
+ExecStartPre=/sbin/modprobe libcomposite
+ExecStartPre=/sbin/modprobe usb_f_ecm
+ExecStartPre=/sbin/modprobe usb_f_acm
+
+# Démarrage du gadget
+ExecStart=/usr/local/sbin/secubox-otg-gadget.sh start
+
+# Arrêt propre
+ExecStop=/usr/local/sbin/secubox-otg-gadget.sh stop
+
+# Reload
+ExecReload=/usr/local/sbin/secubox-otg-gadget.sh reload
+
+# Environnement
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# Sécurité (limité car besoin d'accès configfs)
+ProtectSystem=false
+ProtectHome=true
+NoNewPrivileges=false
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

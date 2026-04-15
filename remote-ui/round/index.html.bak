@@ -1,0 +1,1179 @@
+<!DOCTYPE html>
+<!--
+SecuBox Remote UI — Round Edition
+Dashboard kiosk pour HyperPixel 2.1 Round Touch (480×480 px)
+RPi Zero W satellite — consomme l'API REST SecuBox-Deb via WiFi
+
+CyberMind — https://cybermind.fr
+Author: Gérald Kerma <gandalf@gk2.net>
+License: Proprietary / ANSSI CSPN candidate
+-->
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=480, height=480, user-scalable=no">
+    <meta name="theme-color" content="#080808">
+    <title>SecuBox Remote UI</title>
+    <style>
+        /* ═══════════════════════════════════════════════════════════
+           SecuBox Remote UI — Round Edition CSS
+           HyperPixel 2.1 Round Touch 480×480 px
+           ═══════════════════════════════════════════════════════════ */
+
+        @font-face {
+            font-family: 'JetBrains Mono';
+            src: local('JetBrains Mono'), local('Fira Mono'), local('monospace');
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        html, body {
+            width: 480px;
+            height: 480px;
+            overflow: hidden;
+            background: #080808;
+            font-family: 'JetBrains Mono', 'Fira Mono', monospace;
+            color: #e0e0e0;
+        }
+
+        /* Container principal clipé en cercle */
+        #container {
+            width: 480px;
+            height: 480px;
+            border-radius: 50%;
+            overflow: hidden;
+            position: relative;
+            background: radial-gradient(circle at center, #101010 0%, #080808 100%);
+        }
+
+        /* Canvas SVG pour les anneaux */
+        #rings-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 480px;
+            height: 480px;
+        }
+
+        /* Zone centrale (horloge + info) */
+        #center-zone {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 10;
+        }
+
+        #clock {
+            font-size: 48px;
+            font-weight: bold;
+            color: #ffffff;
+            text-shadow: 0 0 10px rgba(255,255,255,0.5);
+            letter-spacing: 2px;
+        }
+
+        #date {
+            font-size: 14px;
+            color: #888;
+            margin-top: 4px;
+        }
+
+        #hostname {
+            font-size: 12px;
+            color: #666;
+            margin-top: 8px;
+        }
+
+        #uptime {
+            font-size: 11px;
+            color: #555;
+        }
+
+        /* Barre de température */
+        #temp-bar {
+            position: absolute;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 120px;
+            height: 6px;
+            background: #222;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        #temp-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #3DE6E6, #A8E63D, #FFD93D, #FF6B35);
+            transition: width 0.5s ease;
+        }
+
+        #temp-value {
+            position: absolute;
+            bottom: 90px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 11px;
+            color: #888;
+        }
+
+        /* Bande d'alerte */
+        #alert-band {
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 12px;
+            font-weight: bold;
+            padding: 4px 16px;
+            border-radius: 12px;
+            background: rgba(0,0,0,0.6);
+            white-space: nowrap;
+        }
+
+        #alert-band.nominal { color: #A8E63D; border: 1px solid #A8E63D; }
+        #alert-band.warn { color: #FFD93D; border: 1px solid #FFD93D; }
+        #alert-band.crit { color: #FF6B35; border: 1px solid #FF6B35; animation: pulse-alert 1s infinite; }
+
+        @keyframes pulse-alert {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Pods métriques (tap zones) */
+        .metric-pod {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: opacity 0.15s ease;
+            z-index: 20;
+        }
+
+        .metric-pod:active {
+            opacity: 0.4;
+        }
+
+        .metric-pod .value {
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .metric-pod .label {
+            font-size: 8px;
+            color: #666;
+            text-transform: uppercase;
+        }
+
+        /* Positionnement des pods sur le cercle */
+        #pod-cpu  { top: 35px;  left: 215px; color: #FF6B35; }
+        #pod-mem  { top: 100px; left: 380px; color: #A8E63D; }
+        #pod-disk { top: 280px; left: 400px; color: #3DE6E6; }
+        #pod-wifi { top: 360px; left: 280px; color: #C97EFF; }
+        #pod-load { top: 280px; left: 30px;  color: #FFD93D; }
+
+        /* Dots de présence */
+        #presence-dots {
+            position: absolute;
+            bottom: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 8px;
+        }
+
+        .presence-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #333;
+            transition: background 0.3s ease;
+        }
+
+        .presence-dot.ok { background: #A8E63D; box-shadow: 0 0 6px #A8E63D; }
+        .presence-dot.warn { background: #FFD93D; }
+        .presence-dot.error { background: #FF6B35; }
+
+        /* Badge JWT */
+        #jwt-badge {
+            position: absolute;
+            top: 20px;
+            right: 60px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #FF6B35;
+            transition: background 0.3s ease;
+        }
+
+        #jwt-badge.valid { background: #A8E63D; box-shadow: 0 0 8px #A8E63D; }
+
+        /* Badge Transport (OTG/WiFi indicator) */
+        #transport-badge {
+            position: absolute;
+            top: 20px;
+            left: 60px;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 9px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            background: #333;
+            color: #888;
+            transition: all 0.3s ease;
+        }
+
+        #transport-badge.otg {
+            background: #0A5840;
+            color: #A8E63D;
+            box-shadow: 0 0 8px rgba(10, 88, 64, 0.5);
+        }
+
+        #transport-badge.wifi {
+            background: #104A88;
+            color: #3DE6E6;
+            box-shadow: 0 0 8px rgba(16, 74, 136, 0.5);
+        }
+
+        #transport-badge.sim {
+            background: #333;
+            color: #666;
+        }
+
+        /* Modules actifs (pastilles) */
+        #modules-ring {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 6px;
+        }
+
+        .module-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            opacity: 0.3;
+            transition: opacity 0.3s ease;
+        }
+
+        .module-dot.active { opacity: 1; box-shadow: 0 0 6px currentColor; }
+
+        .module-dot[data-module="AUTH"] { background: #C04E24; color: #C04E24; }
+        .module-dot[data-module="WALL"] { background: #9A6010; color: #9A6010; }
+        .module-dot[data-module="BOOT"] { background: #803018; color: #803018; }
+        .module-dot[data-module="MIND"] { background: #3D35A0; color: #3D35A0; }
+        .module-dot[data-module="ROOT"] { background: #0A5840; color: #0A5840; }
+        .module-dot[data-module="MESH"] { background: #104A88; color: #104A88; }
+
+        /* Splash auth */
+        #auth-splash {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #080808;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            transition: opacity 0.5s ease;
+        }
+
+        #auth-splash.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid #333;
+            border-top-color: #A8E63D;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        #auth-message {
+            margin-top: 16px;
+            font-size: 12px;
+            color: #666;
+        }
+
+        /* Popup détail métrique */
+        #detail-popup {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.9);
+            border: 1px solid #333;
+            border-radius: 12px;
+            padding: 16px 24px;
+            text-align: center;
+            z-index: 50;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+        }
+
+        #detail-popup.visible {
+            opacity: 1;
+        }
+
+        #detail-popup .title {
+            font-size: 14px;
+            color: #888;
+            margin-bottom: 8px;
+        }
+
+        #detail-popup .value {
+            font-size: 32px;
+            font-weight: bold;
+        }
+
+        #detail-popup .extra {
+            font-size: 11px;
+            color: #666;
+            margin-top: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <!-- Anneaux SVG -->
+        <svg id="rings-canvas" viewBox="0 0 480 480">
+            <defs>
+                <filter id="glow">
+                    <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+                    <feMerge>
+                        <feMergeNode in="coloredBlur"/>
+                        <feMergeNode in="SourceGraphic"/>
+                    </feMerge>
+                </filter>
+            </defs>
+            <!-- Fond des anneaux (gris) -->
+            <circle cx="240" cy="240" r="213" fill="none" stroke="#1a1a1a" stroke-width="8"/>
+            <circle cx="240" cy="240" r="200" fill="none" stroke="#1a1a1a" stroke-width="8"/>
+            <circle cx="240" cy="240" r="187" fill="none" stroke="#1a1a1a" stroke-width="8"/>
+            <circle cx="240" cy="240" r="174" fill="none" stroke="#1a1a1a" stroke-width="8"/>
+            <circle cx="240" cy="240" r="161" fill="none" stroke="#1a1a1a" stroke-width="8"/>
+            <!-- Arcs de progression -->
+            <circle id="ring-cpu"  cx="240" cy="240" r="213" fill="none" stroke="#FF6B35" stroke-width="8" stroke-linecap="round" stroke-dasharray="0 1340" transform="rotate(-90 240 240)" filter="url(#glow)"/>
+            <circle id="ring-mem"  cx="240" cy="240" r="200" fill="none" stroke="#A8E63D" stroke-width="8" stroke-linecap="round" stroke-dasharray="0 1257" transform="rotate(-90 240 240)" filter="url(#glow)"/>
+            <circle id="ring-disk" cx="240" cy="240" r="187" fill="none" stroke="#3DE6E6" stroke-width="8" stroke-linecap="round" stroke-dasharray="0 1175" transform="rotate(-90 240 240)" filter="url(#glow)"/>
+            <circle id="ring-wifi" cx="240" cy="240" r="174" fill="none" stroke="#C97EFF" stroke-width="8" stroke-linecap="round" stroke-dasharray="0 1094" transform="rotate(-90 240 240)" filter="url(#glow)"/>
+            <circle id="ring-load" cx="240" cy="240" r="161" fill="none" stroke="#FFD93D" stroke-width="8" stroke-linecap="round" stroke-dasharray="0 1012" transform="rotate(-90 240 240)" filter="url(#glow)"/>
+        </svg>
+
+        <!-- Modules actifs -->
+        <div id="modules-ring">
+            <div class="module-dot" data-module="AUTH" title="AUTH"></div>
+            <div class="module-dot" data-module="WALL" title="WALL"></div>
+            <div class="module-dot" data-module="BOOT" title="BOOT"></div>
+            <div class="module-dot" data-module="MIND" title="MIND"></div>
+            <div class="module-dot" data-module="ROOT" title="ROOT"></div>
+            <div class="module-dot" data-module="MESH" title="MESH"></div>
+        </div>
+
+        <!-- Badge JWT -->
+        <div id="jwt-badge" title="JWT Status"></div>
+
+        <!-- Badge Transport (OTG/WiFi) -->
+        <div id="transport-badge" title="Transport">---</div>
+
+        <!-- Zone centrale -->
+        <div id="center-zone">
+            <div id="clock">--:--:--</div>
+            <div id="date">--/--/----</div>
+            <div id="hostname">secubox</div>
+            <div id="uptime">uptime: --h--</div>
+        </div>
+
+        <!-- Barre température -->
+        <div id="temp-value">--°C</div>
+        <div id="temp-bar"><div id="temp-fill"></div></div>
+
+        <!-- Bande d'alerte -->
+        <div id="alert-band" class="nominal">● SYSTEM NOMINAL</div>
+
+        <!-- Pods métriques -->
+        <div class="metric-pod" id="pod-cpu" ontouchstart="showDetail('cpu')">
+            <span class="value" id="val-cpu">--%</span>
+            <span class="label">CPU</span>
+        </div>
+        <div class="metric-pod" id="pod-mem" ontouchstart="showDetail('mem')">
+            <span class="value" id="val-mem">--%</span>
+            <span class="label">MEM</span>
+        </div>
+        <div class="metric-pod" id="pod-disk" ontouchstart="showDetail('disk')">
+            <span class="value" id="val-disk">--%</span>
+            <span class="label">DISK</span>
+        </div>
+        <div class="metric-pod" id="pod-wifi" ontouchstart="showDetail('wifi')">
+            <span class="value" id="val-wifi">--</span>
+            <span class="label">WiFi</span>
+        </div>
+        <div class="metric-pod" id="pod-load" ontouchstart="showDetail('load')">
+            <span class="value" id="val-load">--</span>
+            <span class="label">LOAD</span>
+        </div>
+
+        <!-- Dots de présence -->
+        <div id="presence-dots">
+            <div class="presence-dot" id="dot-api" title="API"></div>
+            <div class="presence-dot" id="dot-wifi" title="WiFi"></div>
+            <div class="presence-dot" id="dot-cpu" title="CPU"></div>
+            <div class="presence-dot" id="dot-mem" title="MEM"></div>
+            <div class="presence-dot" id="dot-disk" title="DISK"></div>
+        </div>
+
+        <!-- Popup détail -->
+        <div id="detail-popup">
+            <div class="title">--</div>
+            <div class="value">--</div>
+            <div class="extra">--</div>
+        </div>
+
+        <!-- Splash auth -->
+        <div id="auth-splash">
+            <div class="spinner"></div>
+            <div id="auth-message">Connexion à SecuBox...</div>
+        </div>
+    </div>
+
+    <script>
+    /* ═══════════════════════════════════════════════════════════
+       SecuBox Remote UI — Round Edition JavaScript
+       Dashboard kiosk HyperPixel 2.1 Round Touch
+       ═══════════════════════════════════════════════════════════ */
+
+    // ══════════════════════════════════════════════════════════════
+    // CONFIGURATION — Modifier selon l'environnement
+    // ══════════════════════════════════════════════════════════════
+    const CFG = {
+        // Transport OTG prioritaire (USB CDC-ECM @ 10.55.0.0/30)
+        API_OTG_BASE: 'http://10.55.0.1:8000',
+
+        // Transport WiFi fallback
+        API_WIFI_BASE: 'http://192.168.1.1:8000',
+
+        // Endpoints
+        ENDPOINT_METRICS: '/api/v1/system/metrics',
+        ENDPOINT_LOGIN: '/api/v1/auth/login',
+        ENDPOINT_MODULES: '/api/v1/system/metrics/modules',
+        ENDPOINT_ALERTS: '/api/v1/system/metrics/alerts',
+
+        // Credentials
+        LOGIN_USER: 'dashboard',
+        LOGIN_PASS: 'secubox2026',
+
+        // Timing
+        REFRESH_INTERVAL: 2000,              // ms
+        JWT_RENEW_BEFORE_MS: 30000,          // 30s avant expiry
+        TRANSPORT_PROBE_INTERVAL: 30000,     // Re-probe OTG toutes les 30s
+        OTG_TIMEOUT_MS: 2000,                // Timeout connexion OTG
+        WIFI_TIMEOUT_MS: 3000,               // Timeout connexion WiFi
+        OTG_FAILOVER_THRESHOLD: 3,           // Timeouts avant bascule OTG→WiFi
+
+        // Fallback
+        HOSTNAME_FALLBACK: 'secubox',
+        SIMULATE: false,                     // Mode simulation si API absente
+
+        // Couleurs transport
+        COLOR_OTG: '#0A5840',                // ROOT green
+        COLOR_WIFI: '#104A88',               // MESH blue
+        COLOR_SIM: '#444444'                 // Gray
+    };
+
+    // ══════════════════════════════════════════════════════════════
+    // TRANSPORT MANAGER — Gestion OTG / WiFi avec failover automatique
+    // ══════════════════════════════════════════════════════════════
+
+    class TransportManager {
+        constructor() {
+            this.activeTransport = 'none';  // 'otg' | 'wifi' | 'sim' | 'none'
+            this.otgTimeoutCount = 0;
+            this.lastProbe = 0;
+            this.tokens = {
+                otg: { jwt: null, expiry: 0 },
+                wifi: { jwt: null, expiry: 0 }
+            };
+        }
+
+        get baseUrl() {
+            switch (this.activeTransport) {
+                case 'otg': return CFG.API_OTG_BASE;
+                case 'wifi': return CFG.API_WIFI_BASE;
+                default: return CFG.API_WIFI_BASE;
+            }
+        }
+
+        get currentToken() {
+            const t = this.tokens[this.activeTransport];
+            return t ? t.jwt : null;
+        }
+
+        setToken(transport, jwt, expiry) {
+            if (this.tokens[transport]) {
+                this.tokens[transport].jwt = jwt;
+                this.tokens[transport].expiry = expiry;
+            }
+        }
+
+        isTokenValid(transport) {
+            const t = this.tokens[transport];
+            if (!t || !t.jwt) return false;
+            return Date.now() < t.expiry - CFG.JWT_RENEW_BEFORE_MS;
+        }
+
+        async probe() {
+            console.log('[Transport] Probe OTG...');
+
+            // 1. Tenter OTG
+            try {
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), CFG.OTG_TIMEOUT_MS);
+
+                const response = await fetch(CFG.API_OTG_BASE + '/api/v1/system/health', {
+                    signal: controller.signal
+                });
+                clearTimeout(timeout);
+
+                if (response.ok) {
+                    console.log('[Transport] OTG disponible');
+                    this.activeTransport = 'otg';
+                    this.otgTimeoutCount = 0;
+                    return 'otg';
+                }
+            } catch (e) {
+                console.log('[Transport] OTG timeout/erreur:', e.message);
+            }
+
+            // 2. Tenter WiFi
+            console.log('[Transport] Probe WiFi...');
+            try {
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), CFG.WIFI_TIMEOUT_MS);
+
+                const response = await fetch(CFG.API_WIFI_BASE + '/api/v1/system/health', {
+                    signal: controller.signal
+                });
+                clearTimeout(timeout);
+
+                if (response.ok) {
+                    console.log('[Transport] WiFi disponible');
+                    this.activeTransport = 'wifi';
+                    return 'wifi';
+                }
+            } catch (e) {
+                console.log('[Transport] WiFi timeout/erreur:', e.message);
+            }
+
+            // 3. Simulation si configuré
+            if (CFG.SIMULATE) {
+                console.log('[Transport] Mode simulation');
+                this.activeTransport = 'sim';
+                return 'sim';
+            }
+
+            this.activeTransport = 'none';
+            return 'none';
+        }
+
+        async fetch(endpoint, options = {}) {
+            if (this.activeTransport === 'sim' || this.activeTransport === 'none') {
+                return null;
+            }
+
+            const url = this.baseUrl + endpoint;
+            const token = this.currentToken;
+
+            try {
+                const controller = new AbortController();
+                const timeoutMs = this.activeTransport === 'otg' ? CFG.OTG_TIMEOUT_MS : CFG.WIFI_TIMEOUT_MS;
+                const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+                const response = await fetch(url, {
+                    ...options,
+                    signal: controller.signal,
+                    headers: {
+                        ...options.headers,
+                        'Authorization': token ? `Bearer ${token}` : '',
+                        'Accept': 'application/json'
+                    }
+                });
+                clearTimeout(timeout);
+
+                if (response.status === 401) {
+                    // Token expiré, re-login
+                    return null;
+                }
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                // Reset timeout count on success
+                if (this.activeTransport === 'otg') {
+                    this.otgTimeoutCount = 0;
+                }
+
+                return await response.json();
+
+            } catch (e) {
+                console.error('[Transport] Fetch error:', e.message);
+
+                // Comptabiliser les timeouts OTG
+                if (this.activeTransport === 'otg') {
+                    this.otgTimeoutCount++;
+                    console.log(`[Transport] OTG timeout count: ${this.otgTimeoutCount}/${CFG.OTG_FAILOVER_THRESHOLD}`);
+
+                    if (this.otgTimeoutCount >= CFG.OTG_FAILOVER_THRESHOLD) {
+                        console.log('[Transport] Failover OTG → WiFi');
+                        this.activeTransport = 'wifi';
+                        this.otgTimeoutCount = 0;
+                        updateTransportBadge();
+                    }
+                }
+
+                return null;
+            }
+        }
+
+        shouldReprobe() {
+            return Date.now() - this.lastProbe > CFG.TRANSPORT_PROBE_INTERVAL;
+        }
+
+        async reprobeIfNeeded() {
+            if (!this.shouldReprobe()) return;
+
+            this.lastProbe = Date.now();
+            const oldTransport = this.activeTransport;
+            await this.probe();
+
+            if (this.activeTransport !== oldTransport) {
+                console.log(`[Transport] Changement: ${oldTransport} → ${this.activeTransport}`);
+                updateTransportBadge();
+            }
+        }
+    }
+
+    const transport = new TransportManager();
+
+    // ══════════════════════════════════════════════════════════════
+    // ÉTAT GLOBAL
+    // ══════════════════════════════════════════════════════════════
+    let metrics = null;
+    let modules = {};
+    let alerts = { global_level: 'nominal', alerts: [] };
+    let apiOnline = false;
+    let simOffset = 0;
+
+    // ══════════════════════════════════════════════════════════════
+    // TRANSPORT BADGE UI
+    // ══════════════════════════════════════════════════════════════
+
+    function updateTransportBadge() {
+        const badge = document.getElementById('transport-badge');
+        if (!badge) return;
+
+        // Reset classes
+        badge.classList.remove('otg', 'wifi', 'sim');
+
+        switch (transport.activeTransport) {
+            case 'otg':
+                badge.textContent = 'OTG';
+                badge.classList.add('otg');
+                badge.title = 'USB CDC-ECM (10.55.0.0/30)';
+                break;
+            case 'wifi':
+                badge.textContent = 'WiFi';
+                badge.classList.add('wifi');
+                badge.title = 'WiFi LAN';
+                break;
+            case 'sim':
+                badge.textContent = 'SIM';
+                badge.classList.add('sim');
+                badge.title = 'Mode simulation';
+                break;
+            default:
+                badge.textContent = '---';
+                badge.title = 'Aucun transport';
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // AUTHENTIFICATION JWT
+    // ══════════════════════════════════════════════════════════════
+
+    function decodeJwtPayload(token) {
+        try {
+            const parts = token.split('.');
+            if (parts.length !== 3) return null;
+            const payload = atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'));
+            return JSON.parse(payload);
+        } catch (e) {
+            console.error('Erreur décodage JWT:', e);
+            return null;
+        }
+    }
+
+    async function jwtLogin() {
+        const splash = document.getElementById('auth-splash');
+        const msg = document.getElementById('auth-message');
+
+        // Skip if simulation mode
+        if (transport.activeTransport === 'sim' || transport.activeTransport === 'none') {
+            if (CFG.SIMULATE) {
+                msg.textContent = 'Mode simulation...';
+                apiOnline = true;
+                setTimeout(() => splash.classList.add('hidden'), 1000);
+                return true;
+            }
+            msg.textContent = 'Aucun transport disponible';
+            return false;
+        }
+
+        try {
+            msg.textContent = `Auth (${transport.activeTransport.toUpperCase()})...`;
+
+            const controller = new AbortController();
+            const timeoutMs = transport.activeTransport === 'otg' ? CFG.OTG_TIMEOUT_MS : CFG.WIFI_TIMEOUT_MS;
+            const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+            const response = await fetch(transport.baseUrl + CFG.ENDPOINT_LOGIN, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    username: CFG.LOGIN_USER,
+                    password: CFG.LOGIN_PASS
+                }),
+                signal: controller.signal
+            });
+            clearTimeout(timeout);
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
+            const jwt = data.access_token;
+
+            // Décoder l'expiration
+            const payload = decodeJwtPayload(jwt);
+            let expiry;
+            if (payload && payload.exp) {
+                expiry = payload.exp * 1000;
+            } else {
+                // Fallback: 24h
+                expiry = Date.now() + 86400000;
+            }
+
+            // Stocker le token dans TransportManager
+            transport.setToken(transport.activeTransport, jwt, expiry);
+
+            document.getElementById('jwt-badge').classList.add('valid');
+            apiOnline = true;
+            updatePresenceDot('api', 'ok');
+
+            msg.textContent = 'Connecté !';
+            setTimeout(() => splash.classList.add('hidden'), 500);
+
+            return true;
+        } catch (e) {
+            console.error('Erreur login:', e);
+            msg.textContent = CFG.SIMULATE ? 'Mode simulation...' : 'Connexion échouée';
+            document.getElementById('jwt-badge').classList.remove('valid');
+            apiOnline = false;
+            updatePresenceDot('api', 'error');
+
+            if (CFG.SIMULATE) {
+                transport.activeTransport = 'sim';
+                updateTransportBadge();
+                setTimeout(() => splash.classList.add('hidden'), 1000);
+                return true;
+            }
+
+            return false;
+        }
+    }
+
+    async function jwtEnsureValid() {
+        // Vérifier si le token du transport actuel est valide
+        if (!transport.isTokenValid(transport.activeTransport)) {
+            console.log('Renouvellement JWT...');
+            return await jwtLogin();
+        }
+        return transport.currentToken !== null;
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // FETCH API (via TransportManager)
+    // ══════════════════════════════════════════════════════════════
+
+    async function fetchApi(endpoint) {
+        // Mode simulation
+        if (transport.activeTransport === 'sim') {
+            return null;  // Caller will use simulate*() functions
+        }
+
+        if (!transport.currentToken && !CFG.SIMULATE) {
+            return null;
+        }
+
+        const result = await transport.fetch(endpoint);
+
+        if (result === null) {
+            // Could be 401 or network error
+            if (transport.activeTransport !== 'sim') {
+                apiOnline = false;
+                updatePresenceDot('api', 'error');
+
+                // Try re-login if we have a transport
+                if (transport.activeTransport !== 'none') {
+                    await jwtLogin();
+                }
+            }
+            return null;
+        }
+
+        apiOnline = true;
+        updatePresenceDot('api', 'ok');
+        return result;
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // SIMULATION (mode hors-ligne)
+    // ══════════════════════════════════════════════════════════════
+
+    function simulateMetrics() {
+        simOffset += 0.1;
+        const base = Math.sin(simOffset) * 10;
+
+        return {
+            cpu_percent: Math.max(5, Math.min(95, 35 + base + Math.random() * 15)),
+            mem_percent: Math.max(20, Math.min(90, 55 + base * 0.5 + Math.random() * 10)),
+            disk_percent: 42 + Math.random() * 2,
+            wifi_rssi: -55 - Math.floor(Math.random() * 20),
+            load_avg_1: 0.3 + Math.random() * 0.5,
+            cpu_temp: 45 + base * 0.3 + Math.random() * 5,
+            uptime_seconds: 86400 + Math.floor(Date.now() / 1000) % 86400,
+            hostname: CFG.HOSTNAME_FALLBACK,
+            secubox_version: '2.0.0-sim',
+            modules_active: ['AUTH', 'WALL', 'BOOT', 'ROOT', 'MESH']
+        };
+    }
+
+    function simulateModules() {
+        return {
+            modules: {
+                AUTH: 'active',
+                WALL: 'active',
+                BOOT: 'active',
+                MIND: 'inactive',
+                ROOT: 'active',
+                MESH: 'active'
+            },
+            active_count: 5
+        };
+    }
+
+    function simulateAlerts() {
+        const cpu = metrics ? metrics.cpu_percent : 35;
+        if (cpu > 85) {
+            return {
+                global_level: 'crit',
+                alerts: [{ metric: 'cpu', level: 'crit', value: cpu, message: `CPU ${cpu.toFixed(0)}%` }]
+            };
+        } else if (cpu > 70) {
+            return {
+                global_level: 'warn',
+                alerts: [{ metric: 'cpu', level: 'warn', value: cpu, message: `CPU ${cpu.toFixed(0)}%` }]
+            };
+        }
+        return { global_level: 'nominal', alerts: [] };
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // MISE À JOUR UI
+    // ══════════════════════════════════════════════════════════════
+
+    function updateClock() {
+        const now = new Date();
+        const time = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const date = now.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+
+        document.getElementById('clock').textContent = time;
+        document.getElementById('date').textContent = date;
+    }
+
+    function formatUptime(seconds) {
+        const hours = Math.floor(seconds / 3600);
+        const mins = Math.floor((seconds % 3600) / 60);
+        return `${hours}h${mins.toString().padStart(2, '0')}`;
+    }
+
+    function updateRing(id, percent, circumference) {
+        const ring = document.getElementById(id);
+        const dashLength = (percent / 100) * circumference;
+        ring.setAttribute('stroke-dasharray', `${dashLength} ${circumference}`);
+    }
+
+    function wifiRssiToPercent(rssi) {
+        // Convertir RSSI dBm en pourcentage (approximatif)
+        // -30 dBm = 100%, -90 dBm = 0%
+        if (rssi >= -30) return 100;
+        if (rssi <= -90) return 0;
+        return Math.round(((rssi + 90) / 60) * 100);
+    }
+
+    function updateMetrics() {
+        if (!metrics) return;
+
+        // Valeurs textuelles
+        document.getElementById('val-cpu').textContent = `${metrics.cpu_percent.toFixed(0)}%`;
+        document.getElementById('val-mem').textContent = `${metrics.mem_percent.toFixed(0)}%`;
+        document.getElementById('val-disk').textContent = `${metrics.disk_percent.toFixed(0)}%`;
+        document.getElementById('val-wifi').textContent = metrics.wifi_rssi ? `${metrics.wifi_rssi}dB` : '--';
+        document.getElementById('val-load').textContent = metrics.load_avg_1.toFixed(2);
+
+        // Anneaux (circonférences calculées: 2 * PI * r)
+        updateRing('ring-cpu', metrics.cpu_percent, 1340);
+        updateRing('ring-mem', metrics.mem_percent, 1257);
+        updateRing('ring-disk', metrics.disk_percent, 1175);
+        updateRing('ring-wifi', wifiRssiToPercent(metrics.wifi_rssi), 1094);
+        updateRing('ring-load', Math.min(100, metrics.load_avg_1 * 50), 1012); // Load 2.0 = 100%
+
+        // Hostname & uptime
+        document.getElementById('hostname').textContent = metrics.hostname || CFG.HOSTNAME_FALLBACK;
+        document.getElementById('uptime').textContent = `uptime: ${formatUptime(metrics.uptime_seconds)}`;
+
+        // Température
+        const temp = metrics.cpu_temp || 0;
+        document.getElementById('temp-value').textContent = `${temp.toFixed(0)}°C`;
+        const tempPercent = Math.min(100, Math.max(0, (temp / 85) * 100));
+        document.getElementById('temp-fill').style.width = `${tempPercent}%`;
+
+        // Couleur température
+        const tempFill = document.getElementById('temp-fill');
+        if (temp >= 75) {
+            tempFill.style.background = '#FF6B35';
+        } else if (temp >= 65) {
+            tempFill.style.background = 'linear-gradient(90deg, #FFD93D, #FF6B35)';
+        } else {
+            tempFill.style.background = 'linear-gradient(90deg, #3DE6E6, #A8E63D)';
+        }
+
+        // Dots de présence
+        updatePresenceDot('cpu', metrics.cpu_percent < 90 ? 'ok' : 'error');
+        updatePresenceDot('mem', metrics.mem_percent < 90 ? 'ok' : 'error');
+        updatePresenceDot('disk', metrics.disk_percent < 95 ? 'ok' : 'error');
+        updatePresenceDot('wifi', metrics.wifi_rssi && metrics.wifi_rssi > -80 ? 'ok' : (metrics.wifi_rssi ? 'warn' : 'error'));
+    }
+
+    function updateModules() {
+        const modulesDots = document.querySelectorAll('.module-dot');
+        modulesDots.forEach(dot => {
+            const mod = dot.dataset.module;
+            const status = modules.modules ? modules.modules[mod] : 'inactive';
+            dot.classList.toggle('active', status === 'active');
+        });
+    }
+
+    function updateAlerts() {
+        const band = document.getElementById('alert-band');
+        band.className = 'alert-band ' + alerts.global_level;
+
+        if (alerts.global_level === 'nominal') {
+            band.textContent = '● SYSTEM NOMINAL';
+        } else if (alerts.alerts && alerts.alerts.length > 0) {
+            const first = alerts.alerts[0];
+            const icon = alerts.global_level === 'crit' ? '▲' : '●';
+            band.textContent = `${icon} ${first.message || first.metric.toUpperCase()}`;
+        }
+    }
+
+    function updatePresenceDot(name, status) {
+        const dot = document.getElementById(`dot-${name}`);
+        if (dot) {
+            dot.className = 'presence-dot ' + status;
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // POPUP DÉTAIL
+    // ══════════════════════════════════════════════════════════════
+
+    let detailTimeout = null;
+
+    function showDetail(metric) {
+        if (!metrics) return;
+
+        const popup = document.getElementById('detail-popup');
+        const title = popup.querySelector('.title');
+        const value = popup.querySelector('.value');
+        const extra = popup.querySelector('.extra');
+
+        let color = '#fff';
+
+        switch (metric) {
+            case 'cpu':
+                title.textContent = 'CPU Usage';
+                value.textContent = `${metrics.cpu_percent.toFixed(1)}%`;
+                extra.textContent = `Temp: ${metrics.cpu_temp.toFixed(0)}°C`;
+                color = '#FF6B35';
+                break;
+            case 'mem':
+                title.textContent = 'Memory';
+                value.textContent = `${metrics.mem_percent.toFixed(1)}%`;
+                extra.textContent = 'RAM utilisée';
+                color = '#A8E63D';
+                break;
+            case 'disk':
+                title.textContent = 'Disk';
+                value.textContent = `${metrics.disk_percent.toFixed(1)}%`;
+                extra.textContent = 'Partition /';
+                color = '#3DE6E6';
+                break;
+            case 'wifi':
+                title.textContent = 'WiFi Signal';
+                value.textContent = metrics.wifi_rssi ? `${metrics.wifi_rssi} dBm` : 'N/A';
+                extra.textContent = metrics.wifi_rssi ? `${wifiRssiToPercent(metrics.wifi_rssi)}% qualité` : 'Filaire';
+                color = '#C97EFF';
+                break;
+            case 'load':
+                title.textContent = 'Load Average';
+                value.textContent = metrics.load_avg_1.toFixed(2);
+                extra.textContent = '1 minute';
+                color = '#FFD93D';
+                break;
+        }
+
+        value.style.color = color;
+        popup.classList.add('visible');
+
+        // Cacher après 3s
+        clearTimeout(detailTimeout);
+        detailTimeout = setTimeout(() => {
+            popup.classList.remove('visible');
+        }, 3000);
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // BOUCLE PRINCIPALE
+    // ══════════════════════════════════════════════════════════════
+
+    async function fetchAll() {
+        // Vérifier token valide
+        await jwtEnsureValid();
+
+        // Mode simulation
+        const isSimMode = transport.activeTransport === 'sim' ||
+                         (transport.activeTransport === 'none' && CFG.SIMULATE);
+
+        if (apiOnline || isSimMode) {
+            // Fetch métriques
+            const metricsData = await fetchApi(CFG.ENDPOINT_METRICS);
+            if (metricsData) {
+                metrics = metricsData;
+            } else if (isSimMode) {
+                metrics = simulateMetrics();
+            }
+
+            // Fetch modules
+            const modulesData = await fetchApi(CFG.ENDPOINT_MODULES);
+            if (modulesData) {
+                modules = modulesData;
+            } else if (isSimMode) {
+                modules = simulateModules();
+            }
+
+            // Fetch alertes
+            const alertsData = await fetchApi(CFG.ENDPOINT_ALERTS);
+            if (alertsData) {
+                alerts = alertsData;
+            } else if (isSimMode) {
+                alerts = simulateAlerts();
+            }
+
+            // Mise à jour UI
+            updateMetrics();
+            updateModules();
+            updateAlerts();
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // INITIALISATION
+    // ══════════════════════════════════════════════════════════════
+
+    async function init() {
+        console.log('SecuBox Remote UI — Round Edition');
+        console.log('API OTG:', CFG.API_OTG_BASE);
+        console.log('API WiFi:', CFG.API_WIFI_BASE);
+        console.log('Simulate:', CFG.SIMULATE);
+
+        // Démarrer l'horloge
+        updateClock();
+        setInterval(updateClock, 1000);
+
+        // 1. Probe des transports disponibles (OTG prioritaire)
+        const msg = document.getElementById('auth-message');
+        msg.textContent = 'Détection transport...';
+
+        const probeResult = await transport.probe();
+        transport.lastProbe = Date.now();
+        console.log('[Init] Transport détecté:', probeResult);
+        updateTransportBadge();
+
+        // 2. Tentative de login sur le transport actif
+        const loggedIn = await jwtLogin();
+
+        if (!loggedIn && !CFG.SIMULATE) {
+            msg.textContent = 'API non disponible';
+            // Réessayer toutes les 10s
+            setInterval(async () => {
+                await transport.probe();
+                updateTransportBadge();
+                await jwtLogin();
+            }, 10000);
+        }
+
+        // 3. Boucle de refresh des métriques
+        await fetchAll();
+        setInterval(fetchAll, CFG.REFRESH_INTERVAL);
+
+        // 4. Re-probe transport périodique (reprendre OTG si disponible)
+        setInterval(async () => {
+            await transport.reprobeIfNeeded();
+        }, CFG.TRANSPORT_PROBE_INTERVAL);
+    }
+
+    // Démarrer au chargement
+    document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
