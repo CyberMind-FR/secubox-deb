@@ -1,7 +1,7 @@
 {
   "id": "rtty",
   "name": "Remote Terminal",
-  "icon": "terminal",
+  "icon": "🖥️",
   "path": "/rtty/",
   "category": "system",
   "order": 905,

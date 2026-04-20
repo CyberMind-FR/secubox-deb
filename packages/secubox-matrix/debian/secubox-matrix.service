@@ -16,11 +16,11 @@ Restart=on-failure
 RestartSec=5
 
 # Sandboxing
-PrivateTmp=true
+
 NoNewPrivileges=false
 RuntimeDirectory=secubox
 RuntimeDirectoryMode=0775
-ProtectSystem=full
+
 ReadWritePaths=/run/secubox /var/lib/secubox /var/lib/lxc
 
 [Install]

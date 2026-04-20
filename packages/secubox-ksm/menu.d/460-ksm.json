@@ -2,7 +2,7 @@
   "id": "ksm",
   "name": "KSM Memory",
   "category": "system",
-  "icon": "memory",
+  "icon": "💾",
   "path": "/ksm/",
   "order": 460,
   "description": "Kernel Same-page Merging memory optimization"

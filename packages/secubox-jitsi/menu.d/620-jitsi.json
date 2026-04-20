@@ -1,7 +1,7 @@
 {
   "id": "jitsi",
   "name": "Jitsi Meet",
-  "icon": "video",
+  "icon": "📹",
   "path": "/jitsi/",
   "category": "apps",
   "order": 620,

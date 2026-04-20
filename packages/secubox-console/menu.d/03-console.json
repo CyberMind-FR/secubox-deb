@@ -1,7 +1,7 @@
 {
   "name": "Console TUI",
   "path": null,
-  "icon": "terminal",
+  "icon": "🖥️",
   "category": "system",
   "order": 3,
   "description": "Terminal-based dashboard (TTY1)",

@@ -2,7 +2,7 @@
   "id": "ipblock",
   "name": "IP Blocklist",
   "category": "security",
-  "icon": "block",
+  "icon": "🚫",
   "path": "/ipblock/",
   "order": 702,
   "description": "IP blocklist management with multiple sources"

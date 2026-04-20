@@ -30,10 +30,11 @@ Restart=on-failure
 RestartSec=5
 
 # Security
-PrivateTmp=true
+
 NoNewPrivileges=true
-ProtectSystem=full
-ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox
+LogsDirectory=secubox
+LogsDirectoryMode=0755
+ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox /var/log/secubox
 
 [Install]
 WantedBy=multi-user.target

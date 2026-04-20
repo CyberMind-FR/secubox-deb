@@ -12,12 +12,12 @@ ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/config-adv
 Restart=on-failure
 RestartSec=5
 UMask=0000
-PrivateTmp=true
+
 NoNewPrivileges=true
 RuntimeDirectory=secubox
 RuntimeDirectoryMode=0775
-ProtectSystem=full
-ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox
+
+ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox /var/log/secubox
 
 [Install]
 WantedBy=multi-user.target

@@ -17,9 +17,9 @@ RestartSec=5
 
 # Security hardening
 NoNewPrivileges=no
-ProtectSystem=full
+
 ProtectHome=read-only
-PrivateTmp=true
+
 ReadWritePaths=/run/secubox /var/lib/secubox /var/cache/secubox /etc/secubox /sys/bus/w1
 
 [Install]

@@ -1,7 +1,7 @@
 {
     "name": "PeerTube",
     "path": "/peertube/",
-    "icon": "video",
+    "icon": "📹",
     "category": "apps",
     "order": 811,
     "description": "Federated video platform"

@@ -19,10 +19,10 @@ RestartSec=5
 
 # Security hardening
 NoNewPrivileges=no
-ProtectSystem=full
+
 ProtectHome=read-only
-PrivateTmp=true
-ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox
+
+ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox /var/log/secubox
 
 [Install]
 WantedBy=multi-user.target

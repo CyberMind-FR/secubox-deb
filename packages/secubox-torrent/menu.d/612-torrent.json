@@ -1,7 +1,7 @@
 {
     "name": "Torrent",
     "path": "/torrent/",
-    "icon": "download",
+    "icon": "📥",
     "category": "apps",
     "order": 612,
     "description": "BitTorrent client management"
