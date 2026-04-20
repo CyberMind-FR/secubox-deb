@@ -466,11 +466,40 @@ Pour tester le dashboard sans connexion à l'API SecuBox :
 
 ---
 
-## systemd Service
+## systemd Services
 
-Le kiosk est géré par `secubox-remote-ui.service` :
+### Framebuffer Dashboard (v1.11.0+)
+
+For Pi Zero W (ARMv6, no NEON), the dashboard runs via framebuffer:
 
 ```ini
+# /etc/systemd/system/secubox-fb-dashboard.service
+[Unit]
+Description=SecuBox Eye Remote Framebuffer Dashboard
+After=hyperpixel2r-init.service
+Wants=hyperpixel2r-init.service
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/bin/python3 /usr/local/bin/fb_dashboard.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+**Dependencies:**
+- `pigpiod.service` — GPIO daemon for LCD init
+- `hyperpixel2r-init.service` — ST7701S LCD controller init
+
+### Chromium Kiosk (ARM64/x64 only)
+
+For systems with NEON support (Pi Zero 2 W, x64):
+
+```ini
+# /etc/systemd/system/secubox-remote-ui.service
 [Service]
 Type=simple
 User=secubox
@@ -568,6 +597,99 @@ journalctl -u secubox-remote-ui -f
 ```bash
 ssh secubox@secubox-round.local
 systemctl restart secubox-remote-ui
+```
+
+---
+
+## FAQ / Troubleshooting
+
+### Why doesn't Chromium work on Pi Zero W?
+
+**Error:** `The hardware on this system lacks support for NEON SIMD extensions`
+
+**Cause:** Pi Zero W uses an ARMv6 CPU which lacks NEON SIMD instructions. Chromium on Debian Bookworm requires NEON.
+
+**Solution:** Use the framebuffer dashboard (`fb_dashboard.py`) which renders directly to `/dev/fb0` using Python PIL. This is enabled by default in v1.11.0+.
+
+### Display stays black (no content)
+
+1. **Check overlay name** — Must be `hyperpixel2r` (not `hyperpixel4`):
+   ```bash
+   grep dtoverlay /boot/firmware/config.txt
+   # Should show: dtoverlay=hyperpixel2r
+   ```
+
+2. **Check pigpiod is running** — Required for LCD initialization:
+   ```bash
+   systemctl status pigpiod
+   # Should be: active (running)
+   ```
+
+3. **Check hyperpixel2r-init** — LCD controller initialization:
+   ```bash
+   systemctl status hyperpixel2r-init
+   # Should be: inactive (dead) with Result: success
+   ```
+
+4. **Check framebuffer dashboard** — Rendering service:
+   ```bash
+   systemctl status secubox-fb-dashboard
+   # Should be: active (running)
+   ```
+
+### Service dependency order
+
+The services must start in this order:
+```
+pigpiod → hyperpixel2r-init → secubox-fb-dashboard
+```
+
+If the display doesn't work after reboot, check that all three services succeeded:
+```bash
+systemctl status pigpiod hyperpixel2r-init secubox-fb-dashboard --no-pager
+```
+
+### "GPIO not allocated" error
+
+**Cause:** Using RPi.GPIO (which depends on lgpio) when DPI overlay is active. The kernel claims GPIO pins for DPI output.
+
+**Solution:** Use pigpio instead of RPi.GPIO. The init script in v1.10.0+ uses pigpio which works correctly via the pigpiod daemon.
+
+### Display shows colored stripes but no dashboard
+
+**Cause:** Framebuffer is initialized but no application is rendering to it.
+
+**Solution:** Ensure the dashboard service is enabled:
+```bash
+sudo systemctl enable --now secubox-fb-dashboard
+```
+
+### How to test framebuffer manually
+
+```bash
+# Draw random noise to confirm framebuffer works
+cat /dev/urandom > /dev/fb0
+
+# Run dashboard manually
+python3 /usr/local/bin/fb_dashboard.py
+```
+
+### Which config.txt settings are required?
+
+Minimum required for HyperPixel 2.1 Round (v1.11.0):
+```
+dtoverlay=hyperpixel2r
+enable_dpi_lcd=1
+display_default_lcd=1
+dpi_group=2
+dpi_mode=87
+dpi_output_format=0x7f216
+dpi_timings=480 0 10 16 55 480 0 15 60 15 0 0 0 60 0 19200000 6
+framebuffer_width=480
+framebuffer_height=480
+dtparam=i2c_arm=on
+dtparam=spi=on
+dtoverlay=dwc2
 ```
 
 ---

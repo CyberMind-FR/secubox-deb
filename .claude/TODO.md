@@ -1,5 +1,5 @@
 # TODO — SecuBox-DEB Backlog
-*Mis à jour : 2026-04-12*
+*Mis à jour : 2026-04-21*
 
 ---
 
@@ -249,6 +249,12 @@ Advanced security features:
   - Fixed: hyperpixel2r-init uses pigpio instead of RPi.GPIO (lgpio issues on Bookworm)
   - Fixed: Service dependencies (requires pigpiod)
 - [x] **P11-R08** Display verified working after reboot ✅
+- [x] **P11-R09** Framebuffer dashboard for Pi Zero W ✅ v1.11.0
+  - Pi Zero W (ARMv6) lacks NEON SIMD required by Chromium
+  - Created Python PIL-based framebuffer dashboard (fb_dashboard.py)
+  - Renders directly to /dev/fb0 without X11
+  - 6 circular module rings with animated metrics
+  - Auto-starts via secubox-fb-dashboard.service
 
 ### Kiosk Mode
 - [ ] **P11-01** Display SecuBox version in kiosk mode header/footer
