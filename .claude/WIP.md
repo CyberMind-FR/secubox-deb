@@ -1,9 +1,72 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-04-20 (Session 62)*
+*Mis à jour : 2026-04-20 (Session 63)*
 
 ---
 
-## 🔄 En cours (Session 62) — Eye Remote OFFLINE Image Builder
+## ✅ Complété (Session 63) — HyperPixel Display Fix v1.10.0
+
+### S63-01 — Fix HyperPixel 2.1 Round Display Not Working ✅
+
+**Status:** ✅ Complete
+
+**Issue:** [GitHub Issue #30](https://github.com/CyberMind-FR/secubox-deb/issues/30)
+
+#### Problem (v1.9.0)
+HyperPixel 2.1 Round display was not showing any content despite framebuffer being correctly configured at 480x480. Two root causes identified:
+
+1. **Wrong device tree overlay**: `/boot/firmware/config.txt` was using `dtoverlay=hyperpixel4` (rectangular HyperPixel 4.0) instead of `dtoverlay=hyperpixel2r` (round display)
+
+2. **LCD init script failure**: The `hyperpixel2r-init` script used RPi.GPIO which relies on lgpio on Raspberry Pi OS Bookworm. lgpio throws "GPIO not allocated" errors when DPI overlay is active because the GPIO pins are claimed by the kernel for DPI output.
+
+#### Solution (v1.10.0)
+
+1. **Fixed overlay name**: Changed `dtoverlay=hyperpixel4` → `dtoverlay=hyperpixel2r` in config.txt generation
+
+2. **Replaced RPi.GPIO with pigpio**: Rewrote `hyperpixel2r-init` script to use pigpio library which works correctly with Bookworm. pigpio accesses GPIO via the pigpiod daemon, bypassing lgpio's allocation issues.
+
+3. **Fixed service dependencies**: Updated `hyperpixel2r-init.service` to:
+   - Require `pigpiod.service`
+   - Start after pigpiod is running
+   - Enable both services at boot
+
+4. **Added pigpio packages**: Added `python3-pigpio` and `pigpio` to the package list for QEMU chroot installation
+
+5. **Fixed config.txt settings**:
+   - Removed `,disable-i2c` flag from overlay
+   - Added `display_default_lcd=1` setting
+
+#### Files Modified
+- `remote-ui/round/build-eye-remote-image.sh` — v1.9.0 → v1.10.0
+- `remote-ui/round/hyperpixel2r-init` — Rewritten to use pigpio instead of RPi.GPIO
+- `remote-ui/round/hyperpixel2r-init.service` — Added pigpiod dependency
+
+#### Working config.txt (verified on hardware)
+```
+dtoverlay=hyperpixel2r
+enable_dpi_lcd=1
+display_default_lcd=1
+dpi_group=2
+dpi_mode=87
+dpi_output_format=0x7f216
+dpi_timings=480 0 10 16 55 480 0 15 60 15 0 0 0 60 0 19200000 6
+framebuffer_width=480
+framebuffer_height=480
+dtparam=i2c_arm=on
+dtparam=spi=on
+dtoverlay=dwc2
+```
+
+#### Test Results
+- ✅ GPIO pins correctly set to ALT2 (DPI function) after boot
+- ✅ pigpiod service starts successfully
+- ✅ hyperpixel2r-init script runs without errors
+- ✅ ST7701S LCD controller initialized via software SPI
+- ✅ Backlight ON (GPIO 19)
+- ✅ Display shows framebuffer content (tested with solid colors and stripes)
+
+---
+
+## ✅ Complété (Session 62) — Eye Remote OFFLINE Image Builder
 
 ### S62-01 — Fix build-eye-remote-image.sh ✅
 

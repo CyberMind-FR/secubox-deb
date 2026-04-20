@@ -244,7 +244,10 @@ Advanced security features:
 - [x] **P11-R04** Fix vc4-kms-v3d conflict with HyperPixel
 - [x] **P11-R05** Bookworm userconf file for pi:raspberry
 - [x] **P11-R06** usb0-up.sh bypass NetworkManager
-- [ ] **P11-R07** Test HyperPixel display on real hardware
+- [x] **P11-R07** Test HyperPixel display on real hardware ✅ v1.10.0
+  - Fixed: dtoverlay=hyperpixel2r (not hyperpixel4)
+  - Fixed: hyperpixel2r-init uses pigpio instead of RPi.GPIO (lgpio issues on Bookworm)
+  - Fixed: Service dependencies (requires pigpiod)
 - [ ] **P11-R08** Deploy dashboard and verify metrics display
 
 ### Kiosk Mode
