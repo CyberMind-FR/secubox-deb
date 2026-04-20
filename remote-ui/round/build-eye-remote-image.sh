@@ -151,16 +151,30 @@ fi
 
 # HyperPixel + USB OTG config
 log "Configuring HyperPixel + USB OTG..."
+
+# Slipstream HyperPixel overlay (no network required)
+OVERLAYS_DIR="$BOOT_MNT/overlays"
+[[ ! -d "$OVERLAYS_DIR" ]] && OVERLAYS_DIR="$BOOT_MNT/firmware/overlays"
+if [[ -d "$OVERLAYS_DIR" ]]; then
+    log "Slipstreaming hyperpixel2r.dtbo overlay..."
+    sudo cp "$SCRIPT_DIR/hyperpixel2r.dtbo" "$OVERLAYS_DIR/"
+else
+    warn "Overlays directory not found!"
+fi
+
+# Remove any existing dwc2 host mode (base image issue)
+sudo sed -i 's/dtoverlay=dwc2,dr_mode=host/#REMOVED: dtoverlay=dwc2,dr_mode=host/' "$BOOT_MNT/config.txt"
+
 sudo tee -a "$BOOT_MNT/config.txt" > /dev/null << 'EOF'
 
 # === SecuBox Eye Remote v1.8.0 ===
-# HyperPixel 2.1 Round
-dtoverlay=vc4-kms-dpi-hyperpixel2r
+# HyperPixel 2.1 Round (slipstreamed overlay)
+dtoverlay=hyperpixel2r
 dtparam=i2c_arm=on
 dtparam=spi=on
 display_auto_detect=0
 
-# USB OTG Gadget
+# USB OTG Gadget (peripheral mode)
 dtoverlay=dwc2
 EOF
 
