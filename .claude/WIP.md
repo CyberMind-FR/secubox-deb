@@ -1,9 +1,92 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-04-15 (Session 59)*
+*Mis à jour : 2026-06-26 15:30 (Session 60)*
 
 ---
 
-## 🔄 En cours (Session 59) — v1.7.0 Image Builds & Fixes
+## 🔄 En cours (Session 60) — EspressoBin eMMC Boot Fixes
+
+### S60-01 — HAProxy Service Restart Loop Fix ✅
+
+**Status:** ✅ Complete
+
+#### Problem
+secubox-haproxy.service was failing with NAMESPACE errors:
+```
+Failed to set up mount namespacing: /run/systemd/unit-root/etc/haproxy: No such file or directory
+```
+
+#### Root Cause
+`ReadWritePaths=/etc/haproxy /run/haproxy` in service file requires directories to exist for namespace setup, but haproxy is only `Recommends:` not `Depends:`.
+
+#### Fix
+Removed sandboxing directives that cause issues when haproxy not installed.
+
+#### Files Modified
+- `packages/secubox-haproxy/debian/secubox-haproxy.service`
+
+---
+
+### S60-02 — Network Fallback Script Fix ✅
+
+**Status:** ✅ Complete
+
+#### Problem
+secubox-net-fallback was trying DHCP on `lan0`, `lan1` interfaces which are downstream LAN ports where SecuBox provides DHCP (not receives it).
+
+#### Root Cause
+Script processed `lan*` interfaces for DHCP, but these are LAN downstream ports on EspressoBin DSA switch.
+
+#### Fix
+Added logic to skip `lan*` interfaces and bridged interfaces:
+```bash
+case "$IFACE" in
+    lan*)
+        logger -t secubox-net "Skipping LAN interface $IFACE (downstream port)"
+        continue
+        ;;
+esac
+```
+
+#### Files Modified
+- `image/build-image.sh` — Updated secubox-net-fallback script
+
+---
+
+### S60-03 — Network Configuration Fix ✅
+
+**Status:** ✅ Complete
+
+#### Problem
+1. dummy0 had IP 192.168.255.1/24 which conflicted with gateway
+2. IP was assigned to eth0 (CPU port) instead of wan (physical DSA port)
+
+#### Root Cause
+- dummy0 IP overlapped with upstream gateway IP
+- EspressoBin DSA topology: eth0 is CPU port, wan/lan0/lan1 are physical ports
+
+#### Fix
+- Changed dummy0 to use 10.55.255.1/24 (non-conflicting)
+- Updated all board netplan configs to include dummy0
+- Fixed IP assignment to wan interface instead of eth0
+
+#### Files Modified
+- `board/espressobin-v7/netplan/00-secubox.yaml`
+- `board/espressobin-ultra/netplan/00-secubox.yaml`
+- `board/mochabin/netplan/00-secubox.yaml`
+
+---
+
+### S60-04 — EspressoBin V7 Device Mapping Notes
+
+**Important for future reference:**
+- **U-Boot**: eMMC is `mmc 1`, SD card is `mmc 0`
+- **Linux**: eMMC is `/dev/mmcblk0`, detected by presence of `boot0` partition
+- **DSA Switch**: eth0 is CPU port (master), wan/lan0/lan1 are physical ports (slaves)
+- **Network**: Assign IPs to `wan` interface, not `eth0`
+
+---
+
+## ✅ Completed (Session 59) — v1.7.0 Image Builds & Fixes
 
 ### S59-01 — EspressoBin Live USB with eMMC Flasher ✅
 
@@ -233,12 +316,20 @@ Implemented USB OTG composite gadget connection between RPi Zero W (Remote UI) a
 #### Files Modified
 - `remote-ui/round/install_zerow.sh` — Use KMS overlay by default, all fixes integrated
 - `remote-ui/round/README.md` — Updated troubleshooting for KMS overlay
+- `remote-ui/round/secubox_dashboard.py` — **NEW** Python/PIL dashboard (no Chromium!)
 
 #### Testing Status
 - [x] SD card flashing works
 - [x] USB OTG interface appears on host
 - [x] SSH connection works (pi:raspberry via userconf)
 - [x] HyperPixel display works with KMS overlay
+- [x] Python dashboard running with live metrics
+
+#### Technical Notes
+- Framebuffer is RGB565 (16-bit), not 32-bit BGRA
+- KMS overlay provides DRM `/dev/fb0` at 480x480
+- Dashboard uses PIL for rendering, direct FB write for display
+- No X11, no Chromium = lightweight (~18MB RAM)
 
 ---
 

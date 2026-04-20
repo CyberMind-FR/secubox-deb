@@ -21,7 +21,8 @@ RestartSec=5
 NoNewPrivileges=true
 RuntimeDirectory=secubox
 RuntimeDirectoryMode=0775
-ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox /etc/haproxy /run/haproxy
+# ReadWritePaths removed - causes NAMESPACE errors when haproxy not installed
+# (haproxy is Recommends, not Depends - /etc/haproxy may not exist)
 
 [Install]
 WantedBy=multi-user.target
