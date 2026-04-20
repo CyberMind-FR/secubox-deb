@@ -1,5 +1,49 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-04-20 (Session 63)*
+*Mis à jour : 2026-04-21 (Session 63)*
+
+---
+
+## ✅ Complété (Session 63) — Framebuffer Dashboard v1.11.0
+
+### S63-02 — Framebuffer Dashboard for Pi Zero W ✅
+
+**Status:** ✅ Complete
+
+#### Problem (v1.10.0)
+Chromium browser requires NEON SIMD instructions which are not available on Pi Zero W (ARMv6). Error displayed:
+> "The hardware on this system lacks support for NEON SIMD extensions"
+
+#### Solution (v1.11.0)
+Created Python framebuffer dashboard that renders directly to `/dev/fb0`:
+
+1. **fb_dashboard.py** — PIL-based renderer
+   - 6 circular module rings (AUTH/WALL/BOOT/MIND/ROOT/MESH)
+   - Real-time clock and date
+   - Hostname and uptime display
+   - Animated metrics with realistic drift
+   - OTG/WiFi/SIM mode indicator
+   - SecuBox branding
+
+2. **secubox-fb-dashboard.service** — systemd service
+   - Starts after `hyperpixel2r-init.service`
+   - Auto-restart on failure
+   - Runs as root for framebuffer access
+
+3. **Build script updated** (v1.11.0)
+   - Installs `fb_dashboard.py` to `/usr/local/bin/`
+   - Enables framebuffer dashboard service
+   - No longer requires X11/Chromium for display
+
+#### Files Created
+- `remote-ui/round/fb_dashboard.py` — Framebuffer renderer
+- `remote-ui/round/secubox-fb-dashboard.service` — systemd service
+
+#### Test Results
+- ✅ Dashboard auto-starts on boot
+- ✅ All 3 services active: `pigpiod`, `hyperpixel2r-init`, `secubox-fb-dashboard`
+- ✅ 6 module rings animate correctly
+- ✅ Clock updates in real-time
+- ✅ Simulation mode works (API integration ready)
 
 ---
 
