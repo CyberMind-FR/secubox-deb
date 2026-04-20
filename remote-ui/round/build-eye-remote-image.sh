@@ -13,7 +13,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VERSION="1.10.0"
+VERSION="1.11.0"
 OUTPUT_DIR="${OUTPUT_DIR:-/tmp}"
 OUTPUT_NAME="secubox-eye-remote-${VERSION}.img"
 
@@ -471,16 +471,24 @@ cp "$SCRIPT_DIR/secubox-otg-gadget.sh" "$ROOT_MNT/usr/local/sbin/"
 cp "$SCRIPT_DIR/secubox-hid-keyboard.sh" "$ROOT_MNT/usr/local/sbin/"
 chmod +x "$ROOT_MNT/usr/local/sbin/secubox-"*.sh
 
+# Copy framebuffer dashboard (Pi Zero W has no NEON, can't run Chromium)
+log "Installing framebuffer dashboard..."
+mkdir -p "$ROOT_MNT/usr/local/bin"
+cp "$SCRIPT_DIR/fb_dashboard.py" "$ROOT_MNT/usr/local/bin/"
+chmod +x "$ROOT_MNT/usr/local/bin/fb_dashboard.py"
+
 # Copy systemd services
 cp "$SCRIPT_DIR/secubox-otg-gadget.service" "$ROOT_MNT/etc/systemd/system/"
 cp "$SCRIPT_DIR/secubox-serial-console.service" "$ROOT_MNT/etc/systemd/system/"
-cp "$SCRIPT_DIR/secubox-remote-ui.service" "$ROOT_MNT/etc/systemd/system/"
+cp "$SCRIPT_DIR/secubox-fb-dashboard.service" "$ROOT_MNT/etc/systemd/system/"
 
 # Enable services
 mkdir -p "$ROOT_MNT/etc/systemd/system/multi-user.target.wants"
 ln -sf /etc/systemd/system/secubox-otg-gadget.service \
     "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/"
 ln -sf /etc/systemd/system/secubox-serial-console.service \
+    "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/"
+ln -sf /etc/systemd/system/secubox-fb-dashboard.service \
     "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/"
 
 # Network config for usb0
