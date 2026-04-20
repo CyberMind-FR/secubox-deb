@@ -44,11 +44,68 @@ html,body{width:480px;height:480px;overflow:hidden;background:#080808;
   border-top-color:#C04E24;border-radius:50%;animation:spin .8s linear infinite}
 #auth-msg{font-size:9px;color:#333;letter-spacing:1px}
 @keyframes spin{to{transform:rotate(360deg)}}
+/* Mode selector styles */
+#mode-badge{position:absolute;top:15px;left:15px;font-size:8px;padding:4px 8px;
+  border-radius:10px;background:#181818;cursor:pointer;z-index:10;
+  border:1px solid #282828;transition:all .2s;letter-spacing:.5px}
+#mode-badge:hover,#mode-badge:active{background:#222;border-color:#444}
+#mode-badge .dot{display:inline-block;width:6px;height:6px;border-radius:50%;
+  margin-right:4px;vertical-align:middle}
+#mode-panel{position:absolute;top:0;left:0;width:100%;height:100%;
+  border-radius:50%;background:rgba(8,8,8,.97);z-index:50;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:6px;opacity:0;pointer-events:none;transition:opacity .3s}
+#mode-panel.visible{opacity:1;pointer-events:auto}
+#mode-panel h3{font-size:10px;color:#555;letter-spacing:2px;margin-bottom:6px}
+.mode-btn{width:160px;padding:8px 10px;background:#141414;border:1px solid #222;
+  border-radius:6px;display:flex;align-items:center;gap:8px;cursor:pointer;
+  transition:all .15s}
+.mode-btn:hover,.mode-btn:active{background:#1a1a1a;border-color:#333}
+.mode-btn.active{border-color:#0A5840;background:#0a1810}
+.mode-btn .icon{font-size:14px;width:20px;text-align:center}
+.mode-btn .info{flex:1;text-align:left}
+.mode-btn .name{font-size:9px;font-weight:600;color:#ccc;letter-spacing:.8px}
+.mode-btn .desc{font-size:7px;color:#444;margin-top:1px}
+#mode-close{position:absolute;bottom:35px;font-size:8px;color:#333;
+  letter-spacing:1px;cursor:pointer;padding:6px 12px;border-radius:4px;
+  background:#111;border:1px solid #222}
+#mode-close:hover{color:#555;border-color:#333}
+#mode-status{font-size:7px;color:#333;margin-top:4px}
 </style>
 </head>
 <body>
 <div id="screen">
   <canvas id="ring-canvas" width="480" height="480"></canvas>
+  <!-- Mode selector badge -->
+  <div id="mode-badge" onclick="toggleModePanel()">
+    <span class="dot" style="background:#0A5840"></span>NORMAL
+  </div>
+  <!-- Mode selection panel -->
+  <div id="mode-panel">
+    <h3>SELECT MODE</h3>
+    <div class="mode-btn active" onclick="switchMode('normal')">
+      <div class="icon">📡</div>
+      <div class="info"><div class="name">NORMAL</div><div class="desc">Network + Serial</div></div>
+    </div>
+    <div class="mode-btn" onclick="switchMode('flash')">
+      <div class="icon">💾</div>
+      <div class="info"><div class="name">FLASH</div><div class="desc">Bootable USB recovery</div></div>
+    </div>
+    <div class="mode-btn" onclick="switchMode('debug')">
+      <div class="icon">🔍</div>
+      <div class="info"><div class="name">DEBUG</div><div class="desc">Network + Storage + Serial</div></div>
+    </div>
+    <div class="mode-btn" onclick="switchMode('tty')">
+      <div class="icon">⌨️</div>
+      <div class="info"><div class="name">TTY</div><div class="desc">Virtual keyboard</div></div>
+    </div>
+    <div class="mode-btn" onclick="switchMode('auth')">
+      <div class="icon">🔐</div>
+      <div class="info"><div class="name">AUTH</div><div class="desc">Eye Remote security key</div></div>
+    </div>
+    <div id="mode-status"></div>
+    <div id="mode-close" onclick="toggleModePanel()">CLOSE</div>
+  </div>
   <div id="center">
     <div id="time">--:--:--</div>
     <div id="date">· · ·</div>
@@ -258,6 +315,75 @@ function podTap(mod){
   el.style.opacity='.3';setTimeout(()=>el.style.opacity='1',180);
 }
 
+// Mode management
+const MODE_COLORS={normal:'#0A5840',flash:'#ffc107',debug:'#00d4ff',tty:'#6e40c9',auth:'#C04E24'};
+let currentMode='normal';
+
+function toggleModePanel(){
+  document.getElementById('mode-panel').classList.toggle('visible');
+}
+
+async function switchMode(mode){
+  if(mode===currentMode){toggleModePanel();return;}
+  const statusEl=document.getElementById('mode-status');
+  statusEl.textContent='Switching to '+mode.toUpperCase()+'...';
+  try{
+    // Call gadget API if available
+    const base=TM.active==='OTG'?CFG.API_OTG_BASE:CFG.API_WIFI_BASE;
+    const resp=await fetch(base+'/api/v1/remote-ui/mode',{
+      method:'POST',headers:{'Content-Type':'application/json',
+        'Authorization':TM.active==='OTG'?'Bearer '+TM.jwt_otg:'Bearer '+TM.jwt_wifi},
+      body:JSON.stringify({mode:mode}),signal:AbortSignal.timeout(5000)
+    }).catch(()=>null);
+    if(resp&&resp.ok){
+      currentMode=mode;
+      updateModeBadge();
+      document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));
+      document.querySelector('.mode-btn[onclick*="'+mode+'"]').classList.add('active');
+      statusEl.textContent='Mode: '+mode.toUpperCase();
+      setTimeout(toggleModePanel,500);
+    }else{
+      statusEl.textContent='API unavailable - simulate mode';
+      // Simulate mode change for UI testing
+      currentMode=mode;
+      updateModeBadge();
+      document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));
+      document.querySelector('.mode-btn[onclick*="'+mode+'"]').classList.add('active');
+      setTimeout(toggleModePanel,500);
+    }
+  }catch(e){
+    statusEl.textContent='Error: '+e.message;
+  }
+}
+
+function updateModeBadge(){
+  const badge=document.getElementById('mode-badge');
+  const dot=badge.querySelector('.dot');
+  dot.style.background=MODE_COLORS[currentMode]||'#0A5840';
+  badge.innerHTML='<span class="dot" style="background:'+dot.style.background+'"></span>'+currentMode.toUpperCase();
+}
+
+// Check gadget status file periodically
+async function checkGadgetStatus(){
+  try{
+    const base=TM.active==='OTG'?CFG.API_OTG_BASE:CFG.API_WIFI_BASE;
+    const resp=await fetch(base+'/api/v1/remote-ui/gadget-status',{
+      headers:{'Authorization':TM.active==='OTG'?'Bearer '+TM.jwt_otg:'Bearer '+TM.jwt_wifi},
+      signal:AbortSignal.timeout(2000)
+    }).catch(()=>null);
+    if(resp&&resp.ok){
+      const data=await resp.json();
+      if(data.mode&&data.mode!==currentMode){
+        currentMode=data.mode;
+        updateModeBadge();
+        document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));
+        const btn=document.querySelector('.mode-btn[onclick*="'+currentMode+'"]');
+        if(btn)btn.classList.add('active');
+      }
+    }
+  }catch(e){}
+}
+
 async function tick(){
   let s;
   if(!CFG.SIMULATE&&TM.active!=='SIM'){
@@ -279,6 +405,7 @@ async function init(){
   updateClock();setInterval(updateClock,1000);
   await tick();setInterval(tick,CFG.REFRESH_INTERVAL);
   setInterval(()=>TM.probe(),CFG.PROBE_INTERVAL);
+  setInterval(checkGadgetStatus,10000); // Check gadget mode every 10s
 }
 document.addEventListener('DOMContentLoaded',init);
 </script>
