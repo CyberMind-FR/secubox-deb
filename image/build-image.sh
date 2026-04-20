@@ -26,7 +26,7 @@ LOCAL_REPO_PORT="8080"
 SLIPSTREAM_DEBS=1     # Intégrer les .deb locaux dans l'image (default: ON)
 
 # SecuBox versioning
-SECUBOX_VERSION="1.7.0"
+SECUBOX_VERSION="1.8.0"
 BUILD_TIMESTAMP=$(date '+%Y-%m-%d %H:%M')
 
 RED='\033[0;31m'; CYAN='\033[0;36m'; GOLD='\033[0;33m'
@@ -193,7 +193,7 @@ DEBOOTSTRAP_OPTS="--arch=${DEBIAN_ARCH}"
 INCLUDE_PKGS="systemd,systemd-sysv,dbus,netplan.io,nftables,openssh-server"
 INCLUDE_PKGS+=",python3,python3-pip,nginx,curl,wget,ca-certificates,gnupg,apt-transport-https"
 INCLUDE_PKGS+=",iproute2,iputils-ping,ethtool,net-tools,wireguard-tools"
-INCLUDE_PKGS+=",sudo,less,vim-tiny,logrotate,cron,rsync,jq,dnsmasq"
+INCLUDE_PKGS+=",sudo,less,vim-tiny,logrotate,cron,rsync,jq,dnsmasq,cloud-guest-utils,parted"
 
 if [[ $IS_X64 -eq 1 ]]; then
   # x64 : ajouter GRUB EFI + linux-image

@@ -1,35 +1,40 @@
-# SecuBox Remote UI — Round Edition
+# SecuBox Eye Remote — Round Edition
 
-Dashboard kiosk pour **HyperPixel 2.1 Round Touch** (480×480 px) sur **Raspberry Pi Zero W**.
+**Remote control dashboard** for **HyperPixel 2.1 Round Touch** (480×480 px) on **Raspberry Pi Zero W** or **x64/amd64 live systems**.
 
-Affichage temps réel des métriques SecuBox via 6 anneaux concentriques représentant les modules système.
+More than a simple status display — the Eye Remote transforms into a **powerful debugging and security tool** with multiple USB gadget modes.
 
 ---
 
-## Aperçu
+## Overview
 
 ```
           ┌─────────────────────┐
-          │       MESH          │  ← Anneau extérieur (bleu marine)
-          │   ┌───────────┐     │
-          │   │   ROOT    │     │  ← Vert foncé
-          │   │ ┌───────┐ │     │
-          │   │ │ MIND  │ │     │  ← Violet
-          │   │ │┌─────┐│ │     │
-          │   │ ││BOOT ││ │     │  ← Marron
-          │   │ ││┌───┐││ │     │
-          │   │ │││WAL│││ │     │  ← Bronze
-          │   │ ││├───┤││ │     │
-          │   │ │││CPU│││ │     │  ← Centre: % CPU
-          │   │ │││78%│││ │     │
-          │   │ ││└───┘││ │     │
-          │   │ │└─────┘│ │     │
-          │   │ └───────┘ │     │
-          │   └───────────┘     │
+          │   ● SECUBOX EYE     │  ← Mode indicator (OTG/WiFi/SIM)
+          │   ┌───────────────┐ │
+          │  ┌┤  ╔═══════════╗├┐│
+          │  │└──╢  14:32:07 ╟┘││  ← Time/Status center
+          │  │   ╢ NOMINAL   ╟ ││
+          │  │┌──╢ secubox-zr╟─┐│
+          │  ││  ╚═══════════╝ ││
+          │  ││ [AUTH]  [WALL] ││  ← Module pods (6)
+          │  │└─────────────────┘│
+          │  └──[TTY]  [AUTH]───┘│  ← Mode selector (touch)
+          │        480×480       │
           └─────────────────────┘
               HyperPixel 2.1
-                480×480
+           or x64 touchscreen
 ```
+
+### Key Features
+
+| Feature | Description |
+|---------|-------------|
+| **5 USB Modes** | Normal, Flash, Debug, TTY, Auth |
+| **Eye Remote** | Security key with QR auth display |
+| **U-Boot Access** | Virtual keyboard for bootloader |
+| **Live Flash** | Bootable USB recovery mode |
+| **x64 Support** | Live boot on any touchscreen |
 
 ---
 
@@ -41,6 +46,155 @@ Affichage temps réel des métriques SecuBox via 6 anneaux concentriques représ
 | HyperPixel 2.1 Round | Pimoroni | Écran tactile circulaire 480×480 |
 | Carte microSD | 8 Go minimum | Class 10 recommandée |
 | Alimentation | 5V 2.5A | Via micro-USB |
+| Câble USB | Data-capable | Must be DATA port, not PWR |
+
+---
+
+## USB Gadget Modes
+
+The Eye Remote supports **5 operational modes** via USB OTG composite gadget:
+
+```
+┌────────────┬────────────┬──────────────────────────────────────────┐
+│ Command    │ Mode       │ Functions                                │
+├────────────┼────────────┼──────────────────────────────────────────┤
+│ start      │ Normal     │ Network (ECM) + Serial                   │
+│ flash      │ Recovery   │ Bootable USB + Serial (U-Boot access)    │
+│ debug      │ Debug      │ Network + Storage + Serial               │
+│ tty        │ Keyboard   │ Virtual keyboard + Serial (automation)   │
+│ auth       │ Eye Remote │ FIDO/U2F HID + QR display (security key) │
+└────────────┴────────────┴──────────────────────────────────────────┘
+```
+
+### Mode: Normal (default)
+```
+┌────────────────────────────────────┐
+│         ● SECUBOX EYE             │
+│           OTG MODE                 │
+│                                    │
+│         ╔═══════════╗              │
+│         ║  14:32:07 ║              │
+│         ║ NOMINAL   ║              │
+│         ║ up 24h12  ║              │
+│         ╚═══════════╝              │
+│                                    │
+│   [AUTH]  [WALL]  [BOOT]          │
+│   [MIND]  [ROOT]  [MESH]          │
+│                                    │
+│   ═══════════════════════          │ ← 6 status rings
+│     CPU 23% │ MEM 41%              │
+└────────────────────────────────────┘
+```
+- **ECM/RNDIS** network: `10.55.0.0/30`
+- **CDC-ACM** serial: `/dev/ttyGS0` @ 115200
+
+### Mode: Flash (Recovery)
+```
+┌────────────────────────────────────┐
+│         ● FLASH MODE              │
+│      ████████████████ 100%         │ ← Progress bar
+│                                    │
+│         ╔═══════════╗              │
+│         ║  READY    ║              │
+│         ║ Boot from ║              │
+│         ║   USB     ║              │
+│         ╚═══════════╝              │
+│                                    │
+│   💾 secubox-flash.img             │
+│      256MB bootable                │
+│                                    │
+│   [REBOOT TARGET]  [CANCEL]        │
+└────────────────────────────────────┘
+```
+- **Mass Storage**: Bootable recovery image
+- **Serial**: U-Boot console access
+- Use case: Flash/recover bricked SecuBox
+
+### Mode: Debug
+```
+┌────────────────────────────────────┐
+│         ● DEBUG MODE              │
+│                                    │
+│    ┌──────────────────────────┐    │
+│    │ Network: 10.55.0.2       │    │
+│    │ Serial:  /dev/ttyACM0    │    │
+│    │ Storage: secubox-debug   │    │
+│    └──────────────────────────┘    │
+│                                    │
+│    📁 /var/log/secubox/            │
+│    📁 /etc/secubox/                │
+│    📁 /run/secubox/                │
+│                                    │
+│   [VIEW LOGS]  [EXPORT]  [STOP]    │
+└────────────────────────────────────┘
+```
+- **ECM** network + **Mass Storage** (R/W debug partition)
+- Use case: Extract logs, inspect config
+
+### Mode: TTY (Virtual Keyboard)
+```
+┌────────────────────────────────────┐
+│         ● TTY MODE                │
+│       Virtual HID Keyboard         │
+│                                    │
+│    ┌──────────────────────────┐    │
+│    │ > printenv               │    │ ← Command queue
+│    │ > setenv bootcmd run usb │    │
+│    │ > boot                   │    │
+│    └──────────────────────────┘    │
+│                                    │
+│    ⌨️  Sending keystroke...        │
+│       [████████░░░░] 67%           │
+│                                    │
+│   [PAUSE]  [CLEAR]  [+CMD]         │
+└────────────────────────────────────┘
+```
+- **HID Keyboard**: USB scan codes → target U-Boot
+- **Serial**: Capture output
+- Use case: Automated U-Boot commands, rescue boot
+
+### Mode: Auth (Eye Remote Security Key)
+```
+┌────────────────────────────────────┐
+│         ● EYE REMOTE              │
+│       FIDO2/U2F Security Key       │
+│                                    │
+│         ┌─────────────┐            │
+│         │ ▄▄▄ ▀▀▀ ▄▄▄│            │
+│         │ █▀█ ▄▄▄ █▀█│            │ ← QR Code
+│         │ ▀▀▀ █▀█ ▀▀▀│            │
+│         │ ▄▄▄ ▀▀▀ ▄▄▄│            │
+│         └─────────────┘            │
+│                                    │
+│    🔐 Touch to authenticate        │
+│       Challenge: a3f7...           │
+│                                    │
+│   [APPROVE]     [DENY]             │
+└────────────────────────────────────┘
+```
+- **FIDO2/U2F HID**: Hardware security key
+- **QR Display**: One-time challenge codes
+- Use case: SSH auth, WebAuthn, 2FA
+
+---
+
+## x64/amd64 Live Boot Support
+
+The Eye Remote dashboard also runs on **standard x64 systems** for:
+
+- **Live USB boot** environments
+- **SecuBox staging** and initial setup
+- **Touchscreen kiosks** (any resolution, scales to fit)
+- **VM testing** during development
+
+```bash
+# Build live USB with Eye Remote
+./image/build-live-usb.sh --profile x64-live --eye-remote
+
+# Run in VM for testing
+qemu-system-x86_64 -m 2G -cdrom secubox-live.iso \
+    -device virtio-vga -display gtk
+```
 
 ---
 
@@ -100,6 +254,52 @@ ssh pi@10.55.0.2
 
 ## Scripts
 
+### `secubox-otg-gadget.sh`
+
+USB OTG composite gadget controller for all modes.
+
+```bash
+# Start normal mode (ECM + Serial)
+sudo ./secubox-otg-gadget.sh start
+
+# Switch to TTY mode (HID keyboard)
+sudo ./secubox-otg-gadget.sh tty
+
+# Switch to Auth mode (Eye Remote)
+sudo ./secubox-otg-gadget.sh auth
+
+# Flash mode (bootable recovery)
+sudo ./secubox-otg-gadget.sh flash
+
+# Debug mode (network + storage)
+sudo ./secubox-otg-gadget.sh debug
+
+# Check status
+./secubox-otg-gadget.sh status
+```
+
+### `secubox-hid-keyboard.sh`
+
+Virtual keyboard for TTY mode automation.
+
+```bash
+# Send a command (type + Enter)
+./secubox-hid-keyboard.sh cmd 'printenv'
+
+# Type without Enter
+./secubox-hid-keyboard.sh type 'setenv bootcmd run bootusb'
+
+# Send special keys
+./secubox-hid-keyboard.sh enter
+./secubox-hid-keyboard.sh ctrl-c
+
+# Process command queue file
+./secubox-hid-keyboard.sh queue /run/secubox-cmd-queue
+
+# Interactive mode (stdin)
+echo -e "printenv\nboot" | ./secubox-hid-keyboard.sh interactive
+```
+
 ### `install_zerow.sh`
 
 Prépare et flashe une microSD pour RPi Zero W avec HyperPixel 2.1 Round.
@@ -149,15 +349,55 @@ Options facultatives:
 
 ## Architecture
 
+### Eye Remote as USB Gadget
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                     SecuBox Target (Armada/x86)                      │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │ USB Host Port                                                │    │
+│  │   ├── ECM/RNDIS Network ────────► 10.55.0.1 (usb0)          │    │
+│  │   ├── CDC-ACM Serial ───────────► /dev/ttyACM0              │    │
+│  │   ├── Mass Storage ─────────────► /dev/sda (debug/flash)    │    │
+│  │   └── HID Keyboard ─────────────► Virtual input device      │    │
+│  └─────────────────────────────────────────────────────────────┘    │
+│                              ▲ USB OTG                               │
+└──────────────────────────────┼──────────────────────────────────────┘
+                               │
+                    ┌──────────┴──────────┐
+                    │   USB Data Cable    │
+                    │   (NOT power-only)  │
+                    └──────────┬──────────┘
+                               │
+┌──────────────────────────────┼──────────────────────────────────────┐
+│                              ▼                                       │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │ configfs USB Gadget (libcomposite)                          │    │
+│  │   ├── ECM function ──────► usb0 (10.55.0.2)                 │    │
+│  │   ├── ACM function ──────► /dev/ttyGS0 (console)            │    │
+│  │   ├── Mass Storage ──────► /var/lib/secubox-*.img           │    │
+│  │   └── HID function ──────► /dev/hidg0 (keyboard)            │    │
+│  └─────────────────────────────────────────────────────────────┘    │
+│                                                                      │
+│                    RPi Zero W + HyperPixel 2.1 Round                 │
+│                         "SecuBox Eye Remote"                         │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Communication Flow
+
 ```
 SecuBox (Armada/x86)              RPi Zero W + HyperPixel
 ┌─────────────────────┐          ┌─────────────────────┐
 │  secubox-system     │          │  nginx:8080         │
 │  FastAPI:8000       │◄────────►│  ├── /api/* → proxy │
-│  └── /api/v1/system │   WiFi   │  └── /* → dashboard │
-│      /metrics       │          │                     │
-│      /metrics/alerts│          │  Chromium kiosk     │
-│      /metrics/modules          │  └── http://localhost:8080
+│  └── /api/v1/system │ USB OTG  │  └── /* → dashboard │
+│      /metrics       │ 10.55.0  │                     │
+│      /metrics/alerts│◄─WiFi───►│  Chromium kiosk     │
+│      /metrics/modules│ backup  │  └── localhost:8080 │
+│                     │          │                     │
+│  U-Boot console     │◄────────►│  HID Keyboard       │
+│  /dev/ttyACM0       │ Serial   │  secubox-hid-kbd.sh │
 └─────────────────────┘          └─────────────────────┘
 ```
 

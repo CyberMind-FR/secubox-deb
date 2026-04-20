@@ -13,7 +13,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 
 # ── Version ───────────────────────────────────────────────────────
-SECUBOX_VERSION="1.7.0"
+SECUBOX_VERSION="1.8.0"
 
 # ── Defaults ──────────────────────────────────────────────────────
 SUITE="bookworm"

@@ -1,0 +1,9 @@
+{
+  "id": "remote-ui",
+  "name": "Remote UI",
+  "category": "system",
+  "icon": "📺",
+  "path": "/remote-ui/",
+  "order": 15,
+  "description": "Manage HyperPixel Round Display (RPi Zero W)"
+}

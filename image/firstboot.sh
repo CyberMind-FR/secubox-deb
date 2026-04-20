@@ -20,6 +20,184 @@ ok()  { echo "[firstboot] OK: $*" | systemd-cat -t secubox-firstboot -p info 2>/
 
 log "=== SecuBox First Boot ==="
 
+# ── 0. Expand filesystem to use all available space ─────────────────
+expand_filesystem() {
+    log "Checking for filesystem expansion..."
+
+    # Find the root device
+    local root_dev root_part root_disk part_num
+    root_dev=$(findmnt -n -o SOURCE / 2>/dev/null | head -1)
+
+    # Handle overlay filesystems (get the underlying device)
+    if [[ "$root_dev" == "overlay" ]] || [[ "$root_dev" == "overlayfs" ]]; then
+        # Try to find the actual root from /proc/cmdline
+        root_dev=$(grep -oP 'root=\K[^ ]+' /proc/cmdline 2>/dev/null || echo "")
+        if [[ "$root_dev" == "LABEL="* ]]; then
+            local label="${root_dev#LABEL=}"
+            root_dev=$(blkid -L "$label" 2>/dev/null || echo "")
+        elif [[ "$root_dev" == "UUID="* ]]; then
+            local uuid="${root_dev#UUID=}"
+            root_dev=$(blkid -U "$uuid" 2>/dev/null || echo "")
+        fi
+    fi
+
+    if [[ -z "$root_dev" ]] || [[ ! -b "$root_dev" ]]; then
+        log "Could not determine root device - skipping expansion"
+        return 0
+    fi
+
+    log "Root device: $root_dev"
+
+    # Parse device and partition number
+    # Handle both /dev/mmcblk0p2 and /dev/sda2 styles
+    if [[ "$root_dev" =~ ^(/dev/[a-z]+)([0-9]+)$ ]]; then
+        root_disk="${BASH_REMATCH[1]}"
+        part_num="${BASH_REMATCH[2]}"
+    elif [[ "$root_dev" =~ ^(/dev/[a-z]+[0-9]+)p([0-9]+)$ ]]; then
+        root_disk="${BASH_REMATCH[1]}"
+        part_num="${BASH_REMATCH[2]}"
+    elif [[ "$root_dev" =~ ^(/dev/nvme[0-9]+n[0-9]+)p([0-9]+)$ ]]; then
+        root_disk="${BASH_REMATCH[1]}"
+        part_num="${BASH_REMATCH[2]}"
+    else
+        log "Could not parse device name: $root_dev"
+        return 0
+    fi
+
+    log "Disk: $root_disk, Partition: $part_num"
+
+    # Check if this is the last partition (the one we should expand)
+    # For our layout: p1=boot/ESP, p2=rootfs, p3=data
+    # We want to expand p3 (data) or p2 if no p3 exists
+
+    # Count partitions
+    local part_count
+    if [[ "$root_disk" == /dev/mmcblk* ]] || [[ "$root_disk" == /dev/nvme* ]]; then
+        part_count=$(ls -1 "${root_disk}p"* 2>/dev/null | wc -l)
+    else
+        part_count=$(ls -1 "${root_disk}"[0-9]* 2>/dev/null | wc -l)
+    fi
+
+    # Find the last partition
+    local last_part_num=$part_count
+    local last_part
+    if [[ "$root_disk" == /dev/mmcblk* ]] || [[ "$root_disk" == /dev/nvme* ]]; then
+        last_part="${root_disk}p${last_part_num}"
+    else
+        last_part="${root_disk}${last_part_num}"
+    fi
+
+    log "Last partition: $last_part (total: $part_count partitions)"
+
+    # Check if there's unused space after last partition
+    local disk_size_sectors part_end_sectors
+    disk_size_sectors=$(blockdev --getsz "$root_disk" 2>/dev/null || echo 0)
+
+    if [[ $disk_size_sectors -eq 0 ]]; then
+        log "Could not determine disk size"
+        return 0
+    fi
+
+    # Get end of last partition using parted
+    part_end_sectors=$(parted -s "$root_disk" unit s print 2>/dev/null | \
+        awk -v pnum="$last_part_num" '$1 == pnum { gsub("s","",$3); print $3 }')
+
+    if [[ -z "$part_end_sectors" ]]; then
+        log "Could not determine partition end"
+        return 0
+    fi
+
+    # Calculate free space (subtract 2048 sectors for safety margin)
+    local free_sectors=$((disk_size_sectors - part_end_sectors - 2048))
+    local free_mb=$((free_sectors * 512 / 1024 / 1024))
+
+    log "Disk size: $((disk_size_sectors * 512 / 1024 / 1024)) MB"
+    log "Partition end: $((part_end_sectors * 512 / 1024 / 1024)) MB"
+    log "Free space: ${free_mb} MB"
+
+    # Only expand if there's significant free space (> 100MB)
+    if [[ $free_mb -lt 100 ]]; then
+        log "Not enough free space to expand (${free_mb}MB < 100MB)"
+        return 0
+    fi
+
+    log "=== Expanding partition $last_part_num to use ${free_mb}MB of free space ==="
+
+    # Use growpart if available (cleaner), otherwise use parted
+    if command -v growpart &>/dev/null; then
+        log "Using growpart to expand partition..."
+        if growpart "$root_disk" "$last_part_num" 2>&1; then
+            ok "Partition expanded with growpart"
+        else
+            warn "growpart failed, trying parted..."
+            # Fallback to parted
+            parted -s "$root_disk" resizepart "$last_part_num" 100% 2>&1 || \
+                warn "Partition expansion failed"
+        fi
+    else
+        log "Using parted to expand partition..."
+        if parted -s "$root_disk" resizepart "$last_part_num" 100% 2>&1; then
+            ok "Partition expanded with parted"
+        else
+            warn "Partition expansion failed"
+            return 0
+        fi
+    fi
+
+    # Re-read partition table
+    partprobe "$root_disk" 2>/dev/null || true
+    sleep 2
+
+    # Now resize the filesystem
+    local fs_type
+    fs_type=$(blkid -s TYPE -o value "$last_part" 2>/dev/null || echo "")
+
+    log "Filesystem type on $last_part: $fs_type"
+
+    case "$fs_type" in
+        ext4|ext3|ext2)
+            log "Resizing ext4 filesystem..."
+            # resize2fs works on mounted filesystems
+            if resize2fs "$last_part" 2>&1; then
+                ok "ext4 filesystem expanded"
+            else
+                warn "resize2fs failed - may need reboot"
+            fi
+            ;;
+        xfs)
+            log "Resizing XFS filesystem..."
+            # xfs_growfs needs mount point
+            local mount_point
+            mount_point=$(findmnt -n -o TARGET "$last_part" 2>/dev/null || echo "")
+            if [[ -n "$mount_point" ]]; then
+                xfs_growfs "$mount_point" 2>&1 || warn "xfs_growfs failed"
+            else
+                warn "XFS partition not mounted - cannot resize"
+            fi
+            ;;
+        btrfs)
+            log "Resizing Btrfs filesystem..."
+            local mount_point
+            mount_point=$(findmnt -n -o TARGET "$last_part" 2>/dev/null || echo "")
+            if [[ -n "$mount_point" ]]; then
+                btrfs filesystem resize max "$mount_point" 2>&1 || warn "btrfs resize failed"
+            fi
+            ;;
+        *)
+            log "Unknown filesystem type: $fs_type - skipping resize"
+            ;;
+    esac
+
+    # Show new sizes
+    log "New partition layout:"
+    lsblk -o NAME,SIZE,FSTYPE,MOUNTPOINT "$root_disk" 2>/dev/null || true
+
+    ok "Filesystem expansion complete"
+}
+
+# Run expansion
+expand_filesystem
+
 # ── 1. Créer l'utilisateur système secubox ────────────────────────
 if ! id -u secubox >/dev/null 2>&1; then
   adduser --system --group --no-create-home \
