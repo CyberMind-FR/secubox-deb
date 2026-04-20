@@ -1,0 +1,16 @@
+[Unit]
+Description=SecuBox Eye Remote Framebuffer Dashboard
+After=hyperpixel2r-init.service
+Wants=hyperpixel2r-init.service
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/bin/python3 /usr/local/bin/fb_dashboard.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
