@@ -15,8 +15,8 @@ import time
 from pathlib import Path
 
 app = FastAPI(title="secubox-hub", version="1.7.0", root_path="/api/v1/hub")
-# Auth router - prefix applied here
-app.include_router(auth_router, prefix="/auth")
+# Auth router already has prefix="/auth" in secubox_core.auth
+app.include_router(auth_router)
 router = APIRouter()
 public_router = APIRouter(prefix="/public", tags=["public"])
 log = get_logger("hub")
@@ -81,7 +81,9 @@ _cache = {
 }
 CACHE_TTL = 5  # seconds - cache valid for 5 seconds
 
-MODULES = {
+# MODULES dict is dynamically populated from installed services
+# These are the "expected" core modules - actual list comes from systemd
+CORE_MODULES = {
     "crowdsec": "secubox-crowdsec",
     "netdata":  "secubox-netdata",
     "wireguard":"secubox-wireguard",
@@ -95,6 +97,37 @@ MODULES = {
     "mediaflow":"secubox-mediaflow",
     "cdn":      "secubox-cdn",
 }
+
+def _discover_modules() -> dict:
+    """Dynamically discover enabled/active secubox modules from systemd."""
+    modules = {}
+    try:
+        # Get enabled or active services only
+        r = subprocess.run(
+            ["systemctl", "list-units", "secubox-*.service", "--no-pager", "--no-legend", "--all"],
+            capture_output=True, text=True, timeout=10
+        )
+        for line in r.stdout.strip().split("\n"):
+            if not line.strip():
+                continue
+            # Format: UNIT LOAD ACTIVE SUB DESCRIPTION
+            parts = line.split(None, 4)
+            if len(parts) >= 4:
+                svc = parts[0].replace(".service", "")
+                # Skip runtime/core services
+                if svc in ("secubox-core", "secubox-runtime", "secubox-firstboot", "secubox-console"):
+                    continue
+                mod_id = svc.replace("secubox-", "")
+                modules[mod_id] = svc
+    except Exception as e:
+        log.warning("Module discovery failed: %s, using defaults", e)
+        return CORE_MODULES.copy()
+    # If discovery found modules, use them; otherwise fall back to defaults
+    return modules if modules else CORE_MODULES.copy()
+
+# Initialize MODULES with defaults - will be refreshed asynchronously
+MODULES = CORE_MODULES.copy()
+_modules_discovered = False
 
 
 def _refresh_services_cache():
@@ -134,13 +167,21 @@ def _refresh_system_stats():
         log.warning("System stats refresh failed: %s", e)
 
 
+_version_refresh_counter = 0
+
 async def _background_cache_refresh():
     """Background task to refresh cache every CACHE_TTL seconds."""
+    global _version_refresh_counter
     while True:
         try:
             _refresh_services_cache()
             _refresh_system_stats()
             _cache["last_refresh"] = time.time()
+            # Refresh package versions every 12 cycles (~60s)
+            _version_refresh_counter += 1
+            if _version_refresh_counter >= 12:
+                _version_refresh_counter = 0
+                _refresh_package_versions()
         except Exception as e:
             log.error("Background cache error: %s", e)
         await asyncio.sleep(CACHE_TTL)
@@ -149,7 +190,22 @@ async def _background_cache_refresh():
 @app.on_event("startup")
 async def startup():
     """Start background cache refresh task."""
-    # Initial sync refresh
+    global MODULES, _modules_discovered
+    # Discover modules (non-blocking via thread)
+    try:
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor() as pool:
+            future = pool.submit(_discover_modules)
+            discovered = future.result(timeout=15)
+            if discovered:
+                # Replace MODULES with discovered modules
+                MODULES.clear()
+                MODULES.update(discovered)
+                _modules_discovered = True
+                log.info("Discovered %d modules", len(MODULES))
+    except Exception as e:
+        log.warning("Module discovery timed out: %s, using defaults", e)
+    # Initial sync refresh (fast, no dpkg-query)
     _refresh_services_cache()
     _refresh_system_stats()
     _cache["last_refresh"] = time.time()
@@ -157,31 +213,49 @@ async def startup():
     asyncio.create_task(_background_cache_refresh())
 
 
+_version_cache: dict = {}
+
 def _get_package_version(pkg_name: str) -> str:
-    """Get installed package version via dpkg."""
-    try:
-        r = subprocess.run(["dpkg-query", "-W", "-f=${Version}", pkg_name],
-                          capture_output=True, text=True, timeout=2)
-        if r.returncode == 0 and r.stdout.strip():
-            return r.stdout.strip().split('-')[0]  # Return just the version, not debian revision
-    except Exception:
-        pass
+    """Get installed package version via dpkg (cached)."""
+    if pkg_name in _version_cache:
+        return _version_cache[pkg_name]
+    # Don't block - return placeholder and let background task fill it
     return "-"
+
+
+def _refresh_package_versions():
+    """Refresh all package versions in one batch call (non-blocking)."""
+    global _version_cache
+    try:
+        # Single dpkg call for all secubox packages
+        r = subprocess.run(
+            ["dpkg-query", "-W", "-f=${Package} ${Version}\n", "secubox-*"],
+            capture_output=True, text=True, timeout=30
+        )
+        if r.returncode == 0:
+            for line in r.stdout.strip().split("\n"):
+                if " " in line:
+                    pkg, ver = line.split(" ", 1)
+                    _version_cache[pkg] = ver.split("-")[0] if ver else "-"
+    except Exception as e:
+        log.debug("Package version refresh failed: %s", e)
 
 
 def _svc(name: str) -> dict:
     """Get service status from cache (fast) or direct call (fallback)."""
     if name in _cache["services"] and (time.time() - _cache["last_refresh"]) < CACHE_TTL * 2:
         svc_data = _cache["services"][name].copy()
-        # Add version if not already present
-        if "version" not in svc_data:
-            svc_data["version"] = _get_package_version(name)
+        # Add version from version cache
+        svc_data["version"] = _version_cache.get(name, "-")
         return svc_data
-    # Fallback to direct call if cache miss
-    r = subprocess.run(["systemctl", "is-active", name], capture_output=True, text=True, timeout=2)
-    sock = Path(f"/run/secubox/{name.replace('secubox-','')}.sock")
-    return {"name": name, "active": r.stdout.strip() == "active",
-            "socket": sock.exists(), "version": _get_package_version(name)}
+    # Fallback to direct call if cache miss (no version lookup to stay fast)
+    try:
+        r = subprocess.run(["systemctl", "is-active", name], capture_output=True, text=True, timeout=2)
+        sock = Path(f"/run/secubox/{name.replace('secubox-','')}.sock")
+        return {"name": name, "active": r.stdout.strip() == "active",
+                "socket": sock.exists(), "version": _version_cache.get(name, "-")}
+    except Exception:
+        return {"name": name, "active": False, "socket": False, "version": "-"}
 
 @router.get("/status")
 async def status(user=Depends(require_jwt)):

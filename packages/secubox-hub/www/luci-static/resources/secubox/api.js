@@ -8,19 +8,19 @@
 // Version: 0.7.1 - Fixed RPCD method names
 
 async function callStatus(params) {
-    return sbxFetch('/api/v1/hub/getStatus', params, 'GET');
+    return sbxFetch('/api/v1/hub/status', params, 'GET');
 }
 
 async function callModules(params) {
-    return sbxFetch('/api/v1/hub/getModules', params, 'GET');
+    return sbxFetch('/api/v1/hub/modules', params, 'GET');
 }
 
 async function callModulesByCategory(params) {
-    return sbxFetch('/api/v1/hub/modules_by_category', params, 'GET');
+    return sbxFetch('/api/v1/hub/menu', params, 'GET');
 }
 
 async function callModuleInfo(params) {
-    return sbxFetch('/api/v1/hub/getModuleInfo', params, 'GET');
+    return sbxFetch('/api/v1/hub/module_status', params, 'GET');
 }
 
 async function callStartModule(params) {
@@ -49,7 +49,7 @@ async function callCheckModuleEnabled(params) {
 }
 
 async function callHealth(params) {
-    return sbxFetch('/api/v1/hub/getHealth', params, 'GET');
+    return sbxFetch('/api/v1/hub/health', params, 'GET');
 }
 
 async function callDiagnostics(params) {
@@ -57,27 +57,27 @@ async function callDiagnostics(params) {
 }
 
 async function callSystemHealth(params) {
-    return sbxFetch('/api/v1/hub/get_system_health', params, 'GET');
+    return sbxFetch('/api/v1/hub/system_health', params, 'GET');
 }
 
 async function callPublicIPs(params) {
-    return sbxFetch('/api/v1/hub/get_public_ips', params, 'GET');
+    return sbxFetch('/api/v1/hub/network_summary', params, 'GET');
 }
 
 async function callAlerts(params) {
-    return sbxFetch('/api/v1/hub/get_alerts', params, 'GET');
+    return sbxFetch('/api/v1/hub/alerts', params, 'GET');
 }
 
 async function callQuickAction(params) {
-    return sbxFetch('/api/v1/hub/quick_action', params, 'GET');
+    return sbxFetch('/api/v1/hub/quick_actions', params, 'GET');
 }
 
 async function callDashboardData(params) {
-    return sbxFetch('/api/v1/hub/get_dashboard_data', params, 'GET');
+    return sbxFetch('/api/v1/hub/dashboard', params, 'GET');
 }
 
 async function callGetTheme(params) {
-    return sbxFetch('/api/v1/hub/get_theme', params, 'GET');
+    return sbxFetch('/api/v1/hub/theme', params, 'GET');
 }
 
 async function callSetTheme(params) {
@@ -85,11 +85,11 @@ async function callSetTheme(params) {
 }
 
 async function callDismissAlert(params) {
-    return sbxFetch('/api/v1/hub/dismiss_alert', params, 'GET');
+    return sbxFetch('/api/v1/hub/dismiss_notification', params, 'POST');
 }
 
 async function callClearAlerts(params) {
-    return sbxFetch('/api/v1/hub/clear_alerts', params, 'GET');
+    return sbxFetch('/api/v1/hub/dismiss_all_notifications', params, 'POST');
 }
 
 async function callFixPermissions(params) {
