@@ -1,9 +1,84 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-04-20 (Session 61)*
+*Mis à jour : 2026-04-20 (Session 62)*
 
 ---
 
-## 🔄 En cours (Session 61) — Eye Remote Documentation & Modes
+## 🔄 En cours (Session 62) — Eye Remote OFFLINE Image Builder
+
+### S62-01 — Fix build-eye-remote-image.sh ✅
+
+**Status:** ✅ Complete
+
+**Issue:** [GitHub Issue #30](https://github.com/CyberMind-FR/secubox-deb/issues/30)
+
+#### Problem (v1.8.0)
+The script was incomplete, missing critical components for a working Eye Remote SD image.
+
+#### Solution v1.8.1
+Added firstrun script (rc.local) with package installation at first boot.
+
+### S62-02 — OFFLINE Mode (v1.9.0) ✅
+
+**Status:** ✅ Complete
+
+#### Problem
+v1.8.1 required internet at first boot to download ~500MB of packages (chromium, nginx, lightdm, etc.). This is not acceptable for field deployment.
+
+#### Solution (v1.9.0 OFFLINE MODE)
+Complete rewrite to pre-install all packages via QEMU chroot during image build:
+
+1. ✅ **QEMU ARM emulation** — Uses qemu-user-static to run ARM binaries in chroot
+2. ✅ **Image expansion** — Adds 1GB to rootfs for pre-installed packages
+3. ✅ **Package pre-installation** — All dependencies installed at build time:
+   - chromium-browser, xserver-xorg, xinit, lightdm, openbox
+   - nginx, python3-pil, python3-pip, git, i2c-tools
+   - fonts-dejavu-core, unclutter, x11-xserver-utils
+4. ✅ **User creation in chroot** — secubox user with all groups configured
+5. ✅ **All configurations pre-applied:**
+   - LightDM autologin
+   - Openbox autostart with Chromium kiosk
+   - nginx site configuration
+   - USB OTG gadget services
+6. ✅ **No rc.local/firstrun** — System boots directly into kiosk mode
+7. ✅ **GitHub Actions updated** — Added qemu-user-static, increased timeout to 60min
+
+#### Files Modified
+- `remote-ui/round/build-eye-remote-image.sh` — v1.8.1 → v1.9.0 (complete rewrite)
+- `.github/workflows/build-eye-remote.yml` — Added QEMU deps, VERSION 1.9.0
+
+#### Build Requirements
+```bash
+# Host system needs:
+sudo apt install qemu-user-static binfmt-support parted e2fsprogs
+```
+
+#### Build & Test
+```bash
+# Download Raspberry Pi OS Lite (32-bit armhf)
+wget https://downloads.raspberrypi.com/raspios_lite_armhf/images/\
+raspios_lite_armhf-2024-11-19/2024-11-19-raspios-bookworm-armhf-lite.img.xz
+
+# Build OFFLINE image
+cd remote-ui/round
+sudo ./build-eye-remote-image.sh \
+    -i /path/to/raspios-lite.img.xz \
+    -s "WiFiSSID" -p "WiFiPassword"
+
+# Flash to SD card
+sudo dd if=/tmp/secubox-eye-remote-1.9.0.img of=/dev/sdX bs=4M status=progress
+```
+
+#### Boot Time Comparison
+
+| Version | First Boot | Requires Internet |
+|---------|------------|-------------------|
+| v1.8.0 | ~10 min (package download) | Yes |
+| v1.8.1 | ~10 min (package download) | Yes |
+| v1.9.0 | ~60 sec (ready immediately) | **No** |
+
+---
+
+## ✅ Completed (Session 61) — Eye Remote Documentation & Modes
 
 ### S61-01 — README.md Enhancement ✅
 

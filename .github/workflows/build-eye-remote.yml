@@ -22,7 +22,7 @@ on:
       - 'remote-ui/round/**'
 
 env:
-  VERSION: '1.8.0'
+  VERSION: '1.9.0'
   RPI_OS_URL: 'https://downloads.raspberrypi.com/raspios_lite_armhf/images/raspios_lite_armhf-2024-11-19/2024-11-19-raspios-bookworm-armhf-lite.img.xz'
 
 jobs:
@@ -43,7 +43,20 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq \
             parted dosfstools e2fsprogs \
-            xz-utils wget rsync
+            xz-utils wget rsync \
+            qemu-user-static binfmt-support
+
+          # Ensure ARM binfmt is registered
+          sudo systemctl restart binfmt-support || true
+          sudo update-binfmts --enable qemu-arm || true
+
+          # Verify QEMU is working
+          if [ -f /proc/sys/fs/binfmt_misc/qemu-arm ]; then
+            echo "✓ QEMU ARM binfmt registered"
+          else
+            echo "⚠ QEMU ARM binfmt not found, attempting manual registration"
+            sudo update-binfmts --import qemu-arm || true
+          fi
 
       - name: Download Raspberry Pi OS Lite
         run: |
@@ -51,25 +64,25 @@ jobs:
           wget -q -O /tmp/raspios-lite.img.xz "${{ env.RPI_OS_URL }}"
           ls -lh /tmp/raspios-lite.img.xz
 
-      - name: Build Eye Remote image
+      - name: Build Eye Remote image (OFFLINE MODE)
         run: |
           cd remote-ui/round
 
           # Build options
-          WIFI_OPTS=""
+          BUILD_ARGS="-i /tmp/raspios-lite.img.xz -o /tmp"
+
           if [ -n "${{ github.event.inputs.wifi_ssid }}" ]; then
-            WIFI_OPTS="-s '${{ github.event.inputs.wifi_ssid }}' -p '${{ github.event.inputs.wifi_psk }}'"
+            BUILD_ARGS="$BUILD_ARGS -s '${{ github.event.inputs.wifi_ssid }}' -p '${{ github.event.inputs.wifi_psk }}'"
           fi
 
           HOSTNAME="${{ github.event.inputs.hostname || 'secubox-round' }}"
+          BUILD_ARGS="$BUILD_ARGS -h $HOSTNAME"
 
-          sudo bash ./build-eye-remote-image.sh \
-            -i /tmp/raspios-lite.img.xz \
-            -o /tmp \
-            -h "$HOSTNAME"
+          echo "Building with: $BUILD_ARGS"
+          sudo bash ./build-eye-remote-image.sh $BUILD_ARGS
 
           sudo chown $(id -u):$(id -g) /tmp/secubox-eye-remote-*.img
-        timeout-minutes: 30
+        timeout-minutes: 60
 
       - name: Compress image
         run: |
@@ -103,11 +116,13 @@ jobs:
           append_body: true
           body: |
 
-            ### Eye Remote Image
+            ### Eye Remote Image (OFFLINE MODE)
 
             | Image | Hardware | Description |
             |-------|----------|-------------|
             | `secubox-eye-remote-${{ env.VERSION }}.img.xz` | RPi Zero W + HyperPixel 2.1 Round | USB Gadget Controller |
+
+            **🔌 OFFLINE MODE:** All packages pre-installed. No internet required at boot!
 
             **Flash to SD card:**
             ```bash
@@ -115,5 +130,7 @@ jobs:
             ```
 
             **Default credentials:** pi / raspberry
+
+            **First boot:** ~60s (no package download needed)
 
             See [Eye-Remote Wiki](https://github.com/CyberMind-FR/secubox-deb/wiki/Eye-Remote) for full documentation.
