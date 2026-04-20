@@ -17,11 +17,13 @@ fi
 
 # Load compressed image
 echo "Loading image..."
-if load usb 0:1 ${loadaddr} secubox-espressobin-v7-bookworm.img.gz; then
+if load usb 0:1 ${loadaddr} secubox-ebin-v7.img.gz; then
     echo "Image loaded: ${filesize} bytes"
+elif load usb 0:1 ${loadaddr} secubox-espressobin-v7-bookworm.img.gz; then
+    echo "Image loaded (alt name): ${filesize} bytes"
 else
     echo "ERROR: Image not found on USB"
-    echo "Expected: secubox-espressobin-v7-bookworm.img.gz"
+    echo "Expected: secubox-ebin-v7.img.gz"
     exit 1
 fi
 

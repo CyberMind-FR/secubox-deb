@@ -470,9 +470,24 @@ for iface in /sys/class/net/*; do
         lo|dummy*|docker*|veth*|br-*|virbr*) continue ;;
     esac
 
-    # Only process physical network interfaces
+    # Skip LAN interfaces - SecuBox IS the router on these (provides DHCP, not receives it)
+    # lan0, lan1 on EspressoBin are downstream ports to clients
     case "$IFACE" in
-        e*|w*|lan*|eth*|wan*) ;;
+        lan*)
+            logger -t secubox-net "Skipping LAN interface $IFACE (downstream port)"
+            continue
+            ;;
+    esac
+
+    # Skip interfaces that are part of a bridge (already managed)
+    if [[ -d "/sys/class/net/$IFACE/brport" ]]; then
+        logger -t secubox-net "Skipping $IFACE (bridged interface)"
+        continue
+    fi
+
+    # Only process WAN/uplink interfaces (need DHCP from upstream router)
+    case "$IFACE" in
+        eth*|wan*|en*) ;;
         *) continue ;;
     esac
 
@@ -504,8 +519,8 @@ for iface in /sys/class/net/*; do
         continue
     fi
 
-    # DHCP failed - try auto-discovery then fallback
-    if [[ "$IFACE" == e* ]] || [[ "$IFACE" == lan* ]] || [[ "$IFACE" == eth* ]] || [[ "$IFACE" == wan* ]]; then
+    # DHCP failed on WAN interface - try auto-discovery then fallback
+    if [[ "$IFACE" == e* ]] || [[ "$IFACE" == eth* ]] || [[ "$IFACE" == wan* ]] || [[ "$IFACE" == en* ]]; then
         logger -t secubox-net "DHCP failed on $IFACE, trying LAN auto-discovery..."
         if discover_lan "$IFACE"; then
             logger -t secubox-net "LAN auto-discovery succeeded on $IFACE"

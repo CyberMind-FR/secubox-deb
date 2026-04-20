@@ -19,8 +19,22 @@ NC='\033[0m'
 
 # Default paths
 DEFAULT_IMAGE="/secubox/secubox-ebin-v7.img.gz"
-EMMC_DEVICE="/dev/mmcblk1"
 LOG_FILE="/var/log/secubox-flash.log"
+
+# Auto-detect eMMC device (has boot0 partition - unique to eMMC, not SD cards)
+detect_emmc() {
+    local dev
+    for dev in /dev/mmcblk0 /dev/mmcblk1 /dev/mmcblk2; do
+        # eMMC has boot0 partition (block device), SD cards don't
+        if [[ -b "${dev}boot0" ]]; then
+            echo "$dev"
+            return 0
+        fi
+    done
+    return 1
+}
+
+EMMC_DEVICE=""
 
 # Options
 AUTO_MODE=0
@@ -87,22 +101,32 @@ done
 BOOT_DEVICE=$(findmnt -no SOURCE / 2>/dev/null | sed 's/[0-9]*$//' | sed 's/p$//')
 log "Boot device: $BOOT_DEVICE"
 
+# Auto-detect eMMC device
+if ! EMMC_DEVICE=$(detect_emmc); then
+    err "eMMC device not found!
+
+    Checked: /dev/mmcblk0, /dev/mmcblk1, /dev/mmcblk2
+    Looking for: boot0, boot1, rpmb partitions (eMMC signature)
+
+    This could mean:
+    - No eMMC installed on this board
+    - Kernel module not loaded (sdhci-xenon-esdhc)
+    - Check 'lsblk' output for available devices"
+fi
+
+log "Detected eMMC: $EMMC_DEVICE"
+
 # CRITICAL: Don't flash if running from eMMC
-if [[ "$BOOT_DEVICE" == "$EMMC_DEVICE" ]]; then
+if [[ "$BOOT_DEVICE" == "$EMMC_DEVICE" ]] || [[ "$BOOT_DEVICE" == "${EMMC_DEVICE}p"* ]]; then
     err "SAFETY STOP: Currently booted from eMMC ($EMMC_DEVICE)!
 
     You cannot flash the eMMC while running from it.
     Please boot from USB drive first, then run this script."
 fi
 
-# Check if eMMC exists
+# Verify eMMC is accessible
 if [[ ! -b "$EMMC_DEVICE" ]]; then
-    err "eMMC device not found: $EMMC_DEVICE
-
-    This could mean:
-    - No eMMC installed on this board
-    - Wrong device path (check with 'lsblk')
-    - Kernel module not loaded (sdhci-xenon)"
+    err "eMMC device not accessible: $EMMC_DEVICE"
 fi
 
 # ── Find image ──────────────────────────────────────────────────────
