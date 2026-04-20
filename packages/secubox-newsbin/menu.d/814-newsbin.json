@@ -1,7 +1,7 @@
 {
     "name": "Newsbin",
     "path": "/newsbin/",
-    "icon": "download",
+    "icon": "📥",
     "category": "apps",
     "order": 814,
     "description": "Usenet downloader management"

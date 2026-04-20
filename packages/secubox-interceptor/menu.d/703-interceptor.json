@@ -1,7 +1,7 @@
 {
   "id": "interceptor",
   "name": "Interceptor",
-  "icon": "interception",
+  "icon": "🎯",
   "path": "/interceptor/",
   "category": "security",
   "order": 703,

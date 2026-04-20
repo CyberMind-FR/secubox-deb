@@ -18,7 +18,7 @@ StandardError=journal
 
 # Security hardening
 NoNewPrivileges=yes
-ProtectSystem=full
+
 ProtectHome=yes
 PrivateTmp=yes
 ReadWritePaths=/run/secubox /var/lib/secubox/zkp

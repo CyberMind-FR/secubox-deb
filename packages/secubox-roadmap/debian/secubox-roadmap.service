@@ -17,9 +17,9 @@ StandardError=journal
 
 # Security hardening
 NoNewPrivileges=true
-ProtectSystem=full
+
 ProtectHome=true
-PrivateTmp=true
+
 ReadWritePaths=/run/secubox
 
 [Install]

@@ -15,11 +15,11 @@ ExecStart=/usr/bin/python3 -m uvicorn api.main:app \
     --log-level warning
 Restart=on-failure
 RestartSec=5
-PrivateTmp=true
+
 NoNewPrivileges=true
 RuntimeDirectory=secubox
 RuntimeDirectoryMode=0775
-ProtectSystem=full
+
 ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox /etc/mosquitto
 
 [Install]

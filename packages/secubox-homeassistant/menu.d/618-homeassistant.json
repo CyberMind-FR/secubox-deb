@@ -1,7 +1,7 @@
 {
   "id": "homeassistant",
   "name": "Home Assistant",
-  "icon": "home",
+  "icon": "🏠",
   "path": "/homeassistant/",
   "category": "apps",
   "order": 618,

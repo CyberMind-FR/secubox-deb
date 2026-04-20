@@ -1,7 +1,7 @@
 {
   "id": "turn",
   "name": "TURN/STUN Server",
-  "icon": "phone",
+  "icon": "📞",
   "path": "/turn/",
   "category": "network",
   "order": 914,

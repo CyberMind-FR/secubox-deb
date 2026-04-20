@@ -1,7 +1,7 @@
 {
   "id": "cookies",
   "name": "Cookie Tracker",
-  "icon": "cookie",
+  "icon": "🍪",
   "path": "/cookies/",
   "category": "privacy",
   "order": 704,
