@@ -1,44 +1,368 @@
-# SecuBox Remote UI — Wiki Technique
+# SecuBox Eye Remote — Wiki Technique
 
-Documentation technique complète pour le déploiement et la maintenance du dashboard HyperPixel 2.1 Round.
+Documentation technique complète pour le déploiement et la maintenance de l'Eye Remote sur HyperPixel 2.1 Round ou x64 live.
 
 ---
 
 ## Table des matières
 
 1. [Vue d'ensemble](#vue-densemble)
-2. [Prérequis matériel](#prérequis-matériel)
-3. [Installation détaillée](#installation-détaillée)
-4. [Architecture technique](#architecture-technique)
-5. [API Backend](#api-backend)
-6. [Frontend Dashboard](#frontend-dashboard)
-7. [Configuration avancée](#configuration-avancée)
-8. [Sécurité](#sécurité)
-9. [Maintenance](#maintenance)
-10. [Dépannage avancé](#dépannage-avancé)
+2. [Modes de fonctionnement](#modes-de-fonctionnement)
+3. [Mockups visuels](#mockups-visuels)
+4. [Prérequis matériel](#prérequis-matériel)
+5. [Installation détaillée](#installation-détaillée)
+6. [Architecture technique](#architecture-technique)
+7. [API Backend](#api-backend)
+8. [Frontend Dashboard](#frontend-dashboard)
+9. [USB OTG Gadget](#usb-otg-gadget)
+10. [Configuration avancée](#configuration-avancée)
+11. [Sécurité](#sécurité)
+12. [x64 Live Boot](#x64-live-boot)
+13. [Maintenance](#maintenance)
+14. [Dépannage avancé](#dépannage-avancé)
 
 ---
 
 ## Vue d'ensemble
 
-Le **SecuBox Remote UI — Round Edition** est un dashboard physique déporté qui affiche en temps réel l'état d'une appliance SecuBox. Il utilise un écran circulaire HyperPixel 2.1 Round (480×480 pixels) monté sur un Raspberry Pi Zero W.
+Le **SecuBox Eye Remote** est bien plus qu'un simple dashboard — c'est une **télécommande de sécurité multifonction** qui peut surveiller, déboguer, et même contrôler une appliance SecuBox via USB OTG.
+
+### Évolution du concept
+
+```
+Version 1.0 (Clock)          Version 2.0 (Eye Remote)
+┌────────────────────┐       ┌────────────────────┐
+│    Simple clock    │       │  Remote Control    │
+│    Status display  │  ──►  │  5 USB modes       │
+│    WiFi only       │       │  Security key      │
+│                    │       │  U-Boot keyboard   │
+│                    │       │  Live flash tool   │
+└────────────────────┘       └────────────────────┘
+```
 
 ### Cas d'usage
 
-- **Rack datacenter** : Affichage d'état visible sans connexion à l'interface web
-- **NOC** : Surveillance visuelle instantanée des modules de sécurité
-- **Showroom** : Démonstration des capacités SecuBox
-- **Home lab** : Monitoring élégant pour installation personnelle
+| Mode | Cas d'usage |
+|------|-------------|
+| **Normal** | Rack datacenter, NOC monitoring, status display |
+| **Flash** | Recovery d'une SecuBox briquée, installation initiale |
+| **Debug** | Export de logs, diagnostic terrain, support remote |
+| **TTY** | Commandes U-Boot automatisées, rescue boot |
+| **Auth** | 2FA hardware, SSH authentication, WebAuthn |
 
 ### Caractéristiques
 
 | Fonctionnalité | Détail |
 |----------------|--------|
-| Résolution | 480×480 pixels (circulaire) |
-| Rafraîchissement | 5 secondes (configurable) |
+| Résolution | 480×480 pixels (circulaire) ou adaptatif x64 |
+| Rafraîchissement | 2 secondes (configurable) |
 | Protocole | REST API + JWT |
 | Consommation | < 5W (RPi Zero W + écran) |
 | Mode hors-ligne | Simulation disponible |
+| USB Modes | ECM, ACM, Mass Storage, HID Keyboard, FIDO |
+| Plateformes | RPi Zero W, x64 Live USB, VM |
+
+---
+
+## Modes de fonctionnement
+
+### Vue d'ensemble des modes
+
+```
+                    ┌─────────────────────────────────────┐
+                    │        secubox-otg-gadget.sh        │
+                    └──────────────────┬──────────────────┘
+                                       │
+        ┌──────────┬───────────┬───────┼───────┬──────────┐
+        │          │           │       │       │          │
+        ▼          ▼           ▼       ▼       ▼          ▼
+    ┌───────┐  ┌───────┐  ┌───────┐ ┌─────┐ ┌──────┐  ┌──────┐
+    │ start │  │ flash │  │ debug │ │ tty │ │ auth │  │ stop │
+    └───┬───┘  └───┬───┘  └───┬───┘ └──┬──┘ └──┬───┘  └──┬───┘
+        │          │          │        │       │         │
+        ▼          ▼          ▼        ▼       ▼         ▼
+    ECM+ACM    Mass+ACM   ECM+Mass   HID+ACM  FIDO    Cleanup
+                          +ACM               +ACM
+```
+
+### Mode Normal (start)
+
+**Fonctions USB**: ECM/RNDIS (réseau) + CDC-ACM (série)
+
+```
+Gadget Configuration:
+├── functions/
+│   ├── ecm.usb0          ← Ethernet CDC (10.55.0.0/30)
+│   └── acm.usb0          ← Serial console (115200 baud)
+└── configs/c.1/
+    ├── ecm.usb0 → ../functions/ecm.usb0
+    └── acm.usb0 → ../functions/acm.usb0
+```
+
+**Status file** (`/run/secubox-gadget-status.json`):
+```json
+{
+  "mode": "normal",
+  "state": "active",
+  "message": "OTG network ready",
+  "timestamp": "2026-04-20T14:32:07+02:00",
+  "extra": {
+    "ip": "10.55.0.2",
+    "serial": "/dev/ttyGS0"
+  }
+}
+```
+
+### Mode Flash (Recovery)
+
+**Fonctions USB**: Mass Storage (bootable) + CDC-ACM (série)
+
+```
+Mass Storage Image:
+/var/lib/secubox-flash.img (256MB, FAT32 bootable)
+├── EFI/BOOT/
+│   └── BOOTX64.EFI       ← GRUB EFI loader
+├── vmlinuz               ← Kernel
+├── initrd.img            ← Initramfs avec secubox-rescue
+└── secubox-rescue.squashfs
+```
+
+**Workflow**:
+```
+1. Pi Zero expose image as bootable USB
+2. Target SecuBox boots from USB (F12/BIOS)
+3. Rescue system starts
+4. Flash eMMC from recovery image
+5. Round UI shows progress in real-time
+```
+
+### Mode Debug
+
+**Fonctions USB**: ECM + Mass Storage (R/W) + CDC-ACM
+
+```
+Debug Partition:
+/var/lib/secubox-debug.img (512MB, ext4)
+├── var/log/secubox/      ← Exported logs
+├── etc/secubox/          ← Config backup
+├── run/secubox/          ← Runtime state
+└── EXPORT_LOG.txt        ← Export manifest
+```
+
+**Cas d'usage**:
+- Extract logs without SSH access
+- Backup configuration
+- Forensic analysis
+
+### Mode TTY (Virtual Keyboard)
+
+**Fonctions USB**: HID Keyboard + CDC-ACM
+
+```
+HID Keyboard Report (8 bytes):
+┌─────────┬──────────┬──────┬──────┬──────┬──────┬──────┬──────┐
+│Modifier │ Reserved │ Key1 │ Key2 │ Key3 │ Key4 │ Key5 │ Key6 │
+└─────────┴──────────┴──────┴──────┴──────┴──────┴──────┴──────┘
+    0x00      0x00     Scan codes (USB HID Usage Tables)
+```
+
+**Commandes automatisées**:
+```bash
+# U-Boot rescue sequence
+./secubox-hid-keyboard.sh cmd 'printenv'
+./secubox-hid-keyboard.sh cmd 'setenv bootcmd run bootusb'
+./secubox-hid-keyboard.sh cmd 'saveenv'
+./secubox-hid-keyboard.sh cmd 'boot'
+```
+
+**Queue file** (`/run/secubox-cmd-queue`):
+```json
+["printenv", "setenv bootcmd run bootusb", "saveenv", "boot"]
+```
+
+### Mode Auth (Eye Remote Security Key)
+
+**Fonctions USB**: FIDO2/U2F HID + CDC-ACM
+
+```
+FIDO2 Flow:
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   Relying   │────►│  Eye Remote │────►│   Display   │
+│    Party    │     │  FIDO HID   │     │  QR + Touch │
+└─────────────┘     └─────────────┘     └─────────────┘
+     WebAuthn          Challenge           User approval
+     SSH auth          Response            via touchscreen
+```
+
+**Auth state** (`/run/secubox-auth-state.json`):
+```json
+{
+  "status": "pending",
+  "challenge": "a3f7bc91...",
+  "origin": "ssh://secubox.local",
+  "timestamp": "2026-04-20T14:32:07Z",
+  "qr_data": "otpauth://..."
+}
+```
+
+---
+
+## Mockups visuels
+
+### Dashboard Normal — État nominal
+```
+╔══════════════════════════════════════╗
+║         ● SECUBOX EYE               ║
+║           OTG MODE                   ║
+║                                      ║
+║         ╔═══════════════╗            ║
+║         ║   14:32:07    ║            ║
+║         ║   mer 20 avr  ║            ║
+║         ║   secubox-zr  ║            ║
+║         ║   up 24h12    ║            ║
+║         ╚═══════════════╝            ║
+║                                      ║
+║   ┌─────┐  ┌─────┐  ┌─────┐         ║
+║   │AUTH │  │WALL │  │BOOT │         ║
+║   │ 23% │  │ 41% │  │ 28% │         ║
+║   └─────┘  └─────┘  └─────┘         ║
+║   ┌─────┐  ┌─────┐  ┌─────┐         ║
+║   │MIND │  │ROOT │  │MESH │         ║
+║   │ 0.2 │  │ 44° │  │-62db│         ║
+║   └─────┘  └─────┘  └─────┘         ║
+║                                      ║
+║   ═══════════════════════            ║
+║   AUTH─WALL─BOOT─MIND─ROOT─MESH     ║
+║                                      ║
+║         ● NOMINAL                   ║
+║   TEMP [████████░░░░] 44°C          ║
+╚══════════════════════════════════════╝
+```
+
+### Dashboard Normal — Alerte CPU
+```
+╔══════════════════════════════════════╗
+║         ● SECUBOX EYE               ║
+║           OTG MODE                   ║
+║                                      ║
+║         ╔═══════════════╗            ║
+║         ║   14:32:07    ║            ║
+║         ╚═══════════════╝            ║
+║                                      ║
+║   ┌─────┐  ┌─────┐  ┌─────┐         ║
+║   │AUTH │  │WALL │  │BOOT │         ║
+║   │⚠87%│  │ 41% │  │ 28% │  ← Alert ║
+║   └─────┘  └─────┘  └─────┘         ║
+║                                      ║
+║   ═══════════════════════            ║
+║         ▲ AUTH 87%                  ║ ← Status bar
+║   TEMP [████████████░] 72°C         ║ ← Temp warning
+╚══════════════════════════════════════╝
+```
+
+### Mode Flash — Progress
+```
+╔══════════════════════════════════════╗
+║         ● FLASH MODE                ║
+║                                      ║
+║         ╔═══════════════╗            ║
+║         ║   FLASHING    ║            ║
+║         ║   eMMC...     ║            ║
+║         ╚═══════════════╝            ║
+║                                      ║
+║   ┌────────────────────────────┐     ║
+║   │ ████████████████░░░░░░░░░ │     ║
+║   │           67%              │     ║
+║   │   1.2 GB / 1.8 GB         │     ║
+║   │   ETA: 2m 34s             │     ║
+║   └────────────────────────────┘     ║
+║                                      ║
+║   💾 secubox-2.0.0-armada.img       ║
+║                                      ║
+║         [CANCEL]                    ║
+╚══════════════════════════════════════╝
+```
+
+### Mode TTY — Command Queue
+```
+╔══════════════════════════════════════╗
+║         ● TTY MODE                  ║
+║       Virtual HID Keyboard           ║
+║                                      ║
+║   ┌────────────────────────────┐     ║
+║   │ Queue (3 commands):        │     ║
+║   │ ✓ printenv                 │     ║
+║   │ ► setenv bootcmd run usb   │ ←   ║
+║   │   saveenv                  │     ║
+║   │   boot                     │     ║
+║   └────────────────────────────┘     ║
+║                                      ║
+║   ⌨️  Typing: setenv bootcm...      ║
+║      [██████████░░░░] 67%           ║
+║                                      ║
+║   Serial output:                     ║
+║   ┌────────────────────────────┐     ║
+║   │ => printenv                │     ║
+║   │ bootcmd=run bootmmc        │     ║
+║   │ =>                         │     ║
+║   └────────────────────────────┘     ║
+║                                      ║
+║   [PAUSE]  [SKIP]  [+CMD]           ║
+╚══════════════════════════════════════╝
+```
+
+### Mode Auth — QR Challenge
+```
+╔══════════════════════════════════════╗
+║         ● EYE REMOTE                ║
+║       FIDO2 Security Key             ║
+║                                      ║
+║   ┌────────────────────────────┐     ║
+║   │                            │     ║
+║   │    ▄▄▄▄▄ ▄ ▄ ▄ ▄▄▄▄▄      │     ║
+║   │    █ ▄▄▄ █ ▀▄  █ ▄▄▄ █    │     ║
+║   │    █ ███ █▀▀▄▄ █ ███ █    │     ║
+║   │    █▄▄▄▄█ ▄ █ ▄█▄▄▄▄█    │     ║
+║   │    ▄▄▄ ▄▄▄▄▄ ▄▄▄▄▄▄▄▄    │     ║
+║   │    ▀▀▀▀▄██▀▀▀▄ ▄▀█ ▀▀    │     ║
+║   │    ▄▄▄▄▄▄▄ ▀▄█▀▄ █▀▄█    │     ║
+║   │                            │     ║
+║   └────────────────────────────┘     ║
+║                                      ║
+║   🔐 SSH: root@secubox.local        ║
+║      Challenge: a3f7bc91...         ║
+║                                      ║
+║    ┌────────────┐ ┌────────────┐    ║
+║    │  APPROVE   │ │    DENY    │    ║
+║    │    ✓       │ │     ✗      │    ║
+║    └────────────┘ └────────────┘    ║
+╚══════════════════════════════════════╝
+```
+
+### Mode Debug — Export Logs
+```
+╔══════════════════════════════════════╗
+║         ● DEBUG MODE                ║
+║                                      ║
+║   Target: secubox-esbin              ║
+║   IP: 10.55.0.1                      ║
+║                                      ║
+║   ┌────────────────────────────┐     ║
+║   │ Exported files:            │     ║
+║   │ 📁 /var/log/secubox/       │     ║
+║   │    ├── crowdsec.log   2.1M │     ║
+║   │    ├── suricata.log   4.3M │     ║
+║   │    └── audit.log      892K │     ║
+║   │ 📁 /etc/secubox/           │     ║
+║   │    └── (14 files)     128K │     ║
+║   └────────────────────────────┘     ║
+║                                      ║
+║   Storage: [██████░░░░] 58% used    ║
+║   Total exported: 7.4 MB            ║
+║                                      ║
+║   [EXPORT MORE]  [EJECT]  [STOP]    ║
+╚══════════════════════════════════════╝
+```
 
 ---
 
@@ -425,6 +749,178 @@ Recommandations :
 
 ---
 
+## USB OTG Gadget
+
+### Configuration ConfigFS
+
+```bash
+# Gadget creation sequence
+GADGET=/sys/kernel/config/usb_gadget/secubox
+
+mkdir -p $GADGET
+cd $GADGET
+
+# Device descriptor
+echo 0x1d6b > idVendor    # Linux Foundation
+echo 0x0104 > idProduct   # Multifunction Composite Gadget
+echo 0x0100 > bcdDevice
+echo 0x0200 > bcdUSB
+
+# Strings
+mkdir -p strings/0x409
+echo "CyberMind"        > strings/0x409/manufacturer
+echo "SecuBox Eye"      > strings/0x409/product
+echo "$(cat /proc/cpuinfo | grep Serial | cut -d: -f2 | tr -d ' ')" \
+                        > strings/0x409/serialnumber
+
+# Configuration
+mkdir -p configs/c.1/strings/0x409
+echo "SecuBox OTG"      > configs/c.1/strings/0x409/configuration
+echo 250                > configs/c.1/MaxPower
+```
+
+### ECM Function (Ethernet)
+```bash
+mkdir -p functions/ecm.usb0
+# MAC addresses
+HOST_MAC="de:ad:be:ef:$(echo $SERIAL | cut -c1-4)"
+DEV_MAC="de:ad:be:ef:$(echo $SERIAL | cut -c5-8)"
+echo $HOST_MAC > functions/ecm.usb0/host_addr
+echo $DEV_MAC  > functions/ecm.usb0/dev_addr
+ln -s functions/ecm.usb0 configs/c.1/
+```
+
+### ACM Function (Serial)
+```bash
+mkdir -p functions/acm.usb0
+ln -s functions/acm.usb0 configs/c.1/
+# Creates /dev/ttyGS0 on gadget side
+# Creates /dev/ttyACM0 on host side
+```
+
+### Mass Storage Function
+```bash
+mkdir -p functions/mass_storage.usb0
+echo 1 > functions/mass_storage.usb0/stall
+echo 0 > functions/mass_storage.usb0/lun.0/cdrom
+echo 0 > functions/mass_storage.usb0/lun.0/ro
+echo 0 > functions/mass_storage.usb0/lun.0/nofua
+echo "/var/lib/secubox-debug.img" > functions/mass_storage.usb0/lun.0/file
+ln -s functions/mass_storage.usb0 configs/c.1/
+```
+
+### HID Keyboard Function
+```bash
+mkdir -p functions/hid.usb0
+echo 1   > functions/hid.usb0/protocol    # Keyboard
+echo 1   > functions/hid.usb0/subclass    # Boot interface
+echo 8   > functions/hid.usb0/report_length
+# HID Report Descriptor (boot keyboard)
+echo -ne '\x05\x01\x09\x06\xa1\x01\x05\x07...' \
+         > functions/hid.usb0/report_desc
+ln -s functions/hid.usb0 configs/c.1/
+# Creates /dev/hidg0
+```
+
+### Activation
+```bash
+# Find available UDC
+UDC=$(ls /sys/class/udc | head -1)
+echo $UDC > $GADGET/UDC
+```
+
+---
+
+## x64 Live Boot
+
+### Supported Platforms
+
+| Platform | Display | Touch | Notes |
+|----------|---------|-------|-------|
+| Standard PC | VGA/HDMI | Optional | Full resolution |
+| VM (QEMU) | virtio-vga | No | Testing only |
+| Intel NUC | HDMI/DP | USB | Industrial kiosk |
+| Mini PC | HDMI | USB HID | Cost-effective |
+
+### Building x64 Live Image
+
+```bash
+# Build with Eye Remote profile
+./image/build-live-usb.sh \
+    --profile x64-live \
+    --eye-remote \
+    --output /tmp/secubox-eye-live.iso
+
+# Contents
+secubox-eye-live.iso
+├── EFI/BOOT/
+│   └── BOOTX64.EFI
+├── boot/
+│   ├── vmlinuz
+│   └── initrd.img
+├── live/
+│   └── filesystem.squashfs
+└── secubox/
+    └── eye-remote/
+        ├── index.html
+        └── config/
+```
+
+### Boot Parameters
+
+```
+GRUB_CMDLINE:
+  quiet splash
+  secubox.mode=eye-remote
+  secubox.api=http://192.168.1.1:8000
+  secubox.display=auto
+```
+
+### Kiosk Configuration (x64)
+
+```bash
+# /etc/secubox/eye-remote.conf
+[display]
+resolution = "auto"       # or "1920x1080", "1280x720"
+fullscreen = true
+touch_enabled = true
+rotation = 0              # 0, 90, 180, 270
+
+[api]
+base_url = "http://secubox.local:8000"
+fallback_url = "http://192.168.1.1:8000"
+simulate = false
+
+[kiosk]
+browser = "chromium"      # or "firefox"
+hide_cursor = true
+disable_context_menu = true
+```
+
+### Use Cases
+
+1. **Initial SecuBox Setup**
+   - Boot x64 live USB on target hardware
+   - Eye Remote guides through setup wizard
+   - Configure network, passwords, modules
+
+2. **Staging Environment**
+   - Test SecuBox configurations
+   - Validate API responses
+   - Train operators on interface
+
+3. **Field Deployment**
+   - Portable diagnostic tool
+   - Works on any x64 laptop
+   - No permanent installation needed
+
+4. **Touchscreen Kiosk**
+   - Industrial HMI displays
+   - NOC wall displays
+   - Public demo stations
+
+---
+
 ## Maintenance
 
 ### Mise à jour du dashboard
@@ -565,6 +1061,46 @@ ssh secubox@secubox-round.local "sudo systemctl start secubox-remote-ui"
 
 ---
 
-*Documentation mise à jour : 2026-04-15*
-*Version : 1.0.0*
+## Annexe: Commandes rapides
+
+```bash
+# === Mode Switching ===
+sudo secubox-otg-gadget.sh start      # Normal mode
+sudo secubox-otg-gadget.sh tty        # TTY keyboard mode
+sudo secubox-otg-gadget.sh auth       # Eye Remote security key
+sudo secubox-otg-gadget.sh flash      # Recovery/flash mode
+sudo secubox-otg-gadget.sh debug      # Debug export mode
+sudo secubox-otg-gadget.sh stop       # Disable gadget
+secubox-otg-gadget.sh status          # Show current state
+
+# === TTY Keyboard ===
+./secubox-hid-keyboard.sh cmd 'printenv'
+./secubox-hid-keyboard.sh type 'hello world'
+./secubox-hid-keyboard.sh enter
+./secubox-hid-keyboard.sh ctrl-c
+./secubox-hid-keyboard.sh queue /run/secubox-cmd-queue
+
+# === Serial Console (from host) ===
+screen /dev/ttyACM0 115200
+minicom -D /dev/ttyACM0 -b 115200
+
+# === Network Debug ===
+ip addr show usb0                     # Gadget side
+ip addr show secubox-round            # Host side
+ping 10.55.0.1                        # From gadget to host
+ping 10.55.0.2                        # From host to gadget
+
+# === Screenshot ===
+ssh pi@secubox-round "DISPLAY=:0 scrot /tmp/eye.png"
+scp pi@secubox-round:/tmp/eye.png .
+
+# === x64 Live Boot ===
+./image/build-live-usb.sh --profile x64-live --eye-remote
+qemu-system-x86_64 -m 2G -cdrom secubox-eye-live.iso
+```
+
+---
+
+*Documentation mise à jour : 2026-04-20*
+*Version : 2.0.0 — Eye Remote Edition*
 *Auteur : Gérald Kerma — CyberMind*

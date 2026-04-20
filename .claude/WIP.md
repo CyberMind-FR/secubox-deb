@@ -1,9 +1,54 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-06-26 15:30 (Session 60)*
+*Mis à jour : 2026-04-20 (Session 61)*
 
 ---
 
-## 🔄 En cours (Session 60) — EspressoBin eMMC Boot Fixes
+## 🔄 En cours (Session 61) — Eye Remote Documentation & Modes
+
+### S61-01 — README.md Enhancement ✅
+
+**Status:** ✅ Complete
+
+Updated README.md with:
+- Eye Remote concept (transformation from clock to remote control)
+- 5 USB gadget modes documentation (Normal, Flash, Debug, TTY, Auth)
+- ASCII mockups for each mode
+- x64/amd64 live boot support
+- Architecture diagrams showing USB OTG flow
+- Script documentation for secubox-otg-gadget.sh and secubox-hid-keyboard.sh
+
+### S61-02 — WIKI.md Enhancement ✅
+
+**Status:** ✅ Complete
+
+Added to WIKI.md:
+- Complete modes documentation with technical details
+- Visual mockups for all 5 modes (ASCII art)
+- ConfigFS USB gadget configuration examples
+- x64 Live Boot section with build instructions
+- Quick command reference appendix
+
+### S61-03 — Infographic Prompt File ✅
+
+**Status:** ✅ Complete
+
+Created `INFOGRAPHIC-PROMPT.md` with 7 Claude.ai prompts for:
+1. Hero infographic (Eye Remote overview)
+2. Mode comparison infographic
+3. Quick Start howto
+4. Architecture diagram
+5. x64 Live Boot platforms
+6. Auth Mode (Security Key) infographic
+7. Social media banner
+
+#### Files Created/Modified
+- `remote-ui/round/README.md` — Enhanced with Eye Remote documentation
+- `remote-ui/round/WIKI.md` — Enhanced with modes, mockups, x64 support
+- `remote-ui/round/INFOGRAPHIC-PROMPT.md` — New file for image generation
+
+---
+
+## ✅ Completed (Session 60) — EspressoBin eMMC Boot Fixes
 
 ### S60-01 — HAProxy Service Restart Loop Fix ✅
 
@@ -3193,4 +3238,59 @@ sudo dd if=output/secubox-espressobin-v7-live-usb.img of=/dev/sdX bs=4M status=p
 # Boot from USB, then run:
 secubox-flash-emmc
 ```
+
+
+---
+
+## 2026-04-20: Remote UI Enhanced Architecture
+
+### New Gadget Modes (secubox-otg-gadget.sh v2.0)
+
+| Mode | Functions | Purpose |
+|------|-----------|---------|
+| **normal** | ECM + ACM | Network + Serial (default) |
+| **flash** | Mass Storage + ACM | Boot EspressoBin from USB for recovery/flashing |
+| **debug** | ECM + Mass Storage + ACM | Network + File exchange + Serial |
+
+### Round UI as Remote Control (Not Just Clock)
+
+The Round UI should function as a **full remote control interface**:
+
+1. **Mode Selector**
+   - Touch to switch between Normal/Flash/Debug modes
+   - Visual indicator of current mode
+
+2. **Status Panels**
+   - Normal: EspressoBin metrics (CPU, MEM, DISK, etc.)
+   - Flash: Boot status, flash progress, U-Boot console
+   - Debug: Connection status, file transfer, serial output
+
+3. **Interactive Controls**
+   - Reboot EspressoBin
+   - Start/Stop services
+   - Switch network modes
+   - Trigger eMMC flash
+
+4. **U-Boot Console**
+   - In Flash mode, display serial output from /dev/ttyGS0
+   - Send commands to U-Boot
+
+### Files Updated
+
+- `remote-ui/round/secubox-otg-gadget.sh` - Added flash/debug modes + status JSON
+- `image/firstboot.sh` - Added filesystem expansion for eMMC
+
+### Next Steps
+
+1. Update Round UI index.html with mode-aware interface
+2. Add WebSocket or polling for serial console output
+3. Create flash progress indicator
+4. Test USB enumeration between Pi Zero and EspressoBin
+
+### Current Issue
+
+Pi Zero USB enumeration failing with error -110 (timeout). Possible causes:
+- Cable issue (data lines)
+- Power issue
+- Gadget not ready fast enough
 

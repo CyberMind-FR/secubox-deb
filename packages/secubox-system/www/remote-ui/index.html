@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - Remote UI Management</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root {
+            --p31-peak: #00dd44;
+            --p31-hot: #00ff55;
+            --p31-mid: #009933;
+            --p31-dim: #006622;
+            --p31-ghost: #003311;
+            --p31-decay: #ffb347;
+            --tube-light: #e8f5e9;
+            --tube-pale: #c8e6c9;
+            --tube-soft: #a5d6a7;
+            --bg-dark: var(--tube-light);
+            --bg-card: var(--tube-pale);
+            --border: var(--tube-soft);
+            --text: #1a1a2e;
+            --text-dim: var(--p31-dim);
+            --primary: var(--p31-peak);
+            --cyan: var(--p31-peak);
+            --green: var(--p31-peak);
+            --red: #ff4466;
+            --yellow: var(--p31-decay);
+            --orange: #cc7722;
+            --purple: #a371f7;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Courier Prime', 'Courier New', monospace;
+            background: var(--tube-light);
+            color: var(--text);
+            display: flex;
+            min-height: 100vh;
+        }
+        .main { flex: 1; margin-left: 220px; }
+        .header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); background: var(--bg-card); }
+        .header-title h1 { font-size: 1.5rem; font-weight: 600; }
+        .header-actions { display: flex; gap: 0.75rem; }
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.875rem; transition: all 0.2s; }
+        .btn:hover { background: var(--bg-dark); }
+        .btn.primary { background: rgba(0,221,68,0.1); border-color: var(--primary); color: var(--primary); }
+        .btn.success { background: rgba(0,221,68,0.1); border-color: var(--green); color: var(--green); }
+        .btn.danger { background: rgba(255,68,102,0.1); border-color: var(--red); color: var(--red); }
+        .content { padding: 1.5rem; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .card-header h2 { font-size: 1rem; font-weight: 600; }
+        .info-row { display: flex; justify-content: space-between; padding: 0.6rem 0; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+        .info-row:last-child { border-bottom: none; }
+        .info-row .label { color: var(--text-dim); }
+        .status-indicator { display: flex; align-items: center; gap: 0.5rem; }
+        .status-dot { width: 12px; height: 12px; border-radius: 50%; animation: pulse 2s infinite; }
+        .status-dot.connected { background: var(--green); }
+        .status-dot.disconnected { background: var(--red); animation: none; }
+        .status-dot.connecting { background: var(--yellow); }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .transport-badge { padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.75rem; font-weight: bold; text-transform: uppercase; }
+        .transport-badge.otg { background: rgba(0,221,68,0.2); color: var(--green); border: 1px solid var(--green); }
+        .transport-badge.wifi { background: rgba(88,166,255,0.2); color: #58a6ff; border: 1px solid #58a6ff; }
+        .transport-badge.none { background: rgba(255,68,102,0.2); color: var(--red); border: 1px solid var(--red); }
+        .metric-card { text-align: center; padding: 1.5rem; }
+        .metric-value { font-size: 2.5rem; font-weight: bold; color: var(--primary); }
+        .metric-label { color: var(--text-dim); font-size: 0.875rem; margin-top: 0.5rem; }
+        .metric-icon { font-size: 2rem; margin-bottom: 0.5rem; }
+        .round-display-preview { width: 200px; height: 200px; border-radius: 50%; background: #080808; margin: 1rem auto; display: flex; align-items: center; justify-content: center; border: 4px solid var(--border); box-shadow: 0 0 20px rgba(0,221,68,0.3); }
+        .round-display-content { color: var(--green); text-align: center; font-size: 0.75rem; }
+        .round-display-time { font-size: 1.5rem; font-weight: bold; }
+        .serial-console { background: #0a0a0f; color: var(--green); font-family: monospace; padding: 1rem; border-radius: 6px; height: 200px; overflow-y: auto; font-size: 0.8rem; }
+        .network-diagram { display: flex; align-items: center; justify-content: center; gap: 2rem; padding: 2rem; }
+        .device-box { padding: 1rem 1.5rem; border: 2px solid var(--border); border-radius: 8px; text-align: center; background: var(--bg-card); }
+        .device-box.active { border-color: var(--green); box-shadow: 0 0 10px rgba(0,221,68,0.3); }
+        .connection-line { width: 60px; height: 4px; background: var(--border); position: relative; }
+        .connection-line.active { background: var(--green); }
+        .connection-line::before { content: ''; position: absolute; right: -4px; top: -4px; border: 6px solid transparent; border-left-color: inherit; }
+        .log-entry { padding: 0.25rem 0; border-bottom: 1px solid rgba(0,221,68,0.1); }
+        .log-entry.error { color: var(--red); }
+        .log-entry.warn { color: var(--yellow); }
+        .log-entry .timestamp { color: var(--text-dim); margin-right: 0.5rem; }
+    </style>
+</head>
+<body>
+    <!-- Sidebar placeholder - will be injected -->
+    <nav class="sidebar" id="sidebar"></nav>
+
+    <div class="main">
+        <header class="header">
+            <div class="header-title">
+                <h1>Remote UI Management</h1>
+            </div>
+            <div class="header-actions">
+                <button class="btn" onclick="probeConnection()">Probe Connection</button>
+                <button class="btn primary" onclick="refreshStatus()">Refresh</button>
+            </div>
+        </header>
+
+        <div class="content">
+            <!-- Connection Status -->
+            <div class="grid-2">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Connection Status</h2>
+                        <div class="status-indicator">
+                            <span class="status-dot" id="status-dot"></span>
+                            <span id="status-text">Checking...</span>
+                        </div>
+                    </div>
+                    <div class="info-row">
+                        <span class="label">Transport</span>
+                        <span class="transport-badge" id="transport-badge">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="label">Peer IP</span>
+                        <span id="peer-ip">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="label">Interface</span>
+                        <span id="interface-name">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="label">Serial Console</span>
+                        <span id="serial-status">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="label">Connected Since</span>
+                        <span id="connected-since">--</span>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Round Display Preview</h2>
+                    </div>
+                    <div class="round-display-preview">
+                        <div class="round-display-content">
+                            <div class="round-display-time" id="preview-time">--:--:--</div>
+                            <div id="preview-status">SECUBOX</div>
+                            <div id="preview-uptime">--</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Network Topology -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>Network Topology</h2>
+                </div>
+                <div class="network-diagram">
+                    <div class="device-box active">
+                        <div style="font-size: 1.5rem;">SecuBox</div>
+                        <div style="color: var(--text-dim); font-size: 0.8rem;">EspressoBin</div>
+                        <div id="ebin-ip">10.55.0.1</div>
+                    </div>
+                    <div class="connection-line" id="connection-line"></div>
+                    <div class="device-box" id="pizero-box">
+                        <div style="font-size: 1.5rem;">Remote UI</div>
+                        <div style="color: var(--text-dim); font-size: 0.8rem;">RPi Zero W</div>
+                        <div id="pizero-ip">10.55.0.2</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Metrics & Serial Console -->
+            <div class="grid-2">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>OTG Interfaces</h2>
+                    </div>
+                    <div id="interface-list">
+                        <div class="info-row">
+                            <span class="label">usb0 (ECM)</span>
+                            <span id="usb0-status">--</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="label">usb1 (RNDIS)</span>
+                            <span id="usb1-status">--</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="label">ttyACM0 (Serial)</span>
+                            <span id="ttyacm-status">--</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Serial Console</h2>
+                        <button class="btn" onclick="toggleSerial()">Connect</button>
+                    </div>
+                    <div class="serial-console" id="serial-output">
+                        <div class="log-entry">
+                            <span class="timestamp">[--:--:--]</span>
+                            Serial console not connected
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Event Log -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>Event Log</h2>
+                    <button class="btn" onclick="clearLog()">Clear</button>
+                </div>
+                <div class="serial-console" id="event-log" style="height: 150px;">
+                    <div class="log-entry">
+                        <span class="timestamp">[--:--:--]</span>
+                        Waiting for events...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api/v1';
+        let statusInterval = null;
+        let serialConnected = false;
+
+        // Time display
+        function updatePreviewTime() {
+            const now = new Date();
+            document.getElementById('preview-time').textContent =
+                now.toTimeString().split(' ')[0];
+        }
+        setInterval(updatePreviewTime, 1000);
+        updatePreviewTime();
+
+        // Fetch Remote UI status
+        async function refreshStatus() {
+            try {
+                const resp = await fetch(`${API_BASE}/remote-ui/status`, {
+                    headers: { 'Authorization': `Bearer ${getToken()}` }
+                });
+                const data = await resp.json();
+                updateUI(data);
+                logEvent('Status refreshed');
+            } catch (err) {
+                logEvent(`Error: ${err.message}`, 'error');
+            }
+        }
+
+        function updateUI(data) {
+            const dot = document.getElementById('status-dot');
+            const text = document.getElementById('status-text');
+            const badge = document.getElementById('transport-badge');
+            const line = document.getElementById('connection-line');
+            const pizeroBox = document.getElementById('pizero-box');
+
+            if (data.connected) {
+                dot.className = 'status-dot connected';
+                text.textContent = 'Connected';
+                line.className = 'connection-line active';
+                pizeroBox.className = 'device-box active';
+            } else {
+                dot.className = 'status-dot disconnected';
+                text.textContent = 'Disconnected';
+                line.className = 'connection-line';
+                pizeroBox.className = 'device-box';
+            }
+
+            badge.textContent = data.transport || 'none';
+            badge.className = `transport-badge ${data.transport || 'none'}`;
+
+            document.getElementById('peer-ip').textContent = data.peer_ip || '--';
+            document.getElementById('interface-name').textContent = data.interface || '--';
+            document.getElementById('serial-status').textContent =
+                data.serial_available ? 'Available' : 'Not available';
+            document.getElementById('connected-since').textContent =
+                data.connected_since ? new Date(data.connected_since).toLocaleString() : '--';
+        }
+
+        // Probe connection
+        async function probeConnection() {
+            try {
+                logEvent('Probing OTG connection...');
+                const resp = await fetch(`${API_BASE}/remote-ui/probe`, {
+                    headers: { 'Authorization': `Bearer ${getToken()}` }
+                });
+                const data = await resp.json();
+                logEvent(`Probe result: ${data.connected ? 'Connected' : 'Not connected'}`);
+                await refreshStatus();
+            } catch (err) {
+                logEvent(`Probe error: ${err.message}`, 'error');
+            }
+        }
+
+        // Serial console (placeholder)
+        function toggleSerial() {
+            serialConnected = !serialConnected;
+            const output = document.getElementById('serial-output');
+            if (serialConnected) {
+                output.innerHTML = '<div class="log-entry"><span class="timestamp">[' +
+                    new Date().toTimeString().split(' ')[0] + ']</span> Connected to /dev/ttyACM0</div>';
+                logEvent('Serial console connected');
+            } else {
+                output.innerHTML = '<div class="log-entry"><span class="timestamp">[--:--:--]</span> Serial console not connected</div>';
+                logEvent('Serial console disconnected');
+            }
+        }
+
+        // Event logging
+        function logEvent(msg, type = 'info') {
+            const log = document.getElementById('event-log');
+            const time = new Date().toTimeString().split(' ')[0];
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.innerHTML = `<span class="timestamp">[${time}]</span> ${msg}`;
+            log.insertBefore(entry, log.firstChild);
+
+            // Keep max 50 entries
+            while (log.children.length > 50) {
+                log.removeChild(log.lastChild);
+            }
+        }
+
+        function clearLog() {
+            document.getElementById('event-log').innerHTML = '';
+            logEvent('Log cleared');
+        }
+
+        // Token helper
+        function getToken() {
+            return localStorage.getItem('secubox_token') || '';
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            refreshStatus();
+            statusInterval = setInterval(refreshStatus, 10000);
+            logEvent('Remote UI management initialized');
+        });
+    </script>
+    <script src="/shared/sidebar.js"></script>
+</body>
+</html>
