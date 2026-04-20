@@ -13,7 +13,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VERSION="1.9.0"
+VERSION="1.10.0"
 OUTPUT_DIR="${OUTPUT_DIR:-/tmp}"
 OUTPUT_NAME="secubox-eye-remote-${VERSION}.img"
 
@@ -58,9 +58,11 @@ PACKAGES=(
     unclutter
     # Web server
     nginx
-    # Python (for dashboard)
+    # Python (for dashboard and HyperPixel init)
     python3-pil
     python3-pip
+    python3-pigpio
+    pigpio
     # Utilities
     git
     i2c-tools
@@ -262,29 +264,21 @@ else
     HP_OVERLAY="hyperpixel2r"
 
     # Install HyperPixel init script for non-KMS overlay
+    # FIX: Uses pigpio instead of RPi.GPIO (lgpio has GPIO allocation issues on Bookworm)
     if [[ -f "$SCRIPT_DIR/hyperpixel2r-init" ]]; then
-        log "Installing hyperpixel2r-init script..."
-        cp "$SCRIPT_DIR/hyperpixel2r-init" "$ROOT_MNT/usr/local/bin/"
-        chmod +x "$ROOT_MNT/usr/local/bin/hyperpixel2r-init"
+        log "Installing hyperpixel2r-init script (pigpio-based)..."
+        cp "$SCRIPT_DIR/hyperpixel2r-init" "$ROOT_MNT/usr/bin/"
+        chmod +x "$ROOT_MNT/usr/bin/hyperpixel2r-init"
 
-        cat > "$ROOT_MNT/etc/systemd/system/hyperpixel2r-init.service" << 'HP2RSVC'
-[Unit]
-Description=HyperPixel 2.1 Round Init
-DefaultDependencies=no
-Before=local-fs.target sysinit.target
+        # Copy service file (requires pigpiod)
+        cp "$SCRIPT_DIR/hyperpixel2r-init.service" "$ROOT_MNT/etc/systemd/system/"
 
-[Service]
-Type=oneshot
-ExecStart=/usr/local/bin/hyperpixel2r-init
-StandardOutput=journal
-StandardError=journal
-
-[Install]
-WantedBy=sysinit.target
-HP2RSVC
-        mkdir -p "$ROOT_MNT/etc/systemd/system/sysinit.target.wants"
+        # Enable services (pigpiod + hyperpixel2r-init)
+        mkdir -p "$ROOT_MNT/etc/systemd/system/multi-user.target.wants"
+        ln -sf /lib/systemd/system/pigpiod.service \
+            "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/pigpiod.service"
         ln -sf /etc/systemd/system/hyperpixel2r-init.service \
-            "$ROOT_MNT/etc/systemd/system/sysinit.target.wants/hyperpixel2r-init.service"
+            "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/hyperpixel2r-init.service"
     fi
 fi
 
@@ -331,11 +325,13 @@ dtoverlay=dwc2
 KMSCONFIG
 else
     cat >> "$BOOT_MNT/config.txt" << NONKMSCONFIG
-# HyperPixel 2.1 Round 480x480 - non-KMS overlay
-dtoverlay=${HP_OVERLAY},disable-i2c
+# HyperPixel 2.1 Round 480x480 - non-KMS overlay (DPI mode)
+# FIX: Use hyperpixel2r (not hyperpixel4), no disable-i2c flag
+dtoverlay=${HP_OVERLAY}
 
-# DPI configuration
+# DPI configuration (required for ST7701S LCD)
 enable_dpi_lcd=1
+display_default_lcd=1
 dpi_group=2
 dpi_mode=87
 dpi_output_format=0x7f216
@@ -419,9 +415,14 @@ apt-get install -y -qq --no-install-recommends \
     nginx \
     python3-pil \
     python3-pip \
+    python3-pigpio \
+    pigpio \
     git \
     i2c-tools \
     fonts-dejavu-core
+
+echo "=== Enabling pigpiod ==="
+systemctl enable pigpiod
 
 echo "=== Cleaning APT cache ==="
 apt-get clean

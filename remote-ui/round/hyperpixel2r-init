@@ -1,118 +1,87 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
+# ═══════════════════════════════════════════════════════════════════════════════
+# SecuBox Eye Remote — hyperpixel2r-init
+# Initializes ST7701S LCD controller for HyperPixel 2.1 Round display
+#
+# FIX: Uses pigpio instead of RPi.GPIO
+# On Raspberry Pi OS Bookworm, RPi.GPIO uses lgpio which has GPIO allocation
+# issues when DPI overlay is active. pigpio works correctly.
+#
+# Must run after pigpiod: systemctl start pigpiod
+#
+# CyberMind — https://cybermind.fr
+# Author: Gérald Kerma <gandalf@gk2.net>
+# Based on Pimoroni HyperPixel2r driver
+# ═══════════════════════════════════════════════════════════════════════════════
 
-# For some reason this script needs to be run twice - needs some debugging...
-
-
-# Backlight on BCM19:
-# gpio write 24 0
-# gpio write 24 1
-
-# config.txt:
-
-# dtoverlay=hyperpixel4
-# overscan_left=0
-# overscan_right=0
-# overscan_top=0
-# overscan_bottom=0
-# enable_dpi_lcd=1
-# display_default_lcd=1
-# display_rotate=0
-# dpi_group=2
-# dpi_mode=87
-# dpi_output_format=0x7f216
-
-# hdmi_timings=480 0 10 16 55 480 0 15 60 15 0 0 0 60 0 19200000 6
-
-import RPi.GPIO as GPIO
+import sys
 import time
 
+try:
+    import pigpio
+except ImportError:
+    print('ERROR: pigpio module not found. Install with: apt install python3-pigpio')
+    sys.exit(1)
 
-CLK = 11
-MOSI = 10
-CS = 18
-DELAY = 0.00001
+# Software SPI pins for ST7701S initialization
+CLK = 11   # GPIO 11 - Clock
+MOSI = 10  # GPIO 10 - Data out
+CS = 18    # GPIO 18 - Chip select
+BL = 19    # GPIO 19 - Backlight
 
-
-def setupSpiPins(clkPin, mosiPin, csPin):
-    GPIO.setmode(GPIO.BCM)
-    GPIO.setwarnings(False)
-    GPIO.setup(clkPin, GPIO.OUT)
-    GPIO.output(clkPin, GPIO.LOW)
-    GPIO.setup(mosiPin, GPIO.OUT)
-    GPIO.setup(csPin, GPIO.OUT, initial=GPIO.HIGH)
-
-
-def sendBits(data, numBits=8, csPin=CS, clkPin=CLK, mosiPin=MOSI):
-    # print("{:09b}".format(data))
-    data <<= (9 - numBits)
-
-    for bit in range(numBits):
-        # Set RPi's output bit high or low depending on highest bit of data field
-        GPIO.output(mosiPin, GPIO.HIGH if data & 0x100 else GPIO.LOW)
-
-        # Advance data to the next bit
-        data <<= 1
-
-        # Pulse the clock pin HIGH then immediately low
-        time.sleep(DELAY)
-        GPIO.output(clkPin, GPIO.HIGH)
-        time.sleep(DELAY)
-        GPIO.output(clkPin, GPIO.LOW)
-
-    GPIO.output(mosiPin, GPIO.LOW)  # 00 is NOP, so set data pin low to make sure read operations don't cause weirdness
+DELAY = 0.00001  # 10us between bits
 
 
-def SPI_Write(output):
-    sendBits(output, 9, CS, CLK, MOSI)
+def main():
+    print('HyperPixel 2.1 Round - Initializing ST7701S LCD via pigpio...')
 
+    pi = pigpio.pi()
+    if not pi.connected:
+        print('ERROR: Cannot connect to pigpiod.')
+        print('Start it with: sudo systemctl start pigpiod')
+        sys.exit(1)
 
-def SPI_WriteComm(b):
-    SPI_Write(b)
+    # Setup GPIO pins
+    pi.set_mode(CLK, pigpio.OUTPUT)
+    pi.set_mode(MOSI, pigpio.OUTPUT)
+    pi.set_mode(CS, pigpio.OUTPUT)
+    pi.set_mode(BL, pigpio.OUTPUT)
 
+    pi.write(CLK, 0)
+    pi.write(CS, 1)
+    pi.write(BL, 1)  # Backlight ON
 
-def SPI_WriteData(b):
-    SPI_Write(b | 0x100)
+    def sendBits(data, numBits=8):
+        data <<= (9 - numBits)
+        for bit in range(numBits):
+            pi.write(MOSI, 1 if data & 0x100 else 0)
+            data <<= 1
+            time.sleep(DELAY)
+            pi.write(CLK, 1)
+            time.sleep(DELAY)
+            pi.write(CLK, 0)
+        pi.write(MOSI, 0)
 
+    def SPI_Write(output):
+        sendBits(output, 9)
 
-def Delay(ms):
-    time.sleep(ms / 1000.0)
+    def SPI_WriteComm(b):
+        SPI_Write(b)
 
-# BCM 2 = vsync, sync spike high
-# BCM 3 = hsync, sync spike high
-# BCM 0 = DPI clock
-# BCM 1 = display enable, enabled when high
+    def SPI_WriteData(b):
+        SPI_Write(b | 0x100)
 
+    def Delay(ms):
+        time.sleep(ms / 1000.0)
 
-# DPI_OUTPUT_FORMAT = 0x6f016
-# 6 = DPI_OUTPUT_FORMAT_18BIT_666_CFG2
-# 1 = DPI_RGB_ORDER_RGB
-# 0 = output_enable_mode, invert_pixel_clock are default
-# f = hsync_disable, vsync_disable, output_enable_disable are all 1???
-# 6 = hsync_polarity=0, vsync_polarity=1, output_enable_polarity=1
+    # Begin initialization sequence
+    pi.write(CS, 0)
 
-# 7 = hsync_polarity=1, vsync_polarity=1, output_enable_polarity=1
-
-# R2 = BCM 20 = gpio mode 28 down
-# R3 = BCM 21 = wpi 29
-# R4 = BCM 22 = wpi 3
-# R5 = BCM 23 = wpi 4
-# R6 = BCM 24 = wpi 5
-# R7 = BCM 25 = wpi 6
-
-
-def setup_hp2_round(CLK, MOSI, CS):
-    # #****************************************************************************//
-    # #****************************** Page 1 Command ******************************//
-    # #****************************************************************************//
-    GPIO.output(CS, GPIO.LOW)
-
-    # ST7701S:
-    # HW_Reset()         # VBP>=11, VFP>=7
-
-    SPI_WriteComm(0x01)  # Niko added reset
-
+    # Software reset
+    SPI_WriteComm(0x01)
     Delay(240)
 
+    # Page 1 Command
     SPI_WriteComm(0xFF)
     SPI_WriteData(0x77)
     SPI_WriteData(0x01)
@@ -129,51 +98,14 @@ def setup_hp2_round(CLK, MOSI, CS):
     SPI_WriteData(0x02)
 
     SPI_WriteComm(0xC2)
-    SPI_WriteData(0x00)  # 07 OR 00
+    SPI_WriteData(0x00)
     SPI_WriteData(0x02)
 
     SPI_WriteComm(0xCC)
     SPI_WriteData(0x10)
 
-    # Gamma option A:
-    # SPI_WriteComm(0xB0) # IPS
-    # SPI_WriteData(0x00) # 255
-    # SPI_WriteData(0x11) # 251
-    # SPI_WriteData(0x16) # 247  down
-    # SPI_WriteData(0x0e) # 239
-    # SPI_WriteData(0x11) # 231
-    # SPI_WriteData(0x06) # 203
-    # SPI_WriteData(0x05) # 175
-    # SPI_WriteData(0x09) # 147
-    # SPI_WriteData(0x08) # 108
-    # SPI_WriteData(0x21) # 80
-    # SPI_WriteData(0x06) # 52
-    # SPI_WriteData(0x13) # 24
-    # SPI_WriteData(0x10) # 16
-    # SPI_WriteData(0x29) # 8    down
-    # SPI_WriteData(0x31) # 4
-    # SPI_WriteData(0x18) # 0
-
-    # SPI_WriteComm(0xB1)#  IPS
-    # SPI_WriteData(0x00)#  255
-    # SPI_WriteData(0x11)#  251
-    # SPI_WriteData(0x16)#  247   down
-    # SPI_WriteData(0x0e)#  239
-    # SPI_WriteData(0x11)#  231
-    # SPI_WriteData(0x07)#  203
-    # SPI_WriteData(0x05)#  175
-    # SPI_WriteData(0x09)#  147
-    # SPI_WriteData(0x09)#  108
-    # SPI_WriteData(0x21)#  80
-    # SPI_WriteData(0x05)#  52
-    # SPI_WriteData(0x13)#  24
-    # SPI_WriteData(0x11)#  16
-    # SPI_WriteData(0x2a)#  8  down
-    # SPI_WriteData(0x31)#  4
-    # SPI_WriteData(0x18)#  0
-
-    # Gamma option B:
-    SPI_WriteComm(0xB0)  # Positive Voltage Gamma Control
+    # Positive Voltage Gamma Control
+    SPI_WriteComm(0xB0)
     SPI_WriteData(0x02)
     SPI_WriteData(0x13)
     SPI_WriteData(0x1B)
@@ -191,7 +123,8 @@ def setup_hp2_round(CLK, MOSI, CS):
     SPI_WriteData(0x33)
     SPI_WriteData(0x1D)
 
-    SPI_WriteComm(0xB1)  # Negative Voltage Gamma Control
+    # Negative Voltage Gamma Control
+    SPI_WriteComm(0xB1)
     SPI_WriteData(0x05)
     SPI_WriteData(0x13)
     SPI_WriteData(0x1B)
@@ -209,6 +142,7 @@ def setup_hp2_round(CLK, MOSI, CS):
     SPI_WriteData(0x33)
     SPI_WriteData(0x1D)
 
+    # Page 2 Command
     SPI_WriteComm(0xFF)
     SPI_WriteData(0x77)
     SPI_WriteData(0x01)
@@ -216,20 +150,20 @@ def setup_hp2_round(CLK, MOSI, CS):
     SPI_WriteData(0x00)
     SPI_WriteData(0x11)
 
-    SPI_WriteComm(0xB0)  # VOP  3.5375+ *x 0.0125
-    SPI_WriteData(0x5D)  # 6D OR 5D
+    SPI_WriteComm(0xB0)  # VOP 3.5375+ *x 0.0125
+    SPI_WriteData(0x5D)
 
-    SPI_WriteComm(0xB1)  # VCOM amplitude setting
-    SPI_WriteData(0x43)  # 37 OR 43
+    SPI_WriteComm(0xB1)  # VCOM amplitude
+    SPI_WriteData(0x43)
 
-    SPI_WriteComm(0xB2)  # VGH Voltage setting
-    SPI_WriteData(0x81)  # 12V
+    SPI_WriteComm(0xB2)  # VGH 12V
+    SPI_WriteData(0x81)
 
     SPI_WriteComm(0xB3)
     SPI_WriteData(0x80)
 
-    SPI_WriteComm(0xB5)  # VGL Voltage setting
-    SPI_WriteData(0x43)  # -8.3V
+    SPI_WriteComm(0xB5)  # VGL -8.3V
+    SPI_WriteData(0x43)
 
     SPI_WriteComm(0xB7)
     SPI_WriteData(0x85)
@@ -370,6 +304,7 @@ def setup_hp2_round(CLK, MOSI, CS):
     SPI_WriteData(0x3F)
     SPI_WriteData(0x1F)
 
+    # Page 3 Command
     SPI_WriteComm(0xFF)
     SPI_WriteData(0x77)
     SPI_WriteData(0x01)
@@ -380,6 +315,7 @@ def setup_hp2_round(CLK, MOSI, CS):
     SPI_WriteComm(0xEF)
     SPI_WriteData(0x08)
 
+    # Exit page mode
     SPI_WriteComm(0xFF)
     SPI_WriteData(0x77)
     SPI_WriteData(0x01)
@@ -387,26 +323,32 @@ def setup_hp2_round(CLK, MOSI, CS):
     SPI_WriteData(0x00)
     SPI_WriteData(0x00)
 
+    # Display configuration
     SPI_WriteComm(0xCD)  # RGB format COLCTRL
     SPI_WriteData(0x08)
-    # SPI_WriteData(0x00)
 
-    SPI_WriteComm(0x36) # MadCtl
+    SPI_WriteComm(0x36)  # MadCtl
     SPI_WriteData(0x08)
 
     SPI_WriteComm(0x3A)  # Colmod
     SPI_WriteData(0x66)
 
+    # Sleep out
     SPI_WriteComm(0x11)
     Delay(120)
 
+    # Display on
     SPI_WriteComm(0x29)
     Delay(20)
 
-    GPIO.output(CS, GPIO.HIGH)
+    pi.write(CS, 1)
+
+    print('ST7701S LCD initialized successfully!')
+    print('Backlight ON (GPIO 19)')
+
+    pi.stop()
+    return 0
 
 
 if __name__ == '__main__':
-    setupSpiPins(CLK, MOSI, CS)
-
-    setup_hp2_round(CLK, MOSI, CS)
+    sys.exit(main())

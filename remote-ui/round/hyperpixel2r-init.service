@@ -1,11 +1,15 @@
 [Unit]
-Description=HyperPixel 2.0" Round LCD Display Initialization
-DefaultDependencies=no
-After=basic.target
+Description=HyperPixel 2.1 Round LCD Display Initialization
+# Requires pigpiod for GPIO access (RPi.GPIO/lgpio has allocation issues on Bookworm)
+After=pigpiod.service
+Requires=pigpiod.service
 
 [Service]
 Type=oneshot
 ExecStart=/usr/bin/hyperpixel2r-init
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
