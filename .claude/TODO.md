@@ -248,7 +248,7 @@ Advanced security features:
   - Fixed: dtoverlay=hyperpixel2r (not hyperpixel4)
   - Fixed: hyperpixel2r-init uses pigpio instead of RPi.GPIO (lgpio issues on Bookworm)
   - Fixed: Service dependencies (requires pigpiod)
-- [ ] **P11-R08** Deploy dashboard and verify metrics display
+- [x] **P11-R08** Display verified working after reboot ✅
 
 ### Kiosk Mode
 - [ ] **P11-01** Display SecuBox version in kiosk mode header/footer
