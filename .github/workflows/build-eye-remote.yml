@@ -1,0 +1,119 @@
+name: Build Eye Remote Image
+
+on:
+  workflow_dispatch:
+    inputs:
+      wifi_ssid:
+        description: 'WiFi SSID (optional)'
+        required: false
+        default: ''
+      wifi_psk:
+        description: 'WiFi password (optional)'
+        required: false
+        default: ''
+      hostname:
+        description: 'Device hostname'
+        required: false
+        default: 'secubox-round'
+  push:
+    tags:
+      - 'v*'
+    paths:
+      - 'remote-ui/round/**'
+
+env:
+  VERSION: '1.8.0'
+  RPI_OS_URL: 'https://downloads.raspberrypi.com/raspios_lite_armhf/images/raspios_lite_armhf-2024-11-19/2024-11-19-raspios-bookworm-armhf-lite.img.xz'
+
+jobs:
+  build-eye-remote:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          df -h
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            parted dosfstools e2fsprogs \
+            xz-utils wget rsync
+
+      - name: Download Raspberry Pi OS Lite
+        run: |
+          echo "Downloading Raspberry Pi OS Lite (armhf)..."
+          wget -q -O /tmp/raspios-lite.img.xz "${{ env.RPI_OS_URL }}"
+          ls -lh /tmp/raspios-lite.img.xz
+
+      - name: Build Eye Remote image
+        run: |
+          cd remote-ui/round
+
+          # Build options
+          WIFI_OPTS=""
+          if [ -n "${{ github.event.inputs.wifi_ssid }}" ]; then
+            WIFI_OPTS="-s '${{ github.event.inputs.wifi_ssid }}' -p '${{ github.event.inputs.wifi_psk }}'"
+          fi
+
+          HOSTNAME="${{ github.event.inputs.hostname || 'secubox-round' }}"
+
+          sudo bash ./build-eye-remote-image.sh \
+            -i /tmp/raspios-lite.img.xz \
+            -o /tmp \
+            -h "$HOSTNAME"
+
+          sudo chown $(id -u):$(id -g) /tmp/secubox-eye-remote-*.img
+        timeout-minutes: 30
+
+      - name: Compress image
+        run: |
+          cd /tmp
+          echo "Compressing Eye Remote image..."
+          xz -9 -v secubox-eye-remote-${{ env.VERSION }}.img
+          ls -lh secubox-eye-remote-${{ env.VERSION }}.img.xz
+
+      - name: Generate checksums
+        run: |
+          cd /tmp
+          sha256sum secubox-eye-remote-${{ env.VERSION }}.img.xz > secubox-eye-remote-${{ env.VERSION }}.sha256
+          cat secubox-eye-remote-${{ env.VERSION }}.sha256
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: secubox-eye-remote-${{ env.VERSION }}
+          path: |
+            /tmp/secubox-eye-remote-${{ env.VERSION }}.img.xz
+            /tmp/secubox-eye-remote-${{ env.VERSION }}.sha256
+          retention-days: 30
+
+      - name: Upload to release (on tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            /tmp/secubox-eye-remote-${{ env.VERSION }}.img.xz
+            /tmp/secubox-eye-remote-${{ env.VERSION }}.sha256
+          append_body: true
+          body: |
+
+            ### Eye Remote Image
+
+            | Image | Hardware | Description |
+            |-------|----------|-------------|
+            | `secubox-eye-remote-${{ env.VERSION }}.img.xz` | RPi Zero W + HyperPixel 2.1 Round | USB Gadget Controller |
+
+            **Flash to SD card:**
+            ```bash
+            xzcat secubox-eye-remote-${{ env.VERSION }}.img.xz | sudo dd of=/dev/sdX bs=4M status=progress
+            ```
+
+            **Default credentials:** pi / raspberry
+
+            See [Eye-Remote Wiki](https://github.com/CyberMind-FR/secubox-deb/wiki/Eye-Remote) for full documentation.
