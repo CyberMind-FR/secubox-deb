@@ -15,7 +15,7 @@ set -euo pipefail
 # ══════════════════════════════════════════════════════════════════════════════
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VERSION="1.0.0"
+VERSION="1.8.0"
 
 # Couleurs
 RED='\033[0;31m'
@@ -662,12 +662,14 @@ OTGCFG
     # cmdline.txt: charger libcomposite au boot (pas g_ether car on utilise configfs)
     sed -i 's/rootwait/rootwait modules-load=dwc2,libcomposite/' "$BOOT_MNT/cmdline.txt"
 
-    # /etc/modules: modules nécessaires
+    # /etc/modules: modules nécessaires (all gadget modes)
     cat >> "$ROOT_MNT/etc/modules" << 'MODEOF'
 dwc2
 libcomposite
 usb_f_ecm
 usb_f_acm
+usb_f_mass_storage
+usb_f_hid
 MODEOF
 
     # /etc/modprobe.d/secubox-otg.conf: forcer mode peripheral
@@ -687,6 +689,26 @@ MODPROBE
 
     # Copier le service console série
     cp "$SCRIPT_DIR/secubox-serial-console.service" "$ROOT_MNT/etc/systemd/system/"
+
+    # Copier le script HID keyboard (pour mode TTY)
+    log "Installation script HID keyboard..."
+    if [[ -f "$SCRIPT_DIR/secubox-hid-keyboard.sh" ]]; then
+        cp "$SCRIPT_DIR/secubox-hid-keyboard.sh" "$ROOT_MNT/usr/local/sbin/"
+        chmod +x "$ROOT_MNT/usr/local/sbin/secubox-hid-keyboard.sh"
+    else
+        warn "secubox-hid-keyboard.sh non trouvé — mode TTY indisponible"
+    fi
+
+    # Créer les images mass storage pour modes flash/debug
+    log "Création répertoire données gadget..."
+    mkdir -p "$ROOT_MNT/var/lib/secubox-gadget"
+
+    # Créer image debug vide (512MB, sera formatée au premier boot)
+    log "Pré-allocation image debug (512MB sparse)..."
+    truncate -s 512M "$ROOT_MNT/var/lib/secubox-gadget/debug.img"
+
+    # Créer répertoire pour status gadget
+    mkdir -p "$ROOT_MNT/run/secubox"
 
     # Activer les services OTG
     mkdir -p "$ROOT_MNT/etc/systemd/system/multi-user.target.wants"
@@ -766,7 +788,10 @@ USB0SVC
     ln -sf /etc/systemd/system/usb0-up.service \
         "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/usb0-up.service"
 
-    log "OTG Composite configuré: ECM (usb0 @ 10.55.0.2/30) + ACM (ttyGS0)"
+    log "OTG Composite configuré:"
+    log "  - Network: ECM (usb0 @ 10.55.0.2/30)"
+    log "  - Serial: ACM (ttyGS0 @ 115200)"
+    log "  - Modes: normal, flash, debug, tty, auth"
 fi
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -784,9 +809,20 @@ log ""
 log "Prochaines étapes:"
 log "  1. Éjecter la carte SD: sudo eject $DEVICE"
 log "  2. Insérer dans le RPi Zero W avec HyperPixel"
-log "  3. Connecter l'alimentation — le firstrun prendra ~5-10 min"
-log "  4. Une fois redémarré, déployer le dashboard avec deploy.sh"
+log "  3. Connecter USB sur port DATA (milieu), pas PWR"
+log "  4. Attendre ~90s pour le boot initial"
+log "  5. Déployer le dashboard avec deploy.sh"
 log ""
-log "Connexion SSH (après firstrun):"
-log "  ssh ${USER}@${HOSTNAME}.local"
+log "Connexion SSH (via OTG ou WiFi):"
+log "  ssh pi@10.55.0.2           # Via USB OTG"
+log "  ssh ${USER}@${HOSTNAME}.local  # Via WiFi"
 log ""
+if [[ "$USB_OTG" == "true" ]]; then
+log "Modes USB disponibles (secubox-otg-gadget.sh):"
+log "  start  - Normal: Network + Serial"
+log "  flash  - Recovery: Bootable USB + Serial"
+log "  debug  - Debug: Network + Storage + Serial"
+log "  tty    - Keyboard: Virtual HID + Serial"
+log "  auth   - Eye Remote: FIDO2 + Serial"
+log ""
+fi

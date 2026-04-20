@@ -44,12 +44,13 @@ html,body{width:480px;height:480px;overflow:hidden;background:#080808;
   border-top-color:#C04E24;border-radius:50%;animation:spin .8s linear infinite}
 #auth-msg{font-size:9px;color:#333;letter-spacing:1px}
 @keyframes spin{to{transform:rotate(360deg)}}
-/* Mode selector styles */
-#mode-badge{position:absolute;top:15px;left:15px;font-size:8px;padding:4px 8px;
-  border-radius:10px;background:#181818;cursor:pointer;z-index:10;
-  border:1px solid #282828;transition:all .2s;letter-spacing:.5px}
-#mode-badge:hover,#mode-badge:active{background:#222;border-color:#444}
-#mode-badge .dot{display:inline-block;width:6px;height:6px;border-radius:50%;
+/* Mode selector styles - positioned for round display (top center arc) */
+#mode-badge{position:absolute;top:18px;left:50%;transform:translateX(-50%);
+  font-size:7px;padding:4px 10px;border-radius:10px;background:#101010;
+  cursor:pointer;z-index:10;border:1px solid #252525;transition:all .2s;
+  letter-spacing:.6px;text-transform:uppercase}
+#mode-badge:hover,#mode-badge:active{background:#1a1a1a;border-color:#383838}
+#mode-badge .dot{display:inline-block;width:5px;height:5px;border-radius:50%;
   margin-right:4px;vertical-align:middle}
 #mode-panel{position:absolute;top:0;left:0;width:100%;height:100%;
   border-radius:50%;background:rgba(8,8,8,.97);z-index:50;

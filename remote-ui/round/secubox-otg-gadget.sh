@@ -14,7 +14,7 @@
 
 set -euo pipefail
 
-readonly VERSION="1.0.0"
+readonly VERSION="1.8.0"
 readonly GADGET_NAME="secubox"
 readonly CONFIGFS="/sys/kernel/config/usb_gadget"
 readonly GADGET_PATH="${CONFIGFS}/${GADGET_NAME}"
@@ -52,9 +52,63 @@ readonly OTG_NETWORK_DEV="10.55.0.2"
 readonly OTG_NETWORK_HOST="10.55.0.1"
 readonly OTG_NETMASK="255.255.255.252"
 
+# Persistent mode setting (survives reboot)
+readonly MODE_FILE="/etc/secubox/gadget-mode"
+readonly AUTO_MODE_FILE="/run/secubox-gadget-automode"
+
 # Logging
 log()  { echo "[otg-gadget] $*"; logger -t secubox-otg-gadget "$*"; }
 err()  { echo "[otg-gadget] ERROR: $*" >&2; logger -t secubox-otg-gadget -p err "$*"; }
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Auto-mode detection — smart mode selection based on boot conditions
+# ══════════════════════════════════════════════════════════════════════════════
+
+detect_auto_mode() {
+    # Check for persistent mode setting first
+    if [[ -f "$MODE_FILE" ]]; then
+        local saved_mode
+        saved_mode=$(cat "$MODE_FILE" 2>/dev/null | tr -d '[:space:]')
+        if [[ -n "$saved_mode" && "$saved_mode" =~ ^(normal|flash|debug|tty|auth)$ ]]; then
+            echo "$saved_mode"
+            return 0
+        fi
+    fi
+
+    # Check for flash mode trigger (USB host requesting boot)
+    if [[ -f "/run/secubox-request-flash" ]]; then
+        rm -f "/run/secubox-request-flash"
+        echo "flash"
+        return 0
+    fi
+
+    # Check for TTY mode trigger (command queue present)
+    if [[ -f "$CMD_QUEUE" ]] && [[ -s "$CMD_QUEUE" ]]; then
+        echo "tty"
+        return 0
+    fi
+
+    # Check for auth mode trigger
+    if [[ -f "$AUTH_STATE" ]]; then
+        echo "auth"
+        return 0
+    fi
+
+    # Default to normal mode (network + serial)
+    echo "normal"
+}
+
+set_persistent_mode() {
+    local mode="$1"
+    mkdir -p "$(dirname "$MODE_FILE")"
+    echo "$mode" > "$MODE_FILE"
+    log "Persistent mode set: $mode"
+}
+
+clear_persistent_mode() {
+    rm -f "$MODE_FILE"
+    log "Persistent mode cleared"
+}
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Génération déterministe des adresses MAC depuis le serial RPi
@@ -838,8 +892,26 @@ case "${1:-}" in
             write_status "auth" "error" "Auth mode startup failed"
         fi
         ;;
+    auto)
+        # Smart auto-detection of optimal mode
+        auto_mode=$(detect_auto_mode)
+        log "Auto-detected mode: $auto_mode"
+        write_status "$auto_mode" "auto-starting" "Auto-detected mode: $auto_mode"
+        exec "$0" "$auto_mode"
+        ;;
+    set-mode)
+        # Set persistent mode for next boot
+        if [[ -n "${2:-}" ]]; then
+            set_persistent_mode "$2"
+        else
+            echo "Usage: $0 set-mode {normal|flash|debug|tty|auth}"
+        fi
+        ;;
+    clear-mode)
+        clear_persistent_mode
+        ;;
     *)
-        echo "Usage: $0 {start|stop|restart|status|flash|debug|tty|auth}"
+        echo "Usage: $0 {start|stop|restart|status|auto|flash|debug|tty|auth}"
         echo ""
         echo "SecuBox OTG Gadget v${VERSION} — RPi Zero W USB composite device"
         echo ""
@@ -855,6 +927,8 @@ case "${1:-}" in
         echo "│ stop    │           │ Disable USB gadget                       │"
         echo "│ restart │           │ Reload gadget configuration              │"
         echo "│ status  │           │ Show current gadget status               │"
+        echo "│ auto    │           │ Smart auto-detect optimal mode           │"
+        echo "│ set-mode│           │ Set persistent mode (survives reboot)    │"
         echo "└─────────────────────────────────────────────────────────────────┘"
         echo ""
         echo "Round UI Integration:"

@@ -30,8 +30,8 @@ ExecStartPre=/sbin/modprobe libcomposite
 ExecStartPre=/sbin/modprobe usb_f_ecm
 ExecStartPre=/sbin/modprobe usb_f_acm
 
-# Démarrage du gadget
-ExecStart=/usr/local/sbin/secubox-otg-gadget.sh start
+# Démarrage du gadget (auto-detection mode)
+ExecStart=/usr/local/sbin/secubox-otg-gadget.sh auto
 
 # Arrêt propre
 ExecStop=/usr/local/sbin/secubox-otg-gadget.sh stop
