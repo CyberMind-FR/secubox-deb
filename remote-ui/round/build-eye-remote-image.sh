@@ -152,24 +152,27 @@ fi
 # HyperPixel + USB OTG config
 log "Configuring HyperPixel + USB OTG..."
 
-# Slipstream HyperPixel overlay (no network required)
+# Verify KMS overlay exists in base image (preferred, no init script needed)
 OVERLAYS_DIR="$BOOT_MNT/overlays"
 [[ ! -d "$OVERLAYS_DIR" ]] && OVERLAYS_DIR="$BOOT_MNT/firmware/overlays"
-if [[ -d "$OVERLAYS_DIR" ]]; then
-    log "Slipstreaming hyperpixel2r.dtbo overlay..."
-    sudo cp "$SCRIPT_DIR/hyperpixel2r.dtbo" "$OVERLAYS_DIR/"
+if [[ -f "$OVERLAYS_DIR/vc4-kms-dpi-hyperpixel2r.dtbo" ]]; then
+    log "Using KMS overlay vc4-kms-dpi-hyperpixel2r (built-in)"
+    HP_OVERLAY="vc4-kms-dpi-hyperpixel2r"
 else
-    warn "Overlays directory not found!"
+    log "Slipstreaming legacy hyperpixel2r.dtbo overlay..."
+    sudo cp "$SCRIPT_DIR/hyperpixel2r.dtbo" "$OVERLAYS_DIR/"
+    sudo cp "$SCRIPT_DIR/hyperpixel2r-init" "$ROOT_MNT/usr/local/bin/" 2>/dev/null || true
+    HP_OVERLAY="hyperpixel2r"
 fi
 
 # Remove any existing dwc2 host mode (base image issue)
 sudo sed -i 's/dtoverlay=dwc2,dr_mode=host/#REMOVED: dtoverlay=dwc2,dr_mode=host/' "$BOOT_MNT/config.txt"
 
-sudo tee -a "$BOOT_MNT/config.txt" > /dev/null << 'EOF'
+sudo tee -a "$BOOT_MNT/config.txt" > /dev/null << EOF
 
 # === SecuBox Eye Remote v1.8.0 ===
-# HyperPixel 2.1 Round (slipstreamed overlay)
-dtoverlay=hyperpixel2r
+# HyperPixel 2.1 Round (KMS overlay - no init script needed)
+dtoverlay=$HP_OVERLAY
 dtparam=i2c_arm=on
 dtparam=spi=on
 display_auto_detect=0
