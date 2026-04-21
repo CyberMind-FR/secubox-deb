@@ -1,0 +1,25 @@
+[Unit]
+Description=SecuBox Eye Remote Management API
+After=network.target secubox-core.service
+Wants=secubox-core.service
+
+[Service]
+UMask=0000
+Type=simple
+User=secubox
+Group=secubox
+WorkingDirectory=/usr/lib/secubox/eye-remote
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app \
+    --uds /run/secubox/eye-remote.sock \
+    --log-level warning
+Restart=on-failure
+RestartSec=5
+
+NoNewPrivileges=true
+RuntimeDirectory=secubox
+RuntimeDirectoryMode=0775
+
+ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox /var/log/secubox
+
+[Install]
+WantedBy=multi-user.target

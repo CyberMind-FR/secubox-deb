@@ -1,0 +1,11 @@
+secubox-eye-remote (2.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release - Eye Remote Management Module
+  * Device pairing with QR codes and token authentication
+  * Real-time metrics streaming via WebSocket
+  * Device registry with persistence
+  * Multi-SecuBox device management
+  * Remote commands support (screenshot, reboot, OTA)
+  * Serial console passthrough ready
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 21 Apr 2026 12:00:00 +0200
