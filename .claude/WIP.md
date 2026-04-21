@@ -3,6 +3,59 @@
 
 ---
 
+## 🔄 En cours — Eye Remote Full Integration v2.0.0
+
+### Feature: Real Metrics + SecuBox WebUI + Multi-SecuBox Support
+
+**Status:** 📋 Design complete, ready for implementation
+
+**Spec:** `docs/superpowers/specs/2026-04-21-eye-remote-integration-design.md`
+
+**GitHub Issue:** #31
+
+#### Components to Implement
+
+1. **secubox-eye-agent** (Eye Remote side)
+   - [ ] Multi-SecuBox connection manager
+   - [ ] Device token auto-authentication
+   - [ ] Metrics bridge to dashboard
+   - [ ] WebSocket command handler
+   - [ ] Touchless pairing with QR
+   - [ ] SSH auto-provisioning
+   - [ ] Touch gestures for control
+
+2. **secubox-eye-remote** (SecuBox module)
+   - [ ] FastAPI endpoints for device management
+   - [ ] Device registry + token manager
+   - [ ] Pairing flow with QR generation
+   - [ ] WebSocket for bidirectional commands
+   - [ ] Serial console bridge (xterm.js)
+   - [ ] WebUI management dashboard
+
+3. **secubox-eye-gateway** (Dev tool)
+   - [ ] Emulator mode (fake SecuBox API)
+   - [ ] Gateway mode (proxy to real hardware)
+   - [ ] Fleet mode (multi-SecuBox aggregation)
+   - [ ] Metrics profiles (idle/normal/busy/stressed)
+
+#### Key Features
+- One Eye Remote → Multiple SecuBoxes
+- Touchless pairing via QR code
+- Eye Remote as controller (restart services, lockdown, etc.)
+- Screenshot capture, OTA updates, serial console
+- Device token authentication (no manual login)
+
+#### Implementation Order
+1. Phase 1: Eye Remote Agent — basic metrics from single SecuBox
+2. Phase 2: SecuBox Module — API + device registry + pairing
+3. Phase 3: WebUI — management dashboard
+4. Phase 4: Control — bidirectional commands
+5. Phase 5: Multi-SecuBox — device manager
+6. Phase 6: Gateway — emulator and fleet tool
+7. Phase 7: Polish — OTA, serial console, screenshot
+
+---
+
 ## ✅ Complété (Session 63) — Framebuffer Dashboard v1.11.0
 
 ### S63-02 — Framebuffer Dashboard for Pi Zero W ✅
