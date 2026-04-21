@@ -32,12 +32,10 @@ class DeviceManager:
 
     _client: Optional[SecuBoxClient] = field(default=None, repr=False)
     _active_config: Optional[SecuBoxConfig] = field(default=None, repr=False)
-    _listeners: list[Callable] = field(default=None, repr=False)
-    _last_metrics: dict = field(default=None, repr=False)
+    _listeners: list[Callable] = field(default_factory=list, repr=False)
+    _last_metrics: dict = field(default_factory=dict, repr=False)
 
     def __post_init__(self):
-        self._listeners = []
-        self._last_metrics = {}
         self._active_config = get_active_secubox(self.config)
 
     @property
@@ -143,11 +141,12 @@ class DeviceManager:
             self._last_metrics = metrics
 
             # Notify listeners
-            for listener in self._listeners:
-                try:
-                    listener(metrics, self._active_config.name, self._client.transport)
-                except Exception as e:
-                    log.warning("Listener error: %s", e)
+            if self._active_config:
+                for listener in self._listeners:
+                    try:
+                        listener(metrics, self._active_config.name, self._client.transport)
+                    except Exception as e:
+                        log.warning("Listener error: %s", e)
 
             return metrics
         except Exception as e:
