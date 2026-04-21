@@ -256,6 +256,38 @@ Advanced security features:
   - 6 circular module rings with animated metrics
   - Auto-starts via secubox-fb-dashboard.service
 
+### Eye Remote Full Integration (v2.0.0) — Issue #31
+- [ ] **P11-R10** secubox-eye-agent — Multi-SecuBox connection manager
+  - Device token auto-authentication
+  - Metrics bridge (Unix socket to dashboard)
+  - WebSocket command handler
+  - Touch gestures for control
+- [ ] **P11-R11** secubox-eye-remote module — SecuBox side
+  - FastAPI endpoints for device management
+  - Device registry + token manager
+  - Pairing flow with QR generation
+  - WebSocket bidirectional commands
+  - Serial console bridge (xterm.js)
+- [ ] **P11-R12** WebUI management dashboard
+  - Device status, screenshot, reboot, OTA
+  - Configuration panel
+  - Pairing QR display
+  - Serial terminal (xterm.js)
+- [ ] **P11-R13** Touchless pairing
+  - QR code URL to SecuBox
+  - SSH auto-provisioning
+  - Device token generation
+- [ ] **P11-R14** Eye Remote as controller
+  - Service restart via touch
+  - OTG mode switching
+  - Emergency lockdown (3-finger tap)
+- [ ] **P11-R15** secubox-eye-gateway tool
+  - Emulator mode (fake metrics)
+  - Gateway mode (proxy to real SecuBox)
+  - Fleet mode (multi-SecuBox aggregation)
+  - Metrics profiles (idle/normal/busy/stressed)
+- [ ] **P11-R16** OTA updates + screenshot capture
+
 ### Kiosk Mode
 - [ ] **P11-01** Display SecuBox version in kiosk mode header/footer
 - [ ] **P11-02** Show current authentication mode (ZKP/standard) in kiosk UI

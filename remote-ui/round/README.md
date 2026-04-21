@@ -4,6 +4,15 @@
 
 More than a simple status display — the Eye Remote transforms into a **powerful debugging and security tool** with multiple USB gadget modes.
 
+## Current Version
+
+| Version | Status | Features |
+|---------|--------|----------|
+| **v1.11.0** | ✅ Stable | Framebuffer dashboard, simulation mode, HyperPixel working |
+| **v2.0.0** | 🔄 In Development | Real metrics, multi-SecuBox, WebUI management |
+
+See [Issue #31](https://github.com/CyberMind-FR/secubox-deb/issues/31) for v2.0.0 roadmap.
+
 ---
 
 ## Overview
@@ -691,6 +700,44 @@ dtparam=i2c_arm=on
 dtparam=spi=on
 dtoverlay=dwc2
 ```
+
+---
+
+## Roadmap v2.0.0 (Issue #31)
+
+### Planned Features
+
+| Feature | Description |
+|---------|-------------|
+| **Real Metrics** | Connect to SecuBox API for live CPU, RAM, disk, temp data |
+| **Multi-SecuBox** | One Eye Remote managing multiple SecuBox devices |
+| **Auto-Auth** | Device token authentication, no manual login |
+| **Touchless Pairing** | QR code pairing with SSH auto-provisioning |
+| **Control Mode** | Restart services, switch OTG mode, emergency lockdown |
+| **WebUI** | Manage Eye Remote from SecuBox web dashboard |
+| **Serial Console** | xterm.js passthrough to `/dev/ttyACM0` |
+| **Screenshot** | Capture Eye Remote display remotely |
+| **OTA Updates** | Push firmware updates from SecuBox |
+
+### Components
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Eye Remote (Pi Zero W)                                     │
+│  ├── secubox-eye-agent    ← Multi-SecuBox connection mgr    │
+│  └── fb_dashboard.py      ← Display renderer (existing)     │
+├─────────────────────────────────────────────────────────────┤
+│  SecuBox (ESPRESSObin)                                      │
+│  └── secubox-eye-remote   ← Management module + WebUI       │
+├─────────────────────────────────────────────────────────────┤
+│  Dev Machine                                                │
+│  └── secubox-eye-gateway  ← Emulator + fleet gateway        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Design Spec
+
+Full specification: `docs/superpowers/specs/2026-04-21-eye-remote-integration-design.md`
 
 ---
 
