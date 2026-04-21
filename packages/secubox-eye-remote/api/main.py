@@ -11,8 +11,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-# Routers will be added in Task 10
-# from .routers import devices, pairing, metrics, websocket
+from .routers import devices, pairing, metrics
 
 
 @asynccontextmanager
@@ -37,8 +36,7 @@ async def health():
     return {"status": "ok", "module": "eye-remote"}
 
 
-# Include routers (will be uncommented in Task 10)
-# app.include_router(devices.router, prefix="/devices", tags=["devices"])
-# app.include_router(pairing.router, prefix="/pairing", tags=["pairing"])
-# app.include_router(metrics.router, prefix="/metrics", tags=["metrics"])
-# app.include_router(websocket.router, tags=["websocket"])
+# Include routers
+app.include_router(devices.router, prefix="/api/v1/eye-remote")
+app.include_router(pairing.router, prefix="/api/v1/eye-remote")
+app.include_router(metrics.router, prefix="/api/v1/eye-remote")
