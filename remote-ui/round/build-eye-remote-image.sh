@@ -477,22 +477,29 @@ mkdir -p "$ROOT_MNT/usr/local/bin"
 cp "$SCRIPT_DIR/fb_dashboard.py" "$ROOT_MNT/usr/local/bin/"
 chmod +x "$ROOT_MNT/usr/local/bin/fb_dashboard.py"
 
-# Install Eye Agent
-log "Installing Eye Agent..."
-mkdir -p "$ROOT_MNT/usr/lib/secubox-eye/agent"
-mkdir -p "$ROOT_MNT/etc/secubox-eye"
+# Install Eye Agent (daemon + config + systemd service)
+if [[ -f "$SCRIPT_DIR/secubox-eye-agent.service" && -f "$SCRIPT_DIR/config.toml.example" ]]; then
+    log "Installing Eye Agent..."
+    mkdir -p "$ROOT_MNT/usr/lib/secubox-eye/agent"
+    mkdir -p "$ROOT_MNT/etc/secubox-eye"
 
-# Copy agent modules
-cp -r "$SCRIPT_DIR/agent/"*.py "$ROOT_MNT/usr/lib/secubox-eye/agent/"
+    # Copy agent modules (quote glob properly)
+    cp -r "$SCRIPT_DIR/agent"/*.py "$ROOT_MNT/usr/lib/secubox-eye/agent/" || err "Failed to copy agent modules"
 
-# Copy example config
-cp "$SCRIPT_DIR/config.toml.example" "$ROOT_MNT/etc/secubox-eye/config.toml"
+    # Copy example config with secure permissions
+    cp "$SCRIPT_DIR/config.toml.example" "$ROOT_MNT/etc/secubox-eye/config.toml"
+    chmod 600 "$ROOT_MNT/etc/secubox-eye/config.toml"
 
-# Install agent service
-cp "$SCRIPT_DIR/secubox-eye-agent.service" "$ROOT_MNT/etc/systemd/system/"
+    # Install agent service
+    cp "$SCRIPT_DIR/secubox-eye-agent.service" "$ROOT_MNT/etc/systemd/system/"
 
-# Enable agent service
-chroot "$ROOT_MNT" systemctl enable secubox-eye-agent.service
+    # Enable agent service via symlink (atomic, no chroot needed)
+    mkdir -p "$ROOT_MNT/etc/systemd/system/multi-user.target.wants"
+    ln -sf /etc/systemd/system/secubox-eye-agent.service \
+        "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/"
+else
+    warn "Eye Agent files not found, skipping installation"
+fi
 
 # Copy systemd services
 cp "$SCRIPT_DIR/secubox-otg-gadget.service" "$ROOT_MNT/etc/systemd/system/"

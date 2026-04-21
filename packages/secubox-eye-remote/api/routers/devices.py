@@ -11,10 +11,18 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from pydantic import BaseModel, Field
+
 from ...core.device_registry import get_device_registry
 from ...models.device import DeviceListResponse, PairedDevice
 
 log = logging.getLogger(__name__)
+
+
+class UnpairResponse(BaseModel):
+    """Response after unpairing a device."""
+    success: bool = Field(..., description="Whether the unpair succeeded")
+    message: str = Field(..., description="Status message")
 
 router = APIRouter(prefix="/devices", tags=["devices"])
 
@@ -80,11 +88,11 @@ async def get_device(
     return device
 
 
-@router.delete("/{device_id}")
+@router.delete("/{device_id}", response_model=UnpairResponse)
 async def unpair_device(
     device_id: str,
     _: None = Depends(require_jwt),
-) -> dict:
+) -> UnpairResponse:
     """
     Unpair (remove) a device from the registry.
 
@@ -108,7 +116,7 @@ async def unpair_device(
 
     log.info("Unpaired device: %s", device_id)
 
-    return {
-        "success": True,
-        "message": f"Device {device_id} unpaired",
-    }
+    return UnpairResponse(
+        success=True,
+        message=f"Device {device_id} unpaired",
+    )
