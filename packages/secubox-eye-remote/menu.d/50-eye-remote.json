@@ -1,0 +1,9 @@
+{
+  "id": "eye-remote",
+  "title": "Eye Remote",
+  "icon": "eye",
+  "path": "/eye-remote/",
+  "order": 50,
+  "category": "system",
+  "description": "Manage Eye Remote display devices"
+}

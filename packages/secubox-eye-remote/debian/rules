@@ -1,0 +1,22 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	# Install Python modules
+	install -d debian/secubox-eye-remote/usr/lib/secubox/eye-remote/
+	cp -r api debian/secubox-eye-remote/usr/lib/secubox/eye-remote/
+	cp -r core debian/secubox-eye-remote/usr/lib/secubox/eye-remote/
+	cp -r models debian/secubox-eye-remote/usr/lib/secubox/eye-remote/
+
+	# Install www
+	install -d debian/secubox-eye-remote/usr/share/secubox/www
+	[ -d www ] && cp -r www/. debian/secubox-eye-remote/usr/share/secubox/www/ || true
+
+	# Install menu
+	install -d debian/secubox-eye-remote/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-eye-remote/usr/share/secubox/menu.d/ || true
+
+	# Modular nginx config
+	install -d debian/secubox-eye-remote/etc/nginx/secubox.d
+	[ -f nginx/eye-remote.conf ] && cp nginx/eye-remote.conf debian/secubox-eye-remote/etc/nginx/secubox.d/ || true

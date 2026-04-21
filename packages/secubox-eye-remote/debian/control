@@ -1,0 +1,27 @@
+Source: secubox-eye-remote
+Section: admin
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
+
+Package: secubox-eye-remote
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-core (>= 1.0),
+         python3,
+         python3-fastapi,
+         python3-uvicorn,
+         python3-websockets,
+         python3-qrcode
+Description: SecuBox Eye Remote Management Module
+ Management API and WebUI for Eye Remote devices
+ (HyperPixel 2.1 Round on Raspberry Pi Zero W).
+ .
+ Features:
+  - Device pairing with QR codes
+  - Real-time metrics streaming
+  - Remote commands (screenshot, reboot, OTA)
+  - Serial console passthrough
