@@ -1,0 +1,6 @@
+#!/usr/bin/env python3
+"""SecuBox Eye Remote Agent executable."""
+from agent.main import run
+
+if __name__ == "__main__":
+    run()
