@@ -13,6 +13,7 @@ import math
 import struct
 import random
 import socket
+import socket as sock_module
 import json
 from datetime import datetime
 
@@ -56,6 +57,57 @@ MODULES = {
     'ROOT': {'color': (10, 88, 64), 'metric': 'temp', 'unit': '°', 'r': 162},
     'MESH': {'color': (16, 74, 136), 'metric': 'wifi', 'unit': 'dB', 'r': 149},
 }
+
+# Eye Agent Unix socket
+AGENT_SOCKET = '/run/secubox-eye/metrics.sock'
+
+
+class AgentMetricsSource:
+    """Fetch metrics from Eye Agent via Unix socket."""
+
+    def __init__(self):
+        self.mode = 'SIM'
+        self.sim = SimulatedMetrics()
+        self._last_data = None
+
+    def _read_from_socket(self) -> dict:
+        """Read metrics from agent Unix socket."""
+        try:
+            s = sock_module.socket(sock_module.AF_UNIX, sock_module.SOCK_STREAM)
+            s.settimeout(1.0)
+            s.connect(AGENT_SOCKET)
+            data = s.recv(8192)
+            s.close()
+            return json.loads(data.decode())
+        except Exception:
+            return None
+
+    def get_metrics(self):
+        """Get current metrics from agent or simulation."""
+        data = self._read_from_socket()
+
+        if data and 'metrics' in data:
+            self._last_data = data
+            transport = data.get('secubox', {}).get('transport', 'SIM')
+            mode = transport.upper() if transport in ('otg', 'wifi') else 'SIM'
+            self.mode = mode
+
+            metrics = data['metrics']
+            # Map API fields to dashboard fields
+            return {
+                'cpu': metrics.get('cpu_percent', 0),
+                'mem': metrics.get('mem_percent', 0),
+                'disk': metrics.get('disk_percent', 0),
+                'load': metrics.get('load_avg_1', 0),
+                'temp': metrics.get('cpu_temp', 0),
+                'wifi': metrics.get('wifi_rssi', -80),
+                'uptime': metrics.get('uptime_seconds', 0),
+                'hostname': metrics.get('hostname', 'secubox'),
+            }, mode
+
+        # Fallback to simulation
+        self.mode = 'SIM'
+        return self.sim.update(), 'SIM'
 
 
 class MetricsSource:
@@ -332,7 +384,13 @@ def main():
     print(f'Display: {WIDTH}x{HEIGHT}')
     print('Press Ctrl+C to exit')
 
-    source = MetricsSource()
+    # Try agent first, fall back to simulation
+    if os.path.exists(AGENT_SOCKET):
+        print('Using Eye Agent for metrics')
+        source = AgentMetricsSource()
+    else:
+        print('Agent not running, using simulation')
+        source = AgentMetricsSource()  # Will fall back to simulation internally
 
     while True:
         try:
