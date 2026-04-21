@@ -8,9 +8,9 @@ Author: Gerald Kerma <gandalf@gk2.net>
 from __future__ import annotations
 
 import logging
-import secrets
+import os
 import socket
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, status
@@ -122,17 +122,21 @@ async def generate_pairing_qr() -> PairingQRResponse:
     host = _get_local_ip()
     hostname = _get_local_hostname()
 
-    # Create pairing URL
-    url = f"http://{host}:8000/api/v1/eye-remote/pair?code={code}"
+    # Get port from environment or default
+    port = os.getenv("SECUBOX_EYE_REMOTE_PORT", "8000")
 
-    # Store session
-    expires_at = datetime.now(timezone.utc).timestamp() + PAIRING_SESSION_TTL
+    # Create pairing URL
+    url = f"http://{host}:{port}/api/v1/eye-remote/pair?code={code}"
+
+    # Store session (use timedelta for safe arithmetic)
+    now = datetime.now(timezone.utc)
+    expires_at = now + timedelta(seconds=PAIRING_SESSION_TTL)
     _pairing_sessions[code] = {
         "code": code,
         "host": host,
         "hostname": hostname,
-        "expires_at": datetime.fromtimestamp(expires_at, tz=timezone.utc),
-        "created_at": datetime.now(timezone.utc),
+        "expires_at": expires_at,
+        "created_at": now,
     }
 
     log.info("Created pairing session: %s (expires in %ds)", code, PAIRING_SESSION_TTL)
