@@ -1,0 +1,22 @@
+# SecuBox Eye Remote Configuration
+# Copy to /etc/secubox-eye/config.toml
+
+[device]
+id = "eye-remote-001"
+name = "Dashboard Principale"
+
+# Primary SecuBox (via USB OTG)
+[[secubox]]
+name = "Home Lab"
+host = "10.55.0.1"
+fallback = "secubox.local"
+token = "YOUR_DEVICE_TOKEN"
+active = true
+poll_interval = 2.0
+
+# Secondary SecuBox (via WiFi)
+# [[secubox]]
+# name = "Office"
+# host = "192.168.1.100"
+# token = "OTHER_DEVICE_TOKEN"
+# active = false
