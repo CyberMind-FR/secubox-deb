@@ -7,7 +7,7 @@ Author: Gérald Kerma <gandalf@gk2.net>
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 
@@ -44,7 +44,7 @@ class PairedDevice(BaseModel):
     device_id: str = Field(..., description="Unique device identifier")
     name: str = Field(..., description="User-friendly device name")
     token_hash: str = Field(..., description="SHA256 hash of device token")
-    paired_at: datetime = Field(default_factory=datetime.utcnow)
+    paired_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     last_seen: Optional[datetime] = None
     transport: TransportType = TransportType.NONE
     firmware: str = "unknown"

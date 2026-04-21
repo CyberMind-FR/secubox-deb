@@ -14,7 +14,9 @@ import signal
 import sys
 from pathlib import Path
 
-from .config import load_config, DEFAULT_CONFIG_PATH
+from typing import Optional
+
+from .config import load_config, Config, DEFAULT_CONFIG_PATH
 from .device_manager import DeviceManager
 from .metrics_bridge import MetricsBridge
 
@@ -37,12 +39,12 @@ class EyeAgent:
 
     def __init__(self, config_path: Path = DEFAULT_CONFIG_PATH):
         self.config_path = config_path
-        self.config = None
-        self.device_manager = None
-        self.metrics_bridge = None
+        self.config: Optional[Config] = None
+        self.device_manager: Optional[DeviceManager] = None
+        self.metrics_bridge: Optional[MetricsBridge] = None
         self._running = False
-        self._poll_task = None
-        self._bridge_task = None
+        self._poll_task: Optional[asyncio.Task] = None
+        self._bridge_task: Optional[asyncio.Task] = None
 
     async def start(self):
         """Start the agent."""
@@ -83,24 +85,29 @@ class EyeAgent:
 
     def _on_metrics_update(self, metrics: dict, secubox_name: str, transport: str):
         """Handle metrics update from device manager."""
-        self.metrics_bridge.update_metrics(
-            metrics=metrics,
-            secubox_name=secubox_name,
-            transport=transport,
-            secubox_host=self.device_manager.active_secubox.host if self.device_manager.active_secubox else ""
-        )
+        if self.metrics_bridge and self.device_manager:
+            secubox_host = ""
+            if self.device_manager.active_secubox:
+                secubox_host = self.device_manager.active_secubox.host
+            self.metrics_bridge.update_metrics(
+                metrics=metrics,
+                secubox_name=secubox_name,
+                transport=transport,
+                secubox_host=secubox_host
+            )
 
     async def _poll_loop(self):
         """Main polling loop."""
         while self._running:
-            try:
-                await self.device_manager.poll_metrics()
-            except Exception as e:
-                log.warning("Poll error: %s", e)
+            if self.device_manager:
+                try:
+                    await self.device_manager.poll_metrics()
+                except Exception as e:
+                    log.warning("Poll error: %s", e)
 
             # Get poll interval from active config
             interval = 2.0
-            if self.device_manager.active_secubox:
+            if self.device_manager and self.device_manager.active_secubox:
                 interval = self.device_manager.active_secubox.poll_interval
 
             await asyncio.sleep(interval)
@@ -113,12 +120,14 @@ class EyeAgent:
         if self._poll_task:
             self._poll_task.cancel()
 
-        self.metrics_bridge.stop()
+        if self.metrics_bridge:
+            self.metrics_bridge.stop()
 
         if self._bridge_task:
             self._bridge_task.cancel()
 
-        await self.device_manager.close()
+        if self.device_manager:
+            await self.device_manager.close()
 
         # Remove PID file
         if PID_FILE.exists():
