@@ -1,0 +1,26 @@
+# Disable screensaver
+xset s off &
+xset -dpms &
+xset s noblank &
+
+# Hide cursor
+unclutter -idle 0.1 -root &
+
+# Wait for nginx
+sleep 3
+
+# Launch Chromium in kiosk mode
+chromium-browser \
+    --kiosk \
+    --noerrdialogs \
+    --disable-infobars \
+    --disable-session-crashed-bubble \
+    --disable-restore-session-state \
+    --disable-translate \
+    --no-first-run \
+    --start-fullscreen \
+    --window-size=480,480 \
+    --window-position=0,0 \
+    --disable-gpu \
+    --use-gl=egl \
+    http://localhost:8080

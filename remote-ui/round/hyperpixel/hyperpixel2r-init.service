@@ -1,0 +1,12 @@
+[Unit]
+Description=HyperPixel 2.1 Round LCD Display Initialization
+After=pigpiod.service
+Requires=pigpiod.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/hyperpixel2r-init
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
