@@ -1,0 +1,89 @@
+#!/usr/bin/env python3
+import pigpio
+import time
+import sys
+
+CLK = 11
+MOSI = 10
+CS = 18
+BL = 19
+DELAY = 0.00001
+
+def main():
+    print('HyperPixel 2.1 Round - Initializing ST7701S LCD via pigpio...')
+    pi = pigpio.pi()
+    if not pi.connected:
+        print('ERROR: Cannot connect to pigpiod.')
+        sys.exit(1)
+
+    pi.set_mode(CLK, pigpio.OUTPUT)
+    pi.set_mode(MOSI, pigpio.OUTPUT)
+    pi.set_mode(CS, pigpio.OUTPUT)
+    pi.set_mode(BL, pigpio.OUTPUT)
+    pi.write(CLK, 0)
+    pi.write(CS, 1)
+    pi.write(BL, 1)
+
+    def sendBits(data, numBits=8):
+        data <<= (9 - numBits)
+        for bit in range(numBits):
+            pi.write(MOSI, 1 if data & 0x100 else 0)
+            data <<= 1
+            time.sleep(DELAY)
+            pi.write(CLK, 1)
+            time.sleep(DELAY)
+            pi.write(CLK, 0)
+        pi.write(MOSI, 0)
+
+    def SPI_Write(output): sendBits(output, 9)
+    def SPI_WriteComm(b): SPI_Write(b)
+    def SPI_WriteData(b): SPI_Write(b | 0x100)
+    def Delay(ms): time.sleep(ms / 1000.0)
+
+    pi.write(CS, 0)
+    SPI_WriteComm(0x01); Delay(240)
+    SPI_WriteComm(0xFF); SPI_WriteData(0x77); SPI_WriteData(0x01); SPI_WriteData(0x00); SPI_WriteData(0x00); SPI_WriteData(0x10)
+    SPI_WriteComm(0xC0); SPI_WriteData(0x3B); SPI_WriteData(0x00)
+    SPI_WriteComm(0xC1); SPI_WriteData(0x0B); SPI_WriteData(0x02)
+    SPI_WriteComm(0xC2); SPI_WriteData(0x00); SPI_WriteData(0x02)
+    SPI_WriteComm(0xCC); SPI_WriteData(0x10)
+    SPI_WriteComm(0xB0); SPI_WriteData(0x02); SPI_WriteData(0x13); SPI_WriteData(0x1B); SPI_WriteData(0x0D); SPI_WriteData(0x10); SPI_WriteData(0x05); SPI_WriteData(0x08); SPI_WriteData(0x07); SPI_WriteData(0x07); SPI_WriteData(0x24); SPI_WriteData(0x04); SPI_WriteData(0x11); SPI_WriteData(0x0E); SPI_WriteData(0x2C); SPI_WriteData(0x33); SPI_WriteData(0x1D)
+    SPI_WriteComm(0xB1); SPI_WriteData(0x05); SPI_WriteData(0x13); SPI_WriteData(0x1B); SPI_WriteData(0x0D); SPI_WriteData(0x11); SPI_WriteData(0x05); SPI_WriteData(0x08); SPI_WriteData(0x07); SPI_WriteData(0x07); SPI_WriteData(0x24); SPI_WriteData(0x04); SPI_WriteData(0x11); SPI_WriteData(0x0E); SPI_WriteData(0x2C); SPI_WriteData(0x33); SPI_WriteData(0x1D)
+    SPI_WriteComm(0xFF); SPI_WriteData(0x77); SPI_WriteData(0x01); SPI_WriteData(0x00); SPI_WriteData(0x00); SPI_WriteData(0x11)
+    SPI_WriteComm(0xB0); SPI_WriteData(0x5D)
+    SPI_WriteComm(0xB1); SPI_WriteData(0x43)
+    SPI_WriteComm(0xB2); SPI_WriteData(0x81)
+    SPI_WriteComm(0xB3); SPI_WriteData(0x80)
+    SPI_WriteComm(0xB5); SPI_WriteData(0x43)
+    SPI_WriteComm(0xB7); SPI_WriteData(0x85)
+    SPI_WriteComm(0xB8); SPI_WriteData(0x20)
+    SPI_WriteComm(0xC1); SPI_WriteData(0x78)
+    SPI_WriteComm(0xC2); SPI_WriteData(0x78)
+    SPI_WriteComm(0xD0); SPI_WriteData(0x88)
+    SPI_WriteComm(0xE0); SPI_WriteData(0x00); SPI_WriteData(0x00); SPI_WriteData(0x02)
+    SPI_WriteComm(0xE1); SPI_WriteData(0x03); SPI_WriteData(0xA0); SPI_WriteData(0x00); SPI_WriteData(0x00); SPI_WriteData(0x04); SPI_WriteData(0xA0); SPI_WriteData(0x00); SPI_WriteData(0x00); SPI_WriteData(0x00); SPI_WriteData(0x20); SPI_WriteData(0x20)
+    SPI_WriteComm(0xE2); SPI_WriteData(0x00); SPI_WriteData(0x00); SPI_WriteData(0x00); SPI_WriteData(0x00); SPI_WriteData(0x00); SPI_WriteData(0x00); SPI_WriteData(0x00); SPI_WriteData(0x00); SPI_WriteData(0x00); SPI_WriteData(0x00); SPI_WriteData(0x00); SPI_WriteData(0x00); SPI_WriteData(0x00)
+    SPI_WriteComm(0xE3); SPI_WriteData(0x00); SPI_WriteData(0x00); SPI_WriteData(0x11); SPI_WriteData(0x00)
+    SPI_WriteComm(0xE4); SPI_WriteData(0x22); SPI_WriteData(0x00)
+    SPI_WriteComm(0xE5); SPI_WriteData(0x05); SPI_WriteData(0xEC); SPI_WriteData(0xA0); SPI_WriteData(0xA0); SPI_WriteData(0x07); SPI_WriteData(0xEE); SPI_WriteData(0xA0); SPI_WriteData(0xA0); SPI_WriteData(0x00); SPI_WriteData(0x00); SPI_WriteData(0x00); SPI_WriteData(0x00); SPI_WriteData(0x00); SPI_WriteData(0x00); SPI_WriteData(0x00); SPI_WriteData(0x00)
+    SPI_WriteComm(0xE6); SPI_WriteData(0x00); SPI_WriteData(0x00); SPI_WriteData(0x11); SPI_WriteData(0x00)
+    SPI_WriteComm(0xE7); SPI_WriteData(0x22); SPI_WriteData(0x00)
+    SPI_WriteComm(0xE8); SPI_WriteData(0x06); SPI_WriteData(0xED); SPI_WriteData(0xA0); SPI_WriteData(0xA0); SPI_WriteData(0x08); SPI_WriteData(0xEF); SPI_WriteData(0xA0); SPI_WriteData(0xA0); SPI_WriteData(0x00); SPI_WriteData(0x00); SPI_WriteData(0x00); SPI_WriteData(0x00); SPI_WriteData(0x00); SPI_WriteData(0x00); SPI_WriteData(0x00); SPI_WriteData(0x00)
+    SPI_WriteComm(0xEB); SPI_WriteData(0x00); SPI_WriteData(0x00); SPI_WriteData(0x40); SPI_WriteData(0x40); SPI_WriteData(0x00); SPI_WriteData(0x00); SPI_WriteData(0x00)
+    SPI_WriteComm(0xED); SPI_WriteData(0xFF); SPI_WriteData(0xFF); SPI_WriteData(0xFF); SPI_WriteData(0xBA); SPI_WriteData(0x0A); SPI_WriteData(0xBF); SPI_WriteData(0x45); SPI_WriteData(0xFF); SPI_WriteData(0xFF); SPI_WriteData(0x54); SPI_WriteData(0xFB); SPI_WriteData(0xA0); SPI_WriteData(0xAB); SPI_WriteData(0xFF); SPI_WriteData(0xFF); SPI_WriteData(0xFF)
+    SPI_WriteComm(0xEF); SPI_WriteData(0x10); SPI_WriteData(0x0D); SPI_WriteData(0x04); SPI_WriteData(0x08); SPI_WriteData(0x3F); SPI_WriteData(0x1F)
+    SPI_WriteComm(0xFF); SPI_WriteData(0x77); SPI_WriteData(0x01); SPI_WriteData(0x00); SPI_WriteData(0x00); SPI_WriteData(0x13)
+    SPI_WriteComm(0xEF); SPI_WriteData(0x08)
+    SPI_WriteComm(0xFF); SPI_WriteData(0x77); SPI_WriteData(0x01); SPI_WriteData(0x00); SPI_WriteData(0x00); SPI_WriteData(0x00)
+    SPI_WriteComm(0xCD); SPI_WriteData(0x08)
+    SPI_WriteComm(0x36); SPI_WriteData(0x08)
+    SPI_WriteComm(0x3A); SPI_WriteData(0x66)
+    SPI_WriteComm(0x11); Delay(120)
+    SPI_WriteComm(0x29); Delay(20)
+    pi.write(CS, 1)
+    print('ST7701S LCD initialized successfully!')
+    pi.stop()
+    return 0
+
+if __name__ == '__main__':
+    sys.exit(main())

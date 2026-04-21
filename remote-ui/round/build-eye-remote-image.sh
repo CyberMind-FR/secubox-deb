@@ -252,34 +252,41 @@ log "Configuring HyperPixel 2.1 Round..."
 # Detect overlays directory
 OVERLAYS_DIR="$BOOT_MNT/overlays"
 [[ ! -d "$OVERLAYS_DIR" ]] && OVERLAYS_DIR="$BOOT_MNT/firmware/overlays"
+
+# IMPORTANT: Pi Zero W does NOT support KMS properly!
+# Always use legacy DPI mode with hyperpixel2r overlay + ST7701S init script
 USE_KMS_OVERLAY=false
+log "Using LEGACY DPI mode (Pi Zero W does not support KMS)"
 
-if [[ -f "$OVERLAYS_DIR/vc4-kms-dpi-hyperpixel2r.dtbo" ]]; then
-    log "Using KMS overlay vc4-kms-dpi-hyperpixel2r (built-in)"
-    HP_OVERLAY="vc4-kms-dpi-hyperpixel2r"
-    USE_KMS_OVERLAY=true
-else
-    log "Slipstreaming hyperpixel2r.dtbo overlay..."
-    cp "$SCRIPT_DIR/hyperpixel2r.dtbo" "$OVERLAYS_DIR/"
+# Copy our working hyperpixel2r.dtbo overlay
+if [[ -f "$SCRIPT_DIR/hyperpixel/hyperpixel2r.dtbo" ]]; then
+    log "Installing hyperpixel2r.dtbo overlay..."
+    cp "$SCRIPT_DIR/hyperpixel/hyperpixel2r.dtbo" "$OVERLAYS_DIR/"
     HP_OVERLAY="hyperpixel2r"
+else
+    err "Missing hyperpixel2r.dtbo in $SCRIPT_DIR/hyperpixel/"
+fi
 
-    # Install HyperPixel init script for non-KMS overlay
-    # FIX: Uses pigpio instead of RPi.GPIO (lgpio has GPIO allocation issues on Bookworm)
-    if [[ -f "$SCRIPT_DIR/hyperpixel2r-init" ]]; then
-        log "Installing hyperpixel2r-init script (pigpio-based)..."
-        cp "$SCRIPT_DIR/hyperpixel2r-init" "$ROOT_MNT/usr/bin/"
-        chmod +x "$ROOT_MNT/usr/bin/hyperpixel2r-init"
+# Install HyperPixel init script (REQUIRED for ST7701S LCD)
+# Uses pigpio to bit-bang SPI commands to initialize the display controller
+if [[ -f "$SCRIPT_DIR/hyperpixel/hyperpixel2r-init" ]]; then
+    log "Installing hyperpixel2r-init script (pigpio-based)..."
+    mkdir -p "$ROOT_MNT/usr/bin"
+    cp "$SCRIPT_DIR/hyperpixel/hyperpixel2r-init" "$ROOT_MNT/usr/bin/"
+    chmod +x "$ROOT_MNT/usr/bin/hyperpixel2r-init"
 
-        # Copy service file (requires pigpiod)
-        cp "$SCRIPT_DIR/hyperpixel2r-init.service" "$ROOT_MNT/etc/systemd/system/"
+    # Copy service file (requires pigpiod)
+    cp "$SCRIPT_DIR/hyperpixel/hyperpixel2r-init.service" "$ROOT_MNT/etc/systemd/system/"
 
-        # Enable services (pigpiod + hyperpixel2r-init)
-        mkdir -p "$ROOT_MNT/etc/systemd/system/multi-user.target.wants"
-        ln -sf /lib/systemd/system/pigpiod.service \
-            "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/pigpiod.service"
-        ln -sf /etc/systemd/system/hyperpixel2r-init.service \
-            "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/hyperpixel2r-init.service"
-    fi
+    # Enable services (pigpiod + hyperpixel2r-init)
+    mkdir -p "$ROOT_MNT/etc/systemd/system/multi-user.target.wants"
+    ln -sf /lib/systemd/system/pigpiod.service \
+        "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/pigpiod.service"
+    ln -sf /etc/systemd/system/hyperpixel2r-init.service \
+        "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/hyperpixel2r-init.service"
+    log "Enabled pigpiod and hyperpixel2r-init services"
+else
+    err "Missing hyperpixel2r-init script in $SCRIPT_DIR/hyperpixel/"
 fi
 
 # Clean existing config
