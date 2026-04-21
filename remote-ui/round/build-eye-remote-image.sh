@@ -13,7 +13,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VERSION="1.11.0"
+VERSION="2.0.0"
 OUTPUT_DIR="${OUTPUT_DIR:-/tmp}"
 OUTPUT_NAME="secubox-eye-remote-${VERSION}.img"
 
@@ -476,6 +476,23 @@ log "Installing framebuffer dashboard..."
 mkdir -p "$ROOT_MNT/usr/local/bin"
 cp "$SCRIPT_DIR/fb_dashboard.py" "$ROOT_MNT/usr/local/bin/"
 chmod +x "$ROOT_MNT/usr/local/bin/fb_dashboard.py"
+
+# Install Eye Agent
+log "Installing Eye Agent..."
+mkdir -p "$ROOT_MNT/usr/lib/secubox-eye/agent"
+mkdir -p "$ROOT_MNT/etc/secubox-eye"
+
+# Copy agent modules
+cp -r "$SCRIPT_DIR/agent/"*.py "$ROOT_MNT/usr/lib/secubox-eye/agent/"
+
+# Copy example config
+cp "$SCRIPT_DIR/config.toml.example" "$ROOT_MNT/etc/secubox-eye/config.toml"
+
+# Install agent service
+cp "$SCRIPT_DIR/secubox-eye-agent.service" "$ROOT_MNT/etc/systemd/system/"
+
+# Enable agent service
+chroot "$ROOT_MNT" systemctl enable secubox-eye-agent.service
 
 # Copy systemd services
 cp "$SCRIPT_DIR/secubox-otg-gadget.service" "$ROOT_MNT/etc/systemd/system/"
