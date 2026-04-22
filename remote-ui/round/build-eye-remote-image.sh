@@ -380,6 +380,17 @@ gpu_mem=128
 # Uses hyperpixel2r overlay + pigpio init script
 dtoverlay=${HP_OVERLAY}
 
+# Explicit DPI settings (REQUIRED for Pi Zero W - no KMS support!)
+# Without these, the framebuffer may not be created
+enable_dpi_lcd=1
+display_default_lcd=1
+dpi_group=2
+dpi_mode=87
+dpi_output_format=0x7f216
+dpi_timings=480 0 10 16 59 480 0 15 60 15 0 0 0 60 0 19200000 6
+framebuffer_width=480
+framebuffer_height=480
+
 # NOTE: Do NOT enable i2c_arm or spi here!
 # They conflict with DPI pins used by HyperPixel display.
 # The hyperpixel2r overlay uses i2c10 for touch (software I2C).

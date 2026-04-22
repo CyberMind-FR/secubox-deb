@@ -3560,3 +3560,32 @@ The hyperpixel2r overlay:
 
 ### Lesson Learned
 When using DPI displays on Raspberry Pi, avoid enabling standard I2C/SPI that may conflict with DPI GPIO pins.
+
+---
+
+## 2026-04-22: Pi Zero W requires explicit DPI timings (INVESTIGATING)
+
+### Issue
+Display still blank after fixing I2C conflict. Pi Zero W not booting or not creating framebuffer.
+
+### Root Cause (suspected)
+The `hyperpixel2r` overlay may be designed for KMS mode only. Pi Zero W (BCM2835) doesn't support KMS, so the overlay alone doesn't configure DPI output.
+
+### Solution
+Add explicit DPI timing parameters to config.txt:
+
+```
+enable_dpi_lcd=1
+display_default_lcd=1
+dpi_group=2
+dpi_mode=87
+dpi_output_format=0x7f216
+dpi_timings=480 0 10 16 59 480 0 15 60 15 0 0 0 60 0 19200000 6
+framebuffer_width=480
+framebuffer_height=480
+```
+
+These settings explicitly tell the VideoCore GPU how to drive the DPI display, bypassing the need for KMS driver support.
+
+### Testing
+- Awaiting confirmation that explicit DPI settings fix the display
