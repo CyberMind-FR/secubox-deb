@@ -3529,3 +3529,34 @@ Pi Zero USB enumeration failing with error -110 (timeout). Possible causes:
 - Power issue
 - Gadget not ready fast enough
 
+
+---
+
+## 2026-04-22: HyperPixel DPI / I2C Pin Conflict (RESOLVED)
+
+### Issue
+HyperPixel 2.1 Round display not working on Pi Zero W - screen stays blank.
+
+### Root Cause
+Kernel error: `pin gpio2 already requested by i2c; cannot claim for dpi`
+
+The DPI display driver needs GPIO pins 2/3, but `dtparam=i2c_arm=on` enables I2C on those same pins, causing a conflict.
+
+### Solution
+Remove from config.txt:
+```
+# DO NOT USE - conflicts with DPI:
+# dtparam=i2c_arm=on
+# dtparam=spi=on
+```
+
+The hyperpixel2r overlay:
+- Uses **i2c10** (software I2C) for touch controller
+- LCD init uses **pigpio software SPI** (bit-banging), not hardware SPI
+
+### Files Updated
+- `remote-ui/round/build-eye-remote-image.sh` - Removed i2c_arm/spi from config
+- Config.txt on SD card - Disabled conflicting parameters
+
+### Lesson Learned
+When using DPI displays on Raspberry Pi, avoid enabling standard I2C/SPI that may conflict with DPI GPIO pins.

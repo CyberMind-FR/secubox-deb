@@ -289,10 +289,9 @@ log "Configuring HyperPixel 2.1 Round..."
 OVERLAYS_DIR="$BOOT_MNT/overlays"
 [[ ! -d "$OVERLAYS_DIR" ]] && OVERLAYS_DIR="$BOOT_MNT/firmware/overlays"
 
-# IMPORTANT: Pi Zero W does NOT support KMS properly!
-# Always use legacy DPI mode with hyperpixel2r overlay + ST7701S init script
-USE_KMS_OVERLAY=false
-log "Using LEGACY DPI mode (Pi Zero W does not support KMS)"
+# IMPORTANT: Pi Zero W does NOT support KMS!
+# BCM2835 SoC has no VC4 KMS driver - must use legacy DPI mode
+log "Configuring HyperPixel 2.1 Round in LEGACY DPI mode (Pi Zero W)"
 
 # Copy our working hyperpixel2r.dtbo overlay
 if [[ -f "$SCRIPT_DIR/hyperpixel/hyperpixel2r.dtbo" ]]; then
@@ -307,12 +306,31 @@ fi
 # Uses pigpio to bit-bang SPI commands to initialize the display controller
 if [[ -f "$SCRIPT_DIR/hyperpixel/hyperpixel2r-init" ]]; then
     log "Installing hyperpixel2r-init script (pigpio-based)..."
-    mkdir -p "$ROOT_MNT/usr/bin"
-    cp "$SCRIPT_DIR/hyperpixel/hyperpixel2r-init" "$ROOT_MNT/usr/bin/"
-    chmod +x "$ROOT_MNT/usr/bin/hyperpixel2r-init"
+    mkdir -p "$ROOT_MNT/usr/local/sbin"
+    cp "$SCRIPT_DIR/hyperpixel/hyperpixel2r-init" "$ROOT_MNT/usr/local/sbin/"
+    chmod +x "$ROOT_MNT/usr/local/sbin/hyperpixel2r-init"
 
-    # Copy service file (requires pigpiod)
-    cp "$SCRIPT_DIR/hyperpixel/hyperpixel2r-init.service" "$ROOT_MNT/etc/systemd/system/"
+    # Verify copy succeeded
+    if [[ ! -f "$ROOT_MNT/usr/local/sbin/hyperpixel2r-init" ]]; then
+        err "Failed to copy hyperpixel2r-init to rootfs!"
+    fi
+
+    # Copy service file (with correct path)
+    mkdir -p "$ROOT_MNT/etc/systemd/system"
+    cat > "$ROOT_MNT/etc/systemd/system/hyperpixel2r-init.service" << 'HPSERVICE'
+[Unit]
+Description=HyperPixel 2.1 Round LCD Display Initialization
+After=pigpiod.service
+Requires=pigpiod.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/hyperpixel2r-init
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+HPSERVICE
 
     # Enable services (pigpiod + hyperpixel2r-init)
     mkdir -p "$ROOT_MNT/etc/systemd/system/multi-user.target.wants"
@@ -325,72 +343,51 @@ else
     err "Missing hyperpixel2r-init script in $SCRIPT_DIR/hyperpixel/"
 fi
 
-# Clean existing config
-sed -i 's/dtoverlay=dwc2,dr_mode=host/#REMOVED: dtoverlay=dwc2,dr_mode=host/' "$BOOT_MNT/config.txt"
+# Clean existing config - ROBUST cleanup
+log "Cleaning existing HyperPixel/KMS config from config.txt..."
+
+# Remove any previous SecuBox Eye Remote section (everything after the marker)
+sed -i '/^# === SecuBox Eye Remote/,$d' "$BOOT_MNT/config.txt" 2>/dev/null || true
+
+# Remove KMS overlays (Pi Zero W doesn't support KMS!)
+sed -i '/dtoverlay=vc4-kms-v3d/d' "$BOOT_MNT/config.txt" 2>/dev/null || true
+sed -i '/dtoverlay=vc4-fkms-v3d/d' "$BOOT_MNT/config.txt" 2>/dev/null || true
+sed -i '/dtoverlay=vc4-kms-dpi/d' "$BOOT_MNT/config.txt" 2>/dev/null || true
+
+# Remove old hyperpixel references
 sed -i '/hyperpixel/d' "$BOOT_MNT/config.txt" 2>/dev/null || true
 sed -i '/HyperPixel/d' "$BOOT_MNT/config.txt" 2>/dev/null || true
 
-# Handle vc4-kms-v3d based on overlay type
-if [[ "$USE_KMS_OVERLAY" == "true" ]]; then
-    sed -i 's/^#dtoverlay=vc4-kms-v3d.*/dtoverlay=vc4-kms-v3d/' "$BOOT_MNT/config.txt" 2>/dev/null || true
-else
-    sed -i 's/^dtoverlay=vc4-kms-v3d/#dtoverlay=vc4-kms-v3d  # DISABLED - HyperPixel conflict/' "$BOOT_MNT/config.txt" 2>/dev/null || true
-    sed -i 's/^dtoverlay=vc4-fkms-v3d/#dtoverlay=vc4-fkms-v3d  # DISABLED - HyperPixel conflict/' "$BOOT_MNT/config.txt" 2>/dev/null || true
-fi
-sed -i 's/^display_auto_detect=1/display_auto_detect=0/' "$BOOT_MNT/config.txt" 2>/dev/null || true
+# Remove old dwc2 host mode
+sed -i 's/dtoverlay=dwc2,dr_mode=host/#REMOVED: dtoverlay=dwc2,dr_mode=host/' "$BOOT_MNT/config.txt" 2>/dev/null || true
 
-# Write HyperPixel config
-cat >> "$BOOT_MNT/config.txt" << EOF
+# Disable auto-detect
+sed -i 's/^display_auto_detect=1/display_auto_detect=0/' "$BOOT_MNT/config.txt" 2>/dev/null || true
+sed -i 's/^camera_auto_detect=1/camera_auto_detect=0/' "$BOOT_MNT/config.txt" 2>/dev/null || true
+
+# Write HyperPixel config (ALWAYS legacy DPI mode for Pi Zero W)
+cat >> "$BOOT_MNT/config.txt" << CONFIGEOF
 
 # === SecuBox Eye Remote v${VERSION} (OFFLINE) ===
+# Pi Zero W: NO KMS support, use legacy DPI mode only!
 display_auto_detect=0
 camera_auto_detect=0
 enable_tvout=0
 hdmi_blanking=2
 gpu_mem=128
 
-EOF
-
-if [[ "$USE_KMS_OVERLAY" == "true" ]]; then
-    cat >> "$BOOT_MNT/config.txt" << KMSCONFIG
-# KMS graphics driver
-dtoverlay=vc4-kms-v3d
-
-# HyperPixel 2.1 Round 480x480 - KMS overlay
+# HyperPixel 2.1 Round 480x480 - LEGACY DPI mode
+# Uses hyperpixel2r overlay + pigpio init script
 dtoverlay=${HP_OVERLAY}
 
-# I2C and SPI for touch
-dtparam=i2c_arm=on
-dtparam=spi=on
+# NOTE: Do NOT enable i2c_arm or spi here!
+# They conflict with DPI pins used by HyperPixel display.
+# The hyperpixel2r overlay uses i2c10 for touch (software I2C).
+# The LCD init uses pigpio software SPI (bit-banging).
 
-# USB OTG Gadget
+# USB OTG Gadget (composite ECM + ACM)
 dtoverlay=dwc2
-KMSCONFIG
-else
-    cat >> "$BOOT_MNT/config.txt" << NONKMSCONFIG
-# HyperPixel 2.1 Round 480x480 - non-KMS overlay (DPI mode)
-# FIX: Use hyperpixel2r (not hyperpixel4), no disable-i2c flag
-dtoverlay=${HP_OVERLAY}
-
-# DPI configuration (required for ST7701S LCD)
-enable_dpi_lcd=1
-display_default_lcd=1
-dpi_group=2
-dpi_mode=87
-dpi_output_format=0x7f216
-dpi_timings=480 0 10 16 55 480 0 15 60 15 0 0 0 60 0 19200000 6
-framebuffer_width=480
-framebuffer_height=480
-display_rotate=0
-
-# I2C and SPI for touch
-dtparam=i2c_arm=on
-dtparam=spi=on
-
-# USB OTG Gadget
-dtoverlay=dwc2
-NONKMSCONFIG
-fi
+CONFIGEOF
 
 # cmdline.txt: load modules
 CMDLINE=$(cat "$BOOT_MNT/cmdline.txt")
@@ -398,7 +395,7 @@ if [[ ! "$CMDLINE" == *"modules-load"* ]]; then
     sed -i 's/rootwait/rootwait modules-load=dwc2,libcomposite/' "$BOOT_MNT/cmdline.txt"
 fi
 
-log "config.txt configured: overlay=$HP_OVERLAY KMS=$USE_KMS_OVERLAY"
+log "config.txt configured: overlay=$HP_OVERLAY (legacy DPI mode)"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # SETUP QEMU CHROOT FOR PACKAGE INSTALLATION
