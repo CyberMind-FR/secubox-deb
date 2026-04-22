@@ -15,7 +15,6 @@ import random
 import socket
 import socket as sock_module
 import json
-from datetime import datetime
 
 try:
     from PIL import Image, ImageDraw, ImageFont
@@ -265,7 +264,7 @@ def draw_dashboard(metrics, mode='SIM', host='', device_name=''):
     draw.ellipse([10, 10, WIDTH-10, HEIGHT-10], outline=(40, 40, 40), width=2)
 
     # Draw module rings
-    for name, mod in MODULES.items():
+    for _, mod in MODULES.items():
         r = mod['r']
         color = mod['color']
         metric_name = mod['metric']
