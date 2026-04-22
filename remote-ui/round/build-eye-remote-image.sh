@@ -158,7 +158,7 @@ if [[ "$BUILD_MODE" == "browser" ]]; then
 else
     log "Build mode: FRAMEBUFFER (Python/PIL direct)"
     PACKAGES=("${PACKAGES_FRAMEBUFFER[@]}")
-    IMAGE_EXPAND_MB=512   # Less space needed
+    IMAGE_EXPAND_MB=768   # Space for PIL and dependencies
 fi
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -438,6 +438,9 @@ log "DNS configured for chroot"
 log "Installing packages via QEMU chroot (this takes a while)..."
 info "Packages: ${PACKAGES[*]}"
 
+# Create package list file (dynamically based on BUILD_MODE)
+printf "%s\n" "${PACKAGES[@]}" > "$ROOT_MNT/tmp/package-list.txt"
+
 # Create install script
 cat > "$ROOT_MNT/tmp/install-packages.sh" << 'INSTALLSCRIPT'
 #!/bin/bash
@@ -450,30 +453,16 @@ echo "=== Updating APT ==="
 apt-get update -qq
 
 echo "=== Installing packages ==="
-apt-get install -y -qq --no-install-recommends \
-    chromium-browser \
-    xserver-xorg \
-    xserver-xorg-video-fbdev \
-    xinit \
-    lightdm \
-    openbox \
-    x11-xserver-utils \
-    unclutter \
-    nginx \
-    python3-pil \
-    python3-pip \
-    python3-pigpio \
-    pigpio \
-    git \
-    i2c-tools \
-    fonts-dejavu-core
+# Read packages from file and install with --no-install-recommends
+xargs -a /tmp/package-list.txt apt-get install -y -qq --no-install-recommends
 
 echo "=== Enabling pigpiod ==="
-systemctl enable pigpiod
+systemctl enable pigpiod || true
 
 echo "=== Cleaning APT cache ==="
 apt-get clean
 rm -rf /var/lib/apt/lists/*
+rm -f /tmp/package-list.txt
 
 echo "=== Package installation complete ==="
 INSTALLSCRIPT
@@ -698,12 +687,13 @@ chmod +x "$ROOT_MNT/home/secubox/.xinitrc"
 chroot "$ROOT_MNT" chown -R secubox:secubox /home/secubox
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# CONFIGURE NGINX
+# CONFIGURE NGINX (browser mode only)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-log "Configuring nginx..."
+if [[ "$BUILD_MODE" == "browser" ]]; then
+    log "Configuring nginx..."
 
-cat > "$ROOT_MNT/etc/nginx/sites-available/secubox-round" << 'NGINX'
+    cat > "$ROOT_MNT/etc/nginx/sites-available/secubox-round" << 'NGINX'
 server {
     listen 8080 default_server;
     server_name _;
@@ -728,9 +718,12 @@ server {
 }
 NGINX
 
-# Enable nginx site
-ln -sf /etc/nginx/sites-available/secubox-round "$ROOT_MNT/etc/nginx/sites-enabled/"
-rm -f "$ROOT_MNT/etc/nginx/sites-enabled/default"
+    # Enable nginx site
+    ln -sf /etc/nginx/sites-available/secubox-round "$ROOT_MNT/etc/nginx/sites-enabled/"
+    rm -f "$ROOT_MNT/etc/nginx/sites-enabled/default"
+else
+    log "Skipping nginx (framebuffer mode)"
+fi
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # INSTALL DASHBOARD
