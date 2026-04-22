@@ -118,6 +118,105 @@ minicom -D /dev/ttyACM0 -b 115200
 
 ---
 
+## Complete Display Requirements
+
+### Hardware Stack
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      Display Stack                          │
+├─────────────────────────────────────────────────────────────┤
+│  Layer 7: Chromium Browser (kiosk mode, fullscreen)        │
+├─────────────────────────────────────────────────────────────┤
+│  Layer 6: HTML5 Dashboard (Canvas API, WebSocket)          │
+├─────────────────────────────────────────────────────────────┤
+│  Layer 5: nginx (localhost:8080 → proxy to API)            │
+├─────────────────────────────────────────────────────────────┤
+│  Layer 4: Openbox Window Manager (minimal, no decorations)  │
+├─────────────────────────────────────────────────────────────┤
+│  Layer 3: X11 Server (xserver-xorg-video-fbdev)            │
+├─────────────────────────────────────────────────────────────┤
+│  Layer 2: LightDM Display Manager (autologin: secubox)     │
+├─────────────────────────────────────────────────────────────┤
+│  Layer 1: Linux Framebuffer (/dev/fb0, 480x480 RGB666)     │
+├─────────────────────────────────────────────────────────────┤
+│  Layer 0: HyperPixel DPI Interface (24-bit parallel RGB)   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Required Packages
+
+| Package | Purpose | Size |
+|---------|---------|------|
+| `xserver-xorg` | X11 server | ~2MB |
+| `xserver-xorg-video-fbdev` | Framebuffer driver | ~20KB |
+| `xinit` | X initialization | ~100KB |
+| `lightdm` | Display manager | ~1MB |
+| `openbox` | Window manager | ~1MB |
+| `chromium-browser` | Kiosk browser | ~200MB |
+| `unclutter` | Hide mouse cursor | ~20KB |
+| `x11-xserver-utils` | xset, xrandr, etc | ~200KB |
+| `nginx` | Web server for dashboard | ~1MB |
+| `pigpio` | GPIO control daemon | ~500KB |
+| `python3-pigpio` | Python GPIO bindings | ~100KB |
+| `fonts-dejavu-core` | Dashboard fonts | ~3MB |
+
+### Required Services
+
+| Service | Purpose | Depends On |
+|---------|---------|------------|
+| `pigpiod` | GPIO daemon for LCD init | - |
+| `hyperpixel2r-init` | ST7701S LCD initialization | pigpiod |
+| `lightdm` | Display manager | hyperpixel2r-init |
+| `nginx` | Serve dashboard HTML | - |
+
+### Boot Sequence
+
+```
+1. Kernel boots (bcm2708-rpi-zero-w.dtb)
+      ↓
+2. DPI interface initialized (config.txt dpi_timings)
+      ↓
+3. systemd starts multi-user.target
+      ↓
+4. pigpiod.service starts (GPIO daemon)
+      ↓
+5. hyperpixel2r-init.service runs
+   - Connects to pigpiod
+   - Sends SPI commands to ST7701S
+   - Enables backlight
+   - Display shows framebuffer content
+      ↓
+6. lightdm.service starts
+   - Starts X11 server on :0
+   - Auto-logs in as 'secubox' user
+      ↓
+7. openbox-session starts
+   - Executes ~/.config/openbox/autostart
+   - Disables screensaver (xset s off)
+   - Hides cursor (unclutter)
+      ↓
+8. chromium-browser --kiosk http://localhost:8080
+   - Fullscreen, no UI elements
+   - Dashboard renders
+      ↓
+9. Dashboard connects to SecuBox API
+   - Fetches metrics every 2 seconds
+   - Renders on Canvas
+```
+
+### Critical Configuration Files
+
+| File | Purpose |
+|------|---------|
+| `/boot/config.txt` | DPI timings, overlays, GPIO |
+| `/boot/cmdline.txt` | Kernel modules (dwc2, libcomposite) |
+| `/etc/systemd/system/hyperpixel2r-init.service` | LCD init service |
+| `/usr/bin/hyperpixel2r-init` | ST7701S init script |
+| `/etc/lightdm/lightdm.conf.d/50-autologin.conf` | Auto-login config |
+| `/home/secubox/.config/openbox/autostart` | Kiosk startup script |
+| `/etc/nginx/sites-available/secubox-round` | Dashboard web server |
+
 ## Display Configuration
 
 ### Legacy DPI Mode (Required for Pi Zero W)
