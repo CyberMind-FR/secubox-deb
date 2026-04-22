@@ -303,70 +303,37 @@ def draw_dashboard(metrics, mode='SIM', host='', device_name=''):
             y = cy + r * math.sin(rad)
             draw.ellipse([x-5, y-5, x+5, y+5], fill=(255, 255, 255))
 
-    # Center info
-    now = datetime.now()
-    time_str = now.strftime('%H:%M:%S')
-    date_str = now.strftime('%a %d %b')
+    # Center info - OTG mode display (no clock/date)
+    # OTG/WiFi/SIM status - large and central
+    if mode == 'OTG':
+        mode_text = 'USB OTG'
+        mode_color = STATUS_OK  # Neon green
+    elif mode == 'WIFI':
+        mode_text = 'WiFi'
+        mode_color = (0, 191, 255)  # Cyan
+    else:
+        mode_text = 'SIM'
+        mode_color = STATUS_SIM
 
-    # Time
-    bbox = draw.textbbox((0, 0), time_str, font=font_large)
+    # Large mode indicator
+    bbox = draw.textbbox((0, 0), mode_text, font=font_large)
     tw = bbox[2] - bbox[0]
-    draw.text((cx - tw//2, cy - 50), time_str, fill=TEXT_COLOR, font=font_large)
+    draw.text((cx - tw//2, cy - 30), mode_text, fill=mode_color, font=font_large)
 
-    # Date
-    bbox = draw.textbbox((0, 0), date_str, font=font_medium)
-    tw = bbox[2] - bbox[0]
-    draw.text((cx - tw//2, cy), date_str, fill=TEXT_MUTED, font=font_medium)
+    # Connection status
+    if mode in ['OTG', 'WIFI']:
+        status_text = 'CONNECTED'
+        bbox = draw.textbbox((0, 0), status_text, font=font_medium)
+        tw = bbox[2] - bbox[0]
+        draw.text((cx - tw//2, cy + 10), status_text, fill=mode_color, font=font_medium)
 
-    # Hostname
+    # Hostname below
     hostname = metrics.get('hostname', 'secubox')
     bbox = draw.textbbox((0, 0), hostname, font=font_small)
     tw = bbox[2] - bbox[0]
-    draw.text((cx - tw//2, cy + 25), hostname, fill=TEXT_MUTED, font=font_small)
+    draw.text((cx - tw//2, cy + 40), hostname, fill=TEXT_MUTED, font=font_small)
 
-    # Uptime
-    uptime_str = format_uptime(metrics.get('uptime', 0))
-    bbox = draw.textbbox((0, 0), uptime_str, font=font_small)
-    tw = bbox[2] - bbox[0]
-    draw.text((cx - tw//2, cy + 45), uptime_str, fill=TEXT_MUTED, font=font_small)
-
-    # Draw pods with values
-    pod_positions = [
-        ('AUTH', cx, cy - 115),
-        ('WALL', cx + 100, cy - 60),
-        ('BOOT', cx + 100, cy + 60),
-        ('MESH', cx, cy + 115),
-        ('ROOT', cx - 100, cy + 60),
-        ('MIND', cx - 100, cy - 60),
-    ]
-
-    for name, px, py in pod_positions:
-        mod = MODULES[name]
-        metric_name = mod['metric']
-        value = metrics.get(metric_name, 0)
-        unit = mod['unit']
-        color = mod['color']
-
-        # Format value
-        if metric_name in ['cpu', 'mem', 'disk']:
-            val_str = f'{int(value)}'
-        elif metric_name == 'load':
-            val_str = f'{value:.1f}'
-        elif metric_name == 'temp':
-            val_str = f'{int(value)}'
-        else:
-            val_str = f'{int(value)}'
-
-        # Value
-        bbox = draw.textbbox((0, 0), val_str, font=font_medium)
-        tw = bbox[2] - bbox[0]
-        draw.text((px - tw//2, py - 10), val_str, fill=color, font=font_medium)
-
-        # Unit and name
-        label = f'{unit} {name}'
-        bbox = draw.textbbox((0, 0), label, font=font_small)
-        tw = bbox[2] - bbox[0]
-        draw.text((px - tw//2, py + 10), label, fill=TEXT_MUTED, font=font_small)
+    # Rings only - no text labels on circles (clean design)
 
     # Top: SecuBox branding + device name
     brand = 'SECUBOX EYE'
@@ -384,26 +351,12 @@ def draw_dashboard(metrics, mode='SIM', host='', device_name=''):
         tw = bbox[2] - bbox[0]
         draw.text((cx - tw//2, 35), device_text, fill=TEXT_MUTED, font=font_tiny)
 
-    # Status bar at bottom - OTG/WiFi/SIM mode
-    if mode == 'OTG':
-        status = '● OTG CONNECTED'
-        status_color = (10, 88, 64)  # ROOT green
-    elif mode == 'WiFi':
-        status = '● WiFi CONNECTED'
-        status_color = (16, 74, 136)  # MESH blue
-    else:
-        status = '○ SIMULATION'
-        status_color = STATUS_SIM
-
-    bbox = draw.textbbox((0, 0), status, font=font_small)
-    tw = bbox[2] - bbox[0]
-    draw.text((cx - tw//2, HEIGHT - 55), status, fill=status_color, font=font_small)
-
-    # Host address at bottom (if connected to real device)
+    # Host address at bottom (minimal)
     if host and mode != 'SIM':
-        bbox = draw.textbbox((0, 0), host, font=font_tiny)
+        host_display = host.replace('http://', '').replace('https://', '').split(':')[0]
+        bbox = draw.textbbox((0, 0), host_display, font=font_tiny)
         tw = bbox[2] - bbox[0]
-        draw.text((cx - tw//2, HEIGHT - 35), host, fill=TEXT_MUTED, font=font_tiny)
+        draw.text((cx - tw//2, HEIGHT - 30), host_display, fill=TEXT_MUTED, font=font_tiny)
 
     return img
 
