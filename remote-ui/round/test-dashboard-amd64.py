@@ -91,11 +91,19 @@ class APIMetricsSource:
             r = requests.get(f'{self.api_base}/api/v1/health', timeout=3)
             if r.status_code == 200:
                 data = r.json()
-                self.mode = data.get('mode', 'API').upper()
-                self.device_name = f"emulator:{data.get('profile', 'normal')}"
+                # Emulator simulates OTG connection
+                if data.get('emulated'):
+                    self.mode = 'OTG'
+                    self.device_name = data.get('device_name', 'secubox-emulated')
+                else:
+                    self.mode = 'OTG'
+                    self.device_name = data.get('device_name', 'secubox')
                 self._connected = True
-                print(f'Connected to API at {self.api_base}')
-                print(f'  Mode: {self.mode}, Profile: {data.get("profile")}')
+                print(f'Connected to SecuBox at {self.api_base}')
+                print(f'  Mode: {self.mode} ({"emulated" if data.get("emulated") else "real"})')
+                print(f'  Device: {self.device_name}')
+                if data.get('profile'):
+                    print(f'  Profile: {data.get("profile")}')
                 return
         except Exception as e:
             print(f'API probe failed: {e}')
@@ -116,6 +124,13 @@ class APIMetricsSource:
             r = requests.get(f'{self.api_base}/api/v1/system/metrics', timeout=3)
             if r.status_code == 200:
                 data = r.json()
+                # Get transport mode from API (otg, wifi, or default to current mode)
+                transport = data.get('transport', '').upper()
+                if transport in ['OTG', 'WIFI']:
+                    self.mode = transport
+                # Update device name if provided
+                if data.get('hostname'):
+                    self.device_name = data.get('hostname')
                 return {
                     'cpu': data.get('cpu_percent', 0),
                     'mem': data.get('memory_percent', data.get('mem_percent', 0)),
@@ -294,26 +309,35 @@ def draw_dashboard(metrics, mode='SIM', host='', device_name=''):
         tw = bbox[2] - bbox[0]
         draw.text((cx - tw//2, 35), device_text, fill=TEXT_MUTED, font=font_tiny)
 
-    # Status bar at bottom
-    if mode in ['OTG', 'API', 'EMULATOR']:
-        status = f'● {mode} CONNECTED'
-        status_color = STATUS_OK
-    elif mode == 'WiFi':
-        status = '● WiFi CONNECTED'
-        status_color = (0, 191, 255)
+    # Status bar at bottom - OTG/WiFi/SIM mode with indicator
+    if mode == 'OTG':
+        status = '● USB OTG'
+        status_color = STATUS_OK  # Neon green
+    elif mode == 'WIFI':
+        status = '● WiFi'
+        status_color = (0, 191, 255)  # Cyan
     else:
-        status = '○ SIMULATION'
+        status = '○ SIM'
         status_color = STATUS_SIM
 
-    bbox = draw.textbbox((0, 0), status, font=font_small)
+    bbox = draw.textbbox((0, 0), status, font=font_medium)
     tw = bbox[2] - bbox[0]
-    draw.text((cx - tw//2, HEIGHT - 55), status, fill=status_color, font=font_small)
+    draw.text((cx - tw//2, HEIGHT - 60), status, fill=status_color, font=font_medium)
+
+    # Connection status text
+    if mode in ['OTG', 'WIFI']:
+        conn_text = 'CONNECTED'
+        bbox = draw.textbbox((0, 0), conn_text, font=font_tiny)
+        tw = bbox[2] - bbox[0]
+        draw.text((cx - tw//2, HEIGHT - 40), conn_text, fill=status_color, font=font_tiny)
 
     # Host address at bottom
     if host and mode != 'SIM':
-        bbox = draw.textbbox((0, 0), host, font=font_tiny)
+        # Extract just the IP/host part
+        host_display = host.replace('http://', '').replace('https://', '').split(':')[0]
+        bbox = draw.textbbox((0, 0), host_display, font=font_tiny)
         tw = bbox[2] - bbox[0]
-        draw.text((cx - tw//2, HEIGHT - 35), host, fill=TEXT_MUTED, font=font_tiny)
+        draw.text((cx - tw//2, HEIGHT - 25), host_display, fill=TEXT_MUTED, font=font_tiny)
 
     return img
 

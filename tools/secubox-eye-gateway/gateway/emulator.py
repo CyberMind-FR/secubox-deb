@@ -46,6 +46,7 @@ class SecuBoxEmulator:
             "hostname": self.name,
             "uptime": uptime_secs,
             "uptime_seconds": uptime_secs,
+            "transport": "otg",  # Simulate OTG connection
             "emulated": True,
         })
         return metrics
