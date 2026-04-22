@@ -71,7 +71,7 @@ class AgentMetricsSource:
         self.sim = SimulatedMetrics()
         self._last_data = None
 
-    def _read_from_socket(self) -> dict:
+    def _read_from_socket(self) -> dict | None:
         """Read metrics from agent Unix socket."""
         try:
             s = sock_module.socket(sock_module.AF_UNIX, sock_module.SOCK_STREAM)
