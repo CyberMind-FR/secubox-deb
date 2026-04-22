@@ -685,21 +685,38 @@ python3 /usr/local/bin/fb_dashboard.py
 
 ### Which config.txt settings are required?
 
-Minimum required for HyperPixel 2.1 Round (v1.11.0):
+Minimum required for HyperPixel 2.1 Round (v2.0.0):
 ```
 dtoverlay=hyperpixel2r
-enable_dpi_lcd=1
-display_default_lcd=1
-dpi_group=2
-dpi_mode=87
-dpi_output_format=0x7f216
-dpi_timings=480 0 10 16 55 480 0 15 60 15 0 0 0 60 0 19200000 6
-framebuffer_width=480
-framebuffer_height=480
-dtparam=i2c_arm=on
-dtparam=spi=on
 dtoverlay=dwc2
+gpu_mem=128
+display_auto_detect=0
 ```
+
+**⚠️ Do NOT add these - they conflict with DPI:**
+```
+# WRONG - conflicts with DPI pins!
+# dtparam=i2c_arm=on
+# dtparam=spi=on
+```
+
+The `hyperpixel2r` overlay handles its own I2C (i2c10) for touch and uses pigpio software SPI for LCD init.
+
+### DPI fails with "pin gpio2 already requested by i2c"
+
+**Cause:** `dtparam=i2c_arm=on` enables I2C on GPIO2/3, but the DPI display driver needs those pins.
+
+**Kernel error:**
+```
+pinctrl-bcm2835: pin gpio2 already requested by i2c; cannot claim for dpi
+vc4_dpi: Error applying setting, reverse things back
+```
+
+**Solution:** Remove or comment out `dtparam=i2c_arm=on` and `dtparam=spi=on` from config.txt. The HyperPixel overlay uses:
+- **i2c10** (software I2C on different pins) for touch controller
+- **pigpio software SPI** (bit-banging) for LCD initialization
+
+This is handled automatically by `build-eye-remote-image.sh` v2.0.0+.
 
 ---
 
