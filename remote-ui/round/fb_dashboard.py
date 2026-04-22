@@ -40,22 +40,22 @@ API_OTG = 'http://10.55.0.1:8000'
 API_WIFI = 'http://secubox.local:8000'
 API_TIMEOUT = 3
 
-# Colors (RGB)
-BG_COLOR = (8, 8, 8)
-TEXT_COLOR = (232, 230, 217)
-TEXT_MUTED = (107, 107, 122)
-STATUS_OK = (0, 180, 0)
-STATUS_WARN = (255, 180, 0)
-STATUS_SIM = (100, 100, 100)
+# Colors (RGB) — Neon theme
+BG_COLOR = (8, 8, 12)            # Deep space black
+TEXT_COLOR = (240, 240, 250)     # Bright white
+TEXT_MUTED = (130, 130, 150)     # Soft gray-blue
+STATUS_OK = (0, 255, 65)         # Neon green
+STATUS_WARN = (255, 100, 0)      # Neon orange
+STATUS_SIM = (100, 100, 120)     # Dim gray
 
-# Module colors and metrics
+# Module colors — Fluorescent/Phosphorescent neon palette
 MODULES = {
-    'AUTH': {'color': (192, 78, 36), 'metric': 'cpu', 'unit': '%', 'r': 214},
-    'WALL': {'color': (154, 96, 16), 'metric': 'mem', 'unit': '%', 'r': 201},
-    'BOOT': {'color': (128, 48, 24), 'metric': 'disk', 'unit': '%', 'r': 188},
-    'MIND': {'color': (61, 53, 160), 'metric': 'load', 'unit': 'x', 'r': 175},
-    'ROOT': {'color': (10, 88, 64), 'metric': 'temp', 'unit': '°', 'r': 162},
-    'MESH': {'color': (16, 74, 136), 'metric': 'wifi', 'unit': 'dB', 'r': 149},
+    'AUTH': {'color': (255, 0, 100), 'metric': 'cpu', 'unit': '%', 'r': 214},     # Neon Pink/Magenta
+    'WALL': {'color': (255, 100, 0), 'metric': 'mem', 'unit': '%', 'r': 201},     # Neon Orange
+    'BOOT': {'color': (220, 255, 0), 'metric': 'disk', 'unit': '%', 'r': 188},    # Neon Yellow
+    'MIND': {'color': (0, 255, 65), 'metric': 'load', 'unit': 'x', 'r': 175},     # Neon Green (matrix)
+    'ROOT': {'color': (0, 255, 255), 'metric': 'temp', 'unit': '°', 'r': 162},    # Neon Cyan
+    'MESH': {'color': (185, 0, 255), 'metric': 'wifi', 'unit': 'dB', 'r': 149},   # Neon Purple
 }
 
 # Eye Agent Unix socket
@@ -67,6 +67,8 @@ class AgentMetricsSource:
 
     def __init__(self):
         self.mode = 'SIM'
+        self.host = ''
+        self.device_name = ''
         self.sim = SimulatedMetrics()
         self._last_data = None
 
@@ -83,14 +85,21 @@ class AgentMetricsSource:
             return None
 
     def get_metrics(self):
-        """Get current metrics from agent or simulation."""
+        """Get current metrics from agent or simulation.
+
+        Returns:
+            tuple: (metrics_dict, mode, host, device_name)
+        """
         data = self._read_from_socket()
 
         if data and 'metrics' in data:
             self._last_data = data
-            transport = data.get('secubox', {}).get('transport', 'SIM')
+            secubox_info = data.get('secubox', {})
+            transport = secubox_info.get('transport', 'SIM')
             mode = transport.upper() if transport in ('otg', 'wifi') else 'SIM'
             self.mode = mode
+            self.host = secubox_info.get('host', '')
+            self.device_name = secubox_info.get('name', '')
 
             metrics = data['metrics']
             # Map API fields to dashboard fields
@@ -103,11 +112,13 @@ class AgentMetricsSource:
                 'wifi': metrics.get('wifi_rssi', -80),
                 'uptime': metrics.get('uptime_seconds', 0),
                 'hostname': metrics.get('hostname', 'secubox'),
-            }, mode
+            }, mode, self.host, self.device_name
 
         # Fallback to simulation
         self.mode = 'SIM'
-        return self.sim.update(), 'SIM'
+        self.host = ''
+        self.device_name = ''
+        return self.sim.update(), 'SIM', '', ''
 
 
 class MetricsSource:
@@ -116,6 +127,8 @@ class MetricsSource:
     def __init__(self):
         self.mode = 'SIM'  # OTG, WiFi, or SIM
         self.api_base = None
+        self.host = ''
+        self.device_name = ''
         self.jwt_token = None
         self.sim = SimulatedMetrics()
         self._probe_api()
@@ -131,7 +144,8 @@ class MetricsSource:
                 if r.status_code == 200:
                     self.api_base = base
                     self.mode = mode
-                    print(f'Connected to SecuBox via {mode}')
+                    self.host = base.replace('http://', '').split(':')[0]
+                    print(f'Connected to SecuBox via {mode} at {self.host}')
                     return
             except:
                 pass
@@ -139,9 +153,13 @@ class MetricsSource:
         print('No SecuBox API found, using simulation mode')
 
     def get_metrics(self):
-        """Get current metrics"""
+        """Get current metrics.
+
+        Returns:
+            tuple: (metrics_dict, mode, host, device_name)
+        """
         if self.mode == 'SIM' or not self.api_base:
-            return self.sim.update(), 'SIM'
+            return self.sim.update(), 'SIM', '', ''
 
         try:
             headers = {}
@@ -156,6 +174,8 @@ class MetricsSource:
 
             if r.status_code == 200:
                 data = r.json()
+                hostname = data.get('hostname', 'secubox')
+                self.device_name = hostname
                 return {
                     'cpu': data.get('cpu_percent', 0),
                     'mem': data.get('mem_percent', 0),
@@ -164,13 +184,13 @@ class MetricsSource:
                     'temp': data.get('cpu_temp', 0),
                     'wifi': data.get('wifi_rssi', -80),
                     'uptime': data.get('uptime_seconds', 0),
-                    'hostname': data.get('hostname', 'secubox'),
-                }, self.mode
+                    'hostname': hostname,
+                }, self.mode, self.host, self.device_name
         except Exception as e:
             print(f'API error: {e}')
 
         # Fallback to simulation
-        return self.sim.update(), 'SIM'
+        return self.sim.update(), 'SIM', '', ''
 
 
 class SimulatedMetrics:
@@ -215,8 +235,15 @@ def format_uptime(seconds):
     return f'up {hours}h{minutes:02d}'
 
 
-def draw_dashboard(metrics, mode='SIM'):
-    """Draw the dashboard to an image"""
+def draw_dashboard(metrics, mode='SIM', host='', device_name=''):
+    """Draw the dashboard to an image
+
+    Args:
+        metrics: Dict with cpu, mem, disk, load, temp, wifi, uptime, hostname
+        mode: Transport mode - 'OTG', 'WiFi', or 'SIM'
+        host: SecuBox host IP/address
+        device_name: Name of connected SecuBox device
+    """
     img = Image.new('RGBA', (WIDTH, HEIGHT), BG_COLOR + (255,))
     draw = ImageDraw.Draw(img)
 
@@ -341,26 +368,42 @@ def draw_dashboard(metrics, mode='SIM'):
         tw = bbox[2] - bbox[0]
         draw.text((px - tw//2, py + 10), label, fill=TEXT_MUTED, font=font_small)
 
-    # Status bar
+    # Top: SecuBox branding + device name
+    brand = 'SECUBOX EYE'
+    bbox = draw.textbbox((0, 0), brand, font=font_tiny)
+    tw = bbox[2] - bbox[0]
+    draw.text((cx - tw//2, 20), brand, fill=(201, 168, 76), font=font_tiny)  # gold-hermetic
+
+    # Device name/host at top (if connected)
+    if device_name or host:
+        device_text = device_name if device_name else host
+        # Truncate if too long
+        if len(device_text) > 20:
+            device_text = device_text[:18] + '..'
+        bbox = draw.textbbox((0, 0), device_text, font=font_tiny)
+        tw = bbox[2] - bbox[0]
+        draw.text((cx - tw//2, 35), device_text, fill=TEXT_MUTED, font=font_tiny)
+
+    # Status bar at bottom - OTG/WiFi/SIM mode
     if mode == 'OTG':
-        status = '● OTG'
+        status = '● OTG CONNECTED'
         status_color = (10, 88, 64)  # ROOT green
     elif mode == 'WiFi':
-        status = '● WiFi'
+        status = '● WiFi CONNECTED'
         status_color = (16, 74, 136)  # MESH blue
     else:
-        status = '○ SIM'
+        status = '○ SIMULATION'
         status_color = STATUS_SIM
 
     bbox = draw.textbbox((0, 0), status, font=font_small)
     tw = bbox[2] - bbox[0]
-    draw.text((cx - tw//2, HEIGHT - 40), status, fill=status_color, font=font_small)
+    draw.text((cx - tw//2, HEIGHT - 55), status, fill=status_color, font=font_small)
 
-    # SecuBox branding
-    brand = 'SECUBOX'
-    bbox = draw.textbbox((0, 0), brand, font=font_tiny)
-    tw = bbox[2] - bbox[0]
-    draw.text((cx - tw//2, 25), brand, fill=TEXT_MUTED, font=font_tiny)
+    # Host address at bottom (if connected to real device)
+    if host and mode != 'SIM':
+        bbox = draw.textbbox((0, 0), host, font=font_tiny)
+        tw = bbox[2] - bbox[0]
+        draw.text((cx - tw//2, HEIGHT - 35), host, fill=TEXT_MUTED, font=font_tiny)
 
     return img
 
@@ -387,16 +430,20 @@ def main():
     # Try agent first, fall back to simulation
     if os.path.exists(AGENT_SOCKET):
         print('Using Eye Agent for metrics')
-        source = AgentMetricsSource()
     else:
-        print('Agent not running, using simulation')
-        source = AgentMetricsSource()  # Will fall back to simulation internally
+        print('Agent not running, will use simulation mode')
+
+    source = AgentMetricsSource()
 
     while True:
         try:
-            metrics, mode = source.get_metrics()
-            img = draw_dashboard(metrics, mode)
+            metrics, mode, host, device_name = source.get_metrics()
+            img = draw_dashboard(metrics, mode, host, device_name)
             write_to_fb(img)
+
+            # Log connection changes
+            if mode != 'SIM' and host:
+                pass  # Connected to real device
             time.sleep(1)
         except KeyboardInterrupt:
             print('\nExiting...')

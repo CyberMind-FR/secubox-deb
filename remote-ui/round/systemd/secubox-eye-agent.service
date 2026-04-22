@@ -1,0 +1,28 @@
+# SecuBox Eye Remote — Eye Agent Service
+# Fetches metrics from SecuBox and exposes via Unix socket
+#
+# CyberMind — https://cybermind.fr
+
+[Unit]
+Description=SecuBox Eye Remote Agent
+Documentation=https://github.com/CyberMind-FR/secubox-deb/wiki/Eye-Remote
+After=network.target secubox-otg-gadget.service
+Wants=secubox-otg-gadget.service
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/bin/python3 -m agent.main /etc/secubox-eye/config.toml
+WorkingDirectory=/opt/secubox-eye
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+Environment=PYTHONUNBUFFERED=1
+
+# Runtime directory for socket
+RuntimeDirectory=secubox-eye
+RuntimeDirectoryMode=0755
+
+[Install]
+WantedBy=multi-user.target

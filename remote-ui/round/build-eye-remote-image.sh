@@ -45,9 +45,25 @@ SOURCE_IMAGE=""
 # Image size increase (MB) for pre-installed packages
 IMAGE_EXPAND_MB=1024
 
-# Packages to pre-install (offline boot)
-PACKAGES=(
-    # Display & Kiosk
+# Build mode: "browser" (Chromium kiosk) or "framebuffer" (Python/PIL direct)
+BUILD_MODE="framebuffer"  # Default: lightweight framebuffer mode
+
+# Packages for framebuffer mode (lightweight, ~50MB)
+PACKAGES_FRAMEBUFFER=(
+    # Python for dashboard rendering
+    python3-pil
+    python3-pip
+    python3-pigpio
+    python3-aiohttp
+    pigpio
+    # Utilities
+    i2c-tools
+    # Fonts
+    fonts-dejavu-core
+)
+
+# Additional packages for browser mode (~200MB more)
+PACKAGES_BROWSER=(
     chromium-browser
     xserver-xorg
     xserver-xorg-video-fbdev
@@ -56,19 +72,12 @@ PACKAGES=(
     openbox
     x11-xserver-utils
     unclutter
-    # Web server
     nginx
-    # Python (for dashboard and HyperPixel init)
-    python3-pil
-    python3-pip
-    python3-pigpio
-    pigpio
-    # Utilities
     git
-    i2c-tools
-    # Fonts
-    fonts-dejavu-core
 )
+
+# Active package list (set after parsing args)
+PACKAGES=()
 
 usage() {
     cat << EOF
@@ -86,7 +95,18 @@ Options:
   -p, --psk PSK           WiFi password (optional)
   -h, --hostname NAME     Hostname (default: secubox-round)
   -k, --pubkey FILE       SSH public key to install
+  --browser               Use Chromium kiosk mode (~250MB more)
+  --framebuffer           Use Python/PIL framebuffer (default, lightweight)
   --help                  Show this help
+
+Build Modes:
+  framebuffer (default)   Python renders directly to /dev/fb0
+                          Lightweight: ~50MB packages, fast boot
+                          No X11 or browser needed
+
+  browser                 Chromium kiosk with HTML dashboard
+                          Heavy: ~250MB packages, slower boot
+                          Full web capabilities
 
 Requirements:
   - qemu-user-static (for ARM emulation)
@@ -94,11 +114,14 @@ Requirements:
   - sudo privileges
 
 Examples:
-  # Build with WiFi pre-configured
+  # Lightweight framebuffer mode (recommended)
+  sudo $0 -i raspios-lite.img.xz
+
+  # With WiFi pre-configured
   sudo $0 -i raspios-lite.img.xz -s "MyWiFi" -p "password"
 
-  # Build minimal (USB OTG only, offline)
-  sudo $0 -i raspios-lite.img.xz
+  # Browser kiosk mode
+  sudo $0 -i raspios-lite.img.xz --browser
 
 Output: ${OUTPUT_DIR}/${OUTPUT_NAME}
 EOF
@@ -117,6 +140,8 @@ while [[ $# -gt 0 ]]; do
         -p|--psk) WIFI_PSK="$2"; shift 2 ;;
         -h|--hostname) HOSTNAME="$2"; shift 2 ;;
         -k|--pubkey) SSH_PUBKEY="$2"; shift 2 ;;
+        --browser) BUILD_MODE="browser"; shift ;;
+        --framebuffer) BUILD_MODE="framebuffer"; shift ;;
         --help) usage ;;
         *) err "Unknown option: $1" ;;
     esac
@@ -124,6 +149,17 @@ done
 
 [[ -z "$SOURCE_IMAGE" ]] && err "Source image required. Use -i option."
 [[ ! -f "$SOURCE_IMAGE" ]] && err "Image not found: $SOURCE_IMAGE"
+
+# Set package list based on build mode
+if [[ "$BUILD_MODE" == "browser" ]]; then
+    log "Build mode: BROWSER (Chromium kiosk)"
+    PACKAGES=("${PACKAGES_FRAMEBUFFER[@]}" "${PACKAGES_BROWSER[@]}")
+    IMAGE_EXPAND_MB=1536  # More space for browser
+else
+    log "Build mode: FRAMEBUFFER (Python/PIL direct)"
+    PACKAGES=("${PACKAGES_FRAMEBUFFER[@]}")
+    IMAGE_EXPAND_MB=512   # Less space needed
+fi
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PREREQUISITES CHECK
