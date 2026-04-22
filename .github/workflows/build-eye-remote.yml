@@ -22,7 +22,7 @@ on:
       - 'remote-ui/round/**'
 
 env:
-  VERSION: '1.9.0'
+  VERSION: '2.0.0'
   RPI_OS_URL: 'https://downloads.raspberrypi.com/raspios_lite_armhf/images/raspios_lite_armhf-2024-11-19/2024-11-19-raspios-bookworm-armhf-lite.img.xz'
 
 jobs:

@@ -391,6 +391,10 @@ exit 101
 POLICY
 chmod +x "$ROOT_MNT/usr/sbin/policy-rc.d"
 
+# Setup DNS for network access in chroot
+cp /etc/resolv.conf "$ROOT_MNT/etc/resolv.conf"
+log "DNS configured for chroot"
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # INSTALL PACKAGES VIA CHROOT
 # ═══════════════════════════════════════════════════════════════════════════════
