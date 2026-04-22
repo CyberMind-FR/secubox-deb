@@ -1,0 +1,29 @@
+# SecuBox Eye Remote — Framebuffer Dashboard Service
+# Renders metrics directly to /dev/fb0 (no browser needed)
+#
+# CyberMind — https://cybermind.fr
+
+[Unit]
+Description=SecuBox Eye Remote Framebuffer Dashboard
+Documentation=https://github.com/CyberMind-FR/secubox-deb/wiki/Eye-Remote
+After=pigpiod.service hyperpixel2r-init.service secubox-eye-agent.service
+Wants=secubox-eye-agent.service
+ConditionPathExists=/dev/fb0
+
+[Service]
+Type=simple
+User=root
+ExecStartPre=/bin/sleep 2
+ExecStart=/usr/bin/python3 /opt/secubox-eye/fb_dashboard.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+Environment=PYTHONUNBUFFERED=1
+
+# Resource limits
+MemoryMax=128M
+CPUQuota=50%
+
+[Install]
+WantedBy=multi-user.target
