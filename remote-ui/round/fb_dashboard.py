@@ -47,14 +47,14 @@ STATUS_OK = (0, 255, 65)         # Neon green
 STATUS_WARN = (255, 100, 0)      # Neon orange
 STATUS_SIM = (100, 100, 120)     # Dim gray
 
-# Module colors — Fluorescent/Phosphorescent neon palette
+# Module colors — Arc-en-ciel Laser (Neon Rainbow)
 MODULES = {
-    'AUTH': {'color': (255, 0, 100), 'metric': 'cpu', 'unit': '%', 'r': 214},     # Neon Pink/Magenta
+    'AUTH': {'color': (255, 0, 100), 'metric': 'cpu', 'unit': '%', 'r': 214},     # Neon Magenta
     'WALL': {'color': (255, 100, 0), 'metric': 'mem', 'unit': '%', 'r': 201},     # Neon Orange
     'BOOT': {'color': (220, 255, 0), 'metric': 'disk', 'unit': '%', 'r': 188},    # Neon Yellow
-    'MIND': {'color': (0, 255, 65), 'metric': 'load', 'unit': 'x', 'r': 175},     # Neon Green (matrix)
-    'ROOT': {'color': (0, 255, 255), 'metric': 'temp', 'unit': '°', 'r': 162},    # Neon Cyan
-    'MESH': {'color': (185, 0, 255), 'metric': 'wifi', 'unit': 'dB', 'r': 149},   # Neon Purple
+    'MIND': {'color': (0, 255, 65), 'metric': 'load', 'unit': 'x', 'r': 175},     # Matrix Green
+    'ROOT': {'color': (0, 255, 255), 'metric': 'temp', 'unit': '°', 'r': 162},    # Cyber Cyan
+    'MESH': {'color': (185, 0, 255), 'metric': 'wifi', 'unit': 'dB', 'r': 149},   # Laser Purple
 }
 
 # Eye Agent Unix socket
