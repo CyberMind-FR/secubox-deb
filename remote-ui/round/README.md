@@ -685,12 +685,26 @@ python3 /usr/local/bin/fb_dashboard.py
 
 ### Which config.txt settings are required?
 
-Minimum required for HyperPixel 2.1 Round (v2.0.0):
-```
+Minimum required for HyperPixel 2.1 Round on Pi Zero W (v2.0.0):
+
+```ini
+# Display overlay
 dtoverlay=hyperpixel2r
-dtoverlay=dwc2
+
+# Explicit DPI settings (REQUIRED for Pi Zero W - no KMS support)
+enable_dpi_lcd=1
+display_default_lcd=1
+dpi_group=2
+dpi_mode=87
+dpi_output_format=0x7f216
+dpi_timings=480 0 10 16 59 480 0 15 60 15 0 0 0 60 0 19200000 6
+framebuffer_width=480
+framebuffer_height=480
+
+# Other settings
 gpu_mem=128
 display_auto_detect=0
+dtoverlay=dwc2
 ```
 
 **⚠️ Do NOT add these - they conflict with DPI:**
@@ -701,6 +715,12 @@ display_auto_detect=0
 ```
 
 The `hyperpixel2r` overlay handles its own I2C (i2c10) for touch and uses pigpio software SPI for LCD init.
+
+### Pi Zero W: Display blank even with correct overlay
+
+**Cause:** Pi Zero W (BCM2835) doesn't support KMS. The `hyperpixel2r` overlay alone may not configure DPI output properly without KMS.
+
+**Solution:** Add explicit DPI timing parameters (see above). These tell the VideoCore GPU exactly how to drive the 480x480 display, bypassing KMS.
 
 ### DPI fails with "pin gpio2 already requested by i2c"
 
