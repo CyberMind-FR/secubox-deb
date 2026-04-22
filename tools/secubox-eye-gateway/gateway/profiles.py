@@ -146,14 +146,21 @@ class EmulatedMetrics:
         return self
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert metrics to dictionary format."""
+        """Convert metrics to dictionary format.
+
+        Field names match the SecuBox API for compatibility with Eye Remote dashboard.
+        """
         return {
             "cpu_percent": self.cpu,
-            "memory_percent": self.mem,
+            "mem_percent": self.mem,
+            "memory_percent": self.mem,  # Alias
             "disk_percent": self.disk,
-            "temperature": self.temp,
-            "load_avg": self.load,
-            "wifi_signal": self.wifi,
+            "cpu_temp": self.temp,
+            "temperature": self.temp,  # Alias
+            "load_avg_1": self.load,
+            "load_avg": self.load,  # Alias
+            "wifi_rssi": self.wifi,
+            "wifi_signal": self.wifi,  # Alias
             "active_alerts": self.alerts,
             "profile": self.profile,
             "timestamp": time.time(),

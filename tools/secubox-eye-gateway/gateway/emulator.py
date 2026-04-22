@@ -39,10 +39,13 @@ class SecuBoxEmulator:
         """
         self._metrics.update()
         metrics = self._metrics.to_dict()
+        uptime_secs = int(time.time() - self.start_time)
         metrics.update({
             "device_name": self.name,
             "device_id": self.device_id,
-            "uptime": int(time.time() - self.start_time),
+            "hostname": self.name,
+            "uptime": uptime_secs,
+            "uptime_seconds": uptime_secs,
             "emulated": True,
         })
         return metrics
