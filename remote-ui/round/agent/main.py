@@ -13,12 +13,14 @@ import os
 import signal
 import sys
 from pathlib import Path
-
 from typing import Optional
 
-from .config import load_config, Config, DEFAULT_CONFIG_PATH
-from .device_manager import DeviceManager
-from .metrics_bridge import MetricsBridge
+# Add agent directory to path for imports when run as script
+sys.path.insert(0, str(Path(__file__).parent))
+
+from config import load_config, Config, DEFAULT_CONFIG_PATH
+from device_manager import DeviceManager
+from metrics_bridge import MetricsBridge
 
 log = logging.getLogger(__name__)
 
