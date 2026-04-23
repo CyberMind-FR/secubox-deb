@@ -22,6 +22,7 @@ from config import load_config, Config, DEFAULT_CONFIG_PATH, get_active_secubox
 from device_manager import DeviceManager
 from metrics_bridge import MetricsBridge
 from command_handler import create_command_client, WebSocketClient, CommandHandler
+from touch_handler import TouchHandler, create_touch_handler, Gesture
 
 log = logging.getLogger(__name__)
 
@@ -48,10 +49,12 @@ class EyeAgent:
         self.metrics_bridge: Optional[MetricsBridge] = None
         self.ws_client: Optional[WebSocketClient] = None
         self.command_handler: Optional[CommandHandler] = None
+        self.touch_handler: Optional[TouchHandler] = None
         self._running = False
         self._poll_task: Optional[asyncio.Task] = None
         self._bridge_task: Optional[asyncio.Task] = None
         self._ws_task: Optional[asyncio.Task] = None
+        self._touch_task: Optional[asyncio.Task] = None
 
     async def start(self):
         """Start the agent."""
@@ -88,6 +91,9 @@ class EyeAgent:
         if self.ws_client:
             self._ws_task = asyncio.create_task(self._websocket_loop())
 
+        # Demarrer le gestionnaire de gestes tactiles
+        await self._setup_touch_handler()
+
         # Write PID file
         PID_FILE.parent.mkdir(parents=True, exist_ok=True)
         PID_FILE.write_text(str(os.getpid()))
@@ -98,6 +104,8 @@ class EyeAgent:
         tasks = [self._bridge_task, self._poll_task]
         if self._ws_task:
             tasks.append(self._ws_task)
+        if self._touch_task:
+            tasks.append(self._touch_task)
 
         await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -137,6 +145,60 @@ class EyeAgent:
         self.command_handler.set_secubox_action_callback(self._handle_secubox_action)
 
         log.info("Client WebSocket configure pour %s", active_sb.host)
+
+    async def _setup_touch_handler(self):
+        """
+        Configurer le gestionnaire de gestes tactiles.
+
+        Cree le TouchHandler et configure les callbacks pour:
+        - Changement de SecuBox (swipe gauche/droite)
+        - Redemarrage de service (tap sur module)
+        - Lockdown d'urgence (3-finger tap)
+        - Toggle overlay info (swipe down)
+        - Liste des devices (long press centre)
+        """
+        # Creer le handler avec les references aux composants
+        self.touch_handler = create_touch_handler(
+            device_manager=self.device_manager,
+            ws_client=self.ws_client
+        )
+
+        # Configurer les callbacks
+        self.touch_handler.on_gesture(self._on_touch_gesture)
+        self.touch_handler.on_secubox_switch(self._on_secubox_switch)
+        self.touch_handler.on_overlay_toggle(self._on_overlay_toggle)
+        self.touch_handler.on_device_list_toggle(self._on_device_list_toggle)
+
+        # Demarrer le handler (non-bloquant)
+        success = await self.touch_handler.start()
+        if success:
+            log.info("TouchHandler actif: %s", self.touch_handler.touch_device_name)
+        else:
+            log.warning("TouchHandler non demarre - mode tactile desactive")
+
+    def _on_touch_gesture(self, gesture: Gesture, data: dict):
+        """Callback generique pour les gestes tactiles."""
+        log.debug("Geste tactile: %s data=%s", gesture.name, data)
+
+    def _on_secubox_switch(self, name: str):
+        """Callback quand on change de SecuBox via geste."""
+        log.info("SecuBox change via geste: %s", name)
+        # Mettre a jour le bridge avec le nouveau SecuBox
+        if self.metrics_bridge and self.device_manager:
+            secubox_host = ""
+            if self.device_manager.active_secubox:
+                secubox_host = self.device_manager.active_secubox.host
+            # Le bridge sera mis a jour au prochain poll
+
+    def _on_overlay_toggle(self, visible: bool):
+        """Callback quand l'overlay info est toggle."""
+        log.info("Overlay info: %s", "visible" if visible else "cache")
+        # TODO: Signaler au dashboard fb_dashboard.py via le bridge
+
+    def _on_device_list_toggle(self, visible: bool):
+        """Callback quand la liste des devices est toggle."""
+        log.info("Liste devices: %s", "visible" if visible else "cache")
+        # TODO: Signaler au dashboard fb_dashboard.py via le bridge
 
     async def _on_ws_connect(self):
         """Callback quand WebSocket connecte."""
@@ -247,6 +309,17 @@ class EyeAgent:
         """Stop the agent."""
         log.info("Stopping agent...")
         self._running = False
+
+        # Arreter le TouchHandler
+        if self.touch_handler:
+            await self.touch_handler.stop()
+
+        if self._touch_task:
+            self._touch_task.cancel()
+            try:
+                await self._touch_task
+            except asyncio.CancelledError:
+                pass
 
         # Arreter le WebSocket
         if self.ws_client:
