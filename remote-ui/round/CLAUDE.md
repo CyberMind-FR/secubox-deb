@@ -637,6 +637,86 @@ curl -H "Origin: http://10.55.0.2:8080" \
 
 ---
 
+## 14.1 BOOT MEDIA API — ENDPOINTS COMPLÉMENTAIRES
+
+Portage depuis SecuBox-Eye / eye-remote module (v2.1.0+).
+
+### Boot Media Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/eye-remote/boot-media/state` | État du boot-media (active/shadow) |
+| POST | `/api/v1/eye-remote/boot-media/upload` | Uploader fichier image vers shadow |
+| POST | `/api/v1/eye-remote/boot-media/swap` | Basculer active ↔ shadow atomiquement |
+| POST | `/api/v1/eye-remote/boot-media/rollback` | Rollback snapshot 4R |
+| GET | `/api/v1/eye-remote/boot-media/tftp/status` | État serveur TFTP réseau |
+
+### Modèles Pydantic (Boot Media)
+
+```python
+class BootMediaState(BaseModel):
+    active_partition: str       # "/dev/mmcblk0p1" ou symlink
+    active_size: int            # taille octets
+    active_hash: str            # SHA256
+    shadow_partition: str
+    shadow_size: int
+    shadow_hash: str
+    rollback_count: int         # R1..R4 disponibles
+    last_swap_timestamp: datetime
+    tftp_enabled: bool
+
+class BootMediaSwapRequest(BaseModel):
+    validate_hash: Optional[str] = None  # SHA256 attendu active post-swap
+    rollback_target: Optional[int] = None # R1|R2|R3|R4
+
+class TftpStatus(BaseModel):
+    enabled: bool
+    port: int
+    serving_root: str
+    clients_connected: int
+```
+
+### Systemd Services (Eye-Remote)
+
+| Service | File | Description |
+|---------|------|-------------|
+| `secubox-eye-gadget.service` | `/etc/systemd/system/` | USB composé ECM+ACM+mass_storage |
+| `secubox-eye-serial.service` | `/etc/systemd/system/` | Console série via xterm.js |
+| `secubox-eye-websocket.service` | `/etc/systemd/system/` | WebSocket API (port /run/secubox/eye.sock) |
+
+### Directives PARAMETERS (Boot Media Double-Buffer)
+
+Boot-media stocke ses états dans le double-buffer PARAMETERS :
+
+```
+/var/cache/secubox/boot-media/
+├── active/
+│   ├── KERNEL
+│   ├── INITRD
+│   ├── DTB
+│   ├── metadata.json
+│   └── integrity.sha256
+├── shadow/           ← édition
+│   ├── (idem structure)
+│   └── pending_swap.flag
+└── rollback/
+    ├── R1/
+    ├── R2/
+    ├── R3/
+    └── R4/
+```
+
+Swap atomique :
+```
+1. Valider SHA256(shadow/KERNEL) == metadata.validate_hash
+2. fsync() tous les fichiers shadow/
+3. Atomic rename : shadow → active (via mv -T)
+4. Archiver ancien active → R1, shift R1→R2, R2→R3, R3→R4
+5. Retirer pending_swap.flag
+```
+
+---
+
 ## 15. RÉFÉRENCES
 
 ```
