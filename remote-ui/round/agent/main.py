@@ -26,6 +26,52 @@ from touch_handler import TouchHandler, create_touch_handler, Gesture
 
 log = logging.getLogger(__name__)
 
+
+def ensure_usb_network():
+    """Ensure USB network interface is configured for OTG connection.
+
+    The composite gadget creates two interfaces:
+      - usb0: RNDIS (Windows compatible)
+      - usb1: ECM (Linux/Mac compatible via cdc_ether driver)
+
+    Linux hosts use cdc_ether which maps to usb1.
+    We configure only usb1 to avoid asymmetric routing issues.
+    """
+    import subprocess
+    import time
+
+    for attempt in range(30):
+        # Prefer usb1 (ECM) for Linux hosts
+        if Path("/sys/class/net/usb1").exists():
+            try:
+                subprocess.run(["/sbin/ip", "addr", "flush", "dev", "usb1"],
+                             capture_output=True, timeout=5)
+                subprocess.run(["/sbin/ip", "addr", "add", "10.55.0.2/30", "dev", "usb1"],
+                             capture_output=True, timeout=5)
+                subprocess.run(["/sbin/ip", "link", "set", "usb1", "up"],
+                             capture_output=True, timeout=5)
+                log.info(f"usb1 (ECM) configured: 10.55.0.2/30 (attempt {attempt + 1})")
+                return True
+            except Exception as e:
+                log.warning(f"Failed to configure usb1: {e}")
+        # Fallback to usb0 (RNDIS) if usb1 not present
+        elif Path("/sys/class/net/usb0").exists():
+            try:
+                subprocess.run(["/sbin/ip", "addr", "flush", "dev", "usb0"],
+                             capture_output=True, timeout=5)
+                subprocess.run(["/sbin/ip", "addr", "add", "10.55.0.2/30", "dev", "usb0"],
+                             capture_output=True, timeout=5)
+                subprocess.run(["/sbin/ip", "link", "set", "usb0", "up"],
+                             capture_output=True, timeout=5)
+                log.info(f"usb0 (RNDIS) configured: 10.55.0.2/30 (attempt {attempt + 1})")
+                return True
+            except Exception as e:
+                log.warning(f"Failed to configure usb0: {e}")
+        time.sleep(1)
+
+    log.warning("No USB network interface found after 30 attempts")
+    return False
+
 # Default paths
 SOCKET_PATH = Path("/run/secubox-eye/metrics.sock")
 PID_FILE = Path("/run/secubox-eye/agent.pid")
@@ -358,6 +404,9 @@ async def main():
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
     )
+
+    # Ensure USB OTG network is configured
+    ensure_usb_network()
 
     # Parse args
     config_path = DEFAULT_CONFIG_PATH

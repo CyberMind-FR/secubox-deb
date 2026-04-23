@@ -214,17 +214,25 @@ gadget_up() {
     debug "Binding to UDC: ${udc}"
     echo "$udc" > UDC
 
-    # Wait for usb0 interface to appear
+    # Wait for usb1 (ECM) interface to appear
+    # Note: Composite gadget creates usb0 (RNDIS/Windows) and usb1 (ECM/Linux-Mac)
+    # Linux hosts use cdc_ether driver which maps to usb1
     local retry=0
-    while [[ ! -d /sys/class/net/usb0 ]] && [[ $retry -lt 10 ]]; do
+    while [[ ! -d /sys/class/net/usb1 ]] && [[ $retry -lt 10 ]]; do
         sleep 0.5
         ((retry++))
     done
 
-    if [[ -d /sys/class/net/usb0 ]]; then
-        debug "Interface usb0 created"
+    if [[ -d /sys/class/net/usb1 ]]; then
+        debug "Interface usb1 (ECM) created"
+
+        # Configure IP on usb1 only (avoids asymmetric routing with same IP on both)
+        ip addr flush dev usb1 2>/dev/null || true
+        ip addr add 10.55.0.2/30 dev usb1
+        ip link set usb1 up
+        debug "usb1 configured: 10.55.0.2/30"
     else
-        err "Interface usb0 did not appear after 5s"
+        err "Interface usb1 did not appear after 5s"
         return 1
     fi
 
