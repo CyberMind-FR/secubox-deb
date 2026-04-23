@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from .routers import devices, pairing, metrics, websocket, serial
+from .routers import boot_media, devices, pairing, metrics, websocket, serial
 
 log = logging.getLogger(__name__)
 
@@ -54,6 +54,7 @@ async def health():
 
 
 # Include routers
+app.include_router(boot_media.router, prefix="/api/v1/eye-remote")
 app.include_router(devices.router, prefix="/api/v1/eye-remote")
 app.include_router(pairing.router, prefix="/api/v1/eye-remote")
 app.include_router(metrics.router, prefix="/api/v1/eye-remote")

@@ -1,4 +1,4 @@
 """SecuBox Eye Remote — API Routers."""
-from . import devices, pairing, metrics, websocket, serial
+from . import boot_media, devices, pairing, metrics, websocket, serial
 
-__all__ = ["devices", "pairing", "metrics", "websocket", "serial"]
+__all__ = ["boot_media", "devices", "pairing", "metrics", "websocket", "serial"]
