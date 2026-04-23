@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<!--
+SecuBox Eye Remote — Serial Console Terminal
+Console serie distante via xterm.js pour les appareils Eye Remote.
+
+CyberMind — https://cybermind.fr
+Author: Gerald Kerma <gandalf@gk2.net>
+License: Proprietary / ANSSI CSPN candidate
+-->
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox Eye Remote — Console Serie</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+    <!-- xterm.js CDN -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.min.js"></script>
+
+    <style>
+        /* === SecuBox Cyberpunk Palette === */
+        :root {
+            --cosmos-black: #0a0a0f;
+            --gold-hermetic: #c9a84c;
+            --cinnabar: #e63946;
+            --matrix-green: #00ff41;
+            --void-purple: #6e40c9;
+            --cyber-cyan: #00d4ff;
+            --text-primary: #e8e6d9;
+            --text-muted: #6b6b7a;
+            --bg-card: rgba(20, 20, 30, 0.95);
+            --bg-card-hover: rgba(30, 30, 45, 0.95);
+            --border-subtle: rgba(201, 168, 76, 0.3);
+            --border-active: rgba(201, 168, 76, 0.6);
+            --shadow-glow: 0 0 20px rgba(0, 212, 255, 0.15);
+        }
+
+        /* === Reset & Base === */
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html, body {
+            height: 100%;
+            overflow: hidden;
+        }
+
+        body {
+            font-family: 'JetBrains Mono', monospace;
+            background: var(--cosmos-black);
+            color: var(--text-primary);
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Fond anime cyberpunk */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background:
+                radial-gradient(ellipse at 20% 80%, rgba(110, 64, 201, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 20%, rgba(0, 212, 255, 0.05) 0%, transparent 50%),
+                linear-gradient(180deg, var(--cosmos-black) 0%, #0d0d15 100%);
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        /* === Typography === */
+        h1, h2, h3 {
+            font-family: 'Cinzel', serif;
+            font-weight: 600;
+            color: var(--gold-hermetic);
+            letter-spacing: 0.05em;
+        }
+
+        /* === Header === */
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem 1.5rem;
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border-subtle);
+            flex-shrink: 0;
+            z-index: 100;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .header-title {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .header-title h1 {
+            font-size: 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .terminal-icon {
+            font-size: 1.5rem;
+            filter: drop-shadow(0 0 8px var(--matrix-green));
+        }
+
+        .back-link {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 0.85rem;
+            padding: 0.4rem 0.75rem;
+            border: 1px solid var(--border-subtle);
+            border-radius: 4px;
+            transition: all 0.2s ease;
+        }
+
+        .back-link:hover {
+            color: var(--cyber-cyan);
+            border-color: var(--cyber-cyan);
+            background: rgba(0, 212, 255, 0.1);
+        }
+
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        /* === Status Indicator === */
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.4rem 0.875rem;
+            border: 1px solid var(--border-subtle);
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+
+        .status-indicator.connected {
+            background: rgba(0, 255, 65, 0.1);
+            border-color: var(--matrix-green);
+        }
+
+        .status-indicator.disconnected {
+            background: rgba(230, 57, 70, 0.1);
+            border-color: var(--cinnabar);
+        }
+
+        .status-indicator.connecting {
+            background: rgba(201, 168, 76, 0.1);
+            border-color: var(--gold-hermetic);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--text-muted);
+        }
+
+        .status-indicator.connected .status-dot {
+            background: var(--matrix-green);
+            box-shadow: 0 0 8px var(--matrix-green);
+            animation: pulse 2s infinite;
+        }
+
+        .status-indicator.disconnected .status-dot {
+            background: var(--cinnabar);
+        }
+
+        .status-indicator.connecting .status-dot {
+            background: var(--gold-hermetic);
+            animation: blink 0.8s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; box-shadow: 0 0 5px var(--matrix-green); }
+            50% { opacity: 0.6; box-shadow: 0 0 12px var(--matrix-green); }
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        /* === Buttons === */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.5rem 1rem;
+            border: 1px solid;
+            border-radius: 4px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-decoration: none;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--matrix-green), #00cc33);
+            border-color: var(--matrix-green);
+            color: var(--cosmos-black);
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: linear-gradient(135deg, #00ff55, var(--matrix-green));
+            box-shadow: 0 0 15px rgba(0, 255, 65, 0.4);
+        }
+
+        .btn-danger {
+            background: transparent;
+            border-color: var(--cinnabar);
+            color: var(--cinnabar);
+        }
+
+        .btn-danger:hover:not(:disabled) {
+            background: rgba(230, 57, 70, 0.15);
+            box-shadow: 0 0 12px rgba(230, 57, 70, 0.3);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            border-color: var(--border-subtle);
+            color: var(--text-primary);
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            border-color: var(--gold-hermetic);
+            color: var(--gold-hermetic);
+        }
+
+        /* === Toolbar === */
+        .toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.5rem 1rem;
+            background: rgba(15, 15, 20, 0.95);
+            border-bottom: 1px solid var(--border-subtle);
+            flex-shrink: 0;
+        }
+
+        .toolbar-left {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .toolbar-right {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        /* === Form Controls === */
+        .form-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .form-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .form-select {
+            padding: 0.35rem 0.75rem;
+            background: rgba(10, 10, 15, 0.9);
+            border: 1px solid var(--border-subtle);
+            border-radius: 4px;
+            color: var(--text-primary);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            cursor: pointer;
+            outline: none;
+        }
+
+        .form-select:focus {
+            border-color: var(--cyber-cyan);
+        }
+
+        .form-select option {
+            background: var(--cosmos-black);
+            color: var(--text-primary);
+        }
+
+        /* === Terminal Container === */
+        .terminal-container {
+            flex: 1;
+            padding: 0.5rem;
+            overflow: hidden;
+            background: var(--cosmos-black);
+        }
+
+        #terminal {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* xterm.js customization */
+        .xterm {
+            padding: 0.5rem;
+        }
+
+        .xterm-viewport::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .xterm-viewport::-webkit-scrollbar-track {
+            background: rgba(10, 10, 15, 0.5);
+        }
+
+        .xterm-viewport::-webkit-scrollbar-thumb {
+            background: var(--border-subtle);
+            border-radius: 4px;
+        }
+
+        .xterm-viewport::-webkit-scrollbar-thumb:hover {
+            background: var(--gold-hermetic);
+        }
+
+        /* === Connection Dialog === */
+        .dialog-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .dialog-overlay.hidden {
+            display: none;
+        }
+
+        .dialog {
+            background: var(--bg-card);
+            border: 1px solid var(--border-active);
+            border-radius: 8px;
+            padding: 2rem;
+            max-width: 420px;
+            width: 90%;
+            box-shadow: 0 0 40px rgba(0, 212, 255, 0.2);
+        }
+
+        .dialog h2 {
+            margin-bottom: 1.5rem;
+            text-align: center;
+            font-size: 1.3rem;
+        }
+
+        .dialog-form {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .dialog-field {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+
+        .dialog-field label {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .dialog-field input,
+        .dialog-field select {
+            padding: 0.6rem 0.875rem;
+            background: rgba(10, 10, 15, 0.9);
+            border: 1px solid var(--border-subtle);
+            border-radius: 4px;
+            color: var(--text-primary);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            outline: none;
+            transition: border-color 0.2s ease;
+        }
+
+        .dialog-field input:focus,
+        .dialog-field select:focus {
+            border-color: var(--cyber-cyan);
+        }
+
+        .dialog-field input::placeholder {
+            color: var(--text-muted);
+            opacity: 0.6;
+        }
+
+        .dialog-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.75rem;
+            margin-top: 1rem;
+        }
+
+        .dialog-error {
+            background: rgba(230, 57, 70, 0.15);
+            border: 1px solid var(--cinnabar);
+            border-radius: 4px;
+            padding: 0.75rem;
+            color: var(--cinnabar);
+            font-size: 0.85rem;
+            text-align: center;
+        }
+
+        .dialog-error.hidden {
+            display: none;
+        }
+
+        /* === Footer Info === */
+        .footer-info {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.4rem 1rem;
+            background: rgba(15, 15, 20, 0.95);
+            border-top: 1px solid var(--border-subtle);
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            flex-shrink: 0;
+        }
+
+        .footer-left {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+        }
+
+        .footer-item {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+
+        .footer-item span.label {
+            opacity: 0.7;
+        }
+
+        .footer-item span.value {
+            color: var(--cyber-cyan);
+        }
+
+        .footer-item span.value.warning {
+            color: var(--gold-hermetic);
+        }
+
+        /* === Responsive === */
+        @media (max-width: 768px) {
+            header {
+                flex-direction: column;
+                gap: 0.75rem;
+                padding: 0.75rem 1rem;
+            }
+
+            .header-controls {
+                width: 100%;
+                justify-content: space-between;
+            }
+
+            .toolbar {
+                flex-direction: column;
+                gap: 0.75rem;
+                padding: 0.75rem;
+            }
+
+            .toolbar-left,
+            .toolbar-right {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .form-group {
+                flex-direction: column;
+                align-items: flex-start;
+                width: 100%;
+            }
+
+            .form-select {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header>
+        <div class="header-left">
+            <a href="index.html" class="back-link">
+                <span>&larr;</span>
+                <span>Dashboard</span>
+            </a>
+            <div class="header-title">
+                <h1>
+                    <span class="terminal-icon">&#9000;</span>
+                    Console Serie
+                </h1>
+            </div>
+        </div>
+        <div class="header-controls">
+            <div id="status-indicator" class="status-indicator disconnected">
+                <span class="status-dot"></span>
+                <span id="status-text">Deconnecte</span>
+            </div>
+            <button id="btn-connect" class="btn btn-primary">
+                <span>&#9654;</span>
+                Connecter
+            </button>
+            <button id="btn-disconnect" class="btn btn-danger" disabled>
+                <span>&#9632;</span>
+                Deconnecter
+            </button>
+        </div>
+    </header>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+        <div class="toolbar-left">
+            <div class="form-group">
+                <span class="form-label">Device</span>
+                <select id="select-device" class="form-select">
+                    <option value="eye-remote-001">Eye Remote #1</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <span class="form-label">Baud Rate</span>
+                <select id="select-baud" class="form-select">
+                    <option value="9600">9600</option>
+                    <option value="19200">19200</option>
+                    <option value="38400">38400</option>
+                    <option value="57600">57600</option>
+                    <option value="115200" selected>115200</option>
+                    <option value="230400">230400</option>
+                    <option value="460800">460800</option>
+                    <option value="921600">921600</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <span class="form-label">Port</span>
+                <select id="select-port" class="form-select">
+                    <option value="/dev/ttyACM0">/dev/ttyACM0</option>
+                    <option value="/dev/ttyACM1">/dev/ttyACM1</option>
+                    <option value="/dev/ttyUSB0">/dev/ttyUSB0</option>
+                    <option value="/dev/ttyUSB1">/dev/ttyUSB1</option>
+                </select>
+            </div>
+        </div>
+        <div class="toolbar-right">
+            <button id="btn-clear" class="btn btn-secondary" title="Effacer le terminal">
+                <span>&#8999;</span>
+                Effacer
+            </button>
+            <button id="btn-copy" class="btn btn-secondary" title="Copier la selection">
+                <span>&#128203;</span>
+                Copier
+            </button>
+        </div>
+    </div>
+
+    <!-- Terminal Container -->
+    <div class="terminal-container">
+        <div id="terminal"></div>
+    </div>
+
+    <!-- Footer Info -->
+    <div class="footer-info">
+        <div class="footer-left">
+            <div class="footer-item">
+                <span class="label">Mode:</span>
+                <span id="mode-value" class="value">--</span>
+            </div>
+            <div class="footer-item">
+                <span class="label">RX:</span>
+                <span id="rx-value" class="value">0 B</span>
+            </div>
+            <div class="footer-item">
+                <span class="label">TX:</span>
+                <span id="tx-value" class="value">0 B</span>
+            </div>
+            <div class="footer-item">
+                <span class="label">Connecte:</span>
+                <span id="connected-time" class="value">--</span>
+            </div>
+        </div>
+        <div>
+            SecuBox Eye Remote v2.0.0 — <a href="https://cybermind.fr" target="_blank" style="color: var(--gold-hermetic); text-decoration: none;">CyberMind</a>
+        </div>
+    </div>
+
+    <!-- Connection Dialog -->
+    <div id="connect-dialog" class="dialog-overlay hidden">
+        <div class="dialog">
+            <h2>Connexion Console Serie</h2>
+            <form id="connect-form" class="dialog-form">
+                <div id="dialog-error" class="dialog-error hidden"></div>
+
+                <div class="dialog-field">
+                    <label for="input-device-id">ID Appareil</label>
+                    <select id="input-device-id">
+                        <!-- Rempli dynamiquement -->
+                    </select>
+                </div>
+
+                <div class="dialog-field">
+                    <label for="input-token">Token d'authentification</label>
+                    <input type="password" id="input-token" placeholder="Token de l'appareil" required>
+                </div>
+
+                <div class="dialog-field">
+                    <label for="input-baud">Baud Rate</label>
+                    <select id="input-baud">
+                        <option value="9600">9600</option>
+                        <option value="19200">19200</option>
+                        <option value="38400">38400</option>
+                        <option value="57600">57600</option>
+                        <option value="115200" selected>115200</option>
+                        <option value="230400">230400</option>
+                    </select>
+                </div>
+
+                <div class="dialog-field">
+                    <label for="input-port">Port Serie</label>
+                    <select id="input-port">
+                        <option value="/dev/ttyACM0">/dev/ttyACM0</option>
+                        <option value="/dev/ttyACM1">/dev/ttyACM1</option>
+                        <option value="/dev/ttyUSB0">/dev/ttyUSB0</option>
+                    </select>
+                </div>
+
+                <div class="dialog-actions">
+                    <button type="button" id="btn-dialog-cancel" class="btn btn-secondary">Annuler</button>
+                    <button type="submit" id="btn-dialog-connect" class="btn btn-primary">
+                        <span>&#9654;</span>
+                        Connecter
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Terminal JavaScript -->
+    <script src="js/terminal.js"></script>
+</body>
+</html>
