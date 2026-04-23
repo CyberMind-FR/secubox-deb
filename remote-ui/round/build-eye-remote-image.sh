@@ -13,7 +13,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VERSION="2.0.0"
+VERSION="2.1.0"
 OUTPUT_DIR="${OUTPUT_DIR:-/tmp}"
 OUTPUT_NAME="secubox-eye-remote-${VERSION}.img"
 
@@ -60,6 +60,8 @@ PACKAGES_FRAMEBUFFER=(
     i2c-tools
     # Fonts
     fonts-dejavu-core
+    # v2.1.0: TFTP for boot media
+    dnsmasq-base
 )
 
 # Additional packages for browser mode (~200MB more)
@@ -520,6 +522,26 @@ cp "$SCRIPT_DIR/secubox-otg-gadget.sh" "$ROOT_MNT/usr/local/sbin/"
 cp "$SCRIPT_DIR/secubox-hid-keyboard.sh" "$ROOT_MNT/usr/local/sbin/"
 chmod +x "$ROOT_MNT/usr/local/sbin/secubox-"*.sh
 
+# Copy v2.1.0 gadget-setup.sh
+mkdir -p "$ROOT_MNT/etc/secubox/eye-remote"
+cp "$SCRIPT_DIR/files/etc/secubox/eye-remote/gadget-setup.sh" "$ROOT_MNT/etc/secubox/eye-remote/"
+cp "$SCRIPT_DIR/files/etc/secubox/eye-remote/tftp.env" "$ROOT_MNT/etc/secubox/eye-remote/"
+chmod +x "$ROOT_MNT/etc/secubox/eye-remote/gadget-setup.sh"
+
+# Copy dnsmasq config
+mkdir -p "$ROOT_MNT/etc/dnsmasq.d"
+cp "$SCRIPT_DIR/files/etc/dnsmasq.d/secubox-eye-tftp.conf" "$ROOT_MNT/etc/dnsmasq.d/"
+
+# Copy systemd files
+cp "$SCRIPT_DIR/files/etc/systemd/system/secubox-eye-gadget.service" "$ROOT_MNT/etc/systemd/system/"
+mkdir -p "$ROOT_MNT/etc/systemd/system/dnsmasq.service.d"
+cp "$SCRIPT_DIR/files/etc/systemd/system/dnsmasq.service.d/secubox-eye.conf" \
+    "$ROOT_MNT/etc/systemd/system/dnsmasq.service.d/"
+
+# Enable new gadget service
+ln -sf /etc/systemd/system/secubox-eye-gadget.service \
+    "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/"
+
 # Copy framebuffer dashboard (Pi Zero W has no NEON, can't run Chromium)
 log "Installing framebuffer dashboard..."
 mkdir -p "$ROOT_MNT/usr/local/bin"
@@ -617,6 +639,24 @@ ln -sf /etc/systemd/system/usb0-up.service \
 # Create gadget data directory
 mkdir -p "$ROOT_MNT/var/lib/secubox-gadget"
 truncate -s 512M "$ROOT_MNT/var/lib/secubox-gadget/debug.img"
+
+# Create boot media directory
+log "Creating boot media directories..."
+mkdir -p "$ROOT_MNT/var/lib/secubox/eye-remote/boot-media/images"
+mkdir -p "$ROOT_MNT/var/lib/secubox/eye-remote/boot-media/tftp"
+truncate -s 16M "$ROOT_MNT/var/lib/secubox/eye-remote/boot-media/images/placeholder.img"
+ln -sf images/placeholder.img "$ROOT_MNT/var/lib/secubox/eye-remote/boot-media/active"
+
+# Initialize state.json
+cat > "$ROOT_MNT/var/lib/secubox/eye-remote/boot-media/state.json" << 'EOF'
+{
+  "active": null,
+  "shadow": null,
+  "lun_attached": false,
+  "last_swap_at": null,
+  "tftp_armed": false
+}
+EOF
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CREATE SECUBOX USER AND CONFIGURE KIOSK
