@@ -279,6 +279,28 @@ Déclencheurs obligatoires de mise à jour README :
 
 ---
 
+## 📡 API Reference — Eye-Remote Boot Media (v2.1.0+)
+
+### Boot Media API
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/eye-remote/boot-media/state` | Boot media state |
+| POST | `/api/v1/eye-remote/boot-media/upload` | Upload to shadow |
+| POST | `/api/v1/eye-remote/boot-media/swap` | Swap active/shadow |
+| POST | `/api/v1/eye-remote/boot-media/rollback` | Rollback swap |
+| GET | `/api/v1/eye-remote/boot-media/tftp/status` | TFTP status |
+
+### Systemd Services
+
+| Service | Description |
+|---------|-------------|
+| `secubox-eye-gadget.service` | USB gadget (ECM+ACM+mass_storage) |
+| `secubox-eye-serial.service` | Serial console via xterm.js |
+| `secubox-eye-websocket.service` | WebSocket API server |
+
+---
+
 ## 🛠️ Commandes usuelles
 
 ```bash
