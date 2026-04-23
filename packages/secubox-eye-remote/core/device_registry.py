@@ -56,7 +56,7 @@ class DeviceRegistry:
         self.storage_path.parent.mkdir(parents=True, exist_ok=True)
 
         data = {
-            device_id: device.model_dump(mode='json')
+            device_id: device.dict()
             for device_id, device in self._devices.items()
         }
 
