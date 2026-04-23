@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from .routers import devices, pairing, metrics, websocket
+from .routers import devices, pairing, metrics, websocket, serial
 
 log = logging.getLogger(__name__)
 
@@ -58,3 +58,4 @@ app.include_router(devices.router, prefix="/api/v1/eye-remote")
 app.include_router(pairing.router, prefix="/api/v1/eye-remote")
 app.include_router(metrics.router, prefix="/api/v1/eye-remote")
 app.include_router(websocket.router, prefix="/api/v1/eye-remote")
+app.include_router(serial.router, prefix="/api/v1/eye-remote")
