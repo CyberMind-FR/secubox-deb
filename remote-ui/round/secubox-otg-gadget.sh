@@ -266,24 +266,26 @@ gadget_start() {
     log "Activation sur UDC: ${udc}"
     echo "$udc" > UDC
 
-    # Attendre que l'interface usb0 apparaisse
+    # Attendre que l'interface usb1 (ECM) apparaisse
+    # Note: Le gadget composite crée usb0 (RNDIS/Windows) et usb1 (ECM/Linux-Mac)
+    # On configure usb1 car les hôtes Linux utilisent le driver cdc_ether (ECM)
     local retry=0
-    while [[ ! -d /sys/class/net/usb0 ]] && [[ $retry -lt 10 ]]; do
+    while [[ ! -d /sys/class/net/usb1 ]] && [[ $retry -lt 10 ]]; do
         sleep 0.5
         ((retry++))
     done
 
-    if [[ -d /sys/class/net/usb0 ]]; then
-        log "Interface usb0 créée"
+    if [[ -d /sys/class/net/usb1 ]]; then
+        log "Interface usb1 (ECM) créée"
 
-        # Configurer l'IP
-        ip addr flush dev usb0 2>/dev/null || true
-        ip addr add "${OTG_NETWORK_DEV}/30" dev usb0
-        ip link set usb0 up
+        # Configurer l'IP sur usb1 uniquement (évite le routage asymétrique)
+        ip addr flush dev usb1 2>/dev/null || true
+        ip addr add "${OTG_NETWORK_DEV}/30" dev usb1
+        ip link set usb1 up
 
-        log "usb0 configuré: ${OTG_NETWORK_DEV}/30"
+        log "usb1 configuré: ${OTG_NETWORK_DEV}/30"
     else
-        err "Interface usb0 non créée après 5s"
+        err "Interface usb1 non créée après 5s"
         return 1
     fi
 
