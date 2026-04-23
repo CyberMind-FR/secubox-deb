@@ -11,8 +11,8 @@ import logging
 from dataclasses import dataclass, field
 from typing import Optional, Callable
 
-from .config import Config, SecuBoxConfig, get_active_secubox, set_active_secubox
-from .secubox_client import SecuBoxClient
+from config import Config, SecuBoxConfig, get_active_secubox, set_active_secubox
+from secubox_client import SecuBoxClient
 
 log = logging.getLogger(__name__)
 

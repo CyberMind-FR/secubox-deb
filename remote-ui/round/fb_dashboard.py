@@ -60,6 +60,35 @@ MODULES = {
 # Eye Agent Unix socket
 AGENT_SOCKET = '/run/secubox-eye/metrics.sock'
 
+# Framebuffer info (cached)
+_fb_info = None
+
+
+def detect_otg_interface() -> bool:
+    """Check if USB OTG network interface (usb0) is UP."""
+    try:
+        with open('/sys/class/net/usb0/operstate', 'r') as f:
+            state = f.read().strip()
+            return state == 'up'
+    except:
+        return False
+
+
+def get_usb0_ip() -> str:
+    """Get IP address of usb0 interface."""
+    try:
+        import subprocess
+        result = subprocess.run(
+            ['ip', '-4', 'addr', 'show', 'usb0'],
+            capture_output=True, text=True, timeout=2
+        )
+        for line in result.stdout.split('\n'):
+            if 'inet ' in line:
+                return line.split()[1].split('/')[0]
+    except:
+        pass
+    return '10.55.0.2'
+
 
 class AgentMetricsSource:
     """Fetch metrics from Eye Agent via Unix socket."""
@@ -70,6 +99,7 @@ class AgentMetricsSource:
         self.device_name = ''
         self.sim = SimulatedMetrics()
         self._last_data = None
+        self._otg_up = False
 
     def _read_from_socket(self) -> dict | None:
         """Read metrics from agent Unix socket."""
@@ -112,6 +142,16 @@ class AgentMetricsSource:
                 'uptime': metrics.get('uptime_seconds', 0),
                 'hostname': metrics.get('hostname', 'secubox'),
             }, mode, self.host, self.device_name
+
+        # Check OTG interface status for mode detection
+        self._otg_up = detect_otg_interface()
+
+        if self._otg_up:
+            # OTG network is up - show OTG mode with simulated metrics
+            self.mode = 'OTG'
+            self.host = '10.55.0.1'
+            self.device_name = 'SecuBox (waiting)'
+            return self.sim.update(), 'OTG', self.host, self.device_name
 
         # Fallback to simulation
         self.mode = 'SIM'
@@ -360,18 +400,76 @@ def draw_dashboard(metrics, mode='SIM', host='', device_name=''):
     return img
 
 
+def get_fb_info():
+    """Get framebuffer info from sysfs (cached).
+
+    Returns:
+        tuple: (bits_per_pixel, stride)
+    """
+    global _fb_info
+    if _fb_info is not None:
+        return _fb_info
+
+    try:
+        with open('/sys/class/graphics/fb0/bits_per_pixel', 'r') as f:
+            bpp = int(f.read().strip())
+    except:
+        bpp = 32  # Default to 32-bit
+
+    # Line length (stride) - bytes per row
+    try:
+        with open('/sys/class/graphics/fb0/stride', 'r') as f:
+            stride = int(f.read().strip())
+    except:
+        stride = WIDTH * (bpp // 8)
+
+    # Virtual size for buffer info
+    try:
+        with open('/sys/class/graphics/fb0/virtual_size', 'r') as f:
+            vsize = f.read().strip()
+    except:
+        vsize = f'{WIDTH},{HEIGHT}'
+
+    print(f'Framebuffer: {bpp}bpp, stride={stride}, vsize={vsize}')
+    _fb_info = (bpp, stride)
+    return _fb_info
+
+
 def write_to_fb(img):
-    """Write image to framebuffer (BGRA format)"""
-    pixels = img.convert('RGBA')
-    data = bytearray()
+    """Write image to framebuffer with auto-format detection."""
+    bpp, stride = get_fb_info()
 
-    for y in range(HEIGHT):
-        for x in range(WIDTH):
-            r, g, b, a = pixels.getpixel((x, y))
-            data.extend([b, g, r, a])  # BGRA
+    if bpp == 32:
+        # 32-bit BGRA (most common for DPI displays)
+        pixels = img.convert('RGBA')
+        raw = pixels.tobytes('raw', 'BGRA')
+    elif bpp == 24:
+        # 24-bit BGR
+        pixels = img.convert('RGB')
+        raw = pixels.tobytes('raw', 'BGR')
+    elif bpp == 16:
+        # 16-bit RGB565
+        pixels = img.convert('RGB')
+        data = bytearray(WIDTH * HEIGHT * 2)
+        idx = 0
+        for y in range(HEIGHT):
+            for x in range(WIDTH):
+                r, g, b = pixels.getpixel((x, y))
+                # RGB565: RRRRRGGG GGGBBBBB
+                pixel = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3)
+                data[idx] = pixel & 0xFF
+                data[idx + 1] = (pixel >> 8) & 0xFF
+                idx += 2
+        raw = bytes(data)
+    else:
+        print(f'Unsupported framebuffer depth: {bpp}bpp')
+        return
 
-    with open(FB_DEV, 'wb') as fb:
-        fb.write(data)
+    try:
+        with open(FB_DEV, 'wb') as fb:
+            fb.write(raw)
+    except Exception as e:
+        print(f'Framebuffer write error: {e}')
 
 
 def main():
@@ -379,13 +477,31 @@ def main():
     print(f'Display: {WIDTH}x{HEIGHT}')
     print('Press Ctrl+C to exit')
 
+    # Check framebuffer device
+    if os.path.exists(FB_DEV):
+        print(f'Framebuffer device: {FB_DEV} found')
+        # Pre-fetch FB info
+        bpp, stride = get_fb_info()
+    else:
+        print(f'WARNING: {FB_DEV} not found!')
+
     # Try agent first, fall back to simulation
     if os.path.exists(AGENT_SOCKET):
-        print('Using Eye Agent for metrics')
+        print(f'Eye Agent socket found: {AGENT_SOCKET}')
     else:
         print('Agent not running, will use simulation mode')
 
     source = AgentMetricsSource()
+
+    # Draw initial frame immediately
+    print('Drawing initial frame...')
+    try:
+        metrics, mode, host, device_name = source.get_metrics()
+        img = draw_dashboard(metrics, mode, host, device_name)
+        write_to_fb(img)
+        print(f'Initial frame drawn, mode={mode}')
+    except Exception as e:
+        print(f'Initial frame error: {e}')
 
     while True:
         try:

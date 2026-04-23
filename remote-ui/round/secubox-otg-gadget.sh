@@ -95,7 +95,7 @@ detect_auto_mode() {
     fi
 
     # Default to normal mode (network + serial)
-    echo "normal"
+    echo "start"
 }
 
 set_persistent_mode() {
