@@ -15,7 +15,8 @@ Depends: ${misc:Depends},
          python3-fastapi,
          python3-uvicorn,
          python3-websockets,
-         python3-qrcode
+         python3-qrcode,
+         dnsmasq-base
 Description: SecuBox Eye Remote Management Module
  Management API and WebUI for Eye Remote devices
  (HyperPixel 2.1 Round on Raspberry Pi Zero W).

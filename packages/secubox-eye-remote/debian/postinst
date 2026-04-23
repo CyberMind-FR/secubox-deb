@@ -11,7 +11,45 @@ case "$1" in
     install -d -o secubox -g secubox -m 750 /var/lib/secubox/eye-remote
     install -d -o secubox -g secubox -m 750 /run/secubox
 
-    # Enable and start service
+    # Create boot media directory structure
+    install -d -o secubox -g secubox -m 750 /var/lib/secubox/eye-remote/boot-media
+    install -d -o secubox -g secubox -m 750 /var/lib/secubox/eye-remote/boot-media/images
+    install -d -o secubox -g secubox -m 750 /var/lib/secubox/eye-remote/boot-media/tftp
+
+    # Create state.json if missing (double-buffer management)
+    STATE_FILE="/var/lib/secubox/eye-remote/state.json"
+    if [ ! -f "$STATE_FILE" ]; then
+      cat > "$STATE_FILE" << 'EOF'
+{
+  "active_image": null,
+  "shadow_image": null,
+  "rollback": {
+    "R1": null,
+    "R2": null,
+    "R3": null,
+    "R4": null
+  },
+  "last_swap": null,
+  "gadget_enabled": true
+}
+EOF
+      chown secubox:secubox "$STATE_FILE"
+      chmod 640 "$STATE_FILE"
+    fi
+
+    # Create placeholder image if no active image exists
+    IMAGES_DIR="/var/lib/secubox/eye-remote/boot-media/images"
+    if [ -z "$(ls -A "$IMAGES_DIR" 2>/dev/null)" ]; then
+      touch "$IMAGES_DIR/placeholder.img"
+      chown secubox:secubox "$IMAGES_DIR/placeholder.img"
+    fi
+
+    # Make gadget setup script executable if present
+    if [ -f /etc/secubox/eye-remote/gadget-setup.sh ]; then
+      chmod +x /etc/secubox/eye-remote/gadget-setup.sh
+    fi
+
+    # Enable and start services
     systemctl daemon-reload
     systemctl enable secubox-eye-remote.service
     systemctl start secubox-eye-remote.service || true

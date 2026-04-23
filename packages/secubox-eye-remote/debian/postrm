@@ -1,0 +1,31 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+    purge)
+        # Remove configuration
+        rm -rf /etc/secubox/eye-remote
+        # Remove runtime state
+        rm -rf /run/secubox/eye-remote
+        # Remove state.json but PRESERVE images/ (user data)
+        rm -f /var/lib/secubox/eye-remote/state.json
+        # Remove TFTP directory
+        rm -rf /var/lib/secubox/eye-remote/boot-media/tftp
+        # Remove symlinks but keep images/
+        rm -f /var/lib/secubox/eye-remote/boot-media/active /var/lib/secubox/eye-remote/boot-media/shadow
+        # Disable services
+        systemctl disable secubox-eye-remote.service 2>/dev/null || true
+        ;;
+
+    remove|upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
+        ;;
+
+    *)
+        echo "postrm called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

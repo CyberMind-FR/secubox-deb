@@ -1,3 +1,15 @@
+secubox-eye-remote (2.1.0-1~bookworm1) bookworm; urgency=medium
+
+ * Add bootstrap role: mass_storage LUN for U-Boot loading
+ * Add TFTP shadow channel via dnsmasq configuration
+ * New API: /api/v1/eye-remote/boot-media/ endpoints
+ * Implement 4R double-buffer for active/shadow image management
+ * Add atomic swap with crash recovery on gadget enable
+ * New systemd service: secubox-eye-gadget.service
+ * Deprecate: secubox-otg-gadget.sh (moved to boot_media.py logic)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 23 Apr 2026 13:00:00 +0200
+
 secubox-eye-remote (2.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial release - Eye Remote Management Module

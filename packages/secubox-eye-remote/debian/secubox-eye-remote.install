@@ -1,0 +1,7 @@
+api usr/lib/secubox/eye-remote/
+core usr/lib/secubox/eye-remote/
+models usr/lib/secubox/eye-remote/
+menu.d usr/share/secubox/
+www usr/share/secubox/
+nginx/eye-remote.conf etc/nginx/secubox.d/
+debian/secubox-eye-remote.service etc/systemd/system/
