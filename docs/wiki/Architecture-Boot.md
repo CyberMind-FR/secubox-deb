@@ -134,4 +134,17 @@ systemctl isolate secubox-api.target
 
 ---
 
-*See also: [[Architecture-Security]], [[Architecture-Modules]]*
+## Bootstrap Device (Eye Remote v2.1+)
+
+The Eye Remote can function as a **boot device** for MOCHAbin and ESPRESSObin systems:
+
+- **Mass Storage LUN** — U-Boot loads kernel/DTB/initrd from active slot
+- **TFTP Shadow** — Test new images before atomic promotion
+- **Safe Recovery** — Fallback boot when internal storage is corrupted
+- **A/B Slot Management** — Automatic rollback on boot failure
+
+See [[Eye-Remote-Bootstrap]] for full implementation details.
+
+---
+
+*See also: [[Architecture-Security]], [[Architecture-Modules]], [[Eye-Remote-Bootstrap]]*

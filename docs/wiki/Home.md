@@ -128,17 +128,19 @@ See [[Modules]] for complete module documentation.
 
 ## 👁️ Eye Remote
 
-The Eye Remote is a compact USB gadget display for monitoring SecuBox metrics in real-time.
+The Eye Remote is a compact USB gadget display for monitoring SecuBox metrics in real-time. It can also serve as a boot device for ESPRESSObin/MOCHAbin appliances.
 
 | Page | Description |
 |------|-------------|
 | [[Eye-Remote-Implementation]] | Architecture, API, and implementation guide |
 | [[Eye-Remote-Hardware]] | Hardware setup, GPIO pinout, display configuration |
 | [[Eye-Remote-Gateway]] | Gateway emulator for development and testing |
+| [[Eye-Remote-Bootstrap]] | Boot device functionality, A/B slot management, recovery |
 
 **Hardware**: Raspberry Pi Zero W + HyperPixel 2.1 Round (480×480)
 **Connection**: USB OTG (10.55.0.0/30) or WiFi
 **Dashboard**: Python framebuffer rendering (no browser needed)
+**Bootstrap**: Mass Storage LUN for safe boot image testing and atomic slot swapping
 
 ```bash
 # Build Eye Remote image (lightweight framebuffer mode)

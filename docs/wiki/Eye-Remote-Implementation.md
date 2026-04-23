@@ -10,8 +10,9 @@
 6. [Display Configuration](#display-configuration)
 7. [API Reference](#api-reference)
 8. [Development Tools](#development-tools)
-9. [Deployment](#deployment)
-10. [Lessons Learned](#lessons-learned)
+9. [Bootstrap Role](#bootstrap-role)
+10. [Deployment](#deployment)
+11. [Lessons Learned](#lessons-learned)
 
 ---
 
@@ -414,6 +415,80 @@ secubox-eye-gateway --profile stressed --port 8765
 | `GET /api/v1/health` | Health check |
 | `GET /api/v1/system/metrics` | Simulated metrics |
 | `GET /api/v1/eye-remote/discover` | Discovery info |
+
+---
+
+## Bootstrap Role (v2.1.0)
+
+The Eye Remote can serve as a boot device for ESPRESSObin and MOCHAbin appliances, providing critical functionality during system initialization and recovery:
+
+### Capabilities
+
+- **Mass Storage LUN** — U-Boot loads kernel/DTB/initrd from active slot via USB Mass Storage
+- **TFTP Shadow** — Test new images before promoting to active slot
+- **Atomic Swap** — Safe active/shadow slot exchange with rollback protection
+- **Boot Menu** — Interactive selection of kernel versions and boot parameters
+
+### Use Cases
+
+| Use Case | Benefit |
+|----------|---------|
+| **Factory Reset** | Boot fresh image without physical SD cards |
+| **Recovery Boot** | Fallback when internal storage is corrupted |
+| **Image Testing** | Try new Debian images before committing |
+| **Firmware Updates** | Safe A/B slot switching with 4R rollback |
+
+### Architecture
+
+The Eye Remote exposes two USB LUNs:
+
+1. **LUN 0** — Mass Storage (active boot image)
+   - Kernel + DTB + initrd partition
+   - Auto-synced from active slot
+
+2. **LUN 1** — Shadow Test Storage
+   - Staging area for new images
+   - Isolated from live system
+
+### Configuration
+
+Bootstrap is configured in `/etc/secubox/eye-remote.toml`:
+
+```toml
+[bootstrap]
+enabled = true
+mass_storage_lun = 0
+shadow_lun = 1
+auto_sync_interval = 300  # 5 minutes
+max_rollback_slots = 4
+```
+
+### Workflow
+
+```
+1. User initiates image test via dashboard
+   ↓
+2. Eye Remote downloads image to shadow LUN
+   ↓
+3. User selects "Boot from Shadow" in U-Boot menu
+   ↓
+4. System tests image on next reboot
+   ↓
+5. User confirms success → Image promoted to active
+   ↓
+6. Or rejects → Automatic rollback to previous active
+```
+
+### Security Considerations
+
+- Bootstrap operations are **JWT-authenticated** only
+- All slot operations are **logged** to audit trail
+- Image integrity verified via **SHA256 checksums**
+- Rollback protected against **malicious substitution** via timestamp validation
+
+---
+
+**Full documentation:** See [Eye-Remote-Bootstrap](Eye-Remote-Bootstrap.md) for detailed implementation, testing procedures, and troubleshooting.
 
 ---
 
