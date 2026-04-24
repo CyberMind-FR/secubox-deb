@@ -511,10 +511,8 @@ EOF
 mkdir -p "$ROOT_MNT/etc/modprobe.d"
 echo "options dwc2 dr_mode=peripheral" > "$ROOT_MNT/etc/modprobe.d/secubox-otg.conf"
 
-# Mount configfs at boot (required for USB gadget via libcomposite)
-if ! grep -q "configfs" "$ROOT_MNT/etc/fstab" 2>/dev/null; then
-    echo "configfs    /sys/kernel/config    configfs    defaults    0    0" >> "$ROOT_MNT/etc/fstab"
-fi
+# NOTE: configfs is mounted by gadget-setup.sh on demand, not via fstab
+# Adding it to fstab can cause boot failures if module isn't loaded early enough
 
 # Copy gadget scripts
 log "Installing Eye Remote scripts..."
