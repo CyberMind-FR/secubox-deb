@@ -29,6 +29,10 @@ from touch_handler import (
     LONG_PRESS_MS,
     TAP_MAX_MS,
 )
+from menu_navigator import MenuNavigator, MenuMode
+from menu_definitions import MenuID
+from action_executor import ActionExecutor
+from local_api import LocalAPI
 
 
 # =============================================================================
@@ -607,3 +611,188 @@ class TestTouchMenuIntegration:
 
         handler._handle_emergency_exit()
         assert nav.state.mode == MenuMode.DASHBOARD
+
+
+# =============================================================================
+# Full Integration Tests
+# =============================================================================
+
+class TestFullMenuFlow:
+    """Integration tests for complete menu flow."""
+
+    @pytest.fixture
+    def full_setup(self):
+        """Create fully wired system."""
+        handler = create_touch_handler()
+        nav = MenuNavigator()
+        executor = ActionExecutor()
+        local_api = LocalAPI()
+
+        executor._local_api = local_api
+        handler.set_menu_navigator(nav)
+        handler.set_action_executor(executor)
+
+        return handler, nav, executor, local_api
+
+    @pytest.mark.asyncio
+    async def test_complete_navigation_flow(self, full_setup):
+        """Test navigating through menus and executing action."""
+        handler, nav, executor, _ = full_setup
+
+        # 1. Enter menu (long press center)
+        handler._handle_menu_toggle()
+        assert nav.state.mode == MenuMode.MENU
+        assert nav.state.current_menu == MenuID.ROOT
+
+        # 2. Navigate to LOCAL (slice 2)
+        nav.select_by_index(2)
+        action = nav.select_current()
+        assert action is None  # Submenu navigation
+        assert nav.state.current_menu == MenuID.LOCAL
+
+        # 3. Select ABOUT (slice 3)
+        nav.select_by_index(3)
+        action = nav.select_current()
+        assert action == "local.about"
+
+        # 4. Execute action
+        result = await executor.execute(action)
+        assert result.success is True
+        assert "SecuBox" in result.message
+
+    @pytest.mark.asyncio
+    async def test_back_navigation(self, full_setup):
+        """Test navigating back through breadcrumb."""
+        handler, nav, executor, _ = full_setup
+
+        # Enter menu
+        handler._handle_menu_toggle()
+        assert nav.state.mode == MenuMode.MENU
+
+        # Go to SECUBOX (slice 1)
+        nav.select_by_index(1)
+        action = nav.select_current()
+        assert action is None  # Submenu
+        assert nav.state.current_menu == MenuID.SECUBOX
+        assert len(nav.state.breadcrumb) == 1
+
+        # Go back to ROOT
+        nav.go_back()
+        assert nav.state.current_menu == MenuID.ROOT
+        assert len(nav.state.breadcrumb) == 0
+
+    @pytest.mark.asyncio
+    async def test_action_executor_routing(self, full_setup):
+        """Test action executor routes to correct handler."""
+        handler, nav, executor, _ = full_setup
+
+        # Test local.about
+        result = await executor.execute("local.about")
+        assert result.success is True
+        assert result.data is not None
+        assert "version" in result.data
+
+    @pytest.mark.asyncio
+    async def test_menu_confirmation_flow(self, full_setup):
+        """Test action requiring confirmation."""
+        handler, nav, executor, _ = full_setup
+
+        # Enter menu
+        handler._handle_menu_toggle()
+        nav.select_by_index(1)  # SECUBOX
+        nav.select_current()
+
+        # Navigate to a DANGER item if available
+        items = nav.get_current_items()
+        danger_found = False
+        for i, item in enumerate(items):
+            if item.confirm:  # This is a confirmation-required item
+                nav.select_by_index(i)
+                action = nav.select_current()
+                # Should move to CONFIRM mode and action should be None
+                # because select_current returns None for confirmation items
+                assert nav.state.mode == MenuMode.CONFIRM
+                assert action is None
+                assert nav.state.pending_action == item.action
+                danger_found = True
+                break
+
+        # If we found a confirmation item, test cancellation
+        if danger_found:
+            nav.cancel_action()
+            assert nav.state.mode == MenuMode.MENU
+            assert nav.state.pending_action is None
+
+    @pytest.mark.asyncio
+    async def test_menu_exit_to_dashboard(self, full_setup):
+        """Test emergency exit via 3-finger tap."""
+        handler, nav, executor, _ = full_setup
+
+        # Enter menu at SECUBOX
+        handler._handle_menu_toggle()
+        nav.select_by_index(1)
+        nav.select_current()
+
+        assert nav.state.mode == MenuMode.MENU
+        assert nav.state.current_menu == MenuID.SECUBOX
+        assert len(nav.state.breadcrumb) > 0
+
+        # Exit to dashboard
+        handler._handle_emergency_exit()
+        assert nav.state.mode == MenuMode.DASHBOARD
+        assert nav.state.current_menu == MenuID.ROOT
+        assert len(nav.state.breadcrumb) == 0
+
+    @pytest.mark.asyncio
+    async def test_menu_rotation(self, full_setup):
+        """Test rotating selection through menu items."""
+        handler, nav, executor, _ = full_setup
+
+        handler._handle_menu_toggle()
+        items = nav.get_current_items()
+        initial_index = nav.state.selected_index
+
+        # Rotate forward
+        nav.rotate_selection(1)
+        assert nav.state.selected_index == (initial_index + 1) % len(items)
+
+        # Rotate backward
+        nav.rotate_selection(-1)
+        assert nav.state.selected_index == initial_index
+
+        # Rotate forward multiple times
+        nav.rotate_selection(3)
+        assert nav.state.selected_index == (initial_index + 3) % len(items)
+
+    @pytest.mark.asyncio
+    async def test_full_session_simulation(self, full_setup):
+        """Simulate a complete user session."""
+        handler, nav, executor, _ = full_setup
+
+        # 1. Start in dashboard
+        assert nav.state.mode == MenuMode.DASHBOARD
+
+        # 2. Enter menu via long press
+        handler._handle_menu_toggle()
+        assert nav.state.mode == MenuMode.MENU
+
+        # 3. Navigate to LOCAL menu
+        nav.select_by_index(2)
+        nav.select_current()
+        assert nav.state.current_menu == MenuID.LOCAL
+
+        # 4. Select and execute ABOUT action (slice 3)
+        nav.select_by_index(3)
+        action = nav.select_current()
+        assert action is not None
+        result = await executor.execute(action)
+        assert result.success is True
+
+        # 5. Navigate back to ROOT
+        nav.go_back()
+        assert nav.state.current_menu == MenuID.ROOT
+
+        # 6. Exit menu to dashboard
+        handler._handle_emergency_exit()
+        assert nav.state.mode == MenuMode.DASHBOARD
+        assert nav.state.current_menu == MenuID.ROOT
