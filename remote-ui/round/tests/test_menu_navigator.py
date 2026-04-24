@@ -49,3 +49,35 @@ class TestMenuItem:
             confirm=True
         )
         assert item.confirm is True
+
+
+class TestMenuDefinitions:
+    """Tests for static menu definitions."""
+
+    def test_root_menu_has_six_items(self):
+        """Root menu must have exactly 6 slices."""
+        from menu_definitions import MENUS
+        root = MENUS[MenuID.ROOT]
+        assert len(root) == 6
+
+    def test_root_menu_slice_order(self):
+        """Verify correct slice order: DEVICES, SECUBOX, LOCAL, NETWORK, SECURITY, EXIT."""
+        from menu_definitions import MENUS
+        root = MENUS[MenuID.ROOT]
+        labels = [item.label for item in root]
+        assert labels == ["DEVICES", "SECUBOX", "LOCAL", "NETWORK", "SECURITY", "EXIT"]
+
+    def test_all_submenus_have_back(self):
+        """Every submenu must have a BACK item as last entry."""
+        from menu_definitions import MENUS
+        for menu_id, items in MENUS.items():
+            if menu_id != MenuID.ROOT:
+                assert items[-1].label == "< BACK"
+                assert items[-1].action == "nav.back"
+
+    def test_exit_menu_has_dashboard(self):
+        """EXIT menu must have DASHBOARD as first item."""
+        from menu_definitions import MENUS
+        exit_menu = MENUS[MenuID.EXIT]
+        assert exit_menu[0].label == "DASHBOARD"
+        assert exit_menu[0].action == "nav.dashboard"
