@@ -259,14 +259,23 @@ class RadialRenderer:
             return
 
         try:
-            # Convert to RGB565 format expected by most framebuffers
-            fb_image = self.canvas.convert("RGB")
+            # HyperPixel 2.1 Round uses RGB565 (16-bit) format
+            import struct
+            rgb_image = self.canvas.convert("RGB")
+            pixels = rgb_image.load()
+
+            fb_data = bytearray()
+            for y in range(self.height):
+                for x in range(self.width):
+                    r, g, b = pixels[x, y]
+                    # Convert RGB888 to RGB565: RRRRRGGG GGGBBBBB
+                    rgb565 = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3)
+                    fb_data.extend(struct.pack('<H', rgb565))
 
             with open(fb_path, 'wb') as fb:
-                # Write raw RGB data
-                fb.write(fb_image.tobytes())
+                fb.write(fb_data)
 
-            logger.debug(f"Wrote image to {fb_path}")
+            logger.debug(f"Wrote {len(fb_data)} bytes to {fb_path}")
 
         except Exception as e:
             logger.error(f"Failed to write to framebuffer: {e}")
