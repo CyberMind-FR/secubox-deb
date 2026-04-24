@@ -55,7 +55,7 @@ class RadialRenderer:
         Path("/usr/lib/secubox-eye/assets/icons"),          # System install
         Path("/usr/share/secubox-eye/icons"),               # Alternative
     ]
-    ICON_SIZE = 32  # Icon size in pixels
+    ICON_SIZE = 40  # Icon size in pixels
 
     def __init__(self):
         """Initialize renderer."""
