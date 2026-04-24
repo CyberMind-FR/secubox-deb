@@ -23,6 +23,10 @@ from device_manager import DeviceManager
 from metrics_bridge import MetricsBridge
 from command_handler import create_command_client, WebSocketClient, CommandHandler
 from touch_handler import TouchHandler, create_touch_handler, Gesture
+from menu_navigator import MenuNavigator, MenuMode
+from radial_renderer import RadialRenderer
+from action_executor import ActionExecutor
+from local_api import LocalAPI
 
 log = logging.getLogger(__name__)
 
@@ -101,6 +105,12 @@ class EyeAgent:
         self._bridge_task: Optional[asyncio.Task] = None
         self._ws_task: Optional[asyncio.Task] = None
         self._touch_task: Optional[asyncio.Task] = None
+
+        # Menu system components
+        self.menu_navigator = MenuNavigator()
+        self.radial_renderer = RadialRenderer()
+        self.local_api = LocalAPI()
+        self.action_executor = ActionExecutor(local_api=self.local_api)
 
     async def start(self):
         """Start the agent."""
@@ -209,6 +219,14 @@ class EyeAgent:
             ws_client=self.ws_client
         )
 
+        # Configure touch handler with menu
+        self.touch_handler.set_menu_navigator(self.menu_navigator)
+        self.touch_handler.set_action_executor(self.action_executor)
+        self.touch_handler.on_menu_render(self._render_menu)
+
+        # State change callback
+        self.menu_navigator.on_state_change(lambda s: self._render_menu())
+
         # Configurer les callbacks
         self.touch_handler.on_gesture(self._on_touch_gesture)
         self.touch_handler.on_secubox_switch(self._on_secubox_switch)
@@ -221,6 +239,17 @@ class EyeAgent:
             log.info("TouchHandler actif: %s", self.touch_handler.touch_device_name)
         else:
             log.warning("TouchHandler non demarre - mode tactile desactive")
+
+    def _render_menu(self) -> None:
+        """Render the menu to framebuffer."""
+        if not self.radial_renderer or not self.menu_navigator:
+            return
+
+        try:
+            image = self.radial_renderer.render(self.menu_navigator.state)
+            self.radial_renderer.write_to_framebuffer()
+        except Exception as e:
+            log.error("Render error: %s", e)
 
     def _on_touch_gesture(self, gesture: Gesture, data: dict):
         """Callback generique pour les gestes tactiles."""
