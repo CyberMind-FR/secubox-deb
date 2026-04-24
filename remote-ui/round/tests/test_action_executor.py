@@ -13,6 +13,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent / "agent"))
 
 from action_executor import ActionExecutor, ActionResult
+from local_api import LocalAPI
 
 
 class TestActionExecutor:
@@ -55,3 +56,32 @@ class TestActionExecutor:
         result = await executor.execute("unknown.action")
         assert result.success is False
         assert "Unknown" in result.message
+
+
+class TestLocalAPI:
+    """Tests for LocalAPI class."""
+
+    @pytest.mark.asyncio
+    async def test_get_about_info(self):
+        """About returns version info."""
+        api = LocalAPI()
+        result = await api.execute("about", None)
+        assert result.success is True
+        assert "Eye Remote" in result.message
+
+    @pytest.mark.asyncio
+    async def test_get_system_info(self):
+        """System info returns hostname."""
+        api = LocalAPI()
+        result = await api.execute("system_info", None)
+        assert result.success is True
+        assert result.data is not None
+        assert "hostname" in result.data
+
+    @pytest.mark.asyncio
+    async def test_get_storage_info(self):
+        """Storage info returns disk usage."""
+        api = LocalAPI()
+        result = await api.execute("storage", None)
+        assert result.success is True
+        assert "%" in result.message
