@@ -67,6 +67,15 @@ class RadialRenderer:
         # Icon cache
         self._icon_cache: dict[str, Image.Image] = {}
 
+        # Log icon directory status
+        logger.info("=== Checking icon directories ===")
+        for icon_dir in self.ICON_DIRS:
+            if icon_dir.exists():
+                icon_count = len(list(icon_dir.glob("*.png")))
+                logger.info(f"  [OK] {icon_dir} ({icon_count} icons)")
+            else:
+                logger.warning(f"  [--] {icon_dir} (not found)")
+
         # Try to load fonts
         self.font_title = self._load_font(24)
         self.font_label = self._load_font(14)  # Smaller for icon + label
