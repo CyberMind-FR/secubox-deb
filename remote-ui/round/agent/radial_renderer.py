@@ -7,6 +7,7 @@ Author: Gerald Kerma <gandalf@gk2.net>
 Renders radial menus on 480x480 circular display using Pillow.
 """
 import logging
+import math
 from pathlib import Path
 from typing import Optional
 
@@ -164,7 +165,6 @@ class RadialRenderer:
         # Draw label
         if label:
             # Calculate label position (middle of slice arc)
-            import math
             center_angle = (angles['start'] + angles['end']) / 2
             label_radius = (OUTER_RADIUS + INNER_RADIUS) / 2
 
