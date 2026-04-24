@@ -150,6 +150,10 @@ class EyeAgent:
         # Demarrer le gestionnaire de gestes tactiles
         await self._setup_touch_handler()
 
+        # Initial render to display dashboard on startup
+        log.info("Rendering initial display...")
+        self._render_menu()
+
         # Write PID file
         PID_FILE.parent.mkdir(parents=True, exist_ok=True)
         PID_FILE.write_text(str(os.getpid()))
