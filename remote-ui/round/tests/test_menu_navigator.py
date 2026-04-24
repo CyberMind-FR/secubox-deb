@@ -81,3 +81,32 @@ class TestMenuDefinitions:
         exit_menu = MENUS[MenuID.EXIT]
         assert exit_menu[0].label == "DASHBOARD"
         assert exit_menu[0].action == "nav.dashboard"
+
+
+class TestMenuState:
+    """Tests for MenuState dataclass."""
+
+    def test_initial_dashboard_mode(self):
+        """Default state is dashboard mode."""
+        from menu_navigator import MenuState, MenuMode
+        state = MenuState()
+        assert state.mode == MenuMode.DASHBOARD
+        assert state.current_menu == MenuID.ROOT
+        assert state.selected_index == 0
+        assert state.breadcrumb == []
+
+    def test_enter_menu_mode(self):
+        """Entering menu mode sets menu active."""
+        from menu_navigator import MenuState, MenuMode
+        state = MenuState()
+        state.mode = MenuMode.MENU
+        assert state.mode == MenuMode.MENU
+
+    def test_breadcrumb_tracking(self):
+        """Breadcrumb tracks navigation path."""
+        from menu_navigator import MenuState, MenuID as NavMenuID
+        state = MenuState()
+        state.breadcrumb.append(MenuID.ROOT)
+        state.breadcrumb.append(MenuID.SECUBOX)
+        assert len(state.breadcrumb) == 2
+        assert state.breadcrumb[-1] == MenuID.SECUBOX
