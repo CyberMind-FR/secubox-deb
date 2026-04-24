@@ -64,6 +64,53 @@ CENTER_RADIUS = 80  # Zone centrale de 80px de rayon
 
 
 # =============================================================================
+# Slice Detection for Radial Menu
+# =============================================================================
+
+# Zone radii for slice detection
+CENTER_ZONE_RADIUS = 60      # Center area (not a slice)
+OUTER_ZONE_RADIUS = 220      # Outside visible circle
+
+
+def get_slice_from_touch(x: int, y: int) -> Optional[int]:
+    """
+    Convertir des coordonnees tactiles en index de tranche (0-5).
+
+    La tranche 0 est en haut (12h), puis les tranches tournent
+    dans le sens horaire: 1=2h, 2=4h, 3=6h, 4=8h, 5=10h.
+
+    Args:
+        x: Coordonnee X du touch
+        y: Coordonnee Y du touch
+
+    Returns:
+        Index de tranche (0-5) ou None si hors zone
+    """
+    dx = x - CENTER_X
+    dy = y - CENTER_Y
+    distance = math.sqrt(dx * dx + dy * dy)
+
+    # Zone centrale -> pas une tranche
+    if distance < CENTER_ZONE_RADIUS:
+        return None
+
+    # Hors du cercle visible -> ignorer
+    if distance > OUTER_ZONE_RADIUS:
+        return None
+
+    # Calculer l'angle (0 = haut, sens horaire)
+    # atan2(dx, -dy) donne l'angle depuis le haut
+    angle = math.degrees(math.atan2(dx, -dy))
+    if angle < 0:
+        angle += 360
+
+    # Chaque tranche fait 60 degres, decale de 30 pour centrer
+    # la tranche 0 sur le haut
+    slice_index = int((angle + 30) % 360 // 60)
+    return slice_index
+
+
+# =============================================================================
 # Types de gestes detectes
 # =============================================================================
 
