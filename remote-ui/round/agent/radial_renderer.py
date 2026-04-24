@@ -259,23 +259,61 @@ class RadialRenderer:
             return
 
         try:
-            # HyperPixel 2.1 Round uses RGB565 (16-bit) format
-            import struct
-            rgb_image = self.canvas.convert("RGB")
-            pixels = rgb_image.load()
+            # Get framebuffer info from sysfs
+            try:
+                with open('/sys/class/graphics/fb0/bits_per_pixel', 'r') as f:
+                    bpp = int(f.read().strip())
+            except Exception:
+                bpp = 16  # Default for HyperPixel
 
-            fb_data = bytearray()
-            for y in range(self.height):
-                for x in range(self.width):
-                    r, g, b = pixels[x, y]
-                    # Convert RGB888 to RGB565: RRRRRGGG GGGBBBBB
-                    rgb565 = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3)
-                    fb_data.extend(struct.pack('<H', rgb565))
+            try:
+                with open('/sys/class/graphics/fb0/virtual_size', 'r') as f:
+                    vsize = f.read().strip().split(',')
+                    fb_width = int(vsize[0])
+                    fb_height = int(vsize[1]) if len(vsize) > 1 else fb_width
+            except Exception:
+                fb_width, fb_height = 480, 480
+
+            logger.info(f"Framebuffer: {fb_width}x{fb_height} @ {bpp}bpp")
+
+            # Resize if needed
+            img = self.canvas
+            if img.size != (fb_width, fb_height):
+                img = img.resize((fb_width, fb_height))
+
+            if bpp == 32:
+                # 32-bit BGRA
+                pixels = img.convert('RGBA')
+                raw = pixels.tobytes('raw', 'BGRA')
+            elif bpp == 24:
+                # 24-bit BGR
+                pixels = img.convert('RGB')
+                raw = pixels.tobytes('raw', 'BGR')
+            elif bpp == 16:
+                # 16-bit RGB565
+                rgb_img = img.convert('RGB')
+                pixel_data = rgb_img.load()
+                data = bytearray(fb_width * fb_height * 2)
+                idx = 0
+                for y in range(fb_height):
+                    for x in range(fb_width):
+                        r, g, b = pixel_data[x, y]  # type: ignore
+                        # RGB565: RRRRRGGG GGGBBBBB (little endian)
+                        pixel = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3)
+                        data[idx] = pixel & 0xFF
+                        data[idx + 1] = (pixel >> 8) & 0xFF
+                        idx += 2
+                raw = bytes(data)
+            else:
+                # Fallback: raw RGB
+                raw = img.convert('RGB').tobytes()
 
             with open(fb_path, 'wb') as fb:
-                fb.write(fb_data)
+                fb.write(raw)
 
-            logger.debug(f"Wrote {len(fb_data)} bytes to {fb_path}")
+            logger.debug(f"Wrote {len(raw)} bytes to {fb_path}")
 
         except Exception as e:
             logger.error(f"Failed to write to framebuffer: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
