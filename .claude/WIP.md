@@ -1,5 +1,25 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-04-21 (Session 63)*
+*Mis à jour : 2026-04-24 (Session 64)*
+
+---
+
+## ✅ Complété (Session 64) — USB OTG Network Fix v2.1.1
+
+### USB OTG NO-CARRIER Fix ✅
+
+**Problem:** Linux hosts showed NO-CARRIER despite Pi Zero interface being UP.
+
+**Root Cause:** Composite gadget creates `usb0` (RNDIS) and `usb1` (ECM). Linux uses ECM → `usb1`, but scripts configured `usb0` only, causing asymmetric routing.
+
+**Fix:** Configure only `usb1` (ECM) for Linux hosts.
+
+**Files:**
+- `secubox-otg-gadget.sh` — Use usb1 instead of usb0
+- `gadget-setup.sh` — Same fix for eye-remote variant
+- `agent/main.py` — `ensure_usb_network()` prefers usb1
+- `agent/network_debug.py` — New debug script
+
+**Results:** ✅ OTG network working (0.3ms), display shows OTG mode
 
 ---
 

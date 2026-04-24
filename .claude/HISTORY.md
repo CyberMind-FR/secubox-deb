@@ -3,6 +3,42 @@
 
 ---
 
+## 2026-04-23
+
+### Session 64 — Eye Remote USB OTG Network Fix (v2.1.1)
+
+**Issue:** USB OTG network connection showed NO-CARRIER on Linux hosts despite Pi Zero interface being UP.
+
+**Root Cause Analysis:**
+The USB composite gadget creates two network interfaces on the Pi Zero:
+- `usb0` → RNDIS function (Windows compatible)
+- `usb1` → ECM function (Linux/Mac via cdc_ether driver)
+
+Linux hosts use the ECM driver which maps to `usb1`. The old scripts configured `usb0` only, or both interfaces with the same IP (10.55.0.2/30), causing asymmetric routing where packets received on `usb1` could be replied via `usb0`.
+
+**Fix Applied:**
+- Configure only `usb1` (ECM) for Linux host compatibility
+- Fallback to `usb0` only if `usb1` doesn't exist
+
+**Files Modified:**
+- `remote-ui/round/secubox-otg-gadget.sh` — Wait for and configure usb1
+- `remote-ui/round/files/etc/secubox/eye-remote/gadget-setup.sh` — Same fix
+- `remote-ui/round/agent/main.py` — `ensure_usb_network()` prefers usb1
+- `remote-ui/round/agent/network_debug.py` — New debug script
+
+**Results:**
+- ✅ USB OTG network connectivity working (0.3ms latency)
+- ✅ Display shows OTG mode instead of SIM
+- ✅ Host NetworkManager connection persisted ("SecuBox OTG")
+
+**Commits:**
+- `48de244` — fix(eye-remote): Use usb1 (ECM) instead of usb0 for Linux hosts
+- `f7b4bb4` — style(eye-remote): Adjust pod positions for hexagonal ring layout
+
+**Version:** v2.1.1
+
+---
+
 ## 2026-04-15
 
 ### Session 59 — EspressoBin eMMC Flasher & VirtualBox Graphics Fix

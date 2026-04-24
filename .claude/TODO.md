@@ -245,6 +245,7 @@ Advanced security features:
 - [x] **P11-R05** Bookworm userconf file for pi:raspberry
 - [x] **P11-R06** usb0-up.sh bypass NetworkManager
 - [x] **P11-R07** Test HyperPixel display on real hardware ✅ v1.10.0
+- [x] **P11-R17** USB OTG network fix — Use usb1 (ECM) for Linux hosts ✅ v2.1.1
   - Fixed: dtoverlay=hyperpixel2r (not hyperpixel4)
   - Fixed: hyperpixel2r-init uses pigpio instead of RPi.GPIO (lgpio issues on Bookworm)
   - Fixed: Service dependencies (requires pigpiod)
