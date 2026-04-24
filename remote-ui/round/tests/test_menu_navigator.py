@@ -110,3 +110,86 @@ class TestMenuState:
         state.breadcrumb.append(MenuID.SECUBOX)
         assert len(state.breadcrumb) == 2
         assert state.breadcrumb[-1] == MenuID.SECUBOX
+
+
+class TestMenuNavigator:
+    """Tests for MenuNavigator class."""
+
+    def test_enter_menu_mode(self):
+        """Long press center enters menu mode."""
+        from menu_navigator import MenuNavigator, MenuMode
+        nav = MenuNavigator()
+        assert nav.state.mode == MenuMode.DASHBOARD
+        nav.enter_menu()
+        assert nav.state.mode == MenuMode.MENU
+        assert nav.state.current_menu == MenuID.ROOT
+
+    def test_exit_to_dashboard(self):
+        """Exit returns to dashboard mode."""
+        from menu_navigator import MenuNavigator, MenuMode
+        nav = MenuNavigator()
+        nav.enter_menu()
+        nav.state.current_menu = MenuID.SECUBOX
+        nav.state.breadcrumb = [MenuID.ROOT]
+        nav.exit_to_dashboard()
+        assert nav.state.mode == MenuMode.DASHBOARD
+        assert nav.state.breadcrumb == []
+
+    def test_navigate_to_submenu(self):
+        """Selecting submenu item navigates to it."""
+        from menu_navigator import MenuNavigator
+        nav = MenuNavigator()
+        nav.enter_menu()
+        nav.state.selected_index = 0  # DEVICES
+        action = nav.select_current()
+        assert nav.state.current_menu == MenuID.DEVICES
+        assert nav.state.breadcrumb == [MenuID.ROOT]
+        assert action is None
+
+    def test_navigate_back(self):
+        """Back action returns to previous menu."""
+        from menu_navigator import MenuNavigator
+        nav = MenuNavigator()
+        nav.enter_menu()
+        nav.state.current_menu = MenuID.DEVICES
+        nav.state.breadcrumb = [MenuID.ROOT]
+        nav.go_back()
+        assert nav.state.current_menu == MenuID.ROOT
+        assert nav.state.breadcrumb == []
+
+    def test_select_action_item(self):
+        """Selecting action item returns action string."""
+        from menu_navigator import MenuNavigator
+        nav = MenuNavigator()
+        nav.enter_menu()
+        nav.state.current_menu = MenuID.DEVICES
+        nav.state.selected_index = 0  # SCAN
+        action = nav.select_current()
+        assert action == "devices.scan"
+
+    def test_rotate_selection_clockwise(self):
+        """Swipe rotates selection clockwise."""
+        from menu_navigator import MenuNavigator
+        nav = MenuNavigator()
+        nav.enter_menu()
+        nav.state.selected_index = 2
+        nav.rotate_selection(1)
+        assert nav.state.selected_index == 3
+
+    def test_rotate_selection_wraps(self):
+        """Selection wraps around at boundaries."""
+        from menu_navigator import MenuNavigator
+        nav = MenuNavigator()
+        nav.enter_menu()
+        nav.state.selected_index = 5
+        nav.rotate_selection(1)
+        assert nav.state.selected_index == 0
+
+    def test_get_current_items(self):
+        """Get items for current menu."""
+        from menu_navigator import MenuNavigator
+        nav = MenuNavigator()
+        nav.enter_menu()
+        items = nav.get_current_items()
+        assert len(items) == 6
+        assert items[0].label == "DEVICES"
