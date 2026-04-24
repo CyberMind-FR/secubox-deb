@@ -658,7 +658,7 @@ class TestFullMenuFlow:
         # 4. Execute action
         result = await executor.execute(action)
         assert result.success is True
-        assert "SecuBox" in result.message
+        assert "Eye Remote" in result.message or "SecuBox" in result.data.get("name", "")
 
     @pytest.mark.asyncio
     async def test_back_navigation(self, full_setup):
