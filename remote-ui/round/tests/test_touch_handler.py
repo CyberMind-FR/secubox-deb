@@ -550,3 +550,60 @@ class TestSliceDetection:
         y = int(CENTER_Y - 150 * math.cos(angle))
         result = get_slice_from_touch(x, y)
         assert result == 5
+
+
+# =============================================================================
+# Tests Touch + Menu Integration
+# =============================================================================
+
+class TestTouchMenuIntegration:
+    """Tests for touch + menu integration."""
+
+    def test_long_press_center_enters_menu(self):
+        """Long press center toggles menu mode."""
+        # Import menu modules
+        sys.path.insert(0, str(Path(__file__).parent.parent / "agent"))
+        from menu_navigator import MenuNavigator, MenuMode
+
+        handler = create_touch_handler()
+        nav = MenuNavigator()
+        handler.set_menu_navigator(nav)
+
+        assert nav.state.mode == MenuMode.DASHBOARD
+        handler._handle_menu_toggle()
+        assert nav.state.mode == MenuMode.MENU
+
+    def test_tap_slice_in_menu_mode(self):
+        """Tap on slice selects menu item."""
+        sys.path.insert(0, str(Path(__file__).parent.parent / "agent"))
+        from menu_navigator import MenuNavigator, MenuMode
+        from menu_definitions import MenuID
+
+        handler = create_touch_handler()
+        nav = MenuNavigator()
+        handler.set_menu_navigator(nav)
+        nav.enter_menu()
+
+        # Tap on slice 1 (60 degrees = 2 o'clock)
+        angle = math.radians(60)
+        x = int(CENTER_X + 150 * math.sin(angle))
+        y = int(CENTER_Y - 150 * math.cos(angle))
+        action = handler._handle_slice_tap(x, y)
+
+        # Slice 1 = SECUBOX (submenu)
+        assert nav.state.current_menu == MenuID.SECUBOX
+
+    def test_three_finger_exits_menu(self):
+        """3-finger tap exits menu to dashboard."""
+        sys.path.insert(0, str(Path(__file__).parent.parent / "agent"))
+        from menu_navigator import MenuNavigator, MenuMode
+        from menu_definitions import MenuID
+
+        handler = create_touch_handler()
+        nav = MenuNavigator()
+        handler.set_menu_navigator(nav)
+        nav.enter_menu()
+        nav.state.current_menu = MenuID.SECUBOX
+
+        handler._handle_emergency_exit()
+        assert nav.state.mode == MenuMode.DASHBOARD
