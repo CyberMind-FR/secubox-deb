@@ -614,6 +614,14 @@ cp "$SCRIPT_DIR/files/etc/systemd/system/usb-network.service" "$ROOT_MNT/etc/sys
 ln -sf /etc/systemd/system/usb-network.service \
     "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/usb-network.service"
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# CLEANUP BROKEN SYSTEMD SYMLINKS
+# ═══════════════════════════════════════════════════════════════════════════════
+# The base Raspberry Pi OS image has services enabled that aren't installed.
+# These broken symlinks can cause boot failures.
+log "Cleaning up broken systemd symlinks..."
+find "$ROOT_MNT/etc/systemd/system" -type l ! -exec test -e {} \; -delete 2>/dev/null || true
+
 # Create gadget data directory
 mkdir -p "$ROOT_MNT/var/lib/secubox-gadget"
 truncate -s 512M "$ROOT_MNT/var/lib/secubox-gadget/debug.img"
