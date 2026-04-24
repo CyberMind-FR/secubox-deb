@@ -49,8 +49,12 @@ HIGHLIGHT_COLOR = "#00ff41"  # matrix-green
 class RadialRenderer:
     """Renders radial menus to 480x480 circular display."""
 
-    # Icon directory path
-    ICON_DIR = Path(__file__).parent.parent / "assets" / "icons"
+    # Icon directory paths (try multiple locations)
+    ICON_DIRS = [
+        Path(__file__).parent.parent / "assets" / "icons",  # Relative to module
+        Path("/usr/lib/secubox-eye/assets/icons"),          # System install
+        Path("/usr/share/secubox-eye/icons"),               # Alternative
+    ]
     ICON_SIZE = 32  # Icon size in pixels
 
     def __init__(self):
@@ -94,26 +98,33 @@ class RadialRenderer:
         Returns:
             PIL Image or None if not found
         """
+        if not name:
+            return None
+
         if name in self._icon_cache:
             return self._icon_cache[name]
 
-        # Try different sizes: 48px preferred, then 22px
-        for size in [48, 22, 96]:
-            icon_path = self.ICON_DIR / f"{name}-{size}.png"
-            if icon_path.exists():
-                try:
-                    icon = Image.open(icon_path).convert("RGBA")
-                    # Resize to standard icon size
-                    # Use LANCZOS resampling (Pillow 10+ uses Resampling enum)
-                    resample = getattr(Image, 'Resampling', Image).LANCZOS
-                    icon = icon.resize((self.ICON_SIZE, self.ICON_SIZE), resample)
-                    self._icon_cache[name] = icon
-                    logger.debug(f"Loaded icon: {icon_path}")
-                    return icon
-                except Exception as e:
-                    logger.warning(f"Failed to load icon {icon_path}: {e}")
+        # Try each icon directory
+        for icon_dir in self.ICON_DIRS:
+            if not icon_dir.exists():
+                continue
 
-        logger.debug(f"Icon not found: {name}")
+            # Try different sizes: 48px preferred, then 22px, then 96px
+            for size in [48, 22, 96]:
+                icon_path = icon_dir / f"{name}-{size}.png"
+                if icon_path.exists():
+                    try:
+                        icon = Image.open(icon_path).convert("RGBA")
+                        # Use LANCZOS resampling (Pillow 10+ uses Resampling enum)
+                        resample = getattr(Image, 'Resampling', Image).LANCZOS
+                        icon = icon.resize((self.ICON_SIZE, self.ICON_SIZE), resample)
+                        self._icon_cache[name] = icon
+                        logger.info(f"Loaded icon: {icon_path}")
+                        return icon
+                    except Exception as e:
+                        logger.warning(f"Failed to load icon {icon_path}: {e}")
+
+        logger.warning(f"Icon not found in any directory: {name}")
         return None
 
     def get_slice_angles(self, index: int) -> dict:
