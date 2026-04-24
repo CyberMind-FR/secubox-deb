@@ -1,6 +1,5 @@
 [Unit]
 Description=SecuBox Eye Remote USB Gadget (ECM+ACM+mass_storage)
-Documentation=https://github.com/CyberMind-FR/secubox-deb
 After=systemd-modules-load.service
 Before=network.target
 
@@ -10,13 +9,6 @@ RemainAfterExit=yes
 ExecStartPre=/sbin/modprobe libcomposite
 ExecStart=/etc/secubox/eye-remote/gadget-setup.sh up
 ExecStop=/etc/secubox/eye-remote/gadget-setup.sh down
-ExecReload=/etc/secubox/eye-remote/gadget-setup.sh down && /etc/secubox/eye-remote/gadget-setup.sh up
-
-# Security hardening (limited - needs configfs access)
-ProtectSystem=strict
-ReadWritePaths=/sys/kernel/config /var/lib/secubox /run
-PrivateTmp=yes
-NoNewPrivileges=yes
 
 [Install]
 WantedBy=multi-user.target
