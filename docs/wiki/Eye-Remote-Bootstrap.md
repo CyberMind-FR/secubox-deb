@@ -1,9 +1,11 @@
 # Eye Remote Bootstrap Media Management
 
-**Version:** 2.1.0
-**Last Updated:** 2026-04-23
+**Version:** 2.1.1
+**Last Updated:** 2026-04-24
 **Status:** Production
 **Author:** CyberMind — Gerald Kerma
+
+> **v2.1.1 Fix:** USB OTG network now uses `usb1` (ECM) instead of `usb0` (RNDIS) for Linux host compatibility. This fixes the NO-CARRIER issue where the host couldn't establish network connectivity despite the Pi Zero interface being UP.
 
 ---
 
