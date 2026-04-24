@@ -606,45 +606,15 @@ iface usb0 inet static
     gateway 10.55.0.1
 EOF
 
-# usb0-up.sh script (NetworkManager bypass)
+# USB network script (handles both usb0 and usb1 - ECM may create either)
 mkdir -p "$ROOT_MNT/usr/local/bin"
-cat > "$ROOT_MNT/usr/local/bin/usb0-up.sh" << 'USB0UP'
-#!/bin/bash
-LOG=/var/log/usb0-up.log
-exec >> "$LOG" 2>&1
-echo "=== usb0-up.sh started $(date) ==="
-sleep 5
-for i in {1..30}; do
-    if ip link show usb0 &>/dev/null; then
-        ip addr add 10.55.0.2/30 dev usb0 2>&1 || true
-        ip link set usb0 up 2>&1
-        ip route add default via 10.55.0.1 dev usb0 2>&1 || true
-        logger "SecuBox OTG: usb0 configured 10.55.0.2/30"
-        exit 0
-    fi
-    sleep 2
-done
-exit 1
-USB0UP
-chmod +x "$ROOT_MNT/usr/local/bin/usb0-up.sh"
+cp "$SCRIPT_DIR/files/usr/local/bin/usb-network-up.sh" "$ROOT_MNT/usr/local/bin/"
+chmod +x "$ROOT_MNT/usr/local/bin/usb-network-up.sh"
 
-cat > "$ROOT_MNT/etc/systemd/system/usb0-up.service" << 'USB0SVC'
-[Unit]
-Description=SecuBox USB Gadget Network Setup
-After=systemd-modules-load.service secubox-otg-gadget.service
-Wants=secubox-otg-gadget.service
-
-[Service]
-Type=oneshot
-ExecStart=/usr/local/bin/usb0-up.sh
-RemainAfterExit=yes
-TimeoutStartSec=90
-
-[Install]
-WantedBy=multi-user.target
-USB0SVC
-ln -sf /etc/systemd/system/usb0-up.service \
-    "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/usb0-up.service"
+# USB network service
+cp "$SCRIPT_DIR/files/etc/systemd/system/usb-network.service" "$ROOT_MNT/etc/systemd/system/"
+ln -sf /etc/systemd/system/usb-network.service \
+    "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/usb-network.service"
 
 # Create gadget data directory
 mkdir -p "$ROOT_MNT/var/lib/secubox-gadget"
