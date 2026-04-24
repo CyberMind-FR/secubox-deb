@@ -23,8 +23,13 @@ class ActionResult:
 class ActionExecutor:
     """Executes menu actions and routes to appropriate handlers."""
 
-    def __init__(self):
-        """Initialize action executor."""
+    def __init__(self, local_api=None):
+        """Initialize action executor.
+
+        Args:
+            local_api: Optional LocalAPI instance for local actions.
+        """
+        self._local_api = local_api
         self._handlers = {
             "local": self._execute_local,
             "secubox": self._execute_secubox,
@@ -94,10 +99,15 @@ class ActionExecutor:
 
     async def _execute_local(self, method: str, param: Optional[str]) -> ActionResult:
         """Execute local actions (about, settings, etc)."""
+        # Delegate to LocalAPI if available
+        if self._local_api:
+            return await self._local_api.execute(method, param)
+
+        # Fallback handlers when LocalAPI not configured
         if method == "about":
             return ActionResult(
                 success=True,
-                message="About SecuBox Eye",
+                message="About SecuBox Eye Remote",
                 data={
                     "version": "1.0.0",
                     "platform": "Debian Bookworm ARM64",
