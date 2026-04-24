@@ -60,8 +60,79 @@ MODULES = {
 # Eye Agent Unix socket
 AGENT_SOCKET = '/run/secubox-eye/metrics.sock'
 
+# Module icons directory (relative to script location)
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+ICONS_DIR = os.path.join(SCRIPT_DIR, 'assets', 'icons')
+
+# Icon cache
+_icon_cache = {}
+
 # Framebuffer info (cached)
 _fb_info = None
+
+
+def load_module_icon(module_name: str, size: int = 48) -> Image.Image | None:
+    """Load a module icon from assets.
+
+    Args:
+        module_name: Module name (AUTH, WALL, BOOT, MIND, ROOT, MESH)
+        size: Icon size (22, 48, 96, 128)
+
+    Returns:
+        PIL Image or None if not found
+    """
+    cache_key = f"{module_name}_{size}"
+    if cache_key in _icon_cache:
+        return _icon_cache[cache_key]
+
+    icon_path = os.path.join(ICONS_DIR, f"{module_name.lower()}-{size}.png")
+    try:
+        if os.path.exists(icon_path):
+            icon = Image.open(icon_path).convert('RGBA')
+            _icon_cache[cache_key] = icon
+            return icon
+    except Exception as e:
+        print(f"Failed to load icon {icon_path}: {e}")
+
+    return None
+
+
+def get_critical_module(metrics: dict) -> tuple[str, float]:
+    """Determine which module has the most critical metric.
+
+    Returns:
+        tuple: (module_name, criticality_score 0-100)
+    """
+    scores = {}
+
+    # CPU (AUTH) - direct percentage
+    cpu = metrics.get('cpu', 0)
+    scores['AUTH'] = cpu
+
+    # Memory (WALL) - direct percentage
+    mem = metrics.get('mem', 0)
+    scores['WALL'] = mem
+
+    # Disk (BOOT) - direct percentage
+    disk = metrics.get('disk', 0)
+    scores['BOOT'] = disk
+
+    # Load (MIND) - scale 0-4 to 0-100
+    load = metrics.get('load', 0)
+    scores['MIND'] = min(100, load * 25)
+
+    # Temp (ROOT) - scale 30-80°C to 0-100
+    temp = metrics.get('temp', 0)
+    scores['ROOT'] = min(100, max(0, (temp - 30) * 2))
+
+    # WiFi (MESH) - scale -80 to -30 dBm to 0-100 (inverted - weaker = more critical)
+    wifi = metrics.get('wifi', -80)
+    # Invert: -80 dBm = 100% critical, -30 dBm = 0% critical
+    scores['MESH'] = min(100, max(0, (-wifi - 30) * 2))
+
+    # Find most critical
+    critical_module = max(scores, key=scores.get)
+    return critical_module, scores[critical_module]
 
 
 def detect_otg_interface() -> bool:
@@ -342,8 +413,19 @@ def draw_dashboard(metrics, mode='SIM', host='', device_name=''):
             y = cy + r * math.sin(rad)
             draw.ellipse([x-5, y-5, x+5, y+5], fill=(255, 255, 255))
 
-    # Center info - OTG mode display (no clock/date)
-    # OTG/WiFi/SIM status - large and central
+    # Center info - Contextual icon + mode display
+    # Get the most critical module for contextual icon
+    critical_module, criticality = get_critical_module(metrics)
+    module_color = MODULES[critical_module]['color']
+
+    # Draw contextual icon (48px) centered above mode text
+    icon = load_module_icon(critical_module, 48)
+    if icon:
+        icon_x = cx - 24  # Center 48px icon
+        icon_y = cy - 75  # Above mode text
+        img.paste(icon, (icon_x, icon_y), icon)  # Use alpha mask
+
+    # OTG/WiFi/SIM status
     if mode == 'OTG':
         mode_text = 'USB OTG'
         mode_color = STATUS_OK  # Neon green
@@ -354,23 +436,37 @@ def draw_dashboard(metrics, mode='SIM', host='', device_name=''):
         mode_text = 'SIM'
         mode_color = STATUS_SIM
 
-    # Large mode indicator
-    bbox = draw.textbbox((0, 0), mode_text, font=font_large)
+    # Mode indicator (smaller, below icon)
+    bbox = draw.textbbox((0, 0), mode_text, font=font_medium)
     tw = bbox[2] - bbox[0]
-    draw.text((cx - tw//2, cy - 30), mode_text, fill=mode_color, font=font_large)
+    draw.text((cx - tw//2, cy - 20), mode_text, fill=mode_color, font=font_medium)
+
+    # Critical module indicator with value
+    metric_name = MODULES[critical_module]['metric']
+    metric_value = metrics.get(metric_name, 0)
+    metric_unit = MODULES[critical_module]['unit']
+    if metric_name == 'wifi':
+        value_text = f"{critical_module} {int(metric_value)}{metric_unit}"
+    elif metric_name == 'load':
+        value_text = f"{critical_module} {metric_value:.1f}{metric_unit}"
+    else:
+        value_text = f"{critical_module} {int(metric_value)}{metric_unit}"
+    bbox = draw.textbbox((0, 0), value_text, font=font_small)
+    tw = bbox[2] - bbox[0]
+    draw.text((cx - tw//2, cy + 5), value_text, fill=module_color, font=font_small)
 
     # Connection status
     if mode in ['OTG', 'WIFI']:
         status_text = 'CONNECTED'
-        bbox = draw.textbbox((0, 0), status_text, font=font_medium)
+        bbox = draw.textbbox((0, 0), status_text, font=font_tiny)
         tw = bbox[2] - bbox[0]
-        draw.text((cx - tw//2, cy + 10), status_text, fill=mode_color, font=font_medium)
+        draw.text((cx - tw//2, cy + 25), status_text, fill=mode_color, font=font_tiny)
 
     # Hostname below
     hostname = metrics.get('hostname', 'secubox')
     bbox = draw.textbbox((0, 0), hostname, font=font_small)
     tw = bbox[2] - bbox[0]
-    draw.text((cx - tw//2, cy + 40), hostname, fill=TEXT_MUTED, font=font_small)
+    draw.text((cx - tw//2, cy + 42), hostname, fill=TEXT_MUTED, font=font_small)
 
     # Rings only - no text labels on circles (clean design)
 
