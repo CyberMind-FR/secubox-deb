@@ -615,12 +615,25 @@ ln -sf /etc/systemd/system/usb-network.service \
     "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/usb-network.service"
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# CLEANUP BROKEN SYSTEMD SYMLINKS
+# ENABLE REQUIRED SERVICES
 # ═══════════════════════════════════════════════════════════════════════════════
-# The base Raspberry Pi OS image has services enabled that aren't installed.
-# These broken symlinks can cause boot failures.
-log "Cleaning up broken systemd symlinks..."
-find "$ROOT_MNT/etc/systemd/system" -type l ! -exec test -e {} \; -delete 2>/dev/null || true
+# NOTE: We cannot use "find -type l ! -exec test -e" to clean broken symlinks
+# because symlinks to /lib/systemd appear "broken" from host but are valid on target.
+# Instead, explicitly enable the services we need.
+log "Enabling required services..."
+mkdir -p "$ROOT_MNT/etc/systemd/system/multi-user.target.wants"
+
+# Core services
+ln -sf /lib/systemd/system/pigpiod.service "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/" 2>/dev/null || true
+ln -sf /lib/systemd/system/ssh.service "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/" 2>/dev/null || true
+
+# HyperPixel display
+ln -sf /etc/systemd/system/hyperpixel2r-init.service "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/" 2>/dev/null || true
+
+# Eye Remote services
+ln -sf /etc/systemd/system/secubox-eye-gadget.service "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/" 2>/dev/null || true
+ln -sf /etc/systemd/system/secubox-eye-agent.service "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/" 2>/dev/null || true
+ln -sf /etc/systemd/system/usb-network.service "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/" 2>/dev/null || true
 
 # Create gadget data directory
 mkdir -p "$ROOT_MNT/var/lib/secubox-gadget"
