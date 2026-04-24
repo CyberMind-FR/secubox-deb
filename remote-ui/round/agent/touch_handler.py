@@ -228,6 +228,11 @@ class TouchHandler:
     _on_secubox_switch: Optional[Callable[[str], None]] = field(default=None, repr=False)
     _on_gesture: Optional[Callable[[Gesture, dict], None]] = field(default=None, repr=False)
 
+    # Menu integration
+    _menu_navigator: Optional[Any] = field(default=None, repr=False)  # Type: MenuNavigator
+    _action_executor: Optional[Any] = field(default=None, repr=False)  # Type: ActionExecutor
+    _on_menu_render: Optional[Callable[[Any], None]] = field(default=None, repr=False)
+
     # Slot courant pour multi-touch
     _current_slot: int = field(default=0, repr=False)
 
@@ -360,6 +365,33 @@ class TouchHandler:
     def on_gesture(self, callback: Callable[[Gesture, dict], None]):
         """Callback generique pour tous les gestes."""
         self._on_gesture = callback
+
+    def set_menu_navigator(self, navigator: Any):
+        """
+        Definir le navigateur de menu.
+
+        Args:
+            navigator: Instance de MenuNavigator
+        """
+        self._menu_navigator = navigator
+
+    def set_action_executor(self, executor: Any):
+        """
+        Definir l'executeur d'actions.
+
+        Args:
+            executor: Instance de ActionExecutor
+        """
+        self._action_executor = executor
+
+    def on_menu_render(self, callback: Callable[[Any], None]):
+        """
+        Callback pour notifier que le menu doit etre rendu.
+
+        Args:
+            callback: Fonction appellee avec MenuState en argument
+        """
+        self._on_menu_render = callback
 
     # ==========================================================================
     # Boucle d'evenements evdev
@@ -598,6 +630,8 @@ class TouchHandler:
         """
         Executer l'action correspondant au geste detecte.
 
+        Routage en fonction du mode menu/dashboard.
+
         Args:
             gesture: Type de geste detecte
         """
@@ -614,27 +648,66 @@ class TouchHandler:
             except Exception as e:
                 log.warning("Erreur callback on_gesture: %s", e)
 
-        # Actions specifiques
-        if gesture == Gesture.SWIPE_LEFT:
-            await self.on_swipe_left()
+        # Verifier si on est en mode menu
+        in_menu_mode = False
+        if self._menu_navigator:
+            try:
+                from menu_navigator import MenuMode
+                in_menu_mode = self._menu_navigator.state.mode == MenuMode.MENU
+            except ImportError:
+                pass
 
-        elif gesture == Gesture.SWIPE_RIGHT:
-            await self.on_swipe_right()
+        # 3-finger tap: emergency exit (prioritaire sur tout)
+        if gesture == Gesture.THREE_FINGER_TAP:
+            if in_menu_mode:
+                self._handle_emergency_exit()
+            else:
+                await self.on_three_finger_tap()
+            return
 
-        elif gesture == Gesture.TAP:
-            if primary:
-                module = self._detect_module_from_position(primary.x, primary.y)
-                if module:
-                    await self.on_module_tap(module)
-
-        elif gesture == Gesture.THREE_FINGER_TAP:
-            await self.on_three_finger_tap()
-
-        elif gesture == Gesture.SWIPE_DOWN:
-            await self.on_swipe_down()
-
-        elif gesture == Gesture.LONG_PRESS:
+        # Long press centre: toggle menu (si menu navigator configure)
+        if gesture == Gesture.LONG_PRESS:
             await self.on_long_press_center()
+            return
+
+        # Si en mode menu, router differemment
+        if in_menu_mode:
+            if gesture == Gesture.TAP and primary:
+                # Tap sur tranche = selection menu
+                self._handle_slice_tap(primary.x, primary.y)
+
+            elif gesture == Gesture.SWIPE_LEFT:
+                # Swipe gauche = rotation selection
+                if self._menu_navigator:
+                    current = self._menu_navigator.state.selected_index
+                    self._menu_navigator.state.selected_index = (current - 1) % 6
+                    if self._on_menu_render:
+                        self._on_menu_render(self._menu_navigator.state)
+
+            elif gesture == Gesture.SWIPE_RIGHT:
+                # Swipe droite = rotation selection
+                if self._menu_navigator:
+                    current = self._menu_navigator.state.selected_index
+                    self._menu_navigator.state.selected_index = (current + 1) % 6
+                    if self._on_menu_render:
+                        self._on_menu_render(self._menu_navigator.state)
+
+        else:
+            # Mode dashboard: gestes normaux
+            if gesture == Gesture.SWIPE_LEFT:
+                await self.on_swipe_left()
+
+            elif gesture == Gesture.SWIPE_RIGHT:
+                await self.on_swipe_right()
+
+            elif gesture == Gesture.TAP:
+                if primary:
+                    module = self._detect_module_from_position(primary.x, primary.y)
+                    if module:
+                        await self.on_module_tap(module)
+
+            elif gesture == Gesture.SWIPE_DOWN:
+                await self.on_swipe_down()
 
     # ==========================================================================
     # Actions de gestes
@@ -792,10 +865,17 @@ class TouchHandler:
 
     async def on_long_press_center(self):
         """
-        Geste long press au centre: afficher liste des devices.
+        Geste long press au centre: toggle menu ou afficher liste devices.
 
-        Affiche/masque la liste des SecuBox configures.
+        Si le menu est integre, toggle menu/dashboard.
+        Sinon, affiche/masque la liste des SecuBox configures.
         """
+        # Si menu navigator est configure, utiliser le menu
+        if self._menu_navigator:
+            self._handle_menu_toggle()
+            return
+
+        # Sinon, fallback sur device list
         self._device_list_visible = not self._device_list_visible
 
         log.info(
@@ -808,6 +888,101 @@ class TouchHandler:
                 self._on_device_list_toggle(self._device_list_visible)
             except Exception as e:
                 log.warning("Erreur callback device list: %s", e)
+
+    # ==========================================================================
+    # Menu Integration Methods
+    # ==========================================================================
+
+    def _handle_menu_toggle(self):
+        """
+        Toggle entre mode menu et mode dashboard.
+
+        Appele lors d'un long press centre si menu navigator configure.
+        """
+        if not self._menu_navigator:
+            log.warning("MenuNavigator non configure - toggle menu ignore")
+            return
+
+        # Import dynamique pour eviter circular import
+        from menu_navigator import MenuMode
+
+        if self._menu_navigator.state.mode == MenuMode.DASHBOARD:
+            log.info("Entree en mode menu")
+            self._menu_navigator.enter_menu()
+        else:
+            log.info("Sortie vers dashboard")
+            self._menu_navigator.exit_to_dashboard()
+
+        # Notifier pour re-render
+        if self._on_menu_render:
+            try:
+                self._on_menu_render(self._menu_navigator.state)
+            except Exception as e:
+                log.warning("Erreur callback menu render: %s", e)
+
+    def _handle_slice_tap(self, x: int, y: int) -> Optional[str]:
+        """
+        Gerer un tap sur une tranche du menu radial.
+
+        Args:
+            x: Coordonnee X du touch
+            y: Coordonnee Y du touch
+
+        Returns:
+            Action executee ou None
+        """
+        if not self._menu_navigator:
+            log.warning("MenuNavigator non configure - slice tap ignore")
+            return None
+
+        # Detecter la tranche touchee
+        slice_index = get_slice_from_touch(x, y)
+        if slice_index is None:
+            log.debug("Tap hors des tranches menu")
+            return None
+
+        log.info("Tap sur tranche menu: %d", slice_index)
+
+        # Selectionner la tranche dans le navigateur
+        self._menu_navigator.state.selected_index = slice_index
+        action = self._menu_navigator.select_current()
+
+        # Executer l'action si presente
+        if action and self._action_executor:
+            try:
+                import asyncio
+                asyncio.create_task(self._action_executor.execute(action))
+            except Exception as e:
+                log.error("Erreur execution action: %s", e)
+
+        # Notifier pour re-render
+        if self._on_menu_render:
+            try:
+                self._on_menu_render(self._menu_navigator.state)
+            except Exception as e:
+                log.warning("Erreur callback menu render: %s", e)
+
+        return action
+
+    def _handle_emergency_exit(self):
+        """
+        Sortie d'urgence vers le dashboard (3-finger tap).
+
+        Force le retour au dashboard peu importe l'etat du menu.
+        """
+        if not self._menu_navigator:
+            log.warning("MenuNavigator non configure - emergency exit ignore")
+            return
+
+        log.info("Emergency exit vers dashboard")
+        self._menu_navigator.exit_to_dashboard()
+
+        # Notifier pour re-render
+        if self._on_menu_render:
+            try:
+                self._on_menu_render(self._menu_navigator.state)
+            except Exception as e:
+                log.warning("Erreur callback menu render: %s", e)
 
     # ==========================================================================
     # Proprietes d'etat
