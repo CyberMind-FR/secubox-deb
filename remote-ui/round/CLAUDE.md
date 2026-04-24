@@ -717,6 +717,51 @@ Swap atomique :
 
 ---
 
+## 14.2 RADIAL MENU SYSTEM — Touchscreen Controller
+
+### Overview
+
+The Eye Remote supports a radial menu overlay accessed via long-press on the center of the display.
+
+### Components
+
+| File | Purpose |
+|------|---------|
+| `menu_definitions.py` | Static menu structure definitions |
+| `menu_navigator.py` | State machine for menu navigation |
+| `radial_renderer.py` | Pillow-based menu rendering |
+| `action_executor.py` | Action dispatch framework |
+| `local_api.py` | Local Pi Zero settings |
+
+### Gestures in Menu Mode
+
+| Gesture | Action |
+|---------|--------|
+| Long press center | Enter/exit menu mode |
+| Tap slice | Select menu item |
+| Tap center | Go back |
+| Swipe left/right | Rotate selection |
+| 3-finger tap | Emergency exit to dashboard |
+
+### Menu Structure
+
+```
+ROOT (6 slices)
+├── DEVICES: Scan, Pair, Forget
+├── SECUBOX: Status, Modules, Logs, Restart
+│   ├── STATUS: CPU, MEM, DISK, TEMP, UPTIME
+│   └── MODULES: CrowdSec, WireGuard, Firewall, DPI, DNS
+├── LOCAL: Display, Network, System, About
+│   ├── DISPLAY: Brightness, Theme, Timeout, Rotation
+│   ├── NETWORK: USB IP, WiFi, Hostname, DNS
+│   └── SYSTEM: Storage, Memory, CPU, Logs
+├── NETWORK: Interfaces, Routes, DNS, Firewall
+├── SECURITY: Alerts, Bans, Rules, Audit, Lockdown
+└── EXIT: Dashboard, Sleep, Reboot, Shutdown
+```
+
+---
+
 ## 15. RÉFÉRENCES
 
 ```
