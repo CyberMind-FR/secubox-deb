@@ -13,7 +13,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VERSION="2.1.0"
+VERSION="2.2.0"
 OUTPUT_DIR="${OUTPUT_DIR:-/tmp}"
 OUTPUT_NAME="secubox-eye-remote-${VERSION}.img"
 
@@ -55,6 +55,7 @@ PACKAGES_FRAMEBUFFER=(
     python3-pip
     python3-pigpio
     python3-aiohttp
+    python3-evdev
     pigpio
     # Utilities
     i2c-tools
@@ -568,6 +569,15 @@ if [[ -f "$SCRIPT_DIR/secubox-eye-agent.service" && -f "$SCRIPT_DIR/config.toml.
     mkdir -p "$ROOT_MNT/etc/systemd/system/multi-user.target.wants"
     ln -sf /etc/systemd/system/secubox-eye-agent.service \
         "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/"
+
+    # v2.2.0: Install menu system icons for radial menu
+    if [[ -d "$SCRIPT_DIR/assets/icons" ]]; then
+        log "Installing menu system icons..."
+        mkdir -p "$ROOT_MNT/usr/lib/secubox-eye/assets/icons"
+        cp "$SCRIPT_DIR/assets/icons"/*.png "$ROOT_MNT/usr/lib/secubox-eye/assets/icons/" 2>/dev/null || true
+        ICON_COUNT=$(ls "$ROOT_MNT/usr/lib/secubox-eye/assets/icons"/*.png 2>/dev/null | wc -l)
+        log "Installed $ICON_COUNT menu icons"
+    fi
 else
     warn "Eye Agent files not found, skipping installation"
 fi
@@ -867,6 +877,12 @@ log "  1. Insert SD in Pi Zero W with HyperPixel"
 log "  2. Connect USB DATA port (middle) to host"
 log "  3. Wait ~60s for boot"
 log "  4. Dashboard displays automatically"
+log ""
+log "Radial Menu (v2.2.0):"
+log "  Long-press center   → Enter menu"
+log "  Tap slice           → Select item"
+log "  Tap center          → Go back"
+log "  3-finger tap        → Emergency exit"
 log ""
 log "SSH access (credentials: pi / raspberry):"
 log "  ssh pi@10.55.0.2           # Via USB OTG"
