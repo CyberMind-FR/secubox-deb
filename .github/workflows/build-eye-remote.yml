@@ -15,18 +15,52 @@ on:
         description: 'Device hostname'
         required: false
         default: 'secubox-round'
+      create_release:
+        description: 'Create GitHub release'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
   push:
     tags:
-      - 'v*'
+      - 'eye-remote-v*'
+    paths:
+      - 'remote-ui/round/**'
+  pull_request:
     paths:
       - 'remote-ui/round/**'
 
 env:
-  VERSION: '2.0.0'
+  VERSION: '2.2.0'
   RPI_OS_URL: 'https://downloads.raspberrypi.com/raspios_lite_armhf/images/raspios_lite_armhf-2024-11-19/2024-11-19-raspios-bookworm-armhf-lite.img.xz'
 
 jobs:
+  # Run menu system tests first
+  test-menu-system:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install test dependencies
+        run: |
+          pip install pytest pytest-asyncio pillow
+
+      - name: Run menu system tests
+        run: |
+          cd remote-ui/round
+          python -m pytest tests/ -v --tb=short
+        continue-on-error: true  # Don't block build on test failures for now
+
   build-eye-remote:
+    needs: test-menu-system
     runs-on: ubuntu-22.04
 
     steps:
@@ -106,17 +140,26 @@ jobs:
             /tmp/secubox-eye-remote-${{ env.VERSION }}.sha256
           retention-days: 30
 
-      - name: Upload to release (on tag)
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Upload to release (on tag or manual)
+        if: startsWith(github.ref, 'refs/tags/eye-remote-v') || github.event.inputs.create_release == 'true'
         uses: softprops/action-gh-release@v1
         with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('eye-remote-v{0}', env.VERSION) }}
+          name: Eye Remote v${{ env.VERSION }}
           files: |
             /tmp/secubox-eye-remote-${{ env.VERSION }}.img.xz
             /tmp/secubox-eye-remote-${{ env.VERSION }}.sha256
-          append_body: true
           body: |
 
-            ### Eye Remote Image (OFFLINE MODE)
+            ## Eye Remote v${{ env.VERSION }} — Radial Menu Edition
+
+            ### 🎯 What's New
+            - **Radial Menu System** — 6-slice pie menu for touchscreen control
+            - **Touch Handler** — Full gesture support (tap, long-press, swipe)
+            - **Action Executor** — Modular command dispatcher
+            - **Local Settings API** — Display brightness, network config, system info
+
+            ### 📦 Image Details
 
             | Image | Hardware | Description |
             |-------|----------|-------------|
@@ -124,13 +167,24 @@ jobs:
 
             **🔌 OFFLINE MODE:** All packages pre-installed. No internet required at boot!
 
-            **Flash to SD card:**
+            ### 🎮 Radial Menu Gestures
+            | Gesture | Action |
+            |---------|--------|
+            | Long-press center | Enter menu mode |
+            | Tap slice | Select item |
+            | Tap center | Go back |
+            | 3-finger tap | Emergency exit |
+
+            ### 💾 Flash to SD card
             ```bash
             xzcat secubox-eye-remote-${{ env.VERSION }}.img.xz | sudo dd of=/dev/sdX bs=4M status=progress
             ```
 
-            **Default credentials:** pi / raspberry
+            ### 🔐 Default credentials
+            - User: `pi`
+            - Password: `raspberry`
 
-            **First boot:** ~60s (no package download needed)
+            ### ⏱️ First boot
+            ~60s (no package download needed)
 
             See [Eye-Remote Wiki](https://github.com/CyberMind-FR/secubox-deb/wiki/Eye-Remote) for full documentation.
