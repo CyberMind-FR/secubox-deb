@@ -49,6 +49,10 @@ HIGHLIGHT_COLOR = "#00ff41"  # matrix-green
 class RadialRenderer:
     """Renders radial menus to 480x480 circular display."""
 
+    # Icon directory path
+    ICON_DIR = Path(__file__).parent.parent / "assets" / "icons"
+    ICON_SIZE = 32  # Icon size in pixels
+
     def __init__(self):
         """Initialize renderer."""
         self.width = WIDTH
@@ -56,9 +60,12 @@ class RadialRenderer:
         self.canvas = None
         self.draw = None
 
+        # Icon cache
+        self._icon_cache: dict[str, Image.Image] = {}
+
         # Try to load fonts
         self.font_title = self._load_font(24)
-        self.font_label = self._load_font(16)
+        self.font_label = self._load_font(14)  # Smaller for icon + label
         self.font_small = self._load_font(12)
 
     def _load_font(self, size: int) -> ImageFont.FreeTypeFont:
@@ -76,6 +83,38 @@ class RadialRenderer:
                     logger.warning(f"Failed to load font {path}: {e}")
 
         return ImageFont.load_default()
+
+    def _load_icon(self, name: str) -> Optional[Image.Image]:
+        """
+        Load and cache an icon by name.
+
+        Args:
+            name: Icon name without extension (e.g., "devices")
+
+        Returns:
+            PIL Image or None if not found
+        """
+        if name in self._icon_cache:
+            return self._icon_cache[name]
+
+        # Try different sizes: 48px preferred, then 22px
+        for size in [48, 22, 96]:
+            icon_path = self.ICON_DIR / f"{name}-{size}.png"
+            if icon_path.exists():
+                try:
+                    icon = Image.open(icon_path).convert("RGBA")
+                    # Resize to standard icon size
+                    # Use LANCZOS resampling (Pillow 10+ uses Resampling enum)
+                    resample = getattr(Image, 'Resampling', Image).LANCZOS
+                    icon = icon.resize((self.ICON_SIZE, self.ICON_SIZE), resample)
+                    self._icon_cache[name] = icon
+                    logger.debug(f"Loaded icon: {icon_path}")
+                    return icon
+                except Exception as e:
+                    logger.warning(f"Failed to load icon {icon_path}: {e}")
+
+        logger.debug(f"Icon not found: {name}")
+        return None
 
     def get_slice_angles(self, index: int) -> dict:
         """
@@ -102,15 +141,17 @@ class RadialRenderer:
         self,
         index: int,
         label: str,
+        icon_name: Optional[str] = None,
         is_selected: bool = False,
         is_enabled: bool = True
     ):
         """
-        Draw a radial menu slice.
+        Draw a radial menu slice with optional icon.
 
         Args:
             index: Slice index (0-5)
             label: Text label
+            icon_name: Icon name to display (optional)
             is_selected: Highlight this slice
             is_enabled: Slice is active
         """
@@ -162,25 +203,34 @@ class RadialRenderer:
         ]
         self.draw.ellipse(center_bbox, fill=BG_COLOR, outline="#1a1a2e", width=2)
 
-        # Draw label
+        # Calculate position in middle of slice arc
+        center_angle = (angles['start'] + angles['end']) / 2
+        label_radius = (OUTER_RADIUS + INNER_RADIUS) / 2
+
+        angle_rad = math.radians(center_angle)
+        pos_x = CENTER_X + int(label_radius * math.cos(angle_rad))
+        pos_y = CENTER_Y - int(label_radius * math.sin(angle_rad))
+
+        text_color = TEXT_COLOR if is_enabled else "#4a4a5a"
+
+        # Load and draw icon if available
+        icon = self._load_icon(icon_name) if icon_name else None
+        if icon and self.canvas:
+            # Position icon above the label
+            icon_x = pos_x - self.ICON_SIZE // 2
+            icon_y = pos_y - self.ICON_SIZE - 4  # 4px gap above label
+            self.canvas.paste(icon, (icon_x, icon_y), icon)  # Use alpha mask
+
+        # Draw label below icon (or centered if no icon)
         if label:
-            # Calculate label position (middle of slice arc)
-            center_angle = (angles['start'] + angles['end']) / 2
-            label_radius = (OUTER_RADIUS + INNER_RADIUS) / 2
-
-            angle_rad = math.radians(center_angle)
-            label_x = CENTER_X + int(label_radius * math.cos(angle_rad))
-            label_y = CENTER_Y - int(label_radius * math.sin(angle_rad))
-
-            text_color = TEXT_COLOR if is_enabled else "#4a4a5a"
-
-            # Get text bounding box for centering
             bbox = self.draw.textbbox((0, 0), label, font=self.font_label)
             text_width = bbox[2] - bbox[0]
             text_height = bbox[3] - bbox[1]
 
+            # Offset label down if icon is present
+            label_y_offset = 8 if icon else 0
             self.draw.text(
-                (label_x - text_width // 2, label_y - text_height // 2),
+                (pos_x - text_width // 2, pos_y - text_height // 2 + label_y_offset),
                 label,
                 fill=text_color,
                 font=self.font_label
@@ -239,13 +289,25 @@ class RadialRenderer:
             is_selected = (i == state.selected_index)
             # MenuItem has 'enabled' attribute, default to True if not present
             is_enabled = getattr(item, 'enabled', True)
-            self._draw_slice(i, item.label, is_selected, is_enabled)
+            icon_name = getattr(item, 'icon', None)
+            self._draw_slice(i, item.label, icon_name, is_selected, is_enabled)
 
         # Draw center with menu ID as title
         menu_title = state.current_menu.name.replace('_', ' ')
         self._draw_center(menu_title)
 
         return self.canvas
+
+    @staticmethod
+    def hide_cursor():
+        """Hide the TTY cursor to prevent blinking dot on display."""
+        try:
+            # Try to hide cursor on tty1
+            with open('/dev/tty1', 'w') as tty:
+                tty.write('\033[?25l')  # Hide cursor escape sequence
+                tty.flush()
+        except Exception as e:
+            logger.debug(f"Could not hide cursor: {e}")
 
     def write_to_framebuffer(self, fb_path: str = "/dev/fb0"):
         """
@@ -257,6 +319,9 @@ class RadialRenderer:
         if not self.canvas:
             logger.error("No canvas to write")
             return
+
+        # Hide blinking cursor
+        self.hide_cursor()
 
         try:
             # Get framebuffer info from sysfs
