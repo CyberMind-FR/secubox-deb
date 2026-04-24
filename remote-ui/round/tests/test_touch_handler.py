@@ -21,6 +21,7 @@ from touch_handler import (
     GestureState,
     Gesture,
     create_touch_handler,
+    get_slice_from_touch,
     MODULE_RINGS,
     CENTER_X,
     CENTER_Y,
@@ -503,3 +504,49 @@ class TestIntegration:
         await handler.on_swipe_right()
 
         assert switched_to == ["Box-B"]
+
+
+# =============================================================================
+# Tests Slice Detection
+# =============================================================================
+
+class TestSliceDetection:
+    """Tests pour la detection radiale de tranches."""
+
+    def test_center_zone_returns_none(self):
+        """Touch in center zone (radius < 60) returns None."""
+        result = get_slice_from_touch(CENTER_X, CENTER_Y)
+        assert result is None
+        result = get_slice_from_touch(CENTER_X + 50, CENTER_Y)
+        assert result is None
+
+    def test_outside_circle_returns_none(self):
+        """Touch outside visible circle (radius > 220) returns None."""
+        result = get_slice_from_touch(CENTER_X, CENTER_Y - 230)
+        assert result is None
+
+    def test_slice_0_at_top(self):
+        """Slice 0 is at the top (12 o'clock position)."""
+        result = get_slice_from_touch(CENTER_X, CENTER_Y - 150)
+        assert result == 0
+
+    def test_slice_1_at_top_right(self):
+        """Slice 1 is at top-right (2 o'clock position)."""
+        angle = math.radians(60)
+        x = int(CENTER_X + 150 * math.sin(angle))
+        y = int(CENTER_Y - 150 * math.cos(angle))
+        result = get_slice_from_touch(x, y)
+        assert result == 1
+
+    def test_slice_3_at_bottom(self):
+        """Slice 3 is at the bottom (6 o'clock position)."""
+        result = get_slice_from_touch(CENTER_X, CENTER_Y + 150)
+        assert result == 3
+
+    def test_slice_5_at_top_left(self):
+        """Slice 5 is at top-left (10 o'clock position)."""
+        angle = math.radians(-60)
+        x = int(CENTER_X + 150 * math.sin(angle))
+        y = int(CENTER_Y - 150 * math.cos(angle))
+        result = get_slice_from_touch(x, y)
+        assert result == 5
