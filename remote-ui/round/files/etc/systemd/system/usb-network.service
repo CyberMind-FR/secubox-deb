@@ -1,13 +1,15 @@
 [Unit]
 Description=Configure USB OTG Network
 After=secubox-eye-gadget.service
-Wants=secubox-eye-gadget.service
+Requires=secubox-eye-gadget.service
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStartPre=/bin/sleep 2
+# Wait for gadget to fully initialize
+ExecStartPre=/bin/sleep 3
 ExecStart=/usr/local/bin/usb-network-up.sh
+TimeoutStartSec=60
 
 [Install]
 WantedBy=multi-user.target
