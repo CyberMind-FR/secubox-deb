@@ -41,7 +41,7 @@ CENTER_Y = DISPLAY_HEIGHT // 2  # 240
 
 # Seuils de detection des gestes (pixels et millisecondes)
 SWIPE_THRESHOLD = 50            # Distance minimale pour un swipe
-LONG_PRESS_MS = 800             # Duree minimale pour un long press
+LONG_PRESS_MS = 200             # Duree minimale pour un long press (reduced for ghost-heavy hardware)
 TAP_MAX_MS = 200                # Duree maximale pour un tap simple
 SWIPE_TOP_ZONE = 50             # Zone superieure pour swipe down (overlay)
 
@@ -55,7 +55,8 @@ THREE_FINGER_TIMEOUT_MS = 300   # Fenetre pour detecter 3 doigts
 # due to EMI, display interference, or environmental factors.
 
 # Minimum touch duration to consider valid (ms) - filters ultra-short ghost touches
-GHOST_MIN_DURATION_MS = 50
+# Note: set low because hardware generates frequent interruptions; use position/stability for filtering
+GHOST_MIN_DURATION_MS = 20
 
 # Minimum time between end of one gesture and start of next (ms)
 GHOST_DEBOUNCE_MS = 200
@@ -75,6 +76,13 @@ GHOST_MAX_CONTACTS_PER_SEC = 5
 # Track recent contact starts for rate limiting
 GHOST_CONTACT_WINDOW_SEC = 1.0
 
+# Position stability threshold - ghosts jump around, real touches are stable
+GHOST_MAX_Y_RANGE = 80  # Max Y variance during a single touch (ghosts often >200)
+
+# Touch stitching - bridge short gaps caused by ghost interruptions
+GHOST_STITCH_MAX_GAP_MS = 200  # Max gap to consider same touch (extended for noisy hardware)
+GHOST_STITCH_MAX_DISTANCE = 50  # Max position change to stitch
+
 # Rayons des anneaux de modules (depuis CLAUDE.md)
 # L'anneau correspond a la zone touchable autour du rayon indique
 MODULE_RINGS = {
@@ -87,7 +95,7 @@ MODULE_RINGS = {
 }
 
 # Zone centrale (pour long press device list)
-CENTER_RADIUS = 80  # Zone centrale de 80px de rayon
+CENTER_RADIUS = 220  # Zone centrale de 220px de rayon (covers most of 480px screen for noisy touch)
 
 
 # =============================================================================
@@ -170,6 +178,9 @@ class TouchPoint:
     start_y: int = 0        # Position Y initiale
     start_time: float = 0.0 # Timestamp du premier contact
     active: bool = True     # Point encore actif
+    # Ghost filtering: track position stability
+    min_y: int = 9999       # Minimum Y seen during touch
+    max_y: int = 0          # Maximum Y seen during touch
 
 
 @dataclass
@@ -269,6 +280,19 @@ class TouchHandler:
     _contact_start_window: list = field(default_factory=list, repr=False)
     _ghost_filter_enabled: bool = field(default=True, repr=False)
     _ghost_filter_log_suppress: float = field(default=0.0, repr=False)
+
+    # Touch stitching state - bridge short gaps in continuous touches
+    _stitch_last_end_time: float = field(default=0.0, repr=False)
+    _stitch_last_x: int = field(default=0, repr=False)
+    _stitch_last_y: int = field(default=0, repr=False)
+    _stitch_accumulated_time: float = field(default=0.0, repr=False)
+    _stitch_original_start_time: float = field(default=0.0, repr=False)
+
+    # Long press accumulator - track time at center position across ghost interruptions
+    _lp_accum_start: float = field(default=0.0, repr=False)
+    _lp_accum_total_ms: float = field(default=0.0, repr=False)
+    _lp_accum_last_time: float = field(default=0.0, repr=False)
+    _lp_accum_last_pos: tuple = field(default=(0, 0), repr=False)
 
     # ==========================================================================
     # Initialisation et detection du peripherique
@@ -597,6 +621,12 @@ class TouchHandler:
                 slot = self._current_slot
 
                 if event.value >= 0:
+                    # Ghost touch filter: only accept slot 0 to reduce ghost interference
+                    # Multi-touch ghosts often use higher slots
+                    if slot > 0 and self._ghost_filter_enabled:
+                        log.debug("Ghost filter: ignoring slot %d (multi-touch disabled)", slot)
+                        return
+
                     # Ghost touch filter: check if contact rate is excessive
                     if self._is_contact_rate_excessive(now):
                         # Too many contacts starting - likely ghost touches
@@ -606,15 +636,31 @@ class TouchHandler:
                     if self._is_in_debounce_period(now):
                         return
 
+                    # Check for touch stitching - is this a continuation of previous touch?
+                    is_stitch = False
+                    effective_start_time = now
+
+                    if self._stitch_last_end_time > 0:
+                        gap_ms = (now - self._stitch_last_end_time) * 1000
+                        if gap_ms < GHOST_STITCH_MAX_GAP_MS:
+                            # Close enough in time - might be stitching
+                            is_stitch = True
+                            effective_start_time = self._stitch_original_start_time
+                            log.debug("Touch stitch: bridging %.0fms gap", gap_ms)
+
                     # Nouveau contact
                     self._state.touch_points[slot] = TouchPoint(
                         slot=slot,
                         tracking_id=event.value,
                         x=0, y=0,
                         start_x=0, start_y=0,
-                        start_time=now,
+                        start_time=effective_start_time,
                         active=True
                     )
+
+                    # If not stitching, this is a fresh touch - record as potential stitch start
+                    if not is_stitch:
+                        self._stitch_original_start_time = now
 
                     # Premier contact global?
                     if self._state.first_touch_time == 0.0:
@@ -632,8 +678,15 @@ class TouchHandler:
                 else:
                     # Fin de contact (tracking_id = -1)
                     if slot in self._state.touch_points:
-                        self._state.touch_points[slot].active = False
-                        log.debug("Fin contact slot=%d", slot)
+                        tp = self._state.touch_points[slot]
+                        tp.active = False
+
+                        # Save state for potential stitching
+                        self._stitch_last_end_time = now
+                        self._stitch_last_x = tp.x
+                        self._stitch_last_y = tp.y
+
+                        log.debug("Fin contact slot=%d at (%d,%d)", slot, tp.x, tp.y)
 
             elif event.code == evdev.ecodes.ABS_MT_POSITION_X:
                 # Position X
@@ -658,6 +711,10 @@ class TouchHandler:
                     if tp.start_x == 0 and tp.start_y == 0:
                         tp.start_y = event.value
                     tp.y = event.value
+
+                    # Track min/max Y for stability detection
+                    tp.min_y = min(tp.min_y, event.value)
+                    tp.max_y = max(tp.max_y, event.value)
 
                     # Ghost filter: check if position looks suspicious after we have both X and Y
                     if tp.start_x > 0 and tp.start_y > 0:
@@ -730,10 +787,34 @@ class TouchHandler:
                      duration_ms, GHOST_MIN_DURATION_MS)
             return Gesture.NONE
 
-        # Ghost filter: reject if start position was at edge/origin
-        if self._is_ghost_touch_position(primary.start_x, primary.start_y):
-            log.debug("Ghost filter: start position suspicious (%d, %d)",
-                     primary.start_x, primary.start_y)
+        # Ghost filter: check positions (allow if END position is valid, even if start was corrupted)
+        start_suspicious = self._is_ghost_touch_position(primary.start_x, primary.start_y)
+        end_suspicious = self._is_ghost_touch_position(primary.x, primary.y)
+
+        if start_suspicious and end_suspicious:
+            # Both positions bad = definitely ghost
+            log.debug("Ghost filter: both positions suspicious start=(%d,%d) end=(%d,%d)",
+                     primary.start_x, primary.start_y, primary.x, primary.y)
+            return Gesture.NONE
+
+        if start_suspicious and not end_suspicious and duration_ms > 30:
+            # Start was corrupted but end is valid and touch was long enough = likely real
+            log.info("Ghost filter: accepting touch with corrupted start, valid end=(%d,%d)",
+                    primary.x, primary.y)
+            # Use end position as effective position - treat as stationary touch
+            primary.start_x = primary.x
+            primary.start_y = primary.y
+            # Recalculate movement as zero (stationary)
+            dx = 0
+            dy = 0
+            distance = 0
+
+        # Ghost filter: reject unstable Y positions (ghosts jump around vertically)
+        y_range = primary.max_y - primary.min_y
+        if y_range > GHOST_MAX_Y_RANGE and distance < SWIPE_THRESHOLD:
+            # Large Y variance but small total movement = ghost, not swipe
+            log.debug("Ghost filter: unstable Y position (range=%d > %d)",
+                     y_range, GHOST_MAX_Y_RANGE)
             return Gesture.NONE
 
         # 1. Three-finger tap (emergency lockdown)
@@ -743,7 +824,12 @@ class TouchHandler:
                 return Gesture.THREE_FINGER_TAP
 
         # 2. Swipe horizontal (changement de SecuBox)
-        if abs(dx) > SWIPE_THRESHOLD and abs(dx) > abs(dy) * 1.5:
+        # Require minimum duration and non-edge start to filter ghost swipes
+        start_at_edge = (primary.start_x < GHOST_EDGE_MARGIN or
+                        primary.start_x > DISPLAY_WIDTH - GHOST_EDGE_MARGIN or
+                        primary.start_y < GHOST_EDGE_MARGIN or
+                        primary.start_y > DISPLAY_HEIGHT - GHOST_EDGE_MARGIN)
+        if abs(dx) > SWIPE_THRESHOLD and abs(dx) > abs(dy) * 1.5 and duration_ms > 200 and not start_at_edge:
             if dx < 0:
                 log.info("Geste detecte: SWIPE_LEFT (dx=%d)", dx)
                 return Gesture.SWIPE_LEFT
@@ -752,21 +838,90 @@ class TouchHandler:
                 return Gesture.SWIPE_RIGHT
 
         # 3. Swipe down depuis le haut (toggle overlay)
+        # Require minimum duration and non-edge start position to filter ghost swipes
         if (dy > SWIPE_THRESHOLD and
             primary.start_y < SWIPE_TOP_ZONE and
-            abs(dy) > abs(dx) * 1.5):
+            primary.start_y > GHOST_EDGE_MARGIN and  # Not at edge (ghost filter)
+            abs(dy) > abs(dx) * 1.5 and
+            duration_ms > 200):  # Longer duration to filter ghosts
             log.info("Geste detecte: SWIPE_DOWN (from top)")
             return Gesture.SWIPE_DOWN
 
-        # 4. Long press au centre (device list)
-        if duration_ms > LONG_PRESS_MS and distance < SWIPE_THRESHOLD / 2:
-            dist_from_center = math.sqrt(
-                (primary.x - CENTER_X) ** 2 +
-                (primary.y - CENTER_Y) ** 2
-            )
-            if dist_from_center < CENTER_RADIUS:
-                log.info("Geste detecte: LONG_PRESS (center)")
+        # 3b. Swipe up depuis le bas (enter menu - replaces long press for ghost-heavy hardware)
+        # Note: ghost-corrupted starts have start_y=0, so we detect by END position in top zone
+        # If start was corrupted (near 0) and end is in top half with large movement, it's swipe-up
+        start_corrupted = primary.start_y < GHOST_EDGE_MARGIN
+        end_in_top_zone = primary.y < CENTER_Y - 40  # Top zone (y < 200)
+        large_vertical_movement = abs(dy) > SWIPE_THRESHOLD * 1.5
+
+        log.debug("SWIPE_UP check: start_y=%d corrupted=%s end_y=%d in_top=%s dy=%d large=%s dur=%dms",
+                 primary.start_y, start_corrupted, primary.y, end_in_top_zone, dy, large_vertical_movement, duration_ms)
+
+        if (start_corrupted and end_in_top_zone and large_vertical_movement and
+            abs(dy) > abs(dx) * 1.2 and duration_ms > 20):
+            log.info("Geste detecte: SWIPE_UP (from bottom, corrupted start) - enter menu")
+            return Gesture.SWIPE_UP
+
+        # Normal swipe up (non-corrupted start)
+        SWIPE_BOTTOM_ZONE = DISPLAY_HEIGHT - 80  # Bottom 80px
+        if (dy < -SWIPE_THRESHOLD and  # Negative dy = upward
+            primary.start_y > SWIPE_BOTTOM_ZONE and
+            abs(dy) > abs(dx) * 1.5 and
+            duration_ms > 150):
+            log.info("Geste detecte: SWIPE_UP (from bottom) - enter menu")
+            return Gesture.SWIPE_UP
+
+        # 4. Long press au centre (disabled - unreliable with ghost touch hardware)
+        dist_from_center = math.sqrt(
+            (primary.x - CENTER_X) ** 2 +
+            (primary.y - CENTER_Y) ** 2
+        )
+        log.debug("Long press check: dur=%.0fms (>%d?) dist=%.0f (<%d?) center_dist=%.0f (<%d?)",
+                 duration_ms, LONG_PRESS_MS, distance, SWIPE_THRESHOLD // 2,
+                 dist_from_center, CENTER_RADIUS)
+
+        # Check long press with accumulator for ghost-interrupted touches
+        # Long press detection - accumulate qualifying touches regardless of position
+        # (position consistency disabled due to hardware ghost touch defect)
+        MIN_DURATION_FOR_ACCUM = 25  # ms - minimum touch duration to count
+        MIN_TOUCHES_FOR_LP = 5       # Need 5+ qualifying touches
+        ACCUM_TIMEOUT_MS = 3000      # Reset if no qualifying touch for 3s
+
+        if distance < SWIPE_THRESHOLD / 2 and dist_from_center < CENTER_RADIUS:
+            now = time.time()
+            time_since_last = (now - self._lp_accum_last_time) * 1000 if self._lp_accum_last_time > 0 else 9999
+
+            # Only count touches with minimum duration
+            if duration_ms >= MIN_DURATION_FOR_ACCUM:
+                if time_since_last < ACCUM_TIMEOUT_MS:
+                    # Continuation - add to accumulator
+                    self._lp_accum_total_ms += duration_ms
+                    self._lp_accum_count = getattr(self, '_lp_accum_count', 0) + 1
+                else:
+                    # Timeout - new sequence
+                    self._lp_accum_total_ms = duration_ms
+                    self._lp_accum_count = 1
+
+                self._lp_accum_last_time = now
+                log.debug("Long press accumulator: %.0fms total=%.0fms count=%d",
+                         duration_ms, self._lp_accum_total_ms, self._lp_accum_count)
+
+            # Check if both thresholds met
+            accum_count = getattr(self, '_lp_accum_count', 0)
+            if self._lp_accum_total_ms > LONG_PRESS_MS and accum_count >= MIN_TOUCHES_FOR_LP:
+                log.info("Geste detecte: LONG_PRESS - %.0fms over %d touches",
+                        self._lp_accum_total_ms, accum_count)
+                self._lp_accum_total_ms = 0
+                self._lp_accum_count = 0
                 return Gesture.LONG_PRESS
+            else:
+                return Gesture.NONE
+        else:
+            # Touch not at center - only reset if clearly outside (not a ghost at edge)
+            # Don't reset for ghost touches that land far from center
+            if dist_from_center > CENTER_RADIUS * 2:  # Very far from center = intentional move away
+                self._lp_accum_total_ms = 0
+                log.debug("Long press accumulator reset: touch too far from center (%.0f)", dist_from_center)
 
         # 5. Tap simple
         if duration_ms < TAP_MAX_MS and distance < SWIPE_THRESHOLD / 2:
@@ -851,6 +1006,12 @@ class TouchHandler:
         # Long press centre: toggle menu (si menu navigator configure)
         if gesture == Gesture.LONG_PRESS:
             await self.on_long_press_center()
+            return
+
+        # Swipe up from bottom: enter menu (alternative to long press for ghost-heavy hardware)
+        if gesture == Gesture.SWIPE_UP:
+            log.info("SWIPE_UP detected - entering menu")
+            await self.on_long_press_center()  # Reuse same handler
             return
 
         # Si en mode menu, router differemment
