@@ -1,0 +1,6 @@
+# SecuBox Eye Remote - USB OTG network auto-configuration
+# Detects Pi Zero gadget and configures host IP
+
+# Match CDC-ECM gadget by MAC address prefix 02:00:00:00:00:01
+ACTION=="add", SUBSYSTEM=="net", ATTR{address}=="02:00:00:00:00:01", \
+    RUN+="/usr/local/bin/secubox-otg-host-up.sh %k"
