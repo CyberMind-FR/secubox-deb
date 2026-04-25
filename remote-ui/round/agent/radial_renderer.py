@@ -120,11 +120,9 @@ class RadialRenderer:
                     resample = getattr(Image, 'Resampling', Image).LANCZOS
                     icon = icon.resize((self.ICON_SIZE, self.ICON_SIZE), resample)
 
-                    # Convert to white icon using alpha channel
-                    # This ensures visibility on colored slice backgrounds
-                    r, g, b, a = icon.split()
-                    white = Image.new("L", icon.size, 255)  # White layer
-                    icon = Image.merge("RGBA", (white, white, white, a))
+                    # Icons are colored shapes - just use original with alpha
+                    # The slice colors are different enough for contrast
+                    pass  # Keep original RGBA icon as-is
 
                     self._icon_cache[name] = icon
                     logger.info(f"Loaded: {name}")

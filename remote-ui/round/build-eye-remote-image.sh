@@ -400,6 +400,7 @@ framebuffer_height=480
 # The LCD init uses pigpio software SPI (bit-banging).
 
 # USB OTG Gadget (composite ECM + ACM)
+# dr_mode is set via modprobe options in /etc/modprobe.d/secubox-otg.conf
 dtoverlay=dwc2
 CONFIGEOF
 
