@@ -49,12 +49,6 @@ HIGHLIGHT_COLOR = "#00ff41"  # matrix-green
 class RadialRenderer:
     """Renders radial menus to 480x480 circular display."""
 
-    # Icon directory paths (try multiple locations)
-    ICON_DIRS = [
-        Path(__file__).parent.parent / "assets" / "icons",  # Relative to module
-        Path("/usr/lib/secubox-eye/assets/icons"),          # System install
-        Path("/usr/share/secubox-eye/icons"),               # Alternative
-    ]
     ICON_SIZE = 40  # Icon size in pixels
 
     def __init__(self):
@@ -67,14 +61,17 @@ class RadialRenderer:
         # Icon cache
         self._icon_cache: dict[str, Image.Image] = {}
 
-        # Log icon directory status
-        logger.info("=== Checking icon directories ===")
-        for icon_dir in self.ICON_DIRS:
-            if icon_dir.exists():
-                icon_count = len(list(icon_dir.glob("*.png")))
-                logger.info(f"  [OK] {icon_dir} ({icon_count} icons)")
-            else:
-                logger.warning(f"  [--] {icon_dir} (not found)")
+        # Icon directories - use absolute paths only
+        self.icon_dir = Path("/usr/lib/secubox-eye/assets/icons")
+
+        # Verify icon directory exists and has icons
+        if self.icon_dir.exists():
+            icons = list(self.icon_dir.glob("*.png"))
+            logger.info(f"Icon directory: {self.icon_dir} ({len(icons)} icons)")
+            if icons:
+                logger.info(f"Sample icons: {[i.name for i in icons[:5]]}")
+        else:
+            logger.error(f"ICON DIRECTORY NOT FOUND: {self.icon_dir}")
 
         # Try to load fonts
         self.font_title = self._load_font(24)
@@ -100,6 +97,7 @@ class RadialRenderer:
     def _load_icon(self, name: str) -> Optional[Image.Image]:
         """
         Load and cache an icon by name.
+        Icons are converted to white using their alpha as mask.
 
         Args:
             name: Icon name without extension (e.g., "devices")
@@ -113,27 +111,29 @@ class RadialRenderer:
         if name in self._icon_cache:
             return self._icon_cache[name]
 
-        # Try each icon directory
-        for icon_dir in self.ICON_DIRS:
-            if not icon_dir.exists():
-                continue
+        # Try sizes: 48px preferred, then 22px, then 96px
+        for size in [48, 22, 96]:
+            icon_path = self.icon_dir / f"{name}-{size}.png"
+            if icon_path.exists():
+                try:
+                    icon = Image.open(icon_path).convert("RGBA")
+                    resample = getattr(Image, 'Resampling', Image).LANCZOS
+                    icon = icon.resize((self.ICON_SIZE, self.ICON_SIZE), resample)
 
-            # Try different sizes: 48px preferred, then 22px, then 96px
-            for size in [48, 22, 96]:
-                icon_path = icon_dir / f"{name}-{size}.png"
-                if icon_path.exists():
-                    try:
-                        icon = Image.open(icon_path).convert("RGBA")
-                        # Use LANCZOS resampling (Pillow 10+ uses Resampling enum)
-                        resample = getattr(Image, 'Resampling', Image).LANCZOS
-                        icon = icon.resize((self.ICON_SIZE, self.ICON_SIZE), resample)
-                        self._icon_cache[name] = icon
-                        logger.info(f"Loaded icon: {icon_path}")
-                        return icon
-                    except Exception as e:
-                        logger.warning(f"Failed to load icon {icon_path}: {e}")
+                    # Convert to white icon using alpha channel
+                    # This ensures visibility on colored slice backgrounds
+                    r, g, b, a = icon.split()
+                    white = Image.new("L", icon.size, 255)  # White layer
+                    icon = Image.merge("RGBA", (white, white, white, a))
 
-        logger.warning(f"Icon not found in any directory: {name}")
+                    self._icon_cache[name] = icon
+                    logger.info(f"Loaded: {name}")
+                    return icon
+                except Exception as e:
+                    logger.error(f"Icon load failed {icon_path}: {e}")
+                    return None
+
+        logger.error(f"Icon not found: {name}")
         return None
 
     def get_slice_angles(self, index: int) -> dict:
@@ -223,34 +223,40 @@ class RadialRenderer:
         ]
         self.draw.ellipse(center_bbox, fill=BG_COLOR, outline="#1a1a2e", width=2)
 
-        # Calculate position in middle of slice arc
+        # Calculate radial positions for icon and label
         center_angle = (angles['start'] + angles['end']) / 2
-        label_radius = (OUTER_RADIUS + INNER_RADIUS) / 2
-
         angle_rad = math.radians(center_angle)
-        pos_x = CENTER_X + int(label_radius * math.cos(angle_rad))
-        pos_y = CENTER_Y - int(label_radius * math.sin(angle_rad))
+
+        # Icon at outer radius, label at inner radius (both radial)
+        icon_radius = (OUTER_RADIUS + INNER_RADIUS) / 2 + 15  # Towards outer edge
+        label_radius = (OUTER_RADIUS + INNER_RADIUS) / 2 - 15  # Towards inner edge
 
         text_color = TEXT_COLOR if is_enabled else "#4a4a5a"
 
         # Load and draw icon if available
         icon = self._load_icon(icon_name) if icon_name else None
         if icon and self.canvas:
-            # Position icon above the label
-            icon_x = pos_x - self.ICON_SIZE // 2
-            icon_y = pos_y - self.ICON_SIZE - 4  # 4px gap above label
+            # Position icon radially (further from center)
+            icon_cx = CENTER_X + int(icon_radius * math.cos(angle_rad))
+            icon_cy = CENTER_Y - int(icon_radius * math.sin(angle_rad))
+            icon_x = icon_cx - self.ICON_SIZE // 2
+            icon_y = icon_cy - self.ICON_SIZE // 2
             self.canvas.paste(icon, (icon_x, icon_y), icon)  # Use alpha mask
+            logger.debug(f"Icon '{icon_name}' at ({icon_x}, {icon_y})")
 
-        # Draw label below icon (or centered if no icon)
+        # Draw label radially (closer to center than icon)
         if label:
+            # Use label radius if icon present, otherwise use middle radius
+            actual_label_radius = label_radius if icon else (OUTER_RADIUS + INNER_RADIUS) / 2
+            label_cx = CENTER_X + int(actual_label_radius * math.cos(angle_rad))
+            label_cy = CENTER_Y - int(actual_label_radius * math.sin(angle_rad))
+
             bbox = self.draw.textbbox((0, 0), label, font=self.font_label)
             text_width = bbox[2] - bbox[0]
             text_height = bbox[3] - bbox[1]
 
-            # Offset label down if icon is present
-            label_y_offset = 8 if icon else 0
             self.draw.text(
-                (pos_x - text_width // 2, pos_y - text_height // 2 + label_y_offset),
+                (label_cx - text_width // 2, label_cy - text_height // 2),
                 label,
                 fill=text_color,
                 font=self.font_label
