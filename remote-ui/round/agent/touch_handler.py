@@ -48,6 +48,33 @@ SWIPE_TOP_ZONE = 50             # Zone superieure pour swipe down (overlay)
 # Multi-touch
 THREE_FINGER_TIMEOUT_MS = 300   # Fenetre pour detecter 3 doigts
 
+# =============================================================================
+# Ghost Touch Filtering (HyperPixel 2.1 Round ft5x06 workaround)
+# =============================================================================
+# The ft5x06 capacitive touch controller can generate spurious events
+# due to EMI, display interference, or environmental factors.
+
+# Minimum touch duration to consider valid (ms) - filters ultra-short ghost touches
+GHOST_MIN_DURATION_MS = 50
+
+# Minimum time between end of one gesture and start of next (ms)
+GHOST_DEBOUNCE_MS = 200
+
+# Edge zones to ignore (pixels from screen edge) - ghost touches often at edges
+GHOST_EDGE_MARGIN = 8
+
+# Minimum position values to consider valid (sometimes ghost at 0,0)
+GHOST_MIN_POS = 5
+
+# Maximum rate of touch events per second before considered noise
+GHOST_MAX_EVENTS_PER_SEC = 80
+
+# Maximum rate of new touch contacts per second (real users can't tap this fast)
+GHOST_MAX_CONTACTS_PER_SEC = 5
+
+# Track recent contact starts for rate limiting
+GHOST_CONTACT_WINDOW_SEC = 1.0
+
 # Rayons des anneaux de modules (depuis CLAUDE.md)
 # L'anneau correspond a la zone touchable autour du rayon indique
 MODULE_RINGS = {
@@ -236,6 +263,13 @@ class TouchHandler:
     # Slot courant pour multi-touch
     _current_slot: int = field(default=0, repr=False)
 
+    # Ghost touch filtering state
+    _last_gesture_end: float = field(default=0.0, repr=False)
+    _event_count_window: list = field(default_factory=list, repr=False)
+    _contact_start_window: list = field(default_factory=list, repr=False)
+    _ghost_filter_enabled: bool = field(default=True, repr=False)
+    _ghost_filter_log_suppress: float = field(default=0.0, repr=False)
+
     # ==========================================================================
     # Initialisation et detection du peripherique
     # ==========================================================================
@@ -394,6 +428,116 @@ class TouchHandler:
         self._on_menu_render = callback
 
     # ==========================================================================
+    # Ghost Touch Filtering
+    # ==========================================================================
+
+    def _is_ghost_touch_position(self, x: int, y: int) -> bool:
+        """
+        Verifier si une position est probablement un ghost touch.
+
+        Args:
+            x: Position X
+            y: Position Y
+
+        Returns:
+            True si la position semble etre un ghost touch
+        """
+        if not self._ghost_filter_enabled:
+            return False
+
+        # Position (0, 0) ou tres proche - souvent ghost
+        if x < GHOST_MIN_POS and y < GHOST_MIN_POS:
+            log.debug("Ghost filter: position near origin (%d, %d)", x, y)
+            return True
+
+        # Position dans les marges extremes de l'ecran
+        if (x < GHOST_EDGE_MARGIN or x > DISPLAY_WIDTH - GHOST_EDGE_MARGIN or
+            y < GHOST_EDGE_MARGIN or y > DISPLAY_HEIGHT - GHOST_EDGE_MARGIN):
+            log.debug("Ghost filter: position at edge (%d, %d)", x, y)
+            return True
+
+        return False
+
+    def _is_event_rate_excessive(self, now: float) -> bool:
+        """
+        Verifier si le taux d'evenements est excessif (indicateur de bruit).
+
+        Args:
+            now: Timestamp actuel
+
+        Returns:
+            True si le taux d'evenements semble anormal
+        """
+        if not self._ghost_filter_enabled:
+            return False
+
+        # Nettoyer les evenements anciens (plus de 1 seconde)
+        cutoff = now - 1.0
+        self._event_count_window = [t for t in self._event_count_window if t > cutoff]
+
+        # Ajouter l'evenement actuel
+        self._event_count_window.append(now)
+
+        # Verifier le taux
+        if len(self._event_count_window) > GHOST_MAX_EVENTS_PER_SEC:
+            # Suppress excessive logging (only log once per second)
+            if now - self._ghost_filter_log_suppress > 1.0:
+                log.debug("Ghost filter: excessive event rate (%d/sec)",
+                         len(self._event_count_window))
+                self._ghost_filter_log_suppress = now
+            return True
+
+        return False
+
+    def _is_contact_rate_excessive(self, now: float) -> bool:
+        """
+        Verifier si le taux de nouveaux contacts est excessif.
+
+        Real users cannot start more than ~5 touch contacts per second.
+
+        Args:
+            now: Timestamp actuel
+
+        Returns:
+            True si trop de contacts ont commence recemment
+        """
+        if not self._ghost_filter_enabled:
+            return False
+
+        # Nettoyer les contacts anciens
+        cutoff = now - GHOST_CONTACT_WINDOW_SEC
+        self._contact_start_window = [t for t in self._contact_start_window if t > cutoff]
+
+        # Verifier le taux
+        if len(self._contact_start_window) >= GHOST_MAX_CONTACTS_PER_SEC:
+            return True
+
+        # Enregistrer ce nouveau contact
+        self._contact_start_window.append(now)
+        return False
+
+    def _is_in_debounce_period(self, now: float) -> bool:
+        """
+        Verifier si on est dans la periode de debounce apres un geste.
+
+        Args:
+            now: Timestamp actuel
+
+        Returns:
+            True si on doit ignorer les touches (debounce)
+        """
+        if not self._ghost_filter_enabled:
+            return False
+
+        if self._last_gesture_end > 0:
+            elapsed_ms = (now - self._last_gesture_end) * 1000
+            if elapsed_ms < GHOST_DEBOUNCE_MS:
+                log.debug("Ghost filter: in debounce period (%.0fms)", elapsed_ms)
+                return True
+
+        return False
+
+    # ==========================================================================
     # Boucle d'evenements evdev
     # ==========================================================================
 
@@ -438,6 +582,9 @@ class TouchHandler:
 
         now = time.time()
 
+        # Track event rate (for statistics, doesn't block processing)
+        self._is_event_rate_excessive(now)
+
         if event.type == evdev.ecodes.EV_ABS:
             # Evenement de position absolue
 
@@ -450,6 +597,15 @@ class TouchHandler:
                 slot = self._current_slot
 
                 if event.value >= 0:
+                    # Ghost touch filter: check if contact rate is excessive
+                    if self._is_contact_rate_excessive(now):
+                        # Too many contacts starting - likely ghost touches
+                        return
+
+                    # Ghost touch filter: check debounce
+                    if self._is_in_debounce_period(now):
+                        return
+
                     # Nouveau contact
                     self._state.touch_points[slot] = TouchPoint(
                         slot=slot,
@@ -488,6 +644,12 @@ class TouchHandler:
                         tp.start_x = event.value
                     tp.x = event.value
 
+                    # Ghost filter: check if position looks suspicious after we have both X and Y
+                    if tp.start_x > 0 and tp.start_y > 0:
+                        if self._is_ghost_touch_position(tp.start_x, tp.start_y):
+                            log.debug("Ghost filter: invalidating touch at edge/origin")
+                            tp.active = False
+
             elif event.code == evdev.ecodes.ABS_MT_POSITION_Y:
                 # Position Y
                 slot = self._current_slot
@@ -496,6 +658,12 @@ class TouchHandler:
                     if tp.start_x == 0 and tp.start_y == 0:
                         tp.start_y = event.value
                     tp.y = event.value
+
+                    # Ghost filter: check if position looks suspicious after we have both X and Y
+                    if tp.start_x > 0 and tp.start_y > 0:
+                        if self._is_ghost_touch_position(tp.start_x, tp.start_y):
+                            log.debug("Ghost filter: invalidating touch at edge/origin")
+                            tp.active = False
 
         elif event.type == evdev.ecodes.EV_SYN:
             if event.code == evdev.ecodes.SYN_REPORT:
@@ -508,6 +676,9 @@ class TouchHandler:
                     gesture = self._detect_gesture()
                     if gesture != Gesture.NONE:
                         await self._execute_gesture(gesture)
+
+                    # Update debounce timestamp (even if gesture was filtered)
+                    self._last_gesture_end = now
 
                     # Reset pour le prochain geste
                     self._state.reset()
@@ -552,6 +723,18 @@ class TouchHandler:
             "Analyse geste: fingers=%d duration=%.0fms dx=%d dy=%d dist=%.0f",
             state.max_touch_count, duration_ms, dx, dy, distance
         )
+
+        # Ghost filter: reject ultra-short touches (likely noise)
+        if duration_ms < GHOST_MIN_DURATION_MS:
+            log.debug("Ghost filter: touch too short (%.0fms < %dms)",
+                     duration_ms, GHOST_MIN_DURATION_MS)
+            return Gesture.NONE
+
+        # Ghost filter: reject if start position was at edge/origin
+        if self._is_ghost_touch_position(primary.start_x, primary.start_y):
+            log.debug("Ghost filter: start position suspicious (%d, %d)",
+                     primary.start_x, primary.start_y)
+            return Gesture.NONE
 
         # 1. Three-finger tap (emergency lockdown)
         if state.max_touch_count >= 3:
