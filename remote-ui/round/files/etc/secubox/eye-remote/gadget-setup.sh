@@ -103,11 +103,14 @@ check_prerequisites() {
     modprobe usb_f_acm 2>/dev/null || true
     modprobe usb_f_mass_storage 2>/dev/null || true
 
-    # Verify UDC availability
-    if [[ ! -d /sys/class/udc ]] || [[ -z "$(find /sys/class/udc -maxdepth 1 -type d ! -name 'udc' -print -quit 2>/dev/null || true)" ]]; then
+    # Verify UDC availability - use ls instead of find (sysfs symlinks)
+    local udc_list
+    udc_list=$(ls /sys/class/udc/ 2>/dev/null | head -1)
+    if [[ -z "$udc_list" ]]; then
         err "No UDC found (this script requires RPi Zero W)"
         return 1
     fi
+    debug "UDC detected: $udc_list"
 
     return 0
 }
@@ -172,40 +175,59 @@ gadget_up() {
     debug "Creating ACM function..."
     mkdir -p functions/acm.usb0
 
-    # ──── Function 3: Mass Storage (Boot media LUN) ────────────────────────────
-    debug "Creating mass_storage function..."
-    mkdir -p functions/mass_storage.usb0
-
-    # Set up mass storage configuration
-    # The backing file will be /var/lib/secubox/eye-remote/boot-media/active
-    # Start with empty backing file (will be populated by boot_media.py)
+    # ──── Function 3: Mass Storage (Boot media LUN) - OPTIONAL ─────────────────
+    # Mass storage is optional - if it fails, continue with ECM+ACM only
+    local mass_storage_ok=false
     mkdir -p "$BOOT_MEDIA_DIR"
-    if [[ ! -f "$BOOT_MEDIA_ACTIVE" ]]; then
-        # Create empty file as placeholder
-        touch "$BOOT_MEDIA_ACTIVE"
+
+    # Resolve symlink to actual file path (kernel configfs doesn't follow symlinks)
+    local boot_media_file=""
+    if [[ -L "$BOOT_MEDIA_ACTIVE" ]]; then
+        boot_media_file=$(readlink -f "$BOOT_MEDIA_ACTIVE" 2>/dev/null || true)
+    elif [[ -f "$BOOT_MEDIA_ACTIVE" ]]; then
+        boot_media_file="$BOOT_MEDIA_ACTIVE"
     fi
 
-    echo "$BOOT_MEDIA_ACTIVE" > functions/mass_storage.usb0/lun.0/file
-    echo 1 > functions/mass_storage.usb0/lun.0/removable
-    echo 0 > functions/mass_storage.usb0/lun.0/ro       # Read-write
-    echo 0 > functions/mass_storage.usb0/lun.0/cdrom
-    echo 0 > functions/mass_storage.usb0/lun.0/nofua
-    echo 1 > functions/mass_storage.usb0/lun.0/stall    # Allow error handling
+    # Only setup mass_storage if we have a valid backing file with actual content
+    if [[ -n "$boot_media_file" ]] && [[ -f "$boot_media_file" ]] && [[ -s "$boot_media_file" ]]; then
+        debug "Setting up mass_storage with: $boot_media_file"
+        if mkdir -p functions/mass_storage.usb0 2>/dev/null; then
+            if echo "$boot_media_file" > functions/mass_storage.usb0/lun.0/file 2>/dev/null; then
+                echo 1 > functions/mass_storage.usb0/lun.0/removable 2>/dev/null || true
+                echo 0 > functions/mass_storage.usb0/lun.0/ro 2>/dev/null || true
+                echo 0 > functions/mass_storage.usb0/lun.0/cdrom 2>/dev/null || true
+                echo 0 > functions/mass_storage.usb0/lun.0/nofua 2>/dev/null || true
+                mass_storage_ok=true
+                debug "mass_storage configured successfully"
+            else
+                log "WARNING: mass_storage LUN file write failed, continuing without it"
+                rmdir functions/mass_storage.usb0 2>/dev/null || true
+            fi
+        fi
+    else
+        log "No valid boot media, skipping mass_storage (ECM+ACM only)"
+    fi
 
     # ──── Create composite configuration ──────────────────────────────────────
     debug "Creating composite configuration..."
     mkdir -p configs/c.1/strings/0x409
-    echo "SecuBox Eye Remote (ECM + ACM + Mass Storage)" > configs/c.1/strings/0x409/configuration
+    if [[ "$mass_storage_ok" == "true" ]]; then
+        echo "SecuBox Eye Remote (ECM + ACM + Mass Storage)" > configs/c.1/strings/0x409/configuration
+    else
+        echo "SecuBox Eye Remote (ECM + ACM)" > configs/c.1/strings/0x409/configuration
+    fi
     echo 500 > configs/c.1/MaxPower  # 500 mA
 
     # Link functions to configuration
     ln -sf ../../functions/ecm.usb0 configs/c.1/
     ln -sf ../../functions/acm.usb0 configs/c.1/
-    ln -sf ../../functions/mass_storage.usb0 configs/c.1/
+    if [[ "$mass_storage_ok" == "true" ]]; then
+        ln -sf ../../functions/mass_storage.usb0 configs/c.1/
+    fi
 
     # ──── Bind to UDC ────────────────────────────────────────────────────────
     local udc
-    udc=$(find /sys/class/udc -maxdepth 1 -type d ! -name 'udc' -printf '%f' | head -1)
+    udc=$(ls /sys/class/udc/ 2>/dev/null | head -1)
     if [[ -z "$udc" ]]; then
         err "No UDC found for binding"
         return 1
