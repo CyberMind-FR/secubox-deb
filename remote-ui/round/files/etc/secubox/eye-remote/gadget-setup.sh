@@ -103,15 +103,29 @@ check_prerequisites() {
     modprobe usb_f_acm 2>/dev/null || true
     modprobe usb_f_mass_storage 2>/dev/null || true
 
-    # Verify UDC availability - use ls instead of find (sysfs symlinks)
-    local udc_list
-    udc_list=$(ls /sys/class/udc/ 2>/dev/null | head -1)
+    # Wait for UDC to become available (dwc2 needs time to initialize)
+    # This is critical at boot when the service starts before dwc2 is ready
+    local udc_list=""
+    local wait_count=0
+    local max_wait=30  # 30 × 0.5s = 15 seconds max
+
+    log "Waiting for UDC (USB Device Controller)..."
+    while [[ -z "$udc_list" ]] && [[ $wait_count -lt $max_wait ]]; do
+        udc_list=$(ls /sys/class/udc/ 2>/dev/null | head -1)
+        if [[ -z "$udc_list" ]]; then
+            sleep 0.5
+            ((wait_count++))
+            [[ $((wait_count % 4)) -eq 0 ]] && debug "Still waiting for UDC... (${wait_count}/${max_wait})"
+        fi
+    done
+
     if [[ -z "$udc_list" ]]; then
-        err "No UDC found (this script requires RPi Zero W)"
+        err "No UDC found after ${max_wait} attempts (this script requires RPi Zero W)"
+        err "Check: dtoverlay=dwc2 in /boot/firmware/config.txt"
         return 1
     fi
-    debug "UDC detected: $udc_list"
 
+    log "UDC detected: $udc_list (after $((wait_count)) waits)"
     return 0
 }
 
