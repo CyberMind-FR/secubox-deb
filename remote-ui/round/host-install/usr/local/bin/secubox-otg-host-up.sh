@@ -23,4 +23,14 @@ sleep 1
 ip addr add "$HOST_IP" dev "$IFACE" 2>/dev/null || true
 ip link set "$IFACE" up
 
+# Enable NAT for Pi internet access
+sysctl -w net.ipv4.ip_forward=1 >> "$LOG" 2>&1
+# Find default route interface and add masquerade
+DEFAULT_IFACE=$(ip route get 8.8.8.8 2>/dev/null | grep -oP 'dev \K\S+')
+if [[ -n "$DEFAULT_IFACE" ]]; then
+    iptables -t nat -C POSTROUTING -s 10.55.0.0/30 -o "$DEFAULT_IFACE" -j MASQUERADE 2>/dev/null || \
+    iptables -t nat -A POSTROUTING -s 10.55.0.0/30 -o "$DEFAULT_IFACE" -j MASQUERADE
+    echo "$(date): NAT enabled via $DEFAULT_IFACE" >> "$LOG"
+fi
+
 echo "$(date): $IFACE configured" >> "$LOG"

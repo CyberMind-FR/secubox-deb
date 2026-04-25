@@ -33,6 +33,9 @@ ip link set "$IFACE" up
 # Add route (optional, may fail if already exists)
 ip route add default via 10.55.0.1 dev "$IFACE" 2>/dev/null || true
 
+# Configure DNS (use Google DNS via host NAT)
+echo "nameserver 8.8.8.8" > /etc/resolv.conf 2>/dev/null || true
+
 echo "Configured: $IFACE = 10.55.0.2/30"
 ip addr show "$IFACE" | grep inet
 logger -t "eye-remote" "USB network: $IFACE = 10.55.0.2/30"
