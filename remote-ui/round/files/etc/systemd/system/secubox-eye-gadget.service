@@ -1,14 +1,20 @@
 [Unit]
 Description=SecuBox Eye Remote USB Gadget (ECM+ACM+mass_storage)
-After=systemd-modules-load.service
+After=systemd-modules-load.service sys-kernel-config.mount
 Before=network.target
+# Wait for dwc2 UDC to initialize (handled by wait loop in script)
+DefaultDependencies=no
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
+# Load dwc2 first (creates UDC), then libcomposite
+ExecStartPre=/sbin/modprobe dwc2
 ExecStartPre=/sbin/modprobe libcomposite
 ExecStart=/etc/secubox/eye-remote/gadget-setup.sh up
 ExecStop=/etc/secubox/eye-remote/gadget-setup.sh down
+# Give extra time for UDC initialization
+TimeoutStartSec=60
 
 [Install]
 WantedBy=multi-user.target
