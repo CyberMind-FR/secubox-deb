@@ -1,0 +1,59 @@
+<h2>Architecture Approaches</h2>
+<p class="subtitle">How should we structure the Eye Remote Swiss Army system?</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Unified Python Agent (Recommended)</h3>
+      <p>Single Python process handles everything:</p>
+      <ul style="font-size: 13px; color: #aaa; margin: 8px 0;">
+        <li><strong>fb_dashboard.py</strong> — Framebuffer renderer (existing, extended)</li>
+        <li><strong>FastAPI server</strong> — Web Remote at :8080 (embedded)</li>
+        <li><strong>Mode state machine</strong> — Handles transitions & failover</li>
+        <li><strong>System controls</strong> — WiFi/BT/Display via subprocess calls</li>
+      </ul>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Single process = simple deployment</li><li>Shared state, no IPC needed</li><li>Extends existing code</li><li>Low memory footprint</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Crash affects everything</li><li>Blocking operations need async care</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Microservices (Systemd Units)</h3>
+      <p>Separate services communicating via Unix sockets:</p>
+      <ul style="font-size: 13px; color: #aaa; margin: 8px 0;">
+        <li><strong>eye-display.service</strong> — Framebuffer renderer only</li>
+        <li><strong>eye-web.service</strong> — FastAPI Web Remote</li>
+        <li><strong>eye-agent.service</strong> — Mode logic & SecuBox comms</li>
+        <li><strong>eye-system.service</strong> — WiFi/BT/System controls</li>
+      </ul>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Isolated failures</li><li>Independent restarts</li><li>Cleaner separation</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>More complexity</li><li>IPC overhead</li><li>Higher memory on Pi Zero</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Hybrid: Core Agent + Web Sidecar</h3>
+      <p>Two processes with clear responsibilities:</p>
+      <ul style="font-size: 13px; color: #aaa; margin: 8px 0;">
+        <li><strong>eye-agent</strong> — Display + Mode + SecuBox (critical path)</li>
+        <li><strong>eye-web</strong> — Web Remote + System controls (optional)</li>
+        <li>Communication via shared JSON file + signals</li>
+      </ul>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Display works even if web crashes</li><li>Web can be disabled to save resources</li><li>Simple IPC (file + SIGHUP)</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>State sync complexity</li><li>Two processes to manage</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top: 1.5rem;">I recommend <strong>A (Unified Python Agent)</strong> for Pi Zero's limited resources. Which approach?</p>

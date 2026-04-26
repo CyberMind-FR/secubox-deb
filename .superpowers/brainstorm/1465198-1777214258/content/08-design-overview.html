@@ -1,0 +1,74 @@
+<h2>Eye Remote Swiss Army Dashboard — Design Overview</h2>
+<p class="subtitle">Complete design summary for approval</p>
+
+<div class="section">
+  <h3>🎯 Core Concept</h3>
+  <p>Transform Eye Remote from a simple metrics display into a <strong>Swiss Army multi-tool</strong> with 4 operating modes, touchless web-based control, and intelligent failover — all running on Pi Zero W with HyperPixel 2.1 Round (480x480).</p>
+</div>
+
+<div class="section">
+  <h3>🔄 Four Operating Modes</h3>
+  <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+    <tr style="border-bottom: 1px solid #333;">
+      <th style="text-align: left; padding: 8px; color: #0f0;">Mode</th>
+      <th style="text-align: left; padding: 8px; color: #888;">Trigger</th>
+      <th style="text-align: left; padding: 8px; color: #888;">Display</th>
+    </tr>
+    <tr style="border-bottom: 1px solid #222;">
+      <td style="padding: 8px;"><strong>Dashboard</strong></td>
+      <td style="padding: 8px;">SecuBox API responds (auto)</td>
+      <td style="padding: 8px;">6 metric rings, real-time data</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #222;">
+      <td style="padding: 8px;"><strong>Local</strong></td>
+      <td style="padding: 8px;">No API / fallback after 60s</td>
+      <td style="padding: 8px;">Pi Zero stats + icon grid</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #222;">
+      <td style="padding: 8px;"><strong>Flash</strong></td>
+      <td style="padding: 8px;">/FORCE_FLASH flag file</td>
+      <td style="padding: 8px;">USB storage + progress + U-Boot</td>
+    </tr>
+    <tr>
+      <td style="padding: 8px;"><strong>Gateway</strong></td>
+      <td style="padding: 8px;">/FORCE_GATEWAY flag file</td>
+      <td style="padding: 8px;">Multi-SecuBox fleet view</td>
+    </tr>
+  </table>
+</div>
+
+<div class="section">
+  <h3>🌐 Web Remote Control</h3>
+  <p>Local web server at <code>http://eye-remote.local:8080/control</code></p>
+  <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px;">
+    <span style="background: #1a3a1a; padding: 4px 8px; border-radius: 4px; font-size: 12px;">Mode Switching</span>
+    <span style="background: #1a3a3a; padding: 4px 8px; border-radius: 4px; font-size: 12px;">WiFi Config</span>
+    <span style="background: #1a1a3a; padding: 4px 8px; border-radius: 4px; font-size: 12px;">Bluetooth</span>
+    <span style="background: #3a3a1a; padding: 4px 8px; border-radius: 4px; font-size: 12px;">Display Settings</span>
+    <span style="background: #3a1a3a; padding: 4px 8px; border-radius: 4px; font-size: 12px;">Device Manager</span>
+    <span style="background: #3a1a1a; padding: 4px 8px; border-radius: 4px; font-size: 12px;">System Actions</span>
+    <span style="background: #1a2a3a; padding: 4px 8px; border-radius: 4px; font-size: 12px;">SecuBox Control</span>
+  </div>
+</div>
+
+<div class="section">
+  <h3>⚡ Failover Behavior</h3>
+  <ul style="font-size: 13px; color: #ccc;">
+    <li><strong>API Loss:</strong> Stale data + "OFFLINE" badge → 15s gray fade → 60s Local mode</li>
+    <li><strong>USB Replug:</strong> "Connecting..." spinner → green flash on success</li>
+    <li><strong>Auto-reconnect:</strong> Background probe every 10s, silent recovery</li>
+  </ul>
+</div>
+
+<div class="section">
+  <h3>🏗️ Architecture</h3>
+  <p><strong>Unified Python Agent</strong> — Single process extending existing code:</p>
+  <ul style="font-size: 13px; color: #ccc;">
+    <li><code>fb_dashboard.py</code> → Extended with mode state machine</li>
+    <li>Embedded FastAPI server for Web Remote (:8080)</li>
+    <li>Async event loop handles display + web + SecuBox comms</li>
+    <li>System controls via subprocess (nmcli, bluetoothctl, etc.)</li>
+  </ul>
+</div>
+
+<p class="subtitle" style="margin-top: 2rem; color: #0f0;">Does this overview look correct? Type "ok" to continue to detailed sections, or raise concerns.</p>

@@ -1,0 +1,65 @@
+<h2>Failover & Fallback Behavior</h2>
+<p class="subtitle">How should Eye Remote handle connection loss and mode transitions for "plug and play"?</p>
+
+<div class="section">
+  <h3>Scenario: SecuBox API becomes unreachable</h3>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Immediate Fallback to Local</h3>
+      <p>API timeout (3s) → instantly switch to Local mode<br>
+      Show "Connection Lost" briefly, then Pi Zero stats<br>
+      Auto-reconnect attempts every 10s in background</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Graceful Degradation with Cache</h3>
+      <p>Show last known metrics (grayed/stale indicator)<br>
+      After 30s stale → transition to Local mode<br>
+      Preserves context during brief disconnects</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Hybrid: Cache + Visual Warning</h3>
+      <p>Immediate: Show stale data with pulsing "OFFLINE" badge<br>
+      After 15s: Fade rings to gray, keep time/hostname<br>
+      After 60s: Full transition to Local mode<br>
+      <em>Best UX: User sees what's happening</em></p>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 2rem;">
+  <h3>Scenario: USB cable unplugged/replugged</h3>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="plug-instant" onclick="toggleSelect(this)">
+    <div class="letter">1</div>
+    <div class="content">
+      <h3>Instant Re-detection</h3>
+      <p>USB gadget re-enumerates automatically<br>
+      Dashboard reconnects within 5s<br>
+      No user action required</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="plug-display" onclick="toggleSelect(this)">
+    <div class="letter">2</div>
+    <div class="content">
+      <h3>Show Connection Animation</h3>
+      <p>Display "Connecting..." spinner during re-enumeration<br>
+      Visual feedback that something is happening<br>
+      Success: Green flash, Resume dashboard</p>
+    </div>
+  </div>
+</div>

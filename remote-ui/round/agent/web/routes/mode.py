@@ -8,7 +8,6 @@ License: Proprietary / ANSSI CSPN candidate
 """
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import Optional
 
@@ -106,6 +105,6 @@ async def set_mode(request: Request, body: ModeRequest) -> ModeResponse:
 
     return ModeResponse(
         mode=mode_manager.current_mode.value,
-        previous_mode=previous.value if changed else None,
+        previous_mode=previous.value,  # Always return actual previous mode
         changed=changed,
     )

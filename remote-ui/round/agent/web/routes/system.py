@@ -113,7 +113,7 @@ def _get_kernel_version() -> Optional[str]:
 
 
 @router.get("/info", response_model=SystemInfo)
-async def get_system_info(request: Request) -> SystemInfo:
+async def get_system_info(_request: Request) -> SystemInfo:
     """
     Get system information.
 
@@ -131,7 +131,7 @@ async def get_system_info(request: Request) -> SystemInfo:
 
 
 @router.post("/reboot", response_model=RebootResponse)
-async def reboot_system(request: Request) -> RebootResponse:
+async def reboot_system(_request: Request) -> RebootResponse:
     """
     Request system reboot.
 
@@ -147,7 +147,7 @@ async def reboot_system(request: Request) -> RebootResponse:
 
 
 @router.post("/shutdown", response_model=ShutdownResponse)
-async def shutdown_system(request: Request) -> ShutdownResponse:
+async def shutdown_system(_request: Request) -> ShutdownResponse:
     """
     Request system shutdown.
 
@@ -163,7 +163,10 @@ async def shutdown_system(request: Request) -> ShutdownResponse:
 
 
 @router.get("/logs")
-async def get_system_logs(request: Request, lines: int = 50) -> dict:
+async def get_system_logs(
+    _request: Request,
+    lines: int = 50,  # noqa: ARG001 - Reserved for pagination
+) -> dict:
     """
     Get recent system logs.
 
@@ -174,6 +177,7 @@ async def get_system_logs(request: Request, lines: int = 50) -> dict:
         Recent log entries
     """
     # TODO: Implement actual log retrieval
+    _ = lines  # Will be used when implemented
     return {
         "logs": [],
         "message": "Log retrieval not implemented",
@@ -181,7 +185,7 @@ async def get_system_logs(request: Request, lines: int = 50) -> dict:
 
 
 @router.get("/storage")
-async def get_storage_info(request: Request) -> dict:
+async def get_storage_info(_request: Request) -> dict:
     """
     Get storage information.
 

@@ -9,7 +9,10 @@ License: Proprietary / ANSSI CSPN candidate
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    pass  # Future type imports
 
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
@@ -139,7 +142,7 @@ async def set_timeout(request: Request, body: TimeoutRequest) -> OperationRespon
 
 
 @router.post("/wake", response_model=OperationResponse)
-async def wake_display(request: Request) -> OperationResponse:
+async def wake_display(_request: Request) -> OperationResponse:
     """
     Wake the display from sleep.
 
@@ -155,7 +158,7 @@ async def wake_display(request: Request) -> OperationResponse:
 
 
 @router.post("/sleep", response_model=OperationResponse)
-async def sleep_display(request: Request) -> OperationResponse:
+async def sleep_display(_request: Request) -> OperationResponse:
     """
     Put the display to sleep.
 

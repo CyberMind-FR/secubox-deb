@@ -1,0 +1,65 @@
+<h2>Mode Switching Mechanism</h2>
+<p class="subtitle">You mentioned a flag file on storage to switch modes. How should this work?</p>
+
+<div class="section">
+  <p>Since touch is disabled (defective hardware), we need <strong>touchless control</strong>. Options for triggering mode changes:</p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Flag File on USB Storage</h3>
+      <p>Create/delete files on the USB mass storage partition to trigger modes:<br>
+      <code>/SECUBOX_MODE_FLASH</code> → Flash mode<br>
+      <code>/SECUBOX_MODE_LOCAL</code> → Local mode<br>
+      <code>/SECUBOX_MODE_GATEWAY</code> → Gateway mode<br>
+      No file = Dashboard (default)</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Works from any host (Windows/Mac/Linux)</li><li>No network needed</li><li>Survives reboots</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Auto-Detect + Flag Override</h3>
+      <p><strong>Auto:</strong> Dashboard if SecuBox API responds, else Local<br>
+      <strong>Override:</strong> Flag files force specific mode<br>
+      <code>/FORCE_FLASH</code> → Always Flash mode<br>
+      <code>/FORCE_GATEWAY</code> → Always Gateway mode</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Smart defaults</li><li>Manual override when needed</li><li>Plug-and-play friendly</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Config File (TOML/JSON)</h3>
+      <p>Single config file on storage:<br>
+      <code>/SECUBOX.conf</code> with:<br>
+      <code>mode = "auto" | "dashboard" | "local" | "flash" | "gateway"</code><br>
+      Plus WiFi/Bluetooth settings in same file</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>All settings in one place</li><li>Structured, extensible</li><li>Can include WiFi/BT config</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="d" onclick="toggleSelect(this)">
+    <div class="letter">D</div>
+    <div class="content">
+      <h3>Hardware Button + Software Fallback</h3>
+      <p>Physical button press cycles modes (GPIO on Pi Zero header)<br>
+      + Config file fallback for headless operation<br>
+      + LED blink patterns indicate current mode</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Instant tactile feedback</li><li>Works without host connection</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Requires hardware mod</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>

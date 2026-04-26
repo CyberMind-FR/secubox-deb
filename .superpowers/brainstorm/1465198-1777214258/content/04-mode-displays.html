@@ -1,0 +1,78 @@
+<h2>Display Content Per Mode</h2>
+<p class="subtitle">What should the 480x480 round display show in each of the 4 modes?</p>
+
+<div class="section">
+  <h3>Current Dashboard (for reference)</h3>
+  <div class="mockup" style="width: 300px; height: 300px; border-radius: 50%; margin: 1rem auto; background: #0a0a0f; display: flex; flex-direction: column; align-items: center; justify-content: center; border: 3px solid #333; position: relative; overflow: hidden;">
+    <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; border-radius: 50%; border: 8px solid #ff0064; opacity: 0.6;"></div>
+    <div style="position: absolute; top: 8px; left: 8px; right: 8px; bottom: 8px; border-radius: 50%; border: 8px solid #ff6400; opacity: 0.5;"></div>
+    <div style="position: absolute; top: 16px; left: 16px; right: 16px; bottom: 16px; border-radius: 50%; border: 8px solid #dcff00; opacity: 0.4;"></div>
+    <div style="color: #fff; font-size: 28px; font-family: monospace; z-index: 1;">14:32:07</div>
+    <div style="color: #888; font-size: 12px; font-family: monospace; z-index: 1;">secubox-zero</div>
+    <div style="color: #0f0; font-size: 10px; margin-top: 8px; z-index: 1;">● NOMINAL</div>
+  </div>
+</div>
+
+<h3>Proposed Mode Displays</h3>
+
+<div class="cards">
+  <div class="card" data-choice="dashboard" onclick="toggleSelect(this)">
+    <div class="card-image" style="background: #0a0a0f; height: 120px; display: flex; align-items: center; justify-content: center; border-radius: 8px;">
+      <div style="text-align: center;">
+        <div style="color: #0f0; font-size: 10px;">● OTG CONNECTED</div>
+        <div style="color: #fff; font-size: 18px; font-family: monospace;">6 Module Rings</div>
+        <div style="color: #888; font-size: 10px;">CPU MEM DISK LOAD TEMP WIFI</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Dashboard Mode</h3>
+      <p>Real SecuBox metrics with animated rings, time, hostname, status bar</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="local" onclick="toggleSelect(this)">
+    <div class="card-image" style="background: #0a0a0f; height: 120px; display: flex; align-items: center; justify-content: center; border-radius: 8px;">
+      <div style="text-align: center;">
+        <div style="color: #0af; font-size: 10px;">● LOCAL MODE</div>
+        <div style="font-size: 24px;">📡 🔋 💾 📶</div>
+        <div style="color: #888; font-size: 10px;">Pi Zero Stats + Icons</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Local Mode</h3>
+      <p>Pi Zero self-stats (CPU/MEM/DISK/WiFi) + icon grid for settings access</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="flash" onclick="toggleSelect(this)">
+    <div class="card-image" style="background: #1a0a0a; height: 120px; display: flex; align-items: center; justify-content: center; border-radius: 8px;">
+      <div style="text-align: center;">
+        <div style="color: #f80; font-size: 10px;">⚡ FLASH MODE</div>
+        <div style="color: #fff; font-size: 14px; font-family: monospace;">USB STORAGE ACTIVE</div>
+        <div style="color: #888; font-size: 10px;">U-Boot console ready</div>
+        <div style="color: #0f0; font-size: 10px; margin-top: 4px;">████████░░ 80%</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Flash Mode</h3>
+      <p>USB storage status, flash progress bar, U-Boot serial output preview</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="gateway" onclick="toggleSelect(this)">
+    <div class="card-image" style="background: #0a0a1a; height: 120px; display: flex; align-items: center; justify-content: center; border-radius: 8px;">
+      <div style="text-align: center;">
+        <div style="color: #a0f; font-size: 10px;">🌐 GATEWAY MODE</div>
+        <div style="color: #fff; font-size: 12px;">SecuBox-1 ● SecuBox-2 ●</div>
+        <div style="color: #888; font-size: 12px;">SecuBox-3 ○ SecuBox-4 ●</div>
+        <div style="color: #888; font-size: 10px; margin-top: 4px;">Fleet: 3/4 online</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Gateway Mode</h3>
+      <p>Multi-SecuBox fleet view: status dots, aggregated alerts, device selector</p>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top: 1.5rem;">Click any card to discuss/modify that mode's display. Or type "ok" if these look right.</p>

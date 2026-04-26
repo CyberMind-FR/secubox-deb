@@ -1,0 +1,79 @@
+<h2>Web Remote Control Features</h2>
+<p class="subtitle">What should be accessible via http://eye-remote.local:8080/control?</p>
+
+<div class="section">
+  <p>You mentioned WiFi and Bluetooth should be manageable. Select all features the Web Remote should provide:</p>
+</div>
+
+<div class="options" data-multiselect>
+  <div class="option" data-choice="mode-switch" onclick="toggleSelect(this)">
+    <div class="letter">1</div>
+    <div class="content">
+      <h3>Mode Switching</h3>
+      <p>Buttons to switch between Dashboard / Local / Flash / Gateway modes<br>
+      <em>Core feature for touchless control</em></p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="wifi-config" onclick="toggleSelect(this)">
+    <div class="letter">2</div>
+    <div class="content">
+      <h3>WiFi Configuration</h3>
+      <p>Scan networks, connect to SSID, enter password<br>
+      Show current connection status and signal strength<br>
+      <em>Essential for standalone/gateway modes</em></p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="bluetooth" onclick="toggleSelect(this)">
+    <div class="letter">3</div>
+    <div class="content">
+      <h3>Bluetooth Management</h3>
+      <p>Enable/disable BT, scan for devices, pair/unpair<br>
+      Useful for future BT keyboard support<br>
+      <em>Nice-to-have, not critical</em></p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="display-settings" onclick="toggleSelect(this)">
+    <div class="letter">4</div>
+    <div class="content">
+      <h3>Display Settings</h3>
+      <p>Brightness control, screen timeout, theme selection<br>
+      Rotation (if display mounted differently)<br>
+      <em>Quality of life</em></p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="secubox-select" onclick="toggleSelect(this)">
+    <div class="letter">5</div>
+    <div class="content">
+      <h3>SecuBox Device Manager</h3>
+      <p>Add/remove SecuBox connections, set primary device<br>
+      Manual IP entry or mDNS discovery<br>
+      <em>Required for Gateway mode</em></p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="system-actions" onclick="toggleSelect(this)">
+    <div class="letter">6</div>
+    <div class="content">
+      <h3>System Actions</h3>
+      <p>Reboot Eye Remote, Shutdown, Update firmware<br>
+      View logs, export diagnostics<br>
+      <em>Maintenance & troubleshooting</em></p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="secubox-control" onclick="toggleSelect(this)">
+    <div class="letter">7</div>
+    <div class="content">
+      <h3>SecuBox Remote Control</h3>
+      <p>Restart SecuBox services, trigger lockdown mode<br>
+      View SecuBox logs, initiate backup<br>
+      <em>Power user feature - "brain side" control</em></p>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top: 1.5rem;">Click all that should be included (multi-select). Type numbers if easier (e.g., "1 2 5 6")</p>
