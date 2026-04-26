@@ -296,6 +296,7 @@ class TestUpdateDeviceState:
         await manager.update_device_state(device.id, ConnectionState.CONNECTED)
 
         updated = await manager.get_device(device.id)
+        assert updated is not None
         assert updated.state == ConnectionState.CONNECTED
 
     async def test_update_state_disconnected(self):
@@ -306,6 +307,7 @@ class TestUpdateDeviceState:
         await manager.update_device_state(device.id, ConnectionState.DISCONNECTED)
 
         updated = await manager.get_device(device.id)
+        assert updated is not None
         assert updated.state == ConnectionState.DISCONNECTED
 
     async def test_update_state_sets_last_seen(self):
@@ -320,6 +322,7 @@ class TestUpdateDeviceState:
         after = time.time()
 
         updated = await manager.get_device(device.id)
+        assert updated is not None
         assert updated.last_seen is not None
         assert before <= updated.last_seen <= after
 
