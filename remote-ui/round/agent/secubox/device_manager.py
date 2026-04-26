@@ -12,7 +12,6 @@ License: Proprietary / ANSSI CSPN candidate
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import logging
 import time
 import uuid
@@ -165,7 +164,7 @@ class DeviceManager:
         self,
         host: str,
         port: int = 8000,
-        name: str = None
+        name: Optional[str] = None
     ) -> SecuBoxDevice:
         """
         Add a new device to the fleet.

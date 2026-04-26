@@ -266,7 +266,7 @@ def device_status_message(
     Returns:
         Formatted device status message
     """
-    data = {
+    data: Dict[str, Any] = {
         "device_id": device_id,
         "status": status,
     }

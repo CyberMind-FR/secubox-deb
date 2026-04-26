@@ -447,9 +447,9 @@ class EyeAgent:
 
             self.touch_handler.set_menu_navigator(self.menu_navigator)
             self.touch_handler.set_action_executor(self.action_executor)
-            self.touch_handler.on_menu_render(self._render_menu)
+            self.touch_handler.on_menu_render(lambda _: self._render_menu())
 
-            self.menu_navigator.on_state_change(lambda s: self._render_menu())
+            self.menu_navigator.on_state_change(lambda _s: self._render_menu())
 
             self.touch_handler.on_gesture(self._on_touch_gesture)
             self.touch_handler.on_secubox_switch(self._on_secubox_switch)
@@ -630,15 +630,14 @@ class EyeAgent:
         elif fs == FailoverState.DEGRADED:
             connection_state = "degraded"
 
-        # Build device list for gateway mode
+        # Build device list for gateway mode (use cached data)
         devices = []
         if self.fleet_aggregator:
-            fleet_metrics = self.fleet_aggregator.get_fleet_metrics()
-            for dev_id, dev_status in fleet_metrics.devices.items():
+            # Access cached device statuses synchronously
+            for device_id, device_data in self.fleet_aggregator._device_metrics.items():
                 devices.append({
-                    'name': dev_id,
-                    'online': dev_status.online,
-                    'metrics': dev_status.metrics,
+                    'name': device_id,
+                    'online': device_data.get('online', False),
                 })
 
         return RenderContext(
