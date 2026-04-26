@@ -3,8 +3,8 @@
 # SecuBox-Deb :: gadget-setup.sh
 # CyberMind — Gérald Kerma
 #
-# USB Gadget configuration for SecuBox Eye Remote (ECM + ACM)
-# Simple, minimal, working version
+# USB Gadget configuration for SecuBox Eye Remote (ECM + ACM + Mass Storage)
+# Composite USB device with network, serial, and storage functions
 #
 # Usage: gadget-setup.sh {up|down|status}
 #
@@ -13,8 +13,13 @@
 
 set -euo pipefail
 
-readonly VERSION="2.2.0"
+readonly VERSION="2.3.0"
 readonly GADGET="/sys/kernel/config/usb_gadget/secubox"
+
+# Mass storage configuration
+readonly STORAGE_IMAGE="/var/lib/secubox/eye-remote/storage.img"
+readonly STORAGE_SIZE_MB=64  # Size in MB for the storage image
+readonly STORAGE_ENABLED=true  # Set to false to disable mass storage
 
 log() { echo "[eye-gadget] $*"; logger -t eye-gadget "$*"; }
 
@@ -30,18 +35,45 @@ gadget_down() {
 
     # Remove symlinks and directories in reverse order
     rm -f $GADGET/configs/c.1/*.usb0 2>/dev/null || true
+    rm -f $GADGET/configs/c.1/mass_storage.usb0 2>/dev/null || true
     rmdir $GADGET/configs/c.1/strings/0x409 2>/dev/null || true
     rmdir $GADGET/configs/c.1/strings 2>/dev/null || true
     rmdir $GADGET/configs/c.1 2>/dev/null || true
     rmdir $GADGET/configs 2>/dev/null || true
     rmdir $GADGET/functions/ecm.usb0 2>/dev/null || true
     rmdir $GADGET/functions/acm.usb0 2>/dev/null || true
+    rmdir $GADGET/functions/mass_storage.usb0/lun.0 2>/dev/null || true
+    rmdir $GADGET/functions/mass_storage.usb0 2>/dev/null || true
     rmdir $GADGET/functions 2>/dev/null || true
     rmdir $GADGET/strings/0x409 2>/dev/null || true
     rmdir $GADGET/strings 2>/dev/null || true
     rmdir $GADGET 2>/dev/null || true
 
     log "Gadget stopped"
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Create storage image if needed
+# ═══════════════════════════════════════════════════════════════════════════════
+
+create_storage_image() {
+    if [[ -f "$STORAGE_IMAGE" ]]; then
+        log "Storage image exists: $STORAGE_IMAGE"
+        return 0
+    fi
+
+    log "Creating storage image: $STORAGE_IMAGE (${STORAGE_SIZE_MB}MB)..."
+    mkdir -p "$(dirname "$STORAGE_IMAGE")"
+
+    # Create sparse file
+    dd if=/dev/zero of="$STORAGE_IMAGE" bs=1M count=0 seek="$STORAGE_SIZE_MB" 2>/dev/null
+
+    # Format as FAT32
+    mkfs.vfat -F 32 -n "SECUBOX" "$STORAGE_IMAGE" >/dev/null 2>&1 || {
+        log "WARNING: mkfs.vfat failed, storage will be unformatted"
+    }
+
+    log "Storage image created"
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -82,14 +114,33 @@ gadget_up() {
     # Function 2: CDC-ACM (Serial console)
     mkdir -p functions/acm.usb0
 
+    # Function 3: Mass Storage (optional)
+    if [[ "$STORAGE_ENABLED" == "true" ]]; then
+        create_storage_image
+        mkdir -p functions/mass_storage.usb0/lun.0
+        echo 1 > functions/mass_storage.usb0/lun.0/removable
+        echo 0 > functions/mass_storage.usb0/lun.0/cdrom
+        echo 0 > functions/mass_storage.usb0/lun.0/ro
+        echo 0 > functions/mass_storage.usb0/lun.0/nofua
+        echo "$STORAGE_IMAGE" > functions/mass_storage.usb0/lun.0/file
+        log "Mass storage enabled: $STORAGE_IMAGE"
+    fi
+
     # Configuration
     mkdir -p configs/c.1/strings/0x409
-    echo "SecuBox Eye Remote (ECM + ACM)" > configs/c.1/strings/0x409/configuration
+    if [[ "$STORAGE_ENABLED" == "true" ]]; then
+        echo "SecuBox Eye Remote (ECM + ACM + Storage)" > configs/c.1/strings/0x409/configuration
+    else
+        echo "SecuBox Eye Remote (ECM + ACM)" > configs/c.1/strings/0x409/configuration
+    fi
     echo 500 > configs/c.1/MaxPower
 
     # Link functions to configuration (paths relative to gadget root)
     ln -sf functions/ecm.usb0 configs/c.1/
     ln -sf functions/acm.usb0 configs/c.1/
+    if [[ "$STORAGE_ENABLED" == "true" ]]; then
+        ln -sf functions/mass_storage.usb0 configs/c.1/
+    fi
 
     # Bind to UDC
     UDC=$(ls /sys/class/udc/ | head -1)
@@ -108,15 +159,20 @@ gadget_up() {
 
 gadget_status() {
     if [[ -d "$GADGET" ]]; then
-        local udc
+        local udc storage_status
         udc=$(cat "$GADGET/UDC" 2>/dev/null)
-        if [[ -n "$udc" ]]; then
-            echo '{"status":"running","udc":"'"$udc"'","version":"'"$VERSION"'"}'
+        if [[ -f "$STORAGE_IMAGE" ]]; then
+            storage_status="enabled"
         else
-            echo '{"status":"configured","udc":null,"version":"'"$VERSION"'"}'
+            storage_status="disabled"
+        fi
+        if [[ -n "$udc" ]]; then
+            echo '{"status":"running","udc":"'"$udc"'","version":"'"$VERSION"'","storage":"'"$storage_status"'"}'
+        else
+            echo '{"status":"configured","udc":null,"version":"'"$VERSION"'","storage":"'"$storage_status"'"}'
         fi
     else
-        echo '{"status":"stopped","udc":null,"version":"'"$VERSION"'"}'
+        echo '{"status":"stopped","udc":null,"version":"'"$VERSION"'","storage":"disabled"}'
     fi
 }
 
