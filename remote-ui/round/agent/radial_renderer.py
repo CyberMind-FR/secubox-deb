@@ -419,11 +419,15 @@ class RadialRenderer:
         Returns:
             PIL Image (480x480)
         """
+        logger.info(f"Rendering mode: {state.mode.name}")
+
         # Handle different modes
         if state.mode == MenuMode.DASHBOARD:
+            logger.info("Rendering DASHBOARD view")
             return self._render_dashboard()
 
         if state.mode == MenuMode.UBOOT:
+            logger.info("Rendering UBOOT view")
             return self._render_uboot()
 
         # MENU mode (and others) - render radial menu
