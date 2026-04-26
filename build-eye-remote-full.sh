@@ -54,6 +54,7 @@ SKIP_EBIN=0
 SKIP_RPIZ=0
 WIFI_SSID=""
 WIFI_PSK=""
+VERBOSE=0
 
 # ── Usage ─────────────────────────────────────────────────────────────────────
 usage() {
@@ -136,10 +137,14 @@ while [[ $# -gt 0 ]]; do
             IFS=':' read -r WIFI_SSID WIFI_PSK <<< "$2"
             shift 2
             ;;
+        --verbose|-v)     VERBOSE=1; shift ;;
         --help|-h) usage ;;
         *) err "Unknown option: $1" ;;
     esac
 done
+
+# Export VERBOSE for sub-scripts
+export VERBOSE
 
 # ── Prerequisites ─────────────────────────────────────────────────────────────
 [[ $EUID -ne 0 ]] && err "This script must be run as root (sudo)"
@@ -206,9 +211,11 @@ build_debs() {
 
     log "Building SecuBox packages..."
 
-    # Use existing build-all.sh script
+    # Use existing build-all.sh script (with 30 min timeout)
     if [[ -f "${SCRIPT_DIR}/scripts/build-all.sh" ]]; then
-        bash "${SCRIPT_DIR}/scripts/build-all.sh" "$DEBS_DIR"
+        if ! timeout --kill-after=60s 1800s bash "${SCRIPT_DIR}/scripts/build-all.sh" "$DEBS_DIR"; then
+            warn "build-all.sh timed out or failed, trying inline build..."
+        fi
     else
         # Inline build
         local pkg_dirs
@@ -228,11 +235,12 @@ build_debs() {
             log "[$count/$total] $pkg"
             cd "$pkg_dir"
 
-            if dpkg-buildpackage -us -uc -b > /tmp/build-$pkg.log 2>&1; then
+            # 5 min timeout per package
+            if timeout --kill-after=30s 300s dpkg-buildpackage -us -uc -b > /tmp/build-$pkg.log 2>&1; then
                 mv ../*.deb "$DEBS_DIR/" 2>/dev/null || true
                 rm -f ../*.buildinfo ../*.changes 2>/dev/null || true
             else
-                warn "$pkg failed (see /tmp/build-$pkg.log)"
+                warn "$pkg failed or timed out (see /tmp/build-$pkg.log)"
                 failed=$((failed + 1))
             fi
             cd "$SCRIPT_DIR"
@@ -284,13 +292,16 @@ build_ebin() {
         fi
     fi
 
-    # Use build-storage-img.sh if available
+    # Use build-storage-img.sh if available (with 30 min timeout)
     if [[ -f "${SCRIPT_DIR}/remote-ui/round/build-storage-img.sh" ]]; then
         log "Building ESPRESSObin storage image with slipstreamed modules..."
-        bash "${SCRIPT_DIR}/remote-ui/round/build-storage-img.sh" \
+        log "This may take 20-30 minutes under QEMU emulation. Timeout: 45 min."
+        if ! timeout --kill-after=60s 2700s bash "${SCRIPT_DIR}/remote-ui/round/build-storage-img.sh" \
             --source "$EBIN_SOURCE" \
             --output "$EBIN_STORAGE_IMG" \
-            --debs "$DEBS_DIR"
+            --debs "$DEBS_DIR"; then
+            err "build-storage-img.sh failed or timed out"
+        fi
     else
         err "build-storage-img.sh not found"
     fi
@@ -313,13 +324,16 @@ download_rpios() {
         return 0
     fi
 
-    log "Downloading RPi OS Lite..."
-    wget -q --show-progress -O "$target" "$url" || {
+    log "Downloading RPi OS Lite (timeout: 15 min)..."
+    # 15 min timeout for download, with connection timeout of 30s
+    if ! timeout --kill-after=30s 900s wget --timeout=30 --tries=3 -q --show-progress -O "$target" "$url"; then
         warn "Download failed, trying alternative URL..."
         # Try alternative
         url="https://downloads.raspberrypi.org/raspios_lite_armhf_latest"
-        wget -q --show-progress -O "$target" "$url" || err "Failed to download RPi OS"
-    }
+        if ! timeout --kill-after=30s 900s wget --timeout=30 --tries=3 -q --show-progress -O "$target" "$url"; then
+            err "Failed to download RPi OS (check network connection)"
+        fi
+    fi
 
     RPIZ_SOURCE="$target"
     ok "Downloaded: $target"
@@ -369,19 +383,22 @@ build_rpiz() {
 
     log "Building Pi Zero SD image with embedded ESPRESSObin storage..."
 
-    # Use build-eye-remote-image.sh
+    # Use build-eye-remote-image.sh (with 30 min timeout for QEMU operations)
     if [[ -f "${SCRIPT_DIR}/remote-ui/round/build-eye-remote-image.sh" ]]; then
         local wifi_args=""
         if [[ -n "$WIFI_SSID" ]]; then
             wifi_args="-s $WIFI_SSID -p $WIFI_PSK"
         fi
 
+        log "Building Pi Zero image with QEMU emulation. Timeout: 45 min."
         # Build the base image
-        bash "${SCRIPT_DIR}/remote-ui/round/build-eye-remote-image.sh" \
+        if ! timeout --kill-after=60s 2700s bash "${SCRIPT_DIR}/remote-ui/round/build-eye-remote-image.sh" \
             -i "$RPIZ_SOURCE" \
             -o "$OUTPUT_DIR" \
             $wifi_args \
-            --framebuffer
+            --framebuffer; then
+            err "build-eye-remote-image.sh failed or timed out"
+        fi
 
         # Find the generated image
         local built_img
