@@ -76,7 +76,7 @@ fi
 # modprobe.blacklist: prevent mv88e6xxx DSA driver from loading during initramfs
 # sdhci.debug_quirks2=0x40: fix xenon-sdhci DDR timing issues on eMMC
 # mmc_core.use_spi_crc=0: disable CRC checks that can cause timeouts
-setenv bootargs "root=${rootpart} rootfstype=ext4 rootwait rootdelay=5 console=ttyMV0,115200 net.ifnames=0 modprobe.blacklist=mv88e6xxx,dsa_core sdhci.debug_quirks2=0x40"
+setenv bootargs "root=${rootpart} rootfstype=ext4 rootwait rootdelay=5 console=ttyMV0,115200 net.ifnames=0 modprobe.blacklist=mv88e6xxx,mv88e6085,dsa_core initcall_blacklist=mv88e6xxx_driver_init sdhci.debug_quirks2=0x40"
 
 echo "Boot args: ${bootargs}"
 echo "============================================"

@@ -65,7 +65,10 @@ fi
 # boot=live: enable live-boot initramfs
 # live-media-path: where to find filesystem.squashfs
 # toram: optional, loads entire system to RAM (faster but uses more RAM)
-setenv bootargs "boot=live live-media-path=/live root=${rootpart} rootfstype=ext4 rootwait rootdelay=10 console=ttyMV0,115200 net.ifnames=0 modprobe.blacklist=mv88e6xxx,dsa_core sdhci.debug_quirks2=0x40 quiet splash"
+# Blacklist mv88e6xxx switch driver - causes detection loop on ESPRESSObin
+# modprobe.blacklist: for loadable modules
+# initcall_blacklist: for built-in drivers
+setenv bootargs "boot=live live-media-path=/live root=${rootpart} rootfstype=ext4 rootwait rootdelay=10 console=ttyMV0,115200 net.ifnames=0 modprobe.blacklist=mv88e6xxx,mv88e6085,dsa_core initcall_blacklist=mv88e6xxx_driver_init sdhci.debug_quirks2=0x40 quiet splash"
 
 echo "Boot args: ${bootargs}"
 echo "============================================"
