@@ -7,6 +7,7 @@ Author: Gerald Kerma <gandalf@gk2.net>
 License: Proprietary / ANSSI CSPN candidate
 """
 from .device_manager import ConnectionState, DeviceManager, SecuBoxDevice
+from .fleet import DeviceStatus, FleetAggregator, FleetMetrics
 from .remote_control import (
     SecuBoxAlert,
     SecuBoxClient,
@@ -19,6 +20,10 @@ __all__ = [
     "DeviceManager",
     "SecuBoxDevice",
     "ConnectionState",
+    # Fleet Aggregator
+    "FleetAggregator",
+    "FleetMetrics",
+    "DeviceStatus",
     # Remote Control
     "SecuBoxClient",
     "SecuBoxMetrics",
