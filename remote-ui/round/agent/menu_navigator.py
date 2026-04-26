@@ -16,11 +16,12 @@ from menu_definitions import MenuID, MenuItem, MENUS
 
 class MenuMode(Enum):
     """Mode d'affichage actuel."""
-    DASHBOARD = auto()  # Affichage dashboard normal
+    DASHBOARD = auto()  # Affichage dashboard metrics
     MENU = auto()       # Navigation menu radial
     CONFIRM = auto()    # Dialogue de confirmation
     LOADING = auto()    # Attente d'une action async
     RESULT = auto()     # Affichage resultat d'action
+    UBOOT = auto()      # U-Boot serial console helper
 
 
 @dataclass
@@ -83,6 +84,16 @@ class MenuNavigator:
         self.state.current_menu = MenuID.ROOT
         self.state.selected_index = 0
         self.state.breadcrumb = []
+        self._notify_change()
+
+    def enter_uboot_mode(self):
+        """Entrer en mode U-Boot helper (serial console detected)."""
+        self.state.mode = MenuMode.UBOOT
+        self._notify_change()
+
+    def exit_uboot_mode(self):
+        """Quitter le mode U-Boot, retour au dashboard."""
+        self.state.mode = MenuMode.DASHBOARD
         self._notify_change()
 
     def go_back(self):
