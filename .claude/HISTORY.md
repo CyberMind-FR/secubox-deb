@@ -3,6 +3,31 @@
 
 ---
 
+## 2026-04-27
+
+### Session 65 — Eye Remote USB Boot Fix (v2.2.1)
+
+**Issue:** ESPRESSObin would not boot from Eye Remote USB mass storage. mv88e6xxx driver in infinite detection loop.
+
+**Root Cause:** Live USB kernel had mv88e6xxx built-in (not a module), making `modprobe.blacklist` ineffective. The eMMC kernel has mv88e6xxx as a loadable module where blacklist works.
+
+**Fix:**
+- Replaced storage.img boot partition with eMMC kernel/initrd/DTB
+- Replaced storage.img rootfs with working eMMC rootfs
+- Updated boot scripts with extended blacklist for future builds
+
+**Files Modified:**
+- `board/espressobin-v7/boot-live-usb.cmd`
+- `board/espressobin-v7/boot-usb.cmd`
+- `board/espressobin-v7/boot.cmd`
+
+**Commits:**
+- `942196b` — fix(boot): Add mv88e6085 and initcall_blacklist to boot scripts
+
+**Version:** v2.2.1
+
+---
+
 ## 2026-04-23
 
 ### Session 64 — Eye Remote USB OTG Network Fix (v2.1.1)
