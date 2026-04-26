@@ -176,35 +176,68 @@ mount --bind /dev/pts "${TARGET_MOUNT}/dev/pts" 2>/dev/null || true
 # Setup DNS for apt
 cp /etc/resolv.conf "${TARGET_MOUNT}/etc/resolv.conf"
 
-# Copy packages (filter out incompatible architectures)
+# ═══════════════════════════════════════════════════════════════════════════
+# SLIPSTREAM PACKAGES (same logic as build-ebin-live-usb.sh)
+# ═══════════════════════════════════════════════════════════════════════════
+
 DEBS_TMP="${TARGET_MOUNT}/tmp/secubox-debs"
 mkdir -p "$DEBS_TMP"
+
+# Get original user's home when running with sudo
+if [[ -n "${SUDO_USER:-}" ]]; then
+    USER_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
+else
+    USER_HOME="$HOME"
+fi
+CACHE_DEBS="${USER_HOME}/.cache/secubox/debs"
+
+# Count available packages
+CACHE_COUNT=$(find "$CACHE_DEBS" -maxdepth 1 -name "secubox-*.deb" 2>/dev/null | wc -l)
+OUTPUT_COUNT=$(find "${DEBS_DIR}" -maxdepth 1 -name "secubox-*.deb" 2>/dev/null | wc -l)
+log "Found ${CACHE_COUNT} packages in cache, ${OUTPUT_COUNT} in output/debs"
 
 # Skip list: packages with missing deps or wrong arch
 SKIP_PKGS="secubox-daemon secubox-ndpid secubox-netifyd secubox-rtty"
 
-COPIED_COUNT=0
-for deb in "${DEBS_DIR}"/secubox-*.deb; do
-    [[ -f "$deb" ]] || continue
+# Copy from output/debs FIRST (prefer newer local builds over cache)
+if [[ -d "$DEBS_DIR" ]]; then
+    for deb in "${DEBS_DIR}"/secubox-*.deb; do
+        [[ -f "$deb" ]] || continue
 
-    # Check architecture
-    PKG_ARCH=$(dpkg-deb -f "$deb" Architecture 2>/dev/null)
-    PKG_NAME=$(dpkg-deb -f "$deb" Package 2>/dev/null)
+        # Check architecture - skip amd64 on arm64 target
+        PKG_ARCH=$(dpkg-deb -f "$deb" Architecture 2>/dev/null)
+        PKG_NAME=$(dpkg-deb -f "$deb" Package 2>/dev/null)
+        [[ "$PKG_ARCH" == "amd64" ]] && continue
+        echo "$SKIP_PKGS" | grep -qw "$PKG_NAME" && continue
 
-    # Skip amd64 packages on arm64 target
-    [[ "$PKG_ARCH" == "amd64" ]] && continue
+        cp "$deb" "$DEBS_TMP/"
+    done
+    log "Copied compatible packages from output/debs"
+fi
 
-    # Skip known problematic packages
-    echo "$SKIP_PKGS" | grep -qw "$PKG_NAME" && continue
+# Then add from cache for packages not in output/debs
+if [[ $CACHE_COUNT -gt 0 ]]; then
+    for deb in $(find "$CACHE_DEBS" -name "secubox-*.deb" 2>/dev/null); do
+        [[ -f "$deb" ]] || continue
 
-    cp "$deb" "$DEBS_TMP/"
-    COPIED_COUNT=$((COPIED_COUNT + 1))
-done
+        # Check architecture
+        PKG_ARCH=$(dpkg-deb -f "$deb" Architecture 2>/dev/null)
+        PKG_NAME=$(dpkg-deb -f "$deb" Package 2>/dev/null)
+        [[ "$PKG_ARCH" == "amd64" ]] && continue
+        echo "$SKIP_PKGS" | grep -qw "$PKG_NAME" && continue
 
-log "Installing ${COPIED_COUNT} compatible packages..."
+        # Only copy if not already present (prefer output/debs version)
+        if ! ls "${DEBS_TMP}/${PKG_NAME}_"*.deb >/dev/null 2>&1; then
+            cp "$deb" "$DEBS_TMP/"
+            log "Added ${PKG_NAME} from cache"
+        fi
+    done
+fi
+
+DEB_COUNT=$(find "$DEBS_TMP" -maxdepth 1 -name "*.deb" 2>/dev/null | wc -l)
+log "Installing ${DEB_COUNT} packages..."
 
 # Timeouts for QEMU chroot operations (very slow under emulation)
-# Note: stdbuf doesn't work reliably with chroot, use direct timeout
 CHROOT_TIMEOUT="timeout --kill-after=30s 600s"  # 10 min timeout
 
 # Fix any interrupted dpkg state first (common after failed builds)
@@ -218,46 +251,37 @@ if ! $CHROOT_TIMEOUT chroot "${TARGET_MOUNT}" apt-get update > /tmp/apt-update.l
     tail -5 /tmp/apt-update.log 2>/dev/null | sed 's/^/    /' || true
 fi
 
-# Install secubox-core first (with dependencies)
+# ═══════════════════════════════════════════════════════════════════════════
+# FAST INSTALL: dpkg -i with force flags (like build-ebin-live-usb.sh)
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Install secubox-core first (dependency for all)
 if ls "${DEBS_TMP}"/secubox-core_*.deb >/dev/null 2>&1; then
-    log "Installing secubox-core with dependencies..."
-    CORE_DEB=$(ls "${DEBS_TMP}"/secubox-core_*.deb | head -1)
-    # Note: $CHROOT_TIMEOUT already includes stdbuf
-    if ! $CHROOT_TIMEOUT chroot "${TARGET_MOUNT}" apt-get install -y "/tmp/secubox-debs/$(basename "$CORE_DEB")" > /tmp/core-install.log 2>&1; then
-        warn "secubox-core install warnings (see /tmp/core-install.log)"
-        tail -5 /tmp/core-install.log 2>/dev/null | sed 's/^/    /' || true
-    fi
+    log "Installing secubox-core first..."
+    $CHROOT_TIMEOUT chroot "${TARGET_MOUNT}" bash -c \
+        'dpkg -i --force-depends /tmp/secubox-debs/secubox-core_*.deb 2>&1' | tail -10 || \
+        warn "secubox-core install warnings"
 fi
 
-# Install all other packages using apt (handles dependencies)
-log "Installing remaining packages..."
-PKG_COUNT=0
-for deb in "${DEBS_TMP}"/secubox-*.deb; do
-    [[ -f "$deb" ]] || continue
-    PKG_NAME=$(dpkg-deb -f "$deb" Package 2>/dev/null)
-    PKG_COUNT=$((PKG_COUNT + 1))
+# Install ALL packages at once with force flags (much faster than apt per-package)
+log "Installing all packages with dpkg..."
+$CHROOT_TIMEOUT chroot "${TARGET_MOUNT}" bash -c \
+    'dpkg -i --force-depends --force-overwrite /tmp/secubox-debs/*.deb 2>&1 || true' | \
+    grep -v "^dpkg: warning" | tail -30 || true
 
-    # Skip if already installed
-    if chroot "${TARGET_MOUNT}" dpkg -l "$PKG_NAME" 2>/dev/null | grep -q "^ii"; then
-        continue
-    fi
-
-    log "  [$PKG_COUNT] Installing $PKG_NAME..."
-    # 3 min timeout per package
-    if ! timeout --kill-after=10s 180s chroot "${TARGET_MOUNT}" apt-get install -y \
-        "/tmp/secubox-debs/$(basename "$deb")" > "/tmp/install-${PKG_NAME}.log" 2>&1; then
-        warn "  $PKG_NAME failed (see /tmp/install-${PKG_NAME}.log)"
-    fi
-done
-
-# Fix any remaining broken dependencies
+# Fix broken dependencies with apt
 log "Fixing broken dependencies..."
-# Note: $CHROOT_TIMEOUT already includes stdbuf for line-buffered output
 $CHROOT_TIMEOUT chroot "${TARGET_MOUNT}" apt-get -f install -y --fix-broken > /tmp/fix-broken.log 2>&1 || true
 
-# Count installed
-INSTALLED=$(chroot "${TARGET_MOUNT}" dpkg -l 2>/dev/null | grep "^ii.*secubox" | wc -l)
-log "Installed ${INSTALLED} SecuBox packages"
+# Verify installations
+INSTALLED=$(chroot "${TARGET_MOUNT}" bash -c 'dpkg -l "secubox-*" 2>/dev/null | grep "^ii" | wc -l || echo 0')
+log "Installed ${INSTALLED}/${DEB_COUNT} SecuBox packages"
+
+# List what was installed
+if [[ $INSTALLED -gt 0 ]]; then
+    log "Installed modules:"
+    chroot "${TARGET_MOUNT}" bash -c 'dpkg -l "secubox-*" 2>/dev/null | grep "^ii" | awk "{print \"  - \" \$2}"' || true
+fi
 
 # Add SecuBox banner/motd
 cat > "${TARGET_MOUNT}/etc/motd" << 'MOTD'
