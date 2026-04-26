@@ -11,8 +11,8 @@ import logging
 from dataclasses import dataclass, field
 from typing import Optional, Callable
 
-from config import Config, SecuBoxConfig, get_active_secubox, set_active_secubox
-from secubox_client import SecuBoxClient
+from .config import Config, SecuBoxConfig, get_active_secubox, set_active_secubox
+from .secubox_client import SecuBoxClient
 
 log = logging.getLogger(__name__)
 
@@ -63,7 +63,7 @@ class DeviceManager:
                 "host": sb.host,
                 "active": sb.active,
             }
-            for sb in self.config.secuboxes
+            for sb in self.config.secuboxes.devices
         ]
 
     async def connect(self):
@@ -107,7 +107,7 @@ class DeviceManager:
         """
         # Find the target
         target = None
-        for sb in self.config.secuboxes:
+        for sb in self.config.secuboxes.devices:
             if sb.name == name:
                 target = sb
                 break

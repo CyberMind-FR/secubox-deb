@@ -3,7 +3,7 @@ import pytest
 import asyncio
 from unittest.mock import AsyncMock, patch, MagicMock
 
-from agent.config import Config, DeviceConfig, SecuBoxConfig
+from agent.config import Config, DeviceConfig, SecuBoxConfig, SecuBoxesConfig
 
 
 @pytest.fixture
@@ -11,10 +11,13 @@ def test_config():
     """Create test configuration with multiple SecuBoxes."""
     return Config(
         device=DeviceConfig(id="eye-test", name="Test Eye"),
-        secuboxes=[
-            SecuBoxConfig(name="Primary", host="10.55.0.1", token="token1", active=True),
-            SecuBoxConfig(name="Secondary", host="192.168.1.100", token="token2", active=False),
-        ]
+        secuboxes=SecuBoxesConfig(
+            primary="Primary",
+            devices=[
+                SecuBoxConfig(id="primary", name="Primary", host="10.55.0.1", token="token1", active=True),
+                SecuBoxConfig(id="secondary", name="Secondary", host="192.168.1.100", token="token2", active=False),
+            ]
+        )
     )
 
 

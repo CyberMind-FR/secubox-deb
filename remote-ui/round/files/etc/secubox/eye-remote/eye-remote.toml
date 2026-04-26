@@ -1,0 +1,73 @@
+# SecuBox Eye Remote Configuration
+# CyberMind — https://cybermind.fr
+# Author: Gérald Kerma <gandalf@gk2.net>
+# License: Proprietary / ANSSI CSPN candidate
+
+[device]
+# Unique device identifier
+id = "eye-remote-001"
+# Display name for the Eye Remote device
+name = "Eye Remote"
+
+[display]
+# Display brightness (0-100)
+brightness = 80
+# Screen timeout in seconds (0 = never)
+timeout_seconds = 300
+# Visual theme: neon | classic | minimal
+theme = "neon"
+
+[mode]
+# Default operating mode: auto | dashboard | local | flash | gateway
+# auto   : attempts dashboard, falls back to local if API unavailable
+# dashboard : real-time SecuBox metrics (requires API)
+# local  : Pi Zero self-monitoring (API unavailable)
+# flash  : USB storage mode for device recovery
+# gateway: multi-SecuBox fleet management
+default = "auto"
+# Seconds to wait before auto-fallback from dashboard to local mode
+auto_fallback_seconds = 60
+# Reconnection attempt interval in seconds
+reconnect_interval_seconds = 10
+
+[web]
+# Enable web remote server
+enabled = true
+# Web server port
+port = 8080
+# Bind address (0.0.0.0 = all interfaces, 127.0.0.1 = localhost)
+bind = "0.0.0.0"
+
+[secuboxes]
+# Primary SecuBox device ID (used if no device marked active)
+primary = "secubox-main"
+
+# List of SecuBox devices in the fleet
+[[secuboxes.devices]]
+# Unique device identifier in the fleet
+id = "secubox-main"
+# Display name
+name = "SecuBox Main"
+# Connection hostname or IP
+host = "10.55.0.1"
+# API port
+port = 8000
+# API authentication token (empty = no auth)
+token = ""
+# Connection transport: otg | wifi | manual
+# otg   : USB OTG (local network 10.55.0.0/30)
+# wifi  : WiFi network connection
+# manual: manually managed connection
+transport = "otg"
+# Mark this SecuBox as active (only one should be active)
+active = true
+
+# Secondary SecuBox example (optional)
+# [[secuboxes.devices]]
+# id = "secubox-backup"
+# name = "SecuBox Backup"
+# host = "192.168.1.100"
+# port = 8000
+# token = ""
+# transport = "wifi"
+# active = false
