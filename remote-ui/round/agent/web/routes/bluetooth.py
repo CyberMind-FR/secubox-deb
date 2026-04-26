@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 from typing import List, Optional
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 log = logging.getLogger(__name__)
@@ -54,74 +54,125 @@ class BluetoothPairResponse(BaseModel):
 
 
 @router.get("/status", response_model=BluetoothStatus)
-async def get_bluetooth_status(_request: Request) -> BluetoothStatus:
+async def get_bluetooth_status(request: Request) -> BluetoothStatus:
     """
     Get Bluetooth adapter status.
 
     Returns:
         Bluetooth adapter status
     """
-    # TODO: Implement actual Bluetooth status check
-    return BluetoothStatus(
-        enabled=False,
-        discoverable=False,
-        pairable=False,
-        adapter_name=None,
-    )
+    try:
+        bluetooth_manager = request.app.state.bluetooth_manager
+        status = await bluetooth_manager.status()
+        return BluetoothStatus(
+            enabled=status.powered,
+            discoverable=status.discovering,
+            pairable=status.pairable,
+            adapter_name=status.adapter_name,
+        )
+    except Exception as e:
+        log.error(f"Bluetooth status check failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get Bluetooth status")
 
 
 @router.get("/devices", response_model=BluetoothDevicesResponse)
-async def get_bluetooth_devices(_request: Request) -> BluetoothDevicesResponse:
+async def get_bluetooth_devices(request: Request) -> BluetoothDevicesResponse:
     """
     Get list of known Bluetooth devices.
 
     Returns:
         List of paired and discovered devices
     """
-    # TODO: Implement actual Bluetooth device list
-    return BluetoothDevicesResponse(
-        devices=[],
-        scanning=False,
-    )
+    try:
+        bluetooth_manager = request.app.state.bluetooth_manager
+        devices = await bluetooth_manager.list_devices()
+        return BluetoothDevicesResponse(
+            devices=[
+                BluetoothDevice(
+                    address=d.address,
+                    name=d.name,
+                    paired=d.paired,
+                    connected=d.connected,
+                    device_type="unknown",
+                )
+                for d in devices
+            ],
+            scanning=False,
+        )
+    except Exception as e:
+        log.error(f"Bluetooth list devices failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to list Bluetooth devices")
 
 
 @router.post("/scan", response_model=BluetoothDevicesResponse)
-async def scan_bluetooth_devices(_request: Request) -> BluetoothDevicesResponse:
+async def scan_bluetooth_devices(request: Request) -> BluetoothDevicesResponse:
     """
     Trigger Bluetooth device scan.
 
     Returns:
         Scan status and any currently known devices
     """
-    # TODO: Implement actual Bluetooth scan trigger
-    return BluetoothDevicesResponse(
-        devices=[],
-        scanning=True,
-    )
+    try:
+        bluetooth_manager = request.app.state.bluetooth_manager
+        devices = await bluetooth_manager.scan()
+        return BluetoothDevicesResponse(
+            devices=[
+                BluetoothDevice(
+                    address=d.address,
+                    name=d.name,
+                    paired=d.paired,
+                    connected=d.connected,
+                    device_type="unknown",
+                )
+                for d in devices
+            ],
+            scanning=False,
+        )
+    except Exception as e:
+        log.error(f"Bluetooth scan failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to scan Bluetooth devices")
 
 
 @router.post("/enable")
-async def enable_bluetooth(_request: Request) -> dict:
+async def enable_bluetooth(request: Request) -> dict:
     """
     Enable Bluetooth adapter.
 
     Returns:
         Operation result
     """
-    # TODO: Implement Bluetooth enable
-    return {"success": False, "message": "Bluetooth enable not implemented"}
+    try:
+        bluetooth_manager = request.app.state.bluetooth_manager
+        log.info("Bluetooth enable request")
+        success = await bluetooth_manager.enable()
+        if success:
+            return {"success": True, "message": "Bluetooth enabled"}
+        else:
+            return {"success": False, "message": "Failed to enable Bluetooth"}
+    except Exception as e:
+        log.error(f"Bluetooth enable failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to enable Bluetooth")
 
 
 @router.post("/disable")
-async def disable_bluetooth(_request: Request) -> dict:
+async def disable_bluetooth(request: Request) -> dict:
     """
     Disable Bluetooth adapter.
 
     Returns:
         Operation result
     """
-    # TODO: Implement Bluetooth disable
-    return {"success": False, "message": "Bluetooth disable not implemented"}
+    try:
+        bluetooth_manager = request.app.state.bluetooth_manager
+        log.info("Bluetooth disable request")
+        success = await bluetooth_manager.disable()
+        if success:
+            return {"success": True, "message": "Bluetooth disabled"}
+        else:
+            return {"success": False, "message": "Failed to disable Bluetooth"}
+    except Exception as e:
+        log.error(f"Bluetooth disable failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to disable Bluetooth")
 
 
 @router.post("/pair", response_model=BluetoothPairResponse)
@@ -137,12 +188,23 @@ async def pair_bluetooth_device(
     Returns:
         Pairing result
     """
-    # TODO: Implement actual Bluetooth pairing
-    log.info(f"Bluetooth pair request for address: {body.address}")
-    return BluetoothPairResponse(
-        success=False,
-        message="Bluetooth pairing not implemented",
-    )
+    try:
+        bluetooth_manager = request.app.state.bluetooth_manager
+        log.info(f"Bluetooth pair request for address: {body.address}")
+        success = await bluetooth_manager.pair(body.address)
+        if success:
+            return BluetoothPairResponse(
+                success=True,
+                message=f"Paired with {body.address}",
+            )
+        else:
+            return BluetoothPairResponse(
+                success=False,
+                message=f"Failed to pair with {body.address}",
+            )
+    except Exception as e:
+        log.error(f"Bluetooth pair failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to pair Bluetooth device")
 
 
 @router.post("/forget", response_model=BluetoothPairResponse)
@@ -158,9 +220,20 @@ async def forget_bluetooth_device(
     Returns:
         Operation result
     """
-    # TODO: Implement actual Bluetooth unpair
-    log.info(f"Bluetooth forget request for address: {body.address}")
-    return BluetoothPairResponse(
-        success=False,
-        message="Bluetooth forget not implemented",
-    )
+    try:
+        bluetooth_manager = request.app.state.bluetooth_manager
+        log.info(f"Bluetooth forget request for address: {body.address}")
+        success = await bluetooth_manager.forget(body.address)
+        if success:
+            return BluetoothPairResponse(
+                success=True,
+                message=f"Forgot device {body.address}",
+            )
+        else:
+            return BluetoothPairResponse(
+                success=False,
+                message=f"Failed to forget device {body.address}",
+            )
+    except Exception as e:
+        log.error(f"Bluetooth forget failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to forget Bluetooth device")

@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 from typing import List, Optional
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 log = logging.getLogger(__name__)
@@ -54,50 +54,81 @@ class WifiConnectResponse(BaseModel):
 
 
 @router.get("/status", response_model=WifiStatus)
-async def get_wifi_status(_request: Request) -> WifiStatus:
+async def get_wifi_status(request: Request) -> WifiStatus:
     """
     Get current WiFi connection status.
 
     Returns:
         WiFi connection status
     """
-    # TODO: Implement actual WiFi status check
-    return WifiStatus(
-        connected=False,
-        ssid=None,
-        signal=None,
-        ip_address=None,
-    )
+    try:
+        wifi_manager = request.app.state.wifi_manager
+        status = await wifi_manager.status()
+        return WifiStatus(
+            connected=status.connected,
+            ssid=status.ssid,
+            signal=status.signal,
+            ip_address=status.ip_address,
+        )
+    except Exception as e:
+        log.error(f"WiFi status check failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get WiFi status")
 
 
 @router.get("/networks", response_model=WifiNetworksResponse)
-async def get_wifi_networks(_request: Request) -> WifiNetworksResponse:
+async def get_wifi_networks(request: Request) -> WifiNetworksResponse:
     """
     Get list of available WiFi networks.
 
     Returns:
         List of detected networks
     """
-    # TODO: Implement actual WiFi scan
-    return WifiNetworksResponse(
-        networks=[],
-        scanning=False,
-    )
+    try:
+        wifi_manager = request.app.state.wifi_manager
+        networks = await wifi_manager.get_networks()
+        return WifiNetworksResponse(
+            networks=[
+                WifiNetwork(
+                    ssid=n.ssid,
+                    signal=n.signal,
+                    security=n.security,
+                    connected=n.connected,
+                )
+                for n in networks
+            ],
+            scanning=False,
+        )
+    except Exception as e:
+        log.error(f"WiFi get networks failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get WiFi networks")
 
 
 @router.post("/scan", response_model=WifiNetworksResponse)
-async def scan_wifi_networks(_request: Request) -> WifiNetworksResponse:
+async def scan_wifi_networks(request: Request) -> WifiNetworksResponse:
     """
     Trigger WiFi network scan.
 
     Returns:
         Scan status and any currently known networks
     """
-    # TODO: Implement actual WiFi scan trigger
-    return WifiNetworksResponse(
-        networks=[],
-        scanning=True,
-    )
+    try:
+        wifi_manager = request.app.state.wifi_manager
+        networks = await wifi_manager.scan()
+        return WifiNetworksResponse(
+            networks=[
+                WifiNetwork(
+                    ssid=n.ssid,
+                    signal=n.signal,
+                    security=n.security,
+                    connected=n.connected,
+                )
+                for n in networks
+            ],
+            scanning=False,
+        )
+    except Exception as e:
+        log.error(f"WiFi scan failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to scan WiFi networks")
 
 
 @router.post("/connect", response_model=WifiConnectResponse)
@@ -111,24 +142,47 @@ async def connect_wifi(request: Request, body: WifiConnectRequest) -> WifiConnec
     Returns:
         Connection result
     """
-    # TODO: Implement actual WiFi connection
-    log.info(f"WiFi connect request for SSID: {body.ssid}")
-    return WifiConnectResponse(
-        success=False,
-        message="WiFi connection not implemented",
-    )
+    try:
+        wifi_manager = request.app.state.wifi_manager
+        log.info(f"WiFi connect request for SSID: {body.ssid}")
+        success = await wifi_manager.connect(body.ssid, body.password or "")
+        if success:
+            return WifiConnectResponse(
+                success=True,
+                message=f"Connected to {body.ssid}",
+            )
+        else:
+            return WifiConnectResponse(
+                success=False,
+                message=f"Failed to connect to {body.ssid}",
+            )
+    except Exception as e:
+        log.error(f"WiFi connect failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to connect to WiFi")
 
 
 @router.post("/disconnect", response_model=WifiConnectResponse)
-async def disconnect_wifi(_request: Request) -> WifiConnectResponse:
+async def disconnect_wifi(request: Request) -> WifiConnectResponse:
     """
     Disconnect from current WiFi network.
 
     Returns:
         Disconnection result
     """
-    # TODO: Implement actual WiFi disconnection
-    return WifiConnectResponse(
-        success=False,
-        message="WiFi disconnection not implemented",
-    )
+    try:
+        wifi_manager = request.app.state.wifi_manager
+        log.info("WiFi disconnect request")
+        success = await wifi_manager.disconnect()
+        if success:
+            return WifiConnectResponse(
+                success=True,
+                message="Disconnected from WiFi",
+            )
+        else:
+            return WifiConnectResponse(
+                success=False,
+                message="Failed to disconnect from WiFi",
+            )
+    except Exception as e:
+        log.error(f"WiFi disconnect failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to disconnect from WiFi")
