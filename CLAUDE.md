@@ -6,16 +6,45 @@
 
 ## 🧭 Session Startup — Lire d'abord
 
-**À chaque session, lire dans cet ordre :**
+### Fichiers de référence obligatoires
 
-1. `.claude/WIP.md`             → ce qui est en cours, le prochain à faire
-2. `.claude/TODO.md`            → backlog priorisé par phase
-3. `.claude/MIGRATION-MAP.md`   → état de chaque module (✅ / 🔄 / ⬜)
-4. `.claude/PATTERNS.md`        → patterns RPCD→FastAPI avec exemples réels
-5. `.claude/MODULE-COMPLIANCE.md` → **règles de conformité obligatoires**
+| Priorité | Fichier | Description | Quand lire |
+|----------|---------|-------------|------------|
+| 1 | `.claude/WIP.md` | Travail en cours, prochain item | **Toujours en premier** |
+| 2 | `.claude/TODO.md` | Backlog priorisé par phase | Pour planifier |
+| 3 | `.claude/HISTORY.md` | Historique des changements | Pour contexte |
+| 4 | `.claude/MIGRATION-MAP.md` | État modules (✅/🔄/⬜) | Pour status |
+| 5 | `.claude/PATTERNS.md` | Patterns RPCD→FastAPI | Pour coder |
+| 6 | `.claude/MODULE-COMPLIANCE.md` | Règles conformité | **Obligatoire avant code** |
 
-**Quand l'utilisateur dit "continue" / "suivant" / "next" :**
-Consulter `WIP.md` → prendre le premier item "⬜ Next Up" → l'implémenter → mettre à jour les fichiers `.claude/`.
+### Fichiers de référence techniques
+
+| Fichier | Description | Quand lire |
+|---------|-------------|------------|
+| `docs/TOOLS.md` | Référence outils build/génération | Pour builder |
+| `.claude/QUICKSHEET-REFERENCE.md` | Quick ref commandes | Pour commandes |
+| `.claude/DESIGN-CHARTER.md` | Charte UI/UX | Pour frontend |
+| `.claude/WIKI-STYLE-GUIDE.md` | Style documentation | Pour docs |
+| `.claude/NOTES.md` | Notes de session | Pour contexte additionnel |
+
+### Workflow "continue" / "suivant" / "next"
+
+1. Lire `WIP.md` → identifier le premier item "⬜ Next Up"
+2. Implémenter selon `PATTERNS.md` et `MODULE-COMPLIANCE.md`
+3. Mettre à jour les fichiers `.claude/` :
+   - Cocher ✅ dans `MIGRATION-MAP.md` si module terminé
+   - Déplacer dans "✅ Fait" dans `WIP.md`
+   - Ajouter entrée datée dans `HISTORY.md`
+   - Mettre à jour `TODO.md` si nécessaire
+
+### Liens GitHub Issues
+
+Pour les bugs et features : `https://github.com/CyberMind-FR/secubox-deb/issues`
+
+Quand créer une issue :
+- Bug non trivial nécessitant investigation
+- Feature request de l'utilisateur
+- Tâche à reporter pour plus tard
 
 ---
 
@@ -49,10 +78,15 @@ Chaque `package/secubox/luci-app-<module>/` devient un paquet Debian `secubox-<m
 ```
 secubox-deb/
 ├── .claude/                    ← Suivi de projet (lire en premier)
-│   ├── TODO.md
-│   ├── WIP.md
-│   ├── MIGRATION-MAP.md
-│   └── PATTERNS.md
+│   ├── WIP.md                  ← Travail en cours
+│   ├── TODO.md                 ← Backlog priorisé
+│   ├── HISTORY.md              ← Historique changements
+│   ├── MIGRATION-MAP.md        ← État migration modules
+│   ├── PATTERNS.md             ← Patterns code
+│   ├── MODULE-COMPLIANCE.md    ← Règles conformité
+│   ├── QUICKSHEET-REFERENCE.md ← Quick ref commandes
+│   ├── DESIGN-CHARTER.md       ← Charte UI/UX
+│   └── NOTES.md                ← Notes session
 ├── .github/workflows/          ← CI GitHub Actions cross-arm64
 │   ├── build-image.yml
 │   └── build-packages.yml
@@ -91,13 +125,18 @@ secubox-deb/
 │   ├── secubox-cdn/            ← luci-app-cdn-cache
 │   ├── secubox-vhost/          ← luci-app-vhost-manager
 │   └── secubox-system/         ← luci-app-system-hub
-├── scripts/                    ← Outils dev/déploiement
-│   ├── new-package.sh          ← Scaffold un nouveau paquet
+├── scripts/                    ← Outils dev/déploiement (voir scripts/README.md)
+│   ├── README.md               ← Documentation scripts
+│   ├── build-packages.sh       ← Build tous les .deb
 │   ├── deploy.sh               ← Déployer sur board via SSH
-│   ├── port-frontend.sh        ← Copier htdocs depuis secubox-openwrt
-│   └── rewrite-xhr.py          ← Réécrire /cgi-bin/luci → /api/v1
+│   ├── new-package.sh          ← Scaffold un nouveau paquet
+│   └── port-frontend.sh        ← Copier htdocs depuis secubox-openwrt
+├── remote-ui/                  ← Interfaces UI déportées (voir remote-ui/README.md)
+│   ├── README.md               ← Documentation remote-ui
+│   └── round/                  ← Eye Remote Dashboard Pi Zero W
 ├── docs/
-│   └── PORTING-GUIDE.md        ← Guide complet de portage module par module
+│   ├── TOOLS.md                ← Référence outils build/génération
+│   └── PORTING-GUIDE.md        ← Guide portage module par module
 ├── secubox.conf.example        ← /etc/secubox/secubox.conf (TOML)
 ├── setup-dev.sh                ← Installation environnement dev
 └── README.md
