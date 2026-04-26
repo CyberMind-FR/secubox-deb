@@ -55,6 +55,7 @@ class DashboardRenderer(DisplayRenderer):
         self.draw_circle_mask(draw)
 
         self._animation_offset += 0.02
+        assert self._frame is not None  # Frame created by create_frame()
         return self._frame
 
     def _draw_rings(self, draw: ImageDraw.ImageDraw, ctx: RenderContext) -> None:
@@ -73,15 +74,16 @@ class DashboardRenderer(DisplayRenderer):
             normalized = self._normalize_metric(ring["metric"], value)
 
             # Apply connection state visual feedback
+            r, g, b = color
             if ctx.connection_state == "degraded":
-                color = tuple(c // 2 for c in color)
+                color = (r // 2, g // 2, b // 2)
             elif ctx.connection_state == "stale":
                 # Pulsing effect when stale
                 pulse = (math.sin(self._animation_offset * 4) + 1) / 2
-                color = tuple(int(c * (0.5 + 0.5 * pulse)) for c in color)
+                color = (int(r * (0.5 + 0.5 * pulse)), int(g * (0.5 + 0.5 * pulse)), int(b * (0.5 + 0.5 * pulse)))
 
             # Draw background arc (very dim)
-            bg_color = tuple(c // 8 for c in color)
+            bg_color = (color[0] // 8, color[1] // 8, color[2] // 8)
             self._draw_arc(draw, cx, cy, radius, width, 0, 360, bg_color)
 
             # Draw value arc

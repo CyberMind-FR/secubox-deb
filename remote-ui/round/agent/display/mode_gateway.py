@@ -31,6 +31,7 @@ class GatewayRenderer(DisplayRenderer):
         self._draw_alerts(draw, ctx)
         self.draw_circle_mask(draw)
 
+        assert self._frame is not None  # Frame created by create_frame()
         return self._frame
 
     def _draw_mode_badge(self, draw: ImageDraw.ImageDraw) -> None:

@@ -50,6 +50,7 @@ class LocalRenderer(DisplayRenderer):
         self._draw_web_hint(draw)
         self.draw_circle_mask(draw)
 
+        assert self._frame is not None  # Frame created by create_frame()
         return self._frame
 
     def _draw_mode_badge(self, draw: ImageDraw.ImageDraw) -> None:
@@ -59,7 +60,7 @@ class LocalRenderer(DisplayRenderer):
         )
 
     def _draw_icon_grid(
-        self, draw: ImageDraw.ImageDraw, ctx: RenderContext
+        self, draw: ImageDraw.ImageDraw, _ctx: RenderContext
     ) -> None:
         """
         Draw a 3×2 icon grid in the middle of the display.
@@ -69,7 +70,7 @@ class LocalRenderer(DisplayRenderer):
             ctx: RenderContext with metrics
         """
         cx, cy = self.center
-        cols, rows = 3, 2
+        cols = 3
         spacing_x, spacing_y = 90, 80
         start_x = cx - spacing_x
         start_y = cy - 60
