@@ -322,8 +322,8 @@ def test_all_routes_registered():
     """All expected routes should be registered."""
     app = create_app()
 
-    # Get all registered paths
-    routes = [route.path for route in app.routes]
+    # Get all registered paths (filter to routes that have path attribute)
+    routes = [route.path for route in app.routes if hasattr(route, 'path')]
 
     # Check key routes are present
     assert "/api/health" in routes

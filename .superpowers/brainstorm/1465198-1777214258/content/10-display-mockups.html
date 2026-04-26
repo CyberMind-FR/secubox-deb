@@ -1,0 +1,83 @@
+<h2>Display Mockups — 480x480 Round</h2>
+<p class="subtitle">Visual design for each of the 4 modes</p>
+
+<div class="split" style="gap: 24px;">
+  <div class="mockup" style="flex: 1;">
+    <div class="mockup-header">Dashboard Mode</div>
+    <div class="mockup-body" style="background: #0a0a0f; height: 240px; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; overflow: hidden;">
+      <!-- Rings -->
+      <div style="position: absolute; inset: 0; border-radius: 50%; border: 6px solid #ff0064; opacity: 0.7;"></div>
+      <div style="position: absolute; inset: 8px; border-radius: 50%; border: 6px solid #ff6400; opacity: 0.6;"></div>
+      <div style="position: absolute; inset: 16px; border-radius: 50%; border: 6px solid #dcff00; opacity: 0.5;"></div>
+      <div style="position: absolute; inset: 24px; border-radius: 50%; border: 6px solid #00ff41; opacity: 0.4;"></div>
+      <div style="position: absolute; inset: 32px; border-radius: 50%; border: 6px solid #00ffff; opacity: 0.3;"></div>
+      <div style="position: absolute; inset: 40px; border-radius: 50%; border: 6px solid #b900ff; opacity: 0.2;"></div>
+      <!-- Center -->
+      <div style="z-index: 1; text-align: center;">
+        <div style="color: #0f0; font-size: 8px;">● OTG</div>
+        <div style="color: #fff; font-size: 20px; font-family: monospace;">14:32:07</div>
+        <div style="color: #888; font-size: 10px;">secubox-zero</div>
+        <div style="color: #0f0; font-size: 8px; margin-top: 4px;">● NOMINAL</div>
+      </div>
+    </div>
+    <p style="font-size: 11px; color: #888; margin-top: 8px;">6 metric rings, real-time SecuBox data, connection badge</p>
+  </div>
+
+  <div class="mockup" style="flex: 1;">
+    <div class="mockup-header">Local Mode</div>
+    <div class="mockup-body" style="background: #0a0a0f; height: 240px; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative;">
+      <div style="color: #0af; font-size: 8px; position: absolute; top: 20px;">● LOCAL</div>
+      <!-- Icon grid -->
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; text-align: center;">
+        <div style="font-size: 24px;">📡</div>
+        <div style="font-size: 24px;">🔋</div>
+        <div style="font-size: 24px;">💾</div>
+        <div style="font-size: 24px;">📶</div>
+        <div style="font-size: 24px;">⚙️</div>
+        <div style="font-size: 24px;">🔄</div>
+      </div>
+      <div style="color: #888; font-size: 10px; margin-top: 12px;">Pi Zero W • up 2h15m</div>
+      <div style="position: absolute; bottom: 20px; font-size: 9px; color: #666;">Web: eye-remote.local:8080</div>
+    </div>
+    <p style="font-size: 11px; color: #888; margin-top: 8px;">Pi Zero stats icons, uptime, web remote hint</p>
+  </div>
+</div>
+
+<div class="split" style="gap: 24px; margin-top: 24px;">
+  <div class="mockup" style="flex: 1;">
+    <div class="mockup-header">Flash Mode</div>
+    <div class="mockup-body" style="background: #1a0a0a; height: 240px; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative;">
+      <div style="color: #f80; font-size: 8px; position: absolute; top: 20px;">⚡ FLASH MODE</div>
+      <div style="font-size: 32px; margin-bottom: 8px;">💾</div>
+      <div style="color: #fff; font-size: 12px; font-family: monospace;">USB STORAGE</div>
+      <div style="color: #888; font-size: 10px;">2.0 GB • FAT32</div>
+      <!-- Progress bar -->
+      <div style="width: 120px; height: 8px; background: #333; border-radius: 4px; margin-top: 12px; overflow: hidden;">
+        <div style="width: 75%; height: 100%; background: linear-gradient(90deg, #f80, #ff0);"></div>
+      </div>
+      <div style="color: #888; font-size: 9px; margin-top: 4px;">Flashing: 75%</div>
+      <div style="position: absolute; bottom: 20px; color: #0f0; font-size: 8px; font-family: monospace;">U-Boot ready</div>
+    </div>
+    <p style="font-size: 11px; color: #888; margin-top: 8px;">USB storage status, flash progress, U-Boot state</p>
+  </div>
+
+  <div class="mockup" style="flex: 1;">
+    <div class="mockup-header">Gateway Mode</div>
+    <div class="mockup-body" style="background: #0a0a1a; height: 240px; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative;">
+      <div style="color: #a0f; font-size: 8px; position: absolute; top: 20px;">🌐 GATEWAY</div>
+      <div style="font-size: 24px; margin-bottom: 8px;">🖥️</div>
+      <!-- Fleet status -->
+      <div style="text-align: left; font-size: 11px; font-family: monospace;">
+        <div><span style="color: #0f0;">●</span> secubox-main</div>
+        <div><span style="color: #0f0;">●</span> secubox-lab</div>
+        <div><span style="color: #f00;">●</span> secubox-remote</div>
+        <div><span style="color: #0f0;">●</span> secubox-backup</div>
+      </div>
+      <div style="color: #888; font-size: 10px; margin-top: 12px;">Fleet: 3/4 online</div>
+      <div style="position: absolute; bottom: 20px; color: #f80; font-size: 8px;">▲ 1 alert</div>
+    </div>
+    <p style="font-size: 11px; color: #888; margin-top: 8px;">Multi-SecuBox fleet status, alerts summary</p>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top: 1.5rem; color: #0f0;">Display mockups OK? Type "ok" or suggest changes.</p>

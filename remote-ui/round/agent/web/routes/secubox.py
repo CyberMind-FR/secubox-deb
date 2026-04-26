@@ -9,7 +9,7 @@ License: Proprietary / ANSSI CSPN candidate
 from __future__ import annotations
 
 import logging
-from typing import List, Optional, Dict, Any
+from typing import List, Optional
 
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
@@ -78,7 +78,7 @@ async def get_secubox_status(request: Request) -> SecuBoxStatus:
         Connection status and transport info
     """
     failover = request.app.state.failover_monitor
-    config = request.app.state.config
+    _config = request.app.state.config  # Reserved for future use
 
     if failover:
         # TODO: Get actual status from failover monitor
@@ -93,7 +93,7 @@ async def get_secubox_status(request: Request) -> SecuBoxStatus:
 
 
 @router.get("/metrics", response_model=SecuBoxMetrics)
-async def get_secubox_metrics(request: Request) -> SecuBoxMetrics:
+async def get_secubox_metrics(_request: Request) -> SecuBoxMetrics:
     """
     Get SecuBox metrics.
 
@@ -110,7 +110,7 @@ async def get_secubox_metrics(request: Request) -> SecuBoxMetrics:
 
 
 @router.get("/modules", response_model=SecuBoxModulesResponse)
-async def get_secubox_modules(request: Request) -> SecuBoxModulesResponse:
+async def get_secubox_modules(_request: Request) -> SecuBoxModulesResponse:
     """
     Get SecuBox module status.
 
@@ -131,7 +131,7 @@ async def get_secubox_modules(request: Request) -> SecuBoxModulesResponse:
 
 
 @router.get("/alerts", response_model=SecuBoxAlertsResponse)
-async def get_secubox_alerts(request: Request) -> SecuBoxAlertsResponse:
+async def get_secubox_alerts(_request: Request) -> SecuBoxAlertsResponse:
     """
     Get SecuBox alerts.
 
@@ -183,7 +183,11 @@ async def restart_secubox_module(request: Request, module_name: str) -> dict:
 
 
 @router.get("/logs")
-async def get_secubox_logs(request: Request, module: Optional[str] = None, lines: int = 50) -> dict:
+async def get_secubox_logs(
+    _request: Request,
+    module: Optional[str] = None,  # noqa: ARG001 - Reserved for filtering
+    lines: int = 50,  # noqa: ARG001 - Reserved for pagination
+) -> dict:
     """
     Get SecuBox logs.
 
@@ -195,6 +199,7 @@ async def get_secubox_logs(request: Request, module: Optional[str] = None, lines
         Log entries
     """
     # TODO: Implement log retrieval from SecuBox
+    _ = module, lines  # Will be used when implemented
     return {
         "logs": [],
         "message": "Log retrieval not implemented",

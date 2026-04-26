@@ -1,0 +1,62 @@
+<h2>Touchless Control Methods</h2>
+<p class="subtitle">With the touchpad disabled, how should users interact with the Eye Remote?</p>
+
+<div class="section">
+  <p>You mentioned Bluetooth and WiFi as possibilities. The Pi Zero W has built-in WiFi and Bluetooth. Options:</p>
+</div>
+
+<div class="options" data-multiselect>
+  <div class="option" data-choice="bt-keyboard" onclick="toggleSelect(this)">
+    <div class="letter">1</div>
+    <div class="content">
+      <h3>Bluetooth Keyboard/Remote</h3>
+      <p>Pair a mini Bluetooth keyboard or media remote<br>
+      Arrow keys navigate, Enter selects, Escape goes back<br>
+      <em>Example: Rii mini keyboard, Fire TV remote</em></p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="bt-app" onclick="toggleSelect(this)">
+    <div class="letter">2</div>
+    <div class="content">
+      <h3>Bluetooth Phone App</h3>
+      <p>Phone acts as touchpad/keyboard via Bluetooth HID<br>
+      Apps like "Serverless Bluetooth Keyboard" or custom SecuBox app<br>
+      <em>Requires: Phone with BT, app install</em></p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="web-remote" onclick="toggleSelect(this)">
+    <div class="letter">3</div>
+    <div class="content">
+      <h3>Web Remote (WiFi)</h3>
+      <p>Local web server on Pi Zero serves control page<br>
+      Phone/laptop opens <code>http://eye-remote.local:8080/control</code><br>
+      Virtual buttons for navigation + settings<br>
+      <em>Requires: Same WiFi network or USB OTG</em></p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="display-only" onclick="toggleSelect(this)">
+    <div class="letter">4</div>
+    <div class="content">
+      <h3>Display-Only (No Navigation)</h3>
+      <p>Eye Remote is purely a status display<br>
+      All control via flag files on USB storage<br>
+      Mode changes require mount/unmount from host<br>
+      <em>Simplest, most reliable</em></p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="serial-cli" onclick="toggleSelect(this)">
+    <div class="letter">5</div>
+    <div class="content">
+      <h3>Serial Console (ACM)</h3>
+      <p>USB serial gadget already exists (ttyGS0)<br>
+      Text menu over serial: <code>screen /dev/ttyACM0 115200</code><br>
+      <em>Works: Always available via USB, no extra hardware</em></p>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top: 2rem;">Select all that should be supported (multi-select enabled)</p>

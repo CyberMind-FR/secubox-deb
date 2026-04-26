@@ -54,7 +54,7 @@ class BluetoothPairResponse(BaseModel):
 
 
 @router.get("/status", response_model=BluetoothStatus)
-async def get_bluetooth_status(request: Request) -> BluetoothStatus:
+async def get_bluetooth_status(_request: Request) -> BluetoothStatus:
     """
     Get Bluetooth adapter status.
 
@@ -71,7 +71,7 @@ async def get_bluetooth_status(request: Request) -> BluetoothStatus:
 
 
 @router.get("/devices", response_model=BluetoothDevicesResponse)
-async def get_bluetooth_devices(request: Request) -> BluetoothDevicesResponse:
+async def get_bluetooth_devices(_request: Request) -> BluetoothDevicesResponse:
     """
     Get list of known Bluetooth devices.
 
@@ -86,7 +86,7 @@ async def get_bluetooth_devices(request: Request) -> BluetoothDevicesResponse:
 
 
 @router.post("/scan", response_model=BluetoothDevicesResponse)
-async def scan_bluetooth_devices(request: Request) -> BluetoothDevicesResponse:
+async def scan_bluetooth_devices(_request: Request) -> BluetoothDevicesResponse:
     """
     Trigger Bluetooth device scan.
 
@@ -101,7 +101,7 @@ async def scan_bluetooth_devices(request: Request) -> BluetoothDevicesResponse:
 
 
 @router.post("/enable")
-async def enable_bluetooth(request: Request) -> dict:
+async def enable_bluetooth(_request: Request) -> dict:
     """
     Enable Bluetooth adapter.
 
@@ -113,7 +113,7 @@ async def enable_bluetooth(request: Request) -> dict:
 
 
 @router.post("/disable")
-async def disable_bluetooth(request: Request) -> dict:
+async def disable_bluetooth(_request: Request) -> dict:
     """
     Disable Bluetooth adapter.
 

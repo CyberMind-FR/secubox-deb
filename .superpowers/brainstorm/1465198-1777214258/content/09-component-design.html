@@ -1,0 +1,92 @@
+<h2>Component Architecture</h2>
+<p class="subtitle">Detailed breakdown of the Unified Python Agent</p>
+
+<div class="section">
+  <h3>📁 File Structure</h3>
+  <pre style="background: #111; padding: 12px; border-radius: 6px; font-size: 11px; overflow-x: auto;">
+remote-ui/round/
+├── agent/
+│   ├── main.py              # Entry point, async event loop
+│   ├── config.py            # Settings from TOML + flag files
+│   ├── <strong>mode_manager.py</strong>      # NEW: State machine for 4 modes
+│   ├── <strong>failover.py</strong>          # NEW: Connection monitoring + transitions
+│   ├── display/
+│   │   ├── renderer.py      # Framebuffer rendering (from fb_dashboard.py)
+│   │   ├── <strong>mode_dashboard.py</strong> # Dashboard mode display
+│   │   ├── <strong>mode_local.py</strong>     # Local mode display
+│   │   ├── <strong>mode_flash.py</strong>     # Flash mode display
+│   │   └── <strong>mode_gateway.py</strong>   # Gateway mode display
+│   ├── web/
+│   │   ├── <strong>server.py</strong>        # NEW: FastAPI app for Web Remote
+│   │   ├── <strong>routes/</strong>
+│   │   │   ├── mode.py      # Mode switching endpoints
+│   │   │   ├── wifi.py      # WiFi configuration
+│   │   │   ├── bluetooth.py # Bluetooth management
+│   │   │   ├── display.py   # Display settings
+│   │   │   ├── devices.py   # SecuBox device manager
+│   │   │   ├── system.py    # System actions
+│   │   │   └── secubox.py   # SecuBox remote control
+│   │   └── <strong>static/</strong>
+│   │       └── control.html # Web Remote UI (single page)
+│   ├── system/
+│   │   ├── <strong>wifi_manager.py</strong>  # NEW: nmcli wrapper
+│   │   ├── <strong>bt_manager.py</strong>    # NEW: bluetoothctl wrapper
+│   │   └── <strong>display_ctl.py</strong>   # NEW: brightness, timeout
+│   └── secubox_client.py    # Existing: API client
+├── files/
+│   └── etc/secubox/eye-remote/
+│       ├── gadget-setup.sh  # Existing
+│       └── <strong>eye-remote.toml</strong>  # NEW: Unified config
+└── <strong>secubox-eye-agent.service</strong> # Systemd unit (updated)
+  </pre>
+</div>
+
+<div class="section">
+  <h3>🔀 Mode State Machine</h3>
+  <div style="background: #111; padding: 16px; border-radius: 8px; font-family: monospace; font-size: 12px;">
+    <div style="display: flex; justify-content: space-around; text-align: center;">
+      <div>
+        <div style="background: #0a3a0a; padding: 8px 16px; border-radius: 4px; margin-bottom: 8px;">DASHBOARD</div>
+        <div style="color: #888; font-size: 10px;">API OK</div>
+      </div>
+      <div style="color: #666; padding-top: 12px;">↔</div>
+      <div>
+        <div style="background: #0a2a3a; padding: 8px 16px; border-radius: 4px; margin-bottom: 8px;">LOCAL</div>
+        <div style="color: #888; font-size: 10px;">API timeout 60s</div>
+      </div>
+    </div>
+    <div style="text-align: center; color: #666; margin: 8px 0;">↑ auto-detect ↓ flag override</div>
+    <div style="display: flex; justify-content: space-around; text-align: center;">
+      <div>
+        <div style="background: #3a2a0a; padding: 8px 16px; border-radius: 4px; margin-bottom: 8px;">FLASH</div>
+        <div style="color: #888; font-size: 10px;">/FORCE_FLASH</div>
+      </div>
+      <div style="color: #666; padding-top: 12px;">|</div>
+      <div>
+        <div style="background: #2a0a3a; padding: 8px 16px; border-radius: 4px; margin-bottom: 8px;">GATEWAY</div>
+        <div style="color: #888; font-size: 10px;">/FORCE_GATEWAY</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>🌐 Web Remote API</h3>
+  <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+    <tr style="border-bottom: 1px solid #333;">
+      <th style="text-align: left; padding: 6px;">Endpoint</th>
+      <th style="text-align: left; padding: 6px;">Method</th>
+      <th style="text-align: left; padding: 6px;">Purpose</th>
+    </tr>
+    <tr style="border-bottom: 1px solid #222;"><td style="padding: 6px;"><code>/api/mode</code></td><td>GET/POST</td><td>Get/set current mode</td></tr>
+    <tr style="border-bottom: 1px solid #222;"><td style="padding: 6px;"><code>/api/wifi/scan</code></td><td>GET</td><td>Scan available networks</td></tr>
+    <tr style="border-bottom: 1px solid #222;"><td style="padding: 6px;"><code>/api/wifi/connect</code></td><td>POST</td><td>Connect to SSID</td></tr>
+    <tr style="border-bottom: 1px solid #222;"><td style="padding: 6px;"><code>/api/bluetooth/devices</code></td><td>GET</td><td>List paired/available</td></tr>
+    <tr style="border-bottom: 1px solid #222;"><td style="padding: 6px;"><code>/api/display/brightness</code></td><td>POST</td><td>Set brightness 0-100</td></tr>
+    <tr style="border-bottom: 1px solid #222;"><td style="padding: 6px;"><code>/api/devices</code></td><td>GET/POST</td><td>SecuBox device list</td></tr>
+    <tr style="border-bottom: 1px solid #222;"><td style="padding: 6px;"><code>/api/system/reboot</code></td><td>POST</td><td>Reboot Eye Remote</td></tr>
+    <tr><td style="padding: 6px;"><code>/api/secubox/{id}/restart</code></td><td>POST</td><td>Restart SecuBox service</td></tr>
+  </table>
+</div>
+
+<p class="subtitle" style="margin-top: 1.5rem; color: #0f0;">Component structure OK? Type "ok" or suggest changes.</p>

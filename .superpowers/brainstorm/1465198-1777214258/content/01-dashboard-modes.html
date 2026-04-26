@@ -1,0 +1,50 @@
+<h2>Eye Remote Dashboard Modes</h2>
+<p class="subtitle">How should the Eye Remote switch between different operating modes?</p>
+
+<div class="section">
+  <p>You mentioned several modes: <strong>metrics display</strong> (when SecuBox API available), <strong>icons mode</strong> (RPi Zero standalone), <strong>storage-only</strong> vs <strong>multi-gadget</strong>. Let's clarify the primary operating modes.</p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Two Modes: Connected vs Standalone</h3>
+      <p><strong>Connected:</strong> Real metrics from SecuBox API (OTG/WiFi)<br>
+      <strong>Standalone:</strong> Local Pi Zero stats + icon menu for actions</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Simple mental model</li><li>Auto-detect based on connectivity</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Less granular control</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Three Modes: Metrics / Icons / Storage</h3>
+      <p><strong>Metrics:</strong> Real SecuBox data when API available<br>
+      <strong>Icons:</strong> Touch-free menu navigation (Pi Zero local)<br>
+      <strong>Storage:</strong> USB mass storage only (boot media for ESPRESSObin)</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Clear separation of concerns</li><li>Dedicated flash/recovery mode</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Mode switching complexity</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Four Modes: Swiss Army Full Control</h3>
+      <p><strong>Dashboard:</strong> Real-time metrics (API connected)<br>
+      <strong>Local:</strong> Pi Zero self-monitoring + settings<br>
+      <strong>Flash:</strong> USB storage + U-Boot console (recovery)<br>
+      <strong>Gateway:</strong> Multi-SecuBox fleet aggregation</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Maximum flexibility</li><li>Future-proof for fleet management</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>More UI states to design</li><li>Higher complexity</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>

@@ -54,7 +54,7 @@ class WifiConnectResponse(BaseModel):
 
 
 @router.get("/status", response_model=WifiStatus)
-async def get_wifi_status(request: Request) -> WifiStatus:
+async def get_wifi_status(_request: Request) -> WifiStatus:
     """
     Get current WiFi connection status.
 
@@ -71,7 +71,7 @@ async def get_wifi_status(request: Request) -> WifiStatus:
 
 
 @router.get("/networks", response_model=WifiNetworksResponse)
-async def get_wifi_networks(request: Request) -> WifiNetworksResponse:
+async def get_wifi_networks(_request: Request) -> WifiNetworksResponse:
     """
     Get list of available WiFi networks.
 
@@ -86,7 +86,7 @@ async def get_wifi_networks(request: Request) -> WifiNetworksResponse:
 
 
 @router.post("/scan", response_model=WifiNetworksResponse)
-async def scan_wifi_networks(request: Request) -> WifiNetworksResponse:
+async def scan_wifi_networks(_request: Request) -> WifiNetworksResponse:
     """
     Trigger WiFi network scan.
 
@@ -120,7 +120,7 @@ async def connect_wifi(request: Request, body: WifiConnectRequest) -> WifiConnec
 
 
 @router.post("/disconnect", response_model=WifiConnectResponse)
-async def disconnect_wifi(request: Request) -> WifiConnectResponse:
+async def disconnect_wifi(_request: Request) -> WifiConnectResponse:
     """
     Disconnect from current WiFi network.
 

@@ -89,7 +89,7 @@ async def list_devices(request: Request) -> DevicesResponse:
 
 
 @router.post("/scan", response_model=ScanResponse)
-async def scan_devices(request: Request) -> ScanResponse:
+async def scan_devices(_request: Request) -> ScanResponse:
     """
     Scan for SecuBox devices on the network.
 
