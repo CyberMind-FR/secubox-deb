@@ -9,13 +9,16 @@ License: Proprietary / ANSSI CSPN candidate
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from pathlib import Path
 from typing import Optional, TYPE_CHECKING
 
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+
+from agent.web.websocket import ConnectionManager, MessageType, create_message
 
 if TYPE_CHECKING:
     from agent.mode_manager import ModeManager
@@ -354,6 +357,10 @@ def create_app(
         version="1.0.0",
     )
 
+    # Create WebSocket connection manager
+    ws_manager = ConnectionManager()
+    app.state.ws_manager = ws_manager
+
     # Store dependencies in app state
     app.state.mode_manager = mode_manager
     app.state.failover_monitor = failover_monitor
@@ -380,6 +387,64 @@ def create_app(
     async def health_check():
         """Health check endpoint."""
         return {"status": "ok", "service": "eye-remote-web"}
+
+    # WebSocket endpoint for real-time updates
+    @app.websocket("/ws")
+    async def websocket_endpoint(websocket: WebSocket):
+        """
+        WebSocket endpoint for real-time updates.
+
+        Accepts connections, sends initial state, and handles
+        ping/pong keepalive and incoming commands.
+        """
+        await ws_manager.connect(websocket)
+
+        # Send initial state on connect
+        initial_state = {
+            "type": "initial_state",
+            "data": {
+                "mode": mode_manager.current_mode.value if mode_manager else "unknown",
+                "connected": True,
+            },
+        }
+        await ws_manager.send_to(websocket, initial_state)
+
+        try:
+            while True:
+                # Receive and handle incoming messages
+                data = await websocket.receive_text()
+
+                try:
+                    message = json.loads(data)
+                    msg_type = message.get("type", "")
+
+                    if msg_type == "ping":
+                        # Respond with pong for keepalive
+                        await ws_manager.send_to(
+                            websocket,
+                            create_message(MessageType.PONG, {})
+                        )
+                    elif msg_type == "subscribe":
+                        # Handle subscription requests (future use)
+                        await ws_manager.send_to(
+                            websocket,
+                            {"type": "subscribed", "data": message.get("topics", [])}
+                        )
+                    else:
+                        # Echo unknown types for debugging
+                        await ws_manager.send_to(
+                            websocket,
+                            {"type": "ack", "received_type": msg_type}
+                        )
+
+                except json.JSONDecodeError:
+                    await ws_manager.send_to(
+                        websocket,
+                        {"type": "error", "message": "Invalid JSON"}
+                    )
+
+        except WebSocketDisconnect:
+            await ws_manager.disconnect(websocket)
 
     # Control page
     @app.get("/control", response_class=HTMLResponse, tags=["ui"])
