@@ -154,14 +154,15 @@ done
 [[ ! -f "$SOURCE_IMAGE" ]] && err "Image not found: $SOURCE_IMAGE"
 
 # Set package list based on build mode
+# Note: IMAGE_EXPAND_MB must account for embedded storage.img (~2.5GB)
 if [[ "$BUILD_MODE" == "browser" ]]; then
     log "Build mode: BROWSER (Chromium kiosk)"
     PACKAGES=("${PACKAGES_FRAMEBUFFER[@]}" "${PACKAGES_BROWSER[@]}")
-    IMAGE_EXPAND_MB=1536  # More space for browser
+    IMAGE_EXPAND_MB=4096  # Space for browser + embedded storage.img
 else
     log "Build mode: FRAMEBUFFER (Python/PIL direct)"
     PACKAGES=("${PACKAGES_FRAMEBUFFER[@]}")
-    IMAGE_EXPAND_MB=768   # Space for PIL and dependencies
+    IMAGE_EXPAND_MB=3584  # Space for PIL + embedded storage.img (~2.5GB)
 fi
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -217,13 +218,16 @@ dd if=/dev/zero bs=1M count=${IMAGE_EXPAND_MB} >> "$WORK_IMG" 2>/dev/null
 PART_INFO=$(parted -s "$WORK_IMG" unit s print 2>/dev/null | grep "^ 2" || true)
 if [[ -n "$PART_INFO" ]]; then
     # Resize partition 2 to fill space
-    parted -s "$WORK_IMG" resizepart 2 100%
+    parted -s "$WORK_IMG" resizepart 2 100% || warn "parted resizepart warning (may be OK)"
     log "Root partition expanded"
 fi
 
-# Setup loop device
+# Setup loop device (redirect stderr to avoid warning polluting LOOP_DEV)
 log "Setting up loop device..."
-LOOP_DEV=$(losetup -fP --show "$WORK_IMG")
+LOOP_DEV=$(losetup -fP --show "$WORK_IMG" 2>/dev/null)
+if [[ -z "$LOOP_DEV" ]]; then
+    err "Failed to setup loop device"
+fi
 
 cleanup() {
     log "Cleaning up..."
@@ -517,8 +521,8 @@ touch "$CHROOT_LOG"
 tail -f "$CHROOT_LOG" &
 TAIL_PID=$!
 
-# Run chroot with unbuffered output directly to file
-if timeout --kill-after=60s 1200s stdbuf -oL -eL chroot "$ROOT_MNT" /tmp/install-packages.sh > "$CHROOT_LOG" 2>&1; then
+# Run chroot directly to file (stdbuf doesn't work with chroot)
+if timeout --kill-after=60s 1200s chroot "$ROOT_MNT" /tmp/install-packages.sh > "$CHROOT_LOG" 2>&1; then
     kill $TAIL_PID 2>/dev/null || true
     wait $TAIL_PID 2>/dev/null || true
     log "Package installation completed successfully"
