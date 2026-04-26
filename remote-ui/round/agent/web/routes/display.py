@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     pass  # Future type imports
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 log = logging.getLogger(__name__)
@@ -65,16 +65,25 @@ async def get_display_settings(request: Request) -> DisplaySettings:
     Returns:
         Current display settings
     """
-    # Get config if available
-    config = request.app.state.config
-    if config and hasattr(config, 'display'):
-        return DisplaySettings(
-            brightness=config.display.brightness,
-            timeout_seconds=config.display.timeout_seconds,
-            theme=config.display.theme,
-        )
+    try:
+        display_controller = request.app.state.display_controller
+        status = await display_controller.status()
 
-    return DisplaySettings()
+        # Get theme from config if available
+        theme = "neon"
+        config = request.app.state.config
+        if config and hasattr(config, 'display') and hasattr(config.display, 'theme'):
+            theme = config.display.theme
+
+        return DisplaySettings(
+            brightness=status.brightness,
+            timeout_seconds=status.timeout_seconds,
+            theme=theme,
+            rotation=0,
+        )
+    except Exception as e:
+        log.error(f"Display settings check failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get display settings")
 
 
 @router.post("/brightness", response_model=BrightnessResponse)
@@ -88,12 +97,23 @@ async def set_brightness(request: Request, body: BrightnessRequest) -> Brightnes
     Returns:
         Operation result with new brightness
     """
-    # TODO: Implement actual brightness control via sysfs/backlight
-    log.info(f"Setting brightness to {body.value}")
-    return BrightnessResponse(
-        success=True,
-        brightness=body.value,
-    )
+    try:
+        display_controller = request.app.state.display_controller
+        log.info(f"Setting brightness to {body.value}")
+        success = await display_controller.set_brightness(body.value)
+        if success:
+            return BrightnessResponse(
+                success=True,
+                brightness=body.value,
+            )
+        else:
+            return BrightnessResponse(
+                success=False,
+                brightness=await display_controller.get_brightness(),
+            )
+    except Exception as e:
+        log.error(f"Set brightness failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to set display brightness")
 
 
 @router.post("/theme", response_model=OperationResponse)
@@ -133,41 +153,68 @@ async def set_timeout(request: Request, body: TimeoutRequest) -> OperationRespon
     Returns:
         Operation result
     """
-    # TODO: Implement actual timeout control
-    log.info(f"Setting screen timeout to {body.timeout_seconds}s")
-    return OperationResponse(
-        success=True,
-        message=f"Timeout set to {body.timeout_seconds}s",
-    )
+    try:
+        display_controller = request.app.state.display_controller
+        log.info(f"Setting screen timeout to {body.timeout_seconds}s")
+        await display_controller.set_timeout(body.timeout_seconds)
+        return OperationResponse(
+            success=True,
+            message=f"Timeout set to {body.timeout_seconds}s",
+        )
+    except Exception as e:
+        log.error(f"Set timeout failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to set display timeout")
 
 
 @router.post("/wake", response_model=OperationResponse)
-async def wake_display(_request: Request) -> OperationResponse:
+async def wake_display(request: Request) -> OperationResponse:
     """
     Wake the display from sleep.
 
     Returns:
         Operation result
     """
-    # TODO: Implement actual display wake
-    log.info("Waking display")
-    return OperationResponse(
-        success=True,
-        message="Display wake requested",
-    )
+    try:
+        display_controller = request.app.state.display_controller
+        log.info("Waking display")
+        success = await display_controller.wake()
+        if success:
+            return OperationResponse(
+                success=True,
+                message="Display woken",
+            )
+        else:
+            return OperationResponse(
+                success=False,
+                message="Failed to wake display",
+            )
+    except Exception as e:
+        log.error(f"Wake display failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to wake display")
 
 
 @router.post("/sleep", response_model=OperationResponse)
-async def sleep_display(_request: Request) -> OperationResponse:
+async def sleep_display(request: Request) -> OperationResponse:
     """
     Put the display to sleep.
 
     Returns:
         Operation result
     """
-    # TODO: Implement actual display sleep
-    log.info("Sleeping display")
-    return OperationResponse(
-        success=True,
-        message="Display sleep requested",
-    )
+    try:
+        display_controller = request.app.state.display_controller
+        log.info("Sleeping display")
+        success = await display_controller.sleep()
+        if success:
+            return OperationResponse(
+                success=True,
+                message="Display sleeping",
+            )
+        else:
+            return OperationResponse(
+                success=False,
+                message="Failed to put display to sleep",
+            )
+    except Exception as e:
+        log.error(f"Sleep display failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to put display to sleep")

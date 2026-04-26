@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from agent.mode_manager import ModeManager
     from agent.failover import FailoverMonitor
     from agent.config import Config
+    from agent.system import WifiManager, BluetoothManager, DisplayController
 
 log = logging.getLogger(__name__)
 
@@ -326,6 +327,9 @@ def create_app(
     mode_manager: Optional["ModeManager"] = None,
     failover_monitor: Optional["FailoverMonitor"] = None,
     config: Optional["Config"] = None,
+    wifi_manager: Optional["WifiManager"] = None,
+    bluetooth_manager: Optional["BluetoothManager"] = None,
+    display_controller: Optional["DisplayController"] = None,
 ) -> FastAPI:
     """
     Create FastAPI application for Eye Remote web control.
@@ -334,10 +338,16 @@ def create_app(
         mode_manager: ModeManager instance for mode control
         failover_monitor: FailoverMonitor instance for connection status
         config: Config instance with settings
+        wifi_manager: WifiManager instance for WiFi control
+        bluetooth_manager: BluetoothManager instance for Bluetooth control
+        display_controller: DisplayController instance for display control
 
     Returns:
         Configured FastAPI application
     """
+    # Import system controllers here to avoid circular imports
+    from agent.system import WifiManager, BluetoothManager, DisplayController
+
     app = FastAPI(
         title="Eye Remote Web API",
         description="Web control API for SecuBox Eye Remote device",
@@ -348,6 +358,11 @@ def create_app(
     app.state.mode_manager = mode_manager
     app.state.failover_monitor = failover_monitor
     app.state.config = config
+
+    # System controllers (create defaults if not provided)
+    app.state.wifi_manager = wifi_manager or WifiManager()
+    app.state.bluetooth_manager = bluetooth_manager or BluetoothManager()
+    app.state.display_controller = display_controller or DisplayController()
 
     # Import and include routers
     from agent.web.routes import mode, wifi, bluetooth, display, devices, system, secubox
@@ -398,6 +413,9 @@ class WebServer:
         mode_manager: Optional["ModeManager"] = None,
         failover_monitor: Optional["FailoverMonitor"] = None,
         config: Optional["Config"] = None,
+        wifi_manager: Optional["WifiManager"] = None,
+        bluetooth_manager: Optional["BluetoothManager"] = None,
+        display_controller: Optional["DisplayController"] = None,
     ):
         """
         Initialize WebServer.
@@ -408,6 +426,9 @@ class WebServer:
             mode_manager: ModeManager instance
             failover_monitor: FailoverMonitor instance
             config: Config instance
+            wifi_manager: WifiManager instance
+            bluetooth_manager: BluetoothManager instance
+            display_controller: DisplayController instance
         """
         self.host = host
         self.port = port
@@ -415,6 +436,9 @@ class WebServer:
             mode_manager=mode_manager,
             failover_monitor=failover_monitor,
             config=config,
+            wifi_manager=wifi_manager,
+            bluetooth_manager=bluetooth_manager,
+            display_controller=display_controller,
         )
         self._server = None
         self._serve_task = None
