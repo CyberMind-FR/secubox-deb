@@ -13,7 +13,7 @@
 
 set -euo pipefail
 
-readonly VERSION="2.3.0"
+readonly VERSION="2.4.0"
 readonly GADGET="/sys/kernel/config/usb_gadget/secubox"
 
 # Mass storage configuration
@@ -177,12 +177,89 @@ gadget_status() {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Storage-only gadget (for U-Boot compatibility)
+# U-Boot has limited support for composite gadgets - this mode exposes
+# only mass storage for reliable detection from U-Boot USB commands
+# ═══════════════════════════════════════════════════════════════════════════════
+
+gadget_storage_only() {
+    log "Starting USB gadget v${VERSION} (STORAGE-ONLY mode for U-Boot)..."
+
+    # Clean up any existing gadget
+    gadget_down
+
+    # Create storage image if needed
+    create_storage_image
+
+    # Create gadget directory and enter it
+    mkdir -p "$GADGET" && cd "$GADGET"
+
+    # USB IDs - Use standard mass storage class for maximum compatibility
+    echo 0x1d6b > idVendor      # Linux Foundation
+    echo 0x0100 > idProduct     # Mass Storage (not composite)
+    echo 0x0200 > bcdDevice
+
+    # USB class: Defined at interface level for single-function device
+    echo 0x00 > bDeviceClass
+    echo 0x00 > bDeviceSubClass
+    echo 0x00 > bDeviceProtocol
+
+    # Strings (0x409 = US English)
+    mkdir -p strings/0x409
+    echo "CyberMind SecuBox" > strings/0x409/manufacturer
+    echo "Eye Remote Boot Media" > strings/0x409/product
+    SERIAL=$(grep -oP 'Serial\s*:\s*\K[0-9a-f]+' /proc/cpuinfo 2>/dev/null || echo "0000001")
+    echo "$SERIAL" > strings/0x409/serialnumber
+
+    # Function: Mass Storage ONLY
+    mkdir -p functions/mass_storage.usb0/lun.0
+    echo 1 > functions/mass_storage.usb0/lun.0/removable
+    echo 0 > functions/mass_storage.usb0/lun.0/cdrom
+    echo 0 > functions/mass_storage.usb0/lun.0/ro
+    echo 0 > functions/mass_storage.usb0/lun.0/nofua
+    echo "$STORAGE_IMAGE" > functions/mass_storage.usb0/lun.0/file
+
+    # Configuration
+    mkdir -p configs/c.1/strings/0x409
+    echo "SecuBox Eye Remote Boot Media" > configs/c.1/strings/0x409/configuration
+    echo 200 > configs/c.1/MaxPower
+
+    # Link function to configuration
+    ln -sf functions/mass_storage.usb0 configs/c.1/
+
+    # Bind to UDC
+    UDC=$(ls /sys/class/udc/ | head -1)
+    if [[ -z "$UDC" ]]; then
+        log "ERROR: No UDC found"
+        return 1
+    fi
+    echo "$UDC" > UDC
+
+    log "Storage-only gadget started on $UDC"
+    log "U-Boot should now see: 1 Storage Device(s) found"
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Main
 # ═══════════════════════════════════════════════════════════════════════════════
 
 case "${1:-}" in
-    up|start)   gadget_up ;;
-    down|stop)  gadget_down ;;
-    status)     gadget_status ;;
-    *)          echo "Usage: $0 {up|down|status}"; exit 1 ;;
+    up|start)        gadget_up ;;
+    down|stop)       gadget_down ;;
+    status)          gadget_status ;;
+    storage|uboot)   gadget_storage_only ;;
+    *)
+        echo "Usage: $0 {up|down|status|storage}"
+        echo ""
+        echo "Commands:"
+        echo "  up|start   - Start composite gadget (ECM + ACM + Storage)"
+        echo "  down|stop  - Stop gadget"
+        echo "  status     - Show gadget status"
+        echo "  storage    - Start storage-only gadget (for U-Boot compatibility)"
+        echo ""
+        echo "Note: U-Boot has limited support for composite USB gadgets."
+        echo "Use 'storage' mode when flashing from U-Boot, then switch to 'up'"
+        echo "for normal operation with network and serial console."
+        exit 1
+        ;;
 esac
