@@ -540,6 +540,52 @@ rm -f "$ROOT_MNT/usr/sbin/policy-rc.d"
 log "Packages installed successfully"
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# INSTALL SECUBOX PACKAGES (slipstream from output/debs)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+log "Installing SecuBox packages..."
+
+# Find SecuBox .deb packages
+REPO_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
+OUTPUT_DEBS="${REPO_DIR}/output/debs"
+
+if [[ -d "$OUTPUT_DEBS" ]]; then
+    DEB_COUNT=$(find "$OUTPUT_DEBS" -maxdepth 1 -name "secubox-*.deb" 2>/dev/null | wc -l)
+
+    if [[ $DEB_COUNT -gt 0 ]]; then
+        log "Found $DEB_COUNT SecuBox packages to install"
+
+        # Copy packages to chroot
+        mkdir -p "$ROOT_MNT/tmp/secubox-debs"
+        cp "$OUTPUT_DEBS"/secubox-*.deb "$ROOT_MNT/tmp/secubox-debs/" 2>/dev/null || true
+
+        # Install secubox-core first (dependency for all)
+        if ls "$ROOT_MNT/tmp/secubox-debs/secubox-core_"*.deb >/dev/null 2>&1; then
+            log "Installing secubox-core..."
+            chroot "$ROOT_MNT" dpkg -i --force-depends /tmp/secubox-debs/secubox-core_*.deb 2>&1 | tail -5 || true
+        fi
+
+        # Install all packages
+        log "Installing remaining SecuBox packages..."
+        chroot "$ROOT_MNT" bash -c 'dpkg -i --force-depends --force-overwrite /tmp/secubox-debs/*.deb 2>&1 || true' | tail -20
+
+        # Fix broken dependencies
+        chroot "$ROOT_MNT" apt-get -f install -y --fix-broken 2>&1 | tail -5 || true
+
+        # Count installed
+        INSTALLED_COUNT=$(chroot "$ROOT_MNT" bash -c 'dpkg -l "secubox-*" 2>/dev/null | grep "^ii" | wc -l || echo 0')
+        log "Installed $INSTALLED_COUNT SecuBox packages"
+
+        # Cleanup
+        rm -rf "$ROOT_MNT/tmp/secubox-debs"
+    else
+        warn "No SecuBox packages found in $OUTPUT_DEBS"
+    fi
+else
+    warn "SecuBox debs directory not found: $OUTPUT_DEBS"
+fi
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # CONFIGURE ROOT FILESYSTEM
 # ═══════════════════════════════════════════════════════════════════════════════
 
