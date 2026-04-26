@@ -1,54 +1,68 @@
-# 👁️ Eye Remote
+# 👁️ Eye Remote — Addon
 
-**SecuBox Eye Remote** — Compact USB gadget display for SecuBox monitoring and boot device.
+**SecuBox Eye Remote** — Addon de monitoring USB gadget pour SecuBox OS.
+
+> **Note:** Eye Remote est un **addon optionnel** pour SecuBox OS.
+> Il n'est pas nécessaire pour utiliser SecuBox OS, mais offre un affichage
+> déporté pratique pour le monitoring et le débogage.
 
 **Hardware:** Raspberry Pi Zero W + HyperPixel 2.1 Round (480×480)
 
 ---
 
-## Quick Links
+## Pour qui ?
+
+| Cas d'usage | Description |
+|-------------|-------------|
+| **Datacenter** | Monitoring visuel sans écran sur appliance |
+| **Debug terrain** | Console série + affichage status |
+| **Démonstration** | Dashboard compact pour salons/présentations |
+| **Récupération** | Boot USB de secours via mass storage |
+
+---
+
+## Documentation
 
 | Page | Description |
 |------|-------------|
-| [[Eye-Remote-Hardware]] | Hardware setup, GPIO, display config |
-| [[Eye-Remote-Implementation]] | Software architecture, agent, renderer |
-| [[Eye-Remote-Bootstrap]] | Boot device, A/B slots, mass storage |
-| [[Eye-Remote-Gateway]] | Gateway emulator for testing |
-| [[eye-remote-icons]] | Icon reference with images |
+| [[Eye-Remote-Hardware]] | Configuration matérielle, GPIO, display |
+| [[Eye-Remote-Implementation]] | Architecture logicielle, agent, renderer |
+| [[Eye-Remote-Bootstrap]] | Boot device, slots A/B, mass storage |
+| [[Eye-Remote-Gateway]] | Émulateur gateway pour tests |
 
 ---
 
 ## Features
 
-### Display Dashboard
-- 480×480 round framebuffer display
-- Radial menu system with 6 slices
-- Real-time SecuBox metrics
-- Touch navigation
+### Dashboard circulaire
+- Affichage framebuffer 480×480 rond
+- 6 anneaux de status (AUTH, WALL, BOOT, MIND, ROOT, MESH)
+- Métriques temps réel SecuBox
+- Navigation tactile
 
-### USB Connection
-- CDC-ECM network (10.55.0.2 ↔ 10.55.0.1)
-- CDC-ACM serial console
-- Mass storage for boot images
+### Connexion USB OTG
+- **CDC-ECM** : réseau 10.55.0.2 ↔ 10.55.0.1
+- **CDC-ACM** : console série
+- **Mass Storage** : images de boot
 
-### Boot Device
-- A/B slot boot media
-- Atomic swap for safe updates
-- 4-level rollback (R1-R4)
-- TFTP netboot server
+### Boot Device (optionnel)
+- Slots A/B pour boot media
+- Swap atomique pour mises à jour sécurisées
+- Rollback 4 niveaux (R1-R4)
+- Serveur TFTP netboot
 
 ---
 
-## Connection Diagram
+## Schéma de connexion
 
 ```
 ┌─────────────────┐     USB OTG      ┌─────────────────┐
-│   Eye Remote    │◄────────────────►│    SecuBox      │
+│   Eye Remote    │◄────────────────►│   SecuBox OS    │
 │  Pi Zero W      │   10.55.0.0/30   │   Appliance     │
 │  HyperPixel 2.1 │                  │                 │
 └─────────────────┘                  └─────────────────┘
        │                                     │
-       │ Display                             │ LAN
+       │ Display                             │ LAN/WAN
        ▼                                     ▼
   ┌─────────┐                          ┌─────────┐
   │ 480×480 │                          │ Network │
@@ -58,45 +72,44 @@
 
 ---
 
-## Radial Menu
-
-The display shows a radial menu with 6 colored slices:
-
-| Slice | Color | Function |
-|-------|-------|----------|
-| 0 | #C04E24 | DEVICES |
-| 1 | #9A6010 | SECUBOX |
-| 2 | #803018 | LOCAL |
-| 3 | #3D35A0 | NETWORK |
-| 4 | #0A5840 | SECURITY |
-| 5 | #104A88 | EXIT |
-
-See [[eye-remote-icons]] for complete icon reference.
-
----
-
 ## Build & Deploy
 
 ```bash
-# Build Eye Remote image
+# Prérequis: SecuBox OS déjà déployé sur l'appliance cible
+
+# Build image Eye Remote
 cd remote-ui/round
 sudo ./build-eye-remote-image.sh -i raspios-lite.img.xz
 
-# Flash to SD card
+# Flasher sur carte SD
 sudo dd if=eye-remote.img of=/dev/sdX bs=4M status=progress
 
-# Test with gateway emulator
-cd tools/secubox-eye-gateway
-./secubox-eye-gateway --profile stressed
+# Brancher le Pi Zero W sur le port USB de l'appliance SecuBox
+# (port DATA, pas PWR)
 ```
 
 ---
 
-## Translations
+## Palette de couleurs
+
+| Module | Couleur | Hex |
+|--------|---------|-----|
+| AUTH | Orange | #C04E24 |
+| WALL | Jaune-brun | #9A6010 |
+| BOOT | Rouge-brun | #803018 |
+| MIND | Violet | #3D35A0 |
+| ROOT | Vert | #0A5840 |
+| MESH | Bleu | #104A88 |
+
+Voir [[eye-remote-icons]] pour la référence des icônes.
+
+---
+
+## Traductions
 
 - [[Eye-Remote-Bootstrap-FR|Français]]
 - [[Eye-Remote-Bootstrap-ZH|中文]]
 
 ---
 
-*← Back to [[Home|SecuBox Wiki]]*
+*← Retour à [[Home|SecuBox OS]]*

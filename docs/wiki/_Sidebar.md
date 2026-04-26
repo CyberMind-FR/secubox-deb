@@ -1,17 +1,17 @@
-**[SecuBox-Deb](Home)** · [FR](Home-FR) · [中文](Home-ZH)
+**[SecuBox OS](Home)** · [FR](Home-FR) · [中文](Home-ZH)
 
 ---
 
-## SecuBox
+## SecuBox OS
 
-### 🔴 BOOT — Start
+### 🔴 BOOT — Démarrage
 * [[Home|Overview]]
-* [[Live-USB-VirtualBox|VirtualBox]] ⭐
+* [[Live-USB-VirtualBox|VirtualBox]]
 * [[Live-USB|USB Boot]]
 * [[Installation|APT Install]]
-* [[ARM-Installation|ARM Boards]]
+* [[ARM-Installation|Boards ARM]]
 
-### 🟢 ROOT — Config
+### 🟢 ROOT — Configuration
 * [[Configuration]]
 * [[Configuration-Advanced]]
 * [[Troubleshooting]]
@@ -33,20 +33,13 @@
 
 ---
 
-## 👁️ Eye Remote
+## Addons
 
-### Hardware
-* [[Eye-Remote-Hardware|Pi Zero W + HyperPixel]]
-* [[eye-remote-icons|Icons Reference]]
-
-### Software
-* [[Eye-Remote-Implementation|Architecture]]
+### 👁️ Eye Remote
+* [[Eye-Remote|Overview]]
+* [[Eye-Remote-Hardware|Hardware]]
+* [[Eye-Remote-Implementation|Implementation]]
 * [[Eye-Remote-Bootstrap|Boot Media]]
-* [[Eye-Remote-Gateway|Gateway Emulator]]
-
-### Translations
-* [[Eye-Remote-Bootstrap-FR|Bootstrap FR]]
-* [[Eye-Remote-Bootstrap-ZH|Bootstrap 中文]]
 
 ---
 
