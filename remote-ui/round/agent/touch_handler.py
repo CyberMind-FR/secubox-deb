@@ -30,6 +30,12 @@ log = logging.getLogger(__name__)
 
 
 # =============================================================================
+# Touch Enable/Disable Flag
+# =============================================================================
+# Set to False to completely disable touch input (for defective hardware)
+TOUCH_ENABLED = False
+
+# =============================================================================
 # Configuration de l'ecran HyperPixel 2.1 Round
 # =============================================================================
 
@@ -356,6 +362,11 @@ class TouchHandler:
 
         Initialise le peripherique evdev et demarre la boucle d'evenements.
         """
+        # Check if touch is globally disabled (defective hardware)
+        if not TOUCH_ENABLED:
+            log.warning("Touch disabled via TOUCH_ENABLED flag - staying in dashboard mode")
+            return False
+
         try:
             import evdev
         except ImportError:
