@@ -7,5 +7,16 @@ Author: Gerald Kerma <gandalf@gk2.net>
 License: Proprietary / ANSSI CSPN candidate
 """
 from .wifi import WifiManager, WifiNetwork, WifiStatus
+from .bluetooth import BluetoothManager, BluetoothDevice, BluetoothStatus
+from .display_control import DisplayController, DisplayStatus
 
-__all__ = ['WifiManager', 'WifiNetwork', 'WifiStatus']
+__all__ = [
+    'WifiManager',
+    'WifiNetwork',
+    'WifiStatus',
+    'BluetoothManager',
+    'BluetoothDevice',
+    'BluetoothStatus',
+    'DisplayController',
+    'DisplayStatus',
+]
