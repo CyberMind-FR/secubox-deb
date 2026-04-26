@@ -204,11 +204,13 @@ done
 log "Installing ${COPIED_COUNT} compatible packages..."
 
 # Timeouts for QEMU chroot operations (very slow under emulation)
-CHROOT_TIMEOUT="timeout --kill-after=30s 600s"  # 10 min timeout
+# Use stdbuf to prevent buffering hangs
+CHROOT_TIMEOUT="timeout --kill-after=30s 600s stdbuf -oL -eL"  # 10 min timeout, line-buffered
 
 # Update apt cache first (with timeout)
 log "Updating apt cache (QEMU, may take several minutes)..."
-if ! $CHROOT_TIMEOUT chroot "${TARGET_MOUNT}" apt-get update -qq > /tmp/apt-update.log 2>&1; then
+# Remove -qq to show progress and prevent buffer-related hangs
+if ! $CHROOT_TIMEOUT chroot "${TARGET_MOUNT}" apt-get update > /tmp/apt-update.log 2>&1; then
     warn "apt-get update failed or timed out (see /tmp/apt-update.log)"
     tail -5 /tmp/apt-update.log 2>/dev/null | sed 's/^/    /' || true
 fi
@@ -217,6 +219,7 @@ fi
 if ls "${DEBS_TMP}"/secubox-core_*.deb >/dev/null 2>&1; then
     log "Installing secubox-core with dependencies..."
     CORE_DEB=$(ls "${DEBS_TMP}"/secubox-core_*.deb | head -1)
+    # Note: $CHROOT_TIMEOUT already includes stdbuf
     if ! $CHROOT_TIMEOUT chroot "${TARGET_MOUNT}" apt-get install -y "/tmp/secubox-debs/$(basename "$CORE_DEB")" > /tmp/core-install.log 2>&1; then
         warn "secubox-core install warnings (see /tmp/core-install.log)"
         tail -5 /tmp/core-install.log 2>/dev/null | sed 's/^/    /' || true
@@ -237,8 +240,8 @@ for deb in "${DEBS_TMP}"/secubox-*.deb; do
     fi
 
     log "  [$PKG_COUNT] Installing $PKG_NAME..."
-    # 3 min timeout per package
-    if ! timeout --kill-after=10s 180s chroot "${TARGET_MOUNT}" apt-get install -y \
+    # 3 min timeout per package, line-buffered to prevent hangs
+    if ! timeout --kill-after=10s 180s stdbuf -oL -eL chroot "${TARGET_MOUNT}" apt-get install -y \
         "/tmp/secubox-debs/$(basename "$deb")" > "/tmp/install-${PKG_NAME}.log" 2>&1; then
         warn "  $PKG_NAME failed (see /tmp/install-${PKG_NAME}.log)"
     fi
@@ -246,6 +249,7 @@ done
 
 # Fix any remaining broken dependencies
 log "Fixing broken dependencies..."
+# Note: $CHROOT_TIMEOUT already includes stdbuf for line-buffered output
 $CHROOT_TIMEOUT chroot "${TARGET_MOUNT}" apt-get -f install -y --fix-broken > /tmp/fix-broken.log 2>&1 || true
 
 # Count installed

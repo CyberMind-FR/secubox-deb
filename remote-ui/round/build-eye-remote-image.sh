@@ -471,15 +471,21 @@ echo "Packages to install: $PACKAGES"
 echo "=== [3/5] Installing packages one by one (QEMU is slow, be patient) ==="
 INSTALLED=0
 FAILED=0
+TOTAL_PKGS=$(echo $PACKAGES | wc -w)
+PKG_NUM=0
 for pkg in $PACKAGES; do
-    echo "  -> Installing: $pkg"
-    if apt-get install -y -qq --no-install-recommends "$pkg" 2>/dev/null; then
+    PKG_NUM=$((PKG_NUM + 1))
+    echo "  -> [$PKG_NUM/$TOTAL_PKGS] Installing: $pkg"
+    # Don't use 2>/dev/null - it can cause buffering hangs under QEMU
+    if apt-get install -y --no-install-recommends "$pkg"; then
         echo "     OK: $pkg"
         INSTALLED=$((INSTALLED + 1))
     else
         echo "     WARN: $pkg failed (may be optional)"
         FAILED=$((FAILED + 1))
     fi
+    # Flush output after each package
+    sync
 done
 echo "  Installed: $INSTALLED, Failed: $FAILED"
 
@@ -500,9 +506,25 @@ log "Running package installation in QEMU chroot (this takes 10-20 minutes)..."
 log "Progress will be shown below. If it hangs > 20min, check network/DNS."
 
 CHROOT_LOG="/tmp/eye-remote-chroot-install.log"
-if timeout --kill-after=60s 1200s chroot "$ROOT_MNT" /tmp/install-packages.sh 2>&1 | tee "$CHROOT_LOG"; then
+
+# IMPORTANT: Don't use "timeout ... | tee" - it causes hangs!
+# The timeout only applies to the left side of the pipe, not tee.
+# Instead, redirect to file and tail in background for live output.
+rm -f "$CHROOT_LOG"
+touch "$CHROOT_LOG"
+
+# Start tail in background to show live output
+tail -f "$CHROOT_LOG" &
+TAIL_PID=$!
+
+# Run chroot with unbuffered output directly to file
+if timeout --kill-after=60s 1200s stdbuf -oL -eL chroot "$ROOT_MNT" /tmp/install-packages.sh > "$CHROOT_LOG" 2>&1; then
+    kill $TAIL_PID 2>/dev/null || true
+    wait $TAIL_PID 2>/dev/null || true
     log "Package installation completed successfully"
 else
+    kill $TAIL_PID 2>/dev/null || true
+    wait $TAIL_PID 2>/dev/null || true
     err "Package installation failed or timed out (see $CHROOT_LOG)"
     tail -20 "$CHROOT_LOG" || true
     exit 1
