@@ -1,5 +1,49 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-04-24 (Session 64)*
+*Mis à jour : 2026-04-27 (Session 65)*
+
+---
+
+## ✅ Complété (Session 65) — Eye Remote USB Boot Fix v2.2.1
+
+### Eye Remote → ESPRESSObin USB Boot ✅
+
+**Problem:** ESPRESSObin would not boot from Eye Remote USB mass storage. Multiple cascading issues:
+1. Wrong image on Pi Zero W SD card (had ESPRESSObin image instead of Eye Remote image)
+2. Conflicting USB gadget services (`secubox-otg-gadget` vs `secubox-eye-gadget`)
+3. Storage.img boot partition was empty (no kernel, initrd, boot.scr)
+4. mv88e6xxx driver infinite loop — "Marvell 88E6341 detected" repeating every ~125ms
+5. Rootfs corruption on storage.img
+
+**Root Cause (mv88e6xxx loop):** Live USB kernel had mv88e6xxx built-in (not a module), so `modprobe.blacklist` had no effect. The eMMC kernel has mv88e6xxx as a loadable module.
+
+**Fix:**
+1. Flashed correct Eye Remote image (v2.2.1) to SD card
+2. Disabled conflicting `secubox-otg-gadget.service`
+3. Copied kernel, initrd, DTB, boot.scr from eMMC image to storage.img boot partition
+4. Copied rootfs from eMMC image to storage.img rootfs partition
+5. Updated boot scripts with extended blacklist for future builds
+
+**Files Modified:**
+- `board/espressobin-v7/boot-live-usb.cmd` — Added mv88e6085 + initcall_blacklist
+- `board/espressobin-v7/boot-usb.cmd` — Same fix
+- `board/espressobin-v7/boot.cmd` — Same fix
+
+**Boot Script Change:**
+```bash
+# Before
+modprobe.blacklist=mv88e6xxx,dsa_core
+
+# After
+modprobe.blacklist=mv88e6xxx,mv88e6085,dsa_core initcall_blacklist=mv88e6xxx_driver_init
+```
+
+**Results:**
+- ✅ Eye Remote presents USB mass storage
+- ✅ ESPRESSObin boots from USB storage
+- ✅ mv88e6xxx driver loads correctly (DSA ports: wan, lan0, lan1)
+- ✅ Network operational (192.168.255.x)
+
+**Known Issue:** `secubox-haproxy.service` in restart loop — separate bug to investigate.
 
 ---
 
