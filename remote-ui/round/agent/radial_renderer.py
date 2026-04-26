@@ -47,7 +47,7 @@ HIGHLIGHT_COLOR = "#00ff41"  # matrix-green
 
 
 class RadialRenderer:
-    """Renders radial menus to 480x480 circular display."""
+    """Renders radial menus and dashboard to 480x480 circular display."""
 
     ICON_SIZE = 40  # Icon size in pixels
 
@@ -57,6 +57,9 @@ class RadialRenderer:
         self.height = HEIGHT
         self.canvas = None
         self.draw = None
+
+        # Metrics storage for dashboard display
+        self.metrics: dict = {}
 
         # Icon cache
         self._icon_cache: dict[str, Image.Image] = {}
@@ -288,9 +291,127 @@ class RadialRenderer:
             font=self.font_title
         )
 
+    def update_metrics(self, metrics: dict):
+        """Update stored metrics for dashboard display."""
+        self.metrics = metrics
+
+    def _render_dashboard(self) -> Image.Image:
+        """Render metrics dashboard display."""
+        # Create canvas
+        self.canvas = Image.new('RGB', (self.width, self.height), BG_COLOR)
+        self.draw = ImageDraw.Draw(self.canvas)
+
+        # Draw outer ring decorations
+        self.draw.ellipse(
+            [10, 10, self.width - 10, self.height - 10],
+            outline="#1a1a2e", width=2
+        )
+
+        # Title
+        title = "SECUBOX"
+        bbox = self.draw.textbbox((0, 0), title, font=self.font_title)
+        self.draw.text(
+            (CENTER_X - (bbox[2] - bbox[0]) // 2, 40),
+            title, fill="#00d4ff", font=self.font_title
+        )
+
+        # Metrics in arc positions
+        metrics_layout = [
+            ("CPU", self.metrics.get("cpu_percent", 0), "%", "#C04E24", 150, 90),
+            ("MEM", self.metrics.get("mem_percent", 0), "%", "#9A6010", 330, 90),
+            ("DISK", self.metrics.get("disk_percent", 0), "%", "#803018", 150, 160),
+            ("LOAD", self.metrics.get("load_avg_1", 0), "", "#3D35A0", 330, 160),
+            ("TEMP", self.metrics.get("cpu_temp", 0), "°", "#0A5840", 150, 230),
+            ("WIFI", self.metrics.get("wifi_rssi", -99), "dB", "#104A88", 330, 230),
+        ]
+
+        for label, value, unit, color, x, y in metrics_layout:
+            # Draw metric box
+            self.draw.rectangle([x - 60, y - 20, x + 60, y + 25], outline=color, width=2)
+            # Label
+            self.draw.text((x - 50, y - 15), label, fill=color, font=self.font_small)
+            # Value
+            val_str = f"{value:.1f}" if isinstance(value, float) else str(value)
+            self.draw.text((x - 20, y), f"{val_str}{unit}", fill=TEXT_COLOR, font=self.font_title)
+
+        # Center info
+        hostname = self.metrics.get("hostname", "secubox")
+        uptime = self.metrics.get("uptime_seconds", 0)
+        uptime_str = f"up {uptime // 3600}h{(uptime % 3600) // 60:02d}"
+
+        self.draw.ellipse(
+            [CENTER_X - 60, CENTER_Y + 30, CENTER_X + 60, CENTER_Y + 110],
+            fill=CENTER_COLOR, outline="#00d4ff", width=2
+        )
+        bbox = self.draw.textbbox((0, 0), hostname[:12], font=self.font_label)
+        self.draw.text(
+            (CENTER_X - (bbox[2] - bbox[0]) // 2, CENTER_Y + 50),
+            hostname[:12], fill=TEXT_COLOR, font=self.font_label
+        )
+        bbox = self.draw.textbbox((0, 0), uptime_str, font=self.font_small)
+        self.draw.text(
+            (CENTER_X - (bbox[2] - bbox[0]) // 2, CENTER_Y + 75),
+            uptime_str, fill="#6b6b7a", font=self.font_small
+        )
+
+        # Status bar
+        status = "NOMINAL" if self.metrics.get("cpu_percent", 0) < 80 else "HIGH LOAD"
+        status_color = HIGHLIGHT_COLOR if status == "NOMINAL" else "#e63946"
+        self.draw.text((CENTER_X - 40, self.height - 50), f"● {status}",
+                      fill=status_color, font=self.font_label)
+
+        return self.canvas
+
+    def _render_uboot(self) -> Image.Image:
+        """Render U-Boot helper display for serial console."""
+        self.canvas = Image.new('RGB', (self.width, self.height), BG_COLOR)
+        self.draw = ImageDraw.Draw(self.canvas)
+
+        # Border
+        self.draw.ellipse([5, 5, self.width - 5, self.height - 5],
+                         outline="#c9a84c", width=3)
+
+        # Title
+        title = "U-BOOT MODE"
+        bbox = self.draw.textbbox((0, 0), title, font=self.font_title)
+        self.draw.text((CENTER_X - (bbox[2] - bbox[0]) // 2, 30),
+                      title, fill="#c9a84c", font=self.font_title)
+
+        # Instructions - ESPRESSObin v7 correct commands
+        instructions = [
+            "Serial: 115200 8N1",
+            "",
+            "Boot from USB:",
+            "  usb start",
+            "  load usb 0:1 $loadaddr",
+            "      boot/boot.scr",
+            "  source $loadaddr",
+            "",
+            "Flash to eMMC:",
+            "  usb start",
+            "  load usb 0:1 $loadaddr",
+            "      *.img.gz",
+            "  gzwrite mmc 1",
+            "      $loadaddr $filesize",
+        ]
+
+        y = 70
+        for line in instructions:
+            color = "#00d4ff" if line.endswith(":") else TEXT_COLOR
+            if line.startswith("  "):
+                color = HIGHLIGHT_COLOR
+            self.draw.text((50, y), line, fill=color, font=self.font_small)
+            y += 20
+
+        # Status
+        self.draw.text((CENTER_X - 60, self.height - 45),
+                      "● AWAITING BOOT", fill="#c9a84c", font=self.font_label)
+
+        return self.canvas
+
     def render(self, state: MenuState) -> Image.Image:
         """
-        Render menu state to image.
+        Render based on current mode.
 
         Args:
             state: Current menu state
@@ -298,6 +419,14 @@ class RadialRenderer:
         Returns:
             PIL Image (480x480)
         """
+        # Handle different modes
+        if state.mode == MenuMode.DASHBOARD:
+            return self._render_dashboard()
+
+        if state.mode == MenuMode.UBOOT:
+            return self._render_uboot()
+
+        # MENU mode (and others) - render radial menu
         # Create new canvas
         self.canvas = Image.new('RGB', (self.width, self.height), BG_COLOR)
         self.draw = ImageDraw.Draw(self.canvas)

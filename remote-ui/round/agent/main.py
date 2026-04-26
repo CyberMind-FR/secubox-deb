@@ -216,6 +216,8 @@ class EyeAgent:
         - Lockdown d'urgence (3-finger tap)
         - Toggle overlay info (swipe down)
         - Liste des devices (long press centre)
+
+        Note: If touch fails to start, menu system is disabled (no touch = no menu access).
         """
         # Creer le handler avec les references aux composants
         self.touch_handler = create_touch_handler(
@@ -223,26 +225,29 @@ class EyeAgent:
             ws_client=self.ws_client
         )
 
-        # Configure touch handler with menu
-        self.touch_handler.set_menu_navigator(self.menu_navigator)
-        self.touch_handler.set_action_executor(self.action_executor)
-        self.touch_handler.on_menu_render(self._render_menu)
-
-        # State change callback
-        self.menu_navigator.on_state_change(lambda s: self._render_menu())
-
-        # Configurer les callbacks
-        self.touch_handler.on_gesture(self._on_touch_gesture)
-        self.touch_handler.on_secubox_switch(self._on_secubox_switch)
-        self.touch_handler.on_overlay_toggle(self._on_overlay_toggle)
-        self.touch_handler.on_device_list_toggle(self._on_device_list_toggle)
-
         # Demarrer le handler (non-bloquant)
         success = await self.touch_handler.start()
+
         if success:
             log.info("TouchHandler actif: %s", self.touch_handler.touch_device_name)
+
+            # Configure touch handler with menu ONLY if touch is working
+            self.touch_handler.set_menu_navigator(self.menu_navigator)
+            self.touch_handler.set_action_executor(self.action_executor)
+            self.touch_handler.on_menu_render(self._render_menu)
+
+            # State change callback for menu updates
+            self.menu_navigator.on_state_change(lambda s: self._render_menu())
+
+            # Configurer les callbacks
+            self.touch_handler.on_gesture(self._on_touch_gesture)
+            self.touch_handler.on_secubox_switch(self._on_secubox_switch)
+            self.touch_handler.on_overlay_toggle(self._on_overlay_toggle)
+            self.touch_handler.on_device_list_toggle(self._on_device_list_toggle)
         else:
-            log.warning("TouchHandler non demarre - mode tactile desactive")
+            log.warning("TouchHandler non demarre - mode tactile et menu desactives")
+            # Keep menu_navigator in DASHBOARD mode permanently (no touch = no menu access)
+            self.menu_navigator.exit_to_dashboard()
 
     def _render_menu(self) -> None:
         """Render the menu to framebuffer."""
@@ -355,6 +360,12 @@ class EyeAgent:
                 transport=transport,
                 secubox_host=secubox_host
             )
+
+        # Update renderer metrics and re-render if in dashboard mode
+        if self.radial_renderer:
+            self.radial_renderer.update_metrics(metrics)
+            if self.menu_navigator and self.menu_navigator.state.mode == MenuMode.DASHBOARD:
+                self._render_menu()
 
         # Envoyer aussi via WebSocket si connecte
         if self.ws_client and self.ws_client.is_connected:
