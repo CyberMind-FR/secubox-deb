@@ -98,15 +98,24 @@ for PKG in "${PACKAGES[@]}"; do
   # Rendre rules exécutable
   chmod +x debian/rules 2>/dev/null || true
 
-  # Build le package
+  # Build le package with timeout and proper exit code handling
+  # Use a writable log directory (avoid /tmp permission issues from previous root runs)
+  LOG_DIR="${REPO_DIR}/output/logs"
+  mkdir -p "$LOG_DIR" 2>/dev/null || LOG_DIR="/tmp/secubox-build-$$"
+  mkdir -p "$LOG_DIR" 2>/dev/null || true
+  BUILD_LOG="${LOG_DIR}/build-${PKG}.log"
   BUILD_OK=0
+
+  # Use timeout to prevent infinite hangs (5 minutes per package)
+  TIMEOUT_CMD="timeout --kill-after=30s 300s"
+
   if [[ "$ARCH" == "arm64" ]] && [[ "$(uname -m)" != "aarch64" ]]; then
     # Cross-compile pour arm64
-    if dpkg-buildpackage -a arm64 --host-arch arm64 -us -uc -b 2>&1 | tail -5; then
+    if $TIMEOUT_CMD dpkg-buildpackage -a arm64 --host-arch arm64 -us -uc -b > "$BUILD_LOG" 2>&1; then
       BUILD_OK=1
     fi
   else
-    if dpkg-buildpackage -us -uc -b 2>&1 | tail -5; then
+    if $TIMEOUT_CMD dpkg-buildpackage -us -uc -b > "$BUILD_LOG" 2>&1; then
       BUILD_OK=1
     fi
   fi
@@ -115,7 +124,9 @@ for PKG in "${PACKAGES[@]}"; do
     ok "${PKG} built"
     ((SUCCESS++)) || true
   else
-    err "${PKG} FAILED"
+    # Show last 10 lines of log for debugging
+    err "${PKG} FAILED (see $BUILD_LOG)"
+    tail -10 "$BUILD_LOG" 2>/dev/null | sed 's/^/    /' || true
     ((FAILED++)) || true
   fi
 done

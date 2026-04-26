@@ -203,35 +203,50 @@ done
 
 log "Installing ${COPIED_COUNT} compatible packages..."
 
-# Update apt cache first
-log "Updating apt cache..."
-chroot "${TARGET_MOUNT}" apt-get update -qq 2>&1 | tail -5 || true
+# Timeouts for QEMU chroot operations (very slow under emulation)
+CHROOT_TIMEOUT="timeout --kill-after=30s 600s"  # 10 min timeout
+
+# Update apt cache first (with timeout)
+log "Updating apt cache (QEMU, may take several minutes)..."
+if ! $CHROOT_TIMEOUT chroot "${TARGET_MOUNT}" apt-get update -qq > /tmp/apt-update.log 2>&1; then
+    warn "apt-get update failed or timed out (see /tmp/apt-update.log)"
+    tail -5 /tmp/apt-update.log 2>/dev/null | sed 's/^/    /' || true
+fi
 
 # Install secubox-core first (with dependencies)
 if ls "${DEBS_TMP}"/secubox-core_*.deb >/dev/null 2>&1; then
     log "Installing secubox-core with dependencies..."
     CORE_DEB=$(ls "${DEBS_TMP}"/secubox-core_*.deb | head -1)
-    chroot "${TARGET_MOUNT}" apt-get install -y "/tmp/secubox-debs/$(basename $CORE_DEB)" 2>&1 | tail -10 || warn "core install warnings"
+    if ! $CHROOT_TIMEOUT chroot "${TARGET_MOUNT}" apt-get install -y "/tmp/secubox-debs/$(basename "$CORE_DEB")" > /tmp/core-install.log 2>&1; then
+        warn "secubox-core install warnings (see /tmp/core-install.log)"
+        tail -5 /tmp/core-install.log 2>/dev/null | sed 's/^/    /' || true
+    fi
 fi
 
 # Install all other packages using apt (handles dependencies)
 log "Installing remaining packages..."
+PKG_COUNT=0
 for deb in "${DEBS_TMP}"/secubox-*.deb; do
     [[ -f "$deb" ]] || continue
     PKG_NAME=$(dpkg-deb -f "$deb" Package 2>/dev/null)
+    PKG_COUNT=$((PKG_COUNT + 1))
 
     # Skip if already installed
     if chroot "${TARGET_MOUNT}" dpkg -l "$PKG_NAME" 2>/dev/null | grep -q "^ii"; then
         continue
     fi
 
-    # Try to install with apt
-    chroot "${TARGET_MOUNT}" apt-get install -y "/tmp/secubox-debs/$(basename $deb)" 2>&1 | \
-        grep -E "^(Setting up|is already)" || true
+    log "  [$PKG_COUNT] Installing $PKG_NAME..."
+    # 3 min timeout per package
+    if ! timeout --kill-after=10s 180s chroot "${TARGET_MOUNT}" apt-get install -y \
+        "/tmp/secubox-debs/$(basename "$deb")" > "/tmp/install-${PKG_NAME}.log" 2>&1; then
+        warn "  $PKG_NAME failed (see /tmp/install-${PKG_NAME}.log)"
+    fi
 done
 
 # Fix any remaining broken dependencies
-chroot "${TARGET_MOUNT}" apt-get -f install -y --fix-broken 2>&1 | tail -5 || true
+log "Fixing broken dependencies..."
+$CHROOT_TIMEOUT chroot "${TARGET_MOUNT}" apt-get -f install -y --fix-broken > /tmp/fix-broken.log 2>&1 || true
 
 # Count installed
 INSTALLED=$(chroot "${TARGET_MOUNT}" dpkg -l 2>/dev/null | grep "^ii.*secubox" | wc -l)

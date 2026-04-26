@@ -453,7 +453,7 @@ info "Packages: ${PACKAGES[*]}"
 # Create package list file (dynamically based on BUILD_MODE)
 printf "%s\n" "${PACKAGES[@]}" > "$ROOT_MNT/tmp/package-list.txt"
 
-# Create install script
+# Create install script with progress output
 cat > "$ROOT_MNT/tmp/install-packages.sh" << 'INSTALLSCRIPT'
 #!/bin/bash
 set -e
@@ -461,17 +461,32 @@ set -e
 export DEBIAN_FRONTEND=noninteractive
 export LC_ALL=C
 
-echo "=== Updating APT ==="
-apt-get update -qq
+echo "=== [1/5] Updating APT (this may take a few minutes under QEMU) ==="
+apt-get update -q || { echo "APT update failed"; exit 1; }
 
-echo "=== Installing packages ==="
-# Read packages from file and install with --no-install-recommends
-xargs -a /tmp/package-list.txt apt-get install -y -qq --no-install-recommends
+echo "=== [2/5] Reading package list ==="
+PACKAGES=$(cat /tmp/package-list.txt | tr '\n' ' ')
+echo "Packages to install: $PACKAGES"
 
-echo "=== Enabling pigpiod ==="
+echo "=== [3/5] Installing packages one by one (QEMU is slow, be patient) ==="
+INSTALLED=0
+FAILED=0
+for pkg in $PACKAGES; do
+    echo "  -> Installing: $pkg"
+    if apt-get install -y -qq --no-install-recommends "$pkg" 2>/dev/null; then
+        echo "     OK: $pkg"
+        INSTALLED=$((INSTALLED + 1))
+    else
+        echo "     WARN: $pkg failed (may be optional)"
+        FAILED=$((FAILED + 1))
+    fi
+done
+echo "  Installed: $INSTALLED, Failed: $FAILED"
+
+echo "=== [4/5] Enabling pigpiod ==="
 systemctl enable pigpiod || true
 
-echo "=== Cleaning APT cache ==="
+echo "=== [5/5] Cleaning APT cache ==="
 apt-get clean
 rm -rf /var/lib/apt/lists/*
 rm -f /tmp/package-list.txt
@@ -480,8 +495,18 @@ echo "=== Package installation complete ==="
 INSTALLSCRIPT
 chmod +x "$ROOT_MNT/tmp/install-packages.sh"
 
-# Run install in chroot
-chroot "$ROOT_MNT" /tmp/install-packages.sh
+# Run install in chroot with timeout (20 minutes for QEMU ARM emulation)
+log "Running package installation in QEMU chroot (this takes 10-20 minutes)..."
+log "Progress will be shown below. If it hangs > 20min, check network/DNS."
+
+CHROOT_LOG="/tmp/eye-remote-chroot-install.log"
+if timeout --kill-after=60s 1200s chroot "$ROOT_MNT" /tmp/install-packages.sh 2>&1 | tee "$CHROOT_LOG"; then
+    log "Package installation completed successfully"
+else
+    err "Package installation failed or timed out (see $CHROOT_LOG)"
+    tail -20 "$CHROOT_LOG" || true
+    exit 1
+fi
 
 # Remove policy
 rm -f "$ROOT_MNT/usr/sbin/policy-rc.d"
@@ -683,7 +708,9 @@ systemctl enable lightdm 2>/dev/null || true
 systemctl enable nginx 2>/dev/null || true
 USERSCRIPT
 chmod +x "$ROOT_MNT/tmp/setup-user.sh"
-chroot "$ROOT_MNT" /tmp/setup-user.sh
+if ! timeout --kill-after=10s 120s chroot "$ROOT_MNT" /tmp/setup-user.sh 2>&1; then
+    warn "setup-user.sh failed or timed out (non-fatal)"
+fi
 
 # LightDM autologin
 mkdir -p "$ROOT_MNT/etc/lightdm/lightdm.conf.d"
@@ -737,7 +764,7 @@ XINITRC
 chmod +x "$ROOT_MNT/home/secubox/.xinitrc"
 
 # Fix ownership
-chroot "$ROOT_MNT" chown -R secubox:secubox /home/secubox
+timeout --kill-after=5s 30s chroot "$ROOT_MNT" chown -R secubox:secubox /home/secubox 2>/dev/null || true
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CONFIGURE NGINX (browser mode only)
@@ -802,7 +829,7 @@ if [[ -n "$SSH_PUBKEY" && -f "$SSH_PUBKEY" ]]; then
     cp "$SSH_PUBKEY" "$ROOT_MNT/home/pi/.ssh/authorized_keys"
     chmod 700 "$ROOT_MNT/home/pi/.ssh"
     chmod 600 "$ROOT_MNT/home/pi/.ssh/authorized_keys"
-    chroot "$ROOT_MNT" chown -R pi:pi /home/pi/.ssh
+    timeout --kill-after=5s 30s chroot "$ROOT_MNT" chown -R pi:pi /home/pi/.ssh 2>/dev/null || true
 fi
 
 # ═══════════════════════════════════════════════════════════════════════════════

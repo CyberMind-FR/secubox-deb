@@ -45,14 +45,15 @@ for pkg_dir in $PACKAGES; do
     # Clean previous build
     rm -rf debian/.debhelper debian/"$pkg" 2>/dev/null || true
 
-    # Build
-    if dpkg-buildpackage -us -uc -b > /tmp/build-$pkg.log 2>&1; then
+    # Build with 5 minute timeout per package
+    if timeout --kill-after=30s 300s dpkg-buildpackage -us -uc -b > /tmp/build-$pkg.log 2>&1; then
         # Move .deb files
         mv ../*.deb "$OUTPUT_DIR/" 2>/dev/null || true
         rm -f ../*.buildinfo ../*.changes 2>/dev/null || true
         ok "$pkg"
     else
-        err "$pkg - build failed (see /tmp/build-$pkg.log)"
+        err "$pkg - build failed or timed out (see /tmp/build-$pkg.log)"
+        tail -5 /tmp/build-$pkg.log 2>/dev/null | sed 's/^/    /' || true
         FAILED=$((FAILED + 1))
     fi
 
