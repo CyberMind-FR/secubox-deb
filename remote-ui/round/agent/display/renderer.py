@@ -11,8 +11,7 @@ import logging
 import os
 import struct
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -66,7 +65,7 @@ class DisplayRenderer:
         self.width = width
         self.height = height
         self.center = (width // 2, height // 2)
-        self._fonts: dict[str, ImageFont.FreeTypeFont] = {}
+        self._fonts: dict[str, Any] = {}  # FreeTypeFont or ImageFont
         self._load_fonts()
         self._frame: Optional[Image.Image] = None
         self._fb_info: Optional[dict] = None
@@ -89,16 +88,19 @@ class DisplayRenderer:
             if name not in self._fonts:
                 self._fonts[name] = ImageFont.load_default()
 
-    def get_font(self, name: str = 'medium') -> ImageFont.FreeTypeFont:
-        return self._fonts.get(name, self._fonts.get('medium'))
+    def get_font(self, name: str = 'medium') -> Any:
+        """Get a named font, returns FreeTypeFont or default ImageFont."""
+        return self._fonts.get(name) or self._fonts.get('medium')
 
     def create_frame(self) -> Image.Image:
         self._frame = Image.new('RGB', (self.width, self.height), BG_COLOR)
         return self._frame
 
     def get_draw(self) -> ImageDraw.ImageDraw:
+        """Get ImageDraw for current frame, creating frame if needed."""
         if self._frame is None:
             self.create_frame()
+        assert self._frame is not None  # For type checker
         return ImageDraw.Draw(self._frame)
 
     def draw_text_centered(
@@ -115,7 +117,7 @@ class DisplayRenderer:
         x = (self.width - text_width) // 2
         draw.text((x, y), text, font=font, fill=color)
 
-    def draw_circle_mask(self, draw: ImageDraw.ImageDraw) -> None:
+    def draw_circle_mask(self, _draw: ImageDraw.ImageDraw) -> None:
         mask = Image.new('L', (self.width, self.height), 0)
         mask_draw = ImageDraw.Draw(mask)
         mask_draw.ellipse([0, 0, self.width - 1, self.height - 1], fill=255)
@@ -150,8 +152,9 @@ class DisplayRenderer:
             return {'xres': self.width, 'yres': self.height, 'bpp': 16}
 
     def _convert_to_rgb565(self, img: Image.Image) -> bytes:
+        """Convert PIL Image to RGB565 bytes for framebuffer."""
         rgb = img.convert('RGB')
-        pixels = list(rgb.getdata())
+        pixels = list(rgb.getdata())  # type: ignore[arg-type]
         result = bytearray(len(pixels) * 2)
         for i, (r, g, b) in enumerate(pixels):
             rgb565 = ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3)
