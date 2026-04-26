@@ -18,7 +18,7 @@ readonly GADGET="/sys/kernel/config/usb_gadget/secubox"
 
 # Mass storage configuration
 readonly STORAGE_IMAGE="/var/lib/secubox/eye-remote/storage.img"
-readonly STORAGE_SIZE_MB=64  # Size in MB for the storage image
+readonly STORAGE_SIZE_MB=2048  # Size in MB for the storage image (2GB for live images)
 readonly STORAGE_ENABLED=true  # Set to false to disable mass storage
 
 log() { echo "[eye-gadget] $*"; logger -t eye-gadget "$*"; }
