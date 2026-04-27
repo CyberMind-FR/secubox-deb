@@ -5,6 +5,38 @@
 
 ## 2026-04-27
 
+### Session 65 — Multi-Boot Storage System (v2.2.2)
+
+**Feature:** Multi-architecture boot system for Pi Zero Eye Remote storage
+
+**Description:**
+Created a multi-boot storage system that supports ARM64 (ESPRESSObin/MOCHAbin via U-Boot) and AMD64 (UEFI systems via GRUB) from a single USB storage device, with shared application data across both architectures.
+
+**Partition Layout (16GB+):**
+- P1: EFI/FAT32 (512MB) — Boot files for both architectures
+- P2: ext4 (3GB) — ARM64 SecuBox rootfs
+- P3: ext4 (3GB) — AMD64 SecuBox rootfs
+- P4: ext4 (remaining) — Shared data partition
+
+**Features:**
+- U-Boot boot.scr with USB/MMC auto-detection for ARM64
+- GRUB BOOTX64.EFI for AMD64 UEFI boot
+- Shared data partition with bind mounts for /etc/secubox, /var/lib/secubox, /srv/secubox
+- eMMC flasher image included for ARM64 installation
+- Debootstrap-based AMD64 rootfs builder with SecuBox packages
+
+**Files Created:**
+- `image/multiboot/README.md` — Documentation
+- `image/multiboot/build-multiboot.sh` — Main build script
+- `image/multiboot/build-amd64-rootfs.sh` — AMD64 rootfs builder
+
+**Commits:**
+- `5cf69c0` — feat(multiboot): Add multi-architecture boot system with shared data
+
+**Version:** v2.2.2
+
+---
+
 ### Session 65 — Eye Remote USB Boot Fix (v2.2.1)
 
 **Issue:** ESPRESSObin would not boot from Eye Remote USB mass storage. mv88e6xxx driver in infinite detection loop.
