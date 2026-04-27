@@ -14,7 +14,9 @@ ExecStart=/usr/bin/python3 -m uvicorn api.main:app \
     --uds /run/secubox/haproxy.sock \
     --log-level warning
 Restart=on-failure
-RestartSec=5
+RestartSec=30
+StartLimitIntervalSec=300
+StartLimitBurst=5
 # Sandboxing disabled - causes namespace errors with Python symlinks on some kernels
 # PrivateTmp=true
 # ProtectSystem=full
