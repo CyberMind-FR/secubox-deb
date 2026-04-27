@@ -440,21 +440,44 @@ NETWORK
 copy_arm64_kernel_to_efi() {
     log "Copying ARM64 kernel files to EFI partition..."
 
-    # Find and copy kernel
-    local vmlinuz=$(find "$MNT_ARM64/boot" -name 'vmlinuz-*' -type f 2>/dev/null | head -1)
-    local initrd=$(find "$MNT_ARM64/boot" -name 'initrd.img-*' -type f 2>/dev/null | head -1)
+    local kernel_copied=false
+
+    # Find and copy kernel from rootfs
+    local vmlinuz=$(find "$MNT_ARM64/boot" -name 'vmlinuz-*' -type f 2>/dev/null | sort -V | tail -1)
+    local initrd=$(find "$MNT_ARM64/boot" -name 'initrd.img-*' -type f 2>/dev/null | sort -V | tail -1)
 
     if [[ -n "$vmlinuz" && -f "$vmlinuz" ]]; then
-        log "Found kernel: $vmlinuz"
+        log "Found kernel in rootfs: $vmlinuz"
         # ARM64 kernels need to be named 'Image' for U-Boot
         cp "$vmlinuz" "$MNT_EFI/Image"
-    else
-        log "WARNING: No ARM64 kernel found in rootfs"
+        kernel_copied=true
     fi
 
     if [[ -n "$initrd" && -f "$initrd" ]]; then
-        log "Found initrd: $initrd"
+        log "Found initrd in rootfs: $initrd"
         cp "$initrd" "$MNT_EFI/initrd.img"
+    fi
+
+    # Fallback: Try to extract from existing live USB image
+    if [[ "$kernel_copied" != "true" ]]; then
+        local live_img="${OUTPUT_DIR}/secubox-espressobin-v7-live-usb.img"
+        if [[ -f "$live_img" ]]; then
+            log "Fallback: Extracting ARM64 kernel from live USB image..."
+            local tmp_loop=$(losetup -f --show -P "$live_img")
+            local tmp_boot=$(mktemp -d)
+
+            if mount "${tmp_loop}p1" "$tmp_boot" 2>/dev/null; then
+                if [[ -f "$tmp_boot/Image" ]]; then
+                    log "Copying ARM64 kernel from live USB image"
+                    cp "$tmp_boot/Image" "$MNT_EFI/"
+                    cp "$tmp_boot/initrd.img" "$MNT_EFI/" 2>/dev/null || true
+                    kernel_copied=true
+                fi
+                umount "$tmp_boot"
+            fi
+            losetup -d "$tmp_loop" 2>/dev/null || true
+            rmdir "$tmp_boot" 2>/dev/null || true
+        fi
     fi
 
     # Copy device tree blobs
@@ -478,9 +501,10 @@ copy_arm64_kernel_to_efi() {
 
     # Verify files were copied
     if [[ -f "$MNT_EFI/Image" ]]; then
-        log "EFI partition kernel: $(ls -lh "$MNT_EFI/Image")"
+        log "EFI partition ARM64 kernel: $(ls -lh "$MNT_EFI/Image")"
     else
         log "ERROR: Failed to copy ARM64 kernel to EFI partition!"
+        log "ERROR: Build will likely fail to boot on ARM64 systems"
     fi
 
     if [[ -d "$MNT_EFI/dtbs/marvell" ]]; then
@@ -501,9 +525,20 @@ install_amd64_rootfs() {
     fi
 
     # Copy AMD64 kernel to EFI partition
-    if [[ -f "$MNT_AMD64/boot/vmlinuz-"* ]]; then
-        cp "$MNT_AMD64/boot/vmlinuz-"* "$MNT_EFI/vmlinuz"
-        cp "$MNT_AMD64/boot/initrd.img-"* "$MNT_EFI/initrd-amd64.img" 2>/dev/null || true
+    # Use find instead of glob in test (glob in [[ -f ]] doesn't work correctly)
+    local amd64_vmlinuz=$(find "$MNT_AMD64/boot" -name 'vmlinuz-*' -type f 2>/dev/null | sort -V | tail -1)
+    local amd64_initrd=$(find "$MNT_AMD64/boot" -name 'initrd.img-*' -type f 2>/dev/null | sort -V | tail -1)
+
+    if [[ -n "$amd64_vmlinuz" && -f "$amd64_vmlinuz" ]]; then
+        log "Copying AMD64 kernel: $amd64_vmlinuz"
+        cp "$amd64_vmlinuz" "$MNT_EFI/vmlinuz"
+    else
+        log "ERROR: No AMD64 kernel (vmlinuz-*) found in $MNT_AMD64/boot"
+    fi
+
+    if [[ -n "$amd64_initrd" && -f "$amd64_initrd" ]]; then
+        log "Copying AMD64 initrd: $amd64_initrd"
+        cp "$amd64_initrd" "$MNT_EFI/initrd-amd64.img"
     fi
 
     # Setup shared data mounts in fstab
