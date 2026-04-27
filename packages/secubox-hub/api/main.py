@@ -16,7 +16,7 @@ from pathlib import Path
 
 app = FastAPI(title="secubox-hub", version="1.7.0", root_path="/api/v1/hub")
 # Auth router already has prefix="/auth" in secubox_core.auth
-app.include_router(auth_router)
+app.include_router(auth_router, prefix="/auth")
 router = APIRouter()
 public_router = APIRouter(prefix="/public", tags=["public"])
 log = get_logger("hub")
