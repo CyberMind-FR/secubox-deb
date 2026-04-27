@@ -70,10 +70,14 @@ parse_args() {
 }
 
 check_deps() {
-    local deps=(parted mkfs.vfat mkfs.ext4 debootstrap grub-mkimage losetup)
+    local deps=(parted mkfs.vfat mkfs.ext4 debootstrap losetup rsync)
     for cmd in "${deps[@]}"; do
         command -v "$cmd" &>/dev/null || err "Missing: $cmd"
     done
+    # Optional deps - warn but don't fail
+    command -v grub-mkimage &>/dev/null || log "WARNING: grub-mkimage not found, AMD64 UEFI boot may not work"
+    command -v qemu-debootstrap &>/dev/null || log "WARNING: qemu-debootstrap not found, cross-arch debootstrap may fail"
+    command -v mkimage &>/dev/null || log "WARNING: u-boot-tools mkimage not found, will use text boot.cmd"
     [[ $EUID -eq 0 ]] || err "Must run as root"
 }
 
@@ -191,41 +195,106 @@ GRUBCFG
 install_uboot_boot() {
     log "Installing U-Boot boot files for ARM64..."
 
-    # Create boot.scr for ARM64 (ESPRESSObin)
+    # Create boot.scr for ARM64 (ESPRESSObin) with dual boot menu
     cat > /tmp/boot.cmd <<'BOOTCMD'
 # SecuBox Multi-Boot U-Boot Script
 # For ESPRESSObin/MOCHAbin ARM64
+# Version: 2.2.4
 
+echo ""
 echo "============================================"
-echo "SecuBox Multi-Boot — ARM64"
+echo "     SecuBox Multi-Boot — ARM64"
 echo "============================================"
+echo ""
 
 # Detect boot device
 if test "${devtype}" = "usb"; then
     setenv bootpart "usb 0:1"
     setenv rootpart "/dev/sda2"
-    echo "Booting from USB storage"
+    setenv datapart "/dev/sda4"
+    echo "Boot device: USB storage"
 elif test "${devtype}" = "mmc"; then
     setenv bootpart "mmc ${devnum}:1"
     setenv rootpart "/dev/mmcblk${devnum}p2"
-    echo "Booting from MMC/SD"
+    setenv datapart "/dev/mmcblk${devnum}p4"
+    echo "Boot device: MMC/SD"
 else
     # Default to USB
     usb start
     setenv bootpart "usb 0:1"
     setenv rootpart "/dev/sda2"
+    setenv datapart "/dev/sda4"
+fi
+
+# Boot menu with timeout
+echo ""
+echo "============================================"
+echo "          BOOT MENU"
+echo "============================================"
+echo ""
+echo "  [1] Live RAM Boot (default)"
+echo "  [2] Flash SecuBox to eMMC"
+echo ""
+echo "Auto-boot in 5 seconds..."
+echo "Press any key to select option..."
+echo ""
+
+# Set default boot option
+setenv bootopt 1
+
+# Wait for keypress with timeout (5 seconds)
+if askenv -t 5 bootopt "Select option [1-2]: "; then
+    echo "Selected: ${bootopt}"
+else
+    echo "Timeout - using default (Live Boot)"
+    setenv bootopt 1
+fi
+
+# Handle boot options
+if test "${bootopt}" = "2"; then
+    echo ""
+    echo "============================================"
+    echo "     eMMC FLASH MODE"
+    echo "============================================"
+    echo ""
+    echo "WARNING: This will erase ALL data on eMMC!"
+    echo ""
+    echo "After boot, run: secubox-flash-emmc"
+    echo ""
+    # Set flag for flash mode
+    setenv bootargs_extra "secubox.flash_mode=1"
+else
+    echo ""
+    echo "============================================"
+    echo "     LIVE RAM BOOT"
+    echo "============================================"
+    echo ""
+    setenv bootargs_extra ""
 fi
 
 # Load kernel
 echo "Loading ARM64 kernel..."
-load ${bootpart} ${kernel_addr_r} Image
+if load ${bootpart} ${kernel_addr_r} Image; then
+    echo "Kernel loaded successfully"
+else
+    echo "ERROR: Failed to load kernel!"
+    echo "Check that Image exists on EFI partition"
+    sleep 10
+    reset
+fi
 
 # Load device tree
 echo "Loading device tree..."
 if load ${bootpart} ${fdt_addr_r} dtbs/marvell/armada-3720-espressobin-v7-emmc.dtb; then
     echo "Loaded ESPRESSObin v7 eMMC DTB"
+elif load ${bootpart} ${fdt_addr_r} dtbs/marvell/armada-3720-espressobin-v7.dtb; then
+    echo "Loaded ESPRESSObin v7 DTB"
+elif load ${bootpart} ${fdt_addr_r} dtbs/marvell/armada-3720-espressobin.dtb; then
+    echo "Loaded ESPRESSObin DTB"
 else
-    load ${bootpart} ${fdt_addr_r} dtbs/marvell/armada-3720-espressobin-v7.dtb
+    echo "ERROR: No compatible DTB found!"
+    sleep 10
+    reset
 fi
 
 # Load initramfs
@@ -233,15 +302,25 @@ echo "Loading initramfs..."
 if load ${bootpart} ${ramdisk_addr_r} initrd.img; then
     setenv initrd_size ${filesize}
     setenv use_initrd 1
+    echo "Initramfs loaded (${filesize} bytes)"
 else
     setenv use_initrd 0
+    echo "No initramfs - direct boot"
 fi
 
 # Boot arguments
-# Data partition is partition 4
-setenv bootargs "root=${rootpart} rootfstype=ext4 rootwait rootdelay=5 console=ttyMV0,115200 net.ifnames=0 secubox.data=/dev/sda4"
+# boot=live: enable live-boot initramfs (RAM-based root)
+# live-media-path: where to find filesystem.squashfs
+# DSA switch blacklist - REQUIRED for ESPRESSObin live boot
+# modprobe.blacklist: for loadable modules
+# initcall_blacklist: for built-in drivers (live kernel has mv88e6xxx built-in)
+setenv bootargs "boot=live live-media-path=/live root=${rootpart} rootfstype=ext4 rootwait rootdelay=10 console=ttyMV0,115200 net.ifnames=0 modprobe.blacklist=mv88e6xxx,mv88e6085,dsa_core initcall_blacklist=mv88e6xxx_driver_init secubox.data=${datapart} ${bootargs_extra}"
 
+echo ""
 echo "Booting SecuBox ARM64..."
+echo "============================================"
+echo ""
+
 if test "${use_initrd}" = "1"; then
     booti ${kernel_addr_r} ${ramdisk_addr_r}:${initrd_size} ${fdt_addr_r}
 else
@@ -260,9 +339,15 @@ BOOTCMD
 install_arm64_rootfs() {
     log "Installing ARM64 rootfs..."
 
+    local kernel_installed=false
+
     if [[ -n "$ARM64_ROOTFS" && -d "$ARM64_ROOTFS" ]]; then
         log "Copying from $ARM64_ROOTFS"
         rsync -aHAX "$ARM64_ROOTFS/" "$MNT_ARM64/"
+        # Check if kernel is available in the rootfs
+        if [[ -f "$MNT_ARM64/boot/vmlinuz-"* ]]; then
+            kernel_installed=true
+        fi
     else
         # Check for existing built image
         local arm64_img="${OUTPUT_DIR}/secubox-espressobin-v7-bookworm.img"
@@ -270,27 +355,137 @@ install_arm64_rootfs() {
             log "Extracting rootfs from $arm64_img"
             local tmp_loop=$(losetup -f --show -P "$arm64_img")
             local tmp_mnt=$(mktemp -d)
+            local tmp_boot=$(mktemp -d)
+
+            # Mount rootfs partition and copy
             mount "${tmp_loop}p2" "$tmp_mnt"
             rsync -aHAX "$tmp_mnt/" "$MNT_ARM64/"
-            umount "$tmp_mnt"
-            losetup -d "$tmp_loop"
-            rmdir "$tmp_mnt"
 
-            # Also copy kernel/initrd/dtbs to EFI partition
-            mount "${tmp_loop}p1" "$tmp_mnt" 2>/dev/null || true
-            if [[ -f "$tmp_mnt/Image" ]]; then
-                cp "$tmp_mnt/Image" "$MNT_EFI/"
-                cp "$tmp_mnt/initrd.img" "$MNT_EFI/" 2>/dev/null || true
-                cp -r "$tmp_mnt/dtbs" "$MNT_EFI/" 2>/dev/null || true
+            # Check for kernel in rootfs
+            if [[ -f "$MNT_ARM64/boot/vmlinuz-"* ]]; then
+                kernel_installed=true
             fi
-            umount "$tmp_mnt" 2>/dev/null || true
+
+            umount "$tmp_mnt"
+
+            # Mount boot partition and copy kernel files to EFI
+            if mount "${tmp_loop}p1" "$tmp_boot" 2>/dev/null; then
+                if [[ -f "$tmp_boot/Image" ]]; then
+                    log "Copying ARM64 kernel from image boot partition..."
+                    cp "$tmp_boot/Image" "$MNT_EFI/"
+                    cp "$tmp_boot/initrd.img" "$MNT_EFI/" 2>/dev/null || true
+                    cp -r "$tmp_boot/dtbs" "$MNT_EFI/" 2>/dev/null || true
+                    kernel_installed=true
+                fi
+                umount "$tmp_boot"
+            fi
+
+            losetup -d "$tmp_loop"
+            rmdir "$tmp_mnt" "$tmp_boot" 2>/dev/null || true
         else
-            log "WARNING: No ARM64 rootfs source found, partition will be empty"
+            log "No pre-built ARM64 image found, building minimal rootfs with debootstrap..."
+            build_arm64_rootfs_debootstrap
+            kernel_installed=true
         fi
     fi
 
+    # Copy kernel files from rootfs to EFI if not already done
+    copy_arm64_kernel_to_efi
+
     # Setup shared data mounts in fstab
     setup_shared_mounts "$MNT_ARM64"
+}
+
+build_arm64_rootfs_debootstrap() {
+    log "Building ARM64 rootfs with debootstrap..."
+
+    # Bootstrap minimal Debian
+    qemu-debootstrap --arch=arm64 \
+        --include=systemd,systemd-sysv,dbus,udev,iproute2,iputils-ping,openssh-server,sudo,vim-tiny,linux-image-arm64 \
+        bookworm "$MNT_ARM64" http://deb.debian.org/debian
+
+    # Configure the rootfs
+    cat > "$MNT_ARM64/etc/hostname" <<< "secubox"
+
+    cat > "$MNT_ARM64/etc/hosts" <<'HOSTS'
+127.0.0.1   localhost
+127.0.1.1   secubox
+
+::1         localhost ip6-localhost ip6-loopback
+ff02::1     ip6-allnodes
+ff02::2     ip6-allrouters
+HOSTS
+
+    # Set root password to 'secubox' (will be changed on first boot)
+    chroot "$MNT_ARM64" /bin/bash -c "echo 'root:secubox' | chpasswd"
+
+    # Enable serial console
+    chroot "$MNT_ARM64" systemctl enable serial-getty@ttyMV0.service 2>/dev/null || true
+
+    # Enable SSH
+    chroot "$MNT_ARM64" systemctl enable ssh.service 2>/dev/null || true
+
+    # Configure network
+    cat > "$MNT_ARM64/etc/network/interfaces" <<'NETWORK'
+auto lo
+iface lo inet loopback
+
+auto eth0
+iface eth0 inet dhcp
+NETWORK
+
+    log "ARM64 rootfs built with kernel"
+}
+
+copy_arm64_kernel_to_efi() {
+    log "Copying ARM64 kernel files to EFI partition..."
+
+    # Find and copy kernel
+    local vmlinuz=$(find "$MNT_ARM64/boot" -name 'vmlinuz-*' -type f 2>/dev/null | head -1)
+    local initrd=$(find "$MNT_ARM64/boot" -name 'initrd.img-*' -type f 2>/dev/null | head -1)
+
+    if [[ -n "$vmlinuz" && -f "$vmlinuz" ]]; then
+        log "Found kernel: $vmlinuz"
+        # ARM64 kernels need to be named 'Image' for U-Boot
+        cp "$vmlinuz" "$MNT_EFI/Image"
+    else
+        log "WARNING: No ARM64 kernel found in rootfs"
+    fi
+
+    if [[ -n "$initrd" && -f "$initrd" ]]; then
+        log "Found initrd: $initrd"
+        cp "$initrd" "$MNT_EFI/initrd.img"
+    fi
+
+    # Copy device tree blobs
+    mkdir -p "$MNT_EFI/dtbs/marvell"
+
+    # Look for DTBs in various locations
+    local dtb_sources=(
+        "$MNT_ARM64/usr/lib/linux-image-"*"/marvell"
+        "$MNT_ARM64/boot/dtbs/"*"/marvell"
+        "$MNT_ARM64/boot/dtbs/marvell"
+    )
+
+    for dtb_dir in "${dtb_sources[@]}"; do
+        if [[ -d "$dtb_dir" ]]; then
+            log "Copying DTBs from: $dtb_dir"
+            cp "$dtb_dir"/armada-3720-espressobin*.dtb "$MNT_EFI/dtbs/marvell/" 2>/dev/null || true
+            cp "$dtb_dir"/armada-8040-mcbin*.dtb "$MNT_EFI/dtbs/marvell/" 2>/dev/null || true
+            break
+        fi
+    done
+
+    # Verify files were copied
+    if [[ -f "$MNT_EFI/Image" ]]; then
+        log "EFI partition kernel: $(ls -lh "$MNT_EFI/Image")"
+    else
+        log "ERROR: Failed to copy ARM64 kernel to EFI partition!"
+    fi
+
+    if [[ -d "$MNT_EFI/dtbs/marvell" ]]; then
+        log "EFI partition DTBs: $(ls "$MNT_EFI/dtbs/marvell/" 2>/dev/null | wc -l) files"
+    fi
 }
 
 install_amd64_rootfs() {

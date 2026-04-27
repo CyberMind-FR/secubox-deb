@@ -153,6 +153,54 @@ secubox-netdiag
    free -h
    ```
 
+### DSA Switch Detection Loop (ESPRESSObin)
+
+**Symptoms:** Boot log shows repeated messages:
+```
+mv88e6085 d0032004.mdio-mii:01: switch 0x3410 detected: Marvell 88E6341, revision 0
+hwmon hwmon0: temp1_input not attached to any thermal zone
+```
+
+This is a known issue with the Marvell 88E6341 DSA (Distributed Switch Architecture) driver on some ESPRESSObin boards.
+
+**Solutions:**
+
+1. **Boot with DSA disabled** (select option 2 in boot menu):
+   - At boot menu, select "Live Boot + No DSA Switch"
+   - This adds `modprobe.blacklist=mv88e6xxx,dsa_core` to boot args
+
+2. **Manually blacklist the driver**:
+   ```bash
+   echo "blacklist mv88e6xxx" | sudo tee /etc/modprobe.d/no-dsa.conf
+   echo "blacklist dsa_core" | sudo tee -a /etc/modprobe.d/no-dsa.conf
+   sudo update-initramfs -u
+   ```
+
+3. **Use a different DTB**:
+   - Some DTB variants handle the switch differently
+   - Try `armada-3720-espressobin.dtb` instead of v7 variant
+
+4. **Kernel parameters** (add to cmdline):
+   ```
+   mv88e6xxx.blacklist=1
+   ```
+
+**Note:** Disabling DSA means you lose the hardware switch functionality. The LAN ports will not work as a switch but can still be configured as individual interfaces.
+
+### Boot Stuck or Kernel Panic
+
+**Symptoms:** Boot hangs or shows panic after loading kernel
+
+**Solutions:**
+
+1. Connect serial console (115200 8N1) to see actual error
+2. Try different DTB variants from boot menu
+3. Increase rootdelay: add `rootdelay=15` to boot args
+4. Boot with minimal options:
+   ```
+   root=/dev/sda2 rootwait console=ttyMV0,115200 single
+   ```
+
 ## Logs Location
 
 | Service | Log Location |
