@@ -190,10 +190,25 @@ log "1/7 Debootstrap ${SUITE} ${DEBIAN_ARCH}..."
 mkdir -p "${ROOTFS}"
 
 DEBOOTSTRAP_OPTS="--arch=${DEBIAN_ARCH}"
+# Core system packages
 INCLUDE_PKGS="systemd,systemd-sysv,dbus,netplan.io,nftables,openssh-server"
 INCLUDE_PKGS+=",python3,python3-pip,nginx,curl,wget,ca-certificates,gnupg,apt-transport-https"
 INCLUDE_PKGS+=",iproute2,iputils-ping,ethtool,net-tools,wireguard-tools"
 INCLUDE_PKGS+=",sudo,less,vim-tiny,logrotate,cron,rsync,jq,dnsmasq,cloud-guest-utils,parted"
+
+# Python dependencies for SecuBox modules (apt packages)
+INCLUDE_PKGS+=",python3-fastapi,python3-uvicorn,python3-httpx,python3-psutil"
+INCLUDE_PKGS+=",python3-aiosqlite,python3-cryptography,python3-jinja2,python3-jwt"
+INCLUDE_PKGS+=",python3-aiofiles,python3-pil,python3-tomli,python3-pydantic"
+INCLUDE_PKGS+=",python3-jose,python3-toml,python3-netifaces,python3-zmq"
+
+# Network and security tools
+INCLUDE_PKGS+=",bridge-utils,traceroute,dnsutils,whois,mtr-tiny,nmap,arping"
+INCLUDE_PKGS+=",avahi-daemon,avahi-utils,ieee-data,procps,openssl"
+INCLUDE_PKGS+=",fonts-noto-color-emoji,locales,console-setup"
+
+# Optional heavy services (installed but may be disabled)
+# Note: crowdsec, netdata, glances are large - moved to post-debootstrap for --no-install-recommends
 
 if [[ $IS_X64 -eq 1 ]]; then
   # x64 : ajouter GRUB EFI + linux-image
@@ -558,6 +573,35 @@ chroot "${ROOTFS}" pip3 install --break-system-packages -q \
   fastapi uvicorn python-jose httpx jinja2 tomli pyroute2 psutil pydantic 2>&1 | tail -5 || true
 ok "Python dependencies installed"
 
+# Install heavy services that aren't in debootstrap (crowdsec, netdata, glances, X11)
+log "Installing security services and optional components..."
+
+# Add CrowdSec repository
+log "  Adding CrowdSec repository..."
+chroot "${ROOTFS}" bash -c '
+  curl -s https://install.crowdsec.net | bash 2>/dev/null || true
+' 2>/dev/null || warn "CrowdSec repo setup failed"
+
+# Install security services
+chroot "${ROOTFS}" apt-get update -q 2>/dev/null
+chroot "${ROOTFS}" bash -c "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+  crowdsec glances netdata haproxy qrencode mosquitto coturn 2>/dev/null" || warn "Some services not installed"
+
+# Install X11 packages for kiosk/UI mode (lighter xorg install)
+chroot "${ROOTFS}" bash -c "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+  kbd xinit xserver-xorg-core chromium unclutter x11-xserver-utils \
+  xserver-xorg-input-libinput xserver-xorg-video-fbdev 2>/dev/null" || warn "X11 packages partial"
+
+# Install LXC/container tools (for secubox-mail, secubox-streamlit)
+chroot "${ROOTFS}" bash -c "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+  lxc debootstrap 2>/dev/null" || warn "LXC packages not installed"
+
+# Clean apt cache to save space
+chroot "${ROOTFS}" apt-get clean
+chroot "${ROOTFS}" rm -rf /var/lib/apt/lists/*
+
+ok "Services and optional components installed"
+
 # Ajouter repo SecuBox (si disponible)
 SECUBOX_REPO_OK=0
 if [[ "$APT_SECUBOX" == "http://127.0.0.1:"* ]]; then
@@ -587,10 +631,14 @@ fi
 log "Pre-installing Python dependencies for SecuBox modules..."
 install -d -m 755 "${ROOTFS}/usr/lib/systemd/system"
 install -d -m 755 "${ROOTFS}/etc/systemd/system"
+
+# Install comprehensive Python dependencies via pip (covers all SecuBox modules)
 chroot "${ROOTFS}" pip3 install --break-system-packages -q \
   fastapi uvicorn[standard] python-jose[cryptography] httpx \
   jinja2 tomli pyroute2 psutil authlib aiosqlite aiofiles \
-  pydantic toml netifaces 2>/dev/null || warn "pip install partiel"
+  pydantic toml netifaces pillow zmq pyjwt cryptography \
+  textual 2>/dev/null || warn "pip install partiel"
+
 ok "Python dependencies installed"
 
 # Slipstream: intégrer les .deb locaux directement
