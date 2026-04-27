@@ -6,6 +6,20 @@ Complete security appliance solution ported from OpenWrt to Debian bookworm. Des
 
 ---
 
+> **NEW v2.2.3 — Multi-Boot Live OS with Eye Remote Integration**
+>
+> Dual-architecture bootable image (ARM64 + AMD64) with RAM-based execution and shared persistent storage. Boot from USB or use Pi Zero Eye Remote as USB gadget to boot ESPRESSObin/MOCHAbin.
+>
+> **Features:**
+> - Boot any ARM64 (U-Boot) or AMD64 (UEFI) system from one USB stick
+> - Pi Zero presents multiboot image as USB storage for ESPRESSObin boot
+> - RAM-based live execution — minimal I/O, perfect for USB gadgets
+> - Shared data partition accessible from both architectures
+>
+> See [[Multiboot]] for documentation | [Download v2.2.3](https://github.com/CyberMind-FR/secubox-deb/releases/tag/multiboot-v2.2.3)
+
+---
+
 ## 🔴 BOOT — Quick Start
 
 ### VirtualBox (2 Minutes) ⭐
