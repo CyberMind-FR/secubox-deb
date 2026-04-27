@@ -161,18 +161,8 @@ add_secubox_repo() {
         return
     fi
 
-    log "Adding SecuBox repository..."
-
-    # Add SecuBox GPG key
-    mkdir -p "$OUTPUT_DIR/etc/apt/keyrings"
-    curl -fsSL "${SECUBOX_REPO}/gpg.key" | gpg --dearmor -o "$OUTPUT_DIR/etc/apt/keyrings/secubox.gpg" 2>/dev/null || true
-
-    # Add SecuBox repo
-    cat > "$OUTPUT_DIR/etc/apt/sources.list.d/secubox.list" <<EOF
-deb [signed-by=/etc/apt/keyrings/secubox.gpg] ${SECUBOX_REPO} bookworm main
-EOF
-
-    chroot "$OUTPUT_DIR" apt-get update || true
+    # Using local debs instead of apt repo
+    log "Skipping remote SecuBox repo (using local slipstream)"
 }
 
 install_secubox_packages() {
@@ -181,18 +171,36 @@ install_secubox_packages() {
         return
     fi
 
-    log "Installing SecuBox packages..."
+    log "Installing SecuBox packages from local debs..."
 
-    # Install core SecuBox packages
-    chroot "$OUTPUT_DIR" apt-get install -y \
-        secubox-core \
-        secubox-hub \
-        secubox-haproxy \
-        secubox-crowdsec \
-        secubox-system \
-        secubox-hardening \
-        secubox-ipblock \
-        || log "WARNING: Some SecuBox packages failed to install"
+    # Find local debs directory
+    local DEBS_DIR="${REPO_ROOT}/output/debs"
+    if [[ ! -d "$DEBS_DIR" ]]; then
+        log "WARNING: No local debs found at $DEBS_DIR"
+        return
+    fi
+
+    # Copy debs to rootfs
+    local DEB_COUNT=$(ls -1 "$DEBS_DIR"/*.deb 2>/dev/null | wc -l)
+    if [[ "$DEB_COUNT" -eq 0 ]]; then
+        log "WARNING: No .deb files in $DEBS_DIR"
+        return
+    fi
+
+    log "Slipstreaming $DEB_COUNT packages..."
+    mkdir -p "$OUTPUT_DIR/tmp/debs"
+    cp "$DEBS_DIR"/*.deb "$OUTPUT_DIR/tmp/debs/"
+
+    # Install all debs
+    chroot "$OUTPUT_DIR" bash -c '
+        cd /tmp/debs
+        apt-get install -y -f ./secubox-core*.deb 2>/dev/null || true
+        dpkg -i *.deb 2>/dev/null || true
+        apt-get install -y -f 2>/dev/null || true
+        rm -rf /tmp/debs
+    ' || log "WARNING: Some SecuBox packages may have failed"
+
+    log "SecuBox packages slipstreamed"
 }
 
 install_desktop() {
