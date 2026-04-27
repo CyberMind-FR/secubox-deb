@@ -680,22 +680,6 @@ network:
 NETPLAN
 chmod 600 "${ROOTFS}/etc/netplan/00-secubox.yaml"
 
-# Dummy interface with fixed IP - always available for kiosk/local access
-# Using 10.55.255.0/24 to avoid conflicts with typical 192.168.x.x home networks
-cat > "${ROOTFS}/etc/systemd/network/10-dummy0.netdev" <<EOF
-[NetDev]
-Name=dummy0
-Kind=dummy
-EOF
-
-cat > "${ROOTFS}/etc/systemd/network/10-dummy0.network" <<EOF
-[Match]
-Name=dummy0
-
-[Network]
-Address=10.55.255.1/24
-EOF
-
 # Fallback network script - runs after boot, retries DHCP and auto-discovers LAN
 cat > "${ROOTFS}/usr/sbin/secubox-net-fallback" <<'FALLBACK'
 #!/bin/bash

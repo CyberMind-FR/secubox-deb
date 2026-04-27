@@ -285,21 +285,6 @@ chroot "${ROOTFS}" dpkg-reconfigure -f noninteractive tzdata 2>/dev/null || true
 install -d "${ROOTFS}/etc/netplan"
 cp "${BOARD_DIR}/netplan/00-secubox.yaml" "${ROOTFS}/etc/netplan/"
 
-# Dummy interface with fixed IP - always available for kiosk/local access
-cat > "${ROOTFS}/etc/systemd/network/10-dummy0.netdev" <<EOF
-[NetDev]
-Name=dummy0
-Kind=dummy
-EOF
-
-cat > "${ROOTFS}/etc/systemd/network/10-dummy0.network" <<EOF
-[Match]
-Name=dummy0
-
-[Network]
-Address=10.55.255.1/24
-EOF
-
 # Network fallback script - DHCP with smart auto-IP collision avoidance
 cat > "${ROOTFS}/usr/sbin/secubox-net-fallback" <<'FALLBACK'
 #!/bin/bash

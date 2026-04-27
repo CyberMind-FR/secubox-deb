@@ -40,11 +40,6 @@ network:
     lan1:
       optional: true
 
-    # Dummy interface for internal services (non-conflicting with gateway)
-    dummy0:
-      addresses: [10.55.255.1/24]
-      optional: true
-
   bridges:
     br-lan:
       interfaces: [lan0, lan1]

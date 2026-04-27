@@ -16,11 +16,6 @@ network:
     lan3:
       optional: true
 
-    # Dummy interface for internal services
-    dummy0:
-      addresses: [10.55.255.1/24]
-      optional: true
-
   bridges:
     br-lan:
       interfaces: [lan0, lan1, lan2, lan3]
