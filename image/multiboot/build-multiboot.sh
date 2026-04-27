@@ -64,7 +64,9 @@ parse_args() {
         esac
     done
 
-    [[ -z "$OUTPUT_FILE" ]] && OUTPUT_FILE="${OUTPUT_DIR}/secubox-multiboot-$(date +%Y%m%d).img"
+    if [[ -z "$OUTPUT_FILE" ]]; then
+        OUTPUT_FILE="${OUTPUT_DIR}/secubox-multiboot-$(date +%Y%m%d).img"
+    fi
 }
 
 check_deps() {
@@ -300,7 +302,7 @@ install_amd64_rootfs() {
     else
         # Build AMD64 rootfs with debootstrap
         log "Building AMD64 rootfs with debootstrap..."
-        "${SCRIPT_DIR}/build-amd64-rootfs.sh" --output "$MNT_AMD64" --minimal
+        "${SCRIPT_DIR}/build-amd64-rootfs.sh" --output "$MNT_AMD64"
     fi
 
     # Copy AMD64 kernel to EFI partition

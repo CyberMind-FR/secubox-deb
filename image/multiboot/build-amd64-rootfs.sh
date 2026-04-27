@@ -43,7 +43,9 @@ parse_args() {
         esac
     done
 
-    [[ -z "$OUTPUT_DIR" ]] && err "Output directory required (-o)"
+    if [[ -z "$OUTPUT_DIR" ]]; then
+        err "Output directory required (-o)"
+    fi
 }
 
 check_deps() {
