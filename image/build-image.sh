@@ -26,7 +26,7 @@ LOCAL_REPO_PORT="8080"
 SLIPSTREAM_DEBS=1     # Intégrer les .deb locaux dans l'image (default: ON)
 
 # SecuBox versioning
-SECUBOX_VERSION="1.8.0"
+SECUBOX_VERSION="1.9.0"
 BUILD_TIMESTAMP=$(date '+%Y-%m-%d %H:%M')
 
 RED='\033[0;31m'; CYAN='\033[0;36m'; GOLD='\033[0;33m'
