@@ -28,6 +28,14 @@ on:
         options:
           - 'true'
           - 'false'
+      prerelease:
+        description: 'Mark as prerelease'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
   push:
     tags:
       - 'multiboot-v*'
@@ -38,7 +46,7 @@ on:
       - 'image/multiboot/**'
 
 env:
-  VERSION: '2.2.3'
+  VERSION: '2.2.4-pre1'
 
 jobs:
   # Build all .deb packages first
@@ -182,6 +190,7 @@ jobs:
         with:
           tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('multiboot-v{0}', env.VERSION) }}
           name: SecuBox Multiboot v${{ env.VERSION }}
+          prerelease: ${{ github.event.inputs.prerelease == 'true' || contains(env.VERSION, 'pre') }}
           files: |
             output/secubox-multiboot-${{ env.VERSION }}.img.xz
             output/secubox-multiboot-${{ env.VERSION }}.sha256
@@ -190,8 +199,10 @@ jobs:
             ## SecuBox Multiboot v${{ env.VERSION }} — Live RAM OS
 
             ### 🎯 What's New
+            - **Dual Boot Menu** — Interactive menu with 5s timeout: Live RAM Boot (default) or Flash to eMMC
             - **Dual Architecture** — Boot ARM64 (MOCHAbin/ESPRESSObin) or AMD64 (x86_64 PC)
             - **RAM-based Live OS** — Reduced I/O, ideal for USB gadget devices
+            - **Auto Kernel Install** — ARM64 kernel, DTBs, and initrd properly installed on EFI partition
             - **SecuBox Pre-installed** — All modules slipstreamed, ready to use
             - **Shared Data Partition** — Persistent storage accessible from both architectures
 

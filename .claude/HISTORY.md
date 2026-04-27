@@ -5,6 +5,85 @@
 
 ## 2026-04-27
 
+### Session 70 — Live Boot Complete Setup (v2.2.4-live)
+
+**Feature:** Full live-boot implementation with squashfs and RAM boot
+
+**Description:**
+Completed full live-boot setup for Pi Zero Eye Remote storage.img. Installed live-boot package, rebuilt initramfs with live-boot scripts, created squashfs filesystem, and updated boot.scr with proper live boot parameters.
+
+**Changes Made:**
+1. Installed `live-boot` and `busybox` packages on ARM64 rootfs
+2. Rebuilt initramfs with live-boot scripts included
+3. Created `/live/filesystem.squashfs` (878MB) on data partition (sda4)
+4. Updated boot.scr with live boot parameters:
+   - `boot=live` - enables live-boot mode
+   - `live-media=/dev/sda4` - partition with squashfs
+   - `live-media-path=/live` - path to squashfs
+   - `toram` - loads entire squashfs into RAM
+   - DSA blacklist parameters preserved
+
+**Partition Layout:**
+- sda1 (512MB): EFI - kernel, initrd, dtbs, boot.scr
+- sda2 (3GB): ARM64 rootfs (for reference)
+- sda3 (3GB): x86 rootfs (for VirtualBox/QEMU)
+- sda4 (9.5GB): Data + /live/filesystem.squashfs
+
+**Wiki Fix:** Fixed sidebar link syntax from `[[Page|Display]]` to `[Display](Page)`
+
+**Version:** v2.2.4-live
+
+---
+
+### Session 69 — Live RAM Boot Cmdline Fix (v2.2.4-pre2)
+
+**Fix:** Added missing `boot=live live-media-path=/live` parameters to bootargs
+
+**Description:**
+Fixed critical issue where multiboot image was not configured for live RAM boot. The kernel command line was missing the required `boot=live` and `live-media-path=/live` parameters that the live-boot initramfs needs to work properly.
+
+**Files Modified:**
+- `image/multiboot/build-multiboot.sh` — Added live boot parameters to setenv bootargs
+
+**Before:**
+```bash
+setenv bootargs "root=${rootpart} rootfstype=ext4 rootwait rootdelay=10 ..."
+```
+
+**After:**
+```bash
+setenv bootargs "boot=live live-media-path=/live root=${rootpart} rootfstype=ext4 rootwait rootdelay=10 ..."
+```
+
+**Version:** v2.2.4-pre2
+
+---
+
+### Session 68 — Multiboot Dual Boot Menu & Kernel Fix (v2.2.4-pre1)
+
+**Feature:** Fixed ARM64 kernel installation and added interactive boot menu
+
+**Description:**
+Fixed critical bug where ARM64 kernel, initrd, and DTB files were not being copied to the EFI partition. Added interactive dual boot menu with 5-second timeout, offering Live RAM Boot (default) or Flash to eMMC option.
+
+**Files Modified:**
+- `image/multiboot/build-multiboot.sh` — Major fixes:
+  - Fixed loop device release bug in `install_arm64_rootfs()` (was releasing before copying kernel)
+  - Added `build_arm64_rootfs_debootstrap()` function with kernel installation
+  - Added `copy_arm64_kernel_to_efi()` function to properly copy Image, initrd, DTBs
+  - Updated boot.scr with interactive dual boot menu (5s timeout)
+  - Added qemu-debootstrap and other optional dependency warnings
+- `.github/workflows/build-multiboot.yml` — Added prerelease support, bumped version
+- `wiki/_Sidebar.md` — Bumped version to v2.2.4-pre1
+
+**Boot Menu Options:**
+1. Live RAM Boot (default with 5s timeout)
+2. Flash SecuBox to eMMC
+
+**Version:** v2.2.4-pre1 (prerelease)
+
+---
+
 ### Session 67 — Multiboot Wiki & Eye Remote Docs (v2.2.3)
 
 **Feature:** Wiki documentation for multiboot live OS and Eye Remote integration
