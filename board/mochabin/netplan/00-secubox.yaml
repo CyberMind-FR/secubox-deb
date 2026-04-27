@@ -28,11 +28,6 @@ network:
     eth6:
       optional: true
 
-    # Dummy interface for internal services
-    dummy0:
-      addresses: [10.55.255.1/24]
-      optional: true
-
   bridges:
     # Bridge LAN
     br-lan:
