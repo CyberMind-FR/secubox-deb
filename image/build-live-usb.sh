@@ -178,11 +178,11 @@ INCLUDE_PKGS+=",plymouth,plymouth-themes"
 INCLUDE_PKGS+=",fonts-terminus,kbd"
 
 # Python dependencies for SecuBox modules (apt packages)
-# Note: python3-zmq moved to post-debootstrap apt-get (has complex deps)
+# Note: Complex Python packages (cryptography, zmq, jose) moved to post-debootstrap
 INCLUDE_PKGS+=",python3-fastapi,python3-uvicorn,python3-httpx,python3-psutil"
-INCLUDE_PKGS+=",python3-aiosqlite,python3-cryptography,python3-jinja2,python3-jwt"
+INCLUDE_PKGS+=",python3-aiosqlite,python3-jinja2,python3-jwt"
 INCLUDE_PKGS+=",python3-aiofiles,python3-pil,python3-tomli,python3-pydantic"
-INCLUDE_PKGS+=",python3-jose,python3-toml,python3-netifaces"
+INCLUDE_PKGS+=",python3-toml,python3-netifaces"
 
 # Network and security tools (note: iputils-arping already included above)
 INCLUDE_PKGS+=",bridge-utils,traceroute,dnsutils,whois,mtr-tiny,nmap"
@@ -1078,8 +1078,12 @@ chroot "${ROOTFS}" bash -c '
   curl -s https://install.crowdsec.net | bash 2>/dev/null || true
 ' 2>/dev/null || warn "CrowdSec repo setup failed"
 chroot "${ROOTFS}" apt-get update -q 2>/dev/null
+# Install Python packages that fail during debootstrap
 chroot "${ROOTFS}" bash -c "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-  crowdsec glances netdata mosquitto coturn lxc debootstrap python3-zmq 2>/dev/null" || warn "Some services not installed"
+  python3-cryptography python3-jose python3-zmq 2>/dev/null" || warn "Some Python packages not installed"
+
+chroot "${ROOTFS}" bash -c "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+  crowdsec glances netdata mosquitto coturn lxc debootstrap 2>/dev/null" || warn "Some services not installed"
 ok "Security services installed"
 
 # Create symlinks for uvicorn to ensure all service files can find it

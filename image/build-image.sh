@@ -197,11 +197,11 @@ INCLUDE_PKGS+=",iproute2,iputils-ping,ethtool,net-tools,wireguard-tools"
 INCLUDE_PKGS+=",sudo,less,vim-tiny,logrotate,cron,rsync,jq,dnsmasq,cloud-guest-utils,parted"
 
 # Python dependencies for SecuBox modules (apt packages)
-# Note: python3-zmq installed via pip (complex dependencies)
+# Note: Complex deps (cryptography, jose) installed via pip after debootstrap
 INCLUDE_PKGS+=",python3-fastapi,python3-uvicorn,python3-httpx,python3-psutil"
-INCLUDE_PKGS+=",python3-aiosqlite,python3-cryptography,python3-jinja2,python3-jwt"
+INCLUDE_PKGS+=",python3-aiosqlite,python3-jinja2,python3-jwt"
 INCLUDE_PKGS+=",python3-aiofiles,python3-pil,python3-tomli,python3-pydantic"
-INCLUDE_PKGS+=",python3-jose,python3-toml,python3-netifaces"
+INCLUDE_PKGS+=",python3-toml,python3-netifaces"
 
 # Network and security tools
 INCLUDE_PKGS+=",bridge-utils,traceroute,dnsutils,whois,mtr-tiny,nmap,iputils-arping"
