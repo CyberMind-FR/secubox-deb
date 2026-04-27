@@ -26,6 +26,7 @@
 * [UI Comparison](UI-COMPARISON)
 
 ### 🟠 WALL — Hardware
+* [Device Categories](Device-Categories) 6-Icon System
 * [Smart-Strip](Smart-Strip) 🆕 HMI Interface
 
 ### Links
