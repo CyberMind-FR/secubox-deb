@@ -5,6 +5,29 @@
 
 ## 2026-04-27
 
+### Session 66 — Multiboot GitHub Action (v2.2.3)
+
+**Feature:** GitHub Actions workflow for automated multiboot image builds
+
+**Description:**
+Created automated CI/CD pipeline for building the multiboot live OS image with all SecuBox packages slipstreamed. Workflow builds .deb packages first, then creates the 16GB multiboot image with ARM64 and AMD64 rootfs partitions.
+
+**Files Created:**
+- `.github/workflows/build-multiboot.yml` — CI workflow for multiboot image
+
+**Workflow Features:**
+- Manual dispatch with configurable image size (8/16/32GB)
+- Optional desktop environment inclusion
+- Automatic .deb package builds from packages/
+- Debootstrap-based ARM64 and AMD64 rootfs creation
+- QEMU user-mode emulation for cross-arch chroot
+- XZ compression for releases
+- GitHub Release integration
+
+**Version:** v2.2.3
+
+---
+
 ### Session 65 — Multi-Boot Storage System (v2.2.2)
 
 **Feature:** Multi-architecture boot system for Pi Zero Eye Remote storage

@@ -1,0 +1,231 @@
+name: Build Multiboot Live Image
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_size:
+        description: 'Image size in GB'
+        required: false
+        default: '16'
+        type: choice
+        options:
+          - '8'
+          - '16'
+          - '32'
+      include_desktop:
+        description: 'Include desktop environment'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+      create_release:
+        description: 'Create GitHub release'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+  push:
+    tags:
+      - 'multiboot-v*'
+    paths:
+      - 'image/multiboot/**'
+  pull_request:
+    paths:
+      - 'image/multiboot/**'
+
+env:
+  VERSION: '2.2.3'
+
+jobs:
+  # Build all .deb packages first
+  build-packages:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache
+          df -h
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            build-essential devscripts debhelper \
+            dh-python python3-all python3-setuptools \
+            crossbuild-essential-arm64
+
+      - name: Build SecuBox packages
+        run: |
+          mkdir -p output/debs
+
+          # Build each package
+          for pkg in packages/secubox-*/; do
+            if [ -d "$pkg/debian" ]; then
+              echo "Building $(basename $pkg)..."
+              cd "$pkg"
+              dpkg-buildpackage -us -uc -b --host-arch=arm64 2>/dev/null || \
+                dpkg-buildpackage -us -uc -b 2>/dev/null || \
+                echo "WARNING: Failed to build $(basename $pkg)"
+              cd - >/dev/null
+            fi
+          done
+
+          # Collect all .deb files
+          find packages/ -name "*.deb" -exec cp {} output/debs/ \;
+          ls -la output/debs/ || echo "No packages built"
+
+      - name: Upload packages artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: secubox-packages
+          path: output/debs/
+          retention-days: 1
+
+  # Build the multiboot image
+  build-multiboot:
+    needs: build-packages
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache
+          df -h
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            parted dosfstools e2fsprogs \
+            debootstrap qemu-user-static binfmt-support \
+            squashfs-tools xz-utils rsync grub-efi-amd64-bin \
+            grub-pc-bin u-boot-tools
+
+          # Ensure ARM64 binfmt is registered
+          sudo systemctl restart binfmt-support || true
+          sudo update-binfmts --enable qemu-aarch64 || true
+
+          # Verify QEMU is working
+          if [ -f /proc/sys/fs/binfmt_misc/qemu-aarch64 ]; then
+            echo "✓ QEMU ARM64 binfmt registered"
+          else
+            echo "⚠ QEMU ARM64 binfmt not found, attempting manual registration"
+            sudo update-binfmts --import qemu-aarch64 || true
+          fi
+
+      - name: Download packages artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: secubox-packages
+          path: output/debs/
+
+      - name: List available packages
+        run: |
+          echo "SecuBox packages available for slipstream:"
+          ls -la output/debs/ || echo "No packages found"
+
+      - name: Build multiboot image
+        run: |
+          IMAGE_SIZE="${{ github.event.inputs.image_size || '16' }}"
+          DESKTOP="${{ github.event.inputs.include_desktop || 'false' }}"
+
+          mkdir -p output
+
+          BUILD_ARGS="--output output/secubox-multiboot-${{ env.VERSION }}.img"
+          BUILD_ARGS="$BUILD_ARGS --size ${IMAGE_SIZE}G"
+
+          if [ "$DESKTOP" = "true" ]; then
+            BUILD_ARGS="$BUILD_ARGS --desktop"
+          fi
+
+          echo "Building multiboot image with: $BUILD_ARGS"
+          sudo bash image/multiboot/build-multiboot.sh $BUILD_ARGS
+
+          sudo chown $(id -u):$(id -g) output/secubox-multiboot-${{ env.VERSION }}.img
+        timeout-minutes: 120
+
+      - name: Compress image
+        run: |
+          cd output
+          echo "Compressing multiboot image..."
+          xz -9 -v -T0 secubox-multiboot-${{ env.VERSION }}.img
+          ls -lh secubox-multiboot-${{ env.VERSION }}.img.xz
+
+      - name: Generate checksums
+        run: |
+          cd output
+          sha256sum secubox-multiboot-${{ env.VERSION }}.img.xz > secubox-multiboot-${{ env.VERSION }}.sha256
+          cat secubox-multiboot-${{ env.VERSION }}.sha256
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: secubox-multiboot-${{ env.VERSION }}
+          path: |
+            output/secubox-multiboot-${{ env.VERSION }}.img.xz
+            output/secubox-multiboot-${{ env.VERSION }}.sha256
+          retention-days: 30
+
+      - name: Upload to release (on tag or manual)
+        if: startsWith(github.ref, 'refs/tags/multiboot-v') || github.event.inputs.create_release == 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('multiboot-v{0}', env.VERSION) }}
+          name: SecuBox Multiboot v${{ env.VERSION }}
+          files: |
+            output/secubox-multiboot-${{ env.VERSION }}.img.xz
+            output/secubox-multiboot-${{ env.VERSION }}.sha256
+          body: |
+
+            ## SecuBox Multiboot v${{ env.VERSION }} — Live RAM OS
+
+            ### 🎯 What's New
+            - **Dual Architecture** — Boot ARM64 (MOCHAbin/ESPRESSObin) or AMD64 (x86_64 PC)
+            - **RAM-based Live OS** — Reduced I/O, ideal for USB gadget devices
+            - **SecuBox Pre-installed** — All modules slipstreamed, ready to use
+            - **Shared Data Partition** — Persistent storage accessible from both architectures
+
+            ### 📦 Image Layout
+
+            | Partition | Size | Type | Description |
+            |-----------|------|------|-------------|
+            | EFI | 512MB | FAT32 | GRUB + U-Boot for multi-arch boot |
+            | ARM64 | ~4GB | ext4 | Debian bookworm arm64 rootfs |
+            | AMD64 | ~4GB | ext4 | Debian bookworm amd64 rootfs |
+            | Data | ~7GB | ext4 | Shared persistent storage |
+
+            ### 🔧 SecuBox Modules Included
+            - secubox-core, secubox-hub
+            - secubox-crowdsec, secubox-haproxy
+            - secubox-system, secubox-hardening
+            - secubox-ipblock, and more...
+
+            ### 💾 Flash to SD/USB
+            ```bash
+            xzcat secubox-multiboot-${{ env.VERSION }}.img.xz | sudo dd of=/dev/sdX bs=4M status=progress conv=fsync
+            ```
+
+            ### 🔐 Default credentials
+            - User: `secubox`
+            - Password: `secubox`
+            - Root: `secubox`
+
+            ### 🎯 Use Cases
+            - **Demo/Recovery** — Boot from USB to demo or repair SecuBox installations
+            - **Factory Reset** — Clone to eMMC/SD for fresh installations
+            - **Pi Zero Eye Remote** — USB gadget boot media with reduced I/O
+
+            ### ⏱️ First boot
+            ~90s (all packages pre-installed, no internet required)
+
+            See [Multiboot Wiki](https://github.com/CyberMind-FR/secubox-deb/wiki/Multiboot) for full documentation.
