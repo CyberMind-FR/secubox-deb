@@ -5,6 +5,29 @@
 
 ## 2026-04-27
 
+### Session 67 — Multiboot Wiki & Eye Remote Docs (v2.2.3)
+
+**Feature:** Wiki documentation for multiboot live OS and Eye Remote integration
+
+**Description:**
+Added comprehensive wiki documentation for the multi-architecture boot system, including the new Multiboot wiki page, home page announcement banner, and sidebar navigation updates.
+
+**Files Created:**
+- `wiki/Multiboot.md` — Full documentation for multiboot live OS
+
+**Files Modified:**
+- `wiki/Home.md` — Added announcement banner for v2.2.3 multiboot
+- `wiki/_Sidebar.md` — Added Multiboot and Eye Remote links, bumped version
+- `image/multiboot/README.md` — Added Eye Remote integration section
+
+**Changes:**
+- Eye Remote Pi Zero architecture documented with ASCII diagrams
+- Partition layout and boot flow explained
+- Build instructions and GitHub Actions CI docs
+- Troubleshooting section for common boot issues
+
+---
+
 ### Session 66 — Multiboot GitHub Action (v2.2.3)
 
 **Feature:** GitHub Actions workflow for automated multiboot image builds
