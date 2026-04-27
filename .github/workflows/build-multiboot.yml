@@ -162,6 +162,44 @@ jobs:
           sudo chown $(id -u):$(id -g) output/secubox-multiboot-${{ env.VERSION }}.img
         timeout-minutes: 120
 
+      - name: Verify boot files
+        run: |
+          # Mount EFI partition and verify kernel files exist
+          LOOP_DEV=$(sudo losetup -f --show -P output/secubox-multiboot-${{ env.VERSION }}.img)
+          sudo mkdir -p /tmp/verify-efi
+          sudo mount "${LOOP_DEV}p1" /tmp/verify-efi
+
+          echo "=== EFI Partition Boot Files ==="
+          ls -la /tmp/verify-efi/
+
+          # Check for required files
+          MISSING=0
+          for f in Image vmlinuz initrd.img initrd-amd64.img boot.scr; do
+            if [ -f "/tmp/verify-efi/$f" ]; then
+              echo "✓ $f present ($(du -h /tmp/verify-efi/$f | cut -f1))"
+            else
+              echo "✗ $f MISSING!"
+              MISSING=1
+            fi
+          done
+
+          # Check DTBs
+          DTB_COUNT=$(ls /tmp/verify-efi/dtbs/marvell/*.dtb 2>/dev/null | wc -l)
+          if [ "$DTB_COUNT" -gt 0 ]; then
+            echo "✓ DTBs present ($DTB_COUNT files)"
+          else
+            echo "✗ DTBs MISSING!"
+            MISSING=1
+          fi
+
+          sudo umount /tmp/verify-efi
+          sudo losetup -d "$LOOP_DEV"
+
+          if [ "$MISSING" -eq 1 ]; then
+            echo "ERROR: Required boot files missing!"
+            exit 1
+          fi
+
       - name: Compress image
         run: |
           cd output
