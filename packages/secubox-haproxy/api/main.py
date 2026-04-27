@@ -52,9 +52,14 @@ STATS_HISTORY_FILE = DATA_DIR / "stats_history.json"
 WEBHOOKS_FILE = DATA_DIR / "webhooks.json"
 HEALTH_HISTORY_FILE = DATA_DIR / "health_history.json"
 
-# Ensure directories exist
-DATA_DIR.mkdir(parents=True, exist_ok=True)
-CONFIG_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+
+def _ensure_dirs():
+    """Ensure data directories exist. Called at startup, not import time."""
+    try:
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        CONFIG_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    except PermissionError:
+        log.warning("Cannot create data directories - running with limited functionality")
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -307,6 +312,7 @@ async def _periodic_stats_collector():
 async def startup_event():
     """Start background tasks."""
     global _health_monitor_task, _stats_collector_task
+    _ensure_dirs()
     _health_monitor_task = asyncio.create_task(_periodic_health_monitor())
     _stats_collector_task = asyncio.create_task(_periodic_stats_collector())
 
