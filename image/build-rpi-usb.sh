@@ -121,11 +121,23 @@ log "1/7 Debootstrap arm64..."
 # IMPORTANT: Do NOT include kernel/initramfs in debootstrap!
 # initramfs generation under QEMU takes 30+ minutes
 # We install kernel AFTER debootstrap with initramfs disabled
+# Core system packages
 INCLUDE_PKGS="systemd,systemd-sysv,dbus,nftables,openssh-server"
 INCLUDE_PKGS+=",python3,python3-pip,nginx,curl,wget,ca-certificates,gnupg"
-INCLUDE_PKGS+=",iproute2,iputils-ping,net-tools,wireguard-tools"
+INCLUDE_PKGS+=",iproute2,iputils-ping,net-tools,wireguard-tools,dnsmasq"
 INCLUDE_PKGS+=",sudo,less,vim-tiny,cron,rsync,jq"
 INCLUDE_PKGS+=",parted,dosfstools,e2fsprogs,pciutils,usbutils"
+
+# Python dependencies for SecuBox modules (apt packages)
+INCLUDE_PKGS+=",python3-fastapi,python3-uvicorn,python3-httpx,python3-psutil"
+INCLUDE_PKGS+=",python3-aiosqlite,python3-cryptography,python3-jinja2,python3-jwt"
+INCLUDE_PKGS+=",python3-aiofiles,python3-pil,python3-tomli,python3-pydantic"
+INCLUDE_PKGS+=",python3-jose,python3-toml,python3-netifaces"
+
+# Network and security tools
+INCLUDE_PKGS+=",bridge-utils,dnsutils,arping,avahi-daemon,avahi-utils"
+INCLUDE_PKGS+=",ieee-data,procps,openssl,haproxy,qrencode"
+INCLUDE_PKGS+=",fonts-noto-color-emoji,locales,console-setup"
 # Note: linux-image-arm64, plymouth, initramfs-tools installed later
 
 debootstrap --arch=arm64 --foreign --include="${INCLUDE_PKGS}" \

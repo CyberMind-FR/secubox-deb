@@ -167,6 +167,7 @@ trap cleanup EXIT
 log "1/8 Debootstrap ${SUITE} amd64..."
 mkdir -p "${ROOTFS}"
 
+# Core system packages
 INCLUDE_PKGS="systemd,systemd-sysv,dbus,netplan.io,nftables,openssh-server,locales"
 INCLUDE_PKGS+=",python3,python3-pip,nginx,curl,wget,ca-certificates,gnupg,console-setup"
 INCLUDE_PKGS+=",iproute2,iputils-ping,iputils-arping,ethtool,net-tools,wireguard-tools,isc-dhcp-client"
@@ -175,6 +176,17 @@ INCLUDE_PKGS+=",linux-image-amd64,live-boot,live-boot-initramfs-tools,live-confi
 INCLUDE_PKGS+=",grub-efi-amd64,grub-pc-bin,efibootmgr,pciutils,usbutils,parted,dosfstools,lsb-release"
 INCLUDE_PKGS+=",plymouth,plymouth-themes"
 INCLUDE_PKGS+=",fonts-terminus,kbd"
+
+# Python dependencies for SecuBox modules (apt packages)
+INCLUDE_PKGS+=",python3-fastapi,python3-uvicorn,python3-httpx,python3-psutil"
+INCLUDE_PKGS+=",python3-aiosqlite,python3-cryptography,python3-jinja2,python3-jwt"
+INCLUDE_PKGS+=",python3-aiofiles,python3-pil,python3-tomli,python3-pydantic"
+INCLUDE_PKGS+=",python3-jose,python3-toml,python3-netifaces,python3-zmq"
+
+# Network and security tools
+INCLUDE_PKGS+=",bridge-utils,traceroute,dnsutils,whois,mtr-tiny,nmap,arping"
+INCLUDE_PKGS+=",avahi-daemon,avahi-utils,ieee-data,procps,openssl"
+INCLUDE_PKGS+=",fonts-noto-color-emoji,haproxy,qrencode"
 
 debootstrap --arch=amd64 --include="${INCLUDE_PKGS}" \
   "${SUITE}" "${ROOTFS}" "${APT_MIRROR}"
@@ -1053,10 +1065,21 @@ chroot "${ROOTFS}" apt-get install -y -q python3-pip python3-venv 2>/dev/null ||
 chroot "${ROOTFS}" pip3 install --break-system-packages -q \
   fastapi uvicorn[standard] python-jose[cryptography] httpx \
   jinja2 tomli toml pyroute2 psutil 'pydantic[email]' \
-  aiofiles aiosqlite authlib cryptography \
-  python-multipart websockets netifaces email-validator \
+  aiofiles aiosqlite authlib cryptography pillow zmq pyjwt \
+  python-multipart websockets netifaces email-validator textual \
   2>&1 | tail -10 || true
 ok "Python dependencies installed"
+
+# Install heavy security services (not in debootstrap to keep initial download small)
+log "Installing security services..."
+# Add CrowdSec repository
+chroot "${ROOTFS}" bash -c '
+  curl -s https://install.crowdsec.net | bash 2>/dev/null || true
+' 2>/dev/null || warn "CrowdSec repo setup failed"
+chroot "${ROOTFS}" apt-get update -q 2>/dev/null
+chroot "${ROOTFS}" bash -c "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+  crowdsec glances netdata mosquitto coturn lxc debootstrap 2>/dev/null" || warn "Some services not installed"
+ok "Security services installed"
 
 # Create symlinks for uvicorn to ensure all service files can find it
 # pip installs to /usr/local/bin/, but some services expect /usr/bin/

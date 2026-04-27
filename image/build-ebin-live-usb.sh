@@ -154,6 +154,7 @@ trap cleanup EXIT
 log "1/7 Debootstrap ${SUITE} arm64..."
 mkdir -p "${ROOTFS}"
 
+# Core system packages
 INCLUDE_PKGS="systemd,systemd-sysv,dbus,netplan.io,nftables,openssh-server,locales"
 INCLUDE_PKGS+=",python3,python3-pip,nginx,curl,wget,ca-certificates,gnupg,console-setup"
 INCLUDE_PKGS+=",iproute2,iputils-ping,ethtool,net-tools,wireguard-tools"
@@ -161,6 +162,17 @@ INCLUDE_PKGS+=",sudo,less,vim-tiny,logrotate,cron,rsync,jq,dnsmasq"
 INCLUDE_PKGS+=",linux-image-arm64,live-boot,live-boot-initramfs-tools,live-config,live-config-systemd"
 INCLUDE_PKGS+=",pciutils,usbutils,parted,dosfstools,lsb-release"
 INCLUDE_PKGS+=",pv,dialog,fonts-terminus,kbd"
+
+# Python dependencies for SecuBox modules (apt packages)
+INCLUDE_PKGS+=",python3-fastapi,python3-uvicorn,python3-httpx,python3-psutil"
+INCLUDE_PKGS+=",python3-aiosqlite,python3-cryptography,python3-jinja2,python3-jwt"
+INCLUDE_PKGS+=",python3-aiofiles,python3-pil,python3-tomli,python3-pydantic"
+INCLUDE_PKGS+=",python3-jose,python3-toml,python3-netifaces"
+
+# Network and security tools
+INCLUDE_PKGS+=",bridge-utils,dnsutils,arping,avahi-daemon,avahi-utils"
+INCLUDE_PKGS+=",ieee-data,procps,openssl,haproxy,qrencode"
+INCLUDE_PKGS+=",fonts-noto-color-emoji"
 
 # Cross-architecture debootstrap with QEMU
 debootstrap --arch=arm64 --foreign --include="${INCLUDE_PKGS}" \
