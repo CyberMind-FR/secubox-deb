@@ -183,8 +183,8 @@ INCLUDE_PKGS+=",python3-aiosqlite,python3-cryptography,python3-jinja2,python3-jw
 INCLUDE_PKGS+=",python3-aiofiles,python3-pil,python3-tomli,python3-pydantic"
 INCLUDE_PKGS+=",python3-jose,python3-toml,python3-netifaces,python3-zmq"
 
-# Network and security tools
-INCLUDE_PKGS+=",bridge-utils,traceroute,dnsutils,whois,mtr-tiny,nmap,arping"
+# Network and security tools (note: iputils-arping already included above)
+INCLUDE_PKGS+=",bridge-utils,traceroute,dnsutils,whois,mtr-tiny,nmap"
 INCLUDE_PKGS+=",avahi-daemon,avahi-utils,ieee-data,procps,openssl"
 INCLUDE_PKGS+=",fonts-noto-color-emoji,haproxy,qrencode"
 
