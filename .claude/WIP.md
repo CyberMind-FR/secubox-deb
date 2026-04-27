@@ -3,6 +3,31 @@
 
 ---
 
+## ✅ Complété (Session 65) — Multi-Boot Storage System v2.2.2
+
+### Multi-Architecture Boot System ✅
+
+**Feature:** USB storage that boots ARM64 and AMD64 systems with shared data
+
+**Implementation:**
+- Created `image/multiboot/` directory with 3 files
+- `build-multiboot.sh` — Creates 16GB+ image with 4 partitions (EFI, ARM64 rootfs, AMD64 rootfs, shared data)
+- `build-amd64-rootfs.sh` — Debootstrap AMD64 rootfs with SecuBox packages
+- U-Boot boot.scr for ARM64 with USB/MMC detection
+- GRUB BOOTX64.EFI for AMD64 UEFI boot
+- Shared data partition auto-mounted with bind mounts
+
+**Commits:**
+- `5cf69c0` — feat(multiboot): Add multi-architecture boot system with shared data
+
+**Next Steps:**
+- Build actual multi-boot image on build host
+- Test ARM64 boot from USB
+- Test AMD64 UEFI boot
+- Deploy to Pi Zero storage
+
+---
+
 ## ✅ Complété (Session 65) — Eye Remote USB Boot Fix v2.2.1
 
 ### Eye Remote → ESPRESSObin USB Boot ✅
