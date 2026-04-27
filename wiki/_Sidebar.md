@@ -25,6 +25,9 @@
 * [API-Reference](API-Reference) | [FR](API-Reference-FR) | [DE](API-Reference-DE) | [中文](API-Reference-ZH)
 * [UI Comparison](UI-COMPARISON)
 
+### 🟠 WALL — Hardware
+* [Smart-Strip](Smart-Strip) 🆕 HMI Interface
+
 ### Links
 * [Releases](https://github.com/CyberMind-FR/secubox-deb/releases)
 * [Issues](https://github.com/CyberMind-FR/secubox-deb/issues)

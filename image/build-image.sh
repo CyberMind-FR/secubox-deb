@@ -584,18 +584,35 @@ chroot "${ROOTFS}" bash -c '
 ' 2>/dev/null || warn "CrowdSec repo setup failed"
 
 # Install security services
+# For lite profiles, install only essential services
 chroot "${ROOTFS}" apt-get update -q 2>/dev/null
-chroot "${ROOTFS}" bash -c "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-  crowdsec glances netdata haproxy qrencode mosquitto coturn 2>/dev/null" || warn "Some services not installed"
+if [[ "${SECUBOX_LITE:-0}" != "1" ]]; then
+  chroot "${ROOTFS}" bash -c "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    crowdsec glances netdata haproxy qrencode mosquitto coturn 2>/dev/null" || warn "Some services not installed"
+else
+  log "  Installing lite security services (no netdata/glances)..."
+  chroot "${ROOTFS}" bash -c "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    crowdsec haproxy qrencode 2>/dev/null" || warn "Some services not installed"
+fi
 
 # Install X11 packages for kiosk/UI mode (lighter xorg install)
-chroot "${ROOTFS}" bash -c "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-  kbd xinit xserver-xorg-core chromium unclutter x11-xserver-utils \
-  xserver-xorg-input-libinput xserver-xorg-video-fbdev 2>/dev/null" || warn "X11 packages partial"
+# Skip for lite profiles (ESPRESSObin with limited storage/RAM)
+if [[ "${SECUBOX_LITE:-0}" != "1" ]]; then
+  chroot "${ROOTFS}" bash -c "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    kbd xinit xserver-xorg-core chromium unclutter x11-xserver-utils \
+    xserver-xorg-input-libinput xserver-xorg-video-fbdev 2>/dev/null" || warn "X11 packages partial"
+else
+  log "  Skipping X11/kiosk packages (lite profile)"
+fi
 
 # Install LXC/container tools (for secubox-mail, secubox-streamlit)
-chroot "${ROOTFS}" bash -c "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-  lxc debootstrap 2>/dev/null" || warn "LXC packages not installed"
+# Skip for lite profiles - too heavy for limited storage
+if [[ "${SECUBOX_LITE:-0}" != "1" ]]; then
+  chroot "${ROOTFS}" bash -c "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    lxc debootstrap 2>/dev/null" || warn "LXC packages not installed"
+else
+  log "  Skipping LXC packages (lite profile)"
+fi
 
 # Clean apt cache to save space
 chroot "${ROOTFS}" apt-get clean
