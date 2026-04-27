@@ -26,6 +26,22 @@
 
 **Version:** v2.2.1
 
+### Session 65 — HAProxy Service Restart Loop Fix
+
+**Issue:** `secubox-haproxy.service` in restart loop with NAMESPACE error.
+
+**Root Cause:** `RuntimeDirectory=haproxy` triggers systemd namespace setup which expects `/etc/haproxy` to exist. HAProxy is `Recommends:` not `Depends:`.
+
+**Fix:**
+- postinst creates `/etc/haproxy` if not present
+- Removed `RuntimeDirectory=haproxy` from service
+- Moved directory creation from import-time to startup event
+- Increased RestartSec 5→30s
+
+**Commits:**
+- `4321a7c` — fix(haproxy): Prevent service restart loop
+- `9f47e54` — fix(haproxy): Create /etc/haproxy and remove RuntimeDirectory=haproxy
+
 ---
 
 ## 2026-04-23

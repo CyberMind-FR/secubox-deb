@@ -43,7 +43,38 @@ modprobe.blacklist=mv88e6xxx,mv88e6085,dsa_core initcall_blacklist=mv88e6xxx_dri
 - ✅ mv88e6xxx driver loads correctly (DSA ports: wan, lan0, lan1)
 - ✅ Network operational (192.168.255.x)
 
-**Known Issue:** `secubox-haproxy.service` in restart loop — separate bug to investigate.
+---
+
+## ✅ Complété (Session 65) — HAProxy Service Restart Loop Fix
+
+### secubox-haproxy.service Crash Loop ✅
+
+**Problem:** Service restarted every 5 seconds with `NAMESPACE` error:
+```
+Failed to set up mount namespacing: /run/systemd/unit-root/etc/haproxy: No such file or directory
+```
+
+**Root Cause:**
+1. `RuntimeDirectory=haproxy` in service file triggers systemd namespace setup
+2. Namespace setup expects `/etc/haproxy` to exist
+3. HAProxy is `Recommends:` not `Depends:`, so directory may not exist
+
+**Fix:**
+1. postinst now creates `/etc/haproxy` directory if not present
+2. Removed `RuntimeDirectory=haproxy` from service (HAProxy creates its own)
+3. Moved directory creation from import-time to startup event
+4. Increased RestartSec 5→30s with StartLimitBurst=5
+
+**Files Modified:**
+- `packages/secubox-haproxy/debian/postinst`
+- `packages/secubox-haproxy/debian/secubox-haproxy.service`
+- `packages/secubox-haproxy/api/main.py`
+
+**Commits:**
+- `4321a7c` — fix(haproxy): Prevent service restart loop
+- `9f47e54` — fix(haproxy): Create /etc/haproxy and remove RuntimeDirectory=haproxy
+
+**Results:** ✅ Service runs stable (41.8M memory, no restart loop)
 
 ---
 
