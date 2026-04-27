@@ -3,6 +3,68 @@
 
 ---
 
+## 🔨 En préparation / Élaboration — Smart-Strip USB Module (SBX-STR-01)
+
+**Statut:** Spec ready for fabrication
+**Référence:** SBX-STR-01 v1.1
+**Date:** 2026-04-27
+
+### Description
+
+Le **Smart-Strip** est l'interface HMI modulaire de SecuBox : 6 indicateurs lumineux RGB (SK6812-MINI-E) + 6 zones tactiles capacitives invisibles. Contrôleur RP2350A avec dual-mode USB-C / I²C auto-détecté.
+
+### Fichiers ajoutés
+
+| Fichier | Description |
+|---------|-------------|
+| `docs/hardware/smart-strip-v1.1.md` | Fiche technique complète (550 lignes) |
+| `docs/hardware/smart-strip/simulator.html` | Simulateur interactif HTML |
+| `packages/secubox-smart-strip/firmware/parser.c` | Parser CDC grammaire blanche |
+| `packages/secubox-smart-strip/firmware/parser.h` | Header parser |
+| `packages/secubox-smart-strip/firmware/ring_buffer.c` | Ring buffer diagnostic |
+| `packages/secubox-smart-strip/firmware/ring_buffer.h` | Header ring buffer |
+| `packages/secubox-smart-strip/host/secubox_smart_strip.py` | Driver Python (USB/I²C unifié) |
+| `packages/secubox-smart-strip/host/smart-strip-mockup.html` | Simulateur (copie) |
+| `wiki/Smart-Strip.md` | Page wiki hardware |
+
+### Caractéristiques clés
+
+- **MCU:** Raspberry Pi RP2350A (dual M33 + TrustZone-M)
+- **Touch:** Microchip AT42QT2120-XU (12 ch I²C)
+- **LEDs:** 6× SK6812-MINI-E (RGB side-emit, 5V)
+- **USB:** VID 0x1209 / PID 0x4242, composite HID+CDC
+- **I²C:** Adresse 0x42, compatible Qwiic/STEMMA QT
+- **ESD:** IEC 61000-4-2 niveau 4
+
+### Mapping fonctionnel (chemin Hamiltonien)
+
+| Index | Icône | Rôle | Charte |
+|-------|-------|------|--------|
+| 0 | AUTH | VPN / chiffrement | `#C04E24` |
+| 1 | WALL | Pare-feu nftables/CrowdSec | `#9A6010` |
+| 2 | BOOT | Système / OS | `#803018` |
+| 3 | MIND | Charge IA / CPU | `#3D35A0` |
+| 4 | ROOT | Privilèges / intégrité | `#0A5840` |
+| 5 | MESH | Maillage WireGuard/Tailscale | `#104A88` |
+
+### Prochaines étapes
+
+- [ ] Schéma KiCad v1.1 (validation netlist)
+- [ ] Layout PCB 85×15 mm 2-couches
+- [ ] Firmware MicroPython proof-of-concept
+- [ ] Firmware C/C++ TinyUSB production
+- [ ] Premier batch JLCPCB qty 5
+
+### Coûts estimés
+
+| Phase | Coût |
+|-------|------|
+| Proto JLCPCB qty 100 | ~9,55€/unité |
+| Production Eurocircuits CSPN | ~14,50€/unité |
+| Tarif public | 39-49€ TTC |
+
+---
+
 ## ✅ Complété (Session 65) — Multi-Boot Storage System v2.2.2
 
 ### Multi-Architecture Boot System ✅
