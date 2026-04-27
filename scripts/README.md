@@ -88,6 +88,30 @@ bash local-repo-add.sh ../output/debs/secubox-core_1.0.0.deb
 
 ---
 
+## Flash & Download
+
+| Script | Description |
+|--------|-------------|
+| `flash-multiboot.sh` | Download & flash multiboot USB |
+
+### Usage
+
+```bash
+# List available releases
+bash flash-multiboot.sh --list
+
+# Flash latest multiboot to USB
+sudo bash flash-multiboot.sh /dev/sdb
+
+# Download specific release without flashing
+bash flash-multiboot.sh --release multiboot-v2.2.4-live --download
+
+# Flash with force (no confirmation)
+sudo bash flash-multiboot.sh --force /dev/sdb
+```
+
+---
+
 ## VM & Testing
 
 | Script | Description |
