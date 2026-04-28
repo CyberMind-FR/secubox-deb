@@ -40,12 +40,12 @@ class FallbackMode(Enum):
 
 # Flashy module colors - thinner rings, larger center
 MODULES = [
-    {'name': 'AUTH', 'color': (255, 160, 40),  'r': 220, 'glow': (255, 200, 80)},   # orange
-    {'name': 'WALL', 'color': (255, 220, 0),   'r': 200, 'glow': (255, 240, 80)},   # jaune
-    {'name': 'BOOT', 'color': (255, 60, 40),   'r': 180, 'glow': (255, 100, 80)},   # rouge
-    {'name': 'MIND', 'color': (120, 80, 255),  'r': 160, 'glow': (160, 120, 255)},  # violet
-    {'name': 'ROOT', 'color': (0, 255, 120),   'r': 140, 'glow': (80, 255, 160)},   # vert
-    {'name': 'MESH', 'color': (0, 180, 255),   'r': 120, 'glow': (80, 220, 255)},   # bleu
+    {'name': 'BOOT', 'color': (255, 60, 40),   'r': 220, 'glow': (255, 100, 80)},   # rouge (outer)
+    {'name': 'AUTH', 'color': (255, 160, 40),  'r': 200, 'glow': (255, 200, 80)},   # orange
+    {'name': 'WALL', 'color': (255, 220, 0),   'r': 180, 'glow': (255, 240, 80)},   # jaune
+    {'name': 'ROOT', 'color': (0, 255, 120),   'r': 160, 'glow': (80, 255, 160)},   # vert
+    {'name': 'MESH', 'color': (0, 180, 255),   'r': 140, 'glow': (80, 220, 255)},   # bleu
+    {'name': 'MIND', 'color': (120, 80, 255),  'r': 120, 'glow': (160, 120, 255)},  # violet (inner)
 ]
 
 RING_WIDTH = 14
@@ -287,15 +287,15 @@ class FallbackManager:
         """Get index of module currently targeted by radar sweep.
 
         Rainbow: BOOT(rouge), AUTH(orange), WALL(jaune), ROOT(vert), MESH(bleu), MIND(violet)
+        New indices: BOOT=0, AUTH=1, WALL=2, ROOT=3, MESH=4, MIND=5
         Icons start at 3 o'clock (angle=0), clockwise.
         """
         sweep = self.sweep_angle
         # Direct sync
         adjusted = sweep
         position = int(adjusted / (math.pi / 3)) % 6
-        # Rainbow order module mapping
-        position_to_module = [2, 0, 1, 4, 5, 3]  # BOOT, AUTH, WALL, ROOT, MESH, MIND
-        return position_to_module[position]
+        # Rainbow order = module order now
+        return position
 
     @property
     def mode(self) -> FallbackMode:
@@ -603,13 +603,14 @@ class FallbackManager:
         icon_r = 62  # Radius for icon placement
 
         # Rainbow: rouge, orange, jaune, vert, bleu, violet
+        # New indices: BOOT=0, AUTH=1, WALL=2, ROOT=3, MESH=4, MIND=5
         icon_order = [
-            ('boot', 2),   # pos 0: rouge
-            ('auth', 0),   # pos 1: orange
-            ('wall', 1),   # pos 2: jaune
-            ('root', 4),   # pos 3: vert
-            ('mesh', 5),   # pos 4: bleu
-            ('mind', 3),   # pos 5: violet
+            ('boot', 0),   # pos 0: rouge
+            ('auth', 1),   # pos 1: orange
+            ('wall', 2),   # pos 2: jaune
+            ('root', 3),   # pos 3: vert
+            ('mesh', 4),   # pos 4: bleu
+            ('mind', 5),   # pos 5: violet
         ]
 
         # Determine which icon to show in single mode (cycle every 2 seconds)
@@ -718,19 +719,20 @@ class FallbackManager:
                         outline=(20, 20, 28), width=RING_WIDTH)
 
         # Tube-style arcs - each arc centered at its icon direction
-        # Module index to icon position (swapped green/purple and red/yellow)
-        module_to_pos = [1, 0, 2, 3, 5, 4]
+        # New order: BOOT=0, AUTH=1, WALL=2, ROOT=3, MESH=4, MIND=5
+        # Each module index = its icon position (rainbow order matches)
+        module_to_pos = [0, 1, 2, 3, 4, 5]
 
         for idx, m in enumerate(MODULES):
             r = m['r']
             color = m['color']
             value = self._values[m['name']]
 
-            # Get icon angle for this module
+            # PIL degrees: swap red↔yellow and green↔purple
+            # pos: 0=red, 1=orange, 2=yellow, 3=green, 4=blue, 5=purple
+            pil_angles = [300, 0, 60, 120, 180, 240]
             icon_pos = module_to_pos[idx]
-            icon_angle = (icon_pos / 6) * 2 * math.pi - math.pi/3
-            # Convert to PIL degrees (counter-clockwise from 3 o'clock)
-            center_deg = -icon_angle * 180 / math.pi
+            center_deg = pil_angles[icon_pos]
 
             arc_extent = (value / 100) * 360
             half = arc_extent / 2
