@@ -47,6 +47,13 @@ case "$1" in
 
     # Enable runtime directory service (ensures /run/secubox exists before other services)
     systemctl enable --now secubox-runtime.service 2>/dev/null || true
+
+    # ── Python dependencies (ensure compatible versions) ──
+    # Debian bookworm ships old pydantic v1 and fastapi, upgrade via pip
+    if command -v pip3 >/dev/null 2>&1; then
+      pip3 install --break-system-packages --quiet --upgrade \
+        'pydantic>=2.0' 'fastapi>=0.100' 'uvicorn>=0.25' 2>/dev/null || true
+    fi
     ;;
 esac
 

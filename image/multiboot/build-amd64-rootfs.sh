@@ -200,6 +200,11 @@ install_secubox_packages() {
         rm -rf /tmp/debs
     ' || log "WARNING: Some SecuBox packages may have failed"
 
+    # Upgrade Python packages to compatible versions (Debian ships old pydantic v1)
+    log "Upgrading Python dependencies..."
+    chroot "$OUTPUT_DIR" pip3 install --break-system-packages -q \
+        'pydantic>=2.0' 'fastapi>=0.100' 'uvicorn>=0.25' 2>/dev/null || true
+
     log "SecuBox packages slipstreamed"
 }
 

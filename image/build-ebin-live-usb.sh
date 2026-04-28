@@ -347,10 +347,10 @@ ok "Base configuration complete"
 # ══════════════════════════════════════════════════════════════════
 log "3/7 Installing SecuBox packages..."
 
-# Python dependencies
+# Python dependencies (ensure compatible versions - Debian ships old pydantic v1)
 chroot "${ROOTFS}" pip3 install --break-system-packages -q \
-    fastapi uvicorn[standard] python-jose[cryptography] httpx \
-    jinja2 tomli toml psutil pydantic 2>&1 | tail -5 || true
+    'fastapi>=0.100' 'uvicorn[standard]>=0.25' 'pydantic>=2.0' \
+    python-jose[cryptography] httpx jinja2 tomli toml psutil 2>&1 | tail -5 || true
 
 # Slipstream local packages if available
 if [[ $SLIPSTREAM_DEBS -eq 1 ]]; then

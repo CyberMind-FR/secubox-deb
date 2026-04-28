@@ -129,7 +129,7 @@
             submitBtn.disabled = true;
 
             try {
-                const res = await fetch('/api/v1/auth/auth/login', {
+                const res = await fetch('/api/v1/hub/login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ username, password })
