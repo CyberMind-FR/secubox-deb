@@ -166,6 +166,18 @@ echo "Wait 30-60 seconds for boot to complete."
 
 ## Troubleshooting
 
+### API errors / "Invalid credentials" (v2.1.1 Fix)
+
+If you see API 502 errors or "Invalid credentials" after login, upgrade Python packages:
+
+```bash
+ssh -p 2222 root@localhost
+pip3 install --break-system-packages 'pydantic>=2.0' 'fastapi>=0.100' 'uvicorn>=0.25'
+systemctl restart secubox-hub secubox-auth secubox-system
+```
+
+This issue is fixed in v2.1.1+ images.
+
 ### VM won't boot (black screen)
 
 ```bash
