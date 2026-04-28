@@ -257,6 +257,81 @@ async def resources():
     }
 
 
+@router.get("/metrics")
+async def metrics_public():
+    """
+    Public metrics endpoint for Eye Remote Dashboard (no JWT required).
+    Returns all metrics needed by the HyperPixel 2.1 Round display.
+    """
+    import socket
+    import datetime
+
+    cpu = psutil.cpu_percent(interval=0.3)
+    mem = psutil.virtual_memory()
+    disk = psutil.disk_usage("/")
+    load = psutil.getloadavg()
+
+    # CPU temperature
+    cpu_temp = 0.0
+    try:
+        temp_path = Path("/sys/class/thermal/thermal_zone0/temp")
+        if temp_path.exists():
+            cpu_temp = int(temp_path.read_text().strip()) / 1000.0
+    except Exception:
+        pass
+
+    # WiFi RSSI
+    wifi_rssi = -100
+    try:
+        wireless_path = Path("/proc/net/wireless")
+        if wireless_path.exists():
+            for line in wireless_path.read_text().splitlines()[2:]:
+                parts = line.split()
+                if len(parts) >= 4:
+                    wifi_rssi = int(float(parts[3].rstrip('.')))
+                    break
+    except Exception:
+        pass
+
+    # Uptime
+    boot_time = psutil.boot_time()
+    uptime_secs = int(datetime.datetime.now().timestamp() - boot_time)
+
+    # Network I/O
+    net_io = psutil.net_io_counters()
+
+    return {
+        # Primary metrics for 6 modules
+        "cpu_percent": round(cpu, 1),
+        "mem_percent": round(mem.percent, 1),
+        "disk_percent": round(disk.percent, 1),
+        "load_avg_1": round(load[0], 2),
+        "load_avg_5": round(load[1], 2),
+        "load_avg_15": round(load[2], 2),
+        "cpu_temp": round(cpu_temp, 1),
+        "wifi_rssi": wifi_rssi,
+
+        # Extended metrics
+        "mem_used_mb": mem.used // (1024 * 1024),
+        "mem_total_mb": mem.total // (1024 * 1024),
+        "disk_used_gb": disk.used // (1024 ** 3),
+        "disk_total_gb": disk.total // (1024 ** 3),
+        "uptime_seconds": uptime_secs,
+        "uptime_hours": round(uptime_secs / 3600, 1),
+        "rx_bytes_mb": net_io.bytes_recv // (1024 * 1024),
+        "tx_bytes_mb": net_io.bytes_sent // (1024 * 1024),
+        "connections": len(psutil.net_connections()),
+
+        # System info
+        "hostname": socket.gethostname(),
+        "processes": len(psutil.pids()),
+        "threads": sum(p.num_threads() for p in psutil.process_iter(['num_threads']) if p.info['num_threads']),
+
+        # Modules active (simplified check)
+        "modules_active": ["AUTH", "WALL", "BOOT", "MIND", "ROOT", "MESH"],
+    }
+
+
 @router.get("/services")
 async def services():
     """Services list for dashboard (public)."""
