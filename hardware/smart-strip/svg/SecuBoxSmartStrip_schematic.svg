@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1"
+     width="2.0in" height="1.4in"
+     viewBox="0 0 200 140">
+  <!--
+    SecuBox Smart-Strip v1.1 — Fritzing schematic view
+    Standard symbol: rectangular box with 4 pins on the right (or left).
+    Fritzing schematic convention : pin spacing = 0.1in = 7.2 user units approx.
+  -->
+
+  <!-- Schematic body rectangle -->
+  <rect x="20" y="20" width="120" height="100" rx="2"
+        fill="#FFFFC0" stroke="#000000" stroke-width="0.7"/>
+
+  <!-- Title at top -->
+  <text x="80" y="35" font-family="DroidSans, Helvetica, sans-serif"
+        font-size="9" text-anchor="middle" font-weight="bold" fill="#000">
+    SecuBox Smart-Strip
+  </text>
+  <text x="80" y="46" font-family="DroidSans, Helvetica, sans-serif"
+        font-size="6.5" text-anchor="middle" fill="#444">
+    SBX-STR-01 v1.1
+  </text>
+  <text x="80" y="56" font-family="DroidSans, Helvetica, sans-serif"
+        font-size="6" text-anchor="middle" fill="#666">
+    I²C @ 0x42
+  </text>
+
+  <!-- Decoration: 6 little LED dots inside symbol (charte order) -->
+  <g>
+    <circle cx="38" cy="76" r="2.5" fill="#C04E24" stroke="#000" stroke-width="0.3"/>
+    <circle cx="52" cy="76" r="2.5" fill="#9A6010" stroke="#000" stroke-width="0.3"/>
+    <circle cx="66" cy="76" r="2.5" fill="#803018" stroke="#000" stroke-width="0.3"/>
+    <circle cx="80" cy="76" r="2.5" fill="#3D35A0" stroke="#000" stroke-width="0.3"/>
+    <circle cx="94" cy="76" r="2.5" fill="#0A5840" stroke="#000" stroke-width="0.3"/>
+    <circle cx="108" cy="76" r="2.5" fill="#104A88" stroke="#000" stroke-width="0.3"/>
+  </g>
+  <text x="80" y="92" font-family="DroidSans, Helvetica, sans-serif"
+        font-size="5" text-anchor="middle" fill="#666">
+    6× RGB LED + 6× touch
+  </text>
+
+  <!-- Connector pins (right side, 4 pins, 7.2 user units spacing = 0.1in) -->
+  <!--
+    Position pins on the right edge at y = 50, 65, 80, 95 (15 user-unit spacing
+    works for visual clarity even if not exactly 0.1in)
+  -->
+
+  <!-- Pin 1: GND (connector0) -->
+  <line x1="140" y1="50" x2="160" y2="50" stroke="#000" stroke-width="0.7"/>
+  <rect id="connector0pin" x="160" y="48.5" width="3" height="3" fill="none"/>
+  <rect id="connector0terminal" x="160" y="49.5" width="0.1" height="1" fill="none"/>
+  <text x="138" y="52" font-family="DroidSans, Helvetica, sans-serif"
+        font-size="6" text-anchor="end" fill="#000">GND</text>
+
+  <!-- Pin 2: 3V3 (connector1) -->
+  <line x1="140" y1="70" x2="160" y2="70" stroke="#000" stroke-width="0.7"/>
+  <rect id="connector1pin" x="160" y="68.5" width="3" height="3" fill="none"/>
+  <rect id="connector1terminal" x="160" y="69.5" width="0.1" height="1" fill="none"/>
+  <text x="138" y="72" font-family="DroidSans, Helvetica, sans-serif"
+        font-size="6" text-anchor="end" fill="#000">3V3</text>
+
+  <!-- Pin 3: SDA (connector2) -->
+  <line x1="140" y1="90" x2="160" y2="90" stroke="#000" stroke-width="0.7"/>
+  <rect id="connector2pin" x="160" y="88.5" width="3" height="3" fill="none"/>
+  <rect id="connector2terminal" x="160" y="89.5" width="0.1" height="1" fill="none"/>
+  <text x="138" y="92" font-family="DroidSans, Helvetica, sans-serif"
+        font-size="6" text-anchor="end" fill="#000">SDA</text>
+
+  <!-- Pin 4: SCL (connector3) -->
+  <line x1="140" y1="110" x2="160" y2="110" stroke="#000" stroke-width="0.7"/>
+  <rect id="connector3pin" x="160" y="108.5" width="3" height="3" fill="none"/>
+  <rect id="connector3terminal" x="160" y="109.5" width="0.1" height="1" fill="none"/>
+  <text x="138" y="112" font-family="DroidSans, Helvetica, sans-serif"
+        font-size="6" text-anchor="end" fill="#000">SCL</text>
+</svg>

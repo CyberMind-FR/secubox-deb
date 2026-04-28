@@ -38,7 +38,10 @@ class ActionExecutor:
             "system": self._execute_system,
             "devices": self._execute_devices,
             "nav": self._execute_navigation,
+            "otg": self._execute_otg,
         }
+        # OTG manager instance (lazy loaded)
+        self._otg_manager = None
 
     def parse_action(self, action: str) -> Tuple[str, str, Optional[str]]:
         """
@@ -231,6 +234,50 @@ class ActionExecutor:
             return ActionResult(
                 success=False,
                 message=f"Unknown device action: {method}",
+            )
+
+    async def _execute_otg(self, method: str, param: Optional[str]) -> ActionResult:
+        """Execute OTG/USB gadget actions."""
+        # Lazy load OTG manager
+        if self._otg_manager is None:
+            try:
+                from usb_host_detector import OtgModeManager
+                self._otg_manager = OtgModeManager()
+            except ImportError:
+                return ActionResult(
+                    success=False,
+                    message="OTG manager not available",
+                )
+
+        if method == "status":
+            status = self._otg_manager.get_status()
+            return ActionResult(
+                success=True,
+                message=f"OTG: {status['mode']} ({status['state']})",
+                data=status,
+            )
+        elif method == "mode":
+            if not param:
+                return ActionResult(
+                    success=False,
+                    message="Mode parameter required",
+                )
+            if param not in self._otg_manager.MODES:
+                return ActionResult(
+                    success=False,
+                    message=f"Unknown mode: {param}",
+                    data={"available_modes": list(self._otg_manager.MODES.keys())},
+                )
+            success = self._otg_manager.switch_mode(param)
+            return ActionResult(
+                success=success,
+                message=f"Mode changed to {param}" if success else f"Failed to switch to {param}",
+                data={"mode": self._otg_manager.current_mode},
+            )
+        else:
+            return ActionResult(
+                success=False,
+                message=f"Unknown OTG action: {method}",
             )
 
     async def _execute_navigation(

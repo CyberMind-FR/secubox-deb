@@ -1,5 +1,44 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-04-27 (Session 65)*
+*Mis à jour : 2026-04-28 (Session 71)*
+
+---
+
+## ✅ Complété (Session 71) — Eye Remote Display System v2.3.0
+
+### Display State Machine ✅
+
+**Feature:** Complete display visualization system for Pi Zero Eye Remote
+
+**Components:**
+- **Splash Screen** (`splash.py`) — Animated phoenix logo for boot/halt/start/reboot states
+- **Fallback Manager** (`fallback_manager.py`) — Connection state detection with local metrics radar
+- **Touch Analysis** — Noise pattern analyzer, calibration tool, X-stable filter
+
+**Display Modes:**
+| Mode | Trigger | Display |
+|------|---------|---------|
+| BOOT | Service starting | Phoenix logo + "BOOTING" |
+| START | Initialization | Phoenix logo + "STARTING" |
+| HALT | Shutdown | Phoenix logo + "SHUTTING DOWN" |
+| OFFLINE | No connection | Local metrics radar (6 rings) |
+| CONNECTING | Probing | Rotating cube animation |
+| ONLINE | Connected | Full dashboard with cube + icons |
+| COMMUNICATING | Data transfer | Fast rotating cube |
+
+**Radar Visualization:**
+- 6 concentric rings: AUTH, WALL, BOOT, MIND, ROOT, MESH
+- Balanced metric arcs centered at 12 o'clock
+- Rainbow sweep line with trailing fade
+- 3D rotating cube with module icons (A, W, B, M, R, X)
+- Pulsing glow effects
+
+**Touch Noise Analysis:**
+- Pattern: Y-axis oscillation at stable X position (~240-250)
+- Solution: Filter events where X delta ≈ 0 and Y changes wildly
+
+**Package Build:**
+- ✅ Built 128/128 SecuBox Debian packages
+- ✅ ESPRESSObin rebuild with packages slipstreamed
 
 ---
 

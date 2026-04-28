@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1"
+     width="3.346in" height="0.591in"
+     viewBox="0 0 85 15">
+  <!--
+    SecuBox Smart-Strip v1.1 — Fritzing PCB view (1:1 scale, 1 unit = 1mm)
+    PCB: 85 x 15 mm, JST-SH 4-pin pads on right edge.
+    Fritzing convention: copper0 = top, copper1 = bottom, silkscreen = silk.
+  -->
+
+  <!-- Layer: silkscreen (board outline + branding) -->
+  <g id="silkscreen">
+    <!-- Board outline (1mm corner radius) -->
+    <rect x="0" y="0" width="85" height="15" rx="1" ry="1"
+          fill="none" stroke="#FFFFFF" stroke-width="0.15"/>
+
+    <!-- Mounting holes outline (silkscreen ring) -->
+    <circle cx="2.5" cy="2.5" r="1.4" fill="none" stroke="#FFFFFF" stroke-width="0.1"/>
+    <circle cx="82.5" cy="2.5" r="1.4" fill="none" stroke="#FFFFFF" stroke-width="0.1"/>
+    <circle cx="2.5" cy="12.5" r="1.4" fill="none" stroke="#FFFFFF" stroke-width="0.1"/>
+    <circle cx="82.5" cy="12.5" r="1.4" fill="none" stroke="#FFFFFF" stroke-width="0.1"/>
+
+    <!-- Branding silkscreen -->
+    <text x="5" y="2.3" font-family="OCRA, monospace" font-size="1.2" fill="#FFFFFF">SecuBox</text>
+    <text x="80" y="2.3" font-family="OCRA, monospace" font-size="0.9"
+          text-anchor="end" fill="#FFFFFF">SBX-STR-01 v1.1</text>
+    <text x="5" y="14.2" font-family="OCRA, monospace" font-size="0.9" fill="#FFFFFF">CyberMind</text>
+    <text x="80" y="14.2" font-family="OCRA, monospace" font-size="0.9"
+          text-anchor="end" fill="#FFFFFF">85 × 15 mm</text>
+
+    <!-- LED outlines (3.5x3.5mm packages) -->
+    <g fill="none" stroke="#FFFFFF" stroke-width="0.08">
+      <rect x="12" y="3.25" width="3.5" height="3.5"/>
+      <rect x="24" y="3.25" width="3.5" height="3.5"/>
+      <rect x="36" y="3.25" width="3.5" height="3.5"/>
+      <rect x="48" y="3.25" width="3.5" height="3.5"/>
+      <rect x="60" y="3.25" width="3.5" height="3.5"/>
+      <rect x="72" y="3.25" width="3.5" height="3.5"/>
+    </g>
+
+    <!-- LED labels under each package -->
+    <g font-family="OCRA, monospace" font-size="0.7" fill="#FFFFFF" text-anchor="middle">
+      <text x="13.75" y="8">AUTH</text>
+      <text x="25.75" y="8">WALL</text>
+      <text x="37.75" y="8">BOOT</text>
+      <text x="49.75" y="8">MIND</text>
+      <text x="61.75" y="8">ROOT</text>
+      <text x="73.75" y="8">MESH</text>
+    </g>
+  </g>
+
+  <!-- Layer: copper0 (top copper) — JST-SH pads as connectors -->
+  <g id="copper0">
+    <!-- JST-SH pin 1 (GND) — connector0 -->
+    <rect id="connector0pad" x="79" y="6.4" width="1.0" height="0.6"
+          fill="#F7BD13"/>
+
+    <!-- JST-SH pin 2 (3V3) — connector1 -->
+    <rect id="connector1pad" x="79" y="7.4" width="1.0" height="0.6"
+          fill="#F7BD13"/>
+
+    <!-- JST-SH pin 3 (SDA) — connector2 -->
+    <rect id="connector2pad" x="79" y="8.4" width="1.0" height="0.6"
+          fill="#F7BD13"/>
+
+    <!-- JST-SH pin 4 (SCL) — connector3 -->
+    <rect id="connector3pad" x="79" y="9.4" width="1.0" height="0.6"
+          fill="#F7BD13"/>
+
+    <!-- Decorative: USB-C connector pads (left edge, NOT clickable connectors) -->
+    <g fill="#F7BD13" opacity="0.85">
+      <rect x="0.8" y="5.2" width="0.4" height="0.5"/>
+      <rect x="0.8" y="6.0" width="0.4" height="0.5"/>
+      <rect x="0.8" y="6.8" width="0.4" height="0.5"/>
+      <rect x="0.8" y="7.6" width="0.4" height="0.5"/>
+      <rect x="0.8" y="8.4" width="0.4" height="0.5"/>
+      <rect x="0.8" y="9.2" width="0.4" height="0.5"/>
+    </g>
+  </g>
+
+  <!-- Layer: copper1 (bottom copper) — same connector pads (vias to bottom) -->
+  <g id="copper1">
+    <rect id="connector0pad_b" x="79" y="6.4" width="1.0" height="0.6"
+          fill="#F7BD13" opacity="0.0"/>
+    <rect id="connector1pad_b" x="79" y="7.4" width="1.0" height="0.6"
+          fill="#F7BD13" opacity="0.0"/>
+    <rect id="connector2pad_b" x="79" y="8.4" width="1.0" height="0.6"
+          fill="#F7BD13" opacity="0.0"/>
+    <rect id="connector3pad_b" x="79" y="9.4" width="1.0" height="0.6"
+          fill="#F7BD13" opacity="0.0"/>
+  </g>
+</svg>

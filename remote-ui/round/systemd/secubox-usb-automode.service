@@ -1,0 +1,43 @@
+# ==============================================================================
+# SecuBox Eye Remote - USB Auto Mode Service
+# Détecte le type d'host USB et change de mode OTG automatiquement
+#
+# Logique :
+#   - U-Boot (powered > 3s sans config) → mode flash/storage
+#   - OS standard (configured) → mode normal (ECM+ACM)
+#   - Déconnexion → retour mode normal
+#
+# Install:
+#   sudo cp secubox-usb-automode.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now secubox-usb-automode
+#
+# CyberMind - https://cybermind.fr
+# ==============================================================================
+
+[Unit]
+Description=SecuBox Eye Remote USB Auto Mode Detector
+Documentation=https://github.com/CyberMind-FR/secubox-deb
+After=secubox-otg-gadget.service
+Requires=secubox-otg-gadget.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/secubox-eye-remote/agent/usb_host_detector.py --mode service
+Restart=always
+RestartSec=5
+
+# Logs
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=secubox-usb-automode
+
+# Security
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/sys/kernel/config
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

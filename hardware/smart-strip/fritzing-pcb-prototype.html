@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SecuBox Smart-Strip — Fritzing PCB view (prototype)</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    /* Fritzing PCB view canonical colors */
+    --fz-pcb:        #FCC83B;       /* signature Fritzing yellow */
+    --fz-pcb-dark:   #E7A40F;       /* darker for shadows */
+    --fz-trace:      #B8860B;       /* gold copper traces (top) */
+    --fz-trace-bot:  #8B6508;       /* darker gold for bottom layer */
+    --fz-pad:        #d8a850;       /* exposed copper pad */
+    --fz-pad-dark:   #b8862c;       /* pad outline */
+    --fz-silk:       #ffffff;
+    --fz-silk-dim:   rgba(255,255,255,0.65);
+    --fz-via:        #ffffff;       /* drill holes appear white */
+    --fz-component-body: #1a1a1a;
+    --fz-bg:         #1f1815;       /* page background */
+
+    /* Charte LED colors */
+    --auth: #C04E24;
+    --wall: #9A6010;
+    --boot: #803018;
+    --mind: #3D35A0;
+    --root: #0A5840;
+    --mesh: #104A88;
+
+    --mono: 'JetBrains Mono', 'SF Mono', ui-monospace, Consolas, monospace;
+    --sans: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+
+  html, body {
+    background: radial-gradient(ellipse at 50% 0%, #2a221c 0%, #100a08 80%);
+    color: #e5d8b0;
+    font-family: var(--sans);
+    min-height: 100vh;
+    padding: 24px 16px 60px;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 16px;
+    user-select: none;
+  }
+
+  .brand-tag {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.3em;
+    color: #b89968;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  h1 {
+    font-size: 22px;
+    font-weight: 500;
+    color: #f4e4b8;
+    margin-bottom: 4px;
+  }
+
+  .subtitle {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: #b89968;
+    letter-spacing: 0.05em;
+  }
+
+  main { max-width: 1100px; margin: 0 auto; }
+
+  /* PCB stage */
+  .pcb-stage {
+    background: rgba(255, 220, 100, 0.04);
+    border: 1px solid rgba(252, 200, 59, 0.15);
+    border-radius: 8px;
+    padding: 16px;
+    box-shadow:
+      inset 0 0 50px rgba(252, 200, 59, 0.05),
+      0 14px 50px -10px rgba(0, 0, 0, 0.6);
+  }
+
+  /* Layer toggle controls */
+  .toolbar {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+    user-select: none;
+  }
+
+  .toolbar button {
+    background: #1a1410;
+    border: 1px solid #4a3a20;
+    color: #d8c08c;
+    padding: 7px 14px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: all 0.12s ease;
+  }
+
+  .toolbar button:hover {
+    background: #251c14;
+    border-color: #6a5028;
+    color: #f4e4b8;
+  }
+
+  .toolbar button.active {
+    background: var(--fz-pcb);
+    border-color: var(--fz-pcb-dark);
+    color: #1a1410;
+    font-weight: 600;
+  }
+
+  /* The PCB SVG */
+  svg.pcb-view {
+    width: 100%;
+    height: auto;
+    display: block;
+    /* drop shadow for the PCB itself */
+    filter: drop-shadow(0 8px 14px rgba(0,0,0,0.4));
+  }
+
+  /* Layer visibility classes */
+  svg.pcb-view.show-top    .layer-bottom    { display: none; }
+  svg.pcb-view.show-bottom .layer-top       { display: none; }
+  svg.pcb-view.show-bottom .silk-top        { opacity: 0.2; }
+  svg.pcb-view.show-bottom .components-top  { opacity: 0.18; }
+  svg.pcb-view.show-bottom .pads-top        { opacity: 0.4; }
+
+  /* Caption row */
+  .legend {
+    margin-top: 18px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+  }
+
+  .legend-cell {
+    background: #1a1410;
+    border: 1px solid #3a2a18;
+    border-radius: 6px;
+    padding: 12px 14px;
+  }
+
+  .legend-cell .label {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: #b89968;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    margin-bottom: 6px;
+  }
+
+  .legend-cell .swatch {
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+    display: inline-block;
+    vertical-align: middle;
+    margin-right: 8px;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.5);
+  }
+
+  .legend-cell .role {
+    font-size: 12px;
+    color: #f4e4b8;
+    font-weight: 500;
+  }
+
+  /* BOM panel */
+  .bom-panel {
+    margin-top: 18px;
+    background: #1a1410;
+    border: 1px solid #3a2a18;
+    border-radius: 6px;
+    padding: 14px 18px;
+    font-size: 12px;
+    line-height: 1.6;
+    color: #d8c08c;
+  }
+
+  .bom-panel h3 {
+    font-size: 11px;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: #b89968;
+    font-weight: 600;
+  }
+
+  .bom-panel table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+
+  .bom-panel th, .bom-panel td {
+    text-align: left;
+    padding: 5px 8px;
+    border-bottom: 1px dashed #3a2a18;
+  }
+
+  .bom-panel th {
+    color: #b89968;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 9px;
+  }
+
+  .bom-panel td.right { text-align: right; }
+  .bom-panel tr:last-child td { border-bottom: none; }
+  .bom-panel tr:hover td { background: rgba(255,220,100,0.04); }
+
+  footer {
+    margin-top: 28px;
+    text-align: center;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: #6e5a3c;
+    letter-spacing: 0.1em;
+  }
+
+  @media (max-width: 760px) {
+    .legend { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand-tag">CyberMind · Prototype</div>
+  <h1>SecuBox Smart-Strip — Vue PCB Fritzing</h1>
+  <div class="subtitle">SBX-STR-01 PROTO v0.9 · 100×40 mm · 2 couches · XIAO RP2350</div>
+</header>
+
+<main>
+<div class="pcb-stage">
+
+  <!-- Layer toggle toolbar -->
+  <div class="toolbar">
+    <button data-view="top" class="active">▲ Top copper + silk</button>
+    <button data-view="bottom">▼ Bottom copper</button>
+    <button data-view="both">⊕ Top + Bottom</button>
+    <button data-view="silk-only">⌐ Silkscreen only</button>
+  </div>
+
+  <svg class="pcb-view show-top" id="pcb-svg" viewBox="0 0 1000 400" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <!-- PCB substrate texture (subtle) -->
+      <pattern id="fr4-texture" patternUnits="userSpaceOnUse" width="20" height="20">
+        <rect width="20" height="20" fill="#FCC83B"/>
+        <rect width="20" height="0.5" fill="rgba(0,0,0,0.04)"/>
+        <rect width="0.5" height="20" fill="rgba(0,0,0,0.04)"/>
+      </pattern>
+
+      <!-- Trace style -->
+      <filter id="trace-shadow">
+        <feGaussianBlur in="SourceAlpha" stdDeviation="0.5"/>
+        <feOffset dx="0" dy="0.5" result="o"/>
+        <feMerge>
+          <feMergeNode in="o"/>
+          <feMergeNode in="SourceGraphic"/>
+        </feMerge>
+      </filter>
+
+      <!-- Component shadow -->
+      <filter id="cmp-shadow">
+        <feGaussianBlur in="SourceAlpha" stdDeviation="1.2"/>
+        <feOffset dx="0" dy="1.5"/>
+        <feComponentTransfer><feFuncA type="linear" slope="0.45"/></feComponentTransfer>
+        <feMerge>
+          <feMergeNode/>
+          <feMergeNode in="SourceGraphic"/>
+        </feMerge>
+      </filter>
+
+      <!-- LED radial glow -->
+      <radialGradient id="led-auth" cx="0.4" cy="0.4">
+        <stop offset="0%" stop-color="#ffc4a0"/>
+        <stop offset="50%" stop-color="#C04E24"/>
+        <stop offset="100%" stop-color="#601810"/>
+      </radialGradient>
+      <radialGradient id="led-wall" cx="0.4" cy="0.4">
+        <stop offset="0%" stop-color="#e8c080"/>
+        <stop offset="50%" stop-color="#9A6010"/>
+        <stop offset="100%" stop-color="#4a2c08"/>
+      </radialGradient>
+      <radialGradient id="led-boot" cx="0.4" cy="0.4">
+        <stop offset="0%" stop-color="#d49484"/>
+        <stop offset="50%" stop-color="#803018"/>
+        <stop offset="100%" stop-color="#3a1408"/>
+      </radialGradient>
+      <radialGradient id="led-mind" cx="0.4" cy="0.4">
+        <stop offset="0%" stop-color="#a09cf0"/>
+        <stop offset="50%" stop-color="#3D35A0"/>
+        <stop offset="100%" stop-color="#1a1450"/>
+      </radialGradient>
+      <radialGradient id="led-root" cx="0.4" cy="0.4">
+        <stop offset="0%" stop-color="#5cbc9c"/>
+        <stop offset="50%" stop-color="#0A5840"/>
+        <stop offset="100%" stop-color="#042818"/>
+      </radialGradient>
+      <radialGradient id="led-mesh" cx="0.4" cy="0.4">
+        <stop offset="0%" stop-color="#5ca0e0"/>
+        <stop offset="50%" stop-color="#104A88"/>
+        <stop offset="100%" stop-color="#06224a"/>
+      </radialGradient>
+
+      <!-- Connector pad gradient -->
+      <linearGradient id="pad-gradient" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#f0d088"/>
+        <stop offset="100%" stop-color="#b88638"/>
+      </linearGradient>
+    </defs>
+
+    <!--====================================================================
+         PCB substrate (Fritzing-yellow)
+    ====================================================================-->
+    <rect x="0" y="0" width="1000" height="400" rx="12" ry="12"
+          fill="url(#fr4-texture)" stroke="#9c7510" stroke-width="0.8"/>
+
+    <!-- Subtle highlight at top-left -->
+    <rect x="3" y="3" width="994" height="2" fill="rgba(255,255,255,0.18)" rx="6"/>
+
+    <!--====================================================================
+         BOTTOM LAYER (copper) — visible when toggled
+         Mostly GND pour with a few signal traces
+    ====================================================================-->
+    <g class="layer-bottom" stroke-linecap="round" stroke-linejoin="round">
+      <!-- GND pour: a big polygon covering most of the board, darker yellow -->
+      <path d="M 25 25 L 975 25 L 975 375 L 25 375 Z
+               M 50 50 L 50 350 L 950 350 L 950 50 Z"
+            fill="#a87c14" fill-rule="evenodd" opacity="0.55"/>
+
+      <!-- Bottom traces (signal returns and a few power runs) -->
+      <g stroke="var(--fz-trace-bot)" fill="none" stroke-width="3">
+        <!-- 3V3 distribution under the LED chain -->
+        <path d="M 250 60 L 250 50 L 720 50 L 720 60"/>
+        <!-- Touch pad return traces routed bottom -->
+        <path d="M 90 280 L 90 320 L 380 320 L 380 270"/>
+        <path d="M 175 280 L 175 320 L 415 320 L 415 270"/>
+        <path d="M 260 280 L 260 320 L 450 320 L 450 270"/>
+        <path d="M 345 280 L 345 320 L 460 320 L 460 270"/>
+        <path d="M 430 280 L 430 320 L 470 320 L 470 270"/>
+        <path d="M 515 280 L 515 320 L 480 320 L 480 270"/>
+      </g>
+    </g>
+
+    <!--====================================================================
+         TOP COPPER LAYER (gold traces)
+    ====================================================================-->
+    <g class="layer-top">
+      <!-- Major power and signal traces drawn in Fritzing trace style:
+           thick, rounded ends, single color (gold/yellow) -->
+
+      <!-- ===== GND ring around board (top side) ===== -->
+      <g stroke="var(--fz-trace)" fill="none" stroke-width="4" stroke-linecap="round">
+        <path d="M 35 30 L 965 30 L 965 370 L 35 370 Z" stroke-dasharray="0"/>
+      </g>
+
+      <!-- ===== 3V3 power distribution ===== -->
+      <g stroke="var(--fz-trace)" fill="none" stroke-width="5" stroke-linecap="round">
+        <!-- From XIAO 3V3 pin to AT42QT2120 -->
+        <path d="M 855 175 L 880 175 L 880 80 L 460 80 L 460 175 L 470 175"/>
+        <!-- From AT42QT2120 to JST 3V3 pin -->
+        <path d="M 510 175 L 950 175 L 950 200 L 940 200"/>
+      </g>
+
+      <!-- ===== I²C bus (SDA/SCL from XIAO to AT42QT2120 to JST) ===== -->
+      <g stroke="var(--fz-trace)" fill="none" stroke-width="3.5" stroke-linecap="round">
+        <!-- SDA route: XIAO GP4 → AT42QT2120 SDA → JST SDA -->
+        <path d="M 855 145 L 870 145 L 870 165 L 460 165 L 460 195 L 470 195"/>
+        <path d="M 510 195 L 920 195 L 920 215 L 940 215"/>
+        <!-- SCL route: XIAO GP5 → AT42QT2120 SCL → JST SCL -->
+        <path d="M 855 155 L 875 155 L 875 168 L 462 168 L 462 198 L 470 198"/>
+        <path d="M 510 198 L 925 198 L 925 230 L 940 230"/>
+      </g>
+
+      <!-- ===== LED chain data line (PIO output, 6 LEDs in series) ===== -->
+      <g stroke="var(--fz-trace)" fill="none" stroke-width="3" stroke-linecap="round">
+        <!-- XIAO GP16 (PIO) → D1 (AUTH) DIN -->
+        <path d="M 855 130 L 870 130 L 870 75 L 100 75 L 100 90"/>
+        <!-- D1 DOUT → D2 DIN (AUTH → WALL) -->
+        <path d="M 116 90 L 130 90 L 130 75 L 175 75 L 175 90"/>
+        <!-- D2 → D3 (WALL → BOOT) -->
+        <path d="M 191 90 L 205 90 L 205 75 L 250 75 L 250 90"/>
+        <!-- D3 → D4 (BOOT → MIND) -->
+        <path d="M 266 90 L 280 90 L 280 75 L 325 75 L 325 90"/>
+        <!-- D4 → D5 (MIND → ROOT) -->
+        <path d="M 341 90 L 355 90 L 355 75 L 400 75 L 400 90"/>
+        <!-- D5 → D6 (ROOT → MESH) -->
+        <path d="M 416 90 L 430 90 L 430 75 L 475 75 L 475 90"/>
+      </g>
+
+      <!-- ===== LED VBUS power (red wire equivalent in Fritzing, but all gold here) ===== -->
+      <g stroke="var(--fz-trace)" fill="none" stroke-width="4" stroke-linecap="round">
+        <!-- Common 3V3 rail at y=110 to feed all LED VDD pins -->
+        <path d="M 100 110 L 470 110"/>
+        <!-- Vias from this rail down to top traces -->
+        <path d="M 100 96 L 100 110"/>
+        <path d="M 175 96 L 175 110"/>
+        <path d="M 250 96 L 250 110"/>
+        <path d="M 325 96 L 325 110"/>
+        <path d="M 400 96 L 400 110"/>
+        <path d="M 475 96 L 475 110"/>
+      </g>
+
+      <!-- ===== Touch pad sense traces (X0..X5 from AT42QT2120 to pads) ===== -->
+      <g stroke="var(--fz-trace)" fill="none" stroke-width="2.5" stroke-linecap="round">
+        <!-- X0 → AUTH pad -->
+        <path d="M 510 215 C 480 215 360 250 90 245 L 90 270"/>
+        <!-- X1 → WALL pad -->
+        <path d="M 510 220 C 480 220 360 252 175 250 L 175 270"/>
+        <!-- X2 → BOOT pad -->
+        <path d="M 510 225 C 480 225 380 254 260 255 L 260 270"/>
+        <!-- X3 → MIND pad -->
+        <path d="M 510 230 C 480 230 400 256 345 260 L 345 270"/>
+        <!-- X4 → ROOT pad (right side, shorter) -->
+        <path d="M 510 235 C 510 240 460 250 430 260 L 430 270"/>
+        <!-- X5 → MESH pad (right side) -->
+        <path d="M 510 240 C 530 245 535 255 515 268 L 515 270"/>
+      </g>
+
+      <!-- ===== Series 10kΩ resistors on touch pad traces ===== -->
+      <!-- Drawn as 0805 footprint pads inline with the trace -->
+    </g>
+
+    <!--====================================================================
+         VIAS (drill holes through PCB)
+    ====================================================================-->
+    <g class="vias">
+      <!-- Vias for 3V3 distribution -->
+      <circle cx="100" cy="110" r="2.5" fill="white" stroke="#a87c14" stroke-width="0.5"/>
+      <circle cx="175" cy="110" r="2.5" fill="white" stroke="#a87c14" stroke-width="0.5"/>
+      <circle cx="250" cy="110" r="2.5" fill="white" stroke="#a87c14" stroke-width="0.5"/>
+      <circle cx="325" cy="110" r="2.5" fill="white" stroke="#a87c14" stroke-width="0.5"/>
+      <circle cx="400" cy="110" r="2.5" fill="white" stroke="#a87c14" stroke-width="0.5"/>
+      <circle cx="475" cy="110" r="2.5" fill="white" stroke="#a87c14" stroke-width="0.5"/>
+
+      <!-- GND stitching vias around the board edge -->
+      <g fill="white" stroke="#a87c14" stroke-width="0.5">
+        <circle cx="50" cy="50" r="2"/>
+        <circle cx="150" cy="50" r="2"/>
+        <circle cx="250" cy="50" r="2"/>
+        <circle cx="350" cy="50" r="2"/>
+        <circle cx="450" cy="50" r="2"/>
+        <circle cx="550" cy="50" r="2"/>
+        <circle cx="650" cy="50" r="2"/>
+        <circle cx="750" cy="50" r="2"/>
+        <circle cx="850" cy="50" r="2"/>
+        <circle cx="950" cy="50" r="2"/>
+        <circle cx="50" cy="350" r="2"/>
+        <circle cx="150" cy="350" r="2"/>
+        <circle cx="250" cy="350" r="2"/>
+        <circle cx="350" cy="350" r="2"/>
+        <circle cx="450" cy="350" r="2"/>
+        <circle cx="550" cy="350" r="2"/>
+        <circle cx="650" cy="350" r="2"/>
+        <circle cx="750" cy="350" r="2"/>
+        <circle cx="850" cy="350" r="2"/>
+        <circle cx="950" cy="350" r="2"/>
+      </g>
+
+      <!-- 4 mounting holes M2 (Ø2.2mm = ~22px, scaled differently here) -->
+      <circle cx="30" cy="30" r="11" fill="white" stroke="#705210" stroke-width="1"/>
+      <circle cx="970" cy="30" r="11" fill="white" stroke="#705210" stroke-width="1"/>
+      <circle cx="30" cy="370" r="11" fill="white" stroke="#705210" stroke-width="1"/>
+      <circle cx="970" cy="370" r="11" fill="white" stroke="#705210" stroke-width="1"/>
+    </g>
+
+    <!--====================================================================
+         TOP PADS (cuivre exposé, ENIG gold)
+         Touch pads + LED package pads + IC footprints + connectors
+    ====================================================================-->
+    <g class="pads-top">
+      <!-- Touch pads 6× (cuivre exposé, no soldermask = lighter gold) -->
+      <g stroke="#a87c14" stroke-width="0.8">
+        <rect x="75"  y="270" width="30" height="50" rx="2" fill="url(#pad-gradient)"/>
+        <rect x="160" y="270" width="30" height="50" rx="2" fill="url(#pad-gradient)"/>
+        <rect x="245" y="270" width="30" height="50" rx="2" fill="url(#pad-gradient)"/>
+        <rect x="330" y="270" width="30" height="50" rx="2" fill="url(#pad-gradient)"/>
+        <rect x="415" y="270" width="30" height="50" rx="2" fill="url(#pad-gradient)"/>
+        <rect x="500" y="270" width="30" height="50" rx="2" fill="url(#pad-gradient)"/>
+      </g>
+
+      <!-- AT42QT2120 QFN-32 pads (4 sides, ~8 pads each) -->
+      <g fill="#d8a850" stroke="#a87c14" stroke-width="0.3">
+        <!-- Left edge pads -->
+        <rect x="466" y="180" width="3" height="2"/>
+        <rect x="466" y="186" width="3" height="2"/>
+        <rect x="466" y="192" width="3" height="2"/>
+        <rect x="466" y="198" width="3" height="2"/>
+        <rect x="466" y="204" width="3" height="2"/>
+        <rect x="466" y="210" width="3" height="2"/>
+        <rect x="466" y="216" width="3" height="2"/>
+        <rect x="466" y="222" width="3" height="2"/>
+        <!-- Right edge pads -->
+        <rect x="511" y="180" width="3" height="2"/>
+        <rect x="511" y="186" width="3" height="2"/>
+        <rect x="511" y="192" width="3" height="2"/>
+        <rect x="511" y="198" width="3" height="2"/>
+        <rect x="511" y="204" width="3" height="2"/>
+        <rect x="511" y="210" width="3" height="2"/>
+        <rect x="511" y="216" width="3" height="2"/>
+        <rect x="511" y="222" width="3" height="2"/>
+        <!-- Top edge -->
+        <rect x="472" y="174" width="2" height="3"/>
+        <rect x="478" y="174" width="2" height="3"/>
+        <rect x="484" y="174" width="2" height="3"/>
+        <rect x="490" y="174" width="2" height="3"/>
+        <rect x="496" y="174" width="2" height="3"/>
+        <rect x="502" y="174" width="2" height="3"/>
+        <rect x="508" y="174" width="2" height="3"/>
+        <!-- Bottom edge -->
+        <rect x="472" y="225" width="2" height="3"/>
+        <rect x="478" y="225" width="2" height="3"/>
+        <rect x="484" y="225" width="2" height="3"/>
+        <rect x="490" y="225" width="2" height="3"/>
+        <rect x="496" y="225" width="2" height="3"/>
+        <rect x="502" y="225" width="2" height="3"/>
+        <rect x="508" y="225" width="2" height="3"/>
+      </g>
+      <!-- Exposed pad center of QFN -->
+      <rect x="478" y="190" width="24" height="24" rx="1" fill="#d8a850" stroke="#a87c14" stroke-width="0.3"/>
+      <!-- Vias inside EP (5x5 grid) -->
+      <g fill="white" stroke="#a87c14" stroke-width="0.3">
+        <circle cx="483" cy="195" r="1"/>
+        <circle cx="490" cy="195" r="1"/>
+        <circle cx="497" cy="195" r="1"/>
+        <circle cx="483" cy="202" r="1"/>
+        <circle cx="490" cy="202" r="1"/>
+        <circle cx="497" cy="202" r="1"/>
+        <circle cx="483" cy="209" r="1"/>
+        <circle cx="490" cy="209" r="1"/>
+        <circle cx="497" cy="209" r="1"/>
+      </g>
+
+      <!-- LED footprints (4-pad PLCC4 3.5x3.5mm, scaled to ~16x16px) -->
+      <g fill="#d8a850" stroke="#a87c14" stroke-width="0.3">
+        <!-- D1 AUTH -->
+        <rect x="92" y="88" width="6" height="3"/>
+        <rect x="92" y="98" width="6" height="3"/>
+        <rect x="105" y="88" width="6" height="3"/>
+        <rect x="105" y="98" width="6" height="3"/>
+        <!-- D2 WALL -->
+        <rect x="167" y="88" width="6" height="3"/>
+        <rect x="167" y="98" width="6" height="3"/>
+        <rect x="180" y="88" width="6" height="3"/>
+        <rect x="180" y="98" width="6" height="3"/>
+        <!-- D3 BOOT -->
+        <rect x="242" y="88" width="6" height="3"/>
+        <rect x="242" y="98" width="6" height="3"/>
+        <rect x="255" y="88" width="6" height="3"/>
+        <rect x="255" y="98" width="6" height="3"/>
+        <!-- D4 MIND -->
+        <rect x="317" y="88" width="6" height="3"/>
+        <rect x="317" y="98" width="6" height="3"/>
+        <rect x="330" y="88" width="6" height="3"/>
+        <rect x="330" y="98" width="6" height="3"/>
+        <!-- D5 ROOT -->
+        <rect x="392" y="88" width="6" height="3"/>
+        <rect x="392" y="98" width="6" height="3"/>
+        <rect x="405" y="88" width="6" height="3"/>
+        <rect x="405" y="98" width="6" height="3"/>
+        <!-- D6 MESH -->
+        <rect x="467" y="88" width="6" height="3"/>
+        <rect x="467" y="98" width="6" height="3"/>
+        <rect x="480" y="88" width="6" height="3"/>
+        <rect x="480" y="98" width="6" height="3"/>
+      </g>
+
+      <!-- XIAO RP2350 castellated pads (14 total, 7 per side) -->
+      <g fill="#d8a850" stroke="#a87c14" stroke-width="0.3">
+        <!-- Left side (7 pads) -->
+        <rect x="690" y="105" width="6" height="3"/>
+        <rect x="690" y="120" width="6" height="3"/>
+        <rect x="690" y="135" width="6" height="3"/>
+        <rect x="690" y="150" width="6" height="3"/>
+        <rect x="690" y="165" width="6" height="3"/>
+        <rect x="690" y="180" width="6" height="3"/>
+        <rect x="690" y="195" width="6" height="3"/>
+        <!-- Right side (7 pads) -->
+        <rect x="850" y="105" width="6" height="3"/>
+        <rect x="850" y="120" width="6" height="3"/>
+        <rect x="850" y="135" width="6" height="3"/>
+        <rect x="850" y="150" width="6" height="3"/>
+        <rect x="850" y="165" width="6" height="3"/>
+        <rect x="850" y="180" width="6" height="3"/>
+        <rect x="850" y="195" width="6" height="3"/>
+      </g>
+
+      <!-- JST-SH 4P SMD pads -->
+      <g fill="#d8a850" stroke="#a87c14" stroke-width="0.3">
+        <rect x="940" y="195" width="3" height="6"/>
+        <rect x="940" y="210" width="3" height="6"/>
+        <rect x="940" y="225" width="3" height="6"/>
+        <rect x="940" y="240" width="3" height="6"/>
+        <!-- Mechanical anchors -->
+        <rect x="930" y="190" width="4" height="3"/>
+        <rect x="930" y="248" width="4" height="3"/>
+      </g>
+
+      <!-- Resistor 0805 footprints (touch series + I2C pull-ups, decoration) -->
+      <g fill="#d8a850" stroke="#a87c14" stroke-width="0.3">
+        <!-- 6 touch series resistors between pads and AT42QT2120 -->
+        <rect x="90" y="210" width="3" height="2"/>
+        <rect x="100" y="210" width="3" height="2"/>
+        <rect x="175" y="210" width="3" height="2"/>
+        <rect x="185" y="210" width="3" height="2"/>
+        <rect x="260" y="210" width="3" height="2"/>
+        <rect x="270" y="210" width="3" height="2"/>
+        <rect x="345" y="210" width="3" height="2"/>
+        <rect x="355" y="210" width="3" height="2"/>
+        <rect x="430" y="210" width="3" height="2"/>
+        <rect x="440" y="210" width="3" height="2"/>
+
+        <!-- I2C pull-ups -->
+        <rect x="900" y="160" width="3" height="2"/>
+        <rect x="908" y="160" width="3" height="2"/>
+        <rect x="900" y="170" width="3" height="2"/>
+        <rect x="908" y="170" width="3" height="2"/>
+      </g>
+
+      <!-- Decoupling caps 0805 (one per LED VDD, near each LED) -->
+      <g fill="#d8a850" stroke="#a87c14" stroke-width="0.3">
+        <rect x="93" y="115" width="3" height="2"/>
+        <rect x="100" y="115" width="3" height="2"/>
+        <rect x="168" y="115" width="3" height="2"/>
+        <rect x="175" y="115" width="3" height="2"/>
+        <rect x="243" y="115" width="3" height="2"/>
+        <rect x="250" y="115" width="3" height="2"/>
+        <rect x="318" y="115" width="3" height="2"/>
+        <rect x="325" y="115" width="3" height="2"/>
+        <rect x="393" y="115" width="3" height="2"/>
+        <rect x="400" y="115" width="3" height="2"/>
+        <rect x="468" y="115" width="3" height="2"/>
+        <rect x="475" y="115" width="3" height="2"/>
+      </g>
+    </g>
+
+    <!--====================================================================
+         SILKSCREEN (white, top)
+    ====================================================================-->
+    <g class="silk-top" fill="var(--fz-silk)" stroke="var(--fz-silk)">
+      <!-- Branding top-left -->
+      <text x="50" y="20" font-family="monospace" font-size="11" font-weight="600">SecuBox</text>
+      <text x="950" y="20" font-family="monospace" font-size="9" text-anchor="end" opacity="0.85">SBX-STR-01 PROTO v0.9</text>
+      <text x="50" y="395" font-family="monospace" font-size="9" opacity="0.85">CyberMind</text>
+      <text x="950" y="395" font-family="monospace" font-size="9" text-anchor="end" opacity="0.85">100 × 40 mm</text>
+
+      <!-- LED outlines (3.5mm package borders) -->
+      <g fill="none" stroke="var(--fz-silk)" stroke-width="0.5">
+        <rect x="89" y="85" width="25" height="20" rx="0.5"/>
+        <rect x="164" y="85" width="25" height="20" rx="0.5"/>
+        <rect x="239" y="85" width="25" height="20" rx="0.5"/>
+        <rect x="314" y="85" width="25" height="20" rx="0.5"/>
+        <rect x="389" y="85" width="25" height="20" rx="0.5"/>
+        <rect x="464" y="85" width="25" height="20" rx="0.5"/>
+      </g>
+
+      <!-- LED labels (silkscreen text below each LED) -->
+      <g font-family="monospace" font-size="8" text-anchor="middle" opacity="0.95">
+        <text x="101" y="135">D1</text>
+        <text x="176" y="135">D2</text>
+        <text x="251" y="135">D3</text>
+        <text x="326" y="135">D4</text>
+        <text x="401" y="135">D5</text>
+        <text x="476" y="135">D6</text>
+      </g>
+      <g font-family="monospace" font-size="9" text-anchor="middle" font-weight="600">
+        <text x="101" y="148">AUTH</text>
+        <text x="176" y="148">WALL</text>
+        <text x="251" y="148">BOOT</text>
+        <text x="326" y="148">MIND</text>
+        <text x="401" y="148">ROOT</text>
+        <text x="476" y="148">MESH</text>
+      </g>
+
+      <!-- Touch pad labels (small, between pads and silkscreen) -->
+      <g font-family="monospace" font-size="7" text-anchor="middle" opacity="0.85">
+        <text x="90" y="263">TOUCH 0</text>
+        <text x="175" y="263">TOUCH 1</text>
+        <text x="260" y="263">TOUCH 2</text>
+        <text x="345" y="263">TOUCH 3</text>
+        <text x="430" y="263">TOUCH 4</text>
+        <text x="515" y="263">TOUCH 5</text>
+      </g>
+
+      <!-- Component refdes -->
+      <g font-family="monospace" font-size="7" text-anchor="middle">
+        <text x="490" y="173">U1</text>
+        <text x="490" y="245">AT42QT2120</text>
+        <text x="775" y="98">U2</text>
+        <text x="775" y="295">XIAO RP2350</text>
+        <text x="942" y="262">J1</text>
+        <text x="942" y="275">JST-SH</text>
+      </g>
+
+      <!-- XIAO outline (21x18mm = 210x180px region for the daughter board area) -->
+      <g fill="none" stroke="var(--fz-silk)" stroke-width="0.6">
+        <rect x="685" y="100" width="180" height="180" rx="3"/>
+        <!-- USB-C indicator on XIAO (left side facing left edge of carrier) -->
+        <line x1="685" y1="180" x2="685" y2="200" stroke-width="2"/>
+        <text x="678" y="190" font-family="monospace" font-size="6" text-anchor="end" opacity="0.85">USB-C</text>
+      </g>
+
+      <!-- AT42QT2120 outline -->
+      <g fill="none" stroke="var(--fz-silk)" stroke-width="0.5">
+        <rect x="470" y="178" width="40" height="50" rx="0.5"/>
+      </g>
+
+      <!-- JST outline + pin labels -->
+      <g fill="none" stroke="var(--fz-silk)" stroke-width="0.4">
+        <rect x="935" y="190" width="20" height="58" rx="1"/>
+      </g>
+      <g font-family="monospace" font-size="5" fill="var(--fz-silk)" text-anchor="end" opacity="0.85">
+        <text x="932" y="200">G</text>
+        <text x="932" y="215">V</text>
+        <text x="932" y="230">D</text>
+        <text x="932" y="245">C</text>
+      </g>
+
+      <!-- Resistor refdes (small) -->
+      <g font-family="monospace" font-size="5" fill="var(--fz-silk)" text-anchor="middle" opacity="0.7">
+        <text x="96" y="222">R1</text>
+        <text x="181" y="222">R2</text>
+        <text x="266" y="222">R3</text>
+        <text x="351" y="222">R4</text>
+        <text x="436" y="222">R5</text>
+      </g>
+
+      <!-- Charte hint badges along the LED row (color stripe corner indicators) -->
+      <g>
+        <rect x="91" y="83" width="3" height="2" fill="var(--auth)"/>
+        <rect x="166" y="83" width="3" height="2" fill="var(--wall)"/>
+        <rect x="241" y="83" width="3" height="2" fill="var(--boot)"/>
+        <rect x="316" y="83" width="3" height="2" fill="var(--mind)"/>
+        <rect x="391" y="83" width="3" height="2" fill="var(--root)"/>
+        <rect x="466" y="83" width="3" height="2" fill="var(--mesh)"/>
+      </g>
+
+      <!-- Center area: project info -->
+      <g font-family="monospace" text-anchor="middle">
+        <text x="592" y="195" font-size="9" font-weight="600" fill="var(--fz-silk)">PROTO v0.9</text>
+        <text x="592" y="208" font-size="6" opacity="0.6">XIAO + AT42QT2120</text>
+        <text x="592" y="220" font-size="6" opacity="0.6">2-layer FR-4</text>
+      </g>
+
+      <!-- "I²C 0x42" badge near JST -->
+      <text x="892" y="220" font-family="monospace" font-size="6"
+            text-anchor="end" opacity="0.7">I²C 0x42</text>
+
+      <!-- Sectional dividers (subtle silk lines) -->
+      <line x1="660" y1="50" x2="660" y2="350" stroke="var(--fz-silk)"
+            stroke-width="0.3" stroke-dasharray="3,3" opacity="0.35"/>
+    </g>
+
+    <!--====================================================================
+         COMPONENT BODIES (rendered on top of pads)
+    ====================================================================-->
+    <g class="components-top" filter="url(#cmp-shadow)">
+      <!-- LED bodies (colored by charte) -->
+      <g>
+        <rect x="92" y="86" width="20" height="18" rx="1" fill="#1a1a1a" stroke="#000" stroke-width="0.3"/>
+        <rect x="167" y="86" width="20" height="18" rx="1" fill="#1a1a1a" stroke="#000" stroke-width="0.3"/>
+        <rect x="242" y="86" width="20" height="18" rx="1" fill="#1a1a1a" stroke="#000" stroke-width="0.3"/>
+        <rect x="317" y="86" width="20" height="18" rx="1" fill="#1a1a1a" stroke="#000" stroke-width="0.3"/>
+        <rect x="392" y="86" width="20" height="18" rx="1" fill="#1a1a1a" stroke="#000" stroke-width="0.3"/>
+        <rect x="467" y="86" width="20" height="18" rx="1" fill="#1a1a1a" stroke="#000" stroke-width="0.3"/>
+      </g>
+      <!-- LED light dome (centered colored circle) -->
+      <g>
+        <circle cx="102" cy="95" r="6" fill="url(#led-auth)"/>
+        <circle cx="177" cy="95" r="6" fill="url(#led-wall)"/>
+        <circle cx="252" cy="95" r="6" fill="url(#led-boot)"/>
+        <circle cx="327" cy="95" r="6" fill="url(#led-mind)"/>
+        <circle cx="402" cy="95" r="6" fill="url(#led-root)"/>
+        <circle cx="477" cy="95" r="6" fill="url(#led-mesh)"/>
+      </g>
+
+      <!-- AT42QT2120 chip body (QFN-32) -->
+      <rect x="470" y="178" width="40" height="50" rx="0.8" fill="#0e0e0e"
+            stroke="#000" stroke-width="0.4"/>
+      <!-- Pin 1 dot -->
+      <circle cx="475" cy="183" r="1.2" fill="#444"/>
+      <text x="490" y="207" fill="#666" font-family="monospace" font-size="5"
+            text-anchor="middle">AT42</text>
+      <text x="490" y="214" fill="#666" font-family="monospace" font-size="5"
+            text-anchor="middle">QT2120</text>
+
+      <!-- XIAO RP2350 module body -->
+      <rect x="690" y="110" width="170" height="160" rx="2" fill="#1a1a1a"
+            stroke="#000" stroke-width="0.5"/>
+      <!-- USB-C connector on XIAO (exits left) -->
+      <rect x="685" y="180" width="20" height="20" rx="1" fill="#0a0a0a" stroke="#333" stroke-width="0.3"/>
+      <rect x="688" y="184" width="14" height="12" rx="0.5" fill="#1a1a1a"/>
+      <!-- Boot/reset buttons (decoration) -->
+      <circle cx="720" cy="170" r="5" fill="#222" stroke="#000" stroke-width="0.3"/>
+      <circle cx="720" cy="170" r="2.5" fill="#444"/>
+      <circle cx="745" cy="170" r="5" fill="#222" stroke="#000" stroke-width="0.3"/>
+      <circle cx="745" cy="170" r="2.5" fill="#444"/>
+      <text x="720" y="192" font-family="monospace" font-size="5" fill="#888"
+            text-anchor="middle">B</text>
+      <text x="745" y="192" font-family="monospace" font-size="5" fill="#888"
+            text-anchor="middle">R</text>
+      <!-- Big chip on XIAO (RP2350) -->
+      <rect x="755" y="160" width="50" height="50" rx="1" fill="#0a0a0a"
+            stroke="#000" stroke-width="0.4"/>
+      <text x="780" y="187" font-family="monospace" font-size="6" fill="#666"
+            text-anchor="middle">RP2350</text>
+      <text x="780" y="195" font-family="monospace" font-size="4" fill="#555"
+            text-anchor="middle">Pi 2024</text>
+      <!-- LED on XIAO -->
+      <circle cx="820" cy="125" r="2" fill="#0AC840" opacity="0.85"/>
+      <!-- Module label silkscreen -->
+      <text x="775" y="240" font-family="monospace" font-size="6" fill="#aaa"
+            text-anchor="middle" opacity="0.85">SEEED XIAO</text>
+      <text x="775" y="250" font-family="monospace" font-size="5" fill="#888"
+            text-anchor="middle" opacity="0.6">RP2350</text>
+
+      <!-- JST-SH 4P connector body -->
+      <rect x="932" y="190" width="22" height="58" rx="0.8" fill="#f0f0f0"
+            stroke="#888" stroke-width="0.4"/>
+      <rect x="935" y="194" width="16" height="50" rx="0.4" fill="#dadada"/>
+      <!-- Pin marks -->
+      <g fill="#aaa">
+        <rect x="938" y="198" width="2" height="46"/>
+        <rect x="942" y="198" width="2" height="46"/>
+        <rect x="946" y="198" width="2" height="46"/>
+        <rect x="950" y="198" width="2" height="46"/>
+      </g>
+
+      <!-- 0805 resistors (black bodies) -->
+      <g fill="#1a1a1a">
+        <!-- Touch pad series resistors -->
+        <rect x="92" y="207" width="10" height="6" rx="0.3"/>
+        <rect x="177" y="207" width="10" height="6" rx="0.3"/>
+        <rect x="262" y="207" width="10" height="6" rx="0.3"/>
+        <rect x="347" y="207" width="10" height="6" rx="0.3"/>
+        <rect x="432" y="207" width="10" height="6" rx="0.3"/>
+
+        <!-- I2C pull-ups (near XIAO) -->
+        <rect x="898" y="158" width="14" height="6" rx="0.3"/>
+        <rect x="898" y="168" width="14" height="6" rx="0.3"/>
+      </g>
+      <!-- Resistor value labels (white text on black body) -->
+      <g font-family="monospace" font-size="3" fill="white" text-anchor="middle" opacity="0.7">
+        <text x="97" y="211">103</text>
+        <text x="182" y="211">103</text>
+        <text x="267" y="211">103</text>
+        <text x="352" y="211">103</text>
+        <text x="437" y="211">103</text>
+        <text x="905" y="162">472</text>
+        <text x="905" y="172">472</text>
+      </g>
+
+      <!-- 0805 ceramic caps (cream bodies) -->
+      <g fill="#e8d8a0" stroke="#a89868" stroke-width="0.2">
+        <!-- LED VDD decoupling caps -->
+        <rect x="92" y="113" width="10" height="6" rx="0.3"/>
+        <rect x="167" y="113" width="10" height="6" rx="0.3"/>
+        <rect x="242" y="113" width="10" height="6" rx="0.3"/>
+        <rect x="317" y="113" width="10" height="6" rx="0.3"/>
+        <rect x="392" y="113" width="10" height="6" rx="0.3"/>
+        <rect x="467" y="113" width="10" height="6" rx="0.3"/>
+      </g>
+    </g>
+
+    <!--====================================================================
+         Annotations layer (Fritzing arrow callouts)
+    ====================================================================-->
+    <g class="annotations" font-family="monospace" font-size="9">
+      <!-- LED chain direction arrow -->
+      <g opacity="0.7">
+        <path d="M 120 75 L 145 75" stroke="#a87c14" stroke-width="1.5"
+              fill="none" marker-end="url(#arrow)"/>
+      </g>
+    </g>
+
+    <!-- Arrow marker definition -->
+    <defs>
+      <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5"
+              markerWidth="6" markerHeight="6" orient="auto">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#a87c14"/>
+      </marker>
+    </defs>
+  </svg>
+</div>
+
+<!-- Legend -->
+<div class="legend">
+  <div class="legend-cell">
+    <div class="label">Substrat</div>
+    <div><span class="swatch" style="background:#FCC83B"></span><span class="role">FR-4 jaune Fritzing</span></div>
+  </div>
+  <div class="legend-cell">
+    <div class="label">Top copper</div>
+    <div><span class="swatch" style="background:#B8860B"></span><span class="role">Traces gold ENIG</span></div>
+  </div>
+  <div class="legend-cell">
+    <div class="label">Pads cuivre exposé</div>
+    <div><span class="swatch" style="background:#d8a850"></span><span class="role">Touch + soldering</span></div>
+  </div>
+  <div class="legend-cell">
+    <div class="label">Sérigraphie</div>
+    <div><span class="swatch" style="background:#fff"></span><span class="role">Blanc top side</span></div>
+  </div>
+</div>
+
+<!-- BOM panel -->
+<div class="bom-panel">
+  <h3>Bill of Materials — Smart-Strip PROTO v0.9</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Ref</th><th>Qty</th><th>Value</th><th>Footprint</th><th>Source</th><th class="right">Prix unit (€)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>U1</td><td>1</td><td>AT42QT2120-XU</td><td>QFN-32 5×5mm</td><td>Mouser 556-AT42QT2120-XU</td><td class="right">3.20</td></tr>
+      <tr><td>U2</td><td>1</td><td>Seeed XIAO RP2350</td><td>module 21×18mm</td><td>Seeed Studio direct</td><td class="right">5.50</td></tr>
+      <tr><td>D1-D6</td><td>6</td><td>SK6812-MINI-E</td><td>PLCC4 3.5×3.5mm</td><td>LCSC C2761795</td><td class="right">0.30 ×6</td></tr>
+      <tr><td>R1-R6</td><td>6</td><td>10k 0805</td><td>0805</td><td>Mouser 603-RC0805FR-0710K</td><td class="right">0.05 ×6</td></tr>
+      <tr><td>R7-R8</td><td>2</td><td>4.7k 0805</td><td>0805</td><td>Mouser 603-RC0805FR-074K7</td><td class="right">0.05 ×2</td></tr>
+      <tr><td>C1-C8</td><td>8</td><td>100nF 0805</td><td>0805 X7R</td><td>Mouser 81-GRM219R71H104</td><td class="right">0.04 ×8</td></tr>
+      <tr><td>C9</td><td>1</td><td>10µF 0805</td><td>0805 X5R</td><td>Mouser 81-GRM21BR61C106</td><td class="right">0.15</td></tr>
+      <tr><td>J1</td><td>1</td><td>JST-SH 4P</td><td>SMD horizontal</td><td>Mouser 455-BM04B-SRSS-TB</td><td class="right">0.85</td></tr>
+      <tr><td>—</td><td>1</td><td>PCB 100×40mm 2L ENIG</td><td>—</td><td>JLCPCB qty 5</td><td class="right">2.00 (proto)</td></tr>
+    </tbody>
+  </table>
+  <div style="margin-top:10px; font-family:var(--mono); font-size:11px; color:#b89968;">
+    Total estimé unit : ~14.50 € matériaux, hors mécanique et assembly · Buildable to-the-hand soldering with hot air station for U1 (QFN) and SMD passives.
+  </div>
+</div>
+
+</main>
+
+<footer>
+  CyberMind · SBX-STR-01 PROTO v0.9 · 2026 · Vue PCB style Fritzing pour communauté maker
+</footer>
+
+<script>
+  const buttons = document.querySelectorAll('.toolbar button');
+  const svg = document.getElementById('pcb-svg');
+  buttons.forEach(b => b.addEventListener('click', () => {
+    buttons.forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    const view = b.dataset.view;
+    svg.classList.remove('show-top','show-bottom','show-both','show-silk');
+    if (view === 'top')        svg.classList.add('show-top');
+    if (view === 'bottom')     svg.classList.add('show-bottom');
+    if (view === 'both')       svg.classList.add('show-both');
+    if (view === 'silk-only')  svg.classList.add('show-silk');
+  }));
+</script>
+
+</body>
+</html>

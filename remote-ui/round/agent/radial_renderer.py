@@ -242,6 +242,10 @@ class RadialRenderer:
             icon_cy = CENTER_Y - int(icon_radius * math.sin(angle_rad))
             icon_x = icon_cx - self.ICON_SIZE // 2
             icon_y = icon_cy - self.ICON_SIZE // 2
+            # Convert canvas to RGBA for proper alpha compositing
+            if self.canvas.mode == 'RGB':
+                self.canvas = self.canvas.convert('RGBA')
+                self.draw = ImageDraw.Draw(self.canvas)
             self.canvas.paste(icon, (icon_x, icon_y), icon)  # Use alpha mask
             logger.debug(f"Icon '{icon_name}' at ({icon_x}, {icon_y})")
 

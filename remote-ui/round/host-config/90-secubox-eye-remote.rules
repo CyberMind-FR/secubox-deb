@@ -1,0 +1,24 @@
+# ==============================================================================
+# SecuBox Eye Remote - udev rules for USB OTG gadget
+# Auto-configure network interface when Pi Zero is connected
+#
+# Install: sudo cp 90-secubox-eye-remote.rules /etc/udev/rules.d/
+#          sudo udevadm control --reload-rules
+#
+# CyberMind - https://cybermind.fr
+# ==============================================================================
+
+# Pi Zero USB Gadget - CDC Ethernet (ECM)
+# Vendor: 1d6b (Linux Foundation)
+# Product: 0104 (Multifunction Composite Gadget)
+ACTION=="add", SUBSYSTEM=="net", ATTRS{idVendor}=="1d6b", ATTRS{idProduct}=="0104", \
+    NAME="secubox-eye", \
+    RUN+="/usr/local/sbin/secubox-eye-network.sh up"
+
+ACTION=="remove", SUBSYSTEM=="net", ENV{ID_VENDOR_ID}=="1d6b", ENV{ID_MODEL_ID}=="0104", \
+    RUN+="/usr/local/sbin/secubox-eye-network.sh down"
+
+# Alternative: match by MAC prefix (02:fb:00:00 - Pi Zero gadget)
+ACTION=="add", SUBSYSTEM=="net", ATTR{address}=="02:fb:*", \
+    NAME="secubox-eye", \
+    RUN+="/usr/local/sbin/secubox-eye-network.sh up"

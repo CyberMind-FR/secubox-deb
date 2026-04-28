@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SecuBox Smart-Strip — Vue Fritzing breadboard</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    /* Fritzing breadboard background */
+    --fz-bg: #F2E8C8;
+    --fz-bg-dark: #E5D8B0;
+
+    /* Fritzing wire colors (réf. doc Fritzing) */
+    --wire-gnd:  #1f1f1f;
+    --wire-pwr:  #d52222;
+    --wire-sda:  #2761c1;
+    --wire-scl:  #d4a322;
+    --wire-shadow: rgba(0, 0, 0, 0.25);
+
+    /* Pi 4 colors */
+    --pi-pcb:      #0d6b3a;
+    --pi-pcb-dark: #064521;
+    --pi-silk:     #f8f8f8;
+    --pi-usb-blue: #1d6dc7;
+    --pi-usb-black:#1a1a1a;
+    --pi-eth:      #c0c0c0;
+    --pi-chip:     #2a2a2a;
+    --pi-pad-gold: #d8a850;
+
+    /* SecuBox colors (charte) */
+    --auth: #C04E24;
+    --wall: #9A6010;
+    --boot: #803018;
+    --mind: #3D35A0;
+    --root: #0A5840;
+    --mesh: #104A88;
+    --sbx-pcb: #141414;
+    --sbx-silk: #ececec;
+
+    --mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', ui-monospace, Consolas, monospace;
+    --sans: 'Inter', 'Space Grotesk', system-ui, -apple-system, sans-serif;
+    --hand: 'Caveat', 'Comic Sans MS', cursive;
+  }
+
+  html, body {
+    background:
+      radial-gradient(ellipse at 50% 30%, var(--fz-bg) 0%, var(--fz-bg-dark) 100%);
+    color: #2a2a2a;
+    font-family: var(--sans);
+    min-height: 100vh;
+    padding: 24px 16px 60px;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 16px;
+    user-select: none;
+  }
+
+  .brand-tag {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.3em;
+    color: #6b5a3c;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  h1 {
+    font-size: 22px;
+    font-weight: 500;
+    color: #2a2a2a;
+    margin-bottom: 4px;
+    letter-spacing: 0.01em;
+  }
+
+  .subtitle {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: #6b5a3c;
+  }
+
+  main {
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+
+  .stage {
+    background: rgba(255, 255, 255, 0.18);
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 8px;
+    padding: 18px;
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.6) inset,
+      0 14px 40px -10px rgba(0,0,0,0.18);
+  }
+
+  /* The big SVG */
+  svg.fritzing {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+
+  /* Labels written by hand */
+  .hand-note {
+    font-family: var(--hand);
+    font-size: 16px;
+    fill: #4a3818;
+  }
+
+  /* Caption / explanation row */
+  .caption {
+    margin-top: 18px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+  }
+
+  .caption-cell {
+    background: #fff;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 6px;
+    padding: 12px 14px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+  }
+
+  .caption-cell .swatch {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: inline-block;
+    vertical-align: middle;
+    margin-right: 8px;
+    box-shadow: 0 0 0 2px rgba(0,0,0,0.08);
+  }
+
+  .caption-cell .label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: #6b5a3c;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 4px;
+  }
+
+  .caption-cell .role {
+    font-size: 13px;
+    font-weight: 500;
+    color: #2a2a2a;
+  }
+
+  .caption-cell .pin {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: #6b5a3c;
+    margin-top: 2px;
+  }
+
+  /* Code/note panel */
+  .note-panel {
+    margin-top: 18px;
+    background: #fff;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 6px;
+    padding: 14px 18px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: #3a2a18;
+  }
+
+  .note-panel code {
+    font-family: var(--mono);
+    background: #f3ead0;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 12px;
+    color: #2a2a2a;
+  }
+
+  .note-panel h3 {
+    font-size: 13px;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #6b5a3c;
+    font-weight: 600;
+  }
+
+  footer {
+    margin-top: 28px;
+    text-align: center;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: #6b5a3c;
+    letter-spacing: 0.1em;
+  }
+
+  @media (max-width: 760px) {
+    .caption { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 480px) {
+    h1 { font-size: 18px; }
+    .stage { padding: 10px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand-tag">CyberMind</div>
+  <h1>SecuBox Smart-Strip · Vue Fritzing breadboard</h1>
+  <div class="subtitle">SBX-STR-01 v1.1 · I²C Qwiic vers Raspberry Pi 4</div>
+</header>
+
+<main>
+<div class="stage">
+
+<svg class="fritzing" viewBox="0 0 1100 540" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Cable gradient and shadow -->
+    <filter id="wire-shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="1.5"/>
+      <feOffset dx="0" dy="2" result="offsetblur"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.4"/></feComponentTransfer>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <filter id="component-shadow" x="-5%" y="-5%" width="110%" height="120%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="2"/>
+      <feOffset dx="2" dy="4"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.25"/></feComponentTransfer>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Pi PCB texture -->
+    <pattern id="pi-pcb-bg" patternUnits="userSpaceOnUse" width="10" height="10">
+      <rect width="10" height="10" fill="var(--pi-pcb)"/>
+      <circle cx="2" cy="2" r="0.4" fill="rgba(0,0,0,0.15)"/>
+      <circle cx="7" cy="6" r="0.3" fill="rgba(255,255,255,0.05)"/>
+    </pattern>
+
+    <!-- Smart-Strip PCB matte texture -->
+    <pattern id="sbx-pcb-bg" patternUnits="userSpaceOnUse" width="6" height="6">
+      <rect width="6" height="6" fill="var(--sbx-pcb)"/>
+      <rect width="6" height="0.5" fill="rgba(255,255,255,0.02)"/>
+    </pattern>
+
+    <!-- LED glow filter -->
+    <filter id="led-glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Subtle grid background -->
+  <g opacity="0.12">
+    <pattern id="grid" patternUnits="userSpaceOnUse" width="10" height="10">
+      <path d="M 10 0 L 0 0 0 10" fill="none" stroke="#8a7045" stroke-width="0.5"/>
+    </pattern>
+    <rect x="0" y="0" width="1100" height="540" fill="url(#grid)"/>
+  </g>
+
+  <!--========================================================================
+       RASPBERRY PI 4 (left side)
+       Drawn top-down, simplified Fritzing style
+       Position: x=60, y=80
+       Size: 360x230 (Pi is 85x56mm, scaled up)
+  ========================================================================-->
+  <g id="pi-4" transform="translate(60, 80)" filter="url(#component-shadow)">
+    <!-- PCB -->
+    <rect x="0" y="0" width="360" height="230" rx="6" fill="url(#pi-pcb-bg)"
+          stroke="var(--pi-pcb-dark)" stroke-width="1.5"/>
+
+    <!-- Mounting holes -->
+    <circle cx="14" cy="14" r="5" fill="#666" stroke="#333" stroke-width="0.5"/>
+    <circle cx="14" cy="14" r="2.5" fill="var(--fz-bg)"/>
+    <circle cx="346" cy="14" r="5" fill="#666" stroke="#333" stroke-width="0.5"/>
+    <circle cx="346" cy="14" r="2.5" fill="var(--fz-bg)"/>
+    <circle cx="14" cy="216" r="5" fill="#666" stroke="#333" stroke-width="0.5"/>
+    <circle cx="14" cy="216" r="2.5" fill="var(--fz-bg)"/>
+    <circle cx="346" cy="216" r="5" fill="#666" stroke="#333" stroke-width="0.5"/>
+    <circle cx="346" cy="216" r="2.5" fill="var(--fz-bg)"/>
+
+    <!-- Silkscreen branding -->
+    <text x="180" y="60" fill="var(--pi-silk)" font-family="sans-serif"
+          font-size="11" text-anchor="middle" font-weight="600">
+      Raspberry Pi 4 Model B
+    </text>
+    <text x="180" y="74" fill="var(--pi-silk)" font-family="sans-serif"
+          font-size="8" text-anchor="middle" opacity="0.7">
+      © Raspberry Pi 2018
+    </text>
+
+    <!-- BCM2711 SoC (the big square chip in center) -->
+    <rect x="120" y="100" width="50" height="50" rx="2"
+          fill="var(--pi-chip)" stroke="#000" stroke-width="0.5"/>
+    <rect x="124" y="104" width="42" height="42" rx="1"
+          fill="#1a1a1a" opacity="0.9"/>
+    <text x="145" y="128" fill="#666" font-family="monospace" font-size="6"
+          text-anchor="middle">BCM2711</text>
+
+    <!-- RAM chip -->
+    <rect x="190" y="100" width="28" height="36" rx="1"
+          fill="var(--pi-chip)" stroke="#000" stroke-width="0.5"/>
+    <text x="204" y="120" fill="#666" font-family="monospace" font-size="5"
+          text-anchor="middle">SDRAM</text>
+
+    <!-- Wireless chip with antenna pad -->
+    <rect x="25" y="100" width="34" height="22" rx="1"
+          fill="var(--pi-chip)" stroke="#000" stroke-width="0.5"/>
+    <text x="42" y="113" fill="#666" font-family="monospace" font-size="5"
+          text-anchor="middle">WiFi/BT</text>
+    <rect x="22" y="84" width="40" height="14" rx="2"
+          fill="#888" stroke="#444" stroke-width="0.3"/>
+
+    <!-- USB-C power port (top-left) -->
+    <rect x="20" y="-3" width="20" height="14" rx="2"
+          fill="var(--pi-usb-black)" stroke="#000" stroke-width="0.5"/>
+    <rect x="22" y="-1" width="16" height="3" fill="#444"/>
+    <text x="30" y="22" fill="var(--pi-silk)" font-family="monospace" font-size="6"
+          text-anchor="middle">5V/3A</text>
+
+    <!-- HDMI ports x2 -->
+    <rect x="60" y="-2" width="22" height="11" rx="1"
+          fill="var(--pi-usb-black)" stroke="#000" stroke-width="0.5"/>
+    <rect x="62" y="0" width="18" height="5" fill="#333"/>
+    <rect x="92" y="-2" width="22" height="11" rx="1"
+          fill="var(--pi-usb-black)" stroke="#000" stroke-width="0.5"/>
+    <rect x="94" y="0" width="18" height="5" fill="#333"/>
+    <text x="87" y="22" fill="var(--pi-silk)" font-family="monospace" font-size="6"
+          text-anchor="middle">HDMI 0/1</text>
+
+    <!-- Audio + camera CSI -->
+    <rect x="135" y="-2" width="14" height="14" rx="1.5"
+          fill="#3a2818" stroke="#000" stroke-width="0.5"/>
+
+    <!-- USB 3.0 + 2.0 ports (right side) -->
+    <rect x="306" y="35" width="40" height="22" rx="1.5"
+          fill="var(--pi-usb-blue)" stroke="#000" stroke-width="0.5"/>
+    <rect x="306" y="65" width="40" height="22" rx="1.5"
+          fill="var(--pi-usb-blue)" stroke="#000" stroke-width="0.5"/>
+    <rect x="306" y="105" width="40" height="22" rx="1.5"
+          fill="var(--pi-usb-black)" stroke="#000" stroke-width="0.5"/>
+    <rect x="306" y="135" width="40" height="22" rx="1.5"
+          fill="var(--pi-usb-black)" stroke="#000" stroke-width="0.5"/>
+    <text x="328" y="73" fill="white" font-family="monospace" font-size="6"
+          text-anchor="middle">USB 3.0</text>
+    <text x="328" y="148" fill="var(--pi-silk)" font-family="monospace" font-size="6"
+          text-anchor="middle">USB 2.0</text>
+
+    <!-- Ethernet -->
+    <rect x="306" y="165" width="40" height="32" rx="1.5"
+          fill="var(--pi-eth)" stroke="#666" stroke-width="0.5"/>
+    <rect x="310" y="170" width="32" height="22" rx="1" fill="#888"/>
+    <text x="328" y="186" fill="#000" font-family="monospace" font-size="6"
+          text-anchor="middle">RJ45</text>
+
+    <!-- 40-pin GPIO header (top edge) -->
+    <g id="gpio-header">
+      <rect x="32" y="32" width="248" height="14" rx="1.5"
+            fill="#1a1a1a" stroke="#000" stroke-width="0.5"/>
+      <!-- Two rows of 20 pins. We'll highlight pins relevant for Qwiic -->
+      <g id="gpio-pins">
+        <!-- Top row (odd pins): 1, 3, 5, 7, ..., 39 -->
+        <g id="gpio-row-odd">
+          <!-- Pin 1: 3V3 (red) -->
+          <rect x="34" y="34" width="6" height="4" rx="0.5" fill="var(--pi-pad-gold)"/>
+          <circle cx="37" cy="36" r="1.5" fill="#5a3a18"/>
+          <!-- Pin 3: SDA1 (highlighted blue) -->
+          <rect x="46" y="34" width="6" height="4" rx="0.5" fill="var(--pi-pad-gold)"/>
+          <circle cx="49" cy="36" r="1.5" fill="#5a3a18"/>
+          <!-- Pin 5: SCL1 (highlighted yellow) -->
+          <rect x="58" y="34" width="6" height="4" rx="0.5" fill="var(--pi-pad-gold)"/>
+          <circle cx="61" cy="36" r="1.5" fill="#5a3a18"/>
+          <!-- Remaining odd pins -->
+          <g id="other-odd">
+            <rect x="70" y="34" width="6" height="4" rx="0.5" fill="var(--pi-pad-gold)"/>
+            <circle cx="73" cy="36" r="1.5" fill="#5a3a18"/>
+            <rect x="82" y="34" width="6" height="4" rx="0.5" fill="var(--pi-pad-gold)"/>
+            <circle cx="85" cy="36" r="1.5" fill="#5a3a18"/>
+            <rect x="94" y="34" width="6" height="4" rx="0.5" fill="var(--pi-pad-gold)"/>
+            <circle cx="97" cy="36" r="1.5" fill="#5a3a18"/>
+            <rect x="106" y="34" width="6" height="4" rx="0.5" fill="var(--pi-pad-gold)"/>
+            <circle cx="109" cy="36" r="1.5" fill="#5a3a18"/>
+            <rect x="118" y="34" width="6" height="4" rx="0.5" fill="var(--pi-pad-gold)"/>
+            <circle cx="121" cy="36" r="1.5" fill="#5a3a18"/>
+            <rect x="130" y="34" width="6" height="4" rx="0.5" fill="var(--pi-pad-gold)"/>
+            <circle cx="133" cy="36" r="1.5" fill="#5a3a18"/>
+            <rect x="142" y="34" width="6" height="4" rx="0.5" fill="var(--pi-pad-gold)"/>
+            <circle cx="145" cy="36" r="1.5" fill="#5a3a18"/>
+            <rect x="154" y="34" width="6" height="4" rx="0.5" fill="var(--pi-pad-gold)"/>
+            <circle cx="157" cy="36" r="1.5" fill="#5a3a18"/>
+            <rect x="166" y="34" width="6" height="4" rx="0.5" fill="var(--pi-pad-gold)"/>
+            <circle cx="169" cy="36" r="1.5" fill="#5a3a18"/>
+            <rect x="178" y="34" width="6" height="4" rx="0.5" fill="var(--pi-pad-gold)"/>
+            <circle cx="181" cy="36" r="1.5" fill="#5a3a18"/>
+            <rect x="190" y="34" width="6" height="4" rx="0.5" fill="var(--pi-pad-gold)"/>
+            <circle cx="193" cy="36" r="1.5" fill="#5a3a18"/>
+            <rect x="202" y="34" width="6" height="4" rx="0.5" fill="var(--pi-pad-gold)"/>
+            <circle cx="205" cy="36" r="1.5" fill="#5a3a18"/>
+            <rect x="214" y="34" width="6" height="4" rx="0.5" fill="var(--pi-pad-gold)"/>
+            <circle cx="217" cy="36" r="1.5" fill="#5a3a18"/>
+            <rect x="226" y="34" width="6" height="4" rx="0.5" fill="var(--pi-pad-gold)"/>
+            <circle cx="229" cy="36" r="1.5" fill="#5a3a18"/>
+            <rect x="238" y="34" width="6" height="4" rx="0.5" fill="var(--pi-pad-gold)"/>
+            <circle cx="241" cy="36" r="1.5" fill="#5a3a18"/>
+            <rect x="250" y="34" width="6" height="4" rx="0.5" fill="var(--pi-pad-gold)"/>
+            <circle cx="253" cy="36" r="1.5" fill="#5a3a18"/>
+            <rect x="262" y="34" width="6" height="4" rx="0.5" fill="var(--pi-pad-gold)"/>
+            <circle cx="265" cy="36" r="1.5" fill="#5a3a18"/>
+            <rect x="274" y="34" width="6" height="4" rx="0.5" fill="var(--pi-pad-gold)"/>
+            <circle cx="277" cy="36" r="1.5" fill="#5a3a18"/>
+          </g>
+        </g>
+        <!-- Bottom row (even pins): 2, 4, 6, 8, ..., 40 -->
+        <g id="gpio-row-even">
+          <!-- Pin 6: GND (black) -->
+          <rect x="58" y="40" width="6" height="4" rx="0.5" fill="var(--pi-pad-gold)"/>
+          <circle cx="61" cy="42" r="1.5" fill="#5a3a18"/>
+          <!-- Other even pins -->
+          <g id="other-even">
+            <rect x="34" y="40" width="6" height="4" rx="0.5" fill="var(--pi-pad-gold)"/>
+            <circle cx="37" cy="42" r="1.5" fill="#5a3a18"/>
+            <rect x="46" y="40" width="6" height="4" rx="0.5" fill="var(--pi-pad-gold)"/>
+            <circle cx="49" cy="42" r="1.5" fill="#5a3a18"/>
+            <rect x="70" y="40" width="6" height="4" rx="0.5" fill="var(--pi-pad-gold)"/>
+            <circle cx="73" cy="42" r="1.5" fill="#5a3a18"/>
+            <rect x="82" y="40" width="6" height="4" rx="0.5" fill="var(--pi-pad-gold)"/>
+            <circle cx="85" cy="42" r="1.5" fill="#5a3a18"/>
+            <rect x="94" y="40" width="6" height="4" rx="0.5" fill="var(--pi-pad-gold)"/>
+            <circle cx="97" cy="42" r="1.5" fill="#5a3a18"/>
+            <rect x="106" y="40" width="6" height="4" rx="0.5" fill="var(--pi-pad-gold)"/>
+            <circle cx="109" cy="42" r="1.5" fill="#5a3a18"/>
+            <rect x="118" y="40" width="6" height="4" rx="0.5" fill="var(--pi-pad-gold)"/>
+            <circle cx="121" cy="42" r="1.5" fill="#5a3a18"/>
+            <rect x="130" y="40" width="6" height="4" rx="0.5" fill="var(--pi-pad-gold)"/>
+            <circle cx="133" cy="42" r="1.5" fill="#5a3a18"/>
+            <rect x="142" y="40" width="6" height="4" rx="0.5" fill="var(--pi-pad-gold)"/>
+            <circle cx="145" cy="42" r="1.5" fill="#5a3a18"/>
+            <rect x="154" y="40" width="6" height="4" rx="0.5" fill="var(--pi-pad-gold)"/>
+            <circle cx="157" cy="42" r="1.5" fill="#5a3a18"/>
+            <rect x="166" y="40" width="6" height="4" rx="0.5" fill="var(--pi-pad-gold)"/>
+            <circle cx="169" cy="42" r="1.5" fill="#5a3a18"/>
+            <rect x="178" y="40" width="6" height="4" rx="0.5" fill="var(--pi-pad-gold)"/>
+            <circle cx="181" cy="42" r="1.5" fill="#5a3a18"/>
+            <rect x="190" y="40" width="6" height="4" rx="0.5" fill="var(--pi-pad-gold)"/>
+            <circle cx="193" cy="42" r="1.5" fill="#5a3a18"/>
+            <rect x="202" y="40" width="6" height="4" rx="0.5" fill="var(--pi-pad-gold)"/>
+            <circle cx="205" cy="42" r="1.5" fill="#5a3a18"/>
+            <rect x="214" y="40" width="6" height="4" rx="0.5" fill="var(--pi-pad-gold)"/>
+            <circle cx="217" cy="42" r="1.5" fill="#5a3a18"/>
+            <rect x="226" y="40" width="6" height="4" rx="0.5" fill="var(--pi-pad-gold)"/>
+            <circle cx="229" cy="42" r="1.5" fill="#5a3a18"/>
+            <rect x="238" y="40" width="6" height="4" rx="0.5" fill="var(--pi-pad-gold)"/>
+            <circle cx="241" cy="42" r="1.5" fill="#5a3a18"/>
+            <rect x="250" y="40" width="6" height="4" rx="0.5" fill="var(--pi-pad-gold)"/>
+            <circle cx="253" cy="42" r="1.5" fill="#5a3a18"/>
+            <rect x="262" y="40" width="6" height="4" rx="0.5" fill="var(--pi-pad-gold)"/>
+            <circle cx="265" cy="42" r="1.5" fill="#5a3a18"/>
+            <rect x="274" y="40" width="6" height="4" rx="0.5" fill="var(--pi-pad-gold)"/>
+            <circle cx="277" cy="42" r="1.5" fill="#5a3a18"/>
+          </g>
+        </g>
+        <!-- Highlight the 4 pins we use -->
+        <g id="qwiic-pins-highlight">
+          <!-- Pin 1 (3V3) -->
+          <circle cx="37" cy="36" r="3" fill="none"
+                  stroke="var(--wire-pwr)" stroke-width="1.5"/>
+          <!-- Pin 3 (SDA1, GPIO2) -->
+          <circle cx="49" cy="36" r="3" fill="none"
+                  stroke="var(--wire-sda)" stroke-width="1.5"/>
+          <!-- Pin 5 (SCL1, GPIO3) -->
+          <circle cx="61" cy="36" r="3" fill="none"
+                  stroke="var(--wire-scl)" stroke-width="1.5"/>
+          <!-- Pin 6 (GND) -->
+          <circle cx="61" cy="42" r="3" fill="none"
+                  stroke="var(--wire-gnd)" stroke-width="1.5"/>
+        </g>
+        <!-- Pin numbers labels -->
+        <text x="37" y="29" fill="var(--pi-silk)" font-family="monospace"
+              font-size="5" text-anchor="middle" opacity="0.85">1</text>
+        <text x="49" y="29" fill="var(--pi-silk)" font-family="monospace"
+              font-size="5" text-anchor="middle" opacity="0.85">3</text>
+        <text x="61" y="29" fill="var(--pi-silk)" font-family="monospace"
+              font-size="5" text-anchor="middle" opacity="0.85">5</text>
+        <text x="61" y="52" fill="var(--pi-silk)" font-family="monospace"
+              font-size="5" text-anchor="middle" opacity="0.85">6</text>
+      </g>
+    </g>
+
+    <!-- microSD card slot (bottom) -->
+    <rect x="180" y="218" width="32" height="14" rx="1"
+          fill="#444" stroke="#000" stroke-width="0.5"/>
+    <text x="196" y="227" fill="var(--pi-silk)" font-family="monospace"
+          font-size="6" text-anchor="middle">microSD</text>
+
+    <!-- Camera CSI ribbon connector -->
+    <rect x="240" y="100" width="34" height="6" rx="1" fill="#3a2818"
+          stroke="#000" stroke-width="0.5"/>
+    <text x="257" y="120" fill="var(--pi-silk)" font-family="monospace"
+          font-size="6" text-anchor="middle">CAM1</text>
+
+    <!-- Display DSI ribbon connector -->
+    <rect x="100" y="170" width="34" height="6" rx="1" fill="#3a2818"
+          stroke="#000" stroke-width="0.5"/>
+    <text x="117" y="186" fill="var(--pi-silk)" font-family="monospace"
+          font-size="6" text-anchor="middle">DISP1</text>
+
+    <!-- "Pi" logo -->
+    <text x="260" y="148" fill="var(--pi-silk)" font-family="serif"
+          font-size="18" font-weight="bold" font-style="italic" opacity="0.6">π</text>
+  </g>
+
+  <!-- "Raspberry Pi 4" hand label -->
+  <text x="65" y="55" class="hand-note">Raspberry Pi 4 (host)</text>
+  <path d="M 95 65 Q 105 75 120 78" stroke="#4a3818" stroke-width="1"
+        fill="none" stroke-linecap="round"/>
+
+  <!--========================================================================
+       SECUBOX SMART-STRIP (right side)
+       Position: x=670, y=170
+       Size: 380 wide, scaled rep of 85x15mm at higher px ratio
+  ========================================================================-->
+  <g id="smart-strip" transform="translate(660, 200)" filter="url(#component-shadow)">
+    <!-- PCB body -->
+    <rect x="0" y="0" width="400" height="70" rx="3"
+          fill="url(#sbx-pcb-bg)" stroke="#0a0a0a" stroke-width="1"/>
+
+    <!-- Top edge highlight -->
+    <rect x="20" y="1" width="360" height="0.5" fill="rgba(255,255,255,0.18)"/>
+
+    <!-- Mounting holes 4× M2 -->
+    <g fill="#444" stroke="#222" stroke-width="0.5">
+      <circle cx="11" cy="11" r="2.4"/>
+      <circle cx="389" cy="11" r="2.4"/>
+      <circle cx="11" cy="59" r="2.4"/>
+      <circle cx="389" cy="59" r="2.4"/>
+    </g>
+    <g fill="var(--fz-bg)">
+      <circle cx="11" cy="11" r="1.1"/>
+      <circle cx="389" cy="11" r="1.1"/>
+      <circle cx="11" cy="59" r="1.1"/>
+      <circle cx="389" cy="59" r="1.1"/>
+    </g>
+
+    <!-- Silkscreen branding -->
+    <text x="22" y="11" fill="var(--sbx-silk)" font-family="monospace"
+          font-size="7" font-weight="500">SecuBox</text>
+    <text x="378" y="11" fill="#888" font-family="monospace"
+          font-size="6" text-anchor="end">SBX-STR-01 v1.1</text>
+    <text x="22" y="65" fill="#888" font-family="monospace" font-size="6">CyberMind</text>
+    <text x="378" y="65" fill="#888" font-family="monospace"
+          font-size="6" text-anchor="end">85 × 15 mm</text>
+
+    <!-- USB-C connector (left) -->
+    <g id="usb-c-conn">
+      <rect x="-6" y="22" width="14" height="26" rx="1.5"
+            fill="#0a0a0a" stroke="#333" stroke-width="0.5"/>
+      <rect x="-3" y="25" width="8" height="20" rx="0.8" fill="#1a1a1a"/>
+      <text x="2" y="20" fill="#888" font-family="monospace"
+            font-size="5" text-anchor="middle">USB-C</text>
+    </g>
+
+    <!-- JST-SH 4-pin connector (right) - this is what we connect via Qwiic -->
+    <g id="jst-conn">
+      <rect x="392" y="24" width="20" height="22" rx="1"
+            fill="#f5f5f5" stroke="#888" stroke-width="0.5"/>
+      <rect x="395" y="27" width="14" height="16" rx="0.5" fill="#e8e8e8"/>
+      <!-- 4 pins -->
+      <g fill="#999">
+        <rect x="396" y="29" width="3" height="12"/>
+        <rect x="400" y="29" width="3" height="12"/>
+        <rect x="404" y="29" width="3" height="12"/>
+        <rect x="408" y="29" width="3" height="12"/>
+      </g>
+      <text x="402" y="20" fill="#888" font-family="monospace"
+            font-size="5" text-anchor="middle">JST-SH 4P</text>
+      <!-- Pin labels (top, mostly hidden but reference) -->
+      <text x="402" y="55" fill="#888" font-family="monospace"
+            font-size="4" text-anchor="middle">G·V·D·C</text>
+    </g>
+
+    <!-- 6 LEDs (charte SecuBox order) -->
+    <g id="leds" filter="url(#led-glow)">
+      <!-- AUTH -->
+      <circle cx="50" cy="22" r="4" fill="var(--auth)"/>
+      <circle cx="50" cy="22" r="2.8" fill="#fff" opacity="0.45"/>
+      <!-- WALL -->
+      <circle cx="100" cy="22" r="4" fill="var(--wall)"/>
+      <circle cx="100" cy="22" r="2.8" fill="#fff" opacity="0.4"/>
+      <!-- BOOT -->
+      <circle cx="150" cy="22" r="4" fill="var(--boot)"/>
+      <circle cx="150" cy="22" r="2.8" fill="#fff" opacity="0.4"/>
+      <!-- MIND -->
+      <circle cx="200" cy="22" r="4" fill="var(--mind)"/>
+      <circle cx="200" cy="22" r="2.8" fill="#fff" opacity="0.5"/>
+      <!-- ROOT -->
+      <circle cx="250" cy="22" r="4" fill="var(--root)"/>
+      <circle cx="250" cy="22" r="2.8" fill="#fff" opacity="0.4"/>
+      <!-- MESH -->
+      <circle cx="300" cy="22" r="4" fill="var(--mesh)"/>
+      <circle cx="300" cy="22" r="2.8" fill="#fff" opacity="0.45"/>
+    </g>
+
+    <!-- LED labels (silkscreen) -->
+    <g fill="var(--sbx-silk)" font-family="monospace" font-size="5"
+       text-anchor="middle" opacity="0.85">
+      <text x="50" y="40">AUTH</text>
+      <text x="100" y="40">WALL</text>
+      <text x="150" y="40">BOOT</text>
+      <text x="200" y="40">MIND</text>
+      <text x="250" y="40">ROOT</text>
+      <text x="300" y="40">MESH</text>
+    </g>
+
+    <!-- Touch pads (cuivre exposé) below LEDs -->
+    <g id="touch-pads" fill="#d8a850" stroke="#a08038" stroke-width="0.3">
+      <rect x="42" y="44" width="16" height="11" rx="1"/>
+      <rect x="92" y="44" width="16" height="11" rx="1"/>
+      <rect x="142" y="44" width="16" height="11" rx="1"/>
+      <rect x="192" y="44" width="16" height="11" rx="1"/>
+      <rect x="242" y="44" width="16" height="11" rx="1"/>
+      <rect x="292" y="44" width="16" height="11" rx="1"/>
+    </g>
+
+    <!-- Tiny silkscreen icons below pads -->
+    <g fill="var(--sbx-silk)" font-family="serif" font-size="4"
+       text-anchor="middle" opacity="0.5">
+      <text x="50" y="63">touch</text>
+      <text x="100" y="63">touch</text>
+      <text x="150" y="63">touch</text>
+      <text x="200" y="63">touch</text>
+      <text x="250" y="63">touch</text>
+      <text x="300" y="63">touch</text>
+    </g>
+
+    <!-- SMD components hint (decoration) -->
+    <g fill="#0a0a0a">
+      <!-- MCU big QFN -->
+      <rect x="170" y="50" width="14" height="14" rx="0.5"/>
+      <!-- Touch IC -->
+      <rect x="220" y="50" width="11" height="11" rx="0.5"/>
+      <!-- Flash, LDO, ESD passives -->
+      <rect x="135" y="55" width="8" height="6" rx="0.3"/>
+      <rect x="115" y="55" width="6" height="5" rx="0.3"/>
+    </g>
+  </g>
+
+  <!-- "SecuBox Smart-Strip" hand label -->
+  <text x="745" y="180" class="hand-note">SecuBox Smart-Strip v1.1</text>
+  <path d="M 870 192 Q 880 200 855 210" stroke="#4a3818" stroke-width="1"
+        fill="none" stroke-linecap="round"/>
+
+  <!--========================================================================
+       QWIIC CABLE — 4 wires from Pi GPIO to Smart-Strip JST
+       Pi pin coords (in pi group):
+         3V3 (pin 1):   transform(60+37, 80+36) = (97, 116)
+         SDA (pin 3):   transform(60+49, 80+36) = (109, 116)
+         SCL (pin 5):   transform(60+61, 80+36) = (121, 116)
+         GND (pin 6):   transform(60+61, 80+42) = (121, 122)
+
+       Smart-Strip JST coords (in smart-strip group):
+         GND (pin 1):   transform(660+396, 200+35) = (1056, 235)
+         3V3 (pin 2):   transform(660+400, 200+35) = (1060, 235)
+         SDA (pin 3):   transform(660+404, 200+35) = (1064, 235)
+         SCL (pin 4):   transform(660+408, 200+35) = (1068, 235)
+       Wait — JST exits to the right of the board, but we want cable to
+       come FROM the right side. Let me route the cable from JST exit
+       (which is to the right at ~x=1080, y=235) curving around to Pi
+       header at (~120, ~118).
+
+       Actually JST connector cable exits straight out to the right
+       (away from the board). So cable starts at ~(1080, 235) and curves
+       leftward to Pi at ~(60-100, 116).
+
+       But that's a long curve over the page. For breadboard view it's
+       typical and looks like a real cable. Let's draw 4 colored cables
+       with proper Bezier curves.
+  ========================================================================-->
+
+  <!-- Cables: bezier curves from JST exit point back to Pi header -->
+  <g id="cables" fill="none" stroke-linecap="round" filter="url(#wire-shadow)">
+    <!--
+      JST cable exit points (right side of JST, x slightly past 1080):
+        we'll start cables at x=1080 with 4 different y's separated by 4px
+      Pi GPIO header:
+        Pin 1 (3V3): (97, 116)
+        Pin 3 (SDA): (109, 116)
+        Pin 5 (SCL): (121, 116)
+        Pin 6 (GND): (121, 122)
+
+      Curve down/up and across.
+    -->
+
+    <!-- Cable shadow group (slightly below) -->
+    <g opacity="0.95">
+      <!-- GND wire (black) - JST pin 1 -->
+      <path d="M 1080 230 C 1100 230, 1100 380, 800 460
+               C 500 540, 200 480, 100 200
+               C 90 130, 95 125, 121 122"
+            stroke="var(--wire-gnd)" stroke-width="5"/>
+
+      <!-- 3V3 wire (red) - JST pin 2 -->
+      <path d="M 1080 234 C 1095 234, 1095 376, 795 456
+               C 495 535, 195 475, 95 195
+               C 85 125, 90 120, 97 116"
+            stroke="var(--wire-pwr)" stroke-width="5"/>
+
+      <!-- SDA wire (blue) - JST pin 3 -->
+      <path d="M 1080 238 C 1090 238, 1090 372, 790 452
+               C 490 530, 190 470, 90 190
+               C 80 120, 102 114, 109 116"
+            stroke="var(--wire-sda)" stroke-width="5"/>
+
+      <!-- SCL wire (yellow) - JST pin 4 -->
+      <path d="M 1080 242 C 1085 242, 1085 368, 785 448
+               C 485 525, 185 465, 85 185
+               C 75 115, 110 113, 121 116"
+            stroke="var(--wire-scl)" stroke-width="5"/>
+    </g>
+
+    <!-- Cable highlights (top reflective stroke) -->
+    <g opacity="0.4" stroke-width="1.5">
+      <path d="M 1080 230 C 1100 230, 1100 380, 800 460
+               C 500 540, 200 480, 100 200
+               C 90 130, 95 125, 121 122"
+            stroke="rgba(255,255,255,0.6)" stroke-width="1"/>
+    </g>
+  </g>
+
+  <!-- Cable labels at midpoint -->
+  <g class="hand-note" opacity="0.85">
+    <text x="500" y="500" text-anchor="middle">Câble Qwiic JST-SH 4 fils</text>
+    <text x="500" y="518" text-anchor="middle" font-size="13">
+      GND · 3V3 · SDA · SCL
+    </text>
+  </g>
+
+  <!-- Connection point dots -->
+  <g fill="#fff" stroke="#222" stroke-width="0.8">
+    <!-- Pi GPIO highlights -->
+    <circle cx="97" cy="116" r="2.5"/>
+    <circle cx="109" cy="116" r="2.5"/>
+    <circle cx="121" cy="116" r="2.5"/>
+    <circle cx="121" cy="122" r="2.5"/>
+  </g>
+
+  <!-- Pin annotation labels above Pi GPIO -->
+  <g font-family="monospace" font-size="9" text-anchor="middle">
+    <text x="97" y="78" fill="var(--wire-pwr)" font-weight="600">3V3</text>
+    <text x="109" y="92" fill="var(--wire-sda)" font-weight="600">SDA</text>
+    <text x="125" y="78" fill="var(--wire-scl)" font-weight="600">SCL</text>
+    <text x="138" y="92" fill="var(--wire-gnd)" font-weight="600">GND</text>
+  </g>
+
+  <!-- Annotation: "I²C-1 bus" -->
+  <text x="200" y="280" class="hand-note" font-size="14">I²C-1 bus</text>
+  <text x="200" y="296" class="hand-note" font-size="11" opacity="0.7">
+    /dev/i2c-1 · slave 0x42
+  </text>
+
+  <!-- Title strip at top showing the wiring relation -->
+  <g transform="translate(550, 38)">
+    <rect x="-180" y="-22" width="360" height="36" rx="18"
+          fill="rgba(255,255,255,0.85)" stroke="rgba(0,0,0,0.1)" stroke-width="1"/>
+    <text x="0" y="0" font-family="monospace" font-size="11" text-anchor="middle"
+          font-weight="600" fill="#3a2818">
+      Pi 4 Model B  ←  Qwiic JST-SH  →  Smart-Strip
+    </text>
+    <text x="0" y="11" font-family="monospace" font-size="9" text-anchor="middle"
+          fill="#6b5a3c">
+      i²c slave @ 0x42 · 6 LEDs RGB · 6 touch pads
+    </text>
+  </g>
+</svg>
+
+</div>
+
+<!-- Caption row -->
+<div class="caption">
+  <div class="caption-cell">
+    <div class="label"><span class="swatch" style="background:#1f1f1f"></span>Wire 1</div>
+    <div class="role">GND (0V)</div>
+    <div class="pin">Pi pin 6 → JST pin 1</div>
+  </div>
+  <div class="caption-cell">
+    <div class="label"><span class="swatch" style="background:#d52222"></span>Wire 2</div>
+    <div class="role">3V3 power</div>
+    <div class="pin">Pi pin 1 → JST pin 2</div>
+  </div>
+  <div class="caption-cell">
+    <div class="label"><span class="swatch" style="background:#2761c1"></span>Wire 3</div>
+    <div class="role">SDA (data)</div>
+    <div class="pin">Pi pin 3 (GPIO 2) → JST pin 3</div>
+  </div>
+  <div class="caption-cell">
+    <div class="label"><span class="swatch" style="background:#d4a322"></span>Wire 4</div>
+    <div class="role">SCL (clock)</div>
+    <div class="pin">Pi pin 5 (GPIO 3) → JST pin 4</div>
+  </div>
+</div>
+
+<!-- Note panel with usage code -->
+<div class="note-panel">
+  <h3>Mise en service côté Pi</h3>
+  Activer I²C : <code>sudo raspi-config nonint do_i2c 0</code> puis détecter la
+  Smart-Strip avec <code>i2cdetect -y 1</code> (l'adresse <code>0x42</code> doit
+  apparaître). Contrôle simple via Python avec
+  <code>smbus2</code> :<br><br>
+  <code>from smbus2 import SMBus</code><br>
+  <code>bus = SMBus(1)</code><br>
+  <code>bus.write_i2c_block_data(0x42, 0x10, [192, 78, 36])  # AUTH = orange charte</code><br>
+  <code>bus.write_i2c_block_data(0x42, 0x40, [0x55])         # heartbeat</code><br><br>
+  Pilote complet (CDC + I²C unifié) dans <code>host/secubox_smart_strip.py</code>.
+</div>
+
+</main>
+
+<footer>
+  CyberMind · SBX-STR-01 v1.1 · 2026 · Vue Fritzing breadboard pour documentation Ulule
+</footer>
+
+</body>
+</html>

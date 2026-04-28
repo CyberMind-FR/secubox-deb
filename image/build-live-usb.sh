@@ -656,7 +656,7 @@ WantedBy=multi-user.target
 HWSVC
 chroot "${ROOTFS}" systemctl enable secubox-hwcheck.service 2>/dev/null || true
 
-# ── Network config with dummy interface for kiosk ─────────────────
+# ── Network config ─────────────────────────────────────────────────
 mkdir -p "${ROOTFS}/etc/netplan"
 
 # Main netplan config - DHCP on all interfaces, optional so no boot block

@@ -23,6 +23,7 @@ class MenuID(Enum):
     LOCAL_DISPLAY = auto()
     LOCAL_NETWORK = auto()
     LOCAL_SYSTEM = auto()
+    LOCAL_OTG = auto()       # Menu OTG
     NETWORK = auto()
     SECURITY = auto()
     EXIT = auto()
@@ -106,9 +107,9 @@ MENUS: dict[MenuID, list[MenuItem]] = {
     MenuID.LOCAL: [
         MenuItem("DISPLAY", "display", submenu=MenuID.LOCAL_DISPLAY),
         MenuItem("NETWORK", "network", submenu=MenuID.LOCAL_NETWORK),
+        MenuItem("USB/OTG", "usb", submenu=MenuID.LOCAL_OTG),
         MenuItem("SYSTEM", "system", submenu=MenuID.LOCAL_SYSTEM),
         MenuItem("ABOUT", "info", action="local.about"),
-        MenuItem("LOGS", "logs", action="local.logs"),
         MenuItem("< BACK", "back", action="nav.back"),
     ],
 
@@ -139,6 +140,17 @@ MENUS: dict[MenuID, list[MenuItem]] = {
         MenuItem("CPU", "cpu", action="local.cpu_info"),
         MenuItem("LOGS", "logs", action="local.system_logs"),
         MenuItem("UPDATES", "update", action="local.updates"),
+        MenuItem("< BACK", "back", action="nav.back"),
+    ],
+
+    # LOCAL.OTG Menu - Modes USB OTG
+    # Label dynamique : {otg_state} sera remplacé par l'état actuel
+    MenuID.LOCAL_OTG: [
+        MenuItem("{otg_state}", "usb", action="otg.status"),       # État actuel
+        MenuItem("NORMAL", "network", action="otg.mode:normal"),   # ECM + ACM
+        MenuItem("FLASH", "boot", action="otg.mode:flash"),        # Mass Storage bootable
+        MenuItem("DEBUG", "root", action="otg.mode:debug"),        # ECM + Storage + ACM
+        MenuItem("TTY", "mind", action="otg.mode:tty"),            # HID Keyboard + ACM
         MenuItem("< BACK", "back", action="nav.back"),
     ],
 

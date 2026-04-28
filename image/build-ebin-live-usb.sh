@@ -160,14 +160,16 @@ INCLUDE_PKGS+=",python3,python3-pip,nginx,curl,wget,ca-certificates,gnupg,consol
 INCLUDE_PKGS+=",iproute2,iputils-ping,ethtool,net-tools,wireguard-tools"
 INCLUDE_PKGS+=",sudo,less,vim-tiny,logrotate,cron,rsync,jq,dnsmasq"
 INCLUDE_PKGS+=",linux-image-arm64,live-boot,live-boot-initramfs-tools,live-config,live-config-systemd"
-INCLUDE_PKGS+=",pciutils,usbutils,parted,dosfstools,lsb-release"
+INCLUDE_PKGS+=",pciutils,usbutils,parted,dosfstools,e2fsprogs,lsb-release,gdisk"
 INCLUDE_PKGS+=",pv,dialog,fonts-terminus,kbd"
 
 # Python dependencies for SecuBox modules (apt packages)
+# Note: python3-cryptography, python3-jose, python3-zmq installed post-debootstrap
+# (they fail during cross-arch debootstrap due to Rust/native deps)
 INCLUDE_PKGS+=",python3-fastapi,python3-uvicorn,python3-httpx,python3-psutil"
-INCLUDE_PKGS+=",python3-aiosqlite,python3-cryptography,python3-jinja2,python3-jwt"
+INCLUDE_PKGS+=",python3-aiosqlite,python3-jinja2,python3-jwt"
 INCLUDE_PKGS+=",python3-aiofiles,python3-pil,python3-tomli,python3-pydantic"
-INCLUDE_PKGS+=",python3-jose,python3-toml,python3-netifaces"
+INCLUDE_PKGS+=",python3-toml,python3-netifaces"
 
 # Network and security tools
 INCLUDE_PKGS+=",bridge-utils,dnsutils,iputils-arping,avahi-daemon,avahi-utils"
@@ -195,6 +197,40 @@ log "2/7 System configuration..."
 mount -t proc proc   "${ROOTFS}/proc"
 mount -t sysfs sysfs "${ROOTFS}/sys"
 mount --bind /dev    "${ROOTFS}/dev"
+
+# Configure APT sources first
+cat > "${ROOTFS}/etc/apt/sources.list" << SOURCES
+deb ${APT_MIRROR} ${SUITE} main contrib non-free non-free-firmware
+deb ${APT_MIRROR} ${SUITE}-updates main contrib non-free non-free-firmware
+deb http://security.debian.org/debian-security ${SUITE}-security main contrib non-free non-free-firmware
+SOURCES
+
+# Update and install critical packages that debootstrap might have missed
+log "Ensuring critical packages are installed..."
+chroot "${ROOTFS}" bash -c "apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -q \
+    parted e2fsprogs dosfstools gdisk rsync findutils \
+    iproute2 iputils-ping net-tools bridge-utils \
+    systemd-resolved netplan.io \
+    2>&1" | tail -20 || warn "Some packages may have failed"
+
+# Verify critical tools
+for tool in parted mkfs.ext4 rsync findmnt lsblk; do
+    if ! chroot "${ROOTFS}" which "$tool" &>/dev/null; then
+        warn "Missing tool: $tool - attempting install..."
+        case "$tool" in
+            parted) chroot "${ROOTFS}" apt-get install -y parted ;;
+            mkfs.ext4) chroot "${ROOTFS}" apt-get install -y e2fsprogs ;;
+            rsync) chroot "${ROOTFS}" apt-get install -y rsync ;;
+            findmnt|lsblk) chroot "${ROOTFS}" apt-get install -y util-linux ;;
+        esac
+    fi
+done
+ok "Critical packages verified"
+
+# Install Python packages that fail during cross-arch debootstrap
+log "Installing Python cryptography packages post-debootstrap..."
+chroot "${ROOTFS}" bash -c "DEBIAN_FRONTEND=noninteractive apt-get install -y -q \
+    python3-cryptography python3-jose python3-zmq 2>&1" | tail -10 || warn "Some Python packages not installed"
 
 # Hostname
 echo "secubox-live" > "${ROOTFS}/etc/hostname"
@@ -244,19 +280,25 @@ chroot "${ROOTFS}" systemctl enable serial-getty@ttyMV0.service 2>/dev/null || t
 # Network configuration
 mkdir -p "${ROOTFS}/etc/netplan"
 cat > "${ROOTFS}/etc/netplan/00-secubox-live.yaml" << 'NETPLAN'
+# ESPRESSObin V7 DSA network configuration
+# Interfaces: eth0 (CPU), wan@eth0, lan0@eth0, lan1@eth0
 network:
   version: 2
   renderer: networkd
 
   ethernets:
+    # CPU port - must be up for DSA but no IP
     eth0:
-      dhcp4: true
+      dhcp4: false
       optional: true
 
-    wan0:
+    # WAN port - DHCP for internet
+    wan:
       dhcp4: true
+      dhcp6: false
       optional: true
 
+    # LAN ports - bridged
     lan0:
       dhcp4: false
       optional: true
@@ -267,11 +309,36 @@ network:
 
   bridges:
     br-lan:
-      interfaces: []
+      interfaces: [lan0, lan1]
       addresses: [192.168.1.1/24]
       dhcp4: false
+      parameters:
+        stp: false
+        forward-delay: 0
       optional: true
 NETPLAN
+
+# Disable dummy interface module and remove any dummy configs
+echo "blacklist dummy" > "${ROOTFS}/etc/modprobe.d/blacklist-dummy.conf"
+rm -f "${ROOTFS}/etc/systemd/network/"*dummy* 2>/dev/null || true
+rm -f "${ROOTFS}/etc/netplan/"*dummy* 2>/dev/null || true
+
+# Create service to cleanup dummy0 at boot if it appears
+cat > "${ROOTFS}/etc/systemd/system/secubox-cleanup-dummy.service" << 'CLEANUP'
+[Unit]
+Description=Remove dummy0 interface if present
+Before=network-online.target
+After=systemd-networkd.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'ip link del dummy0 2>/dev/null || true'
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+CLEANUP
+chroot "${ROOTFS}" systemctl enable secubox-cleanup-dummy.service 2>/dev/null || true
 
 ok "Base configuration complete"
 
