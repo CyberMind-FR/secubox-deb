@@ -40,12 +40,12 @@ class FallbackMode(Enum):
 
 # Flashy module colors - thinner rings, larger center
 MODULES = [
-    {'name': 'AUTH', 'color': (255, 80, 40),   'r': 220, 'glow': (255, 120, 80)},
-    {'name': 'WALL', 'color': (255, 160, 20),  'r': 200, 'glow': (255, 200, 60)},
-    {'name': 'BOOT', 'color': (255, 60, 100),  'r': 180, 'glow': (255, 100, 140)},
-    {'name': 'MIND', 'color': (120, 80, 255),  'r': 160, 'glow': (160, 120, 255)},
-    {'name': 'ROOT', 'color': (0, 255, 120),   'r': 140, 'glow': (80, 255, 160)},
-    {'name': 'MESH', 'color': (0, 180, 255),   'r': 120, 'glow': (80, 220, 255)},
+    {'name': 'AUTH', 'color': (255, 160, 40),  'r': 220, 'glow': (255, 200, 80)},   # orange
+    {'name': 'WALL', 'color': (255, 220, 0),   'r': 200, 'glow': (255, 240, 80)},   # jaune
+    {'name': 'BOOT', 'color': (255, 60, 40),   'r': 180, 'glow': (255, 100, 80)},   # rouge
+    {'name': 'MIND', 'color': (120, 80, 255),  'r': 160, 'glow': (160, 120, 255)},  # violet
+    {'name': 'ROOT', 'color': (0, 255, 120),   'r': 140, 'glow': (80, 255, 160)},   # vert
+    {'name': 'MESH', 'color': (0, 180, 255),   'r': 120, 'glow': (80, 220, 255)},   # bleu
 ]
 
 RING_WIDTH = 14
@@ -284,15 +284,18 @@ class FallbackManager:
         self._fetch_thread.start()
 
     def get_targeted_module_index(self) -> int:
-        """Get index of module currently targeted by radar sweep."""
-        # Sweep angle goes from 0 to 2*PI, icons are at angles starting -PI/2
-        # Each icon spans 60 degrees (PI/3)
+        """Get index of module currently targeted by radar sweep.
+
+        Rainbow: BOOT(rouge), AUTH(orange), WALL(jaune), ROOT(vert), MESH(bleu), MIND(violet)
+        Icons start at 3 o'clock (angle=0), clockwise.
+        """
         sweep = self.sweep_angle
-        # Adjust for icon starting position (-PI/2) and offset correction
-        adjusted = (sweep + math.pi/2) % (2 * math.pi)
-        # Convert to index (0-5), subtract 1 to align with icon positions
-        index = (int(adjusted / (math.pi / 3)) - 1) % 6
-        return index
+        # Direct sync
+        adjusted = sweep
+        position = int(adjusted / (math.pi / 3)) % 6
+        # Rainbow order module mapping
+        position_to_module = [2, 0, 1, 4, 5, 3]  # BOOT, AUTH, WALL, ROOT, MESH, MIND
+        return position_to_module[position]
 
     @property
     def mode(self) -> FallbackMode:
@@ -590,13 +593,24 @@ class FallbackManager:
         draw.line([(x1, y1), (x2, y2)], fill=(255, 255, 255), width=4)
 
     def _draw_center_icons(self, draw, sweep, pulse, single_mode=False):
-        """Draw 6 module icons positioned at radar sweep angles.
+        """Draw 6 module icons in circle, color ordered.
 
-        Icons are placed at angles corresponding to where radar crosses each ring.
+        Circle order (clockwise from top): red, orange, yellow, green, blue, purple
+        Maps to: AUTH, WALL, BOOT, ROOT, MESH, MIND
+
         If single_mode=True, show one centered cycling icon only.
         """
         icon_r = 62  # Radius for icon placement
-        icon_names = ['auth', 'wall', 'boot', 'mind', 'root', 'mesh']
+
+        # Rainbow: rouge, orange, jaune, vert, bleu, violet
+        icon_order = [
+            ('boot', 2),   # pos 0: rouge
+            ('auth', 0),   # pos 1: orange
+            ('wall', 1),   # pos 2: jaune
+            ('root', 4),   # pos 3: vert
+            ('mesh', 5),   # pos 4: bleu
+            ('mind', 3),   # pos 5: violet
+        ]
 
         # Determine which icon to show in single mode (cycle every 2 seconds)
         if single_mode:
@@ -604,27 +618,24 @@ class FallbackManager:
         else:
             cycle_index = -1  # Show all
 
-        # 6 icons at radar angles - each at the angle where sweep would cross its ring
-        # Starting at top (12 o'clock = -PI/2), going clockwise
-        for i, m in enumerate(MODULES):
+        for pos_idx, (name, module_idx) in enumerate(icon_order):
+            m = MODULES[module_idx]
+
             # In single mode, only draw the current cycling icon - CENTERED
-            if single_mode and i != cycle_index:
+            if single_mode and pos_idx != cycle_index:
                 continue
 
             if single_mode:
                 # Center the single icon (no metric text below)
                 ix, iy = CENTER, CENTER - 10
             else:
-                # Position at angle from top, clockwise like radar sweep
-                # AUTH at top (12h), WALL at 2h, BOOT at 4h, MIND at 6h, ROOT at 8h, MESH at 10h
-                angle = -math.pi/2 + (i / 6) * 2 * math.pi
+                # Position in circle, shifted one step back
+                angle = (pos_idx / 6) * 2 * math.pi - math.pi/3
                 ix = int(CENTER + icon_r * math.cos(angle))
                 iy = int(CENTER + icon_r * math.sin(angle))
 
-            name = icon_names[i]
-
             # Highlight if targeted by radar (online mode only)
-            is_targeted = (not single_mode and i == self._targeted_module)
+            is_targeted = (not single_mode and module_idx == self._targeted_module)
 
             if is_targeted:
                 # Glow ring around targeted icon
