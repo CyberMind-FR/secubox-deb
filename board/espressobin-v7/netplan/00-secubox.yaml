@@ -21,18 +21,19 @@ network:
       dhcp6: false
       optional: true
 
-    # WAN port - static IP (change to dhcp4: true if needed)
+    # WAN port - DHCP for automatic gateway detection
     wan:
-      addresses:
-        - 192.168.255.250/24
-      routes:
-        - to: default
-          via: 192.168.255.1
-      nameservers:
-        addresses:
-          - 192.168.255.1
-          - 8.8.8.8
+      dhcp4: true
+      dhcp6: false
       optional: true
+      # Fallback static config (uncomment if DHCP unavailable):
+      # addresses:
+      #   - 192.168.1.250/24
+      # routes:
+      #   - to: default
+      #     via: 192.168.1.1
+      # nameservers:
+      #   addresses: [8.8.8.8, 1.1.1.1]
 
     # LAN ports - part of bridge, no individual config
     lan0:

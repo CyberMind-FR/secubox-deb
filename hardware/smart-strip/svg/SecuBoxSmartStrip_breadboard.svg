@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1"
+     width="3.346in" height="0.591in"
+     viewBox="0 0 241 42.5">
+  <!--
+    SecuBox Smart-Strip v1.1 — Fritzing breadboard view
+    PCB physical: 85 x 15 mm = 3.346 x 0.591 in
+    Drawing scale: 1 user unit = ~0.353 mm
+
+    Connector pins are on the right edge (JST-SH 4-pin) :
+      connector0 = GND  (pin 1, leftmost in JST)
+      connector1 = 3V3  (pin 2)
+      connector2 = SDA  (pin 3)
+      connector3 = SCL  (pin 4)
+  -->
+  <defs>
+    <linearGradient id="pcb-grad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1a1a1a"/>
+      <stop offset="50%" stop-color="#0e0e0e"/>
+      <stop offset="100%" stop-color="#080808"/>
+    </linearGradient>
+    <radialGradient id="led-auth" cx="0.35" cy="0.35" r="0.65">
+      <stop offset="0%" stop-color="#ffb59c"/>
+      <stop offset="50%" stop-color="#C04E24"/>
+      <stop offset="100%" stop-color="#702010"/>
+    </radialGradient>
+    <radialGradient id="led-wall" cx="0.35" cy="0.35" r="0.65">
+      <stop offset="0%" stop-color="#e0b070"/>
+      <stop offset="50%" stop-color="#9A6010"/>
+      <stop offset="100%" stop-color="#583808"/>
+    </radialGradient>
+    <radialGradient id="led-boot" cx="0.35" cy="0.35" r="0.65">
+      <stop offset="0%" stop-color="#d09080"/>
+      <stop offset="50%" stop-color="#803018"/>
+      <stop offset="100%" stop-color="#481810"/>
+    </radialGradient>
+    <radialGradient id="led-mind" cx="0.35" cy="0.35" r="0.65">
+      <stop offset="0%" stop-color="#9590e0"/>
+      <stop offset="50%" stop-color="#3D35A0"/>
+      <stop offset="100%" stop-color="#1c1860"/>
+    </radialGradient>
+    <radialGradient id="led-root" cx="0.35" cy="0.35" r="0.65">
+      <stop offset="0%" stop-color="#5cb098"/>
+      <stop offset="50%" stop-color="#0A5840"/>
+      <stop offset="100%" stop-color="#053024"/>
+    </radialGradient>
+    <radialGradient id="led-mesh" cx="0.35" cy="0.35" r="0.65">
+      <stop offset="0%" stop-color="#5c9cd8"/>
+      <stop offset="50%" stop-color="#104A88"/>
+      <stop offset="100%" stop-color="#08284c"/>
+    </radialGradient>
+  </defs>
+
+  <!-- PCB body (85 x 15 mm scaled) -->
+  <rect x="0.5" y="0.5" width="240" height="41.5" rx="2" ry="2"
+        fill="url(#pcb-grad)" stroke="#000" stroke-width="0.4"/>
+
+  <!-- Mounting holes (M2, 4 corners) -->
+  <g fill="#444" stroke="#222" stroke-width="0.2">
+    <circle cx="6.2" cy="6.2" r="2.6"/>
+    <circle cx="234.8" cy="6.2" r="2.6"/>
+    <circle cx="6.2" cy="36.3" r="2.6"/>
+    <circle cx="234.8" cy="36.3" r="2.6"/>
+  </g>
+  <g fill="#fff">
+    <circle cx="6.2" cy="6.2" r="1.1"/>
+    <circle cx="234.8" cy="6.2" r="1.1"/>
+    <circle cx="6.2" cy="36.3" r="1.1"/>
+    <circle cx="234.8" cy="36.3" r="1.1"/>
+  </g>
+
+  <!-- Silkscreen branding (white text) -->
+  <g font-family="Helvetica, Arial, sans-serif" fill="#ececec">
+    <text x="13" y="6" font-size="3.2" font-weight="500">SecuBox</text>
+    <text x="227" y="6" font-size="2.4" text-anchor="end" opacity="0.7">SBX-STR-01 v1.1</text>
+    <text x="13" y="40" font-size="2.4" opacity="0.7">CyberMind</text>
+    <text x="227" y="40" font-size="2.4" text-anchor="end" opacity="0.7">85 × 15 mm</text>
+  </g>
+
+  <!-- USB-C connector (left edge, decorative) -->
+  <g>
+    <rect x="-2" y="13.5" width="11" height="15.5" rx="1.2"
+          fill="#0a0a0a" stroke="#333" stroke-width="0.3"/>
+    <rect x="0" y="15.3" width="7" height="11.9" rx="0.6" fill="#1a1a1a"/>
+  </g>
+
+  <!-- 6 RGB LEDs (charte order: AUTH, WALL, BOOT, MIND, ROOT, MESH) -->
+  <g>
+    <circle cx="40"  cy="14" r="3.2" fill="url(#led-auth)" stroke="#000" stroke-width="0.2"/>
+    <circle cx="73"  cy="14" r="3.2" fill="url(#led-wall)" stroke="#000" stroke-width="0.2"/>
+    <circle cx="106" cy="14" r="3.2" fill="url(#led-boot)" stroke="#000" stroke-width="0.2"/>
+    <circle cx="139" cy="14" r="3.2" fill="url(#led-mind)" stroke="#000" stroke-width="0.2"/>
+    <circle cx="172" cy="14" r="3.2" fill="url(#led-root)" stroke="#000" stroke-width="0.2"/>
+    <circle cx="205" cy="14" r="3.2" fill="url(#led-mesh)" stroke="#000" stroke-width="0.2"/>
+  </g>
+
+  <!-- LED labels (silkscreen) -->
+  <g font-family="Helvetica, Arial, sans-serif" font-size="2"
+     fill="#ececec" text-anchor="middle" opacity="0.8">
+    <text x="40"  y="22">AUTH</text>
+    <text x="73"  y="22">WALL</text>
+    <text x="106" y="22">BOOT</text>
+    <text x="139" y="22">MIND</text>
+    <text x="172" y="22">ROOT</text>
+    <text x="205" y="22">MESH</text>
+  </g>
+
+  <!-- 6 touch pads (gold cuivre exposé) -->
+  <g fill="#d8a850" stroke="#a08038" stroke-width="0.15">
+    <rect x="35"  y="25" width="10" height="6" rx="0.5"/>
+    <rect x="68"  y="25" width="10" height="6" rx="0.5"/>
+    <rect x="101" y="25" width="10" height="6" rx="0.5"/>
+    <rect x="134" y="25" width="10" height="6" rx="0.5"/>
+    <rect x="167" y="25" width="10" height="6" rx="0.5"/>
+    <rect x="200" y="25" width="10" height="6" rx="0.5"/>
+  </g>
+
+  <!-- SMD components hint (decorative shadows of QFNs/passives in center) -->
+  <g fill="#0a0a0a" opacity="0.85">
+    <rect x="113" y="32" width="10" height="6" rx="0.3"/>  <!-- MCU -->
+    <rect x="135" y="32" width="8" height="6" rx="0.3"/>   <!-- Touch IC -->
+    <rect x="93"  y="34" width="6" height="3" rx="0.2"/>   <!-- Flash -->
+  </g>
+
+  <!-- JST-SH 4-pin connector (right edge) — exits to the right of the PCB.
+       The 4 pins must be Fritzing-clickable via connector0pin..connector3pin.
+       We place them at the right edge of the SVG. -->
+  <g id="jst-housing">
+    <rect x="226" y="14" width="14" height="14.5" rx="0.6"
+          fill="#f4f4f4" stroke="#888" stroke-width="0.2"/>
+    <rect x="227.5" y="15.5" width="11" height="11.5" rx="0.3" fill="#dadada"/>
+  </g>
+
+  <!-- 4 JST pin terminals = Fritzing connectors -->
+  <!-- Pin centers: x=240 (right edge), y from 15.5 to 27 spaced ~3.8 apart -->
+  <!-- Pin 1: GND  → connector0 -->
+  <g>
+    <rect id="connector0pin" x="237" y="15.5" width="3.5" height="2"
+          fill="#888" stroke="#444" stroke-width="0.15"/>
+    <rect id="connector0terminal" x="240" y="16.25" width="0.5" height="0.5"
+          fill="none"/>
+  </g>
+  <!-- Pin 2: 3V3  → connector1 -->
+  <g>
+    <rect id="connector1pin" x="237" y="18.5" width="3.5" height="2"
+          fill="#888" stroke="#444" stroke-width="0.15"/>
+    <rect id="connector1terminal" x="240" y="19.25" width="0.5" height="0.5"
+          fill="none"/>
+  </g>
+  <!-- Pin 3: SDA  → connector2 -->
+  <g>
+    <rect id="connector2pin" x="237" y="21.5" width="3.5" height="2"
+          fill="#888" stroke="#444" stroke-width="0.15"/>
+    <rect id="connector2terminal" x="240" y="22.25" width="0.5" height="0.5"
+          fill="none"/>
+  </g>
+  <!-- Pin 4: SCL  → connector3 -->
+  <g>
+    <rect id="connector3pin" x="237" y="24.5" width="3.5" height="2"
+          fill="#888" stroke="#444" stroke-width="0.15"/>
+    <rect id="connector3terminal" x="240" y="25.25" width="0.5" height="0.5"
+          fill="none"/>
+  </g>
+
+  <!-- Pin labels (small) on the JST housing for clarity -->
+  <g font-family="Helvetica, Arial, sans-serif" font-size="1.4" fill="#222"
+     text-anchor="end">
+    <text x="236.5" y="16.7">G</text>
+    <text x="236.5" y="19.7">V</text>
+    <text x="236.5" y="22.7">D</text>
+    <text x="236.5" y="25.7">C</text>
+  </g>
+</svg>

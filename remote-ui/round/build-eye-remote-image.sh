@@ -385,7 +385,8 @@ gpu_mem=128
 
 # HyperPixel 2.1 Round 480x480 - LEGACY DPI mode
 # Uses hyperpixel2r overlay + pigpio init script
-dtoverlay=${HP_OVERLAY}
+# :disable-touch allows Python to access touch controller via I2C
+dtoverlay=${HP_OVERLAY}:disable-touch
 
 # Explicit DPI settings (REQUIRED for Pi Zero W - no KMS support!)
 # Without these, the framebuffer may not be created
@@ -525,7 +526,7 @@ echo "  Installed: $INSTALLED, Failed: $FAILED"
 
 echo "=== [3.5/5] Installing Python packages via pip ==="
 # These packages are not in Debian repos, install via pip
-pip3 install httpx fastapi uvicorn websockets --break-system-packages --no-cache-dir || echo "WARN: pip install failed"
+pip3 install httpx fastapi uvicorn websockets hyperpixel2r smbus2 --break-system-packages --no-cache-dir || echo "WARN: pip install failed"
 
 echo "=== [4/5] Enabling pigpiod ==="
 systemctl enable pigpiod || true
@@ -597,6 +598,7 @@ libcomposite
 usb_f_ecm
 usb_f_acm
 usb_f_mass_storage
+i2c-dev
 usb_f_hid
 EOF
 

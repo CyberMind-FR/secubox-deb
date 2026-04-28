@@ -1,0 +1,24 @@
+# ==============================================================================
+# SecuBox Eye Remote - systemd-networkd configuration
+# Auto-configure IP when Pi Zero USB gadget is connected
+#
+# Install: sudo cp secubox-eye.network /etc/systemd/network/
+#          sudo systemctl restart systemd-networkd
+#
+# CyberMind - https://cybermind.fr
+# ==============================================================================
+
+[Match]
+# Match by interface name (set by udev)
+Name=secubox-eye
+
+# Alternative: match by MAC prefix (Pi Zero gadget uses 02:fb:*)
+# MACAddress=02:fb:*
+
+[Network]
+Description=SecuBox Eye Remote USB OTG Network
+Address=10.55.0.1/30
+# No gateway - this is a point-to-point link
+
+[Link]
+RequiredForOnline=no

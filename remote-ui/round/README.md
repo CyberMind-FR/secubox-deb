@@ -52,10 +52,17 @@ See [Issue #31](https://github.com/CyberMind-FR/secubox-deb/issues/31) for v2.0.
 | Composant | Référence | Notes |
 |-----------|-----------|-------|
 | Raspberry Pi Zero W | RPi Zero W / Zero 2 W | WiFi intégré requis |
-| HyperPixel 2.1 Round | Pimoroni | Écran tactile circulaire 480×480 |
+| HyperPixel 2.1 Round | [Pimoroni HyperPixel 2.1 Round](https://shop.pimoroni.com/products/hyperpixel-round?variant=39381081882707) | Écran tactile circulaire 480×480, SPI+I2C |
 | Carte microSD | 8 Go minimum | Class 10 recommandée |
 | Alimentation | 5V 2.5A | Via micro-USB |
 | Câble USB | Data-capable | Must be DATA port, not PWR |
+
+### Spécifications HyperPixel 2.1 Round
+
+- **Résolution** : 480×480 pixels (circulaire)
+- **Contrôleur LCD** : ST7701S (SPI init)
+- **Contrôleur tactile** : I2C bus 11, adresse 0x15, GPIO 27 (interrupt)
+- **Interface** : DPI (Display Parallel Interface) via GPIO
 
 ---
 
@@ -334,6 +341,52 @@ Options facultatives:
 **Sécurité intégrée :**
 - Refuse `/dev/sda`, `/dev/nvme0n1`, `/dev/mmcblk0` (disques système)
 - Demande confirmation avant l'effacement
+
+### `fix-pizero-otg.sh`
+
+Corrige la configuration OTG (réseau + série) d'une SD card Pi Zero.
+
+```bash
+# Insérer la SD card du Pi Zero dans le PC, puis :
+sudo ./fix-pizero-otg.sh /dev/sdX
+
+# Le script configure :
+# - dtoverlay=dwc2 dans config.txt
+# - /etc/modules : dwc2, libcomposite
+# - /etc/network/interfaces.d/usb0 : IP 10.55.0.2/30
+# - getty@ttyGS0.service : console série USB
+# - secubox-otg-gadget.service : gadget composite au boot
+```
+
+### `setup_touch_pimoroni.sh`
+
+Configure le tactile HyperPixel 2r pour utiliser la bibliothèque Python Pimoroni.
+
+```bash
+# Sur le Pi Zero :
+sudo ./setup_touch_pimoroni.sh
+
+# Le script :
+# - Modifie config.txt : dtoverlay=hyperpixel2r:disable-touch
+# - Installe : hyperpixel2r, smbus2, evdev (Python)
+# - Ajoute l'utilisateur au groupe i2c
+# - Teste la connexion I2C bus 11, adresse 0x15
+```
+
+### `test_touch_i2c.py`
+
+Script de diagnostic pour tester la connexion tactile HyperPixel 2r.
+
+```bash
+python3 test_touch_i2c.py
+
+# Tests effectués :
+# 1. Accès I2C direct (smbus2, bus 11, adresse 0x15)
+# 2. Scan des bus I2C disponibles
+# 3. Bibliothèque Pimoroni hyperpixel2r
+# 4. Fallback evdev (pilote kernel)
+# 5. Vérification config.txt
+```
 
 ### `deploy.sh`
 
@@ -780,9 +833,30 @@ Full specification: `docs/superpowers/specs/2026-04-21-eye-remote-integration-de
 
 ## Ressources
 
-- [HyperPixel 2.1 Round — Pimoroni](https://shop.pimoroni.com/products/hyperpixel-2-1-round)
-- [Driver GitHub](https://github.com/pimoroni/hyperpixel2r)
-- [SecuBox Documentation](https://docs.secubox.in)
+### HyperPixel 2.1 Round — Matériel & Drivers
+
+| Ressource | Lien | Description |
+|-----------|------|-------------|
+| **Shop Pimoroni** | [HyperPixel 2.1 Round](https://shop.pimoroni.com/products/hyperpixel-round?variant=39381081882707) | Achat écran tactile 480×480 |
+| **Driver Display** | [github.com/pimoroni/hyperpixel2r](https://github.com/pimoroni/hyperpixel2r) | Overlay DT, scripts init LCD |
+| **Touch Python** | [github.com/pimoroni/hyperpixel2r-python](https://github.com/pimoroni/hyperpixel2r-python) | Lib Python pour tactile I2C direct |
+| **PyPI Package** | [pypi.org/project/hyperpixel2r](https://pypi.org/project/hyperpixel2r/) | `pip install hyperpixel2r` |
+
+### Documentation technique
+
+| Ressource | Lien |
+|-----------|------|
+| Pimoroni Getting Started | [learn.pimoroni.com/hyperpixel2r](https://learn.pimoroni.com/article/getting-started-with-hyperpixel-2-round) |
+| Raspberry Pi DPI | [raspberrypi.com/documentation/computers/raspberry-pi.html#dpi](https://www.raspberrypi.com/documentation/computers/raspberry-pi.html#dpi-display-parallel-interface) |
+| USB Gadget ConfigFS | [kernel.org/doc/Documentation/usb/gadget_configfs.txt](https://www.kernel.org/doc/Documentation/usb/gadget_configfs.txt) |
+
+### SecuBox
+
+| Ressource | Lien |
+|-----------|------|
+| Documentation | [docs.secubox.in](https://docs.secubox.in) |
+| Dépôt GitHub | [github.com/CyberMind-FR/secubox-deb](https://github.com/CyberMind-FR/secubox-deb) |
+| APT Repository | [apt.secubox.in](https://apt.secubox.in) |
 
 ---
 

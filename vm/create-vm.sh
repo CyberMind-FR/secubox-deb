@@ -249,7 +249,7 @@ write_files:
           br-lan:
             interfaces: [eth3, eth4, eth5, eth6]
             addresses:
-              - 192.168.255.1/24
+              - 10.55.1.1/24
             dhcp4: false
             parameters:
               stp: false
@@ -286,7 +286,7 @@ final_message: |
     eth1: Switch Uplink (internal)
     eth2: WAN Secondary (DHCP/NAT)
     eth3-eth6: LAN ports (bridged to br-lan)
-    br-lan: 192.168.255.1/24
+    br-lan: 10.55.1.1/24
 
   Login: secubox / secubox
 

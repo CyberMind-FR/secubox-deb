@@ -100,12 +100,7 @@ The kiosk expects the SecuBox network interface. If you see a black screen:
 # SSH into VM
 ssh -p 2222 root@localhost
 
-# Create dummy interface
-ip link add dummy0 type dummy
-ip addr add 192.168.255.1/24 dev dummy0
-ip link set dummy0 up
-
-# Restart kiosk
+# Restart kiosk (if needed)
 systemctl restart secubox-kiosk
 ```
 
