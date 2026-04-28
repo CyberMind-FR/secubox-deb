@@ -20,6 +20,36 @@ secubox-netdiag
 
 ## Common Issues
 
+### API 502 Bad Gateway / Authentication Errors (v2.1.1 Fix)
+
+**Symptoms:** Web UI shows "Invalid credentials", "NetworkError", or API returns 502
+
+**Cause:** Debian bookworm ships pydantic v1, but SecuBox requires pydantic v2.
+
+**Solutions:**
+
+1. Upgrade Python dependencies:
+   ```bash
+   pip3 install --break-system-packages 'pydantic>=2.0' 'fastapi>=0.100' 'uvicorn>=0.25'
+   ```
+
+2. Restart all SecuBox services:
+   ```bash
+   systemctl restart secubox-hub secubox-auth secubox-system
+   ```
+
+3. Verify sockets are created:
+   ```bash
+   ls -la /run/secubox/*.sock
+   ```
+
+4. Check service logs:
+   ```bash
+   journalctl -u secubox-hub --no-pager -n 20
+   ```
+
+**Note:** This issue is fixed in v2.1.1+ builds. Upgrade your image or run the pip command above.
+
 ### Cannot Access Web UI
 
 **Symptoms:** Browser shows connection refused or timeout

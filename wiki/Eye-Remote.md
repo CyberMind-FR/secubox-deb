@@ -183,6 +183,29 @@ Access at `http://10.55.0.1:8080`:
 - Boot media status
 - Storage swap controls
 
+### HyperPixel Round Display (v2.1.1+)
+
+The Eye Remote supports the Pimoroni HyperPixel 2.1 Round (480×480) for a dedicated dashboard:
+
+```
+┌────────────────────────────────┐
+│     🔴 🟠 🟡 🟢 🔵 🟣          │  ← Rainbow icon ring
+│         ╭─────╮                │
+│      ╭──│TIME │──╮             │  ← Center clock
+│     ╭───│DATE │───╮            │
+│    ╭────│HOST │────╮           │  ← Concentric metric rings
+│   ╭─────│ UP  │─────╮          │    (red→purple outer→inner)
+│   ╰─────╰─────╯─────╯          │
+│         RADAR ⟳                │  ← Rotating radar sweep
+└────────────────────────────────┘
+```
+
+**Features:**
+- 6 module icons in rainbow order (BOOT, AUTH, WALL, ROOT, MESH, MIND)
+- Radar sweep syncs with targeted module glow
+- Metric arcs aligned with corresponding icon colors
+- Concentric rings: red (outer) → purple (inner)
+
 ---
 
 ## API Reference

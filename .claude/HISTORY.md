@@ -5,6 +5,53 @@
 
 ## 2026-04-28
 
+### Session 72 — v2.1.1 Release: Build and API Fixes
+
+**Release:** v2.1.1 — Critical fixes for VirtualBox and ESPRESSObin builds
+
+**Issues Fixed:**
+
+1. **Python Dependencies (Debian Bookworm Compatibility)**
+   - Debian ships pydantic v1, but SecuBox requires v2
+   - Added pip upgrade in build scripts: `pydantic>=2.0`, `fastapi>=0.100`, `uvicorn>=0.25`
+   - Updated `secubox-core` postinst to auto-upgrade on install
+
+2. **CORS Headers**
+   - Added CORS headers to `common/nginx/secubox-proxy.conf`
+   - Fixes cross-origin API requests from web UI
+
+3. **Login Endpoint Path**
+   - Fixed `login.html`: `/auth/login` → `/login`
+   - Affects both main and portal login pages
+
+4. **Eye Remote Display Imports**
+   - Fixed `display/__init__.py` to import existing modules only
+   - Changed service to use `display_manager.py` instead of `main.py`
+
+5. **Eye Remote Rainbow Dashboard**
+   - Icons in rainbow circle: BOOT, AUTH, WALL, ROOT, MESH, MIND
+   - Radar sweep syncs with targeted module glow
+   - Metric arcs aligned with corresponding icon colors
+   - Concentric rings: red (outer) → purple (inner)
+
+**Files Modified:**
+- `common/nginx/secubox-proxy.conf` — CORS headers
+- `packages/secubox-core/debian/postinst` — pip upgrade
+- `packages/secubox-hub/www/login.html` — endpoint fix
+- `packages/secubox-hub/www/portal/login.html` — endpoint fix
+- `image/build-live-usb.sh` — version constraints
+- `image/build-ebin-live-usb.sh` — version constraints
+- `image/multiboot/build-amd64-rootfs.sh` — pip upgrade
+- `remote-ui/round/agent/display/__init__.py` — import fix
+
+**Wiki Updated:**
+- `Home.md` — v2.1.1 announcement
+- `Troubleshooting.md` — API 502/auth fix section
+- `Eye-Remote.md` — HyperPixel dashboard info
+- `Live-USB-VirtualBox.md` — troubleshooting section
+
+---
+
 ### Session 71 — Eye Remote Display System v2.3.0
 
 **Feature:** Complete display state machine with fallback, splash, and radar modes
