@@ -13,7 +13,7 @@
 
 set -euo pipefail
 
-VERSION="2.2.1"
+VERSION="2.3.0"
 BUILD_DATE=$(date +%Y%m%d)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 

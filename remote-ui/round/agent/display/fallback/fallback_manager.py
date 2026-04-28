@@ -21,6 +21,7 @@ import subprocess
 import json
 import urllib.request
 import urllib.error
+import threading
 from pathlib import Path
 from enum import Enum
 from typing import Optional, Tuple, List, Dict, Any
@@ -81,7 +82,11 @@ ICON_PATHS = [
 # API endpoints
 API_BASE_OTG = "http://10.55.0.1:8000"
 API_BASE_WIFI = "http://secubox.local:8000"
-API_METRICS = "/api/v1/system/metrics"
+# Try multiple paths (depends on nginx/reverse proxy config)
+API_METRICS_PATHS = [
+    "/api/v1/system/metrics",  # Via nginx reverse proxy
+    "/metrics",                 # Direct to uvicorn
+]
 API_TIMEOUT = 2
 
 # Module-specific metrics mapping
@@ -131,7 +136,7 @@ class FallbackManager:
     def __init__(self):
         self._start_time = time.time()
         self._mode = FallbackMode.OFFLINE
-        self._values = {m['name']: 50 for m in MODULES}
+        self._values: Dict[str, float] = {m['name']: 50.0 for m in MODULES}
         self._pulse_phase = 0
         self._last_check = 0
         self._check_interval = 5.0  # Check connection every 5s
@@ -149,6 +154,15 @@ class FallbackManager:
         self._api_fetch_interval = 2.0  # Fetch every 2s
         self._api_base = API_BASE_OTG
         self._targeted_module = 0  # Index of module targeted by radar
+
+        # Double buffer for async API fetch - prevents display freeze
+        self._metrics_buffer_a: Dict[str, Any] = {}
+        self._metrics_buffer_b: Dict[str, Any] = {}
+        self._active_buffer = 'a'  # Which buffer is being read by display
+        self._fetch_thread: Optional[threading.Thread] = None
+        self._fetch_lock = threading.Lock()
+        self._fetching = False
+
         self._load_logo()
         self._load_icons()
 
@@ -189,58 +203,95 @@ class FallbackManager:
             except Exception as e:
                 print(f"Icon load error: {e}")
 
+    def _fetch_api_worker(self):
+        """Background worker to fetch API metrics without blocking display."""
+        # Determine which buffer to write to (opposite of active)
+        write_buffer = self._metrics_buffer_b if self._active_buffer == 'a' else self._metrics_buffer_a
+
+        success = False
+
+        # Try each API path
+        for api_path in API_METRICS_PATHS:
+            try:
+                url = f"{self._api_base}{api_path}"
+                req = urllib.request.Request(url, headers={'Accept': 'application/json'})
+                with urllib.request.urlopen(req, timeout=API_TIMEOUT) as resp:
+                    data = json.loads(resp.read().decode())
+
+                    # Write to inactive buffer
+                    new_values: Dict[str, float] = {}
+                    if 'cpu_percent' in data:
+                        new_values['AUTH'] = float(max(5, min(95, data['cpu_percent'])))
+                    if 'mem_percent' in data:
+                        new_values['WALL'] = float(max(5, min(95, data['mem_percent'])))
+                    if 'disk_percent' in data:
+                        new_values['BOOT'] = float(max(5, min(95, data['disk_percent'])))
+                    if 'load_avg_1' in data:
+                        load = data['load_avg_1']
+                        load_pct = 50 + 20 * math.log10(max(0.1, min(10, load))) if load > 0 else 5
+                        new_values['MIND'] = float(max(5, min(95, load_pct)))
+                    if 'cpu_temp' in data:
+                        temp = data['cpu_temp']
+                        temp_pct = max(0, min(100, (temp - 30) / 55 * 100))
+                        new_values['ROOT'] = float(max(5, min(95, temp_pct)))
+                    if 'wifi_rssi' in data:
+                        rssi = data['wifi_rssi']
+                        rssi_pct = max(0, min(100, (rssi + 90) / 60 * 100))
+                        new_values['MESH'] = float(max(5, min(95, rssi_pct)))
+
+                    # Atomic swap to new buffer
+                    with self._fetch_lock:
+                        write_buffer.clear()
+                        write_buffer.update(data)
+                        for k, v in new_values.items():
+                            self._values[k] = v
+                        self._api_metrics = data
+                        # Swap buffers
+                        self._active_buffer = 'b' if self._active_buffer == 'a' else 'a'
+
+                    success = True
+                    break  # Success, exit loop
+
+            except urllib.error.URLError:
+                continue
+            except Exception:
+                continue
+
+        # If all paths failed, try switching base URL for next attempt
+        if not success:
+            if self._api_base == API_BASE_OTG:
+                self._api_base = API_BASE_WIFI
+            else:
+                self._api_base = API_BASE_OTG
+
+        self._fetching = False
+
     def fetch_api_metrics(self):
-        """Fetch metrics from SecuBox gateway API."""
+        """Start async fetch of metrics - non-blocking, uses double buffer."""
         now = time.time()
         if now - self._last_api_fetch < self._api_fetch_interval:
             return
 
+        # Don't start new fetch if one is already running
+        if self._fetching:
+            return
+
         self._last_api_fetch = now
+        self._fetching = True
 
-        try:
-            url = f"{self._api_base}{API_METRICS}"
-            req = urllib.request.Request(url, headers={'Accept': 'application/json'})
-            with urllib.request.urlopen(req, timeout=API_TIMEOUT) as resp:
-                data = json.loads(resp.read().decode())
-                self._api_metrics = data
-
-                # Update ring values from API
-                if 'cpu_percent' in data:
-                    self._values['AUTH'] = max(5, min(95, data['cpu_percent']))
-                if 'mem_percent' in data:
-                    self._values['WALL'] = max(5, min(95, data['mem_percent']))
-                if 'disk_percent' in data:
-                    self._values['BOOT'] = max(5, min(95, data['disk_percent']))
-                if 'load_avg_1' in data:
-                    load = data['load_avg_1']
-                    load_pct = 50 + 20 * math.log10(max(0.1, min(10, load))) if load > 0 else 5
-                    self._values['MIND'] = max(5, min(95, load_pct))
-                if 'cpu_temp' in data:
-                    temp = data['cpu_temp']
-                    temp_pct = max(0, min(100, (temp - 30) / 55 * 100))
-                    self._values['ROOT'] = max(5, min(95, temp_pct))
-                if 'wifi_rssi' in data:
-                    rssi = data['wifi_rssi']
-                    # RSSI: -30 = 100%, -90 = 0%
-                    rssi_pct = max(0, min(100, (rssi + 90) / 60 * 100))
-                    self._values['MESH'] = max(5, min(95, rssi_pct))
-
-        except urllib.error.URLError:
-            # Try WiFi if OTG fails
-            if self._api_base == API_BASE_OTG:
-                self._api_base = API_BASE_WIFI
-        except Exception as e:
-            pass  # Silent fail, use local metrics
+        # Start background thread for API fetch
+        self._fetch_thread = threading.Thread(target=self._fetch_api_worker, daemon=True)
+        self._fetch_thread.start()
 
     def get_targeted_module_index(self) -> int:
         """Get index of module currently targeted by radar sweep."""
         # Sweep angle goes from 0 to 2*PI, icons are at angles starting -PI/2
         # Each icon spans 60 degrees (PI/3)
         sweep = self.sweep_angle
-        # Adjust for icon starting position (-PI/2)
+        # Adjust for icon starting position (-PI/2) and offset correction
         adjusted = (sweep + math.pi/2) % (2 * math.pi)
-        # Convert to index (0-5)
-        index = int(adjusted / (math.pi / 3)) % 6
+        # Convert to index (0-5), subtract 1 to align with icon positions
+        index = (int(adjusted / (math.pi / 3)) - 1) % 6
         return index
 
     @property
@@ -258,8 +309,18 @@ class FallbackManager:
             self._comm_start = time.time()
             self._mode = FallbackMode.COMMUNICATING
 
+    def _check_api_available(self, base_url: str) -> bool:
+        """Check if API is actually responding - quick check with 0.5s timeout."""
+        try:
+            url = f"{base_url}{API_METRICS_PATHS[0]}"
+            req = urllib.request.Request(url, headers={'Accept': 'application/json'})
+            with urllib.request.urlopen(req, timeout=0.5) as resp:
+                return resp.status == 200
+        except Exception:
+            return False
+
     def check_connection(self) -> FallbackMode:
-        """Check OTG/WiFi connection status."""
+        """Check OTG/WiFi connection - ONLINE if connected, uses local metrics if no API."""
         now = time.time()
         if now - self._last_check < self._check_interval:
             return self._mode
@@ -273,24 +334,28 @@ class FallbackManager:
                 capture_output=True, timeout=2
             )
             if result.returncode == 0:
+                # Connected via OTG - ONLINE mode
+                self._api_base = API_BASE_OTG
                 self._mode = FallbackMode.ONLINE
                 return self._mode
-        except:
+        except Exception:
             pass
 
-        # Check WiFi (secubox.local or gateway)
+        # Check WiFi (secubox.local)
         try:
             result = subprocess.run(
                 ['ping', '-c', '1', '-W', '1', 'secubox.local'],
                 capture_output=True, timeout=2
             )
             if result.returncode == 0:
+                # Connected via WiFi - ONLINE mode
+                self._api_base = API_BASE_WIFI
                 self._mode = FallbackMode.ONLINE
                 return self._mode
-        except:
+        except Exception:
             pass
 
-        # No connection
+        # No connection at all
         self._mode = FallbackMode.OFFLINE
         return self._mode
 
@@ -337,8 +402,8 @@ class FallbackManager:
                     diff_idle = idle - self._last_cpu_idle
                     diff_total = total - self._last_cpu_total
                     if diff_total > 0:
-                        cpu_pct = 100 * (1 - diff_idle / diff_total)
-                        self._values['AUTH'] = max(5, min(95, cpu_pct))
+                        cpu_pct = 100.0 * (1 - diff_idle / diff_total)
+                        self._values['AUTH'] = float(max(5, min(95, cpu_pct)))
 
                 self._last_cpu_idle = idle
                 self._last_cpu_total = total
@@ -353,32 +418,31 @@ class FallbackManager:
 
                 total = meminfo.get('MemTotal', 1)
                 avail = meminfo.get('MemAvailable', meminfo.get('MemFree', total))
-                mem_pct = 100 * (1 - avail / total)
-                self._values['WALL'] = max(5, min(95, mem_pct))
+                mem_pct = 100.0 * (1 - avail / total)
+                self._values['WALL'] = float(max(5, min(95, mem_pct)))
 
             # Disk from os.statvfs
-            import os
             st = os.statvfs('/')
-            disk_pct = 100 * (1 - st.f_bavail / st.f_blocks)
-            self._values['BOOT'] = max(5, min(95, disk_pct))
+            disk_pct = 100.0 * (1 - st.f_bavail / st.f_blocks)
+            self._values['BOOT'] = float(max(5, min(95, disk_pct)))
 
             # Load average - logarithmic scale for spikes
             load1, _, _ = os.getloadavg()
             # Pi Zero has 1 core: load 0.1=10%, 1.0=50%, 10.0=90% (log scale)
             if load1 > 0:
-                load_pct = 50 + 20 * math.log10(max(0.1, min(10, load1)))
+                load_pct = 50.0 + 20.0 * math.log10(max(0.1, min(10, load1)))
             else:
-                load_pct = 5
-            self._values['MIND'] = max(5, min(95, load_pct))
+                load_pct = 5.0
+            self._values['MIND'] = float(max(5, min(95, load_pct)))
 
             # CPU temperature
             try:
                 with open('/sys/class/thermal/thermal_zone0/temp', 'r') as f:
-                    temp_c = int(f.read().strip()) / 1000
+                    temp_c = int(f.read().strip()) / 1000.0
                     # Scale: 30°C=0%, 85°C=100%
-                    temp_pct = max(0, min(100, (temp_c - 30) / 55 * 100))
-                    self._values['ROOT'] = max(5, min(95, temp_pct))
-            except:
+                    temp_pct = max(0.0, min(100.0, (temp_c - 30) / 55 * 100))
+                    self._values['ROOT'] = float(max(5, min(95, temp_pct)))
+            except Exception:
                 pass
 
             # Network - logarithmic scale for traffic variation
@@ -392,21 +456,21 @@ class FallbackManager:
                             total_bytes = rx + tx
                             # Log scale: 1KB=20%, 1MB=50%, 1GB=80%
                             if total_bytes > 0:
-                                net_pct = 10 * math.log10(max(1, total_bytes / 100))
-                                net_pct = max(5, min(95, net_pct))
+                                net_pct = 10.0 * math.log10(max(1, total_bytes / 100))
+                                net_pct = float(max(5, min(95, net_pct)))
                             else:
-                                net_pct = 5
+                                net_pct = 5.0
                             self._values['MESH'] = net_pct
                             break
-            except:
+            except Exception:
                 pass
 
-        except Exception as e:
+        except Exception:
             # Fallback to small random drift if metrics fail
             for m in MODULES:
                 name = m['name']
                 delta = (random.random() - 0.5) * 2
-                self._values[name] = max(20, min(95, self._values[name] + delta))
+                self._values[name] = float(max(20, min(95, self._values[name] + delta)))
 
     def rotate_point(self, x, y, z, ax, ay, az) -> Tuple[float, float, float]:
         """Rotate 3D point."""
@@ -428,11 +492,12 @@ class FallbackManager:
         """Render current display based on mode."""
         self.check_connection()
 
-        # Use API metrics when online, local metrics when offline
+        # Always update local metrics as baseline
+        self.update_local_metrics()
+
+        # Try API metrics when online (will overlay local if successful)
         if self._mode in (FallbackMode.ONLINE, FallbackMode.COMMUNICATING):
             self.fetch_api_metrics()
-        else:
-            self.update_local_metrics()
 
         # Track which module is targeted by radar
         self._targeted_module = self.get_targeted_module_index()
@@ -525,10 +590,10 @@ class FallbackManager:
         draw.line([(x1, y1), (x2, y2)], fill=(255, 255, 255), width=4)
 
     def _draw_center_icons(self, draw, sweep, pulse, single_mode=False):
-        """Draw 6 module icons in hexagon - with 48px PNG icons.
+        """Draw 6 module icons positioned at radar sweep angles.
 
-        If single_mode=True, show one centered cycling icon with its metric.
-        Otherwise show all icons with targeted one highlighted.
+        Icons are placed at angles corresponding to where radar crosses each ring.
+        If single_mode=True, show one centered cycling icon only.
         """
         icon_r = 62  # Radius for icon placement
         icon_names = ['auth', 'wall', 'boot', 'mind', 'root', 'mesh']
@@ -539,17 +604,19 @@ class FallbackManager:
         else:
             cycle_index = -1  # Show all
 
-        # 6 icons in hexagon - static, no rotation
+        # 6 icons at radar angles - each at the angle where sweep would cross its ring
+        # Starting at top (12 o'clock = -PI/2), going clockwise
         for i, m in enumerate(MODULES):
             # In single mode, only draw the current cycling icon - CENTERED
             if single_mode and i != cycle_index:
                 continue
 
             if single_mode:
-                # Center the single icon
-                ix, iy = CENTER, CENTER
+                # Center the single icon (no metric text below)
+                ix, iy = CENTER, CENTER - 10
             else:
-                # Normal hexagon position
+                # Position at angle from top, clockwise like radar sweep
+                # AUTH at top (12h), WALL at 2h, BOOT at 4h, MIND at 6h, ROOT at 8h, MESH at 10h
                 angle = -math.pi/2 + (i / 6) * 2 * math.pi
                 ix = int(CENTER + icon_r * math.cos(angle))
                 iy = int(CENTER + icon_r * math.sin(angle))
@@ -576,13 +643,6 @@ class FallbackManager:
                 bg = (m['color'][0]//3, m['color'][1]//3, m['color'][2]//3)
                 draw.ellipse([ix - 20, iy - 20, ix + 20, iy + 20], fill=bg)
                 draw.text((ix - 8, iy - 10), m['name'][0], fill=m['color'])
-
-        # Show targeted module metrics in center (online mode)
-        if not single_mode:
-            self._draw_targeted_metrics(draw)
-        else:
-            # Show single metric value for cycling icon (offline)
-            self._draw_single_metric(draw, cycle_index)
 
     def _draw_cube(self, draw, angle, pulse, show_icons=True):
         """Draw simple 3D rotating cube with PNG icons."""

@@ -27,6 +27,7 @@ SCRIPT_DIR = Path(__file__).parent
 FIRSTBOOT_SENSOR = SCRIPT_DIR / "firstboot_sensor.py"
 FALLBACK_MANAGER = SCRIPT_DIR / "fallback" / "fallback_manager.py"
 LOGO_FALLBACK = SCRIPT_DIR / "logo_fallback.py"
+SPLASH_SCRIPT = SCRIPT_DIR / "splash.py"
 
 # State files
 FIRSTBOOT_DONE = Path("/etc/secubox/eye-remote/.firstboot_done")
@@ -107,10 +108,46 @@ class DisplayManager:
             return False
         return self._current_process.poll() is None
 
+    def _show_splash(self, state: str = "boot", duration: float = 2.0):
+        """Show fullscreen splash logo for boot/halt states."""
+        if SPLASH_SCRIPT.exists():
+            try:
+                # Run splash with state argument
+                proc = subprocess.Popen(
+                    [sys.executable, str(SPLASH_SCRIPT), state],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                )
+                time.sleep(duration)
+                proc.terminate()
+                proc.wait(timeout=1)
+            except Exception as e:
+                print(f"Splash failed: {e}")
+        else:
+            # Fallback: show logo
+            self._run_inline_logo_once()
+
+    def _run_inline_logo_once(self):
+        """Show inline logo for 2 seconds."""
+        try:
+            from PIL import Image, ImageDraw
+            img = Image.new('RGBA', (480, 480), (5, 5, 12, 255))
+            draw = ImageDraw.Draw(img)
+            draw.ellipse([140, 140, 340, 340], fill=(255, 100, 40))
+            draw.text((180, 400), "SECUBOX", fill=(150, 140, 120))
+            with open('/dev/fb0', 'wb') as fb:
+                fb.write(img.convert('RGBA').tobytes('raw', 'BGRA'))
+            time.sleep(2)
+        except Exception:
+            pass
+
     def run(self):
         """Main display manager loop."""
         print("SecuBox Eye Remote - Display Manager")
         print("=" * 40)
+
+        # Show startup splash
+        self._show_splash("boot", 2.0)
 
         while self._running:
             try:
@@ -128,6 +165,9 @@ class DisplayManager:
             except Exception as e:
                 print(f"Error in display manager: {e}")
                 time.sleep(5)
+
+        # Show shutdown splash
+        self._show_splash("halt", 2.0)
 
         # Cleanup
         self._stop_current()
