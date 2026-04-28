@@ -408,10 +408,14 @@ framebuffer_height=480
 dtoverlay=dwc2
 CONFIGEOF
 
-# cmdline.txt: load modules
+# cmdline.txt: load modules and hide cursor
 CMDLINE=$(cat "$BOOT_MNT/cmdline.txt")
 if [[ ! "$CMDLINE" == *"modules-load"* ]]; then
     sed -i 's/rootwait/rootwait modules-load=dwc2,libcomposite/' "$BOOT_MNT/cmdline.txt"
+fi
+# Hide blinking cursor on framebuffer (keep tty for console access)
+if [[ ! "$CMDLINE" == *"vt.global_cursor_default"* ]]; then
+    sed -i 's/$/ vt.global_cursor_default=0/' "$BOOT_MNT/cmdline.txt"
 fi
 
 log "config.txt configured: overlay=$HP_OVERLAY (legacy DPI mode)"
@@ -518,6 +522,10 @@ for pkg in $PACKAGES; do
     sync
 done
 echo "  Installed: $INSTALLED, Failed: $FAILED"
+
+echo "=== [3.5/5] Installing Python packages via pip ==="
+# These packages are not in Debian repos, install via pip
+pip3 install httpx fastapi uvicorn websockets --break-system-packages --no-cache-dir || echo "WARN: pip install failed"
 
 echo "=== [4/5] Enabling pigpiod ==="
 systemctl enable pigpiod || true
@@ -638,8 +646,16 @@ if [[ -f "$SCRIPT_DIR/secubox-eye-agent.service" && -f "$SCRIPT_DIR/config.toml.
     mkdir -p "$ROOT_MNT/usr/lib/secubox-eye/agent"
     mkdir -p "$ROOT_MNT/etc/secubox-eye"
 
-    # Copy agent modules (quote glob properly)
-    cp -r "$SCRIPT_DIR/agent"/*.py "$ROOT_MNT/usr/lib/secubox-eye/agent/" || err "Failed to copy agent modules"
+    # Copy agent modules (all .py files AND subdirectories)
+    cp "$SCRIPT_DIR/agent"/*.py "$ROOT_MNT/usr/lib/secubox-eye/agent/" || err "Failed to copy agent modules"
+
+    # Copy agent subdirectories (display, secubox, system, web)
+    for subdir in display secubox system web; do
+        if [[ -d "$SCRIPT_DIR/agent/$subdir" ]]; then
+            cp -r "$SCRIPT_DIR/agent/$subdir" "$ROOT_MNT/usr/lib/secubox-eye/agent/"
+            log "Copied agent/$subdir/"
+        fi
+    done
 
     # Copy example config with secure permissions
     cp "$SCRIPT_DIR/config.toml.example" "$ROOT_MNT/etc/secubox-eye/config.toml"
@@ -676,8 +692,10 @@ ln -sf /etc/systemd/system/secubox-otg-gadget.service \
     "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/"
 ln -sf /etc/systemd/system/secubox-serial-console.service \
     "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/"
-ln -sf /etc/systemd/system/secubox-fb-dashboard.service \
-    "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/"
+# NOTE: fb-dashboard is DEPRECATED - use secubox-eye-agent instead
+# The old dashboard is kept for fallback but NOT enabled by default
+# ln -sf /etc/systemd/system/secubox-fb-dashboard.service \
+#     "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/"
 
 # Network config for usb0
 mkdir -p "$ROOT_MNT/etc/network/interfaces.d"
