@@ -34,17 +34,17 @@ class FallbackMode(Enum):
     COMMUNICATING = "comm"        # Active transfer - fast dice
 
 
-# Flashy module colors
+# Flashy module colors - thinner rings, larger center
 MODULES = [
-    {'name': 'AUTH', 'color': (255, 80, 40),   'r': 214, 'glow': (255, 120, 80)},
-    {'name': 'WALL', 'color': (255, 160, 20),  'r': 188, 'glow': (255, 200, 60)},
-    {'name': 'BOOT', 'color': (255, 60, 100),  'r': 162, 'glow': (255, 100, 140)},
-    {'name': 'MIND', 'color': (120, 80, 255),  'r': 136, 'glow': (160, 120, 255)},
-    {'name': 'ROOT', 'color': (0, 255, 120),   'r': 110, 'glow': (80, 255, 160)},
-    {'name': 'MESH', 'color': (0, 180, 255),   'r': 84,  'glow': (80, 220, 255)},
+    {'name': 'AUTH', 'color': (255, 80, 40),   'r': 220, 'glow': (255, 120, 80)},
+    {'name': 'WALL', 'color': (255, 160, 20),  'r': 200, 'glow': (255, 200, 60)},
+    {'name': 'BOOT', 'color': (255, 60, 100),  'r': 180, 'glow': (255, 100, 140)},
+    {'name': 'MIND', 'color': (120, 80, 255),  'r': 160, 'glow': (160, 120, 255)},
+    {'name': 'ROOT', 'color': (0, 255, 120),   'r': 140, 'glow': (80, 255, 160)},
+    {'name': 'MESH', 'color': (0, 180, 255),   'r': 120, 'glow': (80, 220, 255)},
 ]
 
-RING_WIDTH = 22
+RING_WIDTH = 14
 
 # 3D Cube
 CUBE_VERTICES = [
@@ -68,6 +68,13 @@ LOGO_PATHS = [
     Path("/etc/secubox/eye-remote/assets/phoenix_logo.png"),
 ]
 
+# Icon paths - module icons
+ICON_PATHS = [
+    Path("/tmp/assets/icons"),
+    Path("/etc/secubox/eye-remote/assets/icons"),
+    Path(__file__).parent.parent.parent.parent / "assets" / "icons",
+]
+
 
 class FallbackManager:
     """Manages fallback display modes based on connection state."""
@@ -87,7 +94,9 @@ class FallbackManager:
         self._last_metrics = 0
         self._logo: Optional[Image.Image] = None
         self._logo_dark: Optional[Image.Image] = None
+        self._icons: dict = {}  # Module icons
         self._load_logo()
+        self._load_icons()
 
     def _load_logo(self):
         """Load and prepare logo as dark background."""
@@ -105,6 +114,26 @@ class FallbackManager:
                     return
             except Exception as e:
                 print(f"Logo load error: {e}")
+
+    def _load_icons(self):
+        """Load module icons (22px for center, 48px for cube)."""
+        icon_names = ['auth', 'wall', 'boot', 'mind', 'root', 'mesh']
+        for icon_dir in ICON_PATHS:
+            if not icon_dir.exists():
+                continue
+            try:
+                for name in icon_names:
+                    # Load 22px for center icons
+                    path_22 = icon_dir / f"{name}-22.png"
+                    if path_22.exists() and name not in self._icons:
+                        img = Image.open(path_22).convert('RGBA')
+                        self._icons[name] = img
+                        print(f"Loaded icon: {name}")
+                if len(self._icons) == 6:
+                    print("All icons loaded")
+                    return
+            except Exception as e:
+                print(f"Icon load error: {e}")
 
     @property
     def mode(self) -> FallbackMode:
@@ -380,22 +409,29 @@ class FallbackManager:
         draw.line([(x1, y1), (x2, y2)], fill=(255, 255, 255), width=4)
 
     def _draw_center_icons(self, draw, sweep, pulse):
-        """Draw 6 module icons in hexagon - clean, fast."""
-        icon_r = 38
+        """Draw 6 module icons in hexagon - with PNG icons, static position."""
+        icon_r = 55
+        icon_names = ['auth', 'wall', 'boot', 'mind', 'root', 'mesh']
 
-        # 6 icons in hexagon (slow rotation with sweep)
-        icons = ['A', 'W', 'B', 'M', 'R', 'X']
+        # 6 icons in hexagon - static, no rotation
         for i, m in enumerate(MODULES):
-            angle = -math.pi/2 + (i / 6) * 2 * math.pi + sweep * 0.2
-            ix = CENTER + icon_r * math.cos(angle)
-            iy = CENTER + icon_r * math.sin(angle)
+            angle = -math.pi/2 + (i / 6) * 2 * math.pi  # Fixed position
+            ix = int(CENTER + icon_r * math.cos(angle))
+            iy = int(CENTER + icon_r * math.sin(angle))
 
-            # Simple background
-            bg = (m['color'][0]//3, m['color'][1]//3, m['color'][2]//3)
-            draw.ellipse([ix - 10, iy - 10, ix + 10, iy + 10], fill=bg)
-
-            # Icon letter
-            draw.text((ix - 5, iy - 6), icons[i], fill=m['color'])
+            name = icon_names[i]
+            if name in self._icons:
+                # Draw PNG icon
+                icon = self._icons[name]
+                pos = (ix - 11, iy - 11)
+                # Get the image we're drawing on
+                img = draw._image
+                img.paste(icon, pos, icon)
+            else:
+                # Fallback to letter
+                bg = (m['color'][0]//3, m['color'][1]//3, m['color'][2]//3)
+                draw.ellipse([ix - 10, iy - 10, ix + 10, iy + 10], fill=bg)
+                draw.text((ix - 5, iy - 6), m['name'][0], fill=m['color'])
 
         # Time in center
         hue = (sweep / (2 * math.pi)) % 1.0
@@ -404,7 +440,7 @@ class FallbackManager:
         draw.text((CENTER - 18, CENTER - 8), time.strftime("%H:%M"), fill=accent)
 
     def _draw_cube(self, draw, angle, pulse, show_icons=True):
-        """Draw simple 3D rotating cube - clean, fast."""
+        """Draw simple 3D rotating cube with PNG icons."""
         ax = angle * 0.7
         ay = angle
         az = angle * 0.3
@@ -416,7 +452,7 @@ class FallbackManager:
                        for i, f in enumerate(CUBE_FACES)]
         face_depths.sort(key=lambda x: x[0])
 
-        icons = ['A', 'W', 'B', 'M', 'R', 'X']
+        icon_names = ['auth', 'wall', 'boot', 'mind', 'root', 'mesh']
 
         for depth, i, face in face_depths:
             points = [self.project_3d(*transformed[v], scale=28) for v in face]
@@ -436,7 +472,13 @@ class FallbackManager:
             if show_icons and depth > -0.3:
                 cx = sum(p[0] for p in points) // 4
                 cy = sum(p[1] for p in points) // 4
-                draw.text((cx - 5, cy - 6), icons[i % 6], fill=(255, 255, 255))
+                name = icon_names[i % 6]
+                if name in self._icons:
+                    icon = self._icons[name]
+                    img = draw._image
+                    img.paste(icon, (cx - 11, cy - 11), icon)
+                else:
+                    draw.text((cx - 5, cy - 6), MODULES[i % 6]['name'][0], fill=(255, 255, 255))
 
         # Edges
         for e in CUBE_EDGES:
@@ -463,7 +505,7 @@ class FallbackManager:
             draw.ellipse([CENTER - r, CENTER - r, CENTER + r, CENTER + r],
                         outline=(20, 20, 28), width=RING_WIDTH)
 
-        # Simple arc drawing - clean, no shadows
+        # Tube-style arcs - darker outside, lighter inside
         for m in MODULES:
             r = m['r']
             color = m['color']
@@ -474,63 +516,78 @@ class FallbackManager:
             start = 90 + half
             end = 90 - half
 
-            # Main arc only
+            # Outer dark edge
+            dark = (color[0]//3, color[1]//3, color[2]//3)
+            draw.arc([CENTER - r - 2, CENTER - r - 2, CENTER + r + 2, CENTER + r + 2],
+                    end, start, fill=dark, width=RING_WIDTH - 2)
+
+            # Main color
             draw.arc([CENTER - r, CENTER - r, CENTER + r, CENTER + r],
-                    end, start, fill=color, width=RING_WIDTH - 4)
+                    end, start, fill=color, width=RING_WIDTH - 6)
 
-        # Sweep line colored by metrics it crosses
-        max_r = MODULES[0]['r'] + 12
-        min_r = MODULES[-1]['r'] - 12
+            # Inner light center (tube highlight)
+            light = (min(255, color[0] + 80), min(255, color[1] + 80), min(255, color[2] + 80))
+            draw.arc([CENTER - r + 2, CENTER - r + 2, CENTER + r - 2, CENTER + r - 2],
+                    end, start, fill=light, width=4)
 
-        # Calculate blended color from all metrics values
-        total_r, total_g, total_b = 0, 0, 0
-        for m in MODULES:
-            value = self._values[m['name']] / 100.0  # 0-1
+        # Sweep line - each segment colored by the ring it crosses
+        max_r = MODULES[0]['r'] + 8
+        min_r = MODULES[-1]['r'] - 8
+
+        # Draw sweep segments per ring - each colored by that ring's metric
+        for idx, m in enumerate(MODULES):
+            r = m['r']
             color = m['color']
-            total_r += color[0] * value
-            total_g += color[1] * value
-            total_b += color[2] * value
+            value = self._values[m['name']] / 100.0
 
-        # Normalize
-        count = len(MODULES)
-        avg_r = min(255, int(total_r / count * 1.5))
-        avg_g = min(255, int(total_g / count * 1.5))
-        avg_b = min(255, int(total_b / count * 1.5))
-        blend_color = (avg_r, avg_g, avg_b)
+            # Segment bounds
+            if idx == 0:
+                r_outer = max_r
+            else:
+                r_outer = (MODULES[idx-1]['r'] + r) // 2
+            if idx == len(MODULES) - 1:
+                r_inner = min_r
+            else:
+                r_inner = (r + MODULES[idx+1]['r']) // 2
 
-        # Sweep trail with metric-blended color
-        for i in range(20):
-            offset = -0.18 * (i / 20)
-            a = sweep + offset
-            fade = 1 - i / 20
+            # Trail for this segment
+            for i in range(15):
+                offset = -0.15 * (i / 15)
+                a = sweep + offset
+                fade = 1 - i / 15
 
-            x1 = CENTER + min_r * math.sin(a)
-            y1 = CENTER - min_r * math.cos(a)
-            x2 = CENTER + max_r * math.sin(a)
-            y2 = CENTER - max_r * math.cos(a)
+                x1 = CENTER + r_inner * math.sin(a)
+                y1 = CENTER - r_inner * math.cos(a)
+                x2 = CENTER + r_outer * math.sin(a)
+                y2 = CENTER - r_outer * math.cos(a)
 
-            width = max(1, int(3 * fade))
-            draw.line([(x1, y1), (x2, y2)],
-                     fill=(int(avg_r*fade), int(avg_g*fade), int(avg_b*fade)), width=width)
+                # Color intensity based on metric value
+                intensity = 0.5 + value * 0.5
+                seg_color = (
+                    int(color[0] * fade * intensity),
+                    int(color[1] * fade * intensity),
+                    int(color[2] * fade * intensity)
+                )
+                draw.line([(x1, y1), (x2, y2)], fill=seg_color, width=2)
 
-        # Main sweep line - brighter version of blend
-        x1 = CENTER + min_r * math.sin(sweep)
-        y1 = CENTER - min_r * math.cos(sweep)
-        x2 = CENTER + max_r * math.sin(sweep)
-        y2 = CENTER - max_r * math.cos(sweep)
-        bright = (min(255, avg_r + 80), min(255, avg_g + 80), min(255, avg_b + 80))
-        draw.line([(x1, y1), (x2, y2)], fill=bright, width=3)
+            # Main sweep segment
+            x1 = CENTER + r_inner * math.sin(sweep)
+            y1 = CENTER - r_inner * math.cos(sweep)
+            x2 = CENTER + r_outer * math.sin(sweep)
+            y2 = CENTER - r_outer * math.cos(sweep)
+            bright = (min(255, color[0] + 60), min(255, color[1] + 60), min(255, color[2] + 60))
+            draw.line([(x1, y1), (x2, y2)], fill=bright, width=3)
 
-        # Sweep head dot - also blended color
-        head_color = blend_color
+        # Sweep head dot - color of outermost ring
+        head_color = MODULES[0]['color']
 
         outer_r = MODULES[0]['r']
         hx = CENTER + outer_r * math.sin(sweep)
         hy = CENTER - outer_r * math.cos(sweep)
         draw.ellipse([hx-4, hy-4, hx+4, hy+4], fill=head_color)
 
-        # Clean center hub
-        inner_r = 55
+        # Clean center hub - larger
+        inner_r = 85
         draw.ellipse([CENTER - inner_r, CENTER - inner_r,
                      CENTER + inner_r, CENTER + inner_r],
                     fill=(12, 12, 22))
