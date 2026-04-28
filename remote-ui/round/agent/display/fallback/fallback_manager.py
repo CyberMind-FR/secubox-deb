@@ -18,9 +18,10 @@ import math
 import random
 import colorsys
 import subprocess
+from pathlib import Path
 from enum import Enum
-from typing import Optional, Tuple
-from PIL import Image, ImageDraw
+from typing import Optional, Tuple, List
+from PIL import Image, ImageDraw, ImageFilter, ImageEnhance
 
 WIDTH = HEIGHT = 480
 CENTER = 240
@@ -61,6 +62,13 @@ CUBE_FACES = [
 ]
 
 
+# Logo paths
+LOGO_PATHS = [
+    Path("/tmp/assets/splash/phoenix_logo.png"),
+    Path("/etc/secubox/eye-remote/assets/phoenix_logo.png"),
+]
+
+
 class FallbackManager:
     """Manages fallback display modes based on connection state."""
 
@@ -77,6 +85,26 @@ class FallbackManager:
         self._last_cpu_total = 0
         self._metrics_interval = 1.0  # Read metrics every 1s
         self._last_metrics = 0
+        self._logo: Optional[Image.Image] = None
+        self._logo_dark: Optional[Image.Image] = None
+        self._load_logo()
+
+    def _load_logo(self):
+        """Load and prepare logo as dark background."""
+        for path in LOGO_PATHS:
+            try:
+                if path.exists():
+                    logo = Image.open(path).convert('RGBA')
+                    # Resize to fill screen
+                    logo = logo.resize((400, 400), Image.Resampling.LANCZOS)
+                    # Darken significantly for background
+                    enhancer = ImageEnhance.Brightness(logo)
+                    self._logo = logo
+                    self._logo_dark = enhancer.enhance(0.15)  # 15% brightness
+                    print(f"Logo loaded from {path}")
+                    return
+            except Exception as e:
+                print(f"Logo load error: {e}")
 
     @property
     def mode(self) -> FallbackMode:
@@ -265,25 +293,26 @@ class FallbackManager:
         self.check_connection()
 
         img = Image.new('RGBA', (WIDTH, HEIGHT), (8, 8, 12, 255))
+
+        # Add logo as dark background
+        if self._logo_dark:
+            logo_pos = (CENTER - 200, CENTER - 200)
+            img.paste(self._logo_dark, logo_pos, self._logo_dark)
+
         draw = ImageDraw.Draw(img)
 
         pulse = (math.sin(self._pulse_phase) + 1) / 2
         sweep = self.sweep_angle
         cube_ang = self.cube_angle
 
-        if self._mode == FallbackMode.OFFLINE:
-            # Original simple concentric radar for OFFLINE
-            self._draw_offline_radar(draw, sweep, pulse)
-        else:
-            # Flashy version with cube for ONLINE/CONNECTING/COMMUNICATING
-            self._draw_rings(draw, pulse)
-            self._draw_arcs(draw, pulse)
-            self._draw_sweep(draw, sweep, pulse)
+        # Radar for all modes
+        self._draw_offline_radar(draw, sweep, pulse)
 
-            if self._mode in (FallbackMode.ONLINE, FallbackMode.COMMUNICATING):
-                self._draw_cube(draw, cube_ang, pulse, show_icons=True)
-            elif self._mode == FallbackMode.CONNECTING:
-                self._draw_cube(draw, cube_ang, pulse, show_icons=False)
+        # OFFLINE: show dice, ONLINE: show icons
+        if self._mode == FallbackMode.OFFLINE:
+            self._draw_cube(draw, cube_ang, pulse, show_icons=True)
+        elif self._mode in (FallbackMode.ONLINE, FallbackMode.COMMUNICATING, FallbackMode.CONNECTING):
+            self._draw_center_icons(draw, sweep, pulse)
 
         # Mode indicator
         self._draw_mode_indicator(draw, pulse)
@@ -350,19 +379,39 @@ class FallbackManager:
         y2 = CENTER - max_r * math.cos(angle)
         draw.line([(x1, y1), (x2, y2)], fill=(255, 255, 255), width=4)
 
-    def _draw_cube(self, draw, angle, pulse, show_icons=True):
-        """Draw 3D rotating cube."""
-        inner_r = 55
-        draw.ellipse([CENTER - inner_r, CENTER - inner_r,
-                     CENTER + inner_r, CENTER + inner_r],
-                    fill=(8, 8, 15), outline=(60, 60, 80), width=2)
+    def _draw_center_icons(self, draw, sweep, pulse):
+        """Draw 6 module icons in hexagon - clean, fast."""
+        icon_r = 38
 
+        # 6 icons in hexagon (slow rotation with sweep)
+        icons = ['A', 'W', 'B', 'M', 'R', 'X']
+        for i, m in enumerate(MODULES):
+            angle = -math.pi/2 + (i / 6) * 2 * math.pi + sweep * 0.2
+            ix = CENTER + icon_r * math.cos(angle)
+            iy = CENTER + icon_r * math.sin(angle)
+
+            # Simple background
+            bg = (m['color'][0]//3, m['color'][1]//3, m['color'][2]//3)
+            draw.ellipse([ix - 10, iy - 10, ix + 10, iy + 10], fill=bg)
+
+            # Icon letter
+            draw.text((ix - 5, iy - 6), icons[i], fill=m['color'])
+
+        # Time in center
+        hue = (sweep / (2 * math.pi)) % 1.0
+        rc, gc, bc = colorsys.hsv_to_rgb(hue, 0.7, 0.9)
+        accent = (int(rc * 255), int(gc * 255), int(bc * 255))
+        draw.text((CENTER - 18, CENTER - 8), time.strftime("%H:%M"), fill=accent)
+
+    def _draw_cube(self, draw, angle, pulse, show_icons=True):
+        """Draw simple 3D rotating cube - clean, fast."""
         ax = angle * 0.7
         ay = angle
         az = angle * 0.3
 
         transformed = [self.rotate_point(*v, ax, ay, az) for v in CUBE_VERTICES]
 
+        # Sort faces by depth
         face_depths = [(sum(transformed[v][2] for v in f) / 4, i, f)
                        for i, f in enumerate(CUBE_FACES)]
         face_depths.sort(key=lambda x: x[0])
@@ -370,62 +419,51 @@ class FallbackManager:
         icons = ['A', 'W', 'B', 'M', 'R', 'X']
 
         for depth, i, face in face_depths:
-            points = [self.project_3d(*transformed[v]) for v in face]
+            points = [self.project_3d(*transformed[v], scale=28) for v in face]
             base = MODULES[i % 6]['color']
-            shade = min(1.0, max(0.3, 0.4 + (depth + 1) * 0.3))
-            fill = (
-                int(base[0] * shade * (0.8 + pulse * 0.2)),
-                int(base[1] * shade * (0.8 + pulse * 0.2)),
-                int(base[2] * shade * (0.8 + pulse * 0.2)),
-            )
-            draw.polygon(points, fill=fill, outline=(255, 255, 255, 100))
 
-            if show_icons and depth > 0:
+            # Simple depth-based shading
+            shade = min(1.2, max(0.4, 0.5 + (depth + 1) * 0.35))
+            fill = (
+                int(base[0] * shade),
+                int(base[1] * shade),
+                int(base[2] * shade)
+            )
+
+            draw.polygon(points, fill=fill, outline=(50, 50, 60))
+
+            # Icon on visible faces
+            if show_icons and depth > -0.3:
                 cx = sum(p[0] for p in points) // 4
                 cy = sum(p[1] for p in points) // 4
                 draw.text((cx - 5, cy - 6), icons[i % 6], fill=(255, 255, 255))
 
+        # Edges
         for e in CUBE_EDGES:
-            p1 = self.project_3d(*transformed[e[0]])
-            p2 = self.project_3d(*transformed[e[1]])
-            draw.line([p1, p2], fill=(255, 255, 255, 180), width=2)
+            p1 = self.project_3d(*transformed[e[0]], scale=28)
+            p2 = self.project_3d(*transformed[e[1]], scale=28)
+            draw.line([p1, p2], fill=(90, 90, 110), width=1)
 
     def _draw_offline_center(self, draw, pulse):
-        """Draw simple center when offline."""
+        """Draw simple center when offline - clean."""
         inner_r = 55
         draw.ellipse([CENTER - inner_r, CENTER - inner_r,
                      CENTER + inner_r, CENTER + inner_r],
-                    fill=(10, 10, 18), outline=(50, 50, 60), width=2)
-
-        # Pulsing ring
-        ring_alpha = int(100 + pulse * 80)
-        draw.ellipse([CENTER - 45, CENTER - 45, CENTER + 45, CENTER + 45],
-                    outline=(100, 100, 120, ring_alpha), width=2)
+                    fill=(12, 12, 22), outline=(50, 50, 60), width=2)
 
         draw.text((CENTER - 35, CENTER - 20), "SECUBOX", fill=(150, 150, 160))
         draw.text((CENTER - 28, CENTER), "OFFLINE", fill=(255, 100, 100))
         draw.text((CENTER - 25, CENTER + 20), time.strftime("%H:%M"), fill=(100, 100, 120))
 
     def _draw_offline_radar(self, draw, sweep, pulse):
-        """Draw radar with 2.5D depth effect - shadows and highlights."""
-        # Ring backgrounds with inset shadow effect
+        """Draw clean radar - no shadows, no dots, just fast and clean."""
+        # Ring backgrounds - solid colors
         for m in MODULES:
             r = m['r']
-            # Outer shadow (darker, offset down-right)
-            draw.ellipse([CENTER - r + 2, CENTER - r + 2, CENTER + r + 2, CENTER + r + 2],
-                        outline=(10, 10, 15), width=RING_WIDTH + 2)
-            # Inner highlight (lighter, offset up-left)
-            draw.ellipse([CENTER - r - 1, CENTER - r - 1, CENTER + r - 1, CENTER + r - 1],
-                        outline=(40, 40, 50), width=RING_WIDTH)
-            # Main groove
             draw.ellipse([CENTER - r, CENTER - r, CENTER + r, CENTER + r],
                         outline=(20, 20, 28), width=RING_WIDTH)
 
-        # Light source position from sweep angle
-        light_x = math.sin(sweep)
-        light_y = -math.cos(sweep)
-
-        # Balanced arcs with dynamic lighting from sweep
+        # Simple arc drawing - clean, no shadows
         for m in MODULES:
             r = m['r']
             color = m['color']
@@ -436,158 +474,91 @@ class FallbackManager:
             start = 90 + half
             end = 90 - half
 
-            # Shadow offset based on light direction (opposite of light)
-            shadow_ox = int(-light_x * 3)
-            shadow_oy = int(-light_y * 3)
-
-            # Highlight offset (toward light)
-            highlight_ox = int(light_x * 2)
-            highlight_oy = int(light_y * 2)
-
-            # Shadow layer (opposite to light source)
-            shadow = (color[0]//4, color[1]//4, color[2]//4)
-            draw.arc([CENTER - r + shadow_ox, CENTER - r + shadow_oy,
-                     CENTER + r + shadow_ox, CENTER + r + shadow_oy],
-                    end, start, fill=shadow, width=RING_WIDTH - 2)
-
-            # Main arc body
+            # Main arc only
             draw.arc([CENTER - r, CENTER - r, CENTER + r, CENTER + r],
                     end, start, fill=color, width=RING_WIDTH - 4)
 
-            # Highlight layer (toward light source)
-            highlight = (min(255, color[0] + 100), min(255, color[1] + 100), min(255, color[2] + 100))
-            draw.arc([CENTER - r + highlight_ox, CENTER - r + highlight_oy,
-                     CENTER + r + highlight_ox, CENTER + r + highlight_oy],
-                    end, start, fill=highlight, width=3)
+        # Sweep line colored by metrics it crosses
+        max_r = MODULES[0]['r'] + 12
+        min_r = MODULES[-1]['r'] - 12
 
-            # Dynamic specular at arc tips
-            for angle_deg in [90 - half, 90 + half]:
-                angle_rad = math.radians(angle_deg)
-                x = CENTER + r * math.cos(angle_rad)
-                y = CENTER - r * math.sin(angle_rad)
+        # Calculate blended color from all metrics values
+        total_r, total_g, total_b = 0, 0, 0
+        for m in MODULES:
+            value = self._values[m['name']] / 100.0  # 0-1
+            color = m['color']
+            total_r += color[0] * value
+            total_g += color[1] * value
+            total_b += color[2] * value
 
-                # Calculate how lit this point is (dot product with light direction)
-                point_x = math.cos(angle_rad)
-                point_y = -math.sin(angle_rad)
-                light_intensity = max(0, point_x * light_x + point_y * light_y)
+        # Normalize
+        count = len(MODULES)
+        avg_r = min(255, int(total_r / count * 1.5))
+        avg_g = min(255, int(total_g / count * 1.5))
+        avg_b = min(255, int(total_b / count * 1.5))
+        blend_color = (avg_r, avg_g, avg_b)
 
-                # Shadow (away from light)
-                draw.ellipse([x - shadow_ox - 2, y - shadow_oy - 2,
-                             x - shadow_ox + 4, y - shadow_oy + 4], fill=shadow)
-                # Main dot
-                draw.ellipse([x-3, y-3, x+3, y+3], fill=color)
-                # Specular highlight (stronger when facing light)
-                spec_alpha = int(100 + light_intensity * 155)
-                draw.ellipse([x + highlight_ox - 2, y + highlight_oy - 2,
-                             x + highlight_ox + 1, y + highlight_oy + 1],
-                            fill=(255, 255, 255, spec_alpha))
-
-        # Rainbow sweep line with 3D effect
-        max_r = MODULES[0]['r'] + 15
-        min_r = MODULES[-1]['r'] - 15
-
-        # Rainbow trail with shadow
-        for i in range(25):
-            offset = -0.2 * (i / 25)
+        # Sweep trail with metric-blended color
+        for i in range(20):
+            offset = -0.18 * (i / 20)
             a = sweep + offset
-            hue = ((a + offset) / (2 * math.pi)) % 1.0
-            rc, gc, bc = colorsys.hsv_to_rgb(hue, 0.9, 1.0)
-            alpha = int(220 * (1 - i / 25))
+            fade = 1 - i / 20
 
             x1 = CENTER + min_r * math.sin(a)
             y1 = CENTER - min_r * math.cos(a)
             x2 = CENTER + max_r * math.sin(a)
             y2 = CENTER - max_r * math.cos(a)
 
-            # Shadow
-            draw.line([(x1+2, y1+2), (x2+2, y2+2)], fill=(10, 10, 15, alpha//2), width=4)
-            # Main color
-            draw.line([(x1, y1), (x2, y2)], fill=(int(rc*255), int(gc*255), int(bc*255), alpha), width=3)
+            width = max(1, int(3 * fade))
+            draw.line([(x1, y1), (x2, y2)],
+                     fill=(int(avg_r*fade), int(avg_g*fade), int(avg_b*fade)), width=width)
 
-        # Main sweep line with 3D raised effect
+        # Main sweep line - brighter version of blend
         x1 = CENTER + min_r * math.sin(sweep)
         y1 = CENTER - min_r * math.cos(sweep)
         x2 = CENTER + max_r * math.sin(sweep)
         y2 = CENTER - max_r * math.cos(sweep)
-        # Shadow
-        draw.line([(x1+2, y1+2), (x2+2, y2+2)], fill=(20, 20, 30), width=6)
-        # Main white
-        draw.line([(x1, y1), (x2, y2)], fill=(220, 220, 230), width=4)
-        # Highlight
-        draw.line([(x1-1, y1-1), (x2-1, y2-1)], fill=(255, 255, 255), width=2)
+        bright = (min(255, avg_r + 80), min(255, avg_g + 80), min(255, avg_b + 80))
+        draw.line([(x1, y1), (x2, y2)], fill=bright, width=3)
 
-        # Rainbow dots at rings with 3D sphere effect
-        for m in MODULES:
-            r = m['r']
-            x = CENTER + r * math.sin(sweep)
-            y = CENTER - r * math.cos(sweep)
-            hue = (sweep / (2 * math.pi)) % 1.0
-            rc, gc, bc = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
-            base_color = (int(rc*255), int(gc*255), int(bc*255))
-            dark_color = (int(rc*128), int(gc*128), int(bc*128))
+        # Sweep head dot - also blended color
+        head_color = blend_color
 
-            # Shadow
-            draw.ellipse([x-4, y-4, x+8, y+8], fill=(10, 10, 15))
-            # Base sphere
-            draw.ellipse([x-6, y-6, x+6, y+6], fill=base_color)
-            # Highlight crescent
-            draw.ellipse([x-5, y-5, x+2, y+2], fill=(255, 255, 255, 150))
+        outer_r = MODULES[0]['r']
+        hx = CENTER + outer_r * math.sin(sweep)
+        hy = CENTER - outer_r * math.cos(sweep)
+        draw.ellipse([hx-4, hy-4, hx+4, hy+4], fill=head_color)
 
-        # Center hub with 3D inset effect
+        # Clean center hub
         inner_r = 55
-        # Outer shadow ring
-        draw.ellipse([CENTER - inner_r + 3, CENTER - inner_r + 3,
-                     CENTER + inner_r + 3, CENTER + inner_r + 3],
-                    fill=(5, 5, 10))
-        # Main hub
         draw.ellipse([CENTER - inner_r, CENTER - inner_r,
                      CENTER + inner_r, CENTER + inner_r],
-                    fill=(15, 15, 25))
-        # Inner highlight ring
-        draw.ellipse([CENTER - inner_r + 4, CENTER - inner_r + 4,
-                     CENTER + inner_r - 4, CENTER + inner_r - 4],
-                    outline=(50, 50, 65), width=2)
-        # Glossy top edge
-        draw.arc([CENTER - inner_r, CENTER - inner_r,
-                 CENTER + inner_r, CENTER + inner_r],
-                200, 340, fill=(60, 60, 80), width=3)
+                    fill=(12, 12, 22))
 
-        # Rotating accent dots with 3D
+        # Rainbow accent color from sweep
         hue = (sweep / (2 * math.pi)) % 1.0
         rc, gc, bc = colorsys.hsv_to_rgb(hue, 0.9, 0.9)
         accent = (int(rc * 255), int(gc * 255), int(bc * 255))
-        for deg in range(0, 360, 30):
-            angle = math.radians(deg) + sweep
-            x = CENTER + 42 * math.sin(angle)
-            y = CENTER - 42 * math.cos(angle)
-            # Shadow
-            draw.ellipse([x, y, x+4, y+4], fill=(10, 10, 15))
-            # Dot
-            draw.ellipse([x-2, y-2, x+2, y+2], fill=accent)
-            # Highlight
-            draw.ellipse([x-1, y-1, x+1, y+1], fill=(255, 255, 255, 100))
 
-        # Time display with shadow
-        draw.text((CENTER - 34, CENTER - 19), "SECUBOX", fill=(30, 30, 40))  # Shadow
-        draw.text((CENTER - 35, CENTER - 20), "SECUBOX", fill=(200, 200, 210))
-        draw.text((CENTER - 21, CENTER + 1), time.strftime("%H:%M"), fill=(30, 30, 40))  # Shadow
-        draw.text((CENTER - 22, CENTER), time.strftime("%H:%M"), fill=accent)
+        # SECUBOX title
+        draw.text((CENTER - 35, CENTER - 25), "SECUBOX", fill=(180, 180, 195))
 
-        # Status LED with 3D glass effect
+        # Time
+        draw.text((CENTER - 22, CENTER - 5), time.strftime("%H:%M"), fill=accent)
+
+        # Status indicator
         max_val = max(self._values.values())
         if max_val > 85:
             status_color = (255, 60, 60)
+            status_text = "CRIT"
         elif max_val > 70:
             status_color = (255, 180, 0)
+            status_text = "WARN"
         else:
             status_color = (0, 220, 100)
+            status_text = "OK"
 
-        # LED shadow
-        draw.ellipse([CENTER - 3, CENTER + 22, CENTER + 9, CENTER + 34], fill=(10, 10, 15))
-        # LED base
-        draw.ellipse([CENTER - 6, CENTER + 18, CENTER + 6, CENTER + 30], fill=status_color)
-        # LED highlight
-        draw.ellipse([CENTER - 4, CENTER + 20, CENTER + 1, CENTER + 25], fill=(255, 255, 255, 150))
+        draw.text((CENTER - 12, CENTER + 12), status_text, fill=status_color)
 
     def _draw_mode_indicator(self, draw, pulse):
         """Draw connection mode indicator."""
