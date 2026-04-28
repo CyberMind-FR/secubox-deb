@@ -116,17 +116,17 @@ class FallbackManager:
                 print(f"Logo load error: {e}")
 
     def _load_icons(self):
-        """Load module icons (22px for center, 48px for cube)."""
+        """Load module icons (48px for center and cube)."""
         icon_names = ['auth', 'wall', 'boot', 'mind', 'root', 'mesh']
         for icon_dir in ICON_PATHS:
             if not icon_dir.exists():
                 continue
             try:
                 for name in icon_names:
-                    # Load 22px for center icons
-                    path_22 = icon_dir / f"{name}-22.png"
-                    if path_22.exists() and name not in self._icons:
-                        img = Image.open(path_22).convert('RGBA')
+                    # Load 48px icons
+                    path_48 = icon_dir / f"{name}-48.png"
+                    if path_48.exists() and name not in self._icons:
+                        img = Image.open(path_48).convert('RGBA')
                         self._icons[name] = img
                         print(f"Loaded icon: {name}")
                 if len(self._icons) == 6:
@@ -337,11 +337,11 @@ class FallbackManager:
         # Radar for all modes
         self._draw_offline_radar(draw, sweep, pulse)
 
-        # OFFLINE: show dice, ONLINE: show icons
+        # OFFLINE: show single cycling icon, ONLINE: show all icons
         if self._mode == FallbackMode.OFFLINE:
-            self._draw_cube(draw, cube_ang, pulse, show_icons=True)
+            self._draw_center_icons(draw, sweep, pulse, single_mode=True)
         elif self._mode in (FallbackMode.ONLINE, FallbackMode.COMMUNICATING, FallbackMode.CONNECTING):
-            self._draw_center_icons(draw, sweep, pulse)
+            self._draw_center_icons(draw, sweep, pulse, single_mode=False)
 
         # Mode indicator
         self._draw_mode_indicator(draw, pulse)
@@ -408,36 +408,42 @@ class FallbackManager:
         y2 = CENTER - max_r * math.cos(angle)
         draw.line([(x1, y1), (x2, y2)], fill=(255, 255, 255), width=4)
 
-    def _draw_center_icons(self, draw, sweep, pulse):
-        """Draw 6 module icons in hexagon - with PNG icons, static position."""
-        icon_r = 55
+    def _draw_center_icons(self, draw, sweep, pulse, single_mode=False):
+        """Draw 6 module icons in hexagon - with 48px PNG icons, static position.
+
+        If single_mode=True, only show one icon at a time (cycling).
+        """
+        icon_r = 62  # Radius for icon placement (further from center)
         icon_names = ['auth', 'wall', 'boot', 'mind', 'root', 'mesh']
+
+        # Determine which icon to show in single mode (cycle every 2 seconds)
+        if single_mode:
+            cycle_index = int(time.time() / 2) % 6
+        else:
+            cycle_index = -1  # Show all
 
         # 6 icons in hexagon - static, no rotation
         for i, m in enumerate(MODULES):
+            # In single mode, only draw the current cycling icon
+            if single_mode and i != cycle_index:
+                continue
+
             angle = -math.pi/2 + (i / 6) * 2 * math.pi  # Fixed position
             ix = int(CENTER + icon_r * math.cos(angle))
             iy = int(CENTER + icon_r * math.sin(angle))
 
             name = icon_names[i]
             if name in self._icons:
-                # Draw PNG icon
+                # Draw 48px PNG icon (centered)
                 icon = self._icons[name]
-                pos = (ix - 11, iy - 11)
-                # Get the image we're drawing on
+                pos = (ix - 24, iy - 24)  # 48/2 = 24
                 img = draw._image
                 img.paste(icon, pos, icon)
             else:
                 # Fallback to letter
                 bg = (m['color'][0]//3, m['color'][1]//3, m['color'][2]//3)
-                draw.ellipse([ix - 10, iy - 10, ix + 10, iy + 10], fill=bg)
-                draw.text((ix - 5, iy - 6), m['name'][0], fill=m['color'])
-
-        # Time in center
-        hue = (sweep / (2 * math.pi)) % 1.0
-        rc, gc, bc = colorsys.hsv_to_rgb(hue, 0.7, 0.9)
-        accent = (int(rc * 255), int(gc * 255), int(bc * 255))
-        draw.text((CENTER - 18, CENTER - 8), time.strftime("%H:%M"), fill=accent)
+                draw.ellipse([ix - 20, iy - 20, ix + 20, iy + 20], fill=bg)
+                draw.text((ix - 8, iy - 10), m['name'][0], fill=m['color'])
 
     def _draw_cube(self, draw, angle, pulse, show_icons=True):
         """Draw simple 3D rotating cube with PNG icons."""
@@ -468,7 +474,7 @@ class FallbackManager:
 
             draw.polygon(points, fill=fill, outline=(50, 50, 60))
 
-            # Icon on visible faces
+            # Icon on visible faces (48px icons)
             if show_icons and depth > -0.3:
                 cx = sum(p[0] for p in points) // 4
                 cy = sum(p[1] for p in points) // 4
@@ -476,9 +482,9 @@ class FallbackManager:
                 if name in self._icons:
                     icon = self._icons[name]
                     img = draw._image
-                    img.paste(icon, (cx - 11, cy - 11), icon)
+                    img.paste(icon, (cx - 24, cy - 24), icon)  # 48/2 = 24
                 else:
-                    draw.text((cx - 5, cy - 6), MODULES[i % 6]['name'][0], fill=(255, 255, 255))
+                    draw.text((cx - 8, cy - 10), MODULES[i % 6]['name'][0], fill=(255, 255, 255))
 
         # Edges
         for e in CUBE_EDGES:
@@ -487,15 +493,11 @@ class FallbackManager:
             draw.line([p1, p2], fill=(90, 90, 110), width=1)
 
     def _draw_offline_center(self, draw, pulse):
-        """Draw simple center when offline - clean."""
+        """Draw simple center when offline - clean, no text."""
         inner_r = 55
         draw.ellipse([CENTER - inner_r, CENTER - inner_r,
                      CENTER + inner_r, CENTER + inner_r],
                     fill=(12, 12, 22), outline=(50, 50, 60), width=2)
-
-        draw.text((CENTER - 35, CENTER - 20), "SECUBOX", fill=(150, 150, 160))
-        draw.text((CENTER - 28, CENTER), "OFFLINE", fill=(255, 100, 100))
-        draw.text((CENTER - 25, CENTER + 20), time.strftime("%H:%M"), fill=(100, 100, 120))
 
     def _draw_offline_radar(self, draw, sweep, pulse):
         """Draw clean radar - no shadows, no dots, just fast and clean."""
@@ -592,30 +594,7 @@ class FallbackManager:
                      CENTER + inner_r, CENTER + inner_r],
                     fill=(12, 12, 22))
 
-        # Rainbow accent color from sweep
-        hue = (sweep / (2 * math.pi)) % 1.0
-        rc, gc, bc = colorsys.hsv_to_rgb(hue, 0.9, 0.9)
-        accent = (int(rc * 255), int(gc * 255), int(bc * 255))
-
-        # SECUBOX title
-        draw.text((CENTER - 35, CENTER - 25), "SECUBOX", fill=(180, 180, 195))
-
-        # Time
-        draw.text((CENTER - 22, CENTER - 5), time.strftime("%H:%M"), fill=accent)
-
-        # Status indicator
-        max_val = max(self._values.values())
-        if max_val > 85:
-            status_color = (255, 60, 60)
-            status_text = "CRIT"
-        elif max_val > 70:
-            status_color = (255, 180, 0)
-            status_text = "WARN"
-        else:
-            status_color = (0, 220, 100)
-            status_text = "OK"
-
-        draw.text((CENTER - 12, CENTER + 12), status_text, fill=status_color)
+        # Center is left clean for icons (no text)
 
     def _draw_mode_indicator(self, draw, pulse):
         """Draw connection mode indicator."""
@@ -644,6 +623,21 @@ class FallbackManager:
 def run_fallback_display():
     """Run the fallback display loop."""
     print("SecuBox Eye Remote - Fallback Display")
+
+    # Hide cursor on framebuffer console
+    try:
+        with open('/sys/class/graphics/fbcon/cursor_blink', 'w') as f:
+            f.write('0')
+    except:
+        pass
+    try:
+        # Also try via escape sequence
+        import sys
+        sys.stdout.write('\033[?25l')
+        sys.stdout.flush()
+    except:
+        pass
+
     manager = FallbackManager()
 
     try:
