@@ -465,6 +465,32 @@ set -e
 export DEBIAN_FRONTEND=noninteractive
 export LC_ALL=C
 
+echo "=== [0/5] Cleaning corrupted APT/dpkg state ==="
+# Remove corrupted apt lists
+rm -rf /var/lib/apt/lists/*
+mkdir -p /var/lib/apt/lists/partial
+rm -f /var/cache/apt/*.bin
+
+# Fix dpkg if corrupted
+if ! dpkg --configure -a 2>/dev/null; then
+    echo "Rebuilding dpkg status..."
+    # Backup and rebuild dpkg status if completely broken
+    if [ -f /var/lib/dpkg/status ]; then
+        cp /var/lib/dpkg/status /var/lib/dpkg/status.bak 2>/dev/null || true
+    fi
+    # Try to recover from available
+    if [ -f /var/lib/dpkg/available ]; then
+        cp /var/lib/dpkg/available /var/lib/dpkg/status 2>/dev/null || true
+    fi
+    dpkg --configure -a 2>/dev/null || true
+fi
+
+# Ensure dpkg status exists and is valid
+touch /var/lib/dpkg/status
+chmod 644 /var/lib/dpkg/status
+
+echo "APT/dpkg cleanup done"
+
 echo "=== [1/5] Updating APT (this may take a few minutes under QEMU) ==="
 apt-get update -q || { echo "APT update failed"; exit 1; }
 
@@ -540,50 +566,11 @@ rm -f "$ROOT_MNT/usr/sbin/policy-rc.d"
 log "Packages installed successfully"
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# INSTALL SECUBOX PACKAGES (slipstream from output/debs)
+# NOTE: Eye Remote is a standalone gadget addon - no SecuBox packages needed
+# The Eye Remote connects to SecuBox via USB OTG and displays metrics
 # ═══════════════════════════════════════════════════════════════════════════════
 
-log "Installing SecuBox packages..."
-
-# Find SecuBox .deb packages
-REPO_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
-OUTPUT_DEBS="${REPO_DIR}/output/debs"
-
-if [[ -d "$OUTPUT_DEBS" ]]; then
-    DEB_COUNT=$(find "$OUTPUT_DEBS" -maxdepth 1 -name "secubox-*.deb" 2>/dev/null | wc -l)
-
-    if [[ $DEB_COUNT -gt 0 ]]; then
-        log "Found $DEB_COUNT SecuBox packages to install"
-
-        # Copy packages to chroot
-        mkdir -p "$ROOT_MNT/tmp/secubox-debs"
-        cp "$OUTPUT_DEBS"/secubox-*.deb "$ROOT_MNT/tmp/secubox-debs/" 2>/dev/null || true
-
-        # Install secubox-core first (dependency for all)
-        if ls "$ROOT_MNT/tmp/secubox-debs/secubox-core_"*.deb >/dev/null 2>&1; then
-            log "Installing secubox-core..."
-            chroot "$ROOT_MNT" dpkg -i --force-depends /tmp/secubox-debs/secubox-core_*.deb 2>&1 | tail -5 || true
-        fi
-
-        # Install all packages
-        log "Installing remaining SecuBox packages..."
-        chroot "$ROOT_MNT" bash -c 'dpkg -i --force-depends --force-overwrite /tmp/secubox-debs/*.deb 2>&1 || true' | tail -20
-
-        # Fix broken dependencies
-        chroot "$ROOT_MNT" apt-get -f install -y --fix-broken 2>&1 | tail -5 || true
-
-        # Count installed
-        INSTALLED_COUNT=$(chroot "$ROOT_MNT" bash -c 'dpkg -l "secubox-*" 2>/dev/null | grep "^ii" | wc -l || echo 0')
-        log "Installed $INSTALLED_COUNT SecuBox packages"
-
-        # Cleanup
-        rm -rf "$ROOT_MNT/tmp/secubox-debs"
-    else
-        warn "No SecuBox packages found in $OUTPUT_DEBS"
-    fi
-else
-    warn "SecuBox debs directory not found: $OUTPUT_DEBS"
-fi
+log "Eye Remote is standalone gadget - skipping SecuBox packages"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CONFIGURE ROOT FILESYSTEM
