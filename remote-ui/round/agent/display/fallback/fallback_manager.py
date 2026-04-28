@@ -18,9 +18,12 @@ import math
 import random
 import colorsys
 import subprocess
+import json
+import urllib.request
+import urllib.error
 from pathlib import Path
 from enum import Enum
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple, List, Dict, Any
 from PIL import Image, ImageDraw, ImageFilter, ImageEnhance
 
 WIDTH = HEIGHT = 480
@@ -75,6 +78,52 @@ ICON_PATHS = [
     Path(__file__).parent.parent.parent.parent / "assets" / "icons",
 ]
 
+# API endpoints
+API_BASE_OTG = "http://10.55.0.1:8000"
+API_BASE_WIFI = "http://secubox.local:8000"
+API_METRICS = "/api/v1/system/metrics"
+API_TIMEOUT = 2
+
+# Module-specific metrics mapping
+MODULE_METRICS = {
+    'AUTH': {
+        'primary': 'cpu_percent',
+        'details': ['processes', 'threads', 'ctx_switches'],
+        'unit': '%',
+        'label': 'CPU'
+    },
+    'WALL': {
+        'primary': 'mem_percent',
+        'details': ['mem_used_mb', 'mem_total_mb', 'swap_percent'],
+        'unit': '%',
+        'label': 'MEM'
+    },
+    'BOOT': {
+        'primary': 'disk_percent',
+        'details': ['disk_used_gb', 'disk_total_gb', 'iops'],
+        'unit': '%',
+        'label': 'DISK'
+    },
+    'MIND': {
+        'primary': 'load_avg_1',
+        'details': ['load_avg_5', 'load_avg_15', 'uptime_hours'],
+        'unit': '',
+        'label': 'LOAD'
+    },
+    'ROOT': {
+        'primary': 'cpu_temp',
+        'details': ['gpu_temp', 'throttled', 'voltage'],
+        'unit': '°C',
+        'label': 'TEMP'
+    },
+    'MESH': {
+        'primary': 'wifi_rssi',
+        'details': ['rx_bytes_mb', 'tx_bytes_mb', 'connections'],
+        'unit': 'dBm',
+        'label': 'NET'
+    },
+}
+
 
 class FallbackManager:
     """Manages fallback display modes based on connection state."""
@@ -95,6 +144,11 @@ class FallbackManager:
         self._logo: Optional[Image.Image] = None
         self._logo_dark: Optional[Image.Image] = None
         self._icons: dict = {}  # Module icons
+        self._api_metrics: Dict[str, Any] = {}  # Metrics from gateway API
+        self._last_api_fetch = 0
+        self._api_fetch_interval = 2.0  # Fetch every 2s
+        self._api_base = API_BASE_OTG
+        self._targeted_module = 0  # Index of module targeted by radar
         self._load_logo()
         self._load_icons()
 
@@ -134,6 +188,60 @@ class FallbackManager:
                     return
             except Exception as e:
                 print(f"Icon load error: {e}")
+
+    def fetch_api_metrics(self):
+        """Fetch metrics from SecuBox gateway API."""
+        now = time.time()
+        if now - self._last_api_fetch < self._api_fetch_interval:
+            return
+
+        self._last_api_fetch = now
+
+        try:
+            url = f"{self._api_base}{API_METRICS}"
+            req = urllib.request.Request(url, headers={'Accept': 'application/json'})
+            with urllib.request.urlopen(req, timeout=API_TIMEOUT) as resp:
+                data = json.loads(resp.read().decode())
+                self._api_metrics = data
+
+                # Update ring values from API
+                if 'cpu_percent' in data:
+                    self._values['AUTH'] = max(5, min(95, data['cpu_percent']))
+                if 'mem_percent' in data:
+                    self._values['WALL'] = max(5, min(95, data['mem_percent']))
+                if 'disk_percent' in data:
+                    self._values['BOOT'] = max(5, min(95, data['disk_percent']))
+                if 'load_avg_1' in data:
+                    load = data['load_avg_1']
+                    load_pct = 50 + 20 * math.log10(max(0.1, min(10, load))) if load > 0 else 5
+                    self._values['MIND'] = max(5, min(95, load_pct))
+                if 'cpu_temp' in data:
+                    temp = data['cpu_temp']
+                    temp_pct = max(0, min(100, (temp - 30) / 55 * 100))
+                    self._values['ROOT'] = max(5, min(95, temp_pct))
+                if 'wifi_rssi' in data:
+                    rssi = data['wifi_rssi']
+                    # RSSI: -30 = 100%, -90 = 0%
+                    rssi_pct = max(0, min(100, (rssi + 90) / 60 * 100))
+                    self._values['MESH'] = max(5, min(95, rssi_pct))
+
+        except urllib.error.URLError:
+            # Try WiFi if OTG fails
+            if self._api_base == API_BASE_OTG:
+                self._api_base = API_BASE_WIFI
+        except Exception as e:
+            pass  # Silent fail, use local metrics
+
+    def get_targeted_module_index(self) -> int:
+        """Get index of module currently targeted by radar sweep."""
+        # Sweep angle goes from 0 to 2*PI, icons are at angles starting -PI/2
+        # Each icon spans 60 degrees (PI/3)
+        sweep = self.sweep_angle
+        # Adjust for icon starting position (-PI/2)
+        adjusted = (sweep + math.pi/2) % (2 * math.pi)
+        # Convert to index (0-5)
+        index = int(adjusted / (math.pi / 3)) % 6
+        return index
 
     @property
     def mode(self) -> FallbackMode:
@@ -318,8 +426,16 @@ class FallbackManager:
 
     def render(self) -> Image.Image:
         """Render current display based on mode."""
-        self.update_local_metrics()
         self.check_connection()
+
+        # Use API metrics when online, local metrics when offline
+        if self._mode in (FallbackMode.ONLINE, FallbackMode.COMMUNICATING):
+            self.fetch_api_metrics()
+        else:
+            self.update_local_metrics()
+
+        # Track which module is targeted by radar
+        self._targeted_module = self.get_targeted_module_index()
 
         img = Image.new('RGBA', (WIDTH, HEIGHT), (8, 8, 12, 255))
 
@@ -409,11 +525,12 @@ class FallbackManager:
         draw.line([(x1, y1), (x2, y2)], fill=(255, 255, 255), width=4)
 
     def _draw_center_icons(self, draw, sweep, pulse, single_mode=False):
-        """Draw 6 module icons in hexagon - with 48px PNG icons, static position.
+        """Draw 6 module icons in hexagon - with 48px PNG icons.
 
-        If single_mode=True, only show one icon at a time (cycling).
+        If single_mode=True, show one centered cycling icon with its metric.
+        Otherwise show all icons with targeted one highlighted.
         """
-        icon_r = 62  # Radius for icon placement (further from center)
+        icon_r = 62  # Radius for icon placement
         icon_names = ['auth', 'wall', 'boot', 'mind', 'root', 'mesh']
 
         # Determine which icon to show in single mode (cycle every 2 seconds)
@@ -424,15 +541,30 @@ class FallbackManager:
 
         # 6 icons in hexagon - static, no rotation
         for i, m in enumerate(MODULES):
-            # In single mode, only draw the current cycling icon
+            # In single mode, only draw the current cycling icon - CENTERED
             if single_mode and i != cycle_index:
                 continue
 
-            angle = -math.pi/2 + (i / 6) * 2 * math.pi  # Fixed position
-            ix = int(CENTER + icon_r * math.cos(angle))
-            iy = int(CENTER + icon_r * math.sin(angle))
+            if single_mode:
+                # Center the single icon
+                ix, iy = CENTER, CENTER
+            else:
+                # Normal hexagon position
+                angle = -math.pi/2 + (i / 6) * 2 * math.pi
+                ix = int(CENTER + icon_r * math.cos(angle))
+                iy = int(CENTER + icon_r * math.sin(angle))
 
             name = icon_names[i]
+
+            # Highlight if targeted by radar (online mode only)
+            is_targeted = (not single_mode and i == self._targeted_module)
+
+            if is_targeted:
+                # Glow ring around targeted icon
+                glow_color = m['color']
+                draw.ellipse([ix - 30, iy - 30, ix + 30, iy + 30],
+                            outline=glow_color, width=3)
+
             if name in self._icons:
                 # Draw 48px PNG icon (centered)
                 icon = self._icons[name]
@@ -444,6 +576,13 @@ class FallbackManager:
                 bg = (m['color'][0]//3, m['color'][1]//3, m['color'][2]//3)
                 draw.ellipse([ix - 20, iy - 20, ix + 20, iy + 20], fill=bg)
                 draw.text((ix - 8, iy - 10), m['name'][0], fill=m['color'])
+
+        # Show targeted module metrics in center (online mode)
+        if not single_mode:
+            self._draw_targeted_metrics(draw)
+        else:
+            # Show single metric value for cycling icon (offline)
+            self._draw_single_metric(draw, cycle_index)
 
     def _draw_cube(self, draw, angle, pulse, show_icons=True):
         """Draw simple 3D rotating cube with PNG icons."""
@@ -594,7 +733,61 @@ class FallbackManager:
                      CENTER + inner_r, CENTER + inner_r],
                     fill=(12, 12, 22))
 
-        # Center is left clean for icons (no text)
+        # Center is left clean for icons (metrics shown via _draw_targeted_metrics)
+
+    def _draw_targeted_metrics(self, draw):
+        """Draw detailed metrics for the radar-targeted module."""
+        idx = self._targeted_module
+        m = MODULES[idx]
+        name = m['name']
+        color = m['color']
+        metrics_info = MODULE_METRICS.get(name, {})
+
+        # Get primary value
+        primary_key = metrics_info.get('primary', '')
+        unit = metrics_info.get('unit', '')
+        label = metrics_info.get('label', name)
+
+        # Try API metrics first, then local values
+        if primary_key in self._api_metrics:
+            value = self._api_metrics[primary_key]
+        else:
+            value = self._values.get(name, 0)
+
+        # Format value
+        if isinstance(value, float):
+            value_str = f"{value:.1f}"
+        else:
+            value_str = str(value)
+
+        # Draw in center - small text below icons area
+        # Module label
+        draw.text((CENTER - 15, CENTER + 35), label, fill=color)
+        # Value with unit
+        val_text = f"{value_str}{unit}"
+        draw.text((CENTER - 20, CENTER + 50), val_text, fill=(200, 200, 210))
+
+    def _draw_single_metric(self, draw, idx):
+        """Draw metric for single cycling icon (offline mode)."""
+        m = MODULES[idx]
+        name = m['name']
+        color = m['color']
+        metrics_info = MODULE_METRICS.get(name, {})
+
+        label = metrics_info.get('label', name)
+        unit = metrics_info.get('unit', '')
+        value = self._values.get(name, 0)
+
+        # Format value
+        if isinstance(value, float):
+            value_str = f"{value:.1f}"
+        else:
+            value_str = str(value)
+
+        # Draw below centered icon
+        draw.text((CENTER - 15, CENTER + 35), label, fill=color)
+        val_text = f"{value_str}{unit}"
+        draw.text((CENTER - 20, CENTER + 50), val_text, fill=(180, 180, 190))
 
     def _draw_mode_indicator(self, draw, pulse):
         """Draw connection mode indicator."""
