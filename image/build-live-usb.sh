@@ -1064,8 +1064,8 @@ log "4/8 Installing ALL SecuBox packages..."
 log "Installing Python dependencies..."
 chroot "${ROOTFS}" apt-get install -y -q python3-pip python3-venv 2>/dev/null || true
 chroot "${ROOTFS}" pip3 install --break-system-packages -q \
-  fastapi uvicorn[standard] python-jose[cryptography] httpx \
-  jinja2 tomli toml pyroute2 psutil 'pydantic[email]' \
+  'fastapi>=0.100' 'uvicorn[standard]>=0.25' 'pydantic[email]>=2.0' \
+  python-jose[cryptography] httpx jinja2 tomli toml pyroute2 psutil \
   aiofiles aiosqlite authlib cryptography pillow zmq pyjwt \
   python-multipart websockets netifaces email-validator textual \
   2>&1 | tail -10 || true
@@ -1249,8 +1249,8 @@ if [[ $CACHE_COUNT -gt 0 ]] || [[ $OUTPUT_COUNT -gt 0 ]]; then
   # ── Pre-install Python dependencies via pip (not in Debian repos) ───────
   log "Pre-installing Python dependencies for SecuBox modules..."
   chroot "${ROOTFS}" pip3 install --break-system-packages \
-    fastapi uvicorn[standard] httpx python-jose aiofiles aiosqlite \
-    pydantic toml jinja2 psutil netifaces 2>/dev/null && \
+    'fastapi>=0.100' 'uvicorn[standard]>=0.25' 'pydantic>=2.0' \
+    httpx python-jose aiofiles aiosqlite toml jinja2 psutil netifaces 2>/dev/null && \
     ok "Python dependencies installed via pip" || warn "Some pip packages failed (may be installed by apt later)"
 
   # Install core first (dependency for all)
