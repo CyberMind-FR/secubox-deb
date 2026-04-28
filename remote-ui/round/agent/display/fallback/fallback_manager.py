@@ -717,16 +717,25 @@ class FallbackManager:
             draw.ellipse([CENTER - r, CENTER - r, CENTER + r, CENTER + r],
                         outline=(20, 20, 28), width=RING_WIDTH)
 
-        # Tube-style arcs - darker outside, lighter inside
-        for m in MODULES:
+        # Tube-style arcs - each arc centered at its icon direction
+        # Module index to icon position (swapped green/purple and red/yellow)
+        module_to_pos = [1, 0, 2, 3, 5, 4]
+
+        for idx, m in enumerate(MODULES):
             r = m['r']
             color = m['color']
             value = self._values[m['name']]
 
+            # Get icon angle for this module
+            icon_pos = module_to_pos[idx]
+            icon_angle = (icon_pos / 6) * 2 * math.pi - math.pi/3
+            # Convert to PIL degrees (counter-clockwise from 3 o'clock)
+            center_deg = -icon_angle * 180 / math.pi
+
             arc_extent = (value / 100) * 360
             half = arc_extent / 2
-            start = 90 + half
-            end = 90 - half
+            start = center_deg + half
+            end = center_deg - half
 
             # Outer dark edge
             dark = (color[0]//3, color[1]//3, color[2]//3)
