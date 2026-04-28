@@ -12,6 +12,7 @@ CyberMind - https://cybermind.fr
 Author: Gerald Kerma <gandalf@gk2.net>
 """
 
+import os
 import time
 import math
 import random
@@ -66,12 +67,16 @@ class FallbackManager:
     def __init__(self):
         self._start_time = time.time()
         self._mode = FallbackMode.OFFLINE
-        self._values = {m['name']: 50 + random.random() * 30 for m in MODULES}
+        self._values = {m['name']: 50 for m in MODULES}
         self._pulse_phase = 0
         self._last_check = 0
         self._check_interval = 5.0  # Check connection every 5s
         self._comm_active = False
         self._comm_start = 0
+        self._last_cpu_idle = 0
+        self._last_cpu_total = 0
+        self._metrics_interval = 1.0  # Read metrics every 1s
+        self._last_metrics = 0
 
     @property
     def mode(self) -> FallbackMode:
@@ -147,12 +152,96 @@ class FallbackManager:
         return elapsed * self.cube_speed * 2 * math.pi
 
     def update_local_metrics(self):
-        """Update simulated local metrics."""
+        """Update real Pi Zero metrics."""
         self._pulse_phase += 0.12
-        for m in MODULES:
-            name = m['name']
-            delta = (random.random() - 0.5) * 2
-            self._values[name] = max(20, min(95, self._values[name] + delta))
+
+        now = time.time()
+        if now - self._last_metrics < self._metrics_interval:
+            return
+        self._last_metrics = now
+
+        try:
+            # CPU usage from /proc/stat
+            with open('/proc/stat', 'r') as f:
+                line = f.readline()
+                parts = line.split()
+                idle = int(parts[4])
+                total = sum(int(p) for p in parts[1:8])
+
+                if self._last_cpu_total > 0:
+                    diff_idle = idle - self._last_cpu_idle
+                    diff_total = total - self._last_cpu_total
+                    if diff_total > 0:
+                        cpu_pct = 100 * (1 - diff_idle / diff_total)
+                        self._values['AUTH'] = max(5, min(95, cpu_pct))
+
+                self._last_cpu_idle = idle
+                self._last_cpu_total = total
+
+            # Memory from /proc/meminfo
+            with open('/proc/meminfo', 'r') as f:
+                meminfo = {}
+                for line in f:
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        meminfo[parts[0].rstrip(':')] = int(parts[1])
+
+                total = meminfo.get('MemTotal', 1)
+                avail = meminfo.get('MemAvailable', meminfo.get('MemFree', total))
+                mem_pct = 100 * (1 - avail / total)
+                self._values['WALL'] = max(5, min(95, mem_pct))
+
+            # Disk from os.statvfs
+            import os
+            st = os.statvfs('/')
+            disk_pct = 100 * (1 - st.f_bavail / st.f_blocks)
+            self._values['BOOT'] = max(5, min(95, disk_pct))
+
+            # Load average - logarithmic scale for spikes
+            load1, _, _ = os.getloadavg()
+            # Pi Zero has 1 core: load 0.1=10%, 1.0=50%, 10.0=90% (log scale)
+            if load1 > 0:
+                load_pct = 50 + 20 * math.log10(max(0.1, min(10, load1)))
+            else:
+                load_pct = 5
+            self._values['MIND'] = max(5, min(95, load_pct))
+
+            # CPU temperature
+            try:
+                with open('/sys/class/thermal/thermal_zone0/temp', 'r') as f:
+                    temp_c = int(f.read().strip()) / 1000
+                    # Scale: 30°C=0%, 85°C=100%
+                    temp_pct = max(0, min(100, (temp_c - 30) / 55 * 100))
+                    self._values['ROOT'] = max(5, min(95, temp_pct))
+            except:
+                pass
+
+            # Network - logarithmic scale for traffic variation
+            try:
+                with open('/proc/net/dev', 'r') as f:
+                    for line in f:
+                        if 'usb' in line:
+                            parts = line.split()
+                            rx = int(parts[1])
+                            tx = int(parts[9])
+                            total_bytes = rx + tx
+                            # Log scale: 1KB=20%, 1MB=50%, 1GB=80%
+                            if total_bytes > 0:
+                                net_pct = 10 * math.log10(max(1, total_bytes / 100))
+                                net_pct = max(5, min(95, net_pct))
+                            else:
+                                net_pct = 5
+                            self._values['MESH'] = net_pct
+                            break
+            except:
+                pass
+
+        except Exception as e:
+            # Fallback to small random drift if metrics fail
+            for m in MODULES:
+                name = m['name']
+                delta = (random.random() - 0.5) * 2
+                self._values[name] = max(20, min(95, self._values[name] + delta))
 
     def rotate_point(self, x, y, z, ax, ay, az) -> Tuple[float, float, float]:
         """Rotate 3D point."""
@@ -175,28 +264,26 @@ class FallbackManager:
         self.update_local_metrics()
         self.check_connection()
 
-        img = Image.new('RGBA', (WIDTH, HEIGHT), (5, 5, 10, 255))
+        img = Image.new('RGBA', (WIDTH, HEIGHT), (8, 8, 12, 255))
         draw = ImageDraw.Draw(img)
 
         pulse = (math.sin(self._pulse_phase) + 1) / 2
         sweep = self.sweep_angle
         cube_ang = self.cube_angle
 
-        # Always draw rings (local metrics as fallback)
-        self._draw_rings(draw, pulse)
-        self._draw_arcs(draw, pulse)
-        self._draw_sweep(draw, sweep, pulse)
-
-        # Draw cube based on mode
-        if self._mode in (FallbackMode.ONLINE, FallbackMode.COMMUNICATING):
-            # Full cube with icons when connected
-            self._draw_cube(draw, cube_ang, pulse, show_icons=True)
-        elif self._mode == FallbackMode.CONNECTING:
-            # Spinning cube when connecting
-            self._draw_cube(draw, cube_ang, pulse, show_icons=False)
+        if self._mode == FallbackMode.OFFLINE:
+            # Original simple concentric radar for OFFLINE
+            self._draw_offline_radar(draw, sweep, pulse)
         else:
-            # Simple center for offline
-            self._draw_offline_center(draw, pulse)
+            # Flashy version with cube for ONLINE/CONNECTING/COMMUNICATING
+            self._draw_rings(draw, pulse)
+            self._draw_arcs(draw, pulse)
+            self._draw_sweep(draw, sweep, pulse)
+
+            if self._mode in (FallbackMode.ONLINE, FallbackMode.COMMUNICATING):
+                self._draw_cube(draw, cube_ang, pulse, show_icons=True)
+            elif self._mode == FallbackMode.CONNECTING:
+                self._draw_cube(draw, cube_ang, pulse, show_icons=False)
 
         # Mode indicator
         self._draw_mode_indicator(draw, pulse)
@@ -318,6 +405,189 @@ class FallbackManager:
         draw.text((CENTER - 35, CENTER - 20), "SECUBOX", fill=(150, 150, 160))
         draw.text((CENTER - 28, CENTER), "OFFLINE", fill=(255, 100, 100))
         draw.text((CENTER - 25, CENTER + 20), time.strftime("%H:%M"), fill=(100, 100, 120))
+
+    def _draw_offline_radar(self, draw, sweep, pulse):
+        """Draw radar with 2.5D depth effect - shadows and highlights."""
+        # Ring backgrounds with inset shadow effect
+        for m in MODULES:
+            r = m['r']
+            # Outer shadow (darker, offset down-right)
+            draw.ellipse([CENTER - r + 2, CENTER - r + 2, CENTER + r + 2, CENTER + r + 2],
+                        outline=(10, 10, 15), width=RING_WIDTH + 2)
+            # Inner highlight (lighter, offset up-left)
+            draw.ellipse([CENTER - r - 1, CENTER - r - 1, CENTER + r - 1, CENTER + r - 1],
+                        outline=(40, 40, 50), width=RING_WIDTH)
+            # Main groove
+            draw.ellipse([CENTER - r, CENTER - r, CENTER + r, CENTER + r],
+                        outline=(20, 20, 28), width=RING_WIDTH)
+
+        # Light source position from sweep angle
+        light_x = math.sin(sweep)
+        light_y = -math.cos(sweep)
+
+        # Balanced arcs with dynamic lighting from sweep
+        for m in MODULES:
+            r = m['r']
+            color = m['color']
+            value = self._values[m['name']]
+
+            arc_extent = (value / 100) * 360
+            half = arc_extent / 2
+            start = 90 + half
+            end = 90 - half
+
+            # Shadow offset based on light direction (opposite of light)
+            shadow_ox = int(-light_x * 3)
+            shadow_oy = int(-light_y * 3)
+
+            # Highlight offset (toward light)
+            highlight_ox = int(light_x * 2)
+            highlight_oy = int(light_y * 2)
+
+            # Shadow layer (opposite to light source)
+            shadow = (color[0]//4, color[1]//4, color[2]//4)
+            draw.arc([CENTER - r + shadow_ox, CENTER - r + shadow_oy,
+                     CENTER + r + shadow_ox, CENTER + r + shadow_oy],
+                    end, start, fill=shadow, width=RING_WIDTH - 2)
+
+            # Main arc body
+            draw.arc([CENTER - r, CENTER - r, CENTER + r, CENTER + r],
+                    end, start, fill=color, width=RING_WIDTH - 4)
+
+            # Highlight layer (toward light source)
+            highlight = (min(255, color[0] + 100), min(255, color[1] + 100), min(255, color[2] + 100))
+            draw.arc([CENTER - r + highlight_ox, CENTER - r + highlight_oy,
+                     CENTER + r + highlight_ox, CENTER + r + highlight_oy],
+                    end, start, fill=highlight, width=3)
+
+            # Dynamic specular at arc tips
+            for angle_deg in [90 - half, 90 + half]:
+                angle_rad = math.radians(angle_deg)
+                x = CENTER + r * math.cos(angle_rad)
+                y = CENTER - r * math.sin(angle_rad)
+
+                # Calculate how lit this point is (dot product with light direction)
+                point_x = math.cos(angle_rad)
+                point_y = -math.sin(angle_rad)
+                light_intensity = max(0, point_x * light_x + point_y * light_y)
+
+                # Shadow (away from light)
+                draw.ellipse([x - shadow_ox - 2, y - shadow_oy - 2,
+                             x - shadow_ox + 4, y - shadow_oy + 4], fill=shadow)
+                # Main dot
+                draw.ellipse([x-3, y-3, x+3, y+3], fill=color)
+                # Specular highlight (stronger when facing light)
+                spec_alpha = int(100 + light_intensity * 155)
+                draw.ellipse([x + highlight_ox - 2, y + highlight_oy - 2,
+                             x + highlight_ox + 1, y + highlight_oy + 1],
+                            fill=(255, 255, 255, spec_alpha))
+
+        # Rainbow sweep line with 3D effect
+        max_r = MODULES[0]['r'] + 15
+        min_r = MODULES[-1]['r'] - 15
+
+        # Rainbow trail with shadow
+        for i in range(25):
+            offset = -0.2 * (i / 25)
+            a = sweep + offset
+            hue = ((a + offset) / (2 * math.pi)) % 1.0
+            rc, gc, bc = colorsys.hsv_to_rgb(hue, 0.9, 1.0)
+            alpha = int(220 * (1 - i / 25))
+
+            x1 = CENTER + min_r * math.sin(a)
+            y1 = CENTER - min_r * math.cos(a)
+            x2 = CENTER + max_r * math.sin(a)
+            y2 = CENTER - max_r * math.cos(a)
+
+            # Shadow
+            draw.line([(x1+2, y1+2), (x2+2, y2+2)], fill=(10, 10, 15, alpha//2), width=4)
+            # Main color
+            draw.line([(x1, y1), (x2, y2)], fill=(int(rc*255), int(gc*255), int(bc*255), alpha), width=3)
+
+        # Main sweep line with 3D raised effect
+        x1 = CENTER + min_r * math.sin(sweep)
+        y1 = CENTER - min_r * math.cos(sweep)
+        x2 = CENTER + max_r * math.sin(sweep)
+        y2 = CENTER - max_r * math.cos(sweep)
+        # Shadow
+        draw.line([(x1+2, y1+2), (x2+2, y2+2)], fill=(20, 20, 30), width=6)
+        # Main white
+        draw.line([(x1, y1), (x2, y2)], fill=(220, 220, 230), width=4)
+        # Highlight
+        draw.line([(x1-1, y1-1), (x2-1, y2-1)], fill=(255, 255, 255), width=2)
+
+        # Rainbow dots at rings with 3D sphere effect
+        for m in MODULES:
+            r = m['r']
+            x = CENTER + r * math.sin(sweep)
+            y = CENTER - r * math.cos(sweep)
+            hue = (sweep / (2 * math.pi)) % 1.0
+            rc, gc, bc = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
+            base_color = (int(rc*255), int(gc*255), int(bc*255))
+            dark_color = (int(rc*128), int(gc*128), int(bc*128))
+
+            # Shadow
+            draw.ellipse([x-4, y-4, x+8, y+8], fill=(10, 10, 15))
+            # Base sphere
+            draw.ellipse([x-6, y-6, x+6, y+6], fill=base_color)
+            # Highlight crescent
+            draw.ellipse([x-5, y-5, x+2, y+2], fill=(255, 255, 255, 150))
+
+        # Center hub with 3D inset effect
+        inner_r = 55
+        # Outer shadow ring
+        draw.ellipse([CENTER - inner_r + 3, CENTER - inner_r + 3,
+                     CENTER + inner_r + 3, CENTER + inner_r + 3],
+                    fill=(5, 5, 10))
+        # Main hub
+        draw.ellipse([CENTER - inner_r, CENTER - inner_r,
+                     CENTER + inner_r, CENTER + inner_r],
+                    fill=(15, 15, 25))
+        # Inner highlight ring
+        draw.ellipse([CENTER - inner_r + 4, CENTER - inner_r + 4,
+                     CENTER + inner_r - 4, CENTER + inner_r - 4],
+                    outline=(50, 50, 65), width=2)
+        # Glossy top edge
+        draw.arc([CENTER - inner_r, CENTER - inner_r,
+                 CENTER + inner_r, CENTER + inner_r],
+                200, 340, fill=(60, 60, 80), width=3)
+
+        # Rotating accent dots with 3D
+        hue = (sweep / (2 * math.pi)) % 1.0
+        rc, gc, bc = colorsys.hsv_to_rgb(hue, 0.9, 0.9)
+        accent = (int(rc * 255), int(gc * 255), int(bc * 255))
+        for deg in range(0, 360, 30):
+            angle = math.radians(deg) + sweep
+            x = CENTER + 42 * math.sin(angle)
+            y = CENTER - 42 * math.cos(angle)
+            # Shadow
+            draw.ellipse([x, y, x+4, y+4], fill=(10, 10, 15))
+            # Dot
+            draw.ellipse([x-2, y-2, x+2, y+2], fill=accent)
+            # Highlight
+            draw.ellipse([x-1, y-1, x+1, y+1], fill=(255, 255, 255, 100))
+
+        # Time display with shadow
+        draw.text((CENTER - 34, CENTER - 19), "SECUBOX", fill=(30, 30, 40))  # Shadow
+        draw.text((CENTER - 35, CENTER - 20), "SECUBOX", fill=(200, 200, 210))
+        draw.text((CENTER - 21, CENTER + 1), time.strftime("%H:%M"), fill=(30, 30, 40))  # Shadow
+        draw.text((CENTER - 22, CENTER), time.strftime("%H:%M"), fill=accent)
+
+        # Status LED with 3D glass effect
+        max_val = max(self._values.values())
+        if max_val > 85:
+            status_color = (255, 60, 60)
+        elif max_val > 70:
+            status_color = (255, 180, 0)
+        else:
+            status_color = (0, 220, 100)
+
+        # LED shadow
+        draw.ellipse([CENTER - 3, CENTER + 22, CENTER + 9, CENTER + 34], fill=(10, 10, 15))
+        # LED base
+        draw.ellipse([CENTER - 6, CENTER + 18, CENTER + 6, CENTER + 30], fill=status_color)
+        # LED highlight
+        draw.ellipse([CENTER - 4, CENTER + 20, CENTER + 1, CENTER + 25], fill=(255, 255, 255, 150))
 
     def _draw_mode_indicator(self, draw, pulse):
         """Draw connection mode indicator."""
