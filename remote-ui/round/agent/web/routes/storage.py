@@ -74,7 +74,7 @@ class ExportRequest(BaseModel):
 class ImportRequest(BaseModel):
     """Config import request."""
     modules: Optional[List[str]] = None
-    validate: bool = True
+    do_validate: bool = True  # renamed from 'validate' to avoid Pydantic conflict
     dry_run: bool = False
 
 
@@ -297,7 +297,7 @@ async def import_configs(request: ImportRequest):
 
     result = await config_sync.import_configs(
         modules=request.modules,
-        validate=request.validate,
+        validate=request.do_validate,
         dry_run=request.dry_run,
     )
 
