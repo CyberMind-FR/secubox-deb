@@ -852,70 +852,74 @@ class FallbackManager:
         y2 = CENTER - max_r * math.cos(angle)
         draw.line([(x1, y1), (x2, y2)], fill=(255, 255, 255), width=4)
 
-    def _draw_metric_symbol(self, draw, cx, cy, symbol, color, size=20):
-        """Draw a metric symbol (CPU, MEM, DISK, etc.) at position.
+    def _draw_metric_symbol(self, draw, cx, cy, symbol, color, size=18):
+        """Draw a metric symbol (CPU, MEM, DISK, etc.) centered in targeting circle.
 
-        Symbols are drawn using PIL primitives for crisp rendering.
+        All symbols fit within a 24px radius circle (the targeting glow is 30px).
         """
-        r = size
         bright = (min(255, color[0] + 100), min(255, color[1] + 100), min(255, color[2] + 100))
         dark = (color[0] // 2, color[1] // 2, color[2] // 2)
 
         if symbol == 'cpu':
-            # CPU chip: square with pins
-            s = r - 4
+            # CPU chip: square with pins - fits in 24px
+            s = 10
             draw.rectangle([cx - s, cy - s, cx + s, cy + s], outline=bright, width=2)
-            draw.rectangle([cx - s + 4, cy - s + 4, cx + s - 4, cy + s - 4], fill=color)
-            # Pins
+            draw.rectangle([cx - s + 3, cy - s + 3, cx + s - 3, cy + s - 3], fill=color)
+            # Pins (shorter)
             for i in range(-1, 2):
-                draw.line([(cx + i * 6, cy - s - 4), (cx + i * 6, cy - s)], fill=bright, width=2)
-                draw.line([(cx + i * 6, cy + s), (cx + i * 6, cy + s + 4)], fill=bright, width=2)
-                draw.line([(cx - s - 4, cy + i * 6), (cx - s, cy + i * 6)], fill=bright, width=2)
-                draw.line([(cx + s, cy + i * 6), (cx + s + 4, cy + i * 6)], fill=bright, width=2)
+                draw.line([(cx + i * 5, cy - s - 3), (cx + i * 5, cy - s)], fill=bright, width=2)
+                draw.line([(cx + i * 5, cy + s), (cx + i * 5, cy + s + 3)], fill=bright, width=2)
+                draw.line([(cx - s - 3, cy + i * 5), (cx - s, cy + i * 5)], fill=bright, width=2)
+                draw.line([(cx + s, cy + i * 5), (cx + s + 3, cy + i * 5)], fill=bright, width=2)
 
         elif symbol == 'mem':
-            # RAM stick: rectangle with notch
-            w, h = r + 8, r - 2
+            # RAM stick: compact rectangle - fits in 24px
+            w, h = 18, 8
             draw.rectangle([cx - w, cy - h, cx + w, cy + h], outline=bright, width=2)
             # Chips on RAM
-            for i in range(-2, 3):
-                draw.rectangle([cx + i * 7 - 2, cy - h + 3, cx + i * 7 + 2, cy + h - 3], fill=color)
+            for i in range(-3, 4):
+                draw.rectangle([cx + i * 5 - 1, cy - h + 2, cx + i * 5 + 1, cy + h - 2], fill=color)
 
         elif symbol == 'disk':
-            # Hard drive: cylinder shape
-            draw.ellipse([cx - r, cy - r // 2, cx + r, cy + r // 2], outline=bright, width=2)
-            draw.rectangle([cx - r, cy - 2, cx + r, cy + r], outline=bright, width=2)
-            draw.ellipse([cx - r, cy + r // 2, cx + r, cy + r + r // 2], fill=dark, outline=bright, width=2)
-            # Platter line
-            draw.arc([cx - r + 4, cy + 2, cx + r - 4, cy + r - 2], 0, 180, fill=color, width=2)
+            # Hard drive: simple disk icon - fits in 24px
+            r = 12
+            draw.ellipse([cx - r, cy - r, cx + r, cy + r], outline=bright, width=2)
+            draw.ellipse([cx - 4, cy - 4, cx + 4, cy + 4], fill=color)
+            # Spindle arm
+            draw.line([(cx + 2, cy), (cx + r - 3, cy - r + 5)], fill=bright, width=2)
 
         elif symbol == 'load':
-            # Gauge/meter: semicircle with needle
-            draw.arc([cx - r, cy - r // 2, cx + r, cy + r], 180, 0, fill=bright, width=3)
+            # Gauge/meter: semicircle with needle - fits in 24px
+            r = 14
+            draw.arc([cx - r, cy - r + 4, cx + r, cy + r + 4], 180, 0, fill=bright, width=3)
             # Needle pointing based on load value
             value = self._values.get('MIND', 50) / 100
             needle_angle = math.pi * (1 - value)
-            nx = cx + int((r - 4) * math.cos(needle_angle))
-            ny = cy + r // 4 - int((r - 4) * math.sin(needle_angle))
-            draw.line([(cx, cy + r // 4), (nx, ny)], fill=color, width=3)
-            draw.ellipse([cx - 4, cy + r // 4 - 4, cx + 4, cy + r // 4 + 4], fill=bright)
+            nx = cx + int((r - 2) * math.cos(needle_angle))
+            ny = cy + 4 - int((r - 2) * math.sin(needle_angle))
+            draw.line([(cx, cy + 4), (nx, ny)], fill=color, width=2)
+            draw.ellipse([cx - 3, cy + 1, cx + 3, cy + 7], fill=bright)
 
         elif symbol == 'temp':
-            # Thermometer: bulb with tube
-            draw.ellipse([cx - 6, cy + r - 8, cx + 6, cy + r + 4], fill=color, outline=bright, width=2)
-            draw.rectangle([cx - 3, cy - r, cx + 3, cy + r - 6], fill=dark, outline=bright, width=1)
+            # Thermometer: compact - fits in 24px
+            # Bulb at bottom
+            draw.ellipse([cx - 5, cy + 6, cx + 5, cy + 16], fill=color, outline=bright, width=1)
+            # Tube
+            draw.rectangle([cx - 3, cy - 14, cx + 3, cy + 8], fill=dark, outline=bright, width=1)
             # Mercury level based on temp
             value = self._values.get('ROOT', 50) / 100
-            level = int((r * 1.5) * value)
-            draw.rectangle([cx - 2, cy + r - 8 - level, cx + 2, cy + r - 8], fill=color)
+            level = int(18 * value)
+            draw.rectangle([cx - 2, cy + 6 - level, cx + 2, cy + 6], fill=color)
 
         elif symbol == 'wifi':
-            # WiFi signal: arcs
+            # WiFi signal: compact arcs - fits in 24px
             for i in range(3):
-                arc_r = 6 + i * 7
-                draw.arc([cx - arc_r, cy - arc_r, cx + arc_r, cy + arc_r],
-                        225, 315, fill=bright if i < 2 else color, width=3)
-            draw.ellipse([cx - 3, cy + r - 6, cx + 3, cy + r], fill=bright)
+                arc_r = 5 + i * 6
+                alpha = 255 if i < int(3 * self._values.get('MESH', 50) / 100) + 1 else 80
+                c = (bright[0], bright[1], bright[2]) if alpha > 100 else dark
+                draw.arc([cx - arc_r, cy - arc_r + 6, cx + arc_r, cy + arc_r + 6],
+                        225, 315, fill=c, width=2)
+            draw.ellipse([cx - 2, cy + 10, cx + 2, cy + 14], fill=bright)
 
     def _draw_center_icons(self, draw, sweep, pulse, single_mode=False):
         """Draw 6 module icons in circle, color ordered.
@@ -971,9 +975,10 @@ class FallbackManager:
                             outline=glow_color, width=3)
 
                 # Draw metric symbol instead of module icon when targeted
+                # Symbol fits inside the 30px glow circle
                 metrics_info = MODULE_METRICS.get(m['name'], {})
                 symbol = metrics_info.get('symbol', 'cpu')
-                self._draw_metric_symbol(draw, ix, iy, symbol, m['color'], size=22)
+                self._draw_metric_symbol(draw, ix, iy, symbol, m['color'])
 
             elif name in self._icons:
                 # Draw 48px PNG icon (centered) - normal state
