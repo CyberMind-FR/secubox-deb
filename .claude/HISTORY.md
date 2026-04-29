@@ -3,6 +3,36 @@
 
 ---
 
+## 2026-04-29
+
+### Session 73 — Eye Remote Interactive v1.9.0
+
+**Feature:** Multi-mode USB gadget display system for Eye Remote
+
+**Files Modified:**
+- `remote-ui/round/fb_dashboard.py` — Added mode detection, TTY terminal, flash progress, auth QR
+- `packages/secubox-hub/debian/secubox-hub.service` — Changed to TCP binding (port 8001)
+- `packages/secubox-hub/nginx/hub.conf` — Changed to TCP proxy
+- `common/nginx/modules.d/hub.conf` — Changed to TCP proxy
+
+**New Classes:**
+- `SerialTerminal` — Read serial console output for TTY mode
+- `FlashProgress` — Track USB mass storage transfer progress
+- `AuthState` — QR code generation for backup authentication
+
+**New Functions:**
+- `get_gadget_mode()` — Read current USB gadget mode from /etc/secubox/gadget-mode
+- `draw_terminal()` — Render serial terminal output on round display
+- `draw_flash_progress()` — Render flash transfer progress bar
+- `draw_auth_mode()` — Render QR code authentication screen
+
+**Fixes:**
+- Hub service changed from Unix socket to TCP (VM compatibility)
+- FAQ and wiki updated with troubleshooting for common issues
+- Kiosk launcher fixed for VM sandbox issues (--no-sandbox flag)
+
+---
+
 ## 2026-04-28
 
 ### Session 72 — v2.1.1 Release: Build and API Fixes

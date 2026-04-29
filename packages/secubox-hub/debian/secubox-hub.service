@@ -14,8 +14,9 @@ WorkingDirectory=/usr/lib/secubox/hub
 ExecStartPre=+/bin/mkdir -p /run/secubox
 ExecStartPre=+/bin/chown secubox:secubox /run/secubox
 ExecStartPre=+/bin/chmod 775 /run/secubox
+# TCP binding for VM compatibility (Unix socket has issues in some VMs)
 ExecStart=/usr/bin/python3 -m uvicorn api.main:app \
-    --uds /run/secubox/hub.sock \
+    --host 127.0.0.1 --port 8001 \
     --log-level warning
 Restart=on-failure
 RestartSec=5
