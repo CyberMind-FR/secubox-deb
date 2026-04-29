@@ -120,37 +120,43 @@ MODULE_METRICS = {
         'primary': 'cpu_percent',
         'details': ['processes', 'threads', 'ctx_switches'],
         'unit': '%',
-        'label': 'CPU'
+        'label': 'CPU',
+        'symbol': 'cpu',  # CPU chip symbol
     },
     'WALL': {
         'primary': 'mem_percent',
         'details': ['mem_used_mb', 'mem_total_mb', 'swap_percent'],
         'unit': '%',
-        'label': 'MEM'
+        'label': 'MEM',
+        'symbol': 'mem',  # RAM stick symbol
     },
     'BOOT': {
         'primary': 'disk_percent',
         'details': ['disk_used_gb', 'disk_total_gb', 'iops'],
         'unit': '%',
-        'label': 'DISK'
+        'label': 'DISK',
+        'symbol': 'disk',  # Hard drive symbol
     },
     'MIND': {
         'primary': 'load_avg_1',
         'details': ['load_avg_5', 'load_avg_15', 'uptime_hours'],
         'unit': '',
-        'label': 'LOAD'
+        'label': 'LOAD',
+        'symbol': 'load',  # Gauge/meter symbol
     },
     'ROOT': {
         'primary': 'cpu_temp',
         'details': ['gpu_temp', 'throttled', 'voltage'],
         'unit': '°C',
-        'label': 'TEMP'
+        'label': 'TEMP',
+        'symbol': 'temp',  # Thermometer symbol
     },
     'MESH': {
         'primary': 'wifi_rssi',
         'details': ['rx_bytes_mb', 'tx_bytes_mb', 'connections'],
         'unit': 'dBm',
-        'label': 'NET'
+        'label': 'NET',
+        'symbol': 'wifi',  # WiFi signal symbol
     },
 }
 
@@ -846,6 +852,71 @@ class FallbackManager:
         y2 = CENTER - max_r * math.cos(angle)
         draw.line([(x1, y1), (x2, y2)], fill=(255, 255, 255), width=4)
 
+    def _draw_metric_symbol(self, draw, cx, cy, symbol, color, size=20):
+        """Draw a metric symbol (CPU, MEM, DISK, etc.) at position.
+
+        Symbols are drawn using PIL primitives for crisp rendering.
+        """
+        r = size
+        bright = (min(255, color[0] + 100), min(255, color[1] + 100), min(255, color[2] + 100))
+        dark = (color[0] // 2, color[1] // 2, color[2] // 2)
+
+        if symbol == 'cpu':
+            # CPU chip: square with pins
+            s = r - 4
+            draw.rectangle([cx - s, cy - s, cx + s, cy + s], outline=bright, width=2)
+            draw.rectangle([cx - s + 4, cy - s + 4, cx + s - 4, cy + s - 4], fill=color)
+            # Pins
+            for i in range(-1, 2):
+                draw.line([(cx + i * 6, cy - s - 4), (cx + i * 6, cy - s)], fill=bright, width=2)
+                draw.line([(cx + i * 6, cy + s), (cx + i * 6, cy + s + 4)], fill=bright, width=2)
+                draw.line([(cx - s - 4, cy + i * 6), (cx - s, cy + i * 6)], fill=bright, width=2)
+                draw.line([(cx + s, cy + i * 6), (cx + s + 4, cy + i * 6)], fill=bright, width=2)
+
+        elif symbol == 'mem':
+            # RAM stick: rectangle with notch
+            w, h = r + 8, r - 2
+            draw.rectangle([cx - w, cy - h, cx + w, cy + h], outline=bright, width=2)
+            # Chips on RAM
+            for i in range(-2, 3):
+                draw.rectangle([cx + i * 7 - 2, cy - h + 3, cx + i * 7 + 2, cy + h - 3], fill=color)
+
+        elif symbol == 'disk':
+            # Hard drive: cylinder shape
+            draw.ellipse([cx - r, cy - r // 2, cx + r, cy + r // 2], outline=bright, width=2)
+            draw.rectangle([cx - r, cy - 2, cx + r, cy + r], outline=bright, width=2)
+            draw.ellipse([cx - r, cy + r // 2, cx + r, cy + r + r // 2], fill=dark, outline=bright, width=2)
+            # Platter line
+            draw.arc([cx - r + 4, cy + 2, cx + r - 4, cy + r - 2], 0, 180, fill=color, width=2)
+
+        elif symbol == 'load':
+            # Gauge/meter: semicircle with needle
+            draw.arc([cx - r, cy - r // 2, cx + r, cy + r], 180, 0, fill=bright, width=3)
+            # Needle pointing based on load value
+            value = self._values.get('MIND', 50) / 100
+            needle_angle = math.pi * (1 - value)
+            nx = cx + int((r - 4) * math.cos(needle_angle))
+            ny = cy + r // 4 - int((r - 4) * math.sin(needle_angle))
+            draw.line([(cx, cy + r // 4), (nx, ny)], fill=color, width=3)
+            draw.ellipse([cx - 4, cy + r // 4 - 4, cx + 4, cy + r // 4 + 4], fill=bright)
+
+        elif symbol == 'temp':
+            # Thermometer: bulb with tube
+            draw.ellipse([cx - 6, cy + r - 8, cx + 6, cy + r + 4], fill=color, outline=bright, width=2)
+            draw.rectangle([cx - 3, cy - r, cx + 3, cy + r - 6], fill=dark, outline=bright, width=1)
+            # Mercury level based on temp
+            value = self._values.get('ROOT', 50) / 100
+            level = int((r * 1.5) * value)
+            draw.rectangle([cx - 2, cy + r - 8 - level, cx + 2, cy + r - 8], fill=color)
+
+        elif symbol == 'wifi':
+            # WiFi signal: arcs
+            for i in range(3):
+                arc_r = 6 + i * 7
+                draw.arc([cx - arc_r, cy - arc_r, cx + arc_r, cy + arc_r],
+                        225, 315, fill=bright if i < 2 else color, width=3)
+            draw.ellipse([cx - 3, cy + r - 6, cx + 3, cy + r], fill=bright)
+
     def _draw_center_icons(self, draw, sweep, pulse, single_mode=False):
         """Draw 6 module icons in circle, color ordered.
 
@@ -853,6 +924,7 @@ class FallbackManager:
         Maps to: AUTH, WALL, BOOT, ROOT, MESH, MIND
 
         If single_mode=True, show one centered cycling icon only.
+        When radar targets a module, show metric symbol instead of module icon.
         """
         icon_r = 62  # Radius for icon placement
 
@@ -898,8 +970,13 @@ class FallbackManager:
                 draw.ellipse([ix - 30, iy - 30, ix + 30, iy + 30],
                             outline=glow_color, width=3)
 
-            if name in self._icons:
-                # Draw 48px PNG icon (centered)
+                # Draw metric symbol instead of module icon when targeted
+                metrics_info = MODULE_METRICS.get(m['name'], {})
+                symbol = metrics_info.get('symbol', 'cpu')
+                self._draw_metric_symbol(draw, ix, iy, symbol, m['color'], size=22)
+
+            elif name in self._icons:
+                # Draw 48px PNG icon (centered) - normal state
                 icon = self._icons[name]
                 pos = (ix - 24, iy - 24)  # 48/2 = 24
                 img = draw._image
