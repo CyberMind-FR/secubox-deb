@@ -16,7 +16,7 @@ from secubox_core.kiosk import (
     get_interface_classification,
     check_interface_carrier,
 )
-import subprocess, json, psutil
+import subprocess, json, psutil, socket, time
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 import platform
@@ -236,6 +236,34 @@ async def info():
         "uptime_formatted": uptime_str,
         "uptime_seconds": uptime_secs,
         "local_time": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+    }
+
+
+@router.get("/metrics")
+async def metrics():
+    """System metrics for Eye Remote dashboard (public).
+
+    Returns metrics in format expected by Eye Remote display.
+    """
+    cpu = psutil.cpu_percent(interval=0.1)
+    mem = psutil.virtual_memory()
+    disk = psutil.disk_usage("/")
+    temp = 0.0
+    try:
+        with open("/sys/class/thermal/thermal_zone0/temp") as f:
+            temp = float(f.read().strip()) / 1000.0
+    except Exception:
+        pass
+    return {
+        "cpu_percent": cpu,
+        "mem_percent": mem.percent,
+        "disk_percent": disk.percent,
+        "load_avg_1": psutil.getloadavg()[0],
+        "cpu_temp": temp,
+        "uptime_seconds": int(time.time() - psutil.boot_time()),
+        "hostname": socket.gethostname(),
+        "memory_used": mem.used,
+        "memory_total": mem.total,
     }
 
 

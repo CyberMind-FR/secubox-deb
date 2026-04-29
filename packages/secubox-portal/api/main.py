@@ -22,7 +22,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from fastapi import FastAPI, APIRouter, Depends, HTTPException, Response, Cookie, Request
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, validator
 import jwt
 
 from secubox_core.config import get_config
@@ -109,9 +109,9 @@ class WebhookConfig(BaseModel):
     secret: Optional[str] = None
     enabled: bool = True
 
-    @field_validator("url")
-    @classmethod
-    def validate_url(cls, v: str) -> str:
+    @validator("url")
+    def validate_url(cls, v):
+        """Validate URL format (Pydantic v1 compatible)."""
         if not v.startswith(("http://", "https://")):
             raise ValueError("URL must start with http:// or https://")
         return v
