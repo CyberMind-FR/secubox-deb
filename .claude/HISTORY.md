@@ -30,6 +30,9 @@
 - Hub service changed from Unix socket to TCP (VM compatibility)
 - FAQ and wiki updated with troubleshooting for common issues
 - Kiosk launcher fixed for VM sandbox issues (--no-sandbox flag)
+- Added public menu endpoint (`/api/v1/hub/public/menu`) for WebUI sidebar
+- Fixed Pydantic 1.x compatibility in auth.py for require_jwt dependency
+- Fixed "Failed to load menu: Invalid menu data" WebUI error
 
 ---
 
