@@ -1,9 +1,9 @@
-# Smart-Strip SecuBox v1.1 — Fiche technique
+# Smart-Strip SecuBox v1.2 — Fiche technique
 
 > **Référence** SBX-STR-01
-> **Version** 1.1
+> **Version** 1.2
 > **Statut** Spec ready for fabrication
-> **Date** 2026-04-27
+> **Date** 2026-04-29
 > **Auteur** CyberMind
 > **Fichier** `docs/hardware/smart-strip-v1.1.md`
 
@@ -23,6 +23,21 @@ Le module présente **deux interfaces physiques sur un PCB unique** :
 
 Le mode actif est **auto-détecté** au boot par présence VBUS. Aucun jumper
 manuel n'est requis.
+
+### Intégration Eye Remote
+
+Le Smart-Strip partage la **charte graphique unifiée** avec l'Eye Remote
+Dashboard (HyperPixel 2.1 Round). Les 6 modules utilisent les mêmes couleurs
+et la même sémantique métrique (voir `docs/design/graphic-charter.md`).
+
+| Smart-Strip | Eye Remote | Métrique système |
+|-------------|------------|------------------|
+| LED AUTH (#C04E24) | Anneau CPU | cpu_percent |
+| LED WALL (#9A6010) | Anneau MEM | mem_percent |
+| LED BOOT (#803018) | Anneau DISK | disk_percent |
+| LED MIND (#3D35A0) | Anneau LOAD | load_avg_1 |
+| LED ROOT (#0A5840) | Anneau TEMP | cpu_temp |
+| LED MESH (#104A88) | Anneau WiFi | wifi_rssi |
 
 ### Compatibilité hôte
 
@@ -140,17 +155,33 @@ SK6812 5050 (top-emit standard) ou SK6812 SIDE (encombrement non-standard).**
 
 ## 3. Mapping fonctionnel
 
-| Index | Icône | Rôle système | Charte | Comportement standard |
-|---|---|---|---|---|
-| 0 | AUTH | État VPN / chiffrement | `#C04E24` | Fixe = OK · Flash = erreur · Pulse = handshake en cours |
-| 1 | WALL | Pare-feu (nftables / CrowdSec) | `#9A6010` | Flash rouge = paquet rejeté · Vert pâle = autorisé |
-| 2 | BOOT | Système / OS | `#803018` | Battement de cœur 1 Hz |
-| 3 | MIND | Charge IA / CPU | `#3D35A0` | Intensité ∝ charge processeur |
-| 4 | ROOT | Privilèges / intégrité | `#0A5840` | Blanc = secure · Orange = mode debug |
-| 5 | MESH | Maillage réseau (WireGuard, Tailscale) | `#104A88` | Bleu = connecté · Éteint = isolé |
+| Index | Module | Couleur RGB | Métrique système | Comportement standard |
+|-------|--------|-------------|------------------|----------------------|
+| 0 | AUTH | `#C04E24` (192, 78, 36) | CPU % | Fixe = VPN OK · Flash = erreur · Pulse = handshake |
+| 1 | WALL | `#9A6010` (154, 96, 16) | MEM % | Flash rouge = rejet · Vert pâle = autorisé |
+| 2 | BOOT | `#803018` (128, 48, 24) | DISK % | Battement de cœur 1 Hz |
+| 3 | MIND | `#3D35A0` (61, 53, 160) | LOAD avg | Intensité ∝ charge processeur |
+| 4 | ROOT | `#0A5840` (10, 88, 64) | TEMP °C | Blanc = secure · Orange = debug |
+| 5 | MESH | `#104A88` (16, 74, 136) | WiFi dBm | Bleu = connecté · Éteint = isolé |
 
 L'ordre AUTH → WALL → BOOT → MIND → ROOT → MESH suit le **chemin
 Hamiltonien** défini dans la charte SecuBox.
+
+### Seuils d'alerte (cohérents avec Eye Remote)
+
+| Module | Métrique | Nominal | Warning | Critical |
+|--------|----------|---------|---------|----------|
+| AUTH | CPU % | < 70% | 70-85% | > 85% |
+| WALL | MEM % | < 75% | 75-90% | > 90% |
+| BOOT | DISK % | < 80% | 80-95% | > 95% |
+| MIND | LOAD | < 2.0 | 2.0-4.0 | > 4.0 |
+| ROOT | TEMP °C | < 65°C | 65-75°C | > 75°C |
+| MESH | WiFi dBm | > -60 | -60/-70 | < -70 |
+
+En mode **métrique automatique**, l'intensité LED reflète la valeur :
+- **Nominal** : couleur module à 50% intensité
+- **Warning** : couleur module à 80% + pulse lent
+- **Critical** : flash rapide alternant rouge + couleur module
 
 ---
 
@@ -542,9 +573,10 @@ Critères de rejet : tout test 1-7 KO. Taux cible < 2% rebut au lot.
 | Version | Date | Changements |
 |---|---|---|
 | v1.0 | 2026-04-25 | Spec initiale, USB-only, RP2040, charge transfer software |
-| **v1.1** | 2026-04-27 | RP2350 + AT42QT2120 dédié, dual-mode USB+I²C auto-detect, BNF parser stricte, ESD niveau 4, secure boot, registres I²C complets, driver Python unifié |
+| v1.1 | 2026-04-27 | RP2350 + AT42QT2120 dédié, dual-mode USB+I²C auto-detect, BNF parser stricte, ESD niveau 4, secure boot, registres I²C complets, driver Python unifié |
+| **v1.2** | 2026-04-29 | Synchronisation avec Eye Remote Dashboard, seuils d'alerte unifiés, mapping métrique système cohérent avec graphic-charter.md |
 
 ---
 
-*CyberMind — SBX-STR-01 v1.1*
+*CyberMind — SBX-STR-01 v1.2*
 *Notre-Dame-du-Cruet, Savoie, France*

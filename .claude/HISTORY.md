@@ -5,6 +5,40 @@
 
 ## 2026-04-29
 
+### Session 75 — Eye Remote Recovery System + Design Charter Update
+
+**Feature:** Board recovery via serial boot protocols + unified design charter
+
+**Files Created:**
+- `remote-ui/round/agent/recovery/protocols/mvebu64boot.py` — 64-bit Marvell boot protocol
+- `remote-ui/round/agent/recovery/protocols/xmodem.py` — XMODEM-CRC file transfer (prior session)
+- `remote-ui/round/agent/recovery/protocols/kwboot.py` — Armada 3720 serial boot (prior session)
+- `remote-ui/round/agent/recovery/recovery_controller.py` — Main recovery controller (prior session)
+
+**Files Modified:**
+- `remote-ui/round/agent/recovery/protocols/__init__.py` — Added Mvebu64Protocol export
+- `remote-ui/round/agent/recovery/__init__.py` — Added RecoveryMethod + Mvebu64Protocol
+- `docs/design/graphic-charter.md` — Updated to v2.0, synced with Eye Remote metrics
+- `docs/hardware/smart-strip-v1.1.md` — Updated to v1.2, synced with graphic charter
+
+**Recovery Protocols:**
+| Protocol | SoC | Use Case |
+|----------|-----|----------|
+| kwboot | Armada 3720 | ESPRESSObin serial boot |
+| mvebu64boot | Armada 7040/8040 | MOCHAbin 64-bit serial boot |
+| XMODEM-CRC | All | File transfer to BootROM |
+
+**Design Charter Updates:**
+- Module → Metric mapping table for Eye Remote dashboard
+- Alert thresholds unified across Eye Remote and Smart-Strip
+- RGB values for SK6812 LEDs documented
+- Pod layout diagram for round display
+- Transport badge colors (OTG=ROOT, WiFi=MESH, SIM=gray)
+
+**GitHub Issue #34:** Confirmed fixed (closed with resolution comment)
+
+---
+
 ### Session 74 — Migration Data Saver v1.0.0
 
 **Feature:** OpenWrt → SecuBox-DEB migration tools
