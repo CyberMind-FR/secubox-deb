@@ -764,14 +764,8 @@ class FallbackManager:
         # OFFLINE: show single cycling icon, ONLINE: show all icons
         if self._mode == FallbackMode.OFFLINE:
             self._draw_center_icons(draw, sweep, pulse, single_mode=True)
-            # Show metric for cycling icon
-            cycle_index = int(time.time() / 2) % 6
-            self._draw_single_metric(draw, cycle_index)
         elif self._mode in (FallbackMode.ONLINE, FallbackMode.COMMUNICATING, FallbackMode.CONNECTING):
             self._draw_center_icons(draw, sweep, pulse, single_mode=False)
-            # Show targeted module details when online
-            if self._mode == FallbackMode.ONLINE:
-                self._draw_targeted_metrics(draw)
 
         # Mode indicator
         self._draw_mode_indicator(draw, pulse)
