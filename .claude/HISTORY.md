@@ -5,6 +5,45 @@
 
 ## 2026-04-29
 
+### Session 78 — Migration Tools v2.1.0 + Services Module
+
+**Feature:** Extended migration with 19 modules covering all SecuBox services
+
+**Files Modified:**
+- `scripts/migration-export.sh` — Added dns, databases, scripts, services modules (v2.1.0)
+- `scripts/migration-import.sh` — Added import functions for all new modules (v2.1.0)
+
+**New Migration Modules:**
+| Module | Export | Import |
+|--------|--------|--------|
+| `dns` | BIND zones, Vortex RPZ, Unbound, AdGuard, Pi-hole | BIND/Unbound configs, zones |
+| `databases` | SQLite, MySQL, PostgreSQL, Redis dumps | DB restoration with permissions |
+| `scripts` | Custom scripts, systemd units, cron jobs, rc.local | Scripts, systemd service creation |
+| `services` | All /srv/* directories (50+ services) | Service restoration, Docker compose |
+
+**Services Module Captures:**
+- Streamlit instances (`/srv/streamlit/*`)
+- Metablogizer/Metabolizer apps
+- Gitea/Git repositories with full history
+- Docker compose configurations
+- LXC container configs
+- mitmproxy, config-vault, saas-relay
+
+**Enhanced HAProxy Export:**
+- conf.d modular architecture
+- Certificate management
+- Lua scripts and maps
+- mitmproxy route integration
+
+**Total Modules:** 19 (network, firewall, wireguard, crowdsec, dhcp, haproxy, nginx, certs, content, vhosts, users, state, git, media, mail, accounts, dns, databases, scripts, services)
+
+**Eye Remote Deployment:**
+- Deployed agent to ESPRESSObin at `/opt/eye-remote/`
+- Fixed `secubox-status` to handle VLAN interfaces (`wan@eth0`)
+- Restored WAN connectivity after migration via `/etc/netplan/10-wan.yaml`
+
+---
+
 ### Session 77 — Migration Tools Extended (v2.0.0)
 
 **Feature:** Extended migration to include Git, Media, Email, and User Accounts
