@@ -13,19 +13,39 @@ Author: Gerald Kerma <gandalf@gk2.net>
 """
 
 import os
+import sys
 import time
 import math
 import random
 import colorsys
 import subprocess
 import json
+import asyncio
+import threading
 import urllib.request
 import urllib.error
-import threading
 from pathlib import Path
 from enum import Enum
 from typing import Optional, Tuple, List, Dict, Any
 from PIL import Image, ImageDraw, ImageFilter, ImageEnhance
+
+# Import metrics fetcher (with fallback if not available)
+try:
+    from ..api.metrics_fetcher import (
+        MetricsFetcher, SecuBoxMetrics, ConnectionState,
+        get_fetcher, fetch_metrics
+    )
+    HAS_METRICS_FETCHER = True
+except ImportError:
+    HAS_METRICS_FETCHER = False
+    ConnectionState = None
+
+# Import gadget status renderer
+try:
+    from ..gadget_status import render_gadget_status_bar, render_gadget_indicator
+    HAS_GADGET_STATUS = True
+except ImportError:
+    HAS_GADGET_STATUS = False
 
 WIDTH = HEIGHT = 480
 CENTER = 240
@@ -163,6 +183,21 @@ class FallbackManager:
         self._fetch_lock = threading.Lock()
         self._fetching = False
 
+        # Real metrics fetcher (async)
+        self._metrics_fetcher: Optional['MetricsFetcher'] = None
+        self._secubox_metrics: Optional['SecuBoxMetrics'] = None
+        self._module_details: Dict[str, Dict[str, Any]] = {}
+        self._using_real_metrics = False
+        self._async_loop: Optional[asyncio.AbstractEventLoop] = None
+
+        # Initialize metrics fetcher if available
+        if HAS_METRICS_FETCHER:
+            try:
+                self._metrics_fetcher = get_fetcher()
+                print("Real metrics fetcher initialized")
+            except Exception as e:
+                print(f"Metrics fetcher init failed: {e}")
+
         self._load_logo()
         self._load_icons()
 
@@ -279,9 +314,109 @@ class FallbackManager:
         self._last_api_fetch = now
         self._fetching = True
 
-        # Start background thread for API fetch
-        self._fetch_thread = threading.Thread(target=self._fetch_api_worker, daemon=True)
+        # Use new metrics fetcher if available
+        if self._metrics_fetcher is not None:
+            self._fetch_thread = threading.Thread(
+                target=self._fetch_real_metrics_worker, daemon=True
+            )
+        else:
+            # Fallback to legacy worker
+            self._fetch_thread = threading.Thread(
+                target=self._fetch_api_worker, daemon=True
+            )
         self._fetch_thread.start()
+
+    def _fetch_real_metrics_worker(self):
+        """Background worker using MetricsFetcher for real SecuBox metrics."""
+        if self._metrics_fetcher is None:
+            self._fetching = False
+            return
+
+        try:
+            # Create event loop for this thread
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+            try:
+                # Fetch all metrics from SecuBox
+                metrics = loop.run_until_complete(self._metrics_fetcher.fetch_all())
+
+                # Check connection state (with proper type guard)
+                if ConnectionState is not None and metrics.connection != ConnectionState.DISCONNECTED:
+                    # Get ring values and module details
+                    ring_values = self._metrics_fetcher.get_ring_values()
+                    module_details = self._metrics_fetcher.get_module_details()
+
+                    with self._fetch_lock:
+                        # Update ring values
+                        for name, value in ring_values.items():
+                            self._values[name] = float(value)
+
+                        # Store full metrics and details
+                        self._secubox_metrics = metrics
+                        self._module_details = module_details
+                        self._using_real_metrics = True
+
+                        # Update API metrics dict for compatibility
+                        self._api_metrics = {
+                            'cpu_percent': metrics.cpu_percent,
+                            'mem_percent': metrics.mem_percent,
+                            'disk_percent': metrics.disk_percent,
+                            'load_avg_1': metrics.load_avg_1,
+                            'cpu_temp': metrics.cpu_temp,
+                            'wifi_rssi': metrics.wifi_rssi,
+                            'hostname': metrics.hostname,
+                            'uptime_seconds': metrics.uptime_seconds,
+                            'connection': metrics.connection.value,
+                            'latency_ms': metrics.api_latency_ms,
+                        }
+
+                        # Update mode based on connection
+                        if ConnectionState is not None:
+                            if metrics.connection == ConnectionState.OTG:
+                                self._mode = FallbackMode.ONLINE
+                                self._api_base = API_BASE_OTG
+                            elif metrics.connection == ConnectionState.WIFI:
+                                self._mode = FallbackMode.ONLINE
+                                self._api_base = API_BASE_WIFI
+                else:
+                    self._using_real_metrics = False
+
+            finally:
+                loop.close()
+
+        except Exception as e:
+            print(f"Real metrics fetch error: {e}")
+            self._using_real_metrics = False
+
+        self._fetching = False
+
+    def get_module_detail(self, module_name: str) -> Dict[str, Any]:
+        """Get detailed metrics for a specific module."""
+        if self._module_details and module_name in self._module_details:
+            return self._module_details[module_name]
+
+        # Fallback to basic info from values
+        value = self._values.get(module_name, 0)
+        metrics_info = MODULE_METRICS.get(module_name, {})
+        return {
+            'primary': f"{value:.1f}",
+            'label': metrics_info.get('label', module_name),
+            'details': [],
+            'real_data': False,
+        }
+
+    @property
+    def using_real_metrics(self) -> bool:
+        """Check if currently using real metrics from SecuBox."""
+        return self._using_real_metrics
+
+    @property
+    def connection_type(self) -> str:
+        """Get current connection type string."""
+        if self._secubox_metrics:
+            return self._secubox_metrics.connection.value
+        return "disconnected"
 
     def get_targeted_module_index(self) -> int:
         """Get index of module currently targeted by radar sweep.
@@ -524,11 +659,31 @@ class FallbackManager:
         # OFFLINE: show single cycling icon, ONLINE: show all icons
         if self._mode == FallbackMode.OFFLINE:
             self._draw_center_icons(draw, sweep, pulse, single_mode=True)
+            # Show metric for cycling icon
+            cycle_index = int(time.time() / 2) % 6
+            self._draw_single_metric(draw, cycle_index)
         elif self._mode in (FallbackMode.ONLINE, FallbackMode.COMMUNICATING, FallbackMode.CONNECTING):
             self._draw_center_icons(draw, sweep, pulse, single_mode=False)
+            # Show targeted module details when online
+            if self._mode == FallbackMode.ONLINE:
+                self._draw_targeted_metrics(draw)
 
         # Mode indicator
         self._draw_mode_indicator(draw, pulse)
+
+        # Gadget status bar (bottom of screen) - only when online via OTG
+        if HAS_GADGET_STATUS and self._mode in (FallbackMode.ONLINE, FallbackMode.COMMUNICATING):
+            try:
+                render_gadget_status_bar(draw, y=455)
+            except Exception:
+                pass  # Silently ignore rendering errors
+
+        # Gadget indicator (corner badge) - show when any gadget mode is active
+        elif HAS_GADGET_STATUS:
+            try:
+                render_gadget_indicator(draw, x=WIDTH - 30, y=HEIGHT - 25)
+            except Exception:
+                pass
 
         return img
 
@@ -823,31 +978,27 @@ class FallbackManager:
         m = MODULES[idx]
         name = m['name']
         color = m['color']
-        metrics_info = MODULE_METRICS.get(name, {})
 
-        # Get primary value
-        primary_key = metrics_info.get('primary', '')
-        unit = metrics_info.get('unit', '')
-        label = metrics_info.get('label', name)
+        # Get module details (real or fallback)
+        details = self.get_module_detail(name)
 
-        # Try API metrics first, then local values
-        if primary_key in self._api_metrics:
-            value = self._api_metrics[primary_key]
-        else:
-            value = self._values.get(name, 0)
+        primary = details.get('primary', '?')
+        label = details.get('label', name)
+        extra_details = details.get('details', [])
+        has_real = details.get('real_data', False)
 
-        # Format value
-        if isinstance(value, float):
-            value_str = f"{value:.1f}"
-        else:
-            value_str = str(value)
+        # Draw in center - below icons area
+        # Module label with real data indicator
+        label_color = color if has_real else (color[0]//2, color[1]//2, color[2]//2)
+        draw.text((CENTER - 15, CENTER + 35), label, fill=label_color)
 
-        # Draw in center - small text below icons area
-        # Module label
-        draw.text((CENTER - 15, CENTER + 35), label, fill=color)
-        # Value with unit
-        val_text = f"{value_str}{unit}"
-        draw.text((CENTER - 20, CENTER + 50), val_text, fill=(200, 200, 210))
+        # Primary value
+        draw.text((CENTER - 25, CENTER + 50), str(primary), fill=(200, 200, 210))
+
+        # Show first extra detail if available (small text)
+        if extra_details and len(extra_details) > 0:
+            detail_text = extra_details[0][:20]  # Truncate
+            draw.text((CENTER - 40, CENTER + 65), detail_text, fill=(120, 120, 130))
 
     def _draw_single_metric(self, draw, idx):
         """Draw metric for single cycling icon (offline mode)."""
@@ -872,27 +1023,48 @@ class FallbackManager:
         draw.text((CENTER - 20, CENTER + 50), val_text, fill=(180, 180, 190))
 
     def _draw_mode_indicator(self, draw, pulse):
-        """Draw connection mode indicator."""
+        """Draw connection mode indicator with real/local data source."""
         mode_colors = {
             FallbackMode.OFFLINE: (255, 80, 80),
             FallbackMode.CONNECTING: (255, 200, 0),
             FallbackMode.ONLINE: (0, 255, 100),
             FallbackMode.COMMUNICATING: (0, 200, 255),
         }
-        mode_labels = {
-            FallbackMode.OFFLINE: "OFFLINE",
-            FallbackMode.CONNECTING: "CONNECTING",
-            FallbackMode.ONLINE: "ONLINE",
-            FallbackMode.COMMUNICATING: "SYNC",
-        }
 
         color = mode_colors.get(self._mode, (100, 100, 100))
-        label = mode_labels.get(self._mode, "?")
 
-        # Pulsing dot
+        # Build label with connection type and data source
+        if self._mode == FallbackMode.ONLINE:
+            conn_type = self.connection_type.upper()
+            if self._using_real_metrics:
+                label = f"{conn_type}"
+                # Add latency if available
+                if self._secubox_metrics and self._secubox_metrics.api_latency_ms > 0:
+                    label += f" {self._secubox_metrics.api_latency_ms:.0f}ms"
+            else:
+                label = f"{conn_type} LOCAL"
+        elif self._mode == FallbackMode.OFFLINE:
+            label = "LOCAL"
+        elif self._mode == FallbackMode.CONNECTING:
+            label = "CONNECTING"
+        else:
+            label = "SYNC"
+
+        # Pulsing dot - different color if using real data
+        if self._using_real_metrics:
+            # Cyan dot for real metrics
+            dot_color = (0, 220, 255)
+        else:
+            dot_color = color
+
         size = int(5 + pulse * 3)
-        draw.ellipse([15 - size, 15 - size, 15 + size, 15 + size], fill=color)
+        draw.ellipse([15 - size, 15 - size, 15 + size, 15 + size], fill=dot_color)
         draw.text((25, 10), label, fill=color)
+
+        # Show hostname if connected
+        if self._mode == FallbackMode.ONLINE and self._secubox_metrics:
+            hostname = self._secubox_metrics.hostname[:12]  # Truncate
+            draw.text((WIDTH - 100, 10), hostname, fill=(150, 150, 160))
 
 
 def run_fallback_display():
