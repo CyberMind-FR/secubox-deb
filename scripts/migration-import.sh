@@ -15,7 +15,7 @@ set -euo pipefail
 
 readonly SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 readonly REPO="$(cd "$SCRIPT_DIR/.." && pwd)"
-readonly VERSION="2.0.0"
+readonly VERSION="2.1.0"
 readonly TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 
 # ── Colors ──
@@ -55,6 +55,9 @@ MEDIA_DIR="/srv/media"
 MAIL_DIR="/var/vmail"
 POSTFIX_DIR="/etc/postfix"
 DOVECOT_DIR="/etc/dovecot"
+BIND_DIR="/etc/bind"
+UNBOUND_DIR="/etc/unbound"
+ADGUARD_DIR="/etc/adguardhome"
 
 usage() {
   cat <<EOF
@@ -76,7 +79,7 @@ Options:
   -m, --modules LIST    Comma-separated module list (default: all)
                         Available: network,firewall,wireguard,crowdsec,dhcp,
                                    haproxy,nginx,certs,content,vhosts,users,state,
-                                   git,media,mail,accounts
+                                   git,media,mail,accounts,dns,databases,scripts
   --help                Show this help
 
 Examples:
@@ -879,6 +882,288 @@ import_accounts() {
   fi
 }
 
+import_dns() {
+  section "Importing: DNS Services"
+
+  local src="$WORKDIR/configs/dns"
+  local secrets_src="$WORKDIR/secrets/dns"
+
+  if [[ -d "$src" && -n "$(ls -A "$src" 2>/dev/null)" ]]; then
+    # BIND/named
+    if [[ -d "$src/bind" ]]; then
+      log "  Importing BIND configuration..."
+      run "mkdir -p '$BIND_DIR'"
+      run "cp -r '$src/bind/'* '$BIND_DIR/' 2>/dev/null || true"
+
+      # Import zones
+      if [[ -d "$src/bind/zones" ]]; then
+        run "mkdir -p '$BIND_DIR/zones'"
+        run "cp -r '$src/bind/zones/'* '$BIND_DIR/zones/' 2>/dev/null || true"
+        local zone_count=$(ls "$src/bind/zones"/*.zone 2>/dev/null | wc -l || echo "0")
+        log "    Imported $zone_count zone files"
+      fi
+
+      # Import RNDC key from secrets
+      if [[ -f "$secrets_src/rndc.key" ]]; then
+        run "cp '$secrets_src/rndc.key' '$BIND_DIR/'"
+        run "chmod 600 '$BIND_DIR/rndc.key'"
+      fi
+
+      if [[ $DRY_RUN -eq 0 ]]; then
+        chown -R bind:bind "$BIND_DIR" 2>/dev/null || true
+        systemctl restart named 2>/dev/null || systemctl restart bind9 2>/dev/null || warn "BIND restart failed"
+      fi
+    fi
+
+    # Unbound
+    if [[ -d "$src/unbound" ]]; then
+      log "  Importing Unbound configuration..."
+      run "mkdir -p '$UNBOUND_DIR'"
+      run "cp -r '$src/unbound/'* '$UNBOUND_DIR/' 2>/dev/null || true"
+      if [[ $DRY_RUN -eq 0 ]]; then
+        systemctl restart unbound 2>/dev/null || warn "Unbound restart failed"
+      fi
+    fi
+
+    # Vortex DNS (dnsmasq blocklists)
+    if [[ -d "$src/vortex" ]]; then
+      log "  Importing Vortex DNS blocklists..."
+      run "mkdir -p '/etc/dnsmasq.d/vortex'"
+      run "cp -r '$src/vortex/'* '/etc/dnsmasq.d/vortex/' 2>/dev/null || true"
+    fi
+
+    # AdGuard Home
+    if [[ -d "$src/adguardhome" ]]; then
+      log "  Importing AdGuard Home configuration..."
+      run "mkdir -p '$ADGUARD_DIR'"
+      run "cp '$src/adguardhome/AdGuardHome.yaml' '$ADGUARD_DIR/' 2>/dev/null || true"
+      if [[ -d "$src/adguardhome/data" ]]; then
+        run "mkdir -p '/var/lib/adguardhome/data'"
+        run "cp -r '$src/adguardhome/data/'* '/var/lib/adguardhome/data/' 2>/dev/null || true"
+      fi
+      if [[ $DRY_RUN -eq 0 ]]; then
+        systemctl restart AdGuardHome 2>/dev/null || warn "AdGuard Home restart failed"
+      fi
+    fi
+
+    # Pi-hole
+    if [[ -d "$src/pihole" ]]; then
+      log "  Importing Pi-hole configuration..."
+      run "mkdir -p '/etc/pihole'"
+      run "cp -r '$src/pihole/'* '/etc/pihole/' 2>/dev/null || true"
+      if [[ $DRY_RUN -eq 0 ]]; then
+        pihole restartdns 2>/dev/null || warn "Pi-hole restart failed"
+      fi
+    fi
+
+    local size=$(du -sh "$src" 2>/dev/null | cut -f1 || echo "0")
+    ok "DNS services imported ($size)"
+  else
+    warn "No DNS configuration to import"
+  fi
+}
+
+import_databases() {
+  section "Importing: Databases"
+
+  local src="$WORKDIR/state/databases"
+
+  if [[ -d "$src" && -n "$(ls -A "$src" 2>/dev/null)" ]]; then
+    # SQLite databases - restore to original locations
+    for db_dir in "$src"/var_lib_*; do
+      [[ -d "$db_dir" ]] || continue
+      local original_path=$(echo "$db_dir" | sed 's/_/\//g' | sed 's/.*var/\/var/')
+      log "  Restoring databases to: $original_path"
+      run "mkdir -p '$original_path'"
+      run "cp -r '$db_dir/'* '$original_path/' 2>/dev/null || true"
+    done
+
+    # MySQL restore
+    if [[ -f "$src/mysql/all-databases.sql" ]]; then
+      log "  Restoring MySQL databases..."
+      if [[ $DRY_RUN -eq 0 ]]; then
+        mysql < "$src/mysql/all-databases.sql" 2>/dev/null || warn "MySQL restore failed"
+      else
+        log "    Would restore MySQL from all-databases.sql"
+      fi
+    fi
+
+    # PostgreSQL restore
+    if [[ -f "$src/postgresql/all-databases.sql" ]]; then
+      log "  Restoring PostgreSQL databases..."
+      if [[ $DRY_RUN -eq 0 ]]; then
+        su - postgres -c "psql < $src/postgresql/all-databases.sql" 2>/dev/null || warn "PostgreSQL restore failed"
+      else
+        log "    Would restore PostgreSQL from all-databases.sql"
+      fi
+    fi
+
+    # Redis restore
+    if [[ -f "$src/redis/dump.rdb" ]]; then
+      log "  Restoring Redis dump..."
+      run "mkdir -p '/var/lib/redis'"
+      run "cp '$src/redis/dump.rdb' '/var/lib/redis/'"
+      if [[ $DRY_RUN -eq 0 ]]; then
+        chown redis:redis /var/lib/redis/dump.rdb 2>/dev/null || true
+        systemctl restart redis 2>/dev/null || warn "Redis restart failed"
+      fi
+    fi
+
+    local size=$(du -sh "$src" 2>/dev/null | cut -f1 || echo "0")
+    ok "Databases imported ($size)"
+  else
+    warn "No databases to import"
+  fi
+}
+
+import_scripts() {
+  section "Importing: Custom Scripts and Units"
+
+  local src="$WORKDIR/configs/scripts"
+
+  if [[ -d "$src" && -n "$(ls -A "$src" 2>/dev/null)" ]]; then
+    # Custom scripts
+    for script_dir in "$src"/usr_local_*; do
+      [[ -d "$script_dir" ]] || continue
+      local target="/usr/local/bin"
+      log "  Importing scripts to: $target"
+      run "mkdir -p '$target'"
+      run "cp -r '$script_dir/'* '$target/' 2>/dev/null || true"
+      run "chmod +x '$target/'* 2>/dev/null || true"
+    done
+
+    for script_dir in "$src"/root_*; do
+      [[ -d "$script_dir" ]] || continue
+      local target="/root/scripts"
+      log "  Importing scripts to: $target"
+      run "mkdir -p '$target'"
+      run "cp -r '$script_dir/'* '$target/' 2>/dev/null || true"
+      run "chmod +x '$target/'* 2>/dev/null || true"
+    done
+
+    # Systemd unit overrides
+    if [[ -d "$src/systemd" ]]; then
+      log "  Importing systemd unit overrides..."
+      for unit in "$src/systemd"/*; do
+        [[ -e "$unit" ]] || continue
+        local unit_name=$(basename "$unit")
+        if [[ -d "$unit" ]]; then
+          run "mkdir -p '/etc/systemd/system/$unit_name'"
+          run "cp -r '$unit/'* '/etc/systemd/system/$unit_name/' 2>/dev/null || true"
+        else
+          run "cp '$unit' '/etc/systemd/system/$unit_name'"
+        fi
+        log "    Imported: $unit_name"
+      done
+      if [[ $DRY_RUN -eq 0 ]]; then
+        systemctl daemon-reload 2>/dev/null || true
+      fi
+    fi
+
+    # RC.local
+    if [[ -f "$src/rc.local" && -s "$src/rc.local" ]]; then
+      log "  Importing rc.local..."
+      run "cp '$src/rc.local' '/etc/rc.local'"
+      run "chmod +x '/etc/rc.local'"
+    fi
+
+    # Environment files
+    if [[ -d "$src/environment" ]]; then
+      if [[ -f "$src/environment/environment" && -s "$src/environment/environment" ]]; then
+        log "  Importing /etc/environment..."
+        run "cp '$src/environment/environment' '/etc/environment'"
+      fi
+    fi
+
+    local size=$(du -sh "$src" 2>/dev/null | cut -f1 || echo "0")
+    ok "Scripts and units imported ($size)"
+  else
+    warn "No scripts to import"
+  fi
+}
+
+import_services() {
+  section "Importing: Application Services"
+
+  local src="$WORKDIR/content/services"
+
+  if [[ -d "$src" && -n "$(ls -A "$src" 2>/dev/null)" ]]; then
+    # Import service directories to /srv/
+    for svc_dir in "$src"/*/; do
+      [[ -d "$svc_dir" ]] || continue
+      local svc_name=$(basename "$svc_dir")
+
+      # Skip special directories
+      [[ "$svc_name" == "git-repos" || "$svc_name" == "docker-compose" || "$svc_name" == "lxc" || "$svc_name" == "streamlit-apps" ]] && continue
+
+      log "  Importing service: $svc_name"
+      run "mkdir -p '/srv/$svc_name'"
+      run "cp -r '$svc_dir'* '/srv/$svc_name/' 2>/dev/null || true"
+    done
+
+    # Import Streamlit apps
+    if [[ -d "$src/streamlit-apps" ]]; then
+      log "  Importing Streamlit apps..."
+      run "mkdir -p '/srv/streamlit/apps'"
+      run "cp -r '$src/streamlit-apps/'* '/srv/streamlit/apps/' 2>/dev/null || true"
+    fi
+
+    # Import Git repositories
+    if [[ -d "$src/git-repos" ]]; then
+      log "  Importing Git repositories..."
+      run "mkdir -p '/srv/repos'"
+      for repo_tar in "$src/git-repos"/*.tar.gz; do
+        [[ -f "$repo_tar" ]] || continue
+        local repo_name=$(basename "$repo_tar" .tar.gz)
+        log "    Importing repo: $repo_name"
+        run "mkdir -p '/srv/repos/$repo_name'"
+        run "tar -xzf '$repo_tar' -C '/srv/repos/$repo_name' --strip-components=2 2>/dev/null || true"
+      done
+    fi
+
+    # Import Docker compose files
+    if [[ -d "$src/docker-compose" ]]; then
+      log "  Importing Docker compose files..."
+      for compose in "$src/docker-compose"/*; do
+        [[ -f "$compose" ]] || continue
+        local compose_name=$(basename "$compose")
+        local target_path=$(echo "$compose_name" | sed 's/_/\//g' | sed 's/^srv/\/srv/')
+        local target_dir=$(dirname "$target_path")
+        run "mkdir -p '$target_dir'"
+        run "cp '$compose' '$target_path'"
+        log "    Imported: $compose_name"
+      done
+    fi
+
+    # Import LXC configs
+    if [[ -d "$src/lxc" ]]; then
+      log "  Importing LXC container configs..."
+      run "mkdir -p '/srv/lxc'"
+      for lxc_config in "$src/lxc"/*.config; do
+        [[ -f "$lxc_config" ]] || continue
+        local container=$(basename "$lxc_config" .config)
+        run "mkdir -p '/srv/lxc/$container'"
+        run "cp '$lxc_config' '/srv/lxc/$container/config'"
+        log "    Imported: $container"
+      done
+    fi
+
+    # Fix ownership
+    if [[ $DRY_RUN -eq 0 ]]; then
+      chown -R root:root /srv/* 2>/dev/null || true
+      # Fix specific service ownership
+      chown -R www-data:www-data /srv/nextcloud 2>/dev/null || true
+      chown -R gitea:gitea /srv/gitea 2>/dev/null || true
+    fi
+
+    local size=$(du -sh "$src" 2>/dev/null | cut -f1 || echo "0")
+    local svc_count=$(ls -d "$src"/*/ 2>/dev/null | wc -l || echo "0")
+    ok "Services imported ($svc_count services, $size)"
+  else
+    warn "No services to import"
+  fi
+}
+
 # ── Module selection ──
 declare -A MODULE_FUNCS=(
   [network]=import_network
@@ -897,9 +1182,13 @@ declare -A MODULE_FUNCS=(
   [media]=import_media
   [mail]=import_mail
   [accounts]=import_accounts
+  [dns]=import_dns
+  [databases]=import_databases
+  [scripts]=import_scripts
+  [services]=import_services
 )
 
-ALL_MODULES="network,firewall,wireguard,crowdsec,dhcp,haproxy,nginx,certs,content,vhosts,users,state,git,media,mail,accounts"
+ALL_MODULES="network,firewall,wireguard,crowdsec,dhcp,haproxy,nginx,certs,content,vhosts,users,state,git,media,mail,accounts,dns,databases,scripts,services"
 
 if [[ "$MODULES" == "all" ]]; then
   MODULES="$ALL_MODULES"

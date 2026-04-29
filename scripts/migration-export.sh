@@ -15,7 +15,7 @@ set -euo pipefail
 
 readonly SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 readonly REPO="$(cd "$SCRIPT_DIR/.." && pwd)"
-readonly VERSION="2.0.0"
+readonly VERSION="2.1.0"
 readonly TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 
 # ── Colors ──
@@ -59,7 +59,7 @@ Options:
   -m, --modules LIST    Comma-separated module list (default: all)
                         Available: network,firewall,wireguard,crowdsec,dhcp,
                                    haproxy,nginx,certs,content,vhosts,users,
-                                   git,media,mail,accounts
+                                   git,media,mail,accounts,dns,databases,scripts
   --help                Show this help
 
 Examples:
@@ -243,17 +243,66 @@ export_dhcp() {
 }
 
 export_haproxy() {
-  section "Exporting: HAProxy Configuration"
+  section "Exporting: HAProxy Configuration (Full)"
   local dst="$WORKDIR/configs/haproxy"
-  mkdir -p "$dst"
+  local secrets_dst="$WORKDIR/secrets/haproxy"
+  mkdir -p "$dst" "$secrets_dst"
 
   # Main config
   ssh_run "cat /etc/haproxy/haproxy.cfg 2>/dev/null" > "$dst/haproxy.cfg" || warn "No HAProxy config"
 
-  # Additional configs
-  ssh_run "tar -czf - /etc/haproxy/conf.d 2>/dev/null" | tar -xzf - -C "$dst" --strip-components=2 || true
+  # conf.d directory (backend definitions, ACLs, routing)
+  if ssh_run "[ -d '/etc/haproxy/conf.d' ]" 2>/dev/null; then
+    log "  Exporting HAProxy conf.d..."
+    mkdir -p "$dst/conf.d"
+    ssh_run "tar -czf - /etc/haproxy/conf.d 2>/dev/null" | tar -xzf - -C "$dst/conf.d" --strip-components=3 || true
+    local conf_count=$(ls "$dst/conf.d"/*.cfg 2>/dev/null | wc -l || echo "0")
+    log "    Found $conf_count config snippets"
+  fi
 
-  ok "HAProxy exported"
+  # HAProxy certificates (secrets)
+  if ssh_run "[ -d '/etc/haproxy/certs' ]" 2>/dev/null; then
+    log "  Exporting HAProxy certificates..."
+    mkdir -p "$secrets_dst/certs"
+    ssh_run "tar -czf - /etc/haproxy/certs 2>/dev/null" | tar -xzf - -C "$secrets_dst/certs" --strip-components=3 || true
+    local cert_count=$(ssh_run "ls /etc/haproxy/certs/*.pem 2>/dev/null | wc -l" || echo "0")
+    log "    Found $cert_count certificate files"
+  fi
+
+  # HAProxy maps (domain → backend mappings)
+  if ssh_run "[ -d '/etc/haproxy/maps' ]" 2>/dev/null; then
+    log "  Exporting HAProxy maps..."
+    mkdir -p "$dst/maps"
+    ssh_run "tar -czf - /etc/haproxy/maps 2>/dev/null" | tar -xzf - -C "$dst/maps" --strip-components=3 || true
+  fi
+
+  # HAProxy errors directory (custom error pages)
+  if ssh_run "[ -d '/etc/haproxy/errors' ]" 2>/dev/null; then
+    log "  Exporting HAProxy error pages..."
+    mkdir -p "$dst/errors"
+    ssh_run "tar -czf - /etc/haproxy/errors 2>/dev/null" | tar -xzf - -C "$dst/errors" --strip-components=3 || true
+  fi
+
+  # ACME/Let's Encrypt HAProxy integration
+  if ssh_run "[ -f '/etc/haproxy/acme.cfg' ]" 2>/dev/null; then
+    ssh_run "cat /etc/haproxy/acme.cfg 2>/dev/null" > "$dst/acme.cfg" || true
+  fi
+
+  # HAProxy Lua scripts
+  if ssh_run "[ -d '/etc/haproxy/lua' ]" 2>/dev/null; then
+    log "  Exporting HAProxy Lua scripts..."
+    mkdir -p "$dst/lua"
+    ssh_run "tar -czf - /etc/haproxy/lua 2>/dev/null" | tar -xzf - -C "$dst/lua" --strip-components=3 || true
+  fi
+
+  # mitmproxy routes mapping (SecuBox specific)
+  if ssh_run "[ -f '/srv/mitmproxy/haproxy-routes.json' ]" 2>/dev/null; then
+    log "  Exporting mitmproxy routes..."
+    ssh_run "cat /srv/mitmproxy/haproxy-routes.json 2>/dev/null" > "$dst/mitmproxy-routes.json" || true
+  fi
+
+  local size=$(du -sh "$dst" 2>/dev/null | cut -f1 || echo "0")
+  ok "HAProxy exported ($size)"
 }
 
 export_nginx() {
@@ -563,6 +612,285 @@ export_accounts() {
   ok "User accounts exported ($user_count users, $size)"
 }
 
+export_dns() {
+  section "Exporting: DNS Services (BIND, Vortex, AdGuard)"
+  local dst="$WORKDIR/configs/dns"
+  local secrets_dst="$WORKDIR/secrets/dns"
+  mkdir -p "$dst" "$secrets_dst"
+
+  # BIND/named configuration
+  if ssh_run "[ -d '/etc/bind' ]" 2>/dev/null; then
+    log "  Exporting BIND configuration..."
+    mkdir -p "$dst/bind"
+    ssh_run "tar -czf - /etc/bind 2>/dev/null" | tar -xzf - -C "$dst/bind" --strip-components=2 || true
+
+    # Zones directory separately (may be large)
+    if ssh_run "[ -d '/etc/bind/zones' ]" 2>/dev/null; then
+      log "  Exporting DNS zones..."
+      mkdir -p "$dst/bind/zones"
+      ssh_run "tar -czf - /etc/bind/zones 2>/dev/null" | tar -xzf - -C "$dst/bind/zones" --strip-components=3 || true
+      local zone_count=$(ls "$dst/bind/zones"/*.zone 2>/dev/null | wc -l || echo "0")
+      log "    Found $zone_count zone files"
+    fi
+
+    # RNDC key (secret)
+    ssh_run "cat /etc/bind/rndc.key 2>/dev/null" > "$secrets_dst/rndc.key" || true
+  fi
+
+  # Unbound configuration
+  if ssh_run "[ -d '/etc/unbound' ]" 2>/dev/null; then
+    log "  Exporting Unbound configuration..."
+    mkdir -p "$dst/unbound"
+    ssh_run "tar -czf - /etc/unbound 2>/dev/null" | tar -xzf - -C "$dst/unbound" --strip-components=2 || true
+  fi
+
+  # Vortex DNS (dnsmasq-based blocklists)
+  if ssh_run "[ -d '/etc/dnsmasq.d/vortex' ]" 2>/dev/null; then
+    log "  Exporting Vortex DNS blocklists..."
+    mkdir -p "$dst/vortex"
+    ssh_run "tar -czf - /etc/dnsmasq.d/vortex 2>/dev/null" | tar -xzf - -C "$dst/vortex" --strip-components=3 || true
+    ssh_run "cat /etc/dnsmasq.d/vortex*.conf 2>/dev/null" > "$dst/vortex/vortex-main.conf" || true
+  fi
+
+  # Vortex RPZ zone (Response Policy Zone for blocking)
+  if ssh_run "[ -f '/etc/bind/zones/rpz.vortex.zone' ]" 2>/dev/null; then
+    log "  Exporting Vortex RPZ zone (blocklist)..."
+    ssh_run "cat /etc/bind/zones/rpz.vortex.zone 2>/dev/null" > "$dst/bind/zones/rpz.vortex.zone" || true
+    local rpz_size=$(ssh_run "du -h /etc/bind/zones/rpz.vortex.zone 2>/dev/null | cut -f1" || echo "0")
+    log "    RPZ zone size: $rpz_size"
+  fi
+
+  # AdGuard Home
+  if ssh_run "[ -f '/etc/adguardhome/AdGuardHome.yaml' ]" 2>/dev/null; then
+    log "  Exporting AdGuard Home configuration..."
+    mkdir -p "$dst/adguardhome"
+    ssh_run "cat /etc/adguardhome/AdGuardHome.yaml 2>/dev/null" > "$dst/adguardhome/AdGuardHome.yaml" || true
+
+    # AdGuard Home data (filters, stats)
+    if ssh_run "[ -d '/var/lib/adguardhome/data' ]" 2>/dev/null; then
+      mkdir -p "$dst/adguardhome/data"
+      ssh_run "tar -czf - /var/lib/adguardhome/data 2>/dev/null" | tar -xzf - -C "$dst/adguardhome/data" --strip-components=4 || true
+    fi
+  fi
+
+  # Pi-hole (if present)
+  if ssh_run "[ -d '/etc/pihole' ]" 2>/dev/null; then
+    log "  Exporting Pi-hole configuration..."
+    mkdir -p "$dst/pihole"
+    ssh_run "tar -czf - /etc/pihole 2>/dev/null" | tar -xzf - -C "$dst/pihole" --strip-components=2 || true
+  fi
+
+  # Additional dnsmasq configs
+  ssh_run "cat /etc/dnsmasq.d/*.conf 2>/dev/null" > "$dst/dnsmasq.d.conf" || true
+
+  local size=$(du -sh "$dst" 2>/dev/null | cut -f1 || echo "0")
+  ok "DNS services exported ($size)"
+}
+
+export_databases() {
+  section "Exporting: Databases (SQLite, MySQL dumps)"
+  local dst="$WORKDIR/state/databases"
+  mkdir -p "$dst"
+
+  # SQLite databases from common locations
+  local db_paths="/var/lib/*.db /srv/*.db /var/lib/*/data/*.db /var/lib/*/*/*.db"
+  local db_count=0
+
+  for db_pattern in $db_paths; do
+    ssh_run "ls $db_pattern 2>/dev/null" | while read -r db_file; do
+      [[ -z "$db_file" ]] && continue
+      local db_name=$(basename "$db_file")
+      local db_dir=$(dirname "$db_file" | tr '/' '_' | sed 's/^_//')
+      mkdir -p "$dst/$db_dir"
+      log "  Exporting: $db_file"
+      ssh_run "cat '$db_file' 2>/dev/null" > "$dst/$db_dir/$db_name" || true
+      ((db_count++))
+    done || true
+  done
+
+  # MySQL/MariaDB dump (if mysqldump available)
+  if ssh_run "which mysqldump >/dev/null 2>&1"; then
+    log "  Creating MySQL dump..."
+    mkdir -p "$dst/mysql"
+    ssh_run "mysqldump --all-databases --single-transaction 2>/dev/null" > "$dst/mysql/all-databases.sql" || warn "MySQL dump failed"
+  fi
+
+  # PostgreSQL dump (if pg_dumpall available)
+  if ssh_run "which pg_dumpall >/dev/null 2>&1"; then
+    log "  Creating PostgreSQL dump..."
+    mkdir -p "$dst/postgresql"
+    ssh_run "su - postgres -c 'pg_dumpall' 2>/dev/null" > "$dst/postgresql/all-databases.sql" || warn "PostgreSQL dump failed"
+  fi
+
+  # Redis dump
+  if ssh_run "[ -f '/var/lib/redis/dump.rdb' ]" 2>/dev/null; then
+    log "  Exporting Redis dump..."
+    mkdir -p "$dst/redis"
+    ssh_run "cat /var/lib/redis/dump.rdb 2>/dev/null" > "$dst/redis/dump.rdb" || true
+  fi
+
+  local size=$(du -sh "$dst" 2>/dev/null | cut -f1 || echo "0")
+  ok "Databases exported ($size)"
+}
+
+export_scripts() {
+  section "Exporting: Custom Scripts and Systemd Units"
+  local dst="$WORKDIR/configs/scripts"
+  mkdir -p "$dst"
+
+  # Custom scripts from common locations
+  local script_dirs="/usr/local/bin /usr/local/sbin /root/scripts /root/bin /opt/scripts"
+  for script_dir in $script_dirs; do
+    if ssh_run "[ -d '$script_dir' ]" 2>/dev/null; then
+      log "  Exporting: $script_dir"
+      local dir_name=$(echo "$script_dir" | tr '/' '_' | sed 's/^_//')
+      mkdir -p "$dst/$dir_name"
+      ssh_run "tar -czf - '$script_dir' 2>/dev/null" | tar -xzf - -C "$dst/$dir_name" --strip-components=3 || true
+    fi
+  done
+
+  # Systemd unit overrides
+  if ssh_run "[ -d '/etc/systemd/system' ]" 2>/dev/null; then
+    log "  Exporting systemd unit overrides..."
+    mkdir -p "$dst/systemd"
+    ssh_run "find /etc/systemd/system -name '*.service' -o -name '*.d' -type d 2>/dev/null" | while read -r unit; do
+      [[ -z "$unit" ]] && continue
+      local unit_name=$(basename "$unit")
+      if [[ -d "$unit" ]]; then
+        ssh_run "tar -czf - '$unit' 2>/dev/null" | tar -xzf - -C "$dst/systemd" --strip-components=3 || true
+      else
+        ssh_run "cat '$unit' 2>/dev/null" > "$dst/systemd/$unit_name" || true
+      fi
+    done || true
+  fi
+
+  # Init.d scripts (OpenWrt style)
+  if ssh_run "[ -d '/etc/init.d' ]" 2>/dev/null; then
+    log "  Exporting init.d scripts..."
+    mkdir -p "$dst/init.d"
+    ssh_run "tar -czf - /etc/init.d 2>/dev/null" | tar -xzf - -C "$dst/init.d" --strip-components=2 || true
+  fi
+
+  # RC.local
+  ssh_run "cat /etc/rc.local 2>/dev/null" > "$dst/rc.local" || true
+
+  # Environment files
+  mkdir -p "$dst/environment"
+  ssh_run "cat /etc/environment 2>/dev/null" > "$dst/environment/environment" || true
+  ssh_run "cat /etc/default/* 2>/dev/null" > "$dst/environment/defaults" || true
+
+  local size=$(du -sh "$dst" 2>/dev/null | cut -f1 || echo "0")
+  ok "Scripts and units exported ($size)"
+}
+
+export_services() {
+  section "Exporting: Application Services (/srv/*)"
+  local dst="$WORKDIR/content/services"
+  mkdir -p "$dst"
+
+  # List of service directories to export from /srv/
+  local services="
+    streamlit
+    gitea
+    metablogizer
+    metabolizer
+    metacatalog
+    mitmproxy
+    mitmproxy-in
+    mitmproxy-out
+    secubox
+    config-vault
+    saas-relay
+    hexojs
+    gotosocial
+    nextcloud
+    peertube
+    matrix
+    simplex
+    voip
+    webradio
+    zigbee2mqtt
+    domoticz
+    photoprism
+    rezapp
+    haproxy
+    crowdsec
+    dns
+    dns-master
+    lxc
+    jabber
+    jitsi
+    localai
+    sherlock
+    maltego
+  "
+
+  for svc in $services; do
+    svc=$(echo "$svc" | tr -d ' ')
+    [[ -z "$svc" ]] && continue
+
+    if ssh_run "[ -d '/srv/$svc' ]" 2>/dev/null; then
+      log "  Exporting: /srv/$svc"
+      mkdir -p "$dst/$svc"
+
+      # Export service directory (excluding large binary/cache dirs)
+      ssh_run "tar -czf - \
+        --exclude='*.log' \
+        --exclude='node_modules' \
+        --exclude='__pycache__' \
+        --exclude='.cache' \
+        --exclude='cache' \
+        --exclude='*.pyc' \
+        --exclude='.venv' \
+        --exclude='venv' \
+        /srv/$svc 2>/dev/null" | tar -xzf - -C "$dst/$svc" --strip-components=2 || warn "Partial export: $svc"
+    fi
+  done
+
+  # Export Streamlit apps specifically
+  if ssh_run "[ -d '/srv/streamlit/apps' ]" 2>/dev/null; then
+    log "  Exporting Streamlit apps..."
+    mkdir -p "$dst/streamlit-apps"
+    ssh_run "tar -czf - /srv/streamlit/apps 2>/dev/null" | tar -xzf - -C "$dst/streamlit-apps" --strip-components=3 || true
+    local app_count=$(ssh_run "ls -d /srv/streamlit/apps/*/ 2>/dev/null | wc -l" || echo "0")
+    log "    Found $app_count Streamlit apps"
+  fi
+
+  # Export Git repositories (full repos with history)
+  log "  Discovering Git repositories..."
+  ssh_run "find /srv -maxdepth 4 -name '.git' -type d 2>/dev/null" | while read -r git_dir; do
+    [[ -z "$git_dir" ]] && continue
+    local repo_path=$(dirname "$git_dir")
+    local repo_name=$(echo "$repo_path" | sed 's|/srv/||' | tr '/' '_')
+    log "    Exporting repo: $repo_name"
+    mkdir -p "$dst/git-repos"
+    ssh_run "tar -czf - '$repo_path' 2>/dev/null" > "$dst/git-repos/${repo_name}.tar.gz" || true
+  done || true
+
+  # Export Docker/Podman compose files
+  log "  Exporting Docker compose files..."
+  mkdir -p "$dst/docker-compose"
+  ssh_run "find /srv -name 'docker-compose*.yml' -o -name 'docker-compose*.yaml' 2>/dev/null" | while read -r compose_file; do
+    [[ -z "$compose_file" ]] && continue
+    local compose_name=$(echo "$compose_file" | tr '/' '_' | sed 's/^_srv_//')
+    ssh_run "cat '$compose_file' 2>/dev/null" > "$dst/docker-compose/$compose_name" || true
+  done || true
+
+  # Export LXC container configs
+  if ssh_run "[ -d '/srv/lxc' ]" 2>/dev/null; then
+    log "  Exporting LXC container configs..."
+    mkdir -p "$dst/lxc"
+    ssh_run "ls /srv/lxc 2>/dev/null" | while read -r container; do
+      [[ -z "$container" ]] && continue
+      ssh_run "cat /srv/lxc/$container/config 2>/dev/null" > "$dst/lxc/${container}.config" || true
+    done || true
+  fi
+
+  local size=$(du -sh "$dst" 2>/dev/null | cut -f1 || echo "0")
+  local svc_count=$(ls -d "$dst"/*/ 2>/dev/null | wc -l || echo "0")
+  ok "Services exported ($svc_count services, $size)"
+}
+
 # ── Module selection ──
 declare -A MODULE_FUNCS=(
   [network]=export_network
@@ -581,9 +909,13 @@ declare -A MODULE_FUNCS=(
   [media]=export_media
   [mail]=export_mail
   [accounts]=export_accounts
+  [dns]=export_dns
+  [databases]=export_databases
+  [scripts]=export_scripts
+  [services]=export_services
 )
 
-ALL_MODULES="network,firewall,wireguard,crowdsec,dhcp,haproxy,nginx,certs,content,vhosts,users,state,git,media,mail,accounts"
+ALL_MODULES="network,firewall,wireguard,crowdsec,dhcp,haproxy,nginx,certs,content,vhosts,users,state,git,media,mail,accounts,dns,databases,scripts,services"
 
 if [[ "$MODULES" == "all" ]]; then
   MODULES="$ALL_MODULES"
