@@ -7,7 +7,7 @@ secubox_core.auth — JWT HS256 authentication
 """
 from __future__ import annotations
 import os, time
-from typing import Annotated
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -19,6 +19,7 @@ from .logger import get_logger
 
 log = get_logger("auth")
 
+# auto_error=False allows us to handle missing token gracefully
 _bearer = HTTPBearer(auto_error=False)
 
 # ── JWT helpers ────────────────────────────────────────────────────
@@ -60,7 +61,7 @@ def _decode_token(token: str) -> dict:
 
 
 async def require_jwt(
-    creds: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)]
+    creds: Optional[HTTPAuthorizationCredentials] = Depends(_bearer)
 ) -> dict:
     """Dependency FastAPI — injecter dans tous les endpoints protégés."""
     if creds is None:
