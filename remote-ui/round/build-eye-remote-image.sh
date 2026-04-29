@@ -36,7 +36,7 @@ info() { echo -e "${BLUE}[info]${NC} $*"; }
 # Default WiFi (user can override)
 WIFI_SSID="${WIFI_SSID:-}"
 WIFI_PSK="${WIFI_PSK:-}"
-HOSTNAME="${HOSTNAME:-secubox-round}"
+HOSTNAME="${HOSTNAME:-eye-remote}"
 SSH_PUBKEY="${SSH_PUBKEY:-}"
 
 # Source image
@@ -96,7 +96,7 @@ Options:
   -o, --output DIR        Output directory (default: /tmp)
   -s, --ssid SSID         WiFi SSID (optional)
   -p, --psk PSK           WiFi password (optional)
-  -h, --hostname NAME     Hostname (default: secubox-round)
+  -h, --hostname NAME     Hostname (default: eye-remote)
   -k, --pubkey FILE       SSH public key to install
   --browser               Use Chromium kiosk mode (~250MB more)
   --framebuffer           Use Python/PIL framebuffer (default, lightweight)

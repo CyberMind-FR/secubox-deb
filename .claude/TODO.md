@@ -306,4 +306,134 @@ Advanced security features:
 
 ---
 
+## 🔄 PHASE 12 — Meta-Script Generator (v2.0.0)
+
+*SecuBox Appliance Factory — Profile-based, modular image generation with version tracking*
+
+### Architecture Core
+- [ ] **P12-01** Profile hierarchy system ("gigogne" nested inheritance)
+  - base/ → tier-lite/ → tier-standard/ → tier-pro/
+  - Profile YAML with `inherits:` directive
+  - Component capability matrix (memory, CPU, storage requirements)
+  - Automatic profile selection based on detected hardware
+- [ ] **P12-02** Board-specific tweaks registry
+  - boards/<board>/tweaks.yaml — hardware-specific optimizations
+  - DTS/DTB overrides per board
+  - Kernel module blacklist/whitelist per board
+  - Performance profiles (idle, normal, busy, stressed)
+- [ ] **P12-03** Component versioning system
+  - component-version.yaml per package
+  - Semantic versioning with SecuBox patch suffix (e.g., 1.7.7-sb3)
+  - Compatibility matrix (min memory, requires, conflicts)
+  - Tag system for feature categorization
+
+### Generator CLI
+- [ ] **P12-04** `secubox-gen` — Manifest generator
+  ```bash
+  secubox-gen --profile tier-lite --board espressobin-v7 \
+    --enable crowdsec,wireguard --tweak low-memory \
+    --output manifest.yaml
+  ```
+  - Interactive mode with hardware detection
+  - Profile auto-selection based on target specs
+  - Dependency resolution and conflict detection
+- [ ] **P12-05** `secubox-build` — Image builder from manifest
+  - Reproducible builds from manifest.yaml
+  - Incremental builds (delta from base image)
+  - Multi-stage build with checkpoints
+  - Build cache for faster iteration
+- [ ] **P12-06** `secubox-fetch` — GitHub release downloader
+  - Download pre-built images for tested boards
+  - GPG signature verification
+  - SHA256 checksum validation
+  - Automatic version matching
+
+### Appliance README Generator
+- [ ] **P12-07** Auto-generated appliance documentation
+  - Hardware profile summary
+  - Component version table with status
+  - Applied tweaks and optimizations
+  - Support contact and issue reporting
+- [ ] **P12-08** Machine-readable manifest for bug reports
+  - JSON export for automated support
+  - Hardware capability snapshot
+  - Service status at generation time
+  - Version fingerprint hash
+
+### Portable Application
+- [ ] **P12-09** Electron/Tauri desktop app for image generation
+  - Cross-platform (Linux, macOS, Windows)
+  - GitHub OAuth for release access
+  - Visual board/profile selector
+  - Progress tracking with logs
+- [ ] **P12-10** Web-based generator (optional)
+  - Static site hosted on GitHub Pages
+  - Manifest builder with live preview
+  - Download link generator
+  - QR code for mobile access
+
+### Version Tracking & Participation
+- [ ] **P12-11** Component version registry API
+  - FastAPI service for version queries
+  - Compatibility checks via API
+  - Update notifications
+  - Usage statistics (opt-in)
+- [ ] **P12-12** Participative development workflow
+  - Issue templates with device fingerprint
+  - Feature request with profile context
+  - Automated testing matrix based on device reports
+  - Community board support voting
+
+### Profile Definitions
+```yaml
+# profiles/tier-lite/profile.yaml
+name: tier-lite
+inherits: base
+description: Constrained devices (≤1GB RAM, ≤2 cores)
+constraints:
+  max_memory: 1G
+  max_cores: 2
+  max_storage: 8G
+components:
+  exclude:
+    - secubox-ollama      # Too heavy
+    - secubox-jellyfin    # Needs GPU
+  optimize:
+    - secubox-crowdsec: --no-hub-download
+    - secubox-nginx: --worker-processes 1
+tweaks:
+  kernel:
+    vm.swappiness: 10
+    vm.dirty_ratio: 20
+  systemd:
+    DefaultMemoryAccounting: yes
+    DefaultTasksMax: 100
+```
+
+### Board-Specific Tweaks
+```yaml
+# boards/espressobin-v7/tweaks.yaml
+board: espressobin-v7
+soc: Marvell Armada 3720
+profile: tier-lite
+capabilities:
+  ram: 1GB
+  cores: 2
+  storage: eMMC 8GB
+  network:
+    - wan: eth0
+    - lan: lan0, lan1
+  usb: 1x USB 3.0, 1x USB 2.0
+tweaks:
+  kernel_modules:
+    blacklist: [bluetooth, btusb]  # No BT hardware
+  device_tree:
+    overlay: espressobin-v7-secubox.dtbo
+  network:
+    default_mode: router
+    wan_interface: eth0
+```
+
+---
+
 > **Reference**: See [REMAINING-PACKAGES.md](REMAINING-PACKAGES.md) for detailed inventory with complexity classification
