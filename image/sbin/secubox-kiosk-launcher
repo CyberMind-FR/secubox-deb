@@ -432,8 +432,8 @@ create_session() {
         log "Real hardware detected - GPU acceleration enabled"
     else
         # VM - disable GPU to prevent crashes
-        chromium_gpu_flags="--disable-gpu --disable-gpu-compositing --disable-software-rasterizer"
-        log "VM detected ($vm_type) - GPU disabled"
+        chromium_gpu_flags="--disable-gpu --disable-gpu-compositing --disable-software-rasterizer --no-sandbox"
+        log "VM detected ($vm_type) - GPU disabled, sandbox disabled for VM"
     fi
 
     # Write GPU flags for session to read

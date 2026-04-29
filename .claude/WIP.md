@@ -1,5 +1,49 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-04-28 (Session 71)*
+*Mis à jour : 2026-04-29 (Session 73)*
+
+---
+
+## ✅ Complété (Session 73) — Eye Remote Interactive v1.9.0
+
+### Mode-Aware Display System ✅
+
+**Feature:** Multi-mode USB gadget display system for Eye Remote
+
+**Files Modified:**
+- `remote-ui/round/fb_dashboard.py` — Added mode detection, TTY terminal, flash progress, auth QR
+- `packages/secubox-hub/debian/secubox-hub.service` — Changed to TCP binding (port 8001)
+- `packages/secubox-hub/nginx/hub.conf` — Changed to TCP proxy
+- `common/nginx/modules.d/hub.conf` — Changed to TCP proxy
+
+**New Features:**
+| Mode | Display | Function |
+|------|---------|----------|
+| TTY | Serial terminal | Real-time U-Boot/console output from /dev/ttyGS0 |
+| FLASH | Progress bar | Transfer progress with speed/ETA for eMMC flashing |
+| AUTH | QR code | Backup authentication code for FIDO2 security |
+| NORMAL | Dashboard | Standard metrics display |
+| DEBUG | Dashboard | Network + storage + serial combined |
+
+**TTY Mode Features:**
+- SerialTerminal class reading from /dev/ttyGS0 at 115200 baud
+- Real-time line buffering with ASCII filtering
+- Monospace font rendering adapted to round display
+- Automatic mode switching via /etc/secubox/gadget-mode
+
+**Flash Mode Features:**
+- FlashProgress class tracking /var/lib/secubox-flash.img transfers
+- Progress bar with percentage, speed (MB/s), and ETA
+- Status: WAITING/TRANSFERRING/COMPLETE indicators
+
+**Auth Mode Features:**
+- AuthState class with QR code generation
+- Device ID based on /etc/machine-id
+- Backup authentication URL format: secubox-auth://device_id/challenge
+- State machine: idle → pending → approved/denied
+
+**Hub Service Fix:**
+- Changed from Unix socket to TCP port 8001 for VM compatibility
+- Issue documented in FAQ-Troubleshooting.md and GitHub #34
 
 ---
 
