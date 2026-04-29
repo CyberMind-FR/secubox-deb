@@ -5,6 +5,59 @@
 
 ## 2026-04-29
 
+### Session 77 — Migration Tools Extended (v2.0.0)
+
+**Feature:** Extended migration to include Git, Media, Email, and User Accounts
+
+**Files Modified:**
+- `scripts/migration-export.sh` — Added git, media, mail, accounts modules (v2.0.0)
+- `scripts/migration-import.sh` — Added import functions for new modules (v2.0.0)
+
+**New Migration Modules:**
+| Module | Export | Import |
+|--------|--------|--------|
+| `git` | /srv/git, /var/lib/git, Gitea/Gogs/GitLab | /srv/git, service configs |
+| `media` | /srv/media, PeerTube, Jellyfin, Nextcloud | /srv/media, service restarts |
+| `mail` | Maildir, Postfix, Dovecot, DKIM | Mail dirs, configs, crontabs |
+| `accounts` | Home dirs, passwd/shadow, sudo, cron | User creation, home dirs |
+
+**Export Test Results:**
+- Git repositories: 4K
+- Media files: 8K
+- Email data: 4K
+- User accounts: 6 users, 96K
+- Total archive: 72K
+
+**Note:** VBox VM SSH issue (banner timeout) prevented import test.
+
+---
+
+### Session 76 — Migration Tools Validation on VirtualBox
+
+**Feature:** Tested migration import on VirtualBox VM
+
+**Test Results:**
+- Export: 66KB archive from SecuBox-OpenWrt (192.168.255.1)
+- Transform: UCI → Debian format (netplan, nftables, dnsmasq, vhost.toml)
+- Import: All modules successfully imported to VBox VM
+
+**Imported Configurations:**
+| Config | Destination | Status |
+|--------|-------------|--------|
+| Network | `/etc/netplan/00-secubox.yaml` | ✅ Imported |
+| Firewall | `/etc/nftables.conf` | ✅ Imported (78 rules) |
+| DNS/DHCP | `/etc/dnsmasq.d/secubox.conf` | ✅ Imported |
+| VHosts | `/etc/secubox/vhosts/vhost.toml` | ✅ Imported (4 services, 3 redirects) |
+| Content | `/srv/www/` | ✅ Imported (8KB) |
+| Auth | `/etc/secubox/auth.toml` | ✅ Imported |
+
+**Rollback Snapshot:**
+- `/var/lib/secubox/rollback/pre-migration-20260429-112849`
+
+**Expected Warnings:** Services not installed on test VM (CrowdSec, dnsmasq, HAProxy)
+
+---
+
 ### Session 75 — Eye Remote Recovery System + Design Charter Update
 
 **Feature:** Board recovery via serial boot protocols + unified design charter

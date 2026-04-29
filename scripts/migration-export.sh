@@ -15,7 +15,7 @@ set -euo pipefail
 
 readonly SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 readonly REPO="$(cd "$SCRIPT_DIR/.." && pwd)"
-readonly VERSION="1.0.0"
+readonly VERSION="2.0.0"
 readonly TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 
 # ── Colors ──
@@ -58,7 +58,8 @@ Options:
   --passphrase PASS     Encryption passphrase (prompts if not provided)
   -m, --modules LIST    Comma-separated module list (default: all)
                         Available: network,firewall,wireguard,crowdsec,dhcp,
-                                   haproxy,nginx,certs,content,vhosts,users
+                                   haproxy,nginx,certs,content,vhosts,users,
+                                   git,media,mail,accounts
   --help                Show this help
 
 Examples:
@@ -358,6 +359,210 @@ export_state() {
   ok "State data exported"
 }
 
+export_git() {
+  section "Exporting: Git Repositories"
+  local dst="$WORKDIR/content/git"
+  mkdir -p "$dst"
+
+  # Common Git repository locations
+  local git_dirs="/srv/git /var/lib/git /home/git /root/repos"
+  local total_size=0
+  local repo_count=0
+
+  for git_base in $git_dirs; do
+    if ssh_run "[ -d '$git_base' ]" 2>/dev/null; then
+      log "  Scanning: $git_base"
+
+      # Find all .git directories (bare repos)
+      ssh_run "find '$git_base' -maxdepth 3 -name '*.git' -type d 2>/dev/null" | while read -r repo; do
+        local repo_name=$(basename "$repo")
+        local repo_path=$(dirname "$repo")
+        log "    Found: $repo_name"
+
+        # Export as bare repo tarball
+        ssh_run "tar -czf - '$repo' 2>/dev/null" > "$dst/${repo_name}.tar.gz" || true
+        ((repo_count++))
+      done || true
+
+      # Also find non-bare repos (containing .git subdirectory)
+      ssh_run "find '$git_base' -maxdepth 4 -type d -name '.git' 2>/dev/null" | while read -r dotgit; do
+        local repo=$(dirname "$dotgit")
+        local repo_name=$(basename "$repo")
+        log "    Found: $repo_name (working tree)"
+
+        # Export entire repo including working tree
+        ssh_run "tar -czf - '$repo' 2>/dev/null" > "$dst/${repo_name}-full.tar.gz" || true
+        ((repo_count++))
+      done || true
+    fi
+  done
+
+  # Gitea/Gogs/GitLab data if present
+  for git_app in gitea gogs gitlab; do
+    local app_data="/var/lib/$git_app"
+    if ssh_run "[ -d '$app_data' ]" 2>/dev/null; then
+      log "  Exporting $git_app data..."
+      mkdir -p "$dst/$git_app"
+      ssh_run "tar -czf - '$app_data/repositories' 2>/dev/null" | tar -xzf - -C "$dst/$git_app" --strip-components=3 || true
+      ssh_run "cat '$app_data/conf/app.ini' 2>/dev/null" > "$dst/$git_app/app.ini" || true
+      ssh_run "cat /etc/$git_app/app.ini 2>/dev/null" >> "$dst/$git_app/app.ini" || true
+    fi
+  done
+
+  local size=$(du -sh "$dst" 2>/dev/null | cut -f1 || echo "0")
+  ok "Git repositories exported ($size)"
+}
+
+export_media() {
+  section "Exporting: Media Files (Videos, Images, Audio)"
+  local dst="$WORKDIR/content/media"
+  mkdir -p "$dst"
+
+  # Common media locations
+  local media_dirs="/srv/media /var/lib/media /home/media /srv/videos /var/lib/jellyfin/data /var/lib/plex"
+
+  for media_base in $media_dirs; do
+    if ssh_run "[ -d '$media_base' ]" 2>/dev/null; then
+      log "  Exporting: $media_base"
+      local base_name=$(echo "$media_base" | tr '/' '_' | sed 's/^_//')
+      mkdir -p "$dst/$base_name"
+
+      # Export media files (with progress indicator for large files)
+      ssh_run "tar -czf - '$media_base' 2>/dev/null" | tar -xzf - -C "$dst/$base_name" --strip-components=2 || true
+    fi
+  done
+
+  # PeerTube data
+  if ssh_run "[ -d '/var/www/peertube/storage' ]" 2>/dev/null; then
+    log "  Exporting PeerTube storage..."
+    mkdir -p "$dst/peertube"
+    ssh_run "tar -czf - /var/www/peertube/storage/videos 2>/dev/null" | tar -xzf - -C "$dst/peertube" --strip-components=4 || true
+  fi
+
+  # Jellyfin metadata + library
+  if ssh_run "[ -d '/var/lib/jellyfin' ]" 2>/dev/null; then
+    log "  Exporting Jellyfin library..."
+    mkdir -p "$dst/jellyfin"
+    ssh_run "tar -czf - /var/lib/jellyfin/data/library 2>/dev/null" | tar -xzf - -C "$dst/jellyfin" --strip-components=4 || true
+    ssh_run "cat /etc/jellyfin/system.xml 2>/dev/null" > "$dst/jellyfin/system.xml" || true
+  fi
+
+  # Nextcloud data (files, not database)
+  if ssh_run "[ -d '/var/www/nextcloud/data' ]" 2>/dev/null; then
+    log "  Exporting Nextcloud user files..."
+    mkdir -p "$dst/nextcloud"
+    ssh_run "tar -czf - /var/www/nextcloud/data 2>/dev/null" | tar -xzf - -C "$dst/nextcloud" --strip-components=4 || warn "Nextcloud export partial"
+  fi
+
+  local size=$(du -sh "$dst" 2>/dev/null | cut -f1 || echo "0")
+  ok "Media files exported ($size)"
+}
+
+export_mail() {
+  section "Exporting: Email Data"
+  local dst="$WORKDIR/content/mail"
+  local secrets_dst="$WORKDIR/secrets/mail"
+  mkdir -p "$dst" "$secrets_dst"
+
+  # Maildir format (Dovecot, Postfix)
+  local mail_dirs="/var/mail /var/vmail /home/vmail"
+  for mail_base in $mail_dirs; do
+    if ssh_run "[ -d '$mail_base' ]" 2>/dev/null; then
+      log "  Exporting Maildir: $mail_base"
+      local base_name=$(echo "$mail_base" | tr '/' '_' | sed 's/^_//')
+      mkdir -p "$dst/$base_name"
+      ssh_run "tar -czf - '$mail_base' 2>/dev/null" | tar -xzf - -C "$dst/$base_name" --strip-components=2 || true
+    fi
+  done
+
+  # Postfix configuration
+  if ssh_run "[ -d '/etc/postfix' ]" 2>/dev/null; then
+    log "  Exporting Postfix config..."
+    mkdir -p "$dst/postfix"
+    ssh_run "tar -czf - /etc/postfix 2>/dev/null" | tar -xzf - -C "$dst/postfix" --strip-components=2 || true
+  fi
+
+  # Dovecot configuration
+  if ssh_run "[ -d '/etc/dovecot' ]" 2>/dev/null; then
+    log "  Exporting Dovecot config..."
+    mkdir -p "$dst/dovecot"
+    ssh_run "tar -czf - /etc/dovecot 2>/dev/null" | tar -xzf - -C "$dst/dovecot" --strip-components=2 || true
+  fi
+
+  # OpenDKIM keys (secrets)
+  if ssh_run "[ -d '/etc/opendkim/keys' ]" 2>/dev/null; then
+    log "  Exporting DKIM keys..."
+    mkdir -p "$secrets_dst/opendkim"
+    ssh_run "tar -czf - /etc/opendkim 2>/dev/null" | tar -xzf - -C "$secrets_dst/opendkim" --strip-components=2 || true
+  fi
+
+  # Mail aliases
+  ssh_run "cat /etc/aliases 2>/dev/null" > "$dst/aliases" || true
+  ssh_run "cat /etc/mailname 2>/dev/null" > "$dst/mailname" || true
+
+  # Mail account database (if using virtual users)
+  ssh_run "cat /etc/postfix/vmailbox 2>/dev/null" > "$dst/vmailbox" || true
+  ssh_run "cat /etc/dovecot/users 2>/dev/null" > "$secrets_dst/dovecot-users" || true
+
+  local size=$(du -sh "$dst" 2>/dev/null | cut -f1 || echo "0")
+  ok "Email data exported ($size)"
+}
+
+export_accounts() {
+  section "Exporting: Complete User Accounts"
+  local dst="$WORKDIR/content/accounts"
+  local secrets_dst="$WORKDIR/secrets/accounts"
+  mkdir -p "$dst" "$secrets_dst"
+
+  # Get list of real users (UID >= 1000 or specific system users)
+  log "  Discovering user accounts..."
+  ssh_run "awk -F: '\$3 >= 1000 || \$1 ~ /^(admin|secubox|git|nextcloud|peertube)/ {print \$1}' /etc/passwd 2>/dev/null" > "$dst/users.list" || true
+
+  # Export home directories
+  while read -r user; do
+    [[ -z "$user" ]] && continue
+    local home_dir=$(ssh_run "getent passwd '$user' | cut -d: -f6" 2>/dev/null)
+    [[ -z "$home_dir" ]] && continue
+
+    if ssh_run "[ -d '$home_dir' ]" 2>/dev/null; then
+      log "    Exporting home: $user ($home_dir)"
+      mkdir -p "$dst/homes/$user"
+
+      # Export home directory (excluding large cache/trash dirs)
+      ssh_run "tar -czf - --exclude='.cache' --exclude='.local/share/Trash' --exclude='node_modules' --exclude='.npm' '$home_dir' 2>/dev/null" | \
+        tar -xzf - -C "$dst/homes/$user" --strip-components=2 || true
+    fi
+  done < "$dst/users.list"
+
+  # Export passwd/shadow/group for these users (to secrets)
+  log "  Exporting user credentials..."
+  while read -r user; do
+    [[ -z "$user" ]] && continue
+    ssh_run "grep '^${user}:' /etc/passwd" >> "$secrets_dst/passwd" 2>/dev/null || true
+    ssh_run "grep '^${user}:' /etc/shadow" >> "$secrets_dst/shadow" 2>/dev/null || true
+    ssh_run "grep -E '(^${user}:|:${user},|,${user},|,${user}\$|:${user}\$)' /etc/group" >> "$secrets_dst/group" 2>/dev/null || true
+  done < "$dst/users.list"
+
+  # Export sudo rules
+  ssh_run "cat /etc/sudoers.d/* 2>/dev/null" > "$dst/sudoers.d" || true
+  ssh_run "grep -v '^#' /etc/sudoers 2>/dev/null | grep -v '^\$'" > "$dst/sudoers" || true
+
+  # Crontabs
+  mkdir -p "$dst/crontabs"
+  ssh_run "ls /var/spool/cron/crontabs 2>/dev/null" | while read -r cron_user; do
+    ssh_run "cat /var/spool/cron/crontabs/$cron_user 2>/dev/null" > "$dst/crontabs/$cron_user" || true
+    log "    Exported crontab: $cron_user"
+  done || true
+
+  # System-wide cron
+  ssh_run "tar -czf - /etc/cron.d /etc/cron.daily /etc/cron.weekly /etc/cron.monthly 2>/dev/null" | \
+    tar -xzf - -C "$dst" --strip-components=1 || true
+
+  local user_count=$(wc -l < "$dst/users.list" 2>/dev/null || echo "0")
+  local size=$(du -sh "$dst" 2>/dev/null | cut -f1 || echo "0")
+  ok "User accounts exported ($user_count users, $size)"
+}
+
 # ── Module selection ──
 declare -A MODULE_FUNCS=(
   [network]=export_network
@@ -372,9 +577,13 @@ declare -A MODULE_FUNCS=(
   [vhosts]=export_vhosts
   [users]=export_users
   [state]=export_state
+  [git]=export_git
+  [media]=export_media
+  [mail]=export_mail
+  [accounts]=export_accounts
 )
 
-ALL_MODULES="network,firewall,wireguard,crowdsec,dhcp,haproxy,nginx,certs,content,vhosts,users,state"
+ALL_MODULES="network,firewall,wireguard,crowdsec,dhcp,haproxy,nginx,certs,content,vhosts,users,state,git,media,mail,accounts"
 
 if [[ "$MODULES" == "all" ]]; then
   MODULES="$ALL_MODULES"

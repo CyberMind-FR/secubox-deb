@@ -15,7 +15,7 @@ set -euo pipefail
 
 readonly SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 readonly REPO="$(cd "$SCRIPT_DIR/.." && pwd)"
-readonly VERSION="1.0.0"
+readonly VERSION="2.0.0"
 readonly TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 
 # ── Colors ──
@@ -50,6 +50,11 @@ LETSENCRYPT_DIR="/etc/letsencrypt"
 WWW_DIR="/srv/www"
 VAR_LIB_SECUBOX="/var/lib/secubox"
 ROLLBACK_DIR="/var/lib/secubox/rollback"
+GIT_DIR="/srv/git"
+MEDIA_DIR="/srv/media"
+MAIL_DIR="/var/vmail"
+POSTFIX_DIR="/etc/postfix"
+DOVECOT_DIR="/etc/dovecot"
 
 usage() {
   cat <<EOF
@@ -70,7 +75,8 @@ Options:
   --passphrase PASS     Decryption passphrase (prompts if encrypted)
   -m, --modules LIST    Comma-separated module list (default: all)
                         Available: network,firewall,wireguard,crowdsec,dhcp,
-                                   haproxy,nginx,certs,content,vhosts,users,state
+                                   haproxy,nginx,certs,content,vhosts,users,state,
+                                   git,media,mail,accounts
   --help                Show this help
 
 Examples:
@@ -534,6 +540,345 @@ import_state() {
   fi
 }
 
+import_git() {
+  section "Importing: Git Repositories"
+
+  local src="$WORKDIR/content/git"
+  if [[ -d "$src" && -n "$(ls -A "$src" 2>/dev/null)" ]]; then
+    run "mkdir -p '$GIT_DIR'"
+
+    local repo_count=0
+
+    # Import bare repos
+    for repo_tar in "$src"/*.git.tar.gz; do
+      [[ -f "$repo_tar" ]] || continue
+      local repo_name=$(basename "$repo_tar" .tar.gz)
+      log "  Importing bare repo: $repo_name"
+      run "tar -xzf '$repo_tar' -C '$GIT_DIR/' --strip-components=2 2>/dev/null || true"
+      ((repo_count++))
+    done
+
+    # Import full repos (with working trees)
+    for repo_tar in "$src"/*-full.tar.gz; do
+      [[ -f "$repo_tar" ]] || continue
+      local repo_name=$(basename "$repo_tar" -full.tar.gz)
+      log "  Importing repo with worktree: $repo_name"
+      run "mkdir -p '$GIT_DIR/$repo_name'"
+      run "tar -xzf '$repo_tar' -C '$GIT_DIR/$repo_name' --strip-components=2 2>/dev/null || true"
+      ((repo_count++))
+    done
+
+    # Import Gitea/Gogs/GitLab repos
+    for git_app in gitea gogs gitlab; do
+      if [[ -d "$src/$git_app" ]]; then
+        log "  Importing $git_app repositories..."
+        run "mkdir -p '/var/lib/$git_app/repositories'"
+        run "cp -r '$src/$git_app/'* '/var/lib/$git_app/repositories/' 2>/dev/null || true"
+
+        # Import config if present
+        if [[ -f "$src/$git_app/app.ini" ]]; then
+          run "mkdir -p '/etc/$git_app'"
+          run "cp '$src/$git_app/app.ini' '/etc/$git_app/'"
+        fi
+
+        if [[ $DRY_RUN -eq 0 ]]; then
+          systemctl restart "$git_app" 2>/dev/null || warn "$git_app restart failed"
+        fi
+      fi
+    done
+
+    # Fix ownership
+    if [[ $DRY_RUN -eq 0 ]]; then
+      chown -R git:git "$GIT_DIR" 2>/dev/null || true
+    fi
+
+    local size=$(du -sh "$src" 2>/dev/null | cut -f1 || echo "0")
+    ok "Git repositories imported ($repo_count repos, $size)"
+  else
+    warn "No git repositories to import"
+  fi
+}
+
+import_media() {
+  section "Importing: Media Files"
+
+  local src="$WORKDIR/content/media"
+  if [[ -d "$src" && -n "$(ls -A "$src" 2>/dev/null)" ]]; then
+    run "mkdir -p '$MEDIA_DIR'"
+
+    # Import general media directories
+    for media_sub in "$src"/srv_* "$src"/var_*; do
+      [[ -d "$media_sub" ]] || continue
+      local sub_name=$(basename "$media_sub")
+      log "  Importing media: $sub_name"
+      run "cp -r '$media_sub/'* '$MEDIA_DIR/' 2>/dev/null || true"
+    done
+
+    # Import PeerTube videos
+    if [[ -d "$src/peertube" ]]; then
+      log "  Importing PeerTube videos..."
+      run "mkdir -p '/var/www/peertube/storage/videos'"
+      run "cp -r '$src/peertube/'* '/var/www/peertube/storage/videos/' 2>/dev/null || true"
+      if [[ $DRY_RUN -eq 0 ]]; then
+        chown -R peertube:peertube /var/www/peertube/storage 2>/dev/null || true
+      fi
+    fi
+
+    # Import Jellyfin library
+    if [[ -d "$src/jellyfin" ]]; then
+      log "  Importing Jellyfin library..."
+      run "mkdir -p '/var/lib/jellyfin/data/library'"
+      run "cp -r '$src/jellyfin/'* '/var/lib/jellyfin/data/library/' 2>/dev/null || true"
+      if [[ -f "$src/jellyfin/system.xml" ]]; then
+        run "mkdir -p '/etc/jellyfin'"
+        run "cp '$src/jellyfin/system.xml' '/etc/jellyfin/'"
+      fi
+      if [[ $DRY_RUN -eq 0 ]]; then
+        chown -R jellyfin:jellyfin /var/lib/jellyfin 2>/dev/null || true
+        systemctl restart jellyfin 2>/dev/null || warn "Jellyfin restart failed"
+      fi
+    fi
+
+    # Import Nextcloud user files
+    if [[ -d "$src/nextcloud" ]]; then
+      log "  Importing Nextcloud files..."
+      run "mkdir -p '/var/www/nextcloud/data'"
+      run "cp -r '$src/nextcloud/'* '/var/www/nextcloud/data/' 2>/dev/null || true"
+      if [[ $DRY_RUN -eq 0 ]]; then
+        chown -R www-data:www-data /var/www/nextcloud/data 2>/dev/null || true
+        # Run Nextcloud file scan
+        sudo -u www-data php /var/www/nextcloud/occ files:scan --all 2>/dev/null || warn "Nextcloud scan failed"
+      fi
+    fi
+
+    local size=$(du -sh "$src" 2>/dev/null | cut -f1 || echo "0")
+    ok "Media files imported ($size)"
+  else
+    warn "No media files to import"
+  fi
+}
+
+import_mail() {
+  section "Importing: Email Data"
+
+  local src="$WORKDIR/content/mail"
+  local secrets_src="$WORKDIR/secrets/mail"
+
+  if [[ -d "$src" && -n "$(ls -A "$src" 2>/dev/null)" ]]; then
+    # Import Maildir
+    for mail_dir in "$src"/var_* "$src"/home_*; do
+      [[ -d "$mail_dir" ]] || continue
+      local dir_name=$(basename "$mail_dir")
+      log "  Importing maildir: $dir_name"
+
+      if [[ "$dir_name" == "var_vmail" || "$dir_name" == "var_mail" ]]; then
+        run "mkdir -p '$MAIL_DIR'"
+        run "cp -r '$mail_dir/'* '$MAIL_DIR/' 2>/dev/null || true"
+      fi
+    done
+
+    # Import Postfix config
+    if [[ -d "$src/postfix" ]]; then
+      log "  Importing Postfix configuration..."
+      run "mkdir -p '$POSTFIX_DIR'"
+      run "cp -r '$src/postfix/'* '$POSTFIX_DIR/' 2>/dev/null || true"
+      if [[ $DRY_RUN -eq 0 ]]; then
+        postmap /etc/postfix/virtual 2>/dev/null || true
+        postmap /etc/postfix/vmailbox 2>/dev/null || true
+        systemctl restart postfix 2>/dev/null || warn "Postfix restart failed"
+      fi
+    fi
+
+    # Import Dovecot config
+    if [[ -d "$src/dovecot" ]]; then
+      log "  Importing Dovecot configuration..."
+      run "mkdir -p '$DOVECOT_DIR'"
+      run "cp -r '$src/dovecot/'* '$DOVECOT_DIR/' 2>/dev/null || true"
+    fi
+
+    # Import DKIM keys from secrets
+    if [[ -d "$secrets_src/opendkim" ]]; then
+      log "  Importing DKIM keys..."
+      run "mkdir -p '/etc/opendkim'"
+      run "cp -r '$secrets_src/opendkim/'* '/etc/opendkim/' 2>/dev/null || true"
+      run "chmod 600 /etc/opendkim/keys/*/*.private 2>/dev/null || true"
+      if [[ $DRY_RUN -eq 0 ]]; then
+        chown -R opendkim:opendkim /etc/opendkim 2>/dev/null || true
+      fi
+    fi
+
+    # Import mail aliases
+    if [[ -f "$src/aliases" ]]; then
+      run "cp '$src/aliases' '/etc/aliases'"
+      if [[ $DRY_RUN -eq 0 ]]; then
+        newaliases 2>/dev/null || warn "newaliases failed"
+      fi
+    fi
+
+    if [[ -f "$src/mailname" ]]; then
+      run "cp '$src/mailname' '/etc/mailname'"
+    fi
+
+    # Import virtual mailbox config
+    if [[ -f "$src/vmailbox" ]]; then
+      run "cp '$src/vmailbox' '/etc/postfix/vmailbox'"
+    fi
+
+    # Import Dovecot users from secrets
+    if [[ -f "$secrets_src/dovecot-users" ]]; then
+      run "mkdir -p '/etc/dovecot'"
+      run "cp '$secrets_src/dovecot-users' '/etc/dovecot/users'"
+      run "chmod 600 '/etc/dovecot/users'"
+    fi
+
+    # Restart mail services
+    if [[ $DRY_RUN -eq 0 ]]; then
+      systemctl restart dovecot 2>/dev/null || warn "Dovecot restart failed"
+      systemctl restart opendkim 2>/dev/null || true
+    fi
+
+    # Fix maildir ownership
+    if [[ $DRY_RUN -eq 0 ]]; then
+      chown -R vmail:vmail "$MAIL_DIR" 2>/dev/null || true
+    fi
+
+    local size=$(du -sh "$src" 2>/dev/null | cut -f1 || echo "0")
+    ok "Email data imported ($size)"
+  else
+    warn "No email data to import"
+  fi
+}
+
+import_accounts() {
+  section "Importing: User Accounts"
+
+  local src="$WORKDIR/content/accounts"
+  local secrets_src="$WORKDIR/secrets/accounts"
+
+  if [[ -d "$src" && -n "$(ls -A "$src" 2>/dev/null)" ]]; then
+    local user_count=0
+
+    # Create users from passwd/shadow (interactive - requires confirmation)
+    if [[ -f "$secrets_src/passwd" && -f "$secrets_src/shadow" ]]; then
+      log "  Importing user accounts..."
+
+      while IFS=: read -r username x uid gid gecos home shell; do
+        [[ -z "$username" ]] && continue
+
+        # Check if user exists
+        if ! id "$username" &>/dev/null; then
+          log "    Creating user: $username (UID: $uid)"
+          if [[ $DRY_RUN -eq 0 ]]; then
+            # Create user with same UID/GID
+            useradd -m -u "$uid" -s "$shell" -c "$gecos" "$username" 2>/dev/null || \
+              useradd -m -s "$shell" -c "$gecos" "$username" 2>/dev/null || \
+              warn "Failed to create user: $username"
+
+            # Set password from shadow
+            local shadow_entry=$(grep "^${username}:" "$secrets_src/shadow" 2>/dev/null)
+            if [[ -n "$shadow_entry" ]]; then
+              echo "$shadow_entry" | chpasswd -e 2>/dev/null || true
+            fi
+          fi
+          ((user_count++))
+        else
+          log "    User exists: $username (skipping)"
+        fi
+      done < "$secrets_src/passwd"
+    fi
+
+    # Import home directories
+    if [[ -d "$src/homes" ]]; then
+      for user_home in "$src/homes"/*; do
+        [[ -d "$user_home" ]] || continue
+        local username=$(basename "$user_home")
+        local target_home="/home/$username"
+
+        # Get actual home from passwd if user exists
+        if id "$username" &>/dev/null; then
+          target_home=$(getent passwd "$username" | cut -d: -f6)
+        fi
+
+        log "    Importing home directory: $username → $target_home"
+        run "mkdir -p '$target_home'"
+        run "cp -r '$user_home/'* '$target_home/' 2>/dev/null || true"
+
+        if [[ $DRY_RUN -eq 0 ]]; then
+          chown -R "$username:$username" "$target_home" 2>/dev/null || true
+        fi
+      done
+    fi
+
+    # Import group memberships
+    if [[ -f "$secrets_src/group" ]]; then
+      log "  Importing group memberships..."
+      while IFS=: read -r groupname x gid members; do
+        [[ -z "$groupname" ]] && continue
+        [[ -z "$members" ]] && continue
+
+        # Create group if it doesn't exist
+        if ! getent group "$groupname" &>/dev/null; then
+          if [[ $DRY_RUN -eq 0 ]]; then
+            groupadd -g "$gid" "$groupname" 2>/dev/null || \
+              groupadd "$groupname" 2>/dev/null || true
+          fi
+        fi
+
+        # Add members to group
+        IFS=',' read -ra MEMBERS <<< "$members"
+        for member in "${MEMBERS[@]}"; do
+          if id "$member" &>/dev/null; then
+            if [[ $DRY_RUN -eq 0 ]]; then
+              usermod -aG "$groupname" "$member" 2>/dev/null || true
+            fi
+          fi
+        done
+      done < "$secrets_src/group"
+    fi
+
+    # Import sudoers
+    if [[ -f "$src/sudoers.d" && -s "$src/sudoers.d" ]]; then
+      log "  Importing sudoers rules..."
+      run "cp '$src/sudoers.d' '/etc/sudoers.d/migrated'"
+      run "chmod 440 '/etc/sudoers.d/migrated'"
+      # Validate sudoers
+      if [[ $DRY_RUN -eq 0 ]]; then
+        visudo -c -f /etc/sudoers.d/migrated 2>/dev/null || {
+          warn "Invalid sudoers rules - removing"
+          rm -f /etc/sudoers.d/migrated
+        }
+      fi
+    fi
+
+    # Import crontabs
+    if [[ -d "$src/crontabs" ]]; then
+      log "  Importing user crontabs..."
+      for crontab_file in "$src/crontabs"/*; do
+        [[ -f "$crontab_file" ]] || continue
+        local cron_user=$(basename "$crontab_file")
+        if id "$cron_user" &>/dev/null; then
+          run "mkdir -p '/var/spool/cron/crontabs'"
+          run "cp '$crontab_file' '/var/spool/cron/crontabs/$cron_user'"
+          run "chmod 600 '/var/spool/cron/crontabs/$cron_user'"
+          run "chown '$cron_user:crontab' '/var/spool/cron/crontabs/$cron_user' 2>/dev/null || true"
+          log "    Imported crontab: $cron_user"
+        fi
+      done
+    fi
+
+    # Import system cron jobs
+    for cron_dir in cron.d cron.daily cron.weekly cron.monthly; do
+      if [[ -d "$src/$cron_dir" ]]; then
+        run "cp -r '$src/$cron_dir/'* '/etc/$cron_dir/' 2>/dev/null || true"
+      fi
+    done
+
+    ok "User accounts imported ($user_count new users)"
+  else
+    warn "No user accounts to import"
+  fi
+}
+
 # ── Module selection ──
 declare -A MODULE_FUNCS=(
   [network]=import_network
@@ -548,9 +893,13 @@ declare -A MODULE_FUNCS=(
   [vhosts]=import_vhosts
   [users]=import_users
   [state]=import_state
+  [git]=import_git
+  [media]=import_media
+  [mail]=import_mail
+  [accounts]=import_accounts
 )
 
-ALL_MODULES="network,firewall,wireguard,crowdsec,dhcp,haproxy,nginx,certs,content,vhosts,users,state"
+ALL_MODULES="network,firewall,wireguard,crowdsec,dhcp,haproxy,nginx,certs,content,vhosts,users,state,git,media,mail,accounts"
 
 if [[ "$MODULES" == "all" ]]; then
   MODULES="$ALL_MODULES"
