@@ -82,6 +82,8 @@ systemctl restart secubox-hub
 
 See [#34](https://github.com/CyberMind-FR/secubox-deb/issues/34) for full discussion.
 
+**GitHub Issue #34 Status**: ✅ **RESOLVED** (Session 73-74, 2026-04-29)
+
 ---
 
 ## Network Issues
