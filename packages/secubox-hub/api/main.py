@@ -25,6 +25,60 @@ log = get_logger("hub")
 # ══════════════════════════════════════════════════════════════════
 # Public Endpoints — No authentication required
 # ══════════════════════════════════════════════════════════════════
+@public_router.get("/menu")
+async def public_menu():
+    """Public menu endpoint for sidebar navigation (no auth required).
+    Returns basic menu structure without sensitive data.
+    """
+    menu_items = _load_menu_definitions()
+
+    # Filter to only installed modules and check active status
+    installed_items = []
+    for item in menu_items:
+        module_id = item.get("id", "")
+
+        # Hub is always installed
+        if module_id == "hub":
+            item["installed"] = True
+            item["active"] = True
+            installed_items.append(item)
+            continue
+
+        # Check if module is installed
+        if _check_module_installed(module_id):
+            item["installed"] = True
+            item["active"] = _check_module_active(module_id)
+            installed_items.append(item)
+
+    # Group by category
+    categories = {}
+    for item in installed_items:
+        cat = item.get("category", "other")
+        if cat not in categories:
+            cat_meta = CATEGORY_META.get(cat, {"name": cat.title(), "icon": "📦", "order": 99})
+            categories[cat] = {
+                "id": cat,
+                "name": cat_meta["name"],
+                "icon": cat_meta["icon"],
+                "order": cat_meta["order"],
+                "items": []
+            }
+        categories[cat]["items"].append(item)
+
+    # Sort items within each category
+    for cat in categories.values():
+        cat["items"].sort(key=lambda x: x.get("order", 999))
+
+    # Sort categories by order
+    sorted_categories = sorted(categories.values(), key=lambda x: x["order"])
+
+    return {
+        "categories": sorted_categories,
+        "total_installed": len(installed_items),
+        "total_active": sum(1 for i in installed_items if i.get("active")),
+    }
+
+
 @public_router.get("/info")
 async def public_info():
     """Public info endpoint for login page (no auth required)."""

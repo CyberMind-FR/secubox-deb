@@ -11,7 +11,7 @@
  */
 
 (function() {
-    const MENU_API = '/api/v1/hub/menu';
+    const MENU_API = '/api/v1/hub/public/menu';
     const VERSION = 'v1.7.0';
     const THEME_KEY = 'sbx_theme';
 

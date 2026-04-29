@@ -45,6 +45,12 @@
 - Changed from Unix socket to TCP port 8001 for VM compatibility
 - Issue documented in FAQ-Troubleshooting.md and GitHub #34
 
+**WebUI Menu Fix:**
+- Added public menu endpoint at `/api/v1/hub/public/menu` (no auth required)
+- Fixed Pydantic 1.x compatibility: `Optional[HTTPAuthorizationCredentials]` for require_jwt
+- Updated sidebar.js to use public menu endpoint
+- Resolves "Failed to load menu: Invalid menu data" error on WebUI
+
 ---
 
 ## ✅ Complété (Session 71) — Eye Remote Display System v2.3.0
