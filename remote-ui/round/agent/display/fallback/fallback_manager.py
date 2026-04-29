@@ -24,6 +24,7 @@ import asyncio
 import threading
 import urllib.request
 import urllib.error
+import ssl
 from pathlib import Path
 from enum import Enum
 from typing import Optional, Tuple, List, Dict, Any
@@ -99,15 +100,19 @@ ICON_PATHS = [
     Path(__file__).parent.parent.parent.parent / "assets" / "icons",
 ]
 
-# API endpoints
-API_BASE_OTG = "http://10.55.0.1:8000"
-API_BASE_WIFI = "http://secubox.local:8000"
+# API endpoints - HTTPS via nginx reverse proxy (port 8000 not exposed)
+# OTG network: Pi Zero W (10.55.0.2) ← USB → ESPRESSObin (10.55.0.1)
+# Main network: ESPRESSObin at 192.168.255.250
+API_BASE_OTG = "https://10.55.0.1"           # ESPRESSObin via OTG USB
+API_BASE_OTG_ALT = "https://192.168.255.250" # ESPRESSObin via main network
+API_BASE_WIFI = "https://secubox.local"      # mDNS fallback
 # Try multiple paths (depends on nginx/reverse proxy config)
 API_METRICS_PATHS = [
-    "/api/v1/system/metrics",  # Via nginx reverse proxy
-    "/metrics",                 # Direct to uvicorn
+    "/api/v1/eye-remote/api/system/info",  # Via nginx reverse proxy
+    "/api/v1/hub/metrics",                  # Hub metrics fallback
+    "/api/v1/system/metrics",               # Legacy path
 ]
-API_TIMEOUT = 2
+API_TIMEOUT = 3
 
 # Module-specific metrics mapping
 MODULE_METRICS = {
@@ -245,30 +250,49 @@ class FallbackManager:
 
         success = False
 
+        # SSL context for self-signed certificates
+        ssl_ctx = ssl.create_default_context()
+        ssl_ctx.check_hostname = False
+        ssl_ctx.verify_mode = ssl.CERT_NONE
+
         # Try each API path
         for api_path in API_METRICS_PATHS:
             try:
                 url = f"{self._api_base}{api_path}"
                 req = urllib.request.Request(url, headers={'Accept': 'application/json'})
-                with urllib.request.urlopen(req, timeout=API_TIMEOUT) as resp:
+                with urllib.request.urlopen(req, timeout=API_TIMEOUT, context=ssl_ctx) as resp:
                     data = json.loads(resp.read().decode())
 
                     # Write to inactive buffer
                     new_values: Dict[str, float] = {}
+
+                    # CPU percent - standard field
                     if 'cpu_percent' in data:
                         new_values['AUTH'] = float(max(5, min(95, data['cpu_percent'])))
-                    if 'mem_percent' in data:
-                        new_values['WALL'] = float(max(5, min(95, data['mem_percent'])))
-                    if 'disk_percent' in data:
-                        new_values['BOOT'] = float(max(5, min(95, data['disk_percent'])))
+
+                    # Memory - ESPRESSObin uses memory_used_percent, standard uses mem_percent
+                    if 'memory_used_percent' in data or 'mem_percent' in data:
+                        mem_val = data.get('memory_used_percent', data.get('mem_percent', 50))
+                        new_values['WALL'] = float(max(5, min(95, mem_val)))
+
+                    # Disk - ESPRESSObin uses disk_used_percent, standard uses disk_percent
+                    if 'disk_used_percent' in data or 'disk_percent' in data:
+                        disk_val = data.get('disk_used_percent', data.get('disk_percent', 50))
+                        new_values['BOOT'] = float(max(5, min(95, disk_val)))
+
+                    # Load average - logarithmic scale
                     if 'load_avg_1' in data:
                         load = data['load_avg_1']
                         load_pct = 50 + 20 * math.log10(max(0.1, min(10, load))) if load > 0 else 5
                         new_values['MIND'] = float(max(5, min(95, load_pct)))
-                    if 'cpu_temp' in data:
-                        temp = data['cpu_temp']
-                        temp_pct = max(0, min(100, (temp - 30) / 55 * 100))
+
+                    # CPU temperature - check multiple field names
+                    temp_val = data.get('cpu_temp', data.get('temperature', None))
+                    if temp_val is not None:
+                        temp_pct = max(0, min(100, (temp_val - 30) / 55 * 100))
                         new_values['ROOT'] = float(max(5, min(95, temp_pct)))
+
+                    # WiFi RSSI
                     if 'wifi_rssi' in data:
                         rssi = data['wifi_rssi']
                         rssi_pct = max(0, min(100, (rssi + 90) / 60 * 100))
@@ -294,7 +318,10 @@ class FallbackManager:
 
         # If all paths failed, try switching base URL for next attempt
         if not success:
+            # Rotate through: OTG → OTG_ALT → WIFI → OTG
             if self._api_base == API_BASE_OTG:
+                self._api_base = API_BASE_OTG_ALT
+            elif self._api_base == API_BASE_OTG_ALT:
                 self._api_base = API_BASE_WIFI
             else:
                 self._api_base = API_BASE_OTG
@@ -448,14 +475,65 @@ class FallbackManager:
             self._mode = FallbackMode.COMMUNICATING
 
     def _check_api_available(self, base_url: str) -> bool:
-        """Check if API is actually responding - quick check with 0.5s timeout."""
+        """Check if API is actually responding - quick check with 1s timeout."""
+        ssl_ctx = ssl.create_default_context()
+        ssl_ctx.check_hostname = False
+        ssl_ctx.verify_mode = ssl.CERT_NONE
         try:
             url = f"{base_url}{API_METRICS_PATHS[0]}"
             req = urllib.request.Request(url, headers={'Accept': 'application/json'})
-            with urllib.request.urlopen(req, timeout=0.5) as resp:
+            with urllib.request.urlopen(req, timeout=1.0, context=ssl_ctx) as resp:
                 return resp.status == 200
         except Exception:
             return False
+
+    def _sync_fetch_initial(self):
+        """Synchronous initial fetch when transitioning to ONLINE.
+
+        This ensures we have remote metrics before first render in ONLINE mode,
+        avoiding the race condition where local metrics are shown briefly.
+        """
+        ssl_ctx = ssl.create_default_context()
+        ssl_ctx.check_hostname = False
+        ssl_ctx.verify_mode = ssl.CERT_NONE
+
+        for api_path in API_METRICS_PATHS:
+            try:
+                url = f"{self._api_base}{api_path}"
+                req = urllib.request.Request(url, headers={'Accept': 'application/json'})
+                with urllib.request.urlopen(req, timeout=API_TIMEOUT, context=ssl_ctx) as resp:
+                    data = json.loads(resp.read().decode())
+
+                    # Update values directly (synchronous, no threading)
+                    if 'cpu_percent' in data:
+                        self._values['AUTH'] = float(max(5, min(95, data['cpu_percent'])))
+                    if 'memory_used_percent' in data or 'mem_percent' in data:
+                        mem_val = data.get('memory_used_percent', data.get('mem_percent', 50))
+                        self._values['WALL'] = float(max(5, min(95, mem_val)))
+                    if 'disk_used_percent' in data or 'disk_percent' in data:
+                        disk_val = data.get('disk_used_percent', data.get('disk_percent', 50))
+                        self._values['BOOT'] = float(max(5, min(95, disk_val)))
+                    if 'load_avg_1' in data:
+                        load = data['load_avg_1']
+                        load_pct = 50 + 20 * math.log10(max(0.1, min(10, load))) if load > 0 else 5
+                        self._values['MIND'] = float(max(5, min(95, load_pct)))
+                    temp_val = data.get('cpu_temp', data.get('temperature', None))
+                    if temp_val is not None:
+                        temp_pct = max(0, min(100, (temp_val - 30) / 55 * 100))
+                        self._values['ROOT'] = float(max(5, min(95, temp_pct)))
+                    if 'wifi_rssi' in data:
+                        rssi = data['wifi_rssi']
+                        rssi_pct = max(0, min(100, (rssi + 90) / 60 * 100))
+                        self._values['MESH'] = float(max(5, min(95, rssi_pct)))
+
+                    self._api_metrics = data
+                    print(f"Initial sync fetch success: {data.get('hostname', 'unknown')}")
+                    return True
+
+            except Exception as e:
+                continue
+
+        return False
 
     def check_connection(self) -> FallbackMode:
         """Check OTG/WiFi connection - ONLINE if connected, uses local metrics if no API."""
@@ -464,8 +542,9 @@ class FallbackManager:
             return self._mode
 
         self._last_check = now
+        was_offline = (self._mode == FallbackMode.OFFLINE)
 
-        # Check OTG first (10.55.0.1)
+        # Check OTG first (10.55.0.1 - ESPRESSObin USB interface)
         try:
             result = subprocess.run(
                 ['ping', '-c', '1', '-W', '1', '10.55.0.1'],
@@ -475,11 +554,30 @@ class FallbackManager:
                 # Connected via OTG - ONLINE mode
                 self._api_base = API_BASE_OTG
                 self._mode = FallbackMode.ONLINE
+                # Sync fetch on transition to get initial remote metrics
+                if was_offline:
+                    self._sync_fetch_initial()
                 return self._mode
         except Exception:
             pass
 
-        # Check WiFi (secubox.local)
+        # Check ESPRESSObin main network IP (192.168.255.250)
+        try:
+            result = subprocess.run(
+                ['ping', '-c', '1', '-W', '1', '192.168.255.250'],
+                capture_output=True, timeout=2
+            )
+            if result.returncode == 0:
+                # Connected via main network - ONLINE mode
+                self._api_base = API_BASE_OTG_ALT
+                self._mode = FallbackMode.ONLINE
+                if was_offline:
+                    self._sync_fetch_initial()
+                return self._mode
+        except Exception:
+            pass
+
+        # Check WiFi mDNS (secubox.local)
         try:
             result = subprocess.run(
                 ['ping', '-c', '1', '-W', '1', 'secubox.local'],
@@ -489,6 +587,9 @@ class FallbackManager:
                 # Connected via WiFi - ONLINE mode
                 self._api_base = API_BASE_WIFI
                 self._mode = FallbackMode.ONLINE
+                # Sync fetch on transition to get initial remote metrics
+                if was_offline:
+                    self._sync_fetch_initial()
                 return self._mode
         except Exception:
             pass
@@ -630,12 +731,16 @@ class FallbackManager:
         """Render current display based on mode."""
         self.check_connection()
 
-        # Always update local metrics as baseline
-        self.update_local_metrics()
-
-        # Try API metrics when online (will overlay local if successful)
+        # Update metrics based on mode
         if self._mode in (FallbackMode.ONLINE, FallbackMode.COMMUNICATING):
+            # Online: use API metrics (fetch async), only use local as fallback
             self.fetch_api_metrics()
+            # Only update local if we have no API data yet
+            if not self._api_metrics:
+                self.update_local_metrics()
+        else:
+            # Offline: always use local metrics
+            self.update_local_metrics()
 
         # Track which module is targeted by radar
         self._targeted_module = self.get_targeted_module_index()
