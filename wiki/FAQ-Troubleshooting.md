@@ -65,11 +65,22 @@ VBoxManage controlvm "SecuBox" natpf1 "https,tcp,,9443,,443"
 
 **Symptom**: After login, sidebar shows error, pages don't load.
 
-**Cause**: FastAPI/Pydantic compatibility issue with auth module.
+**Cause**: The menu endpoint required JWT authentication, but the sidebar loads before user login.
 
-**Status**: Known issue, fix in progress. See [#34](https://github.com/CyberMind-FR/secubox-deb/issues/34)
+**Status**: ✅ **FIXED** in v1.7.1+ (commit `b2c9f01`)
 
-**Workaround**: Use REST API directly or wait for package update.
+**Resolution**:
+1. Added public menu endpoint at `/api/v1/hub/public/menu` (no auth required)
+2. Fixed Pydantic 1.x compatibility: changed `HTTPAuthorizationCredentials = Depends()` to `Optional[HTTPAuthorizationCredentials] = Depends()`
+3. Updated `sidebar.js` to use the public menu endpoint
+
+**If running older version**, update packages:
+```bash
+apt update && apt install secubox-hub secubox-core
+systemctl restart secubox-hub
+```
+
+See [#34](https://github.com/CyberMind-FR/secubox-deb/issues/34) for full discussion.
 
 ---
 
