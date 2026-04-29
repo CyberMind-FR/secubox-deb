@@ -1,5 +1,68 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-04-29 (Session 73)*
+*Mis à jour : 2026-04-29 (Session 74)*
+
+---
+
+## ✅ Complété (Session 74) — Migration Data Saver v1.0.0
+
+### OpenWrt → SecuBox-DEB Migration Tools ✅
+
+**Feature:** Export services and content from SecuBox-OpenWrt and restore to SecuBox-DEB targets
+
+**Files Created:**
+- `scripts/migration-export.sh` — SSH export from OpenWrt (UCI configs, services, content)
+- `scripts/migration-import.sh` — Import to SecuBox-DEB with transformation
+- `scripts/migration-transform.py` — UCI → TOML/netplan/nftables/dnsmasq converter
+
+**Files Modified:**
+- `scripts/README.md` — Added migration documentation
+
+**Architecture:**
+```
+SecuBox-OpenWrt → migration-export.sh → archive.tar.gz → migration-import.sh → SecuBox-DEB
+                  (SSH + tar)           (manifest.json)   (transform + apply)
+```
+
+**Exported Modules:**
+| Module | OpenWrt Format | Debian Format |
+|--------|----------------|---------------|
+| network | UCI /etc/config/network | netplan YAML |
+| firewall | UCI /etc/config/firewall | nftables |
+| wireguard | /etc/wireguard/*.conf | Direct copy |
+| crowdsec | /etc/crowdsec/* | Direct copy |
+| dhcp | UCI /etc/config/dhcp | dnsmasq.conf |
+| haproxy | /etc/haproxy/* | Direct copy |
+| nginx | /etc/nginx/* | Direct copy |
+| certs | /etc/letsencrypt/* | Direct copy (secrets) |
+| content | /srv/www/* | Direct copy |
+| vhosts | UCI /etc/config/vhost | TOML |
+| users | auth.toml + SSH keys | Direct copy (secrets) |
+| state | /var/lib/secubox/* | Direct copy |
+
+**Transformer Features:**
+- UCIParser: Parse OpenWrt UCI format → Python dict
+- NetworkTransformer: UCI network → netplan YAML (bridges, static/DHCP)
+- FirewallTransformer: UCI firewall → nftables (zones, rules, redirects)
+- DHCPTransformer: UCI dhcp → dnsmasq.conf (pools, static hosts, DNS)
+- Generic UCI → TOML for other configs
+
+**Security:**
+- AES-256 encryption option for archives
+- Secrets stored in separate encrypted section
+- SHA256 checksums for integrity verification
+- Pre-import rollback snapshot (4R pattern)
+
+**Usage:**
+```bash
+# Export from OpenWrt
+bash scripts/migration-export.sh -h 192.168.255.1 -i ~/.ssh/secubox-openwrt -o /tmp/migration.tar.gz
+
+# Preview import (dry-run)
+bash scripts/migration-import.sh -f /tmp/migration.tar.gz --dry-run
+
+# Apply migration
+bash scripts/migration-import.sh -f /tmp/migration.tar.gz
+```
 
 ---
 
@@ -89,6 +152,65 @@
 **Package Build:**
 - ✅ Built 128/128 SecuBox Debian packages
 - ✅ ESPRESSObin rebuild with packages slipstreamed
+
+---
+
+## ⬜ Next Up — Eye Remote Recovery Boot System v1.0.0
+
+**Priority:** High
+**Reference:** `.claude/PLAN-EYE-REMOTE-RECOVERY.md`
+
+### Overview
+
+Extend Eye Remote Pi Zero W to provide full Marvell board recovery capabilities:
+- **kwboot** serial boot protocol for bricked boards
+- **XMODEM** file transfer for U-Boot/rescue images
+- **mvebu64boot** for Armada 7040/8040 platforms
+- **Tow-Boot UEFI** firmware installation
+- **Automated recovery workflows**
+
+### Target Boards
+
+| Board | SoC | Boot Tool |
+|-------|-----|-----------|
+| MOCHAbin | Armada 7040 | mvebu64boot |
+| ESPRESSObin v7 | Armada 3720 | kwboot |
+| ESPRESSObin Ultra | Armada 3720 | kwboot |
+
+### New Display Modes
+
+| Mode | Description |
+|------|-------------|
+| RECOVERY | Board recovery with kwboot/XMODEM progress |
+| UEFI | Tow-Boot UEFI firmware installation |
+
+### Files to Create
+
+| File | Description |
+|------|-------------|
+| `remote-ui/round/recovery_controller.py` | Main recovery controller |
+| `remote-ui/round/protocols/kwboot.py` | kwboot protocol (boot pattern + XMODEM) |
+| `remote-ui/round/protocols/xmodem.py` | XMODEM-CRC file transfer |
+| `remote-ui/round/protocols/mvebu64.py` | mvebu64boot for Armada 7K/8K |
+| `remote-ui/round/api/recovery_api.py` | WebSocket API for recovery |
+| `remote-ui/round/display/recovery_display.py` | Recovery mode display |
+| `remote-ui/round/systemd/secubox-eye-recovery.service` | Systemd service |
+
+### Recovery Storage
+
+```
+/srv/secubox-recovery/
+├── boards/mochabin/       # U-Boot, Tow-Boot, rescue images
+├── boards/espressobin-v7/
+├── boards/espressobin-ultra/
+├── tools/                 # kwboot, mvebu64boot binaries
+└── config/                # Board signatures, workflows
+```
+
+### Dependencies
+
+- `pyserial>=3.5` — Serial port control
+- `crcmod>=1.7` — CRC-16-CCITT for XMODEM
 
 ---
 
