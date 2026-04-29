@@ -13,6 +13,9 @@ from . import display
 from . import devices
 from . import system
 from . import secubox
+from . import gadget
+from . import storage
+from . import setup
 
 __all__ = [
     'mode',
@@ -22,4 +25,7 @@ __all__ = [
     'devices',
     'system',
     'secubox',
+    'gadget',
+    'storage',
+    'setup',
 ]

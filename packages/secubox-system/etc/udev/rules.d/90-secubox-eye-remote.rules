@@ -1,0 +1,24 @@
+# SecuBox Eye Remote OTG Detection
+# Detects Pi Zero W connected via USB OTG (CDC-ECM gadget)
+# CyberMind - https://cybermind.fr
+
+# Pi Zero W CDC-ECM gadget appears as USB Ethernet
+# idVendor=0525 (NetChip) idProduct=a4a2 (Linux-USB Ethernet/RNDIS Gadget)
+ACTION=="add", SUBSYSTEM=="net", ATTRS{idVendor}=="0525", ATTRS{idProduct}=="a4a2", \
+    NAME="eye-remote", \
+    RUN+="/usr/lib/secubox/eye-remote-connected.sh"
+
+# Alternative: Raspberry Pi USB gadget signature
+ACTION=="add", SUBSYSTEM=="net", ATTRS{idVendor}=="0525", ATTRS{idProduct}=="a4a1", \
+    NAME="eye-remote", \
+    RUN+="/usr/lib/secubox/eye-remote-connected.sh"
+
+# Generic CDC-ECM gadget fallback (check manufacturer string)
+ACTION=="add", SUBSYSTEM=="net", DRIVERS=="cdc_ether", \
+    ATTR{device/manufacturer}=="*SecuBox*", \
+    NAME="eye-remote", \
+    RUN+="/usr/lib/secubox/eye-remote-connected.sh"
+
+# Disconnect handler
+ACTION=="remove", SUBSYSTEM=="net", ENV{INTERFACE}=="eye-remote", \
+    RUN+="/usr/lib/secubox/eye-remote-disconnected.sh"

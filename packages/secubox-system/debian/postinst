@@ -12,6 +12,12 @@ case "$1" in
     systemctl start  secubox-system.service || true
     install -d -m 755 /etc/nginx/secubox.d
     systemctl reload nginx 2>/dev/null || true
+
+    # Eye Remote OTG support
+    chmod +x /usr/lib/secubox/eye-remote-connected.sh 2>/dev/null || true
+    chmod +x /usr/lib/secubox/eye-remote-disconnected.sh 2>/dev/null || true
+    udevadm control --reload-rules 2>/dev/null || true
+    udevadm trigger 2>/dev/null || true
     ;;
 esac
 #DEBHELPER#

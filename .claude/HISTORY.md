@@ -50,6 +50,52 @@
 - `Eye-Remote.md` — HyperPixel dashboard info
 - `Live-USB-VirtualBox.md` — troubleshooting section
 
+**ESPRESSObin Live USB Rebuilt with Installer:**
+- Built with `--embed-image` option for one-step eMMC flashing
+- Embedded: `secubox-espressobin-v7-bookworm.img.gz` (573MB)
+- Output: `secubox-espressobin-v7-live-usb.img.gz` (1.8GB)
+- Flash command: `secubox-flash-emmc` from live USB
+- Includes all v2.1.1 fixes (pydantic v2, CORS, login endpoints)
+
+### Session 73 — Eye Remote Real Metrics Integration
+
+**Feature:** Real metrics fetching from connected SecuBox via OTG/WiFi
+
+**Components Created:**
+
+1. **Metrics Fetcher** (`remote-ui/round/agent/api/metrics_fetcher.py`)
+   - Async fetcher using aiohttp
+   - Aggregates data from multiple SecuBox API endpoints
+   - Connection state detection (OTG/WiFi/Disconnected)
+   - Module-specific metrics (AUTH, WALL, MESH, etc.)
+   - Double buffer for non-blocking display updates
+
+2. **OTG Host Support for ESPRESSObin** (`packages/secubox-system/`)
+   - `etc/udev/rules.d/90-secubox-eye-remote.rules` — Detects Pi Zero CDC-ECM
+   - `usr/lib/secubox/eye-remote-connected.sh` — Configures 10.55.0.1/30
+   - `usr/lib/secubox/eye-remote-disconnected.sh` — Cleanup handler
+
+3. **Display Integration** (`remote-ui/round/agent/display/fallback/fallback_manager.py`)
+   - Integrated MetricsFetcher for real data
+   - Mode indicator shows connection type + latency
+   - Module details show real vs local data source
+   - Targeted metrics display with extra details
+
+**API Endpoints Used:**
+- `/api/v1/system/metrics` — System metrics
+- `/api/v1/auth/stats` — Authentication stats
+- `/api/v1/crowdsec/metrics` — CrowdSec decisions
+- `/api/v1/wireguard/status` — WireGuard peers
+- `/api/v1/dpi/stats` — DPI flow data
+
+**Feature Plan Created:**
+- `.claude/plans/eye-remote-otg-features.md` — 5 features roadmap:
+  1. Real Metrics Display (implemented)
+  2. OTG Tools Dashboard
+  3. Gadget Parameters Control
+  4. Storage Sync for Configs
+  5. Self-Setup Portal
+
 ---
 
 ### Session 71 — Eye Remote Display System v2.3.0

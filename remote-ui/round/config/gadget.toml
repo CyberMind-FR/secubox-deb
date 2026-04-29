@@ -1,0 +1,52 @@
+# SecuBox Eye Remote - USB Gadget Configuration
+# CyberMind - https://cybermind.fr
+#
+# This file configures USB OTG gadget modes for Eye Remote.
+# Copy to /etc/secubox/eye-remote/gadget.toml for deployment.
+
+[gadget]
+# Default mode at boot: none, ecm, acm, mass_storage, composite
+default_mode = "composite"
+
+# Auto-switch mode based on host detection
+auto_switch = true
+
+# USB device identifiers
+vendor_id = "0x1d6b"   # Linux Foundation
+product_id = "0x0104"  # Multifunction Composite Gadget
+manufacturer = "SecuBox"
+product = "Eye Remote"
+
+# Serial number (leave empty to auto-generate from CPU serial)
+serial_number = ""
+
+[ecm]
+# CDC Ethernet (ECM) settings
+host_ip = "10.55.0.1"     # IP assigned to host side
+device_ip = "10.55.0.2"   # IP assigned to device (Eye Remote)
+netmask = "255.255.255.252"
+
+# MAC addresses (leave empty to auto-generate)
+host_mac = ""
+device_mac = ""
+
+[acm]
+# CDC ACM (Serial) settings
+baudrate = 115200
+
+# Enable getty on serial console
+console_enabled = true
+
+[mass_storage]
+# Mass storage settings
+# Path to storage file or block device
+partition = "/srv/eye-remote/storage.img"
+
+# Read-only mode (safer for config storage)
+readonly = false
+
+# Removable media flag (allows safe eject)
+removable = true
+
+# CD-ROM emulation (for bootable ISOs)
+cdrom = false
