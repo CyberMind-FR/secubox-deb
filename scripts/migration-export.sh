@@ -37,6 +37,7 @@ PASSPHRASE=""
 SSH_PORT=22
 WORKDIR=""
 MODULES="all"
+EXCLUDE_SERVICES=""
 
 usage() {
   cat <<EOF
@@ -60,6 +61,8 @@ Options:
                         Available: network,firewall,wireguard,crowdsec,dhcp,
                                    haproxy,nginx,certs,content,vhosts,users,
                                    git,media,mail,accounts,dns,databases,scripts
+  --exclude-services    Comma-separated list of /srv/* services to skip
+                        Example: nextcloud,peertube,gitea
   --help                Show this help
 
 Examples:
@@ -89,6 +92,7 @@ while [[ $# -gt 0 ]]; do
     -e|--encrypt)   ENCRYPT=1; shift ;;
     --passphrase)   PASSPHRASE="$2"; shift 2 ;;
     -m|--modules)   MODULES="$2"; shift 2 ;;
+    --exclude-services) EXCLUDE_SERVICES="$2"; shift 2 ;;
     --help)         usage ;;
     *)              err "Unknown option: $1" ;;
   esac
@@ -825,9 +829,21 @@ export_services() {
     maltego
   "
 
+  # Build exclusion array
+  local -a excluded_list
+  IFS=',' read -ra excluded_list <<< "$EXCLUDE_SERVICES"
+
   for svc in $services; do
     svc=$(echo "$svc" | tr -d ' ')
     [[ -z "$svc" ]] && continue
+
+    # Check if service is in exclusion list
+    local skip=0
+    for excl in "${excluded_list[@]}"; do
+      excl=$(echo "$excl" | tr -d ' ')
+      [[ "$svc" == "$excl" ]] && { skip=1; break; }
+    done
+    [[ $skip -eq 1 ]] && { warn "  Skipping excluded: /srv/$svc"; continue; }
 
     if ssh_run "[ -d '/srv/$svc' ]" 2>/dev/null; then
       log "  Exporting: /srv/$svc"
