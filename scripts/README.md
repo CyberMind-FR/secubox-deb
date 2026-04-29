@@ -180,6 +180,100 @@ sudo bash install-audit.sh
 
 ---
 
+## Migration Scripts
+
+| Script | Description |
+|--------|-------------|
+| `migration-export.sh` | Export SecuBox-OpenWrt configs via SSH |
+| `migration-import.sh` | Import migration archive to SecuBox-DEB |
+| `migration-transform.py` | UCI → TOML/netplan/nftables converter |
+
+### Overview
+
+Migration Data Saver exports services and content from SecuBox-OpenWrt and restores them to SecuBox-DEB targets (VirtualBox/amd64, ESPRESSObin/ARM64).
+
+```
+┌─────────────────────────────────┐
+│  SecuBox-OpenWrt (source)       │
+│  ├─ /etc/config/* (UCI)         │
+│  ├─ /etc/wireguard/*.conf       │
+│  ├─ /etc/crowdsec/*             │
+│  └─ /srv/www/* (content)        │
+└──────────────┬──────────────────┘
+               │ SSH + tar
+               ▼
+┌─────────────────────────────────┐
+│  Migration Archive (.tar.gz)    │
+│  ├─ manifest.json               │
+│  ├─ configs/ (UCI → TOML)       │
+│  ├─ secrets/ (encrypted)        │
+│  └─ content/ (web/media)        │
+└──────────────┬──────────────────┘
+               │ transform + import
+               ▼
+┌─────────────────────────────────┐
+│  SecuBox-DEB (target)           │
+│  ├─ /etc/secubox/*.toml         │
+│  ├─ /etc/netplan/*.yaml         │
+│  ├─ /etc/nftables.conf          │
+│  └─ /srv/www/*                  │
+└─────────────────────────────────┘
+```
+
+### Usage
+
+```bash
+# 1. Setup SSH key access to OpenWrt source
+ssh-copy-id -i ~/.ssh/secubox-openwrt root@192.168.255.1
+
+# 2. Export from OpenWrt
+bash scripts/migration-export.sh -h 192.168.255.1 -i ~/.ssh/secubox-openwrt -o /tmp/migration.tar.gz
+
+# 3. Preview import on target (dry-run)
+bash scripts/migration-import.sh -f /tmp/migration.tar.gz --dry-run
+
+# 4. Apply migration
+bash scripts/migration-import.sh -f /tmp/migration.tar.gz
+
+# Export with encryption
+bash scripts/migration-export.sh -h 192.168.255.1 -e -o /tmp/migration.tar.gz.enc
+
+# Import encrypted archive
+bash scripts/migration-import.sh -f /tmp/migration.tar.gz.enc --passphrase "secret"
+
+# Export/import specific modules only
+bash scripts/migration-export.sh -h 192.168.255.1 -m wireguard,crowdsec,certs -o /tmp/partial.tar.gz
+bash scripts/migration-import.sh -f /tmp/partial.tar.gz -m wireguard,crowdsec
+```
+
+### Exported Modules
+
+| Module | OpenWrt Source | Debian Destination |
+|--------|----------------|-------------------|
+| network | /etc/config/network (UCI) | /etc/netplan/00-secubox.yaml |
+| firewall | /etc/config/firewall (UCI) | /etc/nftables.conf |
+| wireguard | /etc/wireguard/*.conf | /etc/wireguard/*.conf |
+| crowdsec | /etc/crowdsec/* | /etc/crowdsec/* |
+| dhcp | /etc/config/dhcp (UCI) | /etc/dnsmasq.d/secubox.conf |
+| haproxy | /etc/haproxy/* | /etc/haproxy/* |
+| nginx | /etc/nginx/* | /etc/nginx/* |
+| certs | /etc/letsencrypt/* | /etc/letsencrypt/* |
+| content | /srv/www/* | /srv/www/* |
+| vhosts | /etc/config/vhost (UCI) | /etc/secubox/vhosts/*.toml |
+| users | /etc/secubox/auth.toml | /etc/secubox/auth.toml |
+| state | /var/lib/secubox/* | /var/lib/secubox/* |
+
+### Rollback
+
+Pre-import snapshots are created automatically at `/var/lib/secubox/rollback/pre-migration-TIMESTAMP/`. To rollback:
+
+```bash
+# Restore from snapshot
+cp -a /var/lib/secubox/rollback/pre-migration-20260429-143022/* /etc/
+```
+
+---
+
 ## Environment Variables
 
 | Variable | Description |
