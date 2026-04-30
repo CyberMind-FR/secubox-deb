@@ -537,3 +537,315 @@ Module must provide `menu.d/*.json` with fields:
 ```
 
 **Required fields**: `name` (not `title`), emoji `icon`, `path`, `category`, `order`
+
+---
+
+## Pattern 13 — Performance: Background Refresh Cache
+
+**CRITICAL for stats endpoints.** Never block API responses with expensive computations.
+
+### Problem: Blocking Stats Collection
+```python
+# BAD: 500ms+ blocking on every request
+@router.get("/stats")
+async def get_stats():
+    data = await expensive_collection()  # subprocess calls, file parsing
+    return data
+```
+
+### Solution: Pre-computed Cache with Instant Response
+```python
+import asyncio
+import json
+from pathlib import Path
+from secubox_core.logger import get_logger
+
+log = get_logger("module")
+CACHE_FILE = Path("/var/cache/secubox/module/stats.json")
+_cache: dict = {}
+_cache_lock = asyncio.Lock()
+
+async def _refresh_cache():
+    """Background task: refresh cache every 60s."""
+    while True:
+        try:
+            data = await _compute_stats()  # expensive work
+            CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+            CACHE_FILE.write_text(json.dumps(data))
+            async with _cache_lock:
+                _cache.update(data)
+            log.debug("cache refreshed")
+        except Exception as e:
+            log.error(f"cache refresh failed: {e}")
+        await asyncio.sleep(60)
+
+@app.on_event("startup")
+async def startup():
+    # Load existing cache file if available
+    if CACHE_FILE.exists():
+        try:
+            _cache.update(json.loads(CACHE_FILE.read_text()))
+        except Exception:
+            pass
+    asyncio.create_task(_refresh_cache())
+
+@router.get("/stats")
+async def get_stats():
+    """Instant response from pre-computed cache."""
+    if _cache:
+        return _cache
+    if CACHE_FILE.exists():
+        return json.loads(CACHE_FILE.read_text())
+    return {"error": "cache not ready", "retry_after": 5}
+```
+
+### When to Apply
+- Dashboard stats endpoints
+- Log aggregation endpoints
+- Metrics collection (CPU, mem, disk, network)
+- CrowdSec decisions/alerts lists
+- Any endpoint reading files or calling subprocesses
+
+### When NOT to Apply
+- Real-time actions (start/stop/restart/ban/unban)
+- Configuration changes
+- User-initiated operations requiring immediate feedback
+
+---
+
+## Pattern 14 — Performance: Parallel Subprocess Execution
+
+### Problem: Sequential CLI Calls
+```python
+# BAD: 7-10 seconds total
+decisions = await run("cscli decisions list")  # 2s
+alerts = await run("cscli alerts list")        # 2s
+metrics = await run("cscli metrics")           # 3s
+bouncers = await run("cscli bouncers list")    # 2s
+```
+
+### Solution: asyncio.gather() Parallelization
+```python
+import asyncio
+
+async def run_cmd(cmd: str, timeout: float = 30.0) -> str:
+    """Run subprocess asynchronously with timeout."""
+    proc = await asyncio.create_subprocess_shell(
+        cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    try:
+        stdout, stderr = await asyncio.wait_for(
+            proc.communicate(), timeout=timeout
+        )
+        return stdout.decode() if proc.returncode == 0 else ""
+    except asyncio.TimeoutError:
+        proc.kill()
+        return ""
+
+async def get_crowdsec_status():
+    # GOOD: 2-3 seconds total (parallel execution)
+    decisions, alerts, metrics, bouncers = await asyncio.gather(
+        run_cmd("cscli decisions list -o json"),
+        run_cmd("cscli alerts list -o json"),
+        run_cmd("cscli metrics -o json"),
+        run_cmd("cscli bouncers list -o json"),
+    )
+    return {
+        "decisions": json.loads(decisions) if decisions else [],
+        "alerts": json.loads(alerts) if alerts else [],
+        "metrics": json.loads(metrics) if metrics else {},
+        "bouncers": json.loads(bouncers) if bouncers else [],
+    }
+```
+
+---
+
+## Pattern 15 — Performance: Memory Limits in Systemd
+
+### Service Memory Configuration
+```ini
+# debian/secubox-module.service
+[Service]
+# Memory limits (adjust per device profile)
+MemoryMax=100M           # Hard limit - OOM kill if exceeded
+MemoryHigh=80M           # Soft limit - triggers reclaim pressure
+
+# For ESPRESSObin (1GB RAM) - lighter limits
+# MemoryMax=50M
+# MemoryHigh=40M
+
+# Prevent memory leaks from consuming system
+MemorySwapMax=50M        # Limit swap usage per service
+```
+
+### Drop-in Override for Device Profiles
+```bash
+# /etc/systemd/system/secubox-module.service.d/memory.conf
+[Service]
+MemoryMax=50M    # ESPRESSObin profile
+MemoryHigh=40M
+```
+
+---
+
+## Pattern 16 — Performance: Streaming Large Responses
+
+### Problem: Loading Entire File into Memory
+```python
+# BAD: Loads 100MB log file into memory
+@router.get("/logs")
+async def get_logs():
+    content = Path("/var/log/secubox/audit.log").read_text()
+    return {"logs": content}
+```
+
+### Solution: StreamingResponse with Generator
+```python
+from fastapi.responses import StreamingResponse
+import aiofiles
+
+@router.get("/logs")
+async def get_logs():
+    """Stream logs without loading entire file."""
+    async def generate():
+        async with aiofiles.open("/var/log/secubox/audit.log") as f:
+            async for line in f:
+                yield line
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/plain",
+        headers={"X-Content-Type-Options": "nosniff"}
+    )
+
+# For JSON: paginate instead of streaming
+@router.get("/logs/json")
+async def get_logs_paginated(offset: int = 0, limit: int = 100):
+    """Paginated log access."""
+    lines = []
+    async with aiofiles.open("/var/log/secubox/audit.log") as f:
+        for i, line in enumerate(await f.readlines()):
+            if i < offset:
+                continue
+            if len(lines) >= limit:
+                break
+            lines.append(line.strip())
+    return {"logs": lines, "offset": offset, "limit": limit}
+```
+
+---
+
+## Pattern 17 — Performance: History Limits by Device
+
+```python
+from secubox_core.config import get_config
+
+# Device-specific history limits
+DEVICE_PROFILES = {
+    "espressobin": {  # 1GB RAM
+        "max_history_entries": 1000,
+        "max_log_lines": 500,
+        "cache_ttl_seconds": 120,
+        "uvicorn_workers": 1,
+    },
+    "mochabin": {  # 8GB RAM
+        "max_history_entries": 10000,
+        "max_log_lines": 5000,
+        "cache_ttl_seconds": 60,
+        "uvicorn_workers": 4,
+    },
+    "default": {
+        "max_history_entries": 5000,
+        "max_log_lines": 2000,
+        "cache_ttl_seconds": 60,
+        "uvicorn_workers": 2,
+    },
+}
+
+def get_device_profile() -> dict:
+    """Get performance profile for current device."""
+    cfg = get_config("global")
+    board = cfg.get("board", "default")
+    return DEVICE_PROFILES.get(board, DEVICE_PROFILES["default"])
+
+# Usage
+profile = get_device_profile()
+MAX_HISTORY = profile["max_history_entries"]
+```
+
+---
+
+## Pattern 18 — Performance: Efficient Config Reading
+
+### Problem: Re-reading TOML on Every Request
+```python
+# BAD: File I/O on every API call
+@router.get("/status")
+async def status():
+    config = toml.load("/etc/secubox/module.toml")  # I/O every time
+    return {"enabled": config.get("enabled", True)}
+```
+
+### Solution: LRU Cache with TTL
+```python
+from functools import lru_cache
+import time
+import toml
+
+_config_cache = {}
+_config_mtime = {}
+
+def get_module_config(module: str, ttl: int = 30) -> dict:
+    """Read config with file modification check."""
+    path = f"/etc/secubox/{module}.toml"
+    try:
+        mtime = os.path.getmtime(path)
+        if module in _config_cache and _config_mtime.get(module) == mtime:
+            return _config_cache[module]
+
+        config = toml.load(path)
+        _config_cache[module] = config
+        _config_mtime[module] = mtime
+        return config
+    except Exception:
+        return _config_cache.get(module, {})
+
+# Even simpler: @lru_cache for truly static configs
+@lru_cache(maxsize=32)
+def get_static_config(module: str) -> dict:
+    """For configs that rarely change - clear cache on service restart."""
+    return toml.load(f"/etc/secubox/{module}.toml")
+```
+
+---
+
+## Pattern 19 — Performance Verification Checklist
+
+Before marking a module complete, verify:
+
+```
+□ No blocking subprocess calls in GET endpoints
+□ Stats endpoints use background refresh pattern
+□ Memory limits defined in systemd service
+□ Large responses use streaming or pagination
+□ Config reads use caching (LRU or mtime-based)
+□ Parallel execution for multiple CLI calls
+□ History/log limits respect device profile
+□ P99 latency < 500ms (ESPRESSObin) or < 200ms (MOCHAbin)
+□ Service RSS < 50MB (ESPRESSObin) or < 100MB (MOCHAbin)
+```
+
+### Quick Performance Test Commands
+```bash
+# API latency
+./scripts/bench/api-latency.py --host $HOST --requests 50
+
+# Memory per service
+./scripts/bench/memory-baseline.sh
+
+# Load test
+locust -f scripts/bench/locustfile.py --host https://$HOST \
+       --headless -u 10 -r 2 -t 60s
+```
