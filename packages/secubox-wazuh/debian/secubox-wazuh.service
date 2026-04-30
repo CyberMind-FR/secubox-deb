@@ -6,7 +6,7 @@ After=network.target secubox-core.service
 Type=simple
 User=root
 WorkingDirectory=/usr/lib/secubox/wazuh
-ExecStart=/usr/local/bin/uvicorn api.main:app --uds /run/secubox/wazuh.sock --log-level warning
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/wazuh.sock --log-level warning
 UMask=0117
 Restart=on-failure
 
