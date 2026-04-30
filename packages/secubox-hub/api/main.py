@@ -23,13 +23,15 @@ log = get_logger("hub")
 
 
 # ══════════════════════════════════════════════════════════════════
-# Public Endpoints — No authentication required
+# Menu Cache — Double-buffer pre-cache for instant response
 # ══════════════════════════════════════════════════════════════════
-@public_router.get("/menu")
-async def public_menu():
-    """Public menu endpoint for sidebar navigation (no auth required).
-    Returns basic menu structure without sensitive data.
-    """
+MENU_CACHE_FILE = Path("/var/cache/secubox/menu.json")
+_menu_cache: dict = {}
+_menu_cache_lock = asyncio.Lock()
+
+
+def _compute_menu_sync() -> dict:
+    """Compute full menu (synchronous, called from thread)."""
     menu_items = _load_menu_definitions()
 
     # Filter to only installed modules and check active status
@@ -39,16 +41,18 @@ async def public_menu():
 
         # Hub is always installed
         if module_id == "hub":
-            item["installed"] = True
-            item["active"] = True
-            installed_items.append(item)
+            item_copy = item.copy()
+            item_copy["installed"] = True
+            item_copy["active"] = True
+            installed_items.append(item_copy)
             continue
 
         # Check if module is installed
         if _check_module_installed(module_id):
-            item["installed"] = True
-            item["active"] = _check_module_active(module_id)
-            installed_items.append(item)
+            item_copy = item.copy()
+            item_copy["installed"] = True
+            item_copy["active"] = _check_module_active(module_id)
+            installed_items.append(item_copy)
 
     # Group by category
     categories = {}
@@ -76,7 +80,74 @@ async def public_menu():
         "categories": sorted_categories,
         "total_installed": len(installed_items),
         "total_active": sum(1 for i in installed_items if i.get("active")),
+        "cached_at": time.time(),
     }
+
+
+async def _refresh_menu_cache():
+    """Background task to refresh menu cache every 30s."""
+    global _menu_cache
+    import concurrent.futures
+
+    while True:
+        try:
+            # Run synchronous computation in thread pool
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                loop = asyncio.get_event_loop()
+                menu_data = await loop.run_in_executor(pool, _compute_menu_sync)
+
+            # Update in-memory cache
+            async with _menu_cache_lock:
+                _menu_cache = menu_data
+
+            # Persist to file for fast startup
+            try:
+                MENU_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+                MENU_CACHE_FILE.write_text(json.dumps(menu_data))
+            except Exception as e:
+                log.debug("Menu cache file write failed: %s", e)
+
+            log.debug("Menu cache refreshed: %d modules", menu_data.get("total_installed", 0))
+        except Exception as e:
+            log.error("Menu cache refresh failed: %s", e)
+
+        await asyncio.sleep(30)  # Refresh every 30s
+
+
+def _load_menu_cache_from_file() -> dict:
+    """Load menu cache from file (for fast startup)."""
+    if MENU_CACHE_FILE.exists():
+        try:
+            return json.loads(MENU_CACHE_FILE.read_text())
+        except Exception:
+            pass
+    return {}
+
+
+# ══════════════════════════════════════════════════════════════════
+# Public Endpoints — No authentication required
+# ══════════════════════════════════════════════════════════════════
+@public_router.get("/menu")
+async def public_menu():
+    """Public menu endpoint for sidebar navigation (no auth required).
+    Returns basic menu structure without sensitive data.
+    Uses pre-computed cache for instant response.
+    """
+    global _menu_cache
+
+    # Return from in-memory cache (instant)
+    if _menu_cache:
+        return _menu_cache
+
+    # Fallback to file cache (fast startup)
+    file_cache = _load_menu_cache_from_file()
+    if file_cache:
+        _menu_cache = file_cache
+        return file_cache
+
+    # Last resort: compute synchronously (only on first request before cache ready)
+    log.warning("Menu cache miss - computing synchronously")
+    return _compute_menu_sync()
 
 
 @public_router.get("/info")
@@ -243,8 +314,8 @@ async def _background_cache_refresh():
 
 @app.on_event("startup")
 async def startup():
-    """Start background cache refresh task."""
-    global MODULES, _modules_discovered
+    """Start background cache refresh tasks."""
+    global MODULES, _modules_discovered, _menu_cache
     # Discover modules (non-blocking via thread)
     try:
         import concurrent.futures
@@ -263,8 +334,16 @@ async def startup():
     _refresh_services_cache()
     _refresh_system_stats()
     _cache["last_refresh"] = time.time()
-    # Start background task
+
+    # Load menu cache from file (instant navbar on startup)
+    _menu_cache = _load_menu_cache_from_file()
+    if _menu_cache:
+        log.info("Menu cache loaded from file: %d modules", _menu_cache.get("total_installed", 0))
+
+    # Start background tasks
     asyncio.create_task(_background_cache_refresh())
+    asyncio.create_task(_refresh_menu_cache())
+    log.info("Background cache tasks started")
 
 
 _version_cache: dict = {}
@@ -1206,56 +1285,24 @@ def _check_module_active(module_id: str) -> bool:
 @router.get("/menu")
 async def menu(user=Depends(require_jwt)):
     """
-    Dynamic menu endpoint.
+    Dynamic menu endpoint (authenticated).
     Returns categorized menu items for installed modules only.
+    Uses pre-computed cache for instant response.
     """
-    menu_items = _load_menu_definitions()
+    global _menu_cache
 
-    # Filter to only installed modules and check active status
-    installed_items = []
-    for item in menu_items:
-        module_id = item.get("id", "")
+    # Return from in-memory cache (instant)
+    if _menu_cache:
+        return _menu_cache
 
-        # Hub is always installed
-        if module_id == "hub":
-            item["installed"] = True
-            item["active"] = True
-            installed_items.append(item)
-            continue
+    # Fallback to file cache
+    file_cache = _load_menu_cache_from_file()
+    if file_cache:
+        _menu_cache = file_cache
+        return file_cache
 
-        # Check if module is installed
-        if _check_module_installed(module_id):
-            item["installed"] = True
-            item["active"] = _check_module_active(module_id)
-            installed_items.append(item)
-
-    # Group by category
-    categories = {}
-    for item in installed_items:
-        cat = item.get("category", "other")
-        if cat not in categories:
-            cat_meta = CATEGORY_META.get(cat, {"name": cat.title(), "icon": "📦", "order": 99})
-            categories[cat] = {
-                "id": cat,
-                "name": cat_meta["name"],
-                "icon": cat_meta["icon"],
-                "order": cat_meta["order"],
-                "items": []
-            }
-        categories[cat]["items"].append(item)
-
-    # Sort items within each category
-    for cat in categories.values():
-        cat["items"].sort(key=lambda x: x.get("order", 999))
-
-    # Sort categories by order
-    sorted_categories = sorted(categories.values(), key=lambda x: x["order"])
-
-    return {
-        "categories": sorted_categories,
-        "total_installed": len(installed_items),
-        "total_active": sum(1 for i in installed_items if i.get("active")),
-    }
+    # Last resort: compute synchronously
+    return _compute_menu_sync()
 
 
 app.include_router(router)
