@@ -5,6 +5,47 @@
 
 ## 2026-04-30
 
+### Session 80 — Security Services Integration on ESPRESSObin
+
+**Feature:** Integrated core security modules (CrowdSec, HAProxy, WAF, DNS) on ESPRESSObin
+
+**Services Deployed:**
+| Service | Port | Status | Dashboard |
+|---------|------|--------|-----------|
+| secubox-crowdsec | 8010 | ✅ Running | /crowdsec/ |
+| secubox-haproxy | 8011 | ✅ Running | /haproxy-dashboard/ |
+| secubox-waf | 8012 | ✅ Running | /waf/ |
+| secubox-dns | 8013 | ✅ Running | /dns/ |
+
+**Files Modified:**
+- `packages/secubox-dns/api/main.py` — Fixed Pydantic v1 compatibility (field_validator → validator)
+
+**Systemd Overrides Created (ESPRESSObin):**
+- `/etc/systemd/system/secubox-crowdsec.service.d/override.conf` — TCP port 8010
+- `/etc/systemd/system/secubox-haproxy.service.d/override.conf` — TCP port 8011
+- `/etc/systemd/system/secubox-waf.service.d/override.conf` — TCP port 8012
+- `/etc/systemd/system/secubox-dns.service.d/override.conf` — TCP port 8013
+
+**Nginx Configs Verified:**
+- `/etc/nginx/secubox.d/crowdsec.conf` — API + static dashboard
+- `/etc/nginx/secubox.d/haproxy.conf` — API + static dashboard
+- `/etc/nginx/secubox.d/waf.conf` — API + static dashboard
+- `/etc/nginx/secubox.d/dns.conf` — API + static dashboard
+
+**API Endpoints Working:**
+- CrowdSec: 75+ endpoints (decisions, alerts, bouncers, hub, console, migration)
+- HAProxy: 35+ endpoints (vhosts, backends, certs, stats, WAF toggle)
+- WAF: 15+ endpoints (rules, categories, bans, alerts, autoban)
+- DNS: 20+ endpoints (zones, records, stats, webhooks, export)
+
+**Dashboard Features (OpenWrt-inspired):**
+- CrowdSec: Status monitoring, ban management, alerts, hub, bouncers, console enrollment
+- HAProxy: VHost management, backends, certificates, stats, WAF integration
+- WAF: Rule categories, auto-ban, alerts, IP banning
+- DNS: Zone management, records, validation, history, webhooks
+
+---
+
 ### Session 79 — Performance Benchmark Suite
 
 **Feature:** Created comprehensive performance testing infrastructure for ARM64 optimization

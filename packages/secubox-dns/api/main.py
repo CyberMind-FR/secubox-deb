@@ -23,7 +23,7 @@ from datetime import datetime, timedelta
 from enum import Enum
 
 from fastapi import FastAPI, Depends, HTTPException, Query, BackgroundTasks
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, validator
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
 
@@ -248,8 +248,7 @@ class RecordCreate(BaseModel):
     value: str
     ttl: Optional[int] = Field(default=300, ge=60, le=86400)
 
-    @field_validator('type')
-    @classmethod
+    @validator('type')
     def validate_type(cls, v):
         valid_types = ['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'NS', 'PTR', 'SRV', 'CAA']
         if v.upper() not in valid_types:
@@ -267,8 +266,7 @@ class RecordDelete(BaseModel):
 class ZoneCreate(BaseModel):
     name: str
 
-    @field_validator('name')
-    @classmethod
+    @validator('name')
     def validate_zone_name(cls, v):
         if not v or len(v) < 2:
             raise ValueError("Zone name too short")
@@ -658,7 +656,7 @@ async def validate_record(data: RecordCreate):
     return {
         "valid": len(errors) == 0,
         "errors": errors,
-        "record": data.model_dump()
+        "record": data.dict()
     }
 
 
