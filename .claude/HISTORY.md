@@ -5,6 +5,30 @@
 
 ## 2026-04-30
 
+### Session 81 — Hub Menu Double-Buffer Pre-Cache
+
+**Feature:** Implemented double-buffer pre-cache pattern for navbar menu
+
+**Problem:** Navbar menu was slow (several seconds) due to synchronous systemctl calls for each module check.
+
+**Solution:**
+- Added `MENU_CACHE_FILE` at `/var/cache/secubox/menu.json` for persistence
+- Added `_menu_cache` in-memory dict for instant responses
+- Added `_refresh_menu_cache()` background task (30s interval)
+- Added `_compute_menu_sync()` running in thread pool
+- Cache loaded from file on startup for fast navbar display
+
+**Performance:**
+- Before: Several seconds per request (sequential systemctl calls)
+- After: ~80ms average response time
+
+**Files Modified:**
+- `packages/secubox-hub/api/main.py` — Added cache infrastructure
+
+**Device:** ESPRESSObin V7 (192.168.255.250)
+
+---
+
 ### Session 80 — Security Services Integration on ESPRESSObin
 
 **Feature:** Integrated core security modules (CrowdSec, HAProxy, WAF, DNS) on ESPRESSObin
