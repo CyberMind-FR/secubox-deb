@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from fastapi import FastAPI, Depends, BackgroundTasks
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, validator
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
 
@@ -70,8 +70,7 @@ class WebhookConfig(BaseModel):
     secret: Optional[str] = None
     enabled: bool = True
 
-    @field_validator("url")
-    @classmethod
+    @validator("url")
     def validate_url(cls, v: str) -> str:
         if not v.startswith(("http://", "https://")):
             raise ValueError("URL must start with http:// or https://")
@@ -476,7 +475,7 @@ async def get_config_endpoint():
 @app.put("/config", dependencies=[Depends(require_jwt)])
 async def update_config(data: WebmailConfig):
     """Update webmail configuration."""
-    _record_event("config_update", {"changes": data.model_dump(exclude_none=True)})
+    _record_event("config_update", {"changes": data.dict(exclude_none=True)})
     return {"success": True, "message": "Configuration updated"}
 
 
@@ -589,7 +588,7 @@ async def list_webhooks():
 async def add_webhook(webhook: WebhookConfig):
     """Add a new webhook."""
     webhooks = _load_webhooks()
-    webhook_data = webhook.model_dump()
+    webhook_data = webhook.dict()
     webhook_data["id"] = hashlib.md5(webhook.url.encode()).hexdigest()[:8]
     webhook_data["created_at"] = datetime.now().isoformat()
     webhooks.append(webhook_data)
