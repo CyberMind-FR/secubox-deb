@@ -1,7 +1,7 @@
 {
   "id": "netdiag",
   "name": "Network Diagnostics",
-  "icon": "&#128268;",
+  "icon": "🩺",
   "path": "/netdiag/",
   "category": "network",
   "order": 921,

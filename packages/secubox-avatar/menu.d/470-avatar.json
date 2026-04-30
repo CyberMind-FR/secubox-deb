@@ -2,7 +2,7 @@
   "id": "avatar",
   "name": "Identity Manager",
   "category": "users",
-  "icon": "*",
+  "icon": "👤",
   "path": "/avatar/",
   "order": 470,
   "description": "Identity and avatar management"

@@ -2,7 +2,7 @@
   "id": "cyberfeed",
   "name": "CyberFeed",
   "category": "security",
-  "icon": "shield-check",
+  "icon": "📡",
   "path": "/cyberfeed/",
   "order": 490,
   "description": "Threat intelligence feed aggregator"
