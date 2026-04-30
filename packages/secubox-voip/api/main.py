@@ -4,7 +4,9 @@ Provides Asterisk/FreePBX Docker container management with extension,
 trunk, route, IVR, and voicemail configuration.
 """
 import asyncio
+import hashlib
 import json
+import secrets
 import shutil
 import subprocess
 from datetime import datetime
@@ -43,6 +45,36 @@ EXTENSIONS_FILE = Path("/etc/secubox/voip-extensions.json")
 TRUNKS_FILE = Path("/etc/secubox/voip-trunks.json")
 ROUTES_FILE = Path("/etc/secubox/voip-routes.json")
 IVR_FILE = Path("/etc/secubox/voip-ivr.json")
+
+
+# ============================================================================
+# Password Hashing (PBKDF2-SHA256)
+# ============================================================================
+
+def hash_password(password: str, salt: str = None) -> dict:
+    """Hash password using PBKDF2-SHA256 with random salt.
+
+    Returns:
+        dict with 'hash' and 'salt' fields for storage
+    """
+    if salt is None:
+        salt = secrets.token_hex(16)
+
+    # PBKDF2 with SHA256, 100000 iterations (OWASP recommendation)
+    pw_hash = hashlib.pbkdf2_hmac(
+        'sha256',
+        password.encode('utf-8'),
+        salt.encode('utf-8'),
+        100000
+    ).hex()
+
+    return {"hash": pw_hash, "salt": salt}
+
+
+def verify_password(password: str, stored_hash: str, salt: str) -> bool:
+    """Verify password against stored hash."""
+    computed = hash_password(password, salt)
+    return secrets.compare_digest(computed["hash"], stored_hash)
 
 
 # ============================================================================
@@ -321,9 +353,11 @@ async def create_extension(ext: Extension, user=Depends(require_jwt)):
         "context": ext.context,
         "created": datetime.now().isoformat(),
     }
-    # Store password securely (hash in production)
+    # Store password securely (PBKDF2-SHA256)
     if ext.password:
-        ext_data["password_hash"] = ext.password  # TODO: hash this
+        pw_data = hash_password(ext.password)
+        ext_data["password_hash"] = pw_data["hash"]
+        ext_data["password_salt"] = pw_data["salt"]
 
     extensions.append(ext_data)
     save_json(EXTENSIONS_FILE, extensions)
@@ -383,9 +417,11 @@ async def create_trunk(trunk: Trunk, user=Depends(require_jwt)):
         "codecs": trunk.codecs,
         "created": datetime.now().isoformat(),
     }
-    # Store password securely
+    # Store password securely (PBKDF2-SHA256)
     if trunk.password:
-        trunk_data["password_hash"] = trunk.password  # TODO: hash this
+        pw_data = hash_password(trunk.password)
+        trunk_data["password_hash"] = pw_data["hash"]
+        trunk_data["password_salt"] = pw_data["salt"]
 
     trunks.append(trunk_data)
     save_json(TRUNKS_FILE, trunks)

@@ -449,7 +449,11 @@ async def _sync_mirror(mirror: dict) -> dict:
     try:
         mtype = mirror.get("type", "generic")
         url = mirror.get("url")
-        name = mirror.get("name")
+        name = mirror.get("name", "unknown")
+
+        # Validate required fields
+        if not url:
+            return {"success": False, "error": "Mirror URL not configured"}
 
         if mtype == "apt":
             # For APT mirrors, we just verify reachability
@@ -465,6 +469,55 @@ async def _sync_mirror(mirror: dict) -> dict:
             else:
                 return {"success": False, "error": f"Mirror returned {result.stdout.strip()}"}
 
+        elif mtype == "docker":
+            # Docker registry check - verify registry API v2
+            registry_url = url.rstrip("/") + "/v2/"
+            result = subprocess.run(
+                ["curl", "-sI", "-o", "/dev/null", "-w", "%{http_code}", registry_url],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if result.stdout.strip() in ("200", "401"):  # 401 is OK for auth-required registries
+                return {"success": True, "message": f"Docker registry {name} is reachable"}
+            else:
+                return {"success": False, "error": f"Registry returned {result.stdout.strip()}"}
+
+        elif mtype == "npm":
+            # NPM registry check - verify npm API
+            npm_url = url.rstrip("/") + "/-/ping"
+            result = subprocess.run(
+                ["curl", "-sI", "-o", "/dev/null", "-w", "%{http_code}", npm_url],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if result.stdout.strip() in ("200", "204"):
+                return {"success": True, "message": f"NPM registry {name} is reachable"}
+            else:
+                # Fallback: try root URL
+                result = subprocess.run(
+                    ["curl", "-sI", "-o", "/dev/null", "-w", "%{http_code}", url],
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+                return {"success": result.stdout.strip() in ("200", "301", "302")}
+
+        elif mtype == "pypi":
+            # PyPI registry check - verify simple API
+            pypi_url = url.rstrip("/") + "/simple/"
+            result = subprocess.run(
+                ["curl", "-sI", "-o", "/dev/null", "-w", "%{http_code}", pypi_url],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if result.stdout.strip() in ("200", "301", "302"):
+                return {"success": True, "message": f"PyPI registry {name} is reachable"}
+            else:
+                return {"success": False, "error": f"PyPI returned {result.stdout.strip()}"}
+
         elif mtype == "generic":
             # Generic URL check
             result = subprocess.run(
@@ -475,7 +528,18 @@ async def _sync_mirror(mirror: dict) -> dict:
             )
             return {"success": result.stdout.strip() in ("200", "301", "302")}
 
-        return {"success": True, "message": "Sync not implemented for this type"}
+        else:
+            # Unknown type - try generic URL check
+            result = subprocess.run(
+                ["curl", "-sI", "-o", "/dev/null", "-w", "%{http_code}", url],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            return {
+                "success": result.stdout.strip() in ("200", "301", "302"),
+                "message": f"Unknown type '{mtype}', performed generic check"
+            }
 
     except subprocess.TimeoutExpired:
         return {"success": False, "error": "Sync timeout"}

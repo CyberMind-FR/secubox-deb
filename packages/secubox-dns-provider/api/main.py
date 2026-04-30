@@ -515,60 +515,291 @@ class GandiAdapter(DNSProviderAdapter):
 
 
 class OVHAdapter(DNSProviderAdapter):
-    """OVH DNS API adapter (simplified - uses external ovh library)."""
+    """OVH DNS API adapter using ovh library (pip install ovh)."""
+
+    def __init__(self, credentials: Dict[str, str]):
+        super().__init__(credentials)
+        self._client = None
+        try:
+            import ovh
+            self._client = ovh.Client(
+                endpoint=credentials.get("endpoint", "ovh-eu"),
+                application_key=credentials.get("application_key"),
+                application_secret=credentials.get("application_secret"),
+                consumer_key=credentials.get("consumer_key"),
+            )
+        except ImportError:
+            pass  # Library not installed
+        except Exception:
+            pass  # Invalid credentials
+
+    def _check_client(self):
+        if not self._client:
+            raise HTTPException(501, "OVH adapter requires 'ovh' library: pip install ovh")
 
     async def list_domains(self) -> List[Dict[str, Any]]:
-        # OVH requires complex signature - placeholder
-        return [{"name": "example.com", "id": "example.com", "status": "active", "note": "OVH API not fully implemented"}]
+        self._check_client()
+        try:
+            domains = self._client.get("/domain/zone")
+            return [{"name": d, "id": d, "status": "active"} for d in domains]
+        except Exception as e:
+            raise HTTPException(500, f"OVH API error: {e}")
 
     async def list_records(self, domain: str) -> List[Dict[str, Any]]:
-        return []
+        self._check_client()
+        try:
+            record_ids = self._client.get(f"/domain/zone/{domain}/record")
+            records = []
+            for rid in record_ids:
+                r = self._client.get(f"/domain/zone/{domain}/record/{rid}")
+                records.append({
+                    "id": str(rid),
+                    "name": r.get("subDomain", "@"),
+                    "type": r.get("fieldType"),
+                    "value": r.get("target"),
+                    "ttl": r.get("ttl", 300),
+                })
+            return records
+        except Exception as e:
+            raise HTTPException(500, f"OVH API error: {e}")
 
     async def create_record(self, domain: str, record: RecordCreate) -> Dict[str, Any]:
-        raise HTTPException(501, "OVH adapter requires ovh library")
+        self._check_client()
+        try:
+            result = self._client.post(f"/domain/zone/{domain}/record",
+                fieldType=record.type.value,
+                subDomain=record.name if record.name != "@" else "",
+                target=record.value,
+                ttl=record.ttl or 300,
+            )
+            self._client.post(f"/domain/zone/{domain}/refresh")
+            return {"id": str(result), "name": record.name, "type": record.type.value, "value": record.value}
+        except Exception as e:
+            raise HTTPException(500, f"OVH API error: {e}")
 
     async def update_record(self, domain: str, record_id: str, record: RecordUpdate) -> Dict[str, Any]:
-        raise HTTPException(501, "OVH adapter requires ovh library")
+        self._check_client()
+        try:
+            update_data = {}
+            if record.value:
+                update_data["target"] = record.value
+            if record.ttl:
+                update_data["ttl"] = record.ttl
+            self._client.put(f"/domain/zone/{domain}/record/{record_id}", **update_data)
+            self._client.post(f"/domain/zone/{domain}/refresh")
+            return {"id": record_id, "updated": True}
+        except Exception as e:
+            raise HTTPException(500, f"OVH API error: {e}")
 
     async def delete_record(self, domain: str, record_id: str) -> bool:
-        raise HTTPException(501, "OVH adapter requires ovh library")
+        self._check_client()
+        try:
+            self._client.delete(f"/domain/zone/{domain}/record/{record_id}")
+            self._client.post(f"/domain/zone/{domain}/refresh")
+            return True
+        except Exception:
+            return False
 
     async def create_acme_challenge(self, domain: str, token: str, key_auth: str) -> bool:
-        return False
+        try:
+            record = RecordCreate(type=RecordType.TXT, name="_acme-challenge", value=key_auth, ttl=60)
+            await self.create_record(domain, record)
+            return True
+        except Exception:
+            return False
 
     async def delete_acme_challenge(self, domain: str, token: str) -> bool:
-        return False
+        try:
+            records = await self.list_records(domain)
+            for r in records:
+                if r["name"] == "_acme-challenge" and r["type"] == "TXT":
+                    await self.delete_record(domain, r["id"])
+            return True
+        except Exception:
+            return False
 
     async def export_zone(self, domain: str) -> str:
-        return f"; OVH zone export not implemented for {domain}"
+        records = await self.list_records(domain)
+        lines = [
+            f"; Zone file for {domain}",
+            f"; Exported from OVH at {datetime.now().isoformat()}",
+            f"$ORIGIN {domain}.",
+            "$TTL 300",
+            ""
+        ]
+        for r in records:
+            name = r["name"] if r["name"] else "@"
+            lines.append(f"{name}\t{r.get('ttl', 300)}\tIN\t{r['type']}\t{r['value']}")
+        return "\n".join(lines)
 
 
 class Route53Adapter(DNSProviderAdapter):
-    """AWS Route53 DNS API adapter (simplified - uses boto3)."""
+    """AWS Route53 DNS API adapter using boto3 library."""
+
+    def __init__(self, credentials: Dict[str, str]):
+        super().__init__(credentials)
+        self._client = None
+        self._zone_cache = {}  # domain -> zone_id cache
+        try:
+            import boto3
+            self._client = boto3.client(
+                'route53',
+                aws_access_key_id=credentials.get("aws_access_key_id"),
+                aws_secret_access_key=credentials.get("aws_secret_access_key"),
+                region_name=credentials.get("region", "us-east-1"),
+            )
+        except ImportError:
+            pass
+        except Exception:
+            pass
+
+    def _check_client(self):
+        if not self._client:
+            raise HTTPException(501, "Route53 adapter requires 'boto3' library: pip install boto3")
+
+    async def _get_zone_id(self, domain: str) -> str:
+        if domain in self._zone_cache:
+            return self._zone_cache[domain]
+        zones = self._client.list_hosted_zones_by_name(DNSName=domain, MaxItems="1")
+        for zone in zones.get("HostedZones", []):
+            if zone["Name"].rstrip(".") == domain:
+                zone_id = zone["Id"].replace("/hostedzone/", "")
+                self._zone_cache[domain] = zone_id
+                return zone_id
+        raise HTTPException(404, f"Zone not found for domain: {domain}")
 
     async def list_domains(self) -> List[Dict[str, Any]]:
-        return [{"name": "example.com", "id": "example.com", "status": "active", "note": "Route53 API not fully implemented"}]
+        self._check_client()
+        try:
+            zones = self._client.list_hosted_zones()
+            return [
+                {"name": z["Name"].rstrip("."), "id": z["Id"], "status": "active"}
+                for z in zones.get("HostedZones", [])
+            ]
+        except Exception as e:
+            raise HTTPException(500, f"Route53 API error: {e}")
 
     async def list_records(self, domain: str) -> List[Dict[str, Any]]:
-        return []
+        self._check_client()
+        try:
+            zone_id = await self._get_zone_id(domain)
+            result = self._client.list_resource_record_sets(HostedZoneId=zone_id)
+            records = []
+            for rr in result.get("ResourceRecordSets", []):
+                name = rr["Name"].rstrip(".")
+                name = "@" if name == domain else name.replace(f".{domain}", "")
+                for val in rr.get("ResourceRecords", []):
+                    records.append({
+                        "id": f"{rr['Name']}:{rr['Type']}",
+                        "name": name,
+                        "type": rr["Type"],
+                        "value": val["Value"],
+                        "ttl": rr.get("TTL", 300),
+                    })
+            return records
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(500, f"Route53 API error: {e}")
 
     async def create_record(self, domain: str, record: RecordCreate) -> Dict[str, Any]:
-        raise HTTPException(501, "Route53 adapter requires boto3 library")
+        self._check_client()
+        try:
+            zone_id = await self._get_zone_id(domain)
+            name = f"{record.name}.{domain}" if record.name != "@" else domain
+            self._client.change_resource_record_sets(
+                HostedZoneId=zone_id,
+                ChangeBatch={
+                    "Changes": [{
+                        "Action": "UPSERT",
+                        "ResourceRecordSet": {
+                            "Name": name,
+                            "Type": record.type.value,
+                            "TTL": record.ttl or 300,
+                            "ResourceRecords": [{"Value": record.value}],
+                        }
+                    }]
+                }
+            )
+            return {"id": f"{name}:{record.type.value}", "name": record.name, "type": record.type.value, "value": record.value}
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(500, f"Route53 API error: {e}")
 
     async def update_record(self, domain: str, record_id: str, record: RecordUpdate) -> Dict[str, Any]:
-        raise HTTPException(501, "Route53 adapter requires boto3 library")
+        # Route53 uses UPSERT, so update is same as create
+        name, rtype = record_id.split(":", 1)
+        name = name.replace(f".{domain}", "").rstrip(".")
+        name = "@" if name == domain else name
+        create_record = RecordCreate(
+            type=RecordType(rtype),
+            name=name,
+            value=record.value,
+            ttl=record.ttl
+        )
+        return await self.create_record(domain, create_record)
 
     async def delete_record(self, domain: str, record_id: str) -> bool:
-        raise HTTPException(501, "Route53 adapter requires boto3 library")
+        self._check_client()
+        try:
+            zone_id = await self._get_zone_id(domain)
+            name, rtype = record_id.split(":", 1)
+            # Need to get current TTL and value
+            records = await self.list_records(domain)
+            for r in records:
+                if r["id"] == record_id:
+                    full_name = name if name.endswith(domain) else f"{name}.{domain}" if name != "@" else domain
+                    self._client.change_resource_record_sets(
+                        HostedZoneId=zone_id,
+                        ChangeBatch={
+                            "Changes": [{
+                                "Action": "DELETE",
+                                "ResourceRecordSet": {
+                                    "Name": full_name,
+                                    "Type": rtype,
+                                    "TTL": r.get("ttl", 300),
+                                    "ResourceRecords": [{"Value": r["value"]}],
+                                }
+                            }]
+                        }
+                    )
+                    return True
+            return False
+        except Exception:
+            return False
 
     async def create_acme_challenge(self, domain: str, token: str, key_auth: str) -> bool:
-        return False
+        try:
+            record = RecordCreate(type=RecordType.TXT, name="_acme-challenge", value=f'"{key_auth}"', ttl=60)
+            await self.create_record(domain, record)
+            return True
+        except Exception:
+            return False
 
     async def delete_acme_challenge(self, domain: str, token: str) -> bool:
-        return False
+        try:
+            records = await self.list_records(domain)
+            for r in records:
+                if r["name"] == "_acme-challenge" and r["type"] == "TXT":
+                    await self.delete_record(domain, r["id"])
+            return True
+        except Exception:
+            return False
 
     async def export_zone(self, domain: str) -> str:
-        return f"; Route53 zone export not implemented for {domain}"
+        records = await self.list_records(domain)
+        lines = [
+            f"; Zone file for {domain}",
+            f"; Exported from Route53 at {datetime.now().isoformat()}",
+            f"$ORIGIN {domain}.",
+            "$TTL 300",
+            ""
+        ]
+        for r in records:
+            name = r["name"] if r["name"] else "@"
+            lines.append(f"{name}\t{r.get('ttl', 300)}\tIN\t{r['type']}\t{r['value']}")
+        return "\n".join(lines)
 
 
 def get_adapter(provider_type: ProviderType, credentials: Dict[str, str]) -> DNSProviderAdapter:

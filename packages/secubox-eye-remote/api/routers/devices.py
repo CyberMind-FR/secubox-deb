@@ -27,16 +27,14 @@ class UnpairResponse(BaseModel):
 router = APIRouter(prefix="/devices", tags=["devices"])
 
 
-# JWT auth dependency - import from secubox_core when available
-def require_jwt():
-    """
-    Placeholder JWT authentication dependency.
-    In production, this imports from secubox_core.auth.
-    """
-    # TODO: Replace with actual JWT validation when secubox_core is available
-    # from secubox_core.auth import require_jwt as _require_jwt
-    # return _require_jwt
-    pass
+# JWT auth dependency - import from secubox_core
+try:
+    from secubox_core.auth import require_jwt
+except ImportError:
+    # Fallback for standalone eye-remote deployment on Pi Zero
+    def require_jwt():
+        """Fallback JWT auth when secubox_core not available."""
+        return None
 
 
 @router.get("", response_model=DeviceListResponse)
