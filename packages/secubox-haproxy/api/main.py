@@ -141,6 +141,80 @@ class StatsCache:
 
 stats_cache = StatsCache(ttl_seconds=30)
 
+# Status pre-cache for instant responses
+STATUS_CACHE_FILE = DATA_DIR / "status_cache.json"
+_status_cache: Dict[str, Any] = {}
+_status_cache_lock = threading.Lock()
+
+
+def _compute_status_sync() -> Dict[str, Any]:
+    """Compute HAProxy status (synchronous, for background refresh)."""
+    cfg = get_config("haproxy") or {}
+
+    # Check if running
+    running = subprocess.run(
+        ["pgrep", "haproxy"], capture_output=True, timeout=2
+    ).returncode == 0
+
+    # Check Docker (with short timeout)
+    docker_running = False
+    try:
+        result = subprocess.run(
+            ["docker", "ps", "--filter", "name=haproxy", "--format", "{{.Names}}"],
+            capture_output=True, text=True, timeout=2
+        )
+        docker_running = "haproxy" in result.stdout
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+
+    # WAF availability (fast path check)
+    waf_available = Path(WAF_SOCKET).exists()
+
+    # Load vhosts and backends from config (fast)
+    vhost_cfg = cfg.get("vhosts", {})
+    backend_cfg = cfg.get("backends", {})
+
+    return {
+        "running": running or docker_running,
+        "http_port": cfg.get("http_port", 80),
+        "https_port": cfg.get("https_port", 443),
+        "stats_port": cfg.get("stats_port", 8404),
+        "waf_enabled": cfg.get("waf_enabled", False),
+        "waf_available": waf_available,
+        "crowdsec_enabled": cfg.get("crowdsec_enabled", False),
+        "vhost_count": len(vhost_cfg),
+        "backend_count": len(backend_cfg),
+        "cached_at": time.time(),
+    }
+
+
+def _refresh_status_cache():
+    """Refresh status cache (called from background task)."""
+    global _status_cache
+    try:
+        status_data = _compute_status_sync()
+        with _status_cache_lock:
+            _status_cache = status_data
+        # Persist to file for fast startup
+        try:
+            STATUS_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+            STATUS_CACHE_FILE.write_text(json.dumps(status_data))
+        except Exception:
+            pass
+    except Exception as e:
+        log.debug("Status cache refresh failed: %s", e)
+
+
+def _load_status_cache():
+    """Load status cache from file for fast startup."""
+    global _status_cache
+    if STATUS_CACHE_FILE.exists():
+        try:
+            _status_cache = json.loads(STATUS_CACHE_FILE.read_text())
+            log.info("Loaded status cache from file")
+        except Exception:
+            pass
+
 
 # ═══════════════════════════════════════════════════════════════════════
 # Background Tasks
@@ -148,6 +222,19 @@ stats_cache = StatsCache(ttl_seconds=30)
 
 _health_monitor_task: Optional[asyncio.Task] = None
 _stats_collector_task: Optional[asyncio.Task] = None
+_status_refresh_task: Optional[asyncio.Task] = None
+
+
+async def _periodic_status_refresh():
+    """Refresh status cache every 30 seconds."""
+    while True:
+        try:
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, _refresh_status_cache)
+            log.debug("HAProxy status cache refreshed")
+        except Exception as e:
+            log.error("Status refresh failed: %s", e)
+        await asyncio.sleep(30)
 
 
 def _load_json(path: Path, default=None) -> Any:
@@ -311,20 +398,24 @@ async def _periodic_stats_collector():
 @app.on_event("startup")
 async def startup_event():
     """Start background tasks."""
-    global _health_monitor_task, _stats_collector_task
+    global _health_monitor_task, _stats_collector_task, _status_refresh_task
     _ensure_dirs()
+    _load_status_cache()  # Load from file for instant availability
     _health_monitor_task = asyncio.create_task(_periodic_health_monitor())
     _stats_collector_task = asyncio.create_task(_periodic_stats_collector())
+    _status_refresh_task = asyncio.create_task(_periodic_status_refresh())
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Stop background tasks."""
-    global _health_monitor_task, _stats_collector_task
+    global _health_monitor_task, _stats_collector_task, _status_refresh_task
     if _health_monitor_task:
         _health_monitor_task.cancel()
     if _stats_collector_task:
         _stats_collector_task.cancel()
+    if _status_refresh_task:
+        _status_refresh_task.cancel()
 
 
 def _cfg():
@@ -579,22 +670,21 @@ async def access():
 
 @router.get("/status")
 async def status():
-    """HAProxy status with WAF integration (public)."""
-    cfg = _cfg()
-    running = _haproxy_running() or _docker_running()
-    waf_available = _waf_available()
+    """HAProxy status with WAF integration (public). Returns cached data instantly."""
+    # Return from cache (instant)
+    if _status_cache:
+        return _status_cache
 
-    return {
-        "running": running,
-        "http_port": cfg["http_port"],
-        "https_port": cfg["https_port"],
-        "stats_port": cfg["stats_port"],
-        "waf_enabled": cfg["waf_enabled"],
-        "waf_available": waf_available,
-        "crowdsec_enabled": cfg["crowdsec_enabled"],
-        "vhost_count": len(_load_vhosts()),
-        "backend_count": len(_load_backends()),
-    }
+    # Fallback: file cache
+    if STATUS_CACHE_FILE.exists():
+        try:
+            return json.loads(STATUS_CACHE_FILE.read_text())
+        except Exception:
+            pass
+
+    # Last resort: compute synchronously (only first request)
+    log.warning("Status cache miss - computing synchronously")
+    return _compute_status_sync()
 
 
 @router.get("/stats")

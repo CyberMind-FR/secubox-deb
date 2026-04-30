@@ -258,6 +258,8 @@ async def startup_event():
     """Start background tasks."""
     global _metrics_collector_task
     _metrics_collector_task = asyncio.create_task(_periodic_metrics_collector())
+    # Start status cache refresh (double-buffer pattern)
+    await status.start_cache_refresh()
 
 
 @app.on_event("shutdown")
@@ -266,6 +268,8 @@ async def shutdown_event():
     global _metrics_collector_task
     if _metrics_collector_task:
         _metrics_collector_task.cancel()
+    # Stop status cache refresh
+    await status.stop_cache_refresh()
 
 app.include_router(auth_router,           prefix="/auth")
 app.include_router(status.router,         tags=["status"])
