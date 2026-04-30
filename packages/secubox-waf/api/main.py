@@ -253,6 +253,20 @@ def _get_threat_stats() -> dict:
 
 # === Public Endpoints ===
 
+@app.get("/health")
+async def health():
+    """WAF health check (public)."""
+    cfg = _cfg()
+    total_rules = sum(len(p) for p in _compiled_patterns.values())
+    return {
+        "status": "ok" if cfg["enabled"] else "disabled",
+        "module": "waf",
+        "version": "1.0.0",
+        "rules_loaded": total_rules,
+        "autoban": cfg["autoban_enabled"],
+    }
+
+
 @app.get("/status")
 async def status():
     """WAF status (public)."""
