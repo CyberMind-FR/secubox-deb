@@ -2,7 +2,7 @@
   "id": "mac-guard",
   "name": "MAC Guard",
   "category": "security",
-  "icon": "shield-check",
+  "icon": "🖥️",
   "path": "/mac-guard/",
   "order": 705,
   "description": "MAC address control and network access"

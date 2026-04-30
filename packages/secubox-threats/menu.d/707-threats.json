@@ -2,7 +2,7 @@
   "id": "threats",
   "name": "Threats",
   "category": "security",
-  "icon": "!",
+  "icon": "⚠️",
   "path": "/threats/",
   "order": 707,
   "description": "Unified Threats Dashboard - Aggregated Security Alerts",

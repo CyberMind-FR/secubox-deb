@@ -1,1 +1,9 @@
-{"id":"rezapp","name":"RezApp","icon":"box","path":"/rezapp/","category":"apps","order":494,"description":"Application deployment and management"}
+{
+  "id": "rezapp",
+  "name": "RezApp",
+  "icon": "📦",
+  "path": "/rezapp/",
+  "category": "apps",
+  "order": 494,
+  "description": "Application deployment and management"
+}
