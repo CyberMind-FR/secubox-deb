@@ -26,10 +26,14 @@ log = logging.getLogger(__name__)
 router = APIRouter(prefix="/boot-media", tags=["boot-media"])
 
 
-# JWT auth dependency placeholder
-def require_jwt():
-    """JWT authentication dependency."""
-    pass
+# JWT auth dependency - import from secubox_core
+try:
+    from secubox_core.auth import require_jwt
+except ImportError:
+    # Fallback for standalone eye-remote deployment on Pi Zero
+    def require_jwt():
+        """Fallback JWT auth when secubox_core not available."""
+        return None
 
 
 @router.get("/state", response_model=BootMediaState)

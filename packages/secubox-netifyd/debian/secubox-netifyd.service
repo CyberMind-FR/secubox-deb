@@ -10,7 +10,7 @@ Type=simple
 User=secubox
 Group=secubox
 WorkingDirectory=/usr/lib/secubox/netifyd
-ExecStart=/usr/local/bin/uvicorn api.main:app \
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app \
     --uds /run/secubox/netifyd.sock \
     --log-level warning
 Restart=on-failure

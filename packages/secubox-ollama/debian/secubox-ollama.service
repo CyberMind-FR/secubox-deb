@@ -12,7 +12,7 @@ Type=simple
 User=root
 Group=root
 WorkingDirectory=/usr/lib/secubox/ollama
-ExecStart=/usr/local/bin/uvicorn api.main:app --uds /run/secubox/ollama.sock --log-level warning
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/ollama.sock --log-level warning
 # Use - prefix to ignore failure if socket doesn't exist yet
 ExecStartPost=-/bin/sleep 1
 ExecStartPost=-/bin/chmod 660 /run/secubox/ollama.sock
