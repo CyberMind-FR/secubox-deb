@@ -180,6 +180,33 @@ sudo bash install-audit.sh
 
 ---
 
+## Performance Benchmarks
+
+| Script | Description |
+|--------|-------------|
+| `bench/api-latency.py` | API endpoint latency testing (P50/P95/P99) |
+| `bench/memory-baseline.sh` | Per-service memory tracking (RSS/PSS/USS) |
+| `bench/startup-time.sh` | Service cold-start measurement |
+| `bench/cpu-profile.sh` | Flame graph generation with py-spy |
+| `bench/locustfile.py` | Locust load test scenarios |
+
+See [bench/README.md](bench/README.md) for detailed usage.
+
+### Quick Usage
+
+```bash
+# API latency
+./bench/api-latency.py --host 192.168.255.250 --requests 50
+
+# Memory baseline
+./bench/memory-baseline.sh
+
+# Load test
+locust -f bench/locustfile.py --host https://192.168.255.250
+```
+
+---
+
 ## Migration Scripts
 
 | Script | Description |
