@@ -5,9 +5,9 @@
 
 ## 2026-04-30
 
-### Session 83 — Module Enhancement: From Mockup to Functional
+### Session 83 — Module Enhancement & Service Fixes
 
-**Goal:** Complete stub/mockup implementations across SecuBox modules
+**Goal:** Complete stub/mockup implementations and fix service startup issues
 
 **Critical Security Fixes:**
 - **secubox-voip**: Implemented PBKDF2-SHA256 password hashing (100k iterations)
@@ -34,6 +34,17 @@
 **System Module Performance:**
 - **secubox-system**: 275ms → 40ms (6.8x faster) with batch systemctl calls
 
+**Service Startup Fixes:**
+- Fixed uvicorn path in 31 systemd service files
+- Changed `/usr/local/bin/uvicorn` → `/usr/bin/python3 -m uvicorn`
+- Services now start correctly on all Python installation types
+
+**Affected Packages:**
+cloner, hexo, jabber, jellyfin, localai, lyrion, magicmirror, matrix, mesh,
+mmpm, netifyd, newsbin, ollama, ossec, p2p, peertube, photoprism, picobrew,
+redroid, rezapp, roadmap, simplex, soc-agent, soc-gateway, vault, vm, wazuh,
+webradio, zigbee, zkp
+
 **Files Modified:**
 - `packages/secubox-voip/api/main.py`
 - `packages/secubox-dns-provider/api/main.py`
@@ -41,7 +52,9 @@
 - `packages/secubox-threat-analyst/api/main.py`
 - `packages/secubox-mirror/api/main.py`
 - `packages/secubox-eye-remote/api/routers/devices.py`
+- `packages/secubox-eye-remote/api/routers/boot_media.py`
 - `packages/secubox-system/api/main.py`
+- 31× `packages/*/debian/*.service`
 
 ---
 
