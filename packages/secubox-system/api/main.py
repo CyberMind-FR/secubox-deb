@@ -17,6 +17,9 @@ from secubox_core.kiosk import (
     check_interface_carrier,
 )
 import subprocess, json, psutil, socket, time
+import asyncio
+import threading
+import concurrent.futures
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 import platform
@@ -188,6 +191,145 @@ SECUBOX_SERVICES = [
     "secubox-system","crowdsec","netdata","nginx","nftables","dnsmasq",
 ]
 
+# ══════════════════════════════════════════════════════════════════
+# Double-Buffer Cache for instant responses
+# ══════════════════════════════════════════════════════════════════
+CACHE_DIR = Path("/var/cache/secubox/system")
+STATUS_CACHE_FILE = CACHE_DIR / "status.json"
+SERVICES_CACHE_FILE = CACHE_DIR / "services.json"
+
+_status_cache: Dict[str, Any] = {}
+_services_cache: Dict[str, dict] = {}
+_cache_lock = threading.Lock()
+_cache_refresh_task = None
+
+
+def _compute_services_status_sync() -> Dict[str, dict]:
+    """Compute all services status in one batch (synchronous)."""
+    services = {}
+    # Batch check all services with single systemctl call
+    try:
+        # Get active status for all services
+        r = subprocess.run(
+            ["systemctl", "is-active", "--"] + SECUBOX_SERVICES,
+            capture_output=True, text=True, timeout=5
+        )
+        active_states = r.stdout.strip().split("\n")
+
+        # Get enabled status for all services
+        r2 = subprocess.run(
+            ["systemctl", "is-enabled", "--"] + SECUBOX_SERVICES,
+            capture_output=True, text=True, timeout=5
+        )
+        enabled_states = r2.stdout.strip().split("\n")
+
+        for i, svc in enumerate(SECUBOX_SERVICES):
+            active = active_states[i] if i < len(active_states) else "unknown"
+            enabled = enabled_states[i] if i < len(enabled_states) else "unknown"
+            services[svc] = {
+                "name": svc,
+                "active": active == "active",
+                "status": active,
+                "enabled": enabled == "enabled"
+            }
+    except Exception as e:
+        log.warning("Services status batch failed: %s", e)
+        # Fallback: empty dict, will be filled on next refresh
+        pass
+
+    return services
+
+
+def _compute_status_sync() -> Dict[str, Any]:
+    """Compute system status (synchronous)."""
+    board = get_board_info()
+    services = _services_cache if _services_cache else _compute_services_status_sync()
+
+    # Get first 5 services for sample
+    sample = []
+    for svc in SECUBOX_SERVICES[:5]:
+        if svc in services:
+            sample.append(services[svc])
+
+    active = sum(1 for s in sample if s.get("active"))
+    health = int((active / len(sample)) * 100) if sample else 0
+
+    return {
+        **board,
+        "services_sample": sample,
+        "health": health,
+        "cached_at": time.time(),
+    }
+
+
+def _refresh_cache():
+    """Refresh all caches (called from background task)."""
+    global _status_cache, _services_cache
+    try:
+        # Refresh services first
+        services_data = _compute_services_status_sync()
+        with _cache_lock:
+            _services_cache = services_data
+
+        # Then refresh status
+        status_data = _compute_status_sync()
+        with _cache_lock:
+            _status_cache = status_data
+
+        # Persist to files
+        try:
+            CACHE_DIR.mkdir(parents=True, exist_ok=True)
+            STATUS_CACHE_FILE.write_text(json.dumps(status_data))
+            SERVICES_CACHE_FILE.write_text(json.dumps(services_data))
+        except Exception:
+            pass
+
+        log.debug("System cache refreshed")
+    except Exception as e:
+        log.error("Cache refresh failed: %s", e)
+
+
+def _load_cache_from_files():
+    """Load caches from files for fast startup."""
+    global _status_cache, _services_cache
+    try:
+        if STATUS_CACHE_FILE.exists():
+            _status_cache = json.loads(STATUS_CACHE_FILE.read_text())
+        if SERVICES_CACHE_FILE.exists():
+            _services_cache = json.loads(SERVICES_CACHE_FILE.read_text())
+        if _status_cache:
+            log.info("System cache loaded from file")
+    except Exception:
+        pass
+
+
+async def _periodic_cache_refresh():
+    """Refresh cache every 30 seconds."""
+    while True:
+        try:
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, _refresh_cache)
+        except Exception as e:
+            log.error("Periodic refresh failed: %s", e)
+        await asyncio.sleep(30)
+
+
+@app.on_event("startup")
+async def startup_cache():
+    """Start background cache refresh."""
+    global _cache_refresh_task
+    _load_cache_from_files()
+    _cache_refresh_task = asyncio.create_task(_periodic_cache_refresh())
+
+
+@app.on_event("shutdown")
+async def shutdown_cache():
+    """Stop background cache refresh."""
+    global _cache_refresh_task
+    if _cache_refresh_task:
+        _cache_refresh_task.cancel()
+
+
 def _svc_status(svc: str) -> dict:
     r = subprocess.run(
         ["systemctl", "is-active", svc], capture_output=True, text=True
@@ -206,10 +348,20 @@ def _health_score(services: list[dict]) -> int:
 
 @router.get("/status")
 async def status(user=Depends(require_jwt)):
-    board = get_board_info()
-    services = [_svc_status(s) for s in SECUBOX_SERVICES[:5]]
-    return {**board, "services_sample": services,
-            "health": _health_score(services)}
+    """System status. Returns cached data instantly."""
+    # Return from cache (instant)
+    if _status_cache:
+        return _status_cache
+
+    # Fallback: file cache
+    if STATUS_CACHE_FILE.exists():
+        try:
+            return json.loads(STATUS_CACHE_FILE.read_text())
+        except Exception:
+            pass
+
+    # Last resort: compute synchronously
+    return _compute_status_sync()
 
 
 @router.get("/info")

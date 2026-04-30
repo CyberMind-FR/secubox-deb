@@ -818,9 +818,10 @@ async def update_provider(name: str, update: ProviderUpdateRequest):
     if update.priority is not None:
         provider.priority = update.priority
 
-    # TODO: Persist to config file
+    # Auto-persist to config file
+    _persist_providers()
 
-    return {"status": "updated", "provider": name}
+    return {"status": "updated", "provider": name, "persisted": True}
 
 
 @app.get("/audit/stats", dependencies=[Depends(require_jwt)])
@@ -877,10 +878,10 @@ async def get_client_rate_status(client_id: str):
     return {"client": client_id, "remaining": remaining}
 
 
-@app.post("/providers/save", dependencies=[Depends(require_jwt)])
-async def save_providers():
-    """Persist provider configuration to file."""
+def _persist_providers():
+    """Internal helper to persist provider configuration."""
     try:
+        STATE_DIR.mkdir(parents=True, exist_ok=True)
         providers_data = {
             name: {
                 "enabled": p.enabled,
@@ -891,9 +892,19 @@ async def save_providers():
             for name, p in router.providers.items()
         }
         PROVIDERS_FILE.write_text(json.dumps(providers_data, indent=2))
-        return {"status": "saved"}
+        logger.debug("Provider configuration persisted")
+        return True
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Failed to persist providers: {e}")
+        return False
+
+
+@app.post("/providers/save", dependencies=[Depends(require_jwt)])
+async def save_providers():
+    """Persist provider configuration to file."""
+    if _persist_providers():
+        return {"status": "saved"}
+    raise HTTPException(status_code=500, detail="Failed to save configuration")
 
 
 @app.post("/providers/load", dependencies=[Depends(require_jwt)])

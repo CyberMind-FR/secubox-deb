@@ -295,8 +295,34 @@ def request(flow):
 define THREAT_IPS = {{ {ip_list} }}
 add rule inet filter input ip saddr $THREAT_IPS drop
 """
+        elif rule_type == RuleType.WAF:
+            # Generate WAF (mitmproxy-based) rules in JSON format
+            # Format compatible with SecuBox WAF module
+            ip_list = list(ips)[:30]
+            patterns = []
+            for t in list(types)[:5]:
+                patterns.append({
+                    "id": f"threat-{t.lower().replace(' ', '-')}-{int(time.time())}",
+                    "pattern": f".*",  # Generic pattern, IP-based blocking
+                    "desc": f"Auto-blocked: {t}",
+                })
+            rule_content = json.dumps({
+                "category": f"auto-threat-{rule_id}",
+                "name": f"Auto-Generated Threat Rules ({len(alerts)} alerts)",
+                "severity": "high",
+                "enabled": True,
+                "blocked_ips": ip_list,
+                "patterns": patterns,
+                "metadata": {
+                    "source": "threat-analyst",
+                    "generated_at": now,
+                    "alert_count": len(alerts),
+                    "alert_types": list(types),
+                }
+            }, indent=2)
         else:
-            rule_content = f"# Rule type {rule_type} not implemented"
+            # Fallback for any new rule types
+            rule_content = f"# Rule type {rule_type} - manual implementation required"
 
         rule = GeneratedRule(
             id=rule_id,
