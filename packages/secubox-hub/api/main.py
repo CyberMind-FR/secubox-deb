@@ -1166,9 +1166,17 @@ def _check_module_installed(module_id: str) -> bool:
     if svc_name in _cache["services"]:
         return True  # If in cache, it was found during refresh
 
-    # Check for www directory (static modules)
-    www_path = Path(f"/var/www/secubox/{module_id}")
+    # Check for www directory (static modules) - correct path
+    www_path = Path(f"/usr/share/secubox/www/{module_id}")
     if www_path.exists():
+        return True
+
+    # Check systemd service directly (for TCP port services)
+    result = subprocess.run(
+        ["systemctl", "is-enabled", svc_name],
+        capture_output=True, text=True
+    )
+    if result.returncode == 0:
         return True
 
     return False
@@ -1176,17 +1184,18 @@ def _check_module_installed(module_id: str) -> bool:
 
 def _check_module_active(module_id: str) -> bool:
     """Check if a module's service is active (uses cache)."""
-    # Check for socket first (fast)
+    svc_name = f"secubox-{module_id}"
+
+    # Check cache first
+    if svc_name in _cache["services"]:
+        return _cache["services"][svc_name].get("active", False)
+
+    # Check for socket (for socket-based services)
     sock = Path(f"/run/secubox/{module_id}.sock")
     if sock.exists():
         return True
 
-    # Check cache
-    svc_name = f"secubox-{module_id}"
-    if svc_name in _cache["services"]:
-        return _cache["services"][svc_name].get("active", False)
-
-    # Fallback - but this shouldn't be called often
+    # Check systemd service directly (for TCP port services)
     result = subprocess.run(
         ["systemctl", "is-active", svc_name],
         capture_output=True, text=True
