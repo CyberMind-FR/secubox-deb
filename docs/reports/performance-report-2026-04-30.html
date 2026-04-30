@@ -622,19 +622,22 @@ find /var/log -name '*.gz' -mtime +7 -delete
 
             <div class="grid">
                 <div class="card metric">
-                    <div class="metric-value status-crit">6.80</div>
+                    <div class="metric-value status-warn">4.07</div>
                     <div class="metric-label">Load Average</div>
+                    <div style="font-size: 0.7rem; color: var(--green);">↓ était 6.80</div>
                 </div>
                 <div class="card metric">
-                    <div class="metric-value status-crit">83%</div>
+                    <div class="metric-value status-ok">56%</div>
                     <div class="metric-label">RAM Utilisée</div>
+                    <div style="font-size: 0.7rem; color: var(--green);">↓ était 83%</div>
                 </div>
                 <div class="card metric">
-                    <div class="metric-value status-crit">99.9%</div>
-                    <div class="metric-label">Swap Saturé</div>
+                    <div class="metric-value status-warn">97%</div>
+                    <div class="metric-label">Swap Utilisé</div>
+                    <div style="font-size: 0.7rem; color: var(--text-muted);">libération en cours</div>
                 </div>
                 <div class="card metric">
-                    <div class="metric-value status-warn">73%</div>
+                    <div class="metric-value status-ok">73%</div>
                     <div class="metric-label">Disque Utilisé</div>
                 </div>
             </div>
@@ -668,12 +671,48 @@ find /var/log -name '*.gz' -mtime +7 -delete
                     </tr>
                     <tr>
                         <td>Problèmes Identifiés</td>
-                        <td colspan="2" class="status-crit">
-                            Gitea consomme 7.6GB (fuite mémoire), swap épuisé,
-                            services non optimisés, pas de limites mémoire
+                        <td class="status-crit">
+                            Gitea consommait 7.6GB (fuite mémoire), swap épuisé
+                        </td>
+                        <td class="status-ok">
+                            ✓ CORRIGÉ — Limite 2GB activée
                         </td>
                     </tr>
                 </table>
+            </div>
+
+            <div class="card" style="border-color: var(--green);">
+                <h4 style="color: var(--green);">✓ Correction Appliquée (30/04/2026)</h4>
+                <table>
+                    <tr>
+                        <th>Action</th>
+                        <th>Avant</th>
+                        <th>Après</th>
+                    </tr>
+                    <tr>
+                        <td>RAM Gitea</td>
+                        <td class="status-crit">7.6 GB</td>
+                        <td class="status-ok">2.1 GB</td>
+                    </tr>
+                    <tr>
+                        <td>RAM disponible</td>
+                        <td class="status-crit">794 MB</td>
+                        <td class="status-ok">2.4 GB</td>
+                    </tr>
+                    <tr>
+                        <td>Load average</td>
+                        <td class="status-crit">6.80</td>
+                        <td class="status-ok">4.07</td>
+                    </tr>
+                    <tr>
+                        <td>Limite mémoire LXC</td>
+                        <td class="status-crit">Désactivée</td>
+                        <td class="status-ok">2 GB max</td>
+                    </tr>
+                </table>
+                <p style="margin-top: 1rem; color: var(--text-muted);">
+                    <strong>Commande :</strong> <code>sed -i 's/#lxc.cgroup.memory.limit_in_bytes/lxc.cgroup.memory.limit_in_bytes/' /srv/lxc/gitea/config</code>
+                </p>
             </div>
 
             <div class="advice">
