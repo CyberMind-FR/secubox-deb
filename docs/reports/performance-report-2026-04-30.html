@@ -610,9 +610,279 @@ find /var/log -name '*.gz' -mtime +7 -delete
             </div>
         </section>
 
+        <!-- MOCHAbin Reference -->
+        <section>
+            <h2>8. MOCHAbin — Référence OpenWrt (Obsolète)</h2>
+
+            <div class="advice advice-critical">
+                <strong>⚠️ Version de Référence Uniquement</strong><br>
+                Le MOCHAbin (192.168.255.1) exécute encore SecuBox-OpenWrt 24.10.5.
+                Ces données servent de référence pour la migration vers Debian.
+            </div>
+
+            <div class="grid">
+                <div class="card metric">
+                    <div class="metric-value status-crit">6.80</div>
+                    <div class="metric-label">Load Average</div>
+                </div>
+                <div class="card metric">
+                    <div class="metric-value status-crit">83%</div>
+                    <div class="metric-label">RAM Utilisée</div>
+                </div>
+                <div class="card metric">
+                    <div class="metric-value status-crit">99.9%</div>
+                    <div class="metric-label">Swap Saturé</div>
+                </div>
+                <div class="card metric">
+                    <div class="metric-value status-warn">73%</div>
+                    <div class="metric-label">Disque Utilisé</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <table>
+                    <tr>
+                        <th>Caractéristique</th>
+                        <th>MOCHAbin (OpenWrt)</th>
+                        <th>Cible Debian</th>
+                    </tr>
+                    <tr>
+                        <td>CPU</td>
+                        <td>Armada 7040 (4× Cortex-A72 @ 1.3GHz)</td>
+                        <td>Même hardware</td>
+                    </tr>
+                    <tr>
+                        <td>RAM</td>
+                        <td>8 GB DDR4</td>
+                        <td>8 GB DDR4</td>
+                    </tr>
+                    <tr>
+                        <td>Stockage</td>
+                        <td>16 GB eMMC + overlayfs</td>
+                        <td>16 GB eMMC ext4</td>
+                    </tr>
+                    <tr>
+                        <td>OS</td>
+                        <td class="status-warn">OpenWrt 24.10.5 (obsolète)</td>
+                        <td class="status-ok">Debian 12 Bookworm</td>
+                    </tr>
+                    <tr>
+                        <td>Problèmes Identifiés</td>
+                        <td colspan="2" class="status-crit">
+                            Gitea consomme 7.6GB (fuite mémoire), swap épuisé,
+                            services non optimisés, pas de limites mémoire
+                        </td>
+                    </tr>
+                </table>
+            </div>
+
+            <div class="advice">
+                <strong>Leçons pour la Migration :</strong>
+                <ul style="margin: 0.5rem 0 0 1.5rem;">
+                    <li>Définir des <code>MemoryMax</code> systemd dès le départ</li>
+                    <li>Éviter les services gourmands (Gitea) sur même instance</li>
+                    <li>Implémenter le pattern cache background obligatoirement</li>
+                    <li>Surveiller proactivement avec les scripts bench/</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- Future Devices -->
+        <section>
+            <h2>9. Appareils Cibles — Feuille de Route</h2>
+
+            <h3>9.1 Appareils Actuels</h3>
+            <div class="card">
+                <table>
+                    <tr>
+                        <th>Appareil</th>
+                        <th>CPU</th>
+                        <th>RAM</th>
+                        <th>Profil</th>
+                        <th>Status</th>
+                    </tr>
+                    <tr>
+                        <td><strong>ESPRESSObin V7</strong></td>
+                        <td>Armada 3720 (2×A53)</td>
+                        <td>1 GB</td>
+                        <td>secubox-lite</td>
+                        <td><span class="badge badge-ok">ACTIF</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>MOCHAbin</strong></td>
+                        <td>Armada 7040 (4×A72)</td>
+                        <td>8 GB</td>
+                        <td>secubox-full</td>
+                        <td><span class="badge badge-warn">MIGRATION</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>VirtualBox x64</strong></td>
+                        <td>Host CPU (2-4 vCPU)</td>
+                        <td>2-4 GB</td>
+                        <td>secubox-dev</td>
+                        <td><span class="badge badge-ok">ACTIF</span></td>
+                    </tr>
+                </table>
+            </div>
+
+            <h3>9.2 Appareils Envisagés</h3>
+            <div class="card">
+                <table>
+                    <tr>
+                        <th>Appareil</th>
+                        <th>CPU</th>
+                        <th>RAM</th>
+                        <th>Usage Prévu</th>
+                        <th>Priorité</th>
+                    </tr>
+                    <tr>
+                        <td><strong>ESPRESSObin Ultra</strong></td>
+                        <td>Armada 3720 (2×A53)</td>
+                        <td>2 GB</td>
+                        <td>Version intermédiaire, CrowdSec + WG</td>
+                        <td><span class="badge badge-ok">HAUTE</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Raspberry Pi 4</strong></td>
+                        <td>BCM2711 (4×A72)</td>
+                        <td>4-8 GB</td>
+                        <td>Alternative grand public, éducation</td>
+                        <td><span class="badge badge-warn">MOYENNE</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Raspberry Pi 5</strong></td>
+                        <td>BCM2712 (4×A76)</td>
+                        <td>4-8 GB</td>
+                        <td>Performances accrues, futur standard</td>
+                        <td><span class="badge badge-warn">MOYENNE</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Orange Pi 5</strong></td>
+                        <td>RK3588S (8 cores)</td>
+                        <td>4-16 GB</td>
+                        <td>Haute performance, IA locale</td>
+                        <td><span class="badge badge-warn">MOYENNE</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Banana Pi R4</strong></td>
+                        <td>MT7988A (4×A73)</td>
+                        <td>4 GB</td>
+                        <td>Routeur natif, 4×2.5GbE, WiFi 7</td>
+                        <td><span class="badge badge-ok">HAUTE</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>NanoPi R6S</strong></td>
+                        <td>RK3588S (8 cores)</td>
+                        <td>8 GB</td>
+                        <td>Compact, 2×2.5GbE, USB-C</td>
+                        <td><span class="badge badge-warn">MOYENNE</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Traverse Ten64</strong></td>
+                        <td>LS1088A (8×A53)</td>
+                        <td>8-32 GB</td>
+                        <td>Enterprise, 10GbE, certification</td>
+                        <td><span class="badge badge-crit">BASSE</span></td>
+                    </tr>
+                </table>
+            </div>
+
+            <h3>9.3 Profils de Performance par Catégorie</h3>
+            <div class="grid">
+                <div class="card">
+                    <h4 style="color: var(--green);">🟢 secubox-lite (≤2 GB)</h4>
+                    <p style="color: var(--text-muted); margin: 0.5rem 0;">
+                        ESPRESSObin, ESPRESSObin Ultra
+                    </p>
+                    <ul style="margin: 0.5rem 0 0 1rem; font-size: 0.9rem;">
+                        <li>1 worker Uvicorn</li>
+                        <li>Cache TTL 120s</li>
+                        <li>History 1000 entrées max</li>
+                        <li>Services: Hub, System, Portal</li>
+                        <li>Optionnel: CrowdSec, WireGuard</li>
+                    </ul>
+                </div>
+                <div class="card">
+                    <h4 style="color: var(--cyan);">🔵 secubox-standard (4 GB)</h4>
+                    <p style="color: var(--text-muted); margin: 0.5rem 0;">
+                        RPi 4/5 4GB, Banana Pi R4, VirtualBox
+                    </p>
+                    <ul style="margin: 0.5rem 0 0 1rem; font-size: 0.9rem;">
+                        <li>2 workers Uvicorn</li>
+                        <li>Cache TTL 60s</li>
+                        <li>History 5000 entrées</li>
+                        <li>Tous services core</li>
+                        <li>+ DPI, NAC, QoS</li>
+                    </ul>
+                </div>
+                <div class="card">
+                    <h4 style="color: var(--purple);">🟣 secubox-full (≥8 GB)</h4>
+                    <p style="color: var(--text-muted); margin: 0.5rem 0;">
+                        MOCHAbin, RPi 5 8GB, Orange Pi 5, NanoPi R6S
+                    </p>
+                    <ul style="margin: 0.5rem 0 0 1rem; font-size: 0.9rem;">
+                        <li>4 workers Uvicorn</li>
+                        <li>Cache TTL 30s</li>
+                        <li>History 10000 entrées</li>
+                        <li>Tous modules</li>
+                        <li>+ LocalAI, Matrix, Gitea (conteneur)</li>
+                    </ul>
+                </div>
+                <div class="card">
+                    <h4 style="color: var(--gold);">🟡 secubox-enterprise (≥16 GB)</h4>
+                    <p style="color: var(--text-muted); margin: 0.5rem 0;">
+                        Traverse Ten64, Orange Pi 5 16GB, Serveurs
+                    </p>
+                    <ul style="margin: 0.5rem 0 0 1rem; font-size: 0.9rem;">
+                        <li>8+ workers Uvicorn</li>
+                        <li>Cache TTL 15s</li>
+                        <li>History illimité (DB)</li>
+                        <li>Multi-tenant</li>
+                        <li>+ Monitoring centralisé</li>
+                    </ul>
+                </div>
+            </div>
+
+            <h3>9.4 Appareils Compagnons</h3>
+            <div class="card">
+                <table>
+                    <tr>
+                        <th>Appareil</th>
+                        <th>Rôle</th>
+                        <th>Connexion</th>
+                        <th>Status</th>
+                    </tr>
+                    <tr>
+                        <td><strong>Raspberry Pi Zero W</strong></td>
+                        <td>Eye Remote Dashboard (HyperPixel 2.1)</td>
+                        <td>USB OTG + WiFi</td>
+                        <td><span class="badge badge-ok">ACTIF</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Raspberry Pi Zero 2 W</strong></td>
+                        <td>Eye Remote v2 (performances accrues)</td>
+                        <td>USB OTG + WiFi</td>
+                        <td><span class="badge badge-warn">PRÉVU</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>ESP32-S3</strong></td>
+                        <td>Capteurs IoT, relais GPIO</td>
+                        <td>WiFi / BLE / UART</td>
+                        <td><span class="badge badge-warn">PRÉVU</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>M5Stack Core</strong></td>
+                        <td>Affichage statut compact</td>
+                        <td>WiFi REST API</td>
+                        <td><span class="badge badge-crit">ENVISAGÉ</span></td>
+                    </tr>
+                </table>
+            </div>
+        </section>
+
         <!-- Conclusion -->
         <section>
-            <h2>8. Conclusion</h2>
+            <h2>10. Conclusion</h2>
 
             <div class="card" style="border-color: var(--green);">
                 <h3 style="color: var(--green);">✓ Système Opérationnel</h3>
