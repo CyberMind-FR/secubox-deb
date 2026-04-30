@@ -175,6 +175,104 @@ class ACLEntry(BaseModel):
     permissions: List[str]
 
 # ══════════════════════════════════════════════════════════════════
+# Status Cache — Double-buffer pre-cache for instant responses
+# ══════════════════════════════════════════════════════════════════
+import asyncio
+import time
+import threading
+from pathlib import Path
+
+CACHE_DIR = Path("/var/cache/secubox/users")
+STATUS_CACHE_FILE = CACHE_DIR / "status.json"
+_status_cache: Dict[str, Any] = {}
+_status_cache_lock = threading.Lock()
+_cache_refresh_task = None
+
+
+def _compute_status_sync() -> Dict[str, Any]:
+    """Compute users status (synchronous, for background refresh)."""
+    try:
+        result = subprocess.run(
+            [USERSCTL, "status", "--json"],
+            capture_output=True, text=True, timeout=30
+        )
+        if result.returncode == 0:
+            data = json.loads(result.stdout)
+            data["cached_at"] = time.time()
+            return data
+    except Exception:
+        pass
+
+    # Fallback: basic status from files
+    users = {}
+    if os.path.exists(USERS_FILE):
+        try:
+            users = json.loads(Path(USERS_FILE).read_text())
+        except Exception:
+            pass
+
+    return {
+        "user_count": len(users.get("users", [])),
+        "service_count": len(SERVICES),
+        "cached_at": time.time(),
+    }
+
+
+def _refresh_status_cache():
+    """Refresh status cache (called from background task)."""
+    global _status_cache
+    try:
+        status_data = _compute_status_sync()
+        with _status_cache_lock:
+            _status_cache = status_data
+        # Persist to file
+        try:
+            CACHE_DIR.mkdir(parents=True, exist_ok=True)
+            STATUS_CACHE_FILE.write_text(json.dumps(status_data))
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+
+def _load_status_cache():
+    """Load status cache from file for fast startup."""
+    global _status_cache
+    if STATUS_CACHE_FILE.exists():
+        try:
+            _status_cache = json.loads(STATUS_CACHE_FILE.read_text())
+        except Exception:
+            pass
+
+
+async def _periodic_status_refresh():
+    """Refresh status cache every 60 seconds."""
+    while True:
+        try:
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, _refresh_status_cache)
+        except Exception:
+            pass
+        await asyncio.sleep(60)
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Start background cache refresh."""
+    global _cache_refresh_task
+    _load_status_cache()
+    _cache_refresh_task = asyncio.create_task(_periodic_status_refresh())
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Stop background cache refresh."""
+    global _cache_refresh_task
+    if _cache_refresh_task:
+        _cache_refresh_task.cancel()
+
+
+# ══════════════════════════════════════════════════════════════════
 # Helpers
 # ══════════════════════════════════════════════════════════════════
 
@@ -271,8 +369,20 @@ def user_has_permission(username: str, permission: str) -> bool:
 
 @app.get("/status")
 async def get_status():
-    """Get users system status."""
-    return run_usersctl("status", "--json", parse_json=True)
+    """Get users system status. Returns cached data instantly."""
+    # Return from cache (instant)
+    if _status_cache:
+        return _status_cache
+
+    # Fallback: file cache
+    if STATUS_CACHE_FILE.exists():
+        try:
+            return json.loads(STATUS_CACHE_FILE.read_text())
+        except Exception:
+            pass
+
+    # Last resort: compute (first request only)
+    return _compute_status_sync()
 
 @app.get("/services")
 async def list_services():
