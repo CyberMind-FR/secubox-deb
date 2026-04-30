@@ -9,7 +9,7 @@ import os
 from datetime import datetime
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, validator
 from typing import Optional, List, Dict, Any
 
 import sys
@@ -133,8 +133,7 @@ class UserCreate(BaseModel):
     password: str
     services: List[str] = []
 
-    @field_validator('username')
-    @classmethod
+    @validator('username')
     def validate_username(cls, v):
         if not v or len(v) < 3:
             raise ValueError('Username must be at least 3 characters')
