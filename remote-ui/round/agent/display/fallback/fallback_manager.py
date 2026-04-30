@@ -881,12 +881,16 @@ class FallbackManager:
                 draw.rectangle([cx + i * 5 - 1, cy - h + 2, cx + i * 5 + 1, cy + h - 2], fill=color)
 
         elif symbol == 'disk':
-            # Hard drive: simple disk icon - fits in 24px
-            r = 12
-            draw.ellipse([cx - r, cy - r, cx + r, cy + r], outline=bright, width=2)
-            draw.ellipse([cx - 4, cy - 4, cx + 4, cy + 4], fill=color)
-            # Spindle arm
-            draw.line([(cx + 2, cy), (cx + r - 3, cy - r + 5)], fill=bright, width=2)
+            # Floppy disk: classic 3.5" diskette icon - fits in 24px
+            s = 11  # half-size
+            # Main body (square with slight rounding)
+            draw.rectangle([cx - s, cy - s, cx + s, cy + s], fill=dark, outline=bright, width=2)
+            # Metal slider at top
+            draw.rectangle([cx - 4, cy - s, cx + 4, cy - s + 5], fill=bright)
+            # Notch in slider
+            draw.rectangle([cx - 1, cy - s, cx + 1, cy - s + 3], fill=dark)
+            # Label area (center rectangle)
+            draw.rectangle([cx - 7, cy + 1, cx + 7, cy + s - 2], fill=color, outline=bright, width=1)
 
         elif symbol == 'load':
             # Gauge/meter: semicircle with needle - fits in 24px
