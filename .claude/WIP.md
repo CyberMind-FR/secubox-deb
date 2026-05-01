@@ -1,5 +1,29 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-01 (Session 84)*
+*Mis à jour : 2026-05-01 (Session 85)*
+
+---
+
+## ✅ Complété (Session 85) — VirtualBox VM Network Detection Fix
+
+### VM Network Fix ✅
+
+**Problem:** VBox VMs with NAT + host-only interfaces had broken host-only access due to bridge configuration.
+
+**Root Cause:**
+- `secubox-net-detect` put host-only interface (enp0s8) into br-lan bridge with static 192.168.1.1/24
+- Should get DHCP from VBox host-only network (192.168.56.x)
+
+**Fix:**
+- Separate `x64-vm)` case from `x64-baremetal)` in `get_interface_config()`
+- VMs set `profile="vm"` which forces `mode="single"` (no bridge)
+- `generate_netplan()` detects `board="x64-vm"` and configures ALL interfaces with DHCP
+
+**Files Modified:**
+- `image/sbin/secubox-net-detect` — VM-specific handling
+
+**Result:**
+- VM visible at 192.168.56.110 (host-only DHCP working)
+- SSH service issue separate from network fix (pending investigation)
 
 ---
 
