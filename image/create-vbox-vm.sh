@@ -120,7 +120,8 @@ VBoxManage storagectl "${VM_NAME}" \
   --portcount 2
 
 # Disque
-VM_DIR=$(VBoxManage showvminfo "${VM_NAME}" --machinereadable | grep "^CfgFile=" | cut -d'"' -f2 | xargs dirname)
+CFG_FILE=$(VBoxManage showvminfo "${VM_NAME}" --machinereadable | grep "^CfgFile=" | cut -d'"' -f2)
+VM_DIR=$(dirname "$CFG_FILE")
 
 if [[ -n "$VDI_FILE" ]] && [[ -f "$VDI_FILE" ]]; then
   # Utiliser le VDI fourni (copier dans le dossier VM)

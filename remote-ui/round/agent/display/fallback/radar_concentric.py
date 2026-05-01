@@ -31,7 +31,7 @@ RING_WIDTH = 20
 class ConcentricRadar:
     def __init__(self):
         self._start_time = time.time()
-        self._sweep_speed = 2.5  # RPM
+        self._sweep_speed = 12.0  # RPM (fluid rotation)
         self._values = {m['name']: 50 + random.random() * 30 for m in MODULES}
 
     @property

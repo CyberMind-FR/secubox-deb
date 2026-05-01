@@ -150,85 +150,88 @@ get_interface_config() {
             lan_ifaces="lan0 lan1 lan2 lan3"
             profile="lite"
             ;;
-        x64-vm|x64-baremetal)
-            # x64: Auto-detect based on interface names and connectivity
+        x64-vm)
+            # VMs: All interfaces get DHCP (no bridge/router mode)
+            # VirtualBox/QEMU host-only adapters have their own DHCP
             local all_ifaces
             all_ifaces=$(get_physical_interfaces)
-            local iface_count
-            iface_count=$(echo "$all_ifaces" | wc -w)
-            log "Physical interfaces found: $all_ifaces (count: $iface_count)"
+            log "VM detected - all interfaces will use DHCP: $all_ifaces"
 
-            # SINGLE INTERFACE MODE: If only one ethernet interface, use single mode
-            if [[ "$iface_count" -eq 1 ]]; then
-                wan_iface="$all_ifaces"
-                lan_ifaces=""
-                log "Single interface detected: $wan_iface - using single mode (no bridge)"
-            else
-                # MULTI INTERFACE MODE: Try to find WAN and LAN
-                # Try to find WAN: interface with link that gets DHCP
-                for iface in $all_ifaces; do
-                    if check_link "$iface"; then
-                        log "Interface $iface has carrier (link up)"
-                        # First interface with link is likely WAN
-                        if [[ -z "$wan_iface" ]]; then
-                            wan_iface="$iface"
-                        else
-                            lan_ifaces="$lan_ifaces $iface"
-                        fi
+            # First interface is WAN, no LAN bridge needed
+            wan_iface=$(echo "$all_ifaces" | awk '{print $1}')
+            lan_ifaces=""  # Empty = no bridge created
+            profile="vm"
+            ;;
+        x64-baremetal)
+            # Baremetal x64: Auto-detect WAN/LAN based on connectivity
+            local all_ifaces
+            all_ifaces=$(get_physical_interfaces)
+            log "Physical interfaces found: $all_ifaces"
+
+            # Try to find WAN: interface with link that gets DHCP
+            for iface in $all_ifaces; do
+                if check_link "$iface"; then
+                    log "Interface $iface has carrier (link up)"
+                    # First interface with link is likely WAN
+                    if [[ -z "$wan_iface" ]]; then
+                        wan_iface="$iface"
                     else
-                        log "Interface $iface has no carrier"
+                        lan_ifaces="$lan_ifaces $iface"
                     fi
+                else
+                    log "Interface $iface has no carrier"
+                fi
+            done
+
+            # If no link detected, use naming convention with priority
+            if [[ -z "$wan_iface" ]]; then
+                log "No link detected, using naming convention fallback"
+                # Sort interfaces to get predictable WAN selection
+                # Priority: eth0 > enp*s0 > eno1 > ens* > others
+                local sorted_ifaces
+                sorted_ifaces=$(echo "$all_ifaces" | tr ' ' '\n' | sort -V | tr '\n' ' ')
+
+                for iface in $sorted_ifaces; do
+                    case "$iface" in
+                        # High priority: common WAN interface names
+                        eth0|enp0s3|enp1s0|enp2s0|enp3s0|eno1|eno0|ens33|ens192)
+                            if [[ -z "$wan_iface" ]]; then
+                                wan_iface="$iface"
+                                log "Selected $iface as WAN (naming priority)"
+                            else
+                                lan_ifaces="$lan_ifaces $iface"
+                            fi
+                            ;;
+                        # Medium priority: any enp*s0 (first slot on each bus)
+                        enp[0-9]*s0)
+                            if [[ -z "$wan_iface" ]]; then
+                                wan_iface="$iface"
+                                log "Selected $iface as WAN (pattern enp*s0)"
+                            else
+                                lan_ifaces="$lan_ifaces $iface"
+                            fi
+                            ;;
+                        # Medium priority: any eno* (onboard)
+                        eno[0-9]*)
+                            if [[ -z "$wan_iface" ]]; then
+                                wan_iface="$iface"
+                                log "Selected $iface as WAN (pattern eno*)"
+                            else
+                                lan_ifaces="$lan_ifaces $iface"
+                            fi
+                            ;;
+                        *)
+                            # Everything else goes to LAN
+                            lan_ifaces="$lan_ifaces $iface"
+                            ;;
+                    esac
                 done
 
-                # If no link detected, use naming convention with priority
-                if [[ -z "$wan_iface" ]]; then
-                    log "No link detected, using naming convention fallback"
-                    # Sort interfaces to get predictable WAN selection
-                    local sorted_ifaces
-                    sorted_ifaces=$(echo "$all_ifaces" | tr ' ' '\n' | sort -V | tr '\n' ' ')
-
-                    for iface in $sorted_ifaces; do
-                        case "$iface" in
-                            # High priority: common WAN interface names
-                            eth0|enp0s3|enp1s0|enp2s0|enp3s0|eno1|eno0|ens33|ens192)
-                                if [[ -z "$wan_iface" ]]; then
-                                    wan_iface="$iface"
-                                    log "Selected $iface as WAN (naming priority)"
-                                else
-                                    lan_ifaces="$lan_ifaces $iface"
-                                fi
-                                ;;
-                            # Medium priority: any enp*s0 (first slot on each bus)
-                            enp[0-9]*s0)
-                                if [[ -z "$wan_iface" ]]; then
-                                    wan_iface="$iface"
-                                    log "Selected $iface as WAN (pattern enp*s0)"
-                                else
-                                    lan_ifaces="$lan_ifaces $iface"
-                                fi
-                                ;;
-                            # Medium priority: any eno* (onboard)
-                            eno[0-9]*)
-                                if [[ -z "$wan_iface" ]]; then
-                                    wan_iface="$iface"
-                                    log "Selected $iface as WAN (pattern eno*)"
-                                else
-                                    lan_ifaces="$lan_ifaces $iface"
-                                fi
-                                ;;
-                            *)
-                                # Everything else goes to LAN
-                                lan_ifaces="$lan_ifaces $iface"
-                                ;;
-                        esac
-                    done
-
-                    # Last resort: use first interface as WAN
-                    if [[ -z "$wan_iface" ]] && [[ -n "$all_ifaces" ]]; then
-                        wan_iface=$(echo "$all_ifaces" | awk '{print $1}')
-                        lan_ifaces=$(echo "$all_ifaces" | awk '{$1=""; print $0}')
-                        log "Fallback: using first interface $wan_iface as WAN"
-                    fi
+                # Last resort: use first interface as WAN
+                if [[ -z "$wan_iface" ]] && [[ -n "$all_ifaces" ]]; then
+                    wan_iface=$(echo "$all_ifaces" | awk '{print $1}')
+                    lan_ifaces=$(echo "$all_ifaces" | awk '{$1=""; print $0}')
+                    log "Fallback: using first interface $wan_iface as WAN"
                 fi
             fi
 
@@ -273,14 +276,27 @@ generate_netplan() {
 
     local netplan_file="${NETPLAN_DIR}/00-secubox.yaml"
 
-    log "Generating netplan: WAN=$wan_iface LAN=[$lan_ifaces] mode=$mode"
+    log "Generating netplan: WAN=$wan_iface LAN=[$lan_ifaces] mode=$mode board=$board"
 
     # Build ethernets section (4 spaces for interface name, 6 spaces for properties)
     local ethernets=""
 
-    # WAN interface - DHCP
-    if [[ -n "$wan_iface" ]]; then
-        ethernets+="    ${wan_iface}:
+    # VM special case: ALL interfaces get DHCP
+    if [[ "$board" == "x64-vm" ]]; then
+        log "VM mode: configuring all physical interfaces with DHCP"
+        local all_ifaces
+        all_ifaces=$(get_physical_interfaces)
+        for iface in $all_ifaces; do
+            ethernets+="    ${iface}:
+      dhcp4: true
+      dhcp6: false
+      optional: true
+"
+        done
+    else
+        # Standard WAN interface - DHCP
+        if [[ -n "$wan_iface" ]]; then
+            ethernets+="    ${wan_iface}:
       dhcp4: true
       dhcp6: false
       dhcp4-overrides:
@@ -288,9 +304,10 @@ generate_netplan() {
         use-routes: true
       optional: true
 "
+        fi
     fi
 
-    # LAN interfaces - no IP, will be bridged
+    # LAN interfaces - no IP, will be bridged (not for VMs)
     for iface in $lan_ifaces; do
         ethernets+="    ${iface}:
       dhcp4: false
@@ -402,11 +419,10 @@ main() {
     [[ -n "$sfp_ifaces" ]] && log "SFP interfaces: $sfp_ifaces"
     log "Profile: $profile"
 
-    # Auto-select mode based on interface count
-    # If no LAN interfaces, force single mode (single-port hardware)
-    if [[ -z "$lan_ifaces" ]] && [[ "$mode" == "router" ]]; then
-        log "No LAN interfaces detected - switching to single mode"
+    # VMs use single mode (no bridge) - override any default
+    if [[ "$profile" == "vm" ]]; then
         mode="single"
+        log "VM profile detected - using single mode (no bridge)"
     fi
 
     case "$action" in
