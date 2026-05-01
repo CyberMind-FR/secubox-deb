@@ -5,6 +5,41 @@
 
 ## 2026-05-01
 
+### Session 85 — VirtualBox VM Network Detection Fix
+
+**Goal:** Fix network configuration for VirtualBox VMs with multiple interfaces (NAT + host-only)
+
+**Problem:**
+- VBox VMs with 2 interfaces (NAT + host-only) had host-only interface put into br-lan bridge
+- br-lan bridge got static IP 192.168.1.1/24 instead of DHCP from VBox host-only network
+- This broke host-only network access (should get IP in 192.168.56.x range)
+
+**Root Cause:**
+- `secubox-net-detect` treated x64-vm and x64-baremetal identically
+- Both went through router mode logic that creates bridges for multi-interface setups
+- VMs don't need bridges - each interface should independently get DHCP
+
+**Fix Applied:**
+
+1. **image/sbin/secubox-net-detect** — Separate VM handling:
+   - New `x64-vm)` case in `get_interface_config()` with `profile="vm"`
+   - VMs: first interface as WAN, empty LAN list (no bridge)
+   - Added VM detection in `generate_netplan()`: when `board="x64-vm"`, configure ALL physical interfaces with DHCP
+   - In `main()`: `profile="vm"` forces `mode="single"` (skip bridge creation)
+
+**Result:**
+- VBox VMs now correctly configure all interfaces with DHCP
+- Host-only interface gets IP from VBox DHCP server (192.168.56.x range)
+- NAT interface gets IP from VM's internal NAT (10.0.2.x range)
+- No br-lan bridge created for VMs
+
+**Testing:**
+- Built new image with fix
+- VM visible at 192.168.56.110 on host-only network (DHCP working)
+- SSH service startup issue separate from network fix
+
+---
+
 ### Session 84 — AMD64 Real Hardware Network Fix
 
 **Goal:** Fix network configuration for real AMD64 hardware (x64-live board)
