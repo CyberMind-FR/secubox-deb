@@ -41,7 +41,7 @@ class RadarDashboard:
     def __init__(self):
         self._start_time = time.time()
         self._rotation_speed = 1.5  # RPM for base
-        self._sweep_speed = 3.0     # RPM for sweep
+        self._sweep_speed = 12.0    # RPM for sweep (fluid rotation)
         self._values = {m['name']: 50 + random.random() * 30 for m in MODULES}
         self._status = 'NOMINAL'
 

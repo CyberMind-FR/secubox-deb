@@ -107,7 +107,7 @@ class HybridConfig:
     # Radar central
     radar_radius: int = 120
     radar_inner: int = 20
-    sweep_speed: float = 2.0    # Tours par minute
+    sweep_speed: float = 12.0   # Tours par minute (12 RPM = 5s/tour, fluid)
 
     # Anneaux
     ring_width: int = 10
@@ -335,25 +335,38 @@ class HybridRadar:
                 draw.ellipse([x - 2, y - 2, x + 2, y + 2], fill=color)
 
     def _draw_radar_sweep(self, draw):
-        """Dessine le balayage rotatif du radar."""
+        """Dessine le balayage rotatif du radar avec trail fluide."""
         cfg = self.config
         angle = self.sweep_angle
 
-        # Ligne de balayage avec dégradé
-        for i in range(15):
-            a = angle - i * 2
-            alpha = int(200 * (1 - i / 15))
+        # Trail plus long et plus fluide (30 segments au lieu de 15)
+        trail_length = 30
+        for i in range(trail_length):
+            # Angle décroissant pour le trail (1° par segment)
+            a = angle - i * 1.2
+            # Courbe d'alpha plus douce (exponentielle)
+            alpha = int(220 * math.exp(-i / 12))
+            if alpha < 5:
+                continue
             color = (cfg.sweep_color[0], cfg.sweep_color[1],
                      cfg.sweep_color[2], alpha)
-
+            # Épaisseur décroissante
+            width = max(1, 3 - i // 12)
             x1, y1 = cfg.center_x, cfg.center_y
             x2, y2 = self._deg_to_xy(a, cfg.radar_radius)
-            draw.line([(x1, y1), (x2, y2)], fill=color, width=2)
+            draw.line([(x1, y1), (x2, y2)], fill=color, width=width)
 
-        # Ligne principale
+        # Ligne principale (sweep head)
         x1, y1 = cfg.center_x, cfg.center_y
         x2, y2 = self._deg_to_xy(angle, cfg.radar_radius)
         draw.line([(x1, y1), (x2, y2)], fill=cfg.sweep_color, width=3)
+
+        # Glow effet autour de la tête
+        for glow in range(3, 0, -1):
+            glow_alpha = 60 + (3 - glow) * 40
+            glow_color = (cfg.sweep_color[0], cfg.sweep_color[1],
+                          cfg.sweep_color[2], glow_alpha)
+            draw.line([(x1, y1), (x2, y2)], fill=glow_color, width=3 + glow * 2)
 
         # Point de valeur actuelle sur le balayage
         norm = min(1.0, max(0, self.radar_value / 100.0))

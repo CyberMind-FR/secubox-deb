@@ -52,7 +52,7 @@ CUBE_FACES = [
 class FlashyRadar:
     def __init__(self):
         self._start_time = time.time()
-        self._sweep_speed = 3.0
+        self._sweep_speed = 12.0  # RPM (fluid rotation)
         self._cube_speed = 0.8  # rotations per second
         self._values = {m['name']: 50 + random.random() * 30 for m in MODULES}
         self._pulse_phase = 0
