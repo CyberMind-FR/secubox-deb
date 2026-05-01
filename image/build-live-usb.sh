@@ -1487,6 +1487,7 @@ CORESVC
 fi
 
 # Install secubox-hub.service if package didn't install it
+# Using TCP port instead of Unix socket for compatibility with live filesystem overlay
 if [[ ! -f "${ROOTFS}/usr/lib/systemd/system/secubox-hub.service" ]]; then
   cat > "${ROOTFS}/usr/lib/systemd/system/secubox-hub.service" <<'HUBSVC'
 [Unit]
@@ -1500,20 +1501,12 @@ Type=simple
 User=secubox
 Group=secubox
 WorkingDirectory=/usr/lib/secubox/hub
-ExecStartPre=+/bin/mkdir -p /run/secubox
-ExecStartPre=+/bin/chown secubox:secubox /run/secubox
-ExecStartPre=+/bin/chmod 775 /run/secubox
 ExecStart=/usr/bin/python3 -m uvicorn api.main:app \
-    --uds /run/secubox/hub.sock \
+    --host 127.0.0.1 --port 8001 \
     --log-level warning
 Restart=on-failure
 RestartSec=5
-PrivateTmp=true
 NoNewPrivileges=true
-RuntimeDirectory=secubox
-RuntimeDirectoryMode=0775
-ProtectSystem=full
-ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox
 
 [Install]
 WantedBy=multi-user.target
@@ -1538,31 +1531,43 @@ ln -sf /usr/lib/systemd/system/secubox-hub.service \
 ok "Core services fallback complete"
 
 # ── Fix systemd service namespaces for /run/secubox ────────────────
-# Services with ProtectSystem=strict create mount namespaces that prevent
-# socket creation in /run/secubox. Add RuntimeDirectory and tmpfiles.d.
+# Services with RuntimeDirectory=secubox create namespace-isolated directories
+# that are not visible to other processes. We CLEAR RuntimeDirectory to use
+# the shared /run/secubox created by secubox-runtime.service.
 log "Configuring systemd services for /run/secubox..."
 
 # Create tmpfiles.d entry for /run/secubox
 mkdir -p "${ROOTFS}/etc/tmpfiles.d"
 echo "d /run/secubox 0775 secubox secubox -" > "${ROOTFS}/etc/tmpfiles.d/secubox.conf"
 
-# Create systemd overrides for services that use ProtectSystem with /run/secubox
+# Create systemd overrides to CLEAR RuntimeDirectory from all secubox services
+# This prevents namespace isolation issues with Unix sockets
 for unit in "${ROOTFS}"/usr/lib/systemd/system/secubox-*.service; do
   [[ -f "$unit" ]] || continue
   svc=$(basename "$unit" .service)
 
-  # Check if service uses ProtectSystem with ReadWritePaths containing /run/secubox
-  if grep -q "ProtectSystem=" "$unit" && grep -q "ReadWritePaths=.*/run/secubox" "$unit"; then
+  # Skip runtime setup service
+  [[ "$svc" == "secubox-runtime" ]] && continue
+  [[ "$svc" == "secubox-core" ]] && continue
+
+  # Check if service has RuntimeDirectory - we need to clear it
+  if grep -q "RuntimeDirectory=" "$unit"; then
     override_dir="${ROOTFS}/etc/systemd/system/${svc}.service.d"
     mkdir -p "$override_dir"
-    cat > "$override_dir/runtime.conf" << 'EOF'
+    cat > "$override_dir/socket-fix.conf" << 'EOF'
 [Service]
-# Fix for namespace issues with /run/secubox
-RuntimeDirectory=secubox
-RuntimeDirectoryMode=0775
-RuntimeDirectoryPreserve=yes
+# Fix: Clear RuntimeDirectory to use shared /run/secubox from secubox-runtime.service
+# This prevents namespace isolation that breaks socket visibility
+RuntimeDirectory=
+RuntimeDirectoryMode=
+RuntimeDirectoryPreserve=
+PrivateTmp=no
+ProtectSystem=no
+# Ensure we depend on runtime service
+After=secubox-runtime.service
+Requires=secubox-runtime.service
 EOF
-    log "Created override for $svc"
+    log "Created socket-fix override for $svc"
   fi
 done
 
@@ -1649,6 +1654,28 @@ EOF
 chmod 644 "${ROOTFS}/etc/secubox/users.json"
 chroot "${ROOTFS}" chown root:secubox /etc/secubox/users.json 2>/dev/null || true
 log "Created users.json (admin/secubox, root/secubox)"
+
+# Create auth.toml for secubox_core.auth module
+# This is required by the _check_password function
+cat > "${ROOTFS}/etc/secubox/auth.toml" <<'AUTHTOML'
+# SecuBox Authentication Configuration
+# Demo credentials — change in production!
+
+[users.admin]
+password = "secubox"
+role = "admin"
+
+[users.root]
+password = "secubox"
+role = "admin"
+
+[users.secubox]
+password = "secubox"
+role = "admin"
+AUTHTOML
+chmod 644 "${ROOTFS}/etc/secubox/auth.toml"
+chroot "${ROOTFS}" chown root:secubox /etc/secubox/auth.toml 2>/dev/null || true
+log "Created auth.toml (admin/secubox)"
 
 # ── Restore real systemctl ─────────────────────────────────────────
 if [[ ${SYSTEMCTL_DIVERTED:-0} -eq 1 ]] && [[ -x "${ROOTFS}/bin/systemctl.real" ]]; then
@@ -1795,13 +1822,15 @@ done
 
 # ── Ensure hub.conf exists for the Hub API ────────────────────────────
 # This is critical for authentication to work
+# Using TCP port for compatibility with live filesystem overlay
 if [[ ! -f "${ROOTFS}/etc/nginx/secubox.d/hub.conf" ]]; then
   log "Creating hub.conf for Hub API..."
   cat > "${ROOTFS}/etc/nginx/secubox.d/hub.conf" << 'HUBCONF'
 # /etc/nginx/secubox.d/hub.conf
 # SecuBox Hub API - Authentication and Dashboard
+# Using TCP port for VM/live system compatibility
 location /api/v1/hub/ {
-    proxy_pass http://unix:/run/secubox/hub.sock:/;
+    proxy_pass http://127.0.0.1:8001/;
     include /etc/nginx/snippets/secubox-proxy.conf;
 }
 HUBCONF

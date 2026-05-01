@@ -185,6 +185,20 @@ check_prerequisites() {
 configure_x11() {
     log "Configuring X11..."
 
+    # EARLY CHECK: If DRM works on bare metal, skip all config generation
+    # This prevents corrupted configs from being created
+    local vm_check
+    vm_check=$(systemd-detect-virt 2>/dev/null | tr -d '\n\r' || echo "none")
+    if [[ "$vm_check" == "none" ]] && ls /dev/dri/card* &>/dev/null 2>&1; then
+        log "Bare metal with working DRM - using auto-detection (no config needed)"
+        rm -f /etc/X11/xorg.conf.d/10-*.conf
+        cat > /etc/X11/Xwrapper.config <<'XWRAP'
+allowed_users=anybody
+needs_root_rights=yes
+XWRAP
+        return 0
+    fi
+
     # Check if secubox-x11-setup.service already created the config
     if [[ -f /etc/X11/xorg.conf.d/10-secubox-driver.conf ]]; then
         # Validate the config file syntax - Xorg -validate would be ideal but not always available
@@ -208,7 +222,7 @@ XWRAP
     log "No X11 config found - creating one..."
 
     local vm_type driver="modesetting"
-    vm_type=$(systemd-detect-virt 2>/dev/null || echo "none")
+    vm_type=$(systemd-detect-virt 2>/dev/null | tr -d '\n\r' || echo "none")
     log "VM type: $vm_type"
 
     # Detect graphics hardware
@@ -747,7 +761,7 @@ main() {
 
     # Show hardware info on console
     local vm_type platform_name gpu_info
-    vm_type=$(systemd-detect-virt 2>/dev/null || echo "none")
+    vm_type=$(systemd-detect-virt 2>/dev/null | tr -d '\n\r' || echo "none")
     if [[ "$vm_type" == "none" ]]; then
         platform_name="bare-metal (native)"
     else
