@@ -1,5 +1,41 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-04-29 (Session 74)*
+*Mis à jour : 2026-05-01 (Session 84)*
+
+---
+
+## ✅ Complété (Session 84) — AMD64 Real Hardware Network Fix
+
+### x64-live Netplan Fix for Bare Metal ✅
+
+**Problem:** IP assignment failure on real AMD64 hardware due to broken netplan wildcard syntax.
+
+**Root Cause:**
+- `wan0:` with `match: name: "e*"` but no `set-name:` directive
+- Multiple interfaces matching `e*` caused conflicts
+- No fallback when primary pattern failed
+
+**Files Modified:**
+- `board/x64-live/netplan/00-secubox.yaml` — Proper bootstrap config
+- `image/sbin/secubox-net-detect` — Enhanced detection for real hardware
+
+**Files Created:**
+- `image/sbin/secubox-net-reset` — Utility to force network re-detection
+
+**Solution Architecture:**
+```
+Boot → Bootstrap netplan (DHCP on all en*/eth*) → Network up
+    → secubox-net-detect.service runs once
+    → Detects WAN (first with link) / LAN (remaining)
+    → Generates proper netplan with explicit interface names
+    → Applies config → Network reconfigured
+```
+
+**Testing on real AMD64:**
+```bash
+secubox-net-reset --status    # Check detection state
+secubox-net-reset --apply     # Force immediate re-detection
+ip addr show                  # Verify IP assignment
+```
 
 ---
 

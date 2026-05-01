@@ -194,6 +194,86 @@ Après chaque module complété :
 ```
 * Redémarrer : `systemctl restart mitmproxy`
 
+### Mitmproxy Route Configuration (complet)
+
+Quand tu ajoutes un nouveau service qui passe par HAProxy → mitmproxy :
+
+1. Ajouter le vhost HAProxy :
+   ```bash
+   haproxyctl vhost add <domain>
+   ```
+
+2. Le backend sera par défaut `mitmproxy_inspector` (correct)
+
+3. Ajouter la route mitmproxy (les DEUX fichiers) :
+   ```bash
+   # Éditer /srv/mitmproxy/haproxy-routes.json
+   # Éditer /srv/mitmproxy-in/haproxy-routes.json
+   ```
+   ```json
+   {
+     "domain.example.com": ["127.0.0.1", PORT]
+   }
+   ```
+
+4. Recharger mitmproxy :
+   ```bash
+   systemctl restart mitmproxy
+   ```
+
+5. Tester :
+   ```bash
+   curl -k https://domain.example.com/
+   journalctl -u mitmproxy -f  # Voir les logs
+   ```
+
+---
+
+## 🐧 Debian Shell Scripting Guidelines
+
+### Différences avec OpenWrt
+
+| Commande | OpenWrt | Debian |
+|----------|---------|--------|
+| JSON parsing | `jsonfilter` | `jq` |
+| Timeout | Non disponible | `timeout` |
+| Socket check | `netstat -tln` | `ss -tlnp` |
+| Service | `/etc/init.d/X restart` | `systemctl restart X` |
+| Logs | `logread` | `journalctl` |
+| Config | UCI | TOML + netplan |
+
+### Bonnes pratiques Bash sur Debian
+
+```bash
+#!/bin/bash
+set -euo pipefail  # Strict mode
+
+# Utiliser jq pour JSON (installé sur Debian)
+value=$(jq -r '.field' /path/to/file.json)
+
+# Vérifier port ouvert avec ss
+ss -tlnp | grep -q ":8080 " && echo "Port 8080 open"
+
+# Logs avec journalctl
+journalctl -u secubox-crowdsec --since "1 hour ago" --no-pager
+
+# Timeout disponible
+timeout 5 curl -s http://localhost:8080/health || echo "Timeout"
+
+# Netplan au lieu de UCI
+netplan generate && netplan apply
+```
+
+### Detection de processus
+
+```bash
+# Sur Debian, pgrep -x fonctionne
+pgrep -x crowdsec >/dev/null && echo "CrowdSec running"
+
+# Ou utiliser systemctl
+systemctl is-active --quiet secubox-crowdsec && echo "Active"
+```
+
 ---
 
 ## ⚡ Performance Patterns — Double Caching (porté depuis OpenWrt)
