@@ -3,6 +3,60 @@
 
 ---
 
+## 2026-05-01
+
+### Session 84 — AMD64 Real Hardware Network Fix
+
+**Goal:** Fix network configuration for real AMD64 hardware (x64-live board)
+
+**Problem:**
+- x64-live netplan used broken wildcard syntax (`wan0:` with `match: name: "e*"`)
+- Missing `set-name:` directive caused netplan to not properly configure interfaces
+- On real hardware with multiple interfaces (enp2s0, enp3s0, eno1), this caused IP assignment failures
+
+**Fixes Applied:**
+
+1. **board/x64-live/netplan/00-secubox.yaml** — Complete rewrite:
+   - Changed from broken `wan0:` wildcard to proper `eth-dhcp:` and `eth-legacy:` match patterns
+   - Both patterns get DHCP with different route metrics (100 vs 200) for determinism
+   - Added `optional: true` to prevent boot blocking
+   - Added documentation explaining secubox-net-detect role
+
+2. **image/sbin/secubox-net-detect** — Enhanced interface detection:
+   - Added logging for interface discovery process
+   - Expanded naming pattern matching for real hardware:
+     - `enp[0-9]*s0` patterns (PCI bus addressing)
+     - `eno[0-9]*` patterns (onboard NICs)
+     - `ens*` patterns (VMware ESXi)
+   - Added fallback logic when no link detected
+   - Improved YAML generation with DHCP overrides
+   - Fixed empty LAN interface handling
+
+3. **image/sbin/secubox-net-reset** — New utility script:
+   - `--status` to show current network detection state
+   - `--apply` to re-detect and apply immediately
+   - `--reboot` to clear marker and reboot (default)
+   - Helpful for debugging network issues
+
+**Files Modified:**
+- `board/x64-live/netplan/00-secubox.yaml`
+- `image/sbin/secubox-net-detect`
+- `image/build-live-usb.sh` — Updated embedded netplan config
+- `CLAUDE.md` — Added Debian shell scripting guidelines and mitmproxy docs
+
+**Files Created:**
+- `image/sbin/secubox-net-reset`
+
+**Testing:**
+```bash
+# On real AMD64 hardware:
+secubox-net-reset --status    # Check current state
+secubox-net-reset --apply     # Force re-detection
+journalctl -u secubox-net-detect -f  # Watch detection logs
+```
+
+---
+
 ## 2026-04-30
 
 ### Session 83 — Module Enhancement & Service Fixes

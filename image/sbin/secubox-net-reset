@@ -1,0 +1,127 @@
+#!/bin/bash
+# ══════════════════════════════════════════════════════════════════
+#  secubox-net-reset — Force Network Re-Detection
+#  Clears the net-configured marker and optionally reboots
+# ══════════════════════════════════════════════════════════════════
+set -euo pipefail
+
+RED='\033[0;31m'; GREEN='\033[0;32m'; CYAN='\033[0;36m'; YELLOW='\033[1;33m'; NC='\033[0m'
+
+log()  { echo -e "${CYAN}[net-reset]${NC} $*"; }
+warn() { echo -e "${YELLOW}[WARNING]${NC} $*"; }
+ok()   { echo -e "${GREEN}[  OK  ]${NC} $*"; }
+
+MARKER_FILE="/var/lib/secubox/.net-configured"
+NET_DETECT="/usr/sbin/secubox-net-detect"
+
+usage() {
+    cat <<EOF
+Usage: $0 [OPTIONS]
+
+Forces SecuBox to re-detect network interfaces and regenerate netplan.
+
+Options:
+  --apply         Apply changes immediately without reboot
+  --reboot        Clear marker and reboot (default if no option)
+  --status        Show current network detection status
+  --help          Show this help
+
+Examples:
+  $0              # Clear marker and reboot
+  $0 --apply      # Re-detect and apply now (no reboot)
+  $0 --status     # Show current configuration
+EOF
+}
+
+show_status() {
+    echo -e "${CYAN}=== SecuBox Network Detection Status ===${NC}"
+    echo ""
+
+    if [[ -f "$MARKER_FILE" ]]; then
+        echo -e "Net-configured marker: ${GREEN}EXISTS${NC}"
+        echo "  Created: $(stat -c '%y' "$MARKER_FILE" 2>/dev/null || echo 'unknown')"
+    else
+        echo -e "Net-configured marker: ${YELLOW}MISSING${NC} (will re-detect on next boot)"
+    fi
+
+    echo ""
+    if [[ -f /run/secubox/net-detect.json ]]; then
+        echo "Last detection result:"
+        cat /run/secubox/net-detect.json
+    fi
+
+    echo ""
+    echo "Current netplan config:"
+    if [[ -f /etc/netplan/00-secubox.yaml ]]; then
+        head -20 /etc/netplan/00-secubox.yaml
+    else
+        echo "  No netplan config found"
+    fi
+}
+
+do_apply() {
+    log "Clearing net-configured marker..."
+    rm -f "$MARKER_FILE"
+
+    if [[ -x "$NET_DETECT" ]]; then
+        log "Running network detection..."
+        "$NET_DETECT" apply router
+        ok "Network reconfigured"
+
+        log "Restarting network services..."
+        systemctl restart systemd-networkd 2>/dev/null || warn "Failed to restart networkd"
+
+        log "Current IP addresses:"
+        ip -4 addr show | grep -E '^\s+inet ' || true
+    else
+        warn "secubox-net-detect not found, cannot apply immediately"
+        echo "Reboot required to re-detect network"
+    fi
+}
+
+do_reboot() {
+    log "Clearing net-configured marker..."
+    rm -f "$MARKER_FILE"
+
+    ok "Marker cleared. Network will be re-detected on next boot."
+    echo ""
+    read -p "Reboot now? [y/N] " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        log "Rebooting..."
+        reboot
+    else
+        echo "Run 'reboot' when ready to apply changes."
+    fi
+}
+
+# Check root
+if [[ $EUID -ne 0 ]]; then
+    echo "This script must be run as root"
+    exit 1
+fi
+
+# Parse arguments
+case "${1:-}" in
+    --apply)
+        do_apply
+        ;;
+    --reboot)
+        do_reboot
+        ;;
+    --status)
+        show_status
+        ;;
+    --help|-h)
+        usage
+        ;;
+    "")
+        # Default: reboot
+        do_reboot
+        ;;
+    *)
+        echo "Unknown option: $1"
+        usage
+        exit 1
+        ;;
+esac

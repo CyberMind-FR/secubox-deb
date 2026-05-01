@@ -1,26 +1,43 @@
-# /etc/netplan/00-secubox.yaml — x64 Live — Mode Router
-# WAN: First ethernet interface with DHCP (internet uplink)
-# br-lan: Bridge for LAN ports with static IP (DHCP server via dnsmasq)
+# /etc/netplan/00-secubox.yaml — x64 Live (Bare Metal) — Bootstrap Config
+# This is a minimal bootstrap configuration for real AMD64 hardware.
+# secubox-net-detect.service will generate the proper config at first boot.
+#
+# Strategy: Enable DHCP on ALL detected Ethernet interfaces initially.
+# secubox-net-detect will refine this to router mode (WAN + br-lan).
 network:
   version: 2
   renderer: networkd
 
   ethernets:
-    # WAN — DHCP from upstream router/modem
-    # Matches first ethernet interface (eno1, enp0s3, eth0, ens3, etc.)
-    wan0:
+    # Bootstrap: Enable DHCP on all ethernet interfaces for initial connectivity
+    # This ensures we get an IP regardless of interface naming (eno1, enp2s0, etc.)
+    # After first boot, secubox-net-detect rewrites this with proper WAN/LAN split.
+
+    # Match all common ethernet interface patterns
+    eth-dhcp:
       match:
-        name: "e*"
+        name: "en*"
       dhcp4: true
       dhcp6: false
       dhcp4-overrides:
         use-dns: true
         use-routes: true
-      optional: false
+        route-metric: 100
+      optional: true
+
+    eth-legacy:
+      match:
+        name: "eth*"
+      dhcp4: true
+      dhcp6: false
+      dhcp4-overrides:
+        use-dns: true
+        use-routes: true
+        route-metric: 200
+      optional: true
 
   bridges:
-    # Bridge LAN — local network gateway (192.168.1.1)
-    # secubox-netmodes adds interfaces dynamically
+    # br-lan: Pre-defined but empty - secubox-net-detect populates interfaces
     br-lan:
       interfaces: []
       addresses:
@@ -31,5 +48,10 @@ network:
         stp: false
         forward-delay: 0
 
-# Note: secubox-netmodes dynamically reconfigures this based on detected hardware
-# DHCP server on br-lan managed by dnsmasq (secubox-nac)
+# Note: At first boot, secubox-net-detect.service will:
+# 1. Detect board type (x64-baremetal) and available interfaces
+# 2. Determine WAN (first interface with link/DHCP response)
+# 3. Assign remaining interfaces to br-lan
+# 4. Rewrite this file with explicit interface names
+#
+# To force re-detection: rm /var/lib/secubox/.net-configured && reboot

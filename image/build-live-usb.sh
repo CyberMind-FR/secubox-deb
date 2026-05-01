@@ -659,37 +659,83 @@ chroot "${ROOTFS}" systemctl enable secubox-hwcheck.service 2>/dev/null || true
 # ── Network config ─────────────────────────────────────────────────
 mkdir -p "${ROOTFS}/etc/netplan"
 
-# Main netplan config - DHCP on all interfaces, optional so no boot block
-# Matches all common interface naming schemes for universal hardware compatibility
+# Main netplan config - Bootstrap for real AMD64 hardware
+# Uses two separate match patterns to avoid conflicts when multiple interfaces match
+# secubox-net-detect.service will generate proper config at first boot
 cat > "${ROOTFS}/etc/netplan/00-secubox.yaml" <<'NETPLAN'
+# /etc/netplan/00-secubox.yaml — SecuBox Live USB (Bare Metal) — Bootstrap Config
+# This is a minimal bootstrap configuration for real AMD64 hardware.
+# secubox-net-detect.service will generate the proper config at first boot.
+#
+# Strategy: Enable DHCP on ALL detected Ethernet interfaces initially.
+# secubox-net-detect will refine this to router mode (WAN + br-lan).
 network:
   version: 2
   renderer: networkd
+
   ethernets:
-    # All wired interfaces (enp*, eno*, enx*, ens*, eth*)
-    all-wired:
+    # Bootstrap: Enable DHCP on all ethernet interfaces for initial connectivity
+    # This ensures we get an IP regardless of interface naming (eno1, enp2s0, etc.)
+    # After first boot, secubox-net-detect rewrites this with proper WAN/LAN split.
+
+    # Match modern interface patterns (enp*, eno*, ens*, enx*)
+    eth-dhcp:
       match:
-        name: "e*"
+        name: "en*"
       dhcp4: true
+      dhcp6: false
       dhcp4-overrides:
-        route-metric: 100
         use-dns: true
         use-routes: true
+        route-metric: 100
       optional: true
+
+    # Match legacy interface patterns (eth0, eth1, etc.)
+    eth-legacy:
+      match:
+        name: "eth*"
+      dhcp4: true
+      dhcp6: false
+      dhcp4-overrides:
+        use-dns: true
+        use-routes: true
+        route-metric: 200
+      optional: true
+
   wifis:
     # All WiFi interfaces (wlp*, wlan*, wl*)
     all-wifi:
       match:
-        name: "w*"
+        name: "wl*"
       dhcp4: true
       dhcp4-overrides:
-        route-metric: 200
+        route-metric: 300
         use-dns: true
         use-routes: true
       optional: true
       access-points:
         # Open networks (fallback)
         "": {}
+
+  bridges:
+    # br-lan: Pre-defined but empty - secubox-net-detect populates interfaces
+    br-lan:
+      interfaces: []
+      addresses:
+        - 192.168.1.1/24
+      dhcp4: false
+      optional: true
+      parameters:
+        stp: false
+        forward-delay: 0
+
+# Note: At first boot, secubox-net-detect.service will:
+# 1. Detect board type (x64-baremetal) and available interfaces
+# 2. Determine WAN (first interface with link/DHCP response)
+# 3. Assign remaining interfaces to br-lan
+# 4. Rewrite this file with explicit interface names
+#
+# To force re-detection: rm /var/lib/secubox/.net-configured && reboot
 NETPLAN
 chmod 600 "${ROOTFS}/etc/netplan/00-secubox.yaml"
 
@@ -1808,7 +1854,7 @@ mkdir -p "${ROOTFS}/usr/sbin"
 mkdir -p "${ROOTFS}/usr/lib/secubox"
 
 # Copy scripts (including kiosk-launcher for robust startup, TUI, mode switcher, and disk flasher)
-for script in secubox-net-detect secubox-kiosk-setup secubox-cmdline-handler secubox-kiosk-launcher secubox-x11-splash secubox-console-tui secubox-mode secubox-flash-disk; do
+for script in secubox-net-detect secubox-net-reset secubox-kiosk-setup secubox-cmdline-handler secubox-kiosk-launcher secubox-x11-splash secubox-console-tui secubox-mode secubox-flash-disk; do
   if [[ -f "${SCRIPT_DIR}/sbin/${script}" ]]; then
     cp "${SCRIPT_DIR}/sbin/${script}" "${ROOTFS}/usr/sbin/"
     chmod +x "${ROOTFS}/usr/sbin/${script}"
