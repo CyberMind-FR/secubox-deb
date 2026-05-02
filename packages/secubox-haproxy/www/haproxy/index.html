@@ -890,6 +890,142 @@
             }
         }
 
+        // ══════════════════════════════════════════════════════════════
+        // Backend CRUD
+        // ══════════════════════════════════════════════════════════════
+        function showAddBackendModal() {
+            const body = `
+                <div class="form-group">
+                    <label>Name</label>
+                    <input type="text" id="backend-name" placeholder="my-backend">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Mode</label>
+                        <select id="backend-mode">
+                            <option value="http">HTTP</option>
+                            <option value="tcp">TCP</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Balance</label>
+                        <select id="backend-balance">
+                            <option value="roundrobin">Round Robin</option>
+                            <option value="leastconn">Least Connections</option>
+                            <option value="source">Source IP</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-check">
+                    <input type="checkbox" id="backend-health" checked>
+                    <label>Enable Health Checks</label>
+                </div>
+                <div class="form-group">
+                    <label>Health Check URI</label>
+                    <input type="text" id="backend-health-uri" value="/health" placeholder="/health">
+                </div>
+            `;
+            const footer = `
+                <button class="btn" onclick="closeModal()">Cancel</button>
+                <button class="btn primary" onclick="saveBackend(false)">Add Backend</button>
+            `;
+            openModal('Add Backend', body, footer);
+        }
+
+        async function showEditBackendModal(backend) {
+            const body = `
+                <input type="hidden" id="backend-original-name" value="${backend.name}">
+                <div class="form-group">
+                    <label>Name</label>
+                    <input type="text" id="backend-name" value="${backend.name}">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Mode</label>
+                        <select id="backend-mode">
+                            <option value="http" ${backend.mode === 'http' ? 'selected' : ''}>HTTP</option>
+                            <option value="tcp" ${backend.mode === 'tcp' ? 'selected' : ''}>TCP</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Balance</label>
+                        <select id="backend-balance">
+                            <option value="roundrobin" ${backend.balance === 'roundrobin' ? 'selected' : ''}>Round Robin</option>
+                            <option value="leastconn" ${backend.balance === 'leastconn' ? 'selected' : ''}>Least Connections</option>
+                            <option value="source" ${backend.balance === 'source' ? 'selected' : ''}>Source IP</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-check">
+                    <input type="checkbox" id="backend-health" ${backend.health_check !== false ? 'checked' : ''}>
+                    <label>Enable Health Checks</label>
+                </div>
+                <div class="form-group">
+                    <label>Health Check URI</label>
+                    <input type="text" id="backend-health-uri" value="${backend.health_uri || '/health'}">
+                </div>
+            `;
+            const footer = `
+                <button class="btn" onclick="closeModal()">Cancel</button>
+                <button class="btn primary" onclick="saveBackend(true)">Save Changes</button>
+            `;
+            openModal('Edit Backend', body, footer);
+        }
+
+        async function saveBackend(isEdit) {
+            const valid = validateForm([
+                { id: 'backend-name', rules: { required: true, requiredMsg: 'Name is required', pattern: /^[a-zA-Z][a-zA-Z0-9_-]*$/, patternMsg: 'Name must start with letter, only letters/numbers/hyphens/underscores' }}
+            ]);
+            if (!valid) return;
+
+            const data = {
+                name: document.getElementById('backend-name').value.trim(),
+                mode: document.getElementById('backend-mode').value,
+                balance: document.getElementById('backend-balance').value,
+                health_check: document.getElementById('backend-health').checked,
+                health_uri: document.getElementById('backend-health-uri').value.trim() || '/health'
+            };
+
+            let res;
+            if (isEdit) {
+                const origName = document.getElementById('backend-original-name').value;
+                res = await apiCall(`/backend/${encodeURIComponent(origName)}`, {
+                    method: 'PUT',
+                    body: JSON.stringify(data)
+                });
+            } else {
+                res = await apiCall('/backend', {
+                    method: 'POST',
+                    body: JSON.stringify(data)
+                });
+            }
+
+            if (!res.error) {
+                closeModal();
+                showToast(isEdit ? 'Backend updated' : 'Backend created', 'success');
+                loadBackends();
+                loadStatus();
+            }
+        }
+
+        async function deleteBackend(name) {
+            const backend = cachedBackends.find(b => b.name === name);
+            const serverCount = backend?.servers?.length || 0;
+
+            const msg = serverCount > 0
+                ? `Delete backend "${name}" and its ${serverCount} server(s)?`
+                : `Delete backend "${name}"?`;
+
+            if (!confirm(msg)) return;
+
+            const res = await apiCall(`/backend/${encodeURIComponent(name)}`, { method: 'DELETE' });
+            if (!res.error) {
+                showToast(`Backend "${name}" deleted`, 'success');
+                loadBackends();
+                loadStatus();
+            }
+        }
+
         function switchTab(tabName) {
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
