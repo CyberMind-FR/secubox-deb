@@ -537,8 +537,12 @@
             </div>
 
             <div id="backends" class="tab-content">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+                    <h3 style="margin:0;color:var(--p31-decay)">Backends</h3>
+                    <button class="btn primary" onclick="showAddBackendModal()">+ Add Backend</button>
+                </div>
                 <table>
-                    <thead><tr><th>Name</th><th>Mode</th><th>Balance</th><th>Servers</th><th>Type</th></tr></thead>
+                    <thead><tr><th>Name</th><th>Mode</th><th>Balance</th><th>Servers</th><th>Actions</th></tr></thead>
                     <tbody id="backend-list"><tr><td colspan="5">Loading...</td></tr></tbody>
                 </table>
             </div>
@@ -1329,19 +1333,31 @@
             const d = await api('/backends');
             const list = document.getElementById('backend-list');
             const backends = d.backends || [];
+            cachedBackends = backends;
             if (!backends.length) {
                 list.innerHTML = '<tr><td colspan="5" style="color:var(--text-dim)">No backends</td></tr>';
                 return;
             }
-            list.innerHTML = backends.map(b => `
+            list.innerHTML = backends.map(b => {
+                const isWaf = b.type === 'waf' || b.name === 'waf_inspector';
+                const serverCount = b.servers?.length || 0;
+                return `
                 <tr>
-                    <td>${b.name}</td>
+                    <td><strong>${b.name}</strong></td>
                     <td>${b.mode || 'http'}</td>
                     <td>${b.balance || '-'}</td>
-                    <td>${b.type === 'waf' ? '-' : (b.servers || []).length}</td>
-                    <td>${b.type === 'waf' ? '<span class="badge waf">WAF Inspector</span>' : ''}</td>
+                    <td>
+                        ${isWaf ? '<span class="badge waf">WAF Inspector</span>' : `${serverCount} server${serverCount !== 1 ? 's' : ''}`}
+                        ${!isWaf ? `<button class="btn" style="padding:0.2rem 0.5rem;font-size:0.7rem;margin-left:0.5rem" onclick="showBackendServers('${b.name}')">Manage</button>` : ''}
+                    </td>
+                    <td>
+                        ${!isWaf ? `
+                            <button class="btn" style="padding:0.3rem 0.6rem;font-size:0.75rem" onclick='showEditBackendModal(${JSON.stringify(b)})'>Edit</button>
+                            <button class="btn danger" style="padding:0.3rem 0.6rem;font-size:0.75rem" onclick="deleteBackend('${b.name}')">Delete</button>
+                        ` : ''}
+                    </td>
                 </tr>
-            `).join('');
+            `}).join('');
         }
 
         async function loadStats() {
