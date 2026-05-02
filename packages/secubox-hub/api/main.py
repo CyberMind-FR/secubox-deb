@@ -31,13 +31,25 @@ _menu_cache_lock = asyncio.Lock()
 
 
 def _compute_menu_sync() -> dict:
-    """Compute full menu (synchronous, called from thread)."""
+    """Compute full menu (synchronous, called from thread).
+
+    Only includes modules that have actual www directories with HTML content.
+    Skips items without ID, console-only items, and modules without frontends.
+    """
     menu_items = _load_menu_definitions()
 
     # Filter to only installed modules and check active status
     installed_items = []
     for item in menu_items:
         module_id = item.get("id", "")
+
+        # Skip items without a valid ID
+        if not module_id:
+            continue
+
+        # Skip console-only items (no web interface)
+        if item.get("console_only"):
+            continue
 
         # Hub is always installed
         if module_id == "hub":
@@ -47,7 +59,7 @@ def _compute_menu_sync() -> dict:
             installed_items.append(item_copy)
             continue
 
-        # Check if module is installed
+        # Check if module is installed (has www directory with content)
         if _check_module_installed(module_id):
             item_copy = item.copy()
             item_copy["installed"] = True
@@ -1234,29 +1246,33 @@ def _load_menu_definitions() -> list:
 
 
 def _check_module_installed(module_id: str) -> bool:
-    """Check if a module is installed (uses cache for service check)."""
-    # Check for socket first (fast)
-    sock = Path(f"/run/secubox/{module_id}.sock")
-    if sock.exists():
+    """Check if a module is installed AND has a usable frontend.
+
+    A module is considered installed if it has a www directory with content.
+    Services without frontends are not shown in the menu.
+    """
+    # Reject empty or invalid module IDs
+    if not module_id or not isinstance(module_id, str):
+        return False
+
+    # Hub is always installed
+    if module_id == "hub":
         return True
 
-    # Check cache for service
-    svc_name = f"secubox-{module_id}"
-    if svc_name in _cache["services"]:
-        return True  # If in cache, it was found during refresh
+    # Portal is part of hub package
+    if module_id == "portal":
+        portal_path = Path("/usr/share/secubox/www/portal")
+        return portal_path.exists() and (portal_path / "index.html").exists()
 
-    # Check for www directory (static modules) - correct path
+    # Check for www directory with an index.html or any html file
     www_path = Path(f"/usr/share/secubox/www/{module_id}")
-    if www_path.exists():
-        return True
-
-    # Check systemd service directly (for TCP port services)
-    result = subprocess.run(
-        ["systemctl", "is-enabled", svc_name],
-        capture_output=True, text=True
-    )
-    if result.returncode == 0:
-        return True
+    if www_path.exists() and www_path.is_dir():
+        # Check for index.html or any content
+        if (www_path / "index.html").exists():
+            return True
+        # Check for any HTML files
+        if list(www_path.glob("*.html")):
+            return True
 
     return False
 
