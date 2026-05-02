@@ -358,6 +358,47 @@
             margin: 0;
         }
 
+        /* Form Styles */
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-size: 0.85rem;
+            color: var(--p31-mid);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+        .form-group input,
+        .form-group select {
+            width: 100%;
+        }
+        .form-row {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        .form-row > * {
+            flex: 1;
+        }
+        .form-check {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+        .form-check input[type="checkbox"] {
+            width: auto;
+            margin: 0;
+        }
+        .form-check label {
+            font-size: 0.9rem;
+            color: var(--p31-mid);
+            margin: 0;
+            text-transform: none;
+        }
+
         /* Toast Styles */
         #toast-container {
             position: fixed;
@@ -1420,10 +1461,6 @@
             refresh();
         }
 
-        async function toggleVhostWAF(name, bypass) {
-            await api(`/vhost/${name}/waf-bypass`, { method: 'POST', body: JSON.stringify({ bypass }) });
-            loadVhosts();
-        }
 
         async function syncRoutes() {
             const d = await api('/waf/sync-routes', { method: 'POST' });
