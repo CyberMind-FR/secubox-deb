@@ -1026,6 +1026,161 @@
             }
         }
 
+        // ══════════════════════════════════════════════════════════════
+        // Server CRUD (nested under Backend)
+        // ══════════════════════════════════════════════════════════════
+        async function showBackendServers(backendName) {
+            const d = await api(`/backend/${encodeURIComponent(backendName)}`);
+            const backend = d.backend || d;
+            const servers = backend.servers || [];
+
+            const serverRows = servers.length === 0
+                ? '<tr><td colspan="5" style="color:var(--p31-dim)">No servers configured</td></tr>'
+                : servers.map(s => `
+                    <tr>
+                        <td>${s.name}</td>
+                        <td>${s.address}</td>
+                        <td>${s.port}</td>
+                        <td>${s.weight || 100}</td>
+                        <td>
+                            <button class="btn" style="padding:0.3rem 0.6rem;font-size:0.75rem" onclick="showEditServerModal('${backendName}', ${JSON.stringify(s).replace(/"/g, '&quot;')})">Edit</button>
+                            <button class="btn danger" style="padding:0.3rem 0.6rem;font-size:0.75rem" onclick="deleteServer('${backendName}', '${s.name}')">Delete</button>
+                        </td>
+                    </tr>
+                `).join('');
+
+            const body = `
+                <p style="color:var(--p31-dim);margin-bottom:1rem">Backend: <strong>${backendName}</strong></p>
+                <table style="margin-bottom:1rem">
+                    <thead><tr><th>Name</th><th>Address</th><th>Port</th><th>Weight</th><th>Actions</th></tr></thead>
+                    <tbody>${serverRows}</tbody>
+                </table>
+            `;
+            const footer = `
+                <button class="btn" onclick="closeModal()">Close</button>
+                <button class="btn primary" onclick="showAddServerModal('${backendName}')">+ Add Server</button>
+            `;
+            openModal('Manage Servers', body, footer);
+        }
+
+        function showAddServerModal(backendName) {
+            const body = `
+                <input type="hidden" id="server-backend" value="${backendName}">
+                <div class="form-group">
+                    <label>Server Name</label>
+                    <input type="text" id="server-name" placeholder="server1">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Address</label>
+                        <input type="text" id="server-address" placeholder="192.168.1.10">
+                    </div>
+                    <div class="form-group">
+                        <label>Port</label>
+                        <input type="number" id="server-port" value="80" min="1" max="65535">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Weight</label>
+                        <input type="number" id="server-weight" value="100" min="1" max="256">
+                    </div>
+                    <div class="form-check" style="align-self:end;padding-bottom:0.6rem">
+                        <input type="checkbox" id="server-check" checked>
+                        <label>Health Check</label>
+                    </div>
+                </div>
+            `;
+            const footer = `
+                <button class="btn" onclick="showBackendServers('${backendName}')">Back</button>
+                <button class="btn primary" onclick="saveServer('${backendName}', false)">Add Server</button>
+            `;
+            openModal('Add Server', body, footer);
+        }
+
+        function showEditServerModal(backendName, server) {
+            const body = `
+                <input type="hidden" id="server-backend" value="${backendName}">
+                <input type="hidden" id="server-original-name" value="${server.name}">
+                <div class="form-group">
+                    <label>Server Name</label>
+                    <input type="text" id="server-name" value="${server.name}">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Address</label>
+                        <input type="text" id="server-address" value="${server.address}">
+                    </div>
+                    <div class="form-group">
+                        <label>Port</label>
+                        <input type="number" id="server-port" value="${server.port}" min="1" max="65535">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Weight</label>
+                        <input type="number" id="server-weight" value="${server.weight || 100}" min="1" max="256">
+                    </div>
+                    <div class="form-check" style="align-self:end;padding-bottom:0.6rem">
+                        <input type="checkbox" id="server-check" ${server.check !== false ? 'checked' : ''}>
+                        <label>Health Check</label>
+                    </div>
+                </div>
+            `;
+            const footer = `
+                <button class="btn" onclick="showBackendServers('${backendName}')">Back</button>
+                <button class="btn primary" onclick="saveServer('${backendName}', true)">Save Changes</button>
+            `;
+            openModal('Edit Server', body, footer);
+        }
+
+        async function saveServer(backendName, isEdit) {
+            const valid = validateForm([
+                { id: 'server-name', rules: { required: true, requiredMsg: 'Server name is required' }},
+                { id: 'server-address', rules: { required: true, requiredMsg: 'Address is required' }},
+                { id: 'server-port', rules: { required: true, min: 1, max: 65535, minMsg: 'Port must be 1-65535', maxMsg: 'Port must be 1-65535' }}
+            ]);
+            if (!valid) return;
+
+            const data = {
+                backend: backendName,
+                name: document.getElementById('server-name').value.trim(),
+                address: document.getElementById('server-address').value.trim(),
+                port: parseInt(document.getElementById('server-port').value),
+                weight: parseInt(document.getElementById('server-weight').value) || 100,
+                check: document.getElementById('server-check').checked
+            };
+
+            let res;
+            if (isEdit) {
+                const origName = document.getElementById('server-original-name').value;
+                res = await apiCall(`/server/${encodeURIComponent(origName)}`, {
+                    method: 'PUT',
+                    body: JSON.stringify(data)
+                });
+            } else {
+                res = await apiCall('/server', {
+                    method: 'POST',
+                    body: JSON.stringify(data)
+                });
+            }
+
+            if (!res.error) {
+                showToast(isEdit ? 'Server updated' : 'Server added', 'success');
+                showBackendServers(backendName);
+            }
+        }
+
+        async function deleteServer(backendName, serverName) {
+            if (!confirm(`Delete server "${serverName}" from backend "${backendName}"?`)) return;
+
+            const res = await apiCall(`/server/${encodeURIComponent(serverName)}?backend=${encodeURIComponent(backendName)}`, { method: 'DELETE' });
+            if (!res.error) {
+                showToast(`Server "${serverName}" deleted`, 'success');
+                showBackendServers(backendName);
+            }
+        }
+
         function switchTab(tabName) {
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
