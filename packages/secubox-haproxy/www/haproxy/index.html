@@ -555,9 +555,13 @@
             </div>
 
             <div id="certs" class="tab-content">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+                    <h3 style="margin:0;color:var(--p31-decay)">SSL Certificates</h3>
+                    <button class="btn primary" onclick="showRequestCertModal()">+ Request Certificate</button>
+                </div>
                 <table>
-                    <thead><tr><th>Certificate</th><th>Path</th></tr></thead>
-                    <tbody id="cert-list"><tr><td colspan="2">Loading...</td></tr></tbody>
+                    <thead><tr><th>Certificate</th><th>Path</th><th>Actions</th></tr></thead>
+                    <tbody id="cert-list"><tr><td colspan="3">Loading...</td></tr></tbody>
                 </table>
             </div>
 
@@ -1389,10 +1393,18 @@
             const list = document.getElementById('cert-list');
             const certs = d.certificates || [];
             if (!certs.length) {
-                list.innerHTML = '<tr><td colspan="2" style="color:var(--text-dim)">No certificates</td></tr>';
+                list.innerHTML = '<tr><td colspan="3" style="color:var(--text-dim)">No certificates</td></tr>';
                 return;
             }
-            list.innerHTML = certs.map(c => `<tr><td>${c.name}</td><td style="font-family:monospace;font-size:0.8rem">${c.path}</td></tr>`).join('');
+            list.innerHTML = certs.map(c => `
+                <tr>
+                    <td><strong>${c.name}</strong></td>
+                    <td style="font-family:monospace;font-size:0.8rem;color:var(--p31-dim)">${c.path}</td>
+                    <td>
+                        <button class="btn danger" style="padding:0.3rem 0.6rem;font-size:0.75rem" onclick="deleteCertificate('${c.name}')">Delete</button>
+                    </td>
+                </tr>
+            `).join('');
         }
 
         function formatBytes(bytes) {
