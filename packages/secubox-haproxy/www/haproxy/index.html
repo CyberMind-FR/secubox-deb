@@ -1181,6 +1181,77 @@
             }
         }
 
+        // ══════════════════════════════════════════════════════════════
+        // Certificate CRUD
+        // ══════════════════════════════════════════════════════════════
+        function showRequestCertModal() {
+            const body = `
+                <div class="form-group">
+                    <label>Domain</label>
+                    <input type="text" id="cert-domain" placeholder="example.com">
+                </div>
+                <div class="form-check">
+                    <input type="checkbox" id="cert-staging">
+                    <label>Use Let's Encrypt Staging (for testing)</label>
+                </div>
+                <div id="cert-progress" style="display:none;margin-top:1rem">
+                    <p style="color:var(--p31-mid)">Requesting certificate...</p>
+                    <div style="background:var(--tube-soft);height:4px;border-radius:2px;overflow:hidden">
+                        <div id="cert-progress-bar" style="background:var(--p31-peak);height:100%;width:0%;transition:width 0.5s"></div>
+                    </div>
+                </div>
+            `;
+            const footer = `
+                <button class="btn" onclick="closeModal()">Cancel</button>
+                <button class="btn primary" id="cert-submit-btn" onclick="requestCertificate()">Request Certificate</button>
+            `;
+            openModal('Request SSL Certificate', body, footer);
+        }
+
+        async function requestCertificate() {
+            const valid = validateForm([
+                { id: 'cert-domain', rules: { required: true, requiredMsg: 'Domain is required', pattern: /^[a-zA-Z0-9][-a-zA-Z0-9.]*\.[a-zA-Z]{2,}$/, patternMsg: 'Invalid domain format' }}
+            ]);
+            if (!valid) return;
+
+            const domain = document.getElementById('cert-domain').value.trim();
+            const staging = document.getElementById('cert-staging').checked;
+
+            // Show progress
+            document.getElementById('cert-progress').style.display = 'block';
+            document.getElementById('cert-submit-btn').disabled = true;
+            const progressBar = document.getElementById('cert-progress-bar');
+            progressBar.style.width = '30%';
+
+            const res = await apiCall('/certificate/request', {
+                method: 'POST',
+                body: JSON.stringify({ domain, staging })
+            });
+
+            progressBar.style.width = '100%';
+
+            if (!res.error) {
+                setTimeout(() => {
+                    closeModal();
+                    showToast(`Certificate requested for ${domain}`, 'success');
+                    loadCerts();
+                }, 500);
+            } else {
+                document.getElementById('cert-progress').style.display = 'none';
+                document.getElementById('cert-submit-btn').disabled = false;
+            }
+        }
+
+        async function deleteCertificate(name) {
+            if (!confirm(`Delete certificate "${name}"?`)) return;
+
+            const res = await apiCall(`/certificate/${encodeURIComponent(name)}`, { method: 'DELETE' });
+            if (!res.error) {
+                showToast(`Certificate "${name}" deleted`, 'success');
+                loadCerts();
+            }
+        }
+
         function switchTab(tabName) {
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
