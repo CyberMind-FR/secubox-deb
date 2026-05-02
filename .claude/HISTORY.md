@@ -5,6 +5,53 @@
 
 ## 2026-05-02
 
+### Session 87 — HAProxy WebUI CRUD Enhancement
+
+**Goal:** Add full CRUD operations for VHosts, Backends, Servers, and Certificates to the HAProxy WebUI dashboard
+
+**Context:**
+- Compared OpenWrt SecuBox HAProxy implementation with secubox-deb
+- OpenWrt had 35+ RPCD methods, 8 separate JS view files
+- secubox-deb already had comprehensive FastAPI backend (40+ endpoints)
+- WebUI was read-only — needed CRUD operations
+
+**Implementation:**
+1. Added modal system for add/edit forms
+2. Added toast notifications for success/error feedback
+3. Added client-side form validation with `validateForm()` function
+4. Added enhanced `apiCall()` function with comprehensive error handling
+5. VHost CRUD: add, edit, delete with domain/backend/SSL/WAF/ACME options
+6. Backend CRUD: add, edit, delete with mode/balance/health check options
+7. Server CRUD: nested under backends with address/port/weight management
+8. Certificate CRUD: request ACME certs with progress bar, delete existing
+9. Updated all tables with action buttons (Edit/Delete/Manage)
+10. Maintained P31 Phosphor theme consistency
+
+**Files Changed:**
+- `packages/secubox-haproxy/www/haproxy/index.html` — ~1565 lines (was ~690)
+- `docs/superpowers/specs/2026-05-02-haproxy-webui-enhancement-design.md` — Design spec
+- `docs/superpowers/plans/2026-05-02-haproxy-webui-crud.md` — Implementation plan
+
+**Commits (10 total):**
+- f0970d6 feat(haproxy-ui): Add modal and toast HTML containers with CSS and JS functions
+- 251b292 feat(haproxy-ui): Add validation and enhanced API functions
+- ebb1bb4 feat(haproxy-ui): Add VHost CRUD functions
+- d51e26e feat(haproxy-ui): Add Backend CRUD functions
+- 591d289 feat(haproxy-ui): Add Server CRUD functions
+- 4b2b214 feat(haproxy-ui): Add Certificate CRUD functions
+- 3df7247 feat(haproxy-ui): Update VHosts table with CRUD buttons
+- db04ffb feat(haproxy-ui): Update Backends table with CRUD buttons
+- acdb94b feat(haproxy-ui): Update Certificates table with CRUD buttons
+- 2a1dde2 fix(haproxy-ui): Add form CSS and remove unused function
+
+**Result:**
+- Full CRUD operations for all HAProxy entities
+- Consistent UI with existing P31 Phosphor theme
+- All API endpoints already existed — frontend-only enhancement
+- Code review passed with Good quality rating
+
+---
+
 ### Session 86 — GitHub Actions Package Architecture Filtering Fix
 
 **Goal:** Fix GitHub Actions workflow failures when building ARM64 images
