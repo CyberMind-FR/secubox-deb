@@ -285,6 +285,159 @@
         @media (max-width: 768px) {
             .main { margin-left: 0; }
         }
+
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal.active {
+            display: flex;
+        }
+        .modal-content {
+            background: var(--tube-pale);
+            border: 1px solid var(--p31-dim);
+            border-radius: 8px;
+            box-shadow: 0 0 30px rgba(51, 255, 102, 0.1);
+            max-width: 600px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--p31-ghost);
+        }
+        .modal-title {
+            color: var(--p31-decay);
+            text-shadow: var(--bloom-amber);
+            letter-spacing: 0.1em;
+            margin: 0;
+            font-size: 1.1rem;
+        }
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            color: var(--p31-dim);
+            cursor: pointer;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-close:hover {
+            color: var(--p31-peak);
+            text-shadow: var(--bloom-soft);
+        }
+        #modal-body {
+            padding: 1.5rem;
+            flex: 1;
+            overflow-y: auto;
+        }
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.5rem;
+            padding: 1rem 1.5rem;
+            border-top: 1px solid var(--p31-ghost);
+        }
+        .modal-footer .btn {
+            margin: 0;
+        }
+
+        /* Toast Styles */
+        #toast-container {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            z-index: 2000;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+        .toast {
+            background: var(--tube-pale);
+            border: 2px solid var(--p31-dim);
+            border-radius: 6px;
+            padding: 1rem 1.25rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            font-family: 'Courier Prime', monospace;
+            max-width: 400px;
+            animation: slideIn 0.3s ease-out;
+        }
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        @keyframes slideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+        }
+        .toast.removing {
+            animation: slideOut 0.3s ease-out forwards;
+        }
+        .toast-success {
+            border-color: var(--p31-peak);
+            color: var(--p31-peak);
+        }
+        .toast-success::before {
+            content: "✓ ";
+            font-weight: bold;
+        }
+        .toast-error {
+            border-color: #ff4466;
+            color: #ff4466;
+        }
+        .toast-error::before {
+            content: "✕ ";
+            font-weight: bold;
+        }
+        .toast-info {
+            border-color: var(--p31-mid);
+            color: var(--p31-mid);
+        }
+        .toast-warning {
+            border-color: var(--p31-decay);
+            color: var(--p31-decay);
+        }
+
+        @media (max-width: 768px) {
+            .modal-content {
+                width: 95%;
+            }
+            #toast-container {
+                bottom: 1rem;
+                right: 1rem;
+            }
+            .toast {
+                max-width: 280px;
+            }
+        }
     </style>
 </head>
 <body class="crt-light">
@@ -435,10 +588,73 @@
         </div>
     </div>
 
+    <!-- Generic Modal -->
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-title"></h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div id="modal-body"></div>
+            <div id="modal-footer" class="modal-footer"></div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
+
     <script>
         const API = '/api/v1/haproxy';
         const token = () => localStorage.getItem('sbx_token');
         const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+
+        /* Modal Functions */
+        function openModal(title, body, footer = '') {
+            document.getElementById('modal-title').textContent = title;
+            document.getElementById('modal-body').innerHTML = body;
+            document.getElementById('modal-footer').innerHTML = footer || '';
+            document.getElementById('modal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('modal').classList.remove('active');
+            document.getElementById('modal-title').textContent = '';
+            document.getElementById('modal-body').innerHTML = '';
+            document.getElementById('modal-footer').innerHTML = '';
+        }
+
+        /* Toast Functions */
+        function showToast(message, type = 'info', duration = 3000) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.textContent = message;
+            container.appendChild(toast);
+
+            if (duration > 0) {
+                setTimeout(() => {
+                    toast.classList.add('removing');
+                    setTimeout(() => toast.remove(), 300);
+                }, duration);
+            }
+            return toast;
+        }
+
+        function showSuccess(message, duration = 3000) {
+            return showToast(message, 'success', duration);
+        }
+
+        function showError(message, duration = 3000) {
+            return showToast(message, 'error', duration);
+        }
+
+        function showInfo(message, duration = 3000) {
+            return showToast(message, 'info', duration);
+        }
+
+        function showWarning(message, duration = 3000) {
+            return showToast(message, 'warning', duration);
+        }
 
         async function api(path, opts = {}) {
             try {
