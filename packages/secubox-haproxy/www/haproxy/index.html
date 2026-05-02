@@ -733,6 +733,163 @@
             }
         }
 
+        // ══════════════════════════════════════════════════════════════
+        // VHost CRUD
+        // ══════════════════════════════════════════════════════════════
+        let cachedBackends = [];
+
+        async function loadBackendOptions() {
+            const d = await api('/backends');
+            cachedBackends = (d.backends || []).filter(b => b.type !== 'waf');
+            return cachedBackends.map(b =>
+                `<option value="${b.name}">${b.name}</option>`
+            ).join('');
+        }
+
+        async function showAddVhostModal() {
+            const backendOpts = await loadBackendOptions();
+            const body = `
+                <div class="form-group">
+                    <label>Domain</label>
+                    <input type="text" id="vhost-domain" placeholder="example.com">
+                </div>
+                <div class="form-group">
+                    <label>Backend</label>
+                    <select id="vhost-backend">
+                        <option value="">-- Select Backend --</option>
+                        ${backendOpts}
+                    </select>
+                </div>
+                <div class="form-row">
+                    <div class="form-check">
+                        <input type="checkbox" id="vhost-ssl" checked>
+                        <label>Enable SSL</label>
+                    </div>
+                    <div class="form-check">
+                        <input type="checkbox" id="vhost-ssl-redirect" checked>
+                        <label>Force HTTPS</label>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-check">
+                        <input type="checkbox" id="vhost-acme" checked>
+                        <label>Auto-renew (ACME)</label>
+                    </div>
+                    <div class="form-check">
+                        <input type="checkbox" id="vhost-waf-bypass">
+                        <label>Bypass WAF</label>
+                    </div>
+                </div>
+                <div class="form-check">
+                    <input type="checkbox" id="vhost-enabled" checked>
+                    <label>Enabled</label>
+                </div>
+            `;
+            const footer = `
+                <button class="btn" onclick="closeModal()">Cancel</button>
+                <button class="btn primary" onclick="saveVhost(false)">Add VHost</button>
+            `;
+            openModal('Add Virtual Host', body, footer);
+        }
+
+        async function showEditVhostModal(vhost) {
+            const backendOpts = await loadBackendOptions();
+            const body = `
+                <input type="hidden" id="vhost-original-name" value="${vhost.name || vhost.domain}">
+                <div class="form-group">
+                    <label>Domain</label>
+                    <input type="text" id="vhost-domain" value="${vhost.domain}">
+                </div>
+                <div class="form-group">
+                    <label>Backend</label>
+                    <select id="vhost-backend">
+                        <option value="">-- Select Backend --</option>
+                        ${backendOpts}
+                    </select>
+                </div>
+                <div class="form-row">
+                    <div class="form-check">
+                        <input type="checkbox" id="vhost-ssl" ${vhost.ssl ? 'checked' : ''}>
+                        <label>Enable SSL</label>
+                    </div>
+                    <div class="form-check">
+                        <input type="checkbox" id="vhost-ssl-redirect" ${vhost.ssl_redirect ? 'checked' : ''}>
+                        <label>Force HTTPS</label>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-check">
+                        <input type="checkbox" id="vhost-acme" ${vhost.acme ? 'checked' : ''}>
+                        <label>Auto-renew (ACME)</label>
+                    </div>
+                    <div class="form-check">
+                        <input type="checkbox" id="vhost-waf-bypass" ${vhost.waf_bypass ? 'checked' : ''}>
+                        <label>Bypass WAF</label>
+                    </div>
+                </div>
+                <div class="form-check">
+                    <input type="checkbox" id="vhost-enabled" ${vhost.enabled !== false ? 'checked' : ''}>
+                    <label>Enabled</label>
+                </div>
+            `;
+            const footer = `
+                <button class="btn" onclick="closeModal()">Cancel</button>
+                <button class="btn primary" onclick="saveVhost(true)">Save Changes</button>
+            `;
+            openModal('Edit Virtual Host', body, footer);
+            document.getElementById('vhost-backend').value = vhost.backend || '';
+        }
+
+        async function saveVhost(isEdit) {
+            const valid = validateForm([
+                { id: 'vhost-domain', rules: { required: true, requiredMsg: 'Domain is required', pattern: /^[a-zA-Z0-9*][-a-zA-Z0-9.]*\.[a-zA-Z]{2,}$/, patternMsg: 'Invalid domain format' }},
+                { id: 'vhost-backend', rules: { required: true, requiredMsg: 'Please select a backend' }}
+            ]);
+            if (!valid) return;
+
+            const data = {
+                domain: document.getElementById('vhost-domain').value.trim(),
+                backend: document.getElementById('vhost-backend').value,
+                ssl: document.getElementById('vhost-ssl').checked,
+                ssl_redirect: document.getElementById('vhost-ssl-redirect').checked,
+                acme: document.getElementById('vhost-acme').checked,
+                waf_bypass: document.getElementById('vhost-waf-bypass').checked,
+                enabled: document.getElementById('vhost-enabled').checked
+            };
+
+            let res;
+            if (isEdit) {
+                const origName = document.getElementById('vhost-original-name').value;
+                res = await apiCall(`/vhost/${encodeURIComponent(origName)}`, {
+                    method: 'PUT',
+                    body: JSON.stringify(data)
+                });
+            } else {
+                res = await apiCall('/vhost', {
+                    method: 'POST',
+                    body: JSON.stringify(data)
+                });
+            }
+
+            if (!res.error) {
+                closeModal();
+                showToast(isEdit ? 'VHost updated' : 'VHost created', 'success');
+                loadVhosts();
+                loadStatus();
+            }
+        }
+
+        async function deleteVhost(name) {
+            if (!confirm(`Delete vhost "${name}"?\n\nThis will remove the domain routing.`)) return;
+
+            const res = await apiCall(`/vhost/${encodeURIComponent(name)}`, { method: 'DELETE' });
+            if (!res.error) {
+                showToast(`VHost "${name}" deleted`, 'success');
+                loadVhosts();
+                loadStatus();
+            }
+        }
+
         function switchTab(tabName) {
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
