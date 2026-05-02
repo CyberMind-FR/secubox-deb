@@ -5,6 +5,44 @@
 
 ## 2026-05-02
 
+### Session 88 — Navbar Module Filtering Fix
+
+**Goal:** Fix navbar showing modules that aren't installed, causing 403/404/500 errors
+
+**Problems Identified:**
+1. Portal returning 403 (no index.html, only login.html)
+2. Modules without www directories showing in navbar
+3. Deploy script copying to wrong directory (secubox-hub vs hub symlink issue)
+4. Menu items without `id` field still appearing
+
+**Root Causes:**
+- `/portal/` had only `login.html`, no `index.html` for nginx to serve
+- `_check_module_installed()` was checking for service sockets/systemd, not actual www content
+- `/usr/lib/secubox/hub` (uvicorn workdir) was separate from `/usr/lib/secubox/secubox-hub` (deploy target)
+- Menu definitions (menu.d/*.json) included items without `id` field
+
+**Fixes:**
+1. Created `portal/index.html` redirect to `login.html`
+2. Rewrote `_check_module_installed()` to only return True for modules with:
+   - www directory at `/usr/share/secubox/www/{module_id}`
+   - At least one HTML file in that directory
+3. Added filter to skip menu items without valid `id` or with `console_only: true`
+4. Created symlink: `/usr/lib/secubox/hub -> /usr/lib/secubox/secubox-hub`
+
+**Files Changed:**
+- `packages/secubox-hub/api/main.py` — Updated `_check_module_installed()` and `_compute_menu_sync()`
+- `packages/secubox-hub/www/portal/index.html` — New redirect file
+
+**Commits:**
+- 96b51ef fix(hub): Filter navbar to only show modules with www directories
+
+**Result:**
+- Navbar shows only 8 modules with actual www content (was 29)
+- All menu items return HTTP 200
+- No more 403/404/500 errors from navbar links
+
+---
+
 ### Session 87 — HAProxy WebUI CRUD Enhancement
 
 **Goal:** Add full CRUD operations for VHosts, Backends, Servers, and Certificates to the HAProxy WebUI dashboard
