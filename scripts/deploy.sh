@@ -45,9 +45,10 @@ deploy_pkg() {
     "${pkg_dir}/api/" "${HOST}:/usr/lib/secubox/${pkg}/api/"
 
   # ── Copier le frontend www/ ──
+  # NOTE: Do NOT use --delete here as multiple packages share /usr/share/secubox/www/
   if [[ -d "${pkg_dir}/www" ]]; then
     ssh_run "mkdir -p /usr/share/secubox/www"
-    rsync -az --delete -e "ssh -o StrictHostKeyChecking=no" \
+    rsync -az -e "ssh -o StrictHostKeyChecking=no" \
       "${pkg_dir}/www/" "${HOST}:/usr/share/secubox/www/"
   fi
 
