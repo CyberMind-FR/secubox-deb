@@ -672,8 +672,24 @@ if [[ $SLIPSTREAM_DEBS -eq 1 ]]; then
   if [[ -d "${DEBS_DIR}" ]] && ls "${DEBS_DIR}"/secubox-*.deb >/dev/null 2>&1; then
     log "Slipstream: installation des paquets locaux..."
     install -d "${ROOTFS}/tmp/secubox-debs"
-    cp "${DEBS_DIR}"/secubox-*.deb "${ROOTFS}/tmp/secubox-debs/"
-    SLIP_COUNT=$(ls "${DEBS_DIR}"/secubox-*.deb 2>/dev/null | wc -l)
+
+    # Filter packages by architecture: only copy _all.deb and _${DEBIAN_ARCH}.deb
+    SLIP_COUNT=0
+    SKIP_COUNT=0
+    for deb in "${DEBS_DIR}"/secubox-*.deb; do
+      [[ -f "$deb" ]] || continue
+      deb_name=$(basename "$deb")
+      case "$deb_name" in
+        *_all.deb|*_${DEBIAN_ARCH}.deb)
+          cp "$deb" "${ROOTFS}/tmp/secubox-debs/"
+          ((SLIP_COUNT++)) || true
+          ;;
+        *)
+          ((SKIP_COUNT++)) || true
+          ;;
+      esac
+    done
+    [[ $SKIP_COUNT -gt 0 ]] && log "Slipstream: skipped ${SKIP_COUNT} packages (wrong architecture)"
     log "Slipstream: ${SLIP_COUNT} packages to install"
 
     # Installer secubox-core en premier (dépendance)

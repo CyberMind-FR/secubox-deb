@@ -3,6 +3,45 @@
 
 ---
 
+## 2026-05-02
+
+### Session 86 — GitHub Actions Package Architecture Filtering Fix
+
+**Goal:** Fix GitHub Actions workflow failures when building ARM64 images
+
+**Problem:**
+- GitHub Actions build-image.yml workflow failing on arm64 boards (mochabin, espressobin-v7, espressobin-ultra, rpi400)
+- Error: `package architecture (amd64) does not match system (arm64)` for secubox-c3box and secubox-daemon
+- Slipstream code copied ALL .deb packages without architecture filtering
+- When building arm64 images, amd64 packages were being copied and dpkg failed to install them
+
+**Root Cause:**
+- In `image/build-image.sh` line 675: `cp "${DEBS_DIR}"/secubox-*.deb` copied all packages regardless of architecture
+- Same issue in `image/build-ebin-live-usb.sh` and `image/build-live-usb.sh`
+- `build-rpi-usb.sh` already had correct filtering (only copied `_all.deb` and `_arm64.deb`)
+
+**Fix Applied:**
+
+1. **image/build-image.sh** — Added architecture filtering in slipstream section:
+   - Replaced blind `cp` with a loop that filters by `DEBIAN_ARCH`
+   - Only copies `*_all.deb` and `*_${DEBIAN_ARCH}.deb` packages
+   - Logs skipped packages count for debugging
+
+2. **image/build-ebin-live-usb.sh** — Added arm64 architecture filter:
+   - Filter for `*_all.deb` and `*_arm64.deb` only
+   - Updated cache search to also filter by architecture
+
+3. **image/build-live-usb.sh** — Added amd64 architecture filter:
+   - Filter for `*_all.deb` and `*_amd64.deb` only
+   - Updated cache search to also filter by architecture
+
+**Result:**
+- ARM64 image builds will now skip amd64-only packages (secubox-daemon, secubox-c3box)
+- AMD64 image builds will skip arm64-only packages
+- Architecture-independent packages (`_all.deb`) are correctly installed on all platforms
+
+---
+
 ## 2026-05-01
 
 ### Session 85 — VirtualBox VM Network Detection Fix

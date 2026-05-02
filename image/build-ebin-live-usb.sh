@@ -374,17 +374,30 @@ if [[ $SLIPSTREAM_DEBS -eq 1 ]]; then
         install -d "${ROOTFS}/tmp/secubox-debs"
 
         # Copy from output/debs FIRST (prefer newer local builds over cache)
+        # Filter by architecture: only _all.deb and _arm64.deb for EspressoBin
+        COPIED_COUNT=0
+        SKIPPED_COUNT=0
         if [[ -d "$OUTPUT_DEBS" ]]; then
             for deb in "${OUTPUT_DEBS}"/secubox-*.deb; do
                 [[ -f "$deb" ]] || continue
-                cp "$deb" "${ROOTFS}/tmp/secubox-debs/"
+                deb_name=$(basename "$deb")
+                case "$deb_name" in
+                    *_all.deb|*_arm64.deb)
+                        cp "$deb" "${ROOTFS}/tmp/secubox-debs/"
+                        ((COPIED_COUNT++)) || true
+                        ;;
+                    *)
+                        ((SKIPPED_COUNT++)) || true
+                        ;;
+                esac
             done
-            log "Copied ${OUTPUT_COUNT} packages from output/debs"
+            log "Copied ${COPIED_COUNT} packages from output/debs"
+            [[ $SKIPPED_COUNT -gt 0 ]] && log "Skipped ${SKIPPED_COUNT} packages (wrong architecture)"
         fi
 
         # Then add from cache for packages not in output/debs
         if [[ $CACHE_COUNT -gt 0 ]]; then
-            for deb in $(find "$CACHE_DEBS" -name "secubox-*.deb"); do
+            for deb in $(find "$CACHE_DEBS" -name "secubox-*_all.deb" -o -name "secubox-*_arm64.deb"); do
                 pkg_name=$(basename "$deb" | sed 's/_.*$//')
                 # Only copy if not already present (prefer output/debs version)
                 if ! ls "${ROOTFS}/tmp/secubox-debs/${pkg_name}_"*.deb >/dev/null 2>&1; then
