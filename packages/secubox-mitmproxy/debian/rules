@@ -12,6 +12,7 @@ override_dh_auto_install:
 	install -d $(CURDIR)/debian/secubox-mitmproxy/usr/share/secubox/mitmproxy
 	cp -r addons $(CURDIR)/debian/secubox-mitmproxy/usr/share/secubox/mitmproxy/
 	cp -r data $(CURDIR)/debian/secubox-mitmproxy/usr/share/secubox/mitmproxy/
+	cp -r crowdsec $(CURDIR)/debian/secubox-mitmproxy/usr/share/secubox/mitmproxy/
 	install -d $(CURDIR)/debian/secubox-mitmproxy/usr/sbin
 	install -m 755 bin/mitmproxyctl $(CURDIR)/debian/secubox-mitmproxy/usr/sbin/
 	install -d $(CURDIR)/debian/secubox-mitmproxy/etc/secubox
