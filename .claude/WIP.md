@@ -1,5 +1,32 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-01 (Session 85)*
+*Mis à jour : 2026-05-03 (Session 90)*
+
+---
+
+## ✅ Complété (Session 90) — Mitmproxy WAF Module Migration
+
+**Goal:** Migrate mitmproxy WAF from OpenWrt to SecuBox-DEB
+
+**Approach (Subagent-Driven Development):**
+1. Created design spec and 15-task implementation plan
+2. Executed each task with fresh subagent + two-stage review
+3. Final code review identified 3 issues, all fixed
+
+**Components Delivered:**
+- `secubox-mitmproxy` Debian package (complete)
+- mitmproxyctl CLI for LXC container management
+- FastAPI backend with 5 routers (25+ endpoints)
+- secubox_waf.py mitmproxy addon (90+ patterns, 14 categories)
+- WebUI dashboard (status, settings, filters)
+- CrowdSec integration for auto-banning
+- HAProxy route sync for traffic inspection
+
+**Files Created:**
+- `packages/secubox-mitmproxy/` — 25+ files
+
+**Result:**
+- Package ready for build and deployment
+- 17 commits on master branch
 
 ---
 
