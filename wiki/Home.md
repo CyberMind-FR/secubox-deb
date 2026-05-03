@@ -1,157 +1,90 @@
-# SecuBox
+# SecuBox-Deb
 
-**CyberMind · Gondwana · Notre-Dame-du-Cruet · Savoie** | [FR](Home-FR) | [中文](Home-ZH)
+**Appliance cybersécurité libre, basée Debian**
 
-Complete security appliance solution ported from OpenWrt to Debian bookworm. Designed for GlobalScale ARM64 boards (MOCHAbin, ESPRESSObin) and x86_64 systems. **125 packages** with **2000+ API endpoints**.
-
----
-
-> **NEW v2.1.1 — Build and API Fixes**
->
-> Critical fixes for VirtualBox and ESPRESSObin builds:
-> - CORS headers for cross-origin API requests
-> - Python dependencies upgraded: pydantic≥2.0, fastapi≥0.100, uvicorn≥0.25
-> - Login endpoint path fixes
-> - Eye Remote rainbow dashboard with radar sync
->
-> See [[Troubleshooting]] for details | [Download v2.1.1](https://github.com/CyberMind-FR/secubox-deb/releases/tag/v2.1.1)
+CyberMind · Notre-Dame-du-Cruet, Savoie | [FR](Home-FR) | [DE](Home-DE) | [中文](Home-ZH)
 
 ---
 
-> **Multi-Boot Live OS with Eye Remote Integration (v2.2.3)**
->
-> Dual-architecture bootable image (ARM64 + AMD64) with RAM-based execution and shared persistent storage.
->
-> See [[Multiboot]] for documentation | [Download v2.2.3](https://github.com/CyberMind-FR/secubox-deb/releases/tag/multiboot-v2.2.3)
+SecuBox-Deb est une plateforme de sécurité réseau complète portée d'OpenWrt vers Debian bookworm. Le projet vise la certification ANSSI CSPN à horizon 2027. Toute la stack est libre, auditable, et conçue pour fonctionner sur du matériel que vous possédez déjà — c'est le principe BYOH (Bring Your Own Hardware).
+
+L'architecture repose sur six modules canoniques organisés en chemin hamiltonien : `AUTH → WALL → BOOT → MIND → ROOT → MESH`. Chaque module expose une API REST FastAPI, le tout orchestré par un profile-generator hiérarchique YAML. La cryptographie s'appuie sur le framework GK·HAM-HASH ZKP à trois niveaux.
 
 ---
 
-## 🔴 BOOT — Quick Start
+## Démarrer
 
-### VirtualBox (2 Minutes) ⭐
+La documentation technique couvre l'installation sur différentes cibles matérielles et virtuelles.
 
-Test SecuBox instantly in VirtualBox — no USB drive needed:
-
-```bash
-# Download latest image
-wget https://github.com/CyberMind-FR/secubox-deb/releases/latest/download/secubox-live-amd64-bookworm.img.gz
-gunzip secubox-live-amd64-bookworm.img.gz
-
-# Convert to VDI format
-VBoxManage convertfromraw secubox-live-amd64-bookworm.img secubox-live.vdi --format VDI
-
-# Create and start VM
-curl -sLO https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/image/create-vbox-vm.sh
-chmod +x create-vbox-vm.sh
-./create-vbox-vm.sh secubox-live.vdi
-```
-
-**One-liner with auto-download:**
-
-```bash
-curl -sL https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/image/create-vbox-vm.sh | bash -s -- --download
-```
-
-See [[Live-USB-VirtualBox]] for full documentation.
-
-### Live USB (Hardware) ⚡
-
-Boot directly from USB on physical hardware:
-
-```bash
-wget https://github.com/CyberMind-FR/secubox-deb/releases/latest/download/secubox-live-amd64-bookworm.img.gz
-zcat secubox-live-amd64-bookworm.img.gz | sudo dd of=/dev/sdX bs=4M status=progress
-```
-
-See [[Live-USB]] for complete guide.
-
-### APT Installation (Existing Debian)
-
-```bash
-curl -fsSL https://apt.secubox.in/install.sh | sudo bash
-sudo apt install secubox-full   # or secubox-lite
-```
-
-See [[Installation]] for detailed instructions.
+- **[[Architecture]]** — Vue d'ensemble des six modules et de la stack technique
+- **[[Hardware-Matrix]]** — Matrice de compatibilité BYOH par carte et SoC
+- **[[Installation]]** — Guide d'installation complet (APT, Live USB, ARM)
+- **[[Live-USB-VirtualBox]]** — Test rapide en machine virtuelle
+- **[[QEMU-ARM64]]** — Émulation ARM sur x86 pour développement
+- **[[MODULES-EN|Modules]]** — Documentation des 125 paquets
 
 ---
 
-## 🟠 AUTH — Access Credentials
+## Soutenir le projet
 
-| Service | Username | Password |
-|---------|----------|----------|
-| **Web UI** | admin | secubox |
-| **SSH** | root | secubox |
-| **Access** | https://localhost:9443 | SSH port 2222 |
+SecuBox-Deb est un projet libre sans campagne de financement participatif, sans deadline, sans tier de récompense. Le modèle repose sur trois piliers indépendants.
 
----
-
-## 🟢 ROOT — System Requirements
-
-| Board | SoC | Profile | Use Case |
-|-------|-----|---------|----------|
-| MOCHAbin | Armada 7040 | Full | Enterprise Gateway |
-| ESPRESSObin v7 | Armada 3720 | Lite | Home/SMB Router |
-| ESPRESSObin Ultra | Armada 3720 | Lite+ | Home with Wi-Fi |
-| Raspberry Pi 400 | BCM2711 | Full | Maker Projects |
-| VM x86_64 | Any | Full | Testing/Development |
-| QEMU ARM64 | Emulated | Full | ARM testing on x86 |
+- **[[Financing-Model]]** — Vue d'ensemble du modèle de financement
+- **[[Support]]** — Dons shareware et canaux de contribution
+- **[[Sponsor-a-Port]]** — Mécénat de portage pour nouvelles cibles matérielles
+- **[[Acknowledgments]]** — Crédits donateurs et sponsors
 
 ---
 
-## 🟣 MIND — Feature Overview
+## Statut
 
-| Stack | Description | Modules |
-|-------|-------------|---------|
-| 🟠 **AUTH** | Authentication, ZeroTrust, MFA | auth, portal, users, nac |
-| 🟡 **WALL** | Firewall, CrowdSec, WAF, IDS/IPS | crowdsec, waf, threats, ipblock |
-| 🔴 **BOOT** | Deployment, provisioning | cloner, vault, vm, rezapp |
-| 🟣 **MIND** | AI, behavioral analysis, DPI | dpi, netifyd, ai-insights, soc |
-| 🟢 **ROOT** | System, CLI, hardening | core, hub, system, console |
-| 🔵 **MESH** | Network, WireGuard, QoS | wireguard, haproxy, netmodes, turn |
-
-**Total: 125 packages**
-
-See [[MODULES-EN|Modules]] for complete module documentation.
+| Élément | Valeur |
+|---------|--------|
+| Version courante | v2.2.4-pre1 |
+| Base Debian | bookworm (12) |
+| Kernel | 6.6 LTS mainline |
+| Paquets | 125 |
+| Endpoints API | 2000+ |
+| Dernière mise à jour matrice | 2026-05 |
+| Dernier port livré | MOCHAbin (Armada 7040) |
 
 ---
 
-## 🔵 MESH — Documentation
+## Cibles matérielles principales
 
-### Getting Started
-- [[Live-USB-VirtualBox|VirtualBox Quick Start]] ⭐
-- [[Live-USB]] — Bootable USB guide
-- [[ARM-Installation]] — ARM boards & U-Boot ⚡
-- [[QEMU-ARM64]] — ARM emulation on x86 🖥️
+| Carte | SoC | Profil | Usage |
+|-------|-----|--------|-------|
+| MOCHAbin | Armada 7040 | Full | Gateway entreprise |
+| ESPRESSObin v7 | Armada 3720 | Lite | Routeur PME/domicile |
+| ESPRESSObin Ultra | Armada 3720 | Lite+ | Routeur avec Wi-Fi |
+| VM x86_64 | — | Full | Test/développement |
+| QEMU ARM64 | Émulé | Full | Test ARM sur x86 |
 
-### Configuration
-- [[Configuration]] — System configuration
-- [[Troubleshooting]] — Common issues
-
-### Reference
-- [[MODULES-EN|Modules]] — All 125 modules
-- [[API-Reference]] — REST API (2000+ endpoints)
+Voir **[[Hardware-Matrix]]** pour la matrice complète avec statuts de support.
 
 ---
 
-## 🟡 WALL — Security Features
+## Modules par stack
 
-- **CrowdSec** — Community-driven IDS/IPS
-- **WAF** — 300+ ModSecurity rules
-- **nftables** — Default DROP policy
-- **AI-Insights** — ML threat detection
-- **IPBlock** — Automated blocklist management
-- **MAC-Guard** — MAC address control
+| Stack | Fonction | Modules principaux |
+|-------|----------|-------------------|
+| 🟠 AUTH | Authentification, ZeroTrust, MFA | auth, portal, users, nac |
+| 🟡 WALL | Firewall, CrowdSec, WAF, IDS/IPS | crowdsec, waf, threats, ipblock |
+| 🔴 BOOT | Déploiement, provisioning | cloner, vault, vm, rezapp |
+| 🟣 MIND | IA, analyse comportementale, DPI | dpi, netifyd, ai-insights, soc |
+| 🟢 ROOT | Système, CLI, hardening | core, hub, system, console |
+| 🔵 MESH | Réseau, WireGuard, QoS | wireguard, haproxy, netmodes, turn |
 
 ---
 
-## Links
+## Liens
 
-- [GitHub Repository](https://github.com/CyberMind-FR/secubox-deb)
+- [Dépôt GitHub](https://github.com/CyberMind-FR/secubox-deb)
 - [Releases](https://github.com/CyberMind-FR/secubox-deb/releases)
 - [Issues](https://github.com/CyberMind-FR/secubox-deb/issues)
 - [CyberMind](https://cybermind.fr)
 
 ---
 
-*© 2026 CyberMind · Notre-Dame-du-Cruet, Savoie*
+*Licence : voir dépôt · CyberMind, Notre-Dame-du-Cruet, Savoie*
+*Voir [[Acknowledgments]] pour les crédits contributeurs*
