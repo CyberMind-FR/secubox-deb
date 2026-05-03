@@ -16,6 +16,7 @@ import subprocess
 import json
 import time
 import argparse
+import platform
 from pathlib import Path
 
 try:
@@ -81,13 +82,15 @@ def cmd_install():
 
     # Create LXC container
     print("Creating LXC container...")
+    # Detect architecture: aarch64 → arm64, x86_64 → amd64
+    arch = "arm64" if platform.machine() == "aarch64" else "amd64"
     run([
         "lxc-create", "-n", CONTAINER_NAME,
         "-t", "download",
         "--",
         "-d", "debian",
         "-r", "bookworm",
-        "-a", "amd64"
+        "-a", arch
     ])
 
     # Configure container

@@ -149,6 +149,13 @@ async def clear_alerts(user=Depends(require_jwt)):
     return ActionResponse(success=True, message="Threat log cleared")
 
 
+# Alias for WebUI compatibility
+@router.post("/clear_alerts", response_model=ActionResponse)
+async def clear_alerts_alias(user=Depends(require_jwt)):
+    """Clear the threat log (alias for /alerts/clear)."""
+    return await clear_alerts(user)
+
+
 @router.get("/bans", response_model=BansResponse)
 async def get_bans(user=Depends(require_jwt)):
     """Get active bans from CrowdSec."""
