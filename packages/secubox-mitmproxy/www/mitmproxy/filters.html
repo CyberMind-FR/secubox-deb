@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - WAF Filters</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root {
+            /* P31 Phosphor spectrum */
+            --p31-peak: #00dd44;
+            --p31-hot: #00ff55;
+            --p31-mid: #009933;
+            --p31-dim: #006622;
+            --p31-ghost: #003311;
+            --p31-decay: #ffb347;
+            --p31-decay-dim: #cc7722;
+            /* Tube glass */
+            --tube-light: #e8f5e9;
+            --tube-pale: #c8e6c9;
+            --tube-soft: #a5d6a7;
+            /* Legacy mappings */
+            --bg-dark: var(--tube-light);
+            --bg-card: var(--tube-pale);
+            --border: var(--tube-soft);
+            --text: var(--tube-dark);
+            --text-dim: var(--p31-dim);
+            --primary: var(--p31-peak);
+            --green: var(--p31-peak);
+            --red: #ff4466;
+            --yellow: var(--p31-decay);
+            --orange: var(--p31-decay-dim);
+            /* Bloom effects */
+            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Courier Prime', 'Courier New', monospace;
+            background: var(--tube-light);
+            background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
+            color: var(--tube-dark);
+            display: flex;
+            min-height: 100vh;
+        }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
+        .header h1 {
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--p31-hot);
+            text-shadow: var(--bloom-text);
+            font-weight: 700;
+            letter-spacing: 0.05em;
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            border: 1px solid var(--tube-soft);
+            background: var(--tube-pale);
+            color: var(--p31-mid);
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-family: 'Courier Prime', monospace;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            transition: all 0.2s;
+            text-decoration: none;
+        }
+        .btn:hover {
+            border-color: var(--p31-dim);
+            color: var(--p31-peak);
+            text-shadow: var(--bloom-soft);
+            box-shadow: 0 0 12px rgba(51,255,102,0.1);
+        }
+
+        .badge {
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.65rem;
+            font-weight: 600;
+            font-family: 'Courier Prime', monospace;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            border: 1px solid;
+        }
+        .badge-critical { background: rgba(255,68,102,0.15); border-color: #ff4466; color: #ff4466; }
+        .badge-high { background: rgba(255,136,62,0.15); border-color: var(--orange); color: var(--orange); }
+        .badge-medium { background: rgba(255,179,71,0.15); border-color: var(--yellow); color: var(--yellow); }
+        .badge-low { background: rgba(51,255,102,0.1); border-color: var(--p31-mid); color: var(--p31-mid); }
+
+        .filters-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1rem;
+        }
+
+        .filter-card {
+            background: var(--tube-pale);
+            border: 1px solid var(--tube-soft);
+            border-radius: 8px;
+            padding: 1rem;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
+            transition: all 0.2s;
+        }
+        .filter-card:hover {
+            border-color: var(--p31-dim);
+            box-shadow: 0 0 8px rgba(51,255,102,0.05), inset 0 0 20px rgba(0,0,0,0.3);
+        }
+        .filter-card.disabled {
+            opacity: 0.6;
+        }
+
+        .filter-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 0.75rem;
+        }
+
+        .filter-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--p31-decay);
+            text-shadow: var(--bloom-amber);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .filter-description {
+            font-size: 0.75rem;
+            color: var(--p31-dim);
+            margin-bottom: 1rem;
+            line-height: 1.4;
+        }
+
+        .filter-stats {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .filter-stat {
+            font-size: 0.7rem;
+            color: var(--p31-dim);
+            letter-spacing: 0.05em;
+        }
+        .filter-stat strong {
+            color: var(--p31-mid);
+        }
+
+        .filter-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 0.75rem;
+            border-top: 1px solid var(--tube-soft);
+        }
+
+        .toggle { position: relative; display: inline-block; width: 44px; height: 24px; }
+        .toggle input { opacity: 0; width: 0; height: 0; }
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            transition: 0.3s;
+        }
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 2px;
+            bottom: 2px;
+            background: var(--text-dim);
+            border-radius: 50%;
+            transition: 0.3s;
+        }
+        .toggle input:checked + .toggle-slider { background: var(--green); border-color: var(--green); }
+        .toggle input:checked + .toggle-slider:before { transform: translateX(20px); background: white; }
+        .toggle input:disabled + .toggle-slider { opacity: 0.5; cursor: not-allowed; }
+
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            background: var(--tube-pale);
+            border: 1px solid var(--p31-dim);
+            font-family: 'Courier Prime', monospace;
+            z-index: 1000;
+            animation: slideIn 0.3s;
+        }
+        .toast-success { border-color: var(--p31-peak); }
+        .toast-error { border-color: #ff4466; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        .loading {
+            text-align: center;
+            padding: 3rem;
+            color: var(--p31-dim);
+        }
+
+        .summary-bar {
+            display: flex;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+            margin-bottom: 1.5rem;
+            padding: 1rem;
+            background: var(--tube-pale);
+            border: 1px solid var(--tube-soft);
+            border-radius: 8px;
+        }
+
+        .summary-item {
+            font-size: 0.8rem;
+            color: var(--p31-dim);
+        }
+        .summary-item strong {
+            color: var(--p31-mid);
+            font-size: 1.1rem;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: var(--tube-light); }
+        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
+        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
+
+        @media (max-width: 768px) {
+            .main { margin-left: 0; }
+            .filters-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body class="crt-light">
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+
+    <main class="main">
+        <header class="header">
+            <h1>WAF Filters</h1>
+            <a href="index.html" class="btn">Back to Dashboard</a>
+        </header>
+
+        <p style="color: var(--text-dim); margin-bottom: 1.5rem;">
+            Manage WAF rule categories. Toggle filters on/off to control threat detection.
+        </p>
+
+        <div id="loading" class="loading">Loading filters...</div>
+
+        <div id="content" style="display: none;">
+            <div class="summary-bar" id="summary">
+                <div class="summary-item"><strong id="total-categories">0</strong> Categories</div>
+                <div class="summary-item"><strong id="enabled-count">0</strong> Enabled</div>
+                <div class="summary-item"><strong id="total-patterns">0</strong> Patterns</div>
+                <div class="summary-item"><strong id="total-hits">0</strong> Hits</div>
+            </div>
+
+            <div class="filters-grid" id="filters-grid"></div>
+        </div>
+    </main>
+
+    <div id="toast"></div>
+
+    <script>
+        const API = '/api/v1/mitmproxy/waf';
+        const token = () => localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token');
+        const headers = () => ({
+            'Content-Type': 'application/json',
+            ...(token() ? { 'Authorization': 'Bearer ' + token() } : {})
+        });
+
+        // Category descriptions
+        const DESCRIPTIONS = {
+            sqli: 'SQL injection attacks targeting databases via malicious queries.',
+            xss: 'Cross-site scripting attacks that inject malicious scripts into web pages.',
+            cmdi: 'Command injection attacks that execute arbitrary system commands.',
+            traversal: 'Path traversal attacks attempting to access restricted directories.',
+            ssrf: 'Server-side request forgery targeting internal services.',
+            xxe: 'XML external entity attacks exploiting XML parsers.',
+            ldap: 'LDAP injection attacks targeting directory services.',
+            log4shell: 'Log4j vulnerability exploitation (CVE-2021-44228).',
+            scanners: 'Known security scanner user agents and signatures.',
+            path_scan: 'Probing for sensitive files and directories.',
+            cve_exploits: 'Known CVE exploits (Spring4Shell, MOVEit, etc.).',
+            rce: 'Remote code execution attempts via dangerous functions.',
+            voip: 'VoIP/SIP protocol attacks (experimental).',
+            xmpp: 'XMPP/Jabber protocol attacks (experimental).'
+        };
+
+        async function api(path, opts = {}) {
+            try {
+                const res = await fetch(API + path, { ...opts, headers: headers() });
+                if (res.status === 401) {
+                    window.location = '/portal/login.html';
+                    return null;
+                }
+                return res.json();
+            } catch (e) {
+                console.error(e);
+                return null;
+            }
+        }
+
+        function showToast(msg, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.innerHTML = `<div class="toast toast-${type}">${msg}</div>`;
+            setTimeout(() => toast.innerHTML = '', 3000);
+        }
+
+        function getSeverityBadge(severity) {
+            const cls = `badge badge-${severity}`;
+            return `<span class="${cls}">${severity}</span>`;
+        }
+
+        function renderFilters(categories) {
+            const grid = document.getElementById('filters-grid');
+
+            if (!categories || categories.length === 0) {
+                grid.innerHTML = '<div class="loading">No filters configured</div>';
+                return;
+            }
+
+            // Update summary
+            const enabledCount = categories.filter(c => c.enabled).length;
+            const totalPatterns = categories.reduce((sum, c) => sum + c.pattern_count, 0);
+            const totalHits = categories.reduce((sum, c) => sum + c.hits, 0);
+
+            document.getElementById('total-categories').textContent = categories.length;
+            document.getElementById('enabled-count').textContent = enabledCount;
+            document.getElementById('total-patterns').textContent = totalPatterns;
+            document.getElementById('total-hits').textContent = totalHits.toLocaleString();
+
+            // Render cards
+            grid.innerHTML = categories.map(cat => `
+                <div class="filter-card ${cat.enabled ? '' : 'disabled'}" data-category="${cat.name}">
+                    <div class="filter-header">
+                        <span class="filter-title">${cat.name}</span>
+                        ${getSeverityBadge(cat.severity)}
+                    </div>
+                    <div class="filter-description">
+                        ${DESCRIPTIONS[cat.name] || 'Custom filter category.'}
+                    </div>
+                    <div class="filter-stats">
+                        <span class="filter-stat"><strong>${cat.pattern_count}</strong> patterns</span>
+                        <span class="filter-stat"><strong>${cat.hits.toLocaleString()}</strong> hits</span>
+                    </div>
+                    <div class="filter-footer">
+                        <span style="font-size: 0.7rem; color: var(--p31-dim);">
+                            ${cat.enabled ? 'Active' : 'Disabled'}
+                        </span>
+                        <label class="toggle">
+                            <input type="checkbox"
+                                   ${cat.enabled ? 'checked' : ''}
+                                   onchange="toggleCategory('${cat.name}', this.checked)">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function loadFilters() {
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('content').style.display = 'none';
+
+            const data = await api('/rules');
+
+            if (!data || !data.categories) {
+                document.getElementById('loading').textContent = 'Failed to load filters';
+                return;
+            }
+
+            renderFilters(data.categories);
+
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('content').style.display = 'block';
+        }
+
+        async function toggleCategory(category, enabled) {
+            // Find and disable the toggle while processing
+            const card = document.querySelector(`[data-category="${category}"]`);
+            const toggle = card?.querySelector('input[type="checkbox"]');
+            if (toggle) toggle.disabled = true;
+
+            const result = await api('/rules/toggle', {
+                method: 'POST',
+                body: JSON.stringify({ category, enabled })
+            });
+
+            if (result && result.success) {
+                showToast(result.message || `${category} ${enabled ? 'enabled' : 'disabled'}`);
+                // Update card state
+                if (card) {
+                    card.classList.toggle('disabled', !enabled);
+                    const statusText = card.querySelector('.filter-footer span');
+                    if (statusText) statusText.textContent = enabled ? 'Active' : 'Disabled';
+                }
+                // Update summary counts
+                const enabledSpan = document.getElementById('enabled-count');
+                const current = parseInt(enabledSpan.textContent, 10) || 0;
+                enabledSpan.textContent = enabled ? current + 1 : current - 1;
+            } else {
+                showToast(result?.message || 'Failed to toggle category', 'error');
+                // Revert toggle state
+                if (toggle) toggle.checked = !enabled;
+            }
+
+            if (toggle) toggle.disabled = false;
+        }
+
+        // Initialize
+        loadFilters();
+    </script>
+    <script src="/shared/crt-engine.js"></script>
+</body>
+</html>
