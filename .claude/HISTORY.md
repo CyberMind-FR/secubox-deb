@@ -5,6 +5,65 @@
 
 ## 2026-05-03
 
+### Session 90 — Mitmproxy WAF Module Migration
+
+**Goal:** Complete migration of mitmproxy WAF module from SecuBox-OpenWrt to SecuBox-DEB
+
+**Context:**
+- Original OpenWrt module: luci-app-mitmproxy-waf (shell scripts + LuCI frontend)
+- Target: Full Debian package with FastAPI backend, LXC container isolation, HAProxy integration
+
+**Implementation (15 tasks via Subagent-Driven Development):**
+
+1. **Package Scaffold** — debian/control, rules, postinst, prerm, systemd service
+2. **Configuration** — mitmproxy.toml (TOML), waf-rules.json (90+ patterns, 14 categories)
+3. **mitmproxyctl CLI** — Python CLI for LXC lifecycle (install, start, stop, restart, status, destroy, logs)
+4. **Threat Detection Addon** — secubox_waf.py mitmproxy addon with real-time threat detection
+5. **FastAPI Backend** — 5 routers with JWT auth:
+   - status.py — Container control, stats, mode settings
+   - settings.py — TOML configuration CRUD
+   - alerts.py — Threat log, ban management, CrowdSec integration
+   - haproxy.py — WAF enable/disable, route sync
+   - waf.py — Rule category management
+6. **WebUI** — status.html, settings.html, filters.html (CRT-light theme)
+7. **Integration** — nginx config, CrowdSec acquisition config, menu.d entry
+
+**WAF Detection Categories (14):**
+- SQL Injection, XSS, Command Injection, Path Traversal
+- SSRF, XXE, LDAP Injection, Log4Shell
+- Scanner Detection, Path Scanning, CVE Exploits, RCE
+- VoIP Attacks, XMPP Attacks
+
+**Files Created:**
+- `packages/secubox-mitmproxy/` — Complete package structure
+- `debian/` — control, rules, postinst, prerm, service, mitmproxy.toml
+- `api/` — main.py, routers/{status,settings,alerts,haproxy,waf}.py
+- `addons/secubox_waf.py` — Mitmproxy addon
+- `bin/mitmproxyctl` — CLI tool
+- `data/waf-rules.json` — 90+ detection patterns
+- `www/mitmproxy/` — WebUI pages
+- `nginx/mitmproxy.conf` — API/static proxy
+- `README.md` — Comprehensive documentation
+
+**Code Review Findings (Fixed):**
+1. LXC architecture hardcoded to amd64 → Now detects actual arch (arm64/amd64)
+2. Missing WebUI API endpoints → Added /set_mode, /save_settings, /setup_firewall, /clear_firewall, /wan_setup, /wan_clear, /clear_alerts
+3. Missing crowdsec dir in debian/rules → Added
+
+**Commits:**
+- 17 commits from package scaffold through final fixes
+- d69dd43 fix(mitmproxy): Address code review findings
+- 87602fc fix(mitmproxy): Add crowdsec directory to debian/rules install
+
+**Result:**
+- Complete secubox-mitmproxy package ready for dpkg-buildpackage
+- LXC-isolated WAF with 90+ threat detection patterns
+- Full CrowdSec integration for auto-banning
+- HAProxy route sync for traffic inspection
+- WebUI dashboard with real-time alerts
+
+---
+
 ### Session 89 — Emancipate SecuBox-Dev Methodology
 
 **Goal:** Extract and document the SecuBox development methodology as a standalone, reusable guide
