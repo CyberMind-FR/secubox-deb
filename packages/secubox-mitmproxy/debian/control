@@ -14,6 +14,7 @@ Depends: ${misc:Depends},
          secubox-haproxy,
          lxc,
          lxc-templates,
+         xz-utils,
          python3-uvicorn,
          python3-toml
 Recommends: secubox-crowdsec
