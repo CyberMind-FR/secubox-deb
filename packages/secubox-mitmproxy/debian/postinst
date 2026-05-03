@@ -22,9 +22,6 @@ case "$1" in
         /etc/crowdsec/acquis.d/ 2>/dev/null || true
     fi
 
-    # Symlink for uvicorn workdir
-    ln -sf /usr/lib/secubox/secubox-mitmproxy /usr/lib/secubox/mitmproxy 2>/dev/null || true
-
     # Enable and start service
     systemctl daemon-reload
     systemctl enable secubox-mitmproxy.service
