@@ -1,9 +1,0 @@
-{
-  "id": "mitmproxy",
-  "name": "MITM Proxy",
-  "icon": "🔍",
-  "path": "/mitmproxy/",
-  "category": "security",
-  "order": 115,
-  "description": "Traffic inspection and WAF proxy"
-}

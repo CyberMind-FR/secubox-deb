@@ -1,0 +1,143 @@
+{
+  "sqli": {
+    "enabled": true,
+    "severity": "critical",
+    "patterns": [
+      {"name": "union_select", "regex": "(?i)union\\s+(all\\s+)?select"},
+      {"name": "or_injection", "regex": "(?i)\\bor\\b\\s+['\"]?\\d+['\"]?\\s*=\\s*['\"]?\\d+"},
+      {"name": "and_injection", "regex": "(?i)\\band\\b\\s+['\"]?\\d+['\"]?\\s*=\\s*['\"]?\\d+"},
+      {"name": "sleep_injection", "regex": "(?i)sleep\\s*\\(\\s*\\d+\\s*\\)"},
+      {"name": "benchmark", "regex": "(?i)benchmark\\s*\\("},
+      {"name": "comment_injection", "regex": "(?i)(--|#|/\\*).*$"},
+      {"name": "hex_encoding", "regex": "(?i)0x[0-9a-f]+"},
+      {"name": "char_function", "regex": "(?i)char\\s*\\(\\s*\\d+"}
+    ]
+  },
+  "xss": {
+    "enabled": true,
+    "severity": "high",
+    "patterns": [
+      {"name": "script_tag", "regex": "(?i)<\\s*script[^>]*>"},
+      {"name": "event_handler", "regex": "(?i)\\bon\\w+\\s*="},
+      {"name": "javascript_uri", "regex": "(?i)javascript\\s*:"},
+      {"name": "data_uri", "regex": "(?i)data\\s*:[^,]*;base64"},
+      {"name": "svg_onload", "regex": "(?i)<\\s*svg[^>]*onload"},
+      {"name": "img_onerror", "regex": "(?i)<\\s*img[^>]*onerror"}
+    ]
+  },
+  "cmdi": {
+    "enabled": true,
+    "severity": "critical",
+    "patterns": [
+      {"name": "semicolon_cmd", "regex": ";\\s*(cat|ls|id|whoami|wget|curl|nc|bash|sh)\\b"},
+      {"name": "pipe_cmd", "regex": "\\|\\s*(cat|ls|id|whoami|wget|curl|nc|bash|sh)\\b"},
+      {"name": "backtick", "regex": "`[^`]+`"},
+      {"name": "subshell", "regex": "\\$\\([^)]+\\)"},
+      {"name": "and_cmd", "regex": "&&\\s*(cat|ls|id|whoami|wget|curl)\\b"}
+    ]
+  },
+  "traversal": {
+    "enabled": true,
+    "severity": "high",
+    "patterns": [
+      {"name": "dot_dot_slash", "regex": "\\.\\.[\\\\/]"},
+      {"name": "encoded_traversal", "regex": "(?i)(%2e%2e|%252e%252e)[\\\\/(%2f|%252f)]"},
+      {"name": "nullbyte", "regex": "%00"},
+      {"name": "etc_passwd", "regex": "(?i)etc[\\\\/]passwd"}
+    ]
+  },
+  "ssrf": {
+    "enabled": true,
+    "severity": "critical",
+    "patterns": [
+      {"name": "localhost", "regex": "(?i)(localhost|127\\.0\\.0\\.1)"},
+      {"name": "internal_10", "regex": "\\b10\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\b"},
+      {"name": "internal_172", "regex": "\\b172\\.(1[6-9]|2\\d|3[01])\\.\\d{1,3}\\.\\d{1,3}\\b"},
+      {"name": "internal_192", "regex": "\\b192\\.168\\.\\d{1,3}\\.\\d{1,3}\\b"},
+      {"name": "metadata_aws", "regex": "169\\.254\\.169\\.254"}
+    ]
+  },
+  "xxe": {
+    "enabled": true,
+    "severity": "critical",
+    "patterns": [
+      {"name": "doctype", "regex": "(?i)<!DOCTYPE"},
+      {"name": "entity", "regex": "(?i)<!ENTITY"},
+      {"name": "system", "regex": "(?i)SYSTEM\\s+['\"]"}
+    ]
+  },
+  "ldap": {
+    "enabled": true,
+    "severity": "high",
+    "patterns": [
+      {"name": "ldap_filter", "regex": "\\)\\(|\\(\\||\\(&"},
+      {"name": "ldap_wildcard", "regex": "\\*\\)"}
+    ]
+  },
+  "log4shell": {
+    "enabled": true,
+    "severity": "critical",
+    "patterns": [
+      {"name": "jndi_lookup", "regex": "(?i)\\$\\{jndi:"},
+      {"name": "jndi_ldap", "regex": "(?i)jndi:(ldap|rmi|dns|iiop)://"},
+      {"name": "nested_lookup", "regex": "(?i)\\$\\{[^}]*\\$\\{"}
+    ]
+  },
+  "scanners": {
+    "enabled": true,
+    "severity": "medium",
+    "patterns": [
+      {"name": "sqlmap", "regex": "(?i)sqlmap"},
+      {"name": "nikto", "regex": "(?i)nikto"},
+      {"name": "nuclei", "regex": "(?i)nuclei"},
+      {"name": "burpsuite", "regex": "(?i)burp"},
+      {"name": "nmap", "regex": "(?i)nmap"},
+      {"name": "dirbuster", "regex": "(?i)dirbuster"}
+    ]
+  },
+  "path_scan": {
+    "enabled": true,
+    "severity": "medium",
+    "patterns": [
+      {"name": "dotenv", "regex": "\\.env$"},
+      {"name": "git_dir", "regex": "\\.git/"},
+      {"name": "wp_admin", "regex": "(?i)/wp-admin"},
+      {"name": "phpmyadmin", "regex": "(?i)phpmyadmin"},
+      {"name": "config_php", "regex": "(?i)config\\.php$"},
+      {"name": "backup_files", "regex": "\\.(bak|backup|old|orig)$"}
+    ]
+  },
+  "cve_exploits": {
+    "enabled": true,
+    "severity": "critical",
+    "patterns": [
+      {"name": "spring4shell", "regex": "(?i)class\\.module\\.classLoader"},
+      {"name": "moveit", "regex": "(?i)moveitisapi"},
+      {"name": "struts_ognl", "regex": "(?i)%\\{.*\\}"}
+    ]
+  },
+  "rce": {
+    "enabled": true,
+    "severity": "critical",
+    "patterns": [
+      {"name": "eval_function", "regex": "(?i)\\beval\\s*\\("},
+      {"name": "exec_function", "regex": "(?i)\\bexec\\s*\\("},
+      {"name": "system_function", "regex": "(?i)\\bsystem\\s*\\("},
+      {"name": "passthru", "regex": "(?i)\\bpassthru\\s*\\("}
+    ]
+  },
+  "voip": {
+    "enabled": false,
+    "severity": "medium",
+    "patterns": [
+      {"name": "sip_invite", "regex": "(?i)INVITE\\s+sip:"}
+    ]
+  },
+  "xmpp": {
+    "enabled": false,
+    "severity": "medium",
+    "patterns": [
+      {"name": "xmpp_stanza", "regex": "<(message|presence|iq)\\s"}
+    ]
+  }
+}
