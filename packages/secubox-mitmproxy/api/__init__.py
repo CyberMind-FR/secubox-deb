@@ -1,1 +1,1 @@
-# SecuBox MITMProxy WAF API
+"""SecuBox Mitmproxy WAF API"""

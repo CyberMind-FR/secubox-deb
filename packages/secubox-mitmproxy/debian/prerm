@@ -1,13 +1,10 @@
-#!/bin/sh
+#!/bin/bash
 set -e
 
 case "$1" in
-    remove|upgrade|deconfigure)
-        systemctl stop secubox-mitmproxy.service || true
-        systemctl disable secubox-mitmproxy.service || true
-        ;;
+  remove|purge)
+    systemctl stop secubox-mitmproxy.service || true
+    systemctl disable secubox-mitmproxy.service || true
+    ;;
 esac
-
 #DEBHELPER#
-
-exit 0

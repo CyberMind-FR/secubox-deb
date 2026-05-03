@@ -1,17 +1,24 @@
 [Unit]
-Description=SecuBox MITMProxy WAF API
-After=network.target secubox-core.service
-Wants=secubox-core.service
+Description=SecuBox Mitmproxy WAF API
+After=network.target secubox-core.service lxc.service
+Requires=secubox-core.service
 
 [Service]
 Type=simple
-User=root
-Group=root
+User=secubox
+Group=secubox
 WorkingDirectory=/usr/lib/secubox/mitmproxy
-ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/mitmproxy.sock --log-level warning
+ExecStart=/usr/bin/uvicorn api.main:app \
+    --uds /run/secubox/mitmproxy.sock \
+    --log-level warning
+ExecStartPost=/bin/chmod 660 /run/secubox/mitmproxy.sock
 Restart=on-failure
 RestartSec=5
+
 PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/run/secubox /srv/mitmproxy-waf /var/lib/lxc /etc/secubox
 
 [Install]
 WantedBy=multi-user.target
