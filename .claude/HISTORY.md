@@ -5,6 +5,75 @@
 
 ## 2026-05-03
 
+### Session 92 — Tow-Boot eMMC Support & MOCHAbin Documentation
+
+**Goal:** Add eMMC boot partition support to Tow-Boot for MOCHAbin, document boot mode jumpers
+
+**Context:**
+- MOCHAbin board with dead/intermittent SPI NOR flash (JEDEC 00,00,00)
+- eMMC works in U-Boot but BootROM communication fails
+- Original Tow-Boot build lacks `mmc partconf` command
+- No microSD slot on MOCHAbin (correction to documentation)
+
+**Implementation:**
+
+1. **Copied Tow-Boot to Project:**
+   - Source: `/home/reepost/DEVEL/MOKATOOL/Tow-Boot/`
+   - Destination: `tools/Tow-Boot/`
+
+2. **Enabled eMMC Boot Support:**
+   - Added `mmcBootIndex = "0"` to MOCHAbin board configs
+   - Enables `CONFIG_SUPPORT_EMMC_BOOT=y` in U-Boot
+   - New commands available: `mmc partconf`, `mmc bootbus`
+
+3. **Built New Tow-Boot:**
+   ```bash
+   sg nix-users -c "nix-build -A globalscale-mochabin-8gb"
+   ```
+   - Output: `Tow-Boot.spi.bin`, `Tow-Boot.mmcboot.bin`, `Tow-Boot.noenv.bin`
+
+4. **Hardware Testing (Failed):**
+   - SPI flash intermittent (sometimes detected, mostly JEDEC 00,00,00)
+   - eMMC boot partition: BootROM returns `Error interrupt: 00018000`
+   - Tried boot partitions 1, 2, and user area — all fail at BootROM level
+   - **Verdict: Hardware defective** — board abandoned
+
+**Files Modified:**
+- `tools/Tow-Boot/boards/globalscale-mochabin-2gb/default.nix`
+- `tools/Tow-Boot/boards/globalscale-mochabin-4gb/default.nix`
+- `tools/Tow-Boot/boards/globalscale-mochabin-8gb/default.nix`
+
+**Files Created:**
+- `tools/Tow-Boot/output/` — Built binaries
+- `tools/Tow-Boot/SECUBOX.md` — SecuBox-specific documentation
+
+**Documentation Updated:**
+- `board/mochabin/README.md`:
+  - Added boot mode jumper table (J17-J22)
+  - Added SPI → eMMC jumper change instructions
+  - Documented Tow-Boot flashing procedures
+  - Added known hardware issues section
+  - Removed incorrect microSD slot reference
+
+**Boot Mode Jumpers (J17-J22):**
+| Mode | Code | J17 | J18 | J19 | J20 | J21 | J22 |
+|------|------|-----|-----|-----|-----|-----|-----|
+| SPI | 0x32 | L | R | L | L | R | R |
+| eMMC | 0x2B | R | R | L | R | L | R |
+
+**Result:**
+- Tow-Boot with eMMC support ready for working boards
+- Complete MOCHAbin boot documentation
+- Defective board identified and abandoned
+
+---
+
+### Session 91 — Wiki Badges & VirtualBox VM Rebuild
+
+**Goal:** Update wiki and README with build status badges, metrics dashboard, and rebuild VBox VM
+
+---
+
 ### Session 90 — Mitmproxy WAF Module Migration
 
 **Goal:** Complete migration of mitmproxy WAF module from SecuBox-OpenWrt to SecuBox-DEB

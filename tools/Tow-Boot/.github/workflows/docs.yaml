@@ -1,0 +1,23 @@
+name: docs
+
+on:
+  push:
+    branches:
+      - released
+
+jobs:
+  publish:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - uses: DeterminateSystems/nix-installer-action@v4
+      - run: nix-build doc/
+      - if: success()
+        uses: crazy-max/ghaction-github-pages@v2
+        with:
+          target_branch: gh-pages
+          build_dir: result/
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

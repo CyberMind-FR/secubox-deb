@@ -17,7 +17,7 @@ override_dh_auto_install:
 	install -m 755 bin/mitmproxyctl $(CURDIR)/debian/secubox-mitmproxy/usr/sbin/
 	install -d $(CURDIR)/debian/secubox-mitmproxy/etc/secubox
 	install -m 644 debian/mitmproxy.toml $(CURDIR)/debian/secubox-mitmproxy/etc/secubox/
-	install -d $(CURDIR)/debian/secubox-mitmproxy/lib/systemd/system
-	install -m 644 debian/secubox-mitmproxy.service $(CURDIR)/debian/secubox-mitmproxy/lib/systemd/system/
+	install -d $(CURDIR)/debian/secubox-mitmproxy/usr/lib/systemd/system
+	install -m 644 debian/secubox-mitmproxy.service $(CURDIR)/debian/secubox-mitmproxy/usr/lib/systemd/system/
 	install -d $(CURDIR)/debian/secubox-mitmproxy/etc/nginx/secubox.d
 	install -m 644 nginx/mitmproxy.conf $(CURDIR)/debian/secubox-mitmproxy/etc/nginx/secubox.d/
