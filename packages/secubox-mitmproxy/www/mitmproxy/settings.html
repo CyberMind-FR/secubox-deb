@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - MITMProxy Settings</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root {
+            /* P31 Phosphor spectrum */
+            --p31-peak: #00dd44;
+            --p31-hot: #00ff55;
+            --p31-mid: #009933;
+            --p31-dim: #006622;
+            --p31-ghost: #003311;
+            --p31-decay: #ffb347;
+            --p31-decay-dim: #cc7722;
+            /* Tube glass */
+            --tube-light: #e8f5e9;
+            --tube-pale: #c8e6c9;
+            --tube-soft: #a5d6a7;
+            /* Legacy mappings */
+            --bg-dark: var(--tube-light);
+            --bg-card: var(--tube-pale);
+            --border: var(--tube-soft);
+            --text: var(--tube-dark);
+            --text-dim: var(--p31-dim);
+            --primary: var(--p31-peak);
+            --green: var(--p31-peak);
+            --red: #ff4466;
+            --yellow: var(--p31-decay);
+            --orange: var(--p31-decay-dim);
+            /* Bloom effects */
+            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Courier Prime', 'Courier New', monospace;
+            background: var(--tube-light);
+            background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
+            color: var(--tube-dark);
+            display: flex;
+            min-height: 100vh;
+        }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        .header h1 {
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--p31-hot);
+            text-shadow: var(--bloom-text);
+            font-weight: 700;
+            letter-spacing: 0.05em;
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            border: 1px solid var(--tube-soft);
+            background: var(--tube-pale);
+            color: var(--p31-mid);
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-family: 'Courier Prime', monospace;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            transition: all 0.2s;
+        }
+        .btn:hover {
+            border-color: var(--p31-dim);
+            color: var(--p31-peak);
+            text-shadow: var(--bloom-soft);
+            box-shadow: 0 0 12px rgba(51,255,102,0.1);
+        }
+        .btn-green, .btn-primary {
+            border-color: var(--p31-peak);
+            color: var(--p31-peak);
+            background: rgba(51,255,102,0.1);
+        }
+        .btn-green:hover, .btn-primary:hover {
+            background: rgba(51,255,102,0.2);
+            box-shadow: 0 0 16px rgba(51,255,102,0.2);
+        }
+
+        .card {
+            background: var(--tube-pale);
+            border: 1px solid var(--tube-soft);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
+        }
+        .card:hover {
+            border-color: var(--p31-dim);
+            box-shadow: 0 0 8px rgba(51,255,102,0.05), inset 0 0 20px rgba(0,0,0,0.3);
+        }
+        .card-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: var(--p31-decay);
+            text-shadow: var(--bloom-amber);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+
+        .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+        @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } }
+        @media (max-width: 768px) { .main { margin-left: 0; } }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        .form-group label {
+            display: block;
+            font-size: 0.75rem;
+            color: var(--p31-dim);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            margin-bottom: 0.5rem;
+        }
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 0.625rem;
+            font-family: 'Courier Prime', monospace;
+            font-size: 0.875rem;
+            background: var(--tube-light);
+            border: 1px solid var(--tube-soft);
+            border-radius: 4px;
+            color: var(--p31-mid);
+        }
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: var(--p31-dim);
+            box-shadow: 0 0 8px rgba(51,255,102,0.1);
+        }
+        .form-group input[type="checkbox"] {
+            width: auto;
+            margin-right: 0.5rem;
+        }
+        .form-group .checkbox-row {
+            display: flex;
+            align-items: center;
+            padding: 0.625rem 0;
+        }
+        .form-group .checkbox-row label {
+            margin-bottom: 0;
+            display: inline;
+        }
+        .form-group .help-text {
+            font-size: 0.7rem;
+            color: var(--p31-ghost);
+            margin-top: 0.25rem;
+        }
+
+        .toggle { position: relative; display: inline-block; width: 44px; height: 24px; vertical-align: middle; }
+        .toggle input { opacity: 0; width: 0; height: 0; }
+        .toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: var(--bg-dark); border: 1px solid var(--border); border-radius: 24px; transition: 0.3s; }
+        .toggle-slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 2px; bottom: 2px; background: var(--text-dim); border-radius: 50%; transition: 0.3s; }
+        .toggle input:checked + .toggle-slider { background: var(--green); border-color: var(--green); }
+        .toggle input:checked + .toggle-slider:before { transform: translateX(20px); background: white; }
+
+        .actions {
+            display: flex;
+            gap: 0.75rem;
+            margin-top: 1.5rem;
+        }
+
+        .toast { position: fixed; bottom: 20px; right: 20px; padding: 1rem 1.5rem; border-radius: 8px; background: var(--tube-pale); border: 1px solid var(--p31-dim); font-family: 'Courier Prime', monospace; z-index: 1000; animation: slideIn 0.3s; }
+        .toast-success { border-color: var(--p31-peak); }
+        .toast-error { border-color: #ff4466; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: var(--p31-dim);
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: var(--tube-light); }
+        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
+        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
+    </style>
+</head>
+<body class="crt-light">
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+
+    <main class="main">
+        <header class="header">
+            <h1>MITMProxy Settings</h1>
+            <a href="index.html" class="btn">Back to Dashboard</a>
+        </header>
+
+        <p style="color: var(--text-dim); margin-bottom: 1.5rem;">Configure WAF container, proxy ports, auto-ban behavior, and whitelist.</p>
+
+        <div id="loading" class="loading">Loading settings...</div>
+
+        <form id="settings-form" style="display: none;">
+            <div class="grid-2">
+                <!-- Container Settings -->
+                <div class="card">
+                    <div class="card-title">Container Settings</div>
+
+                    <div class="form-group">
+                        <label for="memory_limit">Memory Limit</label>
+                        <select id="memory_limit" name="memory_limit">
+                            <option value="128M">128 MB</option>
+                            <option value="256M">256 MB</option>
+                            <option value="512M">512 MB</option>
+                            <option value="1G">1 GB</option>
+                            <option value="2G">2 GB</option>
+                        </select>
+                        <div class="help-text">Maximum memory for the mitmproxy container</div>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="checkbox-row">
+                            <label class="toggle">
+                                <input type="checkbox" id="autostart" name="autostart">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <label for="autostart" style="margin-left: 0.75rem;">Autostart on boot</label>
+                        </div>
+                        <div class="help-text">Start container automatically when system boots</div>
+                    </div>
+                </div>
+
+                <!-- Proxy Settings -->
+                <div class="card">
+                    <div class="card-title">Proxy Settings</div>
+
+                    <div class="form-group">
+                        <label for="listen_port">Listen Port</label>
+                        <input type="number" id="listen_port" name="listen_port" min="1" max="65535" placeholder="8890">
+                        <div class="help-text">Port where mitmproxy listens for traffic</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="web_port">Web UI Port</label>
+                        <input type="number" id="web_port" name="web_port" min="1" max="65535" placeholder="8091">
+                        <div class="help-text">Port for mitmproxy web interface</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <!-- Auto-ban Settings -->
+                <div class="card">
+                    <div class="card-title">Auto-ban Settings</div>
+
+                    <div class="form-group">
+                        <div class="checkbox-row">
+                            <label class="toggle">
+                                <input type="checkbox" id="autoban_enabled" name="autoban_enabled">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <label for="autoban_enabled" style="margin-left: 0.75rem;">Enable auto-ban</label>
+                        </div>
+                        <div class="help-text">Automatically ban IPs that trigger security alerts</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="sensitivity">Sensitivity</label>
+                        <select id="sensitivity" name="sensitivity">
+                            <option value="low">Low (fewer bans)</option>
+                            <option value="moderate">Moderate (balanced)</option>
+                            <option value="high">High (stricter)</option>
+                            <option value="paranoid">Paranoid (most strict)</option>
+                        </select>
+                        <div class="help-text">How aggressively to ban suspicious traffic</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="ban_duration">Ban Duration</label>
+                        <select id="ban_duration" name="ban_duration">
+                            <option value="1h">1 hour</option>
+                            <option value="4h">4 hours</option>
+                            <option value="12h">12 hours</option>
+                            <option value="24h">24 hours</option>
+                            <option value="7d">7 days</option>
+                            <option value="30d">30 days</option>
+                            <option value="permanent">Permanent</option>
+                        </select>
+                        <div class="help-text">How long auto-bans last</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="min_severity">Minimum Severity</label>
+                        <select id="min_severity" name="min_severity">
+                            <option value="info">Info (all alerts)</option>
+                            <option value="low">Low</option>
+                            <option value="medium">Medium</option>
+                            <option value="high">High</option>
+                            <option value="critical">Critical only</option>
+                        </select>
+                        <div class="help-text">Minimum severity level to trigger auto-ban</div>
+                    </div>
+                </div>
+
+                <!-- Whitelist Settings -->
+                <div class="card">
+                    <div class="card-title">Whitelist</div>
+
+                    <div class="form-group">
+                        <label for="whitelist_ips">Whitelisted IPs</label>
+                        <input type="text" id="whitelist_ips" name="whitelist_ips" placeholder="127.0.0.1, 192.168.1.100">
+                        <div class="help-text">Comma-separated list of IPs that should never be banned</div>
+                    </div>
+
+                    <div style="margin-top: 1rem; padding: 0.75rem; background: rgba(51,255,102,0.05); border-radius: 4px; border: 1px solid var(--p31-ghost);">
+                        <div style="font-size: 0.75rem; color: var(--p31-dim); margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.1em;">Default entries</div>
+                        <div style="font-size: 0.8rem; color: var(--p31-mid);">
+                            127.0.0.1 is always whitelisted by default to prevent self-lockout.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="actions">
+                <button type="submit" class="btn btn-green">Save Settings</button>
+                <button type="button" class="btn" onclick="loadSettings()">Reset</button>
+            </div>
+        </form>
+    </main>
+
+    <div id="toast"></div>
+
+    <script>
+        const API = '/api/v1/mitmproxy';
+        const token = () => localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token');
+        const headers = () => ({
+            'Content-Type': 'application/json',
+            ...(token() ? { 'Authorization': 'Bearer ' + token() } : {})
+        });
+
+        async function api(path, opts = {}) {
+            try {
+                const res = await fetch(API + path, { ...opts, headers: headers() });
+                if (res.status === 401) {
+                    window.location = '/portal/login.html';
+                    return null;
+                }
+                return res.json();
+            } catch (e) {
+                console.error(e);
+                return null;
+            }
+        }
+
+        function showToast(msg, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.innerHTML = `<div class="toast toast-${type}">${msg}</div>`;
+            setTimeout(() => toast.innerHTML = '', 3000);
+        }
+
+        async function loadSettings() {
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('settings-form').style.display = 'none';
+
+            const data = await api('/settings');
+
+            if (!data) {
+                document.getElementById('loading').textContent = 'Failed to load settings';
+                return;
+            }
+
+            // Container settings
+            document.getElementById('memory_limit').value = data.container?.memory_limit || '256M';
+            document.getElementById('autostart').checked = data.container?.autostart !== false;
+
+            // Proxy settings
+            document.getElementById('listen_port').value = data.proxy?.listen_port || 8890;
+            document.getElementById('web_port').value = data.proxy?.web_port || 8091;
+
+            // Auto-ban settings
+            document.getElementById('autoban_enabled').checked = data.autoban?.enabled !== false;
+            document.getElementById('sensitivity').value = data.autoban?.sensitivity || 'moderate';
+            document.getElementById('ban_duration').value = data.autoban?.ban_duration || '4h';
+            document.getElementById('min_severity').value = data.autoban?.min_severity || 'high';
+
+            // Whitelist
+            const ips = data.whitelist?.ips || ['127.0.0.1'];
+            document.getElementById('whitelist_ips').value = ips.join(', ');
+
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('settings-form').style.display = 'block';
+        }
+
+        async function saveSettings(e) {
+            e.preventDefault();
+
+            // Parse whitelist IPs
+            const whitelistInput = document.getElementById('whitelist_ips').value;
+            const ips = whitelistInput
+                .split(',')
+                .map(ip => ip.trim())
+                .filter(ip => ip.length > 0);
+
+            // Ensure 127.0.0.1 is always included
+            if (!ips.includes('127.0.0.1')) {
+                ips.unshift('127.0.0.1');
+            }
+
+            const payload = {
+                container: {
+                    name: 'mitmproxy-waf',
+                    memory_limit: document.getElementById('memory_limit').value,
+                    autostart: document.getElementById('autostart').checked
+                },
+                proxy: {
+                    listen_port: parseInt(document.getElementById('listen_port').value, 10),
+                    web_port: parseInt(document.getElementById('web_port').value, 10),
+                    web_host: '127.0.0.1',
+                    data_path: '/srv/mitmproxy-waf'
+                },
+                autoban: {
+                    enabled: document.getElementById('autoban_enabled').checked,
+                    sensitivity: document.getElementById('sensitivity').value,
+                    ban_duration: document.getElementById('ban_duration').value,
+                    min_severity: document.getElementById('min_severity').value
+                },
+                whitelist: {
+                    ips: ips
+                }
+            };
+
+            const result = await api('/settings', {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            });
+
+            if (result) {
+                showToast('Settings saved successfully');
+                // Reload to show the saved values
+                loadSettings();
+            } else {
+                showToast('Failed to save settings', 'error');
+            }
+        }
+
+        // Initialize
+        document.getElementById('settings-form').addEventListener('submit', saveSettings);
+        loadSettings();
+    </script>
+    <script src="/shared/crt-engine.js"></script>
+</body>
+</html>
