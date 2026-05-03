@@ -64,6 +64,54 @@
 
 ---
 
+### Session 91 — Wiki Badges & VirtualBox VM Rebuild
+
+**Goal:** Update wiki and README with build status badges, metrics dashboard, and rebuild VBox VM
+
+**Context:**
+- Session 90 completed mitmproxy WAF migration
+- ESPRESSObin has insufficient disk space for LXC container
+- Need VirtualBox VM for testing mitmproxy installation
+- Wiki and README need updated badges/metrics
+
+**Completed:**
+
+1. **VirtualBox VM Rebuild:**
+   - Built new x64-bookworm image with 8GB disk
+   - Generated VDI (2.8GB) and compressed img.gz (963MB)
+   - Fixed VM UUID mismatch after VDI recreation
+   - VM now running with 4GB RAM, EFI boot
+
+2. **Wiki Home.md Update:**
+   - Added workflow status badges (packages, live USB, installer, eye remote, multiboot)
+   - Added development metrics table (131 packages, 94% migration, 2000+ APIs)
+   - Added module status by category with progress indicators
+   - Updated version announcement to v2.3.0
+
+3. **README.md Update:**
+   - Added comprehensive workflow badges
+   - Added metrics table (packages, migration %, APIs, architectures)
+   - Updated version to v2.3.0
+
+4. **Dependency Fix:**
+   - Added xz-utils to secubox-mitmproxy dependencies for LXC template extraction
+
+**Commits:**
+- 22487f8 docs: Add build status badges and metrics to README
+- e041caa docs: Add build badges and metrics dashboard to wiki Home
+
+**Artifacts:**
+- `output/secubox-vm-x64-bookworm.img.gz` (963MB)
+- `output/secubox-vm-x64-bookworm.vdi` (2.8GB)
+- SHA256: 13e69ae55ab185daaf6e9b04ff1fad69bc40cf53c5ae8daac9829334226deca6
+
+**Result:**
+- Wiki now shows live build status for all components
+- VirtualBox VM ready for mitmproxy testing
+- GitHub Actions handles artifact creation on releases
+
+---
+
 ### Session 89 — Emancipate SecuBox-Dev Methodology
 
 **Goal:** Extract and document the SecuBox development methodology as a standalone, reusable guide
