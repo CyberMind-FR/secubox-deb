@@ -1,0 +1,266 @@
+#!/usr/bin/env python3
+"""mitmproxyctl — LXC container management for SecuBox WAF
+
+Usage:
+    mitmproxyctl install   Create and configure LXC container
+    mitmproxyctl start     Start container and mitmproxy
+    mitmproxyctl stop      Stop container
+    mitmproxyctl restart   Restart container
+    mitmproxyctl status    Show container and process status
+    mitmproxyctl destroy   Remove container (requires --force)
+    mitmproxyctl logs      Show mitmproxy logs
+"""
+import sys
+import os
+import subprocess
+import json
+import time
+import argparse
+from pathlib import Path
+
+try:
+    import toml
+except ImportError:
+    toml = None
+
+CONTAINER_NAME = "mitmproxy-waf"
+CONFIG_FILE = Path("/etc/secubox/mitmproxy.toml")
+DATA_PATH = Path("/srv/mitmproxy-waf")
+LXC_PATH = Path("/var/lib/lxc") / CONTAINER_NAME
+
+
+def load_config() -> dict:
+    """Load configuration from TOML file."""
+    if toml and CONFIG_FILE.exists():
+        return toml.load(CONFIG_FILE)
+    return {
+        "container": {"name": CONTAINER_NAME, "memory_limit": "256M"},
+        "proxy": {"listen_port": 8890, "web_port": 8091, "data_path": str(DATA_PATH)},
+    }
+
+
+def run(cmd: list, check: bool = True, capture: bool = False) -> subprocess.CompletedProcess:
+    """Run a command with error handling."""
+    print(f"  → {' '.join(cmd)}")
+    return subprocess.run(cmd, check=check, capture_output=capture, text=True)
+
+
+def lxc_exists() -> bool:
+    """Check if LXC container exists."""
+    result = run(["lxc-ls"], capture=True, check=False)
+    return CONTAINER_NAME in result.stdout.split()
+
+
+def lxc_running() -> bool:
+    """Check if LXC container is running."""
+    result = run(["lxc-info", "-n", CONTAINER_NAME, "-s"], capture=True, check=False)
+    return "RUNNING" in result.stdout
+
+
+def lxc_exec(cmd: list, check: bool = True) -> subprocess.CompletedProcess:
+    """Execute command inside LXC container."""
+    return run(["lxc-attach", "-n", CONTAINER_NAME, "--"] + cmd, check=check)
+
+
+def cmd_install():
+    """Create and configure LXC container."""
+    print(f"Installing LXC container: {CONTAINER_NAME}")
+
+    if lxc_exists():
+        print(f"  Container {CONTAINER_NAME} already exists")
+        return 1
+
+    config = load_config()
+
+    # Create data directories
+    print("Creating data directories...")
+    DATA_PATH.mkdir(parents=True, exist_ok=True)
+    (DATA_PATH / "data").mkdir(exist_ok=True)
+    (DATA_PATH / "addons").mkdir(exist_ok=True)
+    (DATA_PATH / "config").mkdir(exist_ok=True)
+
+    # Create LXC container
+    print("Creating LXC container...")
+    run([
+        "lxc-create", "-n", CONTAINER_NAME,
+        "-t", "download",
+        "--",
+        "-d", "debian",
+        "-r", "bookworm",
+        "-a", "amd64"
+    ])
+
+    # Configure container
+    print("Configuring container...")
+    lxc_config = LXC_PATH / "config"
+    with open(lxc_config, "a") as f:
+        f.write(f"\n# SecuBox WAF configuration\n")
+        f.write(f"lxc.mount.entry = {DATA_PATH}/data data none bind,create=dir 0 0\n")
+        f.write(f"lxc.mount.entry = {DATA_PATH}/addons addons none bind,create=dir 0 0\n")
+        memory_bytes = int(config["container"].get("memory_limit", "256M").rstrip("M")) * 1024 * 1024
+        f.write(f"lxc.cgroup2.memory.max = {memory_bytes}\n")
+
+    # Start container for setup
+    print("Starting container for initial setup...")
+    run(["lxc-start", "-n", CONTAINER_NAME])
+    time.sleep(5)  # Wait for container to boot
+
+    # Install mitmproxy inside container
+    print("Installing mitmproxy in container...")
+    lxc_exec(["apt-get", "update"])
+    lxc_exec(["apt-get", "install", "-y", "python3", "python3-pip"])
+    lxc_exec(["pip3", "install", "--break-system-packages", "mitmproxy"])
+
+    # Stop container
+    run(["lxc-stop", "-n", CONTAINER_NAME])
+
+    print(f"Container {CONTAINER_NAME} installed successfully")
+    return 0
+
+
+def cmd_start():
+    """Start container and mitmproxy."""
+    print(f"Starting {CONTAINER_NAME}...")
+
+    if not lxc_exists():
+        print(f"  Container does not exist. Run: mitmproxyctl install")
+        return 1
+
+    if lxc_running():
+        print(f"  Container already running")
+        return 0
+
+    config = load_config()
+    proxy_port = config["proxy"].get("listen_port", 8890)
+    web_port = config["proxy"].get("web_port", 8091)
+
+    # Start container
+    run(["lxc-start", "-n", CONTAINER_NAME])
+    time.sleep(3)
+
+    # Start mitmproxy inside container (backgrounded)
+    print("Starting mitmproxy...")
+    lxc_exec([
+        "sh", "-c",
+        f"nohup mitmdump --mode upstream:http://127.0.0.1:80 "
+        f"--listen-port {proxy_port} "
+        f"--set web_open_browser=false "
+        f"-s /addons/secubox_waf.py "
+        f"> /var/log/mitmproxy.log 2>&1 &"
+    ])
+
+    print(f"Container {CONTAINER_NAME} started")
+    print(f"  Proxy port: {proxy_port}")
+    print(f"  Web port: {web_port}")
+    return 0
+
+
+def cmd_stop():
+    """Stop container."""
+    print(f"Stopping {CONTAINER_NAME}...")
+
+    if not lxc_exists():
+        print(f"  Container does not exist")
+        return 1
+
+    if not lxc_running():
+        print(f"  Container not running")
+        return 0
+
+    run(["lxc-stop", "-n", CONTAINER_NAME])
+    print(f"Container {CONTAINER_NAME} stopped")
+    return 0
+
+
+def cmd_restart():
+    """Restart container."""
+    cmd_stop()
+    time.sleep(2)
+    return cmd_start()
+
+
+def cmd_status():
+    """Show container and process status."""
+    print(f"Status: {CONTAINER_NAME}")
+
+    if not lxc_exists():
+        print("  Container: NOT INSTALLED")
+        return 1
+
+    if lxc_running():
+        print("  Container: RUNNING")
+
+        # Check mitmproxy process
+        result = lxc_exec(["pgrep", "-f", "mitmdump"], check=False)
+        if result.returncode == 0:
+            print("  Mitmproxy: RUNNING")
+        else:
+            print("  Mitmproxy: STOPPED")
+
+        # Get container IP
+        result = run(["lxc-info", "-n", CONTAINER_NAME, "-iH"], capture=True, check=False)
+        if result.stdout.strip():
+            print(f"  IP: {result.stdout.strip().split()[0]}")
+    else:
+        print("  Container: STOPPED")
+
+    # Check threat log
+    threats_log = DATA_PATH / "data" / "threats.log"
+    if threats_log.exists():
+        lines = threats_log.read_text().strip().split("\n")
+        print(f"  Threats logged: {len([l for l in lines if l])}")
+
+    return 0
+
+
+def cmd_destroy(force: bool = False):
+    """Remove container."""
+    if not force:
+        print("Use --force to destroy container")
+        return 1
+
+    print(f"Destroying {CONTAINER_NAME}...")
+
+    if not lxc_exists():
+        print(f"  Container does not exist")
+        return 0
+
+    if lxc_running():
+        run(["lxc-stop", "-n", CONTAINER_NAME])
+
+    run(["lxc-destroy", "-n", CONTAINER_NAME])
+    print(f"Container {CONTAINER_NAME} destroyed")
+    return 0
+
+
+def cmd_logs():
+    """Show mitmproxy logs."""
+    if not lxc_running():
+        print("Container not running")
+        return 1
+
+    lxc_exec(["tail", "-100", "/var/log/mitmproxy.log"], check=False)
+    return 0
+
+
+def main():
+    parser = argparse.ArgumentParser(description="SecuBox WAF container management")
+    parser.add_argument("command", choices=["install", "start", "stop", "restart", "status", "destroy", "logs"])
+    parser.add_argument("--force", action="store_true", help="Force operation")
+    args = parser.parse_args()
+
+    commands = {
+        "install": cmd_install,
+        "start": cmd_start,
+        "stop": cmd_stop,
+        "restart": cmd_restart,
+        "status": cmd_status,
+        "destroy": lambda: cmd_destroy(args.force),
+        "logs": cmd_logs,
+    }
+
+    return commands[args.command]()
+
+
+if __name__ == "__main__":
+    sys.exit(main())
