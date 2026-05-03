@@ -1,0 +1,63 @@
+# SecuBox Mitmproxy WAF Configuration
+
+[container]
+name = "mitmproxy-waf"
+memory_limit = "256M"
+autostart = true
+
+[proxy]
+listen_port = 8890
+web_port = 8091
+web_host = "127.0.0.1"
+data_path = "/srv/mitmproxy-waf"
+
+[haproxy]
+enabled = false
+config_path = "/etc/haproxy/haproxy.cfg"
+backend_name = "mitmproxy_waf"
+
+[crowdsec]
+enabled = true
+threats_log = "/srv/mitmproxy-waf/data/threats.log"
+
+[autoban]
+enabled = true
+sensitivity = "moderate"
+ban_duration = "4h"
+min_severity = "high"
+
+[autoban.categories]
+sqli = true
+xss = true
+cmdi = true
+traversal = true
+ssrf = true
+log4shell = true
+cve_exploits = true
+scanners = false
+path_scan = false
+
+[autoban.thresholds]
+moderate_count = 3
+moderate_window = 300
+permissive_count = 5
+permissive_window = 3600
+
+[whitelist]
+ips = ["127.0.0.1"]
+
+[waf_rules]
+sqli = true
+xss = true
+cmdi = true
+traversal = true
+ssrf = true
+xxe = true
+ldap = true
+log4shell = true
+scanners = true
+path_scan = true
+cve_exploits = true
+rce = true
+voip = false
+xmpp = false
