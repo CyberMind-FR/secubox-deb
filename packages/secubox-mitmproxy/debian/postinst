@@ -1,26 +1,37 @@
-#!/bin/sh
+#!/bin/bash
 set -e
 
 case "$1" in
-    configure)
-        # Create config directory
-        mkdir -p /etc/secubox
+  configure)
+    # Create data directories
+    install -d -o secubox -g secubox -m 750 /srv/mitmproxy-waf/data
+    install -d -o secubox -g secubox -m 750 /srv/mitmproxy-waf/addons
+    install -d -o secubox -g secubox -m 750 /srv/mitmproxy-waf/config
 
-        # Create run directory
-        mkdir -p /run/secubox
+    # Copy addon to data directory
+    cp /usr/share/secubox/mitmproxy/addons/secubox_waf.py /srv/mitmproxy-waf/addons/
 
-        # Create data directories
-        mkdir -p /srv/mitmproxy
-        mkdir -p /srv/mitmproxy-in
-        mkdir -p /tmp/secubox
+    # Copy default rules if not exists
+    if [ ! -f /srv/mitmproxy-waf/data/waf-rules.json ]; then
+      cp /usr/share/secubox/mitmproxy/data/waf-rules.json /srv/mitmproxy-waf/data/
+    fi
 
-        # Enable and start service
-        systemctl daemon-reload
-        systemctl enable secubox-mitmproxy.service
-        systemctl start secubox-mitmproxy.service || true
-        ;;
+    # Install CrowdSec acquisition if CrowdSec is installed
+    if [ -d /etc/crowdsec/acquis.d ]; then
+      install -m 644 /usr/share/secubox/mitmproxy/crowdsec/secubox-waf.yaml \
+        /etc/crowdsec/acquis.d/ 2>/dev/null || true
+    fi
+
+    # Symlink for uvicorn workdir
+    ln -sf /usr/lib/secubox/secubox-mitmproxy /usr/lib/secubox/mitmproxy 2>/dev/null || true
+
+    # Enable and start service
+    systemctl daemon-reload
+    systemctl enable secubox-mitmproxy.service
+    systemctl start secubox-mitmproxy.service || true
+
+    # Reload nginx if installed
+    systemctl reload nginx 2>/dev/null || true
+    ;;
 esac
-
 #DEBHELPER#
-
-exit 0
