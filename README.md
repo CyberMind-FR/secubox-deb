@@ -2,9 +2,18 @@
 
 **Your Network Security Appliance — Plug, Protect, Peace of Mind**
 
-[![Build Status](https://github.com/CyberMind-FR/secubox-deb/actions/workflows/build-all-live-usb.yml/badge.svg)](https://github.com/CyberMind-FR/secubox-deb/actions)
-[![Version](https://img.shields.io/badge/version-1.7.0-green.svg)](https://github.com/CyberMind-FR/secubox-deb/releases)
+[![Release](https://img.shields.io/github/v/release/CyberMind-FR/secubox-deb?label=Release&logo=github)](https://github.com/CyberMind-FR/secubox-deb/releases)
+[![Packages](https://github.com/CyberMind-FR/secubox-deb/actions/workflows/build-packages.yml/badge.svg)](https://github.com/CyberMind-FR/secubox-deb/actions/workflows/build-packages.yml)
+[![Live USB](https://github.com/CyberMind-FR/secubox-deb/actions/workflows/build-all-live-usb.yml/badge.svg)](https://github.com/CyberMind-FR/secubox-deb/actions/workflows/build-all-live-usb.yml)
+[![Installer](https://github.com/CyberMind-FR/secubox-deb/actions/workflows/build-installer-iso.yml/badge.svg)](https://github.com/CyberMind-FR/secubox-deb/actions/workflows/build-installer-iso.yml)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+
+| Metric | Value |
+|--------|-------|
+| ![Packages](https://img.shields.io/badge/Debian_Packages-131-blue?logo=debian) | 131 `.deb` packages |
+| ![Migration](https://img.shields.io/badge/Migration-94%25-brightgreen) | 123/131 modules migrated |
+| ![APIs](https://img.shields.io/badge/API_Endpoints-2000+-informational) | FastAPI + JWT auth |
+| ![Arch](https://img.shields.io/badge/Architecture-amd64_|_arm64-orange) | x86_64 + ARM64 |
 
 SecuBox transforms any compatible device into a complete network security appliance with VPN, firewall, intrusion detection, and web dashboard — all preconfigured and ready to use.
 
