@@ -1,0 +1,151 @@
+# Architecture
+
+SecuBox-Deb est structuré autour de six modules canoniques organisés en chemin hamiltonien. Chaque module expose une API REST FastAPI, le tout orchestré par un profile-generator hiérarchique YAML.
+
+---
+
+## Six modules — Chemin hamiltonien
+
+```
+AUTH → WALL → BOOT → MIND → ROOT → MESH
+```
+
+Les modules forment un graphe complet où chaque nœud est connecté à tous les autres, mais le chemin canonique définit l'ordre de priorité et de dépendance.
+
+| Module | Couleur | Hex | Fonction |
+|--------|---------|-----|----------|
+| **AUTH** | Terracotta | `#C04E24` | Authentification, ZeroTrust, MFA, portail captif |
+| **WALL** | Ocre | `#9A6010` | Firewall nftables, CrowdSec, WAF, IDS/IPS |
+| **BOOT** | Brique | `#803018` | Déploiement, provisioning, clonage, vault |
+| **MIND** | Indigo | `#3D35A0` | IA, analyse comportementale, DPI, SOC |
+| **ROOT** | Vert profond | `#0A5840` | Système, CLI, hardening, hub central |
+| **MESH** | Bleu nuit | `#104A88` | Réseau, WireGuard, HAProxy, QoS, TURN |
+
+### Paires complémentaires
+
+Les modules s'associent en paires complémentaires pour certaines fonctions :
+
+- `BOOT ↔ ROOT` — Provisioning et système
+- `WALL ↔ MIND` — Défense et analyse
+- `MESH ↔ AUTH` — Réseau et identité
+
+---
+
+## Stack technique
+
+### Base système
+
+| Composant | Choix | Notes |
+|-----------|-------|-------|
+| OS | Debian 12 (bookworm) ARM64/AMD64 | Pas d'OpenWrt, pas de LuCI |
+| Kernel | 6.6 LTS mainline | Device trees upstream Marvell |
+| Init | systemd | Units par module |
+| Firewall | nftables | DEFAULT DROP, pas d'iptables |
+| Réseau | netplan | Configuration YAML |
+
+### Stack applicative
+
+| Composant | Choix | Notes |
+|-----------|-------|-------|
+| Backend | FastAPI + Uvicorn | Socket Unix par module |
+| Frontend | HTML/CSS/JS vanilla | Palette CyberMind, pas de framework lourd |
+| Config | YAML + TOML | Double-buffer, 4R versioning |
+| Reverse proxy | Nginx | Statics + proxy API |
+| TLS | HAProxy | TLS 1.3 minimum, Let's Encrypt |
+
+### Sécurité active
+
+| Composant | Choix | Notes |
+|-----------|-------|-------|
+| IDS/IPS | Suricata + CrowdSec | Bouncers intégrés |
+| WAF | mitmproxy + ModSecurity rules | Inspection HTTPS |
+| DPI | nDPId + netifyd | Dual-stream via tc mirred |
+| DNS | Unbound | Vortex DNS + blocklists |
+
+---
+
+## Profile-generator
+
+Le profile-generator est un système hiérarchique YAML qui génère la configuration de chaque carte à partir de profils empilés.
+
+```
+defaults/
+  └── base.yaml           # Configuration commune
+boards/
+  ├── mochabin/
+  │   └── profile.yaml    # Spécificités MOCHAbin
+  ├── espressobin-v7/
+  │   └── profile.yaml    # Spécificités ESPRESSObin
+  └── x64-vm/
+      └── profile.yaml    # Spécificités VM
+profiles/
+  ├── full.yaml           # Tous les modules
+  ├── lite.yaml           # Modules essentiels
+  └── minimal.yaml        # Firewall + SSH uniquement
+```
+
+L'héritage : `defaults → board → profile → user overrides`
+
+---
+
+## Framework GK·HAM-HASH ZKP
+
+La cryptographie s'appuie sur un framework Zero-Knowledge Proof à trois niveaux.
+
+### L1 — Auth twins (Prover/Verifier)
+
+Authentification NIZKProof hamiltonien. Rotation du graphe G toutes les 24h avec Perfect Forward Secrecy.
+
+### L2 — Routing twins (double-buffer)
+
+Configuration en double-buffer : `active/` (lecture seule) et `shadow/` (édition). Swap atomique conditionné par validation ZKP. Rollback 4R (4 snapshots).
+
+### L3 — Endpoint twins (service/witness)
+
+MirrorNet P2P avec `did:plc`, tunnels WireGuard, et Chain of Hamiltonians pour la preuve de présence réseau.
+
+---
+
+## API REST
+
+Chaque module expose une API FastAPI sur socket Unix :
+
+```
+/run/secubox/hub.sock      → /api/v1/hub/*
+/run/secubox/crowdsec.sock → /api/v1/crowdsec/*
+/run/secubox/wireguard.sock → /api/v1/wireguard/*
+...
+```
+
+Nginx reverse proxy unifie l'accès :
+
+```
+GET  /api/v1/<module>/<method>   # Lecture
+POST /api/v1/<module>/<method>   # Action
+```
+
+Authentification JWT obligatoire sur tous les endpoints via `Depends(auth.require_jwt)`.
+
+---
+
+## Contraintes ANSSI CSPN
+
+Le projet vise la certification ANSSI CSPN à horizon 2027. Contraintes respectées :
+
+| Exigence | Implémentation |
+|----------|----------------|
+| Séparation des privilèges | User/group dédié par daemon |
+| Chiffrement | TLS 1.3 minimum partout |
+| Journalisation | Append-only, horodaté RFC 3339 |
+| Rollback | Double-buffer 4R obligatoire |
+| Surface d'attaque | Services désactivés par défaut |
+| Tests | Couverture ≥ 80%, tests régression |
+
+---
+
+## Liens
+
+- **[[MODULES-EN|Modules]]** — Documentation des 125 paquets
+- **[[API-Reference]]** — Référence API (2000+ endpoints)
+- **[[Hardware-Matrix]]** — Cibles matérielles supportées
+- **[[Roadmap]]** — État du développement
