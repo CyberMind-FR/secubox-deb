@@ -42,6 +42,85 @@ IMG_SIZE="8G"
 - Flashed to USB thumb drive (28.8G DataTraveler 3.0)
 - Ready for boot testing on MOCHAbin hardware
 
+### Session 93b — MOCHAbin eMMC Flash & Boot Success
+
+**Goal:** Flash SecuBox image to eMMC and boot from it
+
+**USB Boot Issues:**
+- USB storage not detected in Linux (f2500000.usb deferred probe)
+- USB thumb drive only accessible from U-Boot, not from running Linux
+
+**eMMC Flash from U-Boot:**
+```
+usb reset
+ext4load usb 0:3 0x10000000 secubox-mochabin-bookworm.img.gz
+gzwrite mmc 0 0x10000000 ${filesize}
+```
+
+**Boot Script Issue:**
+- Initial boot.scr used `uInitrd` (U-Boot wrapped initrd)
+- Image only contains raw `initrd.img` from Debian
+- Error: "Wrong Ramdisk Image Format"
+
+**Solution - Use raw initrd with filesize:**
+```bash
+setenv bootcmd_emmc 'fatload mmc 0:1 0x7000000 Image; fatload mmc 0:1 0x6f00000 dtbs/marvell/armada-7040-mochabin.dtb; fatload mmc 0:1 0x9000000 initrd.img; setenv bootargs root=/dev/mmcblk0p2 rootfstype=ext4 rootwait console=ttyS0,115200 earlycon=uart8250,mmio32,0xf0512000 net.ifnames=0; booti 0x7000000 0x9000000:${filesize} 0x6f00000'
+setenv bootcmd 'run bootcmd_emmc'
+saveenv
+```
+
+**Key insight:** U-Boot can boot raw initrd.img by passing filesize after colon: `0x9000000:${filesize}`
+
+**Boot Success:**
+- Kernel: 6.1.0-42-arm64
+- Memory: 8GB detected (7.8Gi available)
+- eMMC: 14.7 GiB DF4016
+- Network: br-lan @ 192.168.1.1, eth0 @ 10.55.255.177
+- Dashboard: https://192.168.1.1:9443
+- All SecuBox services started
+
+**Minor Issues (Non-blocking):**
+- `crowdsec.service` failed to start (needs investigation)
+- `lxc-net.service` failed (bridge setup conflict)
+- `secubox-metablogiz` keeps restarting (service loop)
+
+**Hardware Notes:**
+- SFP module: OEM SFP28-25G-SR-S detected on eth0 (incompatible mode)
+- SATA: 1TB WD Blue SA510 detected on ata2 (user's personal drive)
+- USB: Quectel EP06-E LTE modem on USB1
+
+### Session 93c — Nginx .dpkg-new Config Fix
+
+**Problem:**
+- Dashboard `/system/` returning HTML instead of JSON
+- `secubox-system.service` was disabled/not running
+- Nginx configs in `/etc/nginx/secubox.d/` had `.dpkg-new` suffix (not activated)
+
+**Root Cause:**
+- dpkg leaves `.dpkg-new` files when installing new conffiles over existing ones
+- Build scripts didn't rename these after package installation
+
+**Fix Applied:**
+Added `.dpkg-new` activation step to all build scripts:
+- `image/build-image.sh` (line ~760)
+- `image/build-live-usb.sh` (line ~1824)
+- `image/build-rpi-usb.sh` (line ~751)
+
+```bash
+# Activate .dpkg-new configs
+for newconf in "${ROOTFS}/etc/nginx/secubox.d/"*.dpkg-new; do
+  [[ -f "$newconf" ]] || continue
+  mv "$newconf" "${newconf%.dpkg-new}"
+done
+```
+
+**Services Fixed on Running System:**
+```bash
+systemctl enable --now secubox-system
+cd /etc/nginx/secubox.d && for f in *.dpkg-new; do mv "$f" "${f%.dpkg-new}"; done
+nginx -s reload
+```
+
 ---
 
 ## 2026-05-03
