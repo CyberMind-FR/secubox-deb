@@ -21,40 +21,40 @@ SecuBox-Deb fonctionne sur du matériel que vous possédez ou achetez directemen
 
 > **Note prix** : Prix indicatifs constatés en 2025-2026, hors frais de port. Les prix varient selon le fournisseur et la disponibilité. Aucun lien d'affiliation.
 
-### GlobalScale Marvell Armada
+### GlobalScale / SolidRun — Marvell Armada
 
 | Carte | SoC | RAM | Réseau | Prix | Statut | Notes |
 |-------|-----|-----|--------|------|--------|-------|
-| **MOCHAbin** | Armada 7040 | 4 GB | 4× GbE + 10GbE SFP+ | ~350 € | ![Tested](https://img.shields.io/badge/-tested-0A5840?style=flat-square) | Cible principale Full |
-| **MOCHAbin** | Armada 7040 | 8 GB | 4× GbE + 10GbE SFP+ | ~450 € | ![Tested](https://img.shields.io/badge/-tested-0A5840?style=flat-square) | Full profile, DPI |
-| **ESPRESSObin v7** | Armada 3720 | 1 GB | 3× GbE (Topaz) | ~50 € | ![Tested](https://img.shields.io/badge/-tested-0A5840?style=flat-square) | Cible Lite entry |
-| **ESPRESSObin v7** | Armada 3720 | 2 GB | 3× GbE (Topaz) | ~70 € | ![Tested](https://img.shields.io/badge/-tested-0A5840?style=flat-square) | Cible Lite, DDR4 |
-| **ESPRESSObin Ultra** | Armada 3720 | 1-2 GB | 3× GbE + Wi-Fi | ~100 € | ![Tested](https://img.shields.io/badge/-tested-0A5840?style=flat-square) | Lite+ Wi-Fi intégré |
-| **ClearFog Base** | Armada 388 | 1 GB | 2× GbE | ~150 € | ![Community](https://img.shields.io/badge/-community-104A88?style=flat-square) | Compact, mPCIe |
-| **ClearFog Pro** | Armada 388 | 1 GB | 6× GbE + SFP | ~220 € | ![Community](https://img.shields.io/badge/-community-104A88?style=flat-square) | Switch intégré |
-| **MACCHIATObin** | Armada 8040 | 16 GB | 4× 10GbE | ~800 € | ![Wishlist](https://img.shields.io/badge/-wishlist-6B6963?style=flat-square) | Server-grade |
+| [**MOCHAbin**](https://globalscaletechnologies.com/product/mochabin/) | Armada 7040 | 4 GB | 4× GbE + 10GbE SFP+ | ~350 € | ![Tested](https://img.shields.io/badge/-tested-0A5840?style=flat-square) | Cible principale Full |
+| [**MOCHAbin**](https://globalscaletechnologies.com/product/mochabin/) | Armada 7040 | 8 GB | 4× GbE + 10GbE SFP+ | ~450 € | ![Tested](https://img.shields.io/badge/-tested-0A5840?style=flat-square) | Full profile, DPI |
+| [**ESPRESSObin v7**](https://globalscaletechnologies.com/product/espressobin-v7/) | Armada 3720 | 1 GB | 3× GbE (Topaz) | ~50 € | ![Tested](https://img.shields.io/badge/-tested-0A5840?style=flat-square) | Cible Lite entry |
+| [**ESPRESSObin v7**](https://globalscaletechnologies.com/product/espressobin-v7/) | Armada 3720 | 2 GB | 3× GbE (Topaz) | ~70 € | ![Tested](https://img.shields.io/badge/-tested-0A5840?style=flat-square) | Cible Lite, DDR4 |
+| [**ESPRESSObin Ultra**](https://globalscaletechnologies.com/product/espressobin-ultra/) | Armada 3720 | 1-2 GB | 3× GbE + Wi-Fi | ~100 € | ![Tested](https://img.shields.io/badge/-tested-0A5840?style=flat-square) | Lite+ Wi-Fi intégré |
+| [**ClearFog Base**](https://www.solid-run.com/arm-servers-networking-platforms/clearfog-base/) | Armada 388 | 1 GB | 2× GbE | ~150 € | ![Community](https://img.shields.io/badge/-community-104A88?style=flat-square) | Compact, mPCIe |
+| [**ClearFog Pro**](https://www.solid-run.com/arm-servers-networking-platforms/clearfog-pro/) | Armada 388 | 1 GB | 6× GbE + SFP | ~220 € | ![Community](https://img.shields.io/badge/-community-104A88?style=flat-square) | Switch intégré |
+| [**MACCHIATObin**](https://www.solid-run.com/arm-servers-networking-platforms/macchiatobin/) | Armada 8040 | 16 GB | 4× 10GbE | ~800 € | ![Wishlist](https://img.shields.io/badge/-wishlist-6B6963?style=flat-square) | Server-grade |
 
 ### SBC ARM64 divers
 
 | Carte | SoC | RAM | Réseau | Prix | Statut | Notes |
 |-------|-----|-----|--------|------|--------|-------|
-| **Raspberry Pi 400** | BCM2711 | 4 GB | 1× GbE | ~80 € | ![Community](https://img.shields.io/badge/-community-104A88?style=flat-square) | USB-Eth recommandé |
-| **NanoPi R6S** | RK3588S | 8 GB | 2× 2.5GbE | ~140 € | ![Experimental](https://img.shields.io/badge/-experimental-C04E24?style=flat-square) | En test |
-| **Banana Pi BPI-R4** | MT7988A | 4 GB | 4× GbE + 2× 10G SFP | ~110 € | ![Wishlist](https://img.shields.io/badge/-wishlist-6B6963?style=flat-square) | Edge/budget |
-| **Banana Pi BPI-R4 Pro** | MT7988A | 4 GB | 4× 2.5GbE + 2× 10G SFP+ | ~150 € | ![Wishlist](https://img.shields.io/badge/-wishlist-6B6963?style=flat-square) | Candidat medium |
-| **Banana Pi BPI-R4 Pro** | MT7988A | 8 GB | 4× 2.5GbE + 2× 10G SFP+ | ~180 € | ![Wishlist](https://img.shields.io/badge/-wishlist-6B6963?style=flat-square) | MOCHAbin-class |
-| **HoneyComb LX2K** | LX2160A | 64 GB | 4× 10GbE + 2× 25GbE | ~900 € | ![Wishlist](https://img.shields.io/badge/-wishlist-6B6963?style=flat-square) | Server-grade |
-| **NanoPC-T6** | RK3588 | 16 GB | 2× 2.5GbE | ~200 € | ![Wishlist](https://img.shields.io/badge/-wishlist-6B6963?style=flat-square) | Rockchip flagship |
-| **Traverse Ten64** | LS1088A | 8 GB | 8× GbE + 2× 10G SFP+ | ~650 € | ![Wishlist](https://img.shields.io/badge/-wishlist-6B6963?style=flat-square) | Open hardware |
+| [**Raspberry Pi 400**](https://www.raspberrypi.com/products/raspberry-pi-400/) | BCM2711 | 4 GB | 1× GbE | ~80 € | ![Community](https://img.shields.io/badge/-community-104A88?style=flat-square) | USB-Eth recommandé |
+| [**NanoPi R6S**](https://www.friendlyelec.com/index.php?route=product/product&product_id=289) | RK3588S | 8 GB | 2× 2.5GbE | ~140 € | ![Experimental](https://img.shields.io/badge/-experimental-C04E24?style=flat-square) | En test |
+| [**Banana Pi BPI-R4**](https://docs.banana-pi.org/en/BPI-R4/BananaPi_BPI-R4) | MT7988A | 4 GB | 4× GbE + 2× 10G SFP | ~110 € | ![Wishlist](https://img.shields.io/badge/-wishlist-6B6963?style=flat-square) | Edge/budget |
+| [**Banana Pi BPI-R4 Pro**](https://docs.banana-pi.org/en/BPI-R4_Pro/BananaPi_BPI-R4_Pro) | MT7988A | 4 GB | 4× 2.5GbE + 2× 10G SFP+ | ~150 € | ![Wishlist](https://img.shields.io/badge/-wishlist-6B6963?style=flat-square) | Candidat medium |
+| [**Banana Pi BPI-R4 Pro**](https://docs.banana-pi.org/en/BPI-R4_Pro/BananaPi_BPI-R4_Pro) | MT7988A | 8 GB | 4× 2.5GbE + 2× 10G SFP+ | ~180 € | ![Wishlist](https://img.shields.io/badge/-wishlist-6B6963?style=flat-square) | MOCHAbin-class |
+| [**HoneyComb LX2K**](https://www.solid-run.com/arm-servers-networking-platforms/honeycomb-lx2/) | LX2160A | 64 GB | 4× 10GbE + 2× 25GbE | ~900 € | ![Wishlist](https://img.shields.io/badge/-wishlist-6B6963?style=flat-square) | Server-grade |
+| [**NanoPC-T6**](https://www.friendlyelec.com/index.php?route=product/product&product_id=292) | RK3588 | 16 GB | 2× 2.5GbE | ~200 € | ![Wishlist](https://img.shields.io/badge/-wishlist-6B6963?style=flat-square) | Rockchip flagship |
+| [**Traverse Ten64**](https://www.traverse.com.au/products/ten64/) | LS1088A | 8 GB | 8× GbE + 2× 10G SFP+ | ~650 € | ![Wishlist](https://img.shields.io/badge/-wishlist-6B6963?style=flat-square) | Open hardware |
 
 ### x86_64
 
 | Cible | Type | RAM | Réseau | Coût | Statut | Notes |
 |-------|------|-----|--------|------|--------|-------|
-| **VirtualBox** | VM | 2+ GB | Virtio/E1000 | Gratuit | ![Tested](https://img.shields.io/badge/-tested-0A5840?style=flat-square) | `create-vbox-vm.sh` |
-| **QEMU** | VM | 2+ GB | Virtio | Gratuit | ![Tested](https://img.shields.io/badge/-tested-0A5840?style=flat-square) | `run-qemu.sh` |
+| [**VirtualBox**](https://www.virtualbox.org/) | VM | 2+ GB | Virtio/E1000 | Gratuit | ![Tested](https://img.shields.io/badge/-tested-0A5840?style=flat-square) | `create-vbox-vm.sh` |
+| [**QEMU**](https://www.qemu.org/) | VM | 2+ GB | Virtio | Gratuit | ![Tested](https://img.shields.io/badge/-tested-0A5840?style=flat-square) | `run-qemu.sh` |
 | **Bare metal x64** | PC | 4+ GB | Intel/Realtek GbE | Variable | ![Tested](https://img.shields.io/badge/-tested-0A5840?style=flat-square) | Live USB bootable |
-| **Proxmox** | VM | 2+ GB | Virtio | Gratuit | ![Community](https://img.shields.io/badge/-community-104A88?style=flat-square) | Import qcow2 |
+| [**Proxmox**](https://www.proxmox.com/en/proxmox-virtual-environment) | VM | 2+ GB | Virtio | Gratuit | ![Community](https://img.shields.io/badge/-community-104A88?style=flat-square) | Import qcow2 |
 
 ---
 
