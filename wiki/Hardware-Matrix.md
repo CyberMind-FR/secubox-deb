@@ -19,35 +19,42 @@ SecuBox-Deb fonctionne sur du matériel que vous possédez ou achetez directemen
 
 ## Matrice principale
 
+> **Note prix** : Prix indicatifs constatés en 2025-2026, hors frais de port. Les prix varient selon le fournisseur et la disponibilité. Aucun lien d'affiliation.
+
 ### GlobalScale Marvell Armada
 
-| Carte | SoC | RAM | Réseau | Statut | Kernel | Notes |
-|-------|-----|-----|--------|--------|--------|-------|
-| **MOCHAbin** | Armada 7040 | 4-8 GB | 4× GbE + 10GbE SFP+ | ![Tested](https://img.shields.io/badge/-tested-0A5840?style=flat-square) | 6.6 LTS | Cible principale Full profile |
-| **ESPRESSObin v7** | Armada 3720 | 1-2 GB | 3× GbE (Topaz switch) | ![Tested](https://img.shields.io/badge/-tested-0A5840?style=flat-square) | 6.6 LTS | Cible Lite, DDR4 |
-| **ESPRESSObin Ultra** | Armada 3720 | 1-2 GB | 3× GbE + Wi-Fi | ![Tested](https://img.shields.io/badge/-tested-0A5840?style=flat-square) | 6.6 LTS | Lite+ avec Wi-Fi intégré |
-| **ClearFog Base** | Armada 388 | 1 GB | 2× GbE | ![Community](https://img.shields.io/badge/-community-104A88?style=flat-square) | 6.6 LTS | Compact, mPCIe |
-| **ClearFog Pro** | Armada 388 | 1 GB | 6× GbE + SFP | ![Community](https://img.shields.io/badge/-community-104A88?style=flat-square) | 6.6 LTS | Switch intégré |
-| **MACCHIATObin** | Armada 8040 | 16 GB | 4× 10GbE | ![Wishlist](https://img.shields.io/badge/-wishlist-6B6963?style=flat-square) | — | Server-grade, sponsor recherché |
+| Carte | SoC | RAM | Réseau | Prix | Statut | Notes |
+|-------|-----|-----|--------|------|--------|-------|
+| **MOCHAbin** | Armada 7040 | 4 GB | 4× GbE + 10GbE SFP+ | ~350 € | ![Tested](https://img.shields.io/badge/-tested-0A5840?style=flat-square) | Cible principale Full |
+| **MOCHAbin** | Armada 7040 | 8 GB | 4× GbE + 10GbE SFP+ | ~450 € | ![Tested](https://img.shields.io/badge/-tested-0A5840?style=flat-square) | Full profile, DPI |
+| **ESPRESSObin v7** | Armada 3720 | 1 GB | 3× GbE (Topaz) | ~50 € | ![Tested](https://img.shields.io/badge/-tested-0A5840?style=flat-square) | Cible Lite entry |
+| **ESPRESSObin v7** | Armada 3720 | 2 GB | 3× GbE (Topaz) | ~70 € | ![Tested](https://img.shields.io/badge/-tested-0A5840?style=flat-square) | Cible Lite, DDR4 |
+| **ESPRESSObin Ultra** | Armada 3720 | 1-2 GB | 3× GbE + Wi-Fi | ~100 € | ![Tested](https://img.shields.io/badge/-tested-0A5840?style=flat-square) | Lite+ Wi-Fi intégré |
+| **ClearFog Base** | Armada 388 | 1 GB | 2× GbE | ~150 € | ![Community](https://img.shields.io/badge/-community-104A88?style=flat-square) | Compact, mPCIe |
+| **ClearFog Pro** | Armada 388 | 1 GB | 6× GbE + SFP | ~220 € | ![Community](https://img.shields.io/badge/-community-104A88?style=flat-square) | Switch intégré |
+| **MACCHIATObin** | Armada 8040 | 16 GB | 4× 10GbE | ~800 € | ![Wishlist](https://img.shields.io/badge/-wishlist-6B6963?style=flat-square) | Server-grade |
 
 ### SBC ARM64 divers
 
-| Carte | SoC | RAM | Réseau | Statut | Kernel | Notes |
-|-------|-----|-----|--------|--------|--------|-------|
-| **Raspberry Pi 400** | BCM2711 | 4 GB | 1× GbE | ![Community](https://img.shields.io/badge/-community-104A88?style=flat-square) | 6.6 LTS | USB-Ethernet recommandé |
-| **NanoPi R6S** | RK3588S | 8 GB | 2× 2.5GbE | ![Experimental](https://img.shields.io/badge/-experimental-C04E24?style=flat-square) | 6.6 | En test |
-| **Banana Pi BPI-R4** | MT7988A | 4 GB | 4× GbE + 2× 10G SFP | ![Wishlist](https://img.shields.io/badge/-wishlist-6B6963?style=flat-square) | — | Edge/budget, sponsor recherché |
-| **Banana Pi BPI-R4 Pro** | MT7988A | 4-8 GB | 4× 2.5GbE + 2× 10G SFP+ | ![Wishlist](https://img.shields.io/badge/-wishlist-6B6963?style=flat-square) | — | Candidat MOCHAbin-class |
-| **HoneyComb LX2K** | LX2160A | 64 GB | 4× 10GbE + 2× 25GbE | ![Wishlist](https://img.shields.io/badge/-wishlist-6B6963?style=flat-square) | — | Server-grade, sponsor recherché |
+| Carte | SoC | RAM | Réseau | Prix | Statut | Notes |
+|-------|-----|-----|--------|------|--------|-------|
+| **Raspberry Pi 400** | BCM2711 | 4 GB | 1× GbE | ~80 € | ![Community](https://img.shields.io/badge/-community-104A88?style=flat-square) | USB-Eth recommandé |
+| **NanoPi R6S** | RK3588S | 8 GB | 2× 2.5GbE | ~140 € | ![Experimental](https://img.shields.io/badge/-experimental-C04E24?style=flat-square) | En test |
+| **Banana Pi BPI-R4** | MT7988A | 4 GB | 4× GbE + 2× 10G SFP | ~110 € | ![Wishlist](https://img.shields.io/badge/-wishlist-6B6963?style=flat-square) | Edge/budget |
+| **Banana Pi BPI-R4 Pro** | MT7988A | 4 GB | 4× 2.5GbE + 2× 10G SFP+ | ~150 € | ![Wishlist](https://img.shields.io/badge/-wishlist-6B6963?style=flat-square) | Candidat medium |
+| **Banana Pi BPI-R4 Pro** | MT7988A | 8 GB | 4× 2.5GbE + 2× 10G SFP+ | ~180 € | ![Wishlist](https://img.shields.io/badge/-wishlist-6B6963?style=flat-square) | MOCHAbin-class |
+| **HoneyComb LX2K** | LX2160A | 64 GB | 4× 10GbE + 2× 25GbE | ~900 € | ![Wishlist](https://img.shields.io/badge/-wishlist-6B6963?style=flat-square) | Server-grade |
+| **NanoPC-T6** | RK3588 | 16 GB | 2× 2.5GbE | ~200 € | ![Wishlist](https://img.shields.io/badge/-wishlist-6B6963?style=flat-square) | Rockchip flagship |
+| **Traverse Ten64** | LS1088A | 8 GB | 8× GbE + 2× 10G SFP+ | ~650 € | ![Wishlist](https://img.shields.io/badge/-wishlist-6B6963?style=flat-square) | Open hardware |
 
 ### x86_64
 
-| Cible | Type | RAM | Réseau | Statut | Notes |
-|-------|------|-----|--------|--------|-------|
-| **VirtualBox** | VM | 2+ GB | Virtio/E1000 | ![Tested](https://img.shields.io/badge/-tested-0A5840?style=flat-square) | Script `create-vbox-vm.sh` |
-| **QEMU** | VM | 2+ GB | Virtio | ![Tested](https://img.shields.io/badge/-tested-0A5840?style=flat-square) | Script `run-qemu.sh` |
-| **Bare metal x64** | PC | 4+ GB | Intel/Realtek GbE | ![Tested](https://img.shields.io/badge/-tested-0A5840?style=flat-square) | Live USB bootable |
-| **Proxmox** | VM | 2+ GB | Virtio | ![Community](https://img.shields.io/badge/-community-104A88?style=flat-square) | Import qcow2 |
+| Cible | Type | RAM | Réseau | Coût | Statut | Notes |
+|-------|------|-----|--------|------|--------|-------|
+| **VirtualBox** | VM | 2+ GB | Virtio/E1000 | Gratuit | ![Tested](https://img.shields.io/badge/-tested-0A5840?style=flat-square) | `create-vbox-vm.sh` |
+| **QEMU** | VM | 2+ GB | Virtio | Gratuit | ![Tested](https://img.shields.io/badge/-tested-0A5840?style=flat-square) | `run-qemu.sh` |
+| **Bare metal x64** | PC | 4+ GB | Intel/Realtek GbE | Variable | ![Tested](https://img.shields.io/badge/-tested-0A5840?style=flat-square) | Live USB bootable |
+| **Proxmox** | VM | 2+ GB | Virtio | Gratuit | ![Community](https://img.shields.io/badge/-community-104A88?style=flat-square) | Import qcow2 |
 
 ---
 
