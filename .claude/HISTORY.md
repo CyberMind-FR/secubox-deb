@@ -3,6 +3,47 @@
 
 ---
 
+## 2026-05-04
+
+### Session 93 — MOCHAbin Full Image Build
+
+**Goal:** Build MOCHAbin image with slipstream packages (full profile like ESPRESSObin)
+
+**Problem:**
+- Previous build attempts failed with "Erreur: La localisation 5890MiB est en dehors du périphérique"
+- Root cause: `board/mochabin/config.mk` had `IMG_SIZE="4G"` which was insufficient for ~5.5GB rootfs
+
+**Fix Applied:**
+```makefile
+# board/mochabin/config.mk
+# Before:
+IMG_SIZE="4G"
+
+# After:
+IMG_SIZE="8G"
+```
+
+**Build Results:**
+- Image: `output/secubox-mochabin-bookworm.img.gz` (1.2G compressed, 8G uncompressed)
+- SHA256: `f1db869b5e82c2d851fa16d38faad4db91f4e76982da8d013c3cceef36b7164c`
+- Slipstream packages: All SecuBox .deb packages pre-installed
+
+**Known Issues (Non-blocking):**
+- 4 packages failed during slipstream (missing systemd service files):
+  - secubox-mitmproxy
+  - secubox-smtp-relay
+  - secubox-soc-agent
+  - secubox-soc-gateway
+
+**Commits:**
+- de2f365 fix(mochabin): Increase image size to 8G for full install
+
+**Deployment:**
+- Flashed to USB thumb drive (28.8G DataTraveler 3.0)
+- Ready for boot testing on MOCHAbin hardware
+
+---
+
 ## 2026-05-03
 
 ### Session 92 — Tow-Boot eMMC Support & MOCHAbin Documentation
