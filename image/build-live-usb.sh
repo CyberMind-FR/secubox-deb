@@ -1821,6 +1821,17 @@ HUBCONF
   ok "Created hub.conf"
 fi
 
+# Activate .dpkg-new configs (dpkg leaves these when conffiles exist)
+log "Activating .dpkg-new nginx configs..."
+DPKG_NEW_COUNT=0
+for newconf in "${ROOTFS}/etc/nginx/secubox.d/"*.dpkg-new; do
+  [[ -f "$newconf" ]] || continue
+  target="${newconf%.dpkg-new}"
+  mv "$newconf" "$target"
+  ((DPKG_NEW_COUNT++)) || true
+done
+[[ $DPKG_NEW_COUNT -gt 0 ]] && ok "Activated ${DPKG_NEW_COUNT} .dpkg-new configs"
+
 # Test nginx configuration in chroot
 log "Testing nginx configuration..."
 if chroot "${ROOTFS}" nginx -t 2>&1; then
