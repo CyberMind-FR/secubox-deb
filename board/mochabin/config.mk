@@ -60,5 +60,6 @@ SFP_IFACES=eth5 eth6
 DPI_MODE=inline
 SWAP_SIZE=0
 
-# Image size: 4G for 8GB eMMC (MOCHAbin has 8GB eMMC + SATA)
-IMG_SIZE="4G"
+# Image size: 8G for full install with slipstream packages
+# MOCHAbin has 8GB eMMC + SATA, use SATA or larger SD for full install
+IMG_SIZE="8G"
