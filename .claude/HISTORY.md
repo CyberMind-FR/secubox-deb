@@ -170,6 +170,44 @@
 **Commits:**
 - 30b8773 feat(eye-remote): Add auto-pair and paired-devices endpoints
 
+### Session 97 — Eye Remote Routing Fixes & Navbar Emoji Cleanup
+
+**Goal:** Fix Eye Remote metrics not reaching MOCHAbin, fix navbar emoji icons
+
+**Completed:**
+1. **rp_filter Martian Source Fix** — Packets from Pi Zero (10.55.0.2) were being dropped
+   - Root cause: Kernel reverse path filter rejecting packets on USB gadget interface
+   - Fix: Added `/etc/sysctl.d/99-secubox-usb.conf` with `net.ipv4.conf.all.rp_filter = 0`
+   - Also apply per-interface in udev rules: `sysctl -w net.ipv4.conf.%k.rp_filter=0`
+
+2. **Dual Interface Routing Conflict** — Pi Zero had both usb0 and usb1 with same IP
+   - Root cause: Pi Zero gadget created RNDIS (usb0) + CDC-ECM (usb1), both configured
+   - Fix: Added `usb1-disable` config to `install_zerow.sh` to bring down usb1
+
+3. **USB Re-plug Detection** — udev rules weren't triggering on reconnect
+   - Fix: Added `ACTION=="bind"` event to udev rules for re-plug detection
+   - Added `sleep 2` delay for gadget initialization
+
+4. **Network Script Status Command** — Added `secubox-eye-network.sh status`
+   - Shows interface state, rp_filter status, and peer reachability
+
+5. **Navbar Emoji Icons** — Replaced text-based icons with proper emoji
+   - Updated CATEGORY_META in hub API with missing categories
+   - Fixed 7 menu.d JSON files with text icons (catalog, shield, camera, etc.)
+
+**Files Modified:**
+- `packages/secubox-eye-remote/sysctl.d/99-secubox-usb.conf` — rp_filter disable
+- `packages/secubox-eye-remote/udev/90-secubox-eye-remote.rules` — bind event, rp_filter
+- `packages/secubox-eye-remote/scripts/secubox-eye-network.sh` — status command
+- `packages/secubox-eye-remote/debian/install` — Added sysctl.d to package
+- `remote-ui/round/install_zerow.sh` — usb1-disable config
+- `packages/secubox-hub/api/main.py` — CATEGORY_META additions
+- `packages/secubox-*/menu.d/*.json` — 7 files with emoji icon fixes
+
+**Commits:**
+- 01f2bf1 fix(eye-remote): Resolve rp_filter and dual-interface routing issues
+- a47d290 fix(menu): Replace text icons with emoji in navbar
+
 ---
 
 ## 2026-05-04
