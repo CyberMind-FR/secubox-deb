@@ -1,0 +1,32 @@
+[Unit]
+Description=SecuBox Modem API
+After=network.target secubox-core.service ModemManager.service
+Requires=secubox-core.service
+Wants=ModemManager.service
+
+[Service]
+UMask=0000
+Type=simple
+User=secubox
+Group=secubox
+WorkingDirectory=/usr/lib/secubox/modem
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app \
+    --uds /run/secubox/modem.sock \
+    --log-level warning
+Restart=on-failure
+RestartSec=5
+
+# Security
+NoNewPrivileges=true
+RuntimeDirectory=secubox
+RuntimeDirectoryMode=0775
+
+# Allow access to serial ports and modem devices
+ReadWritePaths=/run/secubox /var/lib/secubox /var/cache/secubox /etc/secubox /dev
+
+# Memory limits
+MemoryMax=100M
+MemoryHigh=80M
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,11 @@
+secubox-modem (1.0.0-1) bookworm; urgency=medium
+
+  * Initial release
+  * Auto-detect Quectel LTE/5G modems (EC25, RM500Q, etc.)
+  * Data connection management via ModemManager
+  * SMS send/receive WebUI
+  * WebSocket AT command terminal
+  * Signal strength monitoring with history graphs
+  * Hybrid approach: ModemManager + qmicli
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 05 May 2025 10:00:00 +0200

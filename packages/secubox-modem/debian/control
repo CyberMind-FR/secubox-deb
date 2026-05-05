@@ -1,0 +1,33 @@
+Source: secubox-modem
+Section: net
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
+
+Package: secubox-modem
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-core (>= 1.0),
+         modemmanager,
+         libqmi-utils,
+         libmbim-utils,
+         picocom,
+         python3-serial
+Recommends: usb-modeswitch,
+            usb-modeswitch-data
+Description: SecuBox LTE/5G Modem Management
+ Quectel LTE/5G modem management interface for SecuBox.
+ .
+ Features:
+  - Auto-detect any plugged Quectel modem (EC25, RM500Q, etc.)
+  - Data connection management (APN, connect/disconnect)
+  - SMS send/receive via WebUI
+  - AT command console (interactive WebSocket terminal)
+  - Signal strength monitoring with real-time graphs
+  - Firmware/device info display
+  - Hybrid approach: ModemManager + qmicli
+ .
+ Port Debian bookworm de luci-app-modem (SecuBox OpenWrt / CyberMind.fr).

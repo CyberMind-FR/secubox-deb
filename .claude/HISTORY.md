@@ -5,6 +5,89 @@
 
 ## 2026-05-05
 
+### Session 98 — SecuBox Modem Module
+
+**Goal:** Create comprehensive LTE/5G modem management module
+
+**Completed:**
+1. **Package Structure** — Full package at `packages/secubox-modem/`
+   - `api/main.py` — FastAPI application with background signal collector
+   - `api/routers/` — status, connection, sms, terminal routers
+   - `core/` — modem_detect, mm_client, qmi_client, at_interface, signal_history
+   - `www/modem/` — WebUI with tabs for Status, Signal, SMS, Terminal, Settings
+
+2. **Modem Detection** — Auto-detect Quectel modems
+   - USB scanning via `lsusb`
+   - ModemManager integration via `mmcli`
+   - Known Quectel PIDs: EC25, EC21, EP06, EM12, RM500Q, RM520N, RG500Q
+
+3. **Connection Management** — ModemManager-based
+   - Connect/disconnect with APN configuration
+   - Config persistence in `/var/lib/secubox/modem/`
+   - Known APN database (FR, US, generic)
+
+4. **SMS Functionality** — Full send/receive via mmcli
+   - List messages, send SMS, delete
+   - WebUI compose modal and message list
+
+5. **AT Terminal** — Interactive command console
+   - WebSocket endpoint at `/api/v1/modem/at/console`
+   - REST fallback at `/api/v1/modem/at/command`
+   - Security: blocks dangerous commands (AT+CFUN=0, AT+QPOWD, etc.)
+
+6. **Signal Monitoring** — Real-time with history
+   - Background collector every 30 seconds
+   - Signal history stored in `/var/cache/secubox/modem/`
+   - Chart.js graph in WebUI Signal tab
+
+7. **QMI Client** — Detailed signal queries
+   - `qmicli` wrapper for RSRP, RSRQ, SINR, cell location
+   - RF band information, serving system details
+
+8. **Debian Packaging**
+   - `debian/control` — Dependencies: modemmanager, libqmi-utils, libmbim-utils, picocom
+   - `debian/postinst` — Creates data dirs, adds secubox to dialout group
+   - `systemd/secubox-modem.service` — With memory limits
+
+9. **WebUI Features**
+   - P31 phosphor CRT theme (light mode)
+   - Signal bars visualization
+   - xterm.js AT terminal
+   - Chart.js signal history graph
+   - APN database quick-select
+
+**Files Created:**
+- `packages/secubox-modem/api/main.py` — FastAPI app (~200 lines)
+- `packages/secubox-modem/api/routers/status.py` — Status/info/signal endpoints
+- `packages/secubox-modem/api/routers/connection.py` — Connect/disconnect/config
+- `packages/secubox-modem/api/routers/sms.py` — SMS CRUD
+- `packages/secubox-modem/api/routers/terminal.py` — WebSocket AT console
+- `packages/secubox-modem/core/modem_detect.py` — USB/mmcli detection
+- `packages/secubox-modem/core/mm_client.py` — ModemManager wrapper
+- `packages/secubox-modem/core/qmi_client.py` — qmicli wrapper
+- `packages/secubox-modem/core/at_interface.py` — Serial AT handler
+- `packages/secubox-modem/core/signal_history.py` — Signal cache
+- `packages/secubox-modem/www/modem/index.html` — Dashboard (~700 lines)
+- `packages/secubox-modem/www/modem/js/modem.js` — UI logic (~500 lines)
+- `packages/secubox-modem/debian/*` — Full Debian packaging
+- `packages/secubox-modem/nginx/modem.conf` — WebSocket-enabled proxy
+- `packages/secubox-modem/menu.d/37-modem.json` — Navbar entry
+- `packages/secubox-modem/README.md` — Comprehensive documentation
+
+**Migration Map Updated:**
+- Added secubox-modem to module list
+- Total modules: 125
+
+**Deployed to MOCHAbin (192.168.255.10):**
+- Fixed import paths (`...core` → `core` for absolute imports)
+- nginx config moved to `/etc/nginx/secubox.d/modem.conf`
+- Socket created at `/run/secubox/modem.sock`
+- Menu entry at `/etc/secubox/menus.d/37-modem.json`
+- Health endpoint verified: `/api/v1/modem/health`
+- WebUI accessible at `/modem/`
+
+---
+
 ### Session 95 — Eye Remote USB Gadget & Tow-Boot
 
 **Goal:** Get Eye Remote (Pi Zero W USB gadget) working with MOCHAbin
