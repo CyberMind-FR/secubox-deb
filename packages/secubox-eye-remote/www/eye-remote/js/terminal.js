@@ -454,7 +454,7 @@
      */
     async function fetchDevices() {
         try {
-            const response = await fetch(`${CONFIG.apiBase}/devices`);
+            const response = await fetch(`${CONFIG.apiBase}/paired-devices`);
             if (!response.ok) throw new Error('HTTP ' + response.status);
             const data = await response.json();
             return data.devices || [];
@@ -643,7 +643,12 @@
         devices.forEach(device => {
             const opt = document.createElement('option');
             opt.value = device.device_id;
-            opt.textContent = device.name || device.device_id.substring(0, 12);
+            // Store peer_ip as data attribute for direct connection
+            opt.dataset.peerIp = device.peer_ip || '10.55.0.2';
+            opt.dataset.transport = device.transport || 'usb';
+            const hostname = device.hostname || device.device_id;
+            const ip = device.peer_ip || '';
+            opt.textContent = `${hostname} (${ip})`;
             DOM.inputDeviceId.appendChild(opt);
         });
 
@@ -652,7 +657,9 @@
         devices.forEach(device => {
             const opt = document.createElement('option');
             opt.value = device.device_id;
-            opt.textContent = device.name || device.device_id.substring(0, 12);
+            opt.dataset.peerIp = device.peer_ip || '10.55.0.2';
+            const hostname = device.hostname || device.device_id;
+            opt.textContent = hostname;
             DOM.selectDevice.appendChild(opt);
         });
     }
