@@ -317,6 +317,90 @@ sleep 5
 
 ---
 
+## 2026-05-05
+
+### Session 94 — Socket RuntimeDirectory Fix & Dashboard Stability
+
+**Problem:**
+- Multiple dashboard pages returning JSON parse errors
+- Services "active" but sockets missing in `/run/secubox/`
+- RuntimeDirectory causing socket deletion when services restart
+
+**Root Cause:**
+All SecuBox services shared `RuntimeDirectory=secubox` which caused:
+1. Each service restart recreated `/run/secubox/` with only its own socket
+2. Other service sockets were deleted
+3. Race conditions during bulk restarts
+
+**Fix Applied:**
+
+1. **Created tmpfiles.d config for persistent directory:**
+```bash
+cat > /etc/tmpfiles.d/secubox.conf << 'CONF'
+d /run/secubox 0775 secubox secubox -
+CONF
+```
+
+2. **Disabled RuntimeDirectory in services:**
+```bash
+for svc in auth system users crowdsec wireguard dpi dns vhost cdn qos waf nac netmodes admin hub; do
+  mkdir -p /etc/systemd/system/secubox-$svc.service.d
+  cat > /etc/systemd/system/secubox-$svc.service.d/runtime.conf << 'CONF'
+[Service]
+RuntimeDirectory=
+RuntimeDirectoryPreserve=
+CONF
+done
+systemctl daemon-reload
+```
+
+3. **Fixed nginx users.conf routing:**
+```nginx
+location /api/v1/users/ {
+    rewrite ^/api/v1/users/(.*)$ /$1 break;
+    proxy_pass http://unix:/run/secubox/users.sock;
+    include /etc/nginx/snippets/secubox-proxy.conf;
+}
+```
+
+4. **Installed udev rules for Eye Remote:**
+```bash
+cat > /etc/udev/rules.d/90-secubox-otg.rules << 'RULES'
+SUBSYSTEM=="net", ATTRS{idVendor}=="1d6b", ATTRS{idProduct}=="0104", DRIVERS=="cdc_ether", NAME="secubox-round"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1d6b", ATTRS{idProduct}=="0104", KERNEL=="ttyACM*", SYMLINK+="secubox-console"
+RULES
+```
+
+**Result:**
+- All 14+ sockets persisting across service restarts
+- Dashboard pages working: system, crowdsec, users, wireguard, dns, dpi, waf
+- CrowdSec console enrolled and active
+
+**Sockets Created:**
+```
+/run/secubox/admin.sock
+/run/secubox/auth.sock
+/run/secubox/cdn.sock
+/run/secubox/crowdsec.sock
+/run/secubox/dns.sock
+/run/secubox/dpi.sock
+/run/secubox/nac.sock
+/run/secubox/netmodes.sock
+/run/secubox/qos.sock
+/run/secubox/system.sock
+/run/secubox/users.sock
+/run/secubox/vhost.sock
+/run/secubox/waf.sock
+/run/secubox/wireguard.sock
+```
+
+**USB Configuration:**
+- USB1 (480 Mbps): Quectel EP06-E LTE modem
+- USB2 (5000 Mbps): Available for Eye Remote Pi Zero W
+- Eye Remote detection pending (needs to be plugged into USB3 port)
+
+---
+
 ## 2026-05-03
 
 ### Session 92 — Tow-Boot eMMC Support & MOCHAbin Documentation
