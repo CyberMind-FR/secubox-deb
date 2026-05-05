@@ -137,6 +137,39 @@
 - `packages/secubox-crowdsec/systemd/allow-sudo.conf` — NoNewPrivileges=false override
 - `packages/secubox-crowdsec/sudoers.d/secubox-crowdsec` — cscli sudo permission
 
+### Session 96 — Eye Remote Auto-Pairing & Pi Zero Builder
+
+**Goal:** Add auto-pairing and metrics API to Eye Remote
+
+**Completed:**
+1. **Auto-Pair Endpoint** — Added `/api/v1/eye-remote/auto-pair` POST
+   - Creates pairing record for currently connected device
+   - Gets hostname from Pi Zero via metrics API
+   - Stores devices in `/var/lib/secubox/eye-remote/auto-paired.json`
+
+2. **Paired Devices Endpoint** — Added `/api/v1/eye-remote/paired-devices` GET
+   - Lists all paired Eye Remote devices
+   - Masks tokens for security (shows only first 8 chars)
+
+3. **Pi Zero Metrics API in Builder** — Updated `install_zerow.sh` v1.9.0
+   - Integrated `pizero-metrics-api.py` into SD card builder
+   - Added `pizero-metrics.service` systemd unit
+   - New Pi Zero SD cards now auto-include metrics API
+
+4. **PiZero Metrics Public Endpoint** — Added `/api/v1/eye-remote/pizero/metrics`
+   - Relays metrics from Pi Zero without requiring auth
+   - Dashboard can display CPU, Mem, Temp without complex auth setup
+
+5. **Fixed _eye_state Missing** — MOCHAbin hotfix
+   - Added `_eye_state = {"connected": False, "last_seen": None}` to deployed main.py
+
+**Files Modified:**
+- `packages/secubox-eye-remote/api/main.py` — Added auto-pair, paired-devices, pizero/metrics endpoints
+- `remote-ui/round/install_zerow.sh` — v1.9.0, integrated pizero-metrics-api
+
+**Commits:**
+- 30b8773 feat(eye-remote): Add auto-pair and paired-devices endpoints
+
 ---
 
 ## 2026-05-04
