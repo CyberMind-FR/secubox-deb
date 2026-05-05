@@ -11,13 +11,24 @@
 # Pi Zero USB Gadget - CDC Ethernet (ECM)
 # Vendor: 1d6b (Linux Foundation)
 # Product: 0104 (Multifunction Composite Gadget)
-# Note: Interface auto-named usb0/usb1 by kernel
-ACTION=="add", SUBSYSTEM=="net", ATTRS{idVendor}=="1d6b", ATTRS{idProduct}=="0104", \
-    RUN+="/usr/local/sbin/secubox-eye-network.sh up"
 
-ACTION=="remove", SUBSYSTEM=="net", ENV{ID_VENDOR_ID}=="1d6b", ENV{ID_MODEL_ID}=="0104", \
-    RUN+="/usr/local/sbin/secubox-eye-network.sh down"
+# When USB gadget interface appears, configure it and disable rp_filter
+# to prevent "martian source" packet drops
+ACTION=="add", SUBSYSTEM=="net", KERNEL=="usb*", DRIVERS=="rndis_host|cdc_ether", \
+    RUN+="/bin/sh -c 'sysctl -w net.ipv4.conf.%k.rp_filter=0; /usr/local/sbin/secubox-eye-network.sh up'"
+
+# When USB composite gadget binds (handles re-plug scenarios)
+ACTION=="bind", SUBSYSTEM=="usb", ATTR{idVendor}=="1d6b", ATTR{idProduct}=="0104", \
+    RUN+="/bin/sh -c 'sleep 2 && /usr/local/sbin/secubox-eye-network.sh up &'"
 
 # Alternative: match by MAC prefix (02:fb:00:00 - Pi Zero gadget)
 ACTION=="add", SUBSYSTEM=="net", ATTR{address}=="02:fb:*", \
+    RUN+="/bin/sh -c 'sysctl -w net.ipv4.conf.%k.rp_filter=0 2>/dev/null; /usr/local/sbin/secubox-eye-network.sh up'"
+
+# Handle interface state changes (for re-plug detection)
+ACTION=="change", SUBSYSTEM=="net", ATTR{address}=="02:fb:*", \
     RUN+="/usr/local/sbin/secubox-eye-network.sh up"
+
+# Cleanup on removal
+ACTION=="remove", SUBSYSTEM=="net", ENV{ID_VENDOR_ID}=="1d6b", ENV{ID_MODEL_ID}=="0104", \
+    RUN+="/usr/local/sbin/secubox-eye-network.sh down"

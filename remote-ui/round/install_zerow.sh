@@ -788,10 +788,22 @@ USB0SVC
     ln -sf /etc/systemd/system/usb0-up.service \
         "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/usb0-up.service"
 
+    # CRITICAL: Disable usb1 to prevent routing conflict
+    # Pi Zero exposes both RNDIS (usb0) and CDC-ECM (usb1) with same IP,
+    # causing routing loops. We only need usb0.
+    cat > "$ROOT_MNT/etc/network/interfaces.d/usb1-disable" << 'USB1DIS'
+# Disable usb1 to prevent routing conflict with usb0
+# Both interfaces get same IP causing routing loops
+auto usb1
+iface usb1 inet manual
+    pre-up ip link set usb1 down || true
+USB1DIS
+
     log "OTG Composite configuré:"
     log "  - Network: ECM (usb0 @ 10.55.0.2/30)"
     log "  - Serial: ACM (ttyGS0 @ 115200)"
     log "  - Modes: normal, flash, debug, tty, auth"
+    log "  - usb1 disabled (routing conflict prevention)"
 fi
 
 # ══════════════════════════════════════════════════════════════════════════════
