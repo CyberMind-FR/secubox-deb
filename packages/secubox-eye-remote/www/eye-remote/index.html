@@ -254,15 +254,15 @@
 
         function updateSerialUI(data) {
             document.getElementById('serial-device').textContent = data.device || '--';
-            document.getElementById('serial-baud').textContent = data.baud_rate || '--';
-            
+            document.getElementById('serial-baud').textContent = data.baud || data.baud_rate || '--';
+
             const status = document.getElementById('serial-status');
-            if (data.connected) {
-                status.textContent = 'Connected';
-                status.classList.remove('disconnected');
+            status.classList.remove('disconnected');
+            if (data.connected || data.available) {
+                status.textContent = data.connected ? 'Connected' : 'Available';
             } else {
-                status.textContent = data.device ? 'Available' : 'Not available';
-                status.classList.add(data.device ? '' : 'disconnected');
+                status.textContent = 'Not available';
+                status.classList.add('disconnected');
             }
         }
 
@@ -316,7 +316,7 @@
         }
 
         function openSerial() {
-            window.open('/serial/', '_blank');
+            window.open('/eye-remote/terminal.html', '_blank');
         }
 
         // Init

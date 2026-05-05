@@ -1,7 +1,7 @@
 {
   "id": "eye-remote",
-  "title": "Eye Remote",
-  "icon": "eye",
+  "name": "Eye Remote",
+  "icon": "👁️",
   "path": "/eye-remote/",
   "order": 50,
   "category": "system",
