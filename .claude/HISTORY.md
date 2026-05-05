@@ -185,6 +185,48 @@ nginx -s reload
 **Conclusion:**
 Debian migration successful. Despite heavier individual services, overall system load and memory pressure significantly lower. The structured systemd architecture provides better resource management than OpenWrt's init scripts.
 
+### Session 93e — CrowdSec Firewall Bouncer Setup
+
+**Problem:**
+- CrowdSec agent running but no firewall bouncer installed
+- CAPI blocklist (16k+ IPs) not enforced at firewall level
+
+**Fix:**
+```bash
+# Clear stuck apt locks
+pkill -9 apt dpkg
+rm -f /var/lib/dpkg/lock-frontend
+
+# Install bouncer
+apt-get install -y crowdsec-firewall-bouncer-nftables
+```
+
+**Result:**
+- Bouncer auto-registered with CrowdSec API
+- nftables tables created: `ip crowdsec`, `ip6 crowdsec6`
+- Services enabled on boot
+
+**Verification:**
+```bash
+cscli bouncers list
+# cs-firewall-bouncer-1777957909  127.0.0.1  ✔️  v0.0.34
+
+systemctl is-active crowdsec crowdsec-firewall-bouncer
+# active
+# active
+```
+
+**Protection Active:**
+| Category | Decisions |
+|----------|-----------|
+| http:dos | 9,128 |
+| http:exploit | 3,090 |
+| http:bruteforce | 1,369 |
+| ssh:bruteforce | 1,115 |
+| http:scan | 890 |
+| generic:scan | 657 |
+| ssh:exploit | 353 |
+
 ---
 
 ## 2026-05-03
