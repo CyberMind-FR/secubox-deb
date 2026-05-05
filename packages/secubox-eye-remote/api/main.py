@@ -240,11 +240,9 @@ async def get_pizero_metrics():
 async def auto_pair():
     """Auto-pair with connected Eye Remote device.
 
-    Creates a pairing record for the currently connected device.
+    Updates existing entry if device with same IP exists,
+    otherwise creates new entry. Prevents duplicate pairings.
     """
-    import hashlib
-    import secrets
-
     # Check if device is connected
     interface_up = _check_interface()
     peer_reachable = _check_peer_reachable() if interface_up else False
@@ -253,63 +251,73 @@ async def auto_pair():
         return {"success": False, "error": "No Eye Remote device connected"}
 
     # Try to get device info from Pi Zero
-    device_hostname = "eye-remote"
+    hostname = "eye-remote"
     try:
         import httpx
-        async with httpx.AsyncClient(timeout=5.0) as client:
+        async with httpx.AsyncClient(timeout=3.0) as client:
             resp = await client.get(f"http://{PEER_IP}:8000/api/v1/status")
             if resp.status_code == 200:
                 data = resp.json()
-                device_hostname = data.get("hostname", "eye-remote")
+                hostname = data.get("hostname", "eye-remote")
     except Exception:
         pass
 
-    # Generate device ID and token
-    device_id = f"{device_hostname}-{PEER_IP.replace('.', '-')}"
-    token = secrets.token_hex(32)
-    token_hash = hashlib.sha256(token.encode()).hexdigest()
+    import json
 
-    # Save to paired devices storage
-    storage_path = Path("/var/lib/secubox/eye-remote/devices.json")
+    # Save to paired devices storage (list format for console display)
+    storage_path = Path("/var/lib/secubox/eye-remote/auto-paired.json")
     storage_path.parent.mkdir(parents=True, exist_ok=True)
 
-    devices = {}
+    devices = []
     if storage_path.exists():
         try:
-            import json
             with open(storage_path) as f:
                 devices = json.load(f)
         except Exception:
             pass
 
-    devices[device_id] = {
-        "device_id": device_id,
-        "hostname": device_hostname,
-        "ip_address": PEER_IP,
+    # Check if device with this IP already exists
+    existing_idx = None
+    for i, d in enumerate(devices):
+        if d.get("peer_ip") == PEER_IP:
+            existing_idx = i
+            break
+
+    device_entry = {
+        "device_id": hostname,
+        "hostname": hostname,
+        "peer_ip": PEER_IP,
+        "transport": "usb",
         "paired_at": datetime.now().isoformat(),
         "last_seen": datetime.now().isoformat(),
-        "token_hash": token_hash,
-        "transport": "usb",
     }
 
-    import json
+    if existing_idx is not None:
+        # Update existing - keep original paired_at
+        device_entry["paired_at"] = devices[existing_idx].get("paired_at", device_entry["paired_at"])
+        devices[existing_idx] = device_entry
+        message = f"Device {hostname} updated"
+    else:
+        devices.append(device_entry)
+        message = f"Device {hostname} paired successfully"
+
     with open(storage_path, 'w') as f:
         json.dump(devices, f, indent=2)
 
-    logger.info(f"Auto-paired device: {device_id}")
+    logger.info(f"Auto-paired device: {hostname} @ {PEER_IP}")
 
     return {
         "success": True,
-        "device_id": device_id,
-        "hostname": device_hostname,
-        "message": f"Device {device_id} paired successfully",
+        "device_id": hostname,
+        "hostname": hostname,
+        "message": message,
     }
 
 
 @app.get("/api/v1/eye-remote/paired-devices")
 async def get_paired_devices():
     """List all paired Eye Remote devices."""
-    storage_path = Path("/var/lib/secubox/eye-remote/devices.json")
+    storage_path = Path("/var/lib/secubox/eye-remote/auto-paired.json")
 
     if not storage_path.exists():
         return {"devices": [], "count": 0}
@@ -319,7 +327,12 @@ async def get_paired_devices():
         with open(storage_path) as f:
             devices = json.load(f)
 
-        device_list = list(devices.values())
+        # Handle both list and dict formats
+        if isinstance(devices, list):
+            device_list = devices
+        else:
+            device_list = list(devices.values())
+
         return {"devices": device_list, "count": len(device_list)}
     except Exception as e:
         logger.error(f"Failed to read paired devices: {e}")

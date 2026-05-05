@@ -198,11 +198,11 @@
             </div>
         </div>
 
-        <!-- Serial Terminal -->
+        <!-- Pairing Console -->
         <div class="card">
-            <h3>Serial Output</h3>
-            <div class="console" id="serial-console">
-                <div class="line"><span class="prompt">[waiting]</span> Connect to view serial output...</div>
+            <h3>Pairing Console</h3>
+            <div class="console" id="pairing-console">
+                <div class="line"><span class="prompt">[init]</span> Loading paired devices...</div>
             </div>
         </div>
     </main>
@@ -336,8 +336,13 @@
             try {
                 const result = await api('/auto-pair', 'POST');
                 if (result.success) {
-                    alert('Device paired successfully!\nDevice ID: ' + result.device_id);
-                    loadPairedCount();
+                    // Update console with success message
+                    const console = document.getElementById('pairing-console');
+                    const successLine = '<div class="line"><span class="prompt" style="color:#00dd44">[OK]</span> Paired: ' + (result.hostname || result.device_id) + '</div>';
+                    console.innerHTML = successLine + console.innerHTML;
+
+                    // Refresh displays
+                    await updatePairingConsole();
                     refreshAll();
                 } else {
                     alert('Pairing failed: ' + (result.error || 'Unknown error'));
@@ -348,36 +353,67 @@
         }
 
         async function listPaired() {
-            try {
-                const result = await api('/paired-devices');
-                if (result.devices && result.devices.length > 0) {
-                    const list = result.devices.map(d =>
-                        `• ${d.device_id} (paired: ${new Date(d.paired_at).toLocaleDateString()})`
-                    ).join('\n');
-                    alert('Paired Devices:\n' + list);
-                } else {
-                    alert('No paired devices');
-                }
-            } catch (e) {
-                alert('Error listing devices: ' + e.message);
-            }
+            await updatePairingConsole();
         }
 
         async function loadPairedCount() {
             try {
                 const result = await api('/paired-devices');
-                document.getElementById('paired-count').textContent =
-                    (result.devices ? result.devices.length : 0);
+                const count = result.devices ? result.devices.length : 0;
+                document.getElementById('paired-count').textContent = count;
+                return result.devices || [];
             } catch (e) {
                 document.getElementById('paired-count').textContent = '0';
+                return [];
             }
+        }
+
+        async function updatePairingConsole() {
+            const console = document.getElementById('pairing-console');
+            const devices = await loadPairedCount();
+
+            let html = '';
+            const now = new Date();
+
+            if (devices.length === 0) {
+                html = '<div class="line"><span class="prompt">[info]</span> No paired devices. Click "Auto Pair" to pair connected device.</div>';
+            } else {
+                html += '<div class="line"><span class="prompt">[devices]</span> ' + devices.length + ' paired device(s)</div>';
+                html += '<div class="line">─────────────────────────────────────</div>';
+
+                devices.forEach((d, i) => {
+                    const pairedDate = new Date(d.paired_at);
+                    const hostname = d.hostname || d.device_id.split('-')[0] || 'unknown';
+                    const ip = d.peer_ip || d.ip_address || '10.55.0.2';
+                    const transport = d.transport || 'usb';
+
+                    // Calculate time since pairing
+                    const diffMs = now - pairedDate;
+                    const diffMins = Math.floor(diffMs / 60000);
+                    const diffHours = Math.floor(diffMins / 60);
+                    const diffDays = Math.floor(diffHours / 24);
+                    let timeAgo = '';
+                    if (diffDays > 0) timeAgo = diffDays + 'd ago';
+                    else if (diffHours > 0) timeAgo = diffHours + 'h ago';
+                    else if (diffMins > 0) timeAgo = diffMins + 'm ago';
+                    else timeAgo = 'just now';
+
+                    html += '<div class="line"><span class="prompt">[' + (i + 1) + ']</span> <strong>' + hostname + '</strong></div>';
+                    html += '<div class="line">    IP: ' + ip + ' | Transport: ' + transport + '</div>';
+                    html += '<div class="line">    Paired: ' + pairedDate.toLocaleString() + ' (' + timeAgo + ')</div>';
+                    html += '<div class="line"></div>';
+                });
+            }
+
+            console.innerHTML = html;
         }
 
         // Init
         document.addEventListener('DOMContentLoaded', () => {
             refreshAll();
-            loadPairedCount();
+            updatePairingConsole();
             setInterval(refreshAll, 5000);
+            setInterval(updatePairingConsole, 10000);
         });
     </script>
     <script src="/shared/sidebar.js"></script>
