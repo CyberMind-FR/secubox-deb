@@ -1,44 +1,330 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>SecuBox Eye Remote</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - Eye Remote Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
-        body { font-family: 'JetBrains Mono', monospace; background: #0a0a0f; color: #e8e6d9; margin: 20px; }
-        .status { padding: 20px; border: 1px solid #c9a84c; border-radius: 8px; margin: 20px 0; }
-        .connected { border-color: #00ff41; }
-        .disconnected { border-color: #e63946; }
-        h1 { color: #c9a84c; }
-        .metric { display: inline-block; margin: 10px; padding: 10px; background: #1a1a1f; border-radius: 4px; }
+        :root {
+            --p31-peak: #00dd44;
+            --p31-hot: #00ff55;
+            --p31-mid: #009933;
+            --p31-dim: #006622;
+            --tube-light: #e8f5e9;
+            --tube-pale: #c8e6c9;
+            --tube-soft: #a5d6a7;
+            --bg-dark: var(--tube-light);
+            --bg-card: var(--tube-pale);
+            --border: var(--tube-soft);
+            --text: #1a1a2e;
+            --primary: var(--p31-peak);
+            --red: #ff4466;
+            --yellow: #ffb347;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Courier Prime', monospace; background: var(--tube-light); color: var(--text); display: flex; min-height: 100vh; }
+        .main { flex: 1; margin-left: 220px; padding: 1rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; padding: 1rem; background: var(--bg-card); border-radius: 8px; margin-bottom: 1rem; }
+        .header h1 { font-size: 1.5rem; color: var(--primary); }
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.875rem; }
+        .btn.primary { background: rgba(0,221,68,0.15); border-color: var(--primary); color: var(--primary); }
+        .btn:hover { opacity: 0.8; }
+
+        /* Connection Diagram */
+        .connection-diagram { display: flex; align-items: center; justify-content: center; gap: 1rem; padding: 2rem; background: var(--bg-card); border-radius: 8px; margin-bottom: 1rem; }
+        .device-box { padding: 1.5rem 2rem; border: 2px solid var(--border); border-radius: 12px; background: white; text-align: center; min-width: 160px; transition: all 0.3s; }
+        .device-box.active { border-color: var(--primary); box-shadow: 0 0 20px rgba(0,221,68,0.3); }
+        .device-box .icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
+        .device-box .name { font-weight: 700; font-size: 1.1rem; }
+        .device-box .ip { font-size: 0.85rem; color: var(--p31-dim); margin-top: 0.25rem; }
+        .connection-line { width: 80px; height: 4px; background: var(--border); border-radius: 2px; position: relative; }
+        .connection-line.active { background: var(--primary); animation: pulse 1.5s infinite; }
+        .connection-line::before { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 12px; height: 12px; background: inherit; border-radius: 50%; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+        /* Status Cards Grid */
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
+        .card { background: var(--bg-card); border-radius: 8px; padding: 1.25rem; }
+        .card h3 { font-size: 0.9rem; color: var(--p31-dim); margin-bottom: 1rem; text-transform: uppercase; letter-spacing: 0.05em; }
+        .stat { display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
+        .stat:last-child { border-bottom: none; }
+        .stat-label { color: var(--text); }
+        .stat-value { font-weight: 700; color: var(--primary); }
+        .stat-value.disconnected { color: var(--red); }
+        .stat-value.warning { color: var(--yellow); }
+
+        /* Metrics Gauges */
+        .gauges { display: flex; gap: 1.5rem; flex-wrap: wrap; justify-content: center; padding: 1rem 0; }
+        .gauge { text-align: center; }
+        .gauge-circle { width: 80px; height: 80px; border-radius: 50%; border: 4px solid var(--border); position: relative; display: flex; align-items: center; justify-content: center; margin: 0 auto 0.5rem; }
+        .gauge-circle.good { border-color: var(--primary); }
+        .gauge-circle.warn { border-color: var(--yellow); }
+        .gauge-circle.bad { border-color: var(--red); }
+        .gauge-value { font-size: 1.25rem; font-weight: 700; }
+        .gauge-label { font-size: 0.75rem; color: var(--p31-dim); }
+
+        /* Serial Console */
+        .console { background: #1a1a2e; color: #00ff55; border-radius: 8px; padding: 1rem; font-family: 'Courier Prime', monospace; font-size: 0.85rem; height: 200px; overflow-y: auto; }
+        .console .line { padding: 0.15rem 0; }
+        .console .prompt { color: var(--yellow); }
+
+        /* Actions */
+        .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 1rem; }
     </style>
 </head>
 <body>
-    <h1>● SecuBox Eye Remote</h1>
-    <div id="status" class="status disconnected">
-        <h2>Status: <span id="conn-status">Checking...</span></h2>
-        <p>Interface: <span id="interface">-</span></p>
-        <p>Peer IP: <span id="peer-ip">-</span></p>
-        <p>Mode: <span id="gadget-mode">-</span></p>
-    </div>
-    <div id="metrics">
-        <div class="metric">CPU: <span id="cpu">-</span>%</div>
-        <div class="metric">MEM: <span id="mem">-</span>%</div>
-        <div class="metric">TEMP: <span id="temp">-</span>°C</div>
-    </div>
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="main">
+        <div class="header">
+            <h1>🔌 Eye Remote Dashboard</h1>
+            <div>
+                <button class="btn" onclick="refreshAll()">↻ Refresh</button>
+                <button class="btn primary" id="probe-btn" onclick="probeConnection()">Probe Connection</button>
+            </div>
+        </div>
+
+        <!-- Connection Diagram -->
+        <div class="connection-diagram">
+            <div class="device-box active" id="host-box">
+                <div class="icon">🖥️</div>
+                <div class="name">MOCHAbin</div>
+                <div class="ip" id="host-ip">10.55.0.1</div>
+            </div>
+            <div class="connection-line" id="conn-line"></div>
+            <div class="device-box" id="gadget-box">
+                <div class="icon">📟</div>
+                <div class="name">Pi Zero W</div>
+                <div class="ip" id="peer-ip">--</div>
+            </div>
+        </div>
+
+        <div class="grid">
+            <!-- Connection Status -->
+            <div class="card">
+                <h3>Connection Status</h3>
+                <div class="stat">
+                    <span class="stat-label">Status</span>
+                    <span class="stat-value" id="status-text">Checking...</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Interface</span>
+                    <span class="stat-value" id="interface-name">--</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Gadget Mode</span>
+                    <span class="stat-value" id="gadget-mode">--</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Last Seen</span>
+                    <span class="stat-value" id="last-seen">--</span>
+                </div>
+            </div>
+
+            <!-- Serial Console Status -->
+            <div class="card">
+                <h3>Serial Console</h3>
+                <div class="stat">
+                    <span class="stat-label">Device</span>
+                    <span class="stat-value" id="serial-device">--</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Baud Rate</span>
+                    <span class="stat-value" id="serial-baud">--</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Status</span>
+                    <span class="stat-value" id="serial-status">--</span>
+                </div>
+                <div class="actions">
+                    <button class="btn" onclick="openSerial()">Open Console</button>
+                </div>
+            </div>
+
+            <!-- Pi Zero Metrics -->
+            <div class="card">
+                <h3>Pi Zero Metrics</h3>
+                <div class="gauges" id="metrics-gauges">
+                    <div class="gauge">
+                        <div class="gauge-circle" id="cpu-gauge">
+                            <span class="gauge-value" id="cpu-value">--</span>
+                        </div>
+                        <div class="gauge-label">CPU</div>
+                    </div>
+                    <div class="gauge">
+                        <div class="gauge-circle" id="mem-gauge">
+                            <span class="gauge-value" id="mem-value">--</span>
+                        </div>
+                        <div class="gauge-label">RAM</div>
+                    </div>
+                    <div class="gauge">
+                        <div class="gauge-circle" id="temp-gauge">
+                            <span class="gauge-value" id="temp-value">--</span>
+                        </div>
+                        <div class="gauge-label">Temp</div>
+                    </div>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Uptime</span>
+                    <span class="stat-value" id="pizero-uptime">--</span>
+                </div>
+            </div>
+
+            <!-- Gadget Modes -->
+            <div class="card">
+                <h3>Gadget Mode Control</h3>
+                <div class="actions">
+                    <button class="btn" onclick="setMode('normal')">Normal</button>
+                    <button class="btn" onclick="setMode('flash')">Flash Mode</button>
+                    <button class="btn" onclick="setMode('debug')">Debug</button>
+                    <button class="btn" onclick="setMode('tty')">TTY Only</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Serial Terminal -->
+        <div class="card">
+            <h3>Serial Output</h3>
+            <div class="console" id="serial-console">
+                <div class="line"><span class="prompt">[waiting]</span> Connect to view serial output...</div>
+            </div>
+        </div>
+    </main>
+
     <script>
-        async function refresh() {
-            try {
-                const r = await fetch('/api/v1/eye-remote/status');
-                const d = await r.json();
-                document.getElementById('conn-status').textContent = d.connected ? 'Connected' : 'Disconnected';
-                document.getElementById('status').className = 'status ' + (d.connected ? 'connected' : 'disconnected');
-                document.getElementById('interface').textContent = d.interface || '-';
-                document.getElementById('peer-ip').textContent = d.peer_ip || '-';
-                document.getElementById('gadget-mode').textContent = d.gadget_mode || '-';
-            } catch(e) { console.error(e); }
+        const API = '/api/v1/eye-remote';
+
+        async function api(path, method = 'GET', data = null) {
+            const opts = { method, headers: { 'Content-Type': 'application/json' } };
+            if (data) opts.body = JSON.stringify(data);
+            const r = await fetch(API + path, opts);
+            return r.json();
         }
-        setInterval(refresh, 5000);
-        refresh();
+
+        async function refreshAll() {
+            try {
+                // Get status
+                const status = await api('/status');
+                updateConnectionUI(status);
+
+                // Get serial status
+                const serial = await api('/serial/status');
+                updateSerialUI(serial);
+
+                // Get metrics if connected
+                if (status.connected) {
+                    try {
+                        const metrics = await api('/metrics');
+                        updateMetricsUI(metrics);
+                    } catch (e) {
+                        console.log('Metrics not available');
+                    }
+                }
+            } catch (err) {
+                console.error('Refresh error:', err);
+            }
+        }
+
+        function updateConnectionUI(data) {
+            const connLine = document.getElementById('conn-line');
+            const gadgetBox = document.getElementById('gadget-box');
+            const statusText = document.getElementById('status-text');
+
+            if (data.connected) {
+                connLine.classList.add('active');
+                gadgetBox.classList.add('active');
+                statusText.textContent = 'Connected';
+                statusText.classList.remove('disconnected');
+            } else {
+                connLine.classList.remove('active');
+                gadgetBox.classList.remove('active');
+                statusText.textContent = 'Disconnected';
+                statusText.classList.add('disconnected');
+            }
+
+            document.getElementById('host-ip').textContent = data.host_ip || '10.55.0.1';
+            document.getElementById('peer-ip').textContent = data.peer_ip || '--';
+            document.getElementById('interface-name').textContent = data.interface || '--';
+            document.getElementById('gadget-mode').textContent = data.gadget_mode || '--';
+            document.getElementById('last-seen').textContent = data.last_seen ? new Date(data.last_seen).toLocaleTimeString() : '--';
+        }
+
+        function updateSerialUI(data) {
+            document.getElementById('serial-device').textContent = data.device || '--';
+            document.getElementById('serial-baud').textContent = data.baud_rate || '--';
+            
+            const status = document.getElementById('serial-status');
+            if (data.connected) {
+                status.textContent = 'Connected';
+                status.classList.remove('disconnected');
+            } else {
+                status.textContent = data.device ? 'Available' : 'Not available';
+                status.classList.add(data.device ? '' : 'disconnected');
+            }
+        }
+
+        function updateMetricsUI(data) {
+            if (!data || data.error) return;
+
+            const cpu = data.cpu_percent || 0;
+            const mem = data.mem_percent || 0;
+            const temp = data.cpu_temp || 0;
+
+            document.getElementById('cpu-value').textContent = cpu.toFixed(0) + '%';
+            document.getElementById('mem-value').textContent = mem.toFixed(0) + '%';
+            document.getElementById('temp-value').textContent = temp.toFixed(0) + '°';
+
+            setGaugeClass('cpu-gauge', cpu);
+            setGaugeClass('mem-gauge', mem);
+            setGaugeClass('temp-gauge', temp > 70 ? 100 : temp > 50 ? 50 : 0);
+
+            if (data.uptime_seconds) {
+                const h = Math.floor(data.uptime_seconds / 3600);
+                const m = Math.floor((data.uptime_seconds % 3600) / 60);
+                document.getElementById('pizero-uptime').textContent = h + 'h ' + m + 'm';
+            }
+        }
+
+        function setGaugeClass(id, value) {
+            const el = document.getElementById(id);
+            el.classList.remove('good', 'warn', 'bad');
+            if (value < 50) el.classList.add('good');
+            else if (value < 80) el.classList.add('warn');
+            else el.classList.add('bad');
+        }
+
+        async function probeConnection() {
+            const btn = document.getElementById('probe-btn');
+            btn.disabled = true;
+            btn.textContent = 'Probing...';
+            await refreshAll();
+            btn.disabled = false;
+            btn.textContent = 'Probe Connection';
+        }
+
+        async function setMode(mode) {
+            try {
+                await api('/mode', 'POST', { mode });
+                alert('Mode changed to: ' + mode);
+                refreshAll();
+            } catch (e) {
+                alert('Failed to change mode: ' + e.message);
+            }
+        }
+
+        function openSerial() {
+            window.open('/serial/', '_blank');
+        }
+
+        // Init
+        document.addEventListener('DOMContentLoaded', () => {
+            refreshAll();
+            setInterval(refreshAll, 5000);
+        });
     </script>
+    <script src="/shared/sidebar.js"></script>
 </body>
 </html>
