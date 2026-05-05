@@ -1,0 +1,49 @@
+# SecuBox Modem Configuration
+# /etc/secubox/modem.toml
+
+[modem]
+# Enable modem management
+enabled = true
+
+# Signal history refresh interval (seconds)
+refresh_interval = 30
+
+# Hours of signal history to keep
+signal_history_hours = 1
+
+[connection]
+# Auto-connect on boot
+auto_connect = false
+
+# APN (Access Point Name)
+apn = ""
+
+# IP type: ipv4, ipv6, or ipv4v6
+ip_type = "ipv4"
+
+# Authentication: none, pap, chap
+auth = "none"
+
+# Username (if required by carrier)
+user = ""
+
+# NOTE: Password and SIM PIN are stored separately in:
+#   /etc/secubox/secrets/modem-password
+#   /etc/secubox/secrets/modem-pin
+
+[sms]
+# Enable SMS functionality
+enabled = true
+
+# Maximum messages to store
+max_stored = 100
+
+[terminal]
+# Enable AT command terminal
+enabled = true
+
+# Default baudrate for serial connection
+baudrate = 115200
+
+# AT port (auto-detected if empty)
+# port = "/dev/ttyUSB2"

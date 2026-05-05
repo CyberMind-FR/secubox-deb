@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - Modem Management</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5/lib/xterm.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/xterm@5/css/xterm.css" rel="stylesheet">
+    <style>
+        :root {
+            /* P31 Phosphor spectrum */
+            --p31-peak: #00dd44;
+            --p31-hot: #00ff55;
+            --p31-mid: #009933;
+            --p31-dim: #006622;
+            --p31-ghost: #003311;
+            --p31-decay: #ffb347;
+            --p31-decay-dim: #cc7722;
+            /* Tube glass */
+            --tube-light: #e8f5e9;
+            --tube-pale: #c8e6c9;
+            --tube-soft: #a5d6a7;
+            --tube-dark: #1a3320;
+            /* Module accent - cellular blue */
+            --modem-accent: #2196f3;
+            --modem-dim: #1976d2;
+            /* Signal colors */
+            --signal-excellent: #4caf50;
+            --signal-good: #8bc34a;
+            --signal-fair: #ffeb3b;
+            --signal-poor: #ff9800;
+            --signal-bad: #f44336;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Courier Prime', 'Courier New', monospace;
+            background: var(--tube-light);
+            background-image: radial-gradient(ellipse at 50% 40%, rgba(33,150,243,0.03) 0%, transparent 70%);
+            color: var(--tube-dark);
+            display: flex;
+            min-height: 100vh;
+        }
+        .sidebar { width: 220px; position: fixed; height: 100vh; }
+        .main { flex: 1; margin-left: 220px; }
+        .header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; border-bottom: 1px solid var(--tube-soft); background: var(--tube-pale); }
+        .header-title { display: flex; align-items: center; gap: 1rem; }
+        .header-title h1 { font-size: 1.5rem; color: var(--modem-accent); text-shadow: 0 0 8px rgba(33,150,243,0.3); }
+        .badge { padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.75rem; letter-spacing: 0.1em; text-transform: uppercase; border: 1px solid; }
+        .badge.connected { background: rgba(76,175,80,0.1); border-color: var(--signal-excellent); color: var(--signal-excellent); }
+        .badge.disconnected { background: rgba(244,67,54,0.1); border-color: var(--signal-bad); color: var(--signal-bad); }
+        .badge.searching { background: rgba(255,235,59,0.1); border-color: var(--signal-fair); color: #f9a825; }
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--tube-soft); background: var(--tube-pale); color: var(--p31-mid); cursor: pointer; display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; font-family: inherit; letter-spacing: 0.08em; text-transform: uppercase; transition: all 0.2s; }
+        .btn:hover { border-color: var(--p31-dim); color: var(--p31-peak); }
+        .btn.primary { border-color: var(--modem-accent); color: var(--modem-accent); background: rgba(33,150,243,0.1); }
+        .btn.primary:hover { background: rgba(33,150,243,0.2); }
+        .btn.danger { border-color: var(--signal-bad); color: var(--signal-bad); background: rgba(244,67,54,0.1); }
+        .btn.success { border-color: var(--signal-excellent); color: var(--signal-excellent); background: rgba(76,175,80,0.1); }
+        .tabs { display: flex; border-bottom: 1px solid var(--p31-ghost); background: var(--tube-pale); padding: 0 1rem; }
+        .tab { padding: 0.75rem 1.25rem; cursor: pointer; color: var(--p31-dim); border-bottom: 2px solid transparent; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.8rem; }
+        .tab:hover { color: var(--p31-mid); }
+        .tab.active { color: var(--modem-accent); border-bottom-color: var(--modem-accent); }
+        .tab-content { display: none; padding: 1.5rem; }
+        .tab-content.active { display: block; }
+        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card { background: var(--tube-pale); border: 1px solid var(--tube-soft); border-radius: 8px; padding: 1.25rem; text-align: center; }
+        .stat-card .value { font-size: 2rem; font-weight: bold; margin-bottom: 0.25rem; text-shadow: 0 0 10px currentColor; }
+        .stat-card .label { font-size: 0.7rem; color: var(--p31-dim); text-transform: uppercase; letter-spacing: 0.15em; }
+        .stat-card.blue .value { color: var(--modem-accent); }
+        .stat-card.green .value { color: var(--signal-excellent); }
+        .stat-card.yellow .value { color: var(--signal-fair); }
+        .stat-card.red .value { color: var(--signal-bad); }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+        .card { background: var(--tube-pale); border: 1px solid var(--tube-soft); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .card-header h2 { font-size: 0.85rem; color: var(--p31-decay); text-shadow: 0 0 3px var(--p31-decay); letter-spacing: 0.1em; text-transform: uppercase; }
+        .table { width: 100%; border-collapse: collapse; }
+        .table th { text-align: left; padding: 0.75rem; color: var(--p31-decay); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.15em; border-bottom: 1px solid var(--p31-ghost); }
+        .table td { padding: 0.75rem; border-bottom: 1px solid var(--p31-ghost); font-size: 0.9rem; color: var(--p31-mid); }
+        .input-group { display: flex; gap: 0.5rem; margin-top: 1rem; }
+        .input-group input, .input-group select { flex: 1; padding: 0.5rem; border: 1px solid var(--tube-soft); background: var(--tube-light); color: var(--p31-mid); border-radius: 6px; font-family: inherit; }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--p31-dim); }
+        .form-group input, .form-group select { width: 100%; padding: 0.5rem; border: 1px solid var(--tube-soft); background: var(--tube-light); color: var(--p31-mid); border-radius: 6px; font-family: inherit; }
+        .signal-bar { display: flex; gap: 3px; align-items: flex-end; height: 30px; }
+        .signal-bar .bar { width: 8px; background: var(--tube-soft); border-radius: 2px; transition: background 0.3s; }
+        .signal-bar .bar.active { background: var(--signal-excellent); }
+        .signal-bar .bar.fair { background: var(--signal-fair); }
+        .signal-bar .bar.poor { background: var(--signal-poor); }
+        .signal-bar .bar:nth-child(1) { height: 20%; }
+        .signal-bar .bar:nth-child(2) { height: 40%; }
+        .signal-bar .bar:nth-child(3) { height: 60%; }
+        .signal-bar .bar:nth-child(4) { height: 80%; }
+        .signal-bar .bar:nth-child(5) { height: 100%; }
+        .chart-container { height: 250px; background: rgba(0,0,0,0.03); border-radius: 8px; padding: 1rem; }
+        .sms-list { max-height: 400px; overflow-y: auto; }
+        .sms-item { padding: 0.75rem; border-bottom: 1px solid var(--p31-ghost); cursor: pointer; }
+        .sms-item:hover { background: rgba(33,150,243,0.05); }
+        .sms-item .from { font-weight: bold; color: var(--modem-accent); }
+        .sms-item .preview { color: var(--p31-dim); font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .sms-item .time { font-size: 0.75rem; color: var(--p31-ghost); }
+        .terminal-container { height: 400px; background: #1e1e1e; border-radius: 8px; overflow: hidden; }
+        .terminal-container .xterm { height: 100%; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center; }
+        .modal.show { display: flex; }
+        .modal-content { background: var(--tube-pale); border: 1px solid var(--p31-dim); border-radius: 12px; padding: 1.5rem; width: 90%; max-width: 500px; box-shadow: 0 0 30px rgba(33,150,243,0.1); }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .modal-header h2 { color: var(--p31-decay); }
+        .modal-close { background: none; border: none; color: var(--p31-dim); font-size: 1.5rem; cursor: pointer; }
+        @media (max-width: 1200px) { .stats-row { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } .sidebar { display: none; } .main { margin-left: 0; } }
+    </style>
+</head>
+<body class="crt-light">
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+
+    <main class="main">
+        <header class="header">
+            <div class="header-title">
+                <h1>Modem Management</h1>
+                <span class="badge disconnected" id="status-badge">Detecting...</span>
+            </div>
+            <div class="header-actions">
+                <button class="btn" onclick="refreshAll()">Refresh</button>
+                <button class="btn primary" id="connect-btn" onclick="toggleConnection()">Connect</button>
+            </div>
+        </header>
+
+        <div class="tabs">
+            <div class="tab active" data-tab="status">Status</div>
+            <div class="tab" data-tab="signal">Signal</div>
+            <div class="tab" data-tab="sms">SMS</div>
+            <div class="tab" data-tab="terminal">Terminal</div>
+            <div class="tab" data-tab="settings">Settings</div>
+        </div>
+
+        <div class="content">
+            <!-- Status Tab -->
+            <div id="tab-status" class="tab-content active">
+                <div class="stats-row">
+                    <div class="stat-card blue">
+                        <div class="value" id="stat-operator">-</div>
+                        <div class="label">Operator</div>
+                    </div>
+                    <div class="stat-card green">
+                        <div class="value" id="stat-tech">-</div>
+                        <div class="label">Technology</div>
+                    </div>
+                    <div class="stat-card yellow">
+                        <div class="value" id="stat-signal">-</div>
+                        <div class="label">Signal</div>
+                    </div>
+                    <div class="stat-card blue">
+                        <div class="value" id="stat-ip">-</div>
+                        <div class="label">IP Address</div>
+                    </div>
+                </div>
+
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="card-header"><h2>Modem Info</h2></div>
+                        <table class="table">
+                            <tr><td>Model</td><td id="info-model">-</td></tr>
+                            <tr><td>Manufacturer</td><td id="info-mfr">-</td></tr>
+                            <tr><td>IMEI</td><td id="info-imei">-</td></tr>
+                            <tr><td>Firmware</td><td id="info-fw">-</td></tr>
+                            <tr><td>State</td><td id="info-state">-</td></tr>
+                        </table>
+                    </div>
+                    <div class="card">
+                        <div class="card-header"><h2>Signal Strength</h2></div>
+                        <div style="display: flex; align-items: center; gap: 2rem; margin-bottom: 1rem;">
+                            <div class="signal-bar" id="signal-bars">
+                                <div class="bar"></div>
+                                <div class="bar"></div>
+                                <div class="bar"></div>
+                                <div class="bar"></div>
+                                <div class="bar"></div>
+                            </div>
+                            <div style="font-size: 2rem; font-weight: bold; color: var(--modem-accent);" id="signal-percent">-</div>
+                        </div>
+                        <table class="table">
+                            <tr><td>RSSI</td><td id="sig-rssi">- dBm</td></tr>
+                            <tr><td>RSRP</td><td id="sig-rsrp">- dBm</td></tr>
+                            <tr><td>RSRQ</td><td id="sig-rsrq">- dB</td></tr>
+                            <tr><td>SINR</td><td id="sig-sinr">- dB</td></tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Signal Tab -->
+            <div id="tab-signal" class="tab-content">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Signal History (Last Hour)</h2>
+                        <select id="signal-metric" onchange="updateSignalChart()">
+                            <option value="rsrp">RSRP</option>
+                            <option value="rssi">RSSI</option>
+                            <option value="sinr">SINR</option>
+                            <option value="quality_percent">Quality %</option>
+                        </select>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="signal-chart"></canvas>
+                    </div>
+                </div>
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="card-header"><h2>Statistics (1h)</h2></div>
+                        <table class="table" id="signal-stats">
+                            <tr><td>Samples</td><td id="stats-count">-</td></tr>
+                            <tr><td>RSRP Avg</td><td id="stats-rsrp-avg">- dBm</td></tr>
+                            <tr><td>RSRP Min/Max</td><td id="stats-rsrp-range">-</td></tr>
+                            <tr><td>SINR Avg</td><td id="stats-sinr-avg">- dB</td></tr>
+                        </table>
+                    </div>
+                    <div class="card">
+                        <div class="card-header"><h2>Network Info</h2></div>
+                        <table class="table" id="network-info">
+                            <tr><td>Cell ID</td><td id="net-cell">-</td></tr>
+                            <tr><td>TAC</td><td id="net-tac">-</td></tr>
+                            <tr><td>Band</td><td id="net-band">-</td></tr>
+                            <tr><td>EARFCN</td><td id="net-earfcn">-</td></tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SMS Tab -->
+            <div id="tab-sms" class="tab-content">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Messages</h2>
+                        <div>
+                            <button class="btn" onclick="loadSMS()">Refresh</button>
+                            <button class="btn primary" onclick="showComposeModal()">Compose</button>
+                        </div>
+                    </div>
+                    <div class="sms-list" id="sms-list">
+                        <p style="color: var(--p31-dim); text-align: center; padding: 2rem;">Loading messages...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Terminal Tab -->
+            <div id="tab-terminal" class="tab-content">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>AT Command Console</h2>
+                        <div>
+                            <button class="btn" onclick="terminalReconnect()">Reconnect</button>
+                            <button class="btn" onclick="terminalClear()">Clear</button>
+                        </div>
+                    </div>
+                    <div class="terminal-container" id="terminal"></div>
+                    <div class="input-group">
+                        <input type="text" id="at-input" placeholder="Enter AT command..." onkeypress="if(event.key==='Enter')sendATCommand()">
+                        <button class="btn primary" onclick="sendATCommand()">Send</button>
+                    </div>
+                    <p style="margin-top: 0.5rem; font-size: 0.75rem; color: var(--p31-dim);">
+                        Common: AT, ATI, AT+CSQ, AT+COPS?, AT+CREG?, AT+QCSQ
+                    </p>
+                </div>
+            </div>
+
+            <!-- Settings Tab -->
+            <div id="tab-settings" class="tab-content">
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="card-header"><h2>Connection Settings</h2></div>
+                        <div class="form-group">
+                            <label>APN</label>
+                            <input type="text" id="cfg-apn" placeholder="e.g., internet, orange.m2m.spec">
+                        </div>
+                        <div class="form-group">
+                            <label>Username (optional)</label>
+                            <input type="text" id="cfg-user" placeholder="">
+                        </div>
+                        <div class="form-group">
+                            <label>Password (optional)</label>
+                            <input type="password" id="cfg-pass" placeholder="">
+                        </div>
+                        <div class="form-group">
+                            <label>IP Type</label>
+                            <select id="cfg-iptype">
+                                <option value="ipv4">IPv4</option>
+                                <option value="ipv6">IPv6</option>
+                                <option value="ipv4v6">Dual Stack</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="cfg-auto"> Auto-connect on boot
+                            </label>
+                        </div>
+                        <button class="btn primary" onclick="saveConfig()" style="width: 100%;">Save Configuration</button>
+                    </div>
+                    <div class="card">
+                        <div class="card-header"><h2>Known APNs</h2></div>
+                        <div id="apn-list" style="max-height: 300px; overflow-y: auto;"></div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header"><h2>Modem Control</h2></div>
+                    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                        <button class="btn" onclick="resetModem()">Reset Modem</button>
+                        <button class="btn" onclick="powerOff()">Power Off</button>
+                        <button class="btn" onclick="powerOn()">Power On</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Compose SMS Modal -->
+    <div id="compose-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Compose SMS</h2>
+                <button class="modal-close" onclick="closeComposeModal()">&times;</button>
+            </div>
+            <div class="form-group">
+                <label>To (Phone Number)</label>
+                <input type="text" id="sms-to" placeholder="+33612345678">
+            </div>
+            <div class="form-group">
+                <label>Message <span id="sms-chars">0/160</span></label>
+                <textarea id="sms-text" rows="4" style="width:100%; resize:none; font-family:inherit; padding:0.5rem; border:1px solid var(--tube-soft); border-radius:6px;" oninput="updateCharCount()"></textarea>
+            </div>
+            <button class="btn primary" onclick="sendSMS()" style="width: 100%;">Send</button>
+        </div>
+    </div>
+
+    <!-- SMS Detail Modal -->
+    <div id="sms-detail-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Message</h2>
+                <button class="modal-close" onclick="closeSMSDetailModal()">&times;</button>
+            </div>
+            <p><strong>From:</strong> <span id="sms-detail-from"></span></p>
+            <p><strong>Time:</strong> <span id="sms-detail-time"></span></p>
+            <div id="sms-detail-text" style="margin-top: 1rem; padding: 1rem; background: var(--tube-light); border-radius: 6px;"></div>
+            <div style="margin-top: 1rem; display: flex; gap: 1rem;">
+                <button class="btn primary" onclick="replyToSMS()">Reply</button>
+                <button class="btn danger" onclick="deleteSMSDetail()">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/modem.js"></script>
+    <script src="/shared/crt-engine.js"></script>
+</body>
+</html>

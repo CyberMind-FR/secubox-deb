@@ -1,0 +1,35 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    configure)
+        # Add www-data to secubox group for nginx access
+        usermod -a -G secubox www-data 2>/dev/null || true
+
+        # Create data directories
+        mkdir -p /var/lib/secubox/modem
+        mkdir -p /var/cache/secubox/modem
+        chown -R secubox:secubox /var/lib/secubox/modem
+        chown -R secubox:secubox /var/cache/secubox/modem
+
+        # Create secrets directory if needed
+        mkdir -p /etc/secubox/secrets
+        chmod 700 /etc/secubox/secrets
+        chown secubox:secubox /etc/secubox/secrets
+
+        # Add secubox user to dialout group for serial access
+        usermod -a -G dialout secubox 2>/dev/null || true
+
+        # Enable and start service
+        systemctl daemon-reload
+        systemctl enable secubox-modem.service
+        systemctl start secubox-modem.service || true
+
+        # Reload nginx if running
+        systemctl reload nginx 2>/dev/null || true
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

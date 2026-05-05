@@ -125,6 +125,7 @@ Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 | **secubox-dns-provider** | ✅ | ✅ | ✅ | OVH, Gandi, Cloudflare API | ✅ |
 | **secubox-threats** | ✅ | ✅ | ✅ | unified threat dashboard, IOCs | ✅ |
 | **secubox-openclaw** | ✅ | ✅ | ✅ | OSINT reconnaissance | ✅ |
+| **secubox-modem** | ✅ | ✅ | ✅ | LTE/5G modem, SMS, AT terminal | ✅ |
 
 ### Phase 9+ — System & Infrastructure Tools (11 new)
 
@@ -142,7 +143,7 @@ Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 | **secubox-rezapp** | ✅ | ✅ | ✅ | Docker/LXC deployment, templates | ✅ |
 | **secubox-picobrew** | ✅ | ✅ | ✅ | homebrew sensors, fermentation profiles | ✅ |
 
-**Total : 124 modules | ~2000+ endpoints API + Go mesh daemon + TUI console + SOC**
+**Total : 125 modules | ~2000+ endpoints API + Go mesh daemon + TUI console + SOC**
 
 *Note: mail-lxc and webmail-lxc are backend components integrated into secubox-mail*
 

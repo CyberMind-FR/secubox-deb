@@ -1,0 +1,33 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+override_dh_auto_install:
+	# API
+	install -d $(CURDIR)/debian/secubox-modem/usr/lib/secubox/modem
+	cp -r api $(CURDIR)/debian/secubox-modem/usr/lib/secubox/modem/
+	cp -r core $(CURDIR)/debian/secubox-modem/usr/lib/secubox/modem/
+
+	# Web UI
+	install -d $(CURDIR)/debian/secubox-modem/usr/share/secubox/www
+	cp -r www/modem $(CURDIR)/debian/secubox-modem/usr/share/secubox/www/
+
+	# Nginx config
+	install -d $(CURDIR)/debian/secubox-modem/etc/nginx/secubox.d
+	install -m 644 nginx/modem.conf $(CURDIR)/debian/secubox-modem/etc/nginx/secubox.d/
+
+	# Menu entry
+	install -d $(CURDIR)/debian/secubox-modem/usr/share/secubox/menu.d
+	install -m 644 menu.d/37-modem.json $(CURDIR)/debian/secubox-modem/usr/share/secubox/menu.d/
+
+	# Systemd service
+	install -d $(CURDIR)/debian/secubox-modem/usr/lib/systemd/system
+	install -m 644 systemd/secubox-modem.service $(CURDIR)/debian/secubox-modem/usr/lib/systemd/system/
+
+	# Config example
+	install -d $(CURDIR)/debian/secubox-modem/etc/secubox
+	install -m 644 conf/modem.toml.example $(CURDIR)/debian/secubox-modem/etc/secubox/
+
+override_dh_installsystemd:
+	dh_installsystemd --name=secubox-modem
