@@ -1,0 +1,13 @@
+[Unit]
+Description=SecuBox Pi Zero Metrics API
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/secubox/pizero-metrics-api.py
+Restart=always
+RestartSec=5
+User=root
+
+[Install]
+WantedBy=multi-user.target
