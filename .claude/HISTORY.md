@@ -262,6 +262,32 @@ systemctl restart secubox-metablogizer secubox-avatar
 - 0 failed
 - Load: 7.7 → 3.7 (no more restart loops)
 
+### Session 93g — Dashboard System API Fix
+
+**Problem:**
+- https://192.168.255.10/system/ returning JSON parse errors
+- `/api/v1/system/*` endpoints returning HTML instead of JSON
+
+**Root Cause:**
+- `secubox-system.service` was running but socket `/run/secubox/system.sock` was missing
+- Service started at 05:03 but socket disappeared (possibly cleaned by systemd-tmpfiles)
+
+**Fix:**
+```bash
+systemctl restart secubox-system
+```
+
+**Verification:**
+```bash
+curl -s https://localhost/api/v1/system/info
+# {"hostname":"secubox-mochabin","board":"Globalscale MOCHAbin","arch":"aarch64"...}
+```
+
+**Dashboard Status:**
+- ✅ https://192.168.255.10/system/ working
+- ✅ System info, resources, services endpoints functional
+- ✅ JWT authentication enforced on protected endpoints
+
 ---
 
 ## 2026-05-03
