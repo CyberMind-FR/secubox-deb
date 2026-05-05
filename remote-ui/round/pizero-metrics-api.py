@@ -12,7 +12,7 @@ import json
 import os
 import socket
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from datetime import datetime
+from datetime import datetime, timezone
 
 def get_cpu_temp():
     """Read CPU temperature from thermal zone."""
@@ -71,7 +71,7 @@ def get_metrics():
     cpu_percent = min(100.0, (load_1 / cpu_count) * 100)
 
     return {
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "hostname": socket.gethostname(),
         "cpu_percent": round(cpu_percent, 1),
         "cpu_temp": round(get_cpu_temp(), 1),
@@ -96,7 +96,7 @@ class MetricsHandler(BaseHTTPRequestHandler):
         body = json.dumps(data).encode()
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", len(body))
+        self.send_header("Content-Length", str(len(body)))
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         self.wfile.write(body)

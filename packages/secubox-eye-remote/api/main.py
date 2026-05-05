@@ -210,6 +210,122 @@ async def get_serial_status():
     }
 
 
+@app.get("/api/v1/eye-remote/pizero/metrics")
+async def get_pizero_metrics():
+    """Get Pi Zero metrics - public endpoint for dashboard.
+
+    This endpoint relays metrics from the Pi Zero without requiring auth,
+    so the dashboard can display them without complex auth setup.
+    """
+    # First check if peer is reachable (don't rely on state which might be stale)
+    interface_up = _check_interface()
+    peer_reachable = _check_peer_reachable() if interface_up else False
+
+    if not peer_reachable:
+        raise HTTPException(status_code=503, detail="Pi Zero not connected")
+
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(f"http://{PEER_IP}:8000/api/v1/status")
+            if resp.status_code == 200:
+                return resp.json()
+    except Exception as e:
+        logger.warning(f"Failed to fetch Pi Zero metrics: {e}")
+
+    raise HTTPException(status_code=503, detail="Cannot reach Pi Zero")
+
+
+@app.post("/api/v1/eye-remote/auto-pair")
+async def auto_pair():
+    """Auto-pair with connected Eye Remote device.
+
+    Creates a pairing record for the currently connected device.
+    """
+    import hashlib
+    import secrets
+
+    # Check if device is connected
+    interface_up = _check_interface()
+    peer_reachable = _check_peer_reachable() if interface_up else False
+
+    if not peer_reachable:
+        return {"success": False, "error": "No Eye Remote device connected"}
+
+    # Try to get device info from Pi Zero
+    device_hostname = "eye-remote"
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(f"http://{PEER_IP}:8000/api/v1/status")
+            if resp.status_code == 200:
+                data = resp.json()
+                device_hostname = data.get("hostname", "eye-remote")
+    except Exception:
+        pass
+
+    # Generate device ID and token
+    device_id = f"{device_hostname}-{PEER_IP.replace('.', '-')}"
+    token = secrets.token_hex(32)
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+
+    # Save to paired devices storage
+    storage_path = Path("/var/lib/secubox/eye-remote/devices.json")
+    storage_path.parent.mkdir(parents=True, exist_ok=True)
+
+    devices = {}
+    if storage_path.exists():
+        try:
+            import json
+            with open(storage_path) as f:
+                devices = json.load(f)
+        except Exception:
+            pass
+
+    devices[device_id] = {
+        "device_id": device_id,
+        "hostname": device_hostname,
+        "ip_address": PEER_IP,
+        "paired_at": datetime.now().isoformat(),
+        "last_seen": datetime.now().isoformat(),
+        "token_hash": token_hash,
+        "transport": "usb",
+    }
+
+    import json
+    with open(storage_path, 'w') as f:
+        json.dump(devices, f, indent=2)
+
+    logger.info(f"Auto-paired device: {device_id}")
+
+    return {
+        "success": True,
+        "device_id": device_id,
+        "hostname": device_hostname,
+        "message": f"Device {device_id} paired successfully",
+    }
+
+
+@app.get("/api/v1/eye-remote/paired-devices")
+async def get_paired_devices():
+    """List all paired Eye Remote devices."""
+    storage_path = Path("/var/lib/secubox/eye-remote/devices.json")
+
+    if not storage_path.exists():
+        return {"devices": [], "count": 0}
+
+    try:
+        import json
+        with open(storage_path) as f:
+            devices = json.load(f)
+
+        device_list = list(devices.values())
+        return {"devices": device_list, "count": len(device_list)}
+    except Exception as e:
+        logger.error(f"Failed to read paired devices: {e}")
+        return {"devices": [], "count": 0, "error": str(e)}
+
+
 @app.get("/health")
 async def health():
     """Health check endpoint."""
