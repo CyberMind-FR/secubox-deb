@@ -23,12 +23,21 @@ Previous attempt (Session 97) failed due to incomplete HAProxy migration:
 
 #### Step 1: Export from Old C3BOX (OpenWrt)
 ```bash
-# From dev machine, export full configuration
+# From dev machine, export FULL configuration including all services
 bash scripts/migration-export.sh \
   -h 192.168.255.1 \
   -i ~/.ssh/secubox-openwrt \
-  -m haproxy,certs,nginx,vhosts,services \
+  -m haproxy,certs,nginx,vhosts,services,content,databases \
   -o /tmp/c3box-migration.tar.gz
+
+# Services module exports (from /srv/):
+# - streamlit/apps     → All Streamlit applications
+# - metablogizer       → Tor hidden service blogs + configs
+# - gitea              → Git repositories + app.ini
+# - nextcloud          → User files + config
+# - matrix             → Synapse data
+# - mitmproxy          → WAF routes and config
+# - haproxy            → Certs + config
 ```
 
 #### Step 2: Network Setup on MOCHAbin
@@ -58,10 +67,16 @@ network:
 
 #### Step 3: Import Migration Archive
 ```bash
-# On MOCHAbin
+# On MOCHAbin - import ALL modules
 bash scripts/migration-import.sh \
   -f /tmp/c3box-migration.tar.gz \
-  -m haproxy,certs,nginx,vhosts
+  -m haproxy,certs,nginx,vhosts,services,content,databases
+
+# This imports:
+# - /srv/streamlit/apps → Streamlit applications
+# - /srv/metablogizer   → Metablogizer data + Tor configs
+# - /srv/gitea          → Git repositories
+# - All other services from export
 ```
 
 #### Step 4: HAProxy Migration with haproxyctl
@@ -108,9 +123,9 @@ curl -X POST http://unix:/run/secubox/haproxy.sock/waf/sync-routes
 curl -X POST http://unix:/run/secubox/haproxy.sock/waf/toggle -d '{"enabled":true}'
 ```
 
-#### Step 7: LXC Containers (Services)
+#### Step 7: LXC Containers + Native Services
 ```bash
-# Start containers
+# Start LXC containers
 lxc-start -n mail
 lxc-start -n nextcloud
 lxc-start -n gitea
@@ -119,6 +134,18 @@ lxc-start -n matrix
 # Configure DNAT in nftables
 nft add rule inet nat prerouting ip protocol tcp tcp dport { 25, 465, 587, 993, 995 } dnat ip to 10.100.0.10
 nft add rule inet nat prerouting ip protocol tcp tcp dport 2222 dnat ip to 10.100.0.40:22
+
+# Start native services (metablogizer + streamlit)
+systemctl enable --now secubox-metablogizer
+systemctl enable --now secubox-streamlit
+
+# Verify Metablogizer (Tor hidden service blogs)
+metablogizerctl status
+# Check /srv/metablogizer for blog data
+
+# Verify Streamlit apps
+streamlitctl list
+# Apps should be at /srv/streamlit/apps/
 ```
 
 #### Step 8: Verification Checklist
@@ -129,6 +156,8 @@ nft add rule inet nat prerouting ip protocol tcp tcp dport 2222 dnat ip to 10.10
 - [ ] Gitea accessible on port 2222
 - [ ] NextCloud accessible
 - [ ] WebUI on port 9443 only
+- [ ] **Metablogizer**: Tor hidden services running, blogs accessible
+- [ ] **Streamlit**: Apps deployed and accessible via HAProxy
 
 ### Key Files
 | File | Purpose |
@@ -138,6 +167,8 @@ nft add rule inet nat prerouting ip protocol tcp tcp dport 2222 dnat ip to 10.10
 | `/srv/haproxy/certs/` | SSL certificates |
 | `/etc/nftables.conf` | Firewall with DNAT rules |
 | `/var/lib/secubox/haproxy/vhost-routes.json` | WAF routing table |
+| `/srv/metablogizer/` | Metablogizer blogs + Tor hidden service configs |
+| `/srv/streamlit/apps/` | Streamlit applications |
 
 ### Error Page Requirement
 The default backend MUST return 503:
