@@ -94,6 +94,49 @@
 - `/etc/systemd/system/secubox-*.service.d/no-runtime-dir.conf` — Socket conflict fix
 - `/srv/backups/` — Backup storage directory
 
+14. **CrowdSec Console Enrollment** — Fixed key typo
+    - Enrollment key had `1` (one) instead of `l` (lowercase L)
+    - Corrected key: `cmoleja50000802le9t1f7o0d`
+
+15. **CrowdSec Dashboard Cleanup** — Removed obsolete UI elements
+    - Removed Migration section (OpenWrt migration not needed)
+    - Removed Components tab
+    - Removed Access tab
+    - Removed "Import from OpenWrt" button
+
+16. **CrowdSec LAPI/CAPI Status Fix** — Sudo privilege issue
+    - Issue: `NoNewPrivileges=true` in systemd blocked sudo
+    - Fix: Created `/etc/systemd/system/secubox-crowdsec.service.d/allow-sudo.conf`
+    - Added sudoers entry for cscli: `/etc/sudoers.d/secubox-crowdsec`
+    - Rewrote status.py to use `cscli lapi status` subprocess instead of HTTP
+
+17. **CrowdSec Collections Status Fix** — Parsing issue
+    - Issue: Collections showing 0 when 7 installed
+    - Root cause: Code checked `status == "enabled"` but CrowdSec uses `status = "enabled,update-available"`
+    - Fix: Changed to `"enabled" in (item.get("status") or "")`
+
+18. **CrowdSec Bouncers API Fix** — LAPI auth issue
+    - Issue: HTTP calls to LAPI failed (missing X-Api-Key)
+    - Fix: Rewrote bouncers.py to use `cscli bouncers list -o json` subprocess
+
+19. **CrowdSec Hub Functions** — Added missing functions
+    - Added `refreshHub()` and `reloadEngine()` JavaScript functions
+    - Added `/hub/update` and `/service/reload` API endpoints
+
+20. **Duplicate Remote UI Entry Removed** — Menu cleanup
+    - Removed duplicate `remote-ui` menu entry from secubox-system
+    - Eye Remote (`eye-remote`) remains functional at `/eye-remote/`
+    - Files removed: `packages/secubox-system/menu.d/15-remote-ui.json`
+    - Files removed: `packages/secubox-system/www/remote-ui/index.html`
+
+**CrowdSec Files Modified:**
+- `packages/secubox-crowdsec/api/routers/status.py` — cscli subprocess with shell=True
+- `packages/secubox-crowdsec/api/routers/bouncers.py` — cscli subprocess for bouncers
+- `packages/secubox-crowdsec/api/main.py` — Added hub update and reload endpoints
+- `packages/secubox-crowdsec/www/index.html` — Removed Migration, Components, Access tabs
+- `packages/secubox-crowdsec/systemd/allow-sudo.conf` — NoNewPrivileges=false override
+- `packages/secubox-crowdsec/sudoers.d/secubox-crowdsec` — cscli sudo permission
+
 ---
 
 ## 2026-05-04
