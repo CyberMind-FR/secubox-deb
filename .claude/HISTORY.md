@@ -288,6 +288,33 @@ curl -s https://localhost/api/v1/system/info
 - ✅ System info, resources, services endpoints functional
 - ✅ JWT authentication enforced on protected endpoints
 
+### Session 93h — CrowdSec Dashboard & Socket Stability
+
+**Problem:**
+- https://192.168.255.10/crowdsec/ returning JSON parse errors
+- Multiple service sockets disappearing after bulk restart
+
+**Root Cause:**
+- Services running but Unix sockets not created
+- Bulk `systemctl restart 'secubox-*'` causes race conditions
+- Services need time to initialize and create sockets
+
+**Fix:**
+```bash
+# Restart specific services individually
+systemctl restart secubox-system secubox-crowdsec
+sleep 5
+```
+
+**Verified Working:**
+```
+✅ /api/v1/hub/status      → JWT required (correct)
+✅ /api/v1/system/info     → {"hostname":"secubox-mochabin"...}
+✅ /api/v1/crowdsec/status → {"running":true,"version":"v1.7.7"...}
+```
+
+**Note:** Hub service uses TCP port 8001 (not socket) for VM compatibility.
+
 ---
 
 ## 2026-05-03
