@@ -1,0 +1,76 @@
+# Tow-Boot Flash Instructions for MOCHAbin
+# SecuBox-DEB :: board/mochabin
+#
+# CAUTION: Flashing bootloader is risky. Have UART recovery ready.
+
+## Prerequisites
+
+1. File placed at: /boot/tow-boot/Tow-Boot.spi.bin (already done)
+2. Serial console connected at 115200 baud
+3. Know the boot jumper positions for SPI vs UART recovery
+
+## Boot Jumper Reference (J17-J22)
+
+| Mode | J17 | J18 | J19 | J20 | J21 | J22 |
+|------|-----|-----|-----|-----|-----|-----|
+| SPI  | L   | R   | L   | L   | R   | R   |
+| eMMC | R   | R   | L   | R   | L   | R   |
+| UART | R   | R   | R   | R   | R   | R   |
+
+L = Left (pins 2-3), R = Right (pins 1-2)
+
+## Flash from U-Boot
+
+1. Reboot MOCHAbin and press any key to stop autoboot:
+   reboot
+
+2. At U-Boot prompt, run these commands:
+
+   # Initialize MMC
+   mmc dev 0
+
+   # Load Tow-Boot binary to RAM
+   fatload mmc 0:1 0x4000000 tow-boot/Tow-Boot.spi.bin
+
+   # Should show: 1507632 bytes read
+   # Verify size (hex): 0x170130
+
+   # Initialize SPI flash
+   sf probe
+
+   # CRITICAL: Backup current U-Boot first (optional but recommended)
+   # sf read 0x5000000 0x0 0x400000
+   # Then save to eMMC if desired
+
+   # Erase SPI flash (4MB region)
+   sf erase 0x0 0x400000
+
+   # Write Tow-Boot to SPI
+   sf write 0x4000000 0x0 0x170130
+
+   # Reset to boot with new U-Boot
+   reset
+
+## Quick One-liner (after fatload)
+
+   sf probe && sf erase 0 0x400000 && sf write 0x4000000 0 0x170130 && reset
+
+## Recovery if Flash Fails
+
+If the board won't boot after flashing:
+
+1. Set jumpers to UART mode (all Right)
+2. Connect micro-USB for serial
+3. Power cycle board
+4. Use mvebu64boot for UART recovery:
+
+   sudo mvebu64boot -t -b /path/to/Tow-Boot.spi.bin /dev/ttyUSB0
+
+## After Successful Flash
+
+Tow-Boot should boot with:
+- UEFI support
+- Better USB initialization
+- eMMC boot partition support (CONFIG_SUPPORT_EMMC_BOOT=y)
+
+The USB UTMI PHY should be properly initialized for external USB ports.

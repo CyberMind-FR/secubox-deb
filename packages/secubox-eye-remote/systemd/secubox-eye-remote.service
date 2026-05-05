@@ -1,0 +1,24 @@
+[Unit]
+Description=SecuBox Eye Remote API
+Documentation=https://docs.secubox.in/eye-remote
+After=network.target secubox-core.service
+Wants=secubox-core.service
+
+[Service]
+Type=simple
+User=secubox
+Group=secubox
+ExecStart=/usr/bin/uvicorn secubox_eye_remote.api.main:app --uds /run/secubox/eye-remote.sock
+Restart=always
+RestartSec=5
+RuntimeDirectory=secubox
+RuntimeDirectoryPreserve=yes
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/run/secubox /var/log/secubox
+
+[Install]
+WantedBy=multi-user.target
