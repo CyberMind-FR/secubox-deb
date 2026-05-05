@@ -67,12 +67,32 @@
     - `secubox-core.service` is now the ONLY service managing `/run/secubox/`
     - Result: 85+ sockets stable, no more conflicts
 
+12. **JSON Error Fixes** — Navbar component errors
+    - Issue: Disabled services returned HTML 502 instead of JSON
+    - Fix: Added `/etc/nginx/snippets/api-error.conf` returning JSON for 502/503/504
+    - Services using `include /etc/nginx/snippets/secubox-proxy.conf;` now return proper JSON errors
+
+13. **Service Emancipation** — Full WebUI + API exposure
+    - Emancipated 13 services with unified nginx configs:
+      - crowdsec, waf, dpi, system, wireguard, netdata, haproxy
+      - hub, admin, auth, metrics, glances, backup
+    - Each service has: WebUI at `/<service>/`, API at `/api/v1/<service>/`
+    - All services verified working (UI=200, API=200 or 401 for auth-required)
+    - Created `/srv/backups` directory for backup service
+
 **Files Modified:**
 - `board/mochabin/flash-tow-boot.cmd` — bubt flash script
 - `board/mochabin/flash-tow-boot.txt` — manual instructions
 - `packages/secubox-eye-remote/api/main.py` — Fixed interface check (usb0, ARP)
 - `packages/secubox-eye-remote/udev/90-secubox-eye-remote.rules` — Removed NAME rename
 - `packages/secubox-eye-remote/scripts/secubox-eye-network.sh` — Use usb0, notify API
+- `packages/secubox-eye-remote/nginx/eye-remote.conf` — WebUI + API + redirect
+
+**MOCHAbin Files Created:**
+- `/etc/nginx/snippets/api-error.conf` — JSON error responses
+- `/etc/nginx/secubox.d/*.conf` — 13 service nginx configs
+- `/etc/systemd/system/secubox-*.service.d/no-runtime-dir.conf` — Socket conflict fix
+- `/srv/backups/` — Backup storage directory
 
 ---
 
