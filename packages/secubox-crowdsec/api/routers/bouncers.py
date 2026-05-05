@@ -1,28 +1,74 @@
-"""secubox-crowdsec — bouncers + machines"""
-from fastapi import APIRouter, Depends
-import httpx
-from secubox_core.auth   import require_jwt
-from secubox_core.config import get_config
+"""secubox-crowdsec — bouncers and machines management"""
+import subprocess
+import json
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from typing import Optional
+from secubox_core.auth import require_jwt
 
 router = APIRouter()
-def _h(): return {"X-Api-Key": get_config("crowdsec").get("lapi_key", "")}
-def _b(): return get_config("crowdsec").get("lapi_url", "http://127.0.0.1:8080")
+
+
+class BouncerAdd(BaseModel):
+    name: str
 
 
 @router.get("/bouncers")
 async def bouncers():
     """Get bouncers for dashboard (public)."""
     try:
-        async with httpx.AsyncClient(timeout=10) as c:
-            r = await c.get(f"{_b()}/v1/bouncers", headers=_h())
-            data = r.json() or []
+        r = subprocess.run(
+            "sudo cscli bouncers list -o json 2>/dev/null",
+            shell=True, capture_output=True, text=True, timeout=10
+        )
+        if r.returncode == 0 and r.stdout.strip():
+            data = json.loads(r.stdout)
             return {"bouncers": data if isinstance(data, list) else []}
     except Exception:
-        return {"bouncers": []}
+        pass
+    return {"bouncers": []}
+
+
+@router.post("/bouncers/add")
+async def add_bouncer(req: BouncerAdd, user=Depends(require_jwt)):
+    """Add a new bouncer."""
+    try:
+        r = subprocess.run(
+            f"sudo cscli bouncers add {req.name} -o json 2>&1",
+            shell=True, capture_output=True, text=True, timeout=10
+        )
+        if r.returncode == 0:
+            return {"success": True, "output": r.stdout}
+        return {"success": False, "error": r.stdout + r.stderr}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/bouncers/{name}")
+async def delete_bouncer(name: str, user=Depends(require_jwt)):
+    """Delete a bouncer."""
+    try:
+        r = subprocess.run(
+            f"sudo cscli bouncers delete {name} 2>&1",
+            shell=True, capture_output=True, text=True, timeout=10
+        )
+        if r.returncode == 0:
+            return {"success": True}
+        return {"success": False, "error": r.stdout + r.stderr}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/machines")
 async def machines(user=Depends(require_jwt)):
-    async with httpx.AsyncClient(timeout=10) as c:
-        r = await c.get(f"{_b()}/v1/watchers", headers=_h())
-        return r.json() or []
+    """Get machines list."""
+    try:
+        r = subprocess.run(
+            "sudo cscli machines list -o json 2>/dev/null",
+            shell=True, capture_output=True, text=True, timeout=10
+        )
+        if r.returncode == 0 and r.stdout.strip():
+            return json.loads(r.stdout)
+    except Exception:
+        pass
+    return []

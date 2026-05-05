@@ -491,6 +491,28 @@ async def health():
     }
 
 
+@app.post("/hub/update")
+async def hub_update(user=Depends(require_jwt)):
+    """Update CrowdSec hub."""
+    return await _run_ctl("hub", "update")
+
+
+@app.post("/service/reload")
+async def service_reload(user=Depends(require_jwt)):
+    """Reload CrowdSec service."""
+    return await _run_ctl("config", "reload")
+
+
+@app.post("/service/restart")
+async def service_restart(user=Depends(require_jwt)):
+    """Restart CrowdSec service."""
+    result = await _run_ctl("systemctl", "restart", "crowdsec")
+    return result
+
+
+
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # DECISION ANALYTICS
 # ═══════════════════════════════════════════════════════════════════════

@@ -350,7 +350,6 @@
                 <span class="badge" id="agent-badge">-</span>
             </div>
             <div class="header-actions">
-                <button class="btn" onclick="showMigrateModal()">Import from OpenWrt</button>
                 <button class="btn primary" onclick="refreshHub()">Refresh Hub</button>
                 <button class="btn" onclick="reloadEngine()">Reload</button>
             </div>
@@ -358,8 +357,6 @@
 
         <div class="tabs">
             <div class="tab active" data-tab="status">Status</div>
-            <div class="tab" data-tab="components">Components</div>
-            <div class="tab" data-tab="access">Access</div>
             <div class="tab" data-tab="decisions">Decisions</div>
             <div class="tab" data-tab="alerts">Alerts</div>
             <div class="tab" data-tab="hub">Hub</div>
@@ -426,33 +423,6 @@
                         <div id="metrics-content" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
                             <p>Loading...</p>
                         </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Components Tab -->
-            <div id="tab-components" class="tab-content">
-                <div class="component-list" id="components-list">
-                    <p>Loading components...</p>
-                </div>
-            </div>
-
-            <!-- Access Tab -->
-            <div id="tab-access" class="tab-content">
-                <div class="card">
-                    <div class="card-header">
-                        <h2>Connection Endpoints</h2>
-                    </div>
-                    <div class="endpoint-list" id="access-endpoints">
-                        <p>Loading...</p>
-                    </div>
-                </div>
-                <div class="card">
-                    <div class="card-header">
-                        <h2>CLI Commands</h2>
-                    </div>
-                    <div id="cli-examples" style="font-family: monospace; font-size: 0.9rem;">
-                        <p>Loading...</p>
                     </div>
                 </div>
             </div>
@@ -552,44 +522,10 @@
                             <button class="btn primary" onclick="enrollConsole()">Enroll</button>
                         </div>
                     </div>
-                    <div class="card">
-                        <div class="card-header">
-                            <h2>Migration</h2>
-                        </div>
-                        <p style="margin-bottom: 1rem; color: var(--text-dim);">Import configuration from OpenWrt CrowdSec installation.</p>
-                        <button class="btn" onclick="showMigrateModal()" style="width: 100%;">Start Migration</button>
-                    </div>
-                </div>
             </div>
         </div>
     </main>
 
-    <!-- Migration Modal -->
-    <div id="migrate-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Migrate from OpenWrt</h2>
-                <button class="modal-close" onclick="closeMigrateModal()">&times;</button>
-            </div>
-            <div class="form-group">
-                <label>Source IP Address</label>
-                <input type="text" id="migrate-source" value="192.168.255.1" placeholder="192.168.255.1">
-            </div>
-            <div class="form-group">
-                <label>
-                    <input type="checkbox" id="migrate-dry-run"> Dry run (preview only)
-                </label>
-            </div>
-            <p style="margin-bottom: 1rem; color: var(--text-dim); font-size: 0.875rem;">
-                This will sync collections, parsers, scenarios, and bouncer configuration from your OpenWrt device.
-            </p>
-            <div style="display: flex; gap: 0.5rem;">
-                <button class="btn" onclick="closeMigrateModal()">Cancel</button>
-                <button class="btn primary" onclick="runMigration()">Start Migration</button>
-            </div>
-            <div id="migrate-result" style="margin-top: 1rem; display: none;"></div>
-        </div>
-    </div>
 
     <script>
         const API = '/api/v1/crowdsec';
@@ -728,110 +664,6 @@
             `;
         }
 
-        // Load components
-        async function loadComponents() {
-            const data = await api('/components');
-            const components = data.components || [];
-            const list = document.getElementById('components-list');
-
-            const icons = {
-                'service': { icon: '', class: 'service' },
-                'api': { icon: '', class: 'api' },
-                'content': { icon: '', class: 'content' },
-                'cli': { icon: '', class: 'cli' },
-            };
-
-            list.innerHTML = components.map(c => `
-                <div class="component-card">
-                    <div class="component-icon ${c.type}">${icons[c.type]?.icon || ''}</div>
-                    <div class="component-info">
-                        <h3>${c.name}</h3>
-                        <p>${c.description}</p>
-                        ${c.package ? `<div class="component-meta">Package: ${c.package}</div>` : ''}
-                        ${c.service ? `<div class="component-meta">Service: ${c.service}</div>` : ''}
-                        ${c.port ? `<div class="component-meta">Port: ${c.port}</div>` : ''}
-                        ${c.path ? `<div class="component-meta">Path: ${c.path}</div>` : ''}
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        // Load access
-        async function loadAccess() {
-            const data = await api('/access');
-            const endpoints = data.endpoints || [];
-            const cli = data.cli || {};
-
-            document.getElementById('access-endpoints').innerHTML = endpoints.map(e => `
-                <div class="endpoint-card ${e.internal ? 'internal' : ''}">
-                    <h3>${e.name}${e.internal ? ' (Internal)' : ''}</h3>
-                    <div class="url">${e.url}</div>
-                    <div class="desc">${e.description}</div>
-                </div>
-            `).join('');
-
-            document.getElementById('cli-examples').innerHTML = (cli.examples || []).map(cmd =>
-                `<div style="padding: 0.5rem; background: var(--bg-dark); border-radius: 4px; margin-bottom: 0.5rem;">$ ${cmd}</div>`
-            ).join('');
-        }
-
-        // Actions
-        async function addBan() {
-            const ip = document.getElementById('ban-ip').value.trim();
-            const reason = document.getElementById('ban-reason').value.trim();
-            const duration = document.getElementById('ban-duration').value.trim();
-            if (!ip) return alert('Enter an IP address');
-            await api('/ban', 'POST', { ip, reason, duration });
-            document.getElementById('ban-ip').value = '';
-            loadDecisions();
-        }
-
-        async function unban(ip) {
-            await api('/unban', 'POST', { ip });
-            loadDecisions();
-        }
-
-        async function installCollection() {
-            const name = document.getElementById('collection-name').value.trim();
-            if (!name) return alert('Enter collection name');
-            const result = await api('/install_collection', 'POST', { name });
-            if (result.success) {
-                document.getElementById('collection-name').value = '';
-                loadHub();
-            }
-            alert(result.output || (result.success ? 'Installed' : 'Failed'));
-        }
-
-        async function refreshHub() {
-            const result = await api('/hub_update', 'POST');
-            alert('Hub updated');
-            loadHub();
-        }
-
-        async function upgradeHub() {
-            alert('Upgrading hub items...');
-            // Would call upgrade endpoint
-        }
-
-        async function reloadEngine() {
-            await api('/reload', 'POST');
-            alert('Engine reloaded');
-            loadStatus();
-        }
-
-        async function flushDecisions() {
-            if (confirm('Flush all decisions? This will unban all IPs.')) {
-                await api('/flush_decisions', 'POST');
-                loadDecisions();
-            }
-        }
-
-        async function serviceAction(action) {
-            const result = await api('/service/' + action, 'POST');
-            alert(result.output || (result.success ? action + ' completed' : 'Failed'));
-            loadStatus();
-        }
-
         async function loadConsoleStatus() {
             const result = await api('/console/status');
             document.getElementById('console-status').innerHTML = result.output ?
@@ -847,37 +679,45 @@
             loadConsoleStatus();
         }
 
-        // Migration modal
-        function showMigrateModal() {
-            document.getElementById('migrate-modal').classList.add('show');
-        }
 
-        function closeMigrateModal() {
-            document.getElementById('migrate-modal').classList.remove('show');
-            document.getElementById('migrate-result').style.display = 'none';
-        }
-
-        async function runMigration() {
-            const source = document.getElementById('migrate-source').value.trim();
-            const dryRun = document.getElementById('migrate-dry-run').checked;
-
-            const resultDiv = document.getElementById('migrate-result');
-            resultDiv.style.display = 'block';
-            resultDiv.innerHTML = '<p style="color: var(--cyan);">Migration in progress...</p>';
-
-            const result = await api('/migrate', 'POST', { source, dry_run: dryRun });
-
-            if (result.success) {
-                resultDiv.innerHTML = `<p style="color: var(--green);">Migration completed successfully!</p>
-                    <pre style="font-size: 0.8rem; max-height: 200px; overflow: auto;">${result.output || ''}</pre>`;
-                setTimeout(() => {
-                    loadStatus();
+        // Refresh CrowdSec Hub
+        async function refreshHub() {
+            const btn = event.target;
+            btn.disabled = true;
+            btn.textContent = 'Updating...';
+            try {
+                const result = await api('/hub/update', 'POST');
+                if (result.success) {
+                    alert('Hub updated successfully');
                     loadHub();
-                    loadBouncers();
-                }, 2000);
-            } else {
-                resultDiv.innerHTML = `<p style="color: var(--red);">Migration failed: ${result.error || 'Unknown error'}</p>`;
+                } else {
+                    alert('Hub update failed: ' + (result.error || 'Unknown error'));
+                }
+            } catch (e) {
+                alert('Hub update failed: ' + e.message);
             }
+            btn.disabled = false;
+            btn.textContent = 'Refresh Hub';
+        }
+
+        // Reload CrowdSec engine
+        async function reloadEngine() {
+            const btn = event.target;
+            btn.disabled = true;
+            btn.textContent = 'Reloading...';
+            try {
+                const result = await api('/service/reload', 'POST');
+                if (result.success) {
+                    alert('CrowdSec reloaded successfully');
+                    setTimeout(refresh, 2000);
+                } else {
+                    alert('Reload failed: ' + (result.error || 'Unknown error'));
+                }
+            } catch (e) {
+                alert('Reload failed: ' + e.message);
+            }
+            btn.disabled = false;
+            btn.textContent = 'Reload';
         }
 
         // Initial load
@@ -888,8 +728,6 @@
             loadHub();
             loadBouncers();
             loadMetrics();
-            loadComponents();
-            loadAccess();
             loadConsoleStatus();
         }
 
