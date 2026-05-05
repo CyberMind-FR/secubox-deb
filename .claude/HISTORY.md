@@ -121,6 +121,70 @@ cd /etc/nginx/secubox.d && for f in *.dpkg-new; do mv "$f" "${f%.dpkg-new}"; don
 nginx -s reload
 ```
 
+### Session 93d — Performance Comparison: OpenWrt vs Debian
+
+**Test Environment:**
+- 192.168.255.1 — SecuBox OpenWrt 24.10.5 (MOCHAbin 8GB)
+- 192.168.255.10 — SecuBox Debian Bookworm (MOCHAbin 8GB)
+
+#### System Comparison
+
+| Metric | OpenWrt | Debian | Notes |
+|--------|---------|--------|-------|
+| **Kernel** | 6.6.119 | 6.1.0-42-arm64 | OpenWrt newer |
+| **Uptime** | 2 days 22h | 18 hours | — |
+| **Load Average** | 6.63 | 1.31 | **Debian 5x lower** |
+| **Total Processes** | 1768 | 172 | **Debian 10x fewer** |
+| **Memory Total** | 8GB | 8GB | Same |
+| **Memory Used** | 3.1GB (38%) | 1.7GB (22%) | **Debian 45% less** |
+| **Memory Available** | 4.8GB | 6.2GB | **Debian +1.4GB** |
+| **Swap Used** | 1.6GB | 0 | Debian no swap needed |
+| **Disk Used** | 10.6G/14.6G (73%) | 3.5G/5.4G (69%) | Similar % |
+
+#### Service Memory Usage (kB)
+
+| Service | OpenWrt | Debian | Δ |
+|---------|---------|--------|---|
+| nginx | 2,184 | 12,036 | +5.5x |
+| haproxy | 36,888 | 47,080 | +28% |
+| crowdsec | 105,840 | 194,732 | +84% |
+| dnsmasq | 2,404 | 2,000 | -17% |
+| netdata | N/A | 4,520 | — |
+| Python APIs | N/A | 1,250,656 | — |
+
+#### Version Comparison
+
+| Component | OpenWrt | Debian |
+|-----------|---------|--------|
+| Python | 3.11.14 | 3.11.2 |
+| OpenSSL | 3.0.18 | 3.0.18 |
+| HAProxy | 3.0.12 | 2.6.12 |
+| CrowdSec | 1.7.6 | 1.7.7 |
+
+#### Analysis
+
+**Debian Advantages:**
+- **5x lower system load** (1.3 vs 6.6) — more responsive
+- **45% less memory used** — more headroom for services
+- **No swap thrashing** — better performance under load
+- **10x fewer processes** — cleaner process tree
+- **systemd** — modern service management, dependencies
+- **Standard Debian packages** — easier updates, security patches
+
+**OpenWrt Advantages:**
+- **Newer kernel** (6.6 vs 6.1) — more hardware support
+- **Lighter nginx** (2MB vs 12MB) — minimal footprint
+- **Smaller crowdsec** (105MB vs 194MB) — optimized binary
+- **HAProxy 3.0** vs 2.6 — newer features
+
+**Debian Trade-offs:**
+- Python FastAPI services use ~1.2GB total for 22 SecuBox APIs
+- This replaces shell-based RPCD (unmeasured but lighter)
+- Benefit: proper async, JWT auth, OpenAPI docs
+
+**Conclusion:**
+Debian migration successful. Despite heavier individual services, overall system load and memory pressure significantly lower. The structured systemd architecture provides better resource management than OpenWrt's init scripts.
+
 ---
 
 ## 2026-05-03
