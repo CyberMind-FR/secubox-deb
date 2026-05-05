@@ -227,6 +227,41 @@ systemctl is-active crowdsec crowdsec-firewall-bouncer
 | generic:scan | 657 |
 | ssh:exploit | 353 |
 
+### Session 93f — Fix Service Restart Loops
+
+**Problem:**
+Multiple SecuBox services in restart loops due to missing Python dependencies.
+
+**Root Cause:**
+- `python-multipart` missing (required for FastAPI file uploads)
+- `email-validator` missing (required for Pydantic email fields)
+
+**Affected Services:**
+- secubox-metablogizer, secubox-droplet, secubox-avatar, secubox-streamlit, secubox-users
+
+**Fix on Running System:**
+```bash
+pip3 install --break-system-packages python-multipart email-validator
+systemctl restart secubox-metablogizer secubox-avatar
+```
+
+**Build Scripts Updated:**
+- `image/build-image.sh` — added python-multipart, email-validator
+- `image/build-rpi-usb.sh` — added email-validator
+
+**Disabled Non-Critical Services (missing dependencies):**
+- secubox-picobrew (IoT controller, needs hardware)
+- secubox-threats (needs Suricata)
+- secubox-eye-remote (import error)
+- secubox-openclaw (OSINT tool)
+- secubox-ui-manager (display manager)
+- secubox-net-fallback (network already configured)
+
+**Result:**
+- 86 services running
+- 0 failed
+- Load: 7.7 → 3.7 (no more restart loops)
+
 ---
 
 ## 2026-05-03
