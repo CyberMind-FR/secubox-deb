@@ -5,6 +5,75 @@
 
 ## 2026-05-05
 
+### Session 99 — MOCHAbin Migration Recovery Plan
+
+**Goal:** Document lessons learned from failed migration and create proper procedure
+
+**Analysis of Session 97 Failure:**
+1. HAProxy manually configured with only 5 ACLs instead of all 93 domains
+2. Default backend incorrectly set to `nginx_vhosts` (WebUI) instead of 503 error page
+3. WAF (mitmproxy) not installed due to OpenSSL compatibility issue
+4. Websites not accessible from internet despite HAProxy showing 200 locally
+5. User reverted to old C3BOX
+
+**Root Causes Identified:**
+- Did not use `haproxyctl migrate` command
+- Did not use `scripts/migration-export.sh` for full export
+- Manual HAProxy config used wrong fallback backend pattern
+
+**Documentation Created:**
+- Updated `.claude/WIP.md` with comprehensive migration checklist
+- Documented proper 8-step migration procedure
+- Added verification checklist for next attempt
+- Documented key files and error page requirement
+
+**Proper Migration Tools:**
+- `scripts/migration-export.sh` — Full export from OpenWrt
+- `scripts/migration-import.sh` — Import to SecuBox-DEB with transformation
+- `haproxyctl migrate <host>` — HAProxy-specific migration with UCI→TOML conversion
+
+**Key Requirement:**
+```haproxy
+# CORRECT fallback backend
+backend fallback
+    mode http
+    http-request deny deny_status 503
+
+# WRONG - never use WebUI as fallback for unmatched domains
+# default_backend nginx_vhosts
+```
+
+---
+
+### Session 97 — MOCHAbin Migration Attempt (FAILED)
+
+**Goal:** Full data migration from OpenWrt C3BOX to SecuBox-DEB MOCHAbin
+
+**Issues Encountered:**
+- DSA (Distributed Switch Architecture) — lan0-lan3 can't be added to Linux bridges
+- SFP28-25G module incompatible with 10G SFP+ port (used eth2 copper instead)
+- nftables DNAT syntax in inet tables requires `ip dnat to` not just `dnat to`
+- mitmproxy crashed due to OpenSSL AttributeError (X509_V_FLAG_NOTIFY_POLICY)
+
+**Network Setup (Partial Success):**
+- WAN on eth2 (copper) with DMZ IP 192.168.1.200/24
+- LAN on lan0 (DSA) with 192.168.255.1/24
+- br-lxc for containers with 10.100.0.1/24
+- LXC containers running (mail, nextcloud, gitea)
+
+**Critical Failure Points:**
+1. HAProxy configured manually — only 5 ACLs/backends instead of 93
+2. WebUI set as fallback backend — domains without ACL showed admin panel
+3. Websites not actually accessible from internet
+4. WAF not functional
+
+**User Feedback:** "you have missed a lot of works", "websites are not up",
+"worst, you make the webui admin on frontend fallback", "you make all badly"
+
+**Result:** User reverted to old C3BOX. Migration needs complete redo with proper tools.
+
+---
+
 ### Session 98 — SecuBox Modem Module
 
 **Goal:** Create comprehensive LTE/5G modem management module

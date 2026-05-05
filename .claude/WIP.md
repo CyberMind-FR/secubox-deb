@@ -1,5 +1,156 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-03 (Session 90)*
+*Mis à jour : 2026-05-05 (Session 98)*
+
+---
+
+## 🔄 En cours — MOCHAbin Full Migration (HAProxy/WAF/Services)
+
+### Context
+Previous attempt (Session 97) failed due to incomplete HAProxy migration:
+- Only 5 ACLs created instead of all 93 domains
+- Default backend incorrectly set to WebUI (nginx_vhosts) instead of 503 error page
+- WAF (mitmproxy) not functional due to OpenSSL compatibility
+- Websites not accessible from internet
+- User reverted to old C3BOX
+
+### Root Cause Analysis
+1. **Manual HAProxy config** instead of using `haproxyctl migrate` command
+2. **Missing full export** - should use `scripts/migration-export.sh` first
+3. **Incorrect default backend** - should be `http-request deny deny_status 503`
+4. **WAF not integrated** - mitmproxy needs to be installed in LXC container
+
+### Proper Migration Procedure
+
+#### Step 1: Export from Old C3BOX (OpenWrt)
+```bash
+# From dev machine, export full configuration
+bash scripts/migration-export.sh \
+  -h 192.168.255.1 \
+  -i ~/.ssh/secubox-openwrt \
+  -m haproxy,certs,nginx,vhosts,services \
+  -o /tmp/c3box-migration.tar.gz
+```
+
+#### Step 2: Network Setup on MOCHAbin
+```yaml
+# /etc/netplan/01-secubox-gateway.yaml
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    eth2:  # WAN (copper, DMZ)
+      addresses:
+        - 192.168.1.200/24
+      routes:
+        - to: default
+          via: 192.168.1.254
+      nameservers:
+        addresses: [8.8.8.8, 1.1.1.1]
+    lan0:  # LAN (DSA port)
+      addresses:
+        - 192.168.255.1/24
+  bridges:
+    br-lxc:  # LXC container network
+      interfaces: []
+      addresses:
+        - 10.100.0.1/24
+```
+
+#### Step 3: Import Migration Archive
+```bash
+# On MOCHAbin
+bash scripts/migration-import.sh \
+  -f /tmp/c3box-migration.tar.gz \
+  -m haproxy,certs,nginx,vhosts
+```
+
+#### Step 4: HAProxy Migration with haproxyctl
+```bash
+# Use the built-in migration command
+haproxyctl migrate 192.168.255.1
+
+# This will:
+# 1. Sync certificates from /srv/haproxy/certs/
+# 2. Convert UCI vhosts/backends to TOML
+# 3. Generate haproxy.cfg with proper 503 fallback
+# 4. Validate configuration
+```
+
+#### Step 5: Verify HAProxy Configuration
+```bash
+# Check generated config
+cat /etc/haproxy/haproxy.cfg
+
+# Should have:
+# - All ACLs for domains
+# - WAF inspector backend (if waf_enabled=true)
+# - Fallback backend with deny_status 503
+
+# Validate
+haproxy -c -f /etc/haproxy/haproxy.cfg
+
+# Reload
+systemctl reload haproxy
+```
+
+#### Step 6: WAF Setup (mitmproxy in LXC)
+```bash
+# Install mitmproxy container
+mitmproxyctl install
+
+# Start WAF
+mitmproxyctl start
+
+# Sync HAProxy routes
+curl -X POST http://unix:/run/secubox/haproxy.sock/waf/sync-routes
+
+# Enable WAF globally
+curl -X POST http://unix:/run/secubox/haproxy.sock/waf/toggle -d '{"enabled":true}'
+```
+
+#### Step 7: LXC Containers (Services)
+```bash
+# Start containers
+lxc-start -n mail
+lxc-start -n nextcloud
+lxc-start -n gitea
+lxc-start -n matrix
+
+# Configure DNAT in nftables
+nft add rule inet nat prerouting ip protocol tcp tcp dport { 25, 465, 587, 993, 995 } dnat ip to 10.100.0.10
+nft add rule inet nat prerouting ip protocol tcp tcp dport 2222 dnat ip to 10.100.0.40:22
+```
+
+#### Step 8: Verification Checklist
+- [ ] All 93 SSL domains route correctly
+- [ ] Default backend returns 503 (not WebUI)
+- [ ] WAF inspection working
+- [ ] Mail container accessible on SMTP/IMAP ports
+- [ ] Gitea accessible on port 2222
+- [ ] NextCloud accessible
+- [ ] WebUI on port 9443 only
+
+### Key Files
+| File | Purpose |
+|------|---------|
+| `/etc/secubox/haproxy.toml` | HAProxy TOML config with vhosts/backends |
+| `/etc/haproxy/haproxy.cfg` | Generated HAProxy config |
+| `/srv/haproxy/certs/` | SSL certificates |
+| `/etc/nftables.conf` | Firewall with DNAT rules |
+| `/var/lib/secubox/haproxy/vhost-routes.json` | WAF routing table |
+
+### Error Page Requirement
+The default backend MUST return 503:
+```haproxy
+backend fallback
+    mode http
+    http-request deny deny_status 503
+```
+NOT:
+```haproxy
+# WRONG - do not use WebUI as fallback
+default_backend nginx_vhosts
+```
 
 ---
 
