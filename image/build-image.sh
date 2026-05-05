@@ -655,6 +655,7 @@ chroot "${ROOTFS}" pip3 install --break-system-packages -q \
   fastapi uvicorn[standard] python-jose[cryptography] httpx \
   jinja2 tomli pyroute2 psutil authlib aiosqlite aiofiles \
   pydantic toml netifaces pillow zmq pyjwt cryptography \
+  python-multipart email-validator \
   textual 2>/dev/null || warn "pip install partiel"
 
 ok "Python dependencies installed"

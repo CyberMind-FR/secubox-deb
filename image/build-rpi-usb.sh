@@ -618,7 +618,7 @@ chroot "${ROOTFS}" pip3 install --break-system-packages -q \
   fastapi uvicorn[standard] python-jose[cryptography] httpx \
   jinja2 tomli toml pyroute2 psutil pydantic \
   aiofiles aiosqlite authlib cryptography \
-  python-multipart websockets netifaces \
+  python-multipart websockets netifaces email-validator \
   2>&1 | tail -10 || true
 ok "Python dependencies installed"
 
