@@ -3,6 +3,79 @@
 
 ---
 
+## 2026-05-05
+
+### Session 95 — Eye Remote USB Gadget & Tow-Boot
+
+**Goal:** Get Eye Remote (Pi Zero W USB gadget) working with MOCHAbin
+
+**Completed:**
+1. **Tow-Boot Flashed** — Replaced old U-Boot 2018.03 with Tow-Boot for proper USB PHY init
+   - Used `bubt` command for Marvell bootloader flash
+   - Pre-built binary from `tools/Tow-Boot/output/Tow-Boot.spi.bin`
+
+2. **Kernel 6.12 Boot** — Working with CONFIG_PHY_MVEBU_CP110_UTMI
+   - Fixed MAC address issue with `setenv ethaddr`
+   - Fixed console: ttyMV0 → ttyS0 in extlinux.conf
+   - Created /boot/extlinux/extlinux.conf with both kernels (default + 6.12)
+
+3. **Eye Remote USB Detection** — Pi Zero gadget detected on Bus 01
+   - ECM Network + ACM Serial + Mass Storage interfaces
+   - udev rules auto-configure 10.55.0.1/30 interface
+
+4. **SSD Storage** — 1TB mSATA mounted as /data
+   - eMMC freed for system only
+   - `/data` contains: secubox-backups, overlay upper/work dirs
+
+5. **secubox-eye-remote Package Deployed**
+   - Service running: `secubox-eye-remote.service` (active)
+   - Socket: `/run/secubox/eye-remote.sock`
+   - Health endpoint working: `/health`
+
+6. **udev Rules Deployed** — Auto-configure USB network on connect
+   - `/etc/udev/rules.d/90-secubox-eye-remote.rules`
+   - `/usr/local/sbin/secubox-eye-network.sh`
+   - Matches Pi Zero gadget by vendor/product ID (1d6b:0104)
+
+**API Status:**
+- `/api/v1/eye-remote/status` — Working (connected=true)
+- `/api/v1/eye-remote/serial/status` — Working (/dev/ttyACM0 detected)
+- `/health` — Working
+
+7. **Kernel 6.12 Default** — Set as default boot in extlinux.conf
+   - `DEFAULT secubox-612` in `/boot/extlinux/extlinux.conf`
+   - Running: `6.12.85+deb12-arm64`
+
+8. **Socket Creation Fix** — RuntimeDirectoryPreserve for all services
+   - Root cause: Multiple services with `RuntimeDirectory=secubox` caused socket cleanup conflicts
+   - Fix: Added `/etc/systemd/system/secubox-*.service.d/preserve.conf` with `RuntimeDirectoryPreserve=yes`
+   - All services now preserve their sockets when other services restart
+
+9. **Nginx Proxy Path Fix** — Eye Remote API routing
+   - Issue: nginx `proxy_pass http://unix:/run/secubox/eye-remote.sock:/;` stripped path prefix
+   - Fix: Changed to `proxy_pass http://unix:/run/secubox/eye-remote.sock:/api/v1/eye-remote/;`
+   - FastAPI expects full path `/api/v1/eye-remote/status`
+
+10. **Remote UI Emancipation** — Unified WebUI path
+    - `/remote-ui/` now serves the Remote UI Management page
+    - `/eye-remote/` redirects to `/remote-ui/`
+    - API remains at `/api/v1/eye-remote/`
+
+11. **Socket Conflict Resolution** — Definitive fix
+    - Root cause: All services had `RuntimeDirectory=secubox`, causing conflicts when any service restarted
+    - Fix: Created `/etc/systemd/system/secubox-*.service.d/no-runtime-dir.conf` with `RuntimeDirectory=`
+    - `secubox-core.service` is now the ONLY service managing `/run/secubox/`
+    - Result: 85+ sockets stable, no more conflicts
+
+**Files Modified:**
+- `board/mochabin/flash-tow-boot.cmd` — bubt flash script
+- `board/mochabin/flash-tow-boot.txt` — manual instructions
+- `packages/secubox-eye-remote/api/main.py` — Fixed interface check (usb0, ARP)
+- `packages/secubox-eye-remote/udev/90-secubox-eye-remote.rules` — Removed NAME rename
+- `packages/secubox-eye-remote/scripts/secubox-eye-network.sh` — Use usb0, notify API
+
+---
+
 ## 2026-05-04
 
 ### Session 93 — MOCHAbin Full Image Build

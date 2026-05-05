@@ -1,0 +1,5 @@
+udev/90-secubox-eye-remote.rules etc/udev/rules.d/
+scripts/secubox-eye-network.sh usr/local/sbin/
+systemd/secubox-eye-remote.service etc/systemd/system/
+api/main.py usr/share/secubox/eye-remote/api/
+www/* var/www/secubox/eye-remote/
