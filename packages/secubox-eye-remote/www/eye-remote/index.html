@@ -173,6 +173,19 @@
                 </div>
             </div>
 
+            <!-- Device Pairing -->
+            <div class="card">
+                <h3>Device Pairing</h3>
+                <div class="stat">
+                    <span class="stat-label">Paired Devices</span>
+                    <span class="stat-value" id="paired-count">--</span>
+                </div>
+                <div class="actions">
+                    <button class="btn primary" onclick="autoPair()">Auto Pair</button>
+                    <button class="btn" onclick="listPaired()">List Devices</button>
+                </div>
+            </div>
+
             <!-- Gadget Modes -->
             <div class="card">
                 <h3>Gadget Mode Control</h3>
@@ -214,13 +227,13 @@
                 const serial = await api('/serial/status');
                 updateSerialUI(serial);
 
-                // Get metrics if connected
+                // Get Pi Zero metrics if connected
                 if (status.connected) {
                     try {
-                        const metrics = await api('/metrics');
+                        const metrics = await api('/pizero/metrics');
                         updateMetricsUI(metrics);
                     } catch (e) {
-                        console.log('Metrics not available');
+                        console.log('Pi Zero metrics not available');
                     }
                 }
             } catch (err) {
@@ -319,9 +332,51 @@
             window.open('/eye-remote/terminal.html', '_blank');
         }
 
+        async function autoPair() {
+            try {
+                const result = await api('/auto-pair', 'POST');
+                if (result.success) {
+                    alert('Device paired successfully!\nDevice ID: ' + result.device_id);
+                    loadPairedCount();
+                    refreshAll();
+                } else {
+                    alert('Pairing failed: ' + (result.error || 'Unknown error'));
+                }
+            } catch (e) {
+                alert('Pairing error: ' + e.message);
+            }
+        }
+
+        async function listPaired() {
+            try {
+                const result = await api('/paired-devices');
+                if (result.devices && result.devices.length > 0) {
+                    const list = result.devices.map(d =>
+                        `• ${d.device_id} (paired: ${new Date(d.paired_at).toLocaleDateString()})`
+                    ).join('\n');
+                    alert('Paired Devices:\n' + list);
+                } else {
+                    alert('No paired devices');
+                }
+            } catch (e) {
+                alert('Error listing devices: ' + e.message);
+            }
+        }
+
+        async function loadPairedCount() {
+            try {
+                const result = await api('/paired-devices');
+                document.getElementById('paired-count').textContent =
+                    (result.devices ? result.devices.length : 0);
+            } catch (e) {
+                document.getElementById('paired-count').textContent = '0';
+            }
+        }
+
         // Init
         document.addEventListener('DOMContentLoaded', () => {
             refreshAll();
+            loadPairedCount();
             setInterval(refreshAll, 5000);
         });
     </script>
