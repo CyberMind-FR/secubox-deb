@@ -1215,10 +1215,15 @@ CATEGORY_META = {
     "dashboard": {"name": "Dashboard", "icon": "📊", "order": 0},
     "security": {"name": "Security", "icon": "🛡️", "order": 1},
     "network": {"name": "Network", "icon": "🌐", "order": 2},
-    "monitoring": {"name": "Monitoring", "icon": "📈", "order": 3},
-    "publishing": {"name": "Publishing", "icon": "📤", "order": 4},
-    "apps": {"name": "Applications", "icon": "🎯", "order": 5},
-    "admin": {"name": "Administration", "icon": "⚙️", "order": 6},
+    "system": {"name": "System", "icon": "⚙️", "order": 3},
+    "core": {"name": "Core", "icon": "🔧", "order": 4},
+    "users": {"name": "Users", "icon": "👥", "order": 5},
+    "services": {"name": "Services", "icon": "🔌", "order": 6},
+    "privacy": {"name": "Privacy", "icon": "🔒", "order": 7},
+    "monitoring": {"name": "Monitoring", "icon": "📈", "order": 8},
+    "publishing": {"name": "Publishing", "icon": "📤", "order": 9},
+    "apps": {"name": "Applications", "icon": "🎯", "order": 10},
+    "admin": {"name": "Administration", "icon": "🛠️", "order": 11},
 }
 
 

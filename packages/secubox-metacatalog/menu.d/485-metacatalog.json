@@ -2,7 +2,7 @@
   "id": "metacatalog",
   "name": "Service Catalog",
   "category": "system",
-  "icon": "catalog",
+  "icon": "📚",
   "path": "/metacatalog/",
   "order": 485,
   "description": "Service catalog and registry"
