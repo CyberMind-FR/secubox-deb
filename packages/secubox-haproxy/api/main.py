@@ -168,6 +168,7 @@ _status_cache_lock = threading.Lock()
 def _compute_status_sync() -> Dict[str, Any]:
     """Compute HAProxy status (synchronous, for background refresh)."""
     cfg = _get_haproxy_config() or {}
+    main_cfg = cfg.get("main", {})
 
     # Check if running
     running = subprocess.run(
@@ -194,12 +195,12 @@ def _compute_status_sync() -> Dict[str, Any]:
 
     return {
         "running": running or docker_running,
-        "http_port": cfg.get("http_port", 80),
-        "https_port": cfg.get("https_port", 443),
-        "stats_port": cfg.get("stats_port", 8404),
-        "waf_enabled": cfg.get("waf_enabled", False),
+        "http_port": main_cfg.get("http_port", 80),
+        "https_port": main_cfg.get("https_port", 443),
+        "stats_port": main_cfg.get("stats_port", 8404),
+        "waf_enabled": main_cfg.get("waf_enabled", False),
         "waf_available": waf_available,
-        "crowdsec_enabled": cfg.get("crowdsec_enabled", False),
+        "crowdsec_enabled": main_cfg.get("crowdsec_enabled", False),
         "vhost_count": len(vhost_cfg),
         "backend_count": len(backend_cfg),
         "cached_at": time.time(),
@@ -437,16 +438,17 @@ async def shutdown_event():
 
 
 def _cfg():
-    cfg = _get_haproxy_config()
+    cfg = _get_haproxy_config() or {}
+    main_cfg = cfg.get("main", {})
     return {
-        "stats_socket": cfg.get("stats_socket", STATS_SOCKET) if cfg else STATS_SOCKET,
-        "config_dir": cfg.get("config_dir", CONFIG_DIR) if cfg else CONFIG_DIR,
-        "http_port": cfg.get("http_port", 80) if cfg else 80,
-        "https_port": cfg.get("https_port", 443) if cfg else 443,
-        "stats_port": cfg.get("stats_port", 8404) if cfg else 8404,
-        "waf_enabled": cfg.get("waf_enabled", True) if cfg else True,
-        "waf_backend_port": cfg.get("waf_backend_port", 8890) if cfg else 8890,
-        "crowdsec_enabled": cfg.get("crowdsec_enabled", True) if cfg else True,
+        "stats_socket": main_cfg.get("stats_socket", STATS_SOCKET),
+        "config_dir": main_cfg.get("config_dir", CONFIG_DIR),
+        "http_port": main_cfg.get("http_port", 80),
+        "https_port": main_cfg.get("https_port", 443),
+        "stats_port": main_cfg.get("stats_port", 8404),
+        "waf_enabled": main_cfg.get("waf_enabled", True),
+        "waf_backend_port": main_cfg.get("waf_backend_port", 8890),
+        "crowdsec_enabled": main_cfg.get("crowdsec_enabled", True),
     }
 
 
