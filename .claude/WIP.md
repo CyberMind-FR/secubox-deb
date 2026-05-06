@@ -1,5 +1,89 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-06 (Session 105)*
+*Mis à jour : 2026-05-06 (Session 106)*
+
+---
+
+## ✅ Session 106: Double Pre-Cache + Adaptive Navbar + DNS Migration
+
+### Double Pre-Cache System (metablogizer)
+- [x] Created `cache.py` module with memory + file cache
+- [x] Directory mtime tracking for smart invalidation
+- [x] Background refresh every 30s (only if changes)
+- [x] Patched `main.py` for cache integration
+- [x] Guideline: "Only regenerate when necessary"
+
+### Adaptive Navbar Status Dots
+- [x] Added health check code to `sidebar.js`
+- [x] Status classes: `.active` (green), `.warning` (orange), `.error` (red)
+- [x] Checks `/api/v1/{module}/health` with 30s cache TTL
+- [x] Modem health returns `degraded` when no hardware
+
+### DNS Migration
+- [x] Ported `dnsmaster` from OpenWrt to Debian
+- [x] Replaced `uci_get` with TOML config reading
+- [x] Uses `journalctl` instead of `logread`
+- [x] Uses `systemctl` instead of `/etc/init.d/`
+- [x] DNS API now returns proper BIND status
+
+### Metablogizer Fixes
+- [x] Fixed Export ZIP/Download Cert buttons (JS fetch + JWT)
+- [x] Fixed closing tags `</a>` → `</button>`
+- [x] Fixed `downloadCert` missing closing brace
+
+### money.maegia.tv Deployment
+- [x] Added HAProxy vhost
+- [x] Fixed nginx listen port (80 → 9080)
+- [x] Generated ACME certificate via ZeroSSL
+- [x] Restored WebUI 9443 frontend (broken by haproxyctl generate)
+
+### GitHub Issue
+- [x] Created Issue #38: Double Pre-Cache System + Adaptive Navbar Status
+
+### Notes Architecture
+- LXC pour services non-vitaux
+- Vital = WebUI + heartbeat monitoring (contrôle SecuBox)
+- TODO: Porter LEDs heartbeat depuis OpenWrt
+
+### Heartbeat Monitor System
+- [x] Created `/usr/sbin/secubox-heartbeat` CLI (bash)
+- [x] Created `/usr/lib/secubox/heartbeat/api/main.py` (FastAPI)
+- [x] Config: `/etc/secubox/heartbeat.toml`
+- [x] Auto-restart for vital services with max_retries
+- [x] LED control (green/orange/red) for hardware indicators
+- [x] Alerts system with acknowledge/clear
+- [x] Git status integration for live dashboard
+- [x] Metrics: CPU, memory, disk, uptime
+
+### VHost Exposure Modes
+- [x] Created `/etc/secubox/vhost-modes.toml`
+- [x] Mode `darkpublish`: Protected by default, whitelist access
+- [x] Mode `lightexposure`: Open by default, blacklist blocking
+- [x] Global + per-vhost whitelist/blacklist
+- [x] CrowdSec/fail2ban integration for dynamic blocking
+- [x] Rate limiting and geo-blocking options
+
+### Enhanced Navbar (Adaptive LEDs)
+- [x] Updated `/usr/share/secubox/www/shared/sidebar.js`
+- [x] GREEN (.active): Service running, healthy
+- [x] ORANGE (.warning): Service degraded or disabled
+- [x] RED (.error): Service down, critical
+- [x] GRAY (.disabled): Service not installed
+- [x] DISABLED section at bottom for absent modules
+- [x] 30s health check cache TTL
+
+### Live Dashboard (live.maegia.tv)
+- [x] Deployed `secubox-live.html` autogenerative landing
+- [x] GitHub API live sync for commits/releases/languages
+- [x] Stack canonique AUTH→WALL→BOOT→MIND→ROOT→MESH
+- [x] Heartbeat API integration at `/api/v1/heartbeat/`
+
+### Guidelines Added
+- **Double Pre-Cache Pattern**: Memory + file cache + mtime tracking
+- **VHost Multi-Cache**: Offline buffer, pre-publish, refresh on update
+- **Navbar Camouflage**: Orange LED for absent, DISABLED section
+- **Only Regenerate When Necessary**: Smart invalidation
+
+---
 
 ---
 
