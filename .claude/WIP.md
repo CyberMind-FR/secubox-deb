@@ -137,7 +137,11 @@
   - `GET /health-monitor/status` - All vhosts
   - `GET /health-monitor/vhost/{domain}` - Single vhost
   - `GET /health-monitor/alerts` - Down/error list
-- [ ] Dashboard widget (frontend) - TODO
+- [x] Dashboard widget (frontend)
+  - Progress bar avec % health
+  - Compteurs emoji 🟢🟡🔴
+  - Liste des vhosts down (max 5)
+  - Auto-refresh 30s avec loadVHostHealth()
 
 ---
 
