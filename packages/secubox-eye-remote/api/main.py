@@ -348,11 +348,70 @@ async def health():
 # =============================================================================
 # System Metrics — MOCHAbin host metrics for Round UI dashboard
 # =============================================================================
+# Double Pre-Cache Buffer for Metrics
+# Background task updates cache every 2s, API returns instantly from cache
+# =============================================================================
+import asyncio
+import time
+import os
+
+_metrics_cache = {
+    "active": {},      # Current metrics (read by API)
+    "shadow": {},      # Being updated by background task
+    "last_swap": 0,    # Timestamp of last swap
+}
+_cpu_state = {"prev_idle": 0, "prev_total": 0, "prev_time": 0}
+_cache_task = None
+
+
+def _read_cpu_percent() -> float:
+    """Calculate real CPU usage from /proc/stat delta."""
+    import time
+    global _cpu_state
+
+    try:
+        with open("/proc/stat") as f:
+            line = f.readline()
+        parts = line.split()
+        if parts[0] != "cpu":
+            return 0.0
+
+        # user, nice, system, idle, iowait, irq, softirq, steal
+        values = [int(x) for x in parts[1:9]]
+        idle = values[3] + values[4]  # idle + iowait
+        total = sum(values)
+        now = time.time()
+
+        # Calculate delta from previous reading
+        prev_idle = _cpu_state["prev_idle"]
+        prev_total = _cpu_state["prev_total"]
+        prev_time = _cpu_state["prev_time"]
+
+        # Update state
+        _cpu_state["prev_idle"] = idle
+        _cpu_state["prev_total"] = total
+        _cpu_state["prev_time"] = now
+
+        # Need at least 100ms between readings for accuracy
+        if prev_time > 0 and (now - prev_time) > 0.1:
+            idle_delta = idle - prev_idle
+            total_delta = total - prev_total
+            if total_delta > 0:
+                return round(100.0 * (1.0 - idle_delta / total_delta), 1)
+
+        # Fallback for first reading: use 1-second sample
+        import os
+        load = os.getloadavg()[0]
+        cpus = os.cpu_count() or 4
+        return round(min(95.0, (load / cpus) * 80), 1)  # Scale down load-based estimate
+
+    except Exception:
+        return 0.0
+
 
 def _get_host_metrics() -> dict:
     """Collect MOCHAbin host system metrics for round UI display."""
     import os
-    import json
     from datetime import timezone
 
     metrics = {
@@ -360,21 +419,8 @@ def _get_host_metrics() -> dict:
         "hostname": "secubox-mochabin",
     }
 
-    # CPU usage from /proc/stat
-    try:
-        with open("/proc/stat") as f:
-            line = f.readline()
-        parts = line.split()
-        if parts[0] == "cpu":
-            values = [int(x) for x in parts[1:8]]
-            idle = values[3]
-            total = sum(values)
-            # Approximate CPU usage
-            load = os.getloadavg()[0]
-            cpus = os.cpu_count() or 4
-            metrics["cpu_percent"] = round(min(100.0, (load / cpus) * 100), 1)
-    except Exception:
-        metrics["cpu_percent"] = 0.0
+    # CPU usage - real delta calculation
+    metrics["cpu_percent"] = _read_cpu_percent()
 
     # Memory from /proc/meminfo
     try:
@@ -425,11 +471,65 @@ def _get_host_metrics() -> dict:
     return metrics
 
 
+async def _metrics_background_task():
+    """Background task that updates metrics cache every 2 seconds.
+
+    Pattern: Double Pre-Cache Buffer (per SecuBox guidelines)
+    - shadow buffer updated in background
+    - atomic swap to active buffer
+    - API reads from active (instant response)
+    """
+    global _metrics_cache
+
+    while True:
+        try:
+            # Collect metrics into shadow buffer
+            _metrics_cache["shadow"] = _get_host_metrics()
+
+            # Atomic swap: shadow → active
+            _metrics_cache["active"] = _metrics_cache["shadow"].copy()
+            _metrics_cache["last_swap"] = time.time()
+
+        except Exception as e:
+            logger.warning(f"Metrics cache update failed: {e}")
+
+        await asyncio.sleep(2)  # Update every 2 seconds
+
+
+@app.on_event("startup")
+async def start_metrics_cache():
+    """Start background metrics caching on API startup."""
+    global _cache_task
+
+    # Initial cache population
+    _metrics_cache["active"] = _get_host_metrics()
+    _metrics_cache["last_swap"] = time.time()
+
+    # Start background updater
+    _cache_task = asyncio.create_task(_metrics_background_task())
+    logger.info("Metrics pre-cache started (2s refresh)")
+
+
+@app.on_event("shutdown")
+async def stop_metrics_cache():
+    """Stop background task on shutdown."""
+    global _cache_task
+    if _cache_task:
+        _cache_task.cancel()
+        try:
+            await _cache_task
+        except asyncio.CancelledError:
+            pass
+
+
 @app.get("/api/v1/system/metrics")
 async def get_system_metrics():
     """Get MOCHAbin host system metrics for round UI dashboard.
 
-    This endpoint provides the host's metrics (not Pi Zero) for display
-    on the Eye Remote round dashboard.
+    Returns cached metrics (updated every 2s by background task).
+    Pattern: Double Pre-Cache Buffer for instant response.
     """
+    if _metrics_cache["active"]:
+        return _metrics_cache["active"]
+    # Fallback if cache not ready
     return _get_host_metrics()
