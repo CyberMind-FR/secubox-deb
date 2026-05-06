@@ -1,5 +1,26 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-06 (Session 108)*
+*Mis à jour : 2026-05-06 (Session 109)*
+
+---
+
+## 🔄 Session 109: HAProxy VHost Routing + Eye Remote Fix
+
+### HAProxy VHost Additions (on server)
+- [x] Added `sdlc.gk2.secubox.in` → metablog_sdlc (port 8925)
+- [x] Added `facb.gk2.secubox.in` → metablog_facb (port 8972)
+- [x] Added ACLs to both HTTP and HTTPS frontends
+- [x] All metablog vhosts confirmed working (c3box, gandalf, live)
+
+### Eye Remote Dashboard Fix
+- [x] Fixed API calls to use public endpoints (no JWT required)
+- [x] `/status`, `/serial/status`, `/pizero/metrics` now work without auth
+- [x] Added fallback to `/pizero-metrics` endpoint
+- [x] Deployed updated frontend to `/usr/share/secubox/www/eye-remote/`
+
+### mitmproxy Routing Loop Fix (from Session 108)
+- [x] Changed routes.json: 127.0.0.1 → 10.100.0.1 (LXC bridge IP)
+- [x] Killed runaway mitmdump process (PID 896697)
+- [x] Load dropped from 12+ to ~7
 
 ---
 
