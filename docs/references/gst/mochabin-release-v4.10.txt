@@ -1,0 +1,103 @@
+
+Globalscale MOCHAbin board release note
+# Release date: 20220829
+
+GTI version
+ - gti-v4.10
+
+MV-DDR version
+ - mv_ddr-armada-18.12-gti-2e20f5d5e9f00335ddfb694b01e0d801c16e8429
+
+ATF version
+ - atf-v1.5-armada-18.12-gti-277d4b6bae6cf0b265b22597dfc118946fba72f7
+
+Firmware version
+ - binaries-marvell-armada-18.12-c6c529ea3d905a28cc77331964c466c3e2dc852e
+
+U-Boot version
+ - 8k-rtc-b794de0054ee62935c1f510dc8ea361bc92ef375
+
+Linux Kernel version
+ - linux-5.4.163-gti-a7e9e3c22288e178dad71bfe950bee61922f81f1
+
+Hardware
+ - Tested on MOCHAbin hw.v1.2
+# File list
+ - bootloader for DDR 2GB with ECC support
+    file: mochabin-bootloader-ddr4-2g-ecc-mvddr-2e20f5d-atf-277d4b6b-uboot-b794de0054-20220829-rel.bin
+    md5sum: 0b744da8ebf1c9a889ec8b514bc77226
+ - bootloader for DDR 2GB 
+    file: mochabin-bootloader-ddr4-2g-mvddr-2e20f5d-atf-277d4b6b-uboot-b794de0054-20220829-rel.bin
+    md5sum: 90722d5cde5fa6c781df7ecb53f0d90e
+ - bootloader for DDR 4GB with ECC support
+    file: mochabin-bootloader-ddr4-4g-ecc-mvddr-2e20f5d-atf-277d4b6b-uboot-b794de0054-20220829-rel.bin
+    md5sum: 6edc15f01580ce87abba4b60b25b8b2d
+ - bootloader for DDR 4GB 
+    file: mochabin-bootloader-ddr4-4g-mvddr-2e20f5d-atf-277d4b6b-uboot-b794de0054-20220829-rel.bin
+    md5sum: 127a7eb14eb4b76b51d5db5289e13a04
+ - bootloader for DDR 8GB with ECC support
+    file: mochabin-bootloader-ddr4-8g-ecc-mvddr-2e20f5d-atf-277d4b6b-uboot-b794de0054-20220829-rel.bin
+    md5sum: 1f91ff48cd43385ff7afbc7d8256269c
+ - bootloader for DDR 8GB 
+    file: mochabin-bootloader-ddr4-8g-mvddr-2e20f5d-atf-277d4b6b-uboot-b794de0054-20220829-rel.bin
+    md5sum: 810abcecf4602692464139c794f1102b
+ - Linux kernel & modules
+    file: mochabin-kernel-modules-v4.10-20220829.tar.gz
+    md5sum: a2b990be86890eb084f5d29431e055e5
+ - Ubuntu1804-rootfs
+    file: mochabin-rootfs-ubuntu1804-v4.10-20220829.tar.gz
+    md5sum: daad47db2f4949a792d85e17d98aaa88
+ - recovery files
+ - mochabin-recovery.txt (recovery document)
+ - u-boot-env.txt (u-boot environment)
+ - ReleaseNote.txt
+
+# changed
+v4.3:
+  - [atf]: revert "fix usb serdes power on hang issue" and add new patch to fix USB3 powering on when on lane#2
+  - [kernel]: configure cfg80211 and mac80211 to module and fix CONFIG_CFG80211_WEXT=y missing assignment problem
+  - [kernel]: update mochabin kernel config to support SQUASHFS_XZ
+  - [kernel]: update mochabin kernel config to support USB_NET_RNDIS_HOST
+  - [kernel]: update mochabin kernel config to support multiple devices and device mapper driver
+  - [kernel]: update mochabin kernel config to remove gpio debug feature
+  - [rootfs]: add Haveged service to improve the low-entropy (<1000) issue in system
+ v4.4:
+  - [kernel]: upgrade linux codebase to Linux 5.4.53
+  - [kernel]: use gti_generic_mvebu_defconfig to build kernel
+  - [kernel]: enable armada 7k/8k cpu clk driver
+  - [rootfs]: update 88w8997 wifi firmware (16.88.1.p193)
+ v4.5-testing:
+  - [kernel]: add support for 88w9098 wifi module
+  - [kernel]: add support for PL2303HXN
+  - [rootfs]: update wpa package to 2.9 (hostapd + wpasupplicant) to support 802.11ax
+  - [rootfs]: update iw package to support 802.11ax
+ v4.6:
+  - [atf]: update phy-porting-layer.h to mochabin hw v1.1
+  - [u-boot]: update mochabin dts to mochabin hw v1.1
+  - [kernel]: upgrade kernel version to linux-v5.4.108
+  - [kernel]: update mochabin dts to mochabin hw v1.1
+  - [kernel]: fix xlg port can't link up issue
+  - [kernel]: add pwm support for Armada 8K/7K
+v4.7:
+  - [kernel]: upgrade kernel version to linux-v5.4.114
+  - [kernel]: add missing quectel ec20 id to device list
+  - [kernel]: add CONFIG_NETFILTER_XT_MATCH_OWNER to generic config file
+  - [rootfs]: upgrade bridge-utils package to v1.6
+  - [rootfs]: modify hostapd-conf to support fallback ax to ac htmode if device doesn't supoort ax
+v4.8:
+  - [atf]: add 2GB/4GB/8GB DDR with ECC memory topology to support Mochabin hw v1.2 board
+  - [rootfs]: add fw_printf utility
+  - [kernel]: enable safexcel crypto module and add eip197 firmware to rootfs
+v4.9:
+  - [kernel]: upgrade kernel version to linux-v5.4.163
+  - [kernel]: upgrade 88w9098 driver to PCIE-UAPSTA-UART-BT-9098-U16-X86-17.68.1.p109.12-17.26.1.p109-MXM5X17312.P8_V0V1-MGPL
+  - [kernel]: update PCI#2 memory window mapping
+  - [kernel]: increase CMA size up to 64M Bytes
+  - [kernel]: enable more network feature options
+  - [rootfs]: add avahi-daemon and avahi-utils packages
+  - [rootfs]: fix machine-id issue
+v4.10:
+  - [u-boot]: add Marvell rtc driver (for armada 7k/8k)
+  - [kernel]: add Qualcomm QCA6391 WiFi driver support
+  - [mv-ddr]: bootloader_for_mochabin_hw-rev-1-5-0_20220905
+              - apn806: change CK_DELAY params from 160 to 190

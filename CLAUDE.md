@@ -46,6 +46,97 @@ Quand créer une issue :
 - Feature request de l'utilisateur
 - Tâche à reporter pour plus tard
 
+### Synchronisation GitHub Issues — Workflow Obligatoire
+
+**Principe fondamental** : Transparence maximale. Chaque plan/feature majeure doit être synchronisée avec une GitHub Issue pour traçabilité publique.
+
+#### Workflow complet (Open by Default)
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  1. CRÉATION DU PLAN                                                │
+│     ├─ Identifier la feature/bug dans WIP.md ou TODO.md             │
+│     ├─ Créer GitHub Issue avec label approprié                      │
+│     │   gh issue create --title "..." --body "..." --label "..."    │
+│     └─ Référencer l'issue # dans WIP.md/TODO.md                     │
+├─────────────────────────────────────────────────────────────────────┤
+│  2. IMPLÉMENTATION                                                  │
+│     ├─ Mettre à jour WIP.md avec progression                        │
+│     ├─ Commenter l'issue avec avancement significatif               │
+│     │   gh issue comment <#> --body "Progress: ..."                 │
+│     └─ Cocher les sous-tâches dans l'issue si applicable            │
+├─────────────────────────────────────────────────────────────────────┤
+│  3. COMPLÉTION (NE PAS FERMER)                                      │
+│     ├─ Créer commit avec référence issue : "feat: X (ref #42)"      │
+│     ├─ Mettre à jour HISTORY.md avec entrée datée                   │
+│     ├─ Déplacer vers "✅ Fait" dans WIP.md                          │
+│     ├─ Commenter l'issue : "Implementation complete, pending review"│
+│     └─ NE JAMAIS fermer automatiquement                             │
+├─────────────────────────────────────────────────────────────────────┤
+│  4. VALIDATION MANUELLE (User uniquement)                           │
+│     ├─ User teste/valide la feature                                 │
+│     ├─ User confirme : "Validated, closing"                         │
+│     └─ User ferme l'issue OU demande corrections                    │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+#### Labels GitHub recommandés
+
+| Label | Usage |
+|-------|-------|
+| `migration` | Portage OpenWrt → Debian |
+| `hardware` | LED, GPIO, I2C, board-specific |
+| `api` | FastAPI endpoints |
+| `frontend` | Dashboard, UI, CSS |
+| `security` | CSPN, nftables, WAF |
+| `infra` | HAProxy, nginx, systemd |
+| `documentation` | README, CLAUDE.md |
+| `wip` | Travail en cours |
+| `blocked` | Bloqué par dépendance |
+
+#### Commandes rapides
+
+```bash
+# Créer une issue depuis la ligne de commande
+gh issue create --title "Port LED heartbeat from OpenWrt" \
+  --body "$(cat <<'EOF'
+## Context
+Description du problème ou de la feature.
+
+## Tasks
+- [ ] Task 1
+- [ ] Task 2
+- [ ] Task 3
+
+## Files
+- `path/to/file.py`
+
+## References
+- Related: #XX
+EOF
+)" --label "migration,hardware"
+
+# Lister les issues ouvertes
+gh issue list --state open
+
+# Commenter une issue
+gh issue comment 42 --body "Progress: Backend completed, testing frontend"
+
+# Voir une issue
+gh issue view 42
+
+# Fermer (USER UNIQUEMENT après validation)
+gh issue close 42 --comment "Validated and deployed"
+```
+
+#### Règles strictes
+
+1. **Jamais de fermeture automatique** — Seul le user peut valider et fermer
+2. **Référencer dans les commits** — `feat: Add X (ref #42)` ou `fix: Y (closes #42)` si user a pré-validé
+3. **Synchroniser WIP.md** — Chaque issue ouverte doit apparaître dans WIP.md
+4. **Snapshot avant clôture** — Commit + tag si feature majeure
+5. **Issues publiques** — Workflow open source, traçabilité maximale
+
 ---
 
 ## 🏗️ Ce qu'est ce projet
