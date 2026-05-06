@@ -346,30 +346,37 @@ async def health():
 
 
 # =============================================================================
-# Legacy Alias: /api/v1/system/metrics
-# For backward compatibility with remote-ui/round Pi Zero dashboard
+# System Metrics — MOCHAbin host metrics for Round UI dashboard
 # =============================================================================
 
-@app.get("/api/v1/system/metrics")
-async def get_system_metrics_alias():
-    """
-    Alias for host system metrics.
-
-    The Pi Zero remote-ui fetches from /api/v1/system/metrics by default.
-    This endpoint returns the same data as /api/v1/eye-remote/metrics.
-    """
+def _get_host_metrics() -> dict:
+    """Collect MOCHAbin host system metrics for round UI display."""
     import os
-    from datetime import datetime, timezone
+    import json
+    from datetime import timezone
 
-    # CPU usage (estimate from load average)
+    metrics = {
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "hostname": "secubox-mochabin",
+    }
+
+    # CPU usage from /proc/stat
     try:
-        load = os.getloadavg()[0]
-        cpus = os.cpu_count() or 1
-        cpu_percent = round(min(100.0, (load / cpus) * 100), 1)
+        with open("/proc/stat") as f:
+            line = f.readline()
+        parts = line.split()
+        if parts[0] == "cpu":
+            values = [int(x) for x in parts[1:8]]
+            idle = values[3]
+            total = sum(values)
+            # Approximate CPU usage
+            load = os.getloadavg()[0]
+            cpus = os.cpu_count() or 4
+            metrics["cpu_percent"] = round(min(100.0, (load / cpus) * 100), 1)
     except Exception:
-        cpu_percent = 0.0
+        metrics["cpu_percent"] = 0.0
 
-    # Memory
+    # Memory from /proc/meminfo
     try:
         with open("/proc/meminfo") as f:
             meminfo = {}
@@ -377,53 +384,52 @@ async def get_system_metrics_alias():
                 parts = line.split()
                 if len(parts) >= 2:
                     meminfo[parts[0].rstrip(":")] = int(parts[1])
-        total_kb = meminfo.get("MemTotal", 1)
-        free_kb = meminfo.get("MemAvailable", meminfo.get("MemFree", 0))
-        mem_percent = round(((total_kb - free_kb) / total_kb) * 100, 1)
-        mem_free_mb = free_kb // 1024
-        mem_total_mb = total_kb // 1024
+            total_kb = meminfo.get("MemTotal", 1)
+            avail_kb = meminfo.get("MemAvailable", meminfo.get("MemFree", 0))
+            metrics["mem_percent"] = round(((total_kb - avail_kb) / total_kb) * 100, 1)
     except Exception:
-        mem_percent = 0.0
-        mem_free_mb = 0
-        mem_total_mb = 0
+        metrics["mem_percent"] = 0.0
 
-    # Disk
+    # Disk from statvfs
     try:
-        statvfs = os.statvfs("/")
-        total = statvfs.f_blocks * statvfs.f_frsize
-        free = statvfs.f_bavail * statvfs.f_frsize
-        disk_percent = round(((total - free) / total) * 100, 1) if total > 0 else 0.0
-        disk_free_gb = round(free / (1024**3), 1)
-        disk_total_gb = round(total / (1024**3), 1)
+        st = os.statvfs("/")
+        total = st.f_blocks * st.f_frsize
+        free = st.f_bavail * st.f_frsize
+        metrics["disk_percent"] = round(((total - free) / total) * 100, 1) if total > 0 else 0.0
     except Exception:
-        disk_percent = 0.0
-        disk_free_gb = 0.0
-        disk_total_gb = 0.0
+        metrics["disk_percent"] = 0.0
+
+    # CPU temperature
+    try:
+        with open("/sys/class/thermal/thermal_zone0/temp") as f:
+            metrics["cpu_temp"] = round(int(f.read().strip()) / 1000.0, 1)
+    except Exception:
+        metrics["cpu_temp"] = 0.0
 
     # Load average
     try:
-        load_1m, load_5m, load_15m = os.getloadavg()
+        load1, load5, load15 = os.getloadavg()
+        metrics["load_1m"] = round(load1, 2)
+        metrics["load_5m"] = round(load5, 2)
+        metrics["load_15m"] = round(load15, 2)
     except Exception:
-        load_1m = load_5m = load_15m = 0.0
+        metrics["load_1m"] = metrics["load_5m"] = metrics["load_15m"] = 0.0
 
     # Uptime
     try:
         with open("/proc/uptime") as f:
-            uptime = int(float(f.read().split()[0]))
+            metrics["uptime_seconds"] = int(float(f.read().split()[0]))
     except Exception:
-        uptime = 0
+        metrics["uptime_seconds"] = 0
 
-    return {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "uptime": uptime,
-        "cpu_percent": cpu_percent,
-        "memory_percent": mem_percent,
-        "memory_free_mb": mem_free_mb,
-        "memory_total_mb": mem_total_mb,
-        "disk_percent": disk_percent,
-        "disk_free_gb": disk_free_gb,
-        "disk_total_gb": disk_total_gb,
-        "load_1m": round(load_1m, 2),
-        "load_5m": round(load_5m, 2),
-        "load_15m": round(load_15m, 2),
-    }
+    return metrics
+
+
+@app.get("/api/v1/system/metrics")
+async def get_system_metrics():
+    """Get MOCHAbin host system metrics for round UI dashboard.
+
+    This endpoint provides the host's metrics (not Pi Zero) for display
+    on the Eye Remote round dashboard.
+    """
+    return _get_host_metrics()
