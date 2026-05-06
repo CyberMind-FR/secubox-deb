@@ -243,8 +243,12 @@
                             updateMetricsUI(metrics);
                         } catch (e2) {
                             console.log('Pi Zero metrics not available');
+                            clearMetricsUI();
                         }
                     }
+                } else {
+                    // Clear metrics when disconnected
+                    clearMetricsUI();
                 }
             } catch (err) {
                 console.error('Refresh error:', err);
@@ -319,6 +323,18 @@
             if (value < 50) el.classList.add('good');
             else if (value < 80) el.classList.add('warn');
             else el.classList.add('bad');
+        }
+
+        function clearMetricsUI() {
+            document.getElementById('cpu-value').textContent = '--';
+            document.getElementById('mem-value').textContent = '--';
+            document.getElementById('temp-value').textContent = '--';
+            document.getElementById('pizero-uptime').textContent = '--';
+            // Reset gauge classes
+            ['cpu-gauge', 'mem-gauge', 'temp-gauge'].forEach(id => {
+                const el = document.getElementById(id);
+                el.classList.remove('good', 'warn', 'bad');
+            });
         }
 
         async function probeConnection() {
