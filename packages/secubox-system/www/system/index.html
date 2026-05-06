@@ -505,7 +505,7 @@
             const list = document.getElementById('services-list');
             const services = data.services || [];
 
-            list.innerHTML = services.slice(0, 15).map(s => `
+            list.innerHTML = services.slice(0, 4).map(s => `
                 <div class="service-item">
                     <span><span class="status-dot ${s.active ? 'running' : 'stopped'}"></span>${s.name}</span>
                     <button class="btn ${s.active ? 'danger' : 'success'}" onclick="toggleService('${s.name}', ${!s.active})">${s.active ? 'Stop' : 'Start'}</button>
@@ -518,7 +518,7 @@
             const info = document.getElementById('network-info');
             const interfaces = data.interfaces || [];
 
-            info.innerHTML = interfaces.map(i => `
+            info.innerHTML = interfaces.slice(0, 4).map(i => `
                 <div class="info-row">
                     <span class="label">${i.name}</span>
                     <span style="color: ${i.up ? 'var(--green)' : 'var(--red)'};">${i.addresses?.[0] || 'no IP'} ${i.up ? '▲' : '▼'}</span>
