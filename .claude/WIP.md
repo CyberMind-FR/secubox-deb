@@ -83,6 +83,30 @@
 - **Navbar Camouflage**: Orange LED for absent, DISABLED section
 - **Only Regenerate When Necessary**: Smart invalidation
 
+### VHost Routing Fixes (Session 106 continued)
+- [x] Identified live.maegia.tv routing issue (HAProxy → nginx_vhosts instead of metablogizer)
+- [x] Created `metablog_live` backend (port 8906)
+- [x] Fixed HAProxy ACL for live.maegia.tv → metablog_live
+- [x] Verified live.maegia.tv serves correct content
+
+### GitHub Issues Created
+- [x] **#43**: Health Monitor Dashboard - Buffered Metrics & Live Status
+  - Prober background task + cache JSON
+  - Config vs actual state comparison
+  - Emoji/LED status (🟢🔴🟡⚪)
+  - Global alert sketch on dashboard
+  - WebSocket real-time updates
+- [x] **#44**: WebUI Obfuscation - admin.HOSTNAME.secubox.in Only
+  - WebUI never responds on arbitrary URLs
+  - Pattern strict: `admin.*.secubox.in`
+  - Security feature for CSPN compliance
+
+### LED Investigation (IS31FL3199)
+- [ ] CONFIG_LEDS_IS31FL319X not compiled in Debian kernel
+- [ ] DTB GST factory lacks IS31FL3199 node
+- [ ] Options: kernel recompile or userspace I2C driver
+- [ ] Issue à créer pour tracking
+
 ---
 
 ---
