@@ -1,5 +1,27 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-06 (Session 109) — v2.5.0*
+*Mis à jour : 2026-05-06 (Session 110)*
+
+---
+
+## ✅ Session 110: System Optimization + Eye Remote Fix
+
+### System Resource Cleanup
+- [x] Killed orphan health prober (PID 1169103, 705MB VIRT memory leak)
+- [x] Disabled netdata (freed 213MB RAM, 26% CPU)
+- [x] **Load: 7.16 → 4.78 (-33%)**
+- [x] **Free RAM: 380MB → 692MB (+82%)**
+
+### Eye Remote Dashboard Fix
+- [x] Fixed duplicate `get_pizero_metrics()` function bug in API
+- [x] Deployed clean API source (removed router bugs)
+- [x] Added `clearMetricsUI()` - resets gauges to `--` when disconnected
+- [x] Frontend now shows proper disconnect state instead of stale data
+
+### Current Health Status
+- **VHost Health:** 🟢 27 🟡 134 🔴 0 ⬜ 58 (96.4%)
+- **Module Health:** 🟢 5 🟡 3 🔴 0 (62.5%)
+- **System Load:** 4.78 (4-core ARM)
+- **Memory:** 6.1GB/7.7GB (79%)
 
 ---
 
