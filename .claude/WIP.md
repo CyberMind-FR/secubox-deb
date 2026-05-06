@@ -17,6 +17,12 @@
 - [x] Added `clearMetricsUI()` - resets gauges to `--` when disconnected
 - [x] Frontend now shows proper disconnect state instead of stale data
 
+### Eye Remote Round UI Fix
+- [x] Added `/api/v1/system/metrics` endpoint for MOCHAbin metrics
+- [x] Round UI on Pi Zero now receives live data from MOCHAbin
+- [x] Metrics: cpu_percent, mem_percent, disk_percent, cpu_temp, load, uptime
+- [x] Verified working on HyperPixel 2.1 Round display
+
 ### Current Health Status
 - **VHost Health:** 🟢 27 🟡 134 🔴 0 ⬜ 58 (96.4%)
 - **Module Health:** 🟢 5 🟡 3 🔴 0 (62.5%)
