@@ -125,6 +125,20 @@
   - Favorites section
   - Config `/etc/secubox/navbar.toml`
 
+### Health Monitor Implementation (#43)
+- [x] Created `/etc/secubox/health.toml` config
+- [x] Created `/usr/lib/secubox/health/prober.py` daemon
+- [x] Extracts 92 vhosts from HAProxy config
+- [x] Async probing with aiohttp (20 concurrent)
+- [x] Writes to `/var/cache/secubox/health/status.json`
+- [x] Created `secubox-health-prober.service` (enabled)
+- [x] Added API router to secubox-hub:
+  - `GET /health-monitor/summary` - Global stats
+  - `GET /health-monitor/status` - All vhosts
+  - `GET /health-monitor/vhost/{domain}` - Single vhost
+  - `GET /health-monitor/alerts` - Down/error list
+- [ ] Dashboard widget (frontend) - TODO
+
 ---
 
 ---
