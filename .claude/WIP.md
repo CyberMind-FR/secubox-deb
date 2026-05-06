@@ -21,7 +21,13 @@
 - [x] Added `/api/v1/system/metrics` endpoint for MOCHAbin metrics
 - [x] Round UI on Pi Zero now receives live data from MOCHAbin
 - [x] Metrics: cpu_percent, mem_percent, disk_percent, cpu_temp, load, uptime
+- [x] Fixed CPU calculation: real /proc/stat delta (was load-based → stuck at 100%)
+- [x] Added async double pre-cache buffer (per guidelines):
+  - Background task updates shadow buffer every 2s
+  - Atomic swap to active buffer
+  - API returns instantly from cache
 - [x] Verified working on HyperPixel 2.1 Round display
+- [x] Rings now show varied fill levels matching real metrics
 
 ### Current Health Status
 - **VHost Health:** 🟢 27 🟡 134 🔴 0 ⬜ 58 (96.4%)
