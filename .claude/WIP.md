@@ -16,10 +16,11 @@
 - [x] Create `wafctl` control script (xxxctl pattern)
 - [x] Verified working: gandalf 200, pix 200 via WAF
 
-### Phase 2: HAProxy WAF Integration
-- [ ] Configure HAProxy backends to route through mitmproxy
-- [ ] `backend mitmproxy_inspector` → LXC 10.100.0.60:8080
-- [ ] Update all vhost backends to use WAF inspection
+### Phase 2: HAProxy WAF Integration ✅ COMPLETE
+- [x] Configure HAProxy backends to route through mitmproxy
+- [x] `backend mitmproxy_inspector` → LXC 10.100.0.60:8080
+- [x] Update all vhost backends to use WAF inspection (330 rules)
+- [x] Using `http-request set-uri` for proxy-style requests
 - [ ] Test bypass rules for WebSocket/streaming services
 
 ### Phase 3: WAF Rules & Monitoring
@@ -48,13 +49,31 @@
 
 ---
 
-## ✅ Session 102: CMSD-1.0 License Integration
+## ✅ Session 102: CMSD-1.0 License + WAF Phase 2 + Gitea
 
+### License Integration
 - [x] Created `LICENCE-CMSD-1.0.md` (French, authoritative)
 - [x] Created `LICENSE-CMSD-1.0.en.md` (English, informative)
 - [x] Created `LICENSING.md` (documentation & SPDX guidance)
 - [x] Updated `README.md` with prominent license notice
-- [x] Committed and pushed to GitHub
+- [x] Wiki pages: License.md, License-FR.md with QR codes
+- [x] GitHub issues: #35 (migration), #36 (license)
+
+### WAF Phase 2 Complete
+- [x] All 330 backends routed through mitmproxy_inspector
+- [x] HAProxy `http-request set-uri` for proxy-style requests
+- [x] All traffic inspected: X-SecuBox-WAF header added
+- [x] Tested: gandalf, pix, gitea, nextcloud - all via WAF
+
+### Gitea Configuration
+- [x] Fixed permissions (`/var/lib/gitea` → gitea:gitea)
+- [x] Updated domain: gitea.gk2.secubox.in
+- [x] Updated ROOT_URL: https://gitea.gk2.secubox.in/
+- [x] Gitea fully operational through WAF
+
+### WebUI LAN Access
+- [x] Added HAProxy frontend for 192.168.255.1:9443
+- [x] WebUI accessible via WAF with authentication
 
 ---
 
