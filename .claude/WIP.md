@@ -1,5 +1,43 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-06 (Session 103)*
+*Mis à jour : 2026-05-06 (Session 104)*
+
+---
+
+## ✅ Session 104: ACME SSL Renewal + SecuBox CLI v2.0.0
+
+### ACME SSL Certificate Renewal
+- [x] Fixed live.maegia.tv expired certificate (P0 OPORD F-001)
+- [x] Configured HAProxy ACME ACL (path_beg /.well-known/acme-challenge/)
+- [x] Added acme_challenge backend (nginx port 8880)
+- [x] Renewed certificate via ZeroSSL (valid until Aug 4, 2026)
+- [x] Deployed certificate to /data/haproxy/certs/
+- [x] Set up ACME cron for auto-renewal (0 2 * * *)
+
+### SecuBox CLI v2.0.0
+- [x] Enhanced `secubox` unified CLI with new commands:
+  - `secubox threats` - View CrowdSec + WAF threats
+  - `secubox waf` - WAF inspection status
+  - `secubox firewall` - nftables rules
+  - `secubox bans` - CrowdSec active bans
+  - `secubox vhosts` - HAProxy virtual hosts
+  - `secubox certs` - SSL certificate status
+  - `secubox mode [kiosk|tui|console]` - Display mode
+  - `secubox acme-renew <domain>` - Renew SSL certificate
+- [x] Created helper scripts:
+  - `secubox-services` - Service management
+  - `secubox-network` - Network configuration
+  - `secubox-firewall` - Firewall status
+  - `secubox-threats` - Threat intelligence
+  - `secubox-waf-status` - WAF status
+  - `secubox-mode` - Display mode switcher
+
+### OPORD Fixes
+- [x] F-001: SSL expired live.maegia.tv - FIXED
+- [x] F-002: License conflict README vs Wiki - FIXED (removed Apache-2.0 reference)
+- [ ] F-003: Package count - Already correct at 131 packages
+
+### Metablogizer Fixes
+- [x] Fixed site.json permissions (chown secubox:secubox)
 
 ---
 

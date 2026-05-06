@@ -141,7 +141,8 @@ Automatic threat detection and IP blocking with community threat intelligence.
 
 ## License
 
-Apache-2.0 © 2026 [CyberMind](https://cybermind.fr) · Gérald Kerma
+**CMSD-1.0** (CyberMind Source-Disclosed License) © 2026 [CyberMind](https://cybermind.fr) · Gérald Kerma
+See [LICENCE-CMSD-1.0.md](LICENCE-CMSD-1.0.md) for terms.
 
 ---
 
