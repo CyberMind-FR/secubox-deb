@@ -129,8 +129,10 @@ INCLUDE_PKGS+=",sudo,less,vim-tiny,cron,rsync,jq"
 INCLUDE_PKGS+=",parted,dosfstools,e2fsprogs,pciutils,usbutils"
 
 # Python dependencies for SecuBox modules (apt packages)
+# NOTE: python3-cryptography excluded - fails to configure under QEMU emulation
+# (installed via pip later instead, which works reliably cross-arch)
 INCLUDE_PKGS+=",python3-fastapi,python3-uvicorn,python3-httpx,python3-psutil"
-INCLUDE_PKGS+=",python3-aiosqlite,python3-cryptography,python3-jinja2,python3-jwt"
+INCLUDE_PKGS+=",python3-aiosqlite,python3-jinja2,python3-jwt"
 INCLUDE_PKGS+=",python3-aiofiles,python3-pil,python3-tomli,python3-pydantic"
 INCLUDE_PKGS+=",python3-jose,python3-toml,python3-netifaces"
 
