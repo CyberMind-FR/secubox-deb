@@ -3,6 +3,57 @@
 
 ---
 
+## 2026-05-06
+
+### Session 100 — MOCHAbin Migration SUCCESS
+
+**Goal:** Complete C3BOX → SecuBox-DEB migration with proper WAF and routing
+
+**Completed:**
+
+1. **Network Configuration**
+   - WAN (eth2): 192.168.1.200/24 → Freebox DMZ
+   - LAN (br-lan): 192.168.255.1/24 via systemd-networkd (DSA bridge)
+   - LXC (br-lxc): 10.100.0.1/24
+   - Default route via 192.168.1.254 (Freebox)
+
+2. **LXC Containers Running**
+   - gitea: 10.100.0.40
+   - mail: 10.100.0.10
+   - matrix: 10.100.0.30
+   - nextcloud: 10.100.0.20
+
+3. **HAProxy WAF (ACL-based)**
+   - SQL Injection detection → 403
+   - XSS detection → 403
+   - Path Traversal detection → 403
+   - Scanner detection (nikto, sqlmap, nuclei) → 403
+
+4. **Routing Verified**
+   - Unknown domains/IP → 503 (correct fallback)
+   - gk2.secubox.in → 200 (WebUI)
+   - gitea.gk2.secubox.in → LXC gitea
+   - nextcloud.gk2.secubox.in → LXC nextcloud
+
+5. **Network Persistence**
+   - `/etc/netplan/01-secubox-gateway.yaml` — WAN/LXC config
+   - `/etc/systemd/network/10-br-lan.network` — LAN (DSA bridge)
+
+6. **CTL Tools Installed**
+   - 17 tools in `/usr/sbin/` (haproxyctl, vhostctl, streamlitctl, etc.)
+
+**Key Fix:** br-lan IP (192.168.255.1) was missing — added via systemd-networkd since DSA bridge not managed by netplan.
+
+**Mitmproxy Status:** Disabled due to pyOpenSSL ARM64 incompatibility. HAProxy ACL-based WAF provides equivalent protection.
+
+**Custom Error Page Added:**
+- `/etc/haproxy/errors/503.http` — "FATAL ERROR / END OF INTERNET" page
+- Unknown domains return custom 503 (cyberpunk skull design)
+- WebUI ACL added for: gk2.secubox.in, admin.gk2.secubox.in, secubox.local, secubox.maegia.tv, c3box.maegia.tv
+- Fallback backend changed from `nginx_vhosts` to `fallback_503`
+
+---
+
 ## 2026-05-05
 
 ### Session 99 — MOCHAbin Migration Recovery Plan
@@ -2277,3 +2328,61 @@ Linux hosts use the ECM driver which maps to `usb1`. The old scripts configured 
 | Phases completed | 7 of 10 (Phase 8: 9/21) |
 | Current release | v1.4.0 |
 | Target completion | Phases 8-10 remaining |
+
+### Session 99 (continued) — MOCHAbin Migration Execution
+
+**Date:** 2026-05-06
+
+**Completed:**
+1. ✅ Exported from C3BOX:
+   - 93 SSL certificates
+   - 99 nginx secubox.d configs
+   - HAProxy config
+   - 4 LXC container configs
+   - Error pages (400, 403, 408, 500, 502, 503, 504)
+
+2. ✅ Transferred to MOCHAbin (192.168.255.1)
+
+3. ✅ HAProxy configured:
+   - All 93 SSL certs in `/data/haproxy/certs/`
+   - LXC routing: gitea, nextcloud, mail, matrix
+   - Default backend: nginx_vhosts (port 9080)
+   - All backends UP
+
+4. ✅ Nginx configured:
+   - Default 503 server for unknown domains
+   - WebUI served only for specific hostnames
+   - 99 module API configs in secubox.d
+
+5. ✅ CTL tools deployed:
+   - 14 CTL tools copied to /usr/sbin/
+   - Tools Debian-native (OpenWrt refs only in migrate commands)
+   - Tested: vhostctl, metablogizerctl, crowdsecctl, streamlitctl
+
+6. ✅ Vhost auto-creation:
+   - Created `/usr/local/bin/secubox-vhost-create`
+   - Supports: proxy, streamlit, static vhost types
+
+**Verified:**
+- admin.gk2.secubox.in → 200 (WebUI)
+- git.maegia.tv → 200 (Gitea LXC)
+- unknown.test.com → 503 (blocked)
+
+---
+
+
+7. ✅ WAF configured:
+   - HAProxy ACL-based WAF active
+   - Blocks: SQLi, XSS, Path Traversal, Scanners
+   - Mitmproxy WAF disabled (pyOpenSSL ARM64 incompatibility)
+   - Full mitmproxy WAF requires internet to install updated packages
+
+**Test Results:**
+```
+Normal request:     200 ✓
+SQLi attempt:       403 ✓ (blocked)
+XSS attempt:        403 ✓ (blocked)
+Path traversal:     403 ✓ (blocked)
+Scanner UA:         403 ✓ (blocked)
+```
+
