@@ -5,6 +5,30 @@
 
 ## 2026-05-06
 
+### Session 109 — VHost Matrix Sync + Eye Remote Fixes
+
+**Completed:**
+
+1. **VHost Matrix Sync Tool** (`scripts/vhost-matrix-sync.sh`)
+   - Python-based HAProxy parsing (reliable regex extraction)
+   - Fixed stderr logging for clean JSON capture
+   - Syncs HAProxy vhosts → mitmproxy routes + health prober
+   - Uses 10.100.0.1 (LXC bridge IP) for proper routing
+   - Successfully synced 94 vhosts on production server
+
+2. **Eye Remote Dashboard Fixes**
+   - API calls now use public endpoints (no JWT required)
+   - Added `/api/v1/system/metrics` alias for Pi Zero compatibility
+   - Pi Zero round UI displays correct MOCHAbin host metrics
+
+3. **HAProxy VHost Additions**
+   - Added sdlc.gk2.secubox.in and facb.gk2.secubox.in backends
+   - Both routed through mitmproxy WAF inspector
+
+4. **GitHub Issue #49**: MetaBlogizer + Streamlit version management via Gitea
+
+---
+
 ### Session 102 — v2.5.0 WAF Integration Complete
 
 **Goal:** Complete WAF mitmproxy LXC integration (all 5 phases)
