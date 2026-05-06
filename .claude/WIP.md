@@ -4639,3 +4639,53 @@ These settings explicitly tell the VideoCore GPU how to drive the DPI display, b
 
 ### Testing
 - Awaiting confirmation that explicit DPI settings fix the display
+
+---
+
+## 2026-05-06: Session 106 - Heartbeat, LEDs, GitHub Issues Workflow
+
+### Accomplished
+
+1. **GitHub Issues Workflow** ajouté à CLAUDE.md
+   - Synchronisation obligatoire WIP/TODO ↔ GitHub Issues
+   - Règle: jamais de fermeture automatique, validation manuelle user
+
+2. **LED Investigation (Issue #39)**
+   - `CONFIG_LEDS_IS31FL319X is not set` dans kernel Debian
+   - I2C bus errors (mv64xxx_i2c_fsm: Ctlr Error)
+   - DTB Factory GST n'a PAS la config IS31FL3199
+   - Différence: GST kernel 5.4.163 vs mainline avec support LED
+
+3. **References GST intégrées**
+   - `docs/references/gst/mochabin-release-v4.10.txt`
+   - `docs/references/gst/MOCHABIN-BOX-block-diagram-Jan10-2020.pdf`
+
+4. **Issue #38 vérifiée** - Navbar health checks déployés
+   - `sidebar.js` avec healthEndpoints
+   - Classes status-dot active/warning/error/disabled
+
+### Technical References (memorized)
+
+| Doc | Location |
+|-----|----------|
+| GST Release Notes | ~/DEVEL/GST/ReleaseNote.txt |
+| GST Downloads | ~/DEVEL/GST/Downloads/Mochabin/ |
+| Marvell Datasheets | ~/DEVEL/ARMADA/*.pdf |
+| MOCHAbin Images | ~/DEVEL/MOCHABIN/ |
+
+### LEDs - Root Cause
+
+Le DTB factory GST (v4.10) ne configure PAS le contrôleur LED IS31FL3199.
+Le support a été ajouté dans le DTS upstream Linux (torvalds/linux) mais:
+1. Kernel doit être compilé avec CONFIG_LEDS_IS31FL319X=y
+2. DTS doit inclure le noeud is31fl3199 sur i2c@701100
+3. GPIO SDB (62) doit être contrôlé pour activer la puce
+
+### Next Steps
+
+- [ ] Compiler kernel avec CONFIG_LEDS_IS31FL319X
+- [ ] Ou continuer avec userspace i2cset après fix I2C
+- [ ] Privatiser repo gkerma/secubox-openwrt
+- [ ] Mettre à jour licence secubox-openwrt
+- [ ] Deploy live.maegia.tv
+
