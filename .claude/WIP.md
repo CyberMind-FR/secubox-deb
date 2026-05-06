@@ -3,7 +3,53 @@
 
 ---
 
-## 🔄 En cours — Session 101: MOCHAbin Migration COMPLETE
+## 🎯 Plan v2.5.0 — WAF Fixing & Full Health
+
+**Target:** Complete WAF integration and achieve fully healthy SecuBox deployment
+
+### Phase 1: WAF/Mitmproxy Container Setup
+- [ ] Create mitmproxy LXC container at `/data/lxc/mitmproxy`
+- [ ] Install mitmproxy with transparent proxy support
+- [ ] Configure haproxy-routes.json for backend routing
+- [ ] Symlink `/var/lib/lxc/mitmproxy` for lxc-* compatibility
+
+### Phase 2: HAProxy WAF Integration
+- [ ] Configure HAProxy backends to route through mitmproxy
+- [ ] `backend mitmproxy_inspector` → LXC 10.100.0.60:8080
+- [ ] Update all vhost backends to use WAF inspection
+- [ ] Test bypass rules for WebSocket/streaming services
+
+### Phase 3: WAF Rules & Monitoring
+- [ ] Deploy mitmproxy inspection scripts (SecuBox WAF addon)
+- [ ] Configure logging to `/var/log/secubox/waf/`
+- [ ] Create `wafctl` control script (xxxctl pattern)
+- [ ] WebUI integration: WAF status, blocked requests, rules
+
+### Phase 4: Health Verification
+- [ ] All HAProxy backends healthy (no 503s)
+- [ ] WAF container running and inspecting traffic
+- [ ] Metablogizer: 59+ sites accessible via internet
+- [ ] Streamlit: 29 instances accessible via internet
+- [ ] LXC containers: gitea, nextcloud, matrix, mitmproxy
+- [ ] CrowdSec integration with WAF logs
+
+### Phase 5: Package Updates
+- [ ] Create `secubox-waf` package (mitmproxy + wafctl + config)
+- [ ] Update `secubox-haproxy` for WAF backend support
+- [ ] Add WAF status to WebUI dashboard
+
+### Dependencies
+- mitmproxy compatible with OpenSSL on Debian arm64
+- br-lxc network configured (10.100.0.0/24)
+- HAProxy TOML config support
+
+---
+
+## ✅ Released v2.4.0 — Source Package Sync
+
+---
+
+## 🔄 Previous — Session 101: MOCHAbin Migration COMPLETE
 
 ### ✅ Fait cette session
 
