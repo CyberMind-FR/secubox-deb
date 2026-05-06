@@ -1,0 +1,91 @@
+/*
+ * Device Tree Overlay for MOCHAbin IS31FL3199 RGB LEDs
+ * SecuBox-DEB — CyberMind
+ *
+ * IS31FL3199: 9-channel LED driver with I2C interface
+ * MOCHAbin: I2C bus 1 (CP I2C), address 0x64
+ *
+ * Compile: dtc -@ -I dts -O dtb -o secubox-leds.dtbo secubox-leds.dts
+ * Install: cp secubox-leds.dtbo /boot/dtbs/$(uname -r)/marvell/overlays/
+ *
+ * Enable in U-Boot:
+ *   setenv fdt_overlays secubox-leds.dtbo
+ *   saveenv
+ */
+
+/dts-v1/;
+/plugin/;
+
+/ {
+    compatible = "globalscale,mochabin";
+
+    fragment@0 {
+        target = <&cp0_i2c0>;
+        __overlay__ {
+            #address-cells = <1>;
+            #size-cells = <0>;
+            status = "okay";
+
+            led_controller: leds@64 {
+                compatible = "issi,is31fl3199";
+                reg = <0x64>;
+                #address-cells = <1>;
+                #size-cells = <0>;
+
+                /* Shutdown GPIO - CP GPIO1 pin 30 (active high) */
+                /* shutdown-gpios = <&cp0_gpio1 30 GPIO_ACTIVE_HIGH>; */
+
+                /* LED 1 - Health Status (RGB) */
+                led1_red: led@1 {
+                    reg = <1>;
+                    label = "red:led1";
+                    linux,default-trigger = "none";
+                };
+                led1_green: led@2 {
+                    reg = <2>;
+                    label = "green:led1";
+                    linux,default-trigger = "heartbeat";
+                };
+                led1_blue: led@3 {
+                    reg = <3>;
+                    label = "blue:led1";
+                    linux,default-trigger = "none";
+                };
+
+                /* LED 2 - Security Status (RGB) */
+                led2_red: led@4 {
+                    reg = <4>;
+                    label = "red:led2";
+                    linux,default-trigger = "none";
+                };
+                led2_green: led@5 {
+                    reg = <5>;
+                    label = "green:led2";
+                    linux,default-trigger = "none";
+                };
+                led2_blue: led@6 {
+                    reg = <6>;
+                    label = "blue:led2";
+                    linux,default-trigger = "none";
+                };
+
+                /* LED 3 - Capacity Indicator (RGB) */
+                led3_red: led@7 {
+                    reg = <7>;
+                    label = "red:led3";
+                    linux,default-trigger = "none";
+                };
+                led3_green: led@8 {
+                    reg = <8>;
+                    label = "green:led3";
+                    linux,default-trigger = "none";
+                };
+                led3_blue: led@9 {
+                    reg = <9>;
+                    label = "blue:led3";
+                    linux,default-trigger = "none";
+                };
+            };
+        };
+    };
+};

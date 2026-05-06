@@ -1,0 +1,54 @@
+# SecuBox LED Heartbeat Configuration
+# MOCHAbin IS31FL3199 RGB LED controller
+
+[general]
+# Enable LED status indicator
+enabled = true
+
+# Update interval for health checks (seconds)
+health_interval = 15
+
+# Heartbeat pulse interval (seconds)
+heartbeat_interval = 3
+
+[leds]
+# LED assignment
+# LED 1: Health status (pulsing based on health score)
+# LED 2: Security status (steady, flashes on threat)
+# LED 3: Capacity indicator (CPU/memory load)
+
+# Number of available LEDs
+count = 3
+
+# LED brightness scale (0.0-1.0)
+brightness = 1.0
+
+[health]
+# Health score thresholds for colors
+green_threshold = 80   # score >= 80 = green
+yellow_threshold = 60  # score >= 60 = yellow
+orange_threshold = 40  # score >= 40 = orange
+# below orange_threshold = red
+
+[security]
+# Threat level that triggers flashing red
+threat_flash_threshold = 50
+
+# Flash rate (Hz) when threat detected
+flash_rate = 4
+
+[capacity]
+# Resource percentage thresholds
+green_threshold = 50   # < 50% = green
+cyan_threshold = 70    # < 70% = cyan
+yellow_threshold = 80  # < 80% = yellow
+orange_threshold = 90  # < 90% = orange
+# >= 90% = red
+
+[animation]
+# Startup animation style: cascade, rainbow, off
+startup = "cascade"
+
+# K2000 mode (Knight Rider sweep) - for status display
+k2000_enabled = false
+k2000_speed = 0.1

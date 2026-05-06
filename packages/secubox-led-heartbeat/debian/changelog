@@ -1,0 +1,9 @@
+secubox-led-heartbeat (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release
+  * Port from OpenWrt secubox-led-pulse
+  * IS31FL3199 I2C LED controller support
+  * Health-based tri-color heartbeat
+  * Systemd service integration
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 06 May 2026 19:30:00 +0200

@@ -1,0 +1,27 @@
+Source: secubox-led-heartbeat
+Section: admin
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://secubox.in
+Rules-Requires-Root: no
+
+Package: secubox-led-heartbeat
+Architecture: all
+Depends: ${misc:Depends},
+         python3,
+         secubox-core,
+         device-tree-compiler,
+         i2c-tools
+Recommends: secubox-heartbeat
+Description: SecuBox LED heartbeat status indicator
+ Visual system health indicator using MOCHAbin RGB LEDs.
+ .
+ Displays system health, security status, and resource usage
+ via the IS31FL3199 I2C LED controller (3 RGB LEDs).
+ .
+ LED mapping:
+  - LED 1: Health status (pulsing green/yellow/red)
+  - LED 2: Security status (steady, flashing on threat)
+  - LED 3: Capacity (CPU/memory load)

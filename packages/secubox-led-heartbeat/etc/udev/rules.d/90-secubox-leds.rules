@@ -1,0 +1,15 @@
+# SecuBox LED permissions for IS31FL3199 controller
+# Allow root and secubox group to control LEDs
+
+# IS31FL3199 LED controller exposes LEDs as /sys/class/leds/{color}:led{n}
+SUBSYSTEM=="leds", KERNEL=="red:led*", MODE="0664", GROUP="root"
+SUBSYSTEM=="leds", KERNEL=="green:led*", MODE="0664", GROUP="root"
+SUBSYSTEM=="leds", KERNEL=="blue:led*", MODE="0664", GROUP="root"
+
+# Alternative naming patterns
+SUBSYSTEM=="leds", KERNEL=="led*_red", MODE="0664", GROUP="root"
+SUBSYSTEM=="leds", KERNEL=="led*_green", MODE="0664", GROUP="root"
+SUBSYSTEM=="leds", KERNEL=="led*_blue", MODE="0664", GROUP="root"
+
+# IS31FL3199 I2C device permissions
+SUBSYSTEM=="i2c-dev", KERNEL=="i2c-1", MODE="0660", GROUP="root"
