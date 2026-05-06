@@ -343,3 +343,87 @@ async def get_paired_devices():
 async def health():
     """Health check endpoint."""
     return {"status": "ok", "service": "secubox-eye-remote"}
+
+
+# =============================================================================
+# Legacy Alias: /api/v1/system/metrics
+# For backward compatibility with remote-ui/round Pi Zero dashboard
+# =============================================================================
+
+@app.get("/api/v1/system/metrics")
+async def get_system_metrics_alias():
+    """
+    Alias for host system metrics.
+
+    The Pi Zero remote-ui fetches from /api/v1/system/metrics by default.
+    This endpoint returns the same data as /api/v1/eye-remote/metrics.
+    """
+    import os
+    from datetime import datetime, timezone
+
+    # CPU usage (estimate from load average)
+    try:
+        load = os.getloadavg()[0]
+        cpus = os.cpu_count() or 1
+        cpu_percent = round(min(100.0, (load / cpus) * 100), 1)
+    except Exception:
+        cpu_percent = 0.0
+
+    # Memory
+    try:
+        with open("/proc/meminfo") as f:
+            meminfo = {}
+            for line in f:
+                parts = line.split()
+                if len(parts) >= 2:
+                    meminfo[parts[0].rstrip(":")] = int(parts[1])
+        total_kb = meminfo.get("MemTotal", 1)
+        free_kb = meminfo.get("MemAvailable", meminfo.get("MemFree", 0))
+        mem_percent = round(((total_kb - free_kb) / total_kb) * 100, 1)
+        mem_free_mb = free_kb // 1024
+        mem_total_mb = total_kb // 1024
+    except Exception:
+        mem_percent = 0.0
+        mem_free_mb = 0
+        mem_total_mb = 0
+
+    # Disk
+    try:
+        statvfs = os.statvfs("/")
+        total = statvfs.f_blocks * statvfs.f_frsize
+        free = statvfs.f_bavail * statvfs.f_frsize
+        disk_percent = round(((total - free) / total) * 100, 1) if total > 0 else 0.0
+        disk_free_gb = round(free / (1024**3), 1)
+        disk_total_gb = round(total / (1024**3), 1)
+    except Exception:
+        disk_percent = 0.0
+        disk_free_gb = 0.0
+        disk_total_gb = 0.0
+
+    # Load average
+    try:
+        load_1m, load_5m, load_15m = os.getloadavg()
+    except Exception:
+        load_1m = load_5m = load_15m = 0.0
+
+    # Uptime
+    try:
+        with open("/proc/uptime") as f:
+            uptime = int(float(f.read().split()[0]))
+    except Exception:
+        uptime = 0
+
+    return {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "uptime": uptime,
+        "cpu_percent": cpu_percent,
+        "memory_percent": mem_percent,
+        "memory_free_mb": mem_free_mb,
+        "memory_total_mb": mem_total_mb,
+        "disk_percent": disk_percent,
+        "disk_free_gb": disk_free_gb,
+        "disk_total_gb": disk_total_gb,
+        "load_1m": round(load_1m, 2),
+        "load_5m": round(load_5m, 2),
+        "load_15m": round(load_15m, 2),
+    }

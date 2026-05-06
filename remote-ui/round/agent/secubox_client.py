@@ -16,7 +16,7 @@ import aiohttp
 
 log = logging.getLogger(__name__)
 
-METRICS_ENDPOINT = "/api/v1/eye-remote/metrics/public"
+METRICS_ENDPOINT = "/api/v1/system/metrics"
 HEALTH_ENDPOINT = "/health"
 DEFAULT_TIMEOUT = 5.0
 
