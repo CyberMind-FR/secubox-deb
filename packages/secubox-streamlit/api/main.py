@@ -32,10 +32,13 @@ def _cfg():
 
 
 def _run_ctl(*args, timeout: int = 30) -> dict:
-    """Run streamlitctl and return parsed JSON or error."""
+    """Run streamlitctl and return parsed JSON or error.
+
+    Uses sudo -n for non-interactive sudo (requires sudoers config).
+    """
     try:
         result = subprocess.run(
-            [CTL, *args],
+            ["sudo", "-n", CTL, *args],
             capture_output=True, text=True, timeout=timeout
         )
         if result.stdout.strip().startswith("{"):
@@ -48,9 +51,12 @@ def _run_ctl(*args, timeout: int = 30) -> dict:
 
 
 def _lxc_running() -> bool:
-    """Check if LXC container is running."""
+    """Check if LXC container is running.
+
+    Uses sudo -n for non-interactive sudo (requires sudoers config).
+    """
     result = subprocess.run(
-        ["lxc-info", "-n", LXC_NAME, "-s"],
+        ["sudo", "-n", "lxc-info", "-n", LXC_NAME, "-s"],
         capture_output=True, text=True
     )
     return "RUNNING" in result.stdout

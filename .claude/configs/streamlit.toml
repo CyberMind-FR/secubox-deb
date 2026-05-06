@@ -1,0 +1,547 @@
+# Streamlit TOML config
+# Converted from UCI: 35 apps, 29 instances
+[main]
+enabled = true
+http_port = "8501"
+http_host = "0.0.0.0"
+data_path = "/srv/streamlit"
+memory_limit = "4G"
+active_app = "secubox_control"
+
+[server]
+headless = "true"
+browser_gather_usage_stats = "false"
+theme_base = "dark"
+theme_primary_color = "#0ff"
+
+[gitea]
+enabled = true
+user = "gandalf"
+url = "http://192.168.255.1:3001"
+# token = "..." # Configure in /etc/secubox/secrets/
+
+[apps.metabolizer]
+name = "metabolizer"
+path = "metabolizer.py"
+enabled = true
+repo = "gandalf/streamlit-metabolizer"
+gitea_synced = "2026-02-10T07:00:53+01:00"
+
+[apps.bazi_webapp]
+name = "Bazi Web"
+path = "bazi_webapp.py"
+enabled = true
+
+[apps.bazi_calculator]
+name = "bazi_calculator"
+path = "bazi_calculator.py"
+enabled = true
+repo = "gandalf/streamlit-bazi_calculator"
+gitea_synced = "2026-02-10T07:12:30+01:00"
+
+[apps.sappix]
+name = "Sappix Test"
+path = "sappix.py"
+enabled = true
+
+[apps.tong_shu_app]
+name = "tong_shu_app"
+path = "tong_shu_app.py"
+enabled = true
+
+[apps.files_295]
+name = "bweek"
+path = "/srv/streamlit/apps/files_295/bazi_weekly_app.py"
+enabled = true
+repo = "gandalf/streamlit-files_295"
+gitea_synced = "2026-02-10T07:00:49+01:00"
+
+[apps.wuyun_liuqi]
+name = "wuyun_liuqi"
+path = "tong_shu_app.py"
+enabled = true
+repo = "gandalf/streamlit-wuyun_liuqi"
+gitea_synced = "2026-02-15T08:20:28+01:00"
+
+[apps.bazi_weekly_app]
+name = "bazi_weekly_app"
+path = "bazi_weekly_app.py"
+enabled = true
+
+[apps.bazi_calculator_1]
+name = "bazi_calculator_1"
+path = "bazi_calculator_1.py"
+enabled = true
+
+[apps.bazi_complete]
+name = "bazi_complete"
+path = "bazi_complete.py"
+enabled = true
+
+[apps.files_299]
+name = "dash"
+path = "/srv/streamlit/apps/files_299/app.py"
+enabled = true
+repo = "gandalf/streamlit-files_299"
+gitea_synced = "2026-02-10T07:00:50+01:00"
+
+[apps.yijing_oracle]
+name = "yijing_oracle"
+path = "/srv/streamlit/apps/yijing_oracle/yijing-oracle/app.py"
+enabled = true
+repo = "gandalf/streamlit-yijing_oracle"
+gitea_synced = "2026-02-10T07:01:16+01:00"
+
+[apps.test_upload]
+name = "test_upload"
+path = "test_upload.py"
+enabled = true
+
+[apps.yijing_generator_v2]
+name = "yijing_generator_v2"
+path = "/srv/streamlit/apps/yijing_generator_v2/yijing-oracle/generator.py"
+enabled = true
+repo = "gandalf/streamlit-yijing_generator_v2"
+gitea_synced = "2026-02-10T07:01:13+01:00"
+
+[apps.reupload_test]
+name = "reupload_test"
+path = "reupload_test.py"
+enabled = true
+
+[apps.test_app]
+name = "test_app"
+path = "test_app.py"
+enabled = true
+
+[apps.Francetv_magazine]
+name = "Francetv_magazine"
+path = "/srv/streamlit/apps/Francetv_magazine/francetv_magazine.py"
+enabled = true
+repo = "gandalf/streamlit-Francetv_magazine"
+gitea_synced = "2026-02-12T07:57:49+01:00"
+
+[apps.cineposter_fixed]
+name = "cineposter_fixed"
+path = "/srv/streamlit/apps/cineposter_fixed/app.py"
+enabled = true
+repo = "gandalf/streamlit-cineposter_fixed"
+gitea_synced = "2026-02-15T08:20:23+01:00"
+
+[apps.pdf_slideshow]
+name = "pdf_slideshow"
+path = "pdf_slideshow.py"
+enabled = true
+repo = "gandalf/streamlit-pdf_slideshow"
+gitea_synced = "2026-02-15T08:20:24+01:00"
+
+[apps.pharmacopoeia_secubox]
+name = "pharmacopoeia_secubox"
+path = "/srv/streamlit/apps/pharmacopoeia_secubox/app.py"
+enabled = true
+repo = "gandalf/streamlit-pharmacopoeia_secubox"
+gitea_synced = "2026-02-15T08:20:26+01:00"
+
+[apps.Photo_cloud_streamlit_main]
+name = "Photo_cloud_streamlit_main"
+path = "/srv/streamlit/apps/Photo_cloud_streamlit_main/photo_cloud_streamlit.py"
+enabled = true
+repo = "gandalf/streamlit-Photo_cloud_streamlit_main"
+gitea_synced = "2026-02-14T06:18:31+01:00"
+
+[apps.cc_osint]
+name = "cc_osint"
+path = "/srv/streamlit/apps/cc_osint/app.py"
+enabled = true
+repo = "gandalf/streamlit-cc_osint"
+gitea_synced = "2026-02-15T05:06:28+01:00"
+
+[apps.generix]
+name = "generix"
+path = "generix.py"
+enabled = true
+repo = "gandalf/streamlit-generix"
+gitea_synced = "2026-02-16T05:33:08+01:00"
+
+[apps.prompt_forge]
+name = "prompt_forge"
+path = "prompt_forge.py"
+enabled = true
+
+[apps.fanzine_gk2_lumiere_1]
+name = "fanzine_gk2_lumiere_1"
+path = "fanzine_gk2_lumiere_1.py"
+enabled = true
+
+[apps.gk2_lumiere]
+name = "gk2_lumiere"
+path = "gk2_lumiere.py"
+enabled = true
+
+[apps.cybermind_fanzine]
+name = "cybermind_fanzine"
+path = "cybermind_fanzine.py"
+enabled = true
+app = "cybermind_fanzine"
+port = "8529"
+emancipated = true
+emancipated_at = "2026-02-20T19:12:45+01:00"
+domain = "cybermind_fanzine.gk2.secubox.in"
+
+[apps.tamagochi_gol]
+name = "tamagochi_gol"
+path = "tamagochi_gol.py"
+enabled = true
+
+[apps.exit_test]
+name = "exit_test"
+path = "exit_test.py"
+enabled = true
+
+[apps.final_fix_test]
+name = "final_fix_test"
+path = "final_fix_test.py"
+enabled = true
+
+[apps.alerte_depot]
+name = "alerte_depot"
+path = "alerte_depot"
+enabled = true
+
+[apps.diapvid]
+name = "diapvid"
+path = "/srv/streamlit/apps/diapvid/diaporama_video_v2.py"
+enabled = true
+app = "diapvid"
+port = "8519"
+autostart = true
+repo = "gandalf/streamlit-diapvid"
+gitea_synced = "2026-03-02T11:09:32+01:00"
+emancipated = true
+domain = "diapvid.gk2.secubox.in"
+emancipated_at = "2026-03-04T07:30:04+01:00"
+
+[apps.files_51]
+name = "files_51"
+path = "files_51.py"
+enabled = true
+app = "files_51"
+port = "8530"
+autostart = true
+emancipated = true
+emancipated_at = "2026-03-02T11:12:27+01:00"
+domain = "files_51.gk2.secubox.in"
+waf_enabled = true
+
+[apps.enhance_app]
+name = "enhance_app"
+path = "enhance_app.py"
+enabled = true
+app = "enhance_app"
+port = "8531"
+autostart = true
+emancipated = true
+emancipated_at = "2026-03-02T18:22:52+01:00"
+domain = "enhance-app.gk2.secubox.in"
+waf_enabled = true
+
+[apps.yijing_360]
+name = "yijing_360"
+path = "/srv/streamlit/apps/yijing_360/mc360_component.py"
+enabled = true
+repo = "gandalf/streamlit-yijing_360"
+gitea_synced = "2026-03-31T12:15:43+02:00"
+
+[instances.pix]
+name = "bazi_calculator"
+app = "bazi_calculator"
+port = "8506"
+enabled = true
+autostart = true
+emancipated = true
+emancipated_at = "2026-02-13T08:52:09+01:00"
+domain = "pix.gk2.secubox.in"
+
+[instances.wuyun]
+name = "wuyun"
+app = "wuyun_liuqi"
+port = "8503"
+enabled = true
+autostart = true
+emancipated = true
+emancipated_at = "2026-02-13T08:53:16+01:00"
+domain = "wuyun.gk2.secubox.in"
+
+[instances.yling]
+name = "yling"
+app = "yijing"
+port = "8501"
+enabled = true
+autostart = true
+emancipated = true
+emancipated_at = "2026-02-13T08:54:22+01:00"
+domain = "yling.gk2.secubox.in"
+
+[instances.BASIC]
+name = "BASIC"
+app = "bazi_complete"
+port = "8509"
+enabled = true
+autostart = true
+emancipated = true
+emancipated_at = "2026-02-13T08:58:20+01:00"
+domain = "basic.gk2.secubox.in"
+
+[instances.secubox_evolution]
+enabled = true
+app = "secubox_evolution"
+port = "8510"
+emancipated = true
+emancipated_at = "2026-02-13T08:47:14+01:00"
+domain = "secubox_evolution.gk2.secubox.in"
+name = "secubox_evolution"
+path = "/srv/streamlit/apps/secubox_evolution/app.py"
+repo = "gandalf/streamlit-secubox_evolution"
+gitea_synced = "2026-02-15T10:43:54+01:00"
+
+[instances.secubox_control]
+app = "secubox_control"
+port = "8511"
+enabled = true
+emancipated = true
+emancipated_at = "2026-02-13T08:48:20+01:00"
+domain = "secubox_control.gk2.secubox.in"
+
+[instances.console]
+name = "console"
+app = "secubox_console"
+port = "8515"
+enabled = true
+emancipated = true
+emancipated_at = "2026-02-13T08:59:48+01:00"
+domain = "console.gk2.secubox.in"
+
+[instances.hermes]
+name = "hermes"
+app = "yijing_generator_v2"
+port = "8512"
+enabled = true
+autostart = true
+emancipated = true
+emancipated_at = "2026-02-13T09:01:01+01:00"
+domain = "hermes.gk2.secubox.in"
+
+[instances.fabricator]
+name = "fabricator"
+app = "fabricator"
+port = "8520"
+enabled = true
+emancipated = true
+emancipated_at = "2026-02-07T09:37:57+01:00"
+domain = "fabricator.gk2.secubox.in"
+repo = "gandalf/streamlit-fabricator"
+gitea_synced = "2026-02-10T07:00:47+01:00"
+
+[instances.yijing360]
+name = "yijing360"
+app = "yijing-360"
+port = "8521"
+enabled = true
+emancipated = true
+emancipated_at = "2026-02-13T09:02:06+01:00"
+domain = "yijing360.gk2.secubox.in"
+
+[instances.ftvm]
+name = "ftvm"
+app = "Francetv_magazine"
+port = "8522"
+enabled = true
+autostart = true
+emancipated = true
+emancipated_at = "2026-02-13T09:03:05+01:00"
+domain = "ftvm.gk2.secubox.in"
+
+[instances.cpf]
+name = "cpf"
+app = "cineposter_fixed"
+port = "8523"
+enabled = true
+autostart = true
+emancipated = true
+emancipated_at = "2026-02-13T09:04:14+01:00"
+domain = "cpf.gk2.secubox.in"
+
+[instances.pdf]
+name = "pdf"
+app = "pdf_slideshow"
+port = "8524"
+enabled = true
+autostart = true
+emancipated = true
+emancipated_at = "2026-02-13T09:05:41+01:00"
+domain = "pdf.gk2.secubox.in"
+
+[instances.papyrus]
+name = "papyrus"
+app = "pharmacopoeia_secubox"
+port = "8525"
+enabled = true
+autostart = true
+emancipated = true
+emancipated_at = "2026-02-13T09:07:15+01:00"
+domain = "papyrus.gk2.secubox.in"
+
+[instances.pc]
+name = "pc"
+app = "Photo_cloud_streamlit_main"
+port = "8526"
+enabled = true
+autostart = true
+emancipated = true
+emancipated_at = "2026-02-25T09:35:17+01:00"
+domain = "pc.gk2.secubox.in"
+
+[instances.osint]
+name = "osint"
+app = "cc_osint"
+port = "8527"
+enabled = true
+autostart = true
+emancipated = true
+emancipated_at = "2026-02-25T11:12:09+01:00"
+domain = "osint.gk2.secubox.in"
+
+[instances.swg]
+name = "swg"
+app = "generix"
+port = "8513"
+enabled = true
+autostart = true
+emancipated = true
+emancipated_at = "2026-02-16T05:34:52+01:00"
+domain = "swg.gk2.secubox.in"
+
+[instances.generik]
+name = "generik"
+app = "files_19"
+port = "8528"
+enabled = true
+autostart = true
+emancipated = true
+emancipated_at = "2026-02-25T09:38:33+01:00"
+domain = "generik.gk2.secubox.in"
+
+[instances.prompt]
+name = "prompt"
+app = "prompt_forge"
+port = "8502"
+enabled = true
+autostart = true
+emancipated = true
+emancipated_at = "2026-02-19T07:57:15+01:00"
+domain = "pf.gk2.secubox.in"
+
+[instances.fanzine]
+name = "fanzine"
+app = "fanzine_gk2_lumiere_1"
+port = "8504"
+enabled = true
+autostart = true
+emancipated = true
+emancipated_at = "2026-02-20T15:18:55+01:00"
+domain = "fan.gk2.secubox.in"
+
+[instances.gk2]
+name = "gk2"
+app = "gk2_lumiere"
+port = "8505"
+enabled = true
+autostart = true
+emancipated = true
+emancipated_at = "2026-02-20T15:18:44+01:00"
+domain = "gk2.gk2.secubox.in"
+
+[instances.cybfan]
+name = "cybfan"
+app = "cybermind_fanzine"
+port = "8529"
+enabled = true
+autostart = true
+emancipated = true
+emancipated_at = "2026-02-20T18:29:24+01:00"
+domain = "cybfan.gk2.secubox.in"
+
+[instances.tam]
+name = "tam"
+app = "tamagochi_gol"
+port = "8514"
+enabled = true
+autostart = true
+emancipated = true
+emancipated_at = "2026-02-21T09:29:18+01:00"
+domain = "tam.gk2.secubox.in"
+
+[instances.files_40]
+name = "files_40"
+path = "files_40.py"
+enabled = true
+app = "files_40"
+port = "8516"
+autostart = true
+emancipated = true
+emancipated_at = "2026-02-25T09:43:35+01:00"
+domain = "files_40.gk2.secubox.in"
+
+[instances.files_42]
+name = "files_42"
+app = "files_42"
+port = "8517"
+enabled = true
+path = "files_42/app.py"
+emancipated = true
+emancipated_at = "2026-02-21T14:19:50+01:00"
+domain = "files.gk2.secubox.in"
+
+[instances.test2]
+name = "Test2"
+app = "bazi_calculator"
+port = "8598"
+enabled = true
+autostart = true
+emancipated = true
+emancipated_at = "2026-02-25T11:29:48+01:00"
+domain = "test2new.gk2.secubox.in"
+waf_enabled = true
+
+[instances.alerte_depot_inst]
+name = "alerte_depot"
+app = "alerte_depot"
+port = "8518"
+enabled = true
+autostart = true
+domain = "alerte.gk2.secubox.in"
+emancipated = true
+
+[instances.entamoir_1]
+name = "entamoir_1"
+path = "entamoir_1.py"
+enabled = true
+app = "entamoir_1"
+port = "8507"
+autostart = true
+
+[instances.secubox_report_streamlit]
+name = "secubox_report_streamlit"
+path = "secubox_report_streamlit.py"
+enabled = true
+app = "secubox_report_streamlit"
+port = "8508"
+autostart = true
+
+[api]
+# Secrets removed - configure in /etc/secubox/secrets/streamlit.env
+# google_client_id = "..."
+# google_client_secret = "..."
+redirect_base = "https://files.gk2.secubox.in"
+# anthropic_key = "..."
+

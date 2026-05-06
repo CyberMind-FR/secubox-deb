@@ -1,0 +1,7 @@
+# SecuBox Streamlit - Allow secubox user to manage LXC containers
+# Required for API to control streamlit LXC container
+secubox ALL=(root) NOPASSWD: /usr/bin/lxc-info
+secubox ALL=(root) NOPASSWD: /usr/bin/lxc-attach
+secubox ALL=(root) NOPASSWD: /usr/bin/lxc-start
+secubox ALL=(root) NOPASSWD: /usr/bin/lxc-stop
+secubox ALL=(root) NOPASSWD: /usr/sbin/streamlitctl

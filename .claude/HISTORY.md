@@ -5,6 +5,72 @@
 
 ## 2026-05-06
 
+### Session 101 — C3BOX Network Recovery + HAProxy LXC Routing
+
+**Goal:** Establish network connectivity between C3BOX and MOCHAbin for migration
+
+**Completed:**
+
+1. **C3BOX Network Recovery**
+   - Fixed eth2 NO-CARRIER issue (was on wrong interface)
+   - C3BOX lan0@eth1 connected to MOCHAbin lan0 (DSA switch)
+   - IP assigned on br-lan: 192.168.255.201 (original) + .10 (secondary)
+   - Connectivity established: C3BOX ↔ MOCHAbin via 192.168.255.x
+
+2. **Migration Archive Imported**
+   - 93 SSL certificates copied to /data/haproxy/certs/
+   - 99 nginx secubox.d configs available
+   - LXC container configs imported
+
+3. **HAProxy LXC Routing Added**
+   - Created backends: lxc_gitea, lxc_nextcloud, lxc_matrix
+   - ACL routing for gitea.gk2.secubox.in → 10.100.0.40:3000
+   - ACL routing for nextcloud.gk2.secubox.in → 10.100.0.20:80
+   - ACL routing for matrix.gk2.secubox.in → 10.100.0.30:8008
+
+4. **Routing Verified**
+   - gk2.secubox.in → 200 (WebUI)
+   - gitea.gk2.secubox.in → 200 (LXC)
+   - nextcloud.gk2.secubox.in → 302 (LXC redirect)
+   - blog.cybermind.fr → 200 (nginx_vhosts)
+   - Unknown domains → 503 (correct fallback)
+
+5. **Metablogizer Migration COMPLETE**
+   - 166 sites synced from C3BOX (/srv/metablogizer/sites/)
+   - 60 sites emancipated (published) with nginx + HAProxy routing
+   - UCI config converted to nginx server blocks (per-port)
+   - Fixed HAProxy ACL order (metablog backends vs nginx_vhosts)
+   - All sites accessible from internet with correct content
+
+**TODO (noted for later):**
+- Implement mitmproxy WAF container (like C3BOX architecture)
+- HAProxy cacert + vhost SSL verification
+- Metablogizer TOML config conversion
+
+### Session 101 continued — Source Package Sync
+
+**Goal:** Sync source packages with deployed working configurations
+
+**Completed:**
+
+1. **secubox-streamlit package updated:**
+   - API main.py: Added `sudo -n` for LXC commands (NoNewPrivileges workaround)
+   - Added systemd drop-in: `debian/secubox-streamlit.service.d/allow-lxc.conf`
+   - Added sudoers config: `sudoers.d/secubox-streamlit`
+   - Added example config: `config/streamlit.toml.example`
+   - Updated postinst: Creates config dir, example config, LXC symlink
+   - Updated debian/rules to install new files
+
+2. **secubox-metablogizer package updated:**
+   - Added example config: `config/metablogizer.toml.example`
+   - Updated debian/rules to install example config
+
+3. **TOML configs saved:**
+   - `.claude/configs/streamlit.toml` (35 apps, 29 instances)
+   - `.claude/configs/metablogizer.toml` (151 sites)
+
+---
+
 ### Session 100 — MOCHAbin Migration SUCCESS
 
 **Goal:** Complete C3BOX → SecuBox-DEB migration with proper WAF and routing

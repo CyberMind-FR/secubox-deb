@@ -7,6 +7,22 @@ case "$1" in
     install -d -o secubox -g secubox -m 750 /run/secubox /var/lib/secubox
     install -d -o secubox -g secubox -m 755 /srv/streamlit/apps /srv/streamlit/logs
     install -d -o secubox -g secubox -m 755 /var/log/secubox
+    install -d -o root -g root -m 755 /etc/secubox
+
+    # Create example config if none exists
+    if [ ! -f /etc/secubox/streamlit.toml ]; then
+      if [ -f /usr/share/doc/secubox-streamlit/examples/streamlit.toml.example ]; then
+        cp /usr/share/doc/secubox-streamlit/examples/streamlit.toml.example /etc/secubox/streamlit.toml
+        chown root:secubox /etc/secubox/streamlit.toml
+        chmod 640 /etc/secubox/streamlit.toml
+      fi
+    fi
+
+    # Create LXC symlink if container exists on /data (mSSD)
+    if [ -d /data/lxc/streamlit ] && [ ! -e /var/lib/lxc/streamlit ]; then
+      ln -sf /data/lxc/streamlit /var/lib/lxc/streamlit
+    fi
+
     systemctl daemon-reload
     systemctl enable secubox-streamlit.service
     systemctl start secubox-streamlit.service || true

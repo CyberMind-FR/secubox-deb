@@ -1,0 +1,1387 @@
+# Metablogizer TOML config
+# Converted from UCI: 151 sites
+[main]
+enabled = true
+runtime = "uhttpd"
+sites_root = "/srv/metablogizer/sites"
+gitea_url = "http://192.168.255.1:3001"
+port_base = "8900"
+gitea_user = "gandalf"
+# gitea_token = "..." # Configure in /etc/secubox/secrets/
+
+[sites.devel]
+name = "devel"
+domain = "devel.maegia.tv"
+port = "8900"
+runtime = "uhttpd"
+enabled = true
+emancipated = true
+emancipated_at = "2026-02-21T13:48:13+01:00"
+gitea_repo = "gandalf/metablog-devel"
+gitea_synced = "2026-02-10T07:19:08+01:00"
+
+[sites.gandalf]
+name = "gandalf"
+domain = "gandalf.maegia.tv"
+ssl = true
+enabled = true
+port = "8901"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-02-06T09:14:56+01:00"
+gitea_repo = "gandalf/metablog-gandalf"
+gitea_synced = "2026-02-10T07:01:29+01:00"
+
+[sites.secubox]
+name = "secubox"
+domain = "c3box.maegia.tv"
+ssl = true
+enabled = true
+port = "8902"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-02-06T09:15:43+01:00"
+gitea_repo = "gandalf/metablog-secubox"
+gitea_synced = "2026-02-10T07:01:30+01:00"
+
+[sites.cyberzine]
+name = "cyberzine"
+domain = "cyberzine.maegia.tv"
+ssl = true
+enabled = true
+port = "8903"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-02-06T09:16:11+01:00"
+gitea_repo = "gandalf/metablog-cyberzine"
+gitea_synced = "2026-02-10T14:55:58+01:00"
+
+[sites.slides]
+name = "slides"
+domain = "slides.maegia.tv"
+ssl = true
+enabled = true
+port = "8905"
+runtime = "uhttpd"
+tor_enabled = true
+emancipated = true
+emancipated_at = "2026-02-06T09:16:28+01:00"
+gitea_repo = "gandalf/metablog-slides"
+gitea_synced = "2026-02-10T07:01:33+01:00"
+
+[sites.sliders]
+name = "sliders"
+domain = "sliders.maegia.tv"
+ssl = true
+enabled = true
+port = "8904"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-02-06T09:16:44+01:00"
+gitea_repo = "gandalf/metablog-sliders"
+gitea_synced = "2026-02-10T07:01:35+01:00"
+
+[sites.live]
+name = "live"
+domain = "live.maegia.tv"
+ssl = true
+enabled = true
+description = "live why"
+port = "8906"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-02-06T09:17:00+01:00"
+gitea_repo = "gandalf/metablog-live"
+gitea_synced = "2026-04-03T11:27:59+02:00"
+
+[sites.dev]
+name = "dev"
+domain = "devel.cybermind.fr"
+ssl = true
+enabled = true
+description = "cv"
+port = "8907"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-02-06T09:17:33+01:00"
+gitea_repo = "gandalf/metablog-dev"
+gitea_synced = "2026-02-10T07:01:38+01:00"
+
+[sites.status]
+name = "status"
+domain = "status.maegia.tv"
+ssl = true
+enabled = true
+description = "fanzine status live"
+port = "8908"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-02-06T09:17:48+01:00"
+gitea_repo = "gandalf/metablog-status"
+gitea_synced = "2026-02-10T07:01:40+01:00"
+
+[sites.bazi-weekly]
+name = "bazi-weekly"
+domain = "bw.maegia.tv"
+ssl = true
+enabled = true
+port = "8909"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-02-06T09:19:53+01:00"
+gitea_repo = "gandalf/metablog-bazi-weekly"
+gitea_synced = "2026-02-10T07:12:23+01:00"
+
+[sites.gk2]
+name = "gk2"
+domain = "gk2.maegia.tv"
+ssl = false
+enabled = true
+description = "gk2"
+port = "8910"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-02-06T09:28:52+01:00"
+gitea_repo = "gandalf/metablog-gk2"
+gitea_synced = "2026-02-10T07:01:43+01:00"
+
+[sites.coin]
+name = "coin"
+domain = "coin.maegia.tv"
+ssl = true
+enabled = true
+port = "8911"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-02-06T08:44:28+01:00"
+gitea_repo = "gandalf/metablog-coin"
+gitea_synced = "2026-02-10T10:32:16+01:00"
+
+[sites.halt]
+name = "halt"
+domain = "halt.maegia.tv"
+ssl = true
+enabled = true
+port = "8912"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-02-06T09:18:18+01:00"
+gitea_repo = "gandalf/metablog-halt"
+gitea_synced = "2026-02-10T07:01:46+01:00"
+
+[sites.bday]
+name = "bday"
+domain = "bday.secubox.in"
+ssl = true
+enabled = true
+description = "birthday landing page"
+port = "8913"
+runtime = "uhttpd"
+emancipated = false
+emancipated_at = "2026-02-06T08:50:07+01:00"
+gitea_repo = "gandalf/metablog-bday"
+gitea_synced = "2026-02-10T07:01:48+01:00"
+auth_required = true
+
+[sites.lldh]
+name = "lldh"
+domain = "lldh.ganimed.fr"
+ssl = false
+enabled = false
+port = "8914"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-02-07T11:10:50+01:00"
+gitea_repo = "gandalf/metablog-lldh"
+gitea_synced = "2026-02-10T08:22:59+01:00"
+
+[sites.oracle]
+name = "oracle"
+domain = "oracle.ganimed.fr"
+ssl = true
+enabled = true
+port = "8915"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-02-07T17:16:20+01:00"
+gitea_repo = "gandalf/metablog-oracle"
+gitea_synced = "2026-02-10T07:02:19+01:00"
+
+[sites.press]
+name = "press"
+domain = "press.cybermood.eu"
+ssl = true
+enabled = true
+port = "8916"
+runtime = "uhttpd"
+gitea_repo = "gandalf/metablog-press"
+gitea_synced = "2026-02-10T07:02:22+01:00"
+
+[sites.presse]
+name = "presse"
+domain = "presse.cybermood.eu"
+ssl = false
+enabled = false
+port = "8917"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-02-08T10:56:25+01:00"
+gitea_repo = "gandalf/metablog-presse"
+gitea_synced = "2026-02-21T21:47:46+01:00"
+
+[sites.comic]
+name = "comic"
+domain = "comic.secubox.in"
+ssl = true
+enabled = true
+port = "8918"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-02-12T05:51:15+01:00"
+gitea_repo = "gandalf/metablog-comic"
+gitea_synced = "2026-02-10T07:02:27+01:00"
+user = "gandalf"
+url = "http://192.168.255.1:3001"
+token = "f9f7f8a616e36ce269939627529343aaa6def6cc"
+
+[sites.how2]
+name = "how2"
+domain = "how2.maegia.tv"
+ssl = false
+enabled = false
+port = "8919"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-02-12T05:50:23+01:00"
+gitea_repo = "gandalf/metablog-how2"
+gitea_synced = "2026-02-12T05:55:13+01:00"
+
+[sites.want]
+name = "want"
+domain = "wanted.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8920"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-02-12T10:17:53+01:00"
+
+[sites.eval]
+name = "eval"
+domain = "eval.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8921"
+runtime = "uhttpd"
+
+[sites.geo1000]
+name = "geo1000"
+domain = "geo.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8922"
+runtime = "uhttpd"
+
+[sites.gondwana]
+name = "gondwana"
+domain = "gondwana.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8923"
+runtime = "uhttpd"
+
+[sites.horloge]
+name = "horloge"
+domain = "clock.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8924"
+runtime = "uhttpd"
+gitea_repo = "gandalf/metablog-horloge"
+gitea_synced = "2026-02-14T06:58:59+01:00"
+emancipated = true
+emancipated_at = "2026-02-14T07:00:14+01:00"
+
+[sites.sdlc]
+name = "sdlc"
+domain = "sdlc.gk2.secubox.in"
+ssl = false
+enabled = true
+description = "seigneurs de la Chambre"
+port = "8925"
+runtime = "uhttpd"
+gitea_repo = "gandalf/metablog-sdlc"
+gitea_synced = "2026-04-14T08:04:09+02:00"
+emancipated = true
+emancipated_at = "2026-02-14T11:44:47+01:00"
+
+[sites.myhub]
+name = "myhub"
+domain = "gk2.eu"
+ssl = true
+enabled = true
+port = "8926"
+runtime = "uhttpd"
+gitea_repo = "gandalf/metablog-myhub"
+gitea_synced = "2026-02-14T12:18:10+01:00"
+
+[sites.money]
+name = "money"
+domain = "money.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8927"
+runtime = "uhttpd"
+
+[sites.apr]
+name = "apr"
+domain = "apr.gk2.secubox.in"
+ssl = true
+enabled = true
+description = "affaire pierre robert"
+port = "8928"
+runtime = "uhttpd"
+
+[sites.psy]
+name = "psy"
+domain = "psy.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8929"
+runtime = "uhttpd"
+
+[sites.confid]
+name = "confid"
+domain = "confid.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8930"
+runtime = "uhttpd"
+gitea_repo = "gandalf/metablog-confid"
+gitea_synced = "2026-02-15T06:16:38+01:00"
+emancipated = true
+emancipated_at = "2026-02-15T06:17:33+01:00"
+
+[sites.flash]
+name = "flash"
+domain = "flash.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8931"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-02-15T08:53:21+01:00"
+
+[sites.sa]
+name = "sa"
+domain = "sa.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8933"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-02-15T22:39:47+01:00"
+auth_required = false
+
+[sites.ab]
+name = "ab"
+domain = "ab.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8934"
+runtime = "uhttpd"
+gitea_repo = "gandalf/metablog-ab"
+gitea_synced = "2026-02-16T06:24:34+01:00"
+emancipated = true
+emancipated_at = "2026-02-16T06:25:18+01:00"
+auth_required = false
+
+[sites.fb]
+name = "fb"
+domain = "fb.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8935"
+runtime = "uhttpd"
+gitea_repo = "gandalf/metablog-fb"
+gitea_synced = "2026-02-16T06:25:48+01:00"
+
+[sites.fwhs]
+name = "fwhs"
+domain = "fwhs.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8936"
+runtime = "uhttpd"
+gitea_repo = "gandalf/metablog-fwhs"
+gitea_synced = "2026-02-16T06:53:51+01:00"
+emancipated = true
+emancipated_at = "2026-02-16T06:54:39+01:00"
+
+[sites.raid]
+name = "raid"
+domain = "raid.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8937"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-02-16T07:02:05+01:00"
+gitea_repo = "gandalf/metablog-raid"
+gitea_synced = "2026-02-16T07:12:12+01:00"
+
+[sites.mku]
+name = "mku"
+domain = "mku.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8932"
+runtime = "uhttpd"
+gitea_repo = "gandalf/metablog-mku"
+gitea_synced = "2026-02-17T08:32:03+01:00"
+emancipated = true
+emancipated_at = "2026-02-17T08:32:52+01:00"
+
+[sites.pub]
+name = "pub"
+domain = "pub.gk2.secbox.in"
+ssl = true
+enabled = true
+port = "8938"
+runtime = "uhttpd"
+gitea_repo = "gandalf/metablog-pub"
+gitea_synced = "2026-02-20T19:26:54+01:00"
+emancipated = true
+emancipated_at = "2026-02-20T19:29:04+01:00"
+
+[sites.lunaquar]
+name = "lunaquar"
+domain = "lunaquar.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8939"
+runtime = "uhttpd"
+gitea_repo = "gandalf/metablog-lunaquar"
+gitea_synced = "2026-02-21T08:48:35+01:00"
+
+[sites.equa]
+name = "equa"
+domain = "equa.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8940"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-02-21T08:36:08+01:00"
+
+[sites.game]
+name = "game"
+domain = "game.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8941"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-02-21T10:30:56+01:00"
+
+[sites.virus]
+name = "virus"
+domain = "virus.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8942"
+runtime = "uhttpd"
+
+[sites.survie]
+name = "survie"
+domain = "survie.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8943"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-02-21T10:55:58+01:00"
+
+[sites.bgp]
+name = "bgp"
+domain = "bgp.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8944"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-02-21T12:30:00+01:00"
+
+[sites.cgv]
+name = "cgv"
+domain = "cgv.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8945"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-02-21T13:43:42+01:00"
+
+[sites.cpi]
+name = "cpi"
+domain = "cpi.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8946"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-02-21T13:32:35+01:00"
+
+[sites.holo]
+name = "holo"
+domain = "holo.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8947"
+runtime = "uhttpd"
+
+[sites.dgse]
+name = "dgse"
+domain = "dgse.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8954"
+emancipated = true
+emancipated_at = "2026-02-22T03:58:50+01:00"
+auth_required = false
+
+[sites.camus]
+name = "camus"
+domain = "camus.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8951"
+runtime = "uhttpd"
+
+[sites.bdgse]
+name = "bdgse"
+domain = "bdgse.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8955"
+runtime = "uhttpd"
+
+[sites.lrh]
+name = "lrh"
+domain = "lrh.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8952"
+runtime = "uhttpd"
+
+[sites.bcf]
+name = "bcf"
+domain = "bcf.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8953"
+runtime = "uhttpd"
+
+[sites.fm]
+name = "fm"
+domain = "fm.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8956"
+runtime = "uhttpd"
+
+[sites.dcb]
+name = "dcb"
+domain = "dcb.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8957"
+runtime = "uhttpd"
+auth_required = false
+
+[sites.boom]
+name = "boom"
+domain = "boom.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8958"
+runtime = "uhttpd"
+auth_required = false
+
+[sites.punk]
+name = "punk"
+domain = "punk.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8948"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-02-23T08:21:26+01:00"
+
+[sites.ccom]
+name = "ccom"
+domain = "ccom.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8949"
+runtime = "uhttpd"
+auth_required = false
+
+[sites.tuto]
+name = "tuto"
+domain = "tuto.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8959"
+runtime = "uhttpd"
+
+[sites.tdah]
+name = "tdah"
+domain = "tdah.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8960"
+runtime = "uhttpd"
+gitea_repo = "gandalf/metablog-tdah"
+gitea_synced = "2026-02-23T13:14:50+01:00"
+
+[sites.zlib]
+name = "zlib"
+domain = "zlib.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8961"
+runtime = "uhttpd"
+
+[sites.zoom]
+name = "zoom"
+domain = "zoom.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8962"
+runtime = "uhttpd"
+
+[sites.rtdah]
+name = "rtdah"
+domain = "rtdah.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8963"
+runtime = "uhttpd"
+gitea_repo = "gandalf/metablog-rtdah"
+gitea_synced = "2026-02-24T07:04:26+01:00"
+
+[sites.srtc]
+name = "srtc"
+domain = "srtc.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8964"
+runtime = "uhttpd"
+
+[sites.zkp]
+name = "zkp"
+domain = "zkp.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8965"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-02-24T09:37:47+01:00"
+
+[sites.proofit]
+name = "proofit"
+domain = "proofit.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8966"
+runtime = "uhttpd"
+auth_required = false
+emancipated = true
+emancipated_at = "2026-02-24T09:56:46+01:00"
+gitea_repo = "gandalf/metablog-proofit"
+gitea_synced = "2026-02-24T09:57:20+01:00"
+
+[sites.rcve]
+name = "rcve"
+domain = "rcve.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8967"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-02-24T14:07:44+01:00"
+
+[sites.pent]
+name = "pent"
+domain = "pent.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8968"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-02-24T16:52:23+01:00"
+
+[sites.penbd]
+name = "penbd"
+domain = "penbd.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8969"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-02-25T07:22:11+01:00"
+
+[sites.rfg]
+name = "rfg"
+domain = "rfg.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8970"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-02-25T09:37:18+01:00"
+
+[sites.form]
+name = "form"
+domain = "form.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8971"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-02-25T09:42:03+01:00"
+
+[sites.facb]
+name = "facb"
+domain = "facb.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8972"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-02-25T09:43:50+01:00"
+
+[sites.plainte]
+name = "plainte"
+domain = "plainte.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8973"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-02-25T09:51:46+01:00"
+
+[sites.sosint]
+name = "sosint"
+domain = "sosint.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8974"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-02-26T14:43:48+01:00"
+
+[sites.aea]
+name = "aea"
+domain = "aea.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8975"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-02-25T11:02:57+01:00"
+
+[sites.siggk]
+name = "siggk"
+domain = "siggk.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8976"
+runtime = "uhttpd"
+gitea_repo = "gandalf/metablog-siggk"
+gitea_synced = "2026-02-25T12:48:00+01:00"
+emancipated = true
+
+[sites.arm]
+name = "arm"
+domain = "arm.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8977"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-02-26T14:43:13+01:00"
+
+[sites.armada]
+name = "armada"
+domain = "armada.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8978"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-02-26T14:46:36+01:00"
+
+[sites.aiaa]
+name = "aiaa"
+domain = "aiaa.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8979"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-02-26T14:49:26+01:00"
+
+[sites.pripho]
+name = "pripho"
+domain = "pripho.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8980"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-02-26T15:40:27+01:00"
+
+[sites.chili]
+name = "chili"
+domain = "chili.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8981"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-02-26T15:44:49+01:00"
+
+[sites.shroom]
+name = "shroom"
+domain = "shroom.maegia.tv"
+ssl = true
+enabled = true
+port = "8982"
+runtime = "uhttpd"
+gitea_repo = "gandalf/metablog-shroom"
+gitea_synced = "2026-02-27T07:03:44+01:00"
+emancipated = true
+emancipated_at = "2026-02-27T07:11:01+01:00"
+
+[sites.diyegg]
+name = "diyegg"
+domain = "diyegg.maegia.tv"
+ssl = true
+enabled = true
+port = "8983"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-02-27T08:05:52+01:00"
+
+[sites.sib]
+name = "sib"
+domain = "sib..gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8984"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-02-27T08:51:50+01:00"
+
+[sites.sibd]
+name = "sibd"
+domain = "sibd.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8985"
+runtime = "uhttpd"
+
+[sites.secbdp]
+name = "secbdp"
+domain = "secbdp.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8986"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-02-27T09:12:26+01:00"
+
+[sites.dehrsss]
+name = "dehrsss"
+domain = "dehrsss.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8987"
+runtime = "uhttpd"
+
+[sites.snap]
+name = "snap"
+domain = "snap.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8988"
+runtime = "uhttpd"
+
+[sites.tdahbdss]
+name = "tdahbdss"
+domain = "tdahbdss.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8991"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-02-27T13:59:49+01:00"
+
+[sites.shroombdss]
+name = "shroombdss"
+domain = "shroombdss.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8990"
+runtime = "uhttpd"
+
+[sites.santefr]
+name = "santefr"
+domain = "santefr.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "9010"
+runtime = "uhttpd"
+emancipated = true
+emancipated_at = "2026-03-05T09:43:54+01:00"
+gitea_repo = "gandalf/metablog-santefr"
+gitea_synced = "2026-02-28T11:09:15+01:00"
+
+[sites.umemox]
+name = "umemox"
+domain = "umemox.maegia.tv"
+ssl = true
+enabled = true
+port = "8992"
+runtime = "uhttpd"
+
+[sites.wechat]
+name = "wechat"
+domain = "wechat.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8993"
+runtime = "uhttpd"
+
+[sites.starcomm]
+name = "starcomm"
+domain = "starcomm.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8994"
+runtime = "uhttpd"
+gitea_repo = "gandalf/metablog-starcomm"
+gitea_synced = "2026-02-28T12:05:08+01:00"
+
+[sites.chilicc]
+name = "chilicc"
+domain = "chilicc.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8995"
+runtime = "uhttpd"
+
+[sites.risotocc]
+name = "risotocc"
+domain = "risotocc.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8996"
+runtime = "uhttpd"
+
+[sites.astro]
+name = "astro"
+domain = "astro.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8997"
+runtime = "uhttpd"
+
+[sites.astrodynamique]
+name = "astrodynamique"
+domain = "astrodynamique.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8998"
+runtime = "uhttpd"
+
+[sites.zoo]
+name = "zoo"
+domain = "zoo.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "8999"
+runtime = "uhttpd"
+gitea_repo = "gandalf/metablog-zoo"
+gitea_synced = "2026-03-06T10:13:26+01:00"
+
+[sites.cybaxe]
+name = "cybaxe"
+domain = "cybaxe.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "9004"
+runtime = "uhttpd"
+gitea_repo = "gandalf/metablog-cybaxe"
+gitea_synced = "2026-03-06T12:18:32+01:00"
+
+[sites.24x]
+name = "24x"
+domain = "24x.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "9001"
+runtime = "uhttpd"
+
+[sites.tore]
+name = "tore"
+domain = "tore.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "9002"
+runtime = "uhttpd"
+
+[sites.lldh360]
+name = "lldh360"
+domain = "lldh360.maegia.tv"
+ssl = true
+enabled = true
+port = "9003"
+runtime = "uhttpd"
+gitea_repo = "gandalf/metablog-lldh360"
+gitea_synced = "2026-03-08T07:20:00+01:00"
+emancipated = true
+emancipated_at = "2026-03-07T13:42:04+01:00"
+
+[sites.ganimed]
+name = "ganimed"
+domain = "ganimed.maegia.fr"
+ssl = true
+enabled = true
+port = "9011"
+runtime = "uhttpd"
+gitea_repo = "gandalf/metablog-mokup"
+gitea_synced = "2026-03-08T07:46:09+01:00"
+description = "mokup ganimed 2026"
+
+[sites.forensic]
+name = "forensic"
+domain = "forensic.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "9005"
+runtime = "uhttpd"
+
+[sites.krypto]
+name = "krypto"
+domain = "krypto.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "9006"
+runtime = "uhttpd"
+
+[sites.personal]
+name = "personal"
+domain = "personal.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "9007"
+runtime = "uhttpd"
+
+[sites.chess]
+name = "chess"
+domain = "chess.maegia.tv"
+ssl = true
+enabled = true
+port = "9008"
+runtime = "uhttpd"
+gitea_repo = "gandalf/metablog-chess"
+gitea_synced = "2026-04-08T08:34:17+02:00"
+emancipated = true
+emancipated_at = "2026-04-08T09:29:00+02:00"
+
+[sites.wall]
+name = "wall"
+domain = "wall.maegia.tv"
+ssl = true
+enabled = true
+port = "9009"
+runtime = "uhttpd"
+gitea_repo = "gandalf/metablog-wall"
+gitea_synced = "2026-03-11T15:14:16+01:00"
+emancipated = true
+emancipated_at = "2026-03-11T12:51:21+01:00"
+
+[sites.magic]
+name = "magic"
+domain = "magic.maegia.tv"
+ssl = true
+enabled = true
+port = "9012"
+runtime = "uhttpd"
+
+[sites.gateaucc]
+name = "gateaucc"
+domain = "gateaucc.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "9000"
+runtime = "uhttpd"
+
+[sites.srvi]
+name = "srvi"
+domain = "srvi.gk2.secubox.in"
+port = "9014"
+enabled = true
+
+[sites.quick-access]
+name = "quick-access"
+domain = "quick.secubox.in"
+port = "9013"
+enabled = true
+runtime = "uhttpd"
+
+[sites.sweedtest]
+name = "sweedtest"
+domain = "sweedtest.gk2.secubox.in"
+port = "9015"
+enabled = true
+gitea_repo = "gandalf/metablog-sweedtest"
+gitea_synced = "2026-03-17T07:30:10+01:00"
+
+[sites.qlicktest]
+name = "qlicktest"
+domain = "qlicktest.gk2.secubox.in"
+port = "9016"
+enabled = true
+
+[sites.injonction]
+name = "injonction"
+domain = "injonction.gk2.secubox.in"
+port = "9031"
+enabled = true
+gitea_repo = "gandalf/metablog-injonction"
+gitea_synced = "2026-03-17T09:44:29+01:00"
+
+[sites.lifinal]
+name = "lifinal"
+domain = "lifinal.gk2.secubox.in"
+port = "9020"
+enabled = true
+
+[sites.sweedsync]
+name = "sweedsync"
+domain = "sweedsync.gk2.secubox.in"
+port = "9022"
+enabled = true
+
+[sites.wrintftest]
+name = "wrintftest"
+domain = "wrintftest.gk2.secubox.in"
+port = "9023"
+enabled = true
+gitea_repo = "gandalf/metablog-wrintftest"
+gitea_synced = "2026-03-17T09:16:29+01:00"
+
+[sites.iinjonction]
+name = "iinjonction"
+domain = "iinjonction.gk2.secubox.in"
+port = "9024"
+enabled = true
+
+[sites.xtest]
+name = "xtest"
+domain = "xtest.gk2.secubox.in"
+port = "9025"
+enabled = true
+gitea_repo = "gandalf/metablog-xtest"
+gitea_synced = "2026-03-17T09:23:32+01:00"
+
+[sites.litest]
+name = "litest"
+domain = "litest.gk2.secubox.in"
+port = "9027"
+enabled = true
+gitea_repo = "gandalf/metablog-litest"
+gitea_synced = "2026-03-17T09:27:22+01:00"
+
+[sites.filetest]
+name = "filetest"
+domain = "filetest.gk2.secubox.in"
+port = "9028"
+enabled = true
+gitea_repo = "gandalf/metablog-filetest"
+gitea_synced = "2026-03-17T09:31:15+01:00"
+
+[sites.qwizz]
+name = "qwizz"
+domain = "qwizz.gk2.secubox.in"
+port = "9032"
+enabled = true
+
+[sites.42]
+name = "42"
+domain = "42.gk2.secubox.in"
+port = "9033"
+enabled = true
+
+[sites.q42]
+name = "q42"
+domain = "q42.gk2.secubox.in"
+port = "9034"
+enabled = true
+
+[sites.werdl]
+name = "werdl"
+domain = "werdl.gk2.secubox.in"
+port = "9036"
+enabled = true
+
+[sites.ziwtest]
+name = "ziwtest"
+domain = "ziwtest.gk2.secubox.in"
+port = "9038"
+enabled = true
+
+[sites.perdu]
+name = "perdu"
+domain = "perdu.gk2.secubox.in"
+port = "9039"
+enabled = true
+
+[sites.email]
+name = "email"
+domain = "email.gk2.secubox.in"
+port = "9040"
+enabled = true
+
+[sites.zifon]
+name = "zifon"
+domain = "zifon.gk2.secubox.in"
+port = "9041"
+enabled = true
+
+[sites.sid]
+name = "sid"
+domain = "sid.gk2.secubox.in"
+port = "9042"
+enabled = true
+
+[sites.c3deb]
+name = "c3deb"
+domain = "c3deb.gk2.secubox.in"
+port = "9043"
+enabled = true
+
+[sites.vortex]
+name = "vortex"
+domain = "vortex.gk2.secubox.in"
+port = "9044"
+enabled = true
+
+[sites.astrod]
+name = "astrod"
+domain = "astrod.gk2.secubox.in"
+port = "9045"
+enabled = true
+
+[sites.test]
+name = "test"
+domain = "test.gk2.secubox.in"
+port = "9046"
+enabled = true
+
+[sites.migrate]
+name = "migrate"
+domain = "migrate.gk2.secubox.in"
+ssl = true
+enabled = true
+port = "9014"
+runtime = "uhttpd"
+
+[sites.miroir]
+name = "miroir"
+domain = "miroir.gk2.secubox.in"
+port = "9048"
+enabled = true
+
+[sites.couvent]
+name = "couvent"
+domain = "couvent.gk2.secubox.in"
+port = "9051"
+enabled = true
+
+[sites.tsb]
+name = "tsb"
+domain = "tsb.gk2.secubox.in"
+port = "9052"
+enabled = true
+
+[sites.kre360]
+name = "kre360"
+domain = "kre360.gk2.secubox.in"
+port = "9053"
+enabled = true
+
+[sites.go]
+name = "go"
+domain = "go.gk2.secubox.in"
+port = "9054"
+enabled = true
+
+[sites.3d]
+name = "3d"
+domain = "3d.gk2.secubox.in"
+port = "9055"
+enabled = true
+
+[sites.qs]
+name = "qs"
+domain = "qs.gk2.secubox.in"
+port = "9056"
+enabled = true
+
+[sites.fin]
+name = "fin"
+domain = "fin.gk2.secubox.in"
+port = "9057"
+enabled = true
+
+[sites.bd]
+name = "bd"
+domain = "bd.gk2.secubox.in"
+port = "9058"
+enabled = true
+
+[sites.sirds]
+name = "sirds"
+domain = "sirds.gk2.secubox.in"
+port = "9059"
+enabled = true
+
+[sites.cv]
+name = "cv"
+domain = "cv.gk2.secubox.in"
+port = "9060"
+enabled = true
+
+[sites.fondation]
+name = "fondation"
+domain = "fondation.gk2.secubox.in"
+port = "9061"
+enabled = true
+
+[sites.entamoir]
+name = "entamoir"
+domain = "entamoir.gk2.secubox.in"
+port = "9062"
+enabled = true
+
+[sites.financer]
+name = "financer"
+domain = "financer.gk2.secubox.in"
+port = "9063"
+enabled = true
+
