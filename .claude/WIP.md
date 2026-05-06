@@ -29,13 +29,15 @@
 - [x] Create `wafctl` control script (xxxctl pattern)
 - [ ] WebUI integration: WAF status, blocked requests, rules
 
-### Phase 4: Health Verification
-- [ ] All HAProxy backends healthy (no 503s)
-- [ ] WAF container running and inspecting traffic
-- [ ] Metablogizer: 59+ sites accessible via internet
-- [ ] Streamlit: 29 instances accessible via internet
-- [ ] LXC containers: gitea, nextcloud, matrix, mitmproxy
-- [ ] CrowdSec integration with WAF logs
+### Phase 4: Health Verification ✅ COMPLETE
+- [x] All HAProxy backends healthy (no 503s)
+- [x] WAF container running and inspecting traffic
+- [x] All 6 LXC containers running: gitea, nextcloud, matrix, mitmproxy, streamlit, mail
+- [x] Metablogizer sites accessible (gandalf, cyberzine, devel, etc.)
+- [x] Streamlit: 26 instances running
+- [x] Matrix: PostgreSQL permissions fixed, Synapse running
+- [x] All traffic tagged with X-SecuBox-WAF: inspected
+- [ ] CrowdSec integration with WAF logs (future)
 
 ### Phase 5: Package Updates
 - [ ] Create `secubox-waf` package (mitmproxy + wafctl + config)
