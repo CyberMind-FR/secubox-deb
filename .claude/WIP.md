@@ -1,9 +1,113 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-05 (Session 98)*
+*Mis à jour : 2026-05-06 (Session 101)*
 
 ---
 
-## 🔄 En cours — MOCHAbin Full Migration (HAProxy/WAF/Services)
+## 🔄 En cours — Session 101: MOCHAbin Migration COMPLETE
+
+### ✅ Fait cette session
+
+1. **Metablogizer migration complète**
+   - Config TOML: `.claude/configs/metablogizer.toml` (151 sites)
+   - Déployée: `/etc/secubox/metablogizer/config.toml`
+   - 59 sites publiés synchronisés avec HAProxy backends
+   - API: 165 sites total, 59 publiés
+   - Sites internet OK (gandalf.maegia.tv, etc.)
+
+2. **Streamlit migration complète**
+   - Container LXC: `/data/lxc/streamlit` (mSSD), symlink `/var/lib/lxc/streamlit`
+   - IP: 10.100.0.50 (br-lxc)
+   - Config TOML déployée: `/etc/secubox/streamlit.toml` (35 apps, 29 instances)
+   - 22+ instances running dans LXC
+   - HAProxy backends configurés pour tous les domaines emancipated
+   - WebUI: container status = running, 29 instances configurées
+   - Accès internet: https://pix.gk2.secubox.in/, etc.
+
+3. **Configs TOML sauvegardées**
+   - `.claude/configs/metablogizer.toml`
+   - `.claude/configs/streamlit.toml`
+
+### ✅ Corrections API appliquées
+- NoNewPrivileges=false pour permettre sudo lxc-*
+- Sudoers: secubox peut exécuter lxc-info, lxc-attach, streamlitctl
+- API utilise sudo pour les commandes LXC
+
+---
+
+## 📋 Guidelines de développement (Session 101)
+
+### Confinement LXC obligatoire
+Tous les services apportés par les modules SecuBox doivent être confinés dans des conteneurs LXC:
+- Chaque module a son propre LXC (`/data/lxc/<module>`)
+- Symlink vers `/var/lib/lxc/<module>` pour compatibilité lxc-*
+- Le module expose des ports IP vers le nginx/HAProxy du système hôte
+- Exemple: streamlit LXC expose ports 8501-8599, HAProxy route les vhosts
+
+### Pattern xxxctl
+Chaque module doit avoir un outil CLI `<module>ctl`:
+- `streamlitctl` - gestion container, apps, instances
+- `metablogizerctl` - gestion sites, publish, sync
+- Format de sortie JSON pour intégration API
+- Commandes: install, start, stop, status, list, etc.
+
+### Bundle system (à implémenter)
+Pour archivage, backup, mesh publish, migration:
+- Chaque service exportable en bundle autonome
+- Inclut: content, config, requirements, vhost, cert
+
+---
+
+### ⬜ À faire — Bundle system
+
+Voir section détaillée ci-dessous.
+
+---
+
+## 📦 Plan: Bundle System pour archivage/distribution
+
+Structure cible:
+```
+/srv/secubox/bundles/<service>/<name>/
+├── content/        # Fichiers
+├── config.toml     # Config
+├── requirements.txt
+├── vhost.conf
+├── cert/           # SSL si emancipated
+└── manifest.json   # Version, checksums
+```
+
+Objectifs: archivage, backup, mesh publish, migration simplifiée.
+
+---
+
+## 🔄 Previous — MOCHAbin Full Migration (HAProxy/WAF/Services)
+
+### Status (Session 99-100)
+**Export COMPLETE** - Archive ready at `/tmp/c3box-migration-20260506.tar.gz`
+
+✅ Step 1 Complete: Export from C3BOX
+- 93 SSL certificates exported
+- 99 nginx secubox.d configs exported
+- HAProxy config exported
+- 4 LXC container configs exported (gitea, mail, matrix, nextcloud)
+- Services content exported (metablogizer/streamlit dirs empty on source)
+
+⬜ Step 2: MOCHAbin network setup (MOCHAbin currently unreachable at 192.168.255.10)
+⬜ Step 3: Import migration archive
+⬜ Step 4: Run `haproxyctl migrate`
+⬜ Step 5-8: LXC, WAF, verification
+
+**To continue when MOCHAbin is online:**
+```bash
+# Transfer archive
+scp /tmp/c3box-migration-20260506.tar.gz root@192.168.255.10:/tmp/
+
+# On MOCHAbin
+tar xzf /tmp/c3box-migration-20260506.tar.gz -C /tmp/
+cp -a /tmp/c3box-export/secrets/certs/* /data/haproxy/certs/
+haproxyctl generate
+systemctl reload haproxy
+```
 
 ### Context
 Previous attempt (Session 97) failed due to incomplete HAProxy migration:

@@ -11,3 +11,6 @@ override_dh_auto_install:
 	[ -d menu.d ] && cp -r menu.d/. debian/secubox-metablogizer/usr/share/secubox/menu.d/ || true
 	install -d debian/secubox-metablogizer/usr/sbin
 	[ -d sbin ] && install -m 755 sbin/* debian/secubox-metablogizer/usr/sbin/ || true
+	# Example config
+	install -d debian/secubox-metablogizer/usr/share/doc/secubox-metablogizer/examples
+	[ -f config/metablogizer.toml.example ] && install -m 644 config/metablogizer.toml.example debian/secubox-metablogizer/usr/share/doc/secubox-metablogizer/examples/ || true

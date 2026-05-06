@@ -16,3 +16,12 @@ override_dh_auto_install:
 	install -d debian/secubox-streamlit/usr/sbin
 	[ -d sbin ] && install -m 755 sbin/* debian/secubox-streamlit/usr/sbin/ || true
 	[ -d scripts ] && install -m 755 scripts/* debian/secubox-streamlit/usr/sbin/ || true
+	# Sudoers config for LXC access
+	install -d debian/secubox-streamlit/etc/sudoers.d
+	[ -f sudoers.d/secubox-streamlit ] && install -m 440 sudoers.d/secubox-streamlit debian/secubox-streamlit/etc/sudoers.d/ || true
+	# Systemd service drop-in for NoNewPrivileges
+	install -d debian/secubox-streamlit/usr/lib/systemd/system/secubox-streamlit.service.d
+	[ -f debian/secubox-streamlit.service.d/allow-lxc.conf ] && install -m 644 debian/secubox-streamlit.service.d/allow-lxc.conf debian/secubox-streamlit/usr/lib/systemd/system/secubox-streamlit.service.d/ || true
+	# Example config
+	install -d debian/secubox-streamlit/usr/share/doc/secubox-streamlit/examples
+	[ -f config/streamlit.toml.example ] && install -m 644 config/streamlit.toml.example debian/secubox-streamlit/usr/share/doc/secubox-streamlit/examples/ || true

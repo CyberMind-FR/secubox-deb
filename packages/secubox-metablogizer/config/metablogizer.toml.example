@@ -1,0 +1,24 @@
+# SecuBox MetaBlogizer Configuration
+# Location: /etc/secubox/metablogizer/config.toml
+
+[main]
+enabled = true
+runtime = "nginx"
+sites_root = "/srv/metablogizer/sites"
+port_base = "8900"
+
+# Gitea integration (optional)
+[gitea]
+enabled = false
+url = "http://localhost:3001"
+user = "admin"
+# token = "your_gitea_token"
+
+# Site definitions
+# [sites.mysite]
+# name = "mysite"
+# domain = "mysite.example.com"
+# port = "8900"
+# enabled = true
+# emancipated = true
+# ssl = true

@@ -1,0 +1,39 @@
+# SecuBox Streamlit Platform Configuration
+# Location: /etc/secubox/streamlit.toml
+
+[main]
+enabled = true
+http_port = "8501"
+http_host = "0.0.0.0"
+data_path = "/srv/streamlit"
+memory_limit = "4G"
+
+[server]
+headless = "true"
+browser_gather_usage_stats = "false"
+theme_base = "dark"
+theme_primary_color = "#0ff"
+
+# Gitea integration (optional)
+[gitea]
+enabled = false
+user = "admin"
+url = "http://localhost:3001"
+# token = "your_gitea_token"
+
+# App definitions
+# [apps.myapp]
+# name = "My App"
+# path = "myapp.py"
+# enabled = true
+# repo = "user/repo"
+
+# Instance definitions (running instances with domain routing)
+# [instances.myinstance]
+# name = "myinstance"
+# app = "myapp"
+# port = "8501"
+# enabled = true
+# autostart = true
+# emancipated = true
+# domain = "myapp.example.com"
