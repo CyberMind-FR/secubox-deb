@@ -1,48 +1,49 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-06 (Session 109)*
+*Mis à jour : 2026-05-06 (Session 109) — v2.5.0*
 
 ---
 
-## 🔄 Session 109: HAProxy VHost Routing + Eye Remote Fix
+## ✅ Session 109: Metablogizer Full Config + Health Prober Fix
 
-### HAProxy VHost Additions (on server)
-- [x] Added `sdlc.gk2.secubox.in` → metablog_sdlc (port 8925)
-- [x] Added `facb.gk2.secubox.in` → metablog_facb (port 8972)
-- [x] Added ACLs to both HTTP and HTTPS frontends
-- [x] All metablog vhosts confirmed working (c3box, gandalf, live)
+### Metablogizer Full Configuration
+- [x] Configured **165 metablogizer sites** (ports 8900-9204)
+- [x] Created flat config: `/etc/secubox/metablogizer.json`
+- [x] Generated nginx server blocks for all sites
+- [x] Added 131 new HAProxy backends + ACLs
+- [x] Synced **225 mitmproxy routes** through WAF
+- [x] Committed config to repo: `config/metablogizer.json`
 
-### Eye Remote Dashboard Fix
-- [x] Fixed API calls to use public endpoints (no JWT required)
-- [x] `/status`, `/serial/status`, `/pizero/metrics` now work without auth
-- [x] Added fallback to `/pizero-metrics` endpoint
-- [x] Deployed updated frontend to `/usr/share/secubox/www/eye-remote/`
-
-### Eye Remote Metrics Alias (Pi Zero Compatibility)
-- [x] Added `/api/v1/system/metrics` alias endpoint in eye-remote API
-- [x] Returns host system metrics (CPU, memory, disk, load)
-- [x] Pi Zero round UI now fetches correct MOCHAbin metrics
+### Health Prober Fixes
+- [x] Fixed prober to use localhost with Host header (was hitting HTTPS externally)
+- [x] Fixed recursive probe bug in semaphore code
+- [x] Placeholder detection working (58 Streamlit apps identified)
+- [x] **Current health: 🟢 29 🟡 132 🔴 0 ⬜ 58 (100%)**
 
 ### VHost Matrix Sync Tool
 - [x] Created `scripts/vhost-matrix-sync.sh` with Python-based extraction
 - [x] Fixed stderr logging for clean JSON output capture
 - [x] Syncs HAProxy vhosts → mitmproxy routes + health prober
-- [x] Successfully synced 94 vhosts on server
-- [x] Uses 10.100.0.1 (LXC bridge IP) instead of 127.0.0.1 for routes
+- [x] Successfully synced 225 vhosts on server
 
-### mitmproxy Routing Loop Fix (from Session 108)
-- [x] Changed routes.json: 127.0.0.1 → 10.100.0.1 (LXC bridge IP)
-- [x] Killed runaway mitmdump process (PID 896697)
-- [x] Load dropped from 12+ to ~7
+### Eye Remote Fixes
+- [x] Added `/api/v1/system/metrics` alias for Pi Zero compatibility
+- [x] Fixed dashboard to use public endpoints (no JWT)
+
+### GitHub Issues
+- [x] #49 — MetaBlogizer + Streamlit version management via Gitea
+- [x] #50 — Green Computing: Sleep/Wake WAF + Health Prober Optimization
+
+### Release
+- [x] Tagged **v2.5.0** and pushed to master
 
 ---
 
-## 🔄 Session 108 (Continued): VHost Health Fixes + Services Restore
+## ✅ Session 108 (Continued): VHost Health Fixes + Services Restore
 
 ### VHost Health Prober
 - [x] Updated prober to treat placeholders as "placeholder" status (not "down")
 - [x] Added ⬜ placeholder indicator to dashboard
 - [x] Health % now only counts real vhosts (excludes placeholders)
-- [x] Current stats: 🟢 0 🟡 5 🔴 29 ⬜ 58 (14.7% health)
 
 ### HAProxy Routing Fixes
 - [x] Fixed c3box.maegia.tv → metablog_gandalf (was nginx_vhosts placeholder)
