@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-VERSION="1.5.5"
+VERSION="2.0.0"
 SECUBOX_SERVICES=$(systemctl list-units --type=service --all 'secubox-*' --no-legend 2>/dev/null | awk '{print $1}' | sed 's/.service$//')
 
 # Colors
@@ -21,16 +21,30 @@ ${CYAN}SecuBox${NC} - Security Appliance CLI v${VERSION}
 ${YELLOW}Usage:${NC}
     secubox <command> [options]
 
-${YELLOW}Commands:${NC}
+${YELLOW}System:${NC}
     status          Show system and services status
     services        List all SecuBox services
-    version         Show version information
+    info            Show system information
     logs [service]  View logs (all or specific service)
+    version         Show version information
+
+${YELLOW}Security:${NC}
+    threats         View blocked threats (CrowdSec + WAF)
+    waf             WAF inspection status
+    firewall        Firewall rules (nftables)
+    bans            CrowdSec active bans
+
+${YELLOW}Network:${NC}
+    network         Show network configuration
+    vhosts          HAProxy virtual hosts
+    certs           SSL certificate status
+
+${YELLOW}Control:${NC}
     restart <svc>   Restart a SecuBox service
     start <svc>     Start a SecuBox service
     stop <svc>      Stop a SecuBox service
-    info            Show system information
-    network         Show network configuration
+    mode [kiosk|tui|console]  Switch display mode
+    acme-renew <domain>       Renew SSL certificate
     help            Show this help message
 
 ${YELLOW}Examples:${NC}
@@ -180,6 +194,129 @@ cmd_network() {
     ip link show | grep -E '^[0-9]+:' | awk -F: '{print "  " $2}' | xargs -n1
 }
 
+cmd_threats() {
+    echo -e "${CYAN}=== SecuBox Threats ===${NC}"
+    echo
+    echo -e "${YELLOW}CrowdSec Active Bans:${NC}"
+    cscli decisions list --limit 10 2>/dev/null | tail -12 || echo "  CrowdSec not running"
+    echo
+    echo -e "${YELLOW}WAF Recent Threats:${NC}"
+    if [[ -f /srv/mitmproxy/logs/waf-threats.log ]]; then
+        tail -5 /srv/mitmproxy/logs/waf-threats.log | jq -r '"\(.timestamp) | \(.client_ip) | \(.category) | \(.action)"' 2>/dev/null || tail -5 /srv/mitmproxy/logs/waf-threats.log
+    else
+        echo "  No WAF threats logged"
+    fi
+}
+
+cmd_waf() {
+    echo -e "${CYAN}=== SecuBox WAF Status ===${NC}"
+    echo
+    LXC_STATUS=$(lxc-info -n mitmproxy -s 2>/dev/null | grep -oP "State:\s+\K\w+" || echo "UNKNOWN")
+    if [[ "$LXC_STATUS" == "RUNNING" ]]; then
+        echo -e "  ${GREEN}●${NC} mitmproxy LXC: ${GREEN}RUNNING${NC}"
+    else
+        echo -e "  ${RED}●${NC} mitmproxy LXC: ${RED}$LXC_STATUS${NC}"
+    fi
+    if [[ -f /srv/mitmproxy/logs/waf-threats.log ]]; then
+        TOTAL=$(wc -l < /srv/mitmproxy/logs/waf-threats.log 2>/dev/null || echo 0)
+        echo -e "  Total Threats Logged: ${CYAN}$TOTAL${NC}"
+    fi
+    VHOSTS=$(grep -c "use_backend mitmproxy_inspector" /etc/haproxy/haproxy.cfg 2>/dev/null || echo 0)
+    echo -e "  Vhosts via WAF: ${CYAN}$VHOSTS${NC}"
+}
+
+cmd_firewall() {
+    echo -e "${CYAN}=== SecuBox Firewall (nftables) ===${NC}"
+    echo
+    echo -e "${YELLOW}Tables:${NC}"
+    nft list tables 2>/dev/null || echo "  nftables not active"
+    echo
+    echo -e "${YELLOW}Active Connections:${NC}"
+    ss -tuln | head -15
+}
+
+cmd_bans() {
+    echo -e "${CYAN}=== CrowdSec Active Bans ===${NC}"
+    cscli decisions list --limit 20 2>/dev/null || echo "CrowdSec not running"
+}
+
+cmd_vhosts() {
+    echo -e "${CYAN}=== HAProxy Virtual Hosts ===${NC}"
+    COUNT=$(grep -c "^    acl host_" /etc/haproxy/haproxy.cfg 2>/dev/null || echo 0)
+    echo -e "  Total vhosts: ${GREEN}$((COUNT/2))${NC}"
+    echo
+    echo -e "${YELLOW}Recent vhosts:${NC}"
+    grep "hdr(host) -i" /etc/haproxy/haproxy.cfg 2>/dev/null | tail -10 | awk '{print "  " $NF}'
+}
+
+cmd_certs() {
+    echo -e "${CYAN}=== SSL Certificates ===${NC}"
+    echo
+    for cert in /data/haproxy/certs/*.pem; do
+        [[ ! -f "$cert" ]] && continue
+        name=$(basename "$cert")
+        if openssl x509 -in "$cert" -noout -checkend 0 2>/dev/null; then
+            echo -e "  ${GREEN}✓${NC} $name"
+        else
+            echo -e "  ${RED}✗${NC} $name ${RED}EXPIRED${NC}"
+        fi
+    done 2>/dev/null | head -20
+    echo
+    TOTAL=$(ls /data/haproxy/certs/*.pem 2>/dev/null | wc -l)
+    echo -e "  Total: $TOTAL certificates"
+}
+
+cmd_mode() {
+    local mode="${1:-}"
+    MODE_DIR="/var/lib/secubox"
+    mkdir -p "$MODE_DIR"
+    case "$mode" in
+        kiosk)
+            rm -f "$MODE_DIR/.tui-enabled"
+            touch "$MODE_DIR/.kiosk-enabled"
+            echo -e "${GREEN}Switched to KIOSK mode${NC}"
+            echo "Restart required: systemctl restart secubox-ui-manager"
+            ;;
+        tui)
+            rm -f "$MODE_DIR/.kiosk-enabled"
+            touch "$MODE_DIR/.tui-enabled"
+            echo -e "${GREEN}Switched to TUI mode${NC}"
+            echo "Restart required: systemctl restart secubox-ui-manager"
+            ;;
+        console)
+            rm -f "$MODE_DIR/.kiosk-enabled" "$MODE_DIR/.tui-enabled"
+            echo -e "${GREEN}Switched to CONSOLE mode${NC}"
+            ;;
+        *)
+            if [[ -f "$MODE_DIR/.kiosk-enabled" ]]; then
+                echo "Current mode: kiosk"
+            elif [[ -f "$MODE_DIR/.tui-enabled" ]]; then
+                echo "Current mode: tui"
+            else
+                echo "Current mode: console"
+            fi
+            echo "Usage: secubox mode [kiosk|tui|console]"
+            ;;
+    esac
+}
+
+cmd_acme_renew() {
+    local domain="${1:-}"
+    if [[ -z "$domain" ]]; then
+        echo "Usage: secubox acme-renew <domain>"
+        echo
+        echo "Available certificates:"
+        ~/.acme.sh/acme.sh --list 2>/dev/null | tail -n +2 | awk '{print "  " $1}'
+        return 1
+    fi
+    echo "Renewing certificate for $domain..."
+    ~/.acme.sh/acme.sh --renew -d "$domain" --force
+    cat ~/.acme.sh/${domain}_ecc/fullchain.cer ~/.acme.sh/${domain}_ecc/${domain}.key \
+        > /data/haproxy/certs/${domain}.pem 2>/dev/null && \
+        systemctl reload haproxy && \
+        echo -e "${GREEN}Certificate deployed to HAProxy${NC}"
+}
+
 # Main
 case "${1:-help}" in
     status)
@@ -208,6 +345,30 @@ case "${1:-help}" in
         ;;
     network|net)
         cmd_network
+        ;;
+    threats)
+        cmd_threats
+        ;;
+    waf)
+        cmd_waf
+        ;;
+    firewall|fw)
+        cmd_firewall
+        ;;
+    bans)
+        cmd_bans
+        ;;
+    vhosts)
+        cmd_vhosts
+        ;;
+    certs)
+        cmd_certs
+        ;;
+    mode)
+        cmd_mode "${2:-}"
+        ;;
+    acme-renew)
+        cmd_acme_renew "${2:-}"
         ;;
     help|-h|--help|*)
         usage
