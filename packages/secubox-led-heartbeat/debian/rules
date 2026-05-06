@@ -1,0 +1,26 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	# Daemon
+	install -D -m 755 usr/sbin/secubox-led-heartbeat \
+		debian/secubox-led-heartbeat/usr/sbin/secubox-led-heartbeat
+	# Systemd service
+	install -D -m 644 systemd/secubox-led-heartbeat.service \
+		debian/secubox-led-heartbeat/usr/lib/systemd/system/secubox-led-heartbeat.service
+	# Kernel module load config
+	install -D -m 644 etc/modules-load.d/secubox-leds.conf \
+		debian/secubox-led-heartbeat/etc/modules-load.d/secubox-leds.conf
+	# Udev rules for LED permissions
+	install -D -m 644 etc/udev/rules.d/90-secubox-leds.rules \
+		debian/secubox-led-heartbeat/etc/udev/rules.d/90-secubox-leds.rules
+	# Config file
+	install -D -m 644 etc/secubox/leds.toml \
+		debian/secubox-led-heartbeat/etc/secubox/leds.toml
+	# Device Tree overlay source
+	install -D -m 644 boot/overlays/secubox-leds.dts \
+		debian/secubox-led-heartbeat/usr/share/secubox-led-heartbeat/secubox-leds.dts
+
+override_dh_installsystemd:
+	dh_installsystemd --name=secubox-led-heartbeat

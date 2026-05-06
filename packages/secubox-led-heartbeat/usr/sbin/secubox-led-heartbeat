@@ -1,0 +1,357 @@
+#!/usr/bin/env python3
+"""
+SecuBox-Deb :: LED Heartbeat Daemon
+CyberMind — https://cybermind.fr
+Author: Gérald Kerma <gandalf@gk2.net>
+License: Proprietary / ANSSI CSPN candidate
+
+MOCHAbin RGB LED status indicator using IS31FL3199 controller.
+Shows system health, security status, and capacity via 3 RGB LEDs.
+"""
+import json
+import time
+import sys
+import signal
+import logging
+from pathlib import Path
+from dataclasses import dataclass
+from typing import Optional, Tuple
+
+# LED sysfs paths for IS31FL3199 on MOCHAbin
+LED_BASE = Path("/sys/class/leds")
+LED_COLORS = ["red", "green", "blue"]
+LED_COUNT = 3
+
+# Health cache file (from secubox-heartbeat-prober)
+HEALTH_CACHE = Path("/var/cache/secubox/health/system.json")
+MODULE_CACHE = Path("/var/cache/secubox/health/modules.json")
+
+# Update intervals (seconds)
+HEARTBEAT_INTERVAL = 3.0
+HEALTH_CHECK_INTERVAL = 15.0
+
+# Color definitions (R, G, B) 0-255
+COLORS = {
+    "off": (0, 0, 0),
+    "green": (0, 255, 0),
+    "yellow": (255, 200, 0),
+    "orange": (255, 100, 0),
+    "red": (255, 0, 0),
+    "cyan": (0, 255, 200),
+    "blue": (0, 100, 255),
+    "purple": (150, 0, 255),
+    "white": (255, 255, 255),
+}
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
+log = logging.getLogger("led-heartbeat")
+
+
+@dataclass
+class LEDController:
+    """Control IS31FL3199 RGB LEDs via sysfs."""
+
+    available: bool = False
+    led_paths: dict = None
+
+    def __post_init__(self):
+        self.led_paths = {}
+        self._discover_leds()
+
+    def _discover_leds(self):
+        """Find available LED sysfs paths."""
+        if not LED_BASE.exists():
+            log.warning("LED sysfs not found at %s", LED_BASE)
+            return
+
+        # IS31FL3199 exposes LEDs as: red:led1, green:led1, blue:led1, etc.
+        for led_num in range(1, LED_COUNT + 1):
+            self.led_paths[led_num] = {}
+            for color in LED_COLORS:
+                path = LED_BASE / f"{color}:led{led_num}"
+                if path.exists():
+                    self.led_paths[led_num][color] = path / "brightness"
+                else:
+                    # Try alternate naming: led{n}_{color}
+                    alt_path = LED_BASE / f"led{led_num}_{color}"
+                    if alt_path.exists():
+                        self.led_paths[led_num][color] = alt_path / "brightness"
+
+        # Check if we found any LEDs
+        found = sum(len(c) for c in self.led_paths.values())
+        if found > 0:
+            self.available = True
+            log.info("Found %d LED channels", found)
+        else:
+            log.warning("No IS31FL3199 LEDs found - running in simulation mode")
+
+    def set_rgb(self, led_num: int, r: int, g: int, b: int):
+        """Set RGB values for a LED (0-255 each)."""
+        if not 1 <= led_num <= LED_COUNT:
+            return
+
+        values = {"red": r, "green": g, "blue": b}
+
+        if self.available and led_num in self.led_paths:
+            for color, value in values.items():
+                path = self.led_paths[led_num].get(color)
+                if path and path.exists():
+                    try:
+                        path.write_text(str(min(255, max(0, value))))
+                    except PermissionError:
+                        log.warning("No write access to %s", path)
+
+    def set_color(self, led_num: int, color_name: str, brightness: float = 1.0):
+        """Set LED to a named color with optional brightness (0.0-1.0)."""
+        if color_name not in COLORS:
+            color_name = "off"
+        r, g, b = COLORS[color_name]
+        r = int(r * brightness)
+        g = int(g * brightness)
+        b = int(b * brightness)
+        self.set_rgb(led_num, r, g, b)
+
+    def all_off(self):
+        """Turn off all LEDs."""
+        for led_num in range(1, LED_COUNT + 1):
+            self.set_rgb(led_num, 0, 0, 0)
+
+
+class HealthMonitor:
+    """Read health status from cache files."""
+
+    def __init__(self):
+        self._last_health = {}
+        self._last_modules = {}
+
+    def get_health_score(self) -> int:
+        """Get overall health score (0-100)."""
+        try:
+            if HEALTH_CACHE.exists():
+                data = json.loads(HEALTH_CACHE.read_text())
+                self._last_health = data
+                return data.get("score", 100)
+        except Exception as e:
+            log.debug("Error reading health cache: %s", e)
+        return self._last_health.get("score", 100)
+
+    def get_resource_load(self) -> dict:
+        """Get CPU, memory, disk percentages."""
+        try:
+            if HEALTH_CACHE.exists():
+                data = json.loads(HEALTH_CACHE.read_text())
+                return data.get("resources", {})
+        except Exception:
+            pass
+        return {"cpu": 0, "memory": 0, "disk": 0}
+
+    def get_threat_level(self) -> int:
+        """Get security threat level (0-100)."""
+        try:
+            if HEALTH_CACHE.exists():
+                data = json.loads(HEALTH_CACHE.read_text())
+                return data.get("threat_level", 0)
+        except Exception:
+            pass
+        return 0
+
+    def get_services_down(self) -> int:
+        """Get number of services down."""
+        try:
+            if MODULE_CACHE.exists():
+                data = json.loads(MODULE_CACHE.read_text())
+                modules = data.get("modules", {})
+                return sum(1 for m in modules.values() if m.get("status") == "down")
+        except Exception:
+            pass
+        return 0
+
+
+def score_to_color(score: int) -> str:
+    """Convert health score to color name."""
+    if score >= 80:
+        return "green"
+    elif score >= 60:
+        return "yellow"
+    elif score >= 40:
+        return "orange"
+    else:
+        return "red"
+
+
+def percent_to_color(percent: float) -> str:
+    """Convert percentage to color (for capacity)."""
+    if percent < 50:
+        return "green"
+    elif percent < 70:
+        return "cyan"
+    elif percent < 80:
+        return "yellow"
+    elif percent < 90:
+        return "orange"
+    else:
+        return "red"
+
+
+def threat_to_color(level: int) -> str:
+    """Convert threat level to color."""
+    if level < 10:
+        return "green"
+    elif level < 30:
+        return "yellow"
+    elif level < 60:
+        return "orange"
+    else:
+        return "red"
+
+
+class HeartbeatDaemon:
+    """Main daemon that controls LED visualization."""
+
+    def __init__(self):
+        self.leds = LEDController()
+        self.health = HealthMonitor()
+        self.running = True
+        self.pulse_phase = 0
+
+        # Register signal handlers
+        signal.signal(signal.SIGTERM, self._handle_signal)
+        signal.signal(signal.SIGINT, self._handle_signal)
+
+    def _handle_signal(self, signum, frame):
+        log.info("Received signal %d, shutting down...", signum)
+        self.running = False
+        self.leds.all_off()
+        sys.exit(0)
+
+    def pulse_brightness(self, phase: float) -> float:
+        """Calculate pulse brightness (sine wave 0.3-1.0)."""
+        import math
+        return 0.3 + 0.7 * (math.sin(phase * math.pi * 2) + 1) / 2
+
+    def run(self):
+        """Main daemon loop."""
+        log.info("SecuBox LED Heartbeat starting...")
+
+        if not self.leds.available:
+            log.warning("No LEDs available - running in monitoring mode")
+
+        # Initial state
+        self.leds.all_off()
+        time.sleep(0.5)
+
+        # Startup animation
+        self._startup_animation()
+
+        last_health_check = 0
+        health_score = 100
+        threat_level = 0
+        cpu_load = 0
+
+        while self.running:
+            now = time.time()
+
+            # Periodic health check
+            if now - last_health_check > HEALTH_CHECK_INTERVAL:
+                health_score = self.health.get_health_score()
+                threat_level = self.health.get_threat_level()
+                resources = self.health.get_resource_load()
+                cpu_load = resources.get("cpu", 0)
+                last_health_check = now
+
+            # LED 1: Health status (pulsing)
+            brightness = self.pulse_brightness(self.pulse_phase)
+            self.leds.set_color(1, score_to_color(health_score), brightness)
+
+            # LED 2: Security status (steady or flashing if threat)
+            if threat_level > 50:
+                # Flash red on high threat
+                flash = (int(now * 4) % 2) == 0
+                self.leds.set_color(2, "red" if flash else "off")
+            else:
+                self.leds.set_color(2, threat_to_color(threat_level))
+
+            # LED 3: Capacity (CPU load)
+            self.leds.set_color(3, percent_to_color(cpu_load))
+
+            # Advance pulse phase
+            self.pulse_phase = (self.pulse_phase + 0.1) % 1.0
+
+            time.sleep(HEARTBEAT_INTERVAL / 10)
+
+        self.leds.all_off()
+        log.info("LED Heartbeat stopped")
+
+    def _startup_animation(self):
+        """Boot animation - cascade green."""
+        for led_num in range(1, LED_COUNT + 1):
+            self.leds.set_color(led_num, "green")
+            time.sleep(0.3)
+        time.sleep(0.5)
+        for led_num in range(1, LED_COUNT + 1):
+            self.leds.set_color(led_num, "off")
+            time.sleep(0.1)
+
+
+def check_hardware() -> bool:
+    """Check if IS31FL3199 hardware is available."""
+    # Check for kernel module
+    lsmod = Path("/proc/modules")
+    if lsmod.exists():
+        modules = lsmod.read_text()
+        if "leds_is31fl319x" in modules or "is31fl319x" in modules:
+            return True
+
+    # Check for sysfs entries
+    if LED_BASE.exists():
+        for entry in LED_BASE.iterdir():
+            if "led" in entry.name.lower():
+                return True
+
+    return False
+
+
+def main():
+    import argparse
+
+    parser = argparse.ArgumentParser(description="SecuBox LED Heartbeat Daemon")
+    parser.add_argument("--check", action="store_true", help="Check hardware and exit")
+    parser.add_argument("--test", action="store_true", help="Run LED test and exit")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
+    args = parser.parse_args()
+
+    if args.verbose:
+        logging.getLogger().setLevel(logging.DEBUG)
+
+    if args.check:
+        available = check_hardware()
+        print(f"IS31FL3199 LEDs: {'available' if available else 'not found'}")
+        sys.exit(0 if available else 1)
+
+    if args.test:
+        log.info("Running LED test...")
+        leds = LEDController()
+        if not leds.available:
+            log.error("No LEDs available")
+            sys.exit(1)
+
+        for color in ["red", "green", "blue", "yellow", "cyan", "white"]:
+            log.info("Testing: %s", color)
+            for led in range(1, LED_COUNT + 1):
+                leds.set_color(led, color)
+            time.sleep(1)
+
+        leds.all_off()
+        log.info("Test complete")
+        sys.exit(0)
+
+    # Run daemon
+    daemon = HeartbeatDaemon()
+    daemon.run()
+
+
+if __name__ == "__main__":
+    main()

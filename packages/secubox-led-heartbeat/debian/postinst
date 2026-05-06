@@ -1,0 +1,84 @@
+#!/bin/bash
+set -e
+
+OVERLAY_SRC="/usr/share/secubox-led-heartbeat/secubox-leds.dts"
+OVERLAY_DST="/boot/dtbs"
+
+compile_overlay() {
+    # Find kernel version directory
+    local kver=$(uname -r 2>/dev/null || ls /lib/modules | head -1)
+    local overlay_dir=""
+
+    # Try various locations for overlay installation
+    for dir in \
+        "/boot/dtbs/${kver}/marvell/overlays" \
+        "/boot/dtbs/${kver}/overlays" \
+        "/boot/overlays" \
+        "/boot/dtbs/overlays"
+    do
+        if [[ -d "$(dirname "$dir")" ]] || mkdir -p "$dir" 2>/dev/null; then
+            overlay_dir="$dir"
+            break
+        fi
+    done
+
+    if [[ -z "$overlay_dir" ]]; then
+        echo "Warning: Could not find overlay directory"
+        return 1
+    fi
+
+    mkdir -p "$overlay_dir"
+
+    # Compile DTS to DTBO
+    if [[ -f "$OVERLAY_SRC" ]]; then
+        if dtc -@ -I dts -O dtb -o "${overlay_dir}/secubox-leds.dtbo" "$OVERLAY_SRC" 2>/dev/null; then
+            echo "Compiled Device Tree overlay: ${overlay_dir}/secubox-leds.dtbo"
+            return 0
+        else
+            echo "Warning: Failed to compile Device Tree overlay"
+            return 1
+        fi
+    fi
+    return 1
+}
+
+case "$1" in
+    configure)
+        # Compile and install Device Tree overlay
+        compile_overlay || true
+
+        # Load kernel module if available
+        if modprobe leds-is31fl319x 2>/dev/null; then
+            echo "Loaded IS31FL3199 LED kernel module"
+        else
+            echo "Note: LED kernel module not loaded (may need Device Tree overlay)"
+        fi
+
+        # Check I2C device
+        if command -v i2cdetect &>/dev/null; then
+            if i2cdetect -y 1 2>/dev/null | grep -q "64"; then
+                echo "IS31FL3199 detected at I2C address 0x64"
+            fi
+        fi
+
+        # Reload udev rules
+        udevadm control --reload-rules 2>/dev/null || true
+        udevadm trigger --subsystem-match=leds 2>/dev/null || true
+
+        # Enable and start service
+        systemctl daemon-reload
+        systemctl enable secubox-led-heartbeat.service 2>/dev/null || true
+
+        # Only start if LEDs are available
+        if [[ -d /sys/class/leds ]] && ls /sys/class/leds/ | grep -q "led"; then
+            systemctl start secubox-led-heartbeat.service 2>/dev/null || true
+        else
+            echo "Note: No LEDs detected. Service enabled but not started."
+            echo "      Reboot with Device Tree overlay to enable LEDs."
+        fi
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

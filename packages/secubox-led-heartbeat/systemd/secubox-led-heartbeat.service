@@ -1,0 +1,28 @@
+[Unit]
+Description=SecuBox LED Heartbeat Status Indicator
+Documentation=https://github.com/CyberMind-FR/secubox-deb
+After=network.target secubox-heartbeat.service
+Wants=secubox-heartbeat.service
+ConditionPathExists=/sys/class/leds
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/secubox-led-heartbeat
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Run as root for LED hardware access
+User=root
+Group=root
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/sys/class/leds
+ReadOnlyPaths=/var/cache/secubox
+
+[Install]
+WantedBy=multi-user.target
