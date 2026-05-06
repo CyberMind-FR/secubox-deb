@@ -1,0 +1,245 @@
+#!/bin/bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma
+# wafctl - SecuBox WAF (mitmproxy) Controller
+# Control script following xxxctl pattern
+set -e
+
+VERSION="1.1.0"
+LXC_NAME="mitmproxy"
+LXC_IP="10.100.0.60"
+WAF_PORT="8080"
+LXC_PATH="/data/lxc"
+
+log() { echo "[$(date "+%Y-%m-%d %H:%M:%S")] $*"; }
+error() { log "ERROR: $*" >&2; }
+
+lxc_running() { lxc-info -n "$LXC_NAME" -s 2>/dev/null | grep -q "RUNNING"; }
+lxc_exists() { [ -d "/var/lib/lxc/$LXC_NAME/rootfs" ] || [ -d "$LXC_PATH/$LXC_NAME/rootfs" ]; }
+
+cmd_status() {
+    local running="false"
+    local installed="false"
+    local service_active="false"
+
+    lxc_exists && installed="true"
+    lxc_running && running="true"
+
+    if $running; then
+        lxc-attach -n "$LXC_NAME" -- systemctl is-active mitmproxy >/dev/null 2>&1 && service_active="true"
+    fi
+
+    cat << EOF
+{
+  "installed": $installed,
+  "running": $running,
+  "service_active": $service_active,
+  "container": "$LXC_NAME",
+  "ip": "$LXC_IP",
+  "port": $WAF_PORT
+}
+EOF
+}
+
+cmd_components() {
+    cat << EOF
+{
+  "components": [
+    {
+      "name": "WAF Container",
+      "type": "lxc",
+      "container": "$LXC_NAME",
+      "ip": "$LXC_IP",
+      "installed": $(lxc_exists && echo "true" || echo "false")
+    },
+    {
+      "name": "mitmproxy",
+      "type": "service",
+      "port": $WAF_PORT,
+      "description": "HTTP/HTTPS inspection proxy"
+    }
+  ]
+}
+EOF
+}
+
+cmd_install() {
+    if lxc_exists; then
+        log "WAF container already installed"
+        return 0
+    fi
+
+    log "Creating WAF LXC container..."
+
+    # Create container on data partition
+    mkdir -p "$LXC_PATH/$LXC_NAME"
+
+    # Create container
+    TMPDIR=/data/tmp lxc-create -n "$LXC_NAME" -t download \
+        -P "$LXC_PATH" \
+        -- -d debian -r bookworm -a arm64
+
+    # Create symlink for lxc-* commands
+    ln -sf "$LXC_PATH/$LXC_NAME" "/var/lib/lxc/$LXC_NAME"
+
+    # Configure container
+    cat >> "$LXC_PATH/$LXC_NAME/config" << CONF
+
+# Network
+lxc.net.0.type = veth
+lxc.net.0.link = br-lxc
+lxc.net.0.flags = up
+lxc.net.0.ipv4.address = $LXC_IP/24
+lxc.net.0.ipv4.gateway = 10.100.0.1
+
+# Autostart
+lxc.start.auto = 1
+lxc.start.delay = 5
+CONF
+
+    # Start container
+    lxc-start -n "$LXC_NAME"
+    sleep 5
+
+    # Install mitmproxy
+    log "Installing mitmproxy in container..."
+    lxc-attach -n "$LXC_NAME" -- apt-get update
+    lxc-attach -n "$LXC_NAME" -- apt-get install -y python3-pip python3-venv curl jq
+
+    lxc-attach -n "$LXC_NAME" -- mkdir -p /opt/mitmproxy /srv/mitmproxy /var/log/mitmproxy
+    lxc-attach -n "$LXC_NAME" -- python3 -m venv /opt/mitmproxy
+    lxc-attach -n "$LXC_NAME" -- /opt/mitmproxy/bin/pip install mitmproxy
+
+    # Create mitmproxy user
+    lxc-attach -n "$LXC_NAME" -- useradd -r -s /bin/false mitmproxy || true
+    lxc-attach -n "$LXC_NAME" -- chown -R mitmproxy:mitmproxy /srv/mitmproxy /var/log/mitmproxy
+
+    log "WAF container installed"
+}
+
+cmd_start() {
+    if ! lxc_exists; then
+        error "WAF container not installed. Run: wafctl install"
+        return 1
+    fi
+
+    if ! lxc_running; then
+        log "Starting WAF container..."
+        lxc-start -n "$LXC_NAME"
+        sleep 3
+    fi
+
+    log "Starting mitmproxy service..."
+    lxc-attach -n "$LXC_NAME" -- systemctl start mitmproxy
+    log "WAF started"
+}
+
+cmd_stop() {
+    if lxc_running; then
+        log "Stopping mitmproxy service..."
+        lxc-attach -n "$LXC_NAME" -- systemctl stop mitmproxy 2>/dev/null || true
+    fi
+    log "WAF stopped"
+}
+
+cmd_restart() {
+    cmd_stop
+    sleep 1
+    cmd_start
+}
+
+cmd_logs() {
+    local lines="${1:-50}"
+    if lxc_running; then
+        lxc-attach -n "$LXC_NAME" -- journalctl -u mitmproxy -n "$lines" --no-pager
+    else
+        error "Container not running"
+    fi
+}
+
+cmd_routes() {
+    if lxc_running; then
+        lxc-attach -n "$LXC_NAME" -- cat /srv/mitmproxy/haproxy-routes.json 2>/dev/null || echo "{}"
+    else
+        error "Container not running"
+    fi
+}
+
+cmd_add_route() {
+    local domain="$1"
+    local backend_ip="$2"
+    local backend_port="$3"
+
+    if [ -z "$domain" ] || [ -z "$backend_ip" ] || [ -z "$backend_port" ]; then
+        error "Usage: wafctl add-route <domain> <backend_ip> <backend_port>"
+        return 1
+    fi
+
+    if ! lxc_running; then
+        error "Container not running"
+        return 1
+    fi
+
+    lxc-attach -n "$LXC_NAME" -- bash -c "
+        jq '. + {\"$domain\": [\"$backend_ip\", $backend_port]}' /srv/mitmproxy/haproxy-routes.json > /tmp/routes.json && \
+        mv /tmp/routes.json /srv/mitmproxy/haproxy-routes.json
+    "
+    log "Added route: $domain -> $backend_ip:$backend_port"
+}
+
+cmd_reload() {
+    if lxc_running; then
+        log "Reloading mitmproxy..."
+        lxc-attach -n "$LXC_NAME" -- systemctl restart mitmproxy
+        log "WAF reloaded"
+    else
+        error "Container not running"
+    fi
+}
+
+cmd_test() {
+    local domain="${1:-localhost}"
+    log "Testing WAF proxy for $domain..."
+    local code
+    code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 "http://$LXC_IP:$WAF_PORT/" -H "Host: $domain" 2>/dev/null)
+    echo "HTTP $code"
+}
+
+case "${1:-}" in
+    status)     cmd_status ;;
+    components) cmd_components ;;
+    install)    cmd_install ;;
+    start)      cmd_start ;;
+    stop)       cmd_stop ;;
+    restart)    cmd_restart ;;
+    logs)       cmd_logs "$2" ;;
+    routes)     cmd_routes ;;
+    add-route)  cmd_add_route "$2" "$3" "$4" ;;
+    reload)     cmd_reload ;;
+    test)       cmd_test "$2" ;;
+    *)
+        cat << EOF
+wafctl v$VERSION - SecuBox WAF Controller
+
+Information:
+  status        Show WAF status (JSON)
+  components    List WAF components (JSON)
+
+Container:
+  install       Install WAF LXC container
+  start         Start WAF container and service
+  stop          Stop WAF service
+  restart       Restart WAF
+
+Routes:
+  routes        Show HAProxy routes config
+  add-route <domain> <ip> <port>  Add a route
+
+Operations:
+  logs [n]      Show last n log lines (default 50)
+  reload        Reload mitmproxy configuration
+  test [host]   Test WAF connectivity
+
+EOF
+        ;;
+esac

@@ -196,14 +196,41 @@ def _unban_ip(ip: str):
 
 
 def _get_bans() -> List[dict]:
-    """Get active bans from CrowdSec."""
+    """Get active bans from CrowdSec, flattened for dashboard."""
     try:
         result = subprocess.run([
-            "cscli", "decisions", "list", "-o", "json"
-        ], capture_output=True, text=True, timeout=10)
+            "sudo", "cscli", "decisions", "list", "-o", "json"
+        ], capture_output=True, text=True, timeout=15)
 
         if result.returncode == 0 and result.stdout:
-            return json.loads(result.stdout) or []
+            raw = json.loads(result.stdout) or []
+            # Flatten nested structure for dashboard
+            bans = []
+            for item in raw:
+                decisions = item.get("decisions", [])
+                events = item.get("events", [])
+                # Extract metadata from first event
+                meta = {}
+                if events and events[0].get("meta"):
+                    for m in events[0]["meta"]:
+                        meta[m.get("key", "")] = m.get("value", "")
+
+                for d in decisions:
+                    bans.append({
+                        "ip": d.get("value", ""),
+                        "value": d.get("value", ""),
+                        "scenario": d.get("scenario", ""),
+                        "reason": d.get("scenario", ""),
+                        "duration": d.get("duration", ""),
+                        "type": d.get("type", "ban"),
+                        "origin": d.get("origin", ""),
+                        "id": d.get("id"),
+                        "created_at": item.get("created_at", ""),
+                        "country": meta.get("IsoCode", ""),
+                        "asn": meta.get("ASNNumber", ""),
+                        "asn_org": meta.get("ASNOrg", ""),
+                    })
+            return bans
     except Exception:
         pass
     return []
@@ -252,20 +279,6 @@ def _get_threat_stats() -> dict:
 
 
 # === Public Endpoints ===
-
-@app.get("/health")
-async def health():
-    """WAF health check (public)."""
-    cfg = _cfg()
-    total_rules = sum(len(p) for p in _compiled_patterns.values())
-    return {
-        "status": "ok" if cfg["enabled"] else "disabled",
-        "module": "waf",
-        "version": "1.0.0",
-        "rules_loaded": total_rules,
-        "autoban": cfg["autoban_enabled"],
-    }
-
 
 @app.get("/status")
 async def status():

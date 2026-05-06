@@ -5,9 +5,9 @@
 
 ## 2026-05-06
 
-### Session 102 — CMSD-1.0 License + WAF Phase 1 Complete
+### Session 102 — v2.5.0 WAF Integration Complete
 
-**Goal:** Integrate CMSD-1.0 license and complete WAF mitmproxy LXC container
+**Goal:** Complete WAF mitmproxy LXC integration (all 5 phases)
 
 **Completed:**
 
@@ -16,23 +16,26 @@
    - Created `LICENSE-CMSD-1.0.en.md` (English informative translation)
    - Created `LICENSING.md` (license documentation, SPDX guidance)
    - Updated `README.md` with prominent license notice (CAN/CANNOT table)
-   - Replaced Apache-2.0 badge with CMSD-1.0 gold badge
-   - License designed for ANSSI CSPN auditability + commercial rights preservation
+   - Wiki pages: License.md, License-FR.md with QR codes
+   - PDF booklet uploaded to GitHub release v2.4.0
 
-2. **WAF Phase 1: Mitmproxy LXC Container (v2.5.0)**
-   - Created LXC container at `/data/lxc/mitmproxy`
-   - IP: 10.100.0.60 on br-lxc
-   - Mitmproxy running in regular mode on port 8080
-   - Deployed `secubox_waf.py` addon for Host-based routing
-   - 139 HAProxy routes extracted and configured
-   - Routes updated to use 10.100.0.1 (br-lxc gateway) instead of 127.0.0.1
-   - Nginx configs updated to listen on 0.0.0.0 (accessible from container)
-   - Created `wafctl` control script following xxxctl pattern
+2. **WAF Phase 1-4: Mitmproxy LXC Container**
+   - LXC container at `/data/lxc/mitmproxy` (10.100.0.60:8080)
+   - 330 HAProxy backends routing through mitmproxy_inspector
+   - HAProxy `http-request set-uri` for proxy-style requests
+   - All traffic tagged with X-SecuBox-WAF: inspected header
+   - All 6 LXC containers verified running
 
-3. **WAF Verified Working**
-   - gandalf via WAF: HTTP 200 OK
-   - pix via WAF: HTTP 200 OK
-   - X-SecuBox-WAF header added to responses
+3. **WAF Phase 5: Package Updates**
+   - `secubox-waf` v1.1.0: Added LXC mitmproxy support, wafctl, systemd service
+   - `secubox-haproxy` v1.2.0: Added `waf` subcommand (status/enable/disable)
+   - WebUI dashboard: Added mitmproxy container status card
+
+4. **WebUI Access Fixed**
+   - Added 192.168.1.200:9443 HAProxy bind
+   - Added nginx server_name for 192.168.1.200
+   - WebUI accessible at https://192.168.1.200:9443/
+   - Created webui_direct backend (bypasses WAF)
 
 ---
 

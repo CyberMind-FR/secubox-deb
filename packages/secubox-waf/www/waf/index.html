@@ -347,8 +347,8 @@
 
             <div id="bans" class="tab-content">
                 <table>
-                    <thead><tr><th>IP Address</th><th>Reason</th><th>Duration</th><th>Actions</th></tr></thead>
-                    <tbody id="bansTable"><tr><td colspan="4">Loading...</td></tr></tbody>
+                    <thead><tr><th>IP Address</th><th>Reason</th><th>Country</th><th>ASN</th><th>Duration</th><th>Actions</th></tr></thead>
+                    <tbody id="bansTable"><tr><td colspan="6">Loading...</td></tr></tbody>
                 </table>
             </div>
 
@@ -511,7 +511,7 @@
 
             const tbody = document.getElementById('bansTable');
             if (!d.bans || d.bans.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4" style="color:var(--text-dim)">No active bans</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" style="color:var(--text-dim)">No active bans</td></tr>';
                 return;
             }
             tbody.innerHTML = d.bans.map(b => `

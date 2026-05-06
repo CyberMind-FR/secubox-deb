@@ -556,7 +556,8 @@ cmd_generate() {
     local https_port=$(grep -E '^https_port\s*=' "$CONF_PATH" 2>/dev/null | cut -d'=' -f2 | tr -d ' ' || echo "443")
     local stats_port=$(grep -E '^stats_port\s*=' "$CONF_PATH" 2>/dev/null | cut -d'=' -f2 | tr -d ' ' || echo "8404")
     local waf_enabled=$(grep -E '^waf_enabled\s*=' "$CONF_PATH" 2>/dev/null | grep -q 'true' && echo "1" || echo "0")
-    local waf_port=$(grep -E '^waf_backend_port\s*=' "$CONF_PATH" 2>/dev/null | cut -d'=' -f2 | tr -d ' ' || echo "8890")
+    local waf_port=$(grep -E '^waf_backend_port\s*=' "$CONF_PATH" 2>/dev/null | cut -d'=' -f2 | tr -d ' ' || echo "8080")
+    local waf_ip=$(grep -E '^waf_backend_ip\s*=' "$CONF_PATH" 2>/dev/null | cut -d'"' -f2 || echo "10.100.0.60")
 
     mkdir -p "$CONFIG_DIR" /run/haproxy
 
@@ -602,7 +603,7 @@ EOF
             [ "$enabled" = "1" ] && [ -n "$domain" ] && {
                 echo "    acl host_$name hdr(host) -i $domain"
                 if [ "$waf_enabled" = "1" ]; then
-                    echo "    use_backend waf_inspector if host_$name"
+                    echo "    use_backend mitmproxy_inspector if host_$name"
                 else
                     echo "    use_backend $backend if host_$name"
                 fi
@@ -631,7 +632,7 @@ EOF
             [ "$enabled" = "1" ] && [ "$ssl" = "1" ] && [ -n "$domain" ] && {
                 echo "    acl host_$name hdr(host) -i $domain"
                 if [ "$waf_enabled" = "1" ]; then
-                    echo "    use_backend waf_inspector if host_$name"
+                    echo "    use_backend mitmproxy_inspector if host_$name"
                 else
                     echo "    use_backend $backend if host_$name"
                 fi
@@ -644,14 +645,15 @@ EOF
 
 EOF
 
-    # WAF inspector backend
+    # WAF inspector backend (mitmproxy LXC container)
     [ "$waf_enabled" = "1" ] && cat >> "$CONFIG_DIR/haproxy.cfg" << EOF
-# WAF Inspector Backend (mitmproxy)
-backend waf_inspector
+# WAF Inspector Backend (mitmproxy LXC at $waf_ip:$waf_port)
+backend mitmproxy_inspector
     mode http
     option forwardfor
     http-request set-header X-Real-IP %[src]
-    server waf 127.0.0.1:${waf_port} check
+    http-request set-uri http://%[req.hdr(Host)]%[path]%[query]
+    server waf ${waf_ip}:${waf_port} check
 
 EOF
 
@@ -779,6 +781,73 @@ EOF
 }
 
 # ─────────────────────────────────────────────────────────────────────
+# WAF INTEGRATION
+# ─────────────────────────────────────────────────────────────────────
+
+cmd_waf_status() {
+    local waf_enabled=$(grep -E '^waf_enabled\s*=' "$CONF_PATH" 2>/dev/null | grep -q 'true' && echo "true" || echo "false")
+    local waf_ip=$(grep -E '^waf_backend_ip\s*=' "$CONF_PATH" 2>/dev/null | cut -d'"' -f2 || echo "10.100.0.60")
+    local waf_port=$(grep -E '^waf_backend_port\s*=' "$CONF_PATH" 2>/dev/null | cut -d'=' -f2 | tr -d ' ' || echo "8080")
+    local waf_running="false"
+    local waf_container="false"
+
+    # Check if mitmproxy container is running
+    if lxc-info -n mitmproxy -s 2>/dev/null | grep -q "RUNNING"; then
+        waf_container="true"
+        # Check if mitmproxy service is active
+        if lxc-attach -n mitmproxy -- systemctl is-active mitmproxy >/dev/null 2>&1; then
+            waf_running="true"
+        fi
+    fi
+
+    # Check connectivity
+    local waf_reachable="false"
+    if curl -s --connect-timeout 2 "http://${waf_ip}:${waf_port}/" >/dev/null 2>&1; then
+        waf_reachable="true"
+    fi
+
+    cat <<EOF
+{
+  "enabled": $waf_enabled,
+  "container_running": $waf_container,
+  "service_running": $waf_running,
+  "reachable": $waf_reachable,
+  "ip": "$waf_ip",
+  "port": $waf_port,
+  "backend": "mitmproxy_inspector"
+}
+EOF
+}
+
+cmd_waf_enable() {
+    if [ -f "$CONF_PATH" ]; then
+        if grep -q '^waf_enabled' "$CONF_PATH"; then
+            sed -i 's/^waf_enabled.*/waf_enabled = true/' "$CONF_PATH"
+        else
+            echo 'waf_enabled = true' >> "$CONF_PATH"
+        fi
+        log "WAF enabled in config"
+        cmd_generate
+        cmd_reload
+    else
+        error "Config file not found: $CONF_PATH"
+        return 1
+    fi
+}
+
+cmd_waf_disable() {
+    if [ -f "$CONF_PATH" ]; then
+        sed -i 's/^waf_enabled.*/waf_enabled = false/' "$CONF_PATH"
+        log "WAF disabled in config"
+        cmd_generate
+        cmd_reload
+    else
+        error "Config file not found: $CONF_PATH"
+        return 1
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────────────
 # MAIN
 # ─────────────────────────────────────────────────────────────────────
 
@@ -827,6 +896,15 @@ case "${1:-}" in
 
     migrate)    cmd_migrate "$2" ;;
 
+    waf)
+        case "${2:-}" in
+            status)  cmd_waf_status ;;
+            enable)  cmd_waf_enable ;;
+            disable) cmd_waf_disable ;;
+            *)       echo "Usage: haproxyctl waf {status|enable|disable}" ;;
+        esac
+        ;;
+
     *)
         cat << EOF
 haproxyctl v$VERSION - HAProxy Manager
@@ -865,6 +943,11 @@ Certificates:
 
 Migration:
   migrate [source]        Migrate from OpenWrt (default: 192.168.255.1)
+
+WAF (mitmproxy):
+  waf status              Show WAF status (JSON)
+  waf enable              Enable WAF inspection
+  waf disable             Disable WAF inspection
 
 Examples:
   haproxyctl components             # JSON list of components

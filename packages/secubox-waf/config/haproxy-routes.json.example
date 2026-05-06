@@ -1,0 +1,6 @@
+{
+  "gitea.example.com": ["127.0.0.1", 3000],
+  "nextcloud.example.com": ["10.100.0.10", 80],
+  "matrix.example.com": ["10.100.0.30", 8008],
+  "mail.example.com": ["10.100.0.50", 8025]
+}

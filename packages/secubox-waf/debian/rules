@@ -3,15 +3,32 @@
 	dh $@
 
 override_dh_auto_install:
+	# API backend
 	install -d debian/secubox-waf/usr/lib/secubox/waf
 	cp -r api debian/secubox-waf/usr/lib/secubox/waf/
+	# Web frontend
 	install -d debian/secubox-waf/usr/share/secubox/www/waf
 	cp -r www/waf/. debian/secubox-waf/usr/share/secubox/www/waf/
+	# Menu integration
 	install -d debian/secubox-waf/usr/share/secubox/menu.d
 	[ -d menu.d ] && cp -r menu.d/. debian/secubox-waf/usr/share/secubox/menu.d/ || true
+	# WAF rules and config
 	install -d debian/secubox-waf/usr/share/secubox/waf
 	[ -d config ] && cp -r config/. debian/secubox-waf/usr/share/secubox/waf/ || true
-	install -d debian/secubox-waf/var/log/secubox
+	# Mitmproxy addon for LXC container
+	install -d debian/secubox-waf/usr/share/secubox/waf/mitmproxy
+	[ -d mitmproxy ] && cp -r mitmproxy/. debian/secubox-waf/usr/share/secubox/waf/mitmproxy/ || true
+	# wafctl control script
+	install -d debian/secubox-waf/usr/sbin
+	[ -f scripts/wafctl ] && install -m 755 scripts/wafctl debian/secubox-waf/usr/sbin/ || true
+	# Log directory
+	install -d debian/secubox-waf/var/log/secubox/waf
 	# Modular nginx config
 	install -d debian/secubox-waf/etc/nginx/secubox.d
 	[ -f nginx/waf.conf ] && cp nginx/waf.conf debian/secubox-waf/etc/nginx/secubox.d/ || true
+	# Example haproxy-routes.json
+	install -d debian/secubox-waf/usr/share/doc/secubox-waf/examples
+	[ -f config/haproxy-routes.json.example ] && cp config/haproxy-routes.json.example debian/secubox-waf/usr/share/doc/secubox-waf/examples/ || true
+	# Systemd service for mitmproxy in container
+	install -d debian/secubox-waf/usr/share/secubox/waf/systemd
+	[ -f systemd/mitmproxy.service ] && cp systemd/mitmproxy.service debian/secubox-waf/usr/share/secubox/waf/systemd/ || true
