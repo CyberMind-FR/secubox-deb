@@ -1,5 +1,23 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-06 (Session 104)*
+*Mis à jour : 2026-05-06 (Session 105)*
+
+---
+
+## ✅ Session 105: Wiki License Links + Issue #35 Update
+
+### Wiki License Documentation
+- [x] Added full CMSD-1.0 license section to `wiki/Home.md`
+- [x] Added license section to `wiki/Home-FR.md` (French)
+- [x] Added license section to `wiki/Home-DE.md` (German)
+- [x] Added license section to `wiki/Home-ZH.md` (Chinese)
+- [x] Updated `wiki/_Footer.md` with CMSD-1.0 link
+- [x] Updated footer wiki version to v2.5.0
+
+### GitHub Issue #35 Update
+- [x] Updated migration tracking issue with Session 104-105 progress
+- [x] Added WAF Phase 1-5 as complete
+- [x] Added ACME/SSL, SecuBox CLI v2.0.0, license alignment to completed items
+- [x] Updated recent updates table with 2026-05-06 fixes
 
 ---
 
