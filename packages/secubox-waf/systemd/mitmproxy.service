@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma
+# Mitmproxy service for SecuBox WAF LXC container
+# Install this in the mitmproxy LXC container at /etc/systemd/system/
+
+[Unit]
+Description=SecuBox WAF - Mitmproxy Inspection Proxy
+After=network.target
+
+[Service]
+Type=simple
+User=mitmproxy
+Group=mitmproxy
+WorkingDirectory=/srv/mitmproxy
+ExecStart=/opt/mitmproxy/bin/mitmdump \
+    --mode regular \
+    --listen-host 0.0.0.0 \
+    --listen-port 8080 \
+    --set confdir=/srv/mitmproxy \
+    --scripts /srv/mitmproxy/secubox_waf.py
+Restart=on-failure
+RestartSec=5
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/mitmproxy /var/log/mitmproxy
+
+[Install]
+WantedBy=multi-user.target

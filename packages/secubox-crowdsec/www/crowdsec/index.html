@@ -531,11 +531,12 @@
         const API = '/api/v1/crowdsec';
 
         async function api(endpoint, method = 'GET', data = null) {
-            const opts = { method, headers: { 'Content-Type': 'application/json' } };
+            const token = () => localStorage.getItem('sbx_token');
+            const opts = { method, headers: { 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) } };
             if (data) opts.body = JSON.stringify(data);
             try {
                 const res = await fetch(API + endpoint, opts);
-                return res.json();
+                if (res.status === 401) { window.location = "/login.html"; return {}; } return res.json();
             } catch (e) {
                 console.error('API error:', e);
                 return {};
@@ -560,7 +561,7 @@
             document.getElementById('capi-status').className = 'status-dot ' + (data.capi_registered ? 'active' : 'inactive');
             document.getElementById('agent-badge').className = 'badge ' + (data.running ? 'active' : 'inactive');
             document.getElementById('agent-badge').textContent = data.running ? 'Running' : 'Stopped';
-            document.getElementById('version-badge').textContent = 'v' + (data.version || '-');
+            const ver = (data.version || '-').replace('version: ', '').split('-')[0]; document.getElementById('version-badge').textContent = ver;
 
             // Check bouncer
             const health = await api('/health');
@@ -617,8 +618,8 @@
                     <tr>
                         <td>${new Date(a.created_at).toLocaleString()}</td>
                         <td>${a.scenario}</td>
-                        <td style="font-family: monospace;">${a.source?.ip || '-'}</td>
-                        <td>${a.source?.cn || a.source?.country || '-'}</td>
+                        <td style="font-family: monospace;">${a.source_ip || '-'}</td>
+                        <td>${a.country || '-'}</td>
                     </tr>
                 `).join('');
             }
@@ -653,14 +654,41 @@
             `).join('') : '<p style="color: var(--text-dim);">No bouncers registered</p>';
         }
 
-        // Load metrics
+        
+        // Load machines
+        async function loadMachines() {
+            try {
+                const data = await api("/status");
+                // Get machines from status or dedicated endpoint
+                const machinesData = await fetch("/api/v1/crowdsec/machines", {
+                    headers: { "Authorization": "Bearer " + (localStorage.getItem("sbx_token") || "") }
+                }).then(r => r.ok ? r.json() : []).catch(() => []);
+                const machines = Array.isArray(machinesData) ? machinesData : [];
+                document.getElementById("machines-count").textContent = machines.length;
+            } catch(e) {
+                console.error("loadMachines error:", e);
+            }
+        }
+
+// Load metrics
         async function loadMetrics() {
-            const data = await api('/metrics');
-            document.getElementById('metrics-content').innerHTML = `
-                <div>Acquired: <strong style="color: var(--cyan);">${data.acquired || 0}</strong></div>
-                <div>Parsed: <strong style="color: var(--green);">${data.parsed || 0}</strong></div>
-                <div>Poured: <strong style="color: var(--yellow);">${data.poured || 0}</strong></div>
-                <div>Buckets: <strong style="color: var(--purple);">${data.buckets || 0}</strong></div>
+            const data = await api("/metrics");
+            let acquired = 0, parsed = 0, poured = 0, buckets = 0;
+            if (data.raw && data.raw.acquisition) {
+                Object.values(data.raw.acquisition).forEach(src => {
+                    acquired += src.reads || 0;
+                    parsed += src.parsed || 0;
+                    poured += src.pour || 0;
+                });
+            }
+            if (data.raw && data.raw.scenarios) {
+                Object.values(data.raw.scenarios).forEach(s => { buckets += s.curr_count || 0; });
+            }
+            document.getElementById("metrics-content").innerHTML = `
+                <div>Acquired: <strong style="color: var(--cyan);">${acquired.toLocaleString()}</strong></div>
+                <div>Parsed: <strong style="color: var(--green);">${parsed.toLocaleString()}</strong></div>
+                <div>Poured: <strong style="color: var(--yellow);">${poured.toLocaleString()}</strong></div>
+                <div>Buckets: <strong style="color: var(--purple);">${buckets}</strong></div>
             `;
         }
 
@@ -727,6 +755,7 @@
             loadAlerts();
             loadHub();
             loadBouncers();
+            loadMachines();
             loadMetrics();
             loadConsoleStatus();
         }

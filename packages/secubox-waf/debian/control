@@ -4,20 +4,22 @@ Priority: optional
 Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.6.2
+Homepage: https://github.com/CyberMind-FR/secubox-deb
 
 Package: secubox-waf
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0.0)
+Depends: ${misc:Depends}, secubox-core (>= 1.0.0), lxc, jq, curl
 Recommends: crowdsec, secubox-crowdsec, secubox-haproxy
-Description: SecuBox Web Application Firewall
- Mitmproxy-based threat detection with CrowdSec integration.
+Description: SecuBox Web Application Firewall (mitmproxy LXC)
+ LXC-contained mitmproxy WAF for HTTP/HTTPS traffic inspection.
+ All HAProxy traffic routes through mitmproxy for deep inspection.
  .
  Features:
+  - LXC container isolation (mitmproxy in 10.100.0.60)
+  - Host-based routing via haproxy-routes.json
+  - X-SecuBox-WAF header tagging for inspected traffic
   - 300+ threat detection rules across 14+ categories
   - SQL injection, XSS, RCE, LFI detection
-  - VoIP/SIP and XMPP attack detection
-  - Router botnet and CVE exploit detection
-  - Auto-ban with configurable sensitivity
-  - Rate limiting per IP
+  - wafctl control script (status/install/start/stop/routes)
   - CrowdSec integration for centralized banning
   - HAProxy reverse proxy integration

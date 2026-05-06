@@ -1,9 +1,31 @@
 #!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma
 set -e
+
 if [ "$1" = "configure" ]; then
+    # Create log directory
+    mkdir -p /var/log/secubox/waf
+    chown secubox:secubox /var/log/secubox/waf 2>/dev/null || true
+
+    # Enable the WAF API service
     systemctl daemon-reload
     systemctl enable secubox-waf.service || true
     systemctl start secubox-waf.service || true
+
+    # Reminder about LXC container
+    echo "=============================================="
+    echo "SecuBox WAF installed."
+    echo ""
+    echo "To install the mitmproxy LXC container, run:"
+    echo "  wafctl install"
+    echo ""
+    echo "To start the WAF after container install:"
+    echo "  wafctl start"
+    echo ""
+    echo "To add routes for HAProxy backends:"
+    echo "  wafctl add-route <domain> <ip> <port>"
+    echo "=============================================="
 fi
 #DEBHELPER#
 exit 0

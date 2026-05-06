@@ -1,5 +1,5 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-06 (Session 102)*
+*Mis à jour : 2026-05-06 (Session 103)*
 
 ---
 
@@ -39,15 +39,51 @@
 - [x] All traffic tagged with X-SecuBox-WAF: inspected
 - [ ] CrowdSec integration with WAF logs (future)
 
-### Phase 5: Package Updates
-- [ ] Create `secubox-waf` package (mitmproxy + wafctl + config)
-- [ ] Update `secubox-haproxy` for WAF backend support
-- [ ] Add WAF status to WebUI dashboard
+### Phase 5: Package Updates ✅ COMPLETE
+- [x] Create `secubox-waf` package (mitmproxy + wafctl + config)
+  - Updated debian/control with LXC dependencies
+  - Updated debian/rules to install wafctl and mitmproxy addon
+  - Added mitmproxy.service for LXC container
+  - Added haproxy-routes.json.example
+  - Updated debian/changelog to v1.1.0
+- [x] Update `secubox-haproxy` for WAF backend support
+  - Added `waf` subcommand (status/enable/disable)
+  - Added waf_backend_ip config for LXC IP (10.100.0.60)
+  - Updated mitmproxy_inspector backend with http-request set-uri
+  - Updated debian/changelog to v1.2.0
+- [x] Add WAF status to WebUI dashboard
+  - Added mitmproxy container status card
+  - Shows container running state, IP:port, requests inspected
 
 ### Dependencies
 - mitmproxy compatible with OpenSSL on Debian arm64
 - br-lxc network configured (10.100.0.0/24)
 - HAProxy TOML config support
+
+---
+
+## ✅ Session 103: CrowdSec Dashboard Fixes
+
+### API Fixes
+- [x] Added `lapi_key` to `/etc/secubox/secubox.conf` (bouncer API key)
+- [x] Created `/etc/crowdsec/online_api_credentials.yaml` (empty file to fix cscli)
+- [x] Updated alerts router to use `cscli` instead of LAPI (bouncer key can't access alerts)
+- [x] All API endpoints now return real data:
+  - Decisions: 100 active bans
+  - Alerts: 139 alerts in 24h
+  - Bouncers: 1 firewall bouncer
+  - Machines: 2 machines
+  - Hub: 7 collections installed
+
+### Dashboard Fixes
+- [x] Fixed alerts display: `a.source_ip` and `a.country` (was `a.source?.ip`)
+- [x] Added `loadMachines()` function for machines count
+- [x] All cards now show real data
+
+### Known Issues (External - Cannot Fix)
+- CrowdSec Central API: 403 Forbidden (IP 82.67.100.75 blocked by CrowdSec)
+- Hub Update: 403 from cdn-hub.crowdsec.net (same IP blocking)
+- These require contacting CrowdSec support or waiting for IP unblock
 
 ---
 
@@ -75,7 +111,9 @@
 
 ### WebUI LAN Access
 - [x] Added HAProxy frontend for 192.168.255.1:9443
-- [x] WebUI accessible via WAF with authentication
+- [x] Added HAProxy bind for 192.168.1.200:9443
+- [x] Created webui_direct backend (bypasses WAF for admin)
+- [x] WebUI accessible at https://192.168.1.200:9443/
 
 ---
 

@@ -1,3 +1,14 @@
+secubox-waf (1.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Add LXC container support for mitmproxy isolation
+  * Add wafctl control script (install/start/stop/routes)
+  * Add secubox_waf.py mitmproxy addon for Host-based routing
+  * Add X-SecuBox-WAF header tagging for inspected traffic
+  * Add mitmproxy.service systemd unit for container
+  * Add haproxy-routes.json.example configuration
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 06 May 2026 14:30:00 +0200
+
 secubox-waf (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial release
