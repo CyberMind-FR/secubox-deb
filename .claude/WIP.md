@@ -25,8 +25,13 @@
 
 ### Phase 3: WAF Rules & Monitoring
 - [x] Deploy mitmproxy inspection scripts (SecuBox WAF addon)
-- [ ] Configure logging to `/var/log/secubox/waf/`
+- [x] Configure logging to `/srv/mitmproxy/logs/waf-threats.log`
 - [x] Create `wafctl` control script (xxxctl pattern)
+- [x] Graduated Response System (GH Issue #37):
+  - Warning page on first detection (not immediate block)
+  - Counter: shows attempts vs threshold (e.g., "1/3")
+  - Auto-ban via CrowdSec after 3 attempts in 5 min window
+  - SecuBox-themed alert page with license/legal notice
 - [ ] WebUI integration: WAF status, blocked requests, rules
 
 ### Phase 4: Health Verification ✅ COMPLETE
@@ -62,22 +67,43 @@
 
 ---
 
-## ✅ Session 103: CrowdSec Dashboard Fixes
+## ✅ Session 103: CrowdSec + WAF Dashboard Fixes
 
-### API Fixes
+### CrowdSec API Fixes
 - [x] Added `lapi_key` to `/etc/secubox/secubox.conf` (bouncer API key)
-- [x] Created `/etc/crowdsec/online_api_credentials.yaml` (empty file to fix cscli)
-- [x] Updated alerts router to use `cscli` instead of LAPI (bouncer key can't access alerts)
-- [x] All API endpoints now return real data:
+- [x] Registered CAPI with `cscli capi register`
+- [x] Updated alerts router to use `cscli` instead of LAPI
+- [x] Hub update/upgrade working (base-http-scenarios 1.3→1.4)
+- [x] All API endpoints return real data:
   - Decisions: 100 active bans
   - Alerts: 139 alerts in 24h
   - Bouncers: 1 firewall bouncer
   - Machines: 2 machines
   - Hub: 7 collections installed
 
-### Dashboard Fixes
-- [x] Fixed alerts display: `a.source_ip` and `a.country` (was `a.source?.ip`)
+### CrowdSec Dashboard Fixes
+- [x] Fixed alerts display: `a.source_ip` and `a.country`
 - [x] Added `loadMachines()` function for machines count
+- [x] CAPI status now shows registered ✅
+
+### WAF Dashboard Fixes
+- [x] Fixed `_get_bans()` to flatten nested CrowdSec data
+- [x] Added Country, ASN columns to bans table
+- [x] Added `allow-sudo.conf` drop-in for service
+- [x] Bans display with full details (IP, scenario, country, ASN, duration)
+
+### WAF Graduated Response (Phase 3 Enhancement)
+- [x] Implemented progressive threat response:
+  - First detection → Warning page (not block)
+  - 3 attempts → Auto-ban via CrowdSec
+- [x] Beautiful SecuBox-themed alert page
+- [x] Counter shows "Warnings: X / 3"
+- [x] License/legal notice included
+- [x] Created GitHub Issue #37
+- [x] Saved addon to `packages/secubox-waf/config/mitmproxy-addon.py`
+
+### Commits
+- `271f4d4` fix(crowdsec,waf): Fix dashboard API data and display
 - [x] All cards now show real data
 
 ### Known Issues (External - Cannot Fix)
