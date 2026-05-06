@@ -1,0 +1,827 @@
+{
+  "255": {
+    "domain": "255.gk2.secubox.in",
+    "port": 9100,
+    "root": "/srv/metablogizer/sites/255"
+  },
+  "3d": {
+    "domain": "3d.gk2.secubox.in",
+    "port": 9101,
+    "root": "/srv/metablogizer/sites/3d"
+  },
+  "42": {
+    "domain": "42.gk2.secubox.in",
+    "port": 9102,
+    "root": "/srv/metablogizer/sites/42"
+  },
+  "ab": {
+    "domain": "ab.gk2.secubox.in",
+    "port": 8934,
+    "root": "/srv/metablogizer/sites/ab"
+  },
+  "aea": {
+    "domain": "aea.gk2.secubox.in",
+    "port": 8975,
+    "root": "/srv/metablogizer/sites/aea"
+  },
+  "aiaa": {
+    "domain": "aiaa.gk2.secubox.in",
+    "port": 8979,
+    "root": "/srv/metablogizer/sites/aiaa"
+  },
+  "apr": {
+    "domain": "apr.gk2.secubox.in",
+    "port": 9103,
+    "root": "/srv/metablogizer/sites/apr"
+  },
+  "arm": {
+    "domain": "arm.gk2.secubox.in",
+    "port": 8977,
+    "root": "/srv/metablogizer/sites/arm"
+  },
+  "armada": {
+    "domain": "armada.gk2.secubox.in",
+    "port": 8978,
+    "root": "/srv/metablogizer/sites/armada"
+  },
+  "astro": {
+    "domain": "astro.gk2.secubox.in",
+    "port": 9104,
+    "root": "/srv/metablogizer/sites/astro"
+  },
+  "astrod": {
+    "domain": "astrod.gk2.secubox.in",
+    "port": 9105,
+    "root": "/srv/metablogizer/sites/astrod"
+  },
+  "astrodynamique": {
+    "domain": "astrodynamique.gk2.secubox.in",
+    "port": 9106,
+    "root": "/srv/metablogizer/sites/astrodynamique"
+  },
+  "bazi-weekly": {
+    "domain": "bw.maegia.tv",
+    "port": 8909,
+    "root": "/srv/metablogizer/sites/bazi-weekly"
+  },
+  "bcf": {
+    "domain": "bcf.gk2.secubox.in",
+    "port": 9107,
+    "root": "/srv/metablogizer/sites/bcf"
+  },
+  "bd": {
+    "domain": "bd.gk2.secubox.in",
+    "port": 9108,
+    "root": "/srv/metablogizer/sites/bd"
+  },
+  "bday": {
+    "domain": "bday.gk2.secubox.in",
+    "port": 9109,
+    "root": "/srv/metablogizer/sites/bday"
+  },
+  "bdgse": {
+    "domain": "bdgse.gk2.secubox.in",
+    "port": 9110,
+    "root": "/srv/metablogizer/sites/bdgse"
+  },
+  "bgp": {
+    "domain": "bgp.gk2.secubox.in",
+    "port": 8944,
+    "root": "/srv/metablogizer/sites/bgp"
+  },
+  "boom": {
+    "domain": "boom.gk2.secubox.in",
+    "port": 9111,
+    "root": "/srv/metablogizer/sites/boom"
+  },
+  "c3box": {
+    "domain": "c3box.maegia.tv",
+    "port": 9112,
+    "root": "/srv/metablogizer/sites/c3box"
+  },
+  "c3deb": {
+    "domain": "c3deb.gk2.secubox.in",
+    "port": 9113,
+    "root": "/srv/metablogizer/sites/c3deb"
+  },
+  "camus": {
+    "domain": "camus.gk2.secubox.in",
+    "port": 9114,
+    "root": "/srv/metablogizer/sites/camus"
+  },
+  "ccom": {
+    "domain": "ccom.gk2.secubox.in",
+    "port": 9115,
+    "root": "/srv/metablogizer/sites/ccom"
+  },
+  "cgv": {
+    "domain": "cgv.gk2.secubox.in",
+    "port": 8945,
+    "root": "/srv/metablogizer/sites/cgv"
+  },
+  "chess": {
+    "domain": "chess.maegia.tv",
+    "port": 9008,
+    "root": "/srv/metablogizer/sites/chess"
+  },
+  "chili": {
+    "domain": "chili.gk2.secubox.in",
+    "port": 8981,
+    "root": "/srv/metablogizer/sites/chili"
+  },
+  "chilicc": {
+    "domain": "chilicc.gk2.secubox.in",
+    "port": 9116,
+    "root": "/srv/metablogizer/sites/chilicc"
+  },
+  "coin": {
+    "domain": "coin.maegia.tv",
+    "port": 8911,
+    "root": "/srv/metablogizer/sites/coin"
+  },
+  "comic": {
+    "domain": "comic.secubox.in",
+    "port": 8918,
+    "root": "/srv/metablogizer/sites/comic"
+  },
+  "confid": {
+    "domain": "confid.gk2.secubox.in",
+    "port": 8930,
+    "root": "/srv/metablogizer/sites/confid"
+  },
+  "control": {
+    "domain": "control.gk2.secubox.in",
+    "port": 9117,
+    "root": "/srv/metablogizer/sites/control"
+  },
+  "couvent": {
+    "domain": "couvent.gk2.secubox.in",
+    "port": 9118,
+    "root": "/srv/metablogizer/sites/couvent"
+  },
+  "cpi": {
+    "domain": "cpi.gk2.secubox.in",
+    "port": 8946,
+    "root": "/srv/metablogizer/sites/cpi"
+  },
+  "cv": {
+    "domain": "cv.gk2.secubox.in",
+    "port": 9119,
+    "root": "/srv/metablogizer/sites/cv"
+  },
+  "cybaxe": {
+    "domain": "cybaxe.gk2.secubox.in",
+    "port": 9120,
+    "root": "/srv/metablogizer/sites/cybaxe"
+  },
+  "cybermind": {
+    "domain": "cybermind.gk2.secubox.in",
+    "port": 9121,
+    "root": "/srv/metablogizer/sites/cybermind"
+  },
+  "cybermood": {
+    "domain": "cybermood.gk2.secubox.in",
+    "port": 9122,
+    "root": "/srv/metablogizer/sites/cybermood"
+  },
+  "cyberzine": {
+    "domain": "cyberzine.maegia.tv",
+    "port": 8903,
+    "root": "/srv/metablogizer/sites/cyberzine"
+  },
+  "dcb": {
+    "domain": "dcb.gk2.secubox.in",
+    "port": 9123,
+    "root": "/srv/metablogizer/sites/dcb"
+  },
+  "dehrsss": {
+    "domain": "dehrsss.gk2.secubox.in",
+    "port": 9124,
+    "root": "/srv/metablogizer/sites/dehrsss"
+  },
+  "dev": {
+    "domain": "devel.cybermind.fr",
+    "port": 8907,
+    "root": "/srv/metablogizer/sites/dev"
+  },
+  "devel": {
+    "domain": "devel.maegia.tv",
+    "port": 8900,
+    "root": "/srv/metablogizer/sites/devel"
+  },
+  "dgse": {
+    "domain": "dgse.gk2.secubox.in",
+    "port": 8954,
+    "root": "/srv/metablogizer/sites/dgse"
+  },
+  "diyegg": {
+    "domain": "diyegg.maegia.tv",
+    "port": 8983,
+    "root": "/srv/metablogizer/sites/diyegg"
+  },
+  "email": {
+    "domain": "email.gk2.secubox.in",
+    "port": 9125,
+    "root": "/srv/metablogizer/sites/email"
+  },
+  "entamoir": {
+    "domain": "entamoir.gk2.secubox.in",
+    "port": 9126,
+    "root": "/srv/metablogizer/sites/entamoir"
+  },
+  "equa": {
+    "domain": "equa.gk2.secubox.in",
+    "port": 8940,
+    "root": "/srv/metablogizer/sites/equa"
+  },
+  "eval": {
+    "domain": "eval.gk2.secubox.in",
+    "port": 9127,
+    "root": "/srv/metablogizer/sites/eval"
+  },
+  "evolution": {
+    "domain": "evolution.gk2.secubox.in",
+    "port": 9128,
+    "root": "/srv/metablogizer/sites/evolution"
+  },
+  "facb": {
+    "domain": "facb.gk2.secubox.in",
+    "port": 8972,
+    "root": "/srv/metablogizer/sites/facb"
+  },
+  "fb": {
+    "domain": "fb.gk2.secubox.in",
+    "port": 9129,
+    "root": "/srv/metablogizer/sites/fb"
+  },
+  "files-70": {
+    "domain": "files-70.gk2.secubox.in",
+    "port": 9130,
+    "root": "/srv/metablogizer/sites/files-70"
+  },
+  "filetest": {
+    "domain": "filetest.gk2.secubox.in",
+    "port": 9131,
+    "root": "/srv/metablogizer/sites/filetest"
+  },
+  "fin": {
+    "domain": "fin.gk2.secubox.in",
+    "port": 9132,
+    "root": "/srv/metablogizer/sites/fin"
+  },
+  "financer": {
+    "domain": "financer.gk2.secubox.in",
+    "port": 9133,
+    "root": "/srv/metablogizer/sites/financer"
+  },
+  "flash": {
+    "domain": "flash.gk2.secubox.in",
+    "port": 8931,
+    "root": "/srv/metablogizer/sites/flash"
+  },
+  "fm": {
+    "domain": "fm.gk2.secubox.in",
+    "port": 9134,
+    "root": "/srv/metablogizer/sites/fm"
+  },
+  "fondation": {
+    "domain": "fondation.gk2.secubox.in",
+    "port": 9135,
+    "root": "/srv/metablogizer/sites/fondation"
+  },
+  "forensic": {
+    "domain": "forensic.gk2.secubox.in",
+    "port": 9136,
+    "root": "/srv/metablogizer/sites/forensic"
+  },
+  "form": {
+    "domain": "form.gk2.secubox.in",
+    "port": 8971,
+    "root": "/srv/metablogizer/sites/form"
+  },
+  "fwhs": {
+    "domain": "fwhs.gk2.secubox.in",
+    "port": 8936,
+    "root": "/srv/metablogizer/sites/fwhs"
+  },
+  "game": {
+    "domain": "game.gk2.secubox.in",
+    "port": 8941,
+    "root": "/srv/metablogizer/sites/game"
+  },
+  "gandalf": {
+    "domain": "gandalf.maegia.tv",
+    "port": 8901,
+    "root": "/srv/metablogizer/sites/gandalf"
+  },
+  "ganimed": {
+    "domain": "ganimed.gk2.secubox.in",
+    "port": 9137,
+    "root": "/srv/metablogizer/sites/ganimed"
+  },
+  "gateaucc": {
+    "domain": "gateaucc.gk2.secubox.in",
+    "port": 9138,
+    "root": "/srv/metablogizer/sites/gateaucc"
+  },
+  "geo1000": {
+    "domain": "geo1000.gk2.secubox.in",
+    "port": 9139,
+    "root": "/srv/metablogizer/sites/geo1000"
+  },
+  "gk2": {
+    "domain": "gk2.maegia.tv",
+    "port": 8910,
+    "root": "/srv/metablogizer/sites/gk2"
+  },
+  "go": {
+    "domain": "go.gk2.secubox.in",
+    "port": 9140,
+    "root": "/srv/metablogizer/sites/go"
+  },
+  "gondwana": {
+    "domain": "gondwana.gk2.secubox.in",
+    "port": 9141,
+    "root": "/srv/metablogizer/sites/gondwana"
+  },
+  "halt": {
+    "domain": "halt.maegia.tv",
+    "port": 8912,
+    "root": "/srv/metablogizer/sites/halt"
+  },
+  "holo": {
+    "domain": "holo.gk2.secubox.in",
+    "port": 9142,
+    "root": "/srv/metablogizer/sites/holo"
+  },
+  "horloge": {
+    "domain": "clock.gk2.secubox.in",
+    "port": 8924,
+    "root": "/srv/metablogizer/sites/horloge"
+  },
+  "how2": {
+    "domain": "how2.maegia.tv",
+    "port": 9143,
+    "root": "/srv/metablogizer/sites/how2"
+  },
+  "iinjonction": {
+    "domain": "iinjonction.gk2.secubox.in",
+    "port": 9144,
+    "root": "/srv/metablogizer/sites/iinjonction"
+  },
+  "injonction": {
+    "domain": "injonction.gk2.secubox.in",
+    "port": 9145,
+    "root": "/srv/metablogizer/sites/injonction"
+  },
+  "kre360": {
+    "domain": "kre360.gk2.secubox.in",
+    "port": 9146,
+    "root": "/srv/metablogizer/sites/kre360"
+  },
+  "krypto": {
+    "domain": "krypto.gk2.secubox.in",
+    "port": 9147,
+    "root": "/srv/metablogizer/sites/krypto"
+  },
+  "lifinal": {
+    "domain": "lifinal.gk2.secubox.in",
+    "port": 9148,
+    "root": "/srv/metablogizer/sites/lifinal"
+  },
+  "litest": {
+    "domain": "litest.gk2.secubox.in",
+    "port": 9149,
+    "root": "/srv/metablogizer/sites/litest"
+  },
+  "live": {
+    "domain": "live.maegia.tv",
+    "port": 8906,
+    "root": "/srv/metablogizer/sites/live"
+  },
+  "lldh": {
+    "domain": "lldh.ganimed.fr",
+    "port": 9150,
+    "root": "/srv/metablogizer/sites/lldh"
+  },
+  "lldh360": {
+    "domain": "lldh360.maegia.tv",
+    "port": 9003,
+    "root": "/srv/metablogizer/sites/lldh360"
+  },
+  "lrh": {
+    "domain": "lrh.gk2.secubox.in",
+    "port": 9151,
+    "root": "/srv/metablogizer/sites/lrh"
+  },
+  "lunaquar": {
+    "domain": "lunaquar.gk2.secubox.in",
+    "port": 9152,
+    "root": "/srv/metablogizer/sites/lunaquar"
+  },
+  "maegia": {
+    "domain": "maegia.gk2.secubox.in",
+    "port": 9153,
+    "root": "/srv/metablogizer/sites/maegia"
+  },
+  "magic": {
+    "domain": "magic.maegia.tv",
+    "port": 9154,
+    "root": "/srv/metablogizer/sites/magic"
+  },
+  "migrate": {
+    "domain": "migrate.gk2.secubox.in",
+    "port": 9155,
+    "root": "/srv/metablogizer/sites/migrate"
+  },
+  "miroir": {
+    "domain": "miroir.gk2.secubox.in",
+    "port": 9156,
+    "root": "/srv/metablogizer/sites/miroir"
+  },
+  "mku": {
+    "domain": "mku.gk2.secubox.in",
+    "port": 8932,
+    "root": "/srv/metablogizer/sites/mku"
+  },
+  "mokup": {
+    "domain": "mokup.gk2.secubox.in",
+    "port": 9157,
+    "root": "/srv/metablogizer/sites/mokup"
+  },
+  "money": {
+    "domain": "money.maegia.tv",
+    "port": 9158,
+    "root": "/srv/metablogizer/sites/money"
+  },
+  "myhub": {
+    "domain": "myhub.gk2.secubox.in",
+    "port": 9159,
+    "root": "/srv/metablogizer/sites/myhub"
+  },
+  "oracle": {
+    "domain": "oracle.ganimed.fr",
+    "port": 8915,
+    "root": "/srv/metablogizer/sites/oracle"
+  },
+  "penbd": {
+    "domain": "penbd.gk2.secubox.in",
+    "port": 8969,
+    "root": "/srv/metablogizer/sites/penbd"
+  },
+  "pent": {
+    "domain": "pent.gk2.secubox.in",
+    "port": 8968,
+    "root": "/srv/metablogizer/sites/pent"
+  },
+  "perdu": {
+    "domain": "perdu.gk2.secubox.in",
+    "port": 9160,
+    "root": "/srv/metablogizer/sites/perdu"
+  },
+  "personal": {
+    "domain": "personal.gk2.secubox.in",
+    "port": 9161,
+    "root": "/srv/metablogizer/sites/personal"
+  },
+  "plainte": {
+    "domain": "plainte.gk2.secubox.in",
+    "port": 8973,
+    "root": "/srv/metablogizer/sites/plainte"
+  },
+  "press": {
+    "domain": "press.cybermood.eu",
+    "port": 9162,
+    "root": "/srv/metablogizer/sites/press"
+  },
+  "presse": {
+    "domain": "presse.cybermood.eu",
+    "port": 9163,
+    "root": "/srv/metablogizer/sites/presse"
+  },
+  "pripho": {
+    "domain": "pripho.gk2.secubox.in",
+    "port": 8980,
+    "root": "/srv/metablogizer/sites/pripho"
+  },
+  "proofit": {
+    "domain": "proofit.gk2.secubox.in",
+    "port": 8966,
+    "root": "/srv/metablogizer/sites/proofit"
+  },
+  "psy": {
+    "domain": "psy.gk2.secubox.in",
+    "port": 9164,
+    "root": "/srv/metablogizer/sites/psy"
+  },
+  "pub": {
+    "domain": "pub.gk2.secbox.in",
+    "port": 8938,
+    "root": "/srv/metablogizer/sites/pub"
+  },
+  "punk": {
+    "domain": "punk.gk2.secubox.in",
+    "port": 8948,
+    "root": "/srv/metablogizer/sites/punk"
+  },
+  "q42": {
+    "domain": "q42.gk2.secubox.in",
+    "port": 9165,
+    "root": "/srv/metablogizer/sites/q42"
+  },
+  "qlicktest": {
+    "domain": "qlicktest.gk2.secubox.in",
+    "port": 9166,
+    "root": "/srv/metablogizer/sites/qlicktest"
+  },
+  "qs": {
+    "domain": "qs.gk2.secubox.in",
+    "port": 9167,
+    "root": "/srv/metablogizer/sites/qs"
+  },
+  "quick-access": {
+    "domain": "quick-access.gk2.secubox.in",
+    "port": 9168,
+    "root": "/srv/metablogizer/sites/quick-access"
+  },
+  "qwizz": {
+    "domain": "qwizz.gk2.secubox.in",
+    "port": 9169,
+    "root": "/srv/metablogizer/sites/qwizz"
+  },
+  "raid": {
+    "domain": "raid.gk2.secubox.in",
+    "port": 8937,
+    "root": "/srv/metablogizer/sites/raid"
+  },
+  "rcve": {
+    "domain": "rcve.gk2.secubox.in",
+    "port": 8967,
+    "root": "/srv/metablogizer/sites/rcve"
+  },
+  "rfg": {
+    "domain": "rfg.gk2.secubox.in",
+    "port": 8970,
+    "root": "/srv/metablogizer/sites/rfg"
+  },
+  "risotocc": {
+    "domain": "risotocc.gk2.secubox.in",
+    "port": 9170,
+    "root": "/srv/metablogizer/sites/risotocc"
+  },
+  "rtdah": {
+    "domain": "rtdah.gk2.secubox.in",
+    "port": 9171,
+    "root": "/srv/metablogizer/sites/rtdah"
+  },
+  "sa": {
+    "domain": "sa.gk2.secubox.in",
+    "port": 8933,
+    "root": "/srv/metablogizer/sites/sa"
+  },
+  "santefr": {
+    "domain": "santefr.gk2.secubox.in",
+    "port": 9010,
+    "root": "/srv/metablogizer/sites/santefr"
+  },
+  "sb": {
+    "domain": "sb.gk2.secubox.in",
+    "port": 9172,
+    "root": "/srv/metablogizer/sites/sb"
+  },
+  "sdlc": {
+    "domain": "sdlc.gk2.secubox.in",
+    "port": 8925,
+    "root": "/srv/metablogizer/sites/sdlc"
+  },
+  "secbdp": {
+    "domain": "secbdp.gk2.secubox.in",
+    "port": 8986,
+    "root": "/srv/metablogizer/sites/secbdp"
+  },
+  "secbox": {
+    "domain": "secbox.gk2.secubox.in",
+    "port": 9173,
+    "root": "/srv/metablogizer/sites/secbox"
+  },
+  "seccubox": {
+    "domain": "seccubox.gk2.secubox.in",
+    "port": 9174,
+    "root": "/srv/metablogizer/sites/seccubox"
+  },
+  "secubox": {
+    "domain": "c3box.maegia.tv",
+    "port": 8902,
+    "root": "/srv/metablogizer/sites/secubox"
+  },
+  "shroom": {
+    "domain": "shroom.maegia.tv",
+    "port": 8982,
+    "root": "/srv/metablogizer/sites/shroom"
+  },
+  "shroombdss": {
+    "domain": "shroombdss.gk2.secubox.in",
+    "port": 9175,
+    "root": "/srv/metablogizer/sites/shroombdss"
+  },
+  "sib": {
+    "domain": "sib..gk2.secubox.in",
+    "port": 8984,
+    "root": "/srv/metablogizer/sites/sib"
+  },
+  "sibd": {
+    "domain": "sibd.gk2.secubox.in",
+    "port": 9176,
+    "root": "/srv/metablogizer/sites/sibd"
+  },
+  "sid": {
+    "domain": "sid.gk2.secubox.in",
+    "port": 9177,
+    "root": "/srv/metablogizer/sites/sid"
+  },
+  "siggk": {
+    "domain": "siggk.gk2.secubox.in",
+    "port": 8976,
+    "root": "/srv/metablogizer/sites/siggk"
+  },
+  "sirds": {
+    "domain": "sirds.gk2.secubox.in",
+    "port": 9178,
+    "root": "/srv/metablogizer/sites/sirds"
+  },
+  "sliders": {
+    "domain": "sliders.maegia.tv",
+    "port": 8904,
+    "root": "/srv/metablogizer/sites/sliders"
+  },
+  "slides": {
+    "domain": "slides.maegia.tv",
+    "port": 8905,
+    "root": "/srv/metablogizer/sites/slides"
+  },
+  "snap": {
+    "domain": "snap.gk2.secubox.in",
+    "port": 9179,
+    "root": "/srv/metablogizer/sites/snap"
+  },
+  "sosint": {
+    "domain": "sosint.gk2.secubox.in",
+    "port": 8974,
+    "root": "/srv/metablogizer/sites/sosint"
+  },
+  "srtc": {
+    "domain": "srtc.gk2.secubox.in",
+    "port": 9180,
+    "root": "/srv/metablogizer/sites/srtc"
+  },
+  "srvi": {
+    "domain": "srvi.gk2.secubox.in",
+    "port": 9181,
+    "root": "/srv/metablogizer/sites/srvi"
+  },
+  "starcomm": {
+    "domain": "starcomm.gk2.secubox.in",
+    "port": 9182,
+    "root": "/srv/metablogizer/sites/starcomm"
+  },
+  "status": {
+    "domain": "status.maegia.tv",
+    "port": 8908,
+    "root": "/srv/metablogizer/sites/status"
+  },
+  "survie": {
+    "domain": "survie.gk2.secubox.in",
+    "port": 8943,
+    "root": "/srv/metablogizer/sites/survie"
+  },
+  "sweedsync": {
+    "domain": "sweedsync.gk2.secubox.in",
+    "port": 9183,
+    "root": "/srv/metablogizer/sites/sweedsync"
+  },
+  "sweedtest": {
+    "domain": "sweedtest.gk2.secubox.in",
+    "port": 9184,
+    "root": "/srv/metablogizer/sites/sweedtest"
+  },
+  "tdah": {
+    "domain": "tdah.gk2.secubox.in",
+    "port": 9185,
+    "root": "/srv/metablogizer/sites/tdah"
+  },
+  "tdah-test": {
+    "domain": "tdah-test.gk2.secubox.in",
+    "port": 9186,
+    "root": "/srv/metablogizer/sites/tdah-test"
+  },
+  "tdahbdss": {
+    "domain": "tdahbdss.gk2.secubox.in",
+    "port": 8991,
+    "root": "/srv/metablogizer/sites/tdahbdss"
+  },
+  "test": {
+    "domain": "test.gk2.secubox.in",
+    "port": 9187,
+    "root": "/srv/metablogizer/sites/test"
+  },
+  "testdrow2": {
+    "domain": "testdrow2.gk2.secubox.in",
+    "port": 9188,
+    "root": "/srv/metablogizer/sites/testdrow2"
+  },
+  "torrent-search": {
+    "domain": "torrent-search.gk2.secubox.in",
+    "port": 9189,
+    "root": "/srv/metablogizer/sites/torrent-search"
+  },
+  "tsb": {
+    "domain": "tsb.gk2.secubox.in",
+    "port": 9190,
+    "root": "/srv/metablogizer/sites/tsb"
+  },
+  "tuto": {
+    "domain": "tuto.gk2.secubox.in",
+    "port": 9191,
+    "root": "/srv/metablogizer/sites/tuto"
+  },
+  "umemox": {
+    "domain": "umemox.maegia.tv",
+    "port": 9192,
+    "root": "/srv/metablogizer/sites/umemox"
+  },
+  "virus": {
+    "domain": "virus.gk2.secubox.in",
+    "port": 9193,
+    "root": "/srv/metablogizer/sites/virus"
+  },
+  "vortex": {
+    "domain": "vortex.gk2.secubox.in",
+    "port": 9194,
+    "root": "/srv/metablogizer/sites/vortex"
+  },
+  "wall": {
+    "domain": "wall.maegia.tv",
+    "port": 9009,
+    "root": "/srv/metablogizer/sites/wall"
+  },
+  "want": {
+    "domain": "wanted.gk2.secubox.in",
+    "port": 8920,
+    "root": "/srv/metablogizer/sites/want"
+  },
+  "wechat": {
+    "domain": "wechat.gk2.secubox.in",
+    "port": 9195,
+    "root": "/srv/metablogizer/sites/wechat"
+  },
+  "werdl": {
+    "domain": "werdl.gk2.secubox.in",
+    "port": 9196,
+    "root": "/srv/metablogizer/sites/werdl"
+  },
+  "wrintftest": {
+    "domain": "wrintftest.gk2.secubox.in",
+    "port": 9197,
+    "root": "/srv/metablogizer/sites/wrintftest"
+  },
+  "xtest": {
+    "domain": "xtest.gk2.secubox.in",
+    "port": 9198,
+    "root": "/srv/metablogizer/sites/xtest"
+  },
+  "zifon": {
+    "domain": "zifon.gk2.secubox.in",
+    "port": 9199,
+    "root": "/srv/metablogizer/sites/zifon"
+  },
+  "ziptest": {
+    "domain": "ziptest.gk2.secubox.in",
+    "port": 9200,
+    "root": "/srv/metablogizer/sites/ziptest"
+  },
+  "ziwtest": {
+    "domain": "ziwtest.gk2.secubox.in",
+    "port": 9201,
+    "root": "/srv/metablogizer/sites/ziwtest"
+  },
+  "zkp": {
+    "domain": "zkp.gk2.secubox.in",
+    "port": 8965,
+    "root": "/srv/metablogizer/sites/zkp"
+  },
+  "zlib": {
+    "domain": "zlib.gk2.secubox.in",
+    "port": 9202,
+    "root": "/srv/metablogizer/sites/zlib"
+  },
+  "zoo": {
+    "domain": "zoo.gk2.secubox.in",
+    "port": 9203,
+    "root": "/srv/metablogizer/sites/zoo"
+  },
+  "zoom": {
+    "domain": "zoom.gk2.secubox.in",
+    "port": 9204,
+    "root": "/srv/metablogizer/sites/zoom"
+  }
+}
