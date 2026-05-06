@@ -6,7 +6,26 @@
 [![Packages](https://github.com/CyberMind-FR/secubox-deb/actions/workflows/build-packages.yml/badge.svg)](https://github.com/CyberMind-FR/secubox-deb/actions/workflows/build-packages.yml)
 [![Live USB](https://github.com/CyberMind-FR/secubox-deb/actions/workflows/build-all-live-usb.yml/badge.svg)](https://github.com/CyberMind-FR/secubox-deb/actions/workflows/build-all-live-usb.yml)
 [![Installer](https://github.com/CyberMind-FR/secubox-deb/actions/workflows/build-installer-iso.yml/badge.svg)](https://github.com/CyberMind-FR/secubox-deb/actions/workflows/build-installer-iso.yml)
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![License: CMSD-1.0](https://img.shields.io/badge/License-CMSD--1.0-gold.svg)](LICENCE-CMSD-1.0.md)
+
+---
+
+## License — CyberMind Source-Disclosed (CMSD-1.0)
+
+> **Source disclosed, rights reserved.**
+
+This software is released under the **CyberMind Source-Disclosed License v1.0** — a *source-available* license designed for transparency and security auditability while preserving all commercial rights.
+
+| What you CAN do | What you CANNOT do |
+|-----------------|-------------------|
+| Read and study the source code | Use in production (any environment) |
+| Compile for isolated testing/audit | Redistribute or create derivatives |
+| Publish security research results | Integrate into other products |
+| Quote in academic/journalistic contexts | Provide as hosted service (SaaS) |
+
+**ANSSI CSPN Ready:** The license explicitly authorizes audits by accredited security labs (CESTI, CC equivalents) without prior authorization.
+
+See [LICENCE-CMSD-1.0.md](LICENCE-CMSD-1.0.md) (French, authoritative) or [LICENSE-CMSD-1.0.en.md](LICENSE-CMSD-1.0.en.md) (English, informative).
 
 | Metric | Value |
 |--------|-------|
