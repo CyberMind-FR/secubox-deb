@@ -1,5 +1,5 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-06 (Session 106)*
+*Mis à jour : 2026-05-07 (Session 106)*
 
 ---
 
@@ -101,11 +101,29 @@
   - Pattern strict: `admin.*.secubox.in`
   - Security feature for CSPN compliance
 
+### Sidebar Fix (Session 106 continued)
+- [x] Identified truncated sidebar.js (324 lines vs 446 lines)
+- [x] Missing `sidebar.innerHTML` generation code
+- [x] Redeployed correct version from repo
+- [x] Navbar now renders with all 110 modules
+
 ### LED Investigation (IS31FL3199)
-- [ ] CONFIG_LEDS_IS31FL319X not compiled in Debian kernel
-- [ ] DTB GST factory lacks IS31FL3199 node
-- [ ] Options: kernel recompile or userspace I2C driver
-- [ ] Issue à créer pour tracking
+- [x] CONFIG_LEDS_IS31FL319X not compiled in Debian kernel
+- [x] DTB GST factory lacks IS31FL3199 node
+- [x] Options: kernel recompile or userspace I2C driver
+- [x] **#45**: Created GitHub issue for tracking
+
+### GitHub Issues Created (continued)
+- [x] **#45**: LED Hardware IS31FL3199 Driver
+  - Kernel module not available
+  - Userspace I2C driver option
+  - Integration with heartbeat monitor
+- [x] **#46**: Navbar Dynamic Visibility & Toggle
+  - Hide disabled modules
+  - Reorder modules (drag & drop)
+  - Toggle enable/disable inline
+  - Favorites section
+  - Config `/etc/secubox/navbar.toml`
 
 ---
 
