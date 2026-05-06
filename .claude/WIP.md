@@ -17,6 +17,18 @@
 - [x] Added fallback to `/pizero-metrics` endpoint
 - [x] Deployed updated frontend to `/usr/share/secubox/www/eye-remote/`
 
+### Eye Remote Metrics Alias (Pi Zero Compatibility)
+- [x] Added `/api/v1/system/metrics` alias endpoint in eye-remote API
+- [x] Returns host system metrics (CPU, memory, disk, load)
+- [x] Pi Zero round UI now fetches correct MOCHAbin metrics
+
+### VHost Matrix Sync Tool
+- [x] Created `scripts/vhost-matrix-sync.sh` with Python-based extraction
+- [x] Fixed stderr logging for clean JSON output capture
+- [x] Syncs HAProxy vhosts → mitmproxy routes + health prober
+- [x] Successfully synced 94 vhosts on server
+- [x] Uses 10.100.0.1 (LXC bridge IP) instead of 127.0.0.1 for routes
+
 ### mitmproxy Routing Loop Fix (from Session 108)
 - [x] Changed routes.json: 127.0.0.1 → 10.100.0.1 (LXC bridge IP)
 - [x] Killed runaway mitmdump process (PID 896697)
