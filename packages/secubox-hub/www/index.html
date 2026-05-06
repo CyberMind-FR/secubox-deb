@@ -480,6 +480,39 @@
                 </div>
             </div>
 
+            <!-- Health Monitor Widgets (Upper) -->
+            <div class="health-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
+                <div class="card" style="margin-bottom: 0;">
+                    <div class="card-header">
+                        <h2>Module Health</h2>
+                        <span id="module-health-pct" style="font-family: var(--font-mono); color: var(--root-main);">-%</span>
+                    </div>
+                    <div class="health-bar" style="height: 8px; background: var(--border); border-radius: 4px; margin-bottom: 0.75rem;">
+                        <div id="module-health-bar" class="fill" style="width: 0%; height: 100%; background: var(--root-main); border-radius: 4px; transition: width 0.3s;"></div>
+                    </div>
+                    <div style="display: flex; gap: 1rem; font-size: 0.9rem;">
+                        <span id="module-health-ok" style="color: var(--root-main);">🟢 0</span>
+                        <span id="module-health-warn" style="color: var(--wall-main);">🟡 0</span>
+                        <span id="module-health-down" style="color: var(--boot-main);">🔴 0</span>
+                    </div>
+                </div>
+                <div class="card" style="margin-bottom: 0;">
+                    <div class="card-header">
+                        <h2>VHost Health</h2>
+                        <span id="vhost-health-pct" style="font-family: var(--font-mono); color: var(--mesh-main);">-%</span>
+                    </div>
+                    <div class="health-bar" style="height: 8px; background: var(--border); border-radius: 4px; margin-bottom: 0.75rem;">
+                        <div id="vhost-health-bar" class="fill" style="width: 0%; height: 100%; background: var(--mesh-main); border-radius: 4px; transition: width 0.3s;"></div>
+                    </div>
+                    <div style="display: flex; gap: 1rem; font-size: 0.9rem;">
+                        <span id="vhost-health-ok" style="color: var(--root-main);">🟢 0</span>
+                        <span id="vhost-health-slow" style="color: var(--wall-main);">🟡 0</span>
+                        <span id="vhost-health-down" style="color: var(--boot-main);">🔴 0</span>
+                        <span id="vhost-health-placeholder" style="color: var(--muted);">⬜ 0</span>
+                    </div>
+                </div>
+            </div>
+
             <div class="grid-2">
                 <div>
                     <div class="card">
@@ -725,7 +758,7 @@
             const tbody = document.getElementById('modules-table');
             if (menuData && menuData.categories) {
                 const allItems = menuData.categories.flatMap(c => c.items);
-                tbody.innerHTML = allItems.slice(0, 10).map(item => {
+                tbody.innerHTML = allItems.slice(0, 4).map(item => {
                     // Look up version from modules data if available
                     const modData = modules[item.id] || {};
                     const version = modData.version || '-';
@@ -756,6 +789,49 @@
             }
         }
 
+        async function loadModuleHealth() {
+            try {
+                const data = await api('/module-health/summary');
+                if (data && data.health_percent !== undefined) {
+                    const pct = Math.round(data.health_percent);
+                    document.getElementById('module-health-pct').textContent = pct + '%';
+                    document.getElementById('module-health-bar').style.width = pct + '%';
+                    document.getElementById('module-health-ok').textContent = '🟢 ' + (data.healthy || 0);
+                    document.getElementById('module-health-warn').textContent = '🟡 ' + (data.degraded || 0);
+                    document.getElementById('module-health-down').textContent = '🔴 ' + (data.down || 0);
+                }
+            } catch (e) {
+                // Fallback: compute from menu data
+                if (menuData && menuData.categories) {
+                    const allItems = menuData.categories.flatMap(c => c.items);
+                    const active = allItems.filter(i => i.active).length;
+                    const total = allItems.length;
+                    const pct = total > 0 ? Math.round((active / total) * 100) : 0;
+                    document.getElementById('module-health-pct').textContent = pct + '%';
+                    document.getElementById('module-health-bar').style.width = pct + '%';
+                    document.getElementById('module-health-ok').textContent = '🟢 ' + active;
+                    document.getElementById('module-health-down').textContent = '🔴 ' + (total - active);
+                }
+            }
+        }
+
+        async function loadVHostHealth() {
+            try {
+                const data = await api('/health-monitor/summary');
+                if (data && data.health_percent !== undefined) {
+                    const pct = Math.round(data.health_percent);
+                    document.getElementById('vhost-health-pct').textContent = pct + '%';
+                    document.getElementById('vhost-health-bar').style.width = pct + '%';
+                    document.getElementById('vhost-health-ok').textContent = '🟢 ' + (data.ok || 0);
+                    document.getElementById('vhost-health-slow').textContent = '🟡 ' + (data.slow || 0);
+                    document.getElementById('vhost-health-down').textContent = '🔴 ' + (data.down || 0);
+                    document.getElementById('vhost-health-placeholder').textContent = '⬜ ' + (data.placeholder || 0);
+                }
+            } catch (e) {
+                document.getElementById('vhost-health-pct').textContent = 'N/A';
+            }
+        }
+
         async function loadAlerts() {
             const data = await api('/alerts');
             const alerts = data || [];
@@ -763,7 +839,7 @@
 
             const list = document.getElementById('alerts-list');
             if (Array.isArray(alerts) && alerts.length > 0) {
-                list.innerHTML = alerts.slice(0, 5).map(a => `
+                list.innerHTML = alerts.slice(0, 3).map(a => `
                     <div class="alert-item">
                         <div class="time">${new Date().toLocaleTimeString()}</div>
                         <div class="message">${a.type?.replace(/_/g, ' ') || 'Alert'}: ${a.module || ''}</div>
@@ -934,6 +1010,8 @@
             await loadMenu();
             loadDashboard();
             loadHealth();
+            loadModuleHealth();
+            loadVHostHealth();
             loadAlerts();
             loadNetwork();
             loadMemory();

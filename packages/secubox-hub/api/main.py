@@ -940,6 +940,157 @@ async def health():
 
 
 # ══════════════════════════════════════════════════════════════════
+# Module Health Monitor Endpoints
+# ══════════════════════════════════════════════════════════════════
+
+MODULE_HEALTH_CACHE = Path("/var/cache/secubox/health/modules.json")
+VHOST_HEALTH_CACHE = Path("/var/cache/secubox/health/status.json")
+
+
+@router.get("/module-health/summary")
+async def module_health_summary(user=Depends(require_jwt)):
+    """Get module health summary (healthy/degraded/down counts)."""
+    try:
+        if MODULE_HEALTH_CACHE.exists():
+            data = json.loads(MODULE_HEALTH_CACHE.read_text())
+            # Use pre-computed values from cache if available
+            if "ok" in data and "degraded" in data:
+                return {
+                    "health_percent": data.get("health_pct", 0),
+                    "healthy": data.get("ok", 0),
+                    "degraded": data.get("degraded", 0),
+                    "down": data.get("down", 0),
+                    "total": data.get("total", 0),
+                }
+            # Fallback: compute from modules dict
+            modules = data.get("modules", {})
+            healthy = sum(1 for m in modules.values() if m.get("overall") == "ok")
+            degraded = sum(1 for m in modules.values() if m.get("overall") == "degraded")
+            down = sum(1 for m in modules.values() if m.get("overall") in ("down", "error"))
+            total = len(modules)
+            return {
+                "health_percent": (healthy / max(total, 1)) * 100,
+                "healthy": healthy,
+                "degraded": degraded,
+                "down": down,
+                "total": total,
+            }
+    except Exception as e:
+        log.debug("Module health cache read failed: %s", e)
+
+    # Fallback: compute from menu data
+    menu = _menu_cache or _load_menu_cache_from_file()
+    if menu and menu.get("categories"):
+        items = [i for c in menu["categories"] for i in c.get("items", [])]
+        active = sum(1 for i in items if i.get("active"))
+        total = len(items)
+        return {
+            "health_percent": (active / max(total, 1)) * 100,
+            "healthy": active,
+            "degraded": 0,
+            "down": total - active,
+            "total": total,
+        }
+
+    return {"health_percent": 0, "healthy": 0, "degraded": 0, "down": 0, "total": 0}
+
+
+@router.get("/module-health/status")
+async def module_health_status(user=Depends(require_jwt)):
+    """Get detailed module health status."""
+    try:
+        if MODULE_HEALTH_CACHE.exists():
+            return json.loads(MODULE_HEALTH_CACHE.read_text())
+    except Exception:
+        pass
+    return {"modules": {}, "timestamp": time.time()}
+
+
+@router.get("/module-health/alerts")
+async def module_health_alerts(user=Depends(require_jwt)):
+    """Get modules that are degraded or down."""
+    try:
+        if MODULE_HEALTH_CACHE.exists():
+            data = json.loads(MODULE_HEALTH_CACHE.read_text())
+            modules = data.get("modules", {})
+            alerts = [
+                {"name": name, "status": m.get("overall"), "message": m.get("message", "")}
+                for name, m in modules.items()
+                if m.get("overall") in ("degraded", "down", "error")
+            ]
+            return {"alerts": alerts}
+    except Exception:
+        pass
+    return {"alerts": []}
+
+
+@router.get("/health-monitor/summary")
+async def vhost_health_summary(user=Depends(require_jwt)):
+    """Get VHost health summary (ok/slow/placeholder/down counts)."""
+    try:
+        if VHOST_HEALTH_CACHE.exists():
+            data = json.loads(VHOST_HEALTH_CACHE.read_text())
+            # Use pre-computed values if available
+            if "ok" in data:
+                return {
+                    "health_percent": data.get("health_pct", 0),
+                    "ok": data.get("ok", 0),
+                    "slow": data.get("slow", 0),
+                    "placeholder": data.get("placeholder", 0),
+                    "down": data.get("down", 0),
+                    "total": data.get("total", 0),
+                }
+            # Fallback: compute from vhosts dict
+            vhosts = data.get("vhosts", {})
+            ok = sum(1 for v in vhosts.values() if v.get("status") == "ok")
+            slow = sum(1 for v in vhosts.values() if v.get("status") == "slow")
+            placeholder = sum(1 for v in vhosts.values() if v.get("status") == "placeholder")
+            down = sum(1 for v in vhosts.values() if v.get("status") in ("down", "error", "timeout"))
+            total = len(vhosts)
+            real_total = total - placeholder
+            return {
+                "health_percent": (ok + slow) / max(real_total, 1) * 100,
+                "ok": ok,
+                "slow": slow,
+                "placeholder": placeholder,
+                "down": down,
+                "total": total,
+            }
+    except Exception as e:
+        log.debug("VHost health cache read failed: %s", e)
+    return {"health_percent": 0, "ok": 0, "slow": 0, "placeholder": 0, "down": 0, "total": 0}
+
+
+@router.get("/health-monitor/status")
+async def vhost_health_status(user=Depends(require_jwt)):
+    """Get detailed VHost health status."""
+    try:
+        if VHOST_HEALTH_CACHE.exists():
+            return json.loads(VHOST_HEALTH_CACHE.read_text())
+    except Exception:
+        pass
+    return {"vhosts": {}, "timestamp": time.time()}
+
+
+@router.get("/health-monitor/alerts")
+async def vhost_health_alerts(user=Depends(require_jwt)):
+    """Get VHosts that are down or slow."""
+    try:
+        if VHOST_HEALTH_CACHE.exists():
+            data = json.loads(VHOST_HEALTH_CACHE.read_text())
+            vhosts = data.get("vhosts", {})
+            alerts = [
+                {"domain": domain, "status": v.get("status"), "response_time": v.get("response_time", 0)}
+                for domain, v in vhosts.items()
+                if v.get("status") in ("slow", "down", "error", "timeout")
+            ]
+            return {"alerts": alerts[:20]}  # Limit to 20
+    except Exception:
+        pass
+    return {"alerts": []}
+
+
+# ══════════════════════════════════════════════════════════════════
 # Network Mode Selection (integrates with secubox-netmodes)
 # ══════════════════════════════════════════════════════════════════
 

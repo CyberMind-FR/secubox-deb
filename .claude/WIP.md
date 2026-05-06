@@ -1,5 +1,106 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-07 (Session 106)*
+*Mis à jour : 2026-05-06 (Session 108)*
+
+---
+
+## 🔄 Session 108 (Continued): VHost Health Fixes + Services Restore
+
+### VHost Health Prober
+- [x] Updated prober to treat placeholders as "placeholder" status (not "down")
+- [x] Added ⬜ placeholder indicator to dashboard
+- [x] Health % now only counts real vhosts (excludes placeholders)
+- [x] Current stats: 🟢 0 🟡 5 🔴 29 ⬜ 58 (14.7% health)
+
+### HAProxy Routing Fixes
+- [x] Fixed c3box.maegia.tv → metablog_gandalf (was nginx_vhosts placeholder)
+- [x] mitmproxy backend confirmed UP at 10.100.0.60:8080
+
+### Service Socket Restoration
+- [x] Restarted all secubox-* services
+- [x] 86 API sockets now active
+- [x] Verified hub, crowdsec, system, haproxy all working
+
+### System Load Issues (Ongoing)
+- [ ] mitmdump using 95% CPU (821MB RAM) - investigate
+- [ ] Memory at 91% (7.1GB/7.7GB)
+- [ ] Load average: 11-17 (very high)
+
+### Metrics Dashboard (User Request)
+- [ ] Add precaching + double-buffer with threaded updating
+- [ ] Currently 1.6s response time due to high load
+
+---
+
+## 🔄 Session 108: Dashboard Health Widgets + HAProxy Workflow
+
+### HAProxy Workflow Script
+- [x] Created `scripts/haproxy-workflow.sh` with 3 commands:
+  - `rehealth` — Auto-rehealth HAProxy (reload, invalidate caches, restart probers)
+  - `waf-sync` — Sync vhost→backend routes through WAF (mitmproxy)
+  - `certs` — Check/list certificate status for all vhosts
+  - `all` — Run complete workflow
+
+### Dashboard Health Widgets (Upper Position)
+- [x] Added Module Health widget to dashboard index.html
+  - Progress bar + health percentage
+  - Emoji counters 🟢🟡🔴 (healthy/degraded/down)
+  - Calls `/api/v1/hub/module-health/summary`
+- [x] Added VHost Health widget to dashboard index.html
+  - Progress bar + health percentage
+  - Emoji counters 🟢🟡🔴 (ok/slow/down)
+  - Calls `/api/v1/hub/health-monitor/summary`
+- [x] Positioned both widgets upper in grid (before main content)
+
+### Dashboard Widget Limits
+- [x] Modules Overview: Reduced from 10 to 4 items
+- [x] Alert Timeline: Reduced from 5 to 3 items
+
+### Hub API Health Endpoints
+- [x] Added `/module-health/summary` — Module health counts
+- [x] Added `/module-health/status` — Detailed module status
+- [x] Added `/module-health/alerts` — Degraded/down modules
+- [x] Added `/health-monitor/summary` — VHost health counts
+- [x] Added `/health-monitor/status` — Detailed VHost status
+- [x] Added `/health-monitor/alerts` — Slow/down VHosts
+
+---
+
+## ✅ Session 107: Module Health Monitor + Placeholder Detection
+
+### Admin Page Fixes
+- [x] Fixed "undefined/undefined" bug in System Administration page
+- [x] Added null coalescing (`?? 0`) for missing API data
+
+### Module Health Prober System
+- [x] Created `/usr/lib/secubox/health/module_prober.py`
+- [x] Multilayer checks: systemd → socket → API
+- [x] 8 core modules monitored (hub, crowdsec, dpi, haproxy, vhost, wireguard, system, heartbeat)
+- [x] Results cached to `/var/cache/secubox/health/modules.json`
+- [x] Created `secubox-module-prober.service` (enabled)
+- [x] Added API router `/api/v1/hub/module-health/`:
+  - `GET /summary` - Global module health stats
+  - `GET /status` - All modules with layer details
+  - `GET /module/{name}` - Single module status
+  - `GET /alerts` - Degraded/down modules
+- [x] Dashboard widget "Module Health" with:
+  - Progress bar + health %
+  - Emoji counters 🟢🟡🔴
+  - Alert list for degraded/down modules
+
+### Sidebar Module Filtering
+- [x] Menu API now hides inactive modules from sidebar
+- [x] Only functional modules displayed (systemd active)
+- [x] Reduces sidebar clutter for partially-deployed systems
+
+### VHost Health Prober Enhancements
+- [x] Added placeholder page detection (`SecuBox Domain` / `SecuBox Protected`)
+- [x] Sites showing placeholder = marked as "down" (not "ok")
+- [x] Real health: 7 slow, 85 down (mostly placeholder pages)
+
+### VHost Routing Fixes
+- [x] Fixed gandalf.maegia.tv routing
+- [x] Added `metablog_gandalf` backend (port 8901)
+- [x] Updated HAProxy ACL → metablog_gandalf
 
 ---
 
