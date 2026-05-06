@@ -34,82 +34,61 @@ success() { echo -e "${GREEN}[OK]${NC} $*"; }
 # ═══════════════════════════════════════════════════════════════════════════════
 
 extract_vhost_matrix() {
-    log "Extracting vhost→backend matrix from HAProxy config..."
+    # Log to stderr so stdout only contains the JSON result
+    echo -e "${BLUE}[INFO]${NC} Extracting vhost→backend matrix from HAProxy config..." >&2
 
     if [ ! -f "$HAPROXY_CFG" ]; then
         error "HAProxy config not found: $HAPROXY_CFG"
         return 1
     fi
 
-    # Parse HAProxy config to extract:
-    # 1. ACL name → hostname mappings
-    # 2. Backend → server IP:port mappings
-    # 3. use_backend → ACL mappings
-
+    # Use Python for reliable parsing
     local matrix
-    matrix=$(awk '
-    BEGIN {
-        print "{"
-        first = 1
-    }
+    matrix=$(python3 << PYEOF
+import re
+import json
 
-    # Capture backend definitions: backend <name>
-    /^backend / {
-        current_backend = $2
-    }
+with open("$HAPROXY_CFG") as f:
+    content = f.read()
 
-    # Capture server lines: server <name> <ip>:<port>
-    /^[[:space:]]+server / {
-        for (i = 1; i <= NF; i++) {
-            if ($i ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+$/) {
-                split($i, addr, ":")
-                backends[current_backend] = addr[1] ":" addr[2]
-                break
-            }
+# Extract backends with their servers
+backends = {}
+for m in re.finditer(r"^backend\s+(\S+).*?(?=^backend|\Z)", content, re.MULTILINE | re.DOTALL):
+    backend_name = m.group(1)
+    backend_block = m.group(0)
+    server_match = re.search(r"server\s+\S+\s+(\d+\.\d+\.\d+\.\d+):(\d+)", backend_block)
+    if server_match:
+        backends[backend_name] = {"ip": server_match.group(1), "port": int(server_match.group(2))}
+
+# Extract ACLs
+acls = {}
+for m in re.finditer(r"acl\s+(\S+)\s+hdr\(host\)\s+-i\s+(\S+)", content):
+    acls[m.group(1)] = m.group(2)
+
+# Extract use_backend rules and build vhost matrix
+vhosts = {}
+for m in re.finditer(r"use_backend\s+(\S+)\s+if\s+(\S+)", content):
+    backend_name = m.group(1)
+    acl_name = m.group(2)
+
+    # Skip WAF inspector backends
+    if "waf" in backend_name.lower() or "mitmproxy" in backend_name.lower():
+        continue
+
+    hostname = acls.get(acl_name)
+    backend = backends.get(backend_name)
+
+    if hostname and backend and hostname not in vhosts:
+        vhosts[hostname] = {
+            "backend": backend_name,
+            "ip": backend["ip"],
+            "port": backend["port"],
+            "waf": True
         }
-    }
 
-    # Capture ACL definitions: acl <name> hdr(host) -i <hostname>
-    /^[[:space:]]+acl .* hdr\(host\) -i / {
-        acl_name = $2
-        hostname = $NF
-        acls[acl_name] = hostname
-    }
-
-    # Capture use_backend rules: use_backend <backend> if <acl>
-    /^[[:space:]]+use_backend .* if / {
-        backend = $2
-        acl = $4
-
-        # Skip WAF inspector backends (traffic goes through WAF first)
-        if (backend ~ /waf_inspector|mitmproxy_inspector/) {
-            next
-        }
-
-        hostname = acls[acl]
-        server = backends[backend]
-
-        if (hostname && server) {
-            split(server, parts, ":")
-            ip = parts[1]
-            port = parts[2]
-
-            if (!first) print ","
-            first = 0
-
-            printf "  \"%s\": {\n", hostname
-            printf "    \"backend\": \"%s\",\n", backend
-            printf "    \"ip\": \"%s\",\n", ip
-            printf "    \"port\": %s,\n", port
-            printf "    \"waf\": true\n"
-            printf "  }"
-        }
-    }
-
-    END {
-        print "\n}"
-    }
-    ' "$HAPROXY_CFG")
+print(json.dumps(vhosts, indent=2))
+PYEOF
+)
 
     # Validate JSON
     if ! echo "$matrix" | jq . >/dev/null 2>&1; then
@@ -119,7 +98,7 @@ extract_vhost_matrix() {
 
     local count
     count=$(echo "$matrix" | jq 'keys | length')
-    log "Extracted $count vhost mappings"
+    echo -e "${BLUE}[INFO]${NC} Extracted $count vhost mappings" >&2
 
     echo "$matrix"
 }
@@ -131,7 +110,8 @@ extract_vhost_matrix() {
 generate_mitmproxy_routes() {
     local matrix="$1"
 
-    log "Generating mitmproxy routes..."
+    # Log to stderr so stdout only contains the JSON result
+    echo -e "${BLUE}[INFO]${NC} Generating mitmproxy routes..." >&2
 
     # Convert matrix to mitmproxy format: {"hostname": ["ip", port]}
     # Use MITMPROXY_HOST_IP instead of 127.0.0.1 for LXC container access
@@ -148,7 +128,7 @@ generate_mitmproxy_routes() {
 
     local count
     count=$(echo "$routes" | jq 'keys | length')
-    log "Generated $count mitmproxy routes"
+    echo -e "${BLUE}[INFO]${NC} Generated $count mitmproxy routes" >&2
 
     echo "$routes"
 }
