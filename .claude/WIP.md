@@ -26,6 +26,9 @@
   - Background task updates shadow buffer every 2s
   - Atomic swap to active buffer
   - API returns instantly from cache
+- [x] Exposed API on TCP port 8000 (10.55.0.1) for Pi Zero access
+  - Was: Unix socket only (Pi Zero couldn't reach)
+  - Now: TCP listener via systemd drop-in
 - [x] Verified working on HyperPixel 2.1 Round display
 - [x] Rings now show varied fill levels matching real metrics
 
