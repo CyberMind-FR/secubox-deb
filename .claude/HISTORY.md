@@ -5,6 +5,37 @@
 
 ## 2026-05-06
 
+### Session 102 — CMSD-1.0 License + WAF Phase 1 Complete
+
+**Goal:** Integrate CMSD-1.0 license and complete WAF mitmproxy LXC container
+
+**Completed:**
+
+1. **CMSD-1.0 License Integration**
+   - Created `LICENCE-CMSD-1.0.md` (French authoritative version)
+   - Created `LICENSE-CMSD-1.0.en.md` (English informative translation)
+   - Created `LICENSING.md` (license documentation, SPDX guidance)
+   - Updated `README.md` with prominent license notice (CAN/CANNOT table)
+   - Replaced Apache-2.0 badge with CMSD-1.0 gold badge
+   - License designed for ANSSI CSPN auditability + commercial rights preservation
+
+2. **WAF Phase 1: Mitmproxy LXC Container (v2.5.0)**
+   - Created LXC container at `/data/lxc/mitmproxy`
+   - IP: 10.100.0.60 on br-lxc
+   - Mitmproxy running in regular mode on port 8080
+   - Deployed `secubox_waf.py` addon for Host-based routing
+   - 139 HAProxy routes extracted and configured
+   - Routes updated to use 10.100.0.1 (br-lxc gateway) instead of 127.0.0.1
+   - Nginx configs updated to listen on 0.0.0.0 (accessible from container)
+   - Created `wafctl` control script following xxxctl pattern
+
+3. **WAF Verified Working**
+   - gandalf via WAF: HTTP 200 OK
+   - pix via WAF: HTTP 200 OK
+   - X-SecuBox-WAF header added to responses
+
+---
+
 ### Session 101 — C3BOX Network Recovery + HAProxy LXC Routing
 
 **Goal:** Establish network connectivity between C3BOX and MOCHAbin for migration

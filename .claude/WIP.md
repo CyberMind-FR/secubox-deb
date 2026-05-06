@@ -1,5 +1,5 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-06 (Session 101)*
+*Mis à jour : 2026-05-06 (Session 102)*
 
 ---
 
@@ -7,11 +7,14 @@
 
 **Target:** Complete WAF integration and achieve fully healthy SecuBox deployment
 
-### Phase 1: WAF/Mitmproxy Container Setup
-- [ ] Create mitmproxy LXC container at `/data/lxc/mitmproxy`
-- [ ] Install mitmproxy with transparent proxy support
-- [ ] Configure haproxy-routes.json for backend routing
-- [ ] Symlink `/var/lib/lxc/mitmproxy` for lxc-* compatibility
+### Phase 1: WAF/Mitmproxy Container Setup ✅ COMPLETE
+- [x] Create mitmproxy LXC container at `/data/lxc/mitmproxy`
+- [x] Install mitmproxy with transparent proxy support
+- [x] Configure haproxy-routes.json for backend routing (139 routes)
+- [x] Symlink `/var/lib/lxc/mitmproxy` for lxc-* compatibility
+- [x] Deploy `secubox_waf.py` addon (Host-based routing)
+- [x] Create `wafctl` control script (xxxctl pattern)
+- [x] Verified working: gandalf 200, pix 200 via WAF
 
 ### Phase 2: HAProxy WAF Integration
 - [ ] Configure HAProxy backends to route through mitmproxy
@@ -20,9 +23,9 @@
 - [ ] Test bypass rules for WebSocket/streaming services
 
 ### Phase 3: WAF Rules & Monitoring
-- [ ] Deploy mitmproxy inspection scripts (SecuBox WAF addon)
+- [x] Deploy mitmproxy inspection scripts (SecuBox WAF addon)
 - [ ] Configure logging to `/var/log/secubox/waf/`
-- [ ] Create `wafctl` control script (xxxctl pattern)
+- [x] Create `wafctl` control script (xxxctl pattern)
 - [ ] WebUI integration: WAF status, blocked requests, rules
 
 ### Phase 4: Health Verification
@@ -42,6 +45,16 @@
 - mitmproxy compatible with OpenSSL on Debian arm64
 - br-lxc network configured (10.100.0.0/24)
 - HAProxy TOML config support
+
+---
+
+## ✅ Session 102: CMSD-1.0 License Integration
+
+- [x] Created `LICENCE-CMSD-1.0.md` (French, authoritative)
+- [x] Created `LICENSE-CMSD-1.0.en.md` (English, informative)
+- [x] Created `LICENSING.md` (documentation & SPDX guidance)
+- [x] Updated `README.md` with prominent license notice
+- [x] Committed and pushed to GitHub
 
 ---
 
