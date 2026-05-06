@@ -23,6 +23,7 @@ import threading
 import time
 import asyncio
 import httpx
+import tomllib
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta
@@ -51,6 +52,23 @@ CONFIG_BACKUP_DIR = DATA_DIR / "config_backups"
 STATS_HISTORY_FILE = DATA_DIR / "stats_history.json"
 WEBHOOKS_FILE = DATA_DIR / "webhooks.json"
 HEALTH_HISTORY_FILE = DATA_DIR / "health_history.json"
+HAPROXY_TOML = "/etc/secubox/haproxy.toml"
+
+
+def _get_haproxy_config() -> dict:
+    """Load HAProxy config directly from TOML file.
+
+    Bypasses secubox_core.config.get_config() which doesn't load module-specific TOMLs.
+    """
+    try:
+        with open(HAPROXY_TOML, "rb") as f:
+            return tomllib.load(f)
+    except FileNotFoundError:
+        log.warning("HAProxy config not found: %s", HAPROXY_TOML)
+        return {}
+    except Exception as e:
+        log.error("Failed to load HAProxy config: %s", e)
+        return {}
 
 
 def _ensure_dirs():
@@ -149,7 +167,7 @@ _status_cache_lock = threading.Lock()
 
 def _compute_status_sync() -> Dict[str, Any]:
     """Compute HAProxy status (synchronous, for background refresh)."""
-    cfg = get_config("haproxy") or {}
+    cfg = _get_haproxy_config() or {}
 
     # Check if running
     running = subprocess.run(
@@ -419,7 +437,7 @@ async def shutdown_event():
 
 
 def _cfg():
-    cfg = get_config("haproxy")
+    cfg = _get_haproxy_config()
     return {
         "stats_socket": cfg.get("stats_socket", STATS_SOCKET) if cfg else STATS_SOCKET,
         "config_dir": cfg.get("config_dir", CONFIG_DIR) if cfg else CONFIG_DIR,
@@ -514,7 +532,7 @@ def _parse_stats_csv(data: str) -> List[dict]:
 def _load_vhosts() -> List[dict]:
     """Load vhosts from HAProxy config."""
     vhosts = []
-    cfg = get_config("haproxy") or {}
+    cfg = _get_haproxy_config() or {}
     vhost_cfg = cfg.get("vhosts", {})
 
     for name, v in vhost_cfg.items():
@@ -536,7 +554,7 @@ def _load_vhosts() -> List[dict]:
 def _load_backends() -> List[dict]:
     """Load backends from config."""
     backends = []
-    cfg = get_config("haproxy") or {}
+    cfg = _get_haproxy_config() or {}
     backend_cfg = cfg.get("backends", {})
 
     for name, b in backend_cfg.items():
@@ -983,7 +1001,7 @@ async def get_expiring_certificates(days: int = Query(default=30, le=365), user=
 @router.get("/acls", dependencies=[Depends(require_jwt)])
 async def list_acls():
     """List HAProxy ACLs."""
-    cfg = get_config("haproxy") or {}
+    cfg = _get_haproxy_config() or {}
     acls = cfg.get("acls", {})
     return {"acls": list(acls.values()) if isinstance(acls, dict) else []}
 
