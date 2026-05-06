@@ -505,11 +505,11 @@
                 <div class="label">WAF Status</div>
             </div>
             <div class="stat-card">
-                <div class="value" id="vhosts">-</div>
+                <div class="value" id="vhosts-count">-</div>
                 <div class="label">VHosts</div>
             </div>
             <div class="stat-card">
-                <div class="value" id="backends">-</div>
+                <div class="value" id="backends-count">-</div>
                 <div class="label">Backends</div>
             </div>
             <div class="stat-card">
@@ -1340,8 +1340,8 @@
                 wafToggle.checked = false;
             }
 
-            document.getElementById('vhosts').textContent = d.vhost_count || 0;
-            document.getElementById('backends').textContent = d.backend_count || 0;
+            document.getElementById('vhosts-count').textContent = d.vhost_count || 0;
+            document.getElementById('backends-count').textContent = d.backend_count || 0;
 
             // Get CrowdSec bans
             const cs = await api('/crowdsec/status');
