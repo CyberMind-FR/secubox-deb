@@ -219,25 +219,37 @@
 
         async function refreshAll() {
             try {
-                // Get status
+                // Get status (public endpoint)
                 const status = await api('/status');
                 updateConnectionUI(status);
 
-                // Get serial status
-                const serial = await api('/serial/status');
-                updateSerialUI(serial);
+                // Get serial status (public endpoint)
+                try {
+                    const serial = await api('/serial/status');
+                    updateSerialUI(serial);
+                } catch (e) {
+                    updateSerialUI({ available: false });
+                }
 
-                // Get Pi Zero metrics if connected
+                // Get Pi Zero metrics if connected (public endpoint)
                 if (status.connected) {
                     try {
                         const metrics = await api('/pizero/metrics');
                         updateMetricsUI(metrics);
                     } catch (e) {
-                        console.log('Pi Zero metrics not available');
+                        // Try alternate endpoint
+                        try {
+                            const metrics = await api('/pizero-metrics');
+                            updateMetricsUI(metrics);
+                        } catch (e2) {
+                            console.log('Pi Zero metrics not available');
+                        }
                     }
                 }
             } catch (err) {
                 console.error('Refresh error:', err);
+                // Show disconnected state on error
+                updateConnectionUI({ connected: false });
             }
         }
 
