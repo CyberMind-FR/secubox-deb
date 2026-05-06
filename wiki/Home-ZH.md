@@ -160,3 +160,24 @@ sudo apt install secubox-full   # 或 secubox-lite
 - [发布版本](https://github.com/CyberMind-FR/secubox-deb/releases)
 - [问题反馈](https://github.com/CyberMind-FR/secubox-deb/issues)
 - [CyberMind](https://cybermind.fr)
+
+---
+
+## 许可证
+
+**CMSD-1.0**（CyberMind 源码公开许可证）— 源码可读，权利保留。
+
+| ✅ 允许 | ❌ 禁止 |
+|--------|--------|
+| 阅读和研究代码 | 生产环境使用 |
+| 编译用于测试/审计 | 重新分发或创建衍生作品 |
+| 发布安全研究成果 | 集成到其他产品 |
+| 学术/新闻引用 | 作为 SaaS 提供 |
+
+**ANSSI CSPN Ready**：授权认可实验室（CESTI、CC 等效）无需事先授权即可进行审计。
+
+参见 [LICENCE-CMSD-1.0.md](https://github.com/CyberMind-FR/secubox-deb/blob/master/LICENCE-CMSD-1.0.md)（法语，权威版本）或 [LICENSE-CMSD-1.0.en.md](https://github.com/CyberMind-FR/secubox-deb/blob/master/LICENSE-CMSD-1.0.en.md)（英语）。
+
+---
+
+*© 2024-2026 [CyberMind](https://cybermind.fr) · Gérald Kerma · 法国萨瓦省*

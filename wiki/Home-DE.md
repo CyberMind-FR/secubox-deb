@@ -134,4 +134,21 @@ Siehe [[MODULES-DE|Module]] für vollständige Moduldokumentation.
 
 ---
 
-*© 2026 CyberMind · Notre-Dame-du-Cruet, Savoie*
+## Lizenz
+
+**CMSD-1.0** (CyberMind Source-Disclosed License) — Quellcode einsehbar, Rechte vorbehalten.
+
+| ✅ Erlaubt | ❌ Verboten |
+|-----------|------------|
+| Code lesen und studieren | Produktionseinsatz |
+| Kompilieren für Tests/Audits | Weiterverteilung oder Ableitungen |
+| Sicherheitsforschung veröffentlichen | Integration in andere Produkte |
+| Akademische/journalistische Zitate | Als SaaS anbieten |
+
+**ANSSI CSPN Ready**: Audits durch akkreditierte Labore (CESTI, CC-Äquivalente) ohne vorherige Genehmigung erlaubt.
+
+Siehe [LICENCE-CMSD-1.0.md](https://github.com/CyberMind-FR/secubox-deb/blob/master/LICENCE-CMSD-1.0.md) (FR, maßgeblich) oder [LICENSE-CMSD-1.0.en.md](https://github.com/CyberMind-FR/secubox-deb/blob/master/LICENSE-CMSD-1.0.en.md) (EN).
+
+---
+
+*© 2024-2026 [CyberMind](https://cybermind.fr) · Gérald Kerma · Notre-Dame-du-Cruet, Savoie*

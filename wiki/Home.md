@@ -86,5 +86,24 @@ Voir **[[Hardware-Matrix]]** pour la matrice complète avec statuts de support.
 
 ---
 
-*Licence : voir dépôt · CyberMind, Notre-Dame-du-Cruet, Savoie*
+---
+
+## Licence
+
+**CMSD-1.0** (CyberMind Source-Disclosed License) — Code source lisible, droits réservés.
+
+| ✅ Autorisé | ❌ Interdit |
+|------------|------------|
+| Lire et étudier le code | Utiliser en production |
+| Compiler pour test/audit | Redistribuer ou créer des dérivés |
+| Publier résultats de recherche sécurité | Intégrer dans d'autres produits |
+| Citer en contexte académique/journalistique | Proposer en SaaS |
+
+**ANSSI CSPN Ready** : Audits par laboratoires accrédités (CESTI, CC) autorisés sans autorisation préalable.
+
+Voir [LICENCE-CMSD-1.0.md](https://github.com/CyberMind-FR/secubox-deb/blob/master/LICENCE-CMSD-1.0.md) (FR, référence) ou [LICENSE-CMSD-1.0.en.md](https://github.com/CyberMind-FR/secubox-deb/blob/master/LICENSE-CMSD-1.0.en.md) (EN).
+
+---
+
+*© 2024-2026 [CyberMind](https://cybermind.fr) · Gérald Kerma · Notre-Dame-du-Cruet, Savoie*
 *Voir [[Acknowledgments]] pour les crédits contributeurs*
