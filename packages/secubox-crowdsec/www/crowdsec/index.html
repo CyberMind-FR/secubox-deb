@@ -489,6 +489,13 @@
             loadDecisions();
         }
 
+        async function flushDecisions() {
+            if (!confirm('Flush ALL active bans? This cannot be undone.')) return;
+            const result = await api('/flush_decisions', 'POST');
+            alert(result.success ? 'All decisions flushed' : 'Flush failed: ' + (result.error || 'unknown error'));
+            loadDecisions();
+        }
+
         function refresh() {
             loadStatus(); loadDecisions(); loadAlerts(); loadHub(); loadBouncers(); loadMachines(); loadMetrics();
         }
