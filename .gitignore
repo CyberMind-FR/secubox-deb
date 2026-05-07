@@ -43,3 +43,6 @@ dist/
 # Tow-Boot (Nix build artifacts)
 tools/Tow-Boot/result
 tools/Tow-Boot/output/
+
+# Kernel build
+kernel-build/

@@ -110,7 +110,7 @@
 
   // ── Thème ─────────────────────────────────────────────────────────────────────
   "workbench.colorTheme": "One Dark Pro Darker",
-  "workbench.iconTheme": "material-icon-theme",
+  "workbench.iconTheme": "vs-seti",
   "workbench.colorCustomizations": {
     "activityBar.background": "#0a0a0f",
     "sideBar.background": "#0d0d14",

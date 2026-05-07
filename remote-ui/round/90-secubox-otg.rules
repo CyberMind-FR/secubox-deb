@@ -1,72 +1,46 @@
-# ═══════════════════════════════════════════════════════════════════════════════
-# SecuBox Remote UI — 90-secubox-otg.rules
-# Règles udev pour la détection du RPi Zero W connecté en OTG
-#
-# Installe dans : /etc/udev/rules.d/90-secubox-otg.rules
-#
-# CyberMind — https://cybermind.fr
-# Author: Gérald Kerma <gandalf@gk2.net>
-# License: Proprietary / ANSSI CSPN candidate
-# ═══════════════════════════════════════════════════════════════════════════════
+# ==============================================================================
+# SecuBox Eye Remote - USB OTG Gadget Detection
+# Detects Pi Zero W composite gadget (RNDIS + CDC-ECM + ACM + Mass Storage)
+# CyberMind - https://cybermind.fr
+# ==============================================================================
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Interface réseau CDC-ECM (Ethernet over USB)
-# ──────────────────────────────────────────────────────────────────────────────
+# Pi Zero W Composite Gadget: Linux Foundation Multifunction (1d6b:0104)
+# Creates both RNDIS (usb0) and CDC-ECM (usb1) interfaces
+# We only want IP on RNDIS (usb0), disable CDC-ECM (usb1) to prevent conflicts
 
-# Reconnaître le gadget SecuBox par ses IDs USB
-# idVendor=1d6b (Linux Foundation), idProduct=0104 (Multifunction Composite)
-# L'interface réseau est renommée "secubox-round" pour identification facile
+# RNDIS interface (usb0) - Primary network connection
+# Configure IP and bring up
+ACTION=="add", SUBSYSTEM=="net", DRIVERS=="rndis_host", ATTR{address}=="02:fb:*", \
+    RUN+="/sbin/ip link set %k up", \
+    RUN+="/sbin/ip addr add 10.55.0.1/24 dev %k 2>/dev/null || true", \
+    RUN+="/usr/lib/secubox/eye-remote-connected.sh %k"
 
-SUBSYSTEM=="net", \
-    ATTR{address}=="02:sb:*", \
-    DRIVERS=="cdc_ether", \
-    NAME="secubox-round", \
-    TAG+="systemd", \
-    ENV{SYSTEMD_WANTS}="secubox-otg-host@%k.service", \
-    RUN+="/usr/local/sbin/secubox-otg-host-up.sh up"
+# CDC-ECM interface (usb1) - Disable to prevent duplicate IP route
+# Pi Zero creates both RNDIS and ECM; we only use RNDIS
+ACTION=="add", SUBSYSTEM=="net", DRIVERS=="cdc_ether", ATTR{address}=="02:fb:*", \
+    RUN+="/sbin/ip link set %k down"
 
-# Alternative: détection par attributs USB parents
-SUBSYSTEM=="net", \
-    ATTRS{idVendor}=="1d6b", \
-    ATTRS{idProduct}=="0104", \
-    DRIVERS=="cdc_ether", \
-    NAME="secubox-round", \
-    TAG+="systemd", \
-    RUN+="/usr/local/sbin/secubox-otg-host-up.sh up"
+# Legacy: Pi Zero W CDC-ECM only gadget (NetChip signature)
+ACTION=="add", SUBSYSTEM=="net", ATTRS{idVendor}=="0525", ATTRS{idProduct}=="a4a2", \
+    NAME="eye-remote", \
+    RUN+="/sbin/ip link set %k up", \
+    RUN+="/sbin/ip addr add 10.55.0.1/24 dev %k 2>/dev/null || true", \
+    RUN+="/usr/lib/secubox/eye-remote-connected.sh %k"
 
-# Événement de déconnexion
-SUBSYSTEM=="net", \
-    ACTION=="remove", \
-    ENV{ID_NET_NAME}=="secubox-round", \
-    RUN+="/usr/local/sbin/secubox-otg-host-up.sh down"
+# Legacy: Alternative Raspberry Pi USB gadget signature
+ACTION=="add", SUBSYSTEM=="net", ATTRS{idVendor}=="0525", ATTRS{idProduct}=="a4a1", \
+    NAME="eye-remote", \
+    RUN+="/sbin/ip link set %k up", \
+    RUN+="/sbin/ip addr add 10.55.0.1/24 dev %k 2>/dev/null || true", \
+    RUN+="/usr/lib/secubox/eye-remote-connected.sh %k"
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Console série CDC-ACM (ttyACM)
-# ──────────────────────────────────────────────────────────────────────────────
+# Serial console symlink (ACM interface)
+ACTION=="add", SUBSYSTEM=="tty", ATTRS{idVendor}=="1d6b", ATTRS{idProduct}=="0104", \
+    SYMLINK+="eye-remote-console", MODE="0666"
 
-# Créer un lien symbolique /dev/secubox-console vers le bon ttyACM
-SUBSYSTEM=="tty", \
-    ATTRS{idVendor}=="1d6b", \
-    ATTRS{idProduct}=="0104", \
-    KERNEL=="ttyACM*", \
-    SYMLINK+="secubox-console", \
-    MODE="0660", \
-    GROUP="dialout", \
-    TAG+="systemd"
+# Disconnect handler
+ACTION=="remove", SUBSYSTEM=="net", DRIVERS=="rndis_host", ATTR{address}=="02:fb:*", \
+    RUN+="/usr/lib/secubox/eye-remote-disconnected.sh"
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Tags pour intégration systemd
-# ──────────────────────────────────────────────────────────────────────────────
-
-# Permettre à systemd de créer des unités .device
-SUBSYSTEM=="net", \
-    ENV{ID_NET_NAME}=="secubox-round", \
-    TAG+="systemd", \
-    ENV{SYSTEMD_ALIAS}="/sys/subsystem/net/devices/secubox-round"
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Debug (décommenter pour journaliser les événements)
-# ──────────────────────────────────────────────────────────────────────────────
-
-# SUBSYSTEM=="net", ATTRS{idVendor}=="1d6b", RUN+="/bin/sh -c 'echo SecuBox OTG: %k >> /tmp/secubox-udev.log'"
-# SUBSYSTEM=="tty", ATTRS{idVendor}=="1d6b", RUN+="/bin/sh -c 'echo SecuBox ACM: %k >> /tmp/secubox-udev.log'"
+ACTION=="remove", SUBSYSTEM=="net", ENV{INTERFACE}=="eye-remote", \
+    RUN+="/usr/lib/secubox/eye-remote-disconnected.sh"
