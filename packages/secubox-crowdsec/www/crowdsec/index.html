@@ -70,6 +70,7 @@
         .table th { text-align: left; padding: 0.75rem; color: var(--p31-decay); font-size: 0.75rem; text-transform: uppercase; border-bottom: 1px solid var(--p31-ghost); }
         .table td { padding: 0.75rem; border-bottom: 1px solid var(--p31-ghost); font-size: 0.9rem; color: var(--p31-mid); }
         .table tr:hover { background: rgba(51,255,102,0.03); }
+        .geoip-pending { opacity: 0.5; font-style: italic; }
         .scroll-list { max-height: 300px; overflow-y: auto; }
         .input-group { display: flex; gap: 0.5rem; margin-top: 1rem; }
         .input-group input { flex: 1; padding: 0.5rem; border: 1px solid var(--border); background: var(--bg-dark); border-radius: 6px; font-family: inherit; }
@@ -125,8 +126,8 @@
                         <div class="card-header"><h2>Recent Bans</h2></div>
                         <div class="scroll-list">
                             <table class="table" id="quick-bans-table">
-                                <thead><tr><th>IP</th><th>Reason</th><th>Duration</th></tr></thead>
-                                <tbody><tr><td colspan="3">Loading...</td></tr></tbody>
+                                <thead><tr><th>🌍</th><th>IP</th><th>Reason</th><th>Duration</th></tr></thead>
+                                <tbody><tr><td colspan="4">Loading...</td></tr></tbody>
                             </table>
                         </div>
                     </div>
@@ -154,8 +155,8 @@
                     <div class="card-header"><h2>Active Bans</h2><button class="btn danger" onclick="flushDecisions()">Flush</button></div>
                     <div class="scroll-list" style="max-height: 400px;">
                         <table class="table" id="bans-table">
-                            <thead><tr><th>IP</th><th>Reason</th><th>Duration</th><th>Action</th></tr></thead>
-                            <tbody><tr><td colspan="4">Loading...</td></tr></tbody>
+                            <thead><tr><th>Country</th><th>IP</th><th>Reason</th><th>Duration</th><th>Action</th></tr></thead>
+                            <tbody><tr><td colspan="5">Loading...</td></tr></tbody>
                         </table>
                     </div>
                     <div class="input-group">
@@ -209,6 +210,86 @@
 
         function getCountryName(code) { return countryNames[code] || code || 'Unknown'; }
 
+        // GeoIP Cache System
+        const GEOIP_CACHE_KEY = 'secubox_geoip_cache';
+        const GEOIP_CACHE_TTL = 86400000; // 24 hours in ms
+
+        function getGeoCache() {
+            try {
+                const cache = JSON.parse(localStorage.getItem(GEOIP_CACHE_KEY) || '{}');
+                const now = Date.now();
+                // Clean expired entries
+                Object.keys(cache).forEach(ip => {
+                    if (cache[ip].expires < now) delete cache[ip];
+                });
+                return cache;
+            } catch (e) { return {}; }
+        }
+
+        function setGeoCache(ip, country) {
+            try {
+                const cache = getGeoCache();
+                cache[ip] = { country, expires: Date.now() + GEOIP_CACHE_TTL };
+                localStorage.setItem(GEOIP_CACHE_KEY, JSON.stringify(cache));
+            } catch (e) { /* localStorage full */ }
+        }
+
+        async function lookupGeoIP(ip) {
+            const cache = getGeoCache();
+            if (cache[ip]) return cache[ip].country;
+
+            // Skip private IPs
+            if (ip.startsWith('10.') || ip.startsWith('192.168.') || ip.startsWith('127.') || ip.startsWith('172.')) {
+                setGeoCache(ip, 'LAN');
+                return 'LAN';
+            }
+
+            // Use HTTPS GeoIP service with fallback
+            try {
+                // Primary: ipapi.co (free, HTTPS, 1000/day limit)
+                const res = await fetch('https://ipapi.co/' + ip + '/country/', { mode: 'cors' });
+                if (res.ok) {
+                    const cc = (await res.text()).trim();
+                    if (cc.length === 2) {
+                        setGeoCache(ip, cc);
+                        return cc;
+                    }
+                }
+            } catch (e) { /* API error */ }
+
+            // Fallback: Try backend API
+            try {
+                const token = localStorage.getItem('sbx_token');
+                const res = await fetch(API + '/geoip/' + ip, {
+                    headers: token ? { 'Authorization': 'Bearer ' + token } : {}
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    const cc = data.country || 'XX';
+                    setGeoCache(ip, cc);
+                    return cc;
+                }
+            } catch (e) { /* Backend not available */ }
+
+            return 'XX';
+        }
+
+        async function enrichWithGeoIP(decisions) {
+            const results = [];
+            const batchSize = 5;
+            for (let i = 0; i < decisions.length; i += batchSize) {
+                const batch = decisions.slice(i, i + batchSize);
+                const enriched = await Promise.all(batch.map(async d => {
+                    const cc = await lookupGeoIP(d.value);
+                    return { ...d, country: cc };
+                }));
+                results.push(...enriched);
+                // Small delay to respect rate limit
+                if (i + batchSize < decisions.length) await new Promise(r => setTimeout(r, 200));
+            }
+            return results;
+        }
+
         async function api(endpoint, method = 'GET', data = null) {
             const token = localStorage.getItem('sbx_token');
             const opts = { method, headers: { 'Content-Type': 'application/json' } };
@@ -252,20 +333,44 @@
 
             const quickTbody = document.querySelector('#quick-bans-table tbody');
             if (decisions.length === 0) {
-                quickTbody.innerHTML = '<tr><td colspan="3" style="color: var(--green);">No active bans</td></tr>';
+                quickTbody.innerHTML = '<tr><td colspan="4" style="color: var(--green);">No active bans</td></tr>';
             } else {
                 quickTbody.innerHTML = decisions.slice(0, 5).map(d =>
-                    '<tr><td style="font-family: monospace;">' + d.value + '</td><td>' + (d.scenario || d.type || '-') + '</td><td>' + (d.duration || '-') + '</td></tr>'
+                    '<tr data-qip="' + d.value + '"><td class="geoip-pending">🌐</td><td style="font-family: monospace;">' + d.value + '</td><td>' + (d.scenario || d.type || '-') + '</td><td>' + (d.duration || '-') + '</td></tr>'
                 ).join('');
+                // Enrich quick bans
+                enrichWithGeoIP(decisions.slice(0, 5)).then(enriched => {
+                    enriched.forEach(d => {
+                        const row = quickTbody.querySelector('tr[data-qip="' + d.value + '"]');
+                        if (row) {
+                            const cell = row.querySelector('td:first-child');
+                            cell.className = '';
+                            cell.innerHTML = '<span class="country-flag">' + countryFlag(d.country) + '</span>';
+                        }
+                    });
+                });
             }
 
             const tbody = document.querySelector('#bans-table tbody');
             if (decisions.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4" style="color: var(--green);">No active bans</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="5" style="color: var(--green);">No active bans</td></tr>';
             } else {
+                // Show loading state with pending GeoIP
                 tbody.innerHTML = decisions.slice(0, 50).map(d =>
-                    '<tr><td style="font-family: monospace;">' + d.value + '</td><td><span class="status-badge ban">' + d.type + '</span> ' + (d.scenario || '-') + '</td><td>' + (d.duration || '-') + '</td><td><button class="btn danger" onclick="unban(\'' + d.value + '\')">Unban</button></td></tr>'
+                    '<tr data-ip="' + d.value + '"><td class="geoip-pending">🌐</td><td style="font-family: monospace;">' + d.value + '</td><td><span class="status-badge ban">' + d.type + '</span> ' + (d.scenario || '-') + '</td><td>' + (d.duration || '-') + '</td><td><button class="btn danger" onclick="unban(\'' + d.value + '\')">Unban</button></td></tr>'
                 ).join('');
+
+                // Enrich with GeoIP in background
+                enrichWithGeoIP(decisions.slice(0, 50)).then(enriched => {
+                    enriched.forEach(d => {
+                        const row = tbody.querySelector('tr[data-ip="' + d.value + '"]');
+                        if (row) {
+                            const cell = row.querySelector('td:first-child');
+                            cell.className = '';
+                            cell.innerHTML = '<span class="country-flag">' + countryFlag(d.country) + '</span>' + d.country;
+                        }
+                    });
+                });
             }
         }
 
