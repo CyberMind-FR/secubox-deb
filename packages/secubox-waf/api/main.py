@@ -176,7 +176,7 @@ def _ban_ip(ip: str, duration: str = "4h", reason: str = "WAF auto-ban"):
     """Ban IP via CrowdSec."""
     try:
         subprocess.run([
-            "cscli", "decisions", "add",
+            "sudo", "cscli", "decisions", "add",
             "--ip", ip,
             "--type", "ban",
             "--duration", duration,
@@ -190,7 +190,7 @@ def _unban_ip(ip: str):
     """Remove IP ban via CrowdSec."""
     try:
         subprocess.run([
-            "cscli", "decisions", "delete",
+            "sudo", "cscli", "decisions", "delete",
             "--ip", ip
         ], capture_output=True, timeout=10)
     except Exception:
