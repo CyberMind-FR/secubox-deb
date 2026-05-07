@@ -3,6 +3,39 @@
 
 ---
 
+## 2026-05-07
+
+### Session 111 — LED Kernel + CrowdSec GeoIP + Boot Fixes
+
+**Completed:**
+
+1. **LED Kernel Configuration** (Issue #60)
+   - Fixed network drivers: MARVELL_PHY, MDIO, SFP, MDIO_I2C → built-in (=y)
+   - Fixed USB drivers: XHCI, EHCI, OHCI, USB_STORAGE → built-in
+   - Kernel build initiated with updated config
+   - LED chip detected at I2C-1 address 0x64 (IS31FL319X)
+
+2. **CrowdSec WebUI GeoIP Enhancement**
+   - Added country flags to bans/decisions list
+   - Implemented GeoIP cache with 24h TTL (localStorage)
+   - Uses ipapi.co (HTTPS) with backend fallback
+   - Commit: `feat(crowdsec): Add GeoIP cache with country flags`
+
+3. **WAF Client IP Fix**
+   - Fixed mitmproxy to read X-Forwarded-For header
+   - WAF now logs real attacker IP (not HAProxy internal IP)
+
+4. **GitHub Issues Created**
+   - #59: 503 errors at boot (service startup delay)
+   - #60: LED kernel with IS31FL319X and built-in drivers
+   - #61: Eye Remote gadget metrics endpoint
+
+**In Progress:**
+- Kernel build (~25% complete)
+- 503 error permanent fix (HAProxy/mitmproxy chain)
+
+---
+
 ## 2026-05-06
 
 ### Session 109 — VHost Matrix Sync + Eye Remote Fixes
