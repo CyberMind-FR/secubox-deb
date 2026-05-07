@@ -5,6 +5,21 @@
 
 ## 2026-05-07
 
+### Session 113 — WAF False Positive Fixes
+
+**Completed:**
+
+1. **WAF Rules v1.3.0** — Fixed 7 false positive patterns
+   - `lfi-001`: Require 3+ levels of directory traversal
+   - `rce-006`: Target Python SSTI patterns only (not all Jinja2/Vue.js)
+   - `scan-004`: Only block xmlrpc abuse, not legitimate WordPress
+   - `waf-fp-005`: Target MySQL version comments, not CSS
+   - `recon_crawler`: Disabled category (was blocking robots.txt, .well-known)
+   - `cred-002/006`: Detect URL-leaked secrets only, not auth headers
+   - Commit: `fix(waf): Fix 7 false positive patterns in WAF rules v1.3.0`
+
+---
+
 ### Session 111 — LED Kernel + CrowdSec GeoIP + Boot Fixes
 
 **Completed:**

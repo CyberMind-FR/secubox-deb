@@ -33,8 +33,19 @@
 - [x] Ban commands execute successfully via SSH chain
 - [x] Dashboard shows: 0 bans, 1 bouncer, 1 machine, 43k parsed logs
 
+### WAF False Positive Fixes (v1.3.0)
+- [x] Fixed 7 false positive patterns in waf-rules.json:
+  - `lfi-001`: Require 3+ levels of `../` traversal (was: any `../`)
+  - `rce-006`: Target Python SSTI `__class__/__mro__` (was: all `{{ }}`)
+  - `scan-004`: Only block xmlrpc pingback/multicall (was: all WordPress)
+  - `waf-fp-005`: Target MySQL version comments (was: all `/* */`)
+  - `recon_crawler`: Disabled entire category (FP on robots.txt, .well-known)
+  - `cred-002`: Detect password in URL query (was: Basic auth header)
+  - `cred-006`: Detect secrets in URL query (was: X-API-Key header)
+- [x] Synced to debian package locations
+
 ### Known Issues
-- **HAProxy use_backend vs default_backend**: Explicit `use_backend mitmproxy_inspector` 
+- **HAProxy use_backend vs default_backend**: Explicit `use_backend mitmproxy_inspector`
   causes 400 errors with query params, but `default_backend mitmproxy_inspector` works.
   Needs further investigation.
 
