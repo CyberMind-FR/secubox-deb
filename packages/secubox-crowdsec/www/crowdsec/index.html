@@ -10,338 +10,83 @@
     <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
         :root {
-            /* P31 Phosphor spectrum */
             --p31-peak: #00dd44;
             --p31-hot: #00ff55;
             --p31-mid: #009933;
             --p31-dim: #006622;
             --p31-ghost: #003311;
             --p31-decay: #ffb347;
-            --p31-decay-dim: #cc7722;
-            /* Tube glass */
             --tube-light: #e8f5e9;
             --tube-pale: #c8e6c9;
             --tube-soft: #a5d6a7;
-            /* Legacy mappings */
             --bg-dark: var(--tube-light);
             --bg-card: var(--tube-pale);
-            --bg-sidebar: var(--tube-black);
             --border: var(--tube-soft);
-            --text: var(--tube-dark);
             --text-dim: var(--p31-dim);
             --primary: var(--p31-peak);
-            --cyan: var(--p31-peak);
             --green: var(--p31-peak);
             --red: #ff4466;
             --yellow: var(--p31-decay);
-            --orange: var(--p31-decay-dim);
-            --purple: #a371f7;
-            /* Bloom effects */
-            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
+            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak);
+            --bloom-soft: 0 0 6px var(--p31-peak);
+            --bloom-amber: 0 0 3px var(--p31-decay);
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Courier Prime', 'Courier New', monospace;
-            background: var(--tube-light);
-            background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
-            color: var(--tube-dark);
-            display: flex;
-            min-height: 100vh;
-        }
-
-        .sidebar { width: 220px; background: var(--bg-sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; position: fixed; height: 100vh; overflow-y: auto; }
-
-        .main { flex: 1; margin-left: 220px; }
+        body { font-family: 'Courier Prime', monospace; background: var(--tube-light); display: flex; min-height: 100vh; }
+        .sidebar { width: 220px; position: fixed; height: 100vh; overflow-y: auto; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
         .header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); background: var(--bg-card); }
         .header-title { display: flex; align-items: center; gap: 1rem; }
-        .header-title h1 { font-size: 1.5rem; font-weight: 600; }
-        .badge { padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.75rem; font-weight: 500; }
+        .header-title h1 { font-size: 1.5rem; color: var(--p31-hot); text-shadow: var(--bloom-text); }
+        .badge { padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.75rem; }
         .badge.version { background: var(--bg-dark); border: 1px solid var(--border); color: var(--text-dim); }
         .badge.active { background: rgba(63,185,80,0.2); color: var(--green); }
         .badge.inactive { background: rgba(248,81,73,0.2); color: var(--red); }
-        .header-actions { display: flex; gap: 0.75rem; }
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; transition: all 0.2s; }
-        .btn:hover { background: var(--bg-dark); }
-        .btn.primary { background: rgba(88,166,255,0.1); border-color: var(--primary); color: var(--primary); }
-        .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
-        .btn.success { background: rgba(63,185,80,0.1); border-color: var(--green); color: var(--green); }
-
-        /* Tabs */
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); cursor: pointer; font-family: inherit; }
+        .btn.primary { border-color: var(--primary); color: var(--primary); }
+        .btn.danger { border-color: var(--red); color: var(--red); }
         .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--bg-card); padding: 0 1rem; }
-        .tab { padding: 0.75rem 1.25rem; cursor: pointer; color: var(--text-dim); border-bottom: 2px solid transparent; transition: all 0.2s; }
-        .tab:hover { color: var(--text); }
+        .tab { padding: 0.75rem 1.25rem; cursor: pointer; color: var(--text-dim); border-bottom: 2px solid transparent; text-transform: uppercase; font-size: 0.8rem; }
         .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
         .tab-content { display: none; padding: 1.5rem; }
         .tab-content.active { display: block; }
-
-        .content { padding: 0; }
-
         .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
         .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; text-align: center; }
-        .stat-card .value { font-size: 2rem; font-weight: bold; margin-bottom: 0.25rem; }
+        .stat-card .value { font-size: 2rem; font-weight: bold; text-shadow: 0 0 10px currentColor; }
         .stat-card .label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
-        .stat-card.cyan .value { color: var(--cyan); }
-        .stat-card.green .value { color: var(--green); }
-        .stat-card.yellow .value { color: var(--yellow); }
         .stat-card.red .value { color: var(--red); }
-
+        .stat-card.yellow .value { color: var(--yellow); }
+        .stat-card.green .value, .stat-card.cyan .value { color: var(--green); }
         .status-bar { display: flex; gap: 1.5rem; margin-bottom: 1.5rem; padding: 1rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; }
         .status-item { display: flex; align-items: center; gap: 0.5rem; }
         .status-dot { width: 10px; height: 10px; border-radius: 50%; }
         .status-dot.active { background: var(--green); box-shadow: 0 0 8px var(--green); }
         .status-dot.inactive { background: var(--red); }
-
         .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
         .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
         .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-        .card-header h2 { font-size: 1rem; font-weight: 600; }
-
-        .table { width: 100%; border-collapse: collapse; }
-        .table th { text-align: left; padding: 0.75rem; color: var(--text-dim); font-size: 0.75rem; text-transform: uppercase; border-bottom: 1px solid var(--border); }
-        .table td { padding: 0.75rem; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
-        .table tr:hover { background: rgba(255,255,255,0.02); }
-
+        .card-header h2 { font-size: 0.85rem; color: var(--p31-decay); text-shadow: var(--bloom-amber); text-transform: uppercase; }
+        .table { width: 100%; border-collapse: collapse; font-family: inherit; }
+        .table th { text-align: left; padding: 0.75rem; color: var(--p31-decay); font-size: 0.75rem; text-transform: uppercase; border-bottom: 1px solid var(--p31-ghost); }
+        .table td { padding: 0.75rem; border-bottom: 1px solid var(--p31-ghost); font-size: 0.9rem; color: var(--p31-mid); }
+        .table tr:hover { background: rgba(51,255,102,0.03); }
         .scroll-list { max-height: 300px; overflow-y: auto; }
-        .list-item { padding: 0.75rem; border-bottom: 1px solid var(--border); }
-        .list-item:hover { background: rgba(255,255,255,0.02); }
-
         .input-group { display: flex; gap: 0.5rem; margin-top: 1rem; }
-        .input-group input { flex: 1; padding: 0.5rem; border: 1px solid var(--border); background: var(--bg-dark); color: var(--text); border-radius: 6px; }
-
-        .status-badge { padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-family: monospace; }
+        .input-group input { flex: 1; padding: 0.5rem; border: 1px solid var(--border); background: var(--bg-dark); border-radius: 6px; font-family: inherit; }
+        .status-badge { padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; }
         .status-badge.ban { background: rgba(248,81,73,0.2); color: var(--red); }
-        .status-badge.captcha { background: rgba(210,153,34,0.2); color: var(--yellow); }
-
-        /* Components list */
-        .component-list { display: grid; gap: 1rem; }
-        .component-card { background: var(--bg-dark); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; display: flex; align-items: flex-start; gap: 1rem; }
-        .component-icon { width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; }
-        .component-icon.service { background: rgba(88,166,255,0.2); }
-        .component-icon.api { background: rgba(163,113,247,0.2); }
-        .component-icon.content { background: rgba(63,185,80,0.2); }
-        .component-icon.cli { background: rgba(0,212,255,0.2); }
-        .component-info h3 { font-size: 0.95rem; margin-bottom: 0.25rem; }
-        .component-info p { font-size: 0.8rem; color: var(--text-dim); }
-        .component-meta { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.5rem; font-family: monospace; }
-
-        /* Access endpoints */
-        .endpoint-list { display: grid; gap: 1rem; }
-        .endpoint-card { background: var(--bg-dark); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; }
-        .endpoint-card h3 { font-size: 0.95rem; margin-bottom: 0.5rem; }
-        .endpoint-card .url { font-family: monospace; color: var(--cyan); font-size: 0.85rem; word-break: break-all; }
-        .endpoint-card .desc { font-size: 0.8rem; color: var(--text-dim); margin-top: 0.5rem; }
-        .endpoint-card.internal { border-color: var(--text-dim); opacity: 0.7; }
-
-        /* Modal */
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center; }
-        .modal.show { display: flex; }
-        .modal-content { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; width: 90%; max-width: 500px; }
-        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-        .modal-header h2 { font-size: 1.2rem; }
-        .modal-close { background: none; border: none; color: var(--text-dim); font-size: 1.5rem; cursor: pointer; }
-        .form-group { margin-bottom: 1rem; }
-        .form-group label { display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--text-dim); }
-        .form-group input { width: 100%; padding: 0.5rem; border: 1px solid var(--border); background: var(--bg-dark); color: var(--text); border-radius: 6px; }
-        .form-group input:focus { outline: none; border-color: var(--primary); }
-
-        @media (max-width: 1200px) { .stats-row { grid-template-columns: repeat(2, 1fr); } }
+        .country-flag { font-size: 1.2rem; margin-right: 0.3rem; }
+        .geomap { background: var(--bg-dark); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem; }
+        .geomap-title { font-size: 0.85rem; color: var(--p31-decay); text-transform: uppercase; margin-bottom: 0.75rem; }
+        .country-list { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+        .country-chip { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.25rem 0.5rem; background: rgba(51,255,102,0.1); border: 1px solid var(--p31-dim); border-radius: 4px; font-size: 0.8rem; }
+        .country-chip .count { color: var(--red); font-weight: bold; }
         @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } .sidebar { display: none; } .main { margin-left: 0; } }
-    
-        /* CRT Enhancements */
-        .main { margin-left: 220px; padding: 1.5rem; }
-
-        .header h1 {
-            color: var(--p31-hot);
-            text-shadow: var(--bloom-text);
-            font-weight: 700;
-            letter-spacing: 0.05em;
-        }
-
-        .badge {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            border: 1px solid;
-        }
-        .badge-blue, .badge-primary { background: rgba(51,255,102,0.1); border-color: var(--p31-peak); color: var(--p31-peak); }
-        .badge-green { background: rgba(51,255,102,0.15); border-color: var(--p31-peak); color: var(--p31-peak); text-shadow: var(--bloom-soft); }
-        .badge-cyan { background: rgba(51,255,102,0.1); border-color: var(--p31-mid); color: var(--p31-mid); }
-        .badge-purple { background: rgba(163,113,247,0.1); border-color: #a371f7; color: #a371f7; }
-        .badge-yellow, .badge-amber { background: rgba(255,179,71,0.1); border-color: var(--p31-decay); color: var(--p31-decay); }
-        .badge-red { background: rgba(255,68,102,0.1); border-color: #ff4466; color: #ff4466; }
-
-        .btn {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            border: 1px solid var(--tube-soft);
-            background: var(--tube-pale);
-            color: var(--p31-mid);
-            transition: all 0.2s;
-        }
-        .btn:hover {
-            border-color: var(--p31-dim);
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            box-shadow: 0 0 12px rgba(51,255,102,0.1);
-        }
-        .btn-green, .btn-primary, .btn.primary, .btn.success {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-            background: rgba(51,255,102,0.1);
-        }
-        .btn-green:hover, .btn-primary:hover, .btn.primary:hover, .btn.success:hover {
-            background: rgba(51,255,102,0.2);
-            box-shadow: 0 0 16px rgba(51,255,102,0.2);
-        }
-        .btn-red, .btn.danger {
-            border-color: #ff4466;
-            color: #ff4466;
-            background: rgba(255,68,102,0.1);
-        }
-        .btn-red:hover, .btn.danger:hover {
-            background: rgba(255,68,102,0.2);
-        }
-        .btn-blue {
-            border-color: var(--p31-mid);
-            color: var(--p31-mid);
-            background: rgba(51,255,102,0.05);
-        }
-        .btn-blue:hover {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-        }
-
-        .card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card:hover {
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.05), inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card-title, .card-header h2 {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.85rem;
-        }
-
-        .stat-card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-        }
-        .stat-value, .stat-card .value {
-            text-shadow: 0 0 10px currentColor;
-        }
-        .stat-label, .stat-card .label {
-            color: var(--p31-dim);
-            letter-spacing: 0.15em;
-        }
-        .stat-card.cyan .value, .stat-card.green .value { color: var(--p31-peak); }
-        .stat-card.yellow .value { color: var(--p31-decay); }
-        .stat-card.red .value { color: #ff4466; }
-
-        table, .table {
-            font-family: 'Courier Prime', monospace;
-        }
-        th, .table th {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.15em;
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        td, .table td {
-            border-bottom: 1px solid var(--p31-ghost);
-            color: var(--p31-mid);
-        }
-        tr:hover, .table tr:hover {
-            background: rgba(51,255,102,0.03);
-        }
-
-        .status-dot.active, .status-running {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-        }
-        .status-dot.active {
-            background: var(--p31-peak);
-            box-shadow: 0 0 8px var(--p31-peak);
-        }
-
-        .toast {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            font-family: 'Courier Prime', monospace;
-        }
-        .toast-success { border-color: var(--p31-peak); }
-        .toast-error { border-color: #ff4466; }
-
-        .modal {
-            background: rgba(0,0,0,0.85);
-        }
-        .modal-content {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            box-shadow: 0 0 30px rgba(51,255,102,0.1);
-        }
-        .modal-title {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-        }
-
-        .tabs {
-            background: var(--tube-pale);
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        .tab {
-            color: var(--p31-dim);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.8rem;
-        }
-        .tab:hover { color: var(--p31-mid); }
-        .tab.active {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            border-bottom-color: var(--p31-peak);
-        }
-
-        input, select, textarea {
-            font-family: 'Courier Prime', monospace;
-            background: var(--tube-light);
-            border: 1px solid var(--tube-soft);
-            color: var(--p31-mid);
-            padding: 0.5rem;
-        }
-        input:focus, select:focus, textarea:focus {
-            outline: none;
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.1);
-        }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: var(--tube-light); }
-        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
-        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
-
-        /* Empty states */
-        .empty { color: var(--p31-dim); }
-
-        @media (max-width: 768px) {
-            .main { margin-left: 0; }
-        }
     </style>
 </head>
 <body class="crt-light">
     <nav class="sidebar" id="sidebar"></nav>
     <script src="/shared/sidebar.js"></script>
-
     <main class="main">
         <header class="header">
             <div class="header-title">
@@ -354,61 +99,30 @@
                 <button class="btn" onclick="reloadEngine()">Reload</button>
             </div>
         </header>
-
         <div class="tabs">
             <div class="tab active" data-tab="status">Status</div>
+            <div class="tab" data-tab="geomap">GeoMap</div>
             <div class="tab" data-tab="decisions">Decisions</div>
             <div class="tab" data-tab="alerts">Alerts</div>
             <div class="tab" data-tab="hub">Hub</div>
-            <div class="tab" data-tab="actions">Actions</div>
         </div>
-
         <div class="content">
-            <!-- Status Tab -->
             <div id="tab-status" class="tab-content active">
                 <div class="status-bar">
-                    <div class="status-item">
-                        <div class="status-dot" id="cs-status"></div>
-                        <span>CrowdSec Agent</span>
-                    </div>
-                    <div class="status-item">
-                        <div class="status-dot" id="lapi-status"></div>
-                        <span>Local API</span>
-                    </div>
-                    <div class="status-item">
-                        <div class="status-dot" id="capi-status"></div>
-                        <span>Central API</span>
-                    </div>
-                    <div class="status-item">
-                        <div class="status-dot" id="bouncer-status"></div>
-                        <span>Firewall Bouncer</span>
-                    </div>
+                    <div class="status-item"><div class="status-dot" id="cs-status"></div><span>Agent</span></div>
+                    <div class="status-item"><div class="status-dot" id="lapi-status"></div><span>LAPI</span></div>
+                    <div class="status-item"><div class="status-dot" id="capi-status"></div><span>CAPI</span></div>
+                    <div class="status-item"><div class="status-dot" id="bouncer-status"></div><span>Bouncer</span></div>
                 </div>
-
                 <div class="stats-row">
-                    <div class="stat-card red">
-                        <div class="value" id="total-decisions">0</div>
-                        <div class="label">Active Bans</div>
-                    </div>
-                    <div class="stat-card yellow">
-                        <div class="value" id="total-alerts">0</div>
-                        <div class="label">Alerts (24h)</div>
-                    </div>
-                    <div class="stat-card cyan">
-                        <div class="value" id="bouncers-count">0</div>
-                        <div class="label">Bouncers</div>
-                    </div>
-                    <div class="stat-card green">
-                        <div class="value" id="machines-count">0</div>
-                        <div class="label">Machines</div>
-                    </div>
+                    <div class="stat-card red"><div class="value" id="total-decisions">0</div><div class="label">Active Bans</div></div>
+                    <div class="stat-card yellow"><div class="value" id="total-alerts">0</div><div class="label">Alerts</div></div>
+                    <div class="stat-card cyan"><div class="value" id="bouncers-count">0</div><div class="label">Bouncers</div></div>
+                    <div class="stat-card green"><div class="value" id="machines-count">0</div><div class="label">Machines</div></div>
                 </div>
-
                 <div class="grid-2">
                     <div class="card">
-                        <div class="card-header">
-                            <h2>Recent Bans</h2>
-                        </div>
+                        <div class="card-header"><h2>Recent Bans</h2></div>
                         <div class="scroll-list">
                             <table class="table" id="quick-bans-table">
                                 <thead><tr><th>IP</th><th>Reason</th><th>Duration</th></tr></thead>
@@ -417,23 +131,27 @@
                         </div>
                     </div>
                     <div class="card">
-                        <div class="card-header">
-                            <h2>Metrics</h2>
-                        </div>
-                        <div id="metrics-content" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
-                            <p>Loading...</p>
-                        </div>
+                        <div class="card-header"><h2>Metrics</h2></div>
+                        <div id="metrics-content"><p>Loading...</p></div>
                     </div>
                 </div>
             </div>
-
-            <!-- Decisions Tab -->
+            <div id="tab-geomap" class="tab-content">
+                <div class="geomap">
+                    <div class="geomap-title">🌍 Attack Origins</div>
+                    <div class="country-list" id="country-list">Loading...</div>
+                </div>
+                <div class="card">
+                    <div class="card-header"><h2>Countries</h2></div>
+                    <table class="table" id="country-table">
+                        <thead><tr><th>Country</th><th>Flag</th><th>Alerts</th><th>%</th></tr></thead>
+                        <tbody><tr><td colspan="4">Loading...</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
             <div id="tab-decisions" class="tab-content">
                 <div class="card">
-                    <div class="card-header">
-                        <h2>Active Bans</h2>
-                        <button class="btn danger" onclick="flushDecisions()">Flush All</button>
-                    </div>
+                    <div class="card-header"><h2>Active Bans</h2><button class="btn danger" onclick="flushDecisions()">Flush</button></div>
                     <div class="scroll-list" style="max-height: 400px;">
                         <table class="table" id="bans-table">
                             <thead><tr><th>IP</th><th>Reason</th><th>Duration</th><th>Action</th></tr></thead>
@@ -441,20 +159,16 @@
                         </table>
                     </div>
                     <div class="input-group">
-                        <input type="text" id="ban-ip" placeholder="IP address">
-                        <input type="text" id="ban-reason" placeholder="Reason" value="manual">
-                        <input type="text" id="ban-duration" placeholder="Duration" value="24h">
-                        <button class="btn primary" onclick="addBan()">Ban IP</button>
+                        <input type="text" id="ban-ip" placeholder="IP">
+                        <input type="text" id="ban-reason" value="manual" placeholder="Reason">
+                        <input type="text" id="ban-duration" value="24h" placeholder="Duration">
+                        <button class="btn primary" onclick="addBan()">Ban</button>
                     </div>
                 </div>
             </div>
-
-            <!-- Alerts Tab -->
             <div id="tab-alerts" class="tab-content">
                 <div class="card">
-                    <div class="card-header">
-                        <h2>Recent Alerts</h2>
-                    </div>
+                    <div class="card-header"><h2>Recent Alerts</h2></div>
                     <div class="scroll-list" style="max-height: 500px;">
                         <table class="table" id="alerts-table">
                             <thead><tr><th>Time</th><th>Scenario</th><th>Source</th><th>Country</th></tr></thead>
@@ -463,87 +177,50 @@
                     </div>
                 </div>
             </div>
-
-            <!-- Hub Tab -->
             <div id="tab-hub" class="tab-content">
                 <div class="grid-2">
                     <div class="card">
-                        <div class="card-header">
-                            <h2>Collections</h2>
-                            <button class="btn" onclick="refreshHub()">Update Hub</button>
-                        </div>
-                        <div class="scroll-list" id="collections-list">
-                            <p>Loading...</p>
-                        </div>
-                        <div class="input-group">
-                            <input type="text" id="collection-name" placeholder="crowdsecurity/linux">
-                            <button class="btn primary" onclick="installCollection()">Install</button>
-                        </div>
+                        <div class="card-header"><h2>Collections</h2></div>
+                        <div class="scroll-list" id="collections-list"><p>Loading...</p></div>
                     </div>
                     <div class="card">
-                        <div class="card-header">
-                            <h2>Bouncers</h2>
-                        </div>
-                        <div class="scroll-list" id="bouncers-list">
-                            <p>Loading...</p>
-                        </div>
+                        <div class="card-header"><h2>Bouncers</h2></div>
+                        <div class="scroll-list" id="bouncers-list"><p>Loading...</p></div>
                     </div>
                 </div>
             </div>
-
-            <!-- Actions Tab -->
-            <div id="tab-actions" class="tab-content">
-                <div class="grid-2">
-                    <div class="card">
-                        <div class="card-header">
-                            <h2>Service Control</h2>
-                        </div>
-                        <button class="btn success" onclick="serviceAction('start')" style="margin-bottom: 0.5rem; width: 100%;">Start CrowdSec</button>
-                        <button class="btn danger" onclick="serviceAction('stop')" style="margin-bottom: 0.5rem; width: 100%;">Stop CrowdSec</button>
-                        <button class="btn" onclick="serviceAction('restart')" style="margin-bottom: 0.5rem; width: 100%;">Restart Services</button>
-                        <button class="btn" onclick="reloadEngine()" style="width: 100%;">Reload Configuration</button>
-                    </div>
-                    <div class="card">
-                        <div class="card-header">
-                            <h2>Hub Management</h2>
-                        </div>
-                        <button class="btn primary" onclick="refreshHub()" style="margin-bottom: 0.5rem; width: 100%;">Update Hub Index</button>
-                        <button class="btn" onclick="upgradeHub()" style="width: 100%;">Upgrade All Items</button>
-                    </div>
-                    <div class="card">
-                        <div class="card-header">
-                            <h2>CrowdSec Console</h2>
-                        </div>
-                        <div id="console-status" style="margin-bottom: 1rem;">
-                            <p>Checking console status...</p>
-                        </div>
-                        <div class="input-group">
-                            <input type="text" id="enroll-key" placeholder="Enrollment key">
-                            <button class="btn primary" onclick="enrollConsole()">Enroll</button>
-                        </div>
-                    </div>
-            </div>
         </div>
     </main>
-
-
     <script>
         const API = '/api/v1/crowdsec';
 
+        function countryFlag(code) {
+            if (!code || code === '-' || code.length !== 2) return '🌐';
+            const offset = 127397;
+            return String.fromCodePoint(...[...code.toUpperCase()].map(c => c.charCodeAt() + offset));
+        }
+
+        const countryNames = {
+            'RO': 'Romania', 'NL': 'Netherlands', 'US': 'United States', 'CN': 'China',
+            'RU': 'Russia', 'DE': 'Germany', 'FR': 'France', 'GB': 'UK', 'IN': 'India',
+            'BR': 'Brazil', 'KR': 'South Korea', 'JP': 'Japan', 'PA': 'Panama',
+            'UA': 'Ukraine', 'VN': 'Vietnam', 'TR': 'Turkey', 'IR': 'Iran'
+        };
+
+        function getCountryName(code) { return countryNames[code] || code || 'Unknown'; }
+
         async function api(endpoint, method = 'GET', data = null) {
-            const token = () => localStorage.getItem('sbx_token');
-            const opts = { method, headers: { 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) } };
+            const token = localStorage.getItem('sbx_token');
+            const opts = { method, headers: { 'Content-Type': 'application/json' } };
+            if (token) opts.headers['Authorization'] = 'Bearer ' + token;
             if (data) opts.body = JSON.stringify(data);
             try {
                 const res = await fetch(API + endpoint, opts);
-                if (res.status === 401) { window.location = "/login.html"; return {}; } return res.json();
-            } catch (e) {
-                console.error('API error:', e);
-                return {};
-            }
+                if (res.status === 401) { window.location = "/login.html"; return {}; }
+                return res.json();
+            } catch (e) { console.error('API error:', e); return {}; }
         }
 
-        // Tab switching
         document.querySelectorAll('.tab').forEach(tab => {
             tab.addEventListener('click', () => {
                 document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -553,7 +230,6 @@
             });
         });
 
-        // Load status
         async function loadStatus() {
             const data = await api('/status');
             document.getElementById('cs-status').className = 'status-dot ' + (data.running ? 'active' : 'inactive');
@@ -561,203 +237,155 @@
             document.getElementById('capi-status').className = 'status-dot ' + (data.capi_registered ? 'active' : 'inactive');
             document.getElementById('agent-badge').className = 'badge ' + (data.running ? 'active' : 'inactive');
             document.getElementById('agent-badge').textContent = data.running ? 'Running' : 'Stopped';
-            const ver = (data.version || '-').replace('version: ', '').split('-')[0]; document.getElementById('version-badge').textContent = ver;
-
-            // Check bouncer
+            const ver = (data.version || '-').replace('version: ', '').split('-')[0];
+            document.getElementById('version-badge').textContent = ver;
             const health = await api('/health');
             document.getElementById('bouncer-status').className = 'status-dot ' + (health.engine_running ? 'active' : 'inactive');
         }
 
-        // Load decisions
+        let _alerts = [];
+
         async function loadDecisions() {
             const data = await api('/decisions');
             const decisions = data.decisions || [];
             document.getElementById('total-decisions').textContent = decisions.length;
 
-            // Quick bans table
             const quickTbody = document.querySelector('#quick-bans-table tbody');
             if (decisions.length === 0) {
                 quickTbody.innerHTML = '<tr><td colspan="3" style="color: var(--green);">No active bans</td></tr>';
             } else {
-                quickTbody.innerHTML = decisions.slice(0, 5).map(d => `
-                    <tr>
-                        <td style="font-family: monospace;">${d.value}</td>
-                        <td>${d.scenario || d.type || '-'}</td>
-                        <td>${d.duration || '-'}</td>
-                    </tr>
-                `).join('');
+                quickTbody.innerHTML = decisions.slice(0, 5).map(d =>
+                    '<tr><td style="font-family: monospace;">' + d.value + '</td><td>' + (d.scenario || d.type || '-') + '</td><td>' + (d.duration || '-') + '</td></tr>'
+                ).join('');
             }
 
-            // Full bans table
             const tbody = document.querySelector('#bans-table tbody');
             if (decisions.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="4" style="color: var(--green);">No active bans</td></tr>';
             } else {
-                tbody.innerHTML = decisions.slice(0, 50).map(d => `
-                    <tr>
-                        <td style="font-family: monospace;">${d.value}</td>
-                        <td><span class="status-badge ban">${d.type}</span> ${d.scenario || '-'}</td>
-                        <td>${d.duration || '-'}</td>
-                        <td><button class="btn danger" onclick="unban('${d.value}')">Unban</button></td>
-                    </tr>
-                `).join('');
+                tbody.innerHTML = decisions.slice(0, 50).map(d =>
+                    '<tr><td style="font-family: monospace;">' + d.value + '</td><td><span class="status-badge ban">' + d.type + '</span> ' + (d.scenario || '-') + '</td><td>' + (d.duration || '-') + '</td><td><button class="btn danger" onclick="unban(\'' + d.value + '\')">Unban</button></td></tr>'
+                ).join('');
             }
         }
 
-        // Load alerts
         async function loadAlerts() {
             const data = await api('/alerts?limit=50');
-            const alerts = data.alerts || [];
-            document.getElementById('total-alerts').textContent = alerts.length;
+            _alerts = data.alerts || [];
+            document.getElementById('total-alerts').textContent = _alerts.length;
 
             const tbody = document.querySelector('#alerts-table tbody');
-            if (alerts.length === 0) {
+            if (_alerts.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="4" style="color: var(--green);">No alerts</td></tr>';
             } else {
-                tbody.innerHTML = alerts.slice(0, 30).map(a => `
-                    <tr>
-                        <td>${new Date(a.created_at).toLocaleString()}</td>
-                        <td>${a.scenario}</td>
-                        <td style="font-family: monospace;">${a.source_ip || '-'}</td>
-                        <td>${a.country || '-'}</td>
-                    </tr>
-                `).join('');
+                tbody.innerHTML = _alerts.slice(0, 30).map(a => {
+                    const cc = a.country || '-';
+                    return '<tr><td>' + new Date(a.created_at).toLocaleString() + '</td><td>' + a.scenario + '</td><td style="font-family: monospace;">' + (a.source_ip || '-') + '</td><td><span class="country-flag">' + countryFlag(cc) + '</span>' + cc + '</td></tr>';
+                }).join('');
+            }
+            loadGeomap();
+        }
+
+        function loadGeomap() {
+            const countryCounts = {};
+            _alerts.forEach(a => {
+                const cc = a.country || 'Unknown';
+                countryCounts[cc] = (countryCounts[cc] || 0) + 1;
+            });
+
+            const sorted = Object.entries(countryCounts).sort((a, b) => b[1] - a[1]);
+            const total = _alerts.length || 1;
+
+            const chipList = document.getElementById('country-list');
+            if (sorted.length === 0) {
+                chipList.innerHTML = '<span style="color: var(--text-dim);">No data</span>';
+            } else {
+                chipList.innerHTML = sorted.slice(0, 20).map(([cc, count]) =>
+                    '<div class="country-chip"><span class="country-flag">' + countryFlag(cc) + '</span>' + cc + ' <span class="count">' + count + '</span></div>'
+                ).join('');
+            }
+
+            const tbody = document.querySelector('#country-table tbody');
+            if (sorted.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4">No data</td></tr>';
+            } else {
+                tbody.innerHTML = sorted.map(([cc, count]) => {
+                    const pct = ((count / total) * 100).toFixed(1);
+                    return '<tr><td>' + getCountryName(cc) + '</td><td style="font-size: 1.5rem;">' + countryFlag(cc) + '</td><td style="color: var(--red); font-weight: bold;">' + count + '</td><td>' + pct + '%</td></tr>';
+                }).join('');
             }
         }
 
-        // Load hub
         async function loadHub() {
             const data = await api('/hub');
             const collections = (data.collections || []).filter(c => c.installed);
-
             const list = document.getElementById('collections-list');
-            list.innerHTML = collections.length > 0 ? collections.map(c => `
-                <div class="list-item" style="display: flex; justify-content: space-between;">
-                    <span>${c.name}</span>
-                    <span style="color: var(--text-dim);">v${c.version || '?'}</span>
-                </div>
-            `).join('') : '<p style="color: var(--text-dim);">No collections installed</p>';
+            list.innerHTML = collections.length > 0 ? collections.map(c =>
+                '<div class="list-item" style="display: flex; justify-content: space-between;"><span>' + c.name + '</span><span style="color: var(--text-dim);">v' + (c.version || '?') + '</span></div>'
+            ).join('') : '<p style="color: var(--text-dim);">No collections</p>';
         }
 
-        // Load bouncers
         async function loadBouncers() {
             const data = await api('/bouncers');
             const bouncers = data.bouncers || [];
             document.getElementById('bouncers-count').textContent = bouncers.length;
-
             const list = document.getElementById('bouncers-list');
-            list.innerHTML = bouncers.length > 0 ? bouncers.map(b => `
-                <div class="list-item">
-                    <strong>${b.name}</strong>
-                    <div style="font-size: 0.8rem; color: var(--text-dim);">${b.type || 'bouncer'} - Last pull: ${b.last_pull ? new Date(b.last_pull).toLocaleString() : 'never'}</div>
-                </div>
-            `).join('') : '<p style="color: var(--text-dim);">No bouncers registered</p>';
+            list.innerHTML = bouncers.length > 0 ? bouncers.map(b =>
+                '<div class="list-item"><strong>' + b.name + '</strong><div style="font-size: 0.8rem; color: var(--text-dim);">Last: ' + (b.last_pull ? new Date(b.last_pull).toLocaleString() : 'never') + '</div></div>'
+            ).join('') : '<p style="color: var(--text-dim);">No bouncers</p>';
         }
 
-        
-        // Load machines
         async function loadMachines() {
             try {
-                const data = await api("/status");
-                // Get machines from status or dedicated endpoint
-                const machinesData = await fetch("/api/v1/crowdsec/machines", {
-                    headers: { "Authorization": "Bearer " + (localStorage.getItem("sbx_token") || "") }
-                }).then(r => r.ok ? r.json() : []).catch(() => []);
-                const machines = Array.isArray(machinesData) ? machinesData : [];
-                document.getElementById("machines-count").textContent = machines.length;
-            } catch(e) {
-                console.error("loadMachines error:", e);
-            }
+                const data = await api('/status');
+                document.getElementById('machines-count').textContent = data.running ? '1' : '0';
+            } catch(e) {}
         }
 
-// Load metrics
         async function loadMetrics() {
             const data = await api("/metrics");
-            let acquired = 0, parsed = 0, poured = 0, buckets = 0;
+            let acquired = 0, parsed = 0;
             if (data.raw && data.raw.acquisition) {
                 Object.values(data.raw.acquisition).forEach(src => {
-                    acquired += src.reads || 0;
-                    parsed += src.parsed || 0;
-                    poured += src.pour || 0;
+                    acquired += src.reads || 0; parsed += src.parsed || 0;
                 });
             }
-            if (data.raw && data.raw.scenarios) {
-                Object.values(data.raw.scenarios).forEach(s => { buckets += s.curr_count || 0; });
-            }
-            document.getElementById("metrics-content").innerHTML = `
-                <div>Acquired: <strong style="color: var(--cyan);">${acquired.toLocaleString()}</strong></div>
-                <div>Parsed: <strong style="color: var(--green);">${parsed.toLocaleString()}</strong></div>
-                <div>Poured: <strong style="color: var(--yellow);">${poured.toLocaleString()}</strong></div>
-                <div>Buckets: <strong style="color: var(--purple);">${buckets}</strong></div>
-            `;
+            document.getElementById("metrics-content").innerHTML =
+                '<div>Acquired: <strong style="color: var(--green);">' + acquired.toLocaleString() + '</strong></div>' +
+                '<div>Parsed: <strong style="color: var(--yellow);">' + parsed.toLocaleString() + '</strong></div>';
         }
 
-        async function loadConsoleStatus() {
-            const result = await api('/console/status');
-            document.getElementById('console-status').innerHTML = result.output ?
-                `<pre style="font-size: 0.8rem; color: var(--text-dim);">${result.output}</pre>` :
-                '<p style="color: var(--text-dim);">Console status unavailable</p>';
-        }
-
-        async function enrollConsole() {
-            const key = document.getElementById('enroll-key').value.trim();
-            if (!key) return alert('Enter enrollment key');
-            const result = await api('/console/enroll', 'POST', { enrollment_key: key });
-            alert(result.output || (result.success ? 'Enrolled successfully' : 'Enrollment failed'));
-            loadConsoleStatus();
-        }
-
-
-        // Refresh CrowdSec Hub
         async function refreshHub() {
-            const btn = event.target;
-            btn.disabled = true;
-            btn.textContent = 'Updating...';
-            try {
-                const result = await api('/hub/update', 'POST');
-                if (result.success) {
-                    alert('Hub updated successfully');
-                    loadHub();
-                } else {
-                    alert('Hub update failed: ' + (result.error || 'Unknown error'));
-                }
-            } catch (e) {
-                alert('Hub update failed: ' + e.message);
-            }
-            btn.disabled = false;
-            btn.textContent = 'Refresh Hub';
-        }
-
-        // Reload CrowdSec engine
-        async function reloadEngine() {
-            const btn = event.target;
-            btn.disabled = true;
-            btn.textContent = 'Reloading...';
-            try {
-                const result = await api('/service/reload', 'POST');
-                if (result.success) {
-                    alert('CrowdSec reloaded successfully');
-                    setTimeout(refresh, 2000);
-                } else {
-                    alert('Reload failed: ' + (result.error || 'Unknown error'));
-                }
-            } catch (e) {
-                alert('Reload failed: ' + e.message);
-            }
-            btn.disabled = false;
-            btn.textContent = 'Reload';
-        }
-
-        // Initial load
-        function refresh() {
-            loadStatus();
-            loadDecisions();
-            loadAlerts();
+            const result = await api('/hub/update', 'POST');
+            alert(result.success ? 'Hub updated' : 'Update failed');
             loadHub();
-            loadBouncers();
-            loadMachines();
-            loadMetrics();
-            loadConsoleStatus();
+        }
+
+        async function reloadEngine() {
+            const result = await api('/service/reload', 'POST');
+            alert(result.success ? 'Reloaded' : 'Failed');
+            setTimeout(refresh, 2000);
+        }
+
+        async function unban(ip) {
+            if (!confirm('Unban ' + ip + '?')) return;
+            const result = await api('/unban', 'POST', { ip: ip });
+            alert(result.success ? 'Unbanned' : 'Failed');
+            loadDecisions();
+        }
+
+        async function addBan() {
+            const ip = document.getElementById('ban-ip').value;
+            const reason = document.getElementById('ban-reason').value;
+            const duration = document.getElementById('ban-duration').value;
+            if (!ip) return alert('Enter IP');
+            const result = await api('/ban', 'POST', { ip, reason, duration });
+            alert(result.success ? 'Banned' : 'Failed');
+            loadDecisions();
+        }
+
+        function refresh() {
+            loadStatus(); loadDecisions(); loadAlerts(); loadHub(); loadBouncers(); loadMachines(); loadMetrics();
         }
 
         refresh();
