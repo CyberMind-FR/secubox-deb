@@ -1,0 +1,110 @@
+#!/bin/bash
+# SecuBox-Deb :: LED K2000 Rainbow Effect
+# CyberMind — https://cybermind.fr
+# Author: Gerald Kerma <devel@cybermind.fr>
+#
+# Knight Rider style sweep with rainbow colors across 3 RGB LEDs
+
+set -euo pipefail
+
+readonly LED_BASE="/sys/class/leds"
+readonly LOG_TAG="secubox-led-k2000"
+
+# Timing
+SWEEP_DELAY=0.12
+FADE_STEPS=3
+
+# Rainbow colors (R G B)
+declare -a COLORS=(
+    "255 0 0"      # Red
+    "255 127 0"    # Orange
+    "255 255 0"    # Yellow
+    "0 255 0"      # Green
+    "0 255 255"    # Cyan
+    "0 0 255"      # Blue
+    "127 0 255"    # Purple
+    "255 0 127"    # Pink
+)
+
+log() {
+    logger -t "$LOG_TAG" "$1"
+}
+
+set_led() {
+    local led=$1  # 1, 2, or 3
+    local r=$2 g=$3 b=$4
+
+    echo "$r" > "${LED_BASE}/red:led${led}/brightness" 2>/dev/null || true
+    echo "$g" > "${LED_BASE}/green:led${led}/brightness" 2>/dev/null || true
+    echo "$b" > "${LED_BASE}/blue:led${led}/brightness" 2>/dev/null || true
+}
+
+all_off() {
+    for led in 1 2 3; do
+        set_led $led 0 0 0
+    done
+}
+
+cleanup() {
+    log "Stopping K2000"
+    all_off
+    exit 0
+}
+
+trap cleanup SIGTERM SIGINT EXIT
+
+wait_for_leds() {
+    local timeout=30
+    while [[ $timeout -gt 0 ]]; do
+        if [[ -f "${LED_BASE}/red:led1/brightness" ]]; then
+            return 0
+        fi
+        sleep 1
+        ((timeout--))
+    done
+    return 1
+}
+
+main() {
+    log "Starting K2000 rainbow effect"
+
+    if ! wait_for_leds; then
+        log "ERROR: LEDs not available"
+        exit 1
+    fi
+
+    log "K2000 active"
+
+    local color_idx=0
+    local num_colors=${#COLORS[@]}
+
+    while true; do
+        # Get current color
+        local color=(${COLORS[$color_idx]})
+        local r=${color[0]} g=${color[1]} b=${color[2]}
+
+        # Forward sweep: 1 -> 2 -> 3
+        for led in 1 2 3; do
+            all_off
+            set_led $led $r $g $b
+            sleep "$SWEEP_DELAY"
+        done
+
+        # Move to next color
+        color_idx=$(( (color_idx + 1) % num_colors ))
+        color=(${COLORS[$color_idx]})
+        r=${color[0]} g=${color[1]} b=${color[2]}
+
+        # Reverse sweep: 3 -> 2 -> 1
+        for led in 3 2 1; do
+            all_off
+            set_led $led $r $g $b
+            sleep "$SWEEP_DELAY"
+        done
+
+        # Next color for next cycle
+        color_idx=$(( (color_idx + 1) % num_colors ))
+    done
+}
+
+main "$@"
