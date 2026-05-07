@@ -1,0 +1,29 @@
+From: Gerald Kerma <devel@cybermind.fr>
+Subject: [PATCH] arm64: dts: marvell: Fix IS31FL3199 LED GPIO polarity on MOCHAbin
+
+The IS31FL3199 LED controller has a SDB (shutdown bar) pin that must be
+driven HIGH to enable the chip. The previous setting of GPIO_ACTIVE_LOW
+caused the kernel to drive the pin LOW, keeping the chip in shutdown mode
+and preventing any I2C communication.
+
+This fix changes the shutdown-gpios flag from GPIO_ACTIVE_LOW (wrong) to
+GPIO_ACTIVE_HIGH (correct), matching the OpenWrt device tree and other
+similar devices in the kernel tree (cn9130-cf-base.dts, cn9132-clearfog.dts).
+
+Fixes: LED controller not responding to I2C (issue #52)
+Signed-off-by: Gerald Kerma <devel@cybermind.fr>
+---
+ arch/arm64/boot/dts/marvell/armada-7040-mochabin.dts | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+--- a/arch/arm64/boot/dts/marvell/armada-7040-mochabin.dts
++++ b/arch/arm64/boot/dts/marvell/armada-7040-mochabin.dts
+@@ -236,7 +236,7 @@
+ 		#size-cells = <0>;
+ 		pinctrl-names = "default";
+ 		pinctrl-0 = <&is31_sdb_pins>;
+-		shutdown-gpios = <&cp0_gpio1 30 GPIO_ACTIVE_LOW>;
++		shutdown-gpios = <&cp0_gpio1 30 GPIO_ACTIVE_HIGH>;
+ 		reg = <0x64>;
+
+ 		led1_red: led@1 {
