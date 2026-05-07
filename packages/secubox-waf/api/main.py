@@ -14,6 +14,8 @@ from fastapi import FastAPI, Depends, HTTPException, Request
 from pydantic import BaseModel
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
+import geoip2.database
+import geoip2.errors
 
 app = FastAPI(title="SecuBox WAF")
 
@@ -506,3 +508,49 @@ async def update_whitelist(req: WhitelistRequest):
     """Add or remove IP from whitelist."""
     # In production, this would update the TOML config file
     return {"success": True, "ip": req.ip, "action": req.action}
+
+# GeoIP lookup with caching
+import urllib.request
+import ssl
+
+_geoip_cache = {}
+
+# GeoIP database reader (local MaxMind database)
+_geoip_reader = None
+_geoip_cache = {}
+GEOIP_DB_PATH = "/var/lib/secubox/geoip/GeoLite2-Country.mmdb"
+
+def _get_geoip_reader():
+    global _geoip_reader
+    if _geoip_reader is None and geoip2:
+        try:
+            _geoip_reader = geoip2.database.Reader(GEOIP_DB_PATH)
+        except:
+            pass
+    return _geoip_reader
+
+
+@app.get("/geoip/{ip}")
+async def get_geoip(ip: str):
+    """Lookup country code for IP address using local MaxMind database."""
+    if ip in _geoip_cache:
+        return {"ip": ip, "country": _geoip_cache[ip]}
+    
+    # Skip private IPs
+    if ip.startswith(("10.", "192.168.", "127.", "172.16.", "172.17.", "172.18.", "172.19.")):
+        _geoip_cache[ip] = "LAN"
+        return {"ip": ip, "country": "LAN"}
+    
+    # Try local database
+    reader = _get_geoip_reader()
+    if reader:
+        try:
+            response = reader.country(ip)
+            country = response.country.iso_code or ""
+            if country:
+                _geoip_cache[ip] = country
+                return {"ip": ip, "country": country}
+        except Exception:
+            pass
+    
+    return {"ip": ip, "country": ""}

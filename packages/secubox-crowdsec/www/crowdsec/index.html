@@ -246,10 +246,10 @@
 
             // Use HTTPS GeoIP service with fallback
             try {
-                // Primary: ipapi.co (free, HTTPS, 1000/day limit)
-                const res = await fetch('https://ipapi.co/' + ip + '/country/', { mode: 'cors' });
+                // Backend GeoIP API (local MaxMind database)
+                const res = await fetch('/api/v1/waf/geoip/' + ip);
                 if (res.ok) {
-                    const cc = (await res.text()).trim();
+                    const data = await res.json(); const cc = data.country || "";
                     if (cc.length === 2) {
                         setGeoCache(ip, cc);
                         return cc;
