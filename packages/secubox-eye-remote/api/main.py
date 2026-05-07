@@ -70,6 +70,15 @@ _eye_state = {
     "metrics": None,
 }
 
+# I/O tracking state for peak calculation
+_io_state = {
+    "last_read_bytes": 0,
+    "last_write_bytes": 0,
+    "last_time": None,
+    "io_read_peak_mb": 0.0,
+    "io_write_peak_mb": 0.0,
+}
+
 
 def _check_interface() -> bool:
     """Check if Eye Remote interface exists and is up."""
@@ -348,144 +357,11 @@ async def health():
 # =============================================================================
 # System Metrics — MOCHAbin host metrics for Round UI dashboard
 # =============================================================================
-# Double Pre-Cache Buffer for Metrics
-# Background task updates cache every 2s, API returns instantly from cache
-# =============================================================================
-import asyncio
-import time
-import os
-
-_metrics_cache = {
-    "active": {},      # Current metrics (read by API)
-    "shadow": {},      # Being updated by background task
-    "last_swap": 0,    # Timestamp of last swap
-}
-_cpu_state = {"prev_idle": 0, "prev_total": 0, "prev_time": 0}
-_cache_task = None
-
-# Connections tracking for Round Eye MIND metric
-# Peak persisted to file for resilience across restarts
-_PEAK_CONNECTIONS_FILE = Path("/var/cache/secubox/eye-remote/peak_connections")
-_connections_state = {"current": 0, "peak": 0, "last_reset": None}
-
-
-def _load_peak_connections() -> int:
-    """Load peak connections from persistent file."""
-    try:
-        if _PEAK_CONNECTIONS_FILE.exists():
-            return int(_PEAK_CONNECTIONS_FILE.read_text().strip())
-    except Exception:
-        pass
-    return 0
-
-
-def _save_peak_connections(peak: int) -> None:
-    """Persist peak connections to file."""
-    try:
-        _PEAK_CONNECTIONS_FILE.parent.mkdir(parents=True, exist_ok=True)
-        _PEAK_CONNECTIONS_FILE.write_text(str(peak))
-    except Exception:
-        pass
-
-
-def _count_tcp_connections() -> int:
-    """Count established TCP connections using /proc/net/tcp.
-
-    Faster than calling ss/netstat subprocess.
-    """
-    count = 0
-    try:
-        # /proc/net/tcp format: sl local remote st ... (st=01 is ESTABLISHED)
-        with open("/proc/net/tcp") as f:
-            for line in f:
-                parts = line.split()
-                if len(parts) >= 4 and parts[3] == "01":  # 01 = ESTABLISHED
-                    count += 1
-        # Also count tcp6
-        with open("/proc/net/tcp6") as f:
-            for line in f:
-                parts = line.split()
-                if len(parts) >= 4 and parts[3] == "01":
-                    count += 1
-    except Exception:
-        pass
-    return count
-
-
-def _update_connections_state() -> tuple[int, int]:
-    """Update connections state and return (current, peak).
-
-    Called by metrics background task every 2s.
-    Returns: (current_connections, peak_connections)
-    """
-    global _connections_state
-
-    current = _count_tcp_connections()
-    _connections_state["current"] = current
-
-    # Load peak from state (or file on first call)
-    if _connections_state["peak"] == 0:
-        _connections_state["peak"] = _load_peak_connections()
-
-    # Update peak if current exceeds it
-    if current > _connections_state["peak"]:
-        _connections_state["peak"] = current
-        _save_peak_connections(current)
-
-    # Ensure peak is at least 1 to avoid division by zero
-    peak = max(1, _connections_state["peak"])
-
-    return current, peak
-
-
-def _read_cpu_percent() -> float:
-    """Calculate real CPU usage from /proc/stat delta."""
-    import time
-    global _cpu_state
-
-    try:
-        with open("/proc/stat") as f:
-            line = f.readline()
-        parts = line.split()
-        if parts[0] != "cpu":
-            return 0.0
-
-        # user, nice, system, idle, iowait, irq, softirq, steal
-        values = [int(x) for x in parts[1:9]]
-        idle = values[3] + values[4]  # idle + iowait
-        total = sum(values)
-        now = time.time()
-
-        # Calculate delta from previous reading
-        prev_idle = _cpu_state["prev_idle"]
-        prev_total = _cpu_state["prev_total"]
-        prev_time = _cpu_state["prev_time"]
-
-        # Update state
-        _cpu_state["prev_idle"] = idle
-        _cpu_state["prev_total"] = total
-        _cpu_state["prev_time"] = now
-
-        # Need at least 100ms between readings for accuracy
-        if prev_time > 0 and (now - prev_time) > 0.1:
-            idle_delta = idle - prev_idle
-            total_delta = total - prev_total
-            if total_delta > 0:
-                return round(100.0 * (1.0 - idle_delta / total_delta), 1)
-
-        # Fallback for first reading: use 1-second sample
-        import os
-        load = os.getloadavg()[0]
-        cpus = os.cpu_count() or 4
-        return round(min(95.0, (load / cpus) * 80), 1)  # Scale down load-based estimate
-
-    except Exception:
-        return 0.0
-
 
 def _get_host_metrics() -> dict:
     """Collect MOCHAbin host system metrics for round UI display."""
     import os
+    import json
     from datetime import timezone
 
     metrics = {
@@ -493,8 +369,21 @@ def _get_host_metrics() -> dict:
         "hostname": "secubox-mochabin",
     }
 
-    # CPU usage - real delta calculation
-    metrics["cpu_percent"] = _read_cpu_percent()
+    # CPU usage from /proc/stat
+    try:
+        with open("/proc/stat") as f:
+            line = f.readline()
+        parts = line.split()
+        if parts[0] == "cpu":
+            values = [int(x) for x in parts[1:8]]
+            idle = values[3]
+            total = sum(values)
+            # Approximate CPU usage
+            load = os.getloadavg()[0]
+            cpus = os.cpu_count() or 4
+            metrics["cpu_percent"] = round(min(100.0, (load / cpus) * 100), 1)
+    except Exception:
+        metrics["cpu_percent"] = 0.0
 
     # Memory from /proc/meminfo
     try:
@@ -542,250 +431,84 @@ def _get_host_metrics() -> dict:
     except Exception:
         metrics["uptime_seconds"] = 0
 
-    # Connections tracking for Round Eye MIND metric
-    # Returns current connections and peak (highest ever seen)
-    # Round Eye calculates: connections / peak_connections * 100 for ring %
-    current_conns, peak_conns = _update_connections_state()
-    metrics["connections"] = current_conns
-    metrics["peak_connections"] = peak_conns
-    # Pre-calculated percentage for convenience (current / peak * 100)
-    metrics["connections_percent"] = round((current_conns / peak_conns) * 100, 1)
+    # Disk I/O from /proc/diskstats
+    try:
+        import time
+
+        # Read current disk stats (mmcblk0 for eMMC on MOCHAbin)
+        current_read_bytes = 0
+        current_write_bytes = 0
+
+        with open("/proc/diskstats") as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) >= 14:
+                    device = parts[2]
+                    # Match main disk devices (mmcblk0, sda, nvme0n1)
+                    if device in ("mmcblk0", "sda", "nvme0n1"):
+                        # sectors_read (field 6) and sectors_written (field 10)
+                        # Each sector is 512 bytes
+                        current_read_bytes += int(parts[5]) * 512
+                        current_write_bytes += int(parts[9]) * 512
+
+        current_time = time.time()
+
+        # Calculate MB/s if we have previous data
+        if _io_state["last_time"] is not None:
+            elapsed = current_time - _io_state["last_time"]
+            if elapsed > 0:
+                read_bytes_delta = current_read_bytes - _io_state["last_read_bytes"]
+                write_bytes_delta = current_write_bytes - _io_state["last_write_bytes"]
+
+                # Convert to MB/s
+                io_read_mb = (read_bytes_delta / elapsed) / (1024 * 1024)
+                io_write_mb = (write_bytes_delta / elapsed) / (1024 * 1024)
+
+                # Update peaks
+                if io_read_mb > _io_state["io_read_peak_mb"]:
+                    _io_state["io_read_peak_mb"] = io_read_mb
+                if io_write_mb > _io_state["io_write_peak_mb"]:
+                    _io_state["io_write_peak_mb"] = io_write_mb
+
+                metrics["io_read_mb"] = round(io_read_mb, 2)
+                metrics["io_write_mb"] = round(io_write_mb, 2)
+            else:
+                metrics["io_read_mb"] = 0.0
+                metrics["io_write_mb"] = 0.0
+        else:
+            metrics["io_read_mb"] = 0.0
+            metrics["io_write_mb"] = 0.0
+
+        # Store current values for next calculation
+        _io_state["last_read_bytes"] = current_read_bytes
+        _io_state["last_write_bytes"] = current_write_bytes
+        _io_state["last_time"] = current_time
+
+        # Add peaks to metrics
+        metrics["io_read_peak_mb"] = round(_io_state["io_read_peak_mb"], 2)
+        metrics["io_write_peak_mb"] = round(_io_state["io_write_peak_mb"], 2)
+
+        # Calculate I/O percentage (current total vs peak total) for gauge
+        current_total = metrics["io_read_mb"] + metrics["io_write_mb"]
+        peak_total = max(0.1, metrics["io_read_peak_mb"] + metrics["io_write_peak_mb"])
+        metrics["io_percent"] = round(min(100.0, (current_total / peak_total) * 100), 1)
+
+    except Exception as e:
+        logger.debug(f"Failed to read disk I/O stats: {e}")
+        metrics["io_read_mb"] = 0.0
+        metrics["io_write_mb"] = 0.0
+        metrics["io_read_peak_mb"] = 0.0
+        metrics["io_write_peak_mb"] = 0.0
+        metrics["io_percent"] = 0.0
 
     return metrics
-
-
-async def _metrics_background_task():
-    """Background task that updates metrics cache every 2 seconds.
-
-    Pattern: Double Pre-Cache Buffer (per SecuBox guidelines)
-    - shadow buffer updated in background
-    - atomic swap to active buffer
-    - API reads from active (instant response)
-    """
-    global _metrics_cache
-
-    while True:
-        try:
-            # Collect metrics into shadow buffer
-            _metrics_cache["shadow"] = _get_host_metrics()
-
-            # Atomic swap: shadow → active
-            _metrics_cache["active"] = _metrics_cache["shadow"].copy()
-            _metrics_cache["last_swap"] = time.time()
-
-        except Exception as e:
-            logger.warning(f"Metrics cache update failed: {e}")
-
-        await asyncio.sleep(2)  # Update every 2 seconds
-
-
-@app.on_event("startup")
-async def start_metrics_cache():
-    """Start background metrics caching on API startup."""
-    global _cache_task
-
-    # Initial cache population
-    _metrics_cache["active"] = _get_host_metrics()
-    _metrics_cache["last_swap"] = time.time()
-
-    # Start background updater
-    _cache_task = asyncio.create_task(_metrics_background_task())
-    logger.info("Metrics pre-cache started (2s refresh)")
-
-
-@app.on_event("shutdown")
-async def stop_metrics_cache():
-    """Stop background task on shutdown."""
-    global _cache_task
-    if _cache_task:
-        _cache_task.cancel()
-        try:
-            await _cache_task
-        except asyncio.CancelledError:
-            pass
 
 
 @app.get("/api/v1/system/metrics")
 async def get_system_metrics():
     """Get MOCHAbin host system metrics for round UI dashboard.
 
-    Returns cached metrics (updated every 2s by background task).
-    Pattern: Double Pre-Cache Buffer for instant response.
+    This endpoint provides the host's metrics (not Pi Zero) for display
+    on the Eye Remote round dashboard.
     """
-    if _metrics_cache["active"]:
-        return _metrics_cache["active"]
-    # Fallback if cache not ready
     return _get_host_metrics()
-
-
-# =============================================================================
-# USB Gadget Metrics — Issue #61
-# =============================================================================
-
-class GadgetFunctionState(BaseModel):
-    """State of a USB gadget function."""
-    state: str  # connected, disconnected, active, inactive
-    rx_bytes: int = 0
-    tx_bytes: int = 0
-    sessions: int = 0
-    image: Optional[str] = None
-
-
-class GadgetMetrics(BaseModel):
-    """USB gadget metrics for monitoring."""
-    ecm: Optional[GadgetFunctionState] = None
-    acm: Optional[GadgetFunctionState] = None
-    mass_storage: Optional[GadgetFunctionState] = None
-    udc: Optional[str] = None
-    uptime: int = 0
-    last_activity: Optional[datetime] = None
-
-
-def _get_gadget_metrics() -> dict:
-    """Collect USB gadget metrics from configfs and sysfs."""
-    from datetime import timezone
-
-    gadget_base = Path("/sys/kernel/config/usb_gadget/g1")
-    metrics = {
-        "ecm": None,
-        "acm": None,
-        "mass_storage": None,
-        "udc": None,
-        "uptime": 0,
-        "last_activity": None,
-    }
-
-    # Check if gadget is configured
-    if not gadget_base.exists():
-        return metrics
-
-    # Get UDC (USB Device Controller) - shows if gadget is bound
-    udc_file = gadget_base / "UDC"
-    if udc_file.exists():
-        try:
-            udc = udc_file.read_text().strip()
-            metrics["udc"] = udc if udc else None
-        except Exception:
-            pass
-
-    # ECM (Ethernet) gadget function
-    ecm_func = gadget_base / "functions" / "ecm.usb0"
-    if ecm_func.exists():
-        ecm_state = {"state": "configured", "rx_bytes": 0, "tx_bytes": 0}
-
-        # Check network interface stats
-        net_stats = Path("/sys/class/net/usb0/statistics")
-        if net_stats.exists():
-            ecm_state["state"] = "connected"
-            try:
-                rx_file = net_stats / "rx_bytes"
-                tx_file = net_stats / "tx_bytes"
-                if rx_file.exists():
-                    ecm_state["rx_bytes"] = int(rx_file.read_text().strip())
-                if tx_file.exists():
-                    ecm_state["tx_bytes"] = int(tx_file.read_text().strip())
-            except Exception:
-                pass
-        else:
-            ecm_state["state"] = "disconnected"
-
-        metrics["ecm"] = ecm_state
-
-    # ACM (Serial) gadget function
-    acm_func = gadget_base / "functions" / "acm.usb0"
-    if acm_func.exists():
-        acm_state = {"state": "configured", "sessions": 0}
-
-        # Check if ttyGS0 exists (gadget serial device)
-        if Path("/dev/ttyGS0").exists():
-            acm_state["state"] = "active"
-            # Count active sessions by checking if device is open
-            try:
-                result = subprocess.run(
-                    ["fuser", "/dev/ttyGS0"],
-                    capture_output=True, timeout=2
-                )
-                if result.returncode == 0 and result.stdout.strip():
-                    acm_state["sessions"] = len(result.stdout.decode().split())
-            except Exception:
-                pass
-        else:
-            acm_state["state"] = "inactive"
-
-        metrics["acm"] = acm_state
-
-    # Mass Storage gadget function
-    ms_func = gadget_base / "functions" / "mass_storage.usb0"
-    if ms_func.exists():
-        ms_state = {"state": "configured", "image": None}
-
-        # Check LUN0 file
-        lun0_file = ms_func / "lun.0" / "file"
-        if lun0_file.exists():
-            try:
-                image = lun0_file.read_text().strip()
-                if image:
-                    ms_state["image"] = image
-                    ms_state["state"] = "mounted"
-                else:
-                    ms_state["state"] = "unmounted"
-            except Exception:
-                pass
-
-        metrics["mass_storage"] = ms_state
-
-    # Get uptime
-    try:
-        with open("/proc/uptime") as f:
-            metrics["uptime"] = int(float(f.read().split()[0]))
-    except Exception:
-        pass
-
-    # Last activity from state
-    if _eye_state.get("last_seen"):
-        metrics["last_activity"] = _eye_state["last_seen"].isoformat()
-    else:
-        metrics["last_activity"] = datetime.now(timezone.utc).isoformat()
-
-    return metrics
-
-
-@app.get("/api/v1/eye-remote/gadget/metrics")
-async def get_gadget_metrics():
-    """Get USB gadget metrics for monitoring.
-
-    Returns state of USB gadget functions:
-    - ECM (Ethernet): connection state, RX/TX bytes
-    - ACM (Serial): active state, session count
-    - Mass Storage: mount state, image path
-
-    Issue: #61
-    """
-    return _get_gadget_metrics()
-
-
-@app.get("/api/v1/eye-remote/gadget/status")
-async def get_gadget_status():
-    """Get simplified USB gadget status.
-
-    Quick check for dashboard display.
-    """
-    metrics = _get_gadget_metrics()
-
-    # Determine overall status
-    if not metrics.get("udc"):
-        status = "unconfigured"
-    elif metrics.get("ecm", {}).get("state") == "connected":
-        status = "connected"
-    elif metrics.get("udc"):
-        status = "ready"
-    else:
-        status = "unknown"
-
-    return {
-        "status": status,
-        "udc": metrics.get("udc"),
-        "ecm_connected": metrics.get("ecm", {}).get("state") == "connected",
-        "acm_active": metrics.get("acm", {}).get("state") == "active",
-        "mass_storage_mounted": metrics.get("mass_storage", {}).get("state") == "mounted",
-    }
