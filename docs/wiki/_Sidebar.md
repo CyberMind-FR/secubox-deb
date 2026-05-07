@@ -10,6 +10,7 @@
 * [[Live-USB|USB Boot]]
 * [[Installation|APT Install]]
 * [[ARM-Installation|Boards ARM]]
+* [[MOCHAbin-Kernel|Kernel LED]]
 
 ### 🟢 ROOT — Configuration
 * [[Configuration]]

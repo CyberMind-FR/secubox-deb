@@ -5,6 +5,35 @@
 
 ## 2026-05-07
 
+### Session 115 — Kernel Documentation & DISK I/O Metric
+
+**Completed:**
+
+1. **DISK I/O Metric for Eye Remote** — Replaced MESH WiFi metric
+   - New metric: `io_read_mb`, `io_write_mb`, `io_read_peak_mb`, `io_write_peak_mb`
+   - Reads from `/proc/diskstats` (mmcblk0/sda/nvme0n1)
+   - Peak tracking persisted across restarts
+   - Legend updated: 💾 DISK / I/O MB/s
+   - Deployed to MOCHAbin production
+
+2. **MOCHAbin Kernel Documentation** — Wiki page created
+   - `docs/wiki/MOCHAbin-Kernel.md`: Full LED kernel build guide
+   - Debian base config + SecuBox fragment approach documented
+   - GPIO polarity fix for IS31FL3199 documented
+   - Added to wiki sidebar
+
+3. **Kernel Config Files** — Committed to git
+   - `board/mochabin/kernel/config-6.12.85-debian-base` (13K options)
+   - `board/mochabin/kernel/config-6.12.85-secubox-led-v2.fragment`
+   - Build script with CyberMind branding: `LOCALVERSION=-secubox-cybermind`
+
+4. **CyberMind Branding** — Applied to kernel
+   - LOCALVERSION set to `-secubox-cybermind`
+   - Produces: `6.12.85-secubox-cybermind`
+   - Build script header updated with CyberMind URL
+
+---
+
 ### Session 114 — Round Eye Connections Metric
 
 **Completed:**
