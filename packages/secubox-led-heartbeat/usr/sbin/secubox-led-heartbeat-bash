@@ -1,0 +1,108 @@
+#!/bin/bash
+# SecuBox-Deb :: LED Heartbeat Daemon (Bash version)
+# CyberMind — Gérald Kerma
+# Simple heartbeat effect for IS31FL3199 LEDs with I2C delay handling
+#
+# This bash version handles I2C timing issues better than the Python version
+# by using explicit delays between LED writes.
+
+set -euo pipefail
+
+readonly LED_BASE="/sys/class/leds"
+readonly GREEN_LED="${LED_BASE}/green:led1/brightness"
+readonly LOG_TAG="secubox-led-heartbeat"
+
+# Heartbeat timing (milliseconds via bc)
+readonly BEAT_ON=150
+readonly BEAT_OFF=150
+readonly PAUSE=700
+readonly I2C_DELAY=50  # Delay between I2C writes to avoid EIO errors
+
+log() {
+    logger -t "$LOG_TAG" "$1"
+}
+
+# Safe LED write with retry and delay
+led_write() {
+    local path="$1"
+    local value="$2"
+    local retry=3
+
+    while [[ $retry -gt 0 ]]; do
+        if echo "$value" > "$path" 2>/dev/null; then
+            # Success - add small delay for I2C stability
+            usleep "${I2C_DELAY}000" 2>/dev/null || sleep 0.05
+            return 0
+        fi
+        ((retry--))
+        sleep 0.1
+    done
+    return 1
+}
+
+# Check if LEDs are available
+check_leds() {
+    if [[ ! -f "$GREEN_LED" ]]; then
+        log "ERROR: Green LED not found at $GREEN_LED"
+        return 1
+    fi
+    return 0
+}
+
+# Cleanup on exit
+cleanup() {
+    log "Stopping heartbeat"
+    led_write "$GREEN_LED" 0 || true
+    exit 0
+}
+
+trap cleanup SIGTERM SIGINT EXIT
+
+# Wait for LEDs to appear (device tree/driver loading)
+wait_for_leds() {
+    local timeout=30
+    while [[ $timeout -gt 0 ]]; do
+        if [[ -f "$GREEN_LED" ]]; then
+            return 0
+        fi
+        sleep 1
+        ((timeout--))
+    done
+    return 1
+}
+
+main() {
+    log "Starting heartbeat daemon"
+
+    # Wait for LED sysfs entries
+    if ! wait_for_leds; then
+        log "ERROR: LEDs not available after 30s timeout"
+        exit 1
+    fi
+
+    log "LEDs found, starting heartbeat loop"
+
+    # Convert ms to seconds for sleep
+    beat_on_s=$(echo "scale=3; $BEAT_ON/1000" | bc)
+    beat_off_s=$(echo "scale=3; $BEAT_OFF/1000" | bc)
+    pause_s=$(echo "scale=3; $PAUSE/1000" | bc)
+
+    # Heartbeat pattern: lub-dub ... lub-dub
+    while true; do
+        # First beat (lub)
+        led_write "$GREEN_LED" 255 || true
+        sleep "$beat_on_s"
+        led_write "$GREEN_LED" 0 || true
+        sleep "$beat_off_s"
+
+        # Second beat (dub)
+        led_write "$GREEN_LED" 255 || true
+        sleep "$beat_on_s"
+        led_write "$GREEN_LED" 0 || true
+
+        # Pause between heartbeats
+        sleep "$pause_s"
+    done
+}
+
+main "$@"
