@@ -1,5 +1,37 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-06 (Session 110)*
+*Mis à jour : 2026-05-07 (Session 111)*
+
+---
+
+## 🔄 Session 111: LED Kernel + CrowdSec GeoIP + 503 Fix
+
+### LED Kernel Build (#60)
+- [x] Fixed kernel config: MARVELL_PHY=y (was =m)
+- [x] Fixed kernel config: MDIO=y, SFP=y, MDIO_I2C=y
+- [x] Fixed kernel config: USB_XHCI=y, USB_STORAGE=y (for live USB)
+- [ ] Kernel build in progress (~25%)
+- [ ] Deploy Image-secubox-led to MOCHAbin
+- [ ] Debug LED I2C probe failure (IS31FL319X at 0x64)
+
+### CrowdSec WebUI GeoIP
+- [x] Added GeoIP cache with 24h TTL (localStorage)
+- [x] Country flags on bans/decisions list (ipapi.co HTTPS)
+- [x] Backend fallback for GeoIP lookup
+- [x] Deployed to MOCHAbin
+
+### WAF X-Forwarded-For Fix
+- [x] Fixed mitmproxy to use X-Forwarded-For for real client IP
+- [x] WAF stats now show correct attacker IPs
+
+### GitHub Issues Created
+- [x] #59 — 503 errors at boot (service startup delay)
+- [x] #60 — LED kernel with built-in drivers
+- [x] #61 — Eye Remote gadget metrics endpoint
+
+### ⬜ Next Up
+- [ ] Fix 503 errors permanently (HAProxy/mitmproxy chain)
+- [ ] Test LED kernel after build complete
+- [ ] Update netplan boot timing
 
 ---
 
