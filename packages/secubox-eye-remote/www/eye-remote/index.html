@@ -74,6 +74,24 @@
 
         /* Actions */
         .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 1rem; }
+
+        /* Round Eye Legend */
+        .eye-legend { background: #1a1a2e; border-radius: 12px; padding: 1.25rem; }
+        .eye-legend h3 { color: #00dd44; margin-bottom: 1rem; }
+        .legend-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; }
+        .legend-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0.75rem; background: rgba(0,221,68,0.05); border-radius: 8px; border-left: 3px solid var(--item-color); }
+        .legend-icon { width: 32px; height: 32px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; background: rgba(0,0,0,0.3); }
+        .legend-info { flex: 1; }
+        .legend-name { font-weight: 700; font-size: 0.85rem; color: var(--item-color); }
+        .legend-metric { font-size: 0.75rem; color: #888; }
+        .legend-desc { font-size: 0.7rem; color: #666; margin-top: 0.15rem; }
+        /* Module colors */
+        .legend-item.auth { --item-color: #FF0064; }
+        .legend-item.wall { --item-color: #FF6400; }
+        .legend-item.boot { --item-color: #DCFF00; }
+        .legend-item.mind { --item-color: #00FF41; }
+        .legend-item.root { --item-color: #00FFFF; }
+        .legend-item.mesh { --item-color: #B900FF; }
     </style>
 </head>
 <body>
@@ -194,6 +212,61 @@
                     <button class="btn" onclick="setMode('flash')">Flash Mode</button>
                     <button class="btn" onclick="setMode('debug')">Debug</button>
                     <button class="btn" onclick="setMode('tty')">TTY Only</button>
+                </div>
+            </div>
+
+            <!-- Round Eye Legend -->
+            <div class="card eye-legend" style="grid-column: 1 / -1;">
+                <h3>👁️ Round Eye Metrics Legend</h3>
+                <div class="legend-grid">
+                    <div class="legend-item auth">
+                        <div class="legend-icon">🎯</div>
+                        <div class="legend-info">
+                            <div class="legend-name">AUTH</div>
+                            <div class="legend-metric">CPU %</div>
+                            <div class="legend-desc">Auth is CPU-intensive (crypto ops)</div>
+                        </div>
+                    </div>
+                    <div class="legend-item wall">
+                        <div class="legend-icon">🧱</div>
+                        <div class="legend-info">
+                            <div class="legend-name">WALL</div>
+                            <div class="legend-metric">Memory %</div>
+                            <div class="legend-desc">Firewall uses RAM for state tables</div>
+                        </div>
+                    </div>
+                    <div class="legend-item boot">
+                        <div class="legend-icon">🚀</div>
+                        <div class="legend-info">
+                            <div class="legend-name">BOOT</div>
+                            <div class="legend-metric">Disk %</div>
+                            <div class="legend-desc">Boot integrity requires storage</div>
+                        </div>
+                    </div>
+                    <div class="legend-item mind">
+                        <div class="legend-icon">🤖</div>
+                        <div class="legend-info">
+                            <div class="legend-name">MIND</div>
+                            <div class="legend-metric">Connections %</div>
+                            <div class="legend-desc">Current vs peak TCP connections</div>
+                        </div>
+                    </div>
+                    <div class="legend-item root">
+                        <div class="legend-icon">💻</div>
+                        <div class="legend-info">
+                            <div class="legend-name">ROOT</div>
+                            <div class="legend-metric">Temperature °C</div>
+                            <div class="legend-desc">System core temperature</div>
+                        </div>
+                    </div>
+                    <div class="legend-item mesh">
+                        <div class="legend-icon">🌐</div>
+                        <div class="legend-info">
+                            <div class="legend-name">MESH</div>
+                            <div class="legend-metric">WiFi dBm</div>
+                            <div class="legend-desc">Network mesh signal quality</div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
