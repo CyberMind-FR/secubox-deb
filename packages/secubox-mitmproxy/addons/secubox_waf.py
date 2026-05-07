@@ -22,7 +22,7 @@ from mitmproxy import http, ctx
 ROUTES_FILE = Path("/srv/mitmproxy/haproxy-routes.json")
 RULES_FILE = Path("/srv/mitmproxy/waf-rules.json")
 THREATS_LOG = Path("/srv/mitmproxy/logs/waf-threats.log")
-WHITELIST = {"127.0.0.1", "192.168.255.1", "10.100.0.1"}
+WHITELIST = {"127.0.0.1", "192.168.255.1", "10.100.0.1", "192.168.1.36", "192.168.1.254"}
 
 # Graduated response thresholds
 BAN_THRESHOLD = 3  # Number of threats before ban
@@ -141,6 +141,163 @@ WARNING_PAGE = b"""<!DOCTYPE html>
 </body>
 </html>"""
 
+BAN_PAGE = b"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox WAF - ACCESS DENIED</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: linear-gradient(135deg, #0a0a0f 0%, #200505 100%);
+            color: #e8e6d9;
+            font-family: "JetBrains Mono", monospace;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+        .container {
+            text-align: center;
+            padding: 2rem;
+            max-width: 800px;
+            position: relative;
+        }
+        .skull-icon {
+            font-size: 8rem;
+            margin-bottom: 1rem;
+            animation: shake 0.5s ease-in-out infinite;
+            filter: drop-shadow(0 0 30px rgba(230, 57, 70, 0.8));
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+        h1 {
+            color: #ff0000;
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            text-shadow: 0 0 30px rgba(255, 0, 0, 0.8), 0 0 60px rgba(255, 0, 0, 0.4);
+            letter-spacing: 0.5rem;
+            animation: flicker 2s infinite;
+        }
+        @keyframes flicker {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.8; }
+            52% { opacity: 1; }
+            54% { opacity: 0.9; }
+        }
+        .ban-box {
+            background: rgba(255, 0, 0, 0.15);
+            border: 3px solid #ff0000;
+            border-radius: 12px;
+            padding: 2rem;
+            margin: 2rem 0;
+            box-shadow: 0 0 40px rgba(255, 0, 0, 0.3), inset 0 0 20px rgba(255, 0, 0, 0.1);
+        }
+        .ban-text {
+            color: #ff4444;
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin-bottom: 1rem;
+        }
+        .ip-display {
+            font-family: monospace;
+            font-size: 1.2rem;
+            color: #ff6666;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            display: inline-block;
+            margin: 1rem 0;
+        }
+        .details {
+            color: #888;
+            font-size: 0.9rem;
+            margin-top: 1rem;
+        }
+        .duration {
+            color: #c9a84c;
+            font-size: 1.1rem;
+            margin-top: 1rem;
+        }
+        .warning-notice {
+            background: rgba(201, 168, 76, 0.1);
+            border: 1px solid #c9a84c;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-top: 2rem;
+            text-align: left;
+        }
+        .warning-title {
+            color: #c9a84c;
+            font-size: 1rem;
+            margin-bottom: 0.5rem;
+        }
+        .warning-text {
+            color: #6b6b7a;
+            font-size: 0.75rem;
+            line-height: 1.5;
+        }
+        .footer {
+            margin-top: 2rem;
+            color: #6b6b7a;
+            font-size: 0.8rem;
+        }
+        .footer a { color: #c9a84c; text-decoration: none; }
+        .scanlines {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 2px,
+                rgba(0, 0, 0, 0.1) 2px,
+                rgba(0, 0, 0, 0.1) 4px
+            );
+            pointer-events: none;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <div class="scanlines"></div>
+    <div class="container">
+        <div class="skull-icon">&#x1F480;</div>
+        <h1>ACCESS DENIED</h1>
+        <div class="ban-box">
+            <p class="ban-text">&#x1F6AB; YOUR IP HAS BEEN BANNED</p>
+            <div class="ip-display">{client_ip}</div>
+            <p class="details">
+                Multiple malicious requests detected from your IP address.<br>
+                This ban has been logged and reported to CrowdSec threat intelligence.
+            </p>
+            <p class="duration">&#x23F1; Ban duration: 4 hours</p>
+        </div>
+        <div class="warning-notice">
+            <p class="warning-title">&#x2696;&#xFE0F; Legal Notice</p>
+            <p class="warning-text">
+                Unauthorized access attempts are a criminal offense under French law (Art. 323-1 Code Penal).<br>
+                All connection data has been preserved for potential legal action.<br>
+                Your IP address has been shared with CrowdSec community threat intelligence.<br><br>
+                &copy; 2024-2026 CyberMind Security Platform<br>
+                ANSSI CSPN Candidate | https://secubox.in
+            </p>
+        </div>
+        <p class="footer">
+            Protected by <a href="https://cybermind.fr">CyberMind</a> |
+            <a href="https://secubox.in">SecuBox</a>
+        </p>
+    </div>
+</body>
+</html>"""
+
 class SecuBoxWAF:
     def __init__(self):
         self.routes = {}
@@ -245,18 +402,20 @@ class SecuBoxWAF:
             ctx.log.error(f"Failed to log threat: {e}")
 
     def ban_ip(self, ip: str, reason: str):
-        """Ban IP via CrowdSec."""
+        """Ban IP via host CrowdSec (SSH to host)."""
         try:
-            subprocess.run([
-                "cscli", "decisions", "add",
-                "--ip", ip,
-                "--type", "ban",
-                "--duration", "4h",
-                "--reason", f"secubox/waf-{reason}"
-            ], capture_output=True, timeout=5)
-            ctx.log.warn(f"BANNED {ip} for {reason}")
-        except Exception:
-            pass
+            cmd = f"cscli decisions add --ip {ip} --type ban --duration 4h --reason secubox-waf-{reason}"
+            result = subprocess.run(
+                ["ssh", "-o", "StrictHostKeyChecking=no", "-o", "BatchMode=yes",
+                 "-o", "ConnectTimeout=3", "root@10.100.0.1", cmd],
+                capture_output=True, timeout=15, text=True
+            )
+            if result.returncode == 0:
+                ctx.log.warn(f"BANNED {ip} for {reason}")
+            else:
+                ctx.log.error(f"Ban cmd failed: {result.stderr}")
+        except Exception as e:
+            ctx.log.error(f"Ban exception for {ip}: {e}")
 
     def request(self, flow: http.HTTPFlow):
         self.stats["requests"] += 1
@@ -265,8 +424,9 @@ class SecuBoxWAF:
 
         # Skip whitelist
         if client_ip in WHITELIST:
-            if host in self.routes:
-                backend_ip, backend_port = self.routes[host]
+            if host in self.routes or "_default_" in self.routes:
+                backend_ip, backend_port = self.routes.get(host, self.routes.get("_default_", ["127.0.0.1", 80]))
+                flow.request.host_header = host  # Preserve original vhost
                 flow.request.host = backend_ip
                 flow.request.port = backend_port
             return
@@ -287,9 +447,10 @@ class SecuBoxWAF:
                 self.stats["blocked"] += 1
                 self.log_threat(flow, threat, "banned")
                 self.ban_ip(client_ip, threat["category"])
+                ban_html = BAN_PAGE.replace(b"{client_ip}", client_ip.encode())
                 flow.response = http.Response.make(
                     403,
-                    b"<h1>403 Forbidden</h1><p>Your IP has been banned.</p>",
+                    ban_html,
                     {"Content-Type": "text/html", "X-SecuBox-WAF": "banned"}
                 )
             else:
@@ -306,8 +467,9 @@ class SecuBoxWAF:
             return
 
         # Route to backend
-        if host in self.routes:
-            backend_ip, backend_port = self.routes[host]
+        if host in self.routes or "_default_" in self.routes:
+            backend_ip, backend_port = self.routes.get(host, self.routes.get("_default_", ["127.0.0.1", 80]))
+            flow.request.host_header = host  # Preserve original vhost
             flow.request.host = backend_ip
             flow.request.port = backend_port
 

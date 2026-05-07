@@ -435,6 +435,26 @@
             if (h.includes("secubox")) return "🛡️";
             return "🌐";
         }
+        function getCategoryEmoji(cat) {
+            if (!cat) return "⚠️";
+            const c = cat.toLowerCase();
+            if (c.includes("sqli") || c.includes("sql")) return "💉";
+            if (c.includes("xss")) return "🔥";
+            if (c.includes("rce") || c.includes("exec")) return "💀";
+            if (c.includes("lfi") || c.includes("path") || c.includes("traversal")) return "📂";
+            if (c.includes("scanner") || c.includes("recon")) return "🔍";
+            if (c.includes("bot")) return "🤖";
+            if (c.includes("router") || c.includes("iot")) return "📡";
+            if (c.includes("shell") || c.includes("webshell")) return "🐚";
+            if (c.includes("cve") || c.includes("exploit")) return "🎯";
+            if (c.includes("brute") || c.includes("auth")) return "🔓";
+            if (c.includes("dos") || c.includes("flood")) return "🌊";
+            if (c.includes("voip") || c.includes("sip")) return "📞";
+            if (c.includes("crypto") || c.includes("miner")) return "⛏️";
+            if (c.includes("malware")) return "🦠";
+            if (c.includes("backdoor")) return "🚪";
+            return "⚠️";
+        }
 
         async function lookupGeoIP(ip) { if (!ip) return "";
             const cache = getGeoCache();
@@ -474,7 +494,7 @@
             const catEl = document.getElementById('categoryStats');
             if (d.by_category) {
                 catEl.innerHTML = Object.entries(d.by_category).slice(0, 8).map(([cat, count]) =>
-                    `<div style="display:flex;justify-content:space-between;padding:0.25rem 0;"><span>${cat}</span><span style="color:var(--cyan)">${count}</span></div>`
+                    `<div style="display:flex;justify-content:space-between;padding:0.25rem 0;"><span>${getCategoryEmoji(cat)} ${cat}</span><span style="color:var(--cyan)">${count}</span></div>`
                 ).join('');
             }
 
@@ -510,6 +530,7 @@
                     <span class="alert-flag" style="font-size:1.2em">${flags[a.client_ip] || ""}</span>
                     <span class="alert-ip">${a.client_ip}</span><span title="${a.host}" style="margin-left:4px">${getSiteEmoji(a.host)}</span>
                     <span class="badge ${a.severity}">${a.severity}</span>
+                    <span class="alert-cat" style="font-size:1.1em">${getCategoryEmoji(a.category)}</span>
                     <span class="alert-rule">${a.rule_id}: ${a.description}</span>
                 </div>
             `).join('');
