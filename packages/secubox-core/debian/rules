@@ -43,3 +43,10 @@ override_dh_auto_install:
 	install -d debian/secubox-core/usr/lib/tmpfiles.d
 	install -m 644 tmpfiles.d/secubox.conf \
 	               debian/secubox-core/usr/lib/tmpfiles.d/
+
+	# LED Heartbeat script and service
+	install -d debian/secubox-core/usr/sbin
+	install -m 755 usr/sbin/secubox-led-heartbeat \
+	               debian/secubox-core/usr/sbin/
+	install -m 644 systemd/secubox-led-heartbeat.service \
+	               debian/secubox-core/usr/lib/systemd/system/

@@ -1,0 +1,18 @@
+[Unit]
+Description=SecuBox LED Heartbeat Status Indicator
+Documentation=https://github.com/CyberMind-FR/secubox-deb
+After=local-fs.target
+ConditionPathExists=/sys/class/leds
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/secubox-led-heartbeat
+Restart=always
+RestartSec=5
+
+# Environment for LED selection
+Environment=LED_COLOR=green
+Environment=LED_NUM=1
+
+[Install]
+WantedBy=multi-user.target
