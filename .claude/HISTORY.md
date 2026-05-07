@@ -5,6 +5,19 @@
 
 ## 2026-05-07
 
+### Session 114 — Round Eye Connections Metric
+
+**Completed:**
+
+1. **Connections Metric for MIND** — Added to Eye Remote API
+   - `connections`: Current established TCP connections count
+   - `peak_connections`: Maximum observed (persisted to `/var/cache/secubox/eye-remote/peak_connections`)
+   - `connections_percent`: Pre-calculated ratio for Round Eye MIND ring
+   - Reads from `/proc/net/tcp` and `/proc/net/tcp6` (no subprocess overhead)
+   - Documentation updated in README.md and WIKI.md
+
+---
+
 ### Session 113 — WAF False Positive Fixes
 
 **Completed:**

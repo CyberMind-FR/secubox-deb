@@ -569,18 +569,27 @@ Réponse complète des métriques :
 
 ```json
 {
+  "timestamp": "2026-05-07T10:15:00Z",
+  "hostname": "secubox-mochabin",
   "cpu_percent": 45.2,
   "mem_percent": 67.8,
   "disk_percent": 34.5,
-  "wifi_rssi": -52,
-  "load_avg_1": 0.42,
   "cpu_temp": 48.3,
+  "load_1m": 0.42,
+  "load_5m": 0.35,
+  "load_15m": 0.28,
   "uptime_seconds": 86420,
-  "hostname": "secubox-01",
-  "secubox_version": "1.7.0",
-  "modules_active": 5
+  "connections": 42,
+  "peak_connections": 128,
+  "connections_percent": 32.8
 }
 ```
+
+| Champ | Description |
+|-------|-------------|
+| `connections` | Connexions TCP établies actuelles |
+| `peak_connections` | Maximum de connexions observé (persisté) |
+| `connections_percent` | Ratio `connections/peak_connections * 100` — utilisable par MIND metric |
 
 #### `GET /api/v1/system/metrics/modules`
 

@@ -473,6 +473,32 @@ SecuBox (Armada/x86)              RPi Zero W + HyperPixel
 | `GET /api/v1/system/metrics/alerts` | Alertes actives |
 | `POST /api/v1/auth/login` | Authentification JWT |
 
+#### Réponse `/api/v1/system/metrics`
+
+```json
+{
+  "timestamp": "2026-05-07T10:15:00Z",
+  "hostname": "secubox-mochabin",
+  "cpu_percent": 23.5,
+  "mem_percent": 41.2,
+  "disk_percent": 28.7,
+  "cpu_temp": 44.2,
+  "load_1m": 0.18,
+  "load_5m": 0.12,
+  "load_15m": 0.08,
+  "uptime_seconds": 86400,
+  "connections": 42,
+  "peak_connections": 128,
+  "connections_percent": 32.8
+}
+```
+
+| Champ | Description |
+|-------|-------------|
+| `connections` | Connexions TCP établies actuelles |
+| `peak_connections` | Maximum de connexions observé (persisté) |
+| `connections_percent` | `connections / peak_connections * 100` — pour MIND metric |
+
 ### Modules affichés
 
 | Code | Service | Couleur | Description |

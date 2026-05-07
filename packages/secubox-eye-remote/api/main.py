@@ -363,6 +363,80 @@ _metrics_cache = {
 _cpu_state = {"prev_idle": 0, "prev_total": 0, "prev_time": 0}
 _cache_task = None
 
+# Connections tracking for Round Eye MIND metric
+# Peak persisted to file for resilience across restarts
+_PEAK_CONNECTIONS_FILE = Path("/var/cache/secubox/eye-remote/peak_connections")
+_connections_state = {"current": 0, "peak": 0, "last_reset": None}
+
+
+def _load_peak_connections() -> int:
+    """Load peak connections from persistent file."""
+    try:
+        if _PEAK_CONNECTIONS_FILE.exists():
+            return int(_PEAK_CONNECTIONS_FILE.read_text().strip())
+    except Exception:
+        pass
+    return 0
+
+
+def _save_peak_connections(peak: int) -> None:
+    """Persist peak connections to file."""
+    try:
+        _PEAK_CONNECTIONS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _PEAK_CONNECTIONS_FILE.write_text(str(peak))
+    except Exception:
+        pass
+
+
+def _count_tcp_connections() -> int:
+    """Count established TCP connections using /proc/net/tcp.
+
+    Faster than calling ss/netstat subprocess.
+    """
+    count = 0
+    try:
+        # /proc/net/tcp format: sl local remote st ... (st=01 is ESTABLISHED)
+        with open("/proc/net/tcp") as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) >= 4 and parts[3] == "01":  # 01 = ESTABLISHED
+                    count += 1
+        # Also count tcp6
+        with open("/proc/net/tcp6") as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) >= 4 and parts[3] == "01":
+                    count += 1
+    except Exception:
+        pass
+    return count
+
+
+def _update_connections_state() -> tuple[int, int]:
+    """Update connections state and return (current, peak).
+
+    Called by metrics background task every 2s.
+    Returns: (current_connections, peak_connections)
+    """
+    global _connections_state
+
+    current = _count_tcp_connections()
+    _connections_state["current"] = current
+
+    # Load peak from state (or file on first call)
+    if _connections_state["peak"] == 0:
+        _connections_state["peak"] = _load_peak_connections()
+
+    # Update peak if current exceeds it
+    if current > _connections_state["peak"]:
+        _connections_state["peak"] = current
+        _save_peak_connections(current)
+
+    # Ensure peak is at least 1 to avoid division by zero
+    peak = max(1, _connections_state["peak"])
+
+    return current, peak
+
 
 def _read_cpu_percent() -> float:
     """Calculate real CPU usage from /proc/stat delta."""
@@ -467,6 +541,15 @@ def _get_host_metrics() -> dict:
             metrics["uptime_seconds"] = int(float(f.read().split()[0]))
     except Exception:
         metrics["uptime_seconds"] = 0
+
+    # Connections tracking for Round Eye MIND metric
+    # Returns current connections and peak (highest ever seen)
+    # Round Eye calculates: connections / peak_connections * 100 for ring %
+    current_conns, peak_conns = _update_connections_state()
+    metrics["connections"] = current_conns
+    metrics["peak_connections"] = peak_conns
+    # Pre-calculated percentage for convenience (current / peak * 100)
+    metrics["connections_percent"] = round((current_conns / peak_conns) * 100, 1)
 
     return metrics
 
