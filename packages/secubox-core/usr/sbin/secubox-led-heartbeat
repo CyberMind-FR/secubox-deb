@@ -1,0 +1,83 @@
+#!/bin/bash
+# SecuBox-Deb :: LED Heartbeat Daemon
+# CyberMind — https://cybermind.fr
+# Author: Gerald Kerma <devel@cybermind.fr>
+#
+# Simple heartbeat effect for IS31FL3199 LEDs (MOCHAbin)
+# Uses sysfs with timing delays to avoid I2C EIO errors
+
+set -euo pipefail
+
+readonly LED_BASE="/sys/class/leds"
+readonly LOG_TAG="secubox-led-heartbeat"
+
+# Default LED to use for heartbeat
+LED_COLOR="${LED_COLOR:-green}"
+LED_NUM="${LED_NUM:-1}"
+LED_PATH="${LED_BASE}/${LED_COLOR}:led${LED_NUM}/brightness"
+
+# Timing (seconds)
+BEAT_ON=0.15
+BEAT_OFF=0.15
+PAUSE=0.7
+
+log() {
+    logger -t "$LOG_TAG" "$1"
+}
+
+cleanup() {
+    log "Stopping heartbeat"
+    echo 0 > "$LED_PATH" 2>/dev/null || true
+    exit 0
+}
+
+trap cleanup SIGTERM SIGINT EXIT
+
+wait_for_led() {
+    local timeout=30
+    while [[ $timeout -gt 0 ]]; do
+        if [[ -f "$LED_PATH" ]]; then
+            return 0
+        fi
+        sleep 1
+        ((timeout--))
+    done
+    return 1
+}
+
+main() {
+    log "Starting heartbeat (LED: ${LED_COLOR}:led${LED_NUM})"
+
+    if ! wait_for_led; then
+        log "ERROR: LED not available at $LED_PATH"
+        # Check for any available LED
+        for color in green red blue; do
+            alt_path="${LED_BASE}/${color}:led1/brightness"
+            if [[ -f "$alt_path" ]]; then
+                LED_PATH="$alt_path"
+                log "Using fallback LED: $alt_path"
+                break
+            fi
+        done
+        if [[ ! -f "$LED_PATH" ]]; then
+            log "No LEDs available, exiting"
+            exit 1
+        fi
+    fi
+
+    log "Heartbeat active on $LED_PATH"
+
+    # Heartbeat pattern: lub-dub ... lub-dub
+    while true; do
+        echo 255 > "$LED_PATH" 2>/dev/null || true
+        sleep "$BEAT_ON"
+        echo 0 > "$LED_PATH" 2>/dev/null || true
+        sleep "$BEAT_OFF"
+        echo 255 > "$LED_PATH" 2>/dev/null || true
+        sleep "$BEAT_ON"
+        echo 0 > "$LED_PATH" 2>/dev/null || true
+        sleep "$PAUSE"
+    done
+}
+
+main "$@"
