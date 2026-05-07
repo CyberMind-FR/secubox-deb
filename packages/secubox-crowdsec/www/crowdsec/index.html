@@ -260,7 +260,7 @@
             // Fallback: Try backend API
             try {
                 const token = localStorage.getItem('sbx_token');
-                const res = await fetch(API + '/geoip/' + ip, {
+                const res = await fetch('/api/v1/waf/geoip/' + ip, {
                     headers: token ? { 'Authorization': 'Bearer ' + token } : {}
                 });
                 if (res.ok) {
