@@ -533,3 +533,176 @@ async def get_system_metrics():
         return _metrics_cache["active"]
     # Fallback if cache not ready
     return _get_host_metrics()
+
+
+# =============================================================================
+# USB Gadget Metrics — Issue #61
+# =============================================================================
+
+class GadgetFunctionState(BaseModel):
+    """State of a USB gadget function."""
+    state: str  # connected, disconnected, active, inactive
+    rx_bytes: int = 0
+    tx_bytes: int = 0
+    sessions: int = 0
+    image: Optional[str] = None
+
+
+class GadgetMetrics(BaseModel):
+    """USB gadget metrics for monitoring."""
+    ecm: Optional[GadgetFunctionState] = None
+    acm: Optional[GadgetFunctionState] = None
+    mass_storage: Optional[GadgetFunctionState] = None
+    udc: Optional[str] = None
+    uptime: int = 0
+    last_activity: Optional[datetime] = None
+
+
+def _get_gadget_metrics() -> dict:
+    """Collect USB gadget metrics from configfs and sysfs."""
+    from datetime import timezone
+
+    gadget_base = Path("/sys/kernel/config/usb_gadget/g1")
+    metrics = {
+        "ecm": None,
+        "acm": None,
+        "mass_storage": None,
+        "udc": None,
+        "uptime": 0,
+        "last_activity": None,
+    }
+
+    # Check if gadget is configured
+    if not gadget_base.exists():
+        return metrics
+
+    # Get UDC (USB Device Controller) - shows if gadget is bound
+    udc_file = gadget_base / "UDC"
+    if udc_file.exists():
+        try:
+            udc = udc_file.read_text().strip()
+            metrics["udc"] = udc if udc else None
+        except Exception:
+            pass
+
+    # ECM (Ethernet) gadget function
+    ecm_func = gadget_base / "functions" / "ecm.usb0"
+    if ecm_func.exists():
+        ecm_state = {"state": "configured", "rx_bytes": 0, "tx_bytes": 0}
+
+        # Check network interface stats
+        net_stats = Path("/sys/class/net/usb0/statistics")
+        if net_stats.exists():
+            ecm_state["state"] = "connected"
+            try:
+                rx_file = net_stats / "rx_bytes"
+                tx_file = net_stats / "tx_bytes"
+                if rx_file.exists():
+                    ecm_state["rx_bytes"] = int(rx_file.read_text().strip())
+                if tx_file.exists():
+                    ecm_state["tx_bytes"] = int(tx_file.read_text().strip())
+            except Exception:
+                pass
+        else:
+            ecm_state["state"] = "disconnected"
+
+        metrics["ecm"] = ecm_state
+
+    # ACM (Serial) gadget function
+    acm_func = gadget_base / "functions" / "acm.usb0"
+    if acm_func.exists():
+        acm_state = {"state": "configured", "sessions": 0}
+
+        # Check if ttyGS0 exists (gadget serial device)
+        if Path("/dev/ttyGS0").exists():
+            acm_state["state"] = "active"
+            # Count active sessions by checking if device is open
+            try:
+                result = subprocess.run(
+                    ["fuser", "/dev/ttyGS0"],
+                    capture_output=True, timeout=2
+                )
+                if result.returncode == 0 and result.stdout.strip():
+                    acm_state["sessions"] = len(result.stdout.decode().split())
+            except Exception:
+                pass
+        else:
+            acm_state["state"] = "inactive"
+
+        metrics["acm"] = acm_state
+
+    # Mass Storage gadget function
+    ms_func = gadget_base / "functions" / "mass_storage.usb0"
+    if ms_func.exists():
+        ms_state = {"state": "configured", "image": None}
+
+        # Check LUN0 file
+        lun0_file = ms_func / "lun.0" / "file"
+        if lun0_file.exists():
+            try:
+                image = lun0_file.read_text().strip()
+                if image:
+                    ms_state["image"] = image
+                    ms_state["state"] = "mounted"
+                else:
+                    ms_state["state"] = "unmounted"
+            except Exception:
+                pass
+
+        metrics["mass_storage"] = ms_state
+
+    # Get uptime
+    try:
+        with open("/proc/uptime") as f:
+            metrics["uptime"] = int(float(f.read().split()[0]))
+    except Exception:
+        pass
+
+    # Last activity from state
+    if _eye_state.get("last_seen"):
+        metrics["last_activity"] = _eye_state["last_seen"].isoformat()
+    else:
+        metrics["last_activity"] = datetime.now(timezone.utc).isoformat()
+
+    return metrics
+
+
+@app.get("/api/v1/eye-remote/gadget/metrics")
+async def get_gadget_metrics():
+    """Get USB gadget metrics for monitoring.
+
+    Returns state of USB gadget functions:
+    - ECM (Ethernet): connection state, RX/TX bytes
+    - ACM (Serial): active state, session count
+    - Mass Storage: mount state, image path
+
+    Issue: #61
+    """
+    return _get_gadget_metrics()
+
+
+@app.get("/api/v1/eye-remote/gadget/status")
+async def get_gadget_status():
+    """Get simplified USB gadget status.
+
+    Quick check for dashboard display.
+    """
+    metrics = _get_gadget_metrics()
+
+    # Determine overall status
+    if not metrics.get("udc"):
+        status = "unconfigured"
+    elif metrics.get("ecm", {}).get("state") == "connected":
+        status = "connected"
+    elif metrics.get("udc"):
+        status = "ready"
+    else:
+        status = "unknown"
+
+    return {
+        "status": status,
+        "udc": metrics.get("udc"),
+        "ecm_connected": metrics.get("ecm", {}).get("state") == "connected",
+        "acm_active": metrics.get("acm", {}).get("state") == "active",
+        "mass_storage_mounted": metrics.get("mass_storage", {}).get("state") == "mounted",
+    }
