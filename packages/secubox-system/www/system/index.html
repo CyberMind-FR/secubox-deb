@@ -465,7 +465,19 @@
         async function api(endpoint, method = 'GET', data = null) {
             const opts = { method, headers: { 'Content-Type': 'application/json' } };
             if (data) opts.body = JSON.stringify(data);
-            try { const res = await fetch(API + endpoint, opts); return res.json(); } catch (e) { return {}; }
+            try {
+                const res = await fetch(API + endpoint, opts);
+                const text = await res.text();
+                try {
+                    return JSON.parse(text);
+                } catch (e) {
+                    console.warn('API ' + endpoint + ' returned non-JSON:', text.substring(0, 100));
+                    return {};
+                }
+            } catch (e) {
+                console.error('API ' + endpoint + ' fetch failed:', e);
+                return {};
+            }
         }
 
         function formatBytes(b) {

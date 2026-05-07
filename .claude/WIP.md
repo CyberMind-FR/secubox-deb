@@ -1,9 +1,83 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-07 (Session 111)*
+*Mis à jour : 2026-05-07 (Session 113)*
 
 ---
 
-## 🔄 Session 111: LED Kernel + CrowdSec GeoIP + 503 Fix
+## 🔄 Session 113: WAF Ban Page Styling + Autoban Debug
+
+### WAF Ban Page Aesthetic
+- [x] Added styled BAN_PAGE with cyberpunk aesthetic:
+  - Skull icon with shake animation
+  - Red glow effects, scanlines overlay
+  - Client IP display, 4h ban duration notice
+  - Legal notice (Art. 323-1 Code Penal)
+  - CyberMind/SecuBox branding
+- [x] Updated ban_ip() to use SSH to host for CrowdSec
+- [x] Ban page shows {client_ip} placeholder replaced dynamically
+
+### Whitelist Updates
+- [x] Added 192.168.1.36 (user workstation) to WHITELIST
+- [x] Added 192.168.1.254 (user router) to WHITELIST
+- [x] Source file synced: secubox_waf.py
+
+### HAProxy WAF Routing Investigation
+- [x] Tested routing admin.gk2.secubox.in through mitmproxy_inspector
+- [x] Found issue: 400 Bad Request with query parameters
+- [x] Reverted admin.gk2.secubox.in to nginx_vhosts
+- [x] Confirmed default_backend mitmproxy_inspector works fine
+- [ ] TODO: Investigate why use_backend causes 400 errors
+
+### CrowdSec Integration
+- [x] Cleared all CrowdSec decisions
+- [x] Verified SSH from mitmproxy container to host works
+- [x] Ban commands execute successfully via SSH chain
+- [x] Dashboard shows: 0 bans, 1 bouncer, 1 machine, 43k parsed logs
+
+### Known Issues
+- **HAProxy use_backend vs default_backend**: Explicit `use_backend mitmproxy_inspector` 
+  causes 400 errors with query params, but `default_backend mitmproxy_inspector` works.
+  Needs further investigation.
+
+### ⬜ Next Up
+- [ ] Debug HAProxy use_backend 400 error issue
+- [ ] Route critical vhosts through WAF properly
+- [ ] Test autoban end-to-end with external IP
+
+---
+
+## 🔄 Session 112: WAF Autoban + eMMC Rootfs Expansion
+
+### eMMC Rootfs Expansion
+- [x] Deleted mmcblk0p3 partition (unused 8.9G)
+- [x] Expanded mmcblk0p2 rootfs from 5.4G to 14.4G
+- [x] **Disk usage: 95% → 36%** (8.7G free now)
+
+### WAF Autoban via CrowdSec
+- [x] Fixed SSH key: container→host auth for cscli commands
+- [x] Added mitmproxy container SSH key to host authorized_keys
+- [x] Tested ban_ip SSH chain (works manually)
+- [x] Routed webui through WAF (HAProxy→mitmproxy→nginx)
+- [x] Fixed Host header preservation in mitmproxy addon
+- [ ] Test autoban end-to-end (3 threats → CrowdSec ban)
+- [ ] IP-based webui access through WAF (192.168.1.200:9443)
+
+### System Services Fixed
+- [x] Restarted secubox-system (socket was missing)
+- [x] Restarted secubox-hub, secubox-crowdsec
+- [x] Fixed JSON parse error handling in system webui
+
+### Source Sync
+- [x] Updated secubox_waf.py with Host header preservation
+- [x] Updated system/index.html with JSON error handling
+
+### ⬜ Next Up
+- [ ] Clear WAF threats to 0
+- [ ] Verify autoban works end-to-end
+- [ ] Add IP route to haproxy-routes.json for direct IP access
+
+---
+
+## ✅ Session 111: LED Kernel + CrowdSec GeoIP + 503 Fix
 
 ### LED Kernel Build (#60)
 - [x] Fixed kernel config: MARVELL_PHY=y (was =m)
