@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=480,height=480,initial-scale=1,user-scalable=no">
+<title>SecuBox Radar</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#000;display:flex;justify-content:center;align-items:center;
+  min-height:100vh;overflow:hidden;font-family:'JetBrains Mono','SF Mono','Consolas',monospace}
+#screen{position:relative;width:480px;height:480px;border-radius:50%;
+  overflow:hidden;background:radial-gradient(circle,#041008 0%,#020804 60%,#000 100%);
+  border:2px solid #0a2818}
+#radar-canvas{position:absolute;top:0;left:0;width:480px;height:480px}
+#overlay-canvas{position:absolute;top:0;left:0;width:480px;height:480px;pointer-events:none}
+#center{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  text-align:center;pointer-events:none;z-index:10;width:160px}
+#time{font-size:28px;font-weight:700;color:#00ff41;text-shadow:0 0 10px #00ff41,0 0 20px #00ff4188;
+  letter-spacing:2px}
+#date{font-size:9px;color:#00ff4199;letter-spacing:2px;margin-top:2px}
+#hostname{font-size:8px;color:#00ff4166;letter-spacing:1px;margin-top:4px}
+#status{font-size:10px;font-weight:700;margin-top:8px;letter-spacing:1px;
+  transition:color .3s,text-shadow .3s}
+#status.nominal{color:#00ff41;text-shadow:0 0 8px #00ff41}
+#status.warning{color:#ffc107;text-shadow:0 0 8px #ffc107}
+#status.critical{color:#ff4444;text-shadow:0 0 8px #ff4444;animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.blip-label{position:absolute;font-size:7px;letter-spacing:1px;
+  text-shadow:0 0 4px currentColor;opacity:0;transition:opacity .3s;pointer-events:none}
+.blip-label.active{opacity:1}
+.blip-label.ok{color:#00ff41}
+.blip-label.warn{color:#ffc107}
+.blip-label.crit{color:#ff4444}
+#transport{position:absolute;top:15px;right:50%;transform:translateX(50%);
+  font-size:8px;letter-spacing:1px;z-index:10}
+#transport.otg{color:#00ff41}
+#transport.wifi{color:#104A88}
+#transport.sim{color:#444}
+#version{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);
+  font-size:7px;color:#00ff4133;letter-spacing:1px}
+/* Alert ticker */
+#ticker{position:absolute;bottom:38px;left:50%;transform:translateX(-50%);
+  font-size:8px;color:#00ff4188;letter-spacing:1px;max-width:200px;
+  text-align:center;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+/* Metrics mini-readout */
+#metrics{position:absolute;top:50px;left:50%;transform:translateX(-50%);
+  display:flex;gap:12px;font-size:8px;color:#00ff4166;z-index:10}
+.metric-item{text-align:center}
+.metric-val{font-size:10px;font-weight:700;color:#00ff41}
+/* Module icons around the radar */
+.module-icon{position:absolute;width:28px;height:28px;opacity:.4;
+  transition:opacity .3s,filter .3s;pointer-events:none}
+.module-icon.active{opacity:1;filter:drop-shadow(0 0 6px currentColor)}
+</style>
+</head>
+<body>
+<div id="screen">
+  <canvas id="radar-canvas" width="480" height="480"></canvas>
+  <canvas id="overlay-canvas" width="480" height="480"></canvas>
+  <div id="transport" class="otg">● OTG</div>
+  <div id="metrics">
+    <div class="metric-item"><div class="metric-val" id="m-cpu">--</div>CPU</div>
+    <div class="metric-item"><div class="metric-val" id="m-mem">--</div>MEM</div>
+    <div class="metric-item"><div class="metric-val" id="m-disk">--</div>DSK</div>
+  </div>
+  <div id="center">
+    <div id="time">--:--:--</div>
+    <div id="date">--- -- ---</div>
+    <div id="hostname">secubox</div>
+    <div id="status" class="nominal">SCANNING</div>
+  </div>
+  <div id="ticker">SYSTEM NOMINAL</div>
+  <div id="version">SECUBOX RADAR v1.0</div>
+
+  <!-- Module labels positioned at their blip angles -->
+  <div class="blip-label" id="lbl-AUTH" style="top:58px;left:50%;transform:translateX(-50%)">AUTH</div>
+  <div class="blip-label" id="lbl-WALL" style="top:130px;right:65px">WALL</div>
+  <div class="blip-label" id="lbl-MESH" style="bottom:130px;right:65px">MESH</div>
+  <div class="blip-label" id="lbl-ROOT" style="bottom:58px;left:50%;transform:translateX(-50%)">ROOT</div>
+  <div class="blip-label" id="lbl-MIND" style="bottom:130px;left:65px">MIND</div>
+  <div class="blip-label" id="lbl-BOOT" style="top:130px;left:65px">BOOT</div>
+</div>
+
+<script>
+// SecuBox Radar v1.0 - CyberMind
+// Real-time radar sweep with module status blips
+
+const CFG = {
+  API_OTG_BASE: 'http://10.55.0.1:8000',
+  API_WIFI_BASE: 'http://secubox.local:8000',
+  ENDPOINT_METRICS: '/api/v1/system/metrics',
+  ENDPOINT_HEALTH: '/api/v1/health',
+  REFRESH_INTERVAL: 2000,
+  SWEEP_SPEED: 4000, // ms per full rotation
+  SIMULATE: true,
+};
+
+// Module definitions: angle (0=top, clockwise), color, metric key
+const MODULES = {
+  AUTH: { angle: 0,   color: '#C04E24', metric: 'cpu', warn: 70, crit: 85 },
+  WALL: { angle: 60,  color: '#9A6010', metric: 'mem', warn: 75, crit: 90 },
+  MESH: { angle: 120, color: '#104A88', metric: 'wifi', warn: -70, crit: -80 },
+  ROOT: { angle: 180, color: '#0A5840', metric: 'temp', warn: 65, crit: 75 },
+  MIND: { angle: 240, color: '#3D35A0', metric: 'load', warn: 2, crit: 4 },
+  BOOT: { angle: 300, color: '#803018', metric: 'disk', warn: 80, crit: 95 },
+};
+
+const CX = 240, CY = 240;
+const BLIP_RADIUS = 170;
+const GRID_RINGS = [60, 100, 140, 180, 210];
+
+// Canvas setup
+const radarCanvas = document.getElementById('radar-canvas');
+const radarCtx = radarCanvas.getContext('2d');
+const overlayCanvas = document.getElementById('overlay-canvas');
+const overlayCtx = overlayCanvas.getContext('2d');
+
+// State
+let sweepAngle = 0;
+let lastFrame = 0;
+let metrics = null;
+let blipStates = {};
+
+// Initialize blip states
+Object.keys(MODULES).forEach(m => {
+  blipStates[m] = { brightness: 0, lastHit: 0, status: 'ok' };
+});
+
+// Draw static grid (only once needed, but we redraw for glow effect)
+function drawGrid() {
+  radarCtx.clearRect(0, 0, 480, 480);
+
+  // Background gradient
+  const grad = radarCtx.createRadialGradient(CX, CY, 0, CX, CY, 240);
+  grad.addColorStop(0, '#041008');
+  grad.addColorStop(0.6, '#020804');
+  grad.addColorStop(1, '#000');
+  radarCtx.fillStyle = grad;
+  radarCtx.beginPath();
+  radarCtx.arc(CX, CY, 240, 0, Math.PI * 2);
+  radarCtx.fill();
+
+  // Concentric circles
+  radarCtx.strokeStyle = '#00ff4122';
+  radarCtx.lineWidth = 1;
+  GRID_RINGS.forEach(r => {
+    radarCtx.beginPath();
+    radarCtx.arc(CX, CY, r, 0, Math.PI * 2);
+    radarCtx.stroke();
+  });
+
+  // Cross lines (4 quadrants)
+  radarCtx.beginPath();
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2 - Math.PI / 2;
+    radarCtx.moveTo(CX, CY);
+    radarCtx.lineTo(CX + 220 * Math.cos(a), CY + 220 * Math.sin(a));
+  }
+  radarCtx.strokeStyle = '#00ff4111';
+  radarCtx.stroke();
+
+  // Outer rim
+  radarCtx.beginPath();
+  radarCtx.arc(CX, CY, 220, 0, Math.PI * 2);
+  radarCtx.strokeStyle = '#00ff4144';
+  radarCtx.lineWidth = 2;
+  radarCtx.stroke();
+}
+
+// Draw radar sweep
+function drawSweep(angle) {
+  overlayCtx.clearRect(0, 0, 480, 480);
+
+  // Sweep trail (gradient arc)
+  const trailLength = Math.PI * 0.6; // 108 degrees trail
+  const sweepGrad = overlayCtx.createConicGradient(angle - Math.PI/2, CX, CY);
+  sweepGrad.addColorStop(0, '#00ff4100');
+  sweepGrad.addColorStop(0.15, '#00ff4108');
+  sweepGrad.addColorStop(0.3, '#00ff4120');
+  sweepGrad.addColorStop(0.5, '#00ff4140');
+  sweepGrad.addColorStop(1, '#00ff4100');
+
+  overlayCtx.beginPath();
+  overlayCtx.moveTo(CX, CY);
+  overlayCtx.arc(CX, CY, 220, angle - trailLength, angle);
+  overlayCtx.closePath();
+  overlayCtx.fillStyle = sweepGrad;
+  overlayCtx.fill();
+
+  // Sweep line (bright)
+  overlayCtx.beginPath();
+  overlayCtx.moveTo(CX, CY);
+  overlayCtx.lineTo(CX + 220 * Math.cos(angle), CY + 220 * Math.sin(angle));
+  overlayCtx.strokeStyle = '#00ff41cc';
+  overlayCtx.lineWidth = 2;
+  overlayCtx.shadowColor = '#00ff41';
+  overlayCtx.shadowBlur = 15;
+  overlayCtx.stroke();
+  overlayCtx.shadowBlur = 0;
+
+  // Draw blips
+  Object.entries(MODULES).forEach(([name, mod]) => {
+    const blipAngle = (mod.angle - 90) * Math.PI / 180; // Convert to radians, offset for top=0
+    const bx = CX + BLIP_RADIUS * Math.cos(blipAngle);
+    const by = CY + BLIP_RADIUS * Math.sin(blipAngle);
+    const state = blipStates[name];
+
+    // Check if sweep just passed this blip
+    const sweepDeg = ((angle + Math.PI/2) * 180 / Math.PI + 360) % 360;
+    const diff = Math.abs(sweepDeg - mod.angle);
+    const hit = diff < 15 || diff > 345;
+
+    if (hit && Date.now() - state.lastHit > 200) {
+      state.brightness = 1;
+      state.lastHit = Date.now();
+      // Update label
+      const lbl = document.getElementById('lbl-' + name);
+      if (lbl) {
+        lbl.classList.add('active');
+        lbl.className = 'blip-label active ' + state.status;
+      }
+    }
+
+    // Fade blip
+    state.brightness = Math.max(0, state.brightness - 0.015);
+
+    if (state.brightness > 0) {
+      // Blip glow
+      const alpha = state.brightness;
+      let color = '#00ff41';
+      if (state.status === 'warn') color = '#ffc107';
+      if (state.status === 'crit') color = '#ff4444';
+
+      // Outer glow
+      overlayCtx.beginPath();
+      overlayCtx.arc(bx, by, 12 + state.brightness * 8, 0, Math.PI * 2);
+      overlayCtx.fillStyle = color.slice(0,7) + Math.floor(alpha * 30).toString(16).padStart(2,'0');
+      overlayCtx.fill();
+
+      // Core
+      overlayCtx.beginPath();
+      overlayCtx.arc(bx, by, 4 + state.brightness * 3, 0, Math.PI * 2);
+      overlayCtx.fillStyle = color.slice(0,7) + Math.floor(alpha * 200).toString(16).padStart(2,'0');
+      overlayCtx.shadowColor = color;
+      overlayCtx.shadowBlur = 10 * alpha;
+      overlayCtx.fill();
+      overlayCtx.shadowBlur = 0;
+    } else {
+      // Dim blip marker
+      overlayCtx.beginPath();
+      overlayCtx.arc(bx, by, 3, 0, Math.PI * 2);
+      overlayCtx.fillStyle = '#00ff4133';
+      overlayCtx.fill();
+
+      // Fade label
+      const lbl = document.getElementById('lbl-' + name);
+      if (lbl) lbl.classList.remove('active');
+    }
+  });
+}
+
+// Animation loop
+function animate(timestamp) {
+  if (!lastFrame) lastFrame = timestamp;
+  const delta = timestamp - lastFrame;
+  lastFrame = timestamp;
+
+  // Update sweep angle
+  sweepAngle += (delta / CFG.SWEEP_SPEED) * Math.PI * 2;
+  if (sweepAngle > Math.PI * 2) sweepAngle -= Math.PI * 2;
+
+  drawGrid();
+  drawSweep(sweepAngle);
+
+  requestAnimationFrame(animate);
+}
+
+// Update clock
+function updateClock() {
+  const n = new Date();
+  const p = v => String(v).padStart(2, '0');
+  document.getElementById('time').textContent = p(n.getHours()) + ':' + p(n.getMinutes()) + ':' + p(n.getSeconds());
+  const D = ['DIM', 'LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM'];
+  const M = ['JAN', 'FEB', 'MAR', 'AVR', 'MAI', 'JUN', 'JUL', 'AOU', 'SEP', 'OCT', 'NOV', 'DEC'];
+  document.getElementById('date').textContent = D[n.getDay()] + ' ' + p(n.getDate()) + ' ' + M[n.getMonth()];
+}
+
+// Simulation
+const SIM = {
+  cpu: 25, mem: 40, disk: 30, temp: 44, load: 0.3, wifi: -55,
+  tick() {
+    this.cpu = Math.max(5, Math.min(95, this.cpu + (Math.random() - 0.48) * 8));
+    this.mem = Math.max(20, Math.min(90, this.mem + (Math.random() - 0.5) * 3));
+    this.disk = Math.max(10, Math.min(95, this.disk + (Math.random() - 0.5) * 0.5));
+    this.temp = Math.max(35, Math.min(80, this.temp + (Math.random() - 0.5) * 2));
+    this.load = Math.max(0.1, Math.min(5, this.load + (Math.random() - 0.48) * 0.3));
+    this.wifi = Math.max(-85, Math.min(-30, this.wifi + (Math.random() - 0.5) * 5));
+    return {
+      cpu: Math.round(this.cpu),
+      mem: Math.round(this.mem),
+      disk: Math.round(this.disk),
+      temp: Math.round(this.temp),
+      load: Math.round(this.load * 10) / 10,
+      wifi: Math.round(this.wifi),
+      hostname: 'secubox-demo',
+      uptime: Math.floor(Date.now() / 1000) % 86400
+    };
+  }
+};
+
+// Update metrics display
+function updateMetrics(m) {
+  metrics = m;
+  document.getElementById('m-cpu').textContent = m.cpu + '%';
+  document.getElementById('m-mem').textContent = m.mem + '%';
+  document.getElementById('m-disk').textContent = m.disk + '%';
+  document.getElementById('hostname').textContent = m.hostname || 'secubox';
+
+  // Update blip statuses based on thresholds
+  let hasWarning = false, hasCritical = false;
+
+  Object.entries(MODULES).forEach(([name, mod]) => {
+    let val;
+    switch (mod.metric) {
+      case 'cpu': val = m.cpu; break;
+      case 'mem': val = m.mem; break;
+      case 'disk': val = m.disk; break;
+      case 'temp': val = m.temp; break;
+      case 'load': val = m.load; break;
+      case 'wifi': val = m.wifi; break;
+      default: val = 0;
+    }
+
+    let status = 'ok';
+    // For wifi, lower (more negative) is worse
+    if (mod.metric === 'wifi') {
+      if (val < mod.crit) status = 'crit';
+      else if (val < mod.warn) status = 'warn';
+    } else {
+      if (val > mod.crit) status = 'crit';
+      else if (val > mod.warn) status = 'warn';
+    }
+
+    blipStates[name].status = status;
+    if (status === 'warn') hasWarning = true;
+    if (status === 'crit') hasCritical = true;
+  });
+
+  // Update global status
+  const statusEl = document.getElementById('status');
+  const tickerEl = document.getElementById('ticker');
+  statusEl.classList.remove('nominal', 'warning', 'critical');
+
+  if (hasCritical) {
+    statusEl.textContent = 'CRITICAL';
+    statusEl.classList.add('critical');
+    tickerEl.textContent = 'ALERT: THRESHOLD EXCEEDED';
+    tickerEl.style.color = '#ff444488';
+  } else if (hasWarning) {
+    statusEl.textContent = 'WARNING';
+    statusEl.classList.add('warning');
+    tickerEl.textContent = 'CAUTION: ELEVATED METRICS';
+    tickerEl.style.color = '#ffc10788';
+  } else {
+    statusEl.textContent = 'NOMINAL';
+    statusEl.classList.add('nominal');
+    tickerEl.textContent = 'ALL SYSTEMS OPERATIONAL';
+    tickerEl.style.color = '#00ff4188';
+  }
+}
+
+// Transport manager (simplified)
+const TM = {
+  active: 'SIM',
+  async probe() {
+    // Try OTG first
+    try {
+      const r = await fetch(CFG.API_OTG_BASE + CFG.ENDPOINT_HEALTH, {
+        signal: AbortSignal.timeout(2000)
+      });
+      if (r.ok) { this.active = 'OTG'; return; }
+    } catch (e) {}
+
+    // Try WiFi
+    try {
+      const r = await fetch(CFG.API_WIFI_BASE + CFG.ENDPOINT_HEALTH, {
+        signal: AbortSignal.timeout(3000)
+      });
+      if (r.ok) { this.active = 'WiFi'; return; }
+    } catch (e) {}
+
+    this.active = 'SIM';
+  },
+  async fetchMetrics() {
+    if (CFG.SIMULATE || this.active === 'SIM') {
+      return SIM.tick();
+    }
+
+    const base = this.active === 'OTG' ? CFG.API_OTG_BASE : CFG.API_WIFI_BASE;
+    try {
+      const r = await fetch(base + CFG.ENDPOINT_METRICS, {
+        signal: AbortSignal.timeout(5000)
+      });
+      if (r.ok) {
+        const d = await r.json();
+        return {
+          cpu: Math.round(d.cpu_percent || 0),
+          mem: Math.round(d.mem_percent || 0),
+          disk: Math.round(d.disk_percent || 0),
+          temp: Math.round(d.cpu_temp || 40),
+          load: d.load_avg_1 || 0,
+          wifi: d.wifi_rssi || -50,
+          hostname: d.hostname || 'secubox',
+          uptime: d.uptime_seconds || 0
+        };
+      }
+    } catch (e) {}
+    return SIM.tick();
+  }
+};
+
+// Update transport badge
+function updateTransportBadge() {
+  const el = document.getElementById('transport');
+  el.className = TM.active.toLowerCase();
+  el.textContent = '● ' + TM.active;
+}
+
+// Main tick
+async function tick() {
+  const m = await TM.fetchMetrics();
+  updateMetrics(m);
+  updateTransportBadge();
+}
+
+// Init
+async function init() {
+  await TM.probe();
+  updateTransportBadge();
+  updateClock();
+  setInterval(updateClock, 1000);
+  tick();
+  setInterval(tick, CFG.REFRESH_INTERVAL);
+  requestAnimationFrame(animate);
+}
+
+init();
+</script>
+</body>
+</html>
