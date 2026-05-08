@@ -333,17 +333,6 @@
                 }).join('');
             }
 
-            // Top IPs table
-            const ipsTable = document.getElementById('topIpsTable');
-            if (d.top_ips && Object.keys(d.top_ips).length > 0) {
-                const ipCountries = d.top_ips_countries || {};
-                ipsTable.innerHTML = Object.entries(d.top_ips).slice(0, 10).map(([ip, count]) => {
-                    const cc = ipCountries[ip] || '';
-                    const flag = countryToFlag(cc);
-                    return '<tr><td>' + ip + '</td><td style="font-size:1.2em;">' + flag + '</td><td>' + count + '</td><td><button class="btn danger" onclick="banIpDirect(\'' + ip + '\')">BAN</button></td></tr>';
-                }).join('');
-            }
-
             // Geomap
             renderGeomap(d);
         }
