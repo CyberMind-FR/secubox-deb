@@ -12,6 +12,9 @@ override_dh_auto_install:
 		debian/secubox-led-heartbeat/usr/sbin/secubox-led-pulse
 	install -D -m 755 usr/sbin/secubox-led-trigger \
 		debian/secubox-led-heartbeat/usr/sbin/secubox-led-trigger
+	# LED reset tool (I2C recovery)
+	install -D -m 755 usr/sbin/secubox-led-reset \
+		debian/secubox-led-heartbeat/usr/sbin/secubox-led-reset
 	# Legacy daemon (backward compatibility)
 	install -D -m 755 usr/sbin/secubox-led-heartbeat \
 		debian/secubox-led-heartbeat/usr/sbin/secubox-led-heartbeat
@@ -39,6 +42,11 @@ override_dh_auto_install:
 	# Device Tree overlay source
 	install -D -m 644 boot/overlays/secubox-leds.dts \
 		debian/secubox-led-heartbeat/usr/share/secubox-led-heartbeat/secubox-leds.dts
+	# Initramfs modules (for early boot)
+	install -D -m 644 etc/initramfs-tools/modules.d/secubox-leds \
+		debian/secubox-led-heartbeat/etc/initramfs-tools/modules.d/secubox-leds
+	install -D -m 644 etc/initramfs-tools/modules.d/secubox-usb-net \
+		debian/secubox-led-heartbeat/etc/initramfs-tools/modules.d/secubox-usb-net
 
 override_dh_installsystemd:
 	dh_installsystemd --name=secubox-healthbump --no-enable

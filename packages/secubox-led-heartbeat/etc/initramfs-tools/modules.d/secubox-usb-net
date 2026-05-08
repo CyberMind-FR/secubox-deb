@@ -1,0 +1,6 @@
+# SecuBox USB Network modules for Eye Remote gadget
+# These are loaded early via initramfs for USB network boot support
+usbnet
+cdc_ether
+cdc_ncm
+rndis_host

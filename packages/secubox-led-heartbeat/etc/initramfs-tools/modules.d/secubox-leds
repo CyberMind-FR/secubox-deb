@@ -1,0 +1,3 @@
+# SecuBox LED module for MOCHAbin
+# Loaded via initramfs for early LED status display
+leds-is31fl319x
