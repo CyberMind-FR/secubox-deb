@@ -552,6 +552,7 @@
     </style>
 </head>
 <body>
+    <nav class="sidebar" id="sidebar"></nav>
     
         <!-- SIDEBAR -->
         <!-- MAIN CONTENT -->
@@ -1321,7 +1322,7 @@
 
             // Version
             if (data.build_info && data.build_info.version) {
-                document.getElementById('sidebar-version').textContent = 'v' + data.build_info.version;
+                var sv = document.getElementById('sidebar-version'); if(sv) sv.textContent = 'v' + data.build_info.version;
             }
         }
 
