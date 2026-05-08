@@ -190,9 +190,10 @@
         async function api(path, opts = {}) {
             try {
                 const res = await fetch(API + path, { ...opts, headers: headers() });
-                if (res.status === 401) { window.location = '/login.html'; return {}; }
+                if (res.status === 401) { window.location = '/login.html'; return null; }
+                if (!res.ok) return null;
                 return res.json();
-            } catch { return {}; }
+            } catch (e) { console.error('API error:', path, e); return null; }
         }
 
         function countryToFlag(code) {
@@ -306,12 +307,21 @@
 
         async function loadStatus() {
             const d = await api('/status');
-            document.getElementById('totalRules').textContent = d.total_rules || 0;
-            document.getElementById('activeCategories').textContent = d.active_categories || 0;
+            document.getElementById('totalRules').textContent = d?.total_rules || 0;
+            document.getElementById('activeCategories').textContent = d?.active_categories || 0;
         }
 
         async function loadStats() {
             const d = await api('/stats');
+            if (!d) {
+                document.getElementById('threatsToday').textContent = '0';
+                document.getElementById('severityStats').innerHTML = '<p style="color:var(--muted);">No data</p>';
+                document.getElementById('categoryStats').innerHTML = '<p style="color:var(--muted);">No data</p>';
+                document.getElementById('topVhosts').innerHTML = '<p style="color:var(--muted);">No data</p>';
+                document.getElementById('geomarkers').innerHTML = '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#00ff41;font-size:12px;">✓ SECURE</div>';
+                document.getElementById('geoLegend').innerHTML = '<span style="color:#00ff41;">● SECURE</span>';
+                return;
+            }
             document.getElementById('threatsToday').textContent = d.threats_today || 0;
 
             // Severity donut
@@ -411,9 +421,9 @@
 
         async function loadBans() {
             const d = await api('/bans');
-            document.getElementById('activeBans').textContent = d.total || 0;
+            document.getElementById('activeBans').textContent = d?.total || 0;
             const tbody = document.getElementById('bansTable');
-            if (!d.bans || d.bans.length === 0) {
+            if (!d || !d.bans || d.bans.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="5" style="color:var(--muted);">No active bans</td></tr>';
                 return;
             }
@@ -426,17 +436,61 @@
         async function loadAlerts() {
             const d = await api('/alerts?limit=10&aggregate=true');
             const el = document.getElementById('alertsList');
-            if (!d.alerts || d.alerts.length === 0) {
+            if (!d || !d.alerts || d.alerts.length === 0) {
                 el.innerHTML = '<p style="color:var(--muted);">No recent alerts</p>';
                 return;
             }
             el.innerHTML = d.alerts.map(a => '<div style="display:flex;gap:1rem;align-items:center;padding:0.5rem 0;border-bottom:1px solid var(--glass-border);"><span style="font-size:1.2em;">' + countryToFlag(a.country || '') + '</span><span style="font-family:var(--font-mono);color:var(--root-light);">' + a.client_ip + '</span><span style="background:rgba(239,68,68,0.2);color:#ef4444;padding:2px 8px;border-radius:4px;font-size:0.75rem;">' + (a.max_severity || 'unknown') + '</span><span style="flex:1;color:var(--muted);font-size:0.8rem;overflow:hidden;text-overflow:ellipsis;">' + (a.count || 1) + ' alerts</span><button class="btn danger" onclick="banIpDirect(\'' + a.client_ip + '\')">Ban</button></div>').join('');
         }
 
+        async function loadCategories() {
+            const d = await api('/categories');
+            const el = document.getElementById('categoriesList');
+            if (!d || !d.categories || Object.keys(d.categories).length === 0) {
+                el.innerHTML = '<p style="color:var(--muted);">No categories configured</p>';
+                return;
+            }
+            const cats = Object.entries(d.categories).sort((a, b) => (b[1].rules_count || 0) - (a[1].rules_count || 0));
+            el.innerHTML = cats.map(([id, cat]) => {
+                const enabled = cat.enabled !== false;
+                const severity = cat.severity || 'medium';
+                const sevColor = SEV_COLORS[severity] || '#888';
+                const emoji = getCategoryEmoji(id);
+                const toggleColor = enabled ? 'var(--root-light)' : 'var(--boot-light)';
+                const toggleBg = enabled ? 'rgba(20,140,102,0.2)' : 'rgba(239,68,68,0.2)';
+                return '<div style="display:flex;align-items:center;gap:1rem;padding:0.75rem;margin-bottom:0.5rem;background:var(--glass-bg);border:1px solid var(--glass-border);border-radius:var(--radius-md);border-left:3px solid ' + sevColor + ';opacity:' + (enabled ? '1' : '0.6') + ';">' +
+                    '<span style="font-size:1.5em;">' + emoji + '</span>' +
+                    '<div style="flex:1;">' +
+                        '<div style="font-weight:600;color:var(--text-dark);">' + (cat.name || id) + '</div>' +
+                        '<div style="font-size:0.75rem;color:var(--muted-dark);">' + (cat.rules_count || 0) + ' rules · ' + severity + (cat.owasp ? ' · OWASP ' + cat.owasp : '') + '</div>' +
+                    '</div>' +
+                    '<button onclick="toggleCategory(\'' + id + '\', ' + !enabled + ')" style="padding:6px 12px;border:1px solid ' + toggleColor + ';background:' + toggleBg + ';color:' + toggleColor + ';border-radius:var(--radius-sm);cursor:pointer;font-size:0.8rem;font-weight:600;transition:all 0.2s;">' + (enabled ? '✓ ON' : '✗ OFF') + '</button>' +
+                '</div>';
+            }).join('');
+        }
+
+        async function toggleCategory(categoryId, enabled) {
+            const btn = event.target;
+            btn.disabled = true;
+            btn.textContent = '...';
+            const res = await api('/category/' + categoryId + '/toggle', {
+                method: 'POST',
+                body: JSON.stringify({ enabled: enabled })
+            });
+            if (res && res.success) {
+                await loadCategories();
+                await loadStatus();
+            } else {
+                alert('Failed to toggle category: ' + (res?.error || 'Unknown error'));
+                btn.disabled = false;
+                btn.textContent = enabled ? '✓ ON' : '✗ OFF';
+            }
+        }
+
         function banIpDirect(ip) { api('/ban', { method: 'POST', body: JSON.stringify({ ip, duration: '4h', reason: 'Manual ban' }) }).then(() => { loadBans(); loadStats(); }); }
         function unbanIp(ip) { api('/unban', { method: 'POST', body: JSON.stringify({ ip }) }).then(() => loadBans()); }
 
-        async function refresh() { await Promise.all([loadStatus(), loadStats(), loadBans(), loadAlerts()]); }
+        async function refresh() { await Promise.all([loadStatus(), loadStats(), loadBans(), loadAlerts(), loadCategories()]); }
         refresh();
         setInterval(refresh, 30000);
     </script>
