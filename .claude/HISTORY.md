@@ -4,6 +4,34 @@
 ---
 ## 2026-05-08
 
+### Session 129 — Eye Remote Radar Animation + SOC Fixes
+
+**Radar Dashboard Created (remote-ui/round/radar.html):**
+- New radar-style visualization for Eye Remote HyperPixel 2.1 Round
+- Classic radar sweep animation with green phosphor aesthetic
+- 6 module blips (AUTH/WALL/BOOT/MIND/ROOT/MESH) at 60° intervals
+- Blips light up when radar sweep passes them
+- Color-coded status: green=ok, yellow=warn, red=critical
+- Concentric grid rings (60, 100, 140, 180, 210px)
+- 12 radial grid lines
+- Center displays: time, date, hostname, system status
+- Top mini-metrics: CPU%, MEM%, DSK%
+- Transport badge: OTG/WiFi/SIM auto-detection
+- Ticker bar for alerts
+- Simulation mode for offline testing
+- Module thresholds: AUTH(CPU 70/85), WALL(MEM 75/90), BOOT(DISK 80/95), MIND(LOAD 2/4), ROOT(TEMP 65/75), MESH(WiFi -70/-80dBm)
+
+**SOC Dashboard Fixes (earlier this session):**
+- Added shared sidebar injection to SOC page
+- Fixed CrowdSec health detection (direct LAPI HTTP + sudo for cscli)
+- Applied SecuBox Six-Stack colorimetry to stat cards
+- Implemented tiered auto-ban in CrowdSec profiles.yaml
+
+**Files Created:**
+- `remote-ui/round/radar.html` — v1.0 Radar dashboard
+
+---
+
 ### Session 128 — LED Tooltips + Kernel nftables Fix
 
 **Sidebar v2.32.0:**
