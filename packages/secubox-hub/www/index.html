@@ -534,29 +534,8 @@
                         <div class="card-header">
                             <h2>System Health</h2>
                         </div>
-                        <div class="health-item">
-                            <div class="health-header"><span>CPU</span><span id="cpu-info">Load: -</span></div>
-                            <div class="health-bar"><div class="fill red" id="cpu-bar" style="width: 0%"></div></div>
-                            <div class="health-percent" id="cpu-percent">0%</div>
-                        </div>
-                        <div class="health-item">
-                            <div class="health-header"><span>Memory</span><span id="mem-info">- / -</span></div>
-                            <div class="health-bar"><div class="fill yellow" id="mem-bar" style="width: 0%"></div></div>
-                            <div class="health-percent" id="mem-percent">0%</div>
-                        </div>
-                        <div class="health-item">
-                            <div class="health-header"><span>Storage</span><span id="disk-info">- / -</span></div>
-                            <div class="health-bar"><div class="fill red" id="disk-bar" style="width: 0%"></div></div>
-                            <div class="health-percent" id="disk-percent">0%</div>
-                        </div>
-                        <div class="health-item">
-                            <div class="health-header"><span>Network</span><span id="net-info">-</span></div>
-                            <div class="health-bar"><div class="fill cyan" id="net-bar" style="width: 0%"></div></div>
-                            <div class="health-percent" id="net-percent">0%</div>
-                        </div>
-                        
                         <!-- Concentric Gauge (eyeremote style) -->
-                        <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--divider);">
+                        <div style="margin-top: 0.5rem;">
                             <div id="concentric-gauge" style="display: flex; justify-content: center;">
                                 <div style="color: var(--muted); font-size: 0.8rem;">Loading...</div>
                             </div>
@@ -811,13 +790,13 @@
             const disk = data.disk_percent || 0;
             const load = data.load_avg || [0, 0, 0];
 
-            document.getElementById('cpu-info').textContent = 'Load: ' + load[0]?.toFixed(2);
-            document.getElementById('cpu-bar').style.width = cpu + '%';
-            document.getElementById('cpu-percent').textContent = cpu.toFixed(0) + '%';
-            document.getElementById('mem-bar').style.width = mem + '%';
-            document.getElementById('mem-percent').textContent = mem.toFixed(0) + '%';
-            document.getElementById('disk-bar').style.width = disk + '%';
-            document.getElementById('disk-percent').textContent = disk.toFixed(0) + '%';
+            const cpuInfoEl = document.getElementById('cpu-info'); if (cpuInfoEl) cpuInfoEl.textContent = 'Load: ' + load[0]?.toFixed(2);
+            const cpuBarEl = document.getElementById('cpu-bar'); if (cpuBarEl) cpuBarEl.style.width = cpu + '%';
+            const cpuPctEl = document.getElementById('cpu-percent'); if (cpuPctEl) cpuPctEl.textContent = cpu.toFixed(0) + '%';
+            const memBarEl = document.getElementById('mem-bar'); if (memBarEl) memBarEl.style.width = mem + '%';
+            const memPctEl = document.getElementById('mem-percent'); if (memPctEl) memPctEl.textContent = mem.toFixed(0) + '%';
+            const diskBarEl = document.getElementById('disk-bar'); if (diskBarEl) diskBarEl.style.width = disk + '%';
+            const diskPctEl = document.getElementById('disk-percent'); if (diskPctEl) diskPctEl.textContent = disk.toFixed(0) + '%';
             // Update concentric gauge (eyeremote style)
             const concentricEl = document.getElementById('concentric-gauge');
             if (concentricEl) {
@@ -919,13 +898,13 @@
 
         async function loadNetwork() {
             const data = await api('/network_summary');
-            document.getElementById('net-info').textContent = data?.wan_status || 'Unknown';
+            const netInfoEl = document.getElementById('net-info'); if (netInfoEl) netInfoEl.textContent = data?.wan_status || 'Unknown';
             document.getElementById('lan-ip').textContent = data?.lan_ip || '-';
             document.getElementById('wan-ip').textContent = data?.wan_ip || '-';
             if (data?.interfaces_up) {
                 const pct = Math.round((data.interfaces_up / Math.max(data.interfaces, 1)) * 100);
-                document.getElementById('net-bar').style.width = pct + '%';
-                document.getElementById('net-percent').textContent = pct + '%';
+                const netBarEl = document.getElementById('net-bar'); if (netBarEl) netBarEl.style.width = pct + '%';
+                const netPctEl = document.getElementById('net-percent'); if (netPctEl) netPctEl.textContent = pct + '%';
             }
         }
 
@@ -934,7 +913,7 @@
             if (data && data.total_mb) {
                 const used = data.used_mb || 0;
                 const total = data.total_mb || 1;
-                document.getElementById('mem-info').textContent =
+                const memInfoEl = document.getElementById('mem-info'); if (memInfoEl) memInfoEl.textContent =
                     Math.round(used / 1024 * 10) / 10 + ' / ' + Math.round(total / 1024 * 10) / 10 + ' GB';
             }
         }
@@ -944,7 +923,7 @@
             if (data && data.total_gb) {
                 const used = data.used_gb || 0;
                 const total = data.total_gb || 1;
-                document.getElementById('disk-info').textContent = used + ' / ' + total + ' GB';
+                const diskInfoEl = document.getElementById('disk-info'); if (diskInfoEl) diskInfoEl.textContent = used + ' / ' + total + ' GB';
             }
         }
 
