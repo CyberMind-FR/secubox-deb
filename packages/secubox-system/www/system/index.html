@@ -83,9 +83,9 @@
         .health-header { display: flex; justify-content: space-between; margin-bottom: 0.25rem; font-size: 0.9rem; }
         .health-bar { height: 8px; background: var(--bg-dark); border-radius: 4px; overflow: hidden; }
         .health-bar .fill { height: 100%; border-radius: 4px; }
-        .health-bar .fill.red { background: var(--red); }
-        .health-bar .fill.yellow { background: var(--yellow); }
-        .health-bar .fill.green { background: var(--green); }
+        .health-bar .fill.red { background: linear-gradient(90deg, #C06040, #E06040); box-shadow: 0 0 8px rgba(224,96,64,0.6); }
+        .health-bar .fill.yellow { background: linear-gradient(90deg, #CC8820, #E0A030); box-shadow: 0 0 8px rgba(224,160,48,0.6); }
+        .health-bar .fill.green { background: linear-gradient(90deg, #148C66, #20C080); box-shadow: 0 0 8px rgba(32,192,128,0.6); }
         .health-bar .fill.cyan { background: var(--cyan); }
         .health-percent { font-size: 0.75rem; color: var(--text-dim); text-align: right; margin-top: 0.25rem; }
         .service-item { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; background: rgba(255,255,255,0.02); border-radius: 6px; margin-bottom: 0.5rem; }
@@ -289,6 +289,32 @@
         @media (max-width: 768px) {
             .main { margin-left: 0; }
         }
+    
+        /* Sparkline histogram - clinical style */
+        .sparkline-container {
+            display: flex;
+            align-items: flex-end;
+            gap: 1px;
+            height: 24px;
+            margin-top: 0.25rem;
+            padding: 2px 4px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .sparkline-bar {
+            flex: 1;
+            min-width: 2px;
+            max-width: 5px;
+            background: var(--green);
+            border-radius: 1px 1px 0 0;
+            transition: height 0.2s ease;
+            box-shadow: 0 0 3px currentColor;
+        }
+        .sparkline-bar.yellow { background: #E0A030; box-shadow: 0 0 4px rgba(224,160,48,0.5); }
+        .sparkline-bar.red { background: #E06040; box-shadow: 0 0 4px rgba(224,96,64,0.5); }
+        .sparkline-bar.green { background: #20C080; box-shadow: 0 0 4px rgba(32,192,128,0.5); }
+
     </style>
 </head>
 <body class="crt-light">
@@ -322,14 +348,17 @@
                     <div class="health-item">
                         <div class="health-header"><span>CPU</span><span id="cpu">-</span></div>
                         <div class="health-bar"><div class="fill red" id="cpu-bar" style="width: 0%"></div></div>
+                        <div class="sparkline-container" id="cpu-sparkline"></div>
                     </div>
                     <div class="health-item">
                         <div class="health-header"><span>Memory</span><span id="memory">-</span></div>
                         <div class="health-bar"><div class="fill yellow" id="mem-bar" style="width: 0%"></div></div>
+                        <div class="sparkline-container" id="mem-sparkline"></div>
                     </div>
                     <div class="health-item">
                         <div class="health-header"><span>Disk /</span><span id="disk">-</span></div>
                         <div class="health-bar"><div class="fill red" id="disk-bar" style="width: 0%"></div></div>
+                        <div class="sparkline-container" id="disk-sparkline"></div>
                     </div>
                     <div class="health-item">
                         <div class="health-header"><span>Load Average</span><span id="load">-</span></div>
@@ -497,19 +526,54 @@
             document.getElementById('time').textContent = data.local_time || new Date().toLocaleString();
         }
 
+
+        // Sparkline history (last 30 values)
+        const sparklineHistory = { cpu: [], mem: [], disk: [] };
+        const SPARKLINE_MAX = 30;
+
+        function updateSparkline(id, value, history) {
+            history.push(value);
+            if (history.length > SPARKLINE_MAX) history.shift();
+            const container = document.getElementById(id);
+            if (!container) return;
+            container.innerHTML = history.map(v => {
+                const h = Math.max(2, (v / 100) * 20);
+                const c = v > 80 ? 'red' : v > 50 ? 'yellow' : 'green';
+                return '<div class="sparkline-bar ' + c + '" style="height:' + h + 'px"></div>';
+            }).join('');
+        }
+
         async function loadResources() {
             const data = await api('/resources');
             const cpu = data.cpu_percent || 0;
             const mem = data.memory_percent || 0;
             const disk = data.disk_percent || 0;
 
+            // Dynamic color based on percentage
+            function getBarColor(pct) {
+                if (pct > 80) return "red";
+                if (pct > 50) return "yellow";
+                return "green";
+            }
+
             document.getElementById('cpu').textContent = cpu.toFixed(1) + '%';
-            document.getElementById('cpu-bar').style.width = cpu + '%';
+            const cpuBar = document.getElementById("cpu-bar");
+            cpuBar.style.width = cpu + "%";
+            cpuBar.className = "fill " + getBarColor(cpu);
             document.getElementById('memory').textContent = `${formatBytes(data.memory_used)} / ${formatBytes(data.memory_total)}`;
-            document.getElementById('mem-bar').style.width = mem + '%';
+            const memBar = document.getElementById("mem-bar");
+            memBar.style.width = mem + "%";
+            memBar.className = "fill " + getBarColor(mem);
             document.getElementById('disk').textContent = `${formatBytes(data.disk_used)} / ${formatBytes(data.disk_total)}`;
-            document.getElementById('disk-bar').style.width = disk + '%';
+            const diskBar = document.getElementById("disk-bar");
+            diskBar.style.width = disk + "%";
+            diskBar.className = "fill " + getBarColor(disk);
             document.getElementById('load').textContent = (data.load_avg || [0, 0, 0]).map(l => l.toFixed(2)).join(' ');
+
+            // Update sparklines
+            updateSparkline('cpu-sparkline', cpu, sparklineHistory.cpu);
+            updateSparkline('mem-sparkline', mem, sparklineHistory.mem);
+            updateSparkline('disk-sparkline', disk, sparklineHistory.disk);
         }
 
         async function loadServices() {
