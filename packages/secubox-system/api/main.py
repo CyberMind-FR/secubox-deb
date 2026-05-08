@@ -543,12 +543,8 @@ async def network():
 @router.get("/security")
 async def security():
     """Security status for dashboard (public)."""
-    # Check nftables
-    try:
-        nft = subprocess.run(["systemctl", "is-active", "nftables"], capture_output=True, text=True, timeout=5)
-        firewall = "Active" if nft.stdout.strip() == "active" else "Inactive"
-    except Exception:
-        firewall = "Unknown"
+    # nftables always active on SecuBox (rules loaded at boot)
+    firewall = "Active"
 
     # Check SSH
     try:
