@@ -261,8 +261,14 @@
 
         function createCategoryDonut(data, size) {
             size = size || 130;
-            if (!data || Object.keys(data).length === 0) return '<p style="color:var(--muted);">No data</p>';
-            const entries = Object.entries(data).slice(0, 6).filter(([k,v]) => v > 0);
+            if (!data || (Array.isArray(data) ? data.length === 0 : Object.keys(data).length === 0)) return '<p style="color:var(--muted);">No data</p>';
+            // Handle both array [{name, count}] and object {name: count} formats
+            let entries;
+            if (Array.isArray(data)) {
+                entries = data.slice(0, 6).map(c => [c.name || c.category || c[0], c.count || c[1] || 0]).filter(([k,v]) => v > 0);
+            } else {
+                entries = Object.entries(data).slice(0, 6).filter(([k,v]) => typeof v === 'number' && v > 0);
+            }
             const total = entries.reduce((s, [k,v]) => s + v, 0);
             if (total === 0) return '<p style="color:var(--muted);">No data</p>';
             const center = size / 2;
