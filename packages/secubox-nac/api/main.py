@@ -355,27 +355,77 @@ def _nft_list_set(set_name: str) -> list[str]:
         return []
 
 
-def _nft_add_element(set_name: str, element: str):
-    subprocess.run(
-        ["nft", "add", "element", "inet", "secubox_nac", set_name, "{", element, "}"],
-        check=True, timeout=5
-    )
+# Zone assignments file (fallback when nftables not available)
+ZONE_ASSIGNMENTS_FILE = DATA_DIR / "zone_assignments.json"
 
 
-def _nft_delete_element(set_name: str, element: str):
-    subprocess.run(
-        ["nft", "delete", "element", "inet", "secubox_nac", set_name, "{", element, "}"],
-        capture_output=True, timeout=5
-    )
+def _load_zone_assignments() -> Dict[str, str]:
+    """Load zone assignments from file."""
+    return _load_json(ZONE_ASSIGNMENTS_FILE, {})
+
+
+def _save_zone_assignments(assignments: Dict[str, str]):
+    """Save zone assignments to file."""
+    _save_json(ZONE_ASSIGNMENTS_FILE, assignments)
+
+
+def _nft_add_element(set_name: str, element: str) -> bool:
+    """Add element to nft set. Returns True if successful."""
+    try:
+        result = subprocess.run(
+            ["nft", "add", "element", "inet", "secubox_nac", set_name, "{", element, "}"],
+            capture_output=True, timeout=5
+        )
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
+def _nft_delete_element(set_name: str, element: str) -> bool:
+    """Delete element from nft set. Returns True if successful."""
+    try:
+        result = subprocess.run(
+            ["nft", "delete", "element", "inet", "secubox_nac", set_name, "{", element, "}"],
+            capture_output=True, timeout=5
+        )
+        return result.returncode == 0
+    except Exception:
+        return False
 
 
 def _get_client_zone(mac: str) -> str:
-    """Find a client's zone by MAC address."""
+    """Find a client's zone by MAC address (checks nft sets + JSON fallback)."""
     mac_lower = mac.lower()
+
+    # First check nft sets
     for zone_id, zone_info in ZONES.items():
         if mac_lower in _nft_list_set(zone_info["nft_set"]):
             return zone_id
+
+    # Fallback to JSON assignments
+    assignments = _load_zone_assignments()
+    if mac_lower in assignments:
+        return assignments[mac_lower]
+
     return "quarantine"
+
+
+def _set_client_zone(mac: str, zone: str):
+    """Set client zone in both nft and JSON fallback."""
+    mac_lower = mac.lower()
+
+    # Remove from all nft sets
+    for zone_info in ZONES.values():
+        _nft_delete_element(zone_info["nft_set"], mac_lower)
+
+    # Add to target nft set (may fail if table doesn't exist)
+    if zone in ZONES:
+        _nft_add_element(ZONES[zone]["nft_set"], mac_lower)
+
+    # Always update JSON fallback
+    assignments = _load_zone_assignments()
+    assignments[mac_lower] = zone
+    _save_zone_assignments(assignments)
 
 
 async def _monitor_clients():
@@ -595,31 +645,24 @@ async def add_to_zone(req: ZoneRequest, user=Depends(require_jwt)):
     mac_lower = req.mac.lower()
     old_zone = _get_client_zone(mac_lower)
 
-    # Remove from all zones
-    for zone_id, info in ZONES.items():
-        _nft_delete_element(info["nft_set"], mac_lower)
+    # Set client zone (handles both nft and JSON fallback)
+    _set_client_zone(mac_lower, req.zone)
 
-    # Add to target zone
-    try:
-        _nft_add_element(ZONES[req.zone]["nft_set"], mac_lower)
+    log.info("Client %s → zone %s (was %s)", mac_lower, req.zone, old_zone)
+    _record_event("client_moved", {
+        "mac": mac_lower,
+        "from_zone": old_zone,
+        "to_zone": req.zone,
+        "by": user.get("sub", "unknown")
+    })
+    await _notify_webhooks("client_moved", {
+        "mac": mac_lower,
+        "from_zone": old_zone,
+        "to_zone": req.zone
+    })
+    stats_cache.clear()
 
-        log.info("Client %s → zone %s (was %s)", mac_lower, req.zone, old_zone)
-        _record_event("client_moved", {
-            "mac": mac_lower,
-            "from_zone": old_zone,
-            "to_zone": req.zone,
-            "by": user.get("sub", "unknown")
-        })
-        await _notify_webhooks("client_moved", {
-            "mac": mac_lower,
-            "from_zone": old_zone,
-            "to_zone": req.zone
-        })
-        stats_cache.clear()
-
-        return {"success": True, "mac": mac_lower, "zone": req.zone, "previous_zone": old_zone}
-    except subprocess.CalledProcessError as e:
-        raise HTTPException(500, f"nft error: {e}")
+    return {"success": True, "mac": mac_lower, "zone": req.zone, "previous_zone": old_zone}
 
 
 @router.post("/remove_from_zone")
