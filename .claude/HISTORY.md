@@ -4,6 +4,45 @@
 ---
 ## 2026-05-08
 
+### Session 131 — Dice Icons, Scribe Trace, LED Pulse Improvements
+
+**Sidebar — Dice Icons for Smart Strip:**
+- Replaced LED dot indicators with dice icons (⚀⚁⚂⚃⚄⚅)
+- Dynamic update based on metric value (0-100% → dice 1-6)
+- New `getDiceForPercent()` helper function
+- Icons colored per metric type (CPU=red, MEM=yellow, etc.)
+
+**SOC Dashboard — Scribe Trace Histogram:**
+- Replaced bubble stats with vertical histogram visualization
+- EEG/encephalogram style for firewall packets (DROP/ACCEPT/REJECT)
+- Rolling history of 20 samples
+- Vertical bars stacked by packet type
+
+**SOC Dashboard — API Path Fixes:**
+- Fixed API_HUB path from `/api/v1/hub` to `/api`
+- Updated firewall_summary to `/api/public/firewall_summary`
+- Removed category tags (keeping donut metrics only)
+
+**WAF Dashboard — Syntax Fixes:**
+- Removed orphan return statements from getSiteEmoji function
+- Fixed extra closing brace causing "return not in function" error
+- Verified brace balance across all script blocks
+
+**HealthBump LED Service — Pulse Improvements:**
+- LED1 (HW): 1 flash per cycle (slowest)
+- LED2 (SVC): 2 flashes per cycle (medium)
+- LED3 (SEC): 4 flashes per cycle (fastest)
+- Pulse direction: bright → dim → bright (not dark to color)
+- Variable pulse timing for visual differentiation
+
+**Files Updated:**
+- `packages/secubox-hub/www/shared/sidebar.js` — Dice icons, getDiceForPercent
+- `packages/secubox-hub/www/soc.html` — Scribe trace, API fixes, no category tags
+- `packages/secubox-waf/www/index.html` — Syntax fixes
+- `scripts/secubox-healthbump` — 1/2/4 flash patterns
+
+---
+
 ### Session 130 — Eyeremote Style Visualizations + SOC/WAF Improvements
 
 **Hub Dashboard — Concentric System Health Gauge:**
