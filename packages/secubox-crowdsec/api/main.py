@@ -463,6 +463,24 @@ async def console_enroll(req: ConsoleEnrollRequest, user=Depends(require_jwt)):
     return await _run_ctl("console", "enroll", req.enrollment_key)
 
 
+@app.post("/capi/enroll")
+async def capi_enroll(user=Depends(require_jwt)):
+    """Auto-enroll to CAPI (Central API) for community blocklists."""
+    log.info("Auto-enrolling to CAPI")
+    try:
+        # CAPI enrollment happens automatically on first run
+        # We just need to register the machine if not done
+        result = subprocess.run(
+            ["sudo", "cscli", "capi", "register"],
+            capture_output=True, text=True, timeout=30
+        )
+        if result.returncode == 0 or "already registered" in result.stdout.lower():
+            return {"success": True, "message": "CAPI registered"}
+        return {"success": False, "error": result.stderr or result.stdout}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 # === Debug ===
 
 @app.get("/debug")
@@ -526,9 +544,27 @@ async def health():
         checks["bouncers_ok"] = False
         checks["bouncers_count"] = 0
 
+    # Check nftables tables exist (bouncer creates them)
+    try:
+        result = subprocess.run(
+            ["sudo", "nft", "list", "tables"],
+            capture_output=True, text=True, timeout=3
+        )
+        nft_output = result.stdout if result.returncode == 0 else ""
+        checks["nftables_crowdsec"] = "ip crowdsec" in nft_output
+        checks["nftables_crowdsec6"] = "ip6 crowdsec6" in nft_output
+        checks["nftables_ok"] = checks["nftables_crowdsec"] and checks["nftables_crowdsec6"]
+    except Exception as e:
+        log.warning("nftables check failed: %s", e)
+        checks["nftables_ok"] = False
+        checks["nftables_crowdsec"] = False
+        checks["nftables_crowdsec6"] = False
+
     # Determine overall status
-    if checks.get("engine_running") and checks.get("lapi_ok") and checks.get("bouncers_ok"):
+    if checks.get("engine_running") and checks.get("lapi_ok") and checks.get("bouncers_ok") and checks.get("nftables_ok"):
         status = "ok"
+    elif checks.get("engine_running") and checks.get("lapi_ok") and checks.get("bouncers_ok"):
+        status = "degraded"  # Bouncer running but nftables not synced - needs restart
     elif checks.get("engine_running") and checks.get("lapi_ok"):
         status = "degraded"  # Engine + LAPI ok but no bouncers
     elif checks.get("engine_running"):
@@ -601,7 +637,23 @@ async def doctor():
     except Exception:
         pass
 
-    # 5. Check hub updates
+    # 5. Check nftables tables (bouncer must create them)
+    try:
+        result = subprocess.run(
+            ["sudo", "nft", "list", "tables"],
+            capture_output=True, text=True, timeout=3
+        )
+        nft_output = result.stdout if result.returncode == 0 else ""
+        if "ip crowdsec" not in nft_output:
+            issues.append({
+                "type": "nftables_missing",
+                "repairable": True,
+                "details": "CrowdSec nftables table not found - bouncer needs restart"
+            })
+    except Exception:
+        issues.append({"type": "nftables_check_failed", "repairable": True})
+
+    # 6. Check hub updates (renumbered from 5)
     try:
         result = subprocess.run(
             ["cscli", "hub", "list", "-o", "json"],
@@ -646,14 +698,26 @@ async def repair():
 
     # 1. Restart engine if not running
     try:
-        result = subprocess.run(["pgrep", "crowdsec"], capture_output=True, timeout=2)
+        result = subprocess.run(["pgrep", "-x", "crowdsec"], capture_output=True, timeout=2)
         if result.returncode != 0:
             subprocess.run(["systemctl", "restart", "crowdsec"], timeout=30)
             repairs.append({"action": "restart_engine", "status": "ok"})
     except Exception as e:
         repairs.append({"action": "restart_engine", "status": "error", "message": str(e)})
 
-    # 2. Update hub
+    # 2. Check and restart firewall bouncer if nftables tables missing
+    try:
+        result = subprocess.run(["sudo", "nft", "list", "tables"], capture_output=True, text=True, timeout=3)
+        nft_output = result.stdout if result.returncode == 0 else ""
+        if "ip crowdsec" not in nft_output:
+            # Tables missing - restart bouncer to create them
+            subprocess.run(["sudo", "systemctl", "restart", "crowdsec-firewall-bouncer"], timeout=30)
+            await asyncio.sleep(3)  # Wait for bouncer to sync
+            repairs.append({"action": "restart_firewall_bouncer", "status": "ok", "reason": "nftables tables missing"})
+    except Exception as e:
+        repairs.append({"action": "restart_firewall_bouncer", "status": "error", "message": str(e)})
+
+    # 3. Update hub
     try:
         result = subprocess.run(
             ["cscli", "hub", "update"],
@@ -669,7 +733,7 @@ async def repair():
     except Exception as e:
         repairs.append({"action": "hub_update", "status": "error", "message": str(e)})
 
-    # 3. Upgrade hub items if available
+    # 4. Upgrade hub items if available
     try:
         result = subprocess.run(
             ["cscli", "hub", "upgrade"],
@@ -684,7 +748,7 @@ async def repair():
     except Exception as e:
         repairs.append({"action": "hub_upgrade", "status": "error", "message": str(e)})
 
-    # 4. Reload configuration
+    # 5. Reload configuration
     try:
         result = subprocess.run(
             ["cscli", "config", "reload"],
@@ -697,7 +761,7 @@ async def repair():
     except Exception as e:
         repairs.append({"action": "config_reload", "status": "error", "message": str(e)})
 
-    # 5. Register HAProxy bouncer if missing
+    # 6. Register HAProxy bouncer if missing
     try:
         result = subprocess.run(
             ["cscli", "bouncers", "list", "-o", "json"],
@@ -719,7 +783,7 @@ async def repair():
     except Exception as e:
         repairs.append({"action": "check_bouncers", "status": "error", "message": str(e)})
 
-    # 6. Verify health after repairs
+    # 7. Verify health after repairs
     await asyncio.sleep(2)
     health_result = await health()
     repairs.append({
@@ -1158,3 +1222,152 @@ async def export_decisions(format: str = Query(default="json", enum=["json", "cs
         "exported_at": datetime.now().isoformat(),
         "decisions": decisions
     }
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# SOC DASHBOARD STATS (public)
+# ═══════════════════════════════════════════════════════════════════════
+
+@app.get("/decisions_stats")
+async def decisions_stats():
+    """Get decision statistics for SOC dashboard (public).
+
+    Returns counts, bouncers, and categories for the dashboard cards.
+    """
+    cached = stats_cache.get("decisions_stats")
+    if cached:
+        return cached
+
+    # Get active decisions
+    active_decisions = 0
+    categories = {}
+    try:
+        result = subprocess.run(
+            ["sudo", "cscli", "decisions", "list", "-o", "json"],
+            capture_output=True, text=True, timeout=10
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            data = json.loads(result.stdout)
+            for item in data or []:
+                for d in item.get("decisions", []):
+                    active_decisions += 1
+                    # Extract category from scenario name (e.g., "crowdsecurity/ssh-bf" → "ssh")
+                    scenario = d.get("scenario", "")
+                    cat = scenario.split("/")[-1].split("-")[0] if "/" in scenario else scenario
+                    categories[cat] = categories.get(cat, 0) + 1
+    except Exception:
+        pass
+
+    # Get bouncer count
+    bouncers = 0
+    try:
+        result = subprocess.run(
+            ["sudo", "cscli", "bouncers", "list", "-o", "json"],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            data = json.loads(result.stdout)
+            bouncers = len(data) if isinstance(data, list) else 0
+    except Exception:
+        pass
+
+    # Categories list with emoji-friendly names
+    categories_list = [
+        {"name": cat, "count": cnt}
+        for cat, cnt in sorted(categories.items(), key=lambda x: -x[1])[:8]
+    ]
+
+    stats = {
+        "active_decisions": active_decisions,
+        "bouncers": bouncers,
+        "categories": categories_list,
+        "timestamp": datetime.now().isoformat()
+    }
+
+    stats_cache.set("decisions_stats", stats)
+    return stats
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# BAN/UNBAN API (for SOC autoban panel)
+# ═══════════════════════════════════════════════════════════════════════
+
+class BanRequest(BaseModel):
+    ip: str
+    duration: str = "24h"
+    reason: str = "Manual ban from SOC"
+
+
+@app.post("/ban")
+async def ban_ip(req: BanRequest, user=Depends(require_jwt)):
+    """Ban an IP address (manual ban from SOC dashboard)."""
+    log.info("Manual ban requested for %s by %s", req.ip, user.get("sub", "unknown"))
+
+    try:
+        result = subprocess.run([
+            "sudo", "cscli", "decisions", "add",
+            "--ip", req.ip,
+            "--type", "ban",
+            "--duration", req.duration,
+            "--reason", req.reason
+        ], capture_output=True, text=True, timeout=10)
+
+        if result.returncode == 0:
+            # Record in history
+            history = _load_json(DECISION_HISTORY_FILE, {"records": []})
+            history["records"].append({
+                "action": "ban",
+                "ip": req.ip,
+                "duration": req.duration,
+                "reason": req.reason,
+                "timestamp": datetime.now().isoformat(),
+                "user": user.get("sub", "unknown")
+            })
+            history["records"] = history["records"][-1000:]
+            _save_json(DECISION_HISTORY_FILE, history)
+
+            # Invalidate cache
+            stats_cache.invalidate("decisions_stats")
+
+            return {"success": True, "ip": req.ip, "duration": req.duration}
+        else:
+            return {"success": False, "error": result.stderr or result.stdout}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+class UnbanRequest(BaseModel):
+    ip: str
+
+
+@app.post("/unban")
+async def unban_ip(req: UnbanRequest, user=Depends(require_jwt)):
+    """Remove ban for an IP address."""
+    log.info("Unban requested for %s by %s", req.ip, user.get("sub", "unknown"))
+
+    try:
+        result = subprocess.run([
+            "sudo", "cscli", "decisions", "delete",
+            "--ip", req.ip
+        ], capture_output=True, text=True, timeout=10)
+
+        if result.returncode == 0:
+            # Record in history
+            history = _load_json(DECISION_HISTORY_FILE, {"records": []})
+            history["records"].append({
+                "action": "unban",
+                "ip": req.ip,
+                "timestamp": datetime.now().isoformat(),
+                "user": user.get("sub", "unknown")
+            })
+            history["records"] = history["records"][-1000:]
+            _save_json(DECISION_HISTORY_FILE, history)
+
+            # Invalidate cache
+            stats_cache.invalidate("decisions_stats")
+
+            return {"success": True, "ip": req.ip}
+        else:
+            return {"success": False, "error": result.stderr or result.stdout}
+    except Exception as e:
+        return {"success": False, "error": str(e)}

@@ -205,137 +205,6 @@ async def public_info():
     }
 
 
-# ══════════════════════════════════════════════════════════════════
-# Batch Health Endpoint — Efficient health check for navbar
-# ══════════════════════════════════════════════════════════════════
-import httpx
-from typing import Optional
-
-# Health check cache
-_health_cache: dict = {}
-_health_cache_time: float = 0
-HEALTH_CACHE_TTL = 10  # seconds
-
-
-# Static frontend-only modules (no backend service)
-STATIC_MODULES = {
-    "soc", "portal", "roadmap", "prototypes", "terminal"
-}
-
-
-async def _check_module_health(client: httpx.AsyncClient, module: str) -> dict:
-    """Check health of a single module via its socket."""
-    # Static modules - always ok (frontend-only, no backend)
-    if module in STATIC_MODULES:
-        return {
-            "status": "ok",
-            "healthy": True,
-            "module": module,
-            "version": "1.0.0",
-            "dev_stage": "production",
-            "enabled": "enabled",
-            "message": "Static page (no backend)"
-        }
-
-    # Special case: hub uses TCP
-    if module == "hub":
-        url = "http://127.0.0.1:8001/health"
-        try:
-            r = await client.get(url, timeout=3.0)
-            return r.json()
-        except Exception as e:
-            return {"status": "error", "module": module, "message": str(e)}
-
-    # Standard modules use Unix sockets
-    socket_path = f"/run/secubox/{module}.sock"
-    if not Path(socket_path).exists():
-        return {"status": "unknown", "module": module, "message": "socket not found"}
-
-    try:
-        transport = httpx.AsyncHTTPTransport(uds=socket_path)
-        async with httpx.AsyncClient(transport=transport, timeout=3.0) as sock_client:
-            r = await sock_client.get("http://localhost/health")
-            data = r.json()
-            # Ensure module name is present
-            if "module" not in data:
-                data["module"] = module
-            return data
-    except Exception as e:
-        return {"status": "error", "module": module, "message": str(e)}
-
-
-@public_router.get("/health-batch")
-async def batch_health_check(modules: Optional[str] = None):
-    """
-    Batch health check for multiple modules (navbar-optimized).
-
-    Query params:
-        modules: Comma-separated list of module IDs (e.g., "hub,waf,crowdsec")
-                If not provided, checks all modules from menu.
-
-    Returns:
-        {
-            "modules": {
-                "hub": {"status": "ok", "module": "hub", "version": "1.7.0", ...},
-                "waf": {"status": "ok", "module": "waf", "version": "1.2.0", ...},
-                ...
-            },
-            "timestamp": 1234567890.123,
-            "checked": 10
-        }
-    """
-    global _health_cache, _health_cache_time
-
-    # Parse module list
-    if modules:
-        module_list = [m.strip() for m in modules.split(",") if m.strip()]
-    else:
-        # Get all modules from menu cache
-        menu = _menu_cache or _load_menu_cache_from_file() or {}
-        module_list = []
-        for cat in menu.get("categories", []):
-            for item in cat.get("items", []):
-                mod_id = item.get("id")
-                if mod_id:
-                    module_list.append(mod_id)
-
-    # Check cache
-    now = time.time()
-    if _health_cache and (now - _health_cache_time) < HEALTH_CACHE_TTL:
-        # Return cached results for requested modules
-        cached_results = {m: _health_cache.get(m, {"status": "unknown", "module": m})
-                        for m in module_list}
-        return {
-            "modules": cached_results,
-            "timestamp": _health_cache_time,
-            "checked": len(module_list),
-            "cached": True,
-        }
-
-    # Batch check all modules
-    results = {}
-    async with httpx.AsyncClient() as client:
-        tasks = [_check_module_health(client, mod) for mod in module_list]
-        responses = await asyncio.gather(*tasks, return_exceptions=True)
-
-        for mod, resp in zip(module_list, responses):
-            if isinstance(resp, Exception):
-                results[mod] = {"status": "error", "module": mod, "message": str(resp)}
-            else:
-                results[mod] = resp
-
-    # Update cache
-    _health_cache.update(results)
-    _health_cache_time = now
-
-    return {
-        "modules": results,
-        "timestamp": now,
-        "checked": len(module_list),
-        "cached": False,
-    }
-
-
 @public_router.get("/led_status")
 async def public_led_status():
     """Public LED status endpoint — reads actual hardware LED colors from sysfs.
@@ -355,6 +224,7 @@ async def public_led_status():
 
     def brightness_to_hex(r: int, g: int, b: int) -> str:
         """Convert RGB brightness values (0-255) to hex color."""
+        # Normalize to 0-255 range (LED max is typically 255)
         r = min(255, max(0, r))
         g = min(255, max(0, g))
         b = min(255, max(0, b))
@@ -1110,21 +980,7 @@ async def apply_updates(user=Depends(require_jwt)):
 
 @router.get("/health")
 async def health():
-    """Standard health check endpoint (navbar compliant)."""
-    menu_ok = bool(_menu_cache)
-    return {
-        "status": "ok" if menu_ok else "degraded",
-        "healthy": menu_ok,
-        "module": "hub",
-        "version": "1.7.0",
-        "dev_stage": "production",
-        "enabled": "enabled",
-        "message": "Hub operational" if menu_ok else "Menu cache not ready",
-        "checks": {
-            "menu_cached": menu_ok,
-            "modules_count": _menu_cache.get("total_installed", 0) if _menu_cache else 0
-        }
-    }
+    return {"status": "ok", "module": "hub", "version": "1.7.0"}
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -1797,7 +1653,6 @@ MENU_DIR = Path("/usr/share/secubox/menu.d")
 # Default menu definitions (used if menu.d files don't exist)
 DEFAULT_MENU = [
     {"id": "hub", "name": "Dashboard", "category": "dashboard", "icon": "🏠", "path": "/", "order": 0},
-    {"id": "soc", "name": "SOC Dashboard", "category": "dashboard", "icon": "📊", "path": "/soc/", "order": 5},
     {"id": "system", "name": "System Hub", "category": "dashboard", "icon": "🔧", "path": "/system/", "order": 10},
     {"id": "crowdsec", "name": "CrowdSec", "category": "security", "icon": "🛡️", "path": "/crowdsec/", "order": 100},
     {"id": "waf", "name": "WAF", "category": "security", "icon": "🔥", "path": "/waf/", "order": 105},
@@ -1942,3 +1797,63 @@ async def menu(user=Depends(require_jwt)):
 
 
 app.include_router(router)
+
+
+# ══════════════════════════════════════════════════════════════════
+# Firewall Summary — nftables counters for SOC dashboard
+# Reads from cache files (/var/cache/secubox/nft-*.txt) updated by cron
+# ══════════════════════════════════════════════════════════════════
+@public_router.get("/firewall_summary")
+async def firewall_summary():
+    """Get nftables stats for dashboard from cache files."""
+    try:
+        counters = {}
+        # Read from cache file (updated by cron every 30s)
+        try:
+            with open("/var/cache/secubox/nft-counters.txt", "r") as f:
+                current_counter = None
+                for line in f:
+                    line = line.strip()
+                    if line.startswith("counter "):
+                        parts = line.split()
+                        if len(parts) >= 2:
+                            current_counter = parts[1]
+                    elif "packets" in line and current_counter:
+                        parts = line.split()
+                        for i, p in enumerate(parts):
+                            if p == "packets" and i + 1 < len(parts):
+                                packets = int(parts[i + 1])
+                                counters[current_counter] = counters.get(current_counter, 0) + packets
+                                break
+        except FileNotFoundError:
+            pass
+
+        processed = counters.get("processed", 0)
+        dropped = sum(v for k, v in counters.items() if "blacklist" in k.lower())
+
+        # Get table/chain/rule counts from JSON cache
+        tables, chains, rules = 2, 4, 0
+        try:
+            with open("/var/cache/secubox/nft-ruleset.json", "r") as f:
+                data = json.loads(f.read())
+                nftables = data.get("nftables", [])
+                tables = sum(1 for x in nftables if "table" in x)
+                chains = sum(1 for x in nftables if "chain" in x)
+                rules = sum(1 for x in nftables if "rule" in x)
+        except FileNotFoundError:
+            pass
+
+        return {
+            "tables": tables,
+            "chains": chains,
+            "rules": rules,
+            "processed": processed,
+            "dropped": dropped,
+            "accepted": processed - dropped if processed > dropped else 0,
+            "counters": counters
+        }
+    except Exception as e:
+        return {"error": str(e), "tables": 0, "chains": 0, "rules": 0, "dropped": 0, "accepted": 0, "processed": 0}
+
+
+app.include_router(public_router)  # Re-include for firewall_summary

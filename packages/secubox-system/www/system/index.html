@@ -415,13 +415,25 @@
 
                 <div class="card">
                     <div class="card-header">
-                        <h2>📝 System Logs</h2>
-                        <div>
-                            <button class="btn" onclick="loadLogs(50)">50</button>
-                            <button class="btn" onclick="loadLogs(100)">100</button>
+                        <h2>📝 SecuBox Logs</h2>
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <span id="logs-refresh-indicator" style="font-size: 0.7rem; color: var(--p31-dim);">Auto-refresh: 10s</span>
+                            <button class="btn" onclick="loadSecuboxLogs()">🔄</button>
                         </div>
                     </div>
-                    <div class="log-box" id="logs">Loading...</div>
+                    <div id="secubox-logs" style="font-size: 0.85rem;">
+                        <p style="color: var(--text-dim);">Loading...</p>
+                    </div>
+                    <div style="margin-top: 0.75rem; border-top: 1px solid var(--border); padding-top: 0.5rem;">
+                        <details>
+                            <summary style="cursor: pointer; color: var(--p31-dim); font-size: 0.8rem;">📜 Full Logs</summary>
+                            <div style="margin-top: 0.5rem;">
+                                <button class="btn" onclick="loadLogs(50)" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">50</button>
+                                <button class="btn" onclick="loadLogs(100)" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">100</button>
+                            </div>
+                            <div class="log-box" id="logs" style="margin-top: 0.5rem; max-height: 150px;">Loading...</div>
+                        </details>
+                    </div>
                 </div>
 
                 <div class="card">
@@ -607,6 +619,44 @@
             document.getElementById('logs').textContent = (data.lines || []).join('\n') || 'No logs';
         }
 
+        async function loadSecuboxLogs() {
+            const data = await api('/secubox_logs');
+            const container = document.getElementById('secubox-logs');
+            const logs = data.logs || [];
+
+            if (logs.length === 0) {
+                container.innerHTML = '<p style="color: var(--p31-dim);">No recent logs</p>';
+                return;
+            }
+
+            container.innerHTML = logs.map(log => {
+                const countBadge = log.count > 1
+                    ? `<span style="background: var(--p31-ghost); color: var(--p31-decay); padding: 0.1rem 0.4rem; border-radius: 10px; font-size: 0.7rem; margin-left: 0.5rem;">×${log.count}</span>`
+                    : '';
+                return `
+                    <div style="display: flex; align-items: flex-start; gap: 0.5rem; padding: 0.4rem 0; border-bottom: 1px solid var(--p31-ghost);">
+                        <span style="font-size: 1.1rem;">${log.emoji}</span>
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <span style="font-size: 0.7rem; color: var(--p31-decay); text-transform: uppercase;">${log.category}</span>
+                                ${countBadge}
+                            </div>
+                            <div style="color: var(--p31-mid); font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${log.message}">${log.message}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // Update indicator
+            const indicator = document.getElementById('logs-refresh-indicator');
+            if (indicator) {
+                indicator.textContent = `${data.total_entries || 0} entries • Auto: 10s`;
+            }
+        }
+
+        // Auto-refresh secubox logs every 10 seconds
+        setInterval(loadSecuboxLogs, 10000);
+
         async function loadSecurity() {
             const data = await api('/security');
             document.getElementById('firewall').textContent = data.firewall || 'Unknown';
@@ -754,6 +804,7 @@
         function refresh() { loadSystemInfo(); loadResources(); loadServices(); loadNetwork(); loadSecurity(); loadBoardDetection(); loadKioskStatus(); }
         refresh();
         loadLogs();
+        loadSecuboxLogs();
         loadPackages();
         setInterval(refresh, 15000);
     </script>

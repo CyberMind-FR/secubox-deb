@@ -1,5 +1,50 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-08 (Session 128)*
+*Mis à jour : 2026-05-08 (Session 130)*
+
+---
+
+## 🔄 Session 130: Eyeremote Style Visualizations + SOC/WAF Improvements
+
+### Multi-Layer Concentric Donuts — COMPLETE
+- [x] `createConcentricGauge()` for Hub System Health (CPU/RAM/Disk)
+- [x] `createMultiLayerDonut()` for CrowdSec categories
+- [x] `createCountryDonut()` for WAF Top Countries with flags
+- [x] `createSiteDonut()` for WAF Top Attacked Sites with emojis
+- [x] Ring gauges replaced by eyeremote-style concentric visualization
+
+### Hub Dashboard Updates — COMPLETE
+- [x] Concentric gauge for System Health with icons (🔥CPU/🧠RAM/💾Disk)
+- [x] Legend with color-coded percentages
+- [x] Smooth transitions on data update
+
+### SOC Dashboard Updates — COMPLETE
+- [x] Firewall packet stats bubbles (DROP/ACCEPT/REJECT)
+- [x] CrowdSec category multi-layer donut
+- [x] sidebar.js injection added
+- [x] Fixed CATEGORY_EMOJI definition (syntax error)
+
+### WAF Statistics Page — COMPLETE
+- [x] Restored separate Severity/Category donuts
+- [x] Country donut with flags alongside bar graph
+- [x] Site donut with emojis
+- [x] Fixed `parseDuration()` for compound formats ("22m47s")
+- [x] Bar graphs with percentage backgrounds
+
+### Backend API — COMPLETE
+- [x] New `/api/v1/hub/public/firewall_summary` endpoint
+- [x] Cron job for nftables cache (permission fix)
+- [x] Cache files: `/var/cache/secubox/nft-counters.txt`, `nft-ruleset.json`
+
+### Files Updated
+- `packages/secubox-hub/www/index.html` — Concentric gauge
+- `packages/secubox-hub/www/soc.html` — Multi-layer donuts, firewall stats
+- `packages/secubox-waf/www/index.html` — Country/Site donuts, duration fix
+- `packages/secubox-hub/api/main.py` — firewall_summary endpoint
+
+---
+
+## ✅ Session 129: Eye Remote Radar Animation + SOC Fixes
+*(completed earlier today)*
 
 ---
 

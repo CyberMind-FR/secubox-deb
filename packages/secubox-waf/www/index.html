@@ -355,18 +355,21 @@
             <div id="stats" class="tab-content">
                 <div class="grid">
                     <div class="card">
-                        <h2>By Severity</h2>
-                        <div id="severityStats">Loading...</div>
+                        <h2>🎯 By Severity</h2>
+                        <div id="severityStats" style="display:flex;justify-content:center;">Loading...</div>
                     </div>
                     <div class="card">
-                        <h2>By Category</h2>
-                        <div id="categoryStats">Loading...</div>
+                        <h2>📊 By Category</h2>
+                        <div id="categoryStats" style="display:flex;justify-content:center;">Loading...</div>
                     </div>
                 </div>
                 <div class="grid">
                     <div class="card">
                         <h2>🌍 Top Countries</h2>
-                        <div id="topCountries">Loading...</div>
+                        <div style="display: flex; gap: 1rem; align-items: flex-start;">
+                            <div id="countryDonut" style="flex-shrink: 0;"></div>
+                            <div id="topCountries" style="flex: 1;">Loading...</div>
+                        </div>
                     </div>
                     <div class="card">
                         <h2>🎯 Top Attacked Sites</h2>
@@ -445,6 +448,163 @@
             if (h.includes("secubox")) return "🛡️";
             return "🌐";
         }
+
+        // Multi-layer concentric donut for countries with flags
+        function createCountryDonut(countries, size) {
+            size = size || 120;
+            const center = size / 2;
+            if (!countries || countries.length === 0) return "<p style=\"color:var(--text-dim);font-size:0.7rem;\">No data</p>";
+            
+            const total = countries.reduce((s, c) => s + (c.count || 0), 0);
+            if (total === 0) return "<p style=\"color:var(--text-dim);font-size:0.7rem;\">No data</p>";
+            
+            const COUNTRY_COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#14b8a6", "#0ea5e9", "#6366f1", "#a855f7"];
+            const topCountries = countries.slice(0, 6);
+            const ringWidth = 7;
+            const spacing = 2;
+            
+            let svg = "<svg width=\"" + size + "\" height=\"" + size + "\" viewBox=\"0 0 " + size + " " + size + "\">";
+            
+            // Draw rings from outer to inner
+            topCountries.forEach(function(c, i) {
+                const r = center - 8 - (i * (ringWidth + spacing));
+                const pct = c.count / total;
+                const circ = 2 * Math.PI * r;
+                const dash = circ * pct;
+                const gap = circ - dash;
+                const color = COUNTRY_COLORS[i % COUNTRY_COLORS.length];
+                const code = c.country || c.code || "??";
+                const flag = countryToFlag(code);
+                
+                // Background
+                svg += "<circle cx=\"" + center + "\" cy=\"" + center + "\" r=\"" + r + "\" fill=\"none\" stroke=\"rgba(255,255,255,0.05)\" stroke-width=\"" + ringWidth + "\"/>";
+                
+                // Progress arc
+                svg += "<circle cx=\"" + center + "\" cy=\"" + center + "\" r=\"" + r + "\" fill=\"none\" stroke=\"" + color + "\" stroke-width=\"" + ringWidth + "\" stroke-dasharray=\"" + dash + " " + gap + "\" stroke-dashoffset=\"" + (circ/4) + "\" stroke-linecap=\"round\" style=\"transition:stroke-dasharray 0.5s;opacity:0.85;cursor:pointer;\" onmouseover=\"this.style.opacity=1;this.style.strokeWidth=9\" onmouseout=\"this.style.opacity=0.85;this.style.strokeWidth=" + ringWidth + "\"><title>" + flag + " " + code + ": " + c.count + " (" + Math.round(pct*100) + "%)</title></circle>";
+                
+                // Flag at position around ring (spread evenly)
+                const angle = -Math.PI/2 + (i * Math.PI / 4);
+                const iconX = center + Math.cos(angle) * (r + 2);
+                const iconY = center + Math.sin(angle) * (r + 2);
+                svg += "<text x=\"" + iconX + "\" y=\"" + iconY + "\" text-anchor=\"middle\" dominant-baseline=\"middle\" font-size=\"10\" style=\"pointer-events:none;\">" + flag + "</text>";
+            });
+            
+            // Center total
+            svg += "<text x=\"" + center + "\" y=\"" + (center - 2) + "\" text-anchor=\"middle\" fill=\"var(--text)\" font-size=\"14\" font-weight=\"bold\">" + total + "</text>";
+            svg += "<text x=\"" + center + "\" y=\"" + (center + 10) + "\" text-anchor=\"middle\" fill=\"var(--text-dim)\" font-size=\"6\">ATTACKS</text>";
+            
+            svg += "</svg>";
+            
+            // Legend with flags
+            const legend = topCountries.slice(0, 4).map(function(c, i) {
+                const code = c.country || c.code || "??";
+                const flag = countryToFlag(code);
+                return "<span style=\"display:inline-flex;align-items:center;gap:2px;font-size:0.6rem;\"><span style=\"width:6px;height:6px;background:" + COUNTRY_COLORS[i % COUNTRY_COLORS.length] + ";border-radius:1px;\"></span>" + flag + " " + c.count + "</span>";
+            }).join(" ");
+            
+            return "<div style=\"display:flex;flex-direction:column;align-items:center;\">" + svg + "<div style=\"margin-top:4px;display:flex;gap:6px;flex-wrap:wrap;justify-content:center;\">" + legend + "</div></div>";
+        }
+        // Donut chart with hover icons
+
+        // Multi-layer donut for attacked sites with emojis
+        function createSiteDonut(sites, size) {
+            size = size || 110;
+            const center = size / 2;
+            if (!sites || sites.length === 0) return "<p style=\"color:var(--text-dim);font-size:0.7rem;\">No data</p>";
+            
+            const total = sites.reduce((s, v) => s + (v.count || 0), 0);
+            if (total === 0) return "<p style=\"color:var(--text-dim);font-size:0.7rem;\">No data</p>";
+            
+            const SITE_COLORS = ["#ec4899", "#f43f5e", "#ef4444", "#f97316", "#eab308", "#22c55e"];
+            const topSites = sites.slice(0, 5);
+            const ringWidth = 7;
+            const spacing = 2;
+            
+            let svg = "<svg width=\"" + size + "\" height=\"" + size + "\" viewBox=\"0 0 " + size + " " + size + "\">";
+            
+            topSites.forEach(function(s, i) {
+                const r = center - 8 - (i * (ringWidth + spacing));
+                const pct = s.count / total;
+                const circ = 2 * Math.PI * r;
+                const dash = circ * pct;
+                const gap = circ - dash;
+                const color = SITE_COLORS[i % SITE_COLORS.length];
+                const host = s.vhost || s.host || "?";
+                const icon = getSiteEmoji(host);
+                
+                svg += "<circle cx=\"" + center + "\" cy=\"" + center + "\" r=\"" + r + "\" fill=\"none\" stroke=\"rgba(255,255,255,0.05)\" stroke-width=\"" + ringWidth + "\"/>";
+                svg += "<circle cx=\"" + center + "\" cy=\"" + center + "\" r=\"" + r + "\" fill=\"none\" stroke=\"" + color + "\" stroke-width=\"" + ringWidth + "\" stroke-dasharray=\"" + dash + " " + gap + "\" stroke-dashoffset=\"" + (circ/4) + "\" stroke-linecap=\"round\" style=\"transition:stroke-dasharray 0.5s;opacity:0.85;cursor:pointer;\" onmouseover=\"this.style.opacity=1\" onmouseout=\"this.style.opacity=0.85\"><title>" + icon + " " + host + ": " + s.count + " (" + Math.round(pct*100) + "%)</title></circle>";
+                
+                const angle = -Math.PI/2 + (i * Math.PI / 3.5);
+                const iconX = center + Math.cos(angle) * (r + 2);
+                const iconY = center + Math.sin(angle) * (r + 2);
+                svg += "<text x=\"" + iconX + "\" y=\"" + iconY + "\" text-anchor=\"middle\" dominant-baseline=\"middle\" font-size=\"9\" style=\"pointer-events:none;\">" + icon + "</text>";
+            });
+            
+            svg += "<text x=\"" + center + "\" y=\"" + (center - 2) + "\" text-anchor=\"middle\" fill=\"var(--text)\" font-size=\"12\" font-weight=\"bold\">" + total + "</text>";
+            svg += "<text x=\"" + center + "\" y=\"" + (center + 9) + "\" text-anchor=\"middle\" fill=\"var(--text-dim)\" font-size=\"6\">HITS</text>";
+            svg += "</svg>";
+            
+            return "<div style=\"display:flex;flex-direction:column;align-items:center;\">" + svg + "</div>";
+        }
+
+        function createDonutChart(data, colors, icons, size = 100) {
+            const total = Object.values(data).reduce((a, b) => a + b, 0);
+            if (total === 0) return "<p style='color:var(--text-dim)'>No data</p>";
+            const radius = size / 2 - 5;
+            const innerRadius = radius * 0.6;
+            let cumulative = 0;
+            const slices = Object.entries(data).map(([label, value], i) => {
+                const pct = value / total;
+                const startAngle = cumulative * 2 * Math.PI - Math.PI / 2;
+                cumulative += pct;
+                const endAngle = cumulative * 2 * Math.PI - Math.PI / 2;
+                const x1o = Math.cos(startAngle) * radius;
+                const y1o = Math.sin(startAngle) * radius;
+                const x2o = Math.cos(endAngle) * radius;
+                const y2o = Math.sin(endAngle) * radius;
+                const x1i = Math.cos(startAngle) * innerRadius;
+                const y1i = Math.sin(startAngle) * innerRadius;
+                const x2i = Math.cos(endAngle) * innerRadius;
+                const y2i = Math.sin(endAngle) * innerRadius;
+                const largeArc = pct > 0.5 ? 1 : 0;
+                const color = colors[i % colors.length];
+                const icon = icons && icons[label] ? icons[label] : "•";
+                return `<g class="donut-slice"><path d="M${x1o},${y1o} A${radius},${radius} 0 ${largeArc},1 ${x2o},${y2o} L${x2i},${y2i} A${innerRadius},${innerRadius} 0 ${largeArc},0 ${x1i},${y1i} Z" fill="${color}" style="transition:transform 0.2s;transform-origin:center;cursor:pointer;" onmouseover="this.style.transform='scale(1.05)';this.nextElementSibling.style.opacity=1" onmouseout="this.style.transform='scale(1)';this.nextElementSibling.style.opacity=0"/><title>${icon} ${label}: ${value} (${Math.round(pct*100)}%)</title></g>`;
+            });
+            const centerText = `<text x="0" y="-5" text-anchor="middle" fill="var(--text)" font-size="16" font-weight="bold">${total}</text><text x="0" y="12" text-anchor="middle" fill="var(--text-dim)" font-size="9">TOTAL</text>`;
+            return `<div style="display:flex;flex-direction:column;align-items:center;"><svg width="${size}" height="${size}" viewBox="-${size/2} -${size/2} ${size} ${size}">${slices.join("")}${centerText}</svg><div style="display:flex;flex-wrap:wrap;gap:0.4rem;margin-top:0.5rem;font-size:0.7rem;">${Object.entries(data).map(([l,v],i) => `<span style="display:flex;align-items:center;gap:0.2rem;"><span style="width:8px;height:8px;background:${colors[i%colors.length]};border-radius:2px;"></span>${icons&&icons[l]?icons[l]:""} ${l}</span>`).join("")}</div></div>`;
+        }
+        const SEV_COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e"];
+        const SEV_ICONS = {critical:"🔴",high:"🟠",medium:"🟡",low:"🟢"};
+        const CAT_COLORS = ["#6366f1", "#8b5cf6", "#a855f7", "#d946ef", "#ec4899", "#f43f5e", "#0ea5e9", "#14b8a6"];
+        const CAT_ICONS = {router_botnet:"🤖",scanners:"🔍",api_abuse:"⚠️",lfi:"📂",rce:"💀",recon_crawler:"🕷️",waf_fingerprint:"👆",honeypot:"🍯",xss:"⚡",sqli:"💉"};
+        // Nested concentric donut chart (inner=severity, outer=category)
+        function createNestedDonut(innerData, outerData, innerColors, outerColors, innerIcons, outerIcons, size) {
+            size = size || 160;
+            var innerTotal = Object.values(innerData).reduce(function(a,b){return a+b;}, 0);
+            var outerTotal = Object.values(outerData).reduce(function(a,b){return a+b;}, 0);
+            if (innerTotal === 0 && outerTotal === 0) return "<p style=\"color:var(--text-dim)\">No data</p>";
+            var outerR = size/2 - 5, outerI = outerR * 0.7, innerR = outerR * 0.65, innerI = outerR * 0.35;
+            function ring(data, cols, icons, r1, r2, tot) {
+                var cum = 0;
+                return Object.entries(data).map(function(e, i) {
+                    var lbl = e[0], val = e[1], pct = val/tot;
+                    var s = cum * 2 * Math.PI - Math.PI/2; cum += pct; var en = cum * 2 * Math.PI - Math.PI/2;
+                    var x1o = Math.cos(s)*r1, y1o = Math.sin(s)*r1, x2o = Math.cos(en)*r1, y2o = Math.sin(en)*r1;
+                    var x1i = Math.cos(s)*r2, y1i = Math.sin(s)*r2, x2i = Math.cos(en)*r2, y2i = Math.sin(en)*r2;
+                    var la = pct > 0.5 ? 1 : 0, col = cols[i % cols.length], ico = icons && icons[lbl] ? icons[lbl] : "";
+                    return "<path d=\"M"+x1o+","+y1o+" A"+r1+","+r1+" 0 "+la+",1 "+x2o+","+y2o+" L"+x2i+","+y2i+" A"+r2+","+r2+" 0 "+la+",0 "+x1i+","+y1i+" Z\" fill=\""+col+"\" style=\"cursor:pointer;transition:opacity 0.2s;\" onmouseover=\"this.style.opacity=0.7\" onmouseout=\"this.style.opacity=1\"><title>"+ico+" "+lbl+": "+val+" ("+Math.round(pct*100)+"%)</title></path>";
+                }).join("");
+            }
+            var iRing = ring(innerData, innerColors, innerIcons, innerR, innerI, innerTotal);
+            var oRing = ring(outerData, outerColors, outerIcons, outerR, outerI, outerTotal);
+            var ctr = "<text x=\"0\" y=\"-6\" text-anchor=\"middle\" fill=\"var(--text)\" font-size=\"16\" font-weight=\"bold\">"+(innerTotal||outerTotal)+"</text><text x=\"0\" y=\"8\" text-anchor=\"middle\" fill=\"var(--text-dim)\" font-size=\"7\">THREATS</text>";
+            var iLeg = Object.entries(innerData).map(function(e,i){var ic=innerIcons&&innerIcons[e[0]]?innerIcons[e[0]]:"";return "<span style=\"display:inline-flex;align-items:center;gap:2px;margin:1px 3px;\"><span style=\"width:6px;height:6px;background:"+innerColors[i%innerColors.length]+";border-radius:1px;\"></span>"+ic+"</span>";}).join("");
+            var oLeg = Object.entries(outerData).slice(0,5).map(function(e,i){var ic=outerIcons&&outerIcons[e[0]]?outerIcons[e[0]]:"";return "<span style=\"display:inline-flex;align-items:center;gap:2px;margin:1px 3px;\"><span style=\"width:6px;height:6px;background:"+outerColors[i%outerColors.length]+";border-radius:1px;\"></span>"+ic+"</span>";}).join("");
+            return "<div style=\"display:flex;flex-direction:column;align-items:center;\"><svg width=\""+size+"\" height=\""+size+"\" viewBox=\"-"+size/2+" -"+size/2+" "+size+" "+size+"\">"+oRing+iRing+ctr+"</svg><div style=\"font-size:0.6rem;margin-top:4px;text-align:center;\"><div>🎯 "+iLeg+"</div><div>📊 "+oLeg+"</div></div></div>";
+        }
+
         function getCategoryEmoji(cat) {
             if (!cat) return "⚠️";
             const c = cat.toLowerCase();
@@ -492,27 +652,31 @@
             const d = await api('/stats');
             document.getElementById('threatsToday').textContent = d.threats_today || 0;
 
-            // Severity stats
+            // Severity donut
             const sevEl = document.getElementById('severityStats');
             if (d.by_severity) {
-                sevEl.innerHTML = Object.entries(d.by_severity).map(([sev, count]) =>
-                    `<div style="display:flex;justify-content:space-between;padding:0.25rem 0;"><span class="badge ${sev}">${sev}</span><span>${count}</span></div>`
-                ).join('');
+                sevEl.innerHTML = createDonutChart(d.by_severity, SEV_COLORS, SEV_ICONS, 140);
             }
-
-            // Category stats
+            
+            // Category donut
             const catEl = document.getElementById('categoryStats');
             if (d.by_category) {
-                catEl.innerHTML = Object.entries(d.by_category).slice(0, 8).map(([cat, count]) =>
-                    `<div style="display:flex;justify-content:space-between;padding:0.25rem 0;"><span>${getCategoryEmoji(cat)} ${cat}</span><span style="color:var(--cyan)">${count}</span></div>`
-                ).join('');
+                catEl.innerHTML = createDonutChart(d.by_category, CAT_COLORS, CAT_ICONS, 140);
             }
 
-            // Top Countries
+            // Top Countries - render donut + bar graph
             const countriesEl = document.getElementById('topCountries');
-            if (d.top_countries && Object.keys(d.top_countries).length > 0) {
-                countriesEl.innerHTML = Object.entries(d.top_countries).slice(0, 8).map(([code, count]) =>
-                    `<div style="display:flex;justify-content:space-between;padding:0.25rem 0;"><span>${countryToFlag(code)} ${code}</span><span style="color:var(--red)">${count}</span></div>`
+            const countryDonutEl = document.getElementById('countryDonut');
+            const countryTotal = d.top_countries ? d.top_countries.reduce((s,c) => s + c.count, 0) : 1;
+            
+            // Render country donut
+            if (countryDonutEl && d.top_countries && d.top_countries.length > 0) {
+                countryDonutEl.innerHTML = createCountryDonut(d.top_countries, 110);
+            }
+            
+            if (d.top_countries && d.top_countries.length > 0) {
+                countriesEl.innerHTML = d.top_countries.slice(0, 8).map(c => [c.country, c.count]).map(([code, count]) =>
+                    `<div style="position:relative;padding:0.3rem 0.5rem;margin:0.15rem 0;border-radius:4px;overflow:hidden;"><div style="position:absolute;left:0;top:0;bottom:0;width:${Math.round(count/countryTotal*100)}%;background:linear-gradient(90deg,rgba(239,68,68,0.3),rgba(239,68,68,0.1));border-radius:4px;"></div><div style="position:relative;display:flex;justify-content:space-between;align-items:center;"><span>${countryToFlag(code)} ${code}</span><span style="color:var(--red);font-weight:500;">${count} <small style="opacity:0.6;">(${Math.round(count/countryTotal*100)}%)</small></span></div></div>`
                 ).join('');
             } else {
                 countriesEl.innerHTML = '<p style="color:var(--text-dim)">No data (GeoIP DB needed)</p>';
@@ -520,9 +684,9 @@
 
             // Top Attacked Vhosts
             const vhostsEl = document.getElementById('topVhosts');
-            if (d.top_vhosts && Object.keys(d.top_vhosts).length > 0) {
-                vhostsEl.innerHTML = Object.entries(d.top_vhosts).slice(0, 8).map(([host, count]) =>
-                    `<div style="display:flex;justify-content:space-between;padding:0.25rem 0;"><span>${getSiteEmoji(host)} ${host.split('.')[0]}</span><span style="color:var(--yellow)">${count}</span></div>`
+            const vhostTotal = d.top_vhosts ? d.top_vhosts.reduce((s,v) => s + v.count, 0) : 1; if (d.top_vhosts && d.top_vhosts.length > 0) {
+                vhostsEl.innerHTML = d.top_vhosts.slice(0, 8).map(v => [v.vhost, v.count]).map(([host, count]) =>
+                    `<div style="position:relative;padding:0.3rem 0.5rem;margin:0.15rem 0;border-radius:4px;overflow:hidden;"><div style="position:absolute;left:0;top:0;bottom:0;width:${Math.round(count/vhostTotal*100)}%;background:linear-gradient(90deg,rgba(234,179,8,0.3),rgba(234,179,8,0.1));border-radius:4px;"></div><div style="position:relative;display:flex;justify-content:space-between;align-items:center;"><span>${getSiteEmoji(host)} ${host}</span><span style="color:var(--yellow);font-weight:500;">${count} <small style="opacity:0.6;">(${Math.round(count/vhostTotal*100)}%)</small></span></div></div>`
                 ).join('');
             } else {
                 vhostsEl.innerHTML = '<p style="color:var(--text-dim)">No data</p>';
@@ -610,17 +774,20 @@
         }
 
         function parseDuration(dur) {
-            // Parse duration like "4h", "24h", "7d" to milliseconds
+            // Parse duration like "4h", "24h", "7d", "22m47s", "2h30m15s" to milliseconds
             if (!dur) return 0;
-            const m = dur.match(/^(\d+)([smhd])$/i);
-            if (!m) return 0;
-            const n = parseInt(m[1]);
-            const u = m[2].toLowerCase();
-            if (u === 's') return n * 1000;
-            if (u === 'm') return n * 60 * 1000;
-            if (u === 'h') return n * 60 * 60 * 1000;
-            if (u === 'd') return n * 24 * 60 * 60 * 1000;
-            return 0;
+            let ms = 0;
+            // Match all numeric+unit pairs
+            const matches = dur.matchAll(/(\d+)([smhd])/gi);
+            for (const m of matches) {
+                const n = parseInt(m[1]);
+                const u = m[2].toLowerCase();
+                if (u === 's') ms += n * 1000;
+                if (u === 'm') ms += n * 60 * 1000;
+                if (u === 'h') ms += n * 60 * 60 * 1000;
+                if (u === 'd') ms += n * 24 * 60 * 60 * 1000;
+            }
+            return ms;
         }
 
         function formatTimeLeft(ms) {
