@@ -130,7 +130,7 @@
     <script src="/shared/sidebar.js"></script>
     <main class="main">
         <div class="cards-grid">
-            <div class="stat-card"><div class="value" id="threatsToday">-</div><div class="label">Threats Today</div></div>
+            <div class="stat-card"><div class="value" id="threatsToday">-</div><div class="label">Threats 24h</div></div>
             <div class="stat-card"><div class="value" id="totalRules">-</div><div class="label">Active Rules</div></div>
             <div class="stat-card"><div class="value" id="activeCategories">-</div><div class="label">Categories</div></div>
             <div class="stat-card"><div class="value" id="activeBans">-</div><div class="label">Active Bans</div></div>
@@ -322,7 +322,7 @@
                 document.getElementById('geoLegend').innerHTML = '<span style="color:#00ff41;">● SECURE</span>';
                 return;
             }
-            document.getElementById('threatsToday').textContent = d.threats_today || 0;
+            document.getElementById('threatsToday').textContent = (d.blocked_24h || d.threats_today || 0).toLocaleString();
 
             // Severity donut
             if (d.by_severity) {
