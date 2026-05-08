@@ -349,22 +349,7 @@
                     <div id="resource-gauge" style="display:flex;justify-content:center;padding:0.5rem 0;">
                         <p style="color:var(--text-dim);">Loading...</p>
                     </div>
-                    <!-- Detail bars -->
-                    <div class="health-item" style="margin-top:0.5rem;">
-                        <div class="health-header"><span>🔥 CPU</span><span id="cpu">-</span></div>
-                        <div class="health-bar"><div class="fill" id="cpu-bar" style="width:0%;background:#ef4444;"></div></div>
-                    </div>
-                    <div class="health-item">
-                        <div class="health-header"><span>🧠 Memory</span><span id="memory">-</span></div>
-                        <div class="health-bar"><div class="fill" id="mem-bar" style="width:0%;background:#eab308;"></div></div>
-                    </div>
-                    <div class="health-item">
-                        <div class="health-header"><span>💾 Disk /</span><span id="disk">-</span></div>
-                        <div class="health-bar"><div class="fill" id="disk-bar" style="width:0%;background:#22c55e;"></div></div>
-                    </div>
-                    <div class="health-item">
-                        <div class="health-header"><span>📈 Load</span><span id="load">-</span></div>
-                    </div>
+
                 </div>
 
                 <div class="card">
@@ -623,19 +608,16 @@
                 return "green";
             }
 
-            document.getElementById('cpu').textContent = cpu.toFixed(1) + '%';
-            const cpuBar = document.getElementById("cpu-bar");
-            cpuBar.style.width = cpu + "%";
-            cpuBar.className = "fill " + getBarColor(cpu);
-            document.getElementById('memory').textContent = `${formatBytes(data.memory_used)} / ${formatBytes(data.memory_total)}`;
-            const memBar = document.getElementById("mem-bar");
-            memBar.style.width = mem + "%";
-            memBar.className = "fill " + getBarColor(mem);
-            document.getElementById('disk').textContent = `${formatBytes(data.disk_used)} / ${formatBytes(data.disk_total)}`;
-            const diskBar = document.getElementById("disk-bar");
-            diskBar.style.width = disk + "%";
-            diskBar.className = "fill " + getBarColor(disk);
-            document.getElementById('load').textContent = (data.load_avg || [0, 0, 0]).map(l => l.toFixed(2)).join(' ');
+            const cpuEl = document.getElementById('cpu'); if (cpuEl) cpuEl.textContent = cpu.toFixed(1) + '%';
+            const cpuBar = document.getElementById('cpu-bar');
+            if (cpuBar) { cpuBar.style.width = cpu + "%"; cpuBar.className = "fill " + getBarColor(cpu); }
+            const memEl = document.getElementById('memory'); if (memEl) memEl.textContent = `${formatBytes(data.memory_used)} / ${formatBytes(data.memory_total)}`;
+            const memBar = document.getElementById('mem-bar');
+            if (memBar) { memBar.style.width = mem + "%"; memBar.className = "fill " + getBarColor(mem); }
+            const diskEl = document.getElementById('disk'); if (diskEl) diskEl.textContent = `${formatBytes(data.disk_used)} / ${formatBytes(data.disk_total)}`;
+            const diskBar = document.getElementById('disk-bar');
+            if (diskBar) { diskBar.style.width = disk + "%"; diskBar.className = "fill " + getBarColor(disk); }
+            const loadEl = document.getElementById('load'); if (loadEl) loadEl.textContent = (data.load_avg || [0, 0, 0]).map(l => l.toFixed(2)).join(' ');
 
             // Update concentric gauge
             const gaugeEl = document.getElementById('resource-gauge');
