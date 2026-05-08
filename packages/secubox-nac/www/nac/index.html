@@ -307,6 +307,9 @@
         const API = '/api/v1/nac';
 
         async function api(path, opts = {}) {
+            const token = localStorage.getItem('sbx_token');
+            const headers = token ? { 'Authorization': 'Bearer ' + token, ...(opts.headers || {}) } : (opts.headers || {});
+            opts = { ...opts, headers };
             try {
                 const res = await fetch(API + path, { credentials: 'include', ...opts });
                 return res.json();
