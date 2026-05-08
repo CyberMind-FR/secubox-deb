@@ -1168,9 +1168,9 @@
                 const dropEl = document.getElementById('fw-drop-val');
                 const acceptEl = document.getElementById('fw-accept-val');
                 const rejectEl = document.getElementById('fw-reject-val');
-                if (dropEl) dropEl.textContent = '🛑 ' + formatNumber(drop);
-                if (acceptEl) acceptEl.textContent = '✅ ' + formatNumber(accept);
-                if (rejectEl) rejectEl.textContent = '❌ ' + formatNumber(reject);
+                if (dropEl) dropEl.textContent = '🛑 ' + drop.toLocaleString();
+                if (acceptEl) acceptEl.textContent = '✅ ' + accept.toLocaleString();
+                if (rejectEl) rejectEl.textContent = '❌ ' + reject.toLocaleString();
                 
                 // Initialize history if needed
                 if (!window.fwScribeHistory) {
