@@ -569,6 +569,12 @@
             
             const CAT_COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#14b8a6", "#0ea5e9", "#6366f1", "#a855f7"];
             const CAT_ICONS = { scanner: "🔍", scanners: "🔍", bruteforce: "🔨", honeypot: "🍯", waf: "🛡️", http: "🌐", ssh: "🔐", sqli: "💉", xss: "⚠️", rce: "💣", crawler: "🕷️", recon: "🔎", default: "📌" };
+        // Severity emoji helper
+        function getSeverityEmoji(sev) {
+            const emojis = { critical: "💀", high: "🔴", medium: "🟠", low: "🟡", info: "🔵" };
+            return emojis[(sev || "").toLowerCase()] || "⚪";
+        }
+
             const topItems = items.slice(0, 6);
             const ringWidth = 7;
             const spacing = 2;
@@ -847,7 +853,7 @@
                     <span class="alert-flag" style="font-size:1.2em">${flags[a.client_ip] || ""}</span>
                     <span class="alert-ip" style="min-width: 110px;">${a.client_ip}</span>
                     ${countBadge}
-                    <span class="badge ${a.max_severity}" style="margin: 0 0.5rem;">${a.max_severity}</span>
+                    <span style="margin: 0 0.5rem; font-size: 1.2rem;" title="${a.max_severity}">${getSeverityEmoji(a.max_severity)}</span>
                     <span class="alert-cat" style="font-size:1.1em">${categories}</span>
                     <span class="alert-rule" style="flex:1;font-size:0.8rem;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
                         ${a.latest_alert ? (a.latest_alert.rule_id + ': ' + (a.latest_alert.description || '').substring(0, 40)) : ''}
@@ -874,7 +880,7 @@
                         </label>
                     </div>
                     <div class="category-meta">
-                        <span class="badge ${cat.severity}">${cat.severity}</span>
+                        <span style="font-size: 1.1rem;" title="${cat.severity}">${getSeverityEmoji(cat.severity)}</span>
                         <span>${cat.rules_count} rules</span>
                         ${cat.owasp ? `<span>${cat.owasp}</span>` : ''}
                     </div>
