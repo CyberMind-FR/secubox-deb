@@ -2,6 +2,39 @@
 *Tracking completed milestones with dates*
 
 ---
+## 2026-05-09
+
+### Session 133 — WAF Category Toggles, API Error Handling (v2.7.1)
+
+**WAF Dashboard:**
+- Added Categories tab with toggle on/off buttons for each WAF filter
+- Fixed API error handling (return null instead of empty object)
+- Added `loadCategories()` function to populate categories list
+- Handle null responses gracefully in all data loaders (loadAlerts, loadBans, loadStats)
+- Category toggles call `/category/{id}/toggle` API endpoint
+
+**SOC Dashboard:**
+- Fixed API calls to handle null responses properly
+- Show meaningful states (OFFLINE, UNKNOWN) instead of stuck "LOADING"
+- Use `requireAuth=false` for public endpoints (firewall_summary, health)
+- Initialize empty states for all metrics when API fails
+
+**nftables Verification:**
+- IPv4: 3.1M packets processed, 2.7K blocked (CAPI + CrowdSec + manual bans)
+- IPv6: 22K packets processed
+- Cache files updated for SOC dashboard consumption
+
+**WAF Threats Log:**
+- 11,463 threats logged in `/var/log/secubox/waf-threats.log`
+- Latest entries: scanner probes, robots.txt enumeration, favicon fingerprinting
+
+**Tag:** v2.7.1
+
+**Files Updated:**
+- `packages/secubox-waf/www/waf/index.html` — Category toggles, null handling
+- `packages/secubox-hub/www/soc/index.html` — API error states
+
+---
 ## 2026-05-08
 
 ### Session 132 — Eyemote Icons, Concentric Donuts, Categories Fix
