@@ -32,6 +32,27 @@ async function callPublicIPs(params) {
     return sbxFetch('/api/v1/hub/get_public_ips', params, 'GET');
 }
 
+// Eye Remote USB Gadget API
+async function callEyeRemoteMetrics() {
+    try {
+        var response = await fetch('http://10.55.0.2:8000/metrics', { timeout: 3000 });
+        if (!response.ok) throw new Error('Not available');
+        return await response.json();
+    } catch (e) {
+        return null;
+    }
+}
+
+async function callEyeRemoteHealth() {
+    try {
+        var response = await fetch('http://10.55.0.2:8000/health', { timeout: 2000 });
+        if (!response.ok) throw new Error('Not available');
+        return await response.json();
+    } catch (e) {
+        return null;
+    }
+}
+
 // Utilities
 function formatBytes(bytes) {
 	if (!bytes || bytes === 0) return '0 B';
@@ -66,7 +87,8 @@ return view.extend({
 		alerts: [],
 		publicIPs: {},
 		board: {},
-		info: {}
+		info: {},
+		eyeRemote: null
 	},
 
 	load: function() {
@@ -78,7 +100,8 @@ return view.extend({
 			callSystemHealth().catch(function() { return {}; }),
 			callGetModules().catch(function() { return { modules: [] }; }),
 			callGetAlerts().catch(function() { return { alerts: [] }; }),
-			callPublicIPs().catch(function() { return {}; })
+			callPublicIPs().catch(function() { return {}; }),
+			callEyeRemoteMetrics().catch(function() { return null; })
 		]).then(function(results) {
 			self.data = {
 				board: results[0] || {},
@@ -87,7 +110,8 @@ return view.extend({
 				health: results[3] || {},
 				modules: (results[4] && results[4].modules) || [],
 				alerts: (results[5] && results[5].alerts) || [],
-				publicIPs: results[6] || {}
+				publicIPs: results[6] || {},
+				eyeRemote: results[7]
 			};
 			return self.data;
 		});
@@ -252,6 +276,48 @@ return view.extend({
 		}));
 	},
 
+	renderEyeRemote: function() {
+		var c = KissTheme.colors;
+		var eye = this.data.eyeRemote;
+
+		if (!eye) {
+			return E('div', { 'id': 'eye-remote-content', 'style': 'text-align: center; padding: 20px; color: var(--kiss-muted);' }, [
+				E('div', { 'style': 'font-size: 24px; margin-bottom: 8px;' }, '\u{1F441}'),
+				E('div', {}, 'Eye Remote not connected'),
+				E('div', { 'style': 'font-size: 11px; margin-top: 8px;' }, 'USB: 10.55.0.2')
+			]);
+		}
+
+		var cpuColor = eye.cpu_percent > 80 ? c.red : eye.cpu_percent > 50 ? c.orange : c.green;
+		var tempColor = eye.cpu_temp > 70 ? c.red : eye.cpu_temp > 55 ? c.orange : c.green;
+		var memColor = eye.mem_percent > 80 ? c.red : eye.mem_percent > 60 ? c.orange : c.green;
+
+		return E('div', { 'id': 'eye-remote-content' }, [
+			E('div', { 'style': 'display: flex; align-items: center; gap: 8px; margin-bottom: 12px;' }, [
+				E('span', { 'style': 'font-size: 20px;' }, '\u{1F441}'),
+				E('span', { 'style': 'font-weight: 600;' }, eye.hostname || 'eye-remote'),
+				KissTheme.badge('Online', 'green')
+			]),
+			E('div', { 'style': 'display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;' }, [
+				E('div', { 'style': 'text-align: center; padding: 10px; background: var(--kiss-bg2); border-radius: 6px;' }, [
+					E('div', { 'style': 'font-size: 11px; color: var(--kiss-muted); text-transform: uppercase;' }, 'CPU'),
+					E('div', { 'style': 'font-size: 18px; font-weight: bold; color: ' + cpuColor + ';', 'data-eye': 'cpu' }, eye.cpu_percent.toFixed(0) + '%')
+				]),
+				E('div', { 'style': 'text-align: center; padding: 10px; background: var(--kiss-bg2); border-radius: 6px;' }, [
+					E('div', { 'style': 'font-size: 11px; color: var(--kiss-muted); text-transform: uppercase;' }, 'Temp'),
+					E('div', { 'style': 'font-size: 18px; font-weight: bold; color: ' + tempColor + ';', 'data-eye': 'temp' }, eye.cpu_temp.toFixed(1) + '\u00B0C')
+				]),
+				E('div', { 'style': 'text-align: center; padding: 10px; background: var(--kiss-bg2); border-radius: 6px;' }, [
+					E('div', { 'style': 'font-size: 11px; color: var(--kiss-muted); text-transform: uppercase;' }, 'Mem'),
+					E('div', { 'style': 'font-size: 18px; font-weight: bold; color: ' + memColor + ';', 'data-eye': 'mem' }, eye.mem_percent.toFixed(0) + '%')
+				])
+			]),
+			E('div', { 'style': 'margin-top: 10px; font-size: 11px; color: var(--kiss-muted); text-align: center;', 'data-eye': 'uptime' },
+				'Uptime: ' + formatUptime(eye.uptime_seconds) + ' \u2022 Load: ' + (eye.load_1m || 0).toFixed(2)
+			)
+		]);
+	},
+
 	renderAlerts: function() {
 		var c = KissTheme.colors;
 		var alerts = (this.data.alerts || []).slice(0, 5);
@@ -310,11 +376,13 @@ return view.extend({
 			return Promise.all([
 				callSystemHealth().catch(function() { return {}; }),
 				callGetAlerts().catch(function() { return { alerts: [] }; }),
-				callPublicIPs().catch(function() { return {}; })
+				callPublicIPs().catch(function() { return {}; }),
+				callEyeRemoteMetrics().catch(function() { return null; })
 			]).then(function(results) {
 				self.data.health = results[0] || {};
 				self.data.alerts = (results[1] && results[1].alerts) || [];
 				self.data.publicIPs = results[2] || {};
+				self.data.eyeRemote = results[3];
 				self.updateLiveData();
 			});
 		}, 15);
@@ -352,6 +420,9 @@ return view.extend({
 
 				// Right column
 				E('div', { 'style': 'display: flex; flex-direction: column; gap: 20px;' }, [
+					// Eye Remote USB Gadget
+					KissTheme.card('Eye Remote', this.renderEyeRemote()),
+
 					// Network Addresses
 					KissTheme.card('Network Addresses', this.renderNetworkAddresses()),
 
@@ -406,6 +477,36 @@ return view.extend({
 		if (alertsEl) {
 			alertsEl.innerHTML = '';
 			alertsEl.appendChild(this.renderAlerts());
+		}
+
+		// Update Eye Remote panel
+		var eyeEl = document.getElementById('eye-remote-content');
+		if (eyeEl) {
+			var eye = this.data.eyeRemote;
+			if (eye) {
+				var cpuEl = document.querySelector('[data-eye="cpu"]');
+				var tempEl = document.querySelector('[data-eye="temp"]');
+				var memEl = document.querySelector('[data-eye="mem"]');
+				var uptimeEl = document.querySelector('[data-eye="uptime"]');
+				if (cpuEl) {
+					cpuEl.textContent = eye.cpu_percent.toFixed(0) + '%';
+					cpuEl.style.color = eye.cpu_percent > 80 ? c.red : eye.cpu_percent > 50 ? c.orange : c.green;
+				}
+				if (tempEl) {
+					tempEl.textContent = eye.cpu_temp.toFixed(1) + '\u00B0C';
+					tempEl.style.color = eye.cpu_temp > 70 ? c.red : eye.cpu_temp > 55 ? c.orange : c.green;
+				}
+				if (memEl) {
+					memEl.textContent = eye.mem_percent.toFixed(0) + '%';
+					memEl.style.color = eye.mem_percent > 80 ? c.red : eye.mem_percent > 60 ? c.orange : c.green;
+				}
+				if (uptimeEl) {
+					uptimeEl.textContent = 'Uptime: ' + formatUptime(eye.uptime_seconds) + ' \u2022 Load: ' + (eye.load_1m || 0).toFixed(2);
+				}
+			} else {
+				eyeEl.parentElement.innerHTML = '';
+				eyeEl.parentElement.appendChild(this.renderEyeRemote());
+			}
 		}
 	},
 

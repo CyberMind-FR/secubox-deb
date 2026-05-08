@@ -671,7 +671,7 @@
 
         function checkAuth() {
             if (!getToken()) {
-                window.location.href = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+                window.location.href = '/portal/login.html?redirect=' + encodeURIComponent(window.location.pathname);
                 return false;
             }
             return true;
@@ -888,7 +888,7 @@
             await fetch('/api/v1/portal/logout', { method: 'POST', credentials: 'include' });
             localStorage.removeItem('secubox_token');
             localStorage.removeItem('sbx_token');
-            window.location.href = '/login.html';
+            window.location.href = '/portal/login.html';
         }
 
         async function loadNetworkMode() {

@@ -4,6 +4,94 @@
 ---
 ## 2026-05-08
 
+### Session 123 — Health-Aware Sidebar, WAF Alerting & ACME Certs
+
+**Sidebar v2.0.0 (Emoji LED + Pre-cache):**
+- Emoji LED status: 🟢ok 🟡warn 🔴error ⚫unknown 🔵checking
+- Auto-sort: healthy first (ok → warn → unknown → error)
+- Pre-cache in localStorage for instant display on load
+- Quick error toast (no buttons, auto-dismiss 2.5s)
+- Pre-flight health checks on navigation
+- 30-second periodic health refresh
+
+**WAF WebUI Alerting:**
+- Live threat ticker with pulsing red indicator
+- 7680 total threats, 2813+ today detected
+- Alerting tab with filterable list (severity, category, IP)
+- Export alerts to CSV
+- Quick ban buttons on each alert
+- Compact category listing with emoji + toggle
+
+**WAF Threat Log Fix:**
+- Symlinked `/var/log/secubox/waf-threats.log` → `/srv/mitmproxy/logs/waf-threats.log`
+- Mitmproxy logs now accessible to WAF API
+
+**LXC Network Fix:**
+- Updated `lxc-network-fix.service` to run continuously (30s loop)
+- Fixed all container symlinks in `/var/lib/lxc/`
+- Disabled `cgroup2.cpu.max` in all container configs
+
+**Certificate Status (CRITICAL):**
+- 15+ certificates EXPIRED
+- 40+ expiring within 30 days
+- Certificates at `/data/haproxy/certs/`
+
+**ACME Certificate Manager WebUI:**
+- Created `/certs/` dashboard with emoji TTD indicators
+- 💀expired 🔴critical 🟡warning 🟢healthy
+- Pre-flight wizard with DNS/HTTP/ACME checks
+- Origin emoji icons per backend type
+
+**Files Deployed:**
+- `/usr/share/secubox/www/shared/sidebar.js` — v2.0.0 pre-cache
+- `/usr/share/secubox/www/waf/index.html` — alerting system
+- `/usr/share/secubox/www/certs/index.html` — ACME manager
+- `/etc/systemd/system/lxc-network-fix.service` — continuous veth fix
+
+---
+
+### Session 122 — WAF Architecture Fix & Eye Remote Integration
+
+**mitmproxy LXC Container Fix:**
+- Container was STOPPED causing 503 on all vhosts
+- Fixed cgroup2.cpu.max config preventing startup
+- Created `lxc-network-fix.service` to auto-start veth interfaces
+- mitmproxy now running with 145 routes and 150 WAF rules
+
+**HAProxy Routing Refactor:**
+- Changed all vhosts from `nginx_vhosts` → `mitmproxy_inspector`
+- All HTTP traffic now flows through WAF inspection
+- Fallback backend changed from 503 deny to mitmproxy pass-through
+- Traffic flow: `HAProxy → mitmproxy (WAF) → nginx/backends`
+
+**Eye Remote Dashboard:**
+- Fixed `/eye-remote/` page (nginx location was missing)
+- Simplified JS to work with pizero-metrics API
+- Added Quick Commands mini card
+- API proxy: `/api/v1/eye-remote/*` → `10.55.0.2:8000/*`
+
+**USB Gadget Network:**
+- usb0 interface at 10.55.0.1/24
+- Pi Zero W responding at 10.55.0.2:8000
+- Live metrics: CPU, RAM, Temp, Uptime, Load
+
+**CrowdSec Status:**
+- 100+ active bans (SSH brute-force from DE/NL/RO/SE)
+- WAF threats log ready at `/srv/mitmproxy/logs/waf-threats.log`
+
+**Dependencies Added:**
+- `netcat-openbsd` for diagnostics
+
+**Files Modified:**
+- `/etc/haproxy/haproxy.cfg` — All vhosts through mitmproxy
+- `/etc/nginx/sites-enabled/webui.conf` — Eye Remote locations
+- `/var/lib/lxc/mitmproxy/config` — Fixed network config
+- `/etc/systemd/system/lxc-network-fix.service` — Auto veth startup
+- `/usr/share/secubox/www/eye-remote/index.html` — Simplified dashboard
+- `/usr/share/secubox/www/eye-remote/js/eye-remote.js` — pizero-metrics API
+
+---
+
 ### Session 121 — HealthBump v2.1 with Activity Detection & K2000
 
 **Features Added:**
