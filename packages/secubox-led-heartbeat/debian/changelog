@@ -1,3 +1,15 @@
+secubox-led-heartbeat (2.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * NEW: Activity-based brightness (ACTIVE=100, SLEEP=20)
+  * NEW: K2000 (Knight Rider) sweep effect for boot/alerts
+  * NEW: Commands: k2000, success, boot, alert, rainbow
+  * IMPROVED: Aligned I2C timing with secubox-led-safe (300ms)
+  * IMPROVED: Simplified to POSIX /bin/sh
+  * IMPROVED: I2C bus recovery via platform driver rebind
+  * FIX: Removed unstable connect/activity flash
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 08 May 2026 11:15:00 +0200
+
 secubox-led-heartbeat (2.0.0-1~bookworm1) bookworm; urgency=medium
 
   * NEW: HealthBump 3-tier LED system

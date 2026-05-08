@@ -1,5 +1,46 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-08 (Session 118)*
+*Mis à jour : 2026-05-08 (Session 121)*
+
+---
+
+## ✅ Session 121: HealthBump v2.1 with Activity Detection & K2000
+
+### HealthBump Enhancements — COMPLETE
+- [x] Activity-based brightness: ACTIVE (100) when metrics change, SLEEP (20) when stable
+- [x] K2000 (Knight Rider) sweep effect for boot/success announcements
+- [x] Alert mode (red K2000) for warnings
+- [x] Rainbow party mode for testing
+- [x] Aligned I2C timing with secubox-led-safe (300ms write delay)
+- [x] Simplified to POSIX `/bin/sh` (was bash)
+
+### Commands Added
+- `secubox-healthbump k2000 N C` — K2000 sweep N cycles, color C
+- `secubox-healthbump success` — Boot complete announcement
+- `secubox-healthbump alert N` — Red alert sweep
+- `secubox-healthbump rainbow` — All colors party
+
+### I2C Bus Recovery Documented
+```bash
+echo '80018000.i2c' > /sys/bus/platform/drivers/mv64xxx_i2c/unbind
+sleep 2
+echo '80018000.i2c' > /sys/bus/platform/drivers/mv64xxx_i2c/bind
+modprobe leds-is31fl319x
+```
+
+### Files Updated
+- `packages/secubox-led-heartbeat/usr/sbin/secubox-healthbump`
+- `packages/secubox-led-heartbeat/systemd/secubox-healthbump.service`
+- `docs/LED-HEALTHBUMP.md`
+
+---
+
+## ✅ Session 120: LED System Complete & Kernel 6.6.137 Validation
+
+### LED System Working
+- [x] Kernel 6.6.137 LTS deployed (same generation as OpenWrt)
+- [x] IS31FL319X LED driver stable
+- [x] secubox-led-safe with 300ms I2C timing
+- [x] HealthBump 3-tier status system
 
 ---
 

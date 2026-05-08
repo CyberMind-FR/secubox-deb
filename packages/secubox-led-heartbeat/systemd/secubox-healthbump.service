@@ -1,12 +1,15 @@
 [Unit]
-Description=SecuBox HealthBump LED Status Check
+Description=SecuBox HealthBump LED Status Check (3-tier with I2C safety)
 After=network.target
+Wants=secubox-led-heartbeat.service
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/bin/secubox-healthbump
+ExecStart=/usr/sbin/secubox-healthbump
 StandardOutput=journal
 StandardError=journal
+# Allow time for I2C operations (300ms delays)
+TimeoutStartSec=30
 
 [Install]
 WantedBy=multi-user.target

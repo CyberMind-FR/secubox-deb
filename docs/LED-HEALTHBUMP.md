@@ -1,8 +1,10 @@
 # SecuBox LED HealthBump System
 
-**MOCHAbin 3-Tier Health Status Indicator**
+**MOCHAbin 3-Tier Health Status Indicator** — v2.0
 
 The SecuBox HealthBump system uses the MOCHAbin's 3 RGB LEDs as a visual health status indicator, organized in a vertical "level meter" layout.
+
+> **v2.0 Changes**: Added 300ms I2C delays, timeout protection, and automatic I2C bus reset capability for reliable operation on Debian kernel 6.6.x LTS. Based on proven patterns from `secubox-led-safe`.
 
 ## LED Layout
 
@@ -38,27 +40,51 @@ The SecuBox HealthBump system uses the MOCHAbin's 3 RGB LEDs as a visual health 
 | 🔴 Red | `error` | Critical, immediate action required |
 | 🔵 Blue | `msg` | Active mitigation in progress |
 
-## Brightness
+## Brightness & I2C Timing
 
-The IS31FL3199 LED controller uses brightness value **10** for optimal visibility.
-Higher values (e.g., 255) cause I2C communication errors on Debian kernel.
+The IS31FL3199 LED controller uses brightness value **100** (active) or **20** (sleep) for optimal visibility with reliable I2C timing.
 
-> **Note**: OpenWrt kernel 6.6 uses brightness 255 without issues. Debian kernel 6.12
-> has I2C timing differences in the mv64xxx driver that cause occasional `-EIO` errors.
-> With 150ms delays between I2C writes, brightness 100 works reliably and errors don't
-> affect LED visibility.
+> **Important**: Uses same I2C timing values as `secubox-led-safe`:
+> - `WRITE_DELAY=0.3` — 300ms between sysfs writes
+> - `ERROR_BACKOFF=3` — 3 second wait after errors
+> - `MAX_ERRORS=5` — Stop after 5 consecutive errors
+> - `RESET_THRESHOLD=3` — Try I2C reset after 3 errors
+> - `timeout 2` — 2 second max per write (prevents I2C lockup)
 
-## Pulse Speeds (Kernel Timer Triggers)
+Higher values (e.g., 255) or faster timing cause I2C communication errors on Marvell Armada due to mv64xxx driver errata FE-8471889.
 
-Each LED layer uses kernel timer triggers with different cycle times:
+## Activity Detection
 
-| LED | Layer | Cycle Time | Timer Settings |
-|-----|-------|------------|----------------|
-| LED1 | HW | 4 seconds | 2000ms on, 2000ms off |
-| LED2 | SVC | 3 seconds | 1500ms on, 1500ms off |
-| LED3 | SEC | 2 seconds | 1000ms on, 1000ms off |
+HealthBump monitors system changes and adjusts LED brightness:
 
-Using slow kernel timers avoids I2C bus errors on Debian 6.12 kernel.
+| Mode | Brightness | Condition |
+|------|------------|-----------|
+| **ACTIVE** | 100 | Metrics changed (CPU, memory, bans, or colors) |
+| **SLEEP** | 20 | System stable, no changes since last check |
+
+This creates a visual "breathing" effect: brighter when activity occurs, dimmer when idle.
+
+## K2000 Party Mode
+
+For boot/success announcements and alerts:
+
+```bash
+# K2000 sweep effect
+secubox-healthbump k2000 2 cyan    # 2 cycles, cyan color
+secubox-healthbump party 1 green   # 1 cycle, green
+
+# Success announcement (boot complete)
+secubox-healthbump success "SecuBox ready"
+secubox-healthbump boot            # Alias
+
+# Alert (red K2000)
+secubox-healthbump alert 2         # 2 cycles red
+
+# Rainbow party (all colors)
+secubox-healthbump rainbow
+```
+
+Colors: red, orange, yellow, green, cyan, blue, purple
 
 ## SPUNK ALERT
 
@@ -211,12 +237,12 @@ LED1: 🟢 Hardware OK
 
 | File | Purpose |
 |------|---------|
-| `/usr/local/bin/secubox-led` | Manual LED control |
-| `/usr/local/bin/secubox-led-trigger` | Kernel timer trigger setup |
-| `/usr/local/bin/secubox-healthbump` | Automatic health checker |
-| `/etc/systemd/system/secubox-led-trigger.service` | Timer trigger setup at boot |
-| `/etc/systemd/system/secubox-healthbump.service` | Oneshot health check |
+| `/usr/sbin/secubox-led-safe` | Safe LED control with I2C delays |
+| `/usr/sbin/secubox-healthbump` | 3-tier health checker (v2.0) |
+| `/etc/systemd/system/secubox-healthbump.service` | Oneshot health check unit |
 | `/etc/systemd/system/secubox-healthbump.timer` | 30s health check timer |
+| `/tmp/secubox/led-status` | Current LED status output |
+| `/tmp/secubox-ban-rate` | CrowdSec ban rate tracking |
 
 ## Hardware
 
