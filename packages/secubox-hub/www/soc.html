@@ -172,7 +172,9 @@
             align-items: center;
             gap: var(--space-xs);
             font-size: 12px;
-            color: var(--root-light);
+            font-weight: 600;
+            color: var(--card-accent, #148C66);
+            text-shadow: 0 0 8px currentColor;
         }
 
         .card-status::before {
@@ -192,6 +194,8 @@
         .card-metric {
             font-size: 36px;
             font-weight: 700;
+            color: var(--card-accent, var(--text-dark));
+            text-shadow: 0 0 10px var(--card-accent);
             font-family: var(--font-mono);
             line-height: 1;
             margin-bottom: var(--space-s);
@@ -564,7 +568,7 @@
 
             <!-- GLASS CARDS GRID -->
             <div class="cards-grid">
-                <div class="glass-card" style="--card-accent: var(--boot-light);">
+                <div class="glass-card" style="--card-accent: #C06040; border-left: 3px solid #C06040;">
                     <div class="card-header">
                         <span class="card-icon">🛡️</span>
                         <span class="card-status" id="waf-card-status">LOADING</span>
@@ -574,7 +578,7 @@
                     <span class="card-trend up" id="threats-trend">↑ -% vs yesterday</span>
                 </div>
 
-                <div class="glass-card" style="--card-accent: var(--mind-light);">
+                <div class="glass-card" style="--card-accent: #7068D0; border-left: 3px solid #7068D0;">
                     <div class="card-header">
                         <span class="card-icon">👁️</span>
                         <span class="card-status" id="cs-card-status">LOADING</span>
@@ -584,7 +588,7 @@
                     <span class="card-trend up" id="decisions-info">- bouncers</span>
                 </div>
 
-                <div class="glass-card" style="--card-accent: var(--mesh-light);">
+                <div class="glass-card" style="--card-accent: #2C70C0; border-left: 3px solid #2C70C0;">
                     <div class="card-header">
                         <span class="card-icon">🌐</span>
                         <span class="card-status">ACTIVE</span>
@@ -594,7 +598,7 @@
                     <span class="card-trend" id="throughput-trend">- conns</span>
                 </div>
 
-                <div class="glass-card" style="--card-accent: var(--root-light);">
+                <div class="glass-card" style="--card-accent: #148C66; border-left: 3px solid #148C66;">
                     <div class="card-header">
                         <span class="card-icon">⚡</span>
                         <span class="card-status" id="health-status">LOADING</span>
