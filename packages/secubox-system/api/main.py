@@ -681,6 +681,110 @@ async def logs(unit: str = "", lines: int = 100, user=Depends(require_jwt)):
     r = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
     return {"lines": r.stdout.splitlines(), "unit": unit}
 
+
+@router.get("/secubox_logs")
+async def secubox_logs():
+    """Get latest secubox log messages with criticality and emojis (public for dashboard).
+
+    Returns 5 most recent messages from secubox-* services with:
+    - Criticality emoji (🔴 critical, 🟠 error, 🟡 warning, 🔵 info, ⚪ debug)
+    - Service/category
+    - Aggregation count for repeated messages
+    """
+    import re
+    from collections import Counter, defaultdict
+
+    # Get recent logs from all secubox services (journalctl doesn't support globs well)
+    units = [
+        "secubox-hub", "secubox-crowdsec", "secubox-system", "secubox-waf",
+        "secubox-wireguard", "secubox-dpi", "secubox-netmodes", "secubox-nac",
+        "crowdsec", "crowdsec-firewall-bouncer", "nginx", "nftables"
+    ]
+    unit_args = []
+    for u in units:
+        unit_args.extend(["-u", u])
+    cmd = [
+        "journalctl", "--no-pager", "-n", "200", "--output", "json",
+        "--priority", "0..6"  # emerg to info
+    ] + unit_args
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+    except Exception:
+        return {"logs": [], "error": "Failed to read logs"}
+
+    # Priority to emoji mapping
+    PRIORITY_EMOJI = {
+        "0": "🔴",  # emerg
+        "1": "🔴",  # alert
+        "2": "🔴",  # crit
+        "3": "🟠",  # err
+        "4": "🟡",  # warning
+        "5": "🔵",  # notice
+        "6": "⚪",  # info
+        "7": "⚫",  # debug
+    }
+
+    # Category mapping
+    CATEGORY_MAP = {
+        "crowdsec": "🛡️ Security",
+        "secubox-crowdsec": "🛡️ Security",
+        "secubox-nac": "🔐 NAC",
+        "secubox-auth": "🔑 Auth",
+        "secubox-wireguard": "🔒 VPN",
+        "secubox-netmodes": "🌐 Network",
+        "secubox-dpi": "🔍 DPI",
+        "nginx": "🌍 Web",
+        "nftables": "🔥 Firewall",
+        "secubox-system": "⚙️ System",
+        "secubox-hub": "🏠 Hub",
+    }
+
+    # Parse JSON lines and aggregate
+    message_counts: Dict[tuple, int] = {}
+    seen_messages: Dict[tuple, Dict[str, Any]] = {}
+
+    for line in r.stdout.strip().split('\n'):
+        if not line:
+            continue
+        try:
+            entry = json.loads(line)
+            msg = entry.get("MESSAGE", "")
+            unit = entry.get("_SYSTEMD_UNIT", "").replace(".service", "")
+            priority = entry.get("PRIORITY", "6")
+            timestamp = entry.get("__REALTIME_TIMESTAMP", "")
+
+            # Clean message for aggregation
+            clean_msg = re.sub(r'\d+\.\d+\.\d+\.\d+', '<IP>', msg)  # Replace IPs
+            clean_msg = re.sub(r'\d{10,}', '<ID>', clean_msg)  # Replace timestamps/IDs
+
+            key = (unit, clean_msg[:80])
+            message_counts[key] = message_counts.get(key, 0) + 1
+            if key not in seen_messages:
+                seen_messages[key] = {
+                    "message": msg[:120],
+                    "unit": unit,
+                    "priority": priority,
+                    "timestamp": timestamp,
+                    "emoji": PRIORITY_EMOJI.get(str(priority), "⚪"),
+                    "category": CATEGORY_MAP.get(unit, "📋 Other"),
+                }
+        except json.JSONDecodeError:
+            continue
+
+    # Build result with aggregation counts, sorted by count descending
+    sorted_keys = sorted(message_counts.keys(), key=lambda k: message_counts[k], reverse=True)[:10]
+    result = []
+    for key in sorted_keys:
+        if key in seen_messages:
+            entry = seen_messages[key].copy()
+            entry["count"] = message_counts[key]
+            result.append(entry)
+
+    # Sort by priority (most critical first), then by count
+    result.sort(key=lambda x: (int(x.get("priority", 6)), -x.get("count", 1)))
+
+    return {"logs": result[:5], "total_entries": sum(message_counts.values())}
+
 @router.get("/diagnostics")
 async def diagnostics(user=Depends(require_jwt)):
     board = get_board_info()

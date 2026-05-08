@@ -147,7 +147,7 @@ def _log_threat(ip: str, threat: dict, request_path: str):
     log_dir.mkdir(parents=True, exist_ok=True)
 
     entry = {
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.utcnow().isoformat() + "Z",  # UTC with Z suffix
         "ip": ip,
         "path": request_path,
         "category": threat.get("category"),
@@ -399,12 +399,89 @@ async def toggle_category(category: str, req: ToggleCategoryRequest):
 @app.get("/stats")
 async def get_stats():
     """Get threat statistics (public)."""
-    return _get_threat_stats()
+    stats = _get_threat_stats()
+
+    # Add dashboard-friendly fields
+    stats["running"] = _cfg()["enabled"]
+    stats["version"] = "1.2.0"
+    stats["rules_loaded"] = sum(len(p) for p in _compiled_patterns.values())
+
+    # blocked_today for card metric
+    stats["blocked_today"] = stats.get("threats_today", 0)
+    stats["blocked_24h"] = stats.get("total_threats", 0)
+
+    # Categories list with counts for dashboard emojis
+    cats = stats.get("by_category", {})
+    stats["categories_list"] = [
+        {"name": cat, "count": count}
+        for cat, count in sorted(cats.items(), key=lambda x: -x[1])[:8]
+    ]
+
+    # Top countries formatted for dashboard
+    countries = stats.get("top_countries", {})
+    stats["top_countries"] = [
+        {"country": c, "count": cnt}
+        for c, cnt in sorted(countries.items(), key=lambda x: -x[1])[:5]
+    ]
+
+    # Top vhosts (full DNS names) for dashboard
+    vhosts = stats.get("top_vhosts", {})
+    stats["top_vhosts"] = [
+        {"vhost": v, "count": cnt}
+        for v, cnt in sorted(vhosts.items(), key=lambda x: -x[1])[:5]
+    ]
+
+    # Last threat for dashboard
+    log_path = Path(THREATS_LOG)
+    if log_path.exists():
+        try:
+            with open(log_path, "rb") as f:
+                f.seek(0, 2)  # End of file
+                size = f.tell()
+                if size > 2000:
+                    f.seek(-2000, 2)  # Last 2000 bytes
+                else:
+                    f.seek(0)
+                lines = f.read().decode("utf-8", errors="ignore").strip().split("\n")
+                if lines:
+                    last_line = lines[-1]
+                    last = json.loads(last_line)
+                    # Calculate time ago
+                    ts = last.get("timestamp", "")
+                    time_ago = "recently"
+                    if ts:
+                        try:
+                            dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                            diff = datetime.now(dt.tzinfo) - dt
+                            mins = int(diff.total_seconds() / 60)
+                            if mins < 1:
+                                time_ago = "just now"
+                            elif mins < 60:
+                                time_ago = f"{mins}m ago"
+                            else:
+                                time_ago = f"{mins // 60}h ago"
+                        except Exception:
+                            pass
+                    stats["last_threat"] = {
+                        "ip": last.get("ip") or last.get("client_ip", "unknown"),
+                        "type": last.get("category", "attack"),
+                        "vhost": last.get("host") or last.get("vhost"),
+                        "time_ago": time_ago
+                    }
+        except Exception:
+            pass
+
+    return stats
 
 
 @app.get("/alerts")
-async def get_alerts(limit: int = 50):
-    """Get recent threat alerts (public)."""
+async def get_alerts(limit: int = 50, aggregate: bool = False):
+    """Get recent threat alerts (public).
+
+    Args:
+        limit: Max alerts to return
+        aggregate: If True, group alerts by IP with counts
+    """
     log_path = Path(THREATS_LOG)
     if not log_path.exists():
         return {"alerts": []}
@@ -412,16 +489,51 @@ async def get_alerts(limit: int = 50):
     alerts = []
     try:
         with open(log_path) as f:
-            lines = f.readlines()[-limit:]
+            lines = f.readlines()[-500:]  # Read last 500 lines for aggregation
             for line in reversed(lines):
                 try:
-                    alerts.append(json.loads(line.strip()))
+                    entry = json.loads(line.strip())
+                    # Normalize field names
+                    entry["client_ip"] = entry.get("client_ip") or entry.get("ip", "unknown")
+                    alerts.append(entry)
                 except json.JSONDecodeError:
                     pass
     except Exception:
         pass
 
-    return {"alerts": alerts}
+    if aggregate:
+        # Group by IP
+        from collections import defaultdict
+        ip_groups = defaultdict(lambda: {"alerts": [], "count": 0, "categories": set(), "severities": set()})
+
+        for alert in alerts:
+            ip = alert.get("client_ip", "unknown")
+            ip_groups[ip]["alerts"].append(alert)
+            ip_groups[ip]["count"] += 1
+            ip_groups[ip]["categories"].add(alert.get("category", ""))
+            ip_groups[ip]["severities"].add(alert.get("severity", ""))
+            if "first_seen" not in ip_groups[ip]:
+                ip_groups[ip]["first_seen"] = alert.get("timestamp")
+            ip_groups[ip]["last_seen"] = alert.get("timestamp")
+
+        # Convert to list sorted by count
+        aggregated = []
+        for ip, data in sorted(ip_groups.items(), key=lambda x: x[1]["count"], reverse=True)[:limit]:
+            # Determine highest severity
+            sev_order = {"critical": 4, "high": 3, "medium": 2, "low": 1}
+            max_sev = max(data["severities"], key=lambda s: sev_order.get(s, 0), default="low")
+            aggregated.append({
+                "client_ip": ip,
+                "count": data["count"],
+                "categories": list(data["categories"]),
+                "max_severity": max_sev,
+                "first_seen": data.get("first_seen"),
+                "last_seen": data.get("last_seen"),
+                "latest_alert": data["alerts"][0] if data["alerts"] else None,
+            })
+        return {"alerts": aggregated, "aggregated": True}
+
+    return {"alerts": alerts[:limit], "aggregated": False}
 
 
 @app.get("/bans")

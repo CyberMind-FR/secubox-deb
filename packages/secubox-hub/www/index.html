@@ -554,6 +554,13 @@
                             <div class="health-bar"><div class="fill cyan" id="net-bar" style="width: 0%"></div></div>
                             <div class="health-percent" id="net-percent">0%</div>
                         </div>
+                        
+                        <!-- Concentric Gauge (eyeremote style) -->
+                        <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--divider);">
+                            <div id="concentric-gauge" style="display: flex; justify-content: center;">
+                                <div style="color: var(--muted); font-size: 0.8rem;">Loading...</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -663,6 +670,63 @@
 
     <script>
         const API = '/api/v1/hub';
+        // Ring gauge for health metrics (eyeremote style)
+        function createRingGauge(percent, color, size) {
+            size = size || 50;
+            const r = size/2 - 4;
+            const circ = 2 * Math.PI * r;
+            const pct = Math.min(100, Math.max(0, percent));
+            const dash = circ * pct / 100;
+            const gap = circ - dash;
+            const col = color || (pct > 80 ? "#ef4444" : pct > 60 ? "#eab308" : "#22c55e");
+            return "<svg width=\"" + size + "\" height=\"" + size + "\" viewBox=\"0 0 " + size + " " + size + "\"><circle cx=\"" + size/2 + "\" cy=\"" + size/2 + "\" r=\"" + r + "\" fill=\"none\" stroke=\"var(--divider)\" stroke-width=\"4\"/><circle cx=\"" + size/2 + "\" cy=\"" + size/2 + "\" r=\"" + r + "\" fill=\"none\" stroke=\"" + col + "\" stroke-width=\"4\" stroke-dasharray=\"" + dash + " " + gap + "\" stroke-dashoffset=\"" + circ/4 + "\" stroke-linecap=\"round\" style=\"transition:stroke-dasharray 0.3s;\"/><text x=\"50%\" y=\"50%\" dominant-baseline=\"middle\" text-anchor=\"middle\" fill=\"var(--text)\" font-size=\"" + (size/4) + "\" font-weight=\"bold\">" + Math.round(pct) + "%</text></svg>";
+        }
+
+        // Concentric rings gauge for System Health (eyeremote style)
+        function createConcentricGauge(cpu, mem, disk) {
+            const size = 140;
+            const center = size / 2;
+            const rings = [
+                { pct: disk, color: "#22c55e", icon: "💾", label: "Disk", r: 20 },
+                { pct: mem, color: "#eab308", icon: "🧠", label: "RAM", r: 35 },
+                { pct: cpu, color: "#ef4444", icon: "🔥", label: "CPU", r: 50 }
+            ];
+            
+            let svg = "<svg width=\"" + size + "\" height=\"" + size + "\" viewBox=\"0 0 " + size + " " + size + "\">";
+            
+            // Draw rings from outer to inner
+            for (let i = rings.length - 1; i >= 0; i--) {
+                const ring = rings[i];
+                const circ = 2 * Math.PI * ring.r;
+                const dash = circ * ring.pct / 100;
+                const gap = circ - dash;
+                const strokeW = 8;
+                
+                // Background circle
+                svg += "<circle cx=\"" + center + "\" cy=\"" + center + "\" r=\"" + ring.r + "\" fill=\"none\" stroke=\"rgba(255,255,255,0.1)\" stroke-width=\"" + strokeW + "\"/>";
+                
+                // Progress arc
+                svg += "<circle cx=\"" + center + "\" cy=\"" + center + "\" r=\"" + ring.r + "\" fill=\"none\" stroke=\"" + ring.color + "\" stroke-width=\"" + strokeW + "\" stroke-dasharray=\"" + dash + " " + gap + "\" stroke-dashoffset=\"" + (circ/4) + "\" stroke-linecap=\"round\" style=\"transition:stroke-dasharray 0.5s;\"><title>" + ring.icon + " " + ring.label + ": " + Math.round(ring.pct) + "%</title></circle>";
+                
+                // Icon at 12 oclock position (top of ring)
+                const iconY = center - ring.r - 3;
+                svg += "<text x=\"" + center + "\" y=\"" + iconY + "\" text-anchor=\"middle\" font-size=\"10\" style=\"pointer-events:none;\">" + ring.icon + "</text>";
+            }
+            
+            // Center text
+            const avgPct = Math.round((cpu + mem + disk) / 3);
+            svg += "<text x=\"" + center + "\" y=\"" + (center - 2) + "\" text-anchor=\"middle\" fill=\"var(--text)\" font-size=\"14\" font-weight=\"bold\">" + avgPct + "%</text>";
+            svg += "<text x=\"" + center + "\" y=\"" + (center + 10) + "\" text-anchor=\"middle\" fill=\"var(--muted)\" font-size=\"7\">LOAD</text>";
+            
+            svg += "</svg>";
+            
+            // Legend
+            const legend = rings.map(function(r) {
+                return "<span style=\"display:inline-flex;align-items:center;gap:3px;\"><span style=\"width:8px;height:8px;background:" + r.color + ";border-radius:2px;\"></span>" + r.icon + " " + Math.round(r.pct) + "%</span>";
+            }).join(" ");
+            
+            return "<div style=\"display:flex;flex-direction:column;align-items:center;\">" + svg + "<div style=\"font-size:0.65rem;margin-top:6px;display:flex;gap:8px;\">" + legend + "</div></div>";
+        }
 
         // ── Authentication ────────────────────────────────────────────
         function getToken() {
@@ -754,6 +818,11 @@
             document.getElementById('mem-percent').textContent = mem.toFixed(0) + '%';
             document.getElementById('disk-bar').style.width = disk + '%';
             document.getElementById('disk-percent').textContent = disk.toFixed(0) + '%';
+            // Update concentric gauge (eyeremote style)
+            const concentricEl = document.getElementById('concentric-gauge');
+            if (concentricEl) {
+                concentricEl.innerHTML = createConcentricGauge(cpu, mem, disk);
+            }
 
             const tbody = document.getElementById('modules-table');
             if (menuData && menuData.categories) {

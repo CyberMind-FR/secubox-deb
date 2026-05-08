@@ -4,6 +4,48 @@
 ---
 ## 2026-05-08
 
+### Session 130 — Eyeremote Style Visualizations + SOC/WAF Improvements
+
+**Hub Dashboard — Concentric System Health Gauge:**
+- New `createConcentricGauge(cpu, mem, disk)` function
+- Eyeremote-style visualization with 3 concentric rings
+- Icons positioned at 12 o'clock (🔥CPU, 🧠RAM, 💾Disk)
+- Center displays average load percentage
+- Color-coded legend with live values
+- Replaces simple ring gauges for richer visualization
+
+**SOC Dashboard Improvements:**
+- Added firewall packet stats bubbles (🛑DROP, ✅ACCEPT, ❌REJECT)
+- CrowdSec category multi-layer donut with `createMultiLayerDonut()`
+- Fixed sidebar.js injection (was missing)
+- Fixed CATEGORY_EMOJI syntax error
+
+**WAF Statistics Page Enhancements:**
+- Restored separate Severity/Category donuts (user preference)
+- New `createCountryDonut()` with country flags as icons
+- New `createSiteDonut()` with site-specific emojis
+- Fixed `parseDuration()` to handle compound formats like "22m47s"
+- Dual visualization: donut + bar graph for Top Countries/Sites
+
+**Backend API — Firewall Summary:**
+- New endpoint: `/api/v1/hub/public/firewall_summary`
+- Reads from nftables cache files (permission workaround)
+- Returns: tables, chains, rules, processed, dropped, accepted, counters
+- Cron job updates `/var/cache/secubox/nft-counters.txt` every 30s
+
+**IPv6 Support Confirmed:**
+- CrowdSec has both `crowdsec` (IPv4) and `crowdsec6` (IPv6) tables
+- Counters include both address families
+
+**Files Updated:**
+- `packages/secubox-hub/www/index.html` — Concentric gauge, ring gauge functions
+- `packages/secubox-hub/www/soc.html` — Firewall stats, category donut, sidebar
+- `packages/secubox-waf/www/index.html` — Country/Site donuts, duration fix
+- `packages/secubox-hub/api/main.py` — firewall_summary endpoint
+- `/etc/cron.d/secubox-nft-stats` — Cron for nftables cache
+
+---
+
 ### Session 129 — Eye Remote Radar Animation + SOC Fixes
 
 **Radar Dashboard Created (remote-ui/round/radar.html):**

@@ -91,6 +91,17 @@
     let ALL_MODULES = [];
 
     const LED_EMOJI = { ok: '🟢', warn: '🟡', error: '🔴', unknown: '⚫', checking: '🔵' };
+    // Dice icons for metric visualization (⚀=1 to ⚅=6)
+    const DICE_ICONS = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
+    function getDiceForPercent(pct) {
+        // Map 0-100% to dice 1-6
+        if (pct < 17) return '⚀';
+        if (pct < 33) return '⚁';
+        if (pct < 50) return '⚂';
+        if (pct < 67) return '⚃';
+        if (pct < 83) return '⚄';
+        return '⚅';
+    }
 
     // Page icons for menu bar
     const PAGE_ICONS = {
@@ -188,12 +199,12 @@
                 '</div>' +
                 // Smart Strip (6 mini modules) - moved to top bar with hover tooltips
                 '<div class="smart-strip" id="gmb-smart-strip">' +
-                '<div class="strip-module" data-mod="AUTH" data-metric="cpu" onmouseenter="SecuBoxSidebar.showStripPopup(this)" onmouseleave="SecuBoxSidebar.hideStripPopup()"><div class="strip-led" style="background:#C04E24"></div><span class="strip-val" id="ss-cpu">--</span></div>' +
-                '<div class="strip-module" data-mod="WALL" data-metric="mem" onmouseenter="SecuBoxSidebar.showStripPopup(this)" onmouseleave="SecuBoxSidebar.hideStripPopup()"><div class="strip-led" style="background:#9A6010"></div><span class="strip-val" id="ss-mem">--</span></div>' +
-                '<div class="strip-module" data-mod="BOOT" data-metric="disk" onmouseenter="SecuBoxSidebar.showStripPopup(this)" onmouseleave="SecuBoxSidebar.hideStripPopup()"><div class="strip-led" style="background:#803018"></div><span class="strip-val" id="ss-disk">--</span></div>' +
-                '<div class="strip-module" data-mod="MIND" data-metric="load" onmouseenter="SecuBoxSidebar.showStripPopup(this)" onmouseleave="SecuBoxSidebar.hideStripPopup()"><div class="strip-led" style="background:#3D35A0"></div><span class="strip-val" id="ss-load">--</span></div>' +
-                '<div class="strip-module" data-mod="ROOT" data-metric="temp" onmouseenter="SecuBoxSidebar.showStripPopup(this)" onmouseleave="SecuBoxSidebar.hideStripPopup()"><div class="strip-led" style="background:#0A5840"></div><span class="strip-val" id="ss-temp">--</span></div>' +
-                '<div class="strip-module" data-mod="MESH" data-metric="net" onmouseenter="SecuBoxSidebar.showStripPopup(this)" onmouseleave="SecuBoxSidebar.hideStripPopup()"><div class="strip-led" style="background:#104A88"></div><span class="strip-val" id="ss-net">--</span></div>' +
+                '<div class="strip-module" data-mod="AUTH" data-metric="cpu" onmouseenter="SecuBoxSidebar.showStripPopup(this)" onmouseleave="SecuBoxSidebar.hideStripPopup()"><span class="strip-dice" id="ss-dice-cpu" style="color:#C04E24">⚀</span><span class="strip-val" id="ss-cpu">--</span></div>' +
+                '<div class="strip-module" data-mod="WALL" data-metric="mem" onmouseenter="SecuBoxSidebar.showStripPopup(this)" onmouseleave="SecuBoxSidebar.hideStripPopup()"><span class="strip-dice" id="ss-dice-mem" style="color:#9A6010">⚀</span><span class="strip-val" id="ss-mem">--</span></div>' +
+                '<div class="strip-module" data-mod="BOOT" data-metric="disk" onmouseenter="SecuBoxSidebar.showStripPopup(this)" onmouseleave="SecuBoxSidebar.hideStripPopup()"><span class="strip-dice" id="ss-dice-disk" style="color:#803018">⚀</span><span class="strip-val" id="ss-disk">--</span></div>' +
+                '<div class="strip-module" data-mod="MIND" data-metric="load" onmouseenter="SecuBoxSidebar.showStripPopup(this)" onmouseleave="SecuBoxSidebar.hideStripPopup()"><span class="strip-dice" id="ss-dice-load" style="color:#3D35A0">⚀</span><span class="strip-val" id="ss-load">--</span></div>' +
+                '<div class="strip-module" data-mod="ROOT" data-metric="temp" onmouseenter="SecuBoxSidebar.showStripPopup(this)" onmouseleave="SecuBoxSidebar.hideStripPopup()"><span class="strip-dice" id="ss-dice-temp" style="color:#0A5840">⚀</span><span class="strip-val" id="ss-temp">--</span></div>' +
+                '<div class="strip-module" data-mod="MESH" data-metric="net" onmouseenter="SecuBoxSidebar.showStripPopup(this)" onmouseleave="SecuBoxSidebar.hideStripPopup()"><span class="strip-dice" id="ss-dice-net" style="color:#104A88">⚀</span><span class="strip-val" id="ss-net">--</span></div>' +
                 '</div>' +
                 // Popup container for hover details
                 '<div class="strip-popup" id="strip-popup"></div>' +
@@ -572,13 +583,20 @@
             // Update 3 vertical RGB LEDs in top bar (like MOCHAbin physical LEDs)
             // Using double-buffer pattern: shadow → confirm → active → visual
             // NOW reads actual hardware LED colors from API instead of generic health level
+            // Different pulse rates: LED1=1 pulse, LED2=2 pulses, LED3=4 pulses per cycle
             var hwLed1 = document.getElementById('hw-led-1');
             var hwLed2 = document.getElementById('hw-led-2');
             var hwLed3 = document.getElementById('hw-led-3');
 
             if (hwLed1 && hwLed2 && hwLed3) {
-                var baseOpacity = 0.7 + 0.3 * Math.sin(ledPulsePhase * Math.PI / 10);
-                var glowSize = 4 + (ledPulsePhase % 6);
+                // Base brightness is HIGH (color visible), pulse adds glow
+                // LED1: slow pulse (1x), LED2: medium (2x), LED3: fast (4x)
+                var pulse1 = 0.8 + 0.2 * Math.sin(ledPulsePhase * Math.PI / 20);  // slowest
+                var pulse2 = 0.8 + 0.2 * Math.sin(ledPulsePhase * Math.PI / 10);  // medium
+                var pulse3 = 0.8 + 0.2 * Math.sin(ledPulsePhase * Math.PI / 5);   // fastest
+                var glowSize1 = 4 + 3 * Math.sin(ledPulsePhase * Math.PI / 20);
+                var glowSize2 = 4 + 3 * Math.sin(ledPulsePhase * Math.PI / 10);
+                var glowSize3 = 4 + 3 * Math.sin(ledPulsePhase * Math.PI / 5);
 
                 // Step 1: Write to shadow buffer from hardware LED colors (if available)
                 // LED1=Hardware health (bottom), LED2=Services (middle), LED3=Security (top)
@@ -614,10 +632,13 @@
                 hwLed2.style.background = ledBufferActive.led2;
                 hwLed3.style.background = ledBufferActive.led3;
 
-                [hwLed1, hwLed2, hwLed3].forEach(function(led) {
-                    led.style.opacity = baseOpacity;
-                    led.style.boxShadow = '0 0 ' + glowSize + 'px ' + led.style.background;
-                });
+                // Apply different pulse rates to each LED (color always visible, glow pulses)
+                hwLed1.style.opacity = pulse1;
+                hwLed1.style.boxShadow = '0 0 ' + glowSize1 + 'px ' + ledBufferActive.led1 + ', inset 0 0 3px rgba(255,255,255,0.3)';
+                hwLed2.style.opacity = pulse2;
+                hwLed2.style.boxShadow = '0 0 ' + glowSize2 + 'px ' + ledBufferActive.led2 + ', inset 0 0 3px rgba(255,255,255,0.3)';
+                hwLed3.style.opacity = pulse3;
+                hwLed3.style.boxShadow = '0 0 ' + glowSize3 + 'px ' + ledBufferActive.led3 + ', inset 0 0 3px rgba(255,255,255,0.3)';
             }
 
             // Update top bar health bumper
@@ -754,6 +775,20 @@
                 if (ssLoad) ssLoad.textContent = load.toFixed(1);
                 if (ssTemp) ssTemp.textContent = temp + '°';
                 if (ssNet) ssNet.textContent = net + 'dB';
+
+                // Update dice icons based on metric values
+                var diceCpu = document.getElementById('ss-dice-cpu');
+                var diceMem = document.getElementById('ss-dice-mem');
+                var diceDisk = document.getElementById('ss-dice-disk');
+                var diceLoad = document.getElementById('ss-dice-load');
+                var diceTemp = document.getElementById('ss-dice-temp');
+                var diceNet = document.getElementById('ss-dice-net');
+                if (diceCpu) diceCpu.textContent = getDiceForPercent(cpu);
+                if (diceMem) diceMem.textContent = getDiceForPercent(mem);
+                if (diceDisk) diceDisk.textContent = getDiceForPercent(disk);
+                if (diceLoad) diceLoad.textContent = getDiceForPercent(Math.min(load * 10, 100));
+                if (diceTemp) diceTemp.textContent = getDiceForPercent(temp);
+                if (diceNet) diceNet.textContent = getDiceForPercent(Math.min(Math.abs(net) * 2, 100));
 
                 // Determine overall health level (tri-level)
                 var maxVal = Math.max(cpu, mem, disk);
@@ -1578,6 +1613,7 @@
             '.status-panel{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:90%;max-width:400px;max-height:70vh;background:#1a1a2e;color:#e8e6d9;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.5);z-index:10001;overflow:hidden;font-family:monospace;}.status-panel-header{display:flex;justify-content:space-between;align-items:center;padding:0.75rem 1rem;background:#252540;font-size:0.9rem;}.status-panel-header button{background:none;border:none;color:#888;font-size:1rem;cursor:pointer;}.status-panel-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;padding:0.75rem;background:#1e1e32;}.status-panel-summary div{text-align:center;padding:0.4rem;border-radius:4px;background:#252540;font-size:0.75rem;}.status-panel-list{max-height:250px;overflow-y:auto;padding:0.5rem;}.status-item{display:flex;align-items:center;gap:0.5rem;padding:0.4rem;font-size:0.75rem;border-bottom:1px solid #333;}.status-mod{font-weight:bold;min-width:80px;}.status-msg{color:#888;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.status-panel-footer{padding:0.75rem;background:#252540;}.status-panel-footer button{width:100%;padding:0.5rem;background:#4466ff;color:#fff;border:none;border-radius:4px;cursor:pointer;}' +
             '.master-top-title{background:rgba(0,221,68,0.15);color:var(--p31-peak,#00dd44);font-weight:bold;}' +
             '.health-toast{position:fixed;top:1rem;right:1rem;z-index:10000;animation:toastIn 0.3s;}.health-toast-content{display:flex;align-items:center;gap:0.5rem;background:rgba(255,68,68,0.95);color:#fff;padding:0.5rem 1rem;border-radius:8px;font-size:0.8rem;}@keyframes toastIn{from{opacity:0;transform:translateY(-10px);}to{opacity:1;transform:translateY(0);}}';
+
         document.head.appendChild(s);
     }
 
@@ -1748,7 +1784,7 @@
 
     window.SecuBoxSidebar = {
         build: buildSidebar,
-        toggleTheme: function() { /* Removed - hybrid-skin is the only theme */ },
+        toggleTheme: function() { /* Dark theme only */ },
         logout: function() {
             localStorage.removeItem('sbx_token');
             localStorage.removeItem('secubox_token');

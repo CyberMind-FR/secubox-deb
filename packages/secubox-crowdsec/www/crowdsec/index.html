@@ -62,6 +62,33 @@
         .status-dot { width: 10px; height: 10px; border-radius: 50%; }
         .status-dot.active { background: var(--green); box-shadow: 0 0 8px var(--green); }
         .status-dot.inactive { background: var(--red); }
+        .status-dot.warning { background: var(--yellow); box-shadow: 0 0 8px var(--yellow); }
+        /* Agent Status Cards */
+        .agent-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+        .agent-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; position: relative; overflow: hidden; }
+        .agent-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; }
+        .agent-card.ok::before { background: var(--green); box-shadow: 0 0 10px var(--green); }
+        .agent-card.error::before { background: var(--red); box-shadow: 0 0 10px var(--red); }
+        .agent-card.warning::before { background: var(--yellow); box-shadow: 0 0 10px var(--yellow); }
+        .agent-card .icon { font-size: 1.8rem; margin-bottom: 0.5rem; }
+        .agent-card .name { font-size: 0.85rem; font-weight: bold; color: var(--p31-mid); text-transform: uppercase; }
+        .agent-card .status-text { font-size: 0.7rem; color: var(--text-dim); margin-top: 0.25rem; }
+        .agent-card .detail { font-size: 0.65rem; color: var(--text-dim); margin-top: 0.5rem; opacity: 0.7; }
+        .agent-card.ok .name { color: var(--green); }
+        .agent-card.error .name { color: var(--red); }
+        .agent-card.warning .name { color: var(--yellow); }
+        .repair-btn { margin-top: 0.5rem; padding: 0.25rem 0.5rem; font-size: 0.65rem; background: transparent; border: 1px solid var(--yellow); color: var(--yellow); border-radius: 4px; cursor: pointer; }
+        .repair-btn:hover { background: rgba(255,179,71,0.1); }
+        /* Metrics Grid */
+        .metrics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; margin-bottom: 1rem; }
+        .metric-item { text-align: center; padding: 0.5rem; background: var(--bg-dark); border-radius: 6px; }
+        .metric-value { display: block; font-size: 1.2rem; font-weight: bold; }
+        .metric-label { font-size: 0.65rem; color: var(--text-dim); }
+        .sources-list { border-top: 1px solid var(--border); padding-top: 0.75rem; margin-top: 0.5rem; }
+        .source-item { display: flex; justify-content: space-between; padding: 0.25rem 0; font-size: 0.8rem; }
+        .source-name { color: var(--text-dim); }
+        .source-count { color: var(--green); font-family: monospace; }
+        @media (max-width: 600px) { .agent-grid { grid-template-columns: repeat(2, 1fr); } .metrics-grid { grid-template-columns: repeat(2, 1fr); } }
         .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
         .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
         .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
@@ -109,11 +136,38 @@
         </div>
         <div class="content">
             <div id="tab-status" class="tab-content active">
-                <div class="status-bar">
-                    <div class="status-item"><div class="status-dot" id="cs-status"></div><span>Agent</span></div>
-                    <div class="status-item"><div class="status-dot" id="lapi-status"></div><span>LAPI</span></div>
-                    <div class="status-item"><div class="status-dot" id="capi-status"></div><span>CAPI</span></div>
-                    <div class="status-item"><div class="status-dot" id="bouncer-status"></div><span>Bouncer</span></div>
+                <!-- Agent Status Cards -->
+                <div class="agent-grid">
+                    <div class="agent-card" id="card-agent">
+                        <div class="icon">🛡️</div>
+                        <div class="name">Agent</div>
+                        <div class="status-text" id="agent-status-text">Checking...</div>
+                        <div class="detail" id="agent-detail">--</div>
+                    </div>
+                    <div class="agent-card" id="card-lapi">
+                        <div class="icon">🔌</div>
+                        <div class="name">LAPI</div>
+                        <div class="status-text" id="lapi-status-text">Checking...</div>
+                        <div class="detail" id="lapi-detail">Local API</div>
+                    </div>
+                    <div class="agent-card" id="card-capi">
+                        <div class="icon">☁️</div>
+                        <div class="name">CAPI</div>
+                        <div class="status-text" id="capi-status-text">Checking...</div>
+                        <div class="detail" id="capi-detail">Community Intel</div>
+                    </div>
+                    <div class="agent-card" id="card-bouncer">
+                        <div class="icon">🚫</div>
+                        <div class="name">Bouncer</div>
+                        <div class="status-text" id="bouncer-status-text">Checking...</div>
+                        <div class="detail" id="bouncer-detail">nftables</div>
+                    </div>
+                    <div class="agent-card" id="card-nftables">
+                        <div class="icon">🔥</div>
+                        <div class="name">Firewall</div>
+                        <div class="status-text" id="nftables-status-text">Checking...</div>
+                        <div class="detail" id="nftables-detail">Blacklists</div>
+                    </div>
                 </div>
                 <div class="stats-row">
                     <div class="stat-card red"><div class="value" id="total-decisions">0</div><div class="label">Active Bans</div></div>
@@ -313,15 +367,107 @@
 
         async function loadStatus() {
             const data = await api('/status');
-            document.getElementById('cs-status').className = 'status-dot ' + (data.running ? 'active' : 'inactive');
-            document.getElementById('lapi-status').className = 'status-dot ' + (data.lapi_reachable ? 'active' : 'inactive');
-            document.getElementById('capi-status').className = 'status-dot ' + (data.capi_registered ? 'active' : 'inactive');
-            document.getElementById('agent-badge').className = 'badge ' + (data.running ? 'active' : 'inactive');
-            document.getElementById('agent-badge').textContent = data.running ? 'Running' : 'Stopped';
+            const health = await api('/health');
+            const checks = health.checks || {};
+
+            // Version badge
             const ver = (data.version || '-').replace('version: ', '').split('-')[0];
             document.getElementById('version-badge').textContent = ver;
-            const health = await api('/health');
-            document.getElementById('bouncer-status').className = 'status-dot ' + (health.engine_running ? 'active' : 'inactive');
+            document.getElementById('agent-badge').className = 'badge ' + (data.running ? 'active' : 'inactive');
+            document.getElementById('agent-badge').textContent = data.running ? 'Running' : 'Stopped';
+
+            // Agent Card
+            const agentCard = document.getElementById('card-agent');
+            agentCard.className = 'agent-card ' + (data.running ? 'ok' : 'error');
+            document.getElementById('agent-status-text').textContent = data.running ? '● Online' : '○ Offline';
+            document.getElementById('agent-detail').textContent = ver || 'CrowdSec Engine';
+
+            // LAPI Card
+            const lapiCard = document.getElementById('card-lapi');
+            lapiCard.className = 'agent-card ' + (data.lapi_reachable ? 'ok' : 'error');
+            document.getElementById('lapi-status-text').textContent = data.lapi_reachable ? '● Connected' : '○ Unreachable';
+            document.getElementById('lapi-detail').textContent = ':8080 Local API';
+
+            // CAPI Card - distinguish between enrolled, not enrolled, and error
+            const capiCard = document.getElementById('card-capi');
+            const capiError = data.capi_error;
+            if (data.capi_registered) {
+                capiCard.className = 'agent-card ok';
+                document.getElementById('capi-status-text').textContent = '● Enrolled';
+                document.getElementById('capi-detail').textContent = 'Community Intel';
+            } else if (capiError) {
+                capiCard.className = 'agent-card error';
+                document.getElementById('capi-status-text').textContent = '✖ API Error';
+                document.getElementById('capi-detail').textContent = capiError.substring(0, 25);
+            } else {
+                capiCard.className = 'agent-card warning';
+                document.getElementById('capi-status-text').textContent = '⚠ Not enrolled';
+                document.getElementById('capi-detail').textContent = 'Community Intel';
+            }
+
+            // Add CAPI enroll button if not enrolled (but not if API error)
+            const existingBtn = document.getElementById('capi-enroll-btn');
+            if (!data.capi_registered && !capiError && !existingBtn) {
+                const btn = document.createElement('button');
+                btn.id = 'capi-enroll-btn';
+                btn.className = 'repair-btn';
+                btn.textContent = '🔑 Enroll';
+                btn.onclick = enrollCAPI;
+                capiCard.appendChild(btn);
+            } else if (data.capi_registered || capiError) {
+                if (existingBtn) existingBtn.remove();
+            }
+
+            // Bouncer Card
+            const bouncerCard = document.getElementById('card-bouncer');
+            const bouncerOk = checks.bouncers_ok;
+            bouncerCard.className = 'agent-card ' + (bouncerOk ? 'ok' : 'error');
+            document.getElementById('bouncer-status-text').textContent = bouncerOk ? '● Active' : '○ Missing';
+            document.getElementById('bouncer-detail').textContent = (checks.bouncers_count || 0) + ' registered';
+
+            // nftables Card
+            const nftCard = document.getElementById('card-nftables');
+            const nftOk = checks.nftables_ok;
+            nftCard.className = 'agent-card ' + (nftOk ? 'ok' : 'warning');
+            document.getElementById('nftables-status-text').textContent = nftOk ? '● Synced' : '⚠ Not synced';
+            document.getElementById('nftables-detail').textContent = nftOk ? 'Blacklists active' : 'Restart bouncer';
+
+            // Add repair button if nftables not synced
+            if (!nftOk && !document.getElementById('nft-repair-btn')) {
+                const btn = document.createElement('button');
+                btn.id = 'nft-repair-btn';
+                btn.className = 'repair-btn';
+                btn.textContent = '🔧 Repair';
+                btn.onclick = repairNftables;
+                nftCard.appendChild(btn);
+            } else if (nftOk) {
+                const btn = document.getElementById('nft-repair-btn');
+                if (btn) btn.remove();
+            }
+        }
+
+        async function repairNftables() {
+            const btn = document.getElementById('nft-repair-btn');
+            if (btn) btn.textContent = '⏳ Repairing...';
+            const result = await api('/repair', 'POST');
+            if (result.success) {
+                alert('✅ Repair completed');
+            } else {
+                alert('❌ Repair failed');
+            }
+            loadStatus();
+        }
+
+        async function enrollCAPI() {
+            const btn = document.getElementById('capi-enroll-btn');
+            if (btn) btn.textContent = '⏳ Enrolling...';
+            const result = await api('/capi/enroll', 'POST');
+            if (result.success) {
+                alert('✅ CAPI enrollment successful! Community blocklists will sync shortly.');
+            } else {
+                alert('❌ Enrollment failed: ' + (result.error || 'Check console enrollment key'));
+            }
+            loadStatus();
         }
 
         let _alerts = [];
@@ -449,15 +595,42 @@
 
         async function loadMetrics() {
             const data = await api("/metrics");
-            let acquired = 0, parsed = 0;
+            let acquired = 0, parsed = 0, poured = 0, unparsed = 0;
+            const sources = [];
+
             if (data.raw && data.raw.acquisition) {
-                Object.values(data.raw.acquisition).forEach(src => {
-                    acquired += src.reads || 0; parsed += src.parsed || 0;
+                Object.entries(data.raw.acquisition).forEach(([name, src]) => {
+                    const reads = src.reads || src.lines_read || 0;
+                    const p = src.parsed || src.lines_parsed || 0;
+                    acquired += reads;
+                    parsed += p;
+                    unparsed += src.lines_unparsed || 0;
+                    poured += src.lines_poured_to_bucket || 0;
+                    if (reads > 0) {
+                        const shortName = name.split('/').pop().replace('.log', '');
+                        sources.push({ name: shortName, reads, parsed: p });
+                    }
                 });
             }
-            document.getElementById("metrics-content").innerHTML =
-                '<div>Acquired: <strong style="color: var(--green);">' + acquired.toLocaleString() + '</strong></div>' +
-                '<div>Parsed: <strong style="color: var(--yellow);">' + parsed.toLocaleString() + '</strong></div>';
+
+            const efficiency = acquired > 0 ? ((parsed / acquired) * 100).toFixed(1) : 0;
+
+            let html = '<div class="metrics-grid">';
+            html += '<div class="metric-item"><span class="metric-value" style="color: var(--green);">' + acquired.toLocaleString() + '</span><span class="metric-label">📥 Acquired</span></div>';
+            html += '<div class="metric-item"><span class="metric-value" style="color: var(--yellow);">' + parsed.toLocaleString() + '</span><span class="metric-label">✅ Parsed</span></div>';
+            html += '<div class="metric-item"><span class="metric-value" style="color: var(--red);">' + poured.toLocaleString() + '</span><span class="metric-label">🪣 Poured</span></div>';
+            html += '<div class="metric-item"><span class="metric-value">' + efficiency + '%</span><span class="metric-label">📊 Efficiency</span></div>';
+            html += '</div>';
+
+            if (sources.length > 0) {
+                html += '<div class="sources-list">';
+                sources.sort((a, b) => b.reads - a.reads).slice(0, 4).forEach(s => {
+                    html += '<div class="source-item"><span class="source-name">' + s.name + '</span><span class="source-count">' + s.reads.toLocaleString() + '</span></div>';
+                });
+                html += '</div>';
+            }
+
+            document.getElementById("metrics-content").innerHTML = html;
         }
 
         async function refreshHub() {

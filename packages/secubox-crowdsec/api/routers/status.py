@@ -97,6 +97,7 @@ def _compute_status_sync() -> Dict[str, Any]:
         pass
 
     # Check CAPI registration
+    capi_error = None
     try:
         r = subprocess.run(
             "sudo cscli capi status 2>&1",
@@ -105,8 +106,10 @@ def _compute_status_sync() -> Dict[str, Any]:
         output = r.stdout + r.stderr
         if "enrolled" in output.lower() or "successfully interact" in output.lower() or r.returncode == 0:
             capi_registered = True
-    except Exception:
-        pass
+        elif "forbidden" in output.lower() or "403" in output:
+            capi_error = "API Forbidden - account issue"
+    except Exception as e:
+        capi_error = str(e)
 
     # Get alerts count
     try:
@@ -125,6 +128,7 @@ def _compute_status_sync() -> Dict[str, Any]:
         "version": version,
         "lapi_reachable": lapi_reachable,
         "capi_registered": capi_registered,
+        "capi_error": capi_error,
         "lapi_url": url,
         "decisions_count": decisions_count,
         "alerts_count": alerts_count,

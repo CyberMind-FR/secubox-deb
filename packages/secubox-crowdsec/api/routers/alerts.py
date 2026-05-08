@@ -21,32 +21,45 @@ async def alerts(
         if r.returncode == 0 and r.stdout.strip():
             data = json.loads(r.stdout)
             # Transform to simpler format for dashboard
-            alerts = []
+            alerts_list = []
             for alert in (data if isinstance(data, list) else []):
                 source_ip = ""
                 country = ""
-                # Extract source_ip and country from events metadata
-                for event in alert.get("events", []):
-                    for meta in event.get("meta", []):
-                        if meta.get("key") == "source_ip":
+
+                # Primary: get IP from source object
+                source = alert.get("source") or {}
+                source_ip = source.get("ip") or source.get("value") or ""
+
+                # Secondary: extract from events metadata if available
+                events = alert.get("events") or []
+                for event in events:
+                    for meta in (event.get("meta") or []):
+                        if meta.get("key") == "source_ip" and not source_ip:
                             source_ip = meta.get("value", "")
                         if meta.get("key") == "IsoCode":
                             country = meta.get("value", "")
-                    if source_ip:
+                    if source_ip and country:
                         break
-                
-                alerts.append({
+
+                # Get country from decisions if not in events
+                if not country:
+                    for dec in (alert.get("decisions") or []):
+                        if dec.get("origin") == "CAPI":
+                            country = "CAPI"
+                            break
+
+                alerts_list.append({
                     "id": alert.get("id"),
                     "created_at": alert.get("created_at"),
-                    "scenario": alert.get("scenario"),
-                    "source_ip": source_ip or alert.get("source", {}).get("ip", ""),
+                    "scenario": alert.get("scenario") or alert.get("message") or "unknown",
+                    "source_ip": source_ip,
                     "country": country,
-                    "events_count": len(alert.get("events", [])),
-                    "decisions": alert.get("decisions", [])
+                    "events_count": alert.get("events_count") or len(events),
+                    "decisions": alert.get("decisions") or []
                 })
-            return {"alerts": alerts}
-    except Exception:
-        pass
+            return {"alerts": alerts_list}
+    except Exception as e:
+        return {"alerts": [], "error": str(e)}
     return {"alerts": []}
 
 
