@@ -208,12 +208,12 @@
                 '</div>' +
                 // Smart Strip (6 mini modules) - moved to top bar with hover tooltips
                 '<div class="smart-strip" id="gmb-smart-strip">' +
-                '<div class="strip-module" data-mod="AUTH" data-metric="cpu" onmouseenter="SecuBoxSidebar.showStripPopup(this)" onmouseleave="SecuBoxSidebar.hideStripPopup()"><span class="strip-icon" id="ss-icon-cpu" style="font-size:0.9rem;">🔐</span><span class="strip-val" id="ss-cpu">--</span></div>' +
-                '<div class="strip-module" data-mod="WALL" data-metric="mem" onmouseenter="SecuBoxSidebar.showStripPopup(this)" onmouseleave="SecuBoxSidebar.hideStripPopup()"><span class="strip-icon" id="ss-icon-mem" style="font-size:0.9rem;">🛡️</span><span class="strip-val" id="ss-mem">--</span></div>' +
-                '<div class="strip-module" data-mod="BOOT" data-metric="disk" onmouseenter="SecuBoxSidebar.showStripPopup(this)" onmouseleave="SecuBoxSidebar.hideStripPopup()"><span class="strip-icon" id="ss-icon-disk" style="font-size:0.9rem;">⚡</span><span class="strip-val" id="ss-disk">--</span></div>' +
-                '<div class="strip-module" data-mod="MIND" data-metric="load" onmouseenter="SecuBoxSidebar.showStripPopup(this)" onmouseleave="SecuBoxSidebar.hideStripPopup()"><span class="strip-icon" id="ss-icon-load" style="font-size:0.9rem;">🧠</span><span class="strip-val" id="ss-load">--</span></div>' +
-                '<div class="strip-module" data-mod="ROOT" data-metric="temp" onmouseenter="SecuBoxSidebar.showStripPopup(this)" onmouseleave="SecuBoxSidebar.hideStripPopup()"><span class="strip-icon" id="ss-icon-temp" style="font-size:0.9rem;">🌿</span><span class="strip-val" id="ss-temp">--</span></div>' +
-                '<div class="strip-module" data-mod="MESH" data-metric="net" onmouseenter="SecuBoxSidebar.showStripPopup(this)" onmouseleave="SecuBoxSidebar.hideStripPopup()"><span class="strip-icon" id="ss-icon-net" style="font-size:0.9rem;">🔗</span><span class="strip-val" id="ss-net">--</span></div>' +
+                '<div class="strip-module" data-mod="AUTH" data-metric="cpu" onmouseenter="SecuBoxSidebar.showStripPopup(this)" onmouseleave="SecuBoxSidebar.hideStripPopup()"><span class="strip-icon" id="ss-icon-cpu" style="font-size:0.9rem;">🎯</span><span class="strip-val" id="ss-cpu">--</span></div>' +
+                '<div class="strip-module" data-mod="WALL" data-metric="mem" onmouseenter="SecuBoxSidebar.showStripPopup(this)" onmouseleave="SecuBoxSidebar.hideStripPopup()"><span class="strip-icon" id="ss-icon-mem" style="font-size:0.9rem;">🔥</span><span class="strip-val" id="ss-mem">--</span></div>' +
+                '<div class="strip-module" data-mod="BOOT" data-metric="disk" onmouseenter="SecuBoxSidebar.showStripPopup(this)" onmouseleave="SecuBoxSidebar.hideStripPopup()"><span class="strip-icon" id="ss-icon-disk" style="font-size:0.9rem;">🚀</span><span class="strip-val" id="ss-disk">--</span></div>' +
+                '<div class="strip-module" data-mod="MIND" data-metric="load" onmouseenter="SecuBoxSidebar.showStripPopup(this)" onmouseleave="SecuBoxSidebar.hideStripPopup()"><span class="strip-icon" id="ss-icon-load" style="font-size:0.9rem;">🤖</span><span class="strip-val" id="ss-load">--</span></div>' +
+                '<div class="strip-module" data-mod="ROOT" data-metric="temp" onmouseenter="SecuBoxSidebar.showStripPopup(this)" onmouseleave="SecuBoxSidebar.hideStripPopup()"><span class="strip-icon" id="ss-icon-temp" style="font-size:0.9rem;">💻</span><span class="strip-val" id="ss-temp">--</span></div>' +
+                '<div class="strip-module" data-mod="MESH" data-metric="net" onmouseenter="SecuBoxSidebar.showStripPopup(this)" onmouseleave="SecuBoxSidebar.hideStripPopup()"><span class="strip-icon" id="ss-icon-net" style="font-size:0.9rem;">⚙️</span><span class="strip-val" id="ss-net">--</span></div>' +
                 '</div>' +
                 // Popup container for hover details
                 '<div class="strip-popup" id="strip-popup"></div>' +
@@ -379,14 +379,14 @@
         cpu: 0, mem: 0, disk: 0, load: 0, temp: 0, net: 0
     };
 
-    // Module metadata for popup with icons
+    // Module metadata for popup with official SecuBox emoji icons and colors
     const STRIP_MODULE_INFO = {
-        AUTH: { color: '#C04E24', metric: 'cpu', label: 'CPU Usage', unit: '%', icon: '/eye-remote/assets/icons/auth-22.png', desc: 'Authentication module - Processor utilization' },
-        WALL: { color: '#9A6010', metric: 'mem', label: 'Memory', unit: '%', icon: '/eye-remote/assets/icons/wall-22.png', desc: 'Firewall module - RAM utilization' },
-        BOOT: { color: '#803018', metric: 'disk', label: 'Disk', unit: '%', icon: '/eye-remote/assets/icons/boot-22.png', desc: 'Boot module - Storage utilization' },
-        MIND: { color: '#3D35A0', metric: 'load', label: 'Load', unit: 'x', icon: '/eye-remote/assets/icons/mind-22.png', desc: 'AI module - System load average' },
-        ROOT: { color: '#0A5840', metric: 'temp', label: 'Temp', unit: '°C', icon: '/eye-remote/assets/icons/root-22.png', desc: 'Core module - CPU temperature' },
-        MESH: { color: '#104A88', metric: 'net', label: 'Signal', unit: 'dB', icon: '/eye-remote/assets/icons/mesh-22.png', desc: 'Network module - WiFi signal strength' }
+        AUTH: { color: '#C04E24', emoji: '🎯', metric: 'cpu', label: 'CPU Usage', unit: '%', desc: 'Authentication module - Processor utilization' },
+        WALL: { color: '#9A6010', emoji: '🔥', metric: 'mem', label: 'Memory', unit: '%', desc: 'Firewall module - RAM utilization' },
+        BOOT: { color: '#803018', emoji: '🚀', metric: 'disk', label: 'Disk', unit: '%', desc: 'Boot module - Storage utilization' },
+        MIND: { color: '#3D35A0', emoji: '🤖', metric: 'load', label: 'Load', unit: 'x', desc: 'AI module - System load average' },
+        ROOT: { color: '#0A5840', emoji: '💻', metric: 'temp', label: 'Temp', unit: '°C', desc: 'Core module - CPU temperature' },
+        MESH: { color: '#104A88', emoji: '⚙️', metric: 'net', label: 'Signal', unit: 'dB', desc: 'Network module - WiFi signal strength' }
     };
 
     function showStripPopup(el) {
@@ -419,7 +419,7 @@
                           (value > 80 ? 'error' : value > 50 ? 'warn' : 'ok');
 
         popup.innerHTML = '<div class="popup-header" style="border-color:' + info.color + '">' +
-            '<img class="popup-icon" src="' + info.icon + '" alt="' + mod + '" onerror="this.style.display=\'none\'">' +
+            '<span class="popup-emoji" style="font-size:1.4rem;margin-right:8px;filter:drop-shadow(0 0 4px ' + info.color + ');">' + info.emoji + '</span>' +
             '<span class="popup-mod" style="color:' + info.color + '">' + mod + '</span>' +
             '<span class="popup-label">' + info.label + '</span>' +
             '</div>' +
@@ -785,19 +785,7 @@
                 if (ssTemp) ssTemp.textContent = temp + '°';
                 if (ssNet) ssNet.textContent = net + 'dB';
 
-                // Update dice icons based on metric values
-                var iconCpu = document.getElementById('ss-icon-cpu');
-                var iconMem = document.getElementById('ss-icon-mem');
-                var iconDisk = document.getElementById('ss-icon-disk');
-                var iconLoad = document.getElementById('ss-icon-load');
-                var iconTemp = document.getElementById('ss-icon-temp');
-                var iconNet = document.getElementById('ss-icon-net');
-                if (iconCpu) iconCpu.textContent = getMetricIcon(cpu, 'cpu');
-                if (iconMem) iconMem.textContent = getMetricIcon(mem, 'mem');
-                if (iconDisk) iconDisk.textContent = getMetricIcon(disk, 'disk');
-                if (iconLoad) iconLoad.textContent = getMetricIcon(Math.min(load * 10, 100), 'load');
-                if (iconTemp) iconTemp.textContent = getMetricIcon(temp, 'temp');
-                if (iconNet) iconNet.textContent = getMetricIcon(Math.min(Math.abs(net) * 2, 100), 'net');
+                // Icons are static (official SecuBox: 🎯🔥🚀🤖💻⚙️) - no dynamic updates
 
                 // Determine overall health level (tri-level)
                 var maxVal = Math.max(cpu, mem, disk);

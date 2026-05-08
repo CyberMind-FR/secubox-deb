@@ -1,335 +1,142 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SecuBox - Web Application Firewall</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-light.css">
-    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/design-tokens.css">
     <style>
-        :root {
-            /* P31 Phosphor spectrum */
-            --p31-peak: #00dd44;
-            --p31-hot: #00ff55;
-            --p31-mid: #009933;
-            --p31-dim: #006622;
-            --p31-ghost: #003311;
-            --p31-decay: #ffb347;
-            --p31-decay-dim: #cc7722;
-            /* Tube glass */
-            --tube-light: #e8f5e9;
-            --tube-pale: #c8e6c9;
-            --tube-soft: #a5d6a7;
-            /* Legacy mappings */
-            --bg-dark: var(--tube-light);
-            --bg-card: var(--tube-pale);
-            --bg-sidebar: var(--tube-black);
-            --border: var(--tube-soft);
-            --text: var(--tube-dark);
-            --text-dim: var(--p31-dim);
-            --primary: var(--p31-peak);
-            --cyan: var(--p31-peak);
-            --green: var(--p31-peak);
-            --red: #ff4466;
-            --yellow: var(--p31-decay);
-            --orange: var(--p31-decay-dim);
-            --purple: #a371f7;
-            /* Bloom effects */
-            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: 'Courier Prime', 'Courier New', monospace;
-            background: var(--tube-light);
-            background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
-            color: var(--tube-dark);
-            display: flex;
+            font-family: var(--font-display);
+            background: var(--bg-deep);
+            color: var(--text-dark);
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+        .layout { display: flex; min-height: 100vh; }
+        .sidebar { width: 180px; }
+        .main {
+            flex: 1;
+            margin-left: 180px;
+            padding: var(--space-l);
+            background: linear-gradient(180deg, var(--bg-deep) 0%, var(--bg-dark) 100%);
             min-height: 100vh;
         }
-        .sidebar { width: 220px; background: var(--bg-sidebar); border-right: 1px solid var(--border); position: fixed; height: 100vh; overflow-y: auto; }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-        .header h1 { font-size: 1.5rem; display: flex; align-items: center; gap: 0.5rem; }
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.9rem; }
-        .btn:hover { background: var(--bg-dark); }
-        .btn.primary { background: rgba(88,166,255,0.1); border-color: var(--primary); color: var(--primary); }
-        .btn.success { background: rgba(63,185,80,0.1); border-color: var(--green); color: var(--green); }
-        .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
-        .btn-group { display: flex; gap: 0.5rem; }
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
-        .card h2 { font-size: 1rem; margin-bottom: 1rem; color: var(--cyan); display: flex; align-items: center; gap: 0.5rem; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
-        .stat-card .value { font-size: 1.8rem; font-weight: bold; }
-        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; }
-        .stat-card.threats .value { color: var(--red); }
-        .stat-card.rules .value { color: var(--cyan); }
-        .stat-card.bans .value { color: var(--orange); }
-        .stat-card.categories .value { color: var(--purple); }
-        .badge { display: inline-block; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; }
-        .badge.critical { background: rgba(248,81,73,0.2); color: var(--red); }
-        .badge.high { background: rgba(240,136,62,0.2); color: var(--orange); }
-        .badge.medium { background: rgba(210,153,34,0.2); color: var(--yellow); }
-        .badge.low { background: rgba(63,185,80,0.2); color: var(--green); }
-        .badge.enabled { background: rgba(63,185,80,0.2); color: var(--green); }
-        .badge.disabled { background: rgba(139,148,158,0.2); color: var(--text-dim); }
-        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-        th, td { padding: 0.6rem; text-align: left; border-bottom: 1px solid var(--border); }
-        th { color: var(--text-dim); font-weight: 500; font-size: 0.8rem; }
-        .tabs { display: flex; gap: 0; margin-bottom: 1rem; border-bottom: 1px solid var(--border); }
-        .tab { padding: 0.75rem 1.25rem; cursor: pointer; color: var(--text-dim); border-bottom: 2px solid transparent; }
-        .tab:hover { color: var(--text); }
-        .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-        .category-card { background: var(--bg-dark); border: 1px solid var(--border); border-radius: 6px; padding: 1rem; margin-bottom: 0.75rem; }
-        .category-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
-        .category-name { font-weight: 600; }
-        .category-meta { display: flex; gap: 1rem; font-size: 0.8rem; color: var(--text-dim); }
-        .toggle { position: relative; width: 40px; height: 22px; }
-        .toggle input { opacity: 0; width: 0; height: 0; }
-        .toggle .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: var(--border); border-radius: 22px; transition: 0.3s; }
-        .toggle .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px; background: var(--text); border-radius: 50%; transition: 0.3s; }
-        .toggle input:checked + .slider { background: var(--green); }
-        .toggle input:checked + .slider:before { transform: translateX(18px); }
-        .alert-row { display: flex; gap: 1rem; align-items: center; padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
-        .alert-row:last-child { border-bottom: none; }
-        .alert-time { font-size: 0.75rem; color: var(--text-dim); min-width: 140px; }
-        .alert-ip { font-family: monospace; color: var(--cyan); min-width: 120px; }
-        .alert-rule { font-size: 0.85rem; flex: 1; }
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; align-items: center; justify-content: center; }
-        .modal.show { display: flex; }
-        .modal-content { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; width: 400px; }
-        .form-group { margin-bottom: 1rem; }
-        .form-group label { display: block; margin-bottom: 0.5rem; color: var(--text-dim); font-size: 0.85rem; }
-        .form-group input, .form-group select { width: 100%; padding: 0.5rem; background: var(--bg-dark); border: 1px solid var(--border); border-radius: 4px; color: var(--text); }
-    
-        /* CRT Enhancements */
-        .main { margin-left: 220px; padding: 1.5rem; }
-
-        .header h1 {
-            color: var(--p31-hot);
-            text-shadow: var(--bloom-text);
-            font-weight: 700;
-            letter-spacing: 0.05em;
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: var(--space-m);
+            margin-bottom: var(--space-l);
         }
-
-        .badge {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            border: 1px solid;
-        }
-        .badge-blue, .badge-primary { background: rgba(51,255,102,0.1); border-color: var(--p31-peak); color: var(--p31-peak); }
-        .badge-green { background: rgba(51,255,102,0.15); border-color: var(--p31-peak); color: var(--p31-peak); text-shadow: var(--bloom-soft); }
-        .badge-cyan { background: rgba(51,255,102,0.1); border-color: var(--p31-mid); color: var(--p31-mid); }
-        .badge-purple { background: rgba(163,113,247,0.1); border-color: #a371f7; color: #a371f7; }
-        .badge-yellow, .badge-amber { background: rgba(255,179,71,0.1); border-color: var(--p31-decay); color: var(--p31-decay); }
-        .badge-red { background: rgba(255,68,102,0.1); border-color: #ff4466; color: #ff4466; }
-
-        .btn {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            border: 1px solid var(--tube-soft);
-            background: var(--tube-pale);
-            color: var(--p31-mid);
-            transition: all 0.2s;
-        }
-        .btn:hover {
-            border-color: var(--p31-dim);
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            box-shadow: 0 0 12px rgba(51,255,102,0.1);
-        }
-        .btn-green, .btn-primary, .btn.primary, .btn.success {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-            background: rgba(51,255,102,0.1);
-        }
-        .btn-green:hover, .btn-primary:hover, .btn.primary:hover, .btn.success:hover {
-            background: rgba(51,255,102,0.2);
-            box-shadow: 0 0 16px rgba(51,255,102,0.2);
-        }
-        .btn-red, .btn.danger {
-            border-color: #ff4466;
-            color: #ff4466;
-            background: rgba(255,68,102,0.1);
-        }
-        .btn-red:hover, .btn.danger:hover {
-            background: rgba(255,68,102,0.2);
-        }
-        .btn-blue {
-            border-color: var(--p31-mid);
-            color: var(--p31-mid);
-            background: rgba(51,255,102,0.05);
-        }
-        .btn-blue:hover {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-        }
-
-        .card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card:hover {
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.05), inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card-title, .card-header h2 {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.85rem;
-        }
-
         .stat-card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur));
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            padding: var(--space-l);
+            text-align: center;
         }
-        .stat-value, .stat-card .value {
-            text-shadow: 0 0 10px currentColor;
+        .stat-card .value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            font-family: var(--font-mono);
+            color: var(--text-dark);
         }
-        .stat-label, .stat-card .label {
-            color: var(--p31-dim);
-            letter-spacing: 0.15em;
+        .stat-card .label {
+            font-size: 0.7rem;
+            color: var(--muted-dark);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-top: var(--space-xs);
         }
-        .stat-card.cyan .value, .stat-card.green .value { color: var(--p31-peak); }
-        .stat-card.yellow .value { color: var(--p31-decay); }
-        .stat-card.red .value { color: #ff4466; }
-
-        table, .table {
-            font-family: 'Courier Prime', monospace;
+        .glass-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur));
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            padding: var(--space-l);
+            margin-bottom: var(--space-m);
         }
-        th, .table th {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.15em;
-            border-bottom: 1px solid var(--p31-ghost);
+        .glass-card h2 {
+            font-size: 0.9rem;
+            color: var(--muted-dark);
+            margin-bottom: var(--space-m);
+            display: flex;
+            align-items: center;
+            gap: var(--space-s);
         }
-        td, .table td {
-            border-bottom: 1px solid var(--p31-ghost);
-            color: var(--p31-mid);
-        }
-        tr:hover, .table tr:hover {
-            background: rgba(51,255,102,0.03);
-        }
-
-        .status-dot.active, .status-running {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-        }
-        .status-dot.active {
-            background: var(--p31-peak);
-            box-shadow: 0 0 8px var(--p31-peak);
-        }
-
-        .toast {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            font-family: 'Courier Prime', monospace;
-        }
-        .toast-success { border-color: var(--p31-peak); }
-        .toast-error { border-color: #ff4466; }
-
-        .modal {
-            background: rgba(0,0,0,0.85);
-        }
-        .modal-content {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            box-shadow: 0 0 30px rgba(51,255,102,0.1);
-        }
-        .modal-title {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-        }
-
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-m); }
         .tabs {
-            background: var(--tube-pale);
-            border-bottom: 1px solid var(--p31-ghost);
+            display: flex;
+            gap: var(--space-m);
+            margin-bottom: var(--space-m);
+            border-bottom: 1px solid var(--glass-border);
+            padding-bottom: var(--space-s);
         }
         .tab {
-            color: var(--p31-dim);
-            letter-spacing: 0.1em;
+            padding: var(--space-s) var(--space-m);
+            cursor: pointer;
+            color: var(--muted-dark);
+            font-size: 0.85rem;
             text-transform: uppercase;
+            letter-spacing: 1px;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        .tab:hover { color: var(--text-dark); }
+        .tab.active { color: var(--root-light); border-bottom-color: var(--root-light); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .progress-bar {
+            height: 6px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 4px;
+        }
+        .progress-bar .fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.3s;
+        }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: var(--space-s); text-align: left; border-bottom: 1px solid var(--glass-border); }
+        th { color: var(--muted-dark); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; }
+        td { font-family: var(--font-mono); font-size: 0.85rem; }
+        .btn {
+            padding: var(--space-xs) var(--space-m);
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--glass-border);
+            background: var(--glass-bg);
+            color: var(--text-dark);
+            cursor: pointer;
             font-size: 0.8rem;
+            transition: all 0.2s;
         }
-        .tab:hover { color: var(--p31-mid); }
-        .tab.active {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            border-bottom-color: var(--p31-peak);
+        .btn:hover { background: rgba(255,255,255,0.1); }
+        .btn.danger { border-color: var(--boot-light); color: var(--boot-light); }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 0.9; }
+            50% { transform: scale(1.3); opacity: 0.6; }
         }
-
-        input, select, textarea {
-            font-family: 'Courier Prime', monospace;
-            background: var(--tube-light);
-            border: 1px solid var(--tube-soft);
-            color: var(--p31-mid);
-            padding: 0.5rem;
-        }
-        input:focus, select:focus, textarea:focus {
-            outline: none;
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.1);
-        }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: var(--tube-light); }
-        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
-        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
-
-        /* Empty states */
-        .empty { color: var(--p31-dim); }
-
-        @media (max-width: 768px) {
-            .main { margin-left: 0; }
-        }
+        @media (max-width: 1200px) { .cards-grid { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 768px) { .main { margin-left: 0; } .grid-2 { grid-template-columns: 1fr; } }
     </style>
 </head>
-<body class="crt-light">
+<body>
     <nav class="sidebar" id="sidebar"></nav>
     <script src="/shared/sidebar.js"></script>
     <main class="main">
-        <header class="header">
-            <h1>Web Application Firewall</h1>
-            <div class="btn-group">
-                <button class="btn" onclick="refresh()">Refresh</button>
-                <button class="btn primary" onclick="showBanModal()">Ban IP</button>
-                <button class="btn" onclick="reloadRules()">Reload Rules</button>
-            </div>
-        </header>
-
-        <div class="grid">
-            <div class="stat-card threats">
-                <div class="value" id="threatsToday">-</div>
-                <div class="label">Threats Today</div>
-            </div>
-            <div class="stat-card rules">
-                <div class="value" id="totalRules">-</div>
-                <div class="label">Active Rules</div>
-            </div>
-            <div class="stat-card categories">
-                <div class="value" id="activeCategories">-</div>
-                <div class="label">Categories</div>
-            </div>
-            <div class="stat-card bans">
-                <div class="value" id="activeBans">-</div>
-                <div class="label">Active Bans</div>
-            </div>
+        <div class="cards-grid">
+            <div class="stat-card"><div class="value" id="threatsToday">-</div><div class="label">Threats Today</div></div>
+            <div class="stat-card"><div class="value" id="totalRules">-</div><div class="label">Active Rules</div></div>
+            <div class="stat-card"><div class="value" id="activeCategories">-</div><div class="label">Categories</div></div>
+            <div class="stat-card"><div class="value" id="activeBans">-</div><div class="label">Active Bans</div></div>
         </div>
 
-        <div class="card">
+        <div class="glass-card">
             <div class="tabs">
                 <div class="tab active" data-tab="alerts" onclick="switchTab('alerts')">Alerts</div>
                 <div class="tab" data-tab="categories" onclick="switchTab('categories')">Categories</div>
@@ -347,70 +154,33 @@
 
             <div id="bans" class="tab-content">
                 <table>
-                    <thead><tr><th>IP Address</th><th>Reason</th><th>Country</th><th>ASN</th><th>Duration</th><th>Actions</th></tr></thead>
-                    <tbody id="bansTable"><tr><td colspan="6">Loading...</td></tr></tbody>
+                    <thead><tr><th>IP Address</th><th>🌍</th><th>Reason</th><th>Duration</th><th>Actions</th></tr></thead>
+                    <tbody id="bansTable"><tr><td colspan="5">Loading...</td></tr></tbody>
                 </table>
             </div>
 
             <div id="stats" class="tab-content">
-                <div class="grid">
-                    <div class="card">
-                        <h2>By Severity</h2>
-                        <div id="severityStats">Loading...</div>
-                    </div>
-                    <div class="card">
-                        <h2>By Category</h2>
-                        <div id="categoryStats">Loading...</div>
-                    </div>
+                <div class="grid-2">
+                    <div class="glass-card"><h2>📊 By Severity</h2><div id="severityStats" style="display:flex;justify-content:center;"></div></div>
+                    <div class="glass-card"><h2>📁 By Category</h2><div id="categoryStats" style="display:flex;justify-content:center;"></div></div>
                 </div>
-                <div class="grid">
-                    <div class="card">
-                        <h2>🌍 Top Countries</h2>
-                        <div id="topCountries">Loading...</div>
+                <div class="grid-2">
+                    <div class="glass-card">
+                        <h2>🌍 Attack Origins - Global Threat Map</h2>
+                        <div id="geomap" style="position:relative;width:100%;height:260px;background:#000a0f;border-radius:8px;overflow:visible;margin-bottom:2.5rem;">
+                            <div style="position:absolute;top:0;left:0;width:100%;height:100%;overflow:hidden;">
+                                <img src="/waf/wargames-earth.png" alt="World Map" style="width:200%;height:100%;object-fit:cover;object-position:10% 50%;opacity:0.9;">
+                            </div>
+                            <div id="geomarkers" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;"></div>
+                            <div style="position:absolute;bottom:6px;left:10px;font-size:10px;color:#00ff88;font-family:monospace;text-shadow:0 0 6px #00ff41;letter-spacing:2px;">GLOBAL THREAT MONITOR</div>
+                            <div id="geoLegend" style="position:absolute;bottom:6px;right:10px;font-size:10px;color:#ff4466;font-family:monospace;text-shadow:0 0 6px #ff4466;"></div>
+                        </div>
                     </div>
-                    <div class="card">
-                        <h2>🎯 Top Attacked Sites</h2>
-                        <div id="topVhosts">Loading...</div>
-                    </div>
-                </div>
-                <div class="card">
-                    <h2>Top Attacking IPs</h2>
-                    <table>
-                        <thead><tr><th>IP</th><th>🌍</th><th>Threats</th><th>Actions</th></tr></thead>
-                        <tbody id="topIpsTable"><tr><td colspan="4">Loading...</td></tr></tbody>
-                    </table>
+                    <div class="glass-card"><h2>🎯 Top Attacked Sites</h2><div id="topVhosts">Loading...</div></div>
                 </div>
             </div>
         </div>
     </main>
-
-    <div class="modal" id="banModal">
-        <div class="modal-content">
-            <h3>Ban IP Address</h3>
-            <div class="form-group">
-                <label>IP Address</label>
-                <input type="text" id="banIp" placeholder="192.168.1.100">
-            </div>
-            <div class="form-group">
-                <label>Duration</label>
-                <select id="banDuration">
-                    <option value="1h">1 hour</option>
-                    <option value="4h" selected>4 hours</option>
-                    <option value="24h">24 hours</option>
-                    <option value="7d">7 days</option>
-                    <option value="30d">30 days</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label>Reason</label>
-                <input type="text" id="banReason" placeholder="Manual ban">
-            </div>
-            <div class="btn-group">
-                <button class="btn danger" onclick="banIp()">Ban</button>
-                <button class="btn" onclick="hideModal('banModal')">Cancel</button>
-            </div>
-        </div>
-    </div>
 
     <script>
         const API = '/api/v1/waf';
@@ -424,61 +194,107 @@
                 return res.json();
             } catch { return {}; }
         }
-        // GeoIP cache for country flags
-        const GEOIP_CACHE_KEY = "secubox_waf_geoip";
-        const GEOIP_CACHE_TTL = 86400000;
-        function getGeoCache() { try { return JSON.parse(localStorage.getItem(GEOIP_CACHE_KEY) || "{}"); } catch { return {}; } }
-        function setGeoCache(ip, country) { const c = getGeoCache(); c[ip] = { country, ts: Date.now() }; localStorage.setItem(GEOIP_CACHE_KEY, JSON.stringify(c)); }
-        function countryToFlag(code) { if (!code || code === "LAN" || code.length !== 2) return ""; return String.fromCodePoint(...[...code.toUpperCase()].map(c => 127397 + c.charCodeAt(0))); }
+
+        function countryToFlag(code) {
+            if (!code || code === "LAN" || code.length !== 2) return "🌐";
+            return String.fromCodePoint(...[...code.toUpperCase()].map(c => 127397 + c.charCodeAt(0)));
+        }
+
         function getSiteEmoji(host) {
             if (!host) return "🌐";
             const h = host.toLowerCase();
             if (h.includes("git")) return "💻";
             if (h.includes("mail")) return "📧";
-            if (h.includes("blog")) return "📝";
-            if (h.includes("admin")) return "🔐";
             if (h.includes("api")) return "⚡";
-            if (h.includes("auth")) return "🔑";
-            if (h.includes("file") || h.includes("cloud")) return "📁";
-            if (h.includes("chat") || h.includes("matrix")) return "💬";
-            if (h.includes("media") || h.includes("stream")) return "🎬";
-            if (h.includes("secubox")) return "🛡️";
+            if (h.includes("admin")) return "🔐";
             return "🌐";
         }
+
         function getCategoryEmoji(cat) {
             if (!cat) return "⚠️";
             const c = cat.toLowerCase();
-            if (c.includes("sqli") || c.includes("sql")) return "💉";
+            if (c.includes("sqli")) return "💉";
             if (c.includes("xss")) return "🔥";
-            if (c.includes("rce") || c.includes("exec")) return "💀";
-            if (c.includes("lfi") || c.includes("path") || c.includes("traversal")) return "📂";
-            if (c.includes("scanner") || c.includes("recon")) return "🔍";
+            if (c.includes("rce")) return "💀";
+            if (c.includes("scanner")) return "🔍";
             if (c.includes("bot")) return "🤖";
-            if (c.includes("router") || c.includes("iot")) return "📡";
-            if (c.includes("shell") || c.includes("webshell")) return "🐚";
-            if (c.includes("cve") || c.includes("exploit")) return "🎯";
-            if (c.includes("brute") || c.includes("auth")) return "🔓";
-            if (c.includes("dos") || c.includes("flood")) return "🌊";
-            if (c.includes("voip") || c.includes("sip")) return "📞";
-            if (c.includes("crypto") || c.includes("miner")) return "⛏️";
-            if (c.includes("malware")) return "🦠";
-            if (c.includes("backdoor")) return "🚪";
+            if (c.includes("router")) return "📡";
             return "⚠️";
         }
 
-        async function lookupGeoIP(ip) { if (!ip) return "";
-            const cache = getGeoCache();
-            if (cache[ip] && Date.now() - cache[ip].ts < GEOIP_CACHE_TTL) return cache[ip].country;
-            if (ip.startsWith("10.") || ip.startsWith("192.168.") || ip.startsWith("127.")) { setGeoCache(ip, "LAN"); return "LAN"; }
-            try { const r = await fetch("/api/v1/waf/geoip/" + ip, { mode: "cors" }); const j = await r.json(); const c = j.country; if (c && c.length === 2) { setGeoCache(ip, c); return c; } } catch {}
-            return "";
+        const SEV_COLORS = { critical: '#ef4444', high: '#f97316', medium: '#eab308', low: '#22c55e' };
+        const SEV_EMOJI = { critical: '🔴', high: '🟠', medium: '🟡', low: '🟢' };
+        const CAT_COLORS = ['#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#f43f5e', '#0ea5e9', '#14b8a6'];
+        const ARC_COLORS = ['#ff0044', '#ff4400', '#ff8800', '#ffcc00', '#88ff00', '#00ff44', '#00ffcc', '#0088ff', '#4400ff', '#cc00ff'];
+
+        function createSeverityDonut(data, size) {
+            size = size || 130;
+            if (!data || Object.keys(data).length === 0) return '<p style="color:var(--muted);">No data</p>';
+            const entries = Object.entries(data).filter(([k,v]) => v > 0);
+            const total = entries.reduce((s, [k,v]) => s + v, 0);
+            if (total === 0) return '<p style="color:var(--muted);">No data</p>';
+            const center = size / 2;
+            const ringWidth = 8;
+            const spacing = 3;
+            let svg = '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '">';
+            entries.forEach(([sev, count], i) => {
+                const r = center - 10 - (i * (ringWidth + spacing));
+                const pct = count / total;
+                const circ = 2 * Math.PI * r;
+                const dash = circ * pct;
+                const gap = circ - dash;
+                const color = SEV_COLORS[sev.toLowerCase()] || '#888';
+                const emoji = SEV_EMOJI[sev.toLowerCase()] || '⚪';
+                svg += '<circle cx="' + center + '" cy="' + center + '" r="' + r + '" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="' + ringWidth + '"/>';
+                svg += '<circle cx="' + center + '" cy="' + center + '" r="' + r + '" fill="none" stroke="' + color + '" stroke-width="' + ringWidth + '" stroke-dasharray="' + dash + ' ' + gap + '" stroke-dashoffset="' + (circ/4) + '" stroke-linecap="round" style="filter:drop-shadow(0 0 3px ' + color + ');"><title>' + emoji + ' ' + sev + ': ' + count + ' (' + Math.round(pct*100) + '%)</title></circle>';
+            });
+            svg += '<text x="' + center + '" y="' + (center - 2) + '" text-anchor="middle" fill="var(--text)" font-size="16" font-weight="bold">' + total + '</text>';
+            svg += '<text x="' + center + '" y="' + (center + 12) + '" text-anchor="middle" fill="var(--muted)" font-size="7">ALERTS</text>';
+            svg += '</svg>';
+            const legend = entries.map(([sev, count]) => {
+                const color = SEV_COLORS[sev.toLowerCase()] || '#888';
+                const emoji = SEV_EMOJI[sev.toLowerCase()] || '⚪';
+                return '<span style="display:inline-flex;align-items:center;gap:3px;font-size:0.7rem;">' + emoji + ' <span style="color:' + color + '">' + count + '</span></span>';
+            }).join(' ');
+            return '<div style="display:flex;flex-direction:column;align-items:center;">' + svg + '<div style="margin-top:8px;">' + legend + '</div></div>';
         }
 
+        function createCategoryDonut(data, size) {
+            size = size || 130;
+            if (!data || Object.keys(data).length === 0) return '<p style="color:var(--muted);">No data</p>';
+            const entries = Object.entries(data).slice(0, 6).filter(([k,v]) => v > 0);
+            const total = entries.reduce((s, [k,v]) => s + v, 0);
+            if (total === 0) return '<p style="color:var(--muted);">No data</p>';
+            const center = size / 2;
+            const ringWidth = 8;
+            const spacing = 3;
+            let svg = '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '">';
+            entries.forEach(([cat, count], i) => {
+                const r = center - 10 - (i * (ringWidth + spacing));
+                const pct = count / total;
+                const circ = 2 * Math.PI * r;
+                const dash = circ * pct;
+                const gap = circ - dash;
+                const color = CAT_COLORS[i % CAT_COLORS.length];
+                const emoji = getCategoryEmoji(cat);
+                svg += '<circle cx="' + center + '" cy="' + center + '" r="' + r + '" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="' + ringWidth + '"/>';
+                svg += '<circle cx="' + center + '" cy="' + center + '" r="' + r + '" fill="none" stroke="' + color + '" stroke-width="' + ringWidth + '" stroke-dasharray="' + dash + ' ' + gap + '" stroke-dashoffset="' + (circ/4) + '" stroke-linecap="round" style="filter:drop-shadow(0 0 3px ' + color + ');"><title>' + emoji + ' ' + cat + ': ' + count + ' (' + Math.round(pct*100) + '%)</title></circle>';
+            });
+            svg += '<text x="' + center + '" y="' + (center - 2) + '" text-anchor="middle" fill="var(--text)" font-size="16" font-weight="bold">' + total + '</text>';
+            svg += '<text x="' + center + '" y="' + (center + 12) + '" text-anchor="middle" fill="var(--muted)" font-size="7">THREATS</text>';
+            svg += '</svg>';
+            const legend = entries.slice(0, 5).map(([cat, count], i) => {
+                const color = CAT_COLORS[i % CAT_COLORS.length];
+                const emoji = getCategoryEmoji(cat);
+                return '<span style="display:inline-flex;align-items:center;gap:2px;font-size:0.65rem;"><span style="width:6px;height:6px;background:' + color + ';border-radius:1px;"></span>' + emoji + '</span>';
+            }).join(' ');
+            return '<div style="display:flex;flex-direction:column;align-items:center;">' + svg + '<div style="margin-top:6px;">' + legend + '</div></div>';
+        }
 
         function switchTab(tabName) {
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+            document.querySelector('[data-tab="' + tabName + '"]').classList.add('active');
             document.getElementById(tabName).classList.add('active');
         }
 
@@ -492,250 +308,142 @@
             const d = await api('/stats');
             document.getElementById('threatsToday').textContent = d.threats_today || 0;
 
-            // Severity stats
-            const sevEl = document.getElementById('severityStats');
+            // Severity donut
             if (d.by_severity) {
-                sevEl.innerHTML = Object.entries(d.by_severity).map(([sev, count]) =>
-                    `<div style="display:flex;justify-content:space-between;padding:0.25rem 0;"><span class="badge ${sev}">${sev}</span><span>${count}</span></div>`
-                ).join('');
+                document.getElementById('severityStats').innerHTML = createSeverityDonut(d.by_severity, 140);
             }
 
-            // Category stats
-            const catEl = document.getElementById('categoryStats');
+            // Category donut
             if (d.by_category) {
-                catEl.innerHTML = Object.entries(d.by_category).slice(0, 8).map(([cat, count]) =>
-                    `<div style="display:flex;justify-content:space-between;padding:0.25rem 0;"><span>${getCategoryEmoji(cat)} ${cat}</span><span style="color:var(--cyan)">${count}</span></div>`
-                ).join('');
+                document.getElementById('categoryStats').innerHTML = createCategoryDonut(d.by_category, 140);
             }
 
-            // Top Countries
-            const countriesEl = document.getElementById('topCountries');
-            if (d.top_countries && Object.keys(d.top_countries).length > 0) {
-                countriesEl.innerHTML = Object.entries(d.top_countries).slice(0, 8).map(([code, count]) =>
-                    `<div style="display:flex;justify-content:space-between;padding:0.25rem 0;"><span>${countryToFlag(code)} ${code}</span><span style="color:var(--red)">${count}</span></div>`
-                ).join('');
-            } else {
-                countriesEl.innerHTML = '<p style="color:var(--text-dim)">No data (GeoIP DB needed)</p>';
-            }
-
-            // Top Attacked Vhosts
+            // Top Vhosts with progress bars
             const vhostsEl = document.getElementById('topVhosts');
-            if (d.top_vhosts && Object.keys(d.top_vhosts).length > 0) {
-                vhostsEl.innerHTML = Object.entries(d.top_vhosts).slice(0, 8).map(([host, count]) =>
-                    `<div style="display:flex;justify-content:space-between;padding:0.25rem 0;"><span>${getSiteEmoji(host)} ${host.split('.')[0]}</span><span style="color:var(--yellow)">${count}</span></div>`
-                ).join('');
-            } else {
-                vhostsEl.innerHTML = '<p style="color:var(--text-dim)">No data</p>';
+            if (d.top_vhosts) {
+                let vhostData = Array.isArray(d.top_vhosts)
+                    ? d.top_vhosts.map(v => ({host: v.host || v.vhost || v[0], count: v.count || v.threats || v[1] || 0}))
+                    : Object.entries(d.top_vhosts).map(([h, c]) => ({host: h, count: typeof c === 'object' ? c.count || 0 : c}));
+                const maxVhost = Math.max(...vhostData.map(v => v.count));
+                const totalVhost = vhostData.reduce((s, v) => s + v.count, 0);
+                vhostsEl.innerHTML = vhostData.slice(0, 6).map(v => {
+                    const pct = totalVhost > 0 ? Math.round(v.count / totalVhost * 100) : 0;
+                    const width = maxVhost > 0 ? Math.round(v.count / maxVhost * 100) : 0;
+                    return '<div style="margin-bottom:8px;"><div style="display:flex;justify-content:space-between;font-size:0.8rem;"><span>' + getSiteEmoji(v.host) + ' ' + v.host + '</span><span style="color:var(--wall-light);">' + v.count + ' <span style="color:var(--muted);">(' + pct + '%)</span></span></div><div class="progress-bar"><div class="fill" style="width:' + width + '%;background:linear-gradient(90deg, var(--wall-light), var(--boot-light));"></div></div></div>';
+                }).join('');
             }
 
-            // Top IPs with flags (countries from backend)
+            // Top IPs table
             const ipsTable = document.getElementById('topIpsTable');
             if (d.top_ips && Object.keys(d.top_ips).length > 0) {
                 const ipCountries = d.top_ips_countries || {};
-                ipsTable.innerHTML = Object.entries(d.top_ips).map(([ip, count]) => {
-                    const country = ipCountries[ip] || '';
-                    const flag = countryToFlag(country);
-                    return `
-                    <tr>
-                        <td style="font-family:monospace">${ip}</td>
-                        <td style="font-size:1.2em" title="${country}">${flag}</td>
-                        <td>${count}</td>
-                        <td><button class="btn danger" onclick="banIpDirect('${ip}')">Ban</button></td>
-                    </tr>
-                `}).join('');
+                ipsTable.innerHTML = Object.entries(d.top_ips).slice(0, 10).map(([ip, count]) => {
+                    const cc = ipCountries[ip] || '';
+                    const flag = countryToFlag(cc);
+                    return '<tr><td>' + ip + '</td><td style="font-size:1.2em;">' + flag + '</td><td>' + count + '</td><td><button class="btn danger" onclick="banIpDirect(\'' + ip + '\')">BAN</button></td></tr>';
+                }).join('');
+            }
+
+            // Geomap
+            renderGeomap(d);
+        }
+
+        function renderGeomap(d) {
+            const geomarkers = document.getElementById('geomarkers');
+            const geoLegend = document.getElementById('geoLegend');
+            const countryPos = {
+                'US': {x:22,y:38}, 'CN': {x:82,y:40}, 'RU': {x:72,y:28}, 'DE': {x:52,y:32},
+                'FR': {x:50,y:35}, 'GB': {x:48,y:30}, 'BR': {x:28,y:62}, 'IN': {x:74,y:48},
+                'JP': {x:92,y:38}, 'KR': {x:88,y:38}, 'AU': {x:88,y:72}, 'CA': {x:24,y:30},
+                'NL': {x:51,y:30}, 'IT': {x:54,y:38}, 'ES': {x:47,y:40}, 'PL': {x:56,y:32},
+                'IE': {x:46,y:30}, 'SG': {x:82,y:56}
+            };
+
+            if (d.top_ips && Object.keys(d.top_ips).length > 0) {
+                const ipCountries = d.top_ips_countries || {};
+                const countryThreats = {};
+                Object.entries(d.top_ips).forEach(([ip, count]) => {
+                    const cc = ipCountries[ip] || '';
+                    if (cc) countryThreats[cc] = (countryThreats[cc] || 0) + count;
+                });
+
+                const target = {x: 50, y: 35};
+                let totalThreats = 0;
+                let svgContent = '<svg style="position:absolute;top:0;left:0;width:100%;height:120%;pointer-events:none;overflow:visible;" viewBox="0 0 100 120" preserveAspectRatio="none"><defs><filter id="glow"><feGaussianBlur stdDeviation="0.5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>';
+                let markers = '';
+                let legendFlags = '';
+                const entries = Object.entries(countryThreats).sort((a,b) => b[1] - a[1]).slice(0, 8);
+                const flagSpacing = 100 / (entries.length + 1);
+                const maxCountry = Math.max(...entries.map(e => e[1]));
+
+                entries.forEach(([cc, count], idx) => {
+                    totalThreats += count;
+                    const pos = countryPos[cc] || {x:50,y:50};
+                    const intensity = Math.max(0.3, count / maxCountry);
+                    const arcColor = ARC_COLORS[idx % ARC_COLORS.length];
+                    const strokeWidth = 0.4 + intensity * 1.2;
+                    const size = Math.max(8, Math.min(20, 8 + intensity * 12));
+                    const midX = (pos.x + target.x) / 2;
+                    const dist = Math.sqrt(Math.pow(pos.x - target.x, 2) + Math.pow(pos.y - target.y, 2));
+                    const arcHeight = Math.min(pos.y, target.y) - (dist * 0.35);
+                    const pathId = 'arc' + idx;
+
+                    svgContent += '<path id="' + pathId + '" d="M' + pos.x + ',' + pos.y + ' Q' + midX + ',' + arcHeight + ' ' + target.x + ',' + target.y + '" fill="none" stroke="' + arcColor + '" stroke-width="' + strokeWidth + '" opacity="0.7" filter="url(#glow)" stroke-linecap="round"/>';
+                    
+                    const missileCount = Math.min(4, Math.max(1, Math.floor(intensity * 4)));
+                    for (let m = 0; m < missileCount; m++) {
+                        const dur = 2.5 - intensity;
+                        const delay = idx * 0.2 + m * dur / missileCount;
+                        svgContent += '<circle r="' + (0.5 + intensity * 0.5) + '" fill="' + arcColor + '" filter="url(#glow)"><animateMotion dur="' + dur + 's" repeatCount="indefinite" begin="' + delay + 's"><mpath href="#' + pathId + '"/></animateMotion></circle>';
+                    }
+
+                    markers += '<div style="position:absolute;left:' + pos.x + '%;top:' + (pos.y * 0.85) + '%;transform:translate(-50%,-50%);z-index:5;"><div style="width:' + size + 'px;height:' + size + 'px;background:radial-gradient(circle,' + arcColor + ' 0%,' + arcColor + '60 50%,transparent 70%);border-radius:50%;animation:pulse ' + (1.5 - intensity * 0.7) + 's infinite;box-shadow:0 0 ' + (size * 1.2) + 'px ' + arcColor + ';"></div></div>';
+
+                    const legendX = flagSpacing * (idx + 1);
+                    legendFlags += '<div style="position:absolute;left:' + legendX + '%;top:100%;transform:translate(-50%,4px);text-align:center;z-index:10;"><div style="font-size:14px;filter:drop-shadow(0 0 4px ' + arcColor + ');">' + countryToFlag(cc) + '</div><div style="font-size:8px;color:' + arcColor + ';font-family:monospace;">' + count + '</div></div>';
+                    svgContent += '<line x1="' + legendX + '" y1="106" x2="' + pos.x + '" y2="' + pos.y + '" stroke="' + arcColor + '" stroke-width="0.3" stroke-dasharray="1,1" opacity="0.4"/>';
+                });
+
+                markers += '<div style="position:absolute;left:' + target.x + '%;top:' + (target.y * 0.85) + '%;transform:translate(-50%,-50%);z-index:10;"><div style="width:18px;height:18px;border:2px solid #00ff41;border-radius:50%;animation:pulse 0.5s infinite;box-shadow:0 0 12px #00ff41;"></div><div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:5px;height:5px;background:#00ff41;border-radius:50%;"></div></div>';
+                svgContent += '</svg>';
+                geomarkers.innerHTML = svgContent + markers + legendFlags;
+                geoLegend.innerHTML = '<span style="animation:pulse 1s infinite;">⚠</span> ' + totalThreats.toLocaleString() + ' INCOMING';
             } else {
-                ipsTable.innerHTML = '<tr><td colspan="4" style="color:var(--text-dim)">No data</td></tr>';
+                geomarkers.innerHTML = '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#00ff41;font-size:12px;">✓ SECURE</div>';
+                geoLegend.innerHTML = '<span style="color:#00ff41;">● SECURE</span>';
             }
-        }
-
-        async function loadAlerts() {
-            // Load aggregated alerts (grouped by IP)
-            const d = await api('/alerts?limit=15&aggregate=true');
-            const el = document.getElementById('alertsList');
-            if (!d.alerts || d.alerts.length === 0) {
-                el.innerHTML = '<p style="color:var(--text-dim)">No recent alerts</p>';
-                return;
-            }
-
-            // Fetch flags for all IPs
-            const ips = [...new Set(d.alerts.map(a => a.client_ip))];
-            const flags = {};
-            await Promise.all(ips.map(async ip => { flags[ip] = countryToFlag(await lookupGeoIP(ip)); }));
-
-            el.innerHTML = d.alerts.map(a => {
-                const countBadge = a.count > 1
-                    ? `<span style="background:var(--p31-ghost);color:var(--red);padding:0.15rem 0.5rem;border-radius:12px;font-size:0.75rem;font-weight:bold;">×${a.count}</span>`
-                    : '';
-                const categories = (a.categories || []).slice(0, 2).map(c => getCategoryEmoji(c)).join(' ');
-                const timeStr = a.last_seen ? new Date(a.last_seen).toLocaleTimeString('en-GB', {hour: '2-digit', minute: '2-digit'}) : '';
-                return `
-                <div class="alert-row" style="padding: 0.6rem 0;">
-                    <span class="alert-time" style="min-width: 50px;">${timeStr}</span>
-                    <span class="alert-flag" style="font-size:1.2em">${flags[a.client_ip] || ""}</span>
-                    <span class="alert-ip" style="min-width: 110px;">${a.client_ip}</span>
-                    ${countBadge}
-                    <span class="badge ${a.max_severity}" style="margin: 0 0.5rem;">${a.max_severity}</span>
-                    <span class="alert-cat" style="font-size:1.1em">${categories}</span>
-                    <span class="alert-rule" style="flex:1;font-size:0.8rem;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
-                        ${a.latest_alert ? (a.latest_alert.rule_id + ': ' + (a.latest_alert.description || '').substring(0, 40)) : ''}
-                    </span>
-                    <button class="btn danger" style="padding:0.25rem 0.5rem;font-size:0.7rem;" onclick="banIpDirect('${a.client_ip}')">Ban</button>
-                </div>
-            `}).join('');
-        }
-
-        async function loadCategories() {
-            const d = await api('/categories');
-            const el = document.getElementById('categoriesList');
-            if (!d.categories) {
-                el.innerHTML = '<p style="color:var(--text-dim)">No categories loaded</p>';
-                return;
-            }
-            el.innerHTML = Object.entries(d.categories).map(([id, cat]) => `
-                <div class="category-card">
-                    <div class="category-header">
-                        <span class="category-name">${cat.name}</span>
-                        <label class="toggle">
-                            <input type="checkbox" ${cat.enabled ? 'checked' : ''} onchange="toggleCategory('${id}', this.checked)">
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-                    <div class="category-meta">
-                        <span class="badge ${cat.severity}">${cat.severity}</span>
-                        <span>${cat.rules_count} rules</span>
-                        ${cat.owasp ? `<span>${cat.owasp}</span>` : ''}
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        function parseDuration(dur) {
-            // Parse duration like "4h", "24h", "7d" to milliseconds
-            if (!dur) return 0;
-            const m = dur.match(/^(\d+)([smhd])$/i);
-            if (!m) return 0;
-            const n = parseInt(m[1]);
-            const u = m[2].toLowerCase();
-            if (u === 's') return n * 1000;
-            if (u === 'm') return n * 60 * 1000;
-            if (u === 'h') return n * 60 * 60 * 1000;
-            if (u === 'd') return n * 24 * 60 * 60 * 1000;
-            return 0;
-        }
-
-        function formatTimeLeft(ms) {
-            if (ms <= 0) return 'expiring';
-            const h = Math.floor(ms / 3600000);
-            const m = Math.floor((ms % 3600000) / 60000);
-            if (h >= 24) return `${Math.floor(h/24)}d ${h%24}h`;
-            if (h > 0) return `${h}h ${m}m`;
-            return `${m}m`;
         }
 
         async function loadBans() {
             const d = await api('/bans');
             document.getElementById('activeBans').textContent = d.total || 0;
-
             const tbody = document.getElementById('bansTable');
             if (!d.bans || d.bans.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" style="color:var(--text-dim)">No active bans</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="5" style="color:var(--muted);">No active bans</td></tr>';
                 return;
             }
-
-            // Calculate expiry times and sort
-            const now = Date.now();
-            const bansWithExpiry = d.bans.map(b => {
-                const created = b.created_at ? new Date(b.created_at).getTime() : now;
-                const durMs = parseDuration(b.duration);
-                const expiry = created + durMs;
-                const timeLeft = expiry - now;
-                return { ...b, expiry, timeLeft, created };
-            });
-
-            // Sort: oldest expiry first (next to be unbanned at top)
-            bansWithExpiry.sort((a, b) => a.expiry - b.expiry);
-
-            // Fetch flags
-            const banIps = [...new Set(bansWithExpiry.map(b => b.value || b.ip).filter(Boolean))];
-            const banFlags = {};
-            await Promise.all(banIps.map(async ip => { banFlags[ip] = countryToFlag(await lookupGeoIP(ip)); }));
-
-            // Split into "next to unban" (first 5) and "latest banned" (5 most recent by created)
-            const nextToUnban = bansWithExpiry.slice(0, 5);
-            const latestBanned = [...bansWithExpiry].sort((a, b) => b.created - a.created).slice(0, 5);
-
-            function renderRow(b, highlight = '') {
+            tbody.innerHTML = d.bans.slice(0, 10).map(b => {
                 const ip = b.value || b.ip || '-';
-                const timeLeftStr = b.timeLeft > 0 ? formatTimeLeft(b.timeLeft) : '<span style="color:var(--green)">expiring</span>';
-                return `
-                <tr style="${highlight}">
-                    <td><span style="font-size:1.2em">${banFlags[ip] || ''}</span> <span style="font-family:monospace">${ip}</span></td>
-                    <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis">${b.scenario || b.reason || '-'}</td>
-                    <td>${b.country || '-'}</td>
-                    <td style="font-size:0.85em">${b.asn_org || b.asn || '-'}</td>
-                    <td title="${b.duration}">${timeLeftStr}</td>
-                    <td><button class="btn" onclick="unbanIp('${ip}')">Unban</button></td>
-                </tr>`;
+                return '<tr><td>' + ip + '</td><td>' + countryToFlag(b.country || '') + '</td><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;">' + (b.scenario || b.reason || '-') + '</td><td>' + (b.duration || '-') + '</td><td><button class="btn" onclick="unbanIp(\'' + ip + '\')">Unban</button></td></tr>';
+            }).join('');
+        }
+
+        async function loadAlerts() {
+            const d = await api('/alerts?limit=10&aggregate=true');
+            const el = document.getElementById('alertsList');
+            if (!d.alerts || d.alerts.length === 0) {
+                el.innerHTML = '<p style="color:var(--muted);">No recent alerts</p>';
+                return;
             }
-
-            let html = '<tr><td colspan="6" style="background:var(--surface);color:var(--yellow);text-align:center;font-weight:bold">⏰ Next to Unban</td></tr>';
-            html += nextToUnban.map(b => renderRow(b, '')).join('');
-
-            html += '<tr><td colspan="6" style="background:var(--surface);color:var(--cyan);text-align:center;font-weight:bold;margin-top:1rem">🆕 5 Latest Banned</td></tr>';
-            html += latestBanned.map(b => renderRow(b, '')).join('');
-
-            tbody.innerHTML = html;
+            el.innerHTML = d.alerts.map(a => '<div style="display:flex;gap:1rem;align-items:center;padding:0.5rem 0;border-bottom:1px solid var(--glass-border);"><span style="font-size:1.2em;">' + countryToFlag(a.country || '') + '</span><span style="font-family:var(--font-mono);color:var(--root-light);">' + a.client_ip + '</span><span style="background:rgba(239,68,68,0.2);color:#ef4444;padding:2px 8px;border-radius:4px;font-size:0.75rem;">' + (a.max_severity || 'unknown') + '</span><span style="flex:1;color:var(--muted);font-size:0.8rem;overflow:hidden;text-overflow:ellipsis;">' + (a.count || 1) + ' alerts</span><button class="btn danger" onclick="banIpDirect(\'' + a.client_ip + '\')">Ban</button></div>').join('');
         }
 
-        async function toggleCategory(cat, enabled) {
-            await api(`/category/${cat}/toggle`, { method: 'POST', body: JSON.stringify({ enabled }) });
-            loadStatus();
-        }
+        function banIpDirect(ip) { api('/ban', { method: 'POST', body: JSON.stringify({ ip, duration: '4h', reason: 'Manual ban' }) }).then(() => { loadBans(); loadStats(); }); }
+        function unbanIp(ip) { api('/unban', { method: 'POST', body: JSON.stringify({ ip }) }).then(() => loadBans()); }
 
-        function showModal(id) { document.getElementById(id).classList.add('show'); }
-        function hideModal(id) { document.getElementById(id).classList.remove('show'); }
-        function showBanModal() { showModal('banModal'); }
-
-        async function banIp() {
-            const ip = document.getElementById('banIp').value;
-            const duration = document.getElementById('banDuration').value;
-            const reason = document.getElementById('banReason').value || 'Manual ban';
-            if (!ip) return alert('Enter IP address');
-            await api('/ban', { method: 'POST', body: JSON.stringify({ ip, duration, reason }) });
-            hideModal('banModal');
-            document.getElementById('banIp').value = '';
-            loadBans();
-        }
-
-        async function banIpDirect(ip) {
-            if (!confirm(`Ban ${ip}?`)) return;
-            await api('/ban', { method: 'POST', body: JSON.stringify({ ip, duration: '4h', reason: 'Manual ban from dashboard' }) });
-            loadBans();
-        }
-
-        async function unbanIp(ip) {
-            if (!confirm(`Unban ${ip}?`)) return;
-            await api(`/unban/${ip}`, { method: 'POST' });
-            loadBans();
-        }
-
-        async function reloadRules() {
-            const d = await api('/reload', { method: 'POST' });
-            alert(`Reloaded ${d.rules} rules in ${d.categories} categories`);
-            refresh();
-        }
-
-        function refresh() {
-            loadStatus();
-            loadStats();
-            loadAlerts();
-            loadCategories();
-            loadBans();
-        }
-
+        async function refresh() { await Promise.all([loadStatus(), loadStats(), loadBans(), loadAlerts()]); }
         refresh();
         setInterval(refresh, 30000);
     </script>
-    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>
