@@ -4,6 +4,38 @@
 ---
 ## 2026-05-08
 
+### Session 132 — Eyemote Icons, Concentric Donuts, Categories Fix
+
+**Sidebar — Eyemote Icons (replacing dice):**
+- Replaced dice icons with level-based eyemote icons (🟢🟡🟠🔴🔥💀)
+- Per-metric icon sets (CPU, MEM, DISK, LOAD, TEMP, NET)
+- Doubled icon size (1.4rem) for better visibility
+- New `getMetricIcon(pct, type)` function
+
+**SOC Dashboard — Categories Donut Fix:**
+- Fixed duplicate waf-categories assignments causing "Loading..." display
+- Removed orphan assignment in CrowdSec section (undefined `cats` variable)
+- Categories now properly render concentric ring donut
+- Colorized stat cards with accent colors
+
+**WAF Dashboard — Severity/Category Donuts:**
+- Added concentric severity donut with emojis (💀🔴🟠🟡🔵)
+- Replaced severity badges with emoji spans
+- Category donut with eyemote-style visualization
+
+**System Dashboard — Resource Gauge:**
+- Concentric ring gauge for CPU/RAM/Disk/Load
+- 4-ring visualization with health center indicator
+- Legend with per-metric values
+
+**Files Updated:**
+- `packages/secubox-hub/www/shared/sidebar.js` — Eyemote icons
+- `packages/secubox-hub/www/soc/index.html` — Category fix, colorized cards
+- `packages/secubox-waf/www/index.html` — Severity/category donuts
+- `packages/secubox-system/www/system/index.html` — Resource gauge
+
+---
+
 ### Session 131 — Dice Icons, Scribe Trace, LED Pulse Improvements
 
 **Sidebar — Dice Icons for Smart Strip:**
