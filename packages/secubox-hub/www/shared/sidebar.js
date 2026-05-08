@@ -238,6 +238,8 @@
             loadStatusBarData();
             // Start LED pulse sync
             startLedPulseSync();
+            // Start hardware LED status refresh (reads actual sysfs colors)
+            startLedStatusRefresh();
         }
 
         // 6. Force dark on ALL light backgrounds in main content
@@ -288,6 +290,35 @@
     let ledBufferActive = { led1: '#00dd44', led2: '#00dd44', led3: '#00dd44' };
     let ledBufferShadow = { led1: '#00dd44', led2: '#00dd44', led3: '#00dd44' };
     let ledBufferConfirmed = true;
+
+    // Real hardware LED colors from API (fetched from sysfs)
+    let ledColorsFromHardware = null;  // { led1: '#rrggbb', led2: '#rrggbb', led3: '#rrggbb' }
+    let ledFetchInProgress = false;
+
+    // Fetch real LED status from hardware via API
+    async function fetchHardwareLedStatus() {
+        if (ledFetchInProgress) return;
+        ledFetchInProgress = true;
+        try {
+            var result = await safeFetch('/api/v1/hub/public/led_status', {}, 3000);
+            if (result.ok && result.data) {
+                ledColorsFromHardware = {
+                    led1: result.data.led1 || '#00dd44',
+                    led2: result.data.led2 || '#00dd44',
+                    led3: result.data.led3 || '#00dd44'
+                };
+            }
+        } catch (e) {
+            console.log('[Sidebar] LED status fetch error:', e);
+        }
+        ledFetchInProgress = false;
+    }
+
+    // Start periodic LED status refresh (every 5 seconds)
+    function startLedStatusRefresh() {
+        fetchHardwareLedStatus();  // Initial fetch
+        setInterval(fetchHardwareLedStatus, 5000);  // Refresh every 5s
+    }
 
     // Metrics history for sparkline histograms with localStorage persistence
     const STRIP_HISTORY_MAX = 60;  // 60 samples = ~30 min at 30s refresh
@@ -540,7 +571,7 @@
 
             // Update 3 vertical RGB LEDs in top bar (like MOCHAbin physical LEDs)
             // Using double-buffer pattern: shadow → confirm → active → visual
-            var hwColors = { ok: '#00dd44', warn: '#ffb347', error: '#ff4466' };
+            // NOW reads actual hardware LED colors from API instead of generic health level
             var hwLed1 = document.getElementById('hw-led-1');
             var hwLed2 = document.getElementById('hw-led-2');
             var hwLed3 = document.getElementById('hw-led-3');
@@ -549,14 +580,25 @@
                 var baseOpacity = 0.7 + 0.3 * Math.sin(ledPulsePhase * Math.PI / 10);
                 var glowSize = 4 + (ledPulsePhase % 6);
 
-                // Step 1: Write to shadow buffer based on health level
-                // LED1=Hardware, LED2=Services, LED3=Security (bottom to top)
-                if (systemHealthLevel === 'error') {
-                    ledBufferShadow = { led1: hwColors.ok, led2: hwColors.warn, led3: hwColors.error };
-                } else if (systemHealthLevel === 'warn') {
-                    ledBufferShadow = { led1: hwColors.ok, led2: hwColors.warn, led3: hwColors.warn };
+                // Step 1: Write to shadow buffer from hardware LED colors (if available)
+                // LED1=Hardware health (bottom), LED2=Services (middle), LED3=Security (top)
+                if (ledColorsFromHardware) {
+                    // Use actual hardware LED colors from sysfs via API
+                    ledBufferShadow = {
+                        led1: ledColorsFromHardware.led1,
+                        led2: ledColorsFromHardware.led2,
+                        led3: ledColorsFromHardware.led3
+                    };
                 } else {
-                    ledBufferShadow = { led1: hwColors.ok, led2: hwColors.ok, led3: hwColors.ok };
+                    // Fallback to generic health level colors until API data arrives
+                    var hwColors = { ok: '#00dd44', warn: '#ffb347', error: '#ff4466' };
+                    if (systemHealthLevel === 'error') {
+                        ledBufferShadow = { led1: hwColors.warn, led2: hwColors.warn, led3: hwColors.error };
+                    } else if (systemHealthLevel === 'warn') {
+                        ledBufferShadow = { led1: hwColors.warn, led2: hwColors.ok, led3: hwColors.warn };
+                    } else {
+                        ledBufferShadow = { led1: hwColors.ok, led2: hwColors.ok, led3: hwColors.ok };
+                    }
                 }
 
                 // Step 2: Confirm shadow buffer by reading back (simulate with delay check)

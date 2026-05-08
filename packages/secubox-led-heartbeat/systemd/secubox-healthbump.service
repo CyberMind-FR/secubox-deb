@@ -1,7 +1,7 @@
 [Unit]
 Description=SecuBox HealthBump LED Status Check (3-tier with I2C safety)
 After=network.target
-Wants=secubox-led-heartbeat.service
+# Note: secubox-led-heartbeat removed - use secubox-led-health-bumper instead
 
 [Service]
 Type=oneshot
