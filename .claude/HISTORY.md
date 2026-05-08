@@ -4,6 +4,40 @@
 ---
 ## 2026-05-08
 
+### Session 128 — LED Tooltips + Kernel nftables Fix
+
+**Sidebar v2.32.0:**
+- Per-LED tooltips: each LED row (Hardware/Services/Security) now has its own tooltip
+- Hardware tooltip: CPU/MEM/DISK/LOAD histograms with current/average/max values
+- Services tooltip: OK/WARN/ERROR/UNKNOWN service counts
+- Security tooltip: Active bans and recent alerts from CrowdSec
+- Fixed tooltip positioning for sidebar elements (was offset by navbar width)
+
+**SOC Page Fix:**
+- Fixed nginx `/soc/` route that was incorrectly proxying to API instead of serving static files
+- SOC dashboard HTML now loads correctly
+
+**Kernel nftables Issue (GitHub #64):**
+- Discovered kernel 6.6.137 missing critical nftables options:
+  - `CONFIG_NF_TABLES_INET` - inet family support
+  - `CONFIG_NF_TABLES_IPV4` - IPv4 rules
+  - `CONFIG_NFT_CT`, `CONFIG_NFT_LOG`, `CONFIG_NFT_REJECT`, etc.
+- CrowdSec bouncer in restart loop due to `Operation not supported` errors
+- Updated `board/mochabin/kernel/config-6.12-openwrt-merged.fragment` with complete nftables config
+- Created issue #64 with bouncer health alert requirements (CSPN critical)
+
+**Files Updated:**
+- `www/shared/sidebar.js` — v2.32.0 with per-LED tooltips
+- `www/shared/hybrid-skin.css` — Service/Security tooltip CSS styles
+- `board/mochabin/kernel/config-6.12-openwrt-merged.fragment` — Full nftables support
+
+---
+
+### Session 127 — Smart Strip + LED Pulsing + Round UI Virtual
+*(earlier today - see v2.25.0 to v2.31.0 changes)*
+
+---
+
 ### Session 126 — Hybrid Skin License & Centralized Injection
 
 **License Headers Added:**

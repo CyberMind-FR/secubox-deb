@@ -117,6 +117,72 @@ Each module card contains:
 
 ---
 
+## 🚨 Emergency Recovery — Busybox Anti-Crash
+
+### Problem: `/lib` symlink broken (libc inaccessible)
+
+On modern Debian, `/lib` is a symlink to `/usr/lib`. If a tarball extraction replaces this symlink with a directory, ALL external commands fail:
+
+```
+-bash: /usr/bin/ls: cannot execute: required file not found
+```
+
+### Solution: Busybox (statically linked)
+
+Busybox is often compiled statically and doesn't need libc:
+
+```bash
+# Check if busybox exists
+echo /bin/busybox
+echo /usr/bin/busybox
+
+# If found, use it to repair:
+/bin/busybox rm -rf /lib
+/bin/busybox ln -s usr/lib /lib
+
+# Verify
+/bin/busybox ls -la /lib
+```
+
+### Prevention: Safe module tarball extraction
+
+```bash
+# WRONG - can overwrite /lib symlink
+cd / && tar xzf modules.tar.gz
+
+# RIGHT - extract to specific path
+tar xzf modules.tar.gz -C /lib/modules/ --strip-components=2
+```
+
+### Shell built-ins when nothing works
+
+If no busybox, use bash built-ins to diagnose:
+
+```bash
+# List files (glob expansion)
+echo /lib/*
+echo /usr/lib/aarch64-linux-gnu/libc*
+
+# Read file content
+while IFS= read -r line; do echo "$line"; done < /etc/os-release
+
+# Check if path exists
+[[ -e /lib/aarch64-linux-gnu ]] && echo "exists" || echo "missing"
+```
+
+### Last resort: Rescue boot
+
+Boot from USB/SD rescue media:
+```bash
+mount /dev/mmcblk0p2 /mnt
+rm -rf /mnt/lib
+ln -s usr/lib /mnt/lib
+umount /mnt
+reboot
+```
+
+---
+
 ## Brand Footer
 
 *CyberMind · Gondwana · Notre-Dame-du-Cruet · Savoie*
@@ -124,3 +190,4 @@ Each module card contains:
 ---
 
 *Reference extracted: 2026-04-08*
+*Emergency recovery added: 2026-05-08*

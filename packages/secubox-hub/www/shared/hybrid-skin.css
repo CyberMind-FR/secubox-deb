@@ -1250,19 +1250,38 @@ body.hybrid-skin .map {
     transform: scale(1.1);
 }
 
-/* Header LEDs (sidebar header - next to SECUBOX logo) */
-.header-hw-leds {
+/* Header LEDs with metrics (sidebar header - next to SECUBOX logo) */
+.header-leds-metrics {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: 3px;
-    padding: 4px 6px;
+    gap: 2px;
+    padding: 4px 8px;
     background: rgba(0, 0, 0, 0.4);
-    border-radius: 5px;
+    border-radius: 6px;
     border: 1px solid rgba(255, 255, 255, 0.1);
     margin-left: auto;
     cursor: pointer;
 }
+
+.led-metric-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.led-metric-val {
+    font-size: 9px;
+    font-weight: 600;
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+    color: var(--text-light, #e8e6d9);
+    min-width: 28px;
+    text-align: right;
+}
+
+.led-metric-val.ok { color: #00dd44; }
+.led-metric-val.warn { color: #ffb347; }
+.led-metric-val.error { color: #ff4466; }
+.led-metric-val.info { color: #4488ff; }
 
 .sidebar-header {
     display: flex !important;
@@ -1276,8 +1295,22 @@ body.hybrid-skin .map {
     gap: 8px !important;
 }
 
-.header-hw-leds:hover .hw-led-v {
+.header-leds-metrics:hover .hw-led-v {
     transform: scale(1.15);
+}
+
+/* Legacy - kept for compatibility */
+.header-hw-leds {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 4px 6px;
+    background: rgba(0, 0, 0, 0.4);
+    border-radius: 5px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    margin-left: auto;
+    cursor: pointer;
 }
 
 /* Hardware LED Tooltip */
@@ -1395,6 +1428,74 @@ body.hybrid-skin .map {
     font-size: 8px;
     color: var(--muted-dark, #6b6b7a);
     margin-bottom: 8px;
+}
+
+.hw-tooltip-footer {
+    font-size: 9px;
+    color: var(--muted-dark, #6b6b7a);
+    text-align: center;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Services layer tooltip */
+.svc-metrics {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-around;
+    gap: 8px;
+    padding: 10px 0;
+}
+
+.svc-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+
+.svc-count {
+    font-size: 18px;
+    font-weight: 700;
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+}
+
+.svc-label {
+    font-size: 8px;
+    color: var(--muted-dark, #6b6b7a);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Security layer tooltip */
+.sec-metrics {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px 0;
+}
+
+.sec-stat {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.sec-icon {
+    font-size: 16px;
+}
+
+.sec-count {
+    font-size: 20px;
+    font-weight: 700;
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+    color: var(--text-light, #e8e6d9);
+    min-width: 40px;
+}
+
+.sec-label {
+    font-size: 11px;
+    color: var(--muted-dark, #6b6b7a);
 }
 
 /* Mini LED Strip (legacy - kept for compatibility) */

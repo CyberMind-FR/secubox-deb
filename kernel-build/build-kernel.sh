@@ -65,6 +65,27 @@ install_output() {
     ls -la "$OUTPUT_DIR/"
 }
 
+deploy_to_device() {
+    local HOST="${1:-root@192.168.1.200}"
+    log "Deploying to $HOST..."
+
+    # Deploy kernel and DTB
+    scp "$OUTPUT_DIR/Image-${KERNEL_VERSION}-secubox" "$HOST:/boot/"
+    scp "$OUTPUT_DIR/armada-7040-mochabin.dtb" "$HOST:/boot/"
+
+    # SAFE module deployment - don't overwrite /lib symlink!
+    # Create tarball with correct structure for /lib/modules/ extraction
+    log "Creating safe modules tarball..."
+    cd "$OUTPUT_DIR/modules/lib/modules"
+    tar czf "/tmp/modules-${KERNEL_VERSION}.tar.gz" "${KERNEL_VERSION}"
+
+    # Deploy and extract safely
+    scp "/tmp/modules-${KERNEL_VERSION}.tar.gz" "$HOST:/tmp/"
+    ssh "$HOST" "mkdir -p /lib/modules && cd /lib/modules && tar xzf /tmp/modules-${KERNEL_VERSION}.tar.gz && depmod -a ${KERNEL_VERSION} || true"
+
+    log "Deployed! Add boot entry and reboot."
+}
+
 case "${1:-build}" in
     build) check_deps; download_kernel; apply_patches; configure_kernel; build_kernel; install_output ;;
     deps) check_deps ;;

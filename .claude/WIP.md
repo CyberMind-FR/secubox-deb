@@ -1,5 +1,33 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-08 (Session 127)*
+*Mis à jour : 2026-05-08 (Session 128)*
+
+---
+
+## 🔄 Session 128: LED Tooltips + Kernel NFTables Fix
+
+### Sidebar v2.32.0 — IN PROGRESS
+- [x] Per-LED tooltips (separate for Hardware/Services/Security)
+- [x] Fixed tooltip positioning for sidebar elements
+- [x] Service layer tooltip with OK/WARN/ERROR/UNKNOWN counts
+- [x] Security layer tooltip with bans/alerts stats
+- [x] Hardware layer with CPU/MEM/DISK/LOAD histograms
+
+### SOC Page Fix — COMPLETE
+- [x] Fixed nginx route for /soc/ (was proxying to API, now serves static files)
+- [x] SOC page HTML now loads correctly
+
+### Kernel nftables Issue #64 — CRITICAL
+- [x] Identified missing kernel options: `CONFIG_NF_TABLES_INET`, `CONFIG_NF_TABLES_IPV4`
+- [x] Created GitHub issue #64 with full config requirements
+- [x] Updated `board/mochabin/kernel/config-6.12-openwrt-merged.fragment` with complete nftables config
+- [ ] Rebuild kernel with new config
+- [ ] Deploy new kernel to MOCHAbin
+- [ ] Add nftables modules to initramfs for early boot
+
+### CrowdSec Bouncer Alert — TODO (ref issue #64)
+- [ ] Add pre-flight nftables check to bouncer startup
+- [ ] Alert SOC dashboard if firewall offline
+- [ ] Set LED3 (Security) to RED if nftables fails
 
 ---
 

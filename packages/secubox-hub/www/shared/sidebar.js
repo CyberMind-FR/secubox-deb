@@ -21,7 +21,7 @@
 (function() {
     const MENU_API = '/api/v1/hub/public/menu';
     const BATCH_HEALTH_API = '/api/v1/hub/public/health-batch';
-    const VERSION = 'v2.30.0';
+    const VERSION = 'v2.32.0';
 
     // Round UI Module Colors (6-module system)
     const MODULE_COLORS = {
@@ -360,12 +360,13 @@
     }
 
     // Hardware LED tooltip - shows detailed health info with multi-layer histogram
-    function showHwLedTooltip(el) {
+    // layer: 1=Hardware, 2=Services, 3=Security
+    function showHwLedTooltip(el, layer) {
         var tooltip = document.getElementById('hw-led-tooltip');
         if (!tooltip) return;
 
         var healthLabels = { ok: 'NOMINAL', warn: 'WARNING', error: 'CRITICAL' };
-        var healthColors = { ok: '#00dd44', warn: '#ffb347', error: '#ff4466' };
+        var healthColors = { ok: '#00dd44', warn: '#ffb347', error: '#ff4466', info: '#4488ff' };
 
         // Calculate stats from history (top/max/medium)
         function getStats(arr) {
@@ -376,11 +377,6 @@
             var avg = Math.round(sum / arr.length);
             return { cur: cur, max: max, avg: avg };
         }
-
-        var cpuStats = getStats(stripMetricsHistory.cpu);
-        var memStats = getStats(stripMetricsHistory.mem);
-        var diskStats = getStats(stripMetricsHistory.disk);
-        var loadStats = getStats(stripMetricsHistory.load);
 
         // Multi-layer histogram bars (top=max, medium=avg, bottom=current)
         function makeHistoBar(stats, color) {
@@ -394,29 +390,84 @@
                 '</div>';
         }
 
-        // Build tooltip content with multi-layer histograms
-        var content = '<div class="hw-tooltip-header" style="color:' + healthColors[systemHealthLevel] + '">' +
-            '<span class="hw-tooltip-icon">●</span> ' + healthLabels[systemHealthLevel] +
-            '</div>' +
-            '<div class="hw-tooltip-metrics">' +
-            '<div class="hw-metric-row"><span class="hw-metric-label">CPU</span>' + makeHistoBar(cpuStats, '#C04E24') + '<span class="hw-metric-vals">' + cpuStats.cur + ' / ' + cpuStats.max + '</span></div>' +
-            '<div class="hw-metric-row"><span class="hw-metric-label">MEM</span>' + makeHistoBar(memStats, '#9A6010') + '<span class="hw-metric-vals">' + memStats.cur + ' / ' + memStats.max + '</span></div>' +
-            '<div class="hw-metric-row"><span class="hw-metric-label">DISK</span>' + makeHistoBar(diskStats, '#803018') + '<span class="hw-metric-vals">' + diskStats.cur + ' / ' + diskStats.max + '</span></div>' +
-            '<div class="hw-metric-row"><span class="hw-metric-label">LOAD</span>' + makeHistoBar({cur: loadStats.cur * 25, max: loadStats.max * 25, avg: loadStats.avg * 25}, '#3D35A0') + '<span class="hw-metric-vals">' + (loadStats.cur).toFixed(1) + ' / ' + (loadStats.max).toFixed(1) + '</span></div>' +
-            '</div>' +
-            '<div class="hw-tooltip-legend"><span>■ Current</span><span style="opacity:0.5">■ Average</span><span style="opacity:0.3">■ Max</span></div>' +
-            '<div class="hw-tooltip-leds">' +
-            '<div><span style="color:#00dd44">●</span> System</div>' +
-            '<div><span style="color:' + (systemHealthLevel === 'ok' ? '#00dd44' : '#ffb347') + '">●</span> Services</div>' +
-            '<div><span style="color:' + healthColors[systemHealthLevel] + '">●</span> Security</div>' +
-            '</div>';
+        var content = '';
+        var layerTitles = { 1: 'HARDWARE', 2: 'SERVICES', 3: 'SECURITY' };
+        var layerIcons = { 1: '⚙️', 2: '🔧', 3: '🛡️' };
+
+        if (layer === 1) {
+            // Hardware layer - CPU, MEM, DISK, LOAD
+            var cpuStats = getStats(stripMetricsHistory.cpu);
+            var memStats = getStats(stripMetricsHistory.mem);
+            var diskStats = getStats(stripMetricsHistory.disk);
+            var loadStats = getStats(stripMetricsHistory.load);
+            var hwMax = Math.max(cpuStats.cur, memStats.cur);
+            var hwLevel = hwMax > 80 ? 'error' : hwMax > 50 ? 'warn' : 'ok';
+
+            content = '<div class="hw-tooltip-header" style="color:' + healthColors[hwLevel] + '">' +
+                '<span class="hw-tooltip-icon">' + layerIcons[1] + '</span> ' + layerTitles[1] + ' — ' + healthLabels[hwLevel] +
+                '</div>' +
+                '<div class="hw-tooltip-metrics">' +
+                '<div class="hw-metric-row"><span class="hw-metric-label">CPU</span>' + makeHistoBar(cpuStats, '#C04E24') + '<span class="hw-metric-vals">' + cpuStats.cur + '% / ' + cpuStats.max + '%</span></div>' +
+                '<div class="hw-metric-row"><span class="hw-metric-label">MEM</span>' + makeHistoBar(memStats, '#9A6010') + '<span class="hw-metric-vals">' + memStats.cur + '% / ' + memStats.max + '%</span></div>' +
+                '<div class="hw-metric-row"><span class="hw-metric-label">DISK</span>' + makeHistoBar(diskStats, '#803018') + '<span class="hw-metric-vals">' + diskStats.cur + '% / ' + diskStats.max + '%</span></div>' +
+                '<div class="hw-metric-row"><span class="hw-metric-label">LOAD</span>' + makeHistoBar({cur: loadStats.cur * 25, max: loadStats.max * 25, avg: loadStats.avg * 25}, '#3D35A0') + '<span class="hw-metric-vals">' + (loadStats.cur).toFixed(1) + ' / ' + (loadStats.max).toFixed(1) + '</span></div>' +
+                '</div>' +
+                '<div class="hw-tooltip-legend"><span>■ Current</span><span style="opacity:0.5">■ Average</span><span style="opacity:0.3">■ Max</span></div>';
+
+        } else if (layer === 2) {
+            // Services layer - count ok/warn/error/total
+            var counts = { ok: 0, warn: 0, error: 0, unknown: 0 };
+            Object.keys(healthCache).forEach(function(mod) {
+                var st = healthCache[mod] && healthCache[mod].status;
+                if (st === 'ok') counts.ok++;
+                else if (st === 'warn') counts.warn++;
+                else if (st === 'error') counts.error++;
+                else counts.unknown++;
+            });
+            var total = counts.ok + counts.warn + counts.error + counts.unknown;
+            var svcLevel = counts.error > 0 ? 'error' : counts.warn > 0 ? 'warn' : 'ok';
+
+            content = '<div class="hw-tooltip-header" style="color:' + healthColors[svcLevel] + '">' +
+                '<span class="hw-tooltip-icon">' + layerIcons[2] + '</span> ' + layerTitles[2] + ' — ' + healthLabels[svcLevel] +
+                '</div>' +
+                '<div class="hw-tooltip-metrics svc-metrics">' +
+                '<div class="svc-stat"><span class="svc-count" style="color:#00dd44">' + counts.ok + '</span><span class="svc-label">OK</span></div>' +
+                '<div class="svc-stat"><span class="svc-count" style="color:#ffb347">' + counts.warn + '</span><span class="svc-label">WARN</span></div>' +
+                '<div class="svc-stat"><span class="svc-count" style="color:#ff4466">' + counts.error + '</span><span class="svc-label">ERROR</span></div>' +
+                '<div class="svc-stat"><span class="svc-count" style="color:#666">' + counts.unknown + '</span><span class="svc-label">UNKNOWN</span></div>' +
+                '</div>' +
+                '<div class="hw-tooltip-footer">' + counts.ok + ' / ' + total + ' services healthy</div>';
+
+        } else if (layer === 3) {
+            // Security layer - bans, alerts, crowdsec status
+            var bans = currentStripMetrics.bans || 0;
+            var alerts = currentStripMetrics.alerts || 0;
+            var secLevel = bans > 50 ? 'info' : bans > 20 ? 'warn' : alerts > 0 ? 'warn' : 'ok';
+            var secLabel = bans > 50 ? 'ACTIVE MITIGATION' : healthLabels[secLevel === 'info' ? 'ok' : secLevel];
+
+            content = '<div class="hw-tooltip-header" style="color:' + healthColors[secLevel] + '">' +
+                '<span class="hw-tooltip-icon">' + layerIcons[3] + '</span> ' + layerTitles[3] + ' — ' + secLabel +
+                '</div>' +
+                '<div class="hw-tooltip-metrics sec-metrics">' +
+                '<div class="sec-stat"><span class="sec-icon">🚫</span><span class="sec-count">' + bans + '</span><span class="sec-label">Active Bans</span></div>' +
+                '<div class="sec-stat"><span class="sec-icon">⚠️</span><span class="sec-count">' + alerts + '</span><span class="sec-label">Recent Alerts</span></div>' +
+                '</div>' +
+                '<div class="hw-tooltip-footer">CrowdSec ' + (bans > 0 ? 'actively blocking threats' : 'monitoring') + '</div>';
+        }
 
         tooltip.innerHTML = content;
 
-        // Position tooltip
+        // Position tooltip - check if inside sidebar (left < 220px)
         var rect = el.getBoundingClientRect();
-        tooltip.style.left = rect.left + 'px';
-        tooltip.style.top = (rect.bottom + 8) + 'px';
+        var tooltipLeft = rect.left;
+
+        // If element is in sidebar (left < 220), position tooltip to the right of it
+        if (rect.left < 220) {
+            tooltipLeft = rect.right + 10;
+        }
+
+        tooltip.style.left = tooltipLeft + 'px';
+        tooltip.style.top = rect.top + 'px';
         tooltip.style.display = 'block';
     }
 
@@ -662,7 +713,59 @@
                     healthEl.innerHTML = emoji + ' ' + ok + '/' + total;
                     healthEl.className = 'status-value ' + (err > 0 ? 'error' : warn > 0 ? 'warn' : 'ok');
                     healthEl.title = ok + ' OK, ' + warn + ' warnings, ' + err + ' errors';
+
+                    // Update LED metrics in sidebar header (sync with health bumper)
+                    var lmHw = document.getElementById('lm-hw');
+                    var lmSvc = document.getElementById('lm-svc');
+                    var lmSec = document.getElementById('lm-sec');
+
+                    // LED1 (Hardware): CPU%
+                    if (lmHw) {
+                        var hwMax = Math.max(currentStripMetrics.cpu || 0, currentStripMetrics.mem || 0);
+                        lmHw.textContent = hwMax + '%';
+                        lmHw.className = 'led-metric-val ' + (hwMax > 80 ? 'error' : hwMax > 50 ? 'warn' : 'ok');
+                    }
+
+                    // LED2 (Services): ok/total
+                    if (lmSvc) {
+                        lmSvc.textContent = ok + '/' + total;
+                        lmSvc.className = 'led-metric-val ' + (err > 0 ? 'error' : warn > 0 ? 'warn' : 'ok');
+                    }
+
+                    // LED3 (Security): fetch bans from CrowdSec
+                    if (lmSec) {
+                        // Will be updated by separate security fetch
+                        lmSec.textContent = '...';
+                    }
                 }
+            }
+
+            // Fetch security metrics (CrowdSec bans)
+            try {
+                var secRes = await fetch('/api/v1/crowdsec/stats', { headers: headers });
+                if (secRes.ok) {
+                    var secData = await secRes.json();
+                    var lmSec = document.getElementById('lm-sec');
+                    if (lmSec) {
+                        var bans = secData.active_bans || secData.decisions || 0;
+                        var alerts = secData.alerts_today || 0;
+                        lmSec.textContent = bans + 'B';
+                        lmSec.title = bans + ' bans, ' + alerts + ' alerts today';
+                        // Blue if actively blocking, else based on alert level
+                        if (bans > 20) {
+                            lmSec.className = 'led-metric-val info';  // Blue - active mitigation
+                        } else if (alerts > 50) {
+                            lmSec.className = 'led-metric-val error';
+                        } else if (alerts > 10) {
+                            lmSec.className = 'led-metric-val warn';
+                        } else {
+                            lmSec.className = 'led-metric-val ok';
+                        }
+                    }
+                }
+            } catch (e) {
+                var lmSec = document.getElementById('lm-sec');
+                if (lmSec) lmSec.textContent = '?';
             }
         } catch (e) {
             console.log('[Sidebar] Status bar data error:', e);
@@ -1295,7 +1398,11 @@
         hideUnknownEnabled = getHideUnknownPref();
 
         sidebar.innerHTML = '<div class="sidebar-header"><a href="/"><span class="logo-icon">🔒</span><div><span class="logo">SECUBOX</span><span class="logo-version">🚀 ' + VERSION + '</span></div></a>' +
-            '<div class="header-hw-leds" id="header-hw-leds"><div class="hw-led-v" id="hw-led-3"></div><div class="hw-led-v" id="hw-led-2"></div><div class="hw-led-v" id="hw-led-1"></div></div></div>' +
+            '<div class="header-leds-metrics" id="header-leds-metrics">' +
+            '<div class="led-metric-row" onmouseenter="SecuBoxSidebar.showHwLedTooltip(this,3)" onmouseleave="SecuBoxSidebar.hideHwLedTooltip()"><div class="hw-led-v" id="hw-led-3"></div><span class="led-metric-val" id="lm-sec">--</span></div>' +
+            '<div class="led-metric-row" onmouseenter="SecuBoxSidebar.showHwLedTooltip(this,2)" onmouseleave="SecuBoxSidebar.hideHwLedTooltip()"><div class="hw-led-v" id="hw-led-2"></div><span class="led-metric-val" id="lm-svc">--</span></div>' +
+            '<div class="led-metric-row" onmouseenter="SecuBoxSidebar.showHwLedTooltip(this,1)" onmouseleave="SecuBoxSidebar.hideHwLedTooltip()"><div class="hw-led-v" id="hw-led-1"></div><span class="led-metric-val" id="lm-hw">--</span></div>' +
+            '</div></div>' +
             '<div class="sidebar-nav"><div class="nav-section"><div class="nav-section-title"><span>Loading...</span></div></div></div>';
 
         try {
@@ -1368,10 +1475,10 @@
             });
 
             sidebar.innerHTML = '<div class="sidebar-header"><a href="/"><span class="logo-icon">🔒</span><div><span class="logo">SECUBOX</span><span class="logo-version">🚀 ' + VERSION + '</span></div></a>' +
-                '<div class="header-hw-leds" id="header-hw-leds" onmouseenter="SecuBoxSidebar.showHwLedTooltip(this)" onmouseleave="SecuBoxSidebar.hideHwLedTooltip()">' +
-                '<div class="hw-led-v" id="hw-led-3" title="Security"></div>' +
-                '<div class="hw-led-v" id="hw-led-2" title="Services"></div>' +
-                '<div class="hw-led-v" id="hw-led-1" title="Hardware"></div>' +
+                '<div class="header-leds-metrics" id="header-leds-metrics">' +
+                '<div class="led-metric-row" onmouseenter="SecuBoxSidebar.showHwLedTooltip(this,3)" onmouseleave="SecuBoxSidebar.hideHwLedTooltip()"><div class="hw-led-v" id="hw-led-3"></div><span class="led-metric-val" id="lm-sec">--</span></div>' +
+                '<div class="led-metric-row" onmouseenter="SecuBoxSidebar.showHwLedTooltip(this,2)" onmouseleave="SecuBoxSidebar.hideHwLedTooltip()"><div class="hw-led-v" id="hw-led-2"></div><span class="led-metric-val" id="lm-svc">--</span></div>' +
+                '<div class="led-metric-row" onmouseenter="SecuBoxSidebar.showHwLedTooltip(this,1)" onmouseleave="SecuBoxSidebar.hideHwLedTooltip()"><div class="hw-led-v" id="hw-led-1"></div><span class="led-metric-val" id="lm-hw">--</span></div>' +
                 '</div></div>' +
                 '<div class="sidebar-nav">' + menuHTML + '</div>' +
                 '<div class="sidebar-footer">' +
