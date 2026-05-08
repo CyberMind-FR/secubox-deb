@@ -1,0 +1,28 @@
+/* Virtual Round Pod Styles */
+.vr-pod {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    z-index: 3;
+    transition: transform 0.3s, filter 0.3s;
+}
+.vr-pod.radar-active {
+    transform: scale(1.2);
+    filter: drop-shadow(0 0 10px var(--glow-color, #0f0));
+}
+.vr-pod.radar-active img {
+    filter: brightness(1.5) drop-shadow(0 0 6px var(--glow-color, #0f0));
+}
+.vr-val {
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+}
+.vr-name {
+    font-size: 6px;
+    letter-spacing: 0.8px;
+    opacity: 0.6;
+    color: #888;
+}
