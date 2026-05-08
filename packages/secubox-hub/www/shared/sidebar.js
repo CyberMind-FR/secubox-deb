@@ -1670,7 +1670,7 @@
                 fromCache = true;
                 console.log('[Sidebar] Menu from cache (API failed: ' + (result.error || 'unknown') + ')');
             } else if (result.status === 401) {
-                window.location.href = '/portal/login.html';
+                window.location.href = '/login.html';
                 return;
             } else {
                 console.warn('[Sidebar] Menu API error:', result.error);
@@ -1751,7 +1751,7 @@
                 '<div class="sidebar-nav">' + menuHTML + '</div>' +
                 '<div class="sidebar-footer">' +
                 '<div class="sidebar-clock" id="sidebar-clock">00:00:00</div>' +
-                '<div class="sidebar-user"><span class="sidebar-user-avatar">👤</span><div class="sidebar-user-info"><div class="sidebar-user-name">' + user + '</div><div class="sidebar-user-role">OPERATOR</div></div><button class="sidebar-logout" onclick="localStorage.removeItem(\'sbx_token\');window.location.href=\'/portal/login.html\';">EXIT</button></div>' +
+                '<div class="sidebar-user"><span class="sidebar-user-avatar">👤</span><div class="sidebar-user-info"><div class="sidebar-user-name">' + user + '</div><div class="sidebar-user-role">OPERATOR</div></div><button class="sidebar-logout" onclick="localStorage.removeItem(\'sbx_token\');window.location.href=\'/login.html\';">EXIT</button></div>' +
                 '</div>';
 
             var clock = document.getElementById('sidebar-clock');
@@ -1797,7 +1797,7 @@
         logout: function() {
             localStorage.removeItem('sbx_token');
             localStorage.removeItem('secubox_token');
-            window.location.href = '/portal/login.html';
+            window.location.href = '/login.html';
         },
         // Resilience functions
         forceReinject: function() {
