@@ -4,6 +4,43 @@
 ---
 ## 2026-05-08
 
+### Session 121 — HealthBump v2.1 with Activity Detection & K2000
+
+**Features Added:**
+- Activity-based brightness: ACTIVE (100) when metrics change, SLEEP (20) when stable
+- K2000 (Knight Rider) sweep effect for boot/success announcements
+- Alert mode (red K2000) for warnings
+- Rainbow party mode for testing
+
+**I2C Timing Alignment:**
+- Rewritten to use same values as `secubox-led-safe`:
+  - `WRITE_DELAY=0.3` (300ms)
+  - `ERROR_BACKOFF=3` (3s)
+  - `MAX_ERRORS=5`
+  - `RESET_THRESHOLD=3`
+- Simplified to `/bin/sh` (POSIX compliant like led-safe)
+
+**Commands:**
+```bash
+secubox-healthbump              # Health check (default)
+secubox-healthbump k2000 2 cyan # K2000 sweep
+secubox-healthbump success      # Boot announcement
+secubox-healthbump alert 2      # Red alert sweep
+secubox-healthbump rainbow      # All colors party
+secubox-healthbump off          # Turn off LEDs
+```
+
+**I2C Bus Recovery:**
+- Full rebind: `echo '80018000.i2c' > /sys/bus/platform/drivers/mv64xxx_i2c/unbind`
+- Then bind + modprobe to recover from lockups
+
+**Files Updated:**
+- `packages/secubox-led-heartbeat/usr/sbin/secubox-healthbump`
+- `packages/secubox-led-heartbeat/systemd/secubox-healthbump.service`
+- `docs/LED-HEALTHBUMP.md`
+
+---
+
 ### Session 120 — LED System Complete & Kernel 6.6.137 Validation
 
 **Root Cause Analysis (Systematic Debugging):**
