@@ -34,41 +34,47 @@ The SecuBox HealthBump system uses the MOCHAbin's 3 RGB LEDs as a visual health 
 | Color | Status | Meaning |
 |-------|--------|---------|
 | 🟢 Green | `ok` | All systems healthy |
-| 🟡 Yellow | `warn` | Warning, attention needed |
+| 🟡 Yellow/Orange | `warn` | Warning, elevated activity |
 | 🔴 Red | `error` | Critical, immediate action required |
-| 🔵 Blue | `msg` | Information message, notification |
+| 🔵 Blue | `msg` | Active mitigation in progress |
+
+## Brightness
+
+The IS31FL3199 LED controller uses brightness value **10** for optimal visibility.
+Higher values may cause I2C communication issues.
 
 ## LED Layers
 
 ### LED1 (Bottom) - Hardware Layer `hw`
 
-Monitors base infrastructure health:
+Monitors base infrastructure health with gradient colors:
 
-| Check | OK | Warning | Error |
-|-------|----|---------| ------|
-| WAN connectivity | Ping OK | - | No internet |
-| CPU load | < 3.0 | > 3.0 | - |
-| Memory | < 90% | > 90% | - |
+| Resource Level | Color | Condition |
+|----------------|-------|-----------|
+| Normal | 🟢 Green | Load < 50%, Memory < 50% |
+| Medium | 🟡 Yellow-Green | Load 50-70% |
+| High | 🟠 Orange | Load 70-90% |
+| Critical | 🔴 Red | Load > 90% OR No WAN |
 
 ### LED2 (Middle) - Services Layer `svc`
 
 Monitors application services:
 
-| Check | OK | Warning | Error |
-|-------|----|---------| ------|
-| HAProxy | Running | - | Stopped |
-| Nginx | Running | - | Stopped |
-| Certificates | Valid > 7d | Expiring < 7d | Expired |
+| Status | Color | Condition |
+|--------|-------|-----------|
+| OK | 🟢 Green | HAProxy + Nginx running |
+| Error | 🔴 Red | Any service stopped |
 
 ### LED3 (Top) - Security Layer `sec`
 
-Monitors security status:
+Monitors security with rate-based detection:
 
-| Check | OK | Warning | Error |
-|-------|----|---------| ------|
-| CrowdSec bans | 0 | 1-10 | > 10 |
-| CrowdSec service | Running | - | Stopped |
-| Active attacks | None | Low | High |
+| Status | Color | Condition |
+|--------|-------|-----------|
+| Clear | 🟢 Green | 0 active bans |
+| Mitigating | 🔵 Blue | Bans active, rate < 5/min |
+| Elevated | 🟡 Yellow | Rate 5-20 bans/min |
+| Attack | 🔴 Red | Rate > 20/min OR > 1000 bans |
 
 ## Commands
 
