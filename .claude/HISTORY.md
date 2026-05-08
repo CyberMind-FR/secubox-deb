@@ -2,8 +2,90 @@
 *Tracking completed milestones with dates*
 
 ---
+## 2026-05-08
+
+### Session 117 — OpenWrt-style Kernel with DSA Built-in
+
+**Completed:**
+
+1. **Debian Kernel Boot Fix** — Switched to Debian kernel for DSA support
+   - Custom kernel 6.12.85 had DSA module chain incomplete
+   - Copied Debian kernel `vmlinuz-6.12.85+deb12-arm64` to FAT boot partition
+   - DSA modules (mv88e6xxx, dsa_core) loaded properly
+   - lan0/1/2/3 interfaces restored
+
+2. **OpenWrt Kernel Config Analysis** — Studied OpenWrt MVEBU config
+   - Downloaded OpenWrt mvebu + cortexa72 configs
+   - Key insight: OpenWrt uses `=y` (built-in), Debian uses `=m` (modules)
+   - OpenWrt approach: faster boot, no initrd dependency for network
+
+3. **Created OpenWrt-style Config Fragment** — 365 lines merged config
+   - `board/mochabin/kernel/config-6.12-openwrt-merged.fragment`
+   - Merges OpenWrt MVEBU DSA config + Debian systemd compatibility
+   - All boot-critical and DSA drivers built-in (=y)
+   - Includes: IKCONFIG, WireGuard, nftables, LED triggers, crypto
+
+4. **Built & Deployed OpenWrt-style Kernel** — DSA built-in, no modules
+   - Kernel 6.12.85 with OpenWrt-merged config
+   - `CONFIG_NET_DSA=y` (built-in)
+   - `CONFIG_NET_DSA_MV88E6XXX=y` (built-in)
+   - `CONFIG_MVPP2=y` (built-in)
+   - `CONFIG_IKCONFIG=y` (/proc/config.gz available)
+   - Kernel boot time: 6.6s (fast, no module loading)
+
+5. **Verified Working**
+   - DSA interfaces: lan0/1/2/3 created at boot
+   - No DSA modules loaded (all built-in)
+   - /proc/config.gz available (IKCONFIG)
+   - HAProxy running
+   - WAN uplink: 192.168.1.254 gateway, internet OK
+
+**Files Created:**
+- `board/mochabin/kernel/config-6.12-openwrt-merged.fragment` — OpenWrt+Debian merged config
+
+**Boot Menu (extlinux.conf):**
+1. OpenWrt-style Kernel (default) — DSA built-in, no initrd
+2. Debian Kernel — modules, needs initrd
+3. SecuBox Custom — previous build
+
+---
+
 
 ## 2026-05-07
+
+### Session 116 — Kernel 6.12.85 Boot Fix (Built-in Drivers)
+
+**Completed:**
+
+1. **Kernel Boot Crisis Resolution** — Fixed MOCHAbin unable to boot
+   - Root cause: Critical drivers compiled as modules (=m) instead of built-in (=y)
+   - Multiple rebuild cycles to identify all missing built-in drivers
+   - Created USB rescue boot system for recovery
+
+2. **Built-in Driver Fixes** — All boot-critical drivers now =y
+   - `CONFIG_MMC_SDHCI_XENON=y` — eMMC controller (was causing mmcblk0 not found)
+   - `CONFIG_EXT4_FS=y` — Root filesystem (was causing VFS panic)
+   - `CONFIG_VFAT_FS=y` — Boot partition mount
+   - `CONFIG_NLS_ASCII=y`, `CONFIG_NLS_UTF8=y` — VFAT charset (was "IO charset ascii not found")
+   - `CONFIG_PHY_MVEBU_CP110_UTMI=y` — USB PHY (was "deferred probe pending: wait for supplier ut0")
+   - `CONFIG_PHY_MVEBU_CP110_COMPHY=y` — PCIe/SATA PHY
+   - `CONFIG_BLK_DEV_SD=y` — SCSI disk driver (was no /dev/sda creation)
+   - `CONFIG_AHCI_MVEBU=y` — SATA controller
+   - `CONFIG_MVPP2=y` — Network driver
+
+3. **Hardware Verified Working**
+   - eMMC: 14.7 GiB detected (mmcblk0p1/p2)
+   - SATA: WD Blue SA510 1TB @ 6Gbps
+   - USB: Both xHCI controllers (f2500000, f2510000)
+   - Network: eth0/eth1/eth2 with MAC addresses
+   - PCIe: Root port initialized (no device connected)
+
+4. **Kernel Fragment Saved** — For future builds
+   - `board/mochabin/kernel/config-6.12.85-secubox-boot.fragment`
+   - Contains all MOCHAbin boot-critical options
+   - Usage: merge_config.sh + olddefconfig + make Image
+
+---
 
 ### Session 115 — Kernel Documentation & DISK I/O Metric
 
@@ -2599,4 +2681,49 @@ XSS attempt:        403 ✓ (blocked)
 Path traversal:     403 ✓ (blocked)
 Scanner UA:         403 ✓ (blocked)
 ```
+
+
+---
+
+## Session 118 — 2026-05-08
+
+**Focus:** Kernel build completion with LED driver, USB network modules, documentation
+
+### Accomplishments
+
+1. ✅ Kernel 6.12.85-openwrt-led build completed:
+   - IS31FL319X LED driver built-in (=y)
+   - DSA mv88e6xxx switch built-in (=y)
+   - All network/storage drivers built-in
+   - USB network modules (cdc_ether, usbnet) as =m for Eye Remote
+
+2. ✅ Documentation created:
+   - `kernel-build/README.md` - Full build instructions
+   - Config fragment: `board/mochabin/kernel/config-6.12-openwrt-merged.fragment`
+
+3. ✅ GitHub Issue #60 updated with build progress
+
+4. ✅ Kernel deployed to MOCHAbin `/boot/Image-openwrt`
+
+**Config Fragment Additions:**
+```
+CONFIG_OF_OVERLAY=y
+CONFIG_OF_CONFIGFS=y
+CONFIG_LEDS_IS31FL319X=y
+CONFIG_USB_USBNET=y
+CONFIG_USB_NET_CDCETHER=y
+CONFIG_USB_NET_CDC_NCM=y
+CONFIG_USB_NET_RNDIS_HOST=y
+```
+
+**USB Gadget Architecture Documented:**
+- SecuBox = USB HOST (sees gadgets as peripherals)
+- Eye Remote = USB DEVICE/GADGET (Pi Zero W)
+- SecuBox needs cdc_ether HOST driver, not gadget drivers
+- udev rules at `/etc/udev/rules.d/90-usb-gadget.rules`
+
+**Pending:**
+- Test LED functionality after reboot
+- Test USB network with Eye Remote
+- Verify DSA switch works
 

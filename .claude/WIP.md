@@ -1,5 +1,85 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-07 (Session 113)*
+*Mis à jour : 2026-05-08 (Session 118)*
+
+---
+
+## ✅ Session 118: Kernel LED Driver + USB Network + Documentation
+
+### Kernel Enhancements — COMPLETE
+- [x] Added IS31FL319X LED driver (=y) for I2C LED controller
+- [x] Added USB network drivers for Eye Remote (cdc_ether, usbnet)
+- [x] Rebuilt kernel 6.12.85-openwrt-led
+- [x] Deployed to MOCHAbin /boot/Image-openwrt
+- [x] **LEDs WORKING!** 9 LEDs visible (blue/green/red × led1/led2/led3)
+- [x] Heartbeat trigger active: `echo heartbeat > /sys/class/leds/green:led1/trigger`
+- [ ] Test USB network with Eye Remote gadget (pending device)
+
+### Documentation Created
+- [x] `kernel-build/README.md` - Complete build guide
+- [x] GitHub Issue #60 updated with progress
+- [x] USB gadget architecture documented (SecuBox=HOST, Eye Remote=GADGET)
+
+### Config Fragment Updated
+```
+board/mochabin/kernel/config-6.12-openwrt-merged.fragment
+```
+**Additions:**
+- `CONFIG_LEDS_IS31FL319X=y` (I2C LED controller)
+- `CONFIG_USB_USBNET=y`, `CONFIG_USB_NET_CDCETHER=y` (USB network)
+- `CONFIG_OF_OVERLAY=y`, `CONFIG_OF_CONFIGFS=y` (DT overlays)
+
+---
+
+## ✅ Session 117: OpenWrt-style Kernel with DSA Built-in
+
+### Kernel Migration — RESOLVED
+- [x] Diagnosed: Custom kernel DSA module chain incomplete
+- [x] Switched to Debian kernel for immediate DSA fix
+- [x] Analyzed OpenWrt MVEBU/Cortex-A72 kernel configs
+- [x] Created merged config fragment (OpenWrt + Debian systemd)
+- [x] Built kernel 6.12.85 with DSA built-in (=y)
+- [x] Deployed to MOCHAbin as default boot option
+- [x] Verified: lan0/1/2/3 interfaces working
+- [x] Verified: No DSA modules (all built-in)
+- [x] Verified: /proc/config.gz available (IKCONFIG)
+- [x] Verified: HAProxy running, WAN uplink OK
+
+### Config Fragment Created
+- [x] `board/mochabin/kernel/config-6.12-openwrt-merged.fragment`
+  - 365 lines merged config
+  - OpenWrt MVEBU DSA options (built-in)
+  - Debian systemd compatibility
+  - IKCONFIG, WireGuard, nftables, LED triggers
+
+### Boot Menu Updated
+- [x] Option 1: OpenWrt-style kernel (DSA built-in) — DEFAULT
+- [x] Option 2: Debian kernel (modules, initrd)
+- [x] Option 3: SecuBox custom (previous)
+
+---
+
+## ✅ Session 116: Kernel 6.12.85 Boot Fix
+
+### Kernel Boot Crisis — RESOLVED
+- [x] Diagnosed: Critical drivers as modules (=m) instead of built-in (=y)
+- [x] Created USB rescue boot system
+- [x] Fixed `CONFIG_MMC_SDHCI_XENON=y` — eMMC detection
+- [x] Fixed `CONFIG_EXT4_FS=y` — Root filesystem
+- [x] Fixed `CONFIG_VFAT_FS=y` — Boot partition
+- [x] Fixed `CONFIG_NLS_ASCII=y` / `CONFIG_NLS_UTF8=y` — VFAT charset
+- [x] Fixed `CONFIG_PHY_MVEBU_CP110_UTMI=y` — USB PHY deferred probe
+- [x] Fixed `CONFIG_BLK_DEV_SD=y` — /dev/sda block devices
+- [x] Kernel deployed to eMMC /boot
+- [x] MOCHAbin boots from eMMC without USB
+
+### Kernel Fragment Saved
+- [x] `board/mochabin/kernel/config-6.12.85-secubox-boot.fragment`
+
+### Hardware Verified
+- [x] eMMC: 14.7 GiB (mmcblk0)
+- [x] SATA: WD Blue SA510 1TB @ 6Gbps
+- [x] USB: Both xHCI controllers functional
+- [x] Network: eth0/eth1/eth2 OK
 
 ---
 
