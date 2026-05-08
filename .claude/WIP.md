@@ -1,9 +1,43 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-08 (Session 130)*
+*Mis à jour : 2026-05-09 (Session 133)*
 
 ---
 
-## 🔄 Session 130: Eyeremote Style Visualizations + SOC/WAF Improvements
+## 🔄 Session 133: WAF Categories + NFTables Donuts + Mini Histograms
+
+### WAF Dashboard — COMPLETE
+- [x] Category toggles (ON/OFF buttons for each WAF filter)
+- [x] API error handling (null responses)
+- [x] 24h threats count instead of today
+- [x] `loadCategories()` function
+
+### SOC Dashboard — COMPLETE
+- [x] **NFTables Eyeremote Donut** with breakdown:
+  - ✅ Accept (green)
+  - 🛡️ CAPI DROP (red)
+  - 👁️ CrowdSec DROP (orange)
+  - ✋ Manual DROP (yellow)
+- [x] **Mini Histograms** for system health:
+  - 🔥 CPU (red) | 💾 Memory (yellow) | 💿 Disk (green) | 🌐 Network (blue)
+  - Rolling 12-sample history
+  - Color-coded percentages
+- [x] API null handling for offline states
+
+### NFTables Stats
+- IPv4 Processed: 3.3M packets
+- CAPI DROP: 524 | CrowdSec DROP: 57 | Manual DROP: 2,250
+- Cron job: `/etc/cron.d/secubox-nft-cache` (every minute)
+
+### Files Updated
+- `packages/secubox-waf/www/waf/index.html` — Category toggles, 24h count
+- `packages/secubox-hub/www/soc/index.html` — NFT donut, mini histograms
+- `packages/secubox-hub/api/main.py` — firewall_summary with counters
+
+### Tag: v2.7.1
+
+---
+
+## ✅ Session 130: Eyeremote Style Visualizations + SOC/WAF Improvements
 
 ### Multi-Layer Concentric Donuts — COMPLETE
 - [x] `createConcentricGauge()` for Hub System Health (CPU/RAM/Disk)
