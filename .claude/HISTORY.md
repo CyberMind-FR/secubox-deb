@@ -4,6 +4,47 @@
 ---
 ## 2026-05-08
 
+### Session 120 — LED System Complete & Kernel 6.6.137 Validation
+
+**Root Cause Analysis (Systematic Debugging):**
+
+1. **Evidence Gathered**
+   - Kernel 6.12.85: `mv64xxx_i2c_fsm: Ctlr Error -- state: 0x2, status: 0x0`
+   - I2C bus completely locked after rapid LED writes
+   - Only recoverable via reboot
+
+2. **Data Flow Trace**
+   ```
+   sysfs → leds-is31fl319x → regmap → i2c-mv64xxx → IS31FL3199
+                                        ↑ FAILURE (controller stuck)
+   ```
+
+3. **Hypothesis Tested**
+   - Kernel 6.6.137 LTS (same generation as OpenWrt) should work
+   - **Result: CONFIRMED** - LEDs working perfectly on 6.6.137
+
+**Validation via TTY:**
+- Red/Green/Blue: Bright and perfect ✅
+- Manual control (secubox-led): Working ✅
+- HealthBump stats: Working ✅
+- I2C bus: Stable, no errors ✅
+
+**Package Fixes Committed:**
+- `debian/rules` — Installs all HealthBump scripts
+- `debian/postinst` — Enables healthbump.timer + led-pulse.service
+- `debian/prerm` — Stops all services, turns off LEDs
+- `debian/changelog` — Version 2.0.0-1~bookworm1
+
+**Boot Configuration:**
+- Default kernel: `kernel66` (6.6.137 LTS)
+- LED support: Native, no patches needed
+
+**Commits:**
+- `853f9a6d` fix(led-pkg): Update packaging for HealthBump 3-tier system
+- `5c3afdd5` feat(kernel): Add I2C timing patches for LED driver reliability
+
+---
+
 ### Session 119 — I2C Timing Investigation and Kernel Patches
 
 **Investigation:**

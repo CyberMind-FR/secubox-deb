@@ -373,8 +373,10 @@ CONFIG_OF_CONFIGFS=y
 
 #=============================================================================
 # I2C LED CONTROLLER (IS31FL3199 on MOCHAbin)
+# NOTE: Module (=m) allows recovery from I2C bus hang without reboot:
+#   rmmod leds_is31fl319x && modprobe leds_is31fl319x
 #=============================================================================
-CONFIG_LEDS_IS31FL319X=y
+CONFIG_LEDS_IS31FL319X=m
 
 
 #=============================================================================
