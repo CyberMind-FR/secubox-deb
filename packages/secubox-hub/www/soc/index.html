@@ -194,14 +194,11 @@
         .card-metric {
             font-size: 36px;
             font-weight: 700;
-            color: var(--card-accent, var(--text-dark));
-            
+            color: var(--card-accent, #00ff88);
             font-family: var(--font-mono);
             line-height: 1;
             margin-bottom: var(--space-s);
-            background: linear-gradient(90deg, var(--text-dark), var(--muted-dark));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 10px currentColor;
         }
 
         .card-label { font-size: 13px; color: var(--muted-dark); margin-bottom: var(--space-m); }
@@ -1210,8 +1207,8 @@
 
             // Try to get more details from firewall endpoint
             const fwData = await api(API_HUB + '/public/firewall_summary');
-            if (fwData) {
-                document.getElementById('fw-tables').textContent = fwData.tables || '-';
+            if (fwData && !fwData.error && fwData.tables > 0) {
+                document.getElementById('fw-tables').textContent = fwData.tables;
                 
                 // Scribe trace histogram for firewall packets
                 const drop = fwData.dropped || 0;
