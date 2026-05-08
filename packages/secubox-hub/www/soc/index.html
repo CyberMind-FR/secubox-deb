@@ -731,27 +731,27 @@
                 </div>
             </div>
 
-            <!-- SYSTEM HEALTH -->
-            <div class="health-grid" style="margin-bottom: var(--space-xl);">
-                <div class="health-item">
-                    <div class="health-header"><span>CPU</span><span id="cpu-load">-</span></div>
-                    <div class="health-bar"><div class="health-fill ok" id="cpu-bar" style="width: 0%"></div></div>
-                    <div class="health-percent" id="cpu-pct">0%</div>
+            <!-- SYSTEM HEALTH - Mini Histograms -->
+            <div class="health-grid" style="margin-bottom: var(--space-xl); display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem;">
+                <div class="health-card" style="background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--radius-md); padding: 0.5rem;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;"><span style="font-size:0.7rem;color:var(--muted-dark);">🔥 CPU</span><span id="cpu-pct" style="font-size:0.75rem;font-weight:600;color:#ef4444;">0%</span></div>
+                    <div id="cpu-histogram" style="display:flex;align-items:flex-end;height:24px;gap:1px;background:rgba(0,0,0,0.2);border-radius:3px;padding:2px;"></div>
+                    <div id="cpu-load" style="font-size:0.6rem;color:var(--muted-dark);margin-top:2px;text-align:center;">-</div>
                 </div>
-                <div class="health-item">
-                    <div class="health-header"><span>Memory</span><span id="mem-info">-</span></div>
-                    <div class="health-bar"><div class="health-fill warn" id="mem-bar" style="width: 0%"></div></div>
-                    <div class="health-percent" id="mem-pct">0%</div>
+                <div class="health-card" style="background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--radius-md); padding: 0.5rem;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;"><span style="font-size:0.7rem;color:var(--muted-dark);">💾 Memory</span><span id="mem-pct" style="font-size:0.75rem;font-weight:600;color:#eab308;">0%</span></div>
+                    <div id="mem-histogram" style="display:flex;align-items:flex-end;height:24px;gap:1px;background:rgba(0,0,0,0.2);border-radius:3px;padding:2px;"></div>
+                    <div id="mem-info" style="font-size:0.6rem;color:var(--muted-dark);margin-top:2px;text-align:center;">-</div>
                 </div>
-                <div class="health-item">
-                    <div class="health-header"><span>Disk</span><span id="disk-info">-</span></div>
-                    <div class="health-bar"><div class="health-fill ok" id="disk-bar" style="width: 0%"></div></div>
-                    <div class="health-percent" id="disk-pct">0%</div>
+                <div class="health-card" style="background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--radius-md); padding: 0.5rem;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;"><span style="font-size:0.7rem;color:var(--muted-dark);">💿 Disk</span><span id="disk-pct" style="font-size:0.75rem;font-weight:600;color:#22c55e;">0%</span></div>
+                    <div id="disk-histogram" style="display:flex;align-items:flex-end;height:24px;gap:1px;background:rgba(0,0,0,0.2);border-radius:3px;padding:2px;"></div>
+                    <div id="disk-info" style="font-size:0.6rem;color:var(--muted-dark);margin-top:2px;text-align:center;">-</div>
                 </div>
-                <div class="health-item">
-                    <div class="health-header"><span>Network</span><span id="net-info">-</span></div>
-                    <div class="health-bar"><div class="health-fill ok" id="net-bar" style="width: 0%"></div></div>
-                    <div class="health-percent" id="net-pct">0%</div>
+                <div class="health-card" style="background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--radius-md); padding: 0.5rem;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;"><span style="font-size:0.7rem;color:var(--muted-dark);">🌐 Network</span><span id="net-pct" style="font-size:0.75rem;font-weight:600;color:#3b82f6;">0%</span></div>
+                    <div id="net-histogram" style="display:flex;align-items:flex-end;height:24px;gap:1px;background:rgba(0,0,0,0.2);border-radius:3px;padding:2px;"></div>
+                    <div id="net-info" style="font-size:0.6rem;color:var(--muted-dark);margin-top:2px;text-align:center;">-</div>
                 </div>
             </div>
 
@@ -1384,18 +1384,19 @@
                 return;
             }
 
-            // System metrics
+            // System metrics (use histogram updates)
             const cpu = data.cpu_percent || (data.load_avg ? data.load_avg[0] * 10 : 0);
             const mem = data.mem_pct || data.memory_percent || 0;
 
             document.getElementById('cpu-load').textContent = data.load || (data.load_avg ? data.load_avg.join(' ') : '-');
-            document.getElementById('cpu-bar').style.width = Math.min(cpu, 100) + '%';
             document.getElementById('cpu-pct').textContent = Math.round(cpu) + '%';
+            document.getElementById('cpu-pct').style.color = getHealthColor(cpu);
+            updateMiniHistogram('cpu-histogram', cpu, '#ef4444');
 
             document.getElementById('mem-info').textContent = `${data.mem_used_kb ? Math.round(data.mem_used_kb / 1024) : '-'} / ${data.mem_total_kb ? Math.round(data.mem_total_kb / 1024) : '-'} MB`;
-            document.getElementById('mem-bar').style.width = mem + '%';
             document.getElementById('mem-pct').textContent = Math.round(mem) + '%';
-            document.getElementById('mem-bar').className = 'health-fill ' + (mem > 85 ? 'danger' : mem > 70 ? 'warn' : 'ok');
+            document.getElementById('mem-pct').style.color = getHealthColor(mem);
+            updateMiniHistogram('mem-histogram', mem, '#eab308');
 
             // Uptime
             if (data.uptime) {
@@ -1404,23 +1405,62 @@
             }
         }
 
+        // Mini histogram history
+        const healthHistory = { cpu: [], mem: [], disk: [], net: [] };
+        const HIST_MAX = 12;
+
+        function updateMiniHistogram(id, value, color) {
+            const key = id.replace('-histogram', '');
+            if (!healthHistory[key]) healthHistory[key] = [];
+            healthHistory[key].push(value);
+            if (healthHistory[key].length > HIST_MAX) healthHistory[key].shift();
+
+            const el = document.getElementById(id);
+            if (!el) return;
+
+            const maxH = 20;
+            let bars = '';
+            healthHistory[key].forEach((v, i) => {
+                const h = Math.max(2, (v / 100) * maxH);
+                const opacity = 0.4 + (i / HIST_MAX) * 0.6;
+                bars += '<div style="flex:1;height:' + h + 'px;background:' + color + ';opacity:' + opacity + ';border-radius:1px;"></div>';
+            });
+            el.innerHTML = bars;
+        }
+
+        function getHealthColor(pct) {
+            if (pct < 50) return '#22c55e';
+            if (pct < 75) return '#eab308';
+            if (pct < 90) return '#f97316';
+            return '#ef4444';
+        }
+
         async function loadDashboard() {
             const data = await api(API_HUB + '/dashboard', 'GET', null, true);
             if (!data) return;
 
-            // CPU/Memory from dashboard
+            // CPU
             if (data.cpu_percent !== undefined) {
-                document.getElementById('cpu-bar').style.width = data.cpu_percent + '%';
-                document.getElementById('cpu-pct').textContent = Math.round(data.cpu_percent) + '%';
+                const cpu = Math.round(data.cpu_percent);
+                document.getElementById('cpu-pct').textContent = cpu + '%';
+                document.getElementById('cpu-pct').style.color = getHealthColor(cpu);
+                updateMiniHistogram('cpu-histogram', cpu, '#ef4444');
             }
+            // Memory
             if (data.memory_percent !== undefined) {
-                document.getElementById('mem-bar').style.width = data.memory_percent + '%';
-                document.getElementById('mem-pct').textContent = Math.round(data.memory_percent) + '%';
+                const mem = Math.round(data.memory_percent);
+                document.getElementById('mem-pct').textContent = mem + '%';
+                document.getElementById('mem-pct').style.color = getHealthColor(mem);
+                updateMiniHistogram('mem-histogram', mem, '#eab308');
             }
+            // Disk
             if (data.disk_percent !== undefined) {
-                document.getElementById('disk-bar').style.width = data.disk_percent + '%';
-                document.getElementById('disk-pct').textContent = Math.round(data.disk_percent) + '%';
+                const disk = Math.round(data.disk_percent);
+                document.getElementById('disk-pct').textContent = disk + '%';
+                document.getElementById('disk-pct').style.color = getHealthColor(disk);
+                updateMiniHistogram('disk-histogram', disk, '#22c55e');
             }
+            // Load
             if (data.load_avg) {
                 document.getElementById('cpu-load').textContent = 'Load: ' + data.load_avg[0]?.toFixed(2);
             }
@@ -1449,8 +1489,14 @@
             if (!data) {
                 document.getElementById('net-info').textContent = 'Unknown';
                 document.getElementById('net-pct').textContent = '-';
+                updateMiniHistogram('net-histogram', 0, '#3b82f6');
                 return;
             }
+            // Network activity (interfaces up percentage)
+            const netPct = data.interfaces_up && data.interfaces ? Math.round((data.interfaces_up / data.interfaces) * 100) : 0;
+            document.getElementById('net-pct').textContent = netPct + '%';
+            document.getElementById('net-pct').style.color = data.wan_status === 'connected' ? '#22c55e' : '#ef4444';
+            updateMiniHistogram('net-histogram', netPct, '#3b82f6');
 
             document.getElementById('net-info').textContent = data.wan_status || 'Unknown';
             const pct = data.interfaces_up && data.interfaces ? Math.round((data.interfaces_up / data.interfaces) * 100) : 100;
