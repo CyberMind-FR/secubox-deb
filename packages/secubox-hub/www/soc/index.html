@@ -685,15 +685,18 @@
                             <span class="matrix-label">Rules</span>
                             <span class="matrix-value" id="fw-rules">-</span>
                         </div>
-                        <!-- Packet Stats - Scribe Trace Histogram -->
+                        <!-- Packet Stats - Eyeremote Donut -->
                         <div style="margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px solid var(--divider);">
-                            <div id="fw-scribe-trace" style="display: flex; align-items: flex-end; justify-content: center; height: 45px; gap: 2px; background: rgba(0,0,0,0.3); border-radius: 4px; padding: 4px 8px;">
-                                <!-- Histogram bars injected by JS -->
-                            </div>
-                            <div style="display: flex; justify-content: space-between; margin-top: 4px; padding: 0 4px;">
-                                <span id="fw-drop-val" style="font-size:0.65rem;color:#ef4444;">🛑 -</span>
-                                <span id="fw-accept-val" style="font-size:0.65rem;color:#22c55e;">✅ -</span>
-                                <span id="fw-reject-val" style="font-size:0.65rem;color:#f97316;">❌ -</span>
+                            <div style="display: flex; align-items: center; gap: 1rem;">
+                                <div id="fw-donut" style="width: 90px; height: 90px; flex-shrink: 0;">
+                                    <!-- SVG donut injected by JS -->
+                                </div>
+                                <div style="flex: 1; font-size: 0.7rem; line-height: 1.6;">
+                                    <div style="display:flex;align-items:center;gap:4px;"><span style="width:8px;height:8px;border-radius:50%;background:#22c55e;"></span><span style="color:var(--muted-dark);">Accept</span><span id="fw-accept-val" style="margin-left:auto;color:#22c55e;font-weight:600;">-</span></div>
+                                    <div style="display:flex;align-items:center;gap:4px;"><span style="width:8px;height:8px;border-radius:50%;background:#ef4444;"></span><span style="color:var(--muted-dark);">CAPI</span><span id="fw-capi-val" style="margin-left:auto;color:#ef4444;font-weight:600;">-</span></div>
+                                    <div style="display:flex;align-items:center;gap:4px;"><span style="width:8px;height:8px;border-radius:50%;background:#f97316;"></span><span style="color:var(--muted-dark);">CrowdSec</span><span id="fw-cs-val" style="margin-left:auto;color:#f97316;font-weight:600;">-</span></div>
+                                    <div style="display:flex;align-items:center;gap:4px;"><span style="width:8px;height:8px;border-radius:50%;background:#eab308;"></span><span style="color:var(--muted-dark);">Manual</span><span id="fw-manual-val" style="margin-left:auto;color:#eab308;font-weight:600;">-</span></div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1234,65 +1237,80 @@
             const fwData = await api(API_HUB + '/public/firewall_summary', 'GET', null, false);
             if (fwData && !fwData.error && fwData.tables > 0) {
                 document.getElementById('fw-tables').textContent = fwData.tables;
-                
-                // Scribe trace histogram for firewall packets
-                const drop = fwData.dropped || 0;
-                const accept = fwData.accepted || 0;
-                const reject = fwData.rejected || 0;
-                
-                // Update value labels
-                const dropEl = document.getElementById('fw-drop-val');
-                const acceptEl = document.getElementById('fw-accept-val');
-                const rejectEl = document.getElementById('fw-reject-val');
-                if (dropEl) dropEl.textContent = '🛑 ' + drop.toLocaleString();
-                if (acceptEl) acceptEl.textContent = '✅ ' + accept.toLocaleString();
-                if (rejectEl) rejectEl.textContent = '❌ ' + reject.toLocaleString();
-                
-                // Initialize history if needed
-                if (!window.fwScribeHistory) {
-                    window.fwScribeHistory = { drop: [], accept: [], reject: [] };
-                }
-                
-                // Add to history (max 20 samples)
-                window.fwScribeHistory.drop.push(drop);
-                window.fwScribeHistory.accept.push(accept);
-                window.fwScribeHistory.reject.push(reject);
-                if (window.fwScribeHistory.drop.length > 20) {
-                    window.fwScribeHistory.drop.shift();
-                    window.fwScribeHistory.accept.shift();
-                    window.fwScribeHistory.reject.shift();
-                }
-                
-                // Render scribe trace
-                const scribeEl = document.getElementById('fw-scribe-trace');
-                if (scribeEl) {
-                    const maxVal = Math.max(...window.fwScribeHistory.drop, ...window.fwScribeHistory.accept, ...window.fwScribeHistory.reject, 1);
-                    let bars = '';
-                    for (let i = 0; i < window.fwScribeHistory.drop.length; i++) {
-                        const dH = (window.fwScribeHistory.drop[i] / maxVal) * 35;
-                        const aH = (window.fwScribeHistory.accept[i] / maxVal) * 35;
-                        const rH = (window.fwScribeHistory.reject[i] / maxVal) * 35;
-                        bars += '<div style="display:flex;flex-direction:column;gap:1px;">';
-                        bars += '<div style="width:3px;height:' + dH + 'px;background:#ef4444;border-radius:1px;"></div>';
-                        bars += '<div style="width:3px;height:' + aH + 'px;background:#22c55e;border-radius:1px;"></div>';
-                        bars += '<div style="width:3px;height:' + rH + 'px;background:#f97316;border-radius:1px;"></div>';
-                        bars += '</div>';
-                    }
-                    scribeEl.innerHTML = bars;
-                }
                 document.getElementById('fw-chains').textContent = fwData.chains || '-';
                 document.getElementById('fw-rules').textContent = fwData.rules || '-';
+
+                // Extract individual counters
+                const counters = fwData.counters || {};
+                const processed = fwData.processed || 0;
+                const capi = counters['crowdsec-blacklists-CAPI'] || 0;
+                const crowdsec = counters['crowdsec-blacklists-crowdsec'] || 0;
+                const manual = counters['crowdsec-blacklists-cscli'] || 0;
+                const totalDrop = capi + crowdsec + manual;
+                const accepted = processed - totalDrop;
+
+                // Update legend values
+                document.getElementById('fw-accept-val').textContent = formatNum(accepted);
+                document.getElementById('fw-capi-val').textContent = formatNum(capi);
+                document.getElementById('fw-cs-val').textContent = formatNum(crowdsec);
+                document.getElementById('fw-manual-val').textContent = formatNum(manual);
+
+                // Create eyeremote donut
+                const donutEl = document.getElementById('fw-donut');
+                if (donutEl && processed > 0) {
+                    donutEl.innerHTML = createNftDonut(accepted, capi, crowdsec, manual, processed, 90);
+                }
             } else {
                 document.getElementById('fw-tables').textContent = '-';
                 document.getElementById('fw-chains').textContent = '-';
                 document.getElementById('fw-rules').textContent = '-';
-                // Initialize scribe trace with empty
-                const scribeEl = document.getElementById('fw-scribe-trace');
-                if (scribeEl) scribeEl.innerHTML = '<div style="color:var(--muted);font-size:10px;">No data</div>';
-                document.getElementById('fw-drop-val').textContent = '🛑 0';
-                document.getElementById('fw-accept-val').textContent = '✅ 0';
-                document.getElementById('fw-reject-val').textContent = '❌ 0';
+                document.getElementById('fw-accept-val').textContent = '-';
+                document.getElementById('fw-capi-val').textContent = '-';
+                document.getElementById('fw-cs-val').textContent = '-';
+                document.getElementById('fw-manual-val').textContent = '-';
+                const donutEl = document.getElementById('fw-donut');
+                if (donutEl) donutEl.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;width:90px;height:90px;color:var(--muted);font-size:10px;">No data</div>';
             }
+        }
+
+        function formatNum(n) {
+            if (n >= 1000000) return (n/1000000).toFixed(1) + 'M';
+            if (n >= 1000) return (n/1000).toFixed(1) + 'K';
+            return n.toString();
+        }
+
+        function createNftDonut(accepted, capi, crowdsec, manual, total, size) {
+            const cx = size / 2, cy = size / 2;
+            const colors = ['#22c55e', '#ef4444', '#f97316', '#eab308'];
+            const values = [accepted, capi, crowdsec, manual];
+            const labels = ['✓', '🛡', '👁', '✋'];
+
+            let svg = '<svg viewBox="0 0 ' + size + ' ' + size + '" style="width:100%;height:100%;">';
+
+            // Background ring
+            svg += '<circle cx="' + cx + '" cy="' + cy + '" r="38" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="12"/>';
+
+            // Calculate percentages and draw arcs
+            let startAngle = -90;
+            const radius = 38;
+            const circumference = 2 * Math.PI * radius;
+
+            values.forEach((val, i) => {
+                if (val <= 0) return;
+                const pct = val / total;
+                const dashLen = pct * circumference;
+                const dashOffset = -startAngle / 360 * circumference;
+
+                svg += '<circle cx="' + cx + '" cy="' + cy + '" r="' + radius + '" fill="none" stroke="' + colors[i] + '" stroke-width="12" stroke-linecap="round" stroke-dasharray="' + dashLen + ' ' + circumference + '" transform="rotate(' + startAngle + ' ' + cx + ' ' + cy + ')" style="opacity:0.9;"/>';
+                startAngle += pct * 360;
+            });
+
+            // Center text
+            svg += '<text x="' + cx + '" y="' + (cy - 6) + '" text-anchor="middle" fill="var(--text-dark)" style="font-size:11px;font-weight:700;">' + formatNum(total) + '</text>';
+            svg += '<text x="' + cx + '" y="' + (cy + 8) + '" text-anchor="middle" fill="var(--muted-dark)" style="font-size:8px;">packets</text>';
+
+            svg += '</svg>';
+            return svg;
         }
 
         // Recent bans list
