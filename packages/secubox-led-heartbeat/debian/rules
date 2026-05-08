@@ -3,10 +3,28 @@
 	dh $@
 
 override_dh_auto_install:
-	# Daemon
+	# HealthBump 3-tier system (primary)
+	install -D -m 755 usr/sbin/secubox-healthbump \
+		debian/secubox-led-heartbeat/usr/sbin/secubox-healthbump
+	install -D -m 755 usr/sbin/secubox-led \
+		debian/secubox-led-heartbeat/usr/sbin/secubox-led
+	install -D -m 755 usr/sbin/secubox-led-pulse \
+		debian/secubox-led-heartbeat/usr/sbin/secubox-led-pulse
+	install -D -m 755 usr/sbin/secubox-led-trigger \
+		debian/secubox-led-heartbeat/usr/sbin/secubox-led-trigger
+	# Legacy daemon (backward compatibility)
 	install -D -m 755 usr/sbin/secubox-led-heartbeat \
 		debian/secubox-led-heartbeat/usr/sbin/secubox-led-heartbeat
-	# Systemd service
+	# Systemd services - HealthBump system
+	install -D -m 644 systemd/secubox-healthbump.service \
+		debian/secubox-led-heartbeat/usr/lib/systemd/system/secubox-healthbump.service
+	install -D -m 644 systemd/secubox-healthbump.timer \
+		debian/secubox-led-heartbeat/usr/lib/systemd/system/secubox-healthbump.timer
+	install -D -m 644 systemd/secubox-led-pulse.service \
+		debian/secubox-led-heartbeat/usr/lib/systemd/system/secubox-led-pulse.service
+	install -D -m 644 systemd/secubox-led-trigger.service \
+		debian/secubox-led-heartbeat/usr/lib/systemd/system/secubox-led-trigger.service
+	# Legacy service (backward compatibility)
 	install -D -m 644 systemd/secubox-led-heartbeat.service \
 		debian/secubox-led-heartbeat/usr/lib/systemd/system/secubox-led-heartbeat.service
 	# Kernel module load config
@@ -23,4 +41,7 @@ override_dh_auto_install:
 		debian/secubox-led-heartbeat/usr/share/secubox-led-heartbeat/secubox-leds.dts
 
 override_dh_installsystemd:
-	dh_installsystemd --name=secubox-led-heartbeat
+	dh_installsystemd --name=secubox-healthbump --no-enable
+	dh_installsystemd --name=secubox-led-pulse --no-enable
+	dh_installsystemd --name=secubox-led-trigger --no-enable
+	dh_installsystemd --name=secubox-led-heartbeat --no-enable
