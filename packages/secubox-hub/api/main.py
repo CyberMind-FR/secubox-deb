@@ -336,6 +336,49 @@ async def batch_health_check(modules: Optional[str] = None):
     }
 
 
+@public_router.get("/led_status")
+async def public_led_status():
+    """Public LED status endpoint — reads actual hardware LED colors from sysfs.
+
+    Returns the current RGB color of each of the 3 MOCHAbin LEDs.
+    LED1 = Hardware health, LED2 = Services health, LED3 = Security status.
+    """
+    led_base = Path("/sys/class/leds")
+
+    def read_led_brightness(color: str, led_num: int) -> int:
+        """Read brightness value for a specific LED color channel."""
+        path = led_base / f"{color}:led{led_num}" / "brightness"
+        try:
+            return int(path.read_text().strip())
+        except Exception:
+            return 0
+
+    def brightness_to_hex(r: int, g: int, b: int) -> str:
+        """Convert RGB brightness values (0-255) to hex color."""
+        r = min(255, max(0, r))
+        g = min(255, max(0, g))
+        b = min(255, max(0, b))
+        return f"#{r:02x}{g:02x}{b:02x}"
+
+    # Read actual hardware LED values
+    leds = {}
+    for led_num in [1, 2, 3]:
+        r = read_led_brightness("red", led_num)
+        g = read_led_brightness("green", led_num)
+        b = read_led_brightness("blue", led_num)
+        leds[f"led{led_num}"] = {
+            "r": r, "g": g, "b": b,
+            "color": brightness_to_hex(r, g, b)
+        }
+
+    return {
+        "led1": leds["led1"]["color"],  # Hardware health (bottom)
+        "led2": leds["led2"]["color"],  # Services health (middle)
+        "led3": leds["led3"]["color"],  # Security status (top)
+        "raw": leds,  # Full RGB values for debugging
+    }
+
+
 app.include_router(public_router)
 
 # ══════════════════════════════════════════════════════════════════
