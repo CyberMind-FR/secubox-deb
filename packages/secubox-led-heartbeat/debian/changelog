@@ -1,3 +1,19 @@
+secubox-led-heartbeat (2.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * NEW: HealthBump 3-tier LED system
+    - LED1 (bottom): Hardware layer - CPU, memory, WAN
+    - LED2 (middle): Services layer - HAProxy, nginx, certs
+    - LED3 (top): Security layer - CrowdSec bans, attack rate
+  * NEW: Variable pulse speeds (slow/medium/fast per layer)
+  * NEW: SPUNK ALERT - rapid all-red flash on critical failure
+  * NEW: secubox-led CLI for manual control
+  * NEW: secubox-led-trigger for kernel timer setup
+  * NEW: secubox-healthbump.timer (30s health checks)
+  * IMPROVED: I2C timing - 30ms delays, brightness 100
+  * COMPAT: Legacy secubox-led-heartbeat daemon retained
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 08 May 2026 10:00:00 +0200
+
 secubox-led-heartbeat (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial release

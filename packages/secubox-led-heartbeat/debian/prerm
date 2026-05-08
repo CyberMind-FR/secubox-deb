@@ -3,8 +3,16 @@ set -e
 
 case "$1" in
     remove|upgrade|deconfigure)
-        # Stop service and turn off LEDs
+        # Stop HealthBump 3-tier system
+        systemctl stop secubox-led-pulse.service 2>/dev/null || true
+        systemctl stop secubox-healthbump.timer 2>/dev/null || true
+        systemctl stop secubox-led-trigger.service 2>/dev/null || true
+        # Stop legacy service
         systemctl stop secubox-led-heartbeat.service 2>/dev/null || true
+        # Turn off LEDs
+        for led in /sys/class/leds/*:led*/brightness; do
+            echo 0 > "$led" 2>/dev/null || true
+        done
         ;;
 esac
 

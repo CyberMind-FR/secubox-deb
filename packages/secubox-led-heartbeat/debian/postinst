@@ -65,16 +65,29 @@ case "$1" in
         udevadm control --reload-rules 2>/dev/null || true
         udevadm trigger --subsystem-match=leds 2>/dev/null || true
 
-        # Enable and start service
+        # Enable and start services
         systemctl daemon-reload
-        systemctl enable secubox-led-heartbeat.service 2>/dev/null || true
 
         # Only start if LEDs are available
-        if [[ -d /sys/class/leds ]] && ls /sys/class/leds/ | grep -q "led"; then
-            systemctl start secubox-led-heartbeat.service 2>/dev/null || true
+        if [[ -d /sys/class/leds ]] && ls /sys/class/leds/ | grep -qE "(led[0-9]|:led)"; then
+            echo "LEDs detected, enabling HealthBump 3-tier system..."
+            # Enable LED trigger setup (runs at boot)
+            systemctl enable secubox-led-trigger.service 2>/dev/null || true
+            systemctl start secubox-led-trigger.service 2>/dev/null || true
+            # Enable HealthBump timer (runs every 30s)
+            systemctl enable secubox-healthbump.timer 2>/dev/null || true
+            systemctl start secubox-healthbump.timer 2>/dev/null || true
+            # Enable LED pulse daemon
+            systemctl enable secubox-led-pulse.service 2>/dev/null || true
+            systemctl start secubox-led-pulse.service 2>/dev/null || true
+            echo "HealthBump system started."
         else
-            echo "Note: No LEDs detected. Service enabled but not started."
+            echo "Note: No LEDs detected. Services enabled but not started."
             echo "      Reboot with Device Tree overlay to enable LEDs."
+            # Still enable for next boot
+            systemctl enable secubox-led-trigger.service 2>/dev/null || true
+            systemctl enable secubox-healthbump.timer 2>/dev/null || true
+            systemctl enable secubox-led-pulse.service 2>/dev/null || true
         fi
         ;;
 esac
