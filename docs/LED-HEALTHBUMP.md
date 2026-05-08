@@ -41,7 +41,35 @@ The SecuBox HealthBump system uses the MOCHAbin's 3 RGB LEDs as a visual health 
 ## Brightness
 
 The IS31FL3199 LED controller uses brightness value **10** for optimal visibility.
-Higher values may cause I2C communication issues.
+Higher values (e.g., 255) cause I2C communication errors on Debian kernel.
+
+> **Note**: OpenWrt kernel 6.6 uses brightness 255 without issues. Debian kernel 6.12
+> has I2C timing differences in the mv64xxx driver that cause occasional `-EIO` errors.
+> With 150ms delays between I2C writes, brightness 100 works reliably and errors don't
+> affect LED visibility.
+
+## Pulse Speeds (Kernel Timer Triggers)
+
+Each LED layer uses kernel timer triggers with different cycle times:
+
+| LED | Layer | Cycle Time | Timer Settings |
+|-----|-------|------------|----------------|
+| LED1 | HW | 4 seconds | 2000ms on, 2000ms off |
+| LED2 | SVC | 3 seconds | 1500ms on, 1500ms off |
+| LED3 | SEC | 2 seconds | 1000ms on, 1000ms off |
+
+Using slow kernel timers avoids I2C bus errors on Debian 6.12 kernel.
+
+## SPUNK ALERT
+
+When critical services (HAProxy, CrowdSec) are down, all LEDs flash rapid red:
+
+```
+SPUNK ALERT: HAProxy down
+```
+
+The alert flashes 5 times then pauses 0.5s before rechecking. This overrides
+normal health status until services recover.
 
 ## LED Layers
 
@@ -58,12 +86,13 @@ Monitors base infrastructure health with gradient colors:
 
 ### LED2 (Middle) - Services Layer `svc`
 
-Monitors application services:
+Monitors application services and certificates:
 
 | Status | Color | Condition |
 |--------|-------|-----------|
-| OK | 🟢 Green | HAProxy + Nginx running |
-| Error | 🔴 Red | Any service stopped |
+| OK | 🟢 Green | HAProxy + Nginx running, certs valid |
+| Warning | 🟡 Yellow | Certificate expiring < 30 days |
+| Error | 🔴 Red | Service stopped OR cert expired |
 
 ### LED3 (Top) - Security Layer `sec`
 
@@ -107,11 +136,10 @@ secubox-led top error   # Same as sec
 # Run manual health check
 secubox-healthbump
 
-# Output example:
-# LED1 (HW): ok
-# LED2 (SVC): ok
-# LED3 (SEC): warn
-# 07:07:50 HW:ok SVC:ok SEC:warn
+# Output examples:
+# 08:03:46 HW:[yellow:medium(50%cpu,53%mem)] SVC:[green:ok] SEC:[blue:mitigating(100 bans)]
+# 08:15:22 HW:[green:ok(12%cpu,45%mem)] SVC:[green:ok] SEC:[green:clear]
+# 08:30:01 HW:[red:no-wan] SVC:[green:ok] SEC:[yellow:elevated(50 bans,12/min)]
 ```
 
 ### Systemd Timer
@@ -184,9 +212,11 @@ LED1: 🟢 Hardware OK
 | File | Purpose |
 |------|---------|
 | `/usr/local/bin/secubox-led` | Manual LED control |
+| `/usr/local/bin/secubox-led-trigger` | Kernel timer trigger setup |
 | `/usr/local/bin/secubox-healthbump` | Automatic health checker |
-| `/etc/systemd/system/secubox-healthbump.service` | Oneshot service |
-| `/etc/systemd/system/secubox-healthbump.timer` | 30s timer |
+| `/etc/systemd/system/secubox-led-trigger.service` | Timer trigger setup at boot |
+| `/etc/systemd/system/secubox-healthbump.service` | Oneshot health check |
+| `/etc/systemd/system/secubox-healthbump.timer` | 30s health check timer |
 
 ## Hardware
 
@@ -201,6 +231,7 @@ LED1: 🟢 Hardware OK
 - GitHub Issue #45: IS31FL3199 driver
 - GitHub Issue #60: Kernel LED build
 - `kernel-build/README.md`: Kernel build instructions
+- `docs/reference/secubox-led-pulse-openwrt.sh`: Original OpenWrt LED script (single LED)
 
 ---
 

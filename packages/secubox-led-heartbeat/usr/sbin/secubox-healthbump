@@ -1,0 +1,225 @@
+#!/bin/bash
+# SecuBox HealthBump - 3-Tier LED Status with Variable Pulse Speeds + SPUNK ALERT
+# CyberMind — https://cybermind.fr
+# Author: Gerald Kerma <gandalf@gk2.net>
+#
+# LED Layout (MOCHAbin front panel, bottom to top):
+#   LED1 (HW)  - Hardware: network, CPU, memory (SLOW pulse)
+#   LED2 (SVC) - Services: vhosts, certs, HAProxy (MEDIUM pulse)
+#   LED3 (SEC) - Security: CrowdSec bans, attacks (FAST pulse)
+#
+# Brightness value 10 is optimal for IS31FL3199 on Debian (255 causes I2C errors)
+
+set -euo pipefail
+
+# Brightness 100 works reliably with proper I2C delays
+readonly BRIGHTNESS=100
+readonly I2C_DELAY=0.03
+readonly RATE_FILE="/tmp/secubox-ban-rate"
+readonly STATUS_FILE="/tmp/secubox/led-status"
+
+# LED sysfs paths
+led_path() { echo "/sys/class/leds/$1:led$2/brightness"; }
+
+# Set RGB for a specific LED (1-3) with I2C delay
+set_rgb() {
+    local led=$1 r=$2 g=$3 b=$4
+    echo "$r" > "$(led_path red $led)" 2>/dev/null || true
+    sleep $I2C_DELAY
+    echo "$g" > "$(led_path green $led)" 2>/dev/null || true
+    sleep $I2C_DELAY
+    echo "$b" > "$(led_path blue $led)" 2>/dev/null || true
+    sleep $I2C_DELAY
+}
+
+# Named colors using BRIGHTNESS value
+set_led_color() {
+    local led=$1 color=$2
+    case "$color" in
+        green)       set_rgb $led 0 $BRIGHTNESS 0 ;;
+        yellow)      set_rgb $led $BRIGHTNESS $((BRIGHTNESS/2)) 0 ;;
+        orange)      set_rgb $led $BRIGHTNESS $((BRIGHTNESS/4)) 0 ;;
+        red)         set_rgb $led $BRIGHTNESS 0 0 ;;
+        blue)        set_rgb $led 0 0 $BRIGHTNESS ;;
+        cyan)        set_rgb $led 0 $BRIGHTNESS $BRIGHTNESS ;;
+        off)         set_rgb $led 0 0 0 ;;
+    esac
+}
+
+# Dim version for pulse (half brightness)
+set_led_dim() {
+    local led=$1 color=$2
+    local half=$((BRIGHTNESS/2))
+    case "$color" in
+        green)       set_rgb $led 0 $half 0 ;;
+        yellow)      set_rgb $led $half $((half/2)) 0 ;;
+        orange)      set_rgb $led $half $((half/4)) 0 ;;
+        red)         set_rgb $led $half 0 0 ;;
+        blue)        set_rgb $led 0 0 $half ;;
+        cyan)        set_rgb $led 0 $half $half ;;
+        off)         set_rgb $led 0 0 0 ;;
+    esac
+}
+
+all_off() { set_rgb 1 0 0 0; set_rgb 2 0 0 0; set_rgb 3 0 0 0; }
+
+# SPUNK ALERT - Rapid all-red flash for critical failures
+spunk_alert() {
+    local reason="$1"
+    echo "SPUNK ALERT: $reason" >&2
+    echo "CRITICAL:$reason" > "$STATUS_FILE"
+
+    for i in 1 2 3 4 5; do
+        set_rgb 1 $BRIGHTNESS 0 0
+        set_rgb 2 $BRIGHTNESS 0 0
+        set_rgb 3 $BRIGHTNESS 0 0
+        sleep 0.05
+        all_off
+        sleep 0.05
+    done
+    sleep 0.5
+}
+
+# Check critical services (HAProxy, CrowdSec, Nginx)
+check_critical() {
+    ! pgrep -x haproxy >/dev/null && { spunk_alert "HAProxy down"; return 1; }
+    ! pgrep -x crowdsec >/dev/null && { spunk_alert "CrowdSec down"; return 1; }
+    return 0
+}
+
+# LED1 (HW) - Hardware layer: CPU, Memory, Network - SLOW pulse
+check_hardware() {
+    local load mem wan_ok
+    local color="green" detail="ok"
+
+    # Get CPU load (1-min average * 25 for percentage)
+    load=$(cut -d' ' -f1 /proc/loadavg | cut -d'.' -f1)
+    local cpu_pct=$((load * 25))
+
+    # Get memory usage
+    mem=$(free | awk '/^Mem:/ {printf "%.0f", $3/$2*100}')
+
+    # Check WAN connectivity
+    wan_ok=1
+    ip route get 8.8.8.8 >/dev/null 2>&1 || wan_ok=0
+
+    # Determine color based on highest concern
+    if [ "$wan_ok" -eq 0 ]; then
+        color="red"; detail="no-wan"
+    elif [ "$cpu_pct" -gt 90 ] || [ "$mem" -gt 90 ]; then
+        color="red"; detail="critical($cpu_pct%cpu,$mem%mem)"
+    elif [ "$cpu_pct" -gt 70 ] || [ "$mem" -gt 70 ]; then
+        color="orange"; detail="high($cpu_pct%cpu,$mem%mem)"
+    elif [ "$cpu_pct" -gt 50 ] || [ "$mem" -gt 50 ]; then
+        color="yellow"; detail="medium($cpu_pct%cpu,$mem%mem)"
+    else
+        color="green"; detail="ok($cpu_pct%cpu,$mem%mem)"
+    fi
+
+    # SLOW pulse (120ms on, 80ms dim)
+    set_led_dim 1 "$color"; sleep 0.08
+    set_led_color 1 "$color"; sleep 0.12
+    set_led_dim 1 "$color"; sleep 0.08
+
+    echo "HW:[$color:$detail]"
+}
+
+# LED2 (SVC) - Services layer: HAProxy, Nginx, certs - MEDIUM pulse
+check_services() {
+    local color="green" detail="ok"
+    local issues=""
+
+    # Check HAProxy
+    pgrep -x haproxy >/dev/null || { issues+="haproxy,"; color="red"; }
+
+    # Check Nginx
+    pgrep -x nginx >/dev/null || { issues+="nginx,"; color="red"; }
+
+    # Check certificate expiry (warn if <30 days)
+    local cert_warn=0
+    if [ -f /etc/haproxy/certs/default.pem ]; then
+        local exp=$(openssl x509 -in /etc/haproxy/certs/default.pem -noout -enddate 2>/dev/null | cut -d= -f2)
+        if [ -n "$exp" ]; then
+            local exp_ts=$(date -d "$exp" +%s 2>/dev/null || echo 0)
+            local now_ts=$(date +%s)
+            local days_left=$(( (exp_ts - now_ts) / 86400 ))
+            if [ "$days_left" -lt 30 ] && [ "$days_left" -gt 0 ]; then
+                [ "$color" = "green" ] && color="yellow"
+                issues+="cert-$days_left d,"
+            elif [ "$days_left" -le 0 ]; then
+                color="red"
+                issues+="cert-expired,"
+            fi
+        fi
+    fi
+
+    [ -z "$issues" ] && detail="ok" || detail="${issues%,}"
+
+    # MEDIUM pulse (60ms on, 40ms dim)
+    set_led_dim 2 "$color"; sleep 0.04
+    set_led_color 2 "$color"; sleep 0.06
+    set_led_dim 2 "$color"; sleep 0.04
+
+    echo "SVC:[$color:$detail]"
+}
+
+# LED3 (SEC) - Security layer: CrowdSec bans, attack rate - FAST pulse
+check_security() {
+    local color="green" detail="clear"
+
+    # Get current ban count
+    local bans=0
+    bans=$(cscli decisions list -o json 2>/dev/null | jq 'length' 2>/dev/null || echo 0)
+
+    # Calculate ban rate (bans in last 60s)
+    local rate=0
+    if [ -f "$RATE_FILE" ]; then
+        local prev_bans prev_time
+        read prev_bans prev_time < "$RATE_FILE" 2>/dev/null || { prev_bans=0; prev_time=0; }
+        local now=$(date +%s)
+        local elapsed=$((now - prev_time))
+        if [ "$elapsed" -gt 0 ] && [ "$elapsed" -lt 120 ]; then
+            rate=$(( (bans - prev_bans) * 60 / elapsed ))
+            [ "$rate" -lt 0 ] && rate=0
+        fi
+    fi
+
+    # Save current state for rate calculation
+    echo "$bans $(date +%s)" > "$RATE_FILE"
+
+    # Determine color based on rate and total
+    if [ "$rate" -gt 20 ] || [ "$bans" -gt 1000 ]; then
+        color="red"; detail="attack($bans bans,$rate/min)"
+    elif [ "$rate" -gt 5 ]; then
+        color="yellow"; detail="elevated($bans bans,$rate/min)"
+    elif [ "$bans" -gt 0 ]; then
+        color="blue"; detail="mitigating($bans bans)"
+    else
+        color="green"; detail="clear"
+    fi
+
+    # FAST pulse (20ms on, 20ms dim)
+    set_led_dim 3 "$color"; sleep 0.02
+    set_led_color 3 "$color"; sleep 0.02
+    set_led_dim 3 "$color"; sleep 0.02
+
+    echo "SEC:[$color:$detail]"
+}
+
+# Main
+mkdir -p /tmp/secubox
+
+# Check critical services first
+if ! check_critical; then
+    exit 1
+fi
+
+# Run all checks with their respective pulse speeds
+hw=$(check_hardware)
+svc=$(check_services)
+sec=$(check_security)
+
+# Output summary
+timestamp=$(date +%H:%M:%S)
+echo "$timestamp $hw $svc $sec"
+echo "$timestamp $hw $svc $sec" > "$STATUS_FILE"

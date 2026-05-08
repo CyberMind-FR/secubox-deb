@@ -1,0 +1,99 @@
+#!/bin/bash
+# SecuBox LED Pulse Daemon - Simple Debian I2C-safe version
+# CyberMind — https://cybermind.fr
+
+set -euo pipefail
+
+BRIGHTNESS=100
+I2C_DELAY=0.15
+STATUS_FILE="/tmp/secubox/led-status"
+
+led_path() { echo "/sys/class/leds/$1:led$2/brightness"; }
+
+set_led() {
+    local led=$1 r=$2 g=$3 b=$4
+    echo "$r" > "$(led_path red $led)" 2>/dev/null
+    sleep $I2C_DELAY
+    echo "$g" > "$(led_path green $led)" 2>/dev/null
+    sleep $I2C_DELAY
+    echo "$b" > "$(led_path blue $led)" 2>/dev/null
+    sleep $I2C_DELAY
+}
+
+all_off() { set_led 1 0 0 0; set_led 2 0 0 0; set_led 3 0 0 0; }
+
+get_colors() {
+    if [ -f "$STATUS_FILE" ]; then
+        local status
+        status=$(cat "$STATUS_FILE" 2>/dev/null || echo "")
+        hw=$(echo "$status" | grep -oP 'HW:\[\K[^:]+' 2>/dev/null || echo "green")
+        svc=$(echo "$status" | grep -oP 'SVC:\[\K[^:]+' 2>/dev/null || echo "green")
+        sec=$(echo "$status" | grep -oP 'SEC:\[\K[^:]+' 2>/dev/null || echo "green")
+    else
+        hw="green"; svc="green"; sec="green"
+    fi
+}
+
+# Color to RGB (bright version)
+color_bright() {
+    case "$1" in
+        green)  echo "0 $BRIGHTNESS 0" ;;
+        yellow) echo "$BRIGHTNESS $((BRIGHTNESS/2)) 0" ;;
+        orange) echo "$BRIGHTNESS $((BRIGHTNESS/4)) 0" ;;
+        red)    echo "$BRIGHTNESS 0 0" ;;
+        blue)   echo "0 0 $BRIGHTNESS" ;;
+        *)      echo "0 $BRIGHTNESS 0" ;;
+    esac
+}
+
+# Color to RGB (dim version)
+color_dim() {
+    local b=$((BRIGHTNESS/2))
+    case "$1" in
+        green)  echo "0 $b 0" ;;
+        yellow) echo "$b $((b/2)) 0" ;;
+        orange) echo "$b $((b/4)) 0" ;;
+        red)    echo "$b 0 0" ;;
+        blue)   echo "0 0 $b" ;;
+        *)      echo "0 $b 0" ;;
+    esac
+}
+
+trap 'all_off; exit 0' SIGTERM SIGINT
+
+echo "SecuBox LED Pulse starting..."
+all_off
+sleep 1
+
+phase=0
+while true; do
+    get_colors
+
+    # LED1 - slow: bright every 4 phases
+    # LED2 - medium: bright every 2 phases
+    # LED3 - fast: alternates each phase
+
+    if [ $((phase % 4)) -eq 0 ]; then
+        read r g b <<< "$(color_bright $hw)"
+    else
+        read r g b <<< "$(color_dim $hw)"
+    fi
+    set_led 1 $r $g $b
+
+    if [ $((phase % 2)) -eq 0 ]; then
+        read r g b <<< "$(color_bright $svc)"
+    else
+        read r g b <<< "$(color_dim $svc)"
+    fi
+    set_led 2 $r $g $b
+
+    if [ $((phase % 2)) -eq 0 ]; then
+        read r g b <<< "$(color_bright $sec)"
+    else
+        read r g b <<< "$(color_dim $sec)"
+    fi
+    set_led 3 $r $g $b
+
+    phase=$(( (phase + 1) % 4 ))
+    sleep 0.3
+done

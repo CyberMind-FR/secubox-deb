@@ -4,6 +4,48 @@
 ---
 ## 2026-05-08
 
+### Session 118 — LED HealthBump 3-Tier System
+
+**Completed:**
+
+1. **Kernel with IS31FL3199 LED Driver** — Built-in LED support
+   - Kernel 6.12.85 with `CONFIG_LEDS_IS31FL319X=y`
+   - LEDs appear at `/sys/class/leds/{red,green,blue}:led{1,2,3}/`
+   - Discovered brightness 10 optimal (255 causes I2C EIO errors on Debian)
+
+2. **3-Tier LED HealthBump System** — Visual health indicator
+   - LED1 (bottom): Hardware layer - CPU, memory, WAN connectivity
+   - LED2 (middle): Services layer - HAProxy, Nginx, certificate expiry
+   - LED3 (top): Security layer - CrowdSec bans, attack rate detection
+   - Variable pulse speeds: slow (HW), medium (SVC), fast (SEC)
+
+3. **SPUNK ALERT** — Critical failure rapid flash
+   - All LEDs flash rapid red when HAProxy/CrowdSec down
+   - Ported from OpenWrt `secubox-led-pulse` script
+   - Overrides normal health status until services recover
+
+4. **Manual LED Control** — `secubox-led` command
+   - Layer aliases: hw/1/bottom, svc/2/middle, sec/3/top
+   - Status colors: ok/green, warn/yellow, error/red, msg/blue, off
+
+5. **OpenWrt LED Script Analysis** — Serial console retrieval
+   - Found `/overlay/upper/usr/sbin/secubox-led-pulse` via ttyUSB0
+   - OpenWrt uses brightness 255 without I2C errors (different driver timing)
+   - Saved reference in `docs/reference/secubox-led-pulse-openwrt.sh`
+
+**Files Created/Updated:**
+- `packages/secubox-led-heartbeat/usr/sbin/secubox-healthbump` — 3-tier health check
+- `packages/secubox-led-heartbeat/usr/sbin/secubox-led` — Manual LED control
+- `packages/secubox-led-heartbeat/systemd/secubox-healthbump.{service,timer}` — Systemd units
+- `docs/LED-HEALTHBUMP.md` — Documentation with pulse speeds and SPUNK ALERT
+- `docs/reference/secubox-led-pulse-openwrt.sh` — OpenWrt reference script
+
+**Current Status:**
+- HealthBump running on 30s timer
+- LED1: Yellow (medium load), LED2: Green (services ok), LED3: Blue (mitigating 100 bans)
+
+---
+
 ### Session 117 — OpenWrt-style Kernel with DSA Built-in
 
 **Completed:**

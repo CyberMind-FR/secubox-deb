@@ -1,0 +1,12 @@
+[Unit]
+Description=SecuBox LED Pulse Daemon - Continuous visual status
+After=network.target secubox-healthbump.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/secubox-led-pulse
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
