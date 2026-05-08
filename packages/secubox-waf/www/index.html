@@ -557,6 +557,12 @@
             return "<div style=\"display:flex;flex-direction:column;align-items:center;\">" + svg + "<div style=\"margin-top:4px;display:flex;gap:6px;flex-wrap:wrap;justify-content:center;\">" + legend + "</div></div>";
         }
 
+        // Severity emoji helper (global)
+        function getSeverityEmoji(sev) {
+            const emojis = { critical: "💀", high: "🔴", medium: "🟠", low: "🟡", info: "🔵" };
+            return emojis[(sev || "").toLowerCase()] || "⚪";
+        }
+
         // Concentric donut for categories
         function createCategoryConcentricDonut(data, size) {
             size = size || 120;
@@ -569,11 +575,6 @@
             
             const CAT_COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#14b8a6", "#0ea5e9", "#6366f1", "#a855f7"];
             const CAT_ICONS = { scanner: "🔍", scanners: "🔍", bruteforce: "🔨", honeypot: "🍯", waf: "🛡️", http: "🌐", ssh: "🔐", sqli: "💉", xss: "⚠️", rce: "💣", crawler: "🕷️", recon: "🔎", default: "📌" };
-        // Severity emoji helper
-        function getSeverityEmoji(sev) {
-            const emojis = { critical: "💀", high: "🔴", medium: "🟠", low: "🟡", info: "🔵" };
-            return emojis[(sev || "").toLowerCase()] || "⚪";
-        }
 
             const topItems = items.slice(0, 6);
             const ringWidth = 7;
