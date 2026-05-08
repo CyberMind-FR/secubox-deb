@@ -467,13 +467,20 @@ async def status(user=Depends(require_jwt)):
         zone = _get_client_zone(client["mac"])
         by_zone[zone] = by_zone.get(zone, 0) + 1
 
+    # Count online clients
+    online_count = sum(1 for c in clients_list if c.get("state") in ("REACHABLE", "DELAY", "PROBE", "PERMANENT"))
+
     result = {
         "client_count": len(clients_list),
+        "total_clients": len(clients_list),  # Alias for frontend compatibility
+        "online_count": online_count,
+        "online": online_count,  # Alias for frontend compatibility
         "nftables_ok": nft_ok,
         "dnsmasq_ok": dnsmasq_ok,
         "zones": list(ZONES.keys()),
         "by_zone": by_zone,
         "quarantine_count": by_zone.get("quarantine", 0),
+        "quarantined": by_zone.get("quarantine", 0),  # Alias for frontend compatibility
         "timestamp": datetime.now().isoformat()
     }
 
@@ -497,6 +504,15 @@ async def clients(user=Depends(require_jwt)):
         zone = _get_client_zone(mac)
         client_meta = meta.get(mac, {})
 
+        is_online = c.get("state") in ("REACHABLE", "DELAY", "PROBE", "PERMANENT")
+        # Status for frontend badge
+        if zone == "quarantine":
+            status = "quarantine"
+        elif zone == "lan":
+            status = "enabled" if is_online else "disabled"
+        else:
+            status = zone
+
         result.append({
             **c,
             "zone": zone,
@@ -506,7 +522,8 @@ async def clients(user=Depends(require_jwt)):
             "notes": client_meta.get("notes", ""),
             "first_seen": client_meta.get("first_seen"),
             "last_seen": datetime.now().isoformat(),
-            "online": c.get("state") in ("REACHABLE", "DELAY", "PROBE", "PERMANENT"),
+            "online": is_online,
+            "status": status,  # For frontend badge
         })
 
     response = {
@@ -870,9 +887,41 @@ async def parental(user=Depends(require_jwt)):
     return await parental_rules(user)
 
 
+@router.get("/quarantine")
+async def list_quarantine(user=Depends(require_jwt)):
+    """List all quarantined clients (frontend compatibility endpoint)."""
+    discovered = _discover_clients()
+    meta = _load_clients_meta()
+
+    clients = []
+    for c in discovered:
+        zone = _get_client_zone(c["mac"])
+        if zone == "quarantine":
+            client_meta = meta.get(c["mac"].lower(), {})
+            clients.append({
+                "mac": c["mac"],
+                "ip": c.get("ip", ""),
+                "hostname": c.get("hostname", "") or client_meta.get("hostname", ""),
+                "reason": "New device" if not client_meta.get("first_seen") else "Quarantined",
+                "since": client_meta.get("first_seen", datetime.now().isoformat()),
+            })
+
+    return {"clients": clients, "count": len(clients)}
+
+
 @router.post("/quarantine_client")
 async def quarantine_client(mac: str, user=Depends(require_jwt)):
     return await add_to_zone(ZoneRequest(mac=mac, zone="quarantine"), user)
+
+
+class MacRequest(BaseModel):
+    mac: str
+
+
+@router.post("/unquarantine")
+async def unquarantine(req: MacRequest, user=Depends(require_jwt)):
+    """Move client from quarantine to LAN (frontend compatibility endpoint)."""
+    return await add_to_zone(ZoneRequest(mac=req.mac, zone="lan"), user)
 
 
 @router.get("/get_client")
