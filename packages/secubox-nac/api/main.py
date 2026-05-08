@@ -232,8 +232,106 @@ def _parse_leases() -> list[dict]:
             "ip": parts[2],
             "hostname": parts[3] if parts[3] != "*" else "",
             "id": parts[4] if len(parts) > 4 else "",
+            "source": "dhcp",
         })
     return clients
+
+
+# Interfaces to scan for ARP entries (LAN interfaces only)
+LAN_INTERFACES = {"lan0", "lan1", "lan2", "lan3", "br0", "br-lan", "eth0", "eth1"}
+
+
+def _parse_arp() -> list[dict]:
+    """Parse ARP table for network clients (fallback when DHCP leases unavailable)."""
+    clients = []
+    try:
+        # Use ip neigh for more reliable ARP parsing
+        r = subprocess.run(
+            ["ip", "neigh", "show"],
+            capture_output=True, text=True, timeout=5
+        )
+        if r.returncode != 0:
+            return clients
+
+        for line in r.stdout.splitlines():
+            # Format: IP dev IFACE lladdr MAC STATE
+            # Example: 192.168.1.36 dev lan0 lladdr 92:83:c4:29:7d:47 REACHABLE
+            parts = line.split()
+            if len(parts) < 5:
+                continue
+
+            ip = parts[0]
+            iface = parts[2] if len(parts) > 2 and parts[1] == "dev" else ""
+            mac = ""
+            state = ""
+
+            # Find lladdr and state
+            for i, part in enumerate(parts):
+                if part == "lladdr" and i + 1 < len(parts):
+                    mac = parts[i + 1].lower()
+                if part in ("REACHABLE", "STALE", "DELAY", "PROBE", "PERMANENT"):
+                    state = part
+
+            # Skip if no MAC, failed entries, or non-LAN interfaces
+            if not mac or state == "FAILED":
+                continue
+
+            # Only include clients from LAN interfaces
+            if iface and iface not in LAN_INTERFACES:
+                continue
+
+            # Skip IPv6 link-local
+            if ip.startswith("fe80:"):
+                continue
+
+            # Skip local/router IPs (common gateway patterns)
+            if ip.endswith(".1") or ip.endswith(".254"):
+                continue
+
+            clients.append({
+                "expiry": 0,  # ARP doesn't have expiry
+                "mac": mac,
+                "ip": ip,
+                "hostname": "",  # ARP doesn't provide hostname
+                "id": "",
+                "source": "arp",
+                "state": state,
+                "interface": iface,
+            })
+    except Exception as e:
+        log.warning("ARP parsing failed: %s", e)
+
+    return clients
+
+
+def _discover_clients() -> list[dict]:
+    """Discover network clients from multiple sources (DHCP leases + ARP fallback)."""
+    # Primary: DHCP leases
+    clients = _parse_leases()
+
+    # If leases file is empty/missing, fall back to ARP
+    if not clients:
+        clients = _parse_arp()
+        if clients:
+            log.info("Using ARP discovery: found %d clients (DHCP leases empty)", len(clients))
+    else:
+        # Merge ARP data for additional info (like STALE/REACHABLE state)
+        arp_clients = {c["mac"]: c for c in _parse_arp()}
+        for client in clients:
+            arp_info = arp_clients.get(client["mac"])
+            if arp_info:
+                client["state"] = arp_info.get("state", "")
+                client["interface"] = arp_info.get("interface", "")
+
+    # Deduplicate by MAC
+    seen_macs = set()
+    unique_clients = []
+    for c in clients:
+        if c["mac"] not in seen_macs:
+            seen_macs.add(c["mac"])
+            unique_clients.append(c)
+
+    return unique_clients
 
 
 def _nft_list_set(set_name: str) -> list[str]:
@@ -286,13 +384,13 @@ async def _monitor_clients():
 
     while True:
         try:
-            leases = _parse_leases()
-            current_macs = {c["mac"].lower() for c in leases}
+            clients = _discover_clients()
+            current_macs = {c["mac"].lower() for c in clients}
 
             # Check for new clients
             new_clients = current_macs - _known_clients
             for mac in new_clients:
-                client = next((c for c in leases if c["mac"].lower() == mac), None)
+                client = next((c for c in clients if c["mac"].lower() == mac), None)
                 if client:
                     _record_event("client_joined", {
                         "mac": mac,
@@ -317,9 +415,10 @@ async def _monitor_clients():
 async def startup():
     """Start background monitoring."""
     global _monitoring_task, _known_clients
-    # Initialize known clients
-    leases = _parse_leases()
-    _known_clients = {c["mac"].lower() for c in leases}
+    # Initialize known clients from all discovery sources
+    clients = _discover_clients()
+    _known_clients = {c["mac"].lower() for c in clients}
+    log.info("NAC startup: discovered %d clients", len(_known_clients))
     _monitoring_task = asyncio.create_task(_monitor_clients())
 
 
@@ -344,7 +443,7 @@ async def status(user=Depends(require_jwt)):
     if cached:
         return cached
 
-    leases = _parse_leases()
+    clients_list = _discover_clients()
 
     try:
         nft_ok = subprocess.run(
@@ -364,12 +463,12 @@ async def status(user=Depends(require_jwt)):
 
     # Count by zone
     by_zone: Dict[str, int] = {z: 0 for z in ZONES}
-    for client in leases:
+    for client in clients_list:
         zone = _get_client_zone(client["mac"])
         by_zone[zone] = by_zone.get(zone, 0) + 1
 
     result = {
-        "client_count": len(leases),
+        "client_count": len(clients_list),
         "nftables_ok": nft_ok,
         "dnsmasq_ok": dnsmasq_ok,
         "zones": list(ZONES.keys()),
@@ -389,11 +488,11 @@ async def clients(user=Depends(require_jwt)):
     if cached:
         return cached
 
-    leases = _parse_leases()
+    discovered = _discover_clients()
     meta = _load_clients_meta()
     result = []
 
-    for c in leases:
+    for c in discovered:
         mac = c["mac"].lower()
         zone = _get_client_zone(mac)
         client_meta = meta.get(mac, {})
@@ -406,7 +505,8 @@ async def clients(user=Depends(require_jwt)):
             "custom_hostname": client_meta.get("hostname", ""),
             "notes": client_meta.get("notes", ""),
             "first_seen": client_meta.get("first_seen"),
-            "last_seen": datetime.now().isoformat()
+            "last_seen": datetime.now().isoformat(),
+            "online": c.get("state") in ("REACHABLE", "DELAY", "PROBE", "PERMANENT"),
         })
 
     response = {
@@ -422,11 +522,11 @@ async def clients(user=Depends(require_jwt)):
 @router.get("/client/{mac}")
 async def get_client(mac: str, user=Depends(require_jwt)):
     """Get details for a specific client."""
-    leases = _parse_leases()
+    discovered = _discover_clients()
     meta = _load_clients_meta()
     mac_lower = mac.lower()
 
-    for c in leases:
+    for c in discovered:
         if c["mac"].lower() == mac_lower:
             zone = _get_client_zone(mac_lower)
             client_meta = meta.get(mac_lower, {})
@@ -634,10 +734,10 @@ async def delete_parental_rule(mac: str, user=Depends(require_jwt)):
 async def alerts(user=Depends(require_jwt)):
     """Get current alerts."""
     quarantine = _nft_list_set("quarantine_zone")
-    leases = _parse_leases()
+    discovered = _discover_clients()
     alerts_list = []
 
-    for c in leases:
+    for c in discovered:
         if c["mac"].lower() in quarantine:
             alerts_list.append({
                 "type": "new_client",

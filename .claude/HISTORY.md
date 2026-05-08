@@ -3126,3 +3126,34 @@ CONFIG_USB_NET_RNDIS_HOST=y
 - LED1 (HW): Green/Yellow/Orange/Red based on load %
 - LED2 (SVC): Green=ok, Red=error
 - LED3 (SEC): Green=clear, Blue=mitigating, Yellow=elevated, Red=attack
+
+---
+
+### Session 130 — NAC ARP Discovery Fix
+
+**Problem:** NAC dashboard showing "0 clients" despite active clients on network.
+
+**Root Cause:**
+- NAC module relied exclusively on `/var/lib/misc/dnsmasq.leases` for client discovery
+- dnsmasq not configured as DHCP server (leases file empty)
+- Clients using static IPs or getting DHCP from external router
+
+**Solution:** Added ARP-based client discovery as fallback:
+- New `_parse_arp()` function reads kernel ARP table via `ip neigh show`
+- New `_discover_clients()` combines DHCP leases + ARP fallback
+- Filters out gateway IPs (.1, .254) and non-LAN interfaces
+- Includes ARP state (REACHABLE/STALE) for online detection
+- Deduplicates clients by MAC address
+
+**Files Modified:**
+- `packages/secubox-nac/api/main.py` — Added ARP discovery (~80 lines)
+
+**Results:**
+- NAC now discovers 2 clients via ARP: 192.168.1.36 (REACHABLE), 192.168.255.2 (STALE)
+- Dashboard shows correct client count and online status
+- Clients start in quarantine zone (default for new discoveries)
+
+**Technical Details:**
+- LAN interfaces scanned: lan0, lan1, lan2, lan3, br0, br-lan, eth0, eth1
+- ARP states mapped to online: REACHABLE, DELAY, PROBE, PERMANENT = online
+- STALE, FAILED = offline
