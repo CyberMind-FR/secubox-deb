@@ -47,6 +47,21 @@ tar xf linux-6.6.137.tar.xz
 cd linux-6.6.137
 ```
 
+### Apply I2C/LED Patches
+
+Apply patches to fix I2C timing issues with the IS31FL319X LED driver:
+
+```bash
+# From kernel source directory
+cd linux-6.6.137
+
+# Apply LED driver delay patch
+patch -p1 < ../kernel-build/patches/001-leds-is31fl319x-add-i2c-delays.patch
+
+# Apply I2C errata delay increase patch
+patch -p1 < ../kernel-build/patches/002-i2c-mv64xxx-increase-errata-delay.patch
+```
+
 ### Configuration
 
 ```bash
@@ -143,6 +158,27 @@ ls /sys/class/leds/
 - Check I2C bus: `i2cdetect -y 1` (should show 0x64)
 - Check driver loaded: `dmesg | grep is31fl`
 - Verify DTS has correct node
+
+### LED I2C errors (-EIO)
+
+Symptoms:
+```
+leds green:led1: Setting an LED's brightness failed (-5)
+```
+
+The mv64xxx I2C driver on Marvell Armada platforms has timing issues (errata FE-8471889).
+The mainline kernel has a 5µs delay fix, but this is sometimes insufficient for LED controllers.
+
+**Solution**: Apply the patches in `kernel-build/patches/`:
+
+1. `001-leds-is31fl319x-add-i2c-delays.patch` - Adds 1ms delays between I2C writes in LED driver
+2. `002-i2c-mv64xxx-increase-errata-delay.patch` - Increases errata delay from 5µs to 50µs
+
+After patching and rebuilding the kernel, LED timer triggers should work without errors.
+
+**Alternative workaround** (without kernel rebuild):
+Use slow kernel timers (2-4 second cycles) via `secubox-led-trigger` script instead of
+rapid userspace updates. The slow timers give the I2C bus time to settle between writes.
 
 ### USB network not working
 - Load modules: `modprobe cdc_ether`
