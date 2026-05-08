@@ -915,7 +915,7 @@
             // WAF categories with emojis
             if (data.categories_list || data.top_categories) {
                 const cats = data.categories_list || data.top_categories;
-                renderCategories(cats, 'waf-categories');
+                // Categories shown in donut only
             } else {
                 document.getElementById('waf-categories').innerHTML = '<span class="cat-tag">-</span>';
             }
@@ -1034,13 +1034,13 @@
             svg += "<text x=\"" + center + "\" y=\"" + (center + 10) + "\" text-anchor=\"middle\" fill=\"var(--muted)\" font-size=\"6\">ATTACKS</text>";
             svg += "</svg>";
             
-            const legend = topCountries.slice(0, 5).map(function(c, i) {
+            const legend = topCountries.slice(0, 4).map(function(c, i) {
                 const code = c.country || c.code || "??";
                 const flag = countryToFlag(code);
-                return "<div style=\"font-size:0.6rem;\">" + flag + " " + code + "<span style=\"color:" + COUNTRY_COLORS[i % COUNTRY_COLORS.length] + ";\">" + c.count + "</span> (" + Math.round(c.count/total*100) + "%)</div>";
-            }).join("");
+                return "<span style=\"display:inline-flex;align-items:center;gap:2px;font-size:0.6rem;\"><span style=\"width:6px;height:6px;background:" + COUNTRY_COLORS[i % COUNTRY_COLORS.length] + ";border-radius:1px;\"></span>" + flag + " " + c.count + "</span>";
+            }).join(" ");
             
-            return "<div style=\"display:flex;flex-direction:column;align-items:center;\">" + svg + "<div style=\"margin-top:4px;\">" + legend + "</div></div>";
+            return "<div style=\"display:flex;flex-direction:column;align-items:center;\">" + svg + "<div style=\"margin-top:4px;display:flex;gap:6px;flex-wrap:wrap;justify-content:center;\">" + legend + "</div></div>";
         }
 
         const CAT_COLORS = ["#6366f1", "#8b5cf6", "#a855f7", "#d946ef", "#ec4899", "#f43f5e", "#0ea5e9", "#14b8a6"];
@@ -1178,7 +1178,7 @@
 
             // Categories
             if (data.categories) {
-                renderCategories(data.categories, 'cs-categories');
+                // Categories shown in donut only
                 // Render multi-layer donut for categories
                 const csDonut = document.getElementById('cs-cat-donut');
                 if (csDonut && data.categories && data.categories.length > 0) {
