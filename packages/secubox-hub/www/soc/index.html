@@ -2,411 +2,586 @@
 <!--
  ═══════════════════════════════════════════════════════════════════════════════
   SECUBOX SOC DASHBOARD — Security Operations Center
- ═══════════════════════════════════════════════════════════════════════════════
-
-  SecuBox-Deb :: SOC Dashboard Module
-  CyberMind — https://cybermind.fr
-  Author: Gérald Kerma <gandalf@gk2.net>
-  License: Proprietary / ANSSI CSPN candidate
-
-  Location: Notre-Dame-du-Cruet · Savoie · France
-  Project: SecuBox-Deb — Debian-based security appliance
-
- ───────────────────────────────────────────────────────────────────────────────
-  ARCHITECTURE:
- ───────────────────────────────────────────────────────────────────────────────
-  - Shared sidebar via /shared/sidebar.js (navbar integration)
-  - Hybrid skin: Glass Morphism + Matrix Terminal (/shared/hybrid-skin.css)
-  - Design tokens: /shared/design-tokens.css (CSS Custom Properties)
-  - APIs: /api/v1/hub, /api/v1/waf, /api/v1/crowdsec, /api/v1/metrics
-
- ───────────────────────────────────────────────────────────────────────────────
-  COMPONENTS:
- ───────────────────────────────────────────────────────────────────────────────
-  - Glass Cards: Threats, Decisions, Connections, Services (real-time)
-  - Matrix Panel: WAF status, top countries, vhosts, last threat
-  - Health Grid: CPU, Memory, Disk, Network (progress bars)
-  - Chart Area: 24h threat activity (bar chart)
-  - Activity Feed: Filterable event stream (all/threats/system)
-
- ───────────────────────────────────────────────────────────────────────────────
-  COPYRIGHT (C) 2024-2025 CyberMind / Gérald Kerma
-  All Rights Reserved — Unauthorized use prohibited
+  v2.1.0 — With shared sidebar and real API connections
  ═══════════════════════════════════════════════════════════════════════════════
 -->
 <html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="author" content="Gérald Kerma, CyberMind">
-    <meta name="description" content="SecuBox Security Operations Center - Real-time threat monitoring">
     <title>SOC Dashboard - SecuBox</title>
-    <!-- Fonts proxied via local CDN cache -->
     <link href="/cdn/fonts/space-grotesk.css" rel="stylesheet" onerror="this.href='https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap'">
     <link href="/cdn/fonts/jetbrains-mono.css" rel="stylesheet" onerror="this.href='https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap'">
     <link rel="stylesheet" href="/shared/design-tokens.css">
     <link rel="stylesheet" href="/shared/sidebar.css">
     <link rel="stylesheet" href="/shared/hybrid-skin.css">
+    <style>
+        /* SOC-specific styles */
+        .soc-main {
+            margin-left: 220px;
+            padding: var(--space-l);
+            min-height: 100vh;
+        }
+
+        .soc-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--space-l);
+            padding-bottom: var(--space-m);
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .soc-title { font-size: 1.5rem; font-weight: 600; }
+        .soc-subtitle { color: var(--muted-dark); font-size: 0.85rem; }
+
+        /* Cards Grid */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: var(--space-m);
+            margin-bottom: var(--space-l);
+        }
+
+        .stat-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur));
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-md);
+            padding: var(--space-m);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: var(--card-accent, var(--root-light));
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--space-s);
+        }
+
+        .card-icon { font-size: 1.5rem; }
+        .card-status {
+            font-size: 0.7rem;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: var(--radius-sm);
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--root-light);
+        }
+        .card-status.warning { background: rgba(245, 158, 11, 0.2); color: var(--wall-light); }
+        .card-status.danger { background: rgba(239, 68, 68, 0.2); color: var(--boot-light); }
+
+        .card-metric {
+            font-size: 2.5rem;
+            font-weight: 700;
+            font-family: var(--font-mono);
+            line-height: 1;
+            margin-bottom: var(--space-xs);
+        }
+
+        .card-label { font-size: 0.8rem; color: var(--muted-dark); margin-bottom: var(--space-xs); }
+        .card-trend { font-size: 0.75rem; color: var(--muted-dark); }
+        .card-trend.up { color: var(--root-light); }
+        .card-trend.down { color: var(--boot-light); }
+
+        /* Mini histogram bars */
+        .mini-histogram {
+            height: 4px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 2px;
+            margin: var(--space-xs) 0;
+            overflow: hidden;
+        }
+        .mini-bar {
+            height: 100%;
+            border-radius: 2px;
+            transition: width 0.5s ease;
+        }
+        .mini-bar.danger { background: linear-gradient(90deg, var(--boot-light), #ef4444); }
+        .mini-bar.warn { background: linear-gradient(90deg, var(--wall-light), var(--auth-light)); }
+        .mini-bar.ok { background: linear-gradient(90deg, var(--root-light), #16a34a); }
+        .mini-bar.info { background: linear-gradient(90deg, var(--mesh-light), var(--mind-light)); }
+
+        /* Matrix Panel */
+        .matrix-panel {
+            background: linear-gradient(135deg, rgba(10, 15, 20, 0.9), rgba(5, 10, 15, 0.95));
+            border: 1px solid var(--root-light);
+            border-radius: var(--radius-md);
+            padding: var(--space-m);
+            margin-bottom: var(--space-l);
+            font-family: var(--font-mono);
+        }
+
+        .matrix-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--space-m);
+            padding-bottom: var(--space-s);
+            border-bottom: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .matrix-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--root-light);
+            letter-spacing: 2px;
+        }
+
+        .matrix-row {
+            display: flex;
+            justify-content: space-between;
+            padding: var(--space-xs) 0;
+            border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
+        }
+
+        .matrix-label { color: var(--muted-dark); font-size: 0.8rem; }
+        .matrix-value { color: var(--text-dark); font-size: 0.85rem; }
+        .matrix-value .highlight { color: var(--root-light); }
+        .matrix-value .warning { color: var(--wall-light); }
+        .matrix-value .danger { color: var(--boot-light); }
+
+        /* Health Grid */
+        .health-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: var(--space-m);
+            margin-bottom: var(--space-l);
+        }
+
+        .health-item {
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur));
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-md);
+            padding: var(--space-m);
+        }
+
+        .health-header { display: flex; justify-content: space-between; margin-bottom: var(--space-s); font-size: 0.85rem; }
+        .health-bar { height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; }
+        .health-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+        .health-fill.ok { background: linear-gradient(90deg, var(--root-light), #16a34a); }
+        .health-fill.warn { background: linear-gradient(90deg, var(--wall-light), var(--auth-light)); }
+        .health-fill.danger { background: linear-gradient(90deg, var(--boot-light), #ef4444); }
+        .health-percent { font-family: var(--font-mono); font-size: 0.75rem; color: var(--muted-dark); margin-top: var(--space-xs); text-align: right; }
+
+        /* Activity Feed */
+        .activity-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur));
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-md);
+            padding: var(--space-m);
+        }
+
+        .activity-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--space-m);
+        }
+
+        .activity-title { font-weight: 600; }
+        .activity-list { max-height: 300px; overflow-y: auto; }
+
+        .activity-item {
+            display: flex;
+            align-items: flex-start;
+            gap: var(--space-s);
+            padding: var(--space-s) 0;
+            border-bottom: 1px solid var(--glass-border);
+            font-size: 0.85rem;
+        }
+
+        .activity-icon { font-size: 1rem; }
+        .activity-content { flex: 1; }
+        .activity-time { color: var(--muted-dark); font-size: 0.75rem; }
+        .activity-content code { background: rgba(0,0,0,0.3); padding: 1px 4px; border-radius: 3px; font-family: var(--font-mono); }
+
+        @media (max-width: 768px) {
+            .soc-main { margin-left: 0; }
+        }
+    </style>
 </head>
 <body class="hybrid-skin">
-    <!-- Shared Sidebar (loaded via JS) -->
+    <!-- Shared Sidebar -->
     <nav class="sidebar" id="sidebar"></nav>
 
-    <main class="main hybrid-main">
-        <header class="page-header glass-header">
+    <!-- Main Content -->
+    <main class="soc-main">
+        <header class="soc-header">
             <div>
-                <h1 class="page-title">Security Operations Center</h1>
-                <p class="page-subtitle">Real-time threat monitoring — <span id="last-update">updating...</span></p>
+                <h1 class="soc-title">Security Operations Center</h1>
+                <p class="soc-subtitle">Real-time threat monitoring — <span id="last-update">updating...</span></p>
             </div>
-            <div class="header-actions">
+            <div>
                 <button class="btn glass-btn" onclick="refresh()">🔄 Refresh</button>
-                <button class="btn glass-btn danger" onclick="logout()">Logout</button>
             </div>
         </header>
 
-        <div class="content">
-            <!-- GLASS CARDS GRID -->
-            <div class="cards-grid">
-                <div class="glass-card" style="--card-accent: var(--boot-light);">
-                    <div class="card-header">
-                        <span class="card-icon">🛡️</span>
-                        <span class="card-status" id="waf-card-status">LOADING</span>
-                    </div>
-                    <div class="card-metric" id="threats-blocked">-</div>
-                    <div class="card-label">Threats Blocked Today</div>
-                    <span class="card-trend up" id="threats-trend">↑ -% vs yesterday</span>
+        <!-- Cards Grid -->
+        <div class="cards-grid">
+            <div class="stat-card" style="--card-accent: var(--boot-light);">
+                <div class="card-header">
+                    <span class="card-icon">🛡️</span>
+                    <span class="card-status" id="waf-card-status">LOADING</span>
                 </div>
-
-                <div class="glass-card" style="--card-accent: var(--mind-light);">
-                    <div class="card-header">
-                        <span class="card-icon">👁️</span>
-                        <span class="card-status" id="cs-card-status">LOADING</span>
-                    </div>
-                    <div class="card-metric" id="active-decisions">-</div>
-                    <div class="card-label">Active Decisions</div>
-                    <span class="card-trend up" id="decisions-info">- bouncers</span>
-                </div>
-
-                <div class="glass-card" style="--card-accent: var(--mesh-light);">
-                    <div class="card-header">
-                        <span class="card-icon">🌐</span>
-                        <span class="card-status">ACTIVE</span>
-                    </div>
-                    <div class="card-metric" id="throughput">-</div>
-                    <div class="card-label">Active Connections</div>
-                    <span class="card-trend" id="throughput-trend">- TCP</span>
-                </div>
-
-                <div class="glass-card" style="--card-accent: var(--root-light);">
-                    <div class="card-header">
-                        <span class="card-icon">⚡</span>
-                        <span class="card-status" id="health-status">LOADING</span>
-                    </div>
-                    <div class="card-metric" id="active-services">-</div>
-                    <div class="card-label">Healthy Services</div>
-                    <span class="card-trend up" id="uptime-info">-% uptime</span>
-                </div>
+                <div class="card-metric" id="threats-blocked">-</div>
+                <div class="card-label">🔥 Active Bans</div>
+                <div class="mini-histogram"><div class="mini-bar danger" id="ban-histogram" style="width:0%"></div></div>
+                <span class="card-trend" id="threats-trend">⚔️ CrowdSec decisions</span>
             </div>
 
-            <!-- MATRIX PANEL — WAF Status -->
-            <div class="matrix-panel">
-                <div class="matrix-header">
-                    <span class="matrix-title">WAF STATUS</span>
-                    <span class="matrix-meta" id="waf-version">v- · -</span>
+            <div class="stat-card" style="--card-accent: var(--mind-light);">
+                <div class="card-header">
+                    <span class="card-icon">👁️</span>
+                    <span class="card-status" id="cs-card-status">LOADING</span>
                 </div>
-                <div class="matrix-body">
-                    <div class="matrix-row">
-                        <span class="matrix-label">Status</span>
-                        <span class="matrix-value" id="waf-status-detail"><span class="highlight">● LOADING</span></span>
-                    </div>
-                    <div class="matrix-row">
-                        <span class="matrix-label">Top Countries</span>
-                        <span class="matrix-value" id="top-countries">Loading...</span>
-                    </div>
-                    <div class="matrix-row">
-                        <span class="matrix-label">Top Vhosts</span>
-                        <span class="matrix-value" id="top-vhosts">Loading...</span>
-                    </div>
-                    <div class="matrix-row">
-                        <span class="matrix-label">Last Threat</span>
-                        <span class="matrix-value" id="last-threat">Loading...</span>
-                    </div>
-                </div>
+                <div class="card-metric" id="active-decisions">-</div>
+                <div class="card-label">⚠️ Alerts</div>
+                <div class="mini-histogram"><div class="mini-bar warn" id="alert-histogram" style="width:0%"></div></div>
+                <span class="card-trend" id="decisions-info">🤖 - bouncers</span>
             </div>
 
-            <!-- SYSTEM HEALTH -->
-            <div class="health-grid">
-                <div class="health-item glass-card">
-                    <div class="health-header"><span>🖥️ CPU</span><span id="cpu-load">-</span></div>
-                    <div class="health-bar"><div class="health-fill ok" id="cpu-bar" style="width: 0%"></div></div>
-                    <div class="health-percent" id="cpu-pct">0%</div>
+            <div class="stat-card" style="--card-accent: var(--mesh-light);">
+                <div class="card-header">
+                    <span class="card-icon">🌐</span>
+                    <span class="card-status">ACTIVE</span>
                 </div>
-                <div class="health-item glass-card">
-                    <div class="health-header"><span>💾 Memory</span><span id="mem-info">-</span></div>
-                    <div class="health-bar"><div class="health-fill warn" id="mem-bar" style="width: 0%"></div></div>
-                    <div class="health-percent" id="mem-pct">0%</div>
-                </div>
-                <div class="health-item glass-card">
-                    <div class="health-header"><span>📀 Disk</span><span id="disk-info">-</span></div>
-                    <div class="health-bar"><div class="health-fill ok" id="disk-bar" style="width: 0%"></div></div>
-                    <div class="health-percent" id="disk-pct">0%</div>
-                </div>
-                <div class="health-item glass-card">
-                    <div class="health-header"><span>📡 Network</span><span id="net-info">-</span></div>
-                    <div class="health-bar"><div class="health-fill ok" id="net-bar" style="width: 0%"></div></div>
-                    <div class="health-percent" id="net-pct">0%</div>
-                </div>
+                <div class="card-metric" id="throughput">-</div>
+                <div class="card-label">Connections</div>
+                <span class="card-trend" id="throughput-trend">TCP sessions</span>
             </div>
 
-            <!-- CHART + ACTIVITY ROW -->
-            <div class="grid-row">
-                <div class="grid-col">
-                    <div class="glass-card chart-card">
-                        <div class="card-header">
-                            <span class="chart-title">📊 Threat Activity (24h)</span>
-                            <div class="chart-legend">
-                                <span class="legend-item"><span class="legend-dot" style="background: var(--root-light);"></span>Blocked</span>
-                            </div>
-                        </div>
-                        <div class="chart-area" id="threat-chart"></div>
-                        <div class="chart-labels">
-                            <span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>Now</span>
-                        </div>
-                    </div>
+            <div class="stat-card" style="--card-accent: var(--root-light);">
+                <div class="card-header">
+                    <span class="card-icon">⚡</span>
+                    <span class="card-status" id="health-status">LOADING</span>
                 </div>
+                <div class="card-metric" id="active-services">-</div>
+                <div class="card-label">Services OK</div>
+                <span class="card-trend" id="uptime-info">-</span>
+            </div>
+        </div>
 
-                <div class="grid-col">
-                    <div class="glass-card activity-panel">
-                        <div class="card-header">
-                            <span class="activity-title">🔔 Recent Activity</span>
-                            <div class="activity-filter">
-                                <button class="filter-btn active" onclick="filterActivity('all')">All</button>
-                                <button class="filter-btn" onclick="filterActivity('threats')">Threats</button>
-                                <button class="filter-btn" onclick="filterActivity('system')">System</button>
-                            </div>
-                        </div>
-                        <div class="activity-list" id="activity-list">
-                            <div class="activity-item loading">
-                                <div class="activity-icon waf">🛡️</div>
-                                <div class="activity-content">
-                                    <div class="activity-text">Loading activity...</div>
-                                    <div class="activity-meta">--</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+        <!-- CrowdSec Matrix Panel -->
+        <div class="matrix-panel">
+            <div class="matrix-header">
+                <span class="matrix-title">CROWDSEC STATUS</span>
+                <span style="color: var(--muted-dark);" id="cs-version">v2.0.0</span>
+            </div>
+            <div class="matrix-body">
+                <div class="matrix-row">
+                    <span class="matrix-label">Engine</span>
+                    <span class="matrix-value" id="cs-engine"><span class="highlight">● LOADING</span></span>
+                </div>
+                <div class="matrix-row">
+                    <span class="matrix-label">LAPI</span>
+                    <span class="matrix-value" id="cs-lapi">Loading...</span>
+                </div>
+                <div class="matrix-row">
+                    <span class="matrix-label">Bouncers</span>
+                    <span class="matrix-value" id="cs-bouncers">Loading...</span>
+                </div>
+                <div class="matrix-row">
+                    <span class="matrix-label">Top Scenario</span>
+                    <span class="matrix-value" id="cs-top-scenario">Loading...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- System Health -->
+        <div class="health-grid">
+            <div class="health-item">
+                <div class="health-header"><span>CPU</span><span id="cpu-load">-</span></div>
+                <div class="health-bar"><div class="health-fill ok" id="cpu-bar" style="width: 0%"></div></div>
+                <div class="health-percent" id="cpu-pct">0%</div>
+            </div>
+            <div class="health-item">
+                <div class="health-header"><span>Memory</span><span id="mem-info">-</span></div>
+                <div class="health-bar"><div class="health-fill warn" id="mem-bar" style="width: 0%"></div></div>
+                <div class="health-percent" id="mem-pct">0%</div>
+            </div>
+            <div class="health-item">
+                <div class="health-header"><span>Disk</span><span id="disk-info">-</span></div>
+                <div class="health-bar"><div class="health-fill ok" id="disk-bar" style="width: 0%"></div></div>
+                <div class="health-percent" id="disk-pct">0%</div>
+            </div>
+            <div class="health-item">
+                <div class="health-header"><span>Load</span><span id="net-info">-</span></div>
+                <div class="health-bar"><div class="health-fill ok" id="net-bar" style="width: 0%"></div></div>
+                <div class="health-percent" id="net-pct">0%</div>
+            </div>
+        </div>
+
+        <!-- Activity Feed -->
+        <div class="activity-panel">
+            <div class="activity-header">
+                <span class="activity-title">Recent Activity</span>
+                <span style="color: var(--muted-dark); font-size: 0.8rem;" id="activity-count">0 events</span>
+            </div>
+            <div class="activity-list" id="activity-list">
+                <div class="activity-item">
+                    <span class="activity-icon">⏳</span>
+                    <div class="activity-content">Loading events...</div>
                 </div>
             </div>
         </div>
     </main>
 
-    <!-- Shared sidebar loader -->
+    <!-- Shared Sidebar Script -->
     <script src="/shared/sidebar.js"></script>
-
     <script>
+        // API endpoints
         const API_HUB = '/api/v1/hub';
-        const API_WAF = '/api/v1/waf';
         const API_CROWDSEC = '/api/v1/crowdsec';
-        const API_METRICS = '/api/v1/metrics';
 
-        function getToken() {
-            return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token');
+        // Activity buffer
+        let activities = [];
+
+        function addActivity(type, icon, message, time) {
+            activities.unshift({ type, icon, message, time: time || 'just now' });
+            if (activities.length > 20) activities.pop();
+            renderActivities();
         }
 
-        function checkAuth() {
-            if (!getToken()) {
-                window.location.href = '/portal/login.html?redirect=' + encodeURIComponent(window.location.pathname);
-                return false;
-            }
-            return true;
-        }
-
-        async function api(url, method = 'GET') {
-            const token = getToken();
-            if (!token) { checkAuth(); return null; }
-            try {
-                const res = await fetch(url, {
-                    method,
-                    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }
-                });
-                if (res.status === 401) { checkAuth(); return null; }
-                return await res.json();
-            } catch (e) { console.error('API error:', url, e); return null; }
-        }
-
-        let activityItems = [];
-
-        function addActivity(type, icon, text, meta) {
-            activityItems.unshift({ type, icon, text, meta, time: new Date() });
-            if (activityItems.length > 20) activityItems.pop();
-            renderActivity();
-        }
-
-        function renderActivity(filter = 'all') {
+        function renderActivities() {
             const list = document.getElementById('activity-list');
-            const filtered = filter === 'all' ? activityItems : activityItems.filter(i => i.type === filter);
+            if (!activities.length) {
+                list.innerHTML = '<div class="activity-item"><span class="activity-icon">✓</span><div class="activity-content">No recent events</div></div>';
+                return;
+            }
+            list.innerHTML = activities.map(a => `
+                <div class="activity-item">
+                    <span class="activity-icon">${a.icon}</span>
+                    <div class="activity-content">${a.message}</div>
+                    <span class="activity-time">${a.time}</span>
+                </div>
+            `).join('');
+            document.getElementById('activity-count').textContent = activities.length + ' events';
+        }
 
-            if (filtered.length === 0) {
-                list.innerHTML = '<div class="activity-item"><div class="activity-content"><div class="activity-text" style="color: var(--muted-dark);">No activity yet</div></div></div>';
+        async function api(url) {
+            try {
+                const token = localStorage.getItem('sbx_token');
+                const headers = token ? { 'Authorization': 'Bearer ' + token } : {};
+                const res = await fetch(url, { headers });
+                if (!res.ok) return null;
+                const ct = res.headers.get('content-type') || '';
+                if (!ct.includes('json')) return null;
+                return await res.json();
+            } catch (e) {
+                console.log('API error:', url, e.message);
+                return null;
+            }
+        }
+
+        async function loadCrowdSecHealth() {
+            const data = await api(API_CROWDSEC + '/health');
+            if (!data) {
+                document.getElementById('cs-card-status').textContent = '❌ OFFLINE';
+                document.getElementById('cs-card-status').className = 'card-status danger';
                 return;
             }
 
-            list.innerHTML = filtered.slice(0, 10).map(item => `
-                <div class="activity-item">
-                    <div class="activity-icon ${item.type}">${item.icon}</div>
-                    <div class="activity-content">
-                        <div class="activity-text">${item.text}</div>
-                        <div class="activity-meta">${item.meta}</div>
-                    </div>
-                </div>
-            `).join('');
+            const checks = data.checks || {};
+            const bouncers = checks.bouncers_count || 0;
+
+            // Card status with emoji
+            const statusEmoji = data.status === 'ok' ? '✅' : '⚠️';
+            document.getElementById('cs-card-status').textContent = statusEmoji + ' ' + (data.status === 'ok' ? 'ACTIVE' : data.status.toUpperCase());
+            document.getElementById('cs-card-status').className = 'card-status' + (data.status === 'ok' ? '' : ' warning');
+
+            // Matrix details with emojis
+            document.getElementById('cs-engine').innerHTML = checks.engine_running
+                ? '<span class="highlight">🟢 RUNNING</span>'
+                : '<span class="danger">🔴 STOPPED</span>';
+
+            document.getElementById('cs-lapi').innerHTML = checks.lapi_ok
+                ? '<span class="highlight">🟢 CONNECTED</span>'
+                : '<span class="danger">🔴 DISCONNECTED</span>';
+
+            document.getElementById('cs-bouncers').innerHTML = bouncers > 0
+                ? `<span class="highlight">🤖 ${bouncers} registered</span>`
+                : '<span class="danger">⚠️ 0 registered</span>';
+            document.getElementById('decisions-info').textContent = '🤖 ' + bouncers + ' bouncers';
+
+            // Alert histogram
+            const alertBar = document.getElementById('alert-histogram');
+            if (alertBar && checks.bouncers_ok) {
+                alertBar.style.width = '100%';
+                alertBar.className = 'mini-bar ok';
+            }
         }
 
-        function filterActivity(type) {
-            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-            event.target.classList.add('active');
-            renderActivity(type);
-        }
-
-        async function loadHealthBatch() {
-            const data = await api(API_HUB + '/public/health-batch');
-            if (!data || !data.modules) return;
-
-            let healthy = 0, total = 0;
-            Object.values(data.modules).forEach(m => {
-                total++;
-                if (m.status === 'ok') healthy++;
-            });
-
-            document.getElementById('active-services').textContent = healthy;
-            document.getElementById('health-status').textContent = healthy === total ? 'HEALTHY' : 'DEGRADED';
-            document.getElementById('health-status').className = 'card-status' + (healthy === total ? '' : ' warning');
-        }
-
-        async function loadWAFStats() {
-            const data = await api(API_WAF + '/stats');
+        async function loadCrowdSecStatus() {
+            const data = await api(API_CROWDSEC + '/status');
             if (!data) return;
 
-            const blocked = data.blocked_24h || data.blocked_today || 0;
-            document.getElementById('threats-blocked').textContent = blocked.toLocaleString();
-            document.getElementById('waf-card-status').textContent = data.running ? 'ACTIVE' : 'INACTIVE';
-            document.getElementById('waf-card-status').className = 'card-status' + (data.running ? '' : ' danger');
+            // Active decisions count
+            const decisions = data.decisions_count || 0;
+            const alerts = data.alerts_count || 0;
+            document.getElementById('threats-blocked').textContent = decisions;
+            document.getElementById('active-decisions').textContent = alerts;
+            document.getElementById('waf-card-status').textContent = decisions > 0 ? '🔥 ACTIVE' : '✓ QUIET';
 
-            document.getElementById('waf-version').textContent = `v${data.version || '1.2.0'} · ${data.rules_loaded || 0} rules`;
-            document.getElementById('waf-status-detail').innerHTML = `<span class="highlight">● ${data.running ? 'ACTIVE' : 'INACTIVE'}</span> · ${data.rules_loaded || 0} rules`;
-
-            if (data.top_countries && data.top_countries.length > 0) {
-                const flags = { CN: '🇨🇳', RU: '🇷🇺', US: '🇺🇸', DE: '🇩🇪', FR: '🇫🇷', GB: '🇬🇧', KR: '🇰🇷', NL: '🇳🇱' };
-                document.getElementById('top-countries').innerHTML = data.top_countries.slice(0, 4).map(c =>
-                    `<span class="flag">${flags[c.country] || '🏴'}</span>${c.country} (${c.count})`
-                ).join(' · ');
+            // Mini histogram bar for bans
+            const banBar = document.getElementById('ban-histogram');
+            if (banBar) {
+                const pct = Math.min((decisions / 200) * 100, 100);
+                banBar.style.width = pct + '%';
             }
 
-            if (data.top_vhosts && data.top_vhosts.length > 0) {
-                document.getElementById('top-vhosts').innerHTML = data.top_vhosts.slice(0, 2).map(v =>
-                    `${v.vhost} <span class="warning">(${v.count})</span>`
-                ).join(' · ');
+            // Version
+            if (data.version) {
+                const ver = data.version.replace('version: ', '').split('-')[0];
+                document.getElementById('cs-version').textContent = ver;
             }
 
-            if (data.last_threat) {
-                const t = data.last_threat;
-                document.getElementById('last-threat').innerHTML = `<span class="danger">${t.type || 'Attack'}</span> from ${t.ip || 'unknown'} · ${t.time_ago || 'recently'}`;
-                addActivity('waf', '🛡️', `WAF blocked <code>${t.type || 'attack'}</code> from <code>${t.ip || 'unknown'}</code>`, t.time_ago || 'just now');
+            // Top scenario from status
+            if (data.top_scenario) {
+                document.getElementById('cs-top-scenario').innerHTML = `<span class="warning">🎯 ${data.top_scenario}</span>`;
             }
 
-            // Chart
-            const chartEl = document.getElementById('threat-chart');
-            if (data.hourly_blocks) {
-                const max = Math.max(...data.hourly_blocks, 1);
-                chartEl.innerHTML = data.hourly_blocks.map(v =>
-                    `<div class="chart-bar" style="height: ${(v / max * 100)}%;" title="${v}"></div>`
-                ).join('');
-            } else {
-                chartEl.innerHTML = Array(24).fill(0).map(() =>
-                    `<div class="chart-bar" style="height: ${Math.random() * 100}%;"></div>`
-                ).join('');
-            }
+            addActivity('crowdsec', '👁️', `🛡️ <code>${decisions}</code> bans · <code>${alerts}</code> alerts`, 'now');
         }
 
-        async function loadCrowdSecStats() {
-            const data = await api(API_CROWDSEC + '/decisions_stats');
+        async function loadCrowdSecAlerts() {
+            // Try to get recent alerts
+            const data = await api(API_CROWDSEC + '/alerts/list?limit=5');
             if (!data) {
-                const health = await api(API_CROWDSEC + '/health');
-                if (health) {
-                    document.getElementById('cs-card-status').textContent = health.status === 'ok' ? 'ACTIVE' : 'DEGRADED';
+                // Fallback: try stats endpoint
+                const stats = await api(API_CROWDSEC + '/stats');
+                if (stats && stats.alerts_today !== undefined) {
+                    document.getElementById('active-decisions').textContent = stats.alerts_today;
                 }
                 return;
             }
-            document.getElementById('active-decisions').textContent = data.active_decisions || 0;
-            document.getElementById('cs-card-status').textContent = 'ACTIVE';
-            document.getElementById('decisions-info').textContent = `${data.bouncers || 0} bouncers`;
+
+            const alerts = Array.isArray(data) ? data : (data.alerts || []);
+            if (alerts.length > 0) {
+                // Top scenario
+                const scenarios = {};
+                alerts.forEach(a => {
+                    const s = a.scenario || 'unknown';
+                    scenarios[s] = (scenarios[s] || 0) + 1;
+                });
+                const top = Object.entries(scenarios).sort((a, b) => b[1] - a[1])[0];
+                if (top) {
+                    document.getElementById('cs-top-scenario').innerHTML = `<span class="warning">🎯 ${top[0]}</span> (${top[1]})`;
+                }
+
+                // Add recent alerts to activity
+                alerts.slice(0, 3).forEach(a => {
+                    const ip = a.source?.ip || a.value || 'unknown';
+                    const scenario = a.scenario || 'threat';
+                    addActivity('alert', '⚠️', `🚨 <code>${scenario}</code> from <code>${ip}</code>`, 'recently');
+                });
+            }
         }
 
         async function loadDashboard() {
             const data = await api(API_HUB + '/dashboard');
             if (!data) return;
 
+            // CPU
             if (data.cpu_percent !== undefined) {
-                document.getElementById('cpu-bar').style.width = data.cpu_percent + '%';
-                document.getElementById('cpu-pct').textContent = Math.round(data.cpu_percent) + '%';
-            }
-            if (data.memory_percent !== undefined) {
-                document.getElementById('mem-bar').style.width = data.memory_percent + '%';
-                document.getElementById('mem-pct').textContent = Math.round(data.memory_percent) + '%';
-            }
-            if (data.disk_percent !== undefined) {
-                document.getElementById('disk-bar').style.width = data.disk_percent + '%';
-                document.getElementById('disk-pct').textContent = Math.round(data.disk_percent) + '%';
+                const cpu = Math.round(data.cpu_percent);
+                document.getElementById('cpu-bar').style.width = cpu + '%';
+                document.getElementById('cpu-pct').textContent = cpu + '%';
+                document.getElementById('cpu-bar').className = 'health-fill ' + (cpu > 85 ? 'danger' : cpu > 70 ? 'warn' : 'ok');
             }
             if (data.load_avg) {
-                document.getElementById('cpu-load').textContent = 'Load: ' + data.load_avg[0]?.toFixed(2);
+                document.getElementById('cpu-load').textContent = 'Load: ' + (data.load_avg[0] || 0).toFixed(2);
+                const loadPct = Math.min((data.load_avg[0] || 0) * 25, 100);
+                document.getElementById('net-bar').style.width = loadPct + '%';
+                document.getElementById('net-pct').textContent = loadPct.toFixed(0) + '%';
+            }
+
+            // Memory
+            if (data.memory_percent !== undefined) {
+                const mem = Math.round(data.memory_percent);
+                document.getElementById('mem-bar').style.width = mem + '%';
+                document.getElementById('mem-pct').textContent = mem + '%';
+                document.getElementById('mem-bar').className = 'health-fill ' + (mem > 85 ? 'danger' : mem > 70 ? 'warn' : 'ok');
+            }
+            if (data.memory_used_mb && data.memory_total_mb) {
+                document.getElementById('mem-info').textContent = Math.round(data.memory_used_mb) + '/' + Math.round(data.memory_total_mb) + ' MB';
+            }
+
+            // Disk
+            if (data.disk_percent !== undefined) {
+                const disk = Math.round(data.disk_percent);
+                document.getElementById('disk-bar').style.width = disk + '%';
+                document.getElementById('disk-pct').textContent = disk + '%';
+                document.getElementById('disk-bar').className = 'health-fill ' + (disk > 85 ? 'danger' : disk > 70 ? 'warn' : 'ok');
+            }
+
+            // Uptime
+            if (data.uptime_seconds) {
+                const days = Math.floor(data.uptime_seconds / 86400);
+                const hours = Math.floor((data.uptime_seconds % 86400) / 3600);
+                document.getElementById('uptime-info').textContent = days + 'd ' + hours + 'h uptime';
+            }
+
+            // Connections
+            if (data.tcp_connections !== undefined) {
+                document.getElementById('throughput').textContent = data.tcp_connections;
             }
         }
 
-        async function loadConnections() {
-            const data = await api(API_METRICS + '/connections');
-            if (!data) return;
-            const total = data.total_tcp || (data.http + data.https + data.ssh) || 0;
-            document.getElementById('throughput').textContent = total;
-            document.getElementById('throughput-trend').textContent = `${data.http || 0} HTTP · ${data.https || 0} HTTPS`;
-        }
+        async function loadHealthBatch() {
+            const data = await api(API_HUB + '/public/health-batch');
+            if (!data || !data.modules) return;
 
-        async function loadNetwork() {
-            const data = await api(API_HUB + '/network_summary');
-            if (!data) return;
-            document.getElementById('net-info').textContent = data.wan_status || 'Unknown';
-            const pct = data.interfaces_up && data.interfaces ? Math.round((data.interfaces_up / data.interfaces) * 100) : 100;
-            document.getElementById('net-bar').style.width = pct + '%';
-            document.getElementById('net-pct').textContent = pct + '%';
+            let ok = 0, total = 0;
+            Object.values(data.modules).forEach(m => {
+                total++;
+                if (m.status === 'ok') ok++;
+            });
+
+            document.getElementById('active-services').textContent = ok + '/' + total;
+            document.getElementById('health-status').textContent = ok === total ? 'HEALTHY' : 'DEGRADED';
+            document.getElementById('health-status').className = 'card-status' + (ok === total ? '' : ' warning');
         }
 
         function updateTimestamp() {
             document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
         }
 
-        async function logout() {
-            await fetch('/api/v1/portal/logout', { method: 'POST', credentials: 'include' });
-            localStorage.removeItem('secubox_token');
-            localStorage.removeItem('sbx_token');
-            window.location.href = '/portal/login.html';
-        }
-
         async function refresh() {
             updateTimestamp();
             await Promise.all([
-                loadHealthBatch(),
-                loadWAFStats(),
-                loadCrowdSecStats(),
+                loadCrowdSecHealth(),
+                loadCrowdSecStatus(),
+                loadCrowdSecAlerts(),
                 loadDashboard(),
-                loadConnections(),
-                loadNetwork()
+                loadHealthBatch()
             ]);
         }
 
-        if (checkAuth()) {
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            // Build sidebar
+            if (window.SecuBoxSidebar) {
+                SecuBoxSidebar.build();
+            }
+
+            // Initial load
             refresh();
             setInterval(refresh, 15000);
-        }
+        });
     </script>
 </body>
 </html>
