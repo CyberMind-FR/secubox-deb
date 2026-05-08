@@ -92,15 +92,24 @@
 
     const LED_EMOJI = { ok: '🟢', warn: '🟡', error: '🔴', unknown: '⚫', checking: '🔵' };
     // Dice icons for metric visualization (⚀=1 to ⚅=6)
-    const DICE_ICONS = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
-    function getDiceForPercent(pct) {
-        // Map 0-100% to dice 1-6
-        if (pct < 17) return '⚀';
-        if (pct < 33) return '⚁';
-        if (pct < 50) return '⚂';
-        if (pct < 67) return '⚃';
-        if (pct < 83) return '⚄';
-        return '⚅';
+    // Eyemote metric icons based on level (low to high)
+    function getMetricIcon(pct, type) {
+        // Eyemote icons based on metric type and level
+        const icons = {
+            cpu: ['🟢', '🟡', '🟠', '🔴', '🔥', '💀'],
+            mem: ['🟢', '🟡', '🟠', '🔴', '🧠', '💥'],
+            disk: ['🟢', '🟡', '🟠', '🔴', '💾', '⚠️'],
+            load: ['🟢', '🟡', '🟠', '🔴', '📈', '💣'],
+            temp: ['❄️', '🟢', '🟡', '🟠', '🔴', '🔥'],
+            net: ['📡', '🟢', '🟡', '🟠', '🔴', '📵']
+        };
+        const levels = icons[type] || ['⚪', '🟢', '🟡', '🟠', '🔴', '💀'];
+        if (pct < 17) return levels[0];
+        if (pct < 33) return levels[1];
+        if (pct < 50) return levels[2];
+        if (pct < 67) return levels[3];
+        if (pct < 83) return levels[4];
+        return levels[5];
     }
 
     // Page icons for menu bar
@@ -199,12 +208,12 @@
                 '</div>' +
                 // Smart Strip (6 mini modules) - moved to top bar with hover tooltips
                 '<div class="smart-strip" id="gmb-smart-strip">' +
-                '<div class="strip-module" data-mod="AUTH" data-metric="cpu" onmouseenter="SecuBoxSidebar.showStripPopup(this)" onmouseleave="SecuBoxSidebar.hideStripPopup()"><span class="strip-dice" id="ss-dice-cpu" style="color:#C04E24">⚀</span><span class="strip-val" id="ss-cpu">--</span></div>' +
-                '<div class="strip-module" data-mod="WALL" data-metric="mem" onmouseenter="SecuBoxSidebar.showStripPopup(this)" onmouseleave="SecuBoxSidebar.hideStripPopup()"><span class="strip-dice" id="ss-dice-mem" style="color:#9A6010">⚀</span><span class="strip-val" id="ss-mem">--</span></div>' +
-                '<div class="strip-module" data-mod="BOOT" data-metric="disk" onmouseenter="SecuBoxSidebar.showStripPopup(this)" onmouseleave="SecuBoxSidebar.hideStripPopup()"><span class="strip-dice" id="ss-dice-disk" style="color:#803018">⚀</span><span class="strip-val" id="ss-disk">--</span></div>' +
-                '<div class="strip-module" data-mod="MIND" data-metric="load" onmouseenter="SecuBoxSidebar.showStripPopup(this)" onmouseleave="SecuBoxSidebar.hideStripPopup()"><span class="strip-dice" id="ss-dice-load" style="color:#3D35A0">⚀</span><span class="strip-val" id="ss-load">--</span></div>' +
-                '<div class="strip-module" data-mod="ROOT" data-metric="temp" onmouseenter="SecuBoxSidebar.showStripPopup(this)" onmouseleave="SecuBoxSidebar.hideStripPopup()"><span class="strip-dice" id="ss-dice-temp" style="color:#0A5840">⚀</span><span class="strip-val" id="ss-temp">--</span></div>' +
-                '<div class="strip-module" data-mod="MESH" data-metric="net" onmouseenter="SecuBoxSidebar.showStripPopup(this)" onmouseleave="SecuBoxSidebar.hideStripPopup()"><span class="strip-dice" id="ss-dice-net" style="color:#104A88">⚀</span><span class="strip-val" id="ss-net">--</span></div>' +
+                '<div class="strip-module" data-mod="AUTH" data-metric="cpu" onmouseenter="SecuBoxSidebar.showStripPopup(this)" onmouseleave="SecuBoxSidebar.hideStripPopup()"><span class="strip-icon" id="ss-icon-cpu" style="font-size:1.4rem;">🔥</span><span class="strip-val" id="ss-cpu">--</span></div>' +
+                '<div class="strip-module" data-mod="WALL" data-metric="mem" onmouseenter="SecuBoxSidebar.showStripPopup(this)" onmouseleave="SecuBoxSidebar.hideStripPopup()"><span class="strip-icon" id="ss-icon-mem" style="font-size:1.4rem;">🧠</span><span class="strip-val" id="ss-mem">--</span></div>' +
+                '<div class="strip-module" data-mod="BOOT" data-metric="disk" onmouseenter="SecuBoxSidebar.showStripPopup(this)" onmouseleave="SecuBoxSidebar.hideStripPopup()"><span class="strip-icon" id="ss-icon-disk" style="font-size:1.4rem;">💾</span><span class="strip-val" id="ss-disk">--</span></div>' +
+                '<div class="strip-module" data-mod="MIND" data-metric="load" onmouseenter="SecuBoxSidebar.showStripPopup(this)" onmouseleave="SecuBoxSidebar.hideStripPopup()"><span class="strip-icon" id="ss-icon-load" style="font-size:1.4rem;">📈</span><span class="strip-val" id="ss-load">--</span></div>' +
+                '<div class="strip-module" data-mod="ROOT" data-metric="temp" onmouseenter="SecuBoxSidebar.showStripPopup(this)" onmouseleave="SecuBoxSidebar.hideStripPopup()"><span class="strip-icon" id="ss-icon-temp" style="font-size:1.4rem;">🌡️</span><span class="strip-val" id="ss-temp">--</span></div>' +
+                '<div class="strip-module" data-mod="MESH" data-metric="net" onmouseenter="SecuBoxSidebar.showStripPopup(this)" onmouseleave="SecuBoxSidebar.hideStripPopup()"><span class="strip-icon" id="ss-icon-net" style="font-size:1.4rem;">📡</span><span class="strip-val" id="ss-net">--</span></div>' +
                 '</div>' +
                 // Popup container for hover details
                 '<div class="strip-popup" id="strip-popup"></div>' +
@@ -777,18 +786,18 @@
                 if (ssNet) ssNet.textContent = net + 'dB';
 
                 // Update dice icons based on metric values
-                var diceCpu = document.getElementById('ss-dice-cpu');
-                var diceMem = document.getElementById('ss-dice-mem');
-                var diceDisk = document.getElementById('ss-dice-disk');
-                var diceLoad = document.getElementById('ss-dice-load');
-                var diceTemp = document.getElementById('ss-dice-temp');
-                var diceNet = document.getElementById('ss-dice-net');
-                if (diceCpu) diceCpu.textContent = getDiceForPercent(cpu);
-                if (diceMem) diceMem.textContent = getDiceForPercent(mem);
-                if (diceDisk) diceDisk.textContent = getDiceForPercent(disk);
-                if (diceLoad) diceLoad.textContent = getDiceForPercent(Math.min(load * 10, 100));
-                if (diceTemp) diceTemp.textContent = getDiceForPercent(temp);
-                if (diceNet) diceNet.textContent = getDiceForPercent(Math.min(Math.abs(net) * 2, 100));
+                var iconCpu = document.getElementById('ss-icon-cpu');
+                var iconMem = document.getElementById('ss-icon-mem');
+                var iconDisk = document.getElementById('ss-icon-disk');
+                var iconLoad = document.getElementById('ss-icon-load');
+                var iconTemp = document.getElementById('ss-icon-temp');
+                var iconNet = document.getElementById('ss-icon-net');
+                if (iconCpu) iconCpu.textContent = getMetricIcon(cpu, 'cpu');
+                if (iconMem) iconMem.textContent = getMetricIcon(mem, 'mem');
+                if (iconDisk) iconDisk.textContent = getMetricIcon(disk, 'disk');
+                if (iconLoad) iconLoad.textContent = getMetricIcon(Math.min(load * 10, 100), 'load');
+                if (iconTemp) iconTemp.textContent = getMetricIcon(temp, 'temp');
+                if (iconNet) iconNet.textContent = getMetricIcon(Math.min(Math.abs(net) * 2, 100), 'net');
 
                 // Determine overall health level (tri-level)
                 var maxVal = Math.max(cpu, mem, disk);
