@@ -1,9 +1,38 @@
 /**
- * ═══════════════════════════════════════════════════════════════
+ * ═══════════════════════════════════════════════════════════════════════════════
  *  SECUBOX SIDEBAR — DARK THEME v2.0
  *  Based on Charte Graphique Six-Module Color System
- *  CyberMind · Gondwana · Notre-Dame-du-Cruet · Savoie
- * ═══════════════════════════════════════════════════════════════
+ * ═══════════════════════════════════════════════════════════════════════════════
+ *
+ *  SecuBox-Deb :: Sidebar Component (Glass Morphism)
+ *  CyberMind — https://cybermind.fr
+ *  Author: Gérald Kerma <gandalf@gk2.net>
+ *  License: Proprietary / ANSSI CSPN candidate
+ *
+ *  Location: Notre-Dame-du-Cruet · Savoie · France
+ *  Project: SecuBox-Deb — Debian-based security appliance
+ *
+ * ───────────────────────────────────────────────────────────────────────────────
+ *  FEATURES:
+ * ───────────────────────────────────────────────────────────────────────────────
+ *  - Glass Morphism: backdrop-filter blur effect
+ *  - Six-Module Color System: AUTH/WALL/BOOT/MIND/ROOT/MESH
+ *  - Collapsible nav sections with animation
+ *  - Responsive mobile toggle (hamburger menu)
+ *  - Status indicators with pulse animations
+ *  - Dev badges (alpha/beta)
+ *  - Theme toggle button
+ *
+ * ───────────────────────────────────────────────────────────────────────────────
+ *  USAGE:
+ * ───────────────────────────────────────────────────────────────────────────────
+ *  Requires: design-tokens.css (CSS Custom Properties)
+ *  Load sidebar content via: /shared/sidebar.js
+ *
+ * ───────────────────────────────────────────────────────────────────────────────
+ *  COPYRIGHT (C) 2024-2025 CyberMind / Gérald Kerma
+ *  All Rights Reserved — Unauthorized use prohibited
+ * ═══════════════════════════════════════════════════════════════════════════════
  */
 
 /* ── IMPORT DESIGN TOKENS ── */
@@ -23,21 +52,26 @@
   unicode-range: U+1F000-1F9FF, U+2600-26FF, U+2700-27BF, U+FE00-FE0F, U+1F100-1F1FF;
 }
 
-/* ── SIDEBAR CONTAINER ── */
-.sidebar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 220px;
-  height: 100vh;
-  background: var(--bg-dark);
-  border-right: 1px solid var(--border-dark);
-  display: flex;
-  flex-direction: column;
-  z-index: 1000;
-  font-family: var(--font-body);
-  overflow: hidden;
-  box-shadow: 2px 0 20px rgba(0,0,0,0.3);
+/* ── SIDEBAR CONTAINER — Glass Morphism ── */
+/* !important used to override inline module styles */
+.sidebar,
+body .sidebar,
+.hybrid-skin .sidebar {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 220px !important;
+  height: 100vh !important;
+  background: var(--glass-bg, rgba(17, 23, 32, 0.7)) !important;
+  backdrop-filter: blur(var(--glass-blur, 20px)) !important;
+  -webkit-backdrop-filter: blur(var(--glass-blur, 20px)) !important;
+  border-right: 1px solid var(--glass-border, rgba(255, 255, 255, 0.08)) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  z-index: 1000 !important;
+  font-family: var(--font-body) !important;
+  overflow: hidden !important;
+  box-shadow: 2px 0 20px rgba(0,0,0,0.3) !important;
 }
 
 /* Left accent stripe */
@@ -54,8 +88,8 @@
 /* ── HEADER ── */
 .sidebar-header {
   padding: 1.25rem 1rem 1.25rem 1.5rem;
-  border-bottom: 1px solid var(--border-dark);
-  background: linear-gradient(180deg, var(--surface-dark) 0%, var(--bg-dark) 100%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  background: transparent !important;
 }
 
 .sidebar-header a {
@@ -222,11 +256,13 @@
   -webkit-font-smoothing: antialiased;
 }
 
-.nav-item span:not(.icon):not(.status-dot) {
+.nav-item span:not(.icon):not(.status-dot):not(.status-led) {
   flex: 1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.2;
+  word-break: break-word;
 }
 
 /* ── STATUS INDICATORS — 6-MODULE COLORS ── */
@@ -264,6 +300,31 @@
 .status-dot.mind {
   background: var(--mind-light);
   box-shadow: 0 0 6px var(--mind-light);
+}
+
+/* ── DEV STAGE BADGES ── */
+.dev-badge {
+  font-size: 0.65em;
+  font-weight: bold;
+  padding: 0.1em 0.35em;
+  border-radius: 3px;
+  margin-left: 0.3em;
+  margin-right: 0.2em;
+  font-family: var(--font-body);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.dev-badge.alpha {
+  background: rgba(230, 57, 70, 0.25);
+  color: var(--boot-light);
+  border: 1px solid rgba(230, 57, 70, 0.5);
+}
+
+.dev-badge.beta {
+  background: rgba(201, 168, 76, 0.25);
+  color: var(--gold-hermetic, #c9a84c);
+  border: 1px solid rgba(201, 168, 76, 0.5);
 }
 
 @keyframes pulse-glow {
@@ -307,8 +368,8 @@
 /* ── FOOTER ── */
 .sidebar-footer {
   padding: 0.75rem 1rem 0.75rem 1.5rem;
-  border-top: 1px solid var(--border-dark);
-  background: var(--bg-dark);
+  border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+  background: transparent !important;
 }
 
 .sidebar-clock {

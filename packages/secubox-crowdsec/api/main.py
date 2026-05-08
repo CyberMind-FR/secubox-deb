@@ -475,19 +475,249 @@ async def debug_info(user=Depends(require_jwt)):
 
 @app.get("/health")
 async def health():
-    """Health check endpoint."""
-    # Quick check if CrowdSec is running
+    """Layer 1: Basic health check (public)."""
+    checks = {}
+
+    # Check CrowdSec engine
     try:
         result = subprocess.run(["pgrep", "crowdsec"], capture_output=True, timeout=2)
-        running = result.returncode == 0
+        checks["engine_running"] = result.returncode == 0
     except Exception:
-        running = False
+        checks["engine_running"] = False
+
+    # Check LAPI (Local API)
+    try:
+        result = subprocess.run(
+            ["cscli", "lapi", "status", "-o", "json"],
+            capture_output=True, text=True, timeout=5
+        )
+        checks["lapi_ok"] = result.returncode == 0
+    except Exception:
+        checks["lapi_ok"] = False
+
+    # Check bouncers registered
+    try:
+        result = subprocess.run(
+            ["cscli", "bouncers", "list", "-o", "json"],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0:
+            bouncers = json.loads(result.stdout) if result.stdout.strip() else []
+            checks["bouncers_count"] = len(bouncers)
+            checks["bouncers_ok"] = len(bouncers) > 0
+        else:
+            checks["bouncers_ok"] = False
+    except Exception:
+        checks["bouncers_ok"] = False
+
+    # Determine overall status
+    if checks.get("engine_running") and checks.get("lapi_ok"):
+        status = "ok"
+    elif checks.get("engine_running"):
+        status = "degraded"
+    else:
+        status = "error"
 
     return {
-        "status": "ok" if running else "degraded",
+        "status": status,
+        "healthy": status == "ok",
         "module": "crowdsec",
         "version": "2.0.0",
-        "engine_running": running,
+        "dev_stage": "production",
+        "enabled": "enabled",
+        "checks": checks
+    }
+
+
+@app.get("/doctor")
+async def doctor():
+    """Layer 2: Diagnostic détaillé + can_repair."""
+    issues = []
+
+    # 1. Check engine
+    try:
+        result = subprocess.run(["pgrep", "crowdsec"], capture_output=True, timeout=2)
+        if result.returncode != 0:
+            issues.append({"type": "engine_not_running", "repairable": True})
+    except Exception:
+        issues.append({"type": "engine_check_failed", "repairable": True})
+
+    # 2. Check LAPI
+    try:
+        result = subprocess.run(
+            ["cscli", "lapi", "status"],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode != 0:
+            issues.append({"type": "lapi_error", "repairable": True, "details": result.stderr[:200]})
+    except Exception as e:
+        issues.append({"type": "lapi_check_failed", "repairable": True, "details": str(e)})
+
+    # 3. Check CAPI (Central API) enrollment
+    try:
+        result = subprocess.run(
+            ["cscli", "capi", "status"],
+            capture_output=True, text=True, timeout=10
+        )
+        if "not enrolled" in result.stdout.lower() or result.returncode != 0:
+            issues.append({"type": "capi_not_enrolled", "repairable": False, "details": "Manual enrollment required"})
+    except Exception:
+        issues.append({"type": "capi_check_failed", "repairable": False})
+
+    # 4. Check bouncers
+    try:
+        result = subprocess.run(
+            ["cscli", "bouncers", "list", "-o", "json"],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0:
+            bouncers = json.loads(result.stdout) if result.stdout.strip() else []
+            if len(bouncers) == 0:
+                issues.append({"type": "no_bouncers", "repairable": True})
+            # Check for stale bouncers
+            for b in bouncers:
+                last_pull = b.get("last_pull")
+                if last_pull:
+                    # If no pull in 1 hour, bouncer might be dead
+                    pass  # TODO: Parse and check timestamp
+    except Exception:
+        pass
+
+    # 5. Check hub updates
+    try:
+        result = subprocess.run(
+            ["cscli", "hub", "list", "-o", "json"],
+            capture_output=True, text=True, timeout=10
+        )
+        if result.returncode == 0:
+            hub_data = json.loads(result.stdout) if result.stdout.strip() else {}
+            # Check for outdated collections
+            for item_type in ["parsers", "scenarios", "collections"]:
+                items = hub_data.get(item_type, [])
+                for item in items:
+                    if item.get("status") == "upgrade_available":
+                        issues.append({
+                            "type": "hub_update_available",
+                            "repairable": True,
+                            "item": item.get("name"),
+                            "item_type": item_type
+                        })
+                        break  # One is enough to flag
+    except Exception:
+        pass
+
+    # 6. Check acquisition config
+    acq_file = Path("/etc/crowdsec/acquis.yaml")
+    if not acq_file.exists():
+        issues.append({"type": "acquis_missing", "repairable": False})
+
+    can_repair = all(i.get("repairable", False) for i in issues) if issues else True
+
+    return {
+        "healthy": len(issues) == 0,
+        "issues": issues,
+        "can_repair": can_repair,
+        "repair_endpoint": "/repair"
+    }
+
+
+@app.post("/repair", dependencies=[Depends(require_jwt)])
+async def repair():
+    """Layer 3: Auto-repair CrowdSec."""
+    repairs = []
+
+    # 1. Restart engine if not running
+    try:
+        result = subprocess.run(["pgrep", "crowdsec"], capture_output=True, timeout=2)
+        if result.returncode != 0:
+            subprocess.run(["systemctl", "restart", "crowdsec"], timeout=30)
+            repairs.append({"action": "restart_engine", "status": "ok"})
+    except Exception as e:
+        repairs.append({"action": "restart_engine", "status": "error", "message": str(e)})
+
+    # 2. Update hub
+    try:
+        result = subprocess.run(
+            ["cscli", "hub", "update"],
+            capture_output=True, text=True, timeout=60
+        )
+        repairs.append({
+            "action": "hub_update",
+            "status": "ok" if result.returncode == 0 else "warning",
+            "message": result.stdout[:200] if result.returncode != 0 else None
+        })
+    except subprocess.TimeoutExpired:
+        repairs.append({"action": "hub_update", "status": "timeout"})
+    except Exception as e:
+        repairs.append({"action": "hub_update", "status": "error", "message": str(e)})
+
+    # 3. Upgrade hub items if available
+    try:
+        result = subprocess.run(
+            ["cscli", "hub", "upgrade"],
+            capture_output=True, text=True, timeout=120
+        )
+        repairs.append({
+            "action": "hub_upgrade",
+            "status": "ok" if result.returncode == 0 else "warning"
+        })
+    except subprocess.TimeoutExpired:
+        repairs.append({"action": "hub_upgrade", "status": "timeout"})
+    except Exception as e:
+        repairs.append({"action": "hub_upgrade", "status": "error", "message": str(e)})
+
+    # 4. Reload configuration
+    try:
+        result = subprocess.run(
+            ["cscli", "config", "reload"],
+            capture_output=True, text=True, timeout=10
+        )
+        repairs.append({
+            "action": "config_reload",
+            "status": "ok" if result.returncode == 0 else "error"
+        })
+    except Exception as e:
+        repairs.append({"action": "config_reload", "status": "error", "message": str(e)})
+
+    # 5. Register HAProxy bouncer if missing
+    try:
+        result = subprocess.run(
+            ["cscli", "bouncers", "list", "-o", "json"],
+            capture_output=True, text=True, timeout=5
+        )
+        bouncers = json.loads(result.stdout) if result.stdout.strip() else []
+        bouncer_names = [b.get("name", "") for b in bouncers]
+
+        if "haproxy-bouncer" not in bouncer_names:
+            # Add HAProxy bouncer
+            result = subprocess.run(
+                ["cscli", "bouncers", "add", "haproxy-bouncer", "-o", "raw"],
+                capture_output=True, text=True, timeout=10
+            )
+            if result.returncode == 0:
+                repairs.append({"action": "add_haproxy_bouncer", "status": "ok", "key": result.stdout.strip()[:20] + "..."})
+            else:
+                repairs.append({"action": "add_haproxy_bouncer", "status": "warning", "message": "May already exist"})
+    except Exception as e:
+        repairs.append({"action": "check_bouncers", "status": "error", "message": str(e)})
+
+    # 6. Verify health after repairs
+    await asyncio.sleep(2)
+    health_result = await health()
+    repairs.append({
+        "action": "verify_health",
+        "status": "ok" if health_result.get("healthy") else "warning",
+        "final_status": health_result.get("status")
+    })
+
+    # Log repairs
+    log.info("CrowdSec repair completed: %s", repairs)
+
+    success = all(r.get("status") in ("ok", "warning") for r in repairs)
+
+    return {
+        "success": success,
+        "repairs": repairs
     }
 
 

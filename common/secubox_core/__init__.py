@@ -18,6 +18,11 @@ from .kiosk import (
     detect_board_type, get_board_profile, get_board_capabilities, get_board_model,
     get_physical_interfaces, get_interface_classification, check_interface_carrier,
 )
+from .health import (
+    WorkingStatus, EnabledStatus, DevStage,
+    HealthResponse, make_health_response, health_from_checks,
+    MODULE_METADATA, get_module_metadata,
+)
 
 __all__ = [
     # Auth
@@ -34,4 +39,8 @@ __all__ = [
     "console_status", "display_mode",
     "detect_board_type", "get_board_profile", "get_board_capabilities", "get_board_model",
     "get_physical_interfaces", "get_interface_classification", "check_interface_carrier",
+    # Health
+    "WorkingStatus", "EnabledStatus", "DevStage",
+    "HealthResponse", "make_health_response", "health_from_checks",
+    "MODULE_METADATA", "get_module_metadata",
 ]

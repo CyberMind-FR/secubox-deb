@@ -1,0 +1,1031 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox Hybrid Skin Prototype v1</title>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        /* ═══════════════════════════════════════════════════════════════
+           SECUBOX HYBRID SKIN PROTOTYPE
+           Glass Morphism (Dashboard) + Matrix (Data Views)
+           ═══════════════════════════════════════════════════════════════ */
+
+        :root {
+            /* Base Colors */
+            --bg-deep: #050810;
+            --bg-main: #0a0e14;
+            --bg-surface: #111720;
+            --bg-elevated: #1a2230;
+
+            /* Glass Effect */
+            --glass-bg: rgba(17, 23, 32, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-highlight: rgba(255, 255, 255, 0.04);
+
+            /* Text */
+            --text-primary: #e8e6e0;
+            --text-secondary: #8a9aaa;
+            --text-muted: #5a6a7a;
+
+            /* Six-Module Colors */
+            --auth-main: #e8845a;
+            --wall-main: #d4a84a;
+            --boot-main: #e85a5a;
+            --mind-main: #8a7aff;
+            --root-main: #22c55e;
+            --mesh-main: #3b9dff;
+
+            /* Semantic */
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --info: #3b82f6;
+
+            /* Typography */
+            --font-display: 'Space Grotesk', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+
+            /* Spacing */
+            --space-xs: 4px;
+            --space-sm: 8px;
+            --space-md: 16px;
+            --space-lg: 24px;
+            --space-xl: 32px;
+
+            /* Radius */
+            --radius-sm: 6px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+            --radius-xl: 20px;
+
+            /* Shadows */
+            --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+            --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.4);
+            --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.5);
+            --shadow-glow: 0 0 20px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: var(--font-display);
+            background: var(--bg-deep);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           LAYOUT
+           ═══════════════════════════════════════════════════════════════ */
+
+        .layout {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           SIDEBAR — Glass Effect
+           ═══════════════════════════════════════════════════════════════ */
+
+        .sidebar {
+            width: 240px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            border-right: 1px solid var(--glass-border);
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            height: 100vh;
+            z-index: 100;
+        }
+
+        .sidebar-header {
+            padding: var(--space-lg);
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: var(--space-md);
+            text-decoration: none;
+            color: var(--text-primary);
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--root-main), var(--mesh-main));
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            box-shadow: var(--shadow-glow) rgba(34, 197, 94, 0.3);
+        }
+
+        .logo-text {
+            font-weight: 700;
+            font-size: 18px;
+            letter-spacing: 2px;
+        }
+
+        .logo-version {
+            font-size: 10px;
+            color: var(--text-muted);
+            font-family: var(--font-mono);
+        }
+
+        .sidebar-nav {
+            flex: 1;
+            padding: var(--space-md);
+            overflow-y: auto;
+        }
+
+        .nav-section {
+            margin-bottom: var(--space-lg);
+        }
+
+        .nav-section-title {
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--text-muted);
+            padding: var(--space-sm) var(--space-md);
+            margin-bottom: var(--space-xs);
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: var(--space-md);
+            padding: var(--space-sm) var(--space-md);
+            border-radius: var(--radius-sm);
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: all 0.2s ease;
+            font-size: 14px;
+        }
+
+        .nav-item:hover {
+            background: var(--glass-highlight);
+            color: var(--text-primary);
+        }
+
+        .nav-item.active {
+            background: rgba(34, 197, 94, 0.15);
+            color: var(--root-main);
+            border-left: 2px solid var(--root-main);
+            margin-left: -2px;
+        }
+
+        .nav-item .icon {
+            font-size: 16px;
+            width: 20px;
+            text-align: center;
+        }
+
+        .nav-item .badge {
+            margin-left: auto;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-family: var(--font-mono);
+        }
+
+        .nav-item .badge.beta {
+            background: rgba(245, 158, 11, 0.2);
+            color: var(--warning);
+        }
+
+        .nav-item .badge.alpha {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--danger);
+        }
+
+        .nav-item .status-led {
+            margin-left: auto;
+            font-size: 10px;
+        }
+
+        .sidebar-footer {
+            padding: var(--space-md);
+            border-top: 1px solid var(--glass-border);
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: var(--space-md);
+            padding: var(--space-sm);
+        }
+
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--bg-elevated);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+        }
+
+        .user-details {
+            flex: 1;
+        }
+
+        .user-name {
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .user-role {
+            font-size: 10px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           MAIN CONTENT
+           ═══════════════════════════════════════════════════════════════ */
+
+        .main {
+            flex: 1;
+            margin-left: 240px;
+            padding: var(--space-xl);
+            background: linear-gradient(180deg, var(--bg-deep) 0%, var(--bg-main) 100%);
+            min-height: 100vh;
+        }
+
+        .page-header {
+            margin-bottom: var(--space-xl);
+        }
+
+        .page-title {
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: var(--space-xs);
+        }
+
+        .page-subtitle {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           GLASS CARDS — Dashboard Style
+           ═══════════════════════════════════════════════════════════════ */
+
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: var(--space-lg);
+            margin-bottom: var(--space-xl);
+        }
+
+        .glass-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            padding: var(--space-lg);
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .glass-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+            border-color: rgba(255, 255, 255, 0.12);
+        }
+
+        .glass-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--card-accent, var(--root-main));
+            opacity: 0.8;
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: var(--space-md);
+        }
+
+        .card-icon {
+            font-size: 24px;
+            filter: drop-shadow(var(--shadow-glow) var(--card-accent, var(--root-main)));
+        }
+
+        .card-status {
+            display: flex;
+            align-items: center;
+            gap: var(--space-xs);
+            font-size: 12px;
+            color: var(--success);
+        }
+
+        .card-status::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            background: currentColor;
+            border-radius: 50%;
+            box-shadow: 0 0 8px currentColor;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .card-status.warning { color: var(--warning); }
+        .card-status.danger { color: var(--danger); }
+
+        .card-metric {
+            font-size: 36px;
+            font-weight: 700;
+            font-family: var(--font-mono);
+            line-height: 1;
+            margin-bottom: var(--space-sm);
+            background: linear-gradient(90deg, var(--text-primary), var(--text-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .card-label {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: var(--space-md);
+        }
+
+        .card-trend {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-xs);
+            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: var(--radius-sm);
+            font-family: var(--font-mono);
+        }
+
+        .card-trend.up {
+            background: rgba(34, 197, 94, 0.15);
+            color: var(--success);
+        }
+
+        .card-trend.down {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--danger);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           MATRIX PANEL — Data/Terminal Style
+           ═══════════════════════════════════════════════════════════════ */
+
+        .matrix-panel {
+            background: var(--bg-surface);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            margin-bottom: var(--space-xl);
+        }
+
+        .matrix-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: var(--space-md) var(--space-lg);
+            background: var(--bg-elevated);
+            border-bottom: 1px solid var(--glass-border);
+            font-family: var(--font-mono);
+            font-size: 13px;
+        }
+
+        .matrix-title {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+            color: var(--root-main);
+            font-weight: 500;
+        }
+
+        .matrix-title::before {
+            content: '>';
+            animation: blink 1s step-end infinite;
+        }
+
+        @keyframes blink {
+            50% { opacity: 0; }
+        }
+
+        .matrix-body {
+            padding: var(--space-md);
+            font-family: var(--font-mono);
+            font-size: 13px;
+            line-height: 1.8;
+        }
+
+        .matrix-row {
+            display: flex;
+            align-items: flex-start;
+            padding: var(--space-xs) 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+        }
+
+        .matrix-row:last-child {
+            border-bottom: none;
+        }
+
+        .matrix-label {
+            color: var(--text-muted);
+            min-width: 120px;
+        }
+
+        .matrix-value {
+            color: var(--text-primary);
+            flex: 1;
+        }
+
+        .matrix-value .highlight {
+            color: var(--root-main);
+        }
+
+        .matrix-value .warning {
+            color: var(--warning);
+        }
+
+        .matrix-value .danger {
+            color: var(--danger);
+        }
+
+        .matrix-value .info {
+            color: var(--info);
+        }
+
+        .matrix-tree {
+            color: var(--text-muted);
+        }
+
+        .flag {
+            font-size: 14px;
+            margin-right: var(--space-xs);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           ACTIVITY FEED — Hybrid
+           ═══════════════════════════════════════════════════════════════ */
+
+        .activity-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+        }
+
+        .activity-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: var(--space-lg);
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .activity-title {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .activity-filter {
+            display: flex;
+            gap: var(--space-sm);
+        }
+
+        .filter-btn {
+            padding: var(--space-xs) var(--space-sm);
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--glass-border);
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .filter-btn:hover, .filter-btn.active {
+            background: var(--glass-highlight);
+            color: var(--text-primary);
+            border-color: rgba(255, 255, 255, 0.15);
+        }
+
+        .activity-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .activity-item {
+            display: flex;
+            align-items: flex-start;
+            gap: var(--space-md);
+            padding: var(--space-md) var(--space-lg);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+            transition: background 0.2s ease;
+        }
+
+        .activity-item:hover {
+            background: var(--glass-highlight);
+        }
+
+        .activity-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+
+        .activity-icon.waf {
+            background: rgba(232, 132, 90, 0.15);
+            color: var(--auth-main);
+        }
+
+        .activity-icon.crowdsec {
+            background: rgba(138, 122, 255, 0.15);
+            color: var(--mind-main);
+        }
+
+        .activity-icon.ssl {
+            background: rgba(34, 197, 94, 0.15);
+            color: var(--root-main);
+        }
+
+        .activity-icon.auth {
+            background: rgba(59, 157, 255, 0.15);
+            color: var(--mesh-main);
+        }
+
+        .activity-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .activity-text {
+            font-size: 13px;
+            color: var(--text-primary);
+            margin-bottom: 2px;
+        }
+
+        .activity-text code {
+            font-family: var(--font-mono);
+            background: var(--bg-elevated);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 12px;
+            color: var(--warning);
+        }
+
+        .activity-meta {
+            font-size: 11px;
+            color: var(--text-muted);
+            font-family: var(--font-mono);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           CHARTS AREA
+           ═══════════════════════════════════════════════════════════════ */
+
+        .chart-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            padding: var(--space-lg);
+            margin-bottom: var(--space-xl);
+        }
+
+        .chart-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: var(--space-lg);
+        }
+
+        .chart-title {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .chart-legend {
+            display: flex;
+            gap: var(--space-md);
+            font-size: 12px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: var(--space-xs);
+            color: var(--text-secondary);
+        }
+
+        .legend-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .chart-area {
+            height: 120px;
+            display: flex;
+            align-items: flex-end;
+            gap: 2px;
+            padding: var(--space-sm) 0;
+        }
+
+        .chart-bar {
+            flex: 1;
+            background: linear-gradient(180deg, var(--root-main), rgba(34, 197, 94, 0.3));
+            border-radius: 2px 2px 0 0;
+            min-height: 4px;
+            transition: all 0.3s ease;
+        }
+
+        .chart-bar:hover {
+            filter: brightness(1.2);
+        }
+
+        .chart-labels {
+            display: flex;
+            justify-content: space-between;
+            margin-top: var(--space-sm);
+            font-size: 10px;
+            color: var(--text-muted);
+            font-family: var(--font-mono);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           UTILITIES
+           ═══════════════════════════════════════════════════════════════ */
+
+        .row {
+            display: flex;
+            gap: var(--space-lg);
+        }
+
+        .col-2 {
+            flex: 1;
+        }
+
+        .text-success { color: var(--success); }
+        .text-warning { color: var(--warning); }
+        .text-danger { color: var(--danger); }
+        .text-info { color: var(--info); }
+        .text-muted { color: var(--text-muted); }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--glass-border);
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+    </style>
+</head>
+<body>
+    <div class="layout">
+        <!-- SIDEBAR -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <a href="#" class="logo">
+                    <div class="logo-icon">🔒</div>
+                    <div>
+                        <div class="logo-text">SECUBOX</div>
+                        <div class="logo-version">v2.18.0</div>
+                    </div>
+                </a>
+            </div>
+
+            <nav class="sidebar-nav">
+                <div class="nav-section">
+                    <div class="nav-section-title">Overview</div>
+                    <a href="#" class="nav-item active">
+                        <span class="icon">📊</span>
+                        <span>Dashboard</span>
+                        <span class="status-led">🟢</span>
+                    </a>
+                    <a href="#" class="nav-item">
+                        <span class="icon">🔔</span>
+                        <span>Alerts</span>
+                        <span class="status-led">🟡</span>
+                    </a>
+                </div>
+
+                <div class="nav-section">
+                    <div class="nav-section-title">Security</div>
+                    <a href="#" class="nav-item">
+                        <span class="icon">🛡️</span>
+                        <span>WAF</span>
+                        <span class="status-led">🟢</span>
+                    </a>
+                    <a href="#" class="nav-item">
+                        <span class="icon">👁️</span>
+                        <span>CrowdSec</span>
+                        <span class="status-led">🟢</span>
+                    </a>
+                    <a href="#" class="nav-item">
+                        <span class="icon">🔥</span>
+                        <span>Firewall</span>
+                        <span class="status-led">🟢</span>
+                    </a>
+                    <a href="#" class="nav-item">
+                        <span class="icon">🔐</span>
+                        <span>Auth</span>
+                        <span class="status-led">🟢</span>
+                    </a>
+                </div>
+
+                <div class="nav-section">
+                    <div class="nav-section-title">Network</div>
+                    <a href="#" class="nav-item">
+                        <span class="icon">🌐</span>
+                        <span>Traffic</span>
+                        <span class="status-led">🟢</span>
+                    </a>
+                    <a href="#" class="nav-item">
+                        <span class="icon">🔗</span>
+                        <span>WireGuard</span>
+                        <span class="status-led">🟢</span>
+                    </a>
+                    <a href="#" class="nav-item">
+                        <span class="icon">📡</span>
+                        <span>DNS</span>
+                        <span class="status-led">🟡</span>
+                    </a>
+                </div>
+
+                <div class="nav-section">
+                    <div class="nav-section-title">AI & Analytics</div>
+                    <a href="#" class="nav-item">
+                        <span class="icon">🤖</span>
+                        <span>AI Gateway</span>
+                        <span class="badge beta">β</span>
+                        <span class="status-led">🟢</span>
+                    </a>
+                    <a href="#" class="nav-item">
+                        <span class="icon">🧠</span>
+                        <span>Insights</span>
+                        <span class="badge beta">β</span>
+                        <span class="status-led">🟢</span>
+                    </a>
+                    <a href="#" class="nav-item">
+                        <span class="icon">📈</span>
+                        <span>Metrics</span>
+                        <span class="badge beta">β</span>
+                        <span class="status-led">🟡</span>
+                    </a>
+                </div>
+
+                <div class="nav-section">
+                    <div class="nav-section-title">System</div>
+                    <a href="#" class="nav-item">
+                        <span class="icon">⚙️</span>
+                        <span>Settings</span>
+                    </a>
+                    <a href="#" class="nav-item">
+                        <span class="icon">📋</span>
+                        <span>Logs</span>
+                    </a>
+                </div>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="user-info">
+                    <div class="user-avatar">👤</div>
+                    <div class="user-details">
+                        <div class="user-name">admin</div>
+                        <div class="user-role">Operator</div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- MAIN CONTENT -->
+        <main class="main">
+            <header class="page-header">
+                <h1 class="page-title">Security Dashboard</h1>
+                <p class="page-subtitle">Real-time threat monitoring and system status</p>
+            </header>
+
+            <!-- GLASS CARDS GRID -->
+            <div class="cards-grid">
+                <div class="glass-card" style="--card-accent: var(--boot-main);">
+                    <div class="card-header">
+                        <span class="card-icon">🛡️</span>
+                        <span class="card-status">ACTIVE</span>
+                    </div>
+                    <div class="card-metric">3,152</div>
+                    <div class="card-label">Threats Blocked Today</div>
+                    <span class="card-trend up">↑ +12% vs yesterday</span>
+                </div>
+
+                <div class="glass-card" style="--card-accent: var(--mind-main);">
+                    <div class="card-header">
+                        <span class="card-icon">👁️</span>
+                        <span class="card-status">ACTIVE</span>
+                    </div>
+                    <div class="card-metric">100</div>
+                    <div class="card-label">Active Decisions</div>
+                    <span class="card-trend up">↑ 2 bouncers</span>
+                </div>
+
+                <div class="glass-card" style="--card-accent: var(--mesh-main);">
+                    <div class="card-header">
+                        <span class="card-icon">🌐</span>
+                        <span class="card-status">ACTIVE</span>
+                    </div>
+                    <div class="card-metric">45.2</div>
+                    <div class="card-label">MB/s Throughput</div>
+                    <span class="card-trend down">↓ -5% avg</span>
+                </div>
+
+                <div class="glass-card" style="--card-accent: var(--root-main);">
+                    <div class="card-header">
+                        <span class="card-icon">⚡</span>
+                        <span class="card-status">HEALTHY</span>
+                    </div>
+                    <div class="card-metric">91</div>
+                    <div class="card-label">Active Services</div>
+                    <span class="card-trend up">99.9% uptime</span>
+                </div>
+            </div>
+
+            <!-- MATRIX PANEL — Terminal Style -->
+            <div class="matrix-panel">
+                <div class="matrix-header">
+                    <span class="matrix-title">WAF STATUS</span>
+                    <span class="text-muted">v1.2.0 · production</span>
+                </div>
+                <div class="matrix-body">
+                    <div class="matrix-row">
+                        <span class="matrix-label">Status</span>
+                        <span class="matrix-value"><span class="highlight">● ACTIVE</span> · 150 rules · 17 categories</span>
+                    </div>
+                    <div class="matrix-row">
+                        <span class="matrix-label">Top Countries</span>
+                        <span class="matrix-value">
+                            <span class="flag">🇨🇳</span>CN (523) ·
+                            <span class="flag">🇷🇺</span>RU (312) ·
+                            <span class="flag">🇺🇸</span>US (201) ·
+                            <span class="flag">🇩🇪</span>DE (89)
+                        </span>
+                    </div>
+                    <div class="matrix-row">
+                        <span class="matrix-label">Top Vhosts</span>
+                        <span class="matrix-value">
+                            git.secubox.in <span class="warning">(2,558)</span> ·
+                            gitea.gk2.secubox.in <span class="warning">(2,414)</span>
+                        </span>
+                    </div>
+                    <div class="matrix-row">
+                        <span class="matrix-label">Last Threat</span>
+                        <span class="matrix-value">
+                            <span class="danger">RCE</span> from 45.33.32.156
+                            <span class="flag">🇨🇳</span>· 2s ago
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CHART + ACTIVITY ROW -->
+            <div class="row">
+                <div class="col-2">
+                    <div class="chart-card">
+                        <div class="chart-header">
+                            <span class="chart-title">Threat Activity (24h)</span>
+                            <div class="chart-legend">
+                                <span class="legend-item">
+                                    <span class="legend-dot" style="background: var(--root-main);"></span>
+                                    Blocked
+                                </span>
+                            </div>
+                        </div>
+                        <div class="chart-area">
+                            <div class="chart-bar" style="height: 30%;"></div>
+                            <div class="chart-bar" style="height: 45%;"></div>
+                            <div class="chart-bar" style="height: 25%;"></div>
+                            <div class="chart-bar" style="height: 60%;"></div>
+                            <div class="chart-bar" style="height: 80%;"></div>
+                            <div class="chart-bar" style="height: 55%;"></div>
+                            <div class="chart-bar" style="height: 70%;"></div>
+                            <div class="chart-bar" style="height: 90%;"></div>
+                            <div class="chart-bar" style="height: 75%;"></div>
+                            <div class="chart-bar" style="height: 85%;"></div>
+                            <div class="chart-bar" style="height: 95%;"></div>
+                            <div class="chart-bar" style="height: 100%;"></div>
+                            <div class="chart-bar" style="height: 88%;"></div>
+                            <div class="chart-bar" style="height: 72%;"></div>
+                            <div class="chart-bar" style="height: 65%;"></div>
+                            <div class="chart-bar" style="height: 58%;"></div>
+                            <div class="chart-bar" style="height: 45%;"></div>
+                            <div class="chart-bar" style="height: 52%;"></div>
+                            <div class="chart-bar" style="height: 68%;"></div>
+                            <div class="chart-bar" style="height: 75%;"></div>
+                            <div class="chart-bar" style="height: 82%;"></div>
+                            <div class="chart-bar" style="height: 78%;"></div>
+                            <div class="chart-bar" style="height: 65%;"></div>
+                            <div class="chart-bar" style="height: 55%;"></div>
+                        </div>
+                        <div class="chart-labels">
+                            <span>00:00</span>
+                            <span>06:00</span>
+                            <span>12:00</span>
+                            <span>18:00</span>
+                            <span>Now</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-2">
+                    <div class="activity-panel">
+                        <div class="activity-header">
+                            <span class="activity-title">Recent Activity</span>
+                            <div class="activity-filter">
+                                <button class="filter-btn active">All</button>
+                                <button class="filter-btn">Threats</button>
+                                <button class="filter-btn">System</button>
+                            </div>
+                        </div>
+                        <div class="activity-list">
+                            <div class="activity-item">
+                                <div class="activity-icon waf">🛡️</div>
+                                <div class="activity-content">
+                                    <div class="activity-text">WAF blocked <code>RCE</code> attempt from <code>45.33.32.156</code></div>
+                                    <div class="activity-meta">2 seconds ago · git.secubox.in</div>
+                                </div>
+                            </div>
+                            <div class="activity-item">
+                                <div class="activity-icon crowdsec">👁️</div>
+                                <div class="activity-content">
+                                    <div class="activity-text">CrowdSec synced <code>12</code> new decisions from CAPI</div>
+                                    <div class="activity-meta">5 minutes ago</div>
+                                </div>
+                            </div>
+                            <div class="activity-item">
+                                <div class="activity-icon ssl">🔐</div>
+                                <div class="activity-content">
+                                    <div class="activity-text">SSL certificate renewed for <code>git.secubox.in</code></div>
+                                    <div class="activity-meta">23 minutes ago</div>
+                                </div>
+                            </div>
+                            <div class="activity-item">
+                                <div class="activity-icon auth">👤</div>
+                                <div class="activity-content">
+                                    <div class="activity-text">User <code>admin</code> logged in from <code>192.168.1.10</code></div>
+                                    <div class="activity-meta">1 hour ago</div>
+                                </div>
+                            </div>
+                            <div class="activity-item">
+                                <div class="activity-icon waf">🛡️</div>
+                                <div class="activity-content">
+                                    <div class="activity-text">WAF rules reloaded: <code>150</code> active patterns</div>
+                                    <div class="activity-meta">2 hours ago</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+</body>
+</html>
