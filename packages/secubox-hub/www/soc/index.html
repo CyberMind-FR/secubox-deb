@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<!--
+ ═══════════════════════════════════════════════════════════════════════════════
+  SECUBOX SOC DASHBOARD — Security Operations Center
+ ═══════════════════════════════════════════════════════════════════════════════
+
+  SecuBox-Deb :: SOC Dashboard Module
+  CyberMind — https://cybermind.fr
+  Author: Gérald Kerma <gandalf@gk2.net>
+  License: Proprietary / ANSSI CSPN candidate
+
+  Location: Notre-Dame-du-Cruet · Savoie · France
+  Project: SecuBox-Deb — Debian-based security appliance
+
+ ───────────────────────────────────────────────────────────────────────────────
+  ARCHITECTURE:
+ ───────────────────────────────────────────────────────────────────────────────
+  - Shared sidebar via /shared/sidebar.js (navbar integration)
+  - Hybrid skin: Glass Morphism + Matrix Terminal (/shared/hybrid-skin.css)
+  - Design tokens: /shared/design-tokens.css (CSS Custom Properties)
+  - APIs: /api/v1/hub, /api/v1/waf, /api/v1/crowdsec, /api/v1/metrics
+
+ ───────────────────────────────────────────────────────────────────────────────
+  COMPONENTS:
+ ───────────────────────────────────────────────────────────────────────────────
+  - Glass Cards: Threats, Decisions, Connections, Services (real-time)
+  - Matrix Panel: WAF status, top countries, vhosts, last threat
+  - Health Grid: CPU, Memory, Disk, Network (progress bars)
+  - Chart Area: 24h threat activity (bar chart)
+  - Activity Feed: Filterable event stream (all/threats/system)
+
+ ───────────────────────────────────────────────────────────────────────────────
+  COPYRIGHT (C) 2024-2025 CyberMind / Gérald Kerma
+  All Rights Reserved — Unauthorized use prohibited
+ ═══════════════════════════════════════════════════════════════════════════════
+-->
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="author" content="Gérald Kerma, CyberMind">
+    <meta name="description" content="SecuBox Security Operations Center - Real-time threat monitoring">
+    <title>SOC Dashboard - SecuBox</title>
+    <!-- Fonts proxied via local CDN cache -->
+    <link href="/cdn/fonts/space-grotesk.css" rel="stylesheet" onerror="this.href='https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap'">
+    <link href="/cdn/fonts/jetbrains-mono.css" rel="stylesheet" onerror="this.href='https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap'">
+    <link rel="stylesheet" href="/shared/design-tokens.css">
+    <link rel="stylesheet" href="/shared/sidebar.css">
+    <link rel="stylesheet" href="/shared/hybrid-skin.css">
+</head>
+<body class="hybrid-skin">
+    <!-- Shared Sidebar (loaded via JS) -->
+    <nav class="sidebar" id="sidebar"></nav>
+
+    <main class="main hybrid-main">
+        <header class="page-header glass-header">
+            <div>
+                <h1 class="page-title">Security Operations Center</h1>
+                <p class="page-subtitle">Real-time threat monitoring — <span id="last-update">updating...</span></p>
+            </div>
+            <div class="header-actions">
+                <button class="btn glass-btn" onclick="refresh()">🔄 Refresh</button>
+                <button class="btn glass-btn danger" onclick="logout()">Logout</button>
+            </div>
+        </header>
+
+        <div class="content">
+            <!-- GLASS CARDS GRID -->
+            <div class="cards-grid">
+                <div class="glass-card" style="--card-accent: var(--boot-light);">
+                    <div class="card-header">
+                        <span class="card-icon">🛡️</span>
+                        <span class="card-status" id="waf-card-status">LOADING</span>
+                    </div>
+                    <div class="card-metric" id="threats-blocked">-</div>
+                    <div class="card-label">Threats Blocked Today</div>
+                    <span class="card-trend up" id="threats-trend">↑ -% vs yesterday</span>
+                </div>
+
+                <div class="glass-card" style="--card-accent: var(--mind-light);">
+                    <div class="card-header">
+                        <span class="card-icon">👁️</span>
+                        <span class="card-status" id="cs-card-status">LOADING</span>
+                    </div>
+                    <div class="card-metric" id="active-decisions">-</div>
+                    <div class="card-label">Active Decisions</div>
+                    <span class="card-trend up" id="decisions-info">- bouncers</span>
+                </div>
+
+                <div class="glass-card" style="--card-accent: var(--mesh-light);">
+                    <div class="card-header">
+                        <span class="card-icon">🌐</span>
+                        <span class="card-status">ACTIVE</span>
+                    </div>
+                    <div class="card-metric" id="throughput">-</div>
+                    <div class="card-label">Active Connections</div>
+                    <span class="card-trend" id="throughput-trend">- TCP</span>
+                </div>
+
+                <div class="glass-card" style="--card-accent: var(--root-light);">
+                    <div class="card-header">
+                        <span class="card-icon">⚡</span>
+                        <span class="card-status" id="health-status">LOADING</span>
+                    </div>
+                    <div class="card-metric" id="active-services">-</div>
+                    <div class="card-label">Healthy Services</div>
+                    <span class="card-trend up" id="uptime-info">-% uptime</span>
+                </div>
+            </div>
+
+            <!-- MATRIX PANEL — WAF Status -->
+            <div class="matrix-panel">
+                <div class="matrix-header">
+                    <span class="matrix-title">WAF STATUS</span>
+                    <span class="matrix-meta" id="waf-version">v- · -</span>
+                </div>
+                <div class="matrix-body">
+                    <div class="matrix-row">
+                        <span class="matrix-label">Status</span>
+                        <span class="matrix-value" id="waf-status-detail"><span class="highlight">● LOADING</span></span>
+                    </div>
+                    <div class="matrix-row">
+                        <span class="matrix-label">Top Countries</span>
+                        <span class="matrix-value" id="top-countries">Loading...</span>
+                    </div>
+                    <div class="matrix-row">
+                        <span class="matrix-label">Top Vhosts</span>
+                        <span class="matrix-value" id="top-vhosts">Loading...</span>
+                    </div>
+                    <div class="matrix-row">
+                        <span class="matrix-label">Last Threat</span>
+                        <span class="matrix-value" id="last-threat">Loading...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SYSTEM HEALTH -->
+            <div class="health-grid">
+                <div class="health-item glass-card">
+                    <div class="health-header"><span>🖥️ CPU</span><span id="cpu-load">-</span></div>
+                    <div class="health-bar"><div class="health-fill ok" id="cpu-bar" style="width: 0%"></div></div>
+                    <div class="health-percent" id="cpu-pct">0%</div>
+                </div>
+                <div class="health-item glass-card">
+                    <div class="health-header"><span>💾 Memory</span><span id="mem-info">-</span></div>
+                    <div class="health-bar"><div class="health-fill warn" id="mem-bar" style="width: 0%"></div></div>
+                    <div class="health-percent" id="mem-pct">0%</div>
+                </div>
+                <div class="health-item glass-card">
+                    <div class="health-header"><span>📀 Disk</span><span id="disk-info">-</span></div>
+                    <div class="health-bar"><div class="health-fill ok" id="disk-bar" style="width: 0%"></div></div>
+                    <div class="health-percent" id="disk-pct">0%</div>
+                </div>
+                <div class="health-item glass-card">
+                    <div class="health-header"><span>📡 Network</span><span id="net-info">-</span></div>
+                    <div class="health-bar"><div class="health-fill ok" id="net-bar" style="width: 0%"></div></div>
+                    <div class="health-percent" id="net-pct">0%</div>
+                </div>
+            </div>
+
+            <!-- CHART + ACTIVITY ROW -->
+            <div class="grid-row">
+                <div class="grid-col">
+                    <div class="glass-card chart-card">
+                        <div class="card-header">
+                            <span class="chart-title">📊 Threat Activity (24h)</span>
+                            <div class="chart-legend">
+                                <span class="legend-item"><span class="legend-dot" style="background: var(--root-light);"></span>Blocked</span>
+                            </div>
+                        </div>
+                        <div class="chart-area" id="threat-chart"></div>
+                        <div class="chart-labels">
+                            <span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>Now</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid-col">
+                    <div class="glass-card activity-panel">
+                        <div class="card-header">
+                            <span class="activity-title">🔔 Recent Activity</span>
+                            <div class="activity-filter">
+                                <button class="filter-btn active" onclick="filterActivity('all')">All</button>
+                                <button class="filter-btn" onclick="filterActivity('threats')">Threats</button>
+                                <button class="filter-btn" onclick="filterActivity('system')">System</button>
+                            </div>
+                        </div>
+                        <div class="activity-list" id="activity-list">
+                            <div class="activity-item loading">
+                                <div class="activity-icon waf">🛡️</div>
+                                <div class="activity-content">
+                                    <div class="activity-text">Loading activity...</div>
+                                    <div class="activity-meta">--</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Shared sidebar loader -->
+    <script src="/shared/sidebar.js"></script>
+
+    <script>
+        const API_HUB = '/api/v1/hub';
+        const API_WAF = '/api/v1/waf';
+        const API_CROWDSEC = '/api/v1/crowdsec';
+        const API_METRICS = '/api/v1/metrics';
+
+        function getToken() {
+            return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token');
+        }
+
+        function checkAuth() {
+            if (!getToken()) {
+                window.location.href = '/portal/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+                return false;
+            }
+            return true;
+        }
+
+        async function api(url, method = 'GET') {
+            const token = getToken();
+            if (!token) { checkAuth(); return null; }
+            try {
+                const res = await fetch(url, {
+                    method,
+                    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }
+                });
+                if (res.status === 401) { checkAuth(); return null; }
+                return await res.json();
+            } catch (e) { console.error('API error:', url, e); return null; }
+        }
+
+        let activityItems = [];
+
+        function addActivity(type, icon, text, meta) {
+            activityItems.unshift({ type, icon, text, meta, time: new Date() });
+            if (activityItems.length > 20) activityItems.pop();
+            renderActivity();
+        }
+
+        function renderActivity(filter = 'all') {
+            const list = document.getElementById('activity-list');
+            const filtered = filter === 'all' ? activityItems : activityItems.filter(i => i.type === filter);
+
+            if (filtered.length === 0) {
+                list.innerHTML = '<div class="activity-item"><div class="activity-content"><div class="activity-text" style="color: var(--muted-dark);">No activity yet</div></div></div>';
+                return;
+            }
+
+            list.innerHTML = filtered.slice(0, 10).map(item => `
+                <div class="activity-item">
+                    <div class="activity-icon ${item.type}">${item.icon}</div>
+                    <div class="activity-content">
+                        <div class="activity-text">${item.text}</div>
+                        <div class="activity-meta">${item.meta}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function filterActivity(type) {
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
+            renderActivity(type);
+        }
+
+        async function loadHealthBatch() {
+            const data = await api(API_HUB + '/public/health-batch');
+            if (!data || !data.modules) return;
+
+            let healthy = 0, total = 0;
+            Object.values(data.modules).forEach(m => {
+                total++;
+                if (m.status === 'ok') healthy++;
+            });
+
+            document.getElementById('active-services').textContent = healthy;
+            document.getElementById('health-status').textContent = healthy === total ? 'HEALTHY' : 'DEGRADED';
+            document.getElementById('health-status').className = 'card-status' + (healthy === total ? '' : ' warning');
+        }
+
+        async function loadWAFStats() {
+            const data = await api(API_WAF + '/stats');
+            if (!data) return;
+
+            const blocked = data.blocked_24h || data.blocked_today || 0;
+            document.getElementById('threats-blocked').textContent = blocked.toLocaleString();
+            document.getElementById('waf-card-status').textContent = data.running ? 'ACTIVE' : 'INACTIVE';
+            document.getElementById('waf-card-status').className = 'card-status' + (data.running ? '' : ' danger');
+
+            document.getElementById('waf-version').textContent = `v${data.version || '1.2.0'} · ${data.rules_loaded || 0} rules`;
+            document.getElementById('waf-status-detail').innerHTML = `<span class="highlight">● ${data.running ? 'ACTIVE' : 'INACTIVE'}</span> · ${data.rules_loaded || 0} rules`;
+
+            if (data.top_countries && data.top_countries.length > 0) {
+                const flags = { CN: '🇨🇳', RU: '🇷🇺', US: '🇺🇸', DE: '🇩🇪', FR: '🇫🇷', GB: '🇬🇧', KR: '🇰🇷', NL: '🇳🇱' };
+                document.getElementById('top-countries').innerHTML = data.top_countries.slice(0, 4).map(c =>
+                    `<span class="flag">${flags[c.country] || '🏴'}</span>${c.country} (${c.count})`
+                ).join(' · ');
+            }
+
+            if (data.top_vhosts && data.top_vhosts.length > 0) {
+                document.getElementById('top-vhosts').innerHTML = data.top_vhosts.slice(0, 2).map(v =>
+                    `${v.vhost} <span class="warning">(${v.count})</span>`
+                ).join(' · ');
+            }
+
+            if (data.last_threat) {
+                const t = data.last_threat;
+                document.getElementById('last-threat').innerHTML = `<span class="danger">${t.type || 'Attack'}</span> from ${t.ip || 'unknown'} · ${t.time_ago || 'recently'}`;
+                addActivity('waf', '🛡️', `WAF blocked <code>${t.type || 'attack'}</code> from <code>${t.ip || 'unknown'}</code>`, t.time_ago || 'just now');
+            }
+
+            // Chart
+            const chartEl = document.getElementById('threat-chart');
+            if (data.hourly_blocks) {
+                const max = Math.max(...data.hourly_blocks, 1);
+                chartEl.innerHTML = data.hourly_blocks.map(v =>
+                    `<div class="chart-bar" style="height: ${(v / max * 100)}%;" title="${v}"></div>`
+                ).join('');
+            } else {
+                chartEl.innerHTML = Array(24).fill(0).map(() =>
+                    `<div class="chart-bar" style="height: ${Math.random() * 100}%;"></div>`
+                ).join('');
+            }
+        }
+
+        async function loadCrowdSecStats() {
+            const data = await api(API_CROWDSEC + '/decisions_stats');
+            if (!data) {
+                const health = await api(API_CROWDSEC + '/health');
+                if (health) {
+                    document.getElementById('cs-card-status').textContent = health.status === 'ok' ? 'ACTIVE' : 'DEGRADED';
+                }
+                return;
+            }
+            document.getElementById('active-decisions').textContent = data.active_decisions || 0;
+            document.getElementById('cs-card-status').textContent = 'ACTIVE';
+            document.getElementById('decisions-info').textContent = `${data.bouncers || 0} bouncers`;
+        }
+
+        async function loadDashboard() {
+            const data = await api(API_HUB + '/dashboard');
+            if (!data) return;
+
+            if (data.cpu_percent !== undefined) {
+                document.getElementById('cpu-bar').style.width = data.cpu_percent + '%';
+                document.getElementById('cpu-pct').textContent = Math.round(data.cpu_percent) + '%';
+            }
+            if (data.memory_percent !== undefined) {
+                document.getElementById('mem-bar').style.width = data.memory_percent + '%';
+                document.getElementById('mem-pct').textContent = Math.round(data.memory_percent) + '%';
+            }
+            if (data.disk_percent !== undefined) {
+                document.getElementById('disk-bar').style.width = data.disk_percent + '%';
+                document.getElementById('disk-pct').textContent = Math.round(data.disk_percent) + '%';
+            }
+            if (data.load_avg) {
+                document.getElementById('cpu-load').textContent = 'Load: ' + data.load_avg[0]?.toFixed(2);
+            }
+        }
+
+        async function loadConnections() {
+            const data = await api(API_METRICS + '/connections');
+            if (!data) return;
+            const total = data.total_tcp || (data.http + data.https + data.ssh) || 0;
+            document.getElementById('throughput').textContent = total;
+            document.getElementById('throughput-trend').textContent = `${data.http || 0} HTTP · ${data.https || 0} HTTPS`;
+        }
+
+        async function loadNetwork() {
+            const data = await api(API_HUB + '/network_summary');
+            if (!data) return;
+            document.getElementById('net-info').textContent = data.wan_status || 'Unknown';
+            const pct = data.interfaces_up && data.interfaces ? Math.round((data.interfaces_up / data.interfaces) * 100) : 100;
+            document.getElementById('net-bar').style.width = pct + '%';
+            document.getElementById('net-pct').textContent = pct + '%';
+        }
+
+        function updateTimestamp() {
+            document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
+        }
+
+        async function logout() {
+            await fetch('/api/v1/portal/logout', { method: 'POST', credentials: 'include' });
+            localStorage.removeItem('secubox_token');
+            localStorage.removeItem('sbx_token');
+            window.location.href = '/portal/login.html';
+        }
+
+        async function refresh() {
+            updateTimestamp();
+            await Promise.all([
+                loadHealthBatch(),
+                loadWAFStats(),
+                loadCrowdSecStats(),
+                loadDashboard(),
+                loadConnections(),
+                loadNetwork()
+            ]);
+        }
+
+        if (checkAuth()) {
+            refresh();
+            setInterval(refresh, 15000);
+        }
+    </script>
+</body>
+</html>

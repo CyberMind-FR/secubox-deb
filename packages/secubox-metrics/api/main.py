@@ -290,10 +290,25 @@ async def get_status():
     """Module status endpoint."""
     return {"status": "ok", "module": "metrics", "version": "1.0.0"}
 
+@app.get("/health")
 @app.get("/api/v1/metrics/health")
 async def get_health():
-    """Health check endpoint."""
-    return {"healthy": True}
+    """Standard health check endpoint (navbar compliant)."""
+    cache_ok = CACHE_FILE.exists() and cache_is_fresh()
+    return {
+        "status": "ok" if cache_ok else "degraded",
+        "healthy": cache_ok,
+        "module": "metrics",
+        "version": "1.0.0",
+        "dev_stage": "beta",
+        "enabled": "enabled",
+        "message": "Metrics cache active" if cache_ok else "Cache stale or missing",
+        "checks": {
+            "cache_exists": CACHE_FILE.exists(),
+            "cache_fresh": cache_is_fresh(),
+            "cache_age": get_cache_age()
+        }
+    }
 
 @app.get("/api/v1/metrics/overview")
 async def get_overview(auth: None = Depends(require_jwt)):

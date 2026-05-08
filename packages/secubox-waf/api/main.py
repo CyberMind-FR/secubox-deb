@@ -3,6 +3,7 @@
 Mitmproxy-based threat detection with CrowdSec integration.
 300+ rules across 14+ categories (SQLi, XSS, RCE, VoIP, router botnets, etc.)
 """
+import os
 import json
 import re
 import subprocess
@@ -239,20 +240,24 @@ def _get_bans() -> List[dict]:
 
 
 def _get_threat_stats() -> dict:
-    """Get threat statistics from log."""
+    """Get threat statistics from log with GeoIP country lookup."""
     stats = {
         "total_threats": 0,
         "threats_today": 0,
         "by_category": defaultdict(int),
         "by_severity": defaultdict(int),
         "top_ips": defaultdict(int),
+        "top_countries": defaultdict(int),
+        "top_vhosts": defaultdict(int),
     }
+    ip_countries: Dict[str, str] = {}  # IP → country mapping
 
     log_path = Path(THREATS_LOG)
     if not log_path.exists():
         return stats
 
     today = datetime.now().date().isoformat()
+    geoip_reader = _get_geoip_reader()
 
     try:
         with open(log_path) as f:
@@ -266,16 +271,36 @@ def _get_threat_stats() -> dict:
 
                     stats["by_category"][entry.get("category", "unknown")] += 1
                     stats["by_severity"][entry.get("severity", "unknown")] += 1
-                    stats["top_ips"][entry.get("ip", "unknown")] += 1
+
+                    # IP tracking - try both field names for compatibility
+                    ip = entry.get("client_ip") or entry.get("ip", "unknown")
+                    stats["top_ips"][ip] += 1
+
+                    # Country lookup via GeoIP (cache per IP)
+                    if ip not in ip_countries:
+                        ip_countries[ip] = _lookup_country(ip, geoip_reader)
+                    country = ip_countries[ip]
+                    stats["top_countries"][country] += 1
+
+                    # Vhost tracking
+                    vhost = entry.get("host") or entry.get("vhost", "unknown")
+                    stats["top_vhosts"][vhost] += 1
                 except json.JSONDecodeError:
                     pass
     except Exception:
         pass
 
-    # Convert defaultdicts and get top 10 IPs
+    # Convert defaultdicts and get top 10
     stats["by_category"] = dict(stats["by_category"])
     stats["by_severity"] = dict(stats["by_severity"])
-    stats["top_ips"] = dict(sorted(stats["top_ips"].items(), key=lambda x: -x[1])[:10])
+
+    # Top IPs with country codes included
+    top_ips_sorted = sorted(stats["top_ips"].items(), key=lambda x: -x[1])[:10]
+    stats["top_ips"] = {ip: count for ip, count in top_ips_sorted}
+    stats["top_ips_countries"] = {ip: ip_countries.get(ip, "??") for ip, _ in top_ips_sorted}
+
+    stats["top_countries"] = dict(sorted(stats["top_countries"].items(), key=lambda x: -x[1])[:10])
+    stats["top_vhosts"] = dict(sorted(stats["top_vhosts"].items(), key=lambda x: -x[1])[:10])
 
     return stats
 
@@ -491,6 +516,121 @@ async def update_autoban_config(req: AutobanConfig):
     return {"success": True, "config": req.dict(exclude_none=True)}
 
 
+# ── Health & Auto-Repair ──────────────────────────────────────────
+
+@app.get("/health")
+async def health_check():
+    """Layer 1: Basic health check."""
+    rules_loaded = len(_compiled_patterns) > 0
+    log_writable = os.access(Path(THREATS_LOG).parent, os.W_OK) if Path(THREATS_LOG).parent.exists() else False
+
+    status = "ok" if rules_loaded and log_writable else "degraded"
+    rules_count = sum(len(p) for p in _compiled_patterns.values())
+    return {
+        "status": status,
+        "healthy": status == "ok",
+        "module": "waf",
+        "version": "1.2.0",
+        "dev_stage": "production",
+        "enabled": "enabled",
+        "message": f"WAF active ({rules_count} rules)" if status == "ok" else "WAF degraded",
+        "checks": {
+            "rules_loaded": rules_loaded,
+            "rules_count": rules_count,
+            "log_writable": log_writable,
+            "categories": len(_compiled_patterns)
+        }
+    }
+
+
+@app.get("/doctor")
+async def doctor_check():
+    """Layer 2: Doctor health - can we self-repair?"""
+    issues = []
+    can_repair = True
+
+    # Check rules file
+    rules_path = Path(RULES_PATH)
+    if not rules_path.exists():
+        issues.append({"type": "rules_missing", "repairable": True})
+    elif len(_compiled_patterns) == 0:
+        issues.append({"type": "rules_not_loaded", "repairable": True})
+
+    # Check log directory
+    log_dir = Path(THREATS_LOG).parent
+    if not log_dir.exists():
+        issues.append({"type": "log_dir_missing", "repairable": True})
+    elif not os.access(log_dir, os.W_OK):
+        issues.append({"type": "log_not_writable", "repairable": True})
+
+    # Check mitmproxy routes (for WAF integration)
+    routes_file = Path("/srv/mitmproxy-waf/data/routes.json")
+    if not routes_file.exists():
+        routes_file = Path("/srv/mitmproxy/routes.json")
+    if not routes_file.exists():
+        issues.append({"type": "routes_missing", "repairable": False})
+        can_repair = False
+
+    return {
+        "healthy": len(issues) == 0,
+        "issues": issues,
+        "can_repair": can_repair,
+        "repair_endpoint": "/repair"
+    }
+
+
+@app.post("/repair", dependencies=[Depends(require_jwt)])
+async def repair_waf():
+    """Auto-repair WAF: reload rules, fix logs, sync routes."""
+    repairs = []
+
+    # 1. Ensure log directory
+    log_dir = Path(THREATS_LOG).parent
+    if not log_dir.exists():
+        log_dir.mkdir(parents=True, exist_ok=True)
+        repairs.append({"action": "create_log_dir", "status": "ok"})
+
+    # Fix log permissions
+    if log_dir.exists():
+        try:
+            os.chmod(log_dir, 0o755)
+            log_file = Path(THREATS_LOG)
+            if log_file.exists():
+                os.chmod(log_file, 0o666)
+            repairs.append({"action": "fix_log_perms", "status": "ok"})
+        except Exception as e:
+            repairs.append({"action": "fix_log_perms", "status": "error", "message": str(e)})
+
+    # 2. Reload rules
+    try:
+        _load_rules()
+        total = sum(len(p) for p in _compiled_patterns.values())
+        repairs.append({"action": "reload_rules", "status": "ok", "rules": total})
+    except Exception as e:
+        repairs.append({"action": "reload_rules", "status": "error", "message": str(e)})
+
+    # 3. Clear expired bans (via mitmproxy if available)
+    # This would be done via the mitmproxy addon
+
+    # 4. Verify mitmproxy connection
+    routes_file = Path("/srv/mitmproxy-waf/data/routes.json")
+    if not routes_file.exists():
+        routes_file = Path("/srv/mitmproxy/routes.json")
+    if routes_file.exists():
+        try:
+            routes = json.loads(routes_file.read_text())
+            repairs.append({"action": "check_routes", "status": "ok", "routes": len(routes)})
+        except Exception as e:
+            repairs.append({"action": "check_routes", "status": "error", "message": str(e)})
+    else:
+        repairs.append({"action": "check_routes", "status": "warning", "message": "routes.json not found"})
+
+    return {
+        "success": all(r["status"] in ("ok", "warning") for r in repairs),
+        "repairs": repairs
+    }
+
+
 @app.get("/whitelist", dependencies=[Depends(require_jwt)])
 async def get_whitelist():
     """Get whitelisted IPs."""
@@ -522,12 +662,41 @@ GEOIP_DB_PATH = "/var/lib/secubox/geoip/GeoLite2-Country.mmdb"
 
 def _get_geoip_reader():
     global _geoip_reader
-    if _geoip_reader is None and geoip2:
+    if _geoip_reader is None:
         try:
             _geoip_reader = geoip2.database.Reader(GEOIP_DB_PATH)
-        except:
+        except Exception:
             pass
     return _geoip_reader
+
+
+def _lookup_country(ip: str, reader=None) -> str:
+    """Lookup country code for IP address."""
+    if ip in _geoip_cache:
+        return _geoip_cache[ip]
+
+    # Skip private/local IPs
+    if ip.startswith(("10.", "192.168.", "127.", "172.16.", "172.17.", "172.18.", "172.19.", "172.2", "172.3", "unknown")):
+        _geoip_cache[ip] = "LAN"
+        return "LAN"
+
+    if reader is None:
+        reader = _get_geoip_reader()
+
+    if reader:
+        try:
+            response = reader.country(ip)
+            country = response.country.iso_code or "??"
+            _geoip_cache[ip] = country
+            return country
+        except geoip2.errors.AddressNotFoundError:
+            _geoip_cache[ip] = "??"
+            return "??"
+        except Exception:
+            pass
+
+    _geoip_cache[ip] = "??"
+    return "??"
 
 
 @app.get("/geoip/{ip}")

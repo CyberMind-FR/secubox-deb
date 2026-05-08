@@ -4,6 +4,81 @@
 ---
 ## 2026-05-08
 
+### Session 126 — Hybrid Skin License & Centralized Injection
+
+**License Headers Added:**
+- Added proper CyberMind/Gérald Kerma license and attribution to all theming files
+- All files now include: author, license (Proprietary/ANSSI CSPN), location, project info
+- Design references documented in code comments
+
+**Centralized Hybrid Skin Injection (sidebar.js v2.19.0):**
+- `injectHybridSkin()` function auto-loads CSS on any page with sidebar
+- Injects: design-tokens.css, sidebar.css, hybrid-skin.css
+- Adds `hybrid-skin` class to body, `hybrid-main` to main content
+- All modules automatically get hybrid skin via navbar loading
+- No need to patch individual module index.html files
+
+**Files Updated:**
+- `www/shared/sidebar.js` — v2.19.0 with hybrid skin injector
+- `www/shared/hybrid-skin.css` — Full license header with design references
+- `www/shared/design-tokens.css` — Six-Module Color System documentation
+- `www/shared/sidebar.css` — Glass Morphism sidebar license header
+- `www/soc/index.html` — SOC Dashboard with architecture documentation
+
+**License Format (Standard):**
+```
+SecuBox-Deb :: <Module Name>
+CyberMind — https://cybermind.fr
+Author: Gérald Kerma <gandalf@gk2.net>
+License: Proprietary / ANSSI CSPN candidate
+Location: Notre-Dame-du-Cruet · Savoie · France
+COPYRIGHT (C) 2024-2025 CyberMind / Gérald Kerma
+```
+
+**Deployed to Production:**
+- All updated files synced to 192.168.1.200:/usr/share/secubox/www/
+- Local/live sync verified (all files match)
+
+---
+
+### Session 125 — Socket Repair & Health API Planning
+
+**Socket Repair Complete:**
+- Fixed 91 running services with 87 Unix sockets
+- `ai-gateway`: Fixed permission denied for `/tmp/secubox/ai-gateway` cache dir
+- `mcp-server`: Socket now active after service configuration fix
+- Restarted and verified: `crowdsec`, `vhost`, `wireguard`, `system`
+- Hub uses TCP:8001 by design (VM compatibility)
+
+**Health API Standardization Plan:**
+- Designed navbar-compliant health response schema
+- Fields: `status`, `module`, `version`, `enabled`, `dev_stage`
+- Batch health endpoint for efficient polling
+- Sidebar.js updates for version/dev_stage display
+- Retrofit strategy for 116 modules
+
+**Services Verified:**
+- ✅ hub (v1.7.0), waf (v1.2.0), crowdsec (v2.0.0), haproxy, vhost
+- ✅ wireguard (v2.0.0), system (v1.2.0), ai-gateway, mcp-server
+- ⚠️ dns degraded (unbound not running), metrics needs /health
+
+---
+
+### Session 122 — WAF GeoIP Country Lookup & Stats Enhancement
+
+**WAF API Enhancements:**
+- Added GeoIP country lookup using MaxMind GeoLite2-Country database
+- Added `top_countries` to WAF threat stats (identifies attacking countries)
+- Added `top_vhosts` to WAF threat stats (most targeted vhosts)
+- Fixed IP field name: `ip` → `client_ip` for log compatibility
+- Added `_lookup_country()` with caching and LAN detection
+
+**Files Updated:**
+- `packages/secubox-waf/api/main.py` — GeoIP integration
+- Source files synced to debian package directories
+
+---
+
 ### Session 123 — Health-Aware Sidebar, WAF Alerting & ACME Certs
 
 **Sidebar v2.0.0 (Emoji LED + Pre-cache):**

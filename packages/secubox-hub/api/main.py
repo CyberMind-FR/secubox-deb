@@ -205,6 +205,137 @@ async def public_info():
     }
 
 
+# ══════════════════════════════════════════════════════════════════
+# Batch Health Endpoint — Efficient health check for navbar
+# ══════════════════════════════════════════════════════════════════
+import httpx
+from typing import Optional
+
+# Health check cache
+_health_cache: dict = {}
+_health_cache_time: float = 0
+HEALTH_CACHE_TTL = 10  # seconds
+
+
+# Static frontend-only modules (no backend service)
+STATIC_MODULES = {
+    "soc", "portal", "roadmap", "prototypes", "terminal"
+}
+
+
+async def _check_module_health(client: httpx.AsyncClient, module: str) -> dict:
+    """Check health of a single module via its socket."""
+    # Static modules - always ok (frontend-only, no backend)
+    if module in STATIC_MODULES:
+        return {
+            "status": "ok",
+            "healthy": True,
+            "module": module,
+            "version": "1.0.0",
+            "dev_stage": "production",
+            "enabled": "enabled",
+            "message": "Static page (no backend)"
+        }
+
+    # Special case: hub uses TCP
+    if module == "hub":
+        url = "http://127.0.0.1:8001/health"
+        try:
+            r = await client.get(url, timeout=3.0)
+            return r.json()
+        except Exception as e:
+            return {"status": "error", "module": module, "message": str(e)}
+
+    # Standard modules use Unix sockets
+    socket_path = f"/run/secubox/{module}.sock"
+    if not Path(socket_path).exists():
+        return {"status": "unknown", "module": module, "message": "socket not found"}
+
+    try:
+        transport = httpx.AsyncHTTPTransport(uds=socket_path)
+        async with httpx.AsyncClient(transport=transport, timeout=3.0) as sock_client:
+            r = await sock_client.get("http://localhost/health")
+            data = r.json()
+            # Ensure module name is present
+            if "module" not in data:
+                data["module"] = module
+            return data
+    except Exception as e:
+        return {"status": "error", "module": module, "message": str(e)}
+
+
+@public_router.get("/health-batch")
+async def batch_health_check(modules: Optional[str] = None):
+    """
+    Batch health check for multiple modules (navbar-optimized).
+
+    Query params:
+        modules: Comma-separated list of module IDs (e.g., "hub,waf,crowdsec")
+                If not provided, checks all modules from menu.
+
+    Returns:
+        {
+            "modules": {
+                "hub": {"status": "ok", "module": "hub", "version": "1.7.0", ...},
+                "waf": {"status": "ok", "module": "waf", "version": "1.2.0", ...},
+                ...
+            },
+            "timestamp": 1234567890.123,
+            "checked": 10
+        }
+    """
+    global _health_cache, _health_cache_time
+
+    # Parse module list
+    if modules:
+        module_list = [m.strip() for m in modules.split(",") if m.strip()]
+    else:
+        # Get all modules from menu cache
+        menu = _menu_cache or _load_menu_cache_from_file() or {}
+        module_list = []
+        for cat in menu.get("categories", []):
+            for item in cat.get("items", []):
+                mod_id = item.get("id")
+                if mod_id:
+                    module_list.append(mod_id)
+
+    # Check cache
+    now = time.time()
+    if _health_cache and (now - _health_cache_time) < HEALTH_CACHE_TTL:
+        # Return cached results for requested modules
+        cached_results = {m: _health_cache.get(m, {"status": "unknown", "module": m})
+                        for m in module_list}
+        return {
+            "modules": cached_results,
+            "timestamp": _health_cache_time,
+            "checked": len(module_list),
+            "cached": True,
+        }
+
+    # Batch check all modules
+    results = {}
+    async with httpx.AsyncClient() as client:
+        tasks = [_check_module_health(client, mod) for mod in module_list]
+        responses = await asyncio.gather(*tasks, return_exceptions=True)
+
+        for mod, resp in zip(module_list, responses):
+            if isinstance(resp, Exception):
+                results[mod] = {"status": "error", "module": mod, "message": str(resp)}
+            else:
+                results[mod] = resp
+
+    # Update cache
+    _health_cache.update(results)
+    _health_cache_time = now
+
+    return {
+        "modules": results,
+        "timestamp": now,
+        "checked": len(module_list),
+        "cached": False,
+    }
+
+
 app.include_router(public_router)
 
 # ══════════════════════════════════════════════════════════════════
@@ -936,7 +1067,21 @@ async def apply_updates(user=Depends(require_jwt)):
 
 @router.get("/health")
 async def health():
-    return {"status": "ok", "module": "hub", "version": "1.7.0"}
+    """Standard health check endpoint (navbar compliant)."""
+    menu_ok = bool(_menu_cache)
+    return {
+        "status": "ok" if menu_ok else "degraded",
+        "healthy": menu_ok,
+        "module": "hub",
+        "version": "1.7.0",
+        "dev_stage": "production",
+        "enabled": "enabled",
+        "message": "Hub operational" if menu_ok else "Menu cache not ready",
+        "checks": {
+            "menu_cached": menu_ok,
+            "modules_count": _menu_cache.get("total_installed", 0) if _menu_cache else 0
+        }
+    }
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -1088,6 +1233,281 @@ async def vhost_health_alerts(user=Depends(require_jwt)):
     except Exception:
         pass
     return {"alerts": []}
+
+
+# ══════════════════════════════════════════════════════════════════
+# Auto-Repair System
+# ══════════════════════════════════════════════════════════════════
+
+REPAIR_LOG = Path("/var/log/secubox/repairs.log")
+REPAIR_HISTORY = Path("/var/cache/secubox/repair-history.json")
+
+# Known repair actions per issue type
+REPAIR_ACTIONS = {
+    "service_dead": ["restart"],
+    "socket_missing": ["create_socket_dir", "restart"],
+    "socket_permission": ["fix_socket_perms", "restart"],
+    "api_timeout": ["restart"],
+    "api_error": ["clear_cache", "restart"],
+    "high_memory": ["restart"],
+    "dependency_failed": ["restart_deps", "restart"],
+}
+
+
+def _log_repair(module: str, action: str, success: bool, message: str = ""):
+    """Log repair action."""
+    REPAIR_LOG.parent.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().isoformat()
+    with open(REPAIR_LOG, "a") as f:
+        f.write(f"{timestamp} | {module} | {action} | {'OK' if success else 'FAIL'} | {message}\n")
+
+
+def _save_repair_history(module: str, actions: list, success: bool):
+    """Save repair to history."""
+    REPAIR_HISTORY.parent.mkdir(parents=True, exist_ok=True)
+    history = []
+    if REPAIR_HISTORY.exists():
+        try:
+            history = json.loads(REPAIR_HISTORY.read_text())
+        except Exception:
+            pass
+    history.insert(0, {
+        "timestamp": datetime.now().isoformat(),
+        "module": module,
+        "actions": actions,
+        "success": success
+    })
+    # Keep last 100 repairs
+    REPAIR_HISTORY.write_text(json.dumps(history[:100], indent=2))
+
+
+def _run_repair_action(module: str, action: str) -> tuple[bool, str]:
+    """Execute a single repair action."""
+    svc = f"secubox-{module}" if not module.startswith("secubox-") else module
+
+    try:
+        if action == "restart":
+            result = subprocess.run(
+                ["systemctl", "restart", svc],
+                capture_output=True, text=True, timeout=30
+            )
+            if result.returncode == 0:
+                return True, f"Restarted {svc}"
+            return False, result.stderr
+
+        elif action == "create_socket_dir":
+            socket_dir = Path(f"/run/secubox")
+            socket_dir.mkdir(parents=True, exist_ok=True)
+            os.chmod(socket_dir, 0o755)
+            return True, f"Created {socket_dir}"
+
+        elif action == "fix_socket_perms":
+            socket_path = Path(f"/run/secubox/{module}.sock")
+            if socket_path.exists():
+                os.chmod(socket_path, 0o666)
+                return True, f"Fixed perms on {socket_path}"
+            return True, "Socket not found, will be recreated"
+
+        elif action == "clear_cache":
+            cache_dir = Path(f"/var/cache/secubox/{module}")
+            if cache_dir.exists():
+                import shutil
+                shutil.rmtree(cache_dir, ignore_errors=True)
+                return True, f"Cleared cache {cache_dir}"
+            return True, "No cache to clear"
+
+        elif action == "restart_deps":
+            # Common dependencies
+            deps = {
+                "haproxy": ["nginx"],
+                "waf": ["haproxy"],
+                "crowdsec": [],
+                "wireguard": [],
+            }
+            mod_name = module.replace("secubox-", "")
+            for dep in deps.get(mod_name, []):
+                subprocess.run(["systemctl", "restart", f"secubox-{dep}"], timeout=30)
+            return True, f"Restarted dependencies"
+
+        else:
+            return False, f"Unknown action: {action}"
+
+    except subprocess.TimeoutExpired:
+        return False, "Timeout"
+    except Exception as e:
+        return False, str(e)
+
+
+def _diagnose_module(module: str) -> list[str]:
+    """Diagnose module issues and return list of problems."""
+    svc = f"secubox-{module}" if not module.startswith("secubox-") else module
+    mod_name = module.replace("secubox-", "")
+    issues = []
+
+    # Check service status
+    try:
+        result = subprocess.run(
+            ["systemctl", "is-active", svc],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.stdout.strip() != "active":
+            issues.append("service_dead")
+    except Exception:
+        issues.append("service_dead")
+
+    # Check socket
+    socket_path = Path(f"/run/secubox/{mod_name}.sock")
+    if not socket_path.exists():
+        issues.append("socket_missing")
+    elif not os.access(socket_path, os.W_OK):
+        issues.append("socket_permission")
+
+    # Check API responsiveness
+    try:
+        result = subprocess.run(
+            ["curl", "-s", "-o", "/dev/null", "-w", "%{http_code}",
+             "--unix-socket", str(socket_path), "http://localhost/health"],
+            capture_output=True, text=True, timeout=5
+        )
+        code = result.stdout.strip()
+        if code not in ("200", "401"):  # 401 is OK (needs auth)
+            issues.append("api_error")
+    except subprocess.TimeoutExpired:
+        issues.append("api_timeout")
+    except Exception:
+        pass
+
+    return issues
+
+
+@router.get("/repair/status")
+async def repair_status():
+    """Get repair system status (public)."""
+    history = []
+    if REPAIR_HISTORY.exists():
+        try:
+            history = json.loads(REPAIR_HISTORY.read_text())[:10]
+        except Exception:
+            pass
+
+    return {
+        "enabled": True,
+        "recent_repairs": history,
+        "log_path": str(REPAIR_LOG)
+    }
+
+
+@router.post("/repair/{module}", dependencies=[Depends(require_jwt)])
+async def repair_module(module: str):
+    """Attempt to repair a specific module."""
+    log.info("Auto-repair requested for: %s", module)
+
+    # Diagnose issues
+    issues = _diagnose_module(module)
+    if not issues:
+        return {"success": True, "module": module, "message": "No issues detected", "actions": []}
+
+    # Collect repair actions
+    actions_to_run = []
+    for issue in issues:
+        actions_to_run.extend(REPAIR_ACTIONS.get(issue, ["restart"]))
+    # Deduplicate while preserving order
+    actions_to_run = list(dict.fromkeys(actions_to_run))
+
+    # Execute repairs
+    results = []
+    all_success = True
+    for action in actions_to_run:
+        success, msg = _run_repair_action(module, action)
+        results.append({"action": action, "success": success, "message": msg})
+        _log_repair(module, action, success, msg)
+        if not success:
+            all_success = False
+
+    _save_repair_history(module, actions_to_run, all_success)
+
+    # Verify fix
+    time.sleep(2)
+    remaining_issues = _diagnose_module(module)
+
+    return {
+        "success": all_success and len(remaining_issues) == 0,
+        "module": module,
+        "issues_found": issues,
+        "actions": results,
+        "issues_remaining": remaining_issues
+    }
+
+
+@router.post("/repair/all", dependencies=[Depends(require_jwt)])
+async def repair_all_modules():
+    """Diagnose and repair all failed modules."""
+    log.info("Auto-repair ALL requested")
+
+    # Get list of secubox services
+    try:
+        result = subprocess.run(
+            ["systemctl", "list-units", "--type=service", "--state=failed,inactive",
+             "--no-legend", "--no-pager"],
+            capture_output=True, text=True, timeout=10
+        )
+        failed = [
+            line.split()[0].replace(".service", "")
+            for line in result.stdout.strip().split("\n")
+            if line.strip() and "secubox-" in line
+        ]
+    except Exception:
+        failed = []
+
+    # Also check for services that are active but unhealthy
+    try:
+        result = subprocess.run(
+            ["systemctl", "list-units", "--type=service", "--state=active",
+             "--no-legend", "--no-pager"],
+            capture_output=True, text=True, timeout=10
+        )
+        for line in result.stdout.strip().split("\n"):
+            if "secubox-" in line:
+                svc = line.split()[0].replace(".service", "")
+                mod = svc.replace("secubox-", "")
+                issues = _diagnose_module(mod)
+                if issues and svc not in failed:
+                    failed.append(svc)
+    except Exception:
+        pass
+
+    if not failed:
+        return {"success": True, "message": "All modules healthy", "repaired": []}
+
+    # Repair each failed module
+    repaired = []
+    for svc in failed[:10]:  # Limit to 10 at a time
+        mod = svc.replace("secubox-", "")
+        result = await repair_module(mod)
+        repaired.append({"module": mod, "result": result})
+
+    return {
+        "success": all(r["result"].get("success") for r in repaired),
+        "repaired": repaired,
+        "total_failed": len(failed)
+    }
+
+
+@router.get("/repair/diagnose/{module}", dependencies=[Depends(require_jwt)])
+async def diagnose_module(module: str):
+    """Diagnose a module without repairing."""
+    issues = _diagnose_module(module)
+    suggested_actions = []
+    for issue in issues:
+        suggested_actions.extend(REPAIR_ACTIONS.get(issue, ["restart"]))
+    suggested_actions = list(dict.fromkeys(suggested_actions))
+
+    return {
+        "module": module,
+        "issues": issues,
+        "suggested_actions": suggested_actions,
+        "healthy": len(issues) == 0
+    }
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -1334,6 +1754,7 @@ MENU_DIR = Path("/usr/share/secubox/menu.d")
 # Default menu definitions (used if menu.d files don't exist)
 DEFAULT_MENU = [
     {"id": "hub", "name": "Dashboard", "category": "dashboard", "icon": "🏠", "path": "/", "order": 0},
+    {"id": "soc", "name": "SOC Dashboard", "category": "dashboard", "icon": "📊", "path": "/soc/", "order": 5},
     {"id": "system", "name": "System Hub", "category": "dashboard", "icon": "🔧", "path": "/system/", "order": 10},
     {"id": "crowdsec", "name": "CrowdSec", "category": "security", "icon": "🛡️", "path": "/crowdsec/", "order": 100},
     {"id": "waf", "name": "WAF", "category": "security", "icon": "🔥", "path": "/waf/", "order": 105},

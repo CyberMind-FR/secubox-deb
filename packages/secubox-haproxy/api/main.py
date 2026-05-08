@@ -13,6 +13,7 @@ Features:
 - Webhook alerts for health changes
 """
 import os
+import shutil
 import subprocess
 import socket
 import json
@@ -788,6 +789,20 @@ async def get_waf_routes():
     """Get current WAF routing table."""
     return {"routes": _load_vhost_routes()}
 
+@router.get("/waf/targets")
+async def get_waf_targets():
+    """Get actual WAF target backends from mitmproxy routes."""
+    try:
+        routes_file = Path("/srv/mitmproxy-waf/data/routes.json")
+        if routes_file.exists():
+            data = json.loads(routes_file.read_text())
+            # Convert [ip, port] to "ip:port" string
+            return {"targets": {k: f"{v[0]}:{v[1]}" for k, v in data.items()}}
+    except Exception as e:
+        log.warning(f"Failed to load mitmproxy routes: {e}")
+    return {"targets": {}}
+
+
 
 # ── VHosts ────────────────────────────────────────────────────────
 
@@ -996,6 +1011,389 @@ async def get_expiring_certificates(days: int = Query(default=30, le=365), user=
         "count": len(expiring),
         "threshold_days": days
     }
+
+
+# ── Certificate Bundle Workflow ───────────────────────────────────
+
+class CertBundleRequest(BaseModel):
+    """Create HAProxy PEM bundle from parts."""
+    name: str  # Output filename (without .pem)
+    cert: str  # Server certificate PEM
+    key: str   # Private key PEM
+    chain: str = ""  # Intermediate CA chain PEM (optional)
+
+
+@router.post("/certificates/bundle", dependencies=[Depends(require_jwt)])
+async def create_cert_bundle(req: CertBundleRequest):
+    """Create HAProxy certificate bundle (cert + key + chain → single PEM)."""
+    cert_dir = Path(CERTS_DIR)
+    if not cert_dir.exists():
+        cert_dir = Path("/etc/haproxy/certs")
+    cert_dir.mkdir(parents=True, exist_ok=True)
+
+    # Validate certificate
+    try:
+        result = subprocess.run(
+            ["openssl", "x509", "-noout", "-text"],
+            input=req.cert, capture_output=True, text=True, timeout=5
+        )
+        if result.returncode != 0:
+            raise HTTPException(400, f"Invalid certificate: {result.stderr}")
+    except subprocess.TimeoutExpired:
+        raise HTTPException(400, "Certificate validation timeout")
+
+    # Validate key
+    try:
+        result = subprocess.run(
+            ["openssl", "rsa", "-check", "-noout"],
+            input=req.key, capture_output=True, text=True, timeout=5
+        )
+        if result.returncode != 0:
+            # Try EC key
+            result = subprocess.run(
+                ["openssl", "ec", "-check", "-noout"],
+                input=req.key, capture_output=True, text=True, timeout=5
+            )
+            if result.returncode != 0:
+                raise HTTPException(400, "Invalid private key")
+    except subprocess.TimeoutExpired:
+        raise HTTPException(400, "Key validation timeout")
+
+    # Build bundle: cert + key + chain (HAProxy order)
+    bundle = req.cert.strip() + "\n" + req.key.strip() + "\n"
+    if req.chain:
+        bundle += req.chain.strip() + "\n"
+
+    # Write bundle
+    bundle_path = cert_dir / f"{req.name}.pem"
+    bundle_path.write_text(bundle)
+    bundle_path.chmod(0o600)
+
+    log.info("Created certificate bundle: %s", req.name)
+
+    # Parse and return info
+    info = _parse_certificate(bundle_path)
+    return {
+        "success": True,
+        "name": req.name,
+        "path": str(bundle_path),
+        "certificate": info.model_dump()
+    }
+
+
+class CertUploadRequest(BaseModel):
+    """Upload pre-made PEM bundle."""
+    name: str
+    pem: str  # Full PEM bundle (cert + key + chain)
+
+
+@router.post("/certificates/upload", dependencies=[Depends(require_jwt)])
+async def upload_certificate(req: CertUploadRequest):
+    """Upload a pre-made PEM certificate bundle."""
+    cert_dir = Path(CERTS_DIR)
+    if not cert_dir.exists():
+        cert_dir = Path("/etc/haproxy/certs")
+    cert_dir.mkdir(parents=True, exist_ok=True)
+
+    # Basic validation - check it contains a certificate
+    if "-----BEGIN CERTIFICATE-----" not in req.pem:
+        raise HTTPException(400, "PEM must contain a certificate")
+    if "-----BEGIN" not in req.pem or "PRIVATE KEY-----" not in req.pem:
+        raise HTTPException(400, "PEM must contain a private key")
+
+    bundle_path = cert_dir / f"{req.name}.pem"
+    bundle_path.write_text(req.pem)
+    bundle_path.chmod(0o600)
+
+    log.info("Uploaded certificate: %s", req.name)
+
+    info = _parse_certificate(bundle_path)
+    return {
+        "success": True,
+        "name": req.name,
+        "path": str(bundle_path),
+        "certificate": info.model_dump()
+    }
+
+
+@router.delete("/certificates/{name}", dependencies=[Depends(require_jwt)])
+async def delete_certificate(name: str):
+    """Delete a certificate bundle."""
+    cert_dir = Path(CERTS_DIR)
+    if not cert_dir.exists():
+        cert_dir = Path("/etc/haproxy/certs")
+
+    cert_path = cert_dir / f"{name}.pem"
+    if not cert_path.exists():
+        raise HTTPException(404, "Certificate not found")
+
+    # Backup before delete
+    backup_dir = cert_dir / "backup"
+    backup_dir.mkdir(exist_ok=True)
+    backup_path = backup_dir / f"{name}.pem.{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    cert_path.rename(backup_path)
+
+    log.info("Deleted certificate: %s (backed up to %s)", name, backup_path)
+    return {"success": True, "name": name, "backup": str(backup_path)}
+
+
+class AcmeRequest(BaseModel):
+    """ACME certificate request."""
+    domain: str
+    email: str = ""
+    staging: bool = False  # Use staging server for testing
+
+
+@router.post("/certificates/acme", dependencies=[Depends(require_jwt)])
+async def request_acme_certificate(req: AcmeRequest):
+    """Request certificate via ACME (Let's Encrypt)."""
+    cert_dir = Path(CERTS_DIR)
+    if not cert_dir.exists():
+        cert_dir = Path("/etc/haproxy/certs")
+    cert_dir.mkdir(parents=True, exist_ok=True)
+
+    # Build certbot command
+    cmd = [
+        "certbot", "certonly",
+        "--standalone",
+        "--non-interactive",
+        "--agree-tos",
+        "-d", req.domain,
+        "--cert-name", req.domain.replace(".", "_"),
+    ]
+    if req.email:
+        cmd.extend(["--email", req.email])
+    else:
+        cmd.append("--register-unsafely-without-email")
+    if req.staging:
+        cmd.append("--staging")
+
+    log.info("Requesting ACME certificate for: %s", req.domain)
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        if result.returncode != 0:
+            return {"success": False, "error": result.stderr, "stdout": result.stdout}
+
+        # Bundle the certificate for HAProxy
+        cert_name = req.domain.replace(".", "_")
+        le_dir = Path(f"/etc/letsencrypt/live/{cert_name}")
+
+        if le_dir.exists():
+            cert = (le_dir / "cert.pem").read_text()
+            key = (le_dir / "privkey.pem").read_text()
+            chain = (le_dir / "chain.pem").read_text()
+
+            bundle = cert + key + chain
+            bundle_path = cert_dir / f"{cert_name}.pem"
+            bundle_path.write_text(bundle)
+            bundle_path.chmod(0o600)
+
+            info = _parse_certificate(bundle_path)
+            return {
+                "success": True,
+                "domain": req.domain,
+                "path": str(bundle_path),
+                "certificate": info.model_dump()
+            }
+
+        return {"success": False, "error": "Certificate files not found after certbot"}
+
+    except subprocess.TimeoutExpired:
+        return {"success": False, "error": "ACME request timeout (120s)"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@router.post("/certificates/{name}/renew", dependencies=[Depends(require_jwt)])
+async def renew_certificate(name: str):
+    """Renew an existing ACME certificate."""
+    try:
+        result = subprocess.run(
+            ["certbot", "renew", "--cert-name", name, "--force-renewal"],
+            capture_output=True, text=True, timeout=120
+        )
+
+        if result.returncode == 0:
+            # Re-bundle for HAProxy
+            le_dir = Path(f"/etc/letsencrypt/live/{name}")
+            cert_dir = Path(CERTS_DIR)
+            if not cert_dir.exists():
+                cert_dir = Path("/etc/haproxy/certs")
+
+            if le_dir.exists():
+                cert = (le_dir / "cert.pem").read_text()
+                key = (le_dir / "privkey.pem").read_text()
+                chain = (le_dir / "chain.pem").read_text()
+
+                bundle = cert + key + chain
+                bundle_path = cert_dir / f"{name}.pem"
+                bundle_path.write_text(bundle)
+                bundle_path.chmod(0o600)
+
+                log.info("Renewed and bundled certificate: %s", name)
+                return {"success": True, "name": name, "renewed": True}
+
+        return {"success": False, "error": result.stderr}
+
+    except subprocess.TimeoutExpired:
+        return {"success": False, "error": "Renewal timeout"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+# ── Auto-Repair ───────────────────────────────────────────────────
+
+@router.post("/repair", dependencies=[Depends(require_jwt)])
+async def repair_haproxy():
+    """Auto-repair HAProxy: check config, fix vhosts, reload."""
+    repairs = []
+
+    # 1. Validate HAProxy config
+    try:
+        result = subprocess.run(
+            ["haproxy", "-c", "-f", "/etc/haproxy/haproxy.cfg"],
+            capture_output=True, text=True, timeout=10
+        )
+        if result.returncode != 0:
+            repairs.append({"action": "config_check", "status": "error", "message": result.stderr})
+            # Try to restore backup
+            backup = Path("/etc/haproxy/haproxy.cfg.bak")
+            if backup.exists():
+                shutil.copy(backup, "/etc/haproxy/haproxy.cfg")
+                repairs.append({"action": "restore_backup", "status": "ok"})
+        else:
+            repairs.append({"action": "config_check", "status": "ok"})
+    except Exception as e:
+        repairs.append({"action": "config_check", "status": "error", "message": str(e)})
+
+    # 2. Ensure certs directory exists
+    cert_dir = Path(CERTS_DIR)
+    if not cert_dir.exists():
+        cert_dir.mkdir(parents=True, exist_ok=True)
+        repairs.append({"action": "create_certs_dir", "status": "ok"})
+
+    # 3. Reload HAProxy
+    try:
+        result = subprocess.run(
+            ["systemctl", "reload", "haproxy"],
+            capture_output=True, text=True, timeout=10
+        )
+        repairs.append({
+            "action": "reload",
+            "status": "ok" if result.returncode == 0 else "error",
+            "message": result.stderr if result.returncode != 0 else None
+        })
+    except Exception as e:
+        repairs.append({"action": "reload", "status": "error", "message": str(e)})
+
+    return {"success": all(r["status"] == "ok" for r in repairs), "repairs": repairs}
+
+
+@router.post("/certificates/repair", dependencies=[Depends(require_jwt)])
+async def repair_certificates():
+    """Auto-repair: renew expiring certificates."""
+    cert_dir = Path(CERTS_DIR)
+    if not cert_dir.exists():
+        cert_dir = Path("/etc/haproxy/certs")
+
+    repaired = []
+    failed = []
+
+    # Find expiring certs
+    for f in cert_dir.glob("*.pem"):
+        info = _parse_certificate(f)
+        days = info.days_until_expiry
+
+        # Renew if expired or expiring within 7 days
+        if days is not None and days <= 7:
+            cert_name = f.stem
+
+            # Try ACME renewal
+            try:
+                result = subprocess.run(
+                    ["certbot", "renew", "--cert-name", cert_name, "--force-renewal"],
+                    capture_output=True, text=True, timeout=120
+                )
+
+                if result.returncode == 0:
+                    # Re-bundle
+                    le_dir = Path(f"/etc/letsencrypt/live/{cert_name}")
+                    if le_dir.exists():
+                        cert = (le_dir / "cert.pem").read_text()
+                        key = (le_dir / "privkey.pem").read_text()
+                        chain = (le_dir / "chain.pem").read_text()
+                        f.write_text(cert + key + chain)
+                        repaired.append({"name": cert_name, "days_was": days, "renewed": True})
+                    else:
+                        failed.append({"name": cert_name, "error": "No Let's Encrypt cert found"})
+                else:
+                    failed.append({"name": cert_name, "error": result.stderr[:200]})
+            except Exception as e:
+                failed.append({"name": cert_name, "error": str(e)})
+
+    # Reload HAProxy if any renewed
+    if repaired:
+        subprocess.run(["systemctl", "reload", "haproxy"], timeout=10)
+
+    return {
+        "success": len(failed) == 0,
+        "repaired": repaired,
+        "failed": failed,
+        "checked": len(list(cert_dir.glob("*.pem")))
+    }
+
+
+@router.post("/vhosts/repair", dependencies=[Depends(require_jwt)])
+async def repair_vhosts():
+    """Auto-repair: sync vhosts, fix backends, regenerate config."""
+    repairs = []
+
+    # 1. Ensure vhosts directory
+    vhosts_dir = Path("/etc/haproxy/vhosts.d")
+    vhosts_dir.mkdir(parents=True, exist_ok=True)
+
+    # 2. Check all vhosts have certs
+    vhosts = await list_vhosts()
+    missing_certs = []
+    for v in vhosts.get("vhosts", []):
+        if v.get("ssl"):
+            cert_path = Path(CERTS_DIR) / f"{v['name']}.pem"
+            if not cert_path.exists():
+                missing_certs.append(v["domain"])
+
+    if missing_certs:
+        repairs.append({
+            "action": "check_certs",
+            "status": "warning",
+            "missing": missing_certs[:10]
+        })
+    else:
+        repairs.append({"action": "check_certs", "status": "ok"})
+
+    # 3. Regenerate HAProxy config
+    try:
+        result = subprocess.run(
+            ["haproxyctl", "generate"],
+            capture_output=True, text=True, timeout=30
+        )
+        repairs.append({
+            "action": "regenerate_config",
+            "status": "ok" if result.returncode == 0 else "warning"
+        })
+    except FileNotFoundError:
+        repairs.append({"action": "regenerate_config", "status": "skipped", "message": "haproxyctl not found"})
+    except Exception as e:
+        repairs.append({"action": "regenerate_config", "status": "error", "message": str(e)})
+
+    # 4. Reload
+    try:
+        subprocess.run(["systemctl", "reload", "haproxy"], timeout=10)
+        repairs.append({"action": "reload", "status": "ok"})
+    except Exception:
+        repairs.append({"action": "reload", "status": "error"})
+
+    return {"success": True, "repairs": repairs}
 
 
 # ── ACLs ──────────────────────────────────────────────────────────

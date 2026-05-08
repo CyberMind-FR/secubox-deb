@@ -363,11 +363,21 @@
                         <div id="categoryStats">Loading...</div>
                     </div>
                 </div>
+                <div class="grid">
+                    <div class="card">
+                        <h2>🌍 Top Countries</h2>
+                        <div id="topCountries">Loading...</div>
+                    </div>
+                    <div class="card">
+                        <h2>🎯 Top Attacked Sites</h2>
+                        <div id="topVhosts">Loading...</div>
+                    </div>
+                </div>
                 <div class="card">
                     <h2>Top Attacking IPs</h2>
                     <table>
-                        <thead><tr><th>IP</th><th>Threats</th><th>Actions</th></tr></thead>
-                        <tbody id="topIpsTable"><tr><td colspan="3">Loading...</td></tr></tbody>
+                        <thead><tr><th>IP</th><th>🌍</th><th>Threats</th><th>Actions</th></tr></thead>
+                        <tbody id="topIpsTable"><tr><td colspan="4">Loading...</td></tr></tbody>
                     </table>
                 </div>
             </div>
@@ -498,18 +508,43 @@
                 ).join('');
             }
 
-            // Top IPs
+            // Top Countries
+            const countriesEl = document.getElementById('topCountries');
+            if (d.top_countries && Object.keys(d.top_countries).length > 0) {
+                countriesEl.innerHTML = Object.entries(d.top_countries).slice(0, 8).map(([code, count]) =>
+                    `<div style="display:flex;justify-content:space-between;padding:0.25rem 0;"><span>${countryToFlag(code)} ${code}</span><span style="color:var(--red)">${count}</span></div>`
+                ).join('');
+            } else {
+                countriesEl.innerHTML = '<p style="color:var(--text-dim)">No data (GeoIP DB needed)</p>';
+            }
+
+            // Top Attacked Vhosts
+            const vhostsEl = document.getElementById('topVhosts');
+            if (d.top_vhosts && Object.keys(d.top_vhosts).length > 0) {
+                vhostsEl.innerHTML = Object.entries(d.top_vhosts).slice(0, 8).map(([host, count]) =>
+                    `<div style="display:flex;justify-content:space-between;padding:0.25rem 0;"><span>${getSiteEmoji(host)} ${host.split('.')[0]}</span><span style="color:var(--yellow)">${count}</span></div>`
+                ).join('');
+            } else {
+                vhostsEl.innerHTML = '<p style="color:var(--text-dim)">No data</p>';
+            }
+
+            // Top IPs with flags (countries from backend)
             const ipsTable = document.getElementById('topIpsTable');
             if (d.top_ips && Object.keys(d.top_ips).length > 0) {
-                ipsTable.innerHTML = Object.entries(d.top_ips).map(([ip, count]) => `
+                const ipCountries = d.top_ips_countries || {};
+                ipsTable.innerHTML = Object.entries(d.top_ips).map(([ip, count]) => {
+                    const country = ipCountries[ip] || '';
+                    const flag = countryToFlag(country);
+                    return `
                     <tr>
                         <td style="font-family:monospace">${ip}</td>
+                        <td style="font-size:1.2em" title="${country}">${flag}</td>
                         <td>${count}</td>
                         <td><button class="btn danger" onclick="banIpDirect('${ip}')">Ban</button></td>
                     </tr>
-                `).join('');
+                `}).join('');
             } else {
-                ipsTable.innerHTML = '<tr><td colspan="3" style="color:var(--text-dim)">No data</td></tr>';
+                ipsTable.innerHTML = '<tr><td colspan="4" style="color:var(--text-dim)">No data</td></tr>';
             }
         }
 
@@ -561,6 +596,29 @@
             `).join('');
         }
 
+        function parseDuration(dur) {
+            // Parse duration like "4h", "24h", "7d" to milliseconds
+            if (!dur) return 0;
+            const m = dur.match(/^(\d+)([smhd])$/i);
+            if (!m) return 0;
+            const n = parseInt(m[1]);
+            const u = m[2].toLowerCase();
+            if (u === 's') return n * 1000;
+            if (u === 'm') return n * 60 * 1000;
+            if (u === 'h') return n * 60 * 60 * 1000;
+            if (u === 'd') return n * 24 * 60 * 60 * 1000;
+            return 0;
+        }
+
+        function formatTimeLeft(ms) {
+            if (ms <= 0) return 'expiring';
+            const h = Math.floor(ms / 3600000);
+            const m = Math.floor((ms % 3600000) / 60000);
+            if (h >= 24) return `${Math.floor(h/24)}d ${h%24}h`;
+            if (h > 0) return `${h}h ${m}m`;
+            return `${m}m`;
+        }
+
         async function loadBans() {
             const d = await api('/bans');
             document.getElementById('activeBans').textContent = d.total || 0;
@@ -570,20 +628,50 @@
                 tbody.innerHTML = '<tr><td colspan="6" style="color:var(--text-dim)">No active bans</td></tr>';
                 return;
             }
-            // Fetch flags for bans
-            const banIps = [...new Set(d.bans.map(b => b.value || b.ip).filter(Boolean))];
+
+            // Calculate expiry times and sort
+            const now = Date.now();
+            const bansWithExpiry = d.bans.map(b => {
+                const created = b.created_at ? new Date(b.created_at).getTime() : now;
+                const durMs = parseDuration(b.duration);
+                const expiry = created + durMs;
+                const timeLeft = expiry - now;
+                return { ...b, expiry, timeLeft, created };
+            });
+
+            // Sort: oldest expiry first (next to be unbanned at top)
+            bansWithExpiry.sort((a, b) => a.expiry - b.expiry);
+
+            // Fetch flags
+            const banIps = [...new Set(bansWithExpiry.map(b => b.value || b.ip).filter(Boolean))];
             const banFlags = {};
             await Promise.all(banIps.map(async ip => { banFlags[ip] = countryToFlag(await lookupGeoIP(ip)); }));
-            tbody.innerHTML = d.bans.map(b => {
+
+            // Split into "next to unban" (first 5) and "latest banned" (5 most recent by created)
+            const nextToUnban = bansWithExpiry.slice(0, 5);
+            const latestBanned = [...bansWithExpiry].sort((a, b) => b.created - a.created).slice(0, 5);
+
+            function renderRow(b, highlight = '') {
                 const ip = b.value || b.ip || '-';
+                const timeLeftStr = b.timeLeft > 0 ? formatTimeLeft(b.timeLeft) : '<span style="color:var(--green)">expiring</span>';
                 return `
-                <tr>
+                <tr style="${highlight}">
                     <td><span style="font-size:1.2em">${banFlags[ip] || ''}</span> <span style="font-family:monospace">${ip}</span></td>
-                    <td>${b.scenario || b.reason || '-'}</td>
-                    <td>${b.duration || '-'}</td>
-                    <td><button class="btn" onclick="unbanIp('${b.value || b.ip}')">Unban</button></td>
-                </tr>
-            `}).join('');
+                    <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis">${b.scenario || b.reason || '-'}</td>
+                    <td>${b.country || '-'}</td>
+                    <td style="font-size:0.85em">${b.asn_org || b.asn || '-'}</td>
+                    <td title="${b.duration}">${timeLeftStr}</td>
+                    <td><button class="btn" onclick="unbanIp('${ip}')">Unban</button></td>
+                </tr>`;
+            }
+
+            let html = '<tr><td colspan="6" style="background:var(--surface);color:var(--yellow);text-align:center;font-weight:bold">⏰ Next to Unban</td></tr>';
+            html += nextToUnban.map(b => renderRow(b, '')).join('');
+
+            html += '<tr><td colspan="6" style="background:var(--surface);color:var(--cyan);text-align:center;font-weight:bold;margin-top:1rem">🆕 5 Latest Banned</td></tr>';
+            html += latestBanned.map(b => renderRow(b, '')).join('');
+
+            tbody.innerHTML = html;
         }
 
         async function toggleCategory(cat, enabled) {

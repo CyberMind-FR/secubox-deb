@@ -1,5 +1,129 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-08 (Session 121)*
+*Mis à jour : 2026-05-08 (Session 126)*
+
+---
+
+## ⬜ Backlog — Deferred Items
+
+### CDN Fonts Proxy (secubox-cdn module)
+- [ ] Create `/cdn/fonts/space-grotesk.css` proxy endpoint
+- [ ] Create `/cdn/fonts/jetbrains-mono.css` proxy endpoint
+- [ ] Cache Google Fonts locally via CDN module
+- [ ] Update SOC/modules to use CDN-proxied fonts
+- [ ] Fallback to external URL if CDN unavailable
+
+---
+
+## ✅ Session 126: Hybrid Skin License & Centralized Injection
+
+### License Headers — COMPLETE
+- [x] Added CyberMind/Gérald Kerma license to `hybrid-skin.css`
+- [x] Added license to `design-tokens.css`
+- [x] Added license to `sidebar.css`
+- [x] Added license + architecture docs to `soc/index.html`
+- [x] Deployed to production (192.168.1.200)
+- [x] Updated HISTORY.md
+
+### Centralized Hybrid Skin Injection — COMPLETE
+- [x] Updated `sidebar.js` to v2.19.0
+- [x] Added `injectHybridSkin()` function
+- [x] Auto-injects: design-tokens.css, sidebar.css, hybrid-skin.css
+- [x] Auto-adds `hybrid-skin` class to body
+- [x] Auto-adds `hybrid-main` class to main content
+- [x] Any page loading sidebar.js gets hybrid skin automatically
+- [x] Verified local/live sync (all files match)
+
+---
+
+## 🔄 Session 125: Socket Repair & Health API Standardization
+
+### Socket Repair — COMPLETE
+- [x] Identified 91 running services, 87 with Unix sockets
+- [x] Fixed `ai-gateway` — permission denied for `/tmp/secubox/ai-gateway`
+- [x] Fixed `mcp-server` — socket now active
+- [x] Restarted `crowdsec`, `vhost`, `wireguard`, `system` — all responding
+- [x] Verified all critical services: hub, waf, crowdsec, haproxy, vhost, wireguard
+
+### Services Status
+| Service | Status | Notes |
+|---------|--------|-------|
+| hub | ✅ TCP:8001 | VM compatibility mode |
+| waf | ✅ socket | v1.2.0 |
+| crowdsec | ✅ socket | v2.0.0 |
+| haproxy | ✅ socket | healthy |
+| vhost | ✅ socket | ok |
+| wireguard | ✅ socket | v2.0.0 |
+| ai-gateway | ✅ socket | fixed |
+| dns | ⚠️ degraded | unbound not running |
+| metrics | ❓ no /health | needs endpoint |
+
+### Planned: Navbar-Compliant Health APIs
+- [ ] Standardized `HealthResponse` schema in `secubox_core`
+- [ ] Fields: `status`, `module`, `version`, `enabled`, `dev_stage`
+- [ ] Batch health endpoint `/api/v1/hub/public/health-batch`
+- [ ] Update `sidebar.js` to display version, dev_stage badges
+- [ ] Retrofit all 116 modules to standard format
+
+---
+
+## 🔄 Session 124: Multi-Layer Health & Auto-Repair System
+
+### Architecture Health/Doctor/Repair — EN COURS
+- [x] HAProxy: `/repair`, `/certificates/repair`, `/vhosts/repair`
+- [x] WAF: `/health`, `/doctor`, `/repair`
+- [x] Hub: `/repair/{module}`, `/repair/all`, `/repair/diagnose/{module}`
+- [ ] Appliquer pattern à TOUS les modules SecuBox
+- [ ] Vhost comme master controller (HAProxy + nginx + certs)
+- [ ] État distribué sans duplication
+- [ ] Escalade multi-niveau avec récursion
+
+### Pattern Multi-Layer
+```
+Layer 1: /health     → Status basique (up/down/degraded)
+Layer 2: /doctor     → Diagnostic détaillé + can_repair
+Layer 3: /repair     → Auto-réparation avec log
+Layer 4: Escalade    → Si repair échoue → notifier admin / hub central
+```
+
+### Modules à migrer vers ce pattern
+- [ ] secubox-crowdsec (CAPI, hub, bouncer)
+- [ ] secubox-wireguard (peers, routes)
+- [ ] secubox-nginx (vhosts, configs)
+- [ ] secubox-dns (zones, unbound)
+- [ ] secubox-mail (postfix, dovecot, dkim)
+- [ ] Tous les autres...
+
+---
+
+## ✅ Session 122: WAF GeoIP Country Lookup & Stats Enhancement
+
+### WAF API Enhancements — COMPLETE
+- [x] Added GeoIP country lookup using MaxMind GeoLite2-Country database
+- [x] Added `top_countries` to WAF threat stats (replaces reliance on top IPs)
+- [x] Added `top_vhosts` to WAF threat stats (most attacked vhosts)
+- [x] Fixed field name: `ip` → `client_ip` for log compatibility
+- [x] Added `_lookup_country()` helper with caching for performance
+- [x] Source files synced to debian package directories
+
+### Files Updated
+- `packages/secubox-waf/api/main.py`
+  - `_get_threat_stats()`: Now returns top_countries, top_vhosts, and uses correct client_ip field
+  - `_lookup_country()`: New GeoIP lookup function with LAN detection
+- `packages/secubox-waf/debian/secubox-waf/usr/lib/secubox/waf/api/main.py` (synced)
+- `packages/secubox-haproxy/debian/secubox-haproxy/usr/lib/secubox/haproxy/api/main.py` (synced)
+
+### Stats Response Now Includes
+```json
+{
+  "total_threats": 8000,
+  "threats_today": 2819,
+  "by_category": {"rce": 100, "sqli": 50, ...},
+  "by_severity": {"critical": 10, "high": 200, ...},
+  "top_ips": {"1.2.3.4": 100, ...},
+  "top_countries": {"CN": 500, "RU": 300, "US": 200, ...},
+  "top_vhosts": {"git.secubox.in": 2558, "gitea.gk2.secubox.in": 2414, ...}
+}
+```
 
 ---
 

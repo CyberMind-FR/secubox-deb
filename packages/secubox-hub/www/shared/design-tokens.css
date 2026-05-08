@@ -1,12 +1,34 @@
 /**
- * SecuBox Design Tokens
- * Based on Charte Graphique v1.0 — April 2026
- * CyberMind · Gondwana · Notre-Dame-du-Cruet · Savoie
+ * ═══════════════════════════════════════════════════════════════════════════════
+ *  SECUBOX DESIGN TOKENS — CSS Custom Properties
+ *  Based on Charte Graphique v1.0 — April 2026
+ * ═══════════════════════════════════════════════════════════════════════════════
  *
- * Six-Module Color System with Complementary Pairs:
- * - Red ↔ Green (BOOT ↔ ROOT)
- * - Yellow ↔ Violet (WALL ↔ MIND)
- * - Blue ↔ Orange (MESH ↔ AUTH)
+ *  SecuBox-Deb :: Design Tokens (CSS Custom Properties)
+ *  CyberMind — https://cybermind.fr
+ *  Author: Gérald Kerma <gandalf@gk2.net>
+ *  License: Proprietary / ANSSI CSPN candidate
+ *
+ *  Location: Notre-Dame-du-Cruet · Savoie · France
+ *  Project: SecuBox-Deb — Debian-based security appliance
+ *
+ * ───────────────────────────────────────────────────────────────────────────────
+ *  SIX-MODULE COLOR SYSTEM — Complementary Pairs:
+ * ───────────────────────────────────────────────────────────────────────────────
+ *  - Red ↔ Green    (BOOT ↔ ROOT)  — Deployment vs Terminal/System
+ *  - Yellow ↔ Violet (WALL ↔ MIND) — Firewall vs AI/Analytics
+ *  - Blue ↔ Orange   (MESH ↔ AUTH) — Network vs Authentication
+ *
+ * ───────────────────────────────────────────────────────────────────────────────
+ *  USAGE:
+ * ───────────────────────────────────────────────────────────────────────────────
+ *  Import this file first in all SecuBox module stylesheets.
+ *  Use CSS variables: var(--root-light), var(--glass-bg), etc.
+ *
+ * ───────────────────────────────────────────────────────────────────────────────
+ *  COPYRIGHT (C) 2024-2025 CyberMind / Gérald Kerma
+ *  All Rights Reserved — Unauthorized use prohibited
+ * ═══════════════════════════════════════════════════════════════════════════════
  */
 
 :root {
@@ -175,6 +197,19 @@
   --shadow-md:  0 4px 6px rgba(0, 0, 0, 0.07);
   --shadow-lg:  0 10px 15px rgba(0, 0, 0, 0.1);
   --shadow-xl:  0 20px 25px rgba(0, 0, 0, 0.15);
+  --shadow-glow: 0 0 20px;
+
+  /* ═══════════════════════════════════════════════════════════════
+     GLASS MORPHISM EFFECTS
+     ═══════════════════════════════════════════════════════════════ */
+  --glass-bg: rgba(17, 23, 32, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-highlight: rgba(255, 255, 255, 0.04);
+  --glass-blur: 20px;
+
+  /* Deep backgrounds for dark glass theme */
+  --bg-deep: #050810;
+  --bg-elevated: #1a2230;
 
   /* ═══════════════════════════════════════════════════════════════
      TRANSITIONS
@@ -221,9 +256,10 @@
 
 /* ═══════════════════════════════════════════════════════════════
    DARK THEME OVERRIDE
-   Apply with class="dark" on <html> or <body>
+   Apply with class="dark", "hybrid-skin" on <html> or <body>
    ═══════════════════════════════════════════════════════════════ */
 .dark,
+.hybrid-skin,
 [data-theme="dark"] {
   --bg:       var(--bg-dark);
   --surface:  var(--surface-dark);

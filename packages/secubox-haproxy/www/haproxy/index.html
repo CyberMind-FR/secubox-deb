@@ -755,8 +755,13 @@
             try {
                 const res = await fetch(API + path, { ...opts, headers: headers() });
                 if (res.status === 401) { window.location = '/login.html'; return {}; }
+                const ct = res.headers.get('content-type') || '';
+                if (!ct.includes('application/json')) {
+                    console.warn('[API] Non-JSON response for', path, ':', ct);
+                    return {};
+                }
                 return res.json();
-            } catch { return {}; }
+            } catch (e) { console.warn('[API] Error:', path, e); return {}; }
         }
 
         /* ══════════════════════════════════════════════════════════════ */
@@ -771,6 +776,12 @@
                     return { error: 'Unauthorized' };
                 }
 
+                const ct = res.headers.get('content-type') || '';
+                if (!ct.includes('application/json')) {
+                    console.warn('[API] Non-JSON response for', path, ':', ct);
+                    return { error: 'Non-JSON response' };
+                }
+
                 const data = await res.json();
 
                 if (!res.ok || data.error) {
@@ -781,6 +792,7 @@
 
                 return data;
             } catch (e) {
+                console.warn('[API] Error:', path, e);
                 showToast('Network error: ' + e.message, 'error');
                 return { error: e.message };
             }

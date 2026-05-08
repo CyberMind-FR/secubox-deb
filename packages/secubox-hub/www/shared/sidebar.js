@@ -1,13 +1,28 @@
 /**
- * SECUBOX SIDEBAR — Health-Aware Navigation
- * v2.17.1 — Simplified LED update logic, always reflects health status
- * CHECKED = hide only black/unknown, UNCHECKED = show all
+ * ═══════════════════════════════════════════════════════════════════════════════
+ *  SECUBOX SIDEBAR — Health-Aware Navigation + Hybrid Skin Injector
+ *  v2.23.0 — Top menu bar + health/CPU/MEM in status bar
+ * ═══════════════════════════════════════════════════════════════════════════════
+ *
+ *  SecuBox-Deb :: Sidebar Component
+ *  CyberMind — https://cybermind.fr
+ *  Author: Gerald Kerma <gandalf@gk2.net>
+ *  License: Proprietary / ANSSI CSPN candidate
+ *
+ *  Features:
+ *  - Automatic hybrid skin CSS injection (design-tokens, sidebar, hybrid-skin)
+ *  - Health-aware LED indicators with batch endpoint
+ *  - Version & dev_stage badges
+ *  - CHECKED = hide unknown, UNCHECKED = show all
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════
  */
 
 (function() {
     const MENU_API = '/api/v1/hub/public/menu';
-    const VERSION = 'v2.17.1';
-    const THEME_KEY = 'sbx_theme';
+    const BATCH_HEALTH_API = '/api/v1/hub/public/health-batch';
+    const VERSION = 'v2.23.0';
+    // Theme system removed - hybrid-skin is the universal theme
     const HEALTH_CACHE_KEY = 'sbx_health_cache';
     const SORT_PREF_KEY = 'sbx_health_sort';
 
@@ -16,13 +31,274 @@
     const HEALTH_REQUEST_TIMEOUT = 4000;
     const BATCH_SIZE = 8;
 
+    // Hybrid skin CSS files (injected automatically)
+    const HYBRID_SKIN_CSS = [
+        '/shared/design-tokens.css',
+        '/shared/sidebar.css',
+        '/shared/hybrid-skin.css'
+    ];
+
     let ALL_MODULES = [];
 
     const LED_EMOJI = { ok: '🟢', warn: '🟡', error: '🔴', unknown: '⚫', checking: '🔵' };
-    const THEMES = {
-        light: { css: '/shared/crt-light.css', sidebar: '/shared/sidebar-light.css', icon: '☀️' },
-        dark: { css: '/shared/crt-system.css', sidebar: '/shared/sidebar.css', icon: '🌙' }
+
+    // Page icons for menu bar
+    const PAGE_ICONS = {
+        '/': '🏠', '/hub/': '🏠', '/soc/': '🛡️', '/waf/': '🔥', '/crowdsec/': '👁️',
+        '/wireguard/': '🔐', '/netdata/': '📊', '/system/': '⚙️', '/vhost/': '🌐',
+        '/dpi/': '🔍', '/netmodes/': '🔀', '/qos/': '📶', '/nac/': '🚫',
+        '/auth/': '🔑', '/cdn/': '💾', '/mediaflow/': '🎬', '/portal/': '🚪',
+        '/metrics/': '📈', '/certs/': '📜', '/vortex-dns/': '🌀', '/eye-remote/': '👁️'
     };
+
+    function getPageIcon(path) {
+        for (var p in PAGE_ICONS) {
+            if (path === p || path.startsWith(p)) return PAGE_ICONS[p];
+        }
+        return '📦';
+    }
+
+    // ============================================
+    // HYBRID SKIN INJECTION (Centralized)
+    // ============================================
+
+    function injectHybridSkin() {
+        // Skip if already injected
+        if (document.getElementById('secubox-hybrid-skin-injected')) return;
+
+        // Create marker
+        var marker = document.createElement('meta');
+        marker.id = 'secubox-hybrid-skin-injected';
+        marker.name = 'secubox-skin';
+        marker.content = 'hybrid';
+        document.head.appendChild(marker);
+
+        // 1. Inject hybrid skin CSS files (append to end for priority)
+        HYBRID_SKIN_CSS.forEach(function(cssPath) {
+            if (document.querySelector('link[href="' + cssPath + '"]')) return;
+            var link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = cssPath;
+            document.head.appendChild(link);
+        });
+
+        // 2. Add hybrid-skin class to body (CSS uses !important to override)
+        document.body.classList.add('hybrid-skin');
+
+        // 3. Add hybrid-main to main content
+        var main = document.querySelector('.main, .main-content, main');
+        if (main) main.classList.add('hybrid-main');
+
+        // 4. Force dark background via inline style (highest priority)
+        document.body.style.setProperty('background', 'var(--bg-deep, #050810)', 'important');
+        document.body.style.setProperty('background-image',
+            'radial-gradient(ellipse at 30% 20%, rgba(20,140,102,0.05) 0%, transparent 50%), ' +
+            'radial-gradient(ellipse at 70% 80%, rgba(44,112,192,0.03) 0%, transparent 50%)', 'important');
+
+        // 5. Force sidebar glass morphism via inline style
+        var sidebar = document.getElementById('sidebar') || document.querySelector('.sidebar');
+        if (sidebar) {
+            sidebar.style.setProperty('background', 'rgba(17, 23, 32, 0.85)', 'important');
+            sidebar.style.setProperty('backdrop-filter', 'blur(20px)', 'important');
+            sidebar.style.setProperty('-webkit-backdrop-filter', 'blur(20px)', 'important');
+            sidebar.style.setProperty('border-right', '1px solid rgba(255, 255, 255, 0.08)', 'important');
+            sidebar.style.setProperty('box-shadow', '2px 0 20px rgba(0,0,0,0.3)', 'important');
+        }
+
+        // 5b. Force dark backgrounds on sidebar header and footer
+        setTimeout(function() {
+            var sidebarHeader = document.querySelector('.sidebar-header');
+            var sidebarFooter = document.querySelector('.sidebar-footer');
+            if (sidebarHeader) {
+                sidebarHeader.style.setProperty('background', 'transparent', 'important');
+                sidebarHeader.style.setProperty('background-color', 'transparent', 'important');
+            }
+            if (sidebarFooter) {
+                sidebarFooter.style.setProperty('background', 'transparent', 'important');
+                sidebarFooter.style.setProperty('background-color', 'transparent', 'important');
+            }
+        }, 100);
+
+        // 5c. Inject global TOP menu bar (replaces page headers)
+        if (!document.getElementById('global-menu-bar')) {
+            var pageTitle = document.title.replace(' - SecuBox', '').replace('SecuBox ', '') || 'Dashboard';
+            var pagePath = window.location.pathname;
+            var pageIcon = getPageIcon(pagePath);
+
+            var menuBar = document.createElement('div');
+            menuBar.id = 'global-menu-bar';
+            menuBar.className = 'global-menu-bar';
+            menuBar.innerHTML = '<div class="menu-left">' +
+                '<span class="menu-icon">' + pageIcon + '</span>' +
+                '<span class="menu-title" id="gmb-title">' + pageTitle + '</span>' +
+                '<span class="menu-breadcrumb" id="gmb-breadcrumb">' + pagePath + '</span>' +
+                '</div><div class="menu-right">' +
+                '<button class="menu-btn" onclick="location.reload()" title="Refresh">🔄</button>' +
+                '<button class="menu-btn" onclick="location.href=\'/system/\'" title="Settings">⚙️</button>' +
+                '<button class="menu-btn danger" onclick="SecuBoxSidebar.logout()" title="Logout">🚪</button>' +
+                '</div>';
+            document.body.insertBefore(menuBar, document.body.firstChild);
+
+            // Hide original page headers
+            setTimeout(function() {
+                document.querySelectorAll('.page-header, .header, header:not(.global-menu-bar)').forEach(function(h) {
+                    if (!h.classList.contains('global-menu-bar') && !h.closest('.global-menu-bar')) {
+                        h.style.display = 'none';
+                    }
+                });
+            }, 50);
+        }
+
+        // 5d. Inject global BOTTOM status bar with health
+        if (!document.getElementById('global-status-bar')) {
+            var statusBar = document.createElement('div');
+            statusBar.id = 'global-status-bar';
+            statusBar.className = 'global-status-bar';
+            statusBar.innerHTML = '<div class="status-left">' +
+                '<div class="status-item"><span class="status-label">SecuBox</span><span class="status-value" id="gsb-version">' + VERSION + '</span></div>' +
+                '<div class="status-item clickable" onclick="SecuBoxSidebar.showStatusPanel()" title="Click for details"><span class="status-label">Health</span><span class="status-value" id="gsb-health">🔵 --</span></div>' +
+                '<div class="status-item"><span class="status-label">Mode</span><span class="status-value info" id="gsb-mode">--</span></div>' +
+                '<div class="status-item"><span class="status-label">Auth</span><span class="status-value" id="gsb-auth">--</span></div>' +
+                '</div><div class="status-right">' +
+                '<div class="status-item"><span class="status-label">CPU</span><span class="status-value" id="gsb-cpu">--%</span></div>' +
+                '<div class="status-item"><span class="status-label">MEM</span><span class="status-value" id="gsb-mem">--%</span></div>' +
+                '<div class="status-item"><span class="status-label">Uptime</span><span class="status-value" id="gsb-uptime">--</span></div>' +
+                '<div class="status-item"><span class="status-value" style="color: var(--muted-dark);">CyberMind</span></div>' +
+                '</div>';
+            document.body.appendChild(statusBar);
+            loadStatusBarData();
+        }
+
+        // 6. Force dark on ALL light backgrounds in main content
+        function forceDarkTheme() {
+            document.querySelectorAll('.main, .main *, .content, .content *, main, main *, .main-content, .main-content *').forEach(function(el) {
+                var style = window.getComputedStyle(el);
+                var bg = style.backgroundColor;
+                // If background is light (RGB > 150), force dark
+                if (bg && bg !== 'transparent' && bg !== 'rgba(0, 0, 0, 0)') {
+                    var match = bg.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+                    if (match) {
+                        var r = parseInt(match[1]), g = parseInt(match[2]), b = parseInt(match[3]);
+                        // Light background detection (average > 150)
+                        if ((r + g + b) / 3 > 150) {
+                            el.style.setProperty('background', 'rgba(17, 23, 32, 0.5)', 'important');
+                            el.style.setProperty('background-color', 'rgba(17, 23, 32, 0.5)', 'important');
+                        }
+                    }
+                }
+                // Force text color on all elements
+                var color = style.color;
+                if (color) {
+                    var colorMatch = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+                    if (colorMatch) {
+                        var cr = parseInt(colorMatch[1]), cg = parseInt(colorMatch[2]), cb = parseInt(colorMatch[3]);
+                        // Dark text on dark bg = bad, lighten it
+                        if ((cr + cg + cb) / 3 < 100) {
+                            el.style.setProperty('color', 'rgba(232, 230, 217, 0.85)', 'important');
+                        }
+                    }
+                }
+            });
+        }
+
+        // Run immediately and after short delay (for dynamic content)
+        forceDarkTheme();
+        setTimeout(forceDarkTheme, 200);
+        setTimeout(forceDarkTheme, 500);
+
+        console.log('[Sidebar ' + VERSION + '] Hybrid skin applied');
+    }
+
+    // Load status bar data from API
+    async function loadStatusBarData() {
+        var token = localStorage.getItem('sbx_token');
+        var headers = token ? { 'Authorization': 'Bearer ' + token } : {};
+
+        try {
+            // Load dashboard for version and uptime
+            var res = await fetch('/api/v1/hub/dashboard', { headers: headers });
+            if (res.ok) {
+                var data = await res.json();
+                if (data.build_info && data.build_info.version) {
+                    var el = document.getElementById('gsb-version');
+                    if (el) el.textContent = 'v' + data.build_info.version;
+                }
+                if (data.uptime) {
+                    var el = document.getElementById('gsb-uptime');
+                    if (el) el.textContent = data.uptime;
+                }
+            }
+
+            // Load boot mode
+            var modeRes = await fetch('/api/v1/hub/boot_mode', { headers: headers });
+            if (modeRes.ok) {
+                var modeData = await modeRes.json();
+                var modeEl = document.getElementById('gsb-mode');
+                if (modeEl && modeData.mode) {
+                    modeEl.textContent = modeData.mode.charAt(0).toUpperCase() + modeData.mode.slice(1);
+                    modeEl.className = 'status-value ' + (modeData.mode === 'kiosk' ? 'info' : 'warn');
+                }
+            }
+
+            // Load auth mode
+            var authRes = await fetch('/api/v1/hub/auth_mode', { headers: headers });
+            if (authRes.ok) {
+                var authData = await authRes.json();
+                var authEl = document.getElementById('gsb-auth');
+                if (authEl && authData.mode) {
+                    authEl.textContent = authData.mode;
+                    authEl.className = 'status-value ' + (authData.mode.toLowerCase() === 'zkp' ? 'ok' : '');
+                }
+            }
+
+            // Load CPU and memory from dashboard
+            var dashRes = await fetch('/api/v1/hub/dashboard', { headers: headers });
+            if (dashRes.ok) {
+                var dashData = await dashRes.json();
+                var cpuEl = document.getElementById('gsb-cpu');
+                var memEl = document.getElementById('gsb-mem');
+                if (cpuEl && dashData.cpu_percent !== undefined) {
+                    var cpu = Math.round(dashData.cpu_percent);
+                    cpuEl.textContent = cpu + '%';
+                    cpuEl.className = 'status-value ' + (cpu > 80 ? 'error' : cpu > 50 ? 'warn' : 'ok');
+                }
+                if (memEl && dashData.memory_percent !== undefined) {
+                    var mem = Math.round(dashData.memory_percent);
+                    memEl.textContent = mem + '%';
+                    memEl.className = 'status-value ' + (mem > 80 ? 'error' : mem > 50 ? 'warn' : 'ok');
+                }
+                if (dashData.uptime) {
+                    var uptimeEl = document.getElementById('gsb-uptime');
+                    if (uptimeEl) uptimeEl.textContent = dashData.uptime;
+                }
+            }
+
+            // Load health summary from batch endpoint
+            var healthRes = await fetch('/api/v1/hub/public/health-batch', { headers: headers });
+            if (healthRes.ok) {
+                var healthData = await healthRes.json();
+                var healthEl = document.getElementById('gsb-health');
+                if (healthEl && healthData.modules) {
+                    var ok = 0, warn = 0, err = 0, total = 0;
+                    Object.values(healthData.modules).forEach(function(m) {
+                        total++;
+                        if (m.status === 'ok') ok++;
+                        else if (m.status === 'warn' || m.status === 'degraded') warn++;
+                        else if (m.status === 'error') err++;
+                    });
+                    var emoji = err > 0 ? '🔴' : warn > 0 ? '🟡' : '🟢';
+                    healthEl.innerHTML = emoji + ' ' + ok + '/' + total;
+                    healthEl.className = 'status-value ' + (err > 0 ? 'error' : warn > 0 ? 'warn' : 'ok');
+                    healthEl.title = ok + ' OK, ' + warn + ' warnings, ' + err + ' errors';
+                }
+            }
+        } catch (e) {
+            console.log('[Sidebar] Status bar data error:', e);
+        }
+
+        // Refresh every 30s
+        setTimeout(loadStatusBarData, 30000);
+    }
 
     let healthCache = {};
     let healthCheckInProgress = {};
@@ -89,12 +365,31 @@
             try { var c = localStorage.getItem(HEALTH_CACHE_KEY); if (c) existing = JSON.parse(c); } catch (e) {}
             for (var mod in health) {
                 existing[mod] = {
-                    status: health[mod].status, msg: health[mod].msg,
+                    status: health[mod].status,
+                    msg: health[mod].msg,
+                    version: health[mod].version,
+                    dev_stage: health[mod].dev_stage,
                     timestamp: health[mod].timestamp || Date.now()
                 };
             }
             localStorage.setItem(HEALTH_CACHE_KEY, JSON.stringify(existing));
         } catch (e) {}
+    }
+
+    // ============================================
+    // DEV STAGE BADGES
+    // ============================================
+
+    function getDevStageBadge(stage) {
+        if (stage === 'alpha') return '<span class="dev-badge alpha" title="Alpha">α</span>';
+        if (stage === 'beta') return '<span class="dev-badge beta" title="Beta">β</span>';
+        return ''; // No badge for production
+    }
+
+    function getVersionTooltip(version, devStage) {
+        if (!version) return '';
+        var stage = devStage && devStage !== 'production' ? ' (' + devStage + ')' : '';
+        return 'v' + version + stage;
     }
 
     // ============================================
@@ -127,13 +422,16 @@
                         try {
                             var d = JSON.parse(text);
                             healthCheckInProgress[mod] = false;
+                            // Extract version and dev_stage from standard health response
+                            var version = d.version || null;
+                            var devStage = d.dev_stage || 'production';
                             if (d.status === 'ok' || d.healthy === true || d.status === 'healthy') {
-                                return { status: 'ok', msg: d.message || 'OK', timestamp: Date.now() };
+                                return { status: 'ok', msg: d.message || 'OK', version: version, dev_stage: devStage, timestamp: Date.now() };
                             }
                             if (d.status === 'degraded' || d.status === 'warn' || d.warning) {
-                                return { status: 'warn', msg: d.message || 'Degraded', timestamp: Date.now() };
+                                return { status: 'warn', msg: d.message || 'Degraded', version: version, dev_stage: devStage, timestamp: Date.now() };
                             }
-                            return { status: 'error', msg: d.message || d.status || 'Error', timestamp: Date.now() };
+                            return { status: 'error', msg: d.message || d.status || 'Error', version: version, dev_stage: devStage, timestamp: Date.now() };
                         } catch (parseErr) {
                             // JSON parse failed - treat as unknown
                             healthCheckInProgress[mod] = false;
@@ -532,19 +830,10 @@
 
     function getHideUnknownPref() { try { return localStorage.getItem(SORT_PREF_KEY) === 'true'; } catch (e) { return false; } }
     function setHideUnknownPref(enabled) { try { localStorage.setItem(SORT_PREF_KEY, enabled ? 'true' : 'false'); hideUnknownEnabled = enabled; } catch (e) {} }
-    function getCurrentTheme() { return localStorage.getItem(THEME_KEY) || 'light'; }
 
-    function setTheme(theme) {
-        localStorage.setItem(THEME_KEY, theme);
-        var config = THEMES[theme];
-        document.querySelectorAll('link[rel="stylesheet"]').forEach(function(link) {
-            var href = link.getAttribute('href');
-            if (href.includes('crt-light.css') || href.includes('crt-system.css')) link.setAttribute('href', config.css);
-            if (href.includes('sidebar-light.css') || (href.includes('sidebar.css') && href.endsWith('.css'))) link.setAttribute('href', config.sidebar);
-        });
-        document.body.classList.remove('crt-light', 'crt-body', 'crt-scanlines');
-        document.body.classList.add(theme === 'light' ? 'crt-light' : 'crt-body');
-        if (theme === 'dark') document.body.classList.add('crt-scanlines');
+    // Theme switching removed - hybrid-skin is the universal theme
+    function setTheme() {
+        // No-op: hybrid-skin is now the only theme
     }
 
     function toggleHideUnknown() {
@@ -627,11 +916,11 @@
         var sidebar = document.getElementById('sidebar');
         if (!sidebar) return;
 
+        // Inject hybrid skin CSS (centralized for all modules)
+        injectHybridSkin();
+
         injectStyles();
-        setTheme(getCurrentTheme());
         hideUnknownEnabled = getHideUnknownPref();
-        var curTheme = getCurrentTheme();
-        var othTheme = curTheme === 'light' ? 'dark' : 'light';
 
         sidebar.innerHTML = '<div class="sidebar-header"><a href="/"><span class="logo-icon">🔒</span><div><span class="logo">SECUBOX</span><span class="logo-version">' + VERSION + '</span></div></a></div><div class="sidebar-nav"><div class="nav-section"><div class="nav-section-title"><span>Loading...</span></div></div></div>';
 
@@ -687,10 +976,18 @@
                         }
                     }
 
+                    // Get version/dev_stage for badge and tooltip
+                    var devStage = (preCache && preCache[mod]) ? preCache[mod].dev_stage : null;
+                    var version = (preCache && preCache[mod]) ? preCache[mod].version : null;
+                    var devBadge = getDevStageBadge(devStage);
+                    var versionTip = getVersionTooltip(version, devStage);
+                    var fullTitle = versionTip ? (initialTitle + ' | ' + versionTip) : initialTitle;
+
                     menuHTML += '<a href="' + item.path + '" class="nav-item' + (isActive ? ' active' : '') + '" data-module="' + mod + '" onclick="return SecuBoxSidebar.navClick(event,\'' + mod + '\',\'' + item.path + '\')">' +
                         '<span class="icon">' + item.icon + '</span>' +
                         '<span>' + item.name + '</span>' +
-                        '<span class="status-led" title="' + initialTitle + '">' + initialLED + '</span></a>';
+                        devBadge +
+                        '<span class="status-led" title="' + fullTitle + '">' + initialLED + '</span></a>';
                 });
 
                 menuHTML += '</div></div>';
@@ -699,11 +996,6 @@
             sidebar.innerHTML = '<div class="sidebar-header"><a href="/"><span class="logo-icon">🔒</span><div><span class="logo">SECUBOX</span><span class="logo-version">' + VERSION + '</span></div></a></div>' +
                 '<div class="sidebar-nav">' + menuHTML + '</div>' +
                 '<div class="sidebar-footer">' +
-                '<div class="footer-row">' +
-                '<div class="filter-btn' + (hideUnknownEnabled ? ' active' : '') + '" id="filter-btn" onclick="SecuBoxSidebar.toggleHideUnknown()" title="' + (hideUnknownEnabled ? 'Active only' : 'Show all') + '">🎯</div>' +
-                '<div class="status-indicator" id="status-indicator" title="Health Status"><span>🩺</span><span>' + ALL_MODULES.length + '</span></div>' +
-                '</div>' +
-                '<button class="theme-toggle" onclick="SecuBoxSidebar.toggleTheme()" title="' + othTheme + '"><span class="theme-icon">' + THEMES[othTheme].icon + '</span></button>' +
                 '<div class="sidebar-clock" id="sidebar-clock">00:00:00</div>' +
                 '<div class="sidebar-user"><span class="sidebar-user-avatar">👤</span><div class="sidebar-user-info"><div class="sidebar-user-name">' + user + '</div><div class="sidebar-user-role">OPERATOR</div></div><button class="sidebar-logout" onclick="localStorage.removeItem(\'sbx_token\');window.location.href=\'/portal/login.html\';">EXIT</button></div>' +
                 '</div>';
@@ -743,7 +1035,12 @@
 
     window.SecuBoxSidebar = {
         build: buildSidebar,
-        toggleTheme: function() { setTheme(getCurrentTheme() === 'light' ? 'dark' : 'light'); },
+        toggleTheme: function() { /* Removed - hybrid-skin is the only theme */ },
+        logout: function() {
+            localStorage.removeItem('sbx_token');
+            localStorage.removeItem('secubox_token');
+            window.location.href = '/portal/login.html';
+        },
         checkHealth: checkAllHealth,
         checkModule: checkModuleHealth,
         updateLEDs: updateLEDs,
