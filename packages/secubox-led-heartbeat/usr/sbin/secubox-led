@@ -1,0 +1,99 @@
+#!/bin/bash
+# SecuBox LED Control - Manual LED status control
+# CyberMind — https://cybermind.fr
+# Author: Gerald Kerma <gandalf@gk2.net>
+#
+# Usage:
+#   secubox-led <layer> <status>
+#   secubox-led all <status>
+#
+# Layers: hw|1|bottom, svc|2|middle, sec|3|top
+# Status: ok|green, warn|yellow, error|red, msg|blue, off
+#
+# Brightness value 10 is optimal for IS31FL3199 on Debian (255 causes I2C errors)
+
+set -euo pipefail
+
+# Brightness 100 works reliably with proper I2C delays
+readonly BRIGHTNESS=100
+readonly I2C_DELAY=0.03
+
+led_path() { echo "/sys/class/leds/$1:led$2/brightness"; }
+
+set_rgb() {
+    local led=$1 r=$2 g=$3 b=$4
+    echo "$r" > "$(led_path red $led)" 2>/dev/null || true
+    sleep $I2C_DELAY
+    echo "$g" > "$(led_path green $led)" 2>/dev/null || true
+    sleep $I2C_DELAY
+    echo "$b" > "$(led_path blue $led)" 2>/dev/null || true
+    sleep $I2C_DELAY
+}
+
+set_led() {
+    local led=$1 status=$2
+    case "$status" in
+        ok|good|green)     set_rgb $led 0 $BRIGHTNESS 0 ;;
+        warn|yellow)       set_rgb $led $BRIGHTNESS $((BRIGHTNESS/2)) 0 ;;
+        error|bad|red)     set_rgb $led $BRIGHTNESS 0 0 ;;
+        msg|info|blue)     set_rgb $led 0 0 $BRIGHTNESS ;;
+        off|clear)         set_rgb $led 0 0 0 ;;
+        *)
+            echo "Unknown status: $status" >&2
+            echo "Valid: ok, warn, error, msg, off" >&2
+            return 1
+            ;;
+    esac
+}
+
+usage() {
+    cat << 'EOF'
+SecuBox LED Control
+
+Usage:
+  secubox-led <layer> <status>
+  secubox-led all <status>
+
+Layers:
+  hw, 1, bottom    LED1 - Hardware layer (network, CPU, memory)
+  svc, 2, middle   LED2 - Services layer (vhosts, certs, HAProxy)
+  sec, 3, top      LED3 - Security layer (CrowdSec, attacks)
+  all              All LEDs
+
+Status:
+  ok, green        Green - All healthy
+  warn, yellow     Yellow - Warning, attention needed
+  error, red       Red - Critical, action required
+  msg, blue        Blue - Information, active mitigation
+  off              Off
+
+Examples:
+  secubox-led hw ok       # Hardware: green
+  secubox-led svc warn    # Services: yellow
+  secubox-led sec error   # Security: red
+  secubox-led all ok      # All green
+  secubox-led all off     # All off
+EOF
+    exit 1
+}
+
+[ $# -lt 2 ] && usage
+
+layer="$1"
+status="$2"
+
+case "$layer" in
+    hw|1|bottom)   set_led 1 "$status" ;;
+    svc|2|middle)  set_led 2 "$status" ;;
+    sec|3|top)     set_led 3 "$status" ;;
+    all)
+        set_led 1 "$status"
+        set_led 2 "$status"
+        set_led 3 "$status"
+        ;;
+    *)
+        echo "Unknown layer: $layer" >&2
+        echo "Valid: hw, svc, sec, 1, 2, 3, bottom, middle, top, all" >&2
+        exit 1
+        ;;
+esac

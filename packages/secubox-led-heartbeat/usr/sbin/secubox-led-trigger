@@ -1,0 +1,160 @@
+#!/bin/bash
+# SecuBox LED Trigger Setup - Uses slow kernel timers for reliable pulsing
+# CyberMind — https://cybermind.fr
+# Author: Gerald Kerma <gandalf@gk2.net>
+#
+# Uses slow timer triggers to avoid I2C bus errors on Debian 6.12 kernel.
+# The mv64xxx I2C driver has timing issues with rapid LED updates.
+
+set -euo pipefail
+
+LED_BASE="/sys/class/leds"
+
+set_trigger() {
+    local led=$1 color=$2 trigger=$3
+    local path="$LED_BASE/${color}:led${led}/trigger"
+    [ -f "$path" ] && echo "$trigger" > "$path" 2>/dev/null || true
+}
+
+set_timer() {
+    local led=$1 color=$2 on=$3 off=$4
+    local base="$LED_BASE/${color}:led${led}"
+    echo timer > "$base/trigger" 2>/dev/null || true
+    echo "$on" > "$base/delay_on" 2>/dev/null || true
+    echo "$off" > "$base/delay_off" 2>/dev/null || true
+}
+
+set_brightness() {
+    local led=$1 color=$2 val=$3
+    echo "$val" > "$LED_BASE/${color}:led${led}/brightness" 2>/dev/null || true
+    sleep 0.2
+}
+
+clear_all() {
+    for n in 1 2 3; do
+        for c in red green blue; do
+            set_trigger $n $c none
+            sleep 0.1
+        done
+    done
+}
+
+usage() {
+    cat << 'EOF'
+SecuBox LED Trigger Setup
+
+Usage:
+  secubox-led-trigger <mode>
+
+Modes:
+  status     Health status with slow timers (default)
+  pulse      All LEDs pulse at different rates
+  solid      Solid colors based on health status
+  off        Turn off all LEDs
+  show       Show current trigger settings
+
+Status mode (slow timers to avoid I2C errors):
+  LED1: Orange, 4s cycle (HW layer)
+  LED2: Green, 3s cycle (SVC layer)
+  LED3: Blue, 2s cycle (SEC layer)
+
+EOF
+    exit 1
+}
+
+show_triggers() {
+    echo "Current LED triggers:"
+    for n in 1 2 3; do
+        echo -n "LED$n: "
+        for c in red green blue; do
+            local t=$(cat "$LED_BASE/${c}:led${n}/trigger" 2>/dev/null | grep -oP '\[.*\]' || echo "[none]")
+            [ "$t" != "[none]" ] && echo -n "$c=$t "
+        done
+        echo
+    done
+}
+
+case "${1:-status}" in
+    status|pulse)
+        echo "Setting up slow timer triggers..."
+        clear_all
+        sleep 1
+
+        # LED1: Orange (HW layer) - slowest, 4s cycle
+        set_timer 1 red 2000 2000
+        set_timer 1 green 2000 2000
+
+        # LED2: Green (SVC layer) - medium, 3s cycle
+        set_timer 2 green 1500 1500
+
+        # LED3: Blue (SEC layer) - fastest, 2s cycle
+        set_timer 3 blue 1000 1000
+
+        echo "Done. LEDs pulsing:"
+        echo "  LED1: Orange, 4s cycle (HW)"
+        echo "  LED2: Green, 3s cycle (SVC)"
+        echo "  LED3: Blue, 2s cycle (SEC)"
+        ;;
+
+    solid)
+        echo "Setting solid colors based on status..."
+        clear_all
+        sleep 1
+
+        # Read status file if available
+        if [ -f /tmp/secubox/led-status ]; then
+            status=$(cat /tmp/secubox/led-status)
+            hw=$(echo "$status" | grep -oP 'HW:\[\K[^:]+' || echo "green")
+            svc=$(echo "$status" | grep -oP 'SVC:\[\K[^:]+' || echo "green")
+            sec=$(echo "$status" | grep -oP 'SEC:\[\K[^:]+' || echo "green")
+        else
+            hw="green"; svc="green"; sec="green"
+        fi
+
+        # Set colors based on status
+        case "$hw" in
+            green)  set_brightness 1 green 100 ;;
+            yellow) set_brightness 1 red 100; set_brightness 1 green 50 ;;
+            orange) set_brightness 1 red 100; set_brightness 1 green 25 ;;
+            red)    set_brightness 1 red 100 ;;
+            *)      set_brightness 1 green 100 ;;
+        esac
+
+        case "$svc" in
+            green)  set_brightness 2 green 100 ;;
+            yellow) set_brightness 2 red 100; set_brightness 2 green 50 ;;
+            red)    set_brightness 2 red 100 ;;
+            *)      set_brightness 2 green 100 ;;
+        esac
+
+        case "$sec" in
+            green)  set_brightness 3 green 100 ;;
+            blue)   set_brightness 3 blue 100 ;;
+            yellow) set_brightness 3 red 100; set_brightness 3 green 50 ;;
+            red)    set_brightness 3 red 100 ;;
+            *)      set_brightness 3 green 100 ;;
+        esac
+
+        echo "Solid colors set: HW=$hw SVC=$svc SEC=$sec"
+        ;;
+
+    off)
+        echo "Turning off all LEDs..."
+        clear_all
+        sleep 1
+        for n in 1 2 3; do
+            for c in red green blue; do
+                set_brightness $n $c 0
+            done
+        done
+        echo "Done."
+        ;;
+
+    show)
+        show_triggers
+        ;;
+
+    *)
+        usage
+        ;;
+esac
