@@ -1,7 +1,7 @@
 /**
  * ═══════════════════════════════════════════════════════════════════════════════
  *  SECUBOX SIDEBAR — Health-Aware Navigation + Hybrid Skin Injector
- *  v2.23.0 — Top menu bar + health/CPU/MEM in status bar
+ *  v2.25.2 — Smart Strip with persistent histogram cache (60 samples, 1h TTL)
  * ═══════════════════════════════════════════════════════════════════════════════
  *
  *  SecuBox-Deb :: Sidebar Component
@@ -21,7 +21,17 @@
 (function() {
     const MENU_API = '/api/v1/hub/public/menu';
     const BATCH_HEALTH_API = '/api/v1/hub/public/health-batch';
-    const VERSION = 'v2.23.0';
+    const VERSION = 'v2.30.0';
+
+    // Round UI Module Colors (6-module system)
+    const MODULE_COLORS = {
+        AUTH: { color: '#C04E24', metric: 'cpu', label: 'CPU' },
+        WALL: { color: '#9A6010', metric: 'mem', label: 'MEM' },
+        BOOT: { color: '#803018', metric: 'disk', label: 'DISK' },
+        MIND: { color: '#3D35A0', metric: 'load', label: 'LOAD' },
+        ROOT: { color: '#0A5840', metric: 'temp', label: 'TEMP' },
+        MESH: { color: '#104A88', metric: 'net', label: 'NET' }
+    };
     // Theme system removed - hybrid-skin is the universal theme
     const HEALTH_CACHE_KEY = 'sbx_health_cache';
     const SORT_PREF_KEY = 'sbx_health_sort';
@@ -131,8 +141,24 @@
             menuBar.innerHTML = '<div class="menu-left">' +
                 '<span class="menu-icon">' + pageIcon + '</span>' +
                 '<span class="menu-title" id="gmb-title">' + pageTitle + '</span>' +
-                '<span class="menu-breadcrumb" id="gmb-breadcrumb">' + pagePath + '</span>' +
+                // Health Bumper with sync emojis
+                '<div class="health-bumper" id="gmb-health-bumper" onclick="SecuBoxSidebar.showStatusPanel()" title="System Health">' +
+                '<span class="hb-led" id="hb-led">●</span>' +
+                '<span class="hb-status" id="hb-status">NOMINAL</span>' +
+                '</div>' +
+                // Smart Strip (6 mini modules) - moved to top bar with hover tooltips
+                '<div class="smart-strip" id="gmb-smart-strip">' +
+                '<div class="strip-module" data-mod="AUTH" data-metric="cpu" onmouseenter="SecuBoxSidebar.showStripPopup(this)" onmouseleave="SecuBoxSidebar.hideStripPopup()"><div class="strip-led" style="background:#C04E24"></div><span class="strip-val" id="ss-cpu">--</span></div>' +
+                '<div class="strip-module" data-mod="WALL" data-metric="mem" onmouseenter="SecuBoxSidebar.showStripPopup(this)" onmouseleave="SecuBoxSidebar.hideStripPopup()"><div class="strip-led" style="background:#9A6010"></div><span class="strip-val" id="ss-mem">--</span></div>' +
+                '<div class="strip-module" data-mod="BOOT" data-metric="disk" onmouseenter="SecuBoxSidebar.showStripPopup(this)" onmouseleave="SecuBoxSidebar.hideStripPopup()"><div class="strip-led" style="background:#803018"></div><span class="strip-val" id="ss-disk">--</span></div>' +
+                '<div class="strip-module" data-mod="MIND" data-metric="load" onmouseenter="SecuBoxSidebar.showStripPopup(this)" onmouseleave="SecuBoxSidebar.hideStripPopup()"><div class="strip-led" style="background:#3D35A0"></div><span class="strip-val" id="ss-load">--</span></div>' +
+                '<div class="strip-module" data-mod="ROOT" data-metric="temp" onmouseenter="SecuBoxSidebar.showStripPopup(this)" onmouseleave="SecuBoxSidebar.hideStripPopup()"><div class="strip-led" style="background:#0A5840"></div><span class="strip-val" id="ss-temp">--</span></div>' +
+                '<div class="strip-module" data-mod="MESH" data-metric="net" onmouseenter="SecuBoxSidebar.showStripPopup(this)" onmouseleave="SecuBoxSidebar.hideStripPopup()"><div class="strip-led" style="background:#104A88"></div><span class="strip-val" id="ss-net">--</span></div>' +
+                '</div>' +
+                // Popup container for hover details
+                '<div class="strip-popup" id="strip-popup"></div>' +
                 '</div><div class="menu-right">' +
+                '<div class="hw-led-tooltip" id="hw-led-tooltip"></div>' +
                 '<button class="menu-btn" onclick="location.reload()" title="Refresh">🔄</button>' +
                 '<button class="menu-btn" onclick="location.href=\'/system/\'" title="Settings">⚙️</button>' +
                 '<button class="menu-btn danger" onclick="SecuBoxSidebar.logout()" title="Logout">🚪</button>' +
@@ -149,24 +175,29 @@
             }, 50);
         }
 
-        // 5d. Inject global BOTTOM status bar with health
+        // 5d. Inject global BOTTOM status bar with health + Smart Strip
         if (!document.getElementById('global-status-bar')) {
             var statusBar = document.createElement('div');
             statusBar.id = 'global-status-bar';
             statusBar.className = 'global-status-bar';
             statusBar.innerHTML = '<div class="status-left">' +
-                '<div class="status-item"><span class="status-label">SecuBox</span><span class="status-value" id="gsb-version">' + VERSION + '</span></div>' +
-                '<div class="status-item clickable" onclick="SecuBoxSidebar.showStatusPanel()" title="Click for details"><span class="status-label">Health</span><span class="status-value" id="gsb-health">🔵 --</span></div>' +
+                // Main health LED with tri-level pulsing
+                '<div class="status-item health-led-container" onclick="SecuBoxSidebar.showStatusPanel()" title="Click for details">' +
+                '<div class="health-led-main" id="gsb-led-main"></div>' +
+                '<span class="status-value" id="gsb-health">--</span></div>' +
                 '<div class="status-item"><span class="status-label">Mode</span><span class="status-value info" id="gsb-mode">--</span></div>' +
                 '<div class="status-item"><span class="status-label">Auth</span><span class="status-value" id="gsb-auth">--</span></div>' +
                 '</div><div class="status-right">' +
-                '<div class="status-item"><span class="status-label">CPU</span><span class="status-value" id="gsb-cpu">--%</span></div>' +
-                '<div class="status-item"><span class="status-label">MEM</span><span class="status-value" id="gsb-mem">--%</span></div>' +
+                '<div class="status-item metric-bar"><span class="status-label">CPU</span><div class="bar-container"><div class="bar-fill" id="gsb-cpu-bar"></div></div><span class="status-value" id="gsb-cpu">--%</span></div>' +
+                '<div class="status-item metric-bar"><span class="status-label">MEM</span><div class="bar-container"><div class="bar-fill" id="gsb-mem-bar"></div></div><span class="status-value" id="gsb-mem">--%</span></div>' +
+                '<div class="status-item metric-bar"><span class="status-label">DISK</span><div class="bar-container"><div class="bar-fill" id="gsb-disk-bar"></div></div><span class="status-value" id="gsb-disk">--%</span></div>' +
                 '<div class="status-item"><span class="status-label">Uptime</span><span class="status-value" id="gsb-uptime">--</span></div>' +
                 '<div class="status-item"><span class="status-value" style="color: var(--muted-dark);">CyberMind</span></div>' +
                 '</div>';
             document.body.appendChild(statusBar);
             loadStatusBarData();
+            // Start LED pulse sync
+            startLedPulseSync();
         }
 
         // 6. Force dark on ALL light backgrounds in main content
@@ -207,6 +238,261 @@
         setTimeout(forceDarkTheme, 500);
 
         console.log('[Sidebar ' + VERSION + '] Hybrid skin applied');
+    }
+
+    // LED Pulse Sync - synchronized pulsing across all health indicators
+    let ledPulsePhase = 0;
+    let systemHealthLevel = 'ok'; // 'ok', 'warn', 'error'
+
+    // LED Double-buffer state (confirm writes before visual update)
+    let ledBufferActive = { led1: '#00dd44', led2: '#00dd44', led3: '#00dd44' };
+    let ledBufferShadow = { led1: '#00dd44', led2: '#00dd44', led3: '#00dd44' };
+    let ledBufferConfirmed = true;
+
+    // Metrics history for sparkline histograms with localStorage persistence
+    const STRIP_HISTORY_MAX = 60;  // 60 samples = ~30 min at 30s refresh
+    const STRIP_CACHE_KEY = 'sbx_strip_history';
+    const STRIP_CACHE_TTL = 3600000;  // 1 hour max age
+
+    // Load cached history from localStorage
+    function loadStripHistoryCache() {
+        try {
+            var cached = localStorage.getItem(STRIP_CACHE_KEY);
+            if (cached) {
+                var data = JSON.parse(cached);
+                // Check if cache is still valid
+                if (data.timestamp && (Date.now() - data.timestamp) < STRIP_CACHE_TTL) {
+                    return data.history || {};
+                }
+            }
+        } catch (e) {
+            console.log('[Sidebar] Strip history cache load error:', e);
+        }
+        return { cpu: [], mem: [], disk: [], load: [], temp: [], net: [] };
+    }
+
+    // Save history to localStorage
+    function saveStripHistoryCache(history) {
+        try {
+            localStorage.setItem(STRIP_CACHE_KEY, JSON.stringify({
+                timestamp: Date.now(),
+                history: history
+            }));
+        } catch (e) {
+            console.log('[Sidebar] Strip history cache save error:', e);
+        }
+    }
+
+    let stripMetricsHistory = loadStripHistoryCache();
+    let currentStripMetrics = {
+        cpu: 0, mem: 0, disk: 0, load: 0, temp: 0, net: 0
+    };
+
+    // Module metadata for popup with icons
+    const STRIP_MODULE_INFO = {
+        AUTH: { color: '#C04E24', metric: 'cpu', label: 'CPU Usage', unit: '%', icon: '/eye-remote/assets/icons/auth-22.png', desc: 'Authentication module - Processor utilization' },
+        WALL: { color: '#9A6010', metric: 'mem', label: 'Memory', unit: '%', icon: '/eye-remote/assets/icons/wall-22.png', desc: 'Firewall module - RAM utilization' },
+        BOOT: { color: '#803018', metric: 'disk', label: 'Disk', unit: '%', icon: '/eye-remote/assets/icons/boot-22.png', desc: 'Boot module - Storage utilization' },
+        MIND: { color: '#3D35A0', metric: 'load', label: 'Load', unit: 'x', icon: '/eye-remote/assets/icons/mind-22.png', desc: 'AI module - System load average' },
+        ROOT: { color: '#0A5840', metric: 'temp', label: 'Temp', unit: '°C', icon: '/eye-remote/assets/icons/root-22.png', desc: 'Core module - CPU temperature' },
+        MESH: { color: '#104A88', metric: 'net', label: 'Signal', unit: 'dB', icon: '/eye-remote/assets/icons/mesh-22.png', desc: 'Network module - WiFi signal strength' }
+    };
+
+    function showStripPopup(el) {
+        var popup = document.getElementById('strip-popup');
+        if (!popup) return;
+
+        var mod = el.dataset.mod;
+        var metric = el.dataset.metric;
+        var info = STRIP_MODULE_INFO[mod];
+        if (!info) return;
+
+        var value = currentStripMetrics[metric] || 0;
+        var history = stripMetricsHistory[metric] || [];
+
+        // Build sparkline HTML
+        var sparkline = history.map(function(v) {
+            var pct = metric === 'load' ? Math.min(100, v * 25) :
+                      metric === 'temp' ? Math.min(100, Math.max(0, (v - 30) * 2)) :
+                      metric === 'net' ? Math.min(100, Math.max(0, 100 + v)) : v;
+            var h = Math.max(2, (pct / 100) * 24);
+            var c = pct > 80 ? 'error' : pct > 50 ? 'warn' : 'ok';
+            return '<div class="spark-bar ' + c + '" style="height:' + h + 'px;background:' + info.color + '"></div>';
+        }).join('');
+
+        // Format value
+        var displayVal = metric === 'load' ? value.toFixed(2) : Math.round(value);
+        var statusClass = metric === 'load' ? (value > 4 ? 'error' : value > 2 ? 'warn' : 'ok') :
+                          metric === 'temp' ? (value > 70 ? 'error' : value > 55 ? 'warn' : 'ok') :
+                          metric === 'net' ? (value < -70 ? 'error' : value < -60 ? 'warn' : 'ok') :
+                          (value > 80 ? 'error' : value > 50 ? 'warn' : 'ok');
+
+        popup.innerHTML = '<div class="popup-header" style="border-color:' + info.color + '">' +
+            '<img class="popup-icon" src="' + info.icon + '" alt="' + mod + '" onerror="this.style.display=\'none\'">' +
+            '<span class="popup-mod" style="color:' + info.color + '">' + mod + '</span>' +
+            '<span class="popup-label">' + info.label + '</span>' +
+            '</div>' +
+            '<div class="popup-value ' + statusClass + '">' + displayVal + '<span class="popup-unit">' + info.unit + '</span></div>' +
+            '<div class="popup-sparkline">' + sparkline + '</div>' +
+            '<div class="popup-desc">' + info.desc + '</div>';
+
+        // Position popup below the element, centered
+        var rect = el.getBoundingClientRect();
+        var popupWidth = 180;  // Match CSS min-width
+        var popupLeft = rect.left + (rect.width / 2) - (popupWidth / 2);
+
+        // Ensure popup doesn't overflow right edge
+        var maxLeft = window.innerWidth - popupWidth - 20;
+        if (popupLeft > maxLeft) popupLeft = maxLeft;
+
+        // Ensure popup doesn't overflow left edge (past sidebar 220px)
+        var minLeft = 230;
+        if (popupLeft < minLeft) popupLeft = minLeft;
+
+        popup.style.left = popupLeft + 'px';
+        popup.style.top = (rect.bottom + 10) + 'px';
+        popup.style.display = 'block';
+    }
+
+    function hideStripPopup() {
+        var popup = document.getElementById('strip-popup');
+        if (popup) popup.style.display = 'none';
+    }
+
+    // Hardware LED tooltip - shows detailed health info with multi-layer histogram
+    function showHwLedTooltip(el) {
+        var tooltip = document.getElementById('hw-led-tooltip');
+        if (!tooltip) return;
+
+        var healthLabels = { ok: 'NOMINAL', warn: 'WARNING', error: 'CRITICAL' };
+        var healthColors = { ok: '#00dd44', warn: '#ffb347', error: '#ff4466' };
+
+        // Calculate stats from history (top/max/medium)
+        function getStats(arr) {
+            if (!arr || arr.length === 0) return { cur: 0, max: 0, avg: 0 };
+            var cur = arr[arr.length - 1] || 0;
+            var max = Math.max.apply(null, arr);
+            var sum = arr.reduce(function(a, b) { return a + b; }, 0);
+            var avg = Math.round(sum / arr.length);
+            return { cur: cur, max: max, avg: avg };
+        }
+
+        var cpuStats = getStats(stripMetricsHistory.cpu);
+        var memStats = getStats(stripMetricsHistory.mem);
+        var diskStats = getStats(stripMetricsHistory.disk);
+        var loadStats = getStats(stripMetricsHistory.load);
+
+        // Multi-layer histogram bars (top=max, medium=avg, bottom=current)
+        function makeHistoBar(stats, color) {
+            var maxPct = Math.min(100, stats.max);
+            var avgPct = Math.min(100, stats.avg);
+            var curPct = Math.min(100, stats.cur);
+            return '<div class="histo-bar">' +
+                '<div class="histo-layer histo-max" style="width:' + maxPct + '%;background:' + color + ';opacity:0.3"></div>' +
+                '<div class="histo-layer histo-avg" style="width:' + avgPct + '%;background:' + color + ';opacity:0.5"></div>' +
+                '<div class="histo-layer histo-cur" style="width:' + curPct + '%;background:' + color + '"></div>' +
+                '</div>';
+        }
+
+        // Build tooltip content with multi-layer histograms
+        var content = '<div class="hw-tooltip-header" style="color:' + healthColors[systemHealthLevel] + '">' +
+            '<span class="hw-tooltip-icon">●</span> ' + healthLabels[systemHealthLevel] +
+            '</div>' +
+            '<div class="hw-tooltip-metrics">' +
+            '<div class="hw-metric-row"><span class="hw-metric-label">CPU</span>' + makeHistoBar(cpuStats, '#C04E24') + '<span class="hw-metric-vals">' + cpuStats.cur + ' / ' + cpuStats.max + '</span></div>' +
+            '<div class="hw-metric-row"><span class="hw-metric-label">MEM</span>' + makeHistoBar(memStats, '#9A6010') + '<span class="hw-metric-vals">' + memStats.cur + ' / ' + memStats.max + '</span></div>' +
+            '<div class="hw-metric-row"><span class="hw-metric-label">DISK</span>' + makeHistoBar(diskStats, '#803018') + '<span class="hw-metric-vals">' + diskStats.cur + ' / ' + diskStats.max + '</span></div>' +
+            '<div class="hw-metric-row"><span class="hw-metric-label">LOAD</span>' + makeHistoBar({cur: loadStats.cur * 25, max: loadStats.max * 25, avg: loadStats.avg * 25}, '#3D35A0') + '<span class="hw-metric-vals">' + (loadStats.cur).toFixed(1) + ' / ' + (loadStats.max).toFixed(1) + '</span></div>' +
+            '</div>' +
+            '<div class="hw-tooltip-legend"><span>■ Current</span><span style="opacity:0.5">■ Average</span><span style="opacity:0.3">■ Max</span></div>' +
+            '<div class="hw-tooltip-leds">' +
+            '<div><span style="color:#00dd44">●</span> System</div>' +
+            '<div><span style="color:' + (systemHealthLevel === 'ok' ? '#00dd44' : '#ffb347') + '">●</span> Services</div>' +
+            '<div><span style="color:' + healthColors[systemHealthLevel] + '">●</span> Security</div>' +
+            '</div>';
+
+        tooltip.innerHTML = content;
+
+        // Position tooltip
+        var rect = el.getBoundingClientRect();
+        tooltip.style.left = rect.left + 'px';
+        tooltip.style.top = (rect.bottom + 8) + 'px';
+        tooltip.style.display = 'block';
+    }
+
+    function hideHwLedTooltip() {
+        var tooltip = document.getElementById('hw-led-tooltip');
+        if (tooltip) tooltip.style.display = 'none';
+    }
+
+    function startLedPulseSync() {
+        // Sync pulse every 100ms for smooth animation
+        setInterval(function() {
+            ledPulsePhase = (ledPulsePhase + 1) % 20; // 2 second cycle
+            var opacity = 0.4 + 0.6 * Math.sin(ledPulsePhase * Math.PI / 10);
+
+            // Update main LED
+            var mainLed = document.getElementById('gsb-led-main');
+            if (mainLed) {
+                mainLed.style.opacity = opacity;
+                // Color based on health level
+                var colors = { ok: '#00dd44', warn: '#ffb347', error: '#ff4466' };
+                mainLed.style.background = colors[systemHealthLevel] || colors.ok;
+                mainLed.style.boxShadow = '0 0 ' + (8 + ledPulsePhase % 5) + 'px ' + (colors[systemHealthLevel] || colors.ok);
+            }
+
+            // Update strip LEDs (glow intensity based on phase)
+            document.querySelectorAll('.strip-led').forEach(function(led) {
+                var baseOpacity = 0.6 + 0.4 * Math.sin(ledPulsePhase * Math.PI / 10);
+                led.style.opacity = baseOpacity;
+            });
+
+            // Update 3 vertical RGB LEDs in top bar (like MOCHAbin physical LEDs)
+            // Using double-buffer pattern: shadow → confirm → active → visual
+            var hwColors = { ok: '#00dd44', warn: '#ffb347', error: '#ff4466' };
+            var hwLed1 = document.getElementById('hw-led-1');
+            var hwLed2 = document.getElementById('hw-led-2');
+            var hwLed3 = document.getElementById('hw-led-3');
+
+            if (hwLed1 && hwLed2 && hwLed3) {
+                var baseOpacity = 0.7 + 0.3 * Math.sin(ledPulsePhase * Math.PI / 10);
+                var glowSize = 4 + (ledPulsePhase % 6);
+
+                // Step 1: Write to shadow buffer based on health level
+                // LED1=Hardware, LED2=Services, LED3=Security (bottom to top)
+                if (systemHealthLevel === 'error') {
+                    ledBufferShadow = { led1: hwColors.ok, led2: hwColors.warn, led3: hwColors.error };
+                } else if (systemHealthLevel === 'warn') {
+                    ledBufferShadow = { led1: hwColors.ok, led2: hwColors.warn, led3: hwColors.warn };
+                } else {
+                    ledBufferShadow = { led1: hwColors.ok, led2: hwColors.ok, led3: hwColors.ok };
+                }
+
+                // Step 2: Confirm shadow buffer by reading back (simulate with delay check)
+                ledBufferConfirmed = (ledBufferShadow.led1 && ledBufferShadow.led2 && ledBufferShadow.led3);
+
+                // Step 3: Swap shadow → active only if confirmed
+                if (ledBufferConfirmed) {
+                    ledBufferActive = { ...ledBufferShadow };
+                }
+
+                // Step 4: Visual update from active buffer only
+                hwLed1.style.background = ledBufferActive.led1;
+                hwLed2.style.background = ledBufferActive.led2;
+                hwLed3.style.background = ledBufferActive.led3;
+
+                [hwLed1, hwLed2, hwLed3].forEach(function(led) {
+                    led.style.opacity = baseOpacity;
+                    led.style.boxShadow = '0 0 ' + glowSize + 'px ' + led.style.background;
+                });
+            }
+
+            // Update top bar health bumper
+            var topHealth = document.getElementById('gmb-health-bumper');
+            if (topHealth) {
+                topHealth.style.opacity = opacity;
+            }
+        }, 100);
     }
 
     // Load status bar data from API
@@ -251,25 +537,111 @@
                 }
             }
 
-            // Load CPU and memory from dashboard
+            // Load CPU, memory, and disk from dashboard
             var dashRes = await fetch('/api/v1/hub/dashboard', { headers: headers });
             if (dashRes.ok) {
                 var dashData = await dashRes.json();
                 var cpuEl = document.getElementById('gsb-cpu');
+                var cpuBar = document.getElementById('gsb-cpu-bar');
                 var memEl = document.getElementById('gsb-mem');
-                if (cpuEl && dashData.cpu_percent !== undefined) {
-                    var cpu = Math.round(dashData.cpu_percent);
+                var memBar = document.getElementById('gsb-mem-bar');
+                var diskEl = document.getElementById('gsb-disk');
+                var diskBar = document.getElementById('gsb-disk-bar');
+
+                // Helper: get color class based on percentage
+                function getBarColor(pct) {
+                    if (pct > 80) return 'bar-error';
+                    if (pct > 50) return 'bar-warn';
+                    return 'bar-ok';
+                }
+
+                // Extract all metrics
+                var cpu = Math.round(dashData.cpu_percent || 0);
+                var mem = Math.round(dashData.memory_percent || 0);
+                var disk = Math.round(dashData.disk_percent || 0);
+                var load = (dashData.load_avg || [0])[0];
+                var temp = Math.round(dashData.cpu_temp || 45);
+                var net = Math.round(dashData.wifi_rssi || -50);
+
+                // Update status bar metrics
+                if (cpuEl) {
                     cpuEl.textContent = cpu + '%';
                     cpuEl.className = 'status-value ' + (cpu > 80 ? 'error' : cpu > 50 ? 'warn' : 'ok');
+                    if (cpuBar) {
+                        cpuBar.style.width = cpu + '%';
+                        cpuBar.className = 'bar-fill ' + getBarColor(cpu);
+                    }
                 }
-                if (memEl && dashData.memory_percent !== undefined) {
-                    var mem = Math.round(dashData.memory_percent);
+                if (memEl) {
                     memEl.textContent = mem + '%';
                     memEl.className = 'status-value ' + (mem > 80 ? 'error' : mem > 50 ? 'warn' : 'ok');
+                    if (memBar) {
+                        memBar.style.width = mem + '%';
+                        memBar.className = 'bar-fill ' + getBarColor(mem);
+                    }
+                }
+                if (diskEl) {
+                    diskEl.textContent = disk + '%';
+                    diskEl.className = 'status-value ' + (disk > 80 ? 'error' : disk > 50 ? 'warn' : 'ok');
+                    if (diskBar) {
+                        diskBar.style.width = disk + '%';
+                        diskBar.className = 'bar-fill ' + getBarColor(disk);
+                    }
                 }
                 if (dashData.uptime) {
                     var uptimeEl = document.getElementById('gsb-uptime');
                     if (uptimeEl) uptimeEl.textContent = dashData.uptime;
+                }
+
+                // Update Smart Strip values and history with persistence
+                currentStripMetrics = { cpu: cpu, mem: mem, disk: disk, load: load, temp: temp, net: net };
+
+                // Track history for sparklines
+                Object.keys(currentStripMetrics).forEach(function(k) {
+                    if (!stripMetricsHistory[k]) stripMetricsHistory[k] = [];
+                    stripMetricsHistory[k].push(currentStripMetrics[k]);
+                    if (stripMetricsHistory[k].length > STRIP_HISTORY_MAX) {
+                        stripMetricsHistory[k].shift();
+                    }
+                });
+
+                // Persist to localStorage every update
+                saveStripHistoryCache(stripMetricsHistory);
+
+                var ssCpu = document.getElementById('ss-cpu');
+                var ssMem = document.getElementById('ss-mem');
+                var ssDisk = document.getElementById('ss-disk');
+                var ssLoad = document.getElementById('ss-load');
+                var ssTemp = document.getElementById('ss-temp');
+                var ssNet = document.getElementById('ss-net');
+
+                if (ssCpu) ssCpu.textContent = cpu + '%';
+                if (ssMem) ssMem.textContent = mem + '%';
+                if (ssDisk) ssDisk.textContent = disk + '%';
+                if (ssLoad) ssLoad.textContent = load.toFixed(1);
+                if (ssTemp) ssTemp.textContent = temp + '°';
+                if (ssNet) ssNet.textContent = net + 'dB';
+
+                // Determine overall health level (tri-level)
+                var maxVal = Math.max(cpu, mem, disk);
+                if (maxVal > 80 || temp > 70) {
+                    systemHealthLevel = 'error';
+                } else if (maxVal > 50 || temp > 55 || load > 4) {
+                    systemHealthLevel = 'warn';
+                } else {
+                    systemHealthLevel = 'ok';
+                }
+
+                // Update Health Bumper in top bar
+                var hbLed = document.getElementById('hb-led');
+                var hbStatus = document.getElementById('hb-status');
+                if (hbLed && hbStatus) {
+                    var hbColors = { ok: '#00dd44', warn: '#ffb347', error: '#ff4466' };
+                    var hbLabels = { ok: 'NOMINAL', warn: 'WARNING', error: 'CRITICAL' };
+                    hbLed.style.color = hbColors[systemHealthLevel];
+                    hbLed.style.textShadow = '0 0 8px ' + hbColors[systemHealthLevel];
+                    hbStatus.textContent = hbLabels[systemHealthLevel];
+                    hbStatus.style.color = hbColors[systemHealthLevel];
                 }
             }
 
@@ -922,7 +1294,9 @@
         injectStyles();
         hideUnknownEnabled = getHideUnknownPref();
 
-        sidebar.innerHTML = '<div class="sidebar-header"><a href="/"><span class="logo-icon">🔒</span><div><span class="logo">SECUBOX</span><span class="logo-version">' + VERSION + '</span></div></a></div><div class="sidebar-nav"><div class="nav-section"><div class="nav-section-title"><span>Loading...</span></div></div></div>';
+        sidebar.innerHTML = '<div class="sidebar-header"><a href="/"><span class="logo-icon">🔒</span><div><span class="logo">SECUBOX</span><span class="logo-version">🚀 ' + VERSION + '</span></div></a>' +
+            '<div class="header-hw-leds" id="header-hw-leds"><div class="hw-led-v" id="hw-led-3"></div><div class="hw-led-v" id="hw-led-2"></div><div class="hw-led-v" id="hw-led-1"></div></div></div>' +
+            '<div class="sidebar-nav"><div class="nav-section"><div class="nav-section-title"><span>Loading...</span></div></div></div>';
 
         try {
             var token = localStorage.getItem('sbx_token');
@@ -993,7 +1367,12 @@
                 menuHTML += '</div></div>';
             });
 
-            sidebar.innerHTML = '<div class="sidebar-header"><a href="/"><span class="logo-icon">🔒</span><div><span class="logo">SECUBOX</span><span class="logo-version">' + VERSION + '</span></div></a></div>' +
+            sidebar.innerHTML = '<div class="sidebar-header"><a href="/"><span class="logo-icon">🔒</span><div><span class="logo">SECUBOX</span><span class="logo-version">🚀 ' + VERSION + '</span></div></a>' +
+                '<div class="header-hw-leds" id="header-hw-leds" onmouseenter="SecuBoxSidebar.showHwLedTooltip(this)" onmouseleave="SecuBoxSidebar.hideHwLedTooltip()">' +
+                '<div class="hw-led-v" id="hw-led-3" title="Security"></div>' +
+                '<div class="hw-led-v" id="hw-led-2" title="Services"></div>' +
+                '<div class="hw-led-v" id="hw-led-1" title="Hardware"></div>' +
+                '</div></div>' +
                 '<div class="sidebar-nav">' + menuHTML + '</div>' +
                 '<div class="sidebar-footer">' +
                 '<div class="sidebar-clock" id="sidebar-clock">00:00:00</div>' +
@@ -1050,6 +1429,10 @@
         toggleHideUnknown: toggleHideUnknown,
         refreshStale: refreshStaleHealth,
         showStatusPanel: showStatusPanel,
+        showStripPopup: showStripPopup,
+        hideStripPopup: hideStripPopup,
+        showHwLedTooltip: showHwLedTooltip,
+        hideHwLedTooltip: hideHwLedTooltip,
         getAllModules: function() { return ALL_MODULES; },
         forceRefresh: function(mod) {
             if (mod) {

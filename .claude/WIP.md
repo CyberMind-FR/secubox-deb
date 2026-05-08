@@ -1,5 +1,30 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-08 (Session 126)*
+*Mis à jour : 2026-05-08 (Session 127)*
+
+---
+
+## ✅ Session 127: Smart Strip + LED Pulsing + Round UI Virtual
+
+### Smart Strip & Health Bumper — COMPLETE
+- [x] sidebar.js v2.25.0 with Smart Strip (6 mini modules)
+- [x] LED tri-level pulsing (NOMINAL/WARNING/CRITICAL)
+- [x] Health Bumper in top bar with sync emojis
+- [x] Module colors: AUTH/WALL/BOOT/MIND/ROOT/MESH
+- [x] Live metrics: CPU%, MEM%, DISK%, LOAD, TEMP°, NET dB
+- [x] CSS for smart-strip, health-bumper, health-led-main
+
+### Eye Remote Round UI Virtual — COMPLETE
+- [x] Deployed 6 module icons (auth-22.png, etc.)
+- [x] Canvas-based concentric rings (drawRoundRings)
+- [x] 6 positioned pods with live values
+- [x] Clock, hostname, status display
+- [x] Transport indicator (OTG)
+
+### Eye Remote 3-Column Layout — COMPLETE
+- [x] Converted from large device boxes to compact chips
+- [x] Device status bar minimized (MOCHAbin/eye-remote)
+- [x] Grid 3-column responsive layout
+- [x] Synced to local repo
 
 ---
 

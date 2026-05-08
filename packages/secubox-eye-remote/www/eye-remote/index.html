@@ -17,7 +17,6 @@
             --tube-light: #e8f5e9;
             --tube-pale: #c8e6c9;
             --tube-soft: #a5d6a7;
-            --bg-dark: var(--tube-light);
             --bg-card: var(--tube-pale);
             --border: var(--tube-soft);
             --text: #1a1a2e;
@@ -34,7 +33,6 @@
         .btn.primary { background: rgba(0,221,68,0.15); border-color: var(--primary); color: var(--primary); }
         .btn:hover { opacity: 0.8; }
 
-        /* Connection Diagram */
         .connection-diagram { display: flex; align-items: center; justify-content: center; gap: 1rem; padding: 2rem; background: var(--bg-card); border-radius: 8px; margin-bottom: 1rem; }
         .device-box { padding: 1.5rem 2rem; border: 2px solid var(--border); border-radius: 12px; background: white; text-align: center; min-width: 160px; transition: all 0.3s; }
         .device-box.active { border-color: var(--primary); box-shadow: 0 0 20px rgba(0,221,68,0.3); }
@@ -43,85 +41,195 @@
         .device-box .ip { font-size: 0.85rem; color: var(--p31-dim); margin-top: 0.25rem; }
         .connection-line { width: 80px; height: 4px; background: var(--border); border-radius: 2px; position: relative; }
         .connection-line.active { background: var(--primary); animation: pulse 1.5s infinite; }
-        .connection-line::before { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 12px; height: 12px; background: inherit; border-radius: 50%; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 
-        /* Status Cards Grid */
         .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
         .card { background: var(--bg-card); border-radius: 8px; padding: 1.25rem; }
-        .card h3 { font-size: 0.9rem; color: var(--p31-dim); margin-bottom: 1rem; text-transform: uppercase; letter-spacing: 0.05em; }
+        .card h3 { font-size: 0.9rem; color: var(--p31-dim); margin-bottom: 1rem; text-transform: uppercase; }
         .stat { display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
         .stat:last-child { border-bottom: none; }
         .stat-label { color: var(--text); }
         .stat-value { font-weight: 700; color: var(--primary); }
         .stat-value.disconnected { color: var(--red); }
-        .stat-value.warning { color: var(--yellow); }
 
-        /* Metrics Gauges */
         .gauges { display: flex; gap: 1.5rem; flex-wrap: wrap; justify-content: center; padding: 1rem 0; }
         .gauge { text-align: center; }
-        .gauge-circle { width: 80px; height: 80px; border-radius: 50%; border: 4px solid var(--border); position: relative; display: flex; align-items: center; justify-content: center; margin: 0 auto 0.5rem; }
+        .gauge-circle { width: 80px; height: 80px; border-radius: 50%; border: 4px solid var(--border); display: flex; align-items: center; justify-content: center; margin: 0 auto 0.5rem; }
         .gauge-circle.good { border-color: var(--primary); }
         .gauge-circle.warn { border-color: var(--yellow); }
         .gauge-circle.bad { border-color: var(--red); }
         .gauge-value { font-size: 1.25rem; font-weight: 700; }
         .gauge-label { font-size: 0.75rem; color: var(--p31-dim); }
 
-        /* Serial Console */
-        .console { background: #1a1a2e; color: #00ff55; border-radius: 8px; padding: 1rem; font-family: 'Courier Prime', monospace; font-size: 0.85rem; height: 200px; overflow-y: auto; }
-        .console .line { padding: 0.15rem 0; }
-        .console .prompt { color: var(--yellow); }
-
-        /* Actions */
-        .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 1rem; }
-
-        /* Round Eye Legend */
-        .eye-legend { background: #1a1a2e; border-radius: 12px; padding: 1.25rem; }
-        .eye-legend h3 { color: #00dd44; margin-bottom: 1rem; }
-        .legend-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; }
-        .legend-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0.75rem; background: rgba(0,221,68,0.05); border-radius: 8px; border-left: 3px solid var(--item-color); }
-        .legend-icon { width: 32px; height: 32px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; background: rgba(0,0,0,0.3); }
-        .legend-info { flex: 1; }
-        .legend-name { font-weight: 700; font-size: 0.85rem; color: var(--item-color); }
-        .legend-metric { font-size: 0.75rem; color: #888; }
-        .legend-desc { font-size: 0.7rem; color: #666; margin-top: 0.15rem; }
+        
+        
+        /* Virtual Round Display */
+        .round-container {
+            width: 320px;
+            height: 320px;
+            border-radius: 50%;
+            background: linear-gradient(180deg, #0a0a0a 0%, #050505 100%);
+            position: relative;
+            overflow: hidden;
+            border: 3px solid #181818;
+            box-shadow: 0 0 30px rgba(0,221,68,0.2), inset 0 0 40px rgba(0,0,0,0.5);
+            margin: 0 auto;
+        }
+        .round-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        .round-center {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 2;
+        }
+        .round-time {
+            font-size: 22px;
+            font-weight: 600;
+            color: #fff;
+            letter-spacing: 2px;
+        }
+        .round-date {
+            font-size: 8px;
+            color: #4a4a4a;
+            margin-top: 3px;
+            letter-spacing: 1px;
+        }
+        .round-hostname {
+            font-size: 7px;
+            color: #0A5840;
+            margin-top: 2px;
+        }
+        .round-pod {
+            position: absolute;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1px;
+            z-index: 3;
+        }
+        .round-pod-icon {
+            width: 18px;
+            height: 18px;
+            object-fit: contain;
+        }
+        .round-pod-val {
+            font-size: 11px;
+            font-weight: 700;
+            color: #fff;
+        }
+        .round-pod-name {
+            font-size: 6px;
+            letter-spacing: 0.5px;
+            opacity: 0.6;
+        }
+        .round-status {
+            position: absolute;
+            bottom: 22px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 7px;
+            letter-spacing: 1px;
+            color: #00dd44;
+            z-index: 2;
+        }
+        .round-transport {
+            position: absolute;
+            top: 14px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 7px;
+            letter-spacing: 0.6px;
+            color: #0A5840;
+            z-index: 2;
+        }
         /* Module colors */
-        .legend-item.auth { --item-color: #FF0064; }
-        .legend-item.wall { --item-color: #FF6400; }
-        .legend-item.boot { --item-color: #DCFF00; }
-        .legend-item.mind { --item-color: #00FF41; }
-        .legend-item.root { --item-color: #00FFFF; }
-        .legend-item.disk { --item-color: #B900FF; }
+        .pod-auth .round-pod-val { color: #C04E24; }
+        .pod-wall .round-pod-val { color: #9A6010; }
+        .pod-boot .round-pod-val { color: #803018; }
+        .pod-mind .round-pod-val { color: #3D35A0; }
+        .pod-root .round-pod-val { color: #0A5840; }
+        .pod-mesh .round-pod-val { color: #104A88; }
+
+        .mini-sparklines { display: flex; gap: 1rem; margin-top: 1rem; justify-content: center; }
+        .mini-spark { display: flex; align-items: flex-end; gap: 1px; height: 20px; padding: 2px; background: rgba(0,0,0,0.1); border-radius: 4px; }
+        .mini-spark .bar { width: 3px; background: var(--primary); border-radius: 1px 1px 0 0; transition: height 0.2s; }
+        .mini-spark .bar.warn { background: var(--yellow); }
+        .mini-spark .bar.bad { background: var(--red); }
+        .mochabin-dashboard { border: 2px solid var(--primary); box-shadow: 0 0 15px rgba(0,221,68,0.2); }
+
+        
+        /* Minimal Device Status Bar */
+        .device-status-bar {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            padding: 8px 16px;
+            background: var(--bg-card);
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            font-size: 0.8rem;
+        }
+        .dev-chip {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            background: rgba(0,0,0,0.05);
+            border-radius: 4px;
+            border: 1px solid var(--border);
+        }
+        .dev-chip.active { border-color: var(--primary); }
+        .dev-led { font-size: 10px; color: var(--border); }
+        .dev-chip.active .dev-led { color: var(--primary); text-shadow: 0 0 6px var(--primary); }
+        .dev-name { font-weight: 600; }
+        .dev-ip { color: var(--p31-dim); font-size: 0.7rem; }
+        .dev-conn { color: var(--border); font-size: 1.2rem; }
+        .dev-conn.active { color: var(--primary); animation: pulse 1.5s infinite; }
+
+        /* 3-Column Grid Layout */
+        .grid-3col {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        @media (max-width: 1024px) {
+            .grid-3col { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (max-width: 768px) {
+            .grid-3col { grid-template-columns: 1fr; }
+        }
+
+        .quicksheet { font-size: 0.75rem; background: #1a1a2e; color: #00ff55; border-radius: 6px; padding: 0.75rem; font-family: monospace; }
+        .quicksheet code { display: block; padding: 0.2rem 0; color: #ccc; }
+        .quicksheet code span { color: #00ff55; }
     </style>
 </head>
 <body>
     <nav class="sidebar" id="sidebar"></nav>
     <main class="main">
         <div class="header">
-            <h1>🔌 Eye Remote Dashboard</h1>
-            <div>
-                <button class="btn" onclick="refreshAll()">↻ Refresh</button>
-                <button class="btn primary" id="probe-btn" onclick="probeConnection()">Probe Connection</button>
-            </div>
+            <h1>Eye Remote Dashboard</h1>
+            <button class="btn primary" id="probe-btn" onclick="refreshAll()">Refresh</button>
         </div>
 
-        <!-- Connection Diagram -->
-        <div class="connection-diagram">
-            <div class="device-box active" id="host-box">
-                <div class="icon">🖥️</div>
-                <div class="name">MOCHAbin</div>
-                <div class="ip" id="host-ip">10.55.0.1</div>
-            </div>
-            <div class="connection-line" id="conn-line"></div>
-            <div class="device-box" id="gadget-box">
-                <div class="icon">📟</div>
-                <div class="name">Pi Zero W</div>
-                <div class="ip" id="peer-ip">--</div>
-            </div>
+        <!-- Minimal inline device status bar -->
+        <div class="device-status-bar">
+            <div class="dev-chip active"><span class="dev-led">●</span><span class="dev-name">MOCHAbin</span><span class="dev-ip">10.55.0.1</span></div>
+            <span class="dev-conn" id="conn-line">⟷</span>
+            <div class="dev-chip" id="gadget-box"><span class="dev-led" id="peer-led">○</span><span class="dev-name" id="pizero-hostname">Pi Zero W</span><span class="dev-ip" id="peer-ip">10.55.0.2</span></div>
         </div>
 
-        <div class="grid">
-            <!-- Connection Status -->
+        <div class="grid-3col">
             <div class="card">
                 <h3>Connection Status</h3>
                 <div class="stat">
@@ -130,42 +238,17 @@
                 </div>
                 <div class="stat">
                     <span class="stat-label">Interface</span>
-                    <span class="stat-value" id="interface-name">--</span>
+                    <span class="stat-value">usb0</span>
                 </div>
                 <div class="stat">
-                    <span class="stat-label">Gadget Mode</span>
-                    <span class="stat-value" id="gadget-mode">--</span>
-                </div>
-                <div class="stat">
-                    <span class="stat-label">Last Seen</span>
-                    <span class="stat-value" id="last-seen">--</span>
+                    <span class="stat-label">Last Update</span>
+                    <span class="stat-value" id="last-update">--</span>
                 </div>
             </div>
 
-            <!-- Serial Console Status -->
-            <div class="card">
-                <h3>Serial Console</h3>
-                <div class="stat">
-                    <span class="stat-label">Device</span>
-                    <span class="stat-value" id="serial-device">--</span>
-                </div>
-                <div class="stat">
-                    <span class="stat-label">Baud Rate</span>
-                    <span class="stat-value" id="serial-baud">--</span>
-                </div>
-                <div class="stat">
-                    <span class="stat-label">Status</span>
-                    <span class="stat-value" id="serial-status">--</span>
-                </div>
-                <div class="actions">
-                    <button class="btn" onclick="openSerial()">Open Console</button>
-                </div>
-            </div>
-
-            <!-- Pi Zero Metrics -->
             <div class="card">
                 <h3>Pi Zero Metrics</h3>
-                <div class="gauges" id="metrics-gauges">
+                <div class="gauges">
                     <div class="gauge">
                         <div class="gauge-circle" id="cpu-gauge">
                             <span class="gauge-value" id="cpu-value">--</span>
@@ -189,153 +272,173 @@
                     <span class="stat-label">Uptime</span>
                     <span class="stat-value" id="pizero-uptime">--</span>
                 </div>
-            </div>
-
-            <!-- Device Pairing -->
-            <div class="card">
-                <h3>Device Pairing</h3>
                 <div class="stat">
-                    <span class="stat-label">Paired Devices</span>
-                    <span class="stat-value" id="paired-count">--</span>
+                    <span class="stat-label">Disk</span>
+                    <span class="stat-value" id="pizero-disk">--</span>
                 </div>
-                <div class="actions">
-                    <button class="btn primary" onclick="autoPair()">Auto Pair</button>
-                    <button class="btn" onclick="listPaired()">List Devices</button>
+                <div class="stat">
+                    <span class="stat-label">Load</span>
+                    <span class="stat-value" id="pizero-load">--</span>
                 </div>
             </div>
 
-            <!-- Gadget Modes -->
+            
+            <div class="card mochabin-dashboard" style="min-height: 400px;">
+                <h3>🖥️ Virtual Round Display</h3>
+                <div class="round-container" id="round-display">
+                    <canvas class="round-canvas" id="round-canvas" width="320" height="320"></canvas>
+                    <div class="round-transport" id="round-transport">● OTG</div>
+                    <div class="round-center">
+                        <div class="round-time" id="round-time">--:--:--</div>
+                        <div class="round-date" id="round-date">---</div>
+                        <div class="round-hostname" id="round-hostname">secubox</div>
+                    </div>
+                    <!-- 6 pods positioned around the circle -->
+                    <div class="round-pod pod-auth" style="top: 78%; left: 22%;">
+                        <img class="round-pod-icon" src="/eye-remote/assets/icons/auth-22.png" alt="AUTH">
+                        <span class="round-pod-val" id="rp-cpu">--%</span>
+                        <span class="round-pod-name">AUTH</span>
+                    </div>
+                    <div class="round-pod pod-wall" style="top: 22%; left: 75%;">
+                        <img class="round-pod-icon" src="/eye-remote/assets/icons/wall-22.png" alt="WALL">
+                        <span class="round-pod-val" id="rp-mem">--%</span>
+                        <span class="round-pod-name">WALL</span>
+                    </div>
+                    <div class="round-pod pod-boot" style="top: 58%; left: 85%;">
+                        <img class="round-pod-icon" src="/eye-remote/assets/icons/boot-22.png" alt="BOOT">
+                        <span class="round-pod-val" id="rp-disk">--%</span>
+                        <span class="round-pod-name">BOOT</span>
+                    </div>
+                    <div class="round-pod pod-mind" style="top: 58%; left: 5%;">
+                        <img class="round-pod-icon" src="/eye-remote/assets/icons/mind-22.png" alt="MIND">
+                        <span class="round-pod-val" id="rp-load">--</span>
+                        <span class="round-pod-name">MIND</span>
+                    </div>
+                    <div class="round-pod pod-root" style="top: 22%; left: 15%;">
+                        <img class="round-pod-icon" src="/eye-remote/assets/icons/root-22.png" alt="ROOT">
+                        <span class="round-pod-val" id="rp-temp">--°</span>
+                        <span class="round-pod-name">ROOT</span>
+                    </div>
+                    <div class="round-pod pod-mesh" style="top: 78%; left: 68%;">
+                        <img class="round-pod-icon" src="/eye-remote/assets/icons/mesh-22.png" alt="MESH">
+                        <span class="round-pod-val" id="rp-net">--</span>
+                        <span class="round-pod-name">MESH</span>
+                    </div>
+                    <div class="round-status" id="round-status">● NOMINAL</div>
+                </div>
+                <div class="gauges">
+                    <div class="gauge">
+                        <div class="gauge-circle" id="mb-cpu-gauge">
+                            <span class="gauge-value" id="mb-cpu-value">--</span>
+                        </div>
+                        <div class="gauge-label">CPU</div>
+                    </div>
+                    <div class="gauge">
+                        <div class="gauge-circle" id="mb-mem-gauge">
+                            <span class="gauge-value" id="mb-mem-value">--</span>
+                        </div>
+                        <div class="gauge-label">RAM</div>
+                    </div>
+                    <div class="gauge">
+                        <div class="gauge-circle" id="mb-disk-gauge">
+                            <span class="gauge-value" id="mb-disk-value">--</span>
+                        </div>
+                        <div class="gauge-label">Disk</div>
+                    </div>
+                    <div class="gauge">
+                        <div class="gauge-circle" id="mb-load-gauge">
+                            <span class="gauge-value" id="mb-load-value">--</span>
+                        </div>
+                        <div class="gauge-label">Load</div>
+                    </div>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Hostname</span>
+                    <span class="stat-value" id="mb-hostname">--</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Uptime</span>
+                    <span class="stat-value" id="mb-uptime">--</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Kernel</span>
+                    <span class="stat-value" id="mb-kernel">--</span>
+                </div>
+                <div class="mini-sparklines">
+                    <div class="mini-spark" id="mb-cpu-spark"></div>
+                    <div class="mini-spark" id="mb-mem-spark"></div>
+                </div>
+            </div>
+
             <div class="card">
-                <h3>Gadget Mode Control</h3>
-                <div class="actions">
-                    <button class="btn" onclick="setMode('normal')">Normal</button>
-                    <button class="btn" onclick="setMode('flash')">Flash Mode</button>
-                    <button class="btn" onclick="setMode('debug')">Debug</button>
-                    <button class="btn" onclick="setMode('tty')">TTY Only</button>
+                <h3>Serial Console</h3>
+                <div class="stat">
+                    <span class="stat-label">Device</span>
+                    <span class="stat-value">/dev/ttyACM0</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Baud</span>
+                    <span class="stat-value">115200</span>
+                </div>
+                <div style="margin-top: 1rem;">
+                    <a href="/eye-remote/terminal.html" class="btn" target="_blank">Open Terminal</a>
                 </div>
             </div>
 
-            <!-- Round Eye Legend -->
-            <div class="card eye-legend" style="grid-column: 1 / -1;">
-                <h3>👁️ Round Eye Metrics Legend</h3>
-                <div class="legend-grid">
-                    <div class="legend-item auth">
-                        <div class="legend-icon">🎯</div>
-                        <div class="legend-info">
-                            <div class="legend-name">AUTH</div>
-                            <div class="legend-metric">CPU %</div>
-                            <div class="legend-desc">Auth is CPU-intensive (crypto ops)</div>
-                        </div>
-                    </div>
-                    <div class="legend-item wall">
-                        <div class="legend-icon">🧱</div>
-                        <div class="legend-info">
-                            <div class="legend-name">WALL</div>
-                            <div class="legend-metric">Memory %</div>
-                            <div class="legend-desc">Firewall uses RAM for state tables</div>
-                        </div>
-                    </div>
-                    <div class="legend-item boot">
-                        <div class="legend-icon">🚀</div>
-                        <div class="legend-info">
-                            <div class="legend-name">BOOT</div>
-                            <div class="legend-metric">Disk %</div>
-                            <div class="legend-desc">Boot integrity requires storage</div>
-                        </div>
-                    </div>
-                    <div class="legend-item mind">
-                        <div class="legend-icon">🤖</div>
-                        <div class="legend-info">
-                            <div class="legend-name">MIND</div>
-                            <div class="legend-metric">Connections %</div>
-                            <div class="legend-desc">Current vs peak TCP connections</div>
-                        </div>
-                    </div>
-                    <div class="legend-item root">
-                        <div class="legend-icon">💻</div>
-                        <div class="legend-info">
-                            <div class="legend-name">ROOT</div>
-                            <div class="legend-metric">Temperature °C</div>
-                            <div class="legend-desc">System core temperature</div>
-                        </div>
-                    </div>
-                    <div class="legend-item disk">
-                        <div class="legend-icon">💾</div>
-                        <div class="legend-info">
-                            <div class="legend-name">DISK</div>
-                            <div class="legend-metric">I/O MB/s</div>
-                            <div class="legend-desc">Current vs peak disk throughput</div>
-                        </div>
-                    </div>
+            <div class="card">
+                <h3>Quick Commands</h3>
+                <div class="quicksheet">
+                    <code><span>ssh pi@10.55.0.2</span></code>
+                    <code><span>screen /dev/ttyACM0 115200</span></code>
+                    <code><span>ip link set usb0 up</span></code>
+                    <code><span>systemctl restart pizero-metrics</span></code>
+                    <code><span>sudo reboot</span> # Pi Zero</code>
                 </div>
-            </div>
-        </div>
-
-        <!-- Pairing Console -->
-        <div class="card">
-            <h3>Pairing Console</h3>
-            <div class="console" id="pairing-console">
-                <div class="line"><span class="prompt">[init]</span> Loading paired devices...</div>
             </div>
         </div>
     </main>
 
     <script>
         const API = '/api/v1/eye-remote';
+        let connected = false;
 
-        async function api(path, method = 'GET', data = null) {
-            const opts = { method, headers: { 'Content-Type': 'application/json' } };
-            if (data) opts.body = JSON.stringify(data);
-            const r = await fetch(API + path, opts);
-            return r.json();
+        async function checkHealth() {
+            try {
+                const r = await fetch(API + '/health', { timeout: 3000 });
+                if (!r.ok) return false;
+                const data = await r.json();
+                return data.status === 'ok';
+            } catch (e) { return false; }
         }
 
-        async function refreshAll() {
+        async function fetchMetrics() {
             try {
-                // Get status (public endpoint)
-                const status = await api('/status');
-                updateConnectionUI(status);
+                const r = await fetch(API + '/metrics', { timeout: 3000 });
+                if (!r.ok) return null;
+                return await r.json();
+            } catch (e) { return null; }
+        }
 
-                // Get serial status (public endpoint)
-                try {
-                    const serial = await api('/serial/status');
-                    updateSerialUI(serial);
-                } catch (e) {
-                    updateSerialUI({ available: false });
-                }
-
-                // Get Pi Zero metrics if connected (public endpoint)
-                if (status.connected) {
-                    try {
-                        const metrics = await api('/pizero/metrics');
-                        updateMetricsUI(metrics);
-                    } catch (e) {
-                        // Try alternate endpoint
-                        try {
-                            const metrics = await api('/pizero-metrics');
-                            updateMetricsUI(metrics);
-                        } catch (e2) {
-                            console.log('Pi Zero metrics not available');
-                            clearMetricsUI();
-                        }
-                    }
-                } else {
-                    // Clear metrics when disconnected
-                    clearMetricsUI();
-                }
-            } catch (err) {
-                console.error('Refresh error:', err);
-                // Show disconnected state on error
-                updateConnectionUI({ connected: false });
+        function setGaugeClass(id, value, isTemp) {
+            const el = document.getElementById(id);
+            el.classList.remove('good', 'warn', 'bad');
+            if (isTemp) {
+                if (value < 50) el.classList.add('good');
+                else if (value < 70) el.classList.add('warn');
+                else el.classList.add('bad');
+            } else {
+                if (value < 60) el.classList.add('good');
+                else if (value < 80) el.classList.add('warn');
+                else el.classList.add('bad');
             }
         }
 
-        function updateConnectionUI(data) {
+        function updateUI(online, metrics) {
             const connLine = document.getElementById('conn-line');
             const gadgetBox = document.getElementById('gadget-box');
             const statusText = document.getElementById('status-text');
 
-            if (data.connected) {
+            if (online) {
                 connLine.classList.add('active');
                 gadgetBox.classList.add('active');
                 statusText.textContent = 'Connected';
@@ -347,176 +450,287 @@
                 statusText.classList.add('disconnected');
             }
 
-            document.getElementById('host-ip').textContent = data.host_ip || '10.55.0.1';
-            document.getElementById('peer-ip').textContent = data.peer_ip || '--';
-            document.getElementById('interface-name').textContent = data.interface || '--';
-            document.getElementById('gadget-mode').textContent = data.gadget_mode || '--';
-            document.getElementById('last-seen').textContent = data.last_seen ? new Date(data.last_seen).toLocaleTimeString() : '--';
-        }
+            if (metrics) {
+                document.getElementById('cpu-value').textContent = Math.round(metrics.cpu_percent) + '%';
+                document.getElementById('mem-value').textContent = Math.round(metrics.mem_percent) + '%';
+                document.getElementById('temp-value').textContent = Math.round(metrics.cpu_temp) + '\u00b0';
 
-        function updateSerialUI(data) {
-            document.getElementById('serial-device').textContent = data.device || '--';
-            document.getElementById('serial-baud').textContent = data.baud || data.baud_rate || '--';
+                setGaugeClass('cpu-gauge', metrics.cpu_percent, false);
+                setGaugeClass('mem-gauge', metrics.mem_percent, false);
+                setGaugeClass('temp-gauge', metrics.cpu_temp, true);
 
-            const status = document.getElementById('serial-status');
-            status.classList.remove('disconnected');
-            if (data.connected || data.available) {
-                status.textContent = data.connected ? 'Connected' : 'Available';
-            } else {
-                status.textContent = 'Not available';
-                status.classList.add('disconnected');
-            }
-        }
-
-        function updateMetricsUI(data) {
-            if (!data || data.error) return;
-
-            const cpu = data.cpu_percent || 0;
-            const mem = data.mem_percent || 0;
-            const temp = data.cpu_temp || 0;
-
-            document.getElementById('cpu-value').textContent = cpu.toFixed(0) + '%';
-            document.getElementById('mem-value').textContent = mem.toFixed(0) + '%';
-            document.getElementById('temp-value').textContent = temp.toFixed(0) + '°';
-
-            setGaugeClass('cpu-gauge', cpu);
-            setGaugeClass('mem-gauge', mem);
-            setGaugeClass('temp-gauge', temp > 70 ? 100 : temp > 50 ? 50 : 0);
-
-            if (data.uptime_seconds) {
-                const h = Math.floor(data.uptime_seconds / 3600);
-                const m = Math.floor((data.uptime_seconds % 3600) / 60);
+                const h = Math.floor(metrics.uptime_seconds / 3600);
+                const m = Math.floor((metrics.uptime_seconds % 3600) / 60);
                 document.getElementById('pizero-uptime').textContent = h + 'h ' + m + 'm';
+                document.getElementById('pizero-disk').textContent = Math.round(metrics.disk_percent) + '%';
+                document.getElementById('pizero-load').textContent = metrics.load_1m.toFixed(2);
+                document.getElementById('pizero-hostname').textContent = metrics.hostname || 'Pi Zero W';
             }
+
+            document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
         }
 
-        function setGaugeClass(id, value) {
-            const el = document.getElementById(id);
-            el.classList.remove('good', 'warn', 'bad');
-            if (value < 50) el.classList.add('good');
-            else if (value < 80) el.classList.add('warn');
-            else el.classList.add('bad');
-        }
-
-        function clearMetricsUI() {
-            document.getElementById('cpu-value').textContent = '--';
-            document.getElementById('mem-value').textContent = '--';
-            document.getElementById('temp-value').textContent = '--';
-            document.getElementById('pizero-uptime').textContent = '--';
-            // Reset gauge classes
-            ['cpu-gauge', 'mem-gauge', 'temp-gauge'].forEach(id => {
-                const el = document.getElementById(id);
-                el.classList.remove('good', 'warn', 'bad');
-            });
-        }
-
-        async function probeConnection() {
+        async function refreshAll() {
             const btn = document.getElementById('probe-btn');
             btn.disabled = true;
-            btn.textContent = 'Probing...';
-            await refreshAll();
+            btn.textContent = 'Checking...';
+
+            const online = await checkHealth();
+            let metrics = null;
+            if (online) {
+                metrics = await fetchMetrics();
+            }
+            updateUI(online, metrics);
+
             btn.disabled = false;
-            btn.textContent = 'Probe Connection';
+            btn.textContent = 'Refresh';
         }
 
-        async function setMode(mode) {
-            try {
-                await api('/mode', 'POST', { mode });
-                alert('Mode changed to: ' + mode);
-                refreshAll();
-            } catch (e) {
-                alert('Failed to change mode: ' + e.message);
-            }
-        }
-
-        function openSerial() {
-            window.open('/eye-remote/terminal.html', '_blank');
-        }
-
-        async function autoPair() {
-            try {
-                const result = await api('/auto-pair', 'POST');
-                if (result.success) {
-                    // Update console with success message
-                    const console = document.getElementById('pairing-console');
-                    const successLine = '<div class="line"><span class="prompt" style="color:#00dd44">[OK]</span> Paired: ' + (result.hostname || result.device_id) + '</div>';
-                    console.innerHTML = successLine + console.innerHTML;
-
-                    // Refresh displays
-                    await updatePairingConsole();
-                    refreshAll();
-                } else {
-                    alert('Pairing failed: ' + (result.error || 'Unknown error'));
-                }
-            } catch (e) {
-                alert('Pairing error: ' + e.message);
-            }
-        }
-
-        async function listPaired() {
-            await updatePairingConsole();
-        }
-
-        async function loadPairedCount() {
-            try {
-                const result = await api('/paired-devices');
-                const count = result.devices ? result.devices.length : 0;
-                document.getElementById('paired-count').textContent = count;
-                return result.devices || [];
-            } catch (e) {
-                document.getElementById('paired-count').textContent = '0';
-                return [];
-            }
-        }
-
-        async function updatePairingConsole() {
-            const console = document.getElementById('pairing-console');
-            const devices = await loadPairedCount();
-
-            let html = '';
-            const now = new Date();
-
-            if (devices.length === 0) {
-                html = '<div class="line"><span class="prompt">[info]</span> No paired devices. Click "Auto Pair" to pair connected device.</div>';
-            } else {
-                html += '<div class="line"><span class="prompt">[devices]</span> ' + devices.length + ' paired device(s)</div>';
-                html += '<div class="line">─────────────────────────────────────</div>';
-
-                devices.forEach((d, i) => {
-                    const pairedDate = new Date(d.paired_at);
-                    const hostname = d.hostname || d.device_id.split('-')[0] || 'unknown';
-                    const ip = d.peer_ip || d.ip_address || '10.55.0.2';
-                    const transport = d.transport || 'usb';
-
-                    // Calculate time since pairing
-                    const diffMs = now - pairedDate;
-                    const diffMins = Math.floor(diffMs / 60000);
-                    const diffHours = Math.floor(diffMins / 60);
-                    const diffDays = Math.floor(diffHours / 24);
-                    let timeAgo = '';
-                    if (diffDays > 0) timeAgo = diffDays + 'd ago';
-                    else if (diffHours > 0) timeAgo = diffHours + 'h ago';
-                    else if (diffMins > 0) timeAgo = diffMins + 'm ago';
-                    else timeAgo = 'just now';
-
-                    html += '<div class="line"><span class="prompt">[' + (i + 1) + ']</span> <strong>' + hostname + '</strong></div>';
-                    html += '<div class="line">    IP: ' + ip + ' | Transport: ' + transport + '</div>';
-                    html += '<div class="line">    Paired: ' + pairedDate.toLocaleString() + ' (' + timeAgo + ')</div>';
-                    html += '<div class="line"></div>';
-                });
-            }
-
-            console.innerHTML = html;
-        }
-
-        // Init
         document.addEventListener('DOMContentLoaded', () => {
             refreshAll();
-            updatePairingConsole();
-            setInterval(refreshAll, 5000);
-            setInterval(updatePairingConsole, 10000);
+            setInterval(refreshAll, 10000);
         });
     </script>
-    <script src="/shared/sidebar.js"></script>
+    <script src="/shared/sidebar.js">
+        // MOCHAbin Dashboard Data
+        const mbHistory = { cpu: [], mem: [] };
+        const MB_SPARK_MAX = 20;
+
+        async function loadMochabinData() {
+            try {
+                var token = localStorage.getItem('sbx_token');
+                var headers = token ? { 'Authorization': 'Bearer ' + token } : {};
+                const res = await fetch('/api/v1/hub/dashboard', { headers: headers });
+                if (!res.ok) throw new Error('API error');
+                const data = await res.json();
+
+                // Update gauges
+                const cpu = Math.round(data.cpu_percent || 0);
+                const mem = Math.round(data.memory_percent || 0);
+                const disk = Math.round(data.disk_percent || 0);
+                const load = (data.load_avg || [0])[0].toFixed(1);
+
+                document.getElementById('mb-cpu-value').textContent = cpu + '%';
+                document.getElementById('mb-mem-value').textContent = mem + '%';
+                document.getElementById('mb-disk-value').textContent = disk + '%';
+                document.getElementById('mb-load-value').textContent = load;
+
+                // Update gauge colors
+                setGaugeColor('mb-cpu-gauge', cpu);
+                setGaugeColor('mb-mem-gauge', mem);
+                setGaugeColor('mb-disk-gauge', disk);
+                setGaugeColor('mb-load-gauge', parseFloat(load) > 4 ? 80 : parseFloat(load) > 2 ? 60 : 30);
+
+                // Update info
+                if (data.hostname) document.getElementById('mb-hostname').textContent = data.hostname;
+                if (data.uptime) document.getElementById('mb-uptime').textContent = data.uptime;
+                if (data.kernel) document.getElementById('mb-kernel').textContent = data.kernel;
+
+                // Update sparklines
+                updateMbSparkline('mb-cpu-spark', cpu, mbHistory.cpu);
+                updateMbSparkline('mb-mem-spark', mem, mbHistory.mem);
+            } catch (e) {
+                console.log('MOCHAbin data error:', e);
+            }
+        }
+
+        function setGaugeColor(id, value) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.className = 'gauge-circle ' + (value > 80 ? 'bad' : value > 50 ? 'warn' : 'good');
+        }
+
+        function updateMbSparkline(id, value, history) {
+            history.push(value);
+            if (history.length > MB_SPARK_MAX) history.shift();
+            const container = document.getElementById(id);
+            if (!container) return;
+            container.innerHTML = history.map(v => {
+                const h = Math.max(2, (v / 100) * 16);
+                const c = v > 80 ? 'bad' : v > 50 ? 'warn' : '';
+                return '<div class="bar ' + c + '" style="height:' + h + 'px"></div>';
+            }).join('');
+        }
+
+        // Load MOCHAbin data on start and refresh
+        loadMochabinData();
+        setInterval(loadMochabinData, 5000);
+
+    
+        // Round Display - Ring rendering
+        // Radar-style ring configuration (scaled to 320px from 480px original)
+        const RING_MODULES = [
+            { name: 'AUTH', color: '#C04E24', metric: 'cpu', r: 143, w: 5 },  // r=214 scaled
+            { name: 'WALL', color: '#9A6010', metric: 'mem', r: 134, w: 5 },  // r=201 scaled
+            { name: 'BOOT', color: '#803018', metric: 'disk', r: 125, w: 5 }, // r=188 scaled
+            { name: 'MIND', color: '#3D35A0', metric: 'load', r: 117, w: 5 }, // r=175 scaled
+            { name: 'ROOT', color: '#0A5840', metric: 'temp', r: 108, w: 5 }, // r=162 scaled
+            { name: 'MESH', color: '#104A88', metric: 'net', r: 99, w: 5 }    // r=149 scaled
+        ];
+
+        let roundMetrics = { cpu: 0, mem: 0, disk: 0, load: 0, temp: 0, net: 0 };
+        const CX = 160, CY = 160, SA = -Math.PI / 2;  // Center 320/2, start angle top
+
+        function drawRoundRings() {
+            const canvas = document.getElementById('round-canvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+
+            ctx.clearRect(0, 0, 320, 320);
+            ctx.save();
+
+            // Clip to circle
+            ctx.beginPath();
+            ctx.arc(CX, CY, 158, 0, Math.PI * 2);
+            ctx.clip();
+
+            RING_MODULES.forEach((ring) => {
+                const value = roundMetrics[ring.metric] || 0;
+                // Calculate percentage based on metric type
+                const pct = ring.metric === 'load' ? Math.min(1, value / 4) :
+                            ring.metric === 'temp' ? Math.min(1, Math.max(0, (value - 35) / 50)) :
+                            ring.metric === 'net' ? Math.min(1, Math.max(0, (value + 90) / 70)) :
+                            value / 100;
+
+                // Background ring (dark track)
+                ctx.beginPath();
+                ctx.arc(CX, CY, ring.r, 0, Math.PI * 2);
+                ctx.strokeStyle = '#141414';
+                ctx.lineWidth = ring.w + 2;
+                ctx.stroke();
+
+                // Colored arc (percentage fill)
+                if (pct > 0.005) {
+                    ctx.beginPath();
+                    ctx.arc(CX, CY, ring.r, SA, SA + Math.PI * 2 * pct);
+                    ctx.strokeStyle = ring.color;
+                    ctx.lineWidth = ring.w;
+                    ctx.lineCap = 'round';
+                    ctx.globalAlpha = 0.92;
+                    ctx.stroke();
+                    ctx.globalAlpha = 1;
+                    ctx.lineCap = 'butt';
+                }
+
+                // Glow dot at arc end
+                const dotAngle = SA + Math.PI * 2 * pct;
+                ctx.beginPath();
+                ctx.arc(CX + ring.r * Math.cos(dotAngle), CY + ring.r * Math.sin(dotAngle), ring.w * 0.65, 0, Math.PI * 2);
+                ctx.fillStyle = ring.color;
+                ctx.globalAlpha = 0.65;
+                ctx.fill();
+                ctx.globalAlpha = 1;
+            });
+
+            ctx.restore();
+
+            // Outer ring border
+            ctx.beginPath();
+            ctx.arc(CX, CY, 157, 0, Math.PI * 2);
+            ctx.strokeStyle = '#1c1c1c';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+        }
+
+        
+        // Radar sweep animation
+        let radarAngle = 0;
+        function drawRadarSweep() {
+            const canvas = document.getElementById('round-canvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+
+            // Draw radar sweep gradient
+            const gradient = ctx.createConicGradient(radarAngle, CX, CY);
+            gradient.addColorStop(0, 'rgba(0,221,68,0.15)');
+            gradient.addColorStop(0.1, 'rgba(0,221,68,0.05)');
+            gradient.addColorStop(0.2, 'rgba(0,221,68,0)');
+            gradient.addColorStop(1, 'rgba(0,221,68,0)');
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(CX, CY, 155, 0, Math.PI * 2);
+            ctx.clip();
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, 320, 320);
+            ctx.restore();
+
+            radarAngle += 0.03;
+            if (radarAngle > Math.PI * 2) radarAngle = 0;
+        }
+
+        // Combined draw function
+        function drawRadar() {
+            drawRoundRings();
+            drawRadarSweep();
+        }
+
+        function updateRoundClock() {
+            const now = new Date();
+            const timeEl = document.getElementById('round-time');
+            const dateEl = document.getElementById('round-date');
+            if (timeEl) timeEl.textContent = now.toLocaleTimeString('fr-FR');
+            if (dateEl) {
+                const opts = { weekday: 'short', day: 'numeric', month: 'short' };
+                dateEl.textContent = now.toLocaleDateString('fr-FR', opts);
+            }
+        }
+
+        async function loadRoundData() {
+            try {
+                var token = localStorage.getItem('sbx_token');
+                var headers = token ? { 'Authorization': 'Bearer ' + token } : {};
+                const res = await fetch('/api/v1/hub/dashboard', { headers: headers });
+                if (!res.ok) throw new Error('API error');
+                const data = await res.json();
+
+                roundMetrics.cpu = data.cpu_percent || 0;
+                roundMetrics.mem = data.memory_percent || 0;
+                roundMetrics.disk = data.disk_percent || 0;
+                roundMetrics.load = (data.load_avg || [0])[0];
+                roundMetrics.temp = data.cpu_temp || 45;
+                roundMetrics.net = data.wifi_rssi || -50;
+
+                // Update pod values
+                document.getElementById('rp-cpu').textContent = Math.round(roundMetrics.cpu) + '%';
+                document.getElementById('rp-mem').textContent = Math.round(roundMetrics.mem) + '%';
+                document.getElementById('rp-disk').textContent = Math.round(roundMetrics.disk) + '%';
+                document.getElementById('rp-load').textContent = roundMetrics.load.toFixed(1) + 'x';
+                document.getElementById('rp-temp').textContent = Math.round(roundMetrics.temp) + '°';
+                document.getElementById('rp-net').textContent = Math.round(roundMetrics.net) + 'dB';
+
+                // Update hostname
+                if (data.hostname) {
+                    document.getElementById('round-hostname').textContent = data.hostname;
+                }
+
+                // Update status
+                const statusEl = document.getElementById('round-status');
+                const maxVal = Math.max(roundMetrics.cpu, roundMetrics.mem, roundMetrics.disk);
+                if (maxVal > 80) {
+                    statusEl.textContent = '▲ CRITICAL';
+                    statusEl.style.color = '#ff4466';
+                } else if (maxVal > 50) {
+                    statusEl.textContent = '● WARNING';
+                    statusEl.style.color = '#ffb347';
+                } else {
+                    statusEl.textContent = '● NOMINAL';
+                    statusEl.style.color = '#00dd44';
+                }
+
+                drawRoundRings();
+            } catch (e) {
+                console.log('Round data error:', e);
+            }
+        }
+
+        // Initialize Round Display
+        setInterval(updateRoundClock, 1000);
+        updateRoundClock();
+        loadRoundData();
+        setInterval(loadRoundData, 3000);
+        setInterval(drawRadar, 50);  // Radar animation 20fps
+
+    </script>
 </body>
 </html>

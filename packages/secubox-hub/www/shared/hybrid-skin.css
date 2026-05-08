@@ -1097,6 +1097,48 @@ body.hybrid-skin .map {
 .global-status-bar .status-value.error { color: var(--boot-light, #E06040); }
 .global-status-bar .status-value.info { color: var(--mesh-light, #2C70C0); }
 
+/* ── Metric Progress Bars ── */
+.global-status-bar .status-item.metric-bar {
+    gap: 0.3rem;
+}
+
+.global-status-bar .bar-container {
+    width: 50px;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    overflow: hidden;
+    position: relative;
+}
+
+.global-status-bar .bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.3s ease, background 0.3s ease;
+    box-shadow: 0 0 4px currentColor;
+}
+
+.global-status-bar .bar-fill.bar-ok {
+    background: linear-gradient(90deg, var(--root-dark, #148C66), var(--root-light, #20C080));
+    box-shadow: 0 0 6px rgba(32, 192, 128, 0.5);
+}
+
+.global-status-bar .bar-fill.bar-warn {
+    background: linear-gradient(90deg, var(--wall-dark, #CC8820), var(--wall-light, #E0A030));
+    box-shadow: 0 0 6px rgba(224, 160, 48, 0.5);
+}
+
+.global-status-bar .bar-fill.bar-error {
+    background: linear-gradient(90deg, var(--boot-dark, #C06040), var(--boot-light, #E06040));
+    box-shadow: 0 0 6px rgba(224, 96, 64, 0.5);
+    animation: pulse-bar 1s ease-in-out infinite;
+}
+
+@keyframes pulse-bar {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
 /* Responsive: full width on mobile */
 @media (max-width: 768px) {
     .global-status-bar { left: 0 !important; }
@@ -1107,6 +1149,423 @@ body.hybrid-skin .map {
 .hybrid-skin .main-content,
 .hybrid-skin main {
     padding-bottom: 40px !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SMART STRIP — 6-module indicator bar (Round UI methodology)
+   ═══════════════════════════════════════════════════════════════ */
+.smart-strip {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 4px 10px;
+    background: rgba(0, 0, 0, 0.4);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.strip-module {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 4px 8px;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: background 0.2s, transform 0.2s;
+}
+
+.strip-module:hover {
+    background: rgba(255, 255, 255, 0.1);
+    transform: translateY(-2px);
+}
+
+.strip-led {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    transition: opacity 0.1s, box-shadow 0.2s;
+}
+
+.strip-module:hover .strip-led {
+    box-shadow: 0 0 12px currentColor;
+}
+
+.strip-val {
+    font-size: 9px;
+    font-weight: 600;
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+    color: var(--text-light, #e8e6d9);
+    line-height: 1;
+}
+
+/* Hardware LED Strip (3 big square LEDs like MOCHAbin physical) */
+.hw-led-strip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: rgba(0, 0, 0, 0.6);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    margin-right: 14px;
+}
+
+.hw-led {
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+    background: #00dd44;
+    transition: opacity 0.1s, box-shadow 0.1s, background 0.3s;
+    cursor: pointer;
+}
+
+.hw-led:hover {
+    transform: scale(1.15);
+}
+
+/* Vertical LED Strip (top bar - right side) */
+.hw-led-strip-v {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 4px 6px;
+    background: rgba(0, 0, 0, 0.5);
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    margin-right: 10px;
+    cursor: pointer;
+}
+
+.hw-led-v {
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+    background: #00dd44;
+    transition: opacity 0.1s, box-shadow 0.1s, background 0.3s;
+}
+
+.hw-led-strip-v:hover .hw-led-v {
+    transform: scale(1.1);
+}
+
+/* Header LEDs (sidebar header - next to SECUBOX logo) */
+.header-hw-leds {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 4px 6px;
+    background: rgba(0, 0, 0, 0.4);
+    border-radius: 5px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    margin-left: auto;
+    cursor: pointer;
+}
+
+.sidebar-header {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+}
+
+.sidebar-header a {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+}
+
+.header-hw-leds:hover .hw-led-v {
+    transform: scale(1.15);
+}
+
+/* Hardware LED Tooltip */
+.hw-led-tooltip {
+    display: none;
+    position: fixed;
+    z-index: 10003;
+    min-width: 200px;
+    background: rgba(10, 15, 25, 0.98);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 10px;
+    padding: 12px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+    pointer-events: none;
+}
+
+.hw-tooltip-header {
+    font-weight: 700;
+    font-size: 14px;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.hw-tooltip-icon {
+    font-size: 12px;
+    text-shadow: 0 0 8px currentColor;
+}
+
+.hw-tooltip-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+
+.hw-tooltip-item {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+}
+
+.hw-tooltip-label {
+    color: var(--muted-dark, #6b6b7a);
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+}
+
+.hw-tooltip-val {
+    color: var(--text-light, #e8e6d9);
+    font-weight: 600;
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+}
+
+.hw-tooltip-leds {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: var(--text-light, #e8e6d9);
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Multi-layer histogram in tooltip */
+.hw-tooltip-metrics {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+
+.hw-metric-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+}
+
+.hw-metric-label {
+    width: 32px;
+    color: var(--muted-dark, #6b6b7a);
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+    font-weight: 600;
+}
+
+.histo-bar {
+    flex: 1;
+    height: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 3px;
+    position: relative;
+    overflow: hidden;
+}
+
+.histo-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    border-radius: 3px;
+}
+
+.hw-metric-vals {
+    width: 50px;
+    text-align: right;
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+    font-size: 9px;
+    color: var(--text-light, #e8e6d9);
+}
+
+.hw-tooltip-legend {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    font-size: 8px;
+    color: var(--muted-dark, #6b6b7a);
+    margin-bottom: 8px;
+}
+
+/* Mini LED Strip (legacy - kept for compatibility) */
+.mini-led-strip {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    background: rgba(0, 0, 0, 0.5);
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    margin-right: 12px;
+}
+
+.mini-led {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    transition: opacity 0.1s, box-shadow 0.1s;
+    cursor: pointer;
+}
+
+.mini-led:hover {
+    transform: scale(1.3);
+    box-shadow: 0 0 10px currentColor !important;
+}
+
+/* Strip Popup (hover details with histogram) */
+.strip-popup {
+    display: none;
+    position: fixed;
+    z-index: 10002;
+    min-width: 180px;
+    background: rgba(17, 23, 32, 0.98);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    padding: 14px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+    pointer-events: none;
+    /* No transform here - JS handles centering */
+}
+
+.popup-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+    border-bottom: 2px solid;
+}
+
+.popup-icon {
+    width: 22px;
+    height: 22px;
+    object-fit: contain;
+}
+
+.popup-mod {
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 1px;
+}
+
+.popup-label {
+    margin-left: auto;
+}
+
+.popup-label {
+    font-size: 10px;
+    color: var(--text-muted, #888);
+}
+
+.popup-value {
+    font-size: 28px;
+    font-weight: 700;
+    text-align: center;
+    margin: 8px 0;
+}
+
+.popup-value.ok { color: var(--root-light, #20C080); }
+.popup-value.warn { color: var(--wall-light, #E0A030); }
+.popup-value.error { color: var(--boot-light, #E06040); }
+
+.popup-unit {
+    font-size: 12px;
+    opacity: 0.6;
+    margin-left: 2px;
+}
+
+.popup-sparkline {
+    display: flex;
+    align-items: flex-end;
+    gap: 1px;
+    height: 28px;
+    padding: 4px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+    margin: 8px 0;
+}
+
+.popup-sparkline .spark-bar {
+    width: 6px;
+    border-radius: 2px 2px 0 0;
+    transition: height 0.2s;
+}
+
+.popup-desc {
+    font-size: 8px;
+    color: var(--text-muted, #888);
+    text-align: center;
+    line-height: 1.3;
+}
+
+/* Health LED Container (main pulsing LED) */
+.health-led-container {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 6px;
+    transition: background 0.2s;
+}
+
+.health-led-container:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.health-led-main {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #00dd44;
+    box-shadow: 0 0 8px #00dd44;
+    transition: background 0.3s, box-shadow 0.3s;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   HEALTH BUMPER — Top bar health indicator with sync pulsing
+   ═══════════════════════════════════════════════════════════════ */
+.health-bumper {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    cursor: pointer;
+    transition: background 0.2s, transform 0.2s;
+}
+
+.health-bumper:hover {
+    background: rgba(0, 0, 0, 0.5);
+    transform: translateY(-1px);
+}
+
+.hb-led {
+    font-size: 14px;
+    color: #00dd44;
+    text-shadow: 0 0 8px #00dd44;
+    transition: color 0.3s, text-shadow 0.3s, opacity 0.1s;
+}
+
+.hb-status {
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    color: #00dd44;
+    transition: color 0.3s;
 }
 
 /* ═══════════════════════════════════════════════════════════════
