@@ -1,13 +1,34 @@
 #!/bin/sh
 # SecuBox Safe LED Script for MochaBin
 # Slow I2C writes with error handling to prevent bus lockup
+# v2 - Added timeout, I2C reset, optimized delays
 
 LED_BASE="/sys/class/leds"
-WRITE_DELAY=1  # 1 second delay between writes to prevent I2C overload
-ERROR_BACKOFF=5  # Wait 5s after any error
-MAX_ERRORS=3     # Stop after 3 consecutive errors
+WRITE_DELAY=0.3    # 300ms between writes (was 1s)
+ERROR_BACKOFF=3    # Wait 3s after error (was 5s)
+MAX_ERRORS=5       # Stop after 5 consecutive errors (was 3)
+RESET_THRESHOLD=3  # Try I2C reset after this many errors
 
 error_count=0
+LED_MODULE="leds-is31fl319x"
+
+# Reset I2C by reloading LED module
+reset_i2c() {
+    logger -t secubox-led "Attempting I2C reset (rmmod/modprobe)..."
+    rmmod "$LED_MODULE" 2>/dev/null
+    sleep 1
+    modprobe "$LED_MODULE" 2>/dev/null
+    sleep 2
+    # Check if LEDs came back
+    if [ -d "$LED_BASE/green:led1" ]; then
+        logger -t secubox-led "I2C reset successful"
+        error_count=0
+        return 0
+    else
+        logger -t secubox-led "I2C reset failed - LEDs not available"
+        return 1
+    fi
+}
 
 # Safe LED write with timeout and error detection
 led_write() {
@@ -17,13 +38,19 @@ led_write() {
 
     [ ! -f "$path" ] && return 1
 
-    # Use timeout to prevent hang (busybox compatible)
-    echo "$val" > "$path" 2>/dev/null
+    # Timeout prevents hang on I2C lockup (2 second max)
+    timeout 2 sh -c "echo $val > '$path'" 2>/dev/null
     local ret=$?
 
     if [ $ret -ne 0 ]; then
         error_count=$((error_count + 1))
-        logger -t secubox-led "LED write failed: $led (error $error_count)"
+        logger -t secubox-led "LED write failed: $led (error $error_count/$MAX_ERRORS)"
+
+        # Try I2C reset after threshold errors
+        if [ $error_count -ge $RESET_THRESHOLD ] && [ $error_count -lt $MAX_ERRORS ]; then
+            reset_i2c
+        fi
+
         sleep $ERROR_BACKOFF
         return 1
     fi
@@ -33,59 +60,64 @@ led_write() {
     return 0
 }
 
-# Set all RGB LEDs to a color (one at a time, slowly)
-set_color() {
-    local r="$1" g="$2" b="$3"
-
-    led_write "red:led1" "$r" || return 1
-    led_write "green:led1" "$g" || return 1
-    led_write "blue:led1" "$b" || return 1
+# Set one LED group (led1, led2, or led3)
+set_led() {
+    local n="$1" r="$2" g="$3" b="$4"
+    led_write "red:led$n" "$r" || return 1
+    led_write "green:led$n" "$g" || return 1
+    led_write "blue:led$n" "$b" || return 1
 }
 
 # Set all 3 LED groups
 set_all_leds() {
     local r="$1" g="$2" b="$3"
-
     for i in 1 2 3; do
-        led_write "red:led$i" "$r" || return 1
-        led_write "green:led$i" "$g" || return 1
-        led_write "blue:led$i" "$b" || return 1
+        set_led "$i" "$r" "$g" "$b" || return 1
+    done
+}
+
+# Turn all LEDs off
+all_off() {
+    for c in red green blue; do
+        for i in 1 2 3; do
+            led_write "$c:led$i" 0 || true
+        done
     done
 }
 
 # Health check - simple status colors
 get_status_color() {
-    # Check basic system health
     local load=$(cat /proc/loadavg | cut -d' ' -f1 | cut -d'.' -f1)
     local mem_free=$(grep MemAvailable /proc/meminfo | awk '{print int($2/1024)}')
 
     # Default: green (healthy)
-    local r=0 g=64 b=0
+    local r=0 g=50 b=0
 
     # Warning: yellow (high load or low memory)
     if [ "$load" -gt 4 ] || [ "$mem_free" -lt 256 ]; then
-        r=64 g=64 b=0
+        r=50 g=50 b=0
     fi
 
     # Critical: red (very high load or very low memory)
     if [ "$load" -gt 8 ] || [ "$mem_free" -lt 128 ]; then
-        r=64 g=0 b=0
+        r=50 g=0 b=0
     fi
 
     echo "$r $g $b"
 }
 
-# Main loop - update every 10 seconds (very slow)
+# Main loop - update every 10 seconds
 main() {
-    logger -t secubox-led "Safe LED script starting..."
+    logger -t secubox-led "Safe LED script v2 starting..."
 
     # Initial state: dim green
-    set_all_leds 0 32 0
+    set_all_leds 0 30 0
 
     while true; do
         # Check for too many errors
         if [ $error_count -ge $MAX_ERRORS ]; then
-            logger -t secubox-led "Too many errors, stopping LED updates"
+            logger -t secubox-led "Too many errors ($error_count), stopping LED updates"
+            all_off
             exit 1
         fi
 
@@ -95,7 +127,7 @@ $(get_status_color)
 EOF
         set_all_leds "$r" "$g" "$b"
 
-        # Long sleep between updates
+        # Sleep between updates
         sleep 10
     done
 }
@@ -103,29 +135,69 @@ EOF
 # Handle arguments
 case "$1" in
     start)
+        # Kill any existing instance
+        [ -f /tmp/secubox-led.pid ] && kill $(cat /tmp/secubox-led.pid) 2>/dev/null
         main &
         echo $! > /tmp/secubox-led.pid
+        echo "Started (PID: $!)"
         ;;
     stop)
-        [ -f /tmp/secubox-led.pid ] && kill $(cat /tmp/secubox-led.pid) 2>/dev/null
-        rm -f /tmp/secubox-led.pid
+        if [ -f /tmp/secubox-led.pid ]; then
+            kill $(cat /tmp/secubox-led.pid) 2>/dev/null
+            rm -f /tmp/secubox-led.pid
+            echo "Stopped"
+        else
+            echo "Not running"
+        fi
+        ;;
+    restart)
+        $0 stop
+        sleep 1
+        $0 start
         ;;
     status)
-        get_status_color
+        if [ -f /tmp/secubox-led.pid ] && kill -0 $(cat /tmp/secubox-led.pid) 2>/dev/null; then
+            echo "Running (PID: $(cat /tmp/secubox-led.pid))"
+            echo "Status color: $(get_status_color)"
+        else
+            echo "Not running"
+        fi
+        ;;
+    reset)
+        reset_i2c
         ;;
     test)
-        echo "Testing LED write..."
-        set_color 0 32 0 && echo "Green OK"
+        echo "Testing LED writes with 300ms delay..."
+        echo "Green..."
+        set_all_leds 0 40 0 && echo "  OK"
         sleep 2
-        set_color 32 32 0 && echo "Yellow OK"
+        echo "Yellow..."
+        set_all_leds 40 40 0 && echo "  OK"
         sleep 2
-        set_color 32 0 0 && echo "Red OK"
+        echo "Red..."
+        set_all_leds 40 0 0 && echo "  OK"
         sleep 2
-        set_color 0 0 32 && echo "Blue OK"
+        echo "Blue..."
+        set_all_leds 0 0 40 && echo "  OK"
         sleep 2
-        set_color 0 32 0 && echo "Back to green"
+        echo "Off..."
+        all_off && echo "  OK"
+        echo "Test complete. Errors: $error_count"
+        ;;
+    off)
+        all_off
+        echo "All LEDs off"
         ;;
     *)
-        echo "Usage: $0 {start|stop|status|test}"
+        echo "Usage: $0 {start|stop|restart|status|reset|test|off}"
+        echo ""
+        echo "Commands:"
+        echo "  start   - Start LED status daemon"
+        echo "  stop    - Stop LED status daemon"
+        echo "  restart - Restart daemon"
+        echo "  status  - Show daemon status"
+        echo "  reset   - Reset I2C (rmmod/modprobe)"
+        echo "  test    - Test all LED colors"
+        echo "  off     - Turn all LEDs off"
         ;;
 esac
