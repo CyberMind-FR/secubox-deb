@@ -1,0 +1,36 @@
+From: Gerald KERMA <devel@cybermind.fr>
+Subject: i2c: mv64xxx: increase errata delay for reliable operation
+
+Increase the errata FE-8471889 delay from 5us to 50us for more reliable
+I2C operation on Marvell Armada platforms. The original 5us delay is
+sometimes insufficient when working with slow I2C devices like LED
+controllers (IS31FL319X) that require additional setup time.
+
+This delay is only applied in standard mode (100kHz) for compatible
+devices (marvell,mv78230-i2c and marvell,mv78230-a0-i2c).
+
+Signed-off-by: Gerald KERMA <devel@cybermind.fr>
+---
+ drivers/i2c/busses/i2c-mv64xxx.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+--- a/drivers/i2c/busses/i2c-mv64xxx.c
++++ b/drivers/i2c/busses/i2c-mv64xxx.c
+@@ -340,7 +340,7 @@ mv64xxx_i2c_do_action(struct mv64xxx_i2c_data *drv_data)
+ 		drv_data->state = MV64XXX_I2C_STATE_WAITING_FOR_START_COND;
+
+ 		if (drv_data->errata_delay)
+-			udelay(5);
++			udelay(50);
+
+ 		drv_data->state = MV64XXX_I2C_STATE_IDLE;
+ 	}
+@@ -502,7 +502,7 @@ mv64xxx_i2c_send_start(struct mv64xxx_i2c_data *drv_data)
+ 	drv_data->state = MV64XXX_I2C_STATE_WAITING_FOR_START_COND;
+
+ 	if (drv_data->errata_delay)
+-		udelay(5);
++		udelay(50);
+ }
+
+ static void

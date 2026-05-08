@@ -1,0 +1,84 @@
+From: Gerald KERMA <devel@cybermind.fr>
+Subject: leds: is31fl319x: add delays between I2C writes for Armada platforms
+
+Add 1ms delays between I2C register writes to prevent bus errors on
+Marvell Armada platforms. The mv64xxx I2C controller on these SoCs
+has timing issues (errata FE-8471889) that can cause errors during
+rapid consecutive I2C transactions.
+
+This patch adds usleep_range() calls after each regmap_write() to
+ensure the I2C bus has time to settle before the next transaction.
+
+Signed-off-by: Gerald KERMA <devel@cybermind.fr>
+---
+ drivers/leds/leds-is31fl319x.c | 25 ++++++++++++++++++++++---
+ 1 file changed, 22 insertions(+), 3 deletions(-)
+
+--- a/drivers/leds/leds-is31fl319x.c
++++ b/drivers/leds/leds-is31fl319x.c
+@@ -24,6 +24,13 @@
+ #include <linux/regmap.h>
+ #include <linux/slab.h>
+
++/*
++ * I2C write delay in microseconds.
++ * Needed for Marvell Armada platforms with mv64xxx I2C controller
++ * timing issues (errata FE-8471889).
++ */
++#define IS31FL319X_I2C_DELAY_US 1000
++
+ /* register numbers */
+ #define IS31FL3190_LEDCONTROL		0x00
+ #define IS31FL3190_BREATH		0x01
+@@ -176,6 +183,8 @@ static int is31fl3190_brightness_set(struct led_classdev *cdev,
+ 	ret = regmap_write(is31->regmap, IS31FL3190_PWM(chan), brightness);
+ 	if (ret < 0)
+ 		goto out;
++
++	usleep_range(IS31FL319X_I2C_DELAY_US, IS31FL319X_I2C_DELAY_US + 100);
+
+ 	/* read current brightness of all PWM channels */
+ 	for (i = 0; i < is31->cdef->num_leds; i++) {
+@@ -195,11 +204,15 @@ static int is31fl3190_brightness_set(struct led_classdev *cdev,
+
+ 	if (ctrl > 0) {
+ 		regmap_write(is31->regmap, IS31FL3190_LEDCONTROL, ctrl);
++		usleep_range(IS31FL319X_I2C_DELAY_US, IS31FL319X_I2C_DELAY_US + 100);
+ 		/* update PWMs */
+ 		regmap_write(is31->regmap, IS31FL3190_DATA_UPDATE, 0x00);
++		usleep_range(IS31FL319X_I2C_DELAY_US, IS31FL319X_I2C_DELAY_US + 100);
+ 		/* enable chip from shut down and enable all channels */
+ 		ret = regmap_write(is31->regmap, IS31FL319X_SHUTDOWN, 0x20);
++		usleep_range(IS31FL319X_I2C_DELAY_US, IS31FL319X_I2C_DELAY_US + 100);
+ 	} else {
++		usleep_range(IS31FL319X_I2C_DELAY_US, IS31FL319X_I2C_DELAY_US + 100);
+ 		dev_dbg(&is31->client->dev, "power down\n");
+ 		/* shut down (no need to clear LEDCONTROL) */
+ 		ret = regmap_write(is31->regmap, IS31FL319X_SHUTDOWN, 0x01);
+@@ -233,6 +246,7 @@ static int is31fl3196_brightness_set(struct led_classdev *cdev,
+ 	ret = regmap_write(is31->regmap, IS31FL3196_PWM(chan), brightness);
+ 	if (ret < 0)
+ 		goto out;
++	usleep_range(IS31FL319X_I2C_DELAY_US, IS31FL319X_I2C_DELAY_US + 100);
+
+ 	/* read current brightness of all PWM channels */
+ 	for (i = 0; i < is31->cdef->num_leds; i++) {
+@@ -259,14 +273,19 @@ static int is31fl3196_brightness_set(struct led_classdev *cdev,
+
+ 	if (ctrl1 > 0 || ctrl2 > 0) {
+ 		regmap_write(is31->regmap, IS31FL3196_LEDCONTROL1, ctrl1);
++		usleep_range(IS31FL319X_I2C_DELAY_US, IS31FL319X_I2C_DELAY_US + 100);
+ 		regmap_write(is31->regmap, IS31FL3196_LEDCONTROL2, ctrl2);
++		usleep_range(IS31FL319X_I2C_DELAY_US, IS31FL319X_I2C_DELAY_US + 100);
+ 		/* update PWMs */
+ 		regmap_write(is31->regmap, IS31FL3196_DATA_UPDATE, 0x00);
++		usleep_range(IS31FL319X_I2C_DELAY_US, IS31FL319X_I2C_DELAY_US + 100);
+ 		/* enable chip from shut down */
+ 		ret = regmap_write(is31->regmap, IS31FL319X_SHUTDOWN, 0x01);
+ 	} else {
+ 		dev_dbg(&is31->client->dev, "power down\n");
+ 		/* shut down */
++		usleep_range(IS31FL319X_I2C_DELAY_US, IS31FL319X_I2C_DELAY_US + 100);
+ 		ret = regmap_write(is31->regmap, IS31FL319X_SHUTDOWN, 0x00);
+ 	}
+

@@ -44,5 +44,7 @@ dist/
 tools/Tow-Boot/result
 tools/Tow-Boot/output/
 
-# Kernel build
-kernel-build/
+# Kernel build (ignore outputs, keep docs and patches)
+kernel-build/*
+!kernel-build/README.md
+!kernel-build/patches/

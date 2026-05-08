@@ -4,6 +4,46 @@
 ---
 ## 2026-05-08
 
+### Session 119 — I2C Timing Investigation and Kernel Patches
+
+**Investigation:**
+
+1. **Root Cause Analysis** — Errata FE-8471889
+   - mv64xxx I2C controller has timing issues on Armada platforms
+   - Mainline kernel has 5µs delay fix, but insufficient for LED controllers
+   - OpenWrt kernel works due to different build/timing characteristics
+
+2. **OpenWrt Patches Review**
+   - Checked OpenWrt mvebu patches-6.12 for I2C fixes
+   - Found i2c-pxa patches for Armada 3700 (not applicable to 7040)
+   - 304-revert_i2c_delay.patch only affects Armada XP (32-bit)
+
+3. **Kernel Configuration Comparison**
+   - Both OpenWrt and custom kernel use CONFIG_I2C_MV64XXX=y
+   - I2C clock at 100kHz (standard mode) - correct for errata fix
+   - DTB uses `marvell,mv78230-i2c` compatible - errata should trigger
+
+**Solution — Kernel Patches Created:**
+
+1. `001-leds-is31fl319x-add-i2c-delays.patch`
+   - Adds 1ms usleep_range() between regmap writes
+   - Prevents rapid I2C transactions that cause bus errors
+
+2. `002-i2c-mv64xxx-increase-errata-delay.patch`
+   - Increases errata delay from 5µs to 50µs
+   - Provides more margin for I2C bus settling
+
+**Files Created:**
+- `kernel-build/patches/001-leds-is31fl319x-add-i2c-delays.patch`
+- `kernel-build/patches/002-i2c-mv64xxx-increase-errata-delay.patch`
+- Updated `kernel-build/README.md` with patch instructions
+
+**References:**
+- [Patchwork: errata FE-8471889](https://patchwork.kernel.org/project/linux-arm-kernel/patch/1370620140-17177-2-git-send-email-gregory.clement@free-electrons.com/)
+- [OpenWrt mvebu target](https://github.com/openwrt/openwrt/tree/master/target/linux/mvebu)
+
+---
+
 ### Session 118 — LED HealthBump 3-Tier System
 
 **Completed:**
