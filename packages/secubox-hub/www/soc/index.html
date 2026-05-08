@@ -237,10 +237,10 @@
                     <span class="card-icon">🛡️</span>
                     <span class="card-status" id="waf-card-status">LOADING</span>
                 </div>
-                <div class="card-metric" id="threats-blocked">-</div>
-                <div class="card-label">🔥 Active Bans</div>
+                <div class="card-metric" style="color: var(--boot-light);" id="threats-blocked">-</div>
+                <div class="card-label"><span style="color: var(--boot-light);">Active Bans</span></div>
                 <div class="mini-histogram"><div class="mini-bar danger" id="ban-histogram" style="width:0%"></div></div>
-                <span class="card-trend" id="threats-trend">⚔️ CrowdSec decisions</span>
+                <span class="card-trend" style="color: var(--boot-light);">CrowdSec decisions</span>
             </div>
 
             <div class="stat-card" style="--card-accent: var(--mind-light);">
@@ -248,10 +248,10 @@
                     <span class="card-icon">👁️</span>
                     <span class="card-status" id="cs-card-status">LOADING</span>
                 </div>
-                <div class="card-metric" id="active-decisions">-</div>
-                <div class="card-label">⚠️ Alerts</div>
+                <div class="card-metric" style="color: var(--mind-light);" id="active-decisions">-</div>
+                <div class="card-label"><span style="color: var(--mind-light);">Alerts</span></div>
                 <div class="mini-histogram"><div class="mini-bar warn" id="alert-histogram" style="width:0%"></div></div>
-                <span class="card-trend" id="decisions-info">🤖 - bouncers</span>
+                <span class="card-trend" style="color: var(--mind-light);" id="decisions-info">- bouncers</span>
             </div>
 
             <div class="stat-card" style="--card-accent: var(--mesh-light);">
@@ -259,9 +259,9 @@
                     <span class="card-icon">🌐</span>
                     <span class="card-status">ACTIVE</span>
                 </div>
-                <div class="card-metric" id="throughput">-</div>
-                <div class="card-label">Connections</div>
-                <span class="card-trend" id="throughput-trend">TCP sessions</span>
+                <div class="card-metric" style="color: var(--mesh-light);" id="throughput">-</div>
+                <div class="card-label"><span style="color: var(--mesh-light);">Connections</span></div>
+                <span class="card-trend" style="color: var(--mesh-light);" id="throughput-trend">TCP sessions</span>
             </div>
 
             <div class="stat-card" style="--card-accent: var(--root-light);">
@@ -269,9 +269,9 @@
                     <span class="card-icon">⚡</span>
                     <span class="card-status" id="health-status">LOADING</span>
                 </div>
-                <div class="card-metric" id="active-services">-</div>
-                <div class="card-label">Services OK</div>
-                <span class="card-trend" id="uptime-info">-</span>
+                <div class="card-metric" style="color: var(--root-light);" id="active-services">-</div>
+                <div class="card-label"><span style="color: var(--root-light);">Services OK</span></div>
+                <span class="card-trend" style="color: var(--root-light);" id="uptime-info">-</span>
             </div>
         </div>
 
@@ -398,24 +398,23 @@
             const checks = data.checks || {};
             const bouncers = checks.bouncers_count || 0;
 
-            // Card status with emoji
-            const statusEmoji = data.status === 'ok' ? '✅' : '⚠️';
-            document.getElementById('cs-card-status').textContent = statusEmoji + ' ' + (data.status === 'ok' ? 'ACTIVE' : data.status.toUpperCase());
+            // Card status
+            document.getElementById('cs-card-status').textContent = data.status === 'ok' ? 'ACTIVE' : data.status.toUpperCase();
             document.getElementById('cs-card-status').className = 'card-status' + (data.status === 'ok' ? '' : ' warning');
 
-            // Matrix details with emojis
+            // Matrix details with color dots
             document.getElementById('cs-engine').innerHTML = checks.engine_running
-                ? '<span class="highlight">🟢 RUNNING</span>'
-                : '<span class="danger">🔴 STOPPED</span>';
+                ? '<span class="highlight">● RUNNING</span>'
+                : '<span class="danger">● STOPPED</span>';
 
             document.getElementById('cs-lapi').innerHTML = checks.lapi_ok
-                ? '<span class="highlight">🟢 CONNECTED</span>'
-                : '<span class="danger">🔴 DISCONNECTED</span>';
+                ? '<span class="highlight">● CONNECTED</span>'
+                : '<span class="danger">● DISCONNECTED</span>';
 
             document.getElementById('cs-bouncers').innerHTML = bouncers > 0
-                ? `<span class="highlight">🤖 ${bouncers} registered</span>`
-                : '<span class="danger">⚠️ 0 registered</span>';
-            document.getElementById('decisions-info').textContent = '🤖 ' + bouncers + ' bouncers';
+                ? `<span class="highlight">${bouncers} registered</span>`
+                : '<span class="danger">0 registered</span>';
+            document.getElementById('decisions-info').textContent = bouncers + ' bouncers';
 
             // Alert histogram
             const alertBar = document.getElementById('alert-histogram');
@@ -454,7 +453,7 @@
                 document.getElementById('cs-top-scenario').innerHTML = `<span class="warning">🎯 ${data.top_scenario}</span>`;
             }
 
-            addActivity('crowdsec', '👁️', `🛡️ <code>${decisions}</code> bans · <code>${alerts}</code> alerts`, 'now');
+            addActivity('crowdsec', '👁️', `<code>${decisions}</code> bans · <code>${alerts}</code> alerts`, 'now');
         }
 
         async function loadCrowdSecAlerts() {
