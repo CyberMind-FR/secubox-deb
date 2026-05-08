@@ -815,17 +815,16 @@
             return true;
         }
 
-        async function api(url, method = 'GET', body = null) {
+        async function api(url, method = 'GET', body = null, requireAuth = true) {
             const token = getToken();
-            if (!token) { checkAuth(); return null; }
+            if (requireAuth && !token) { checkAuth(); return null; }
             try {
-                const opts = {
-                    method,
-                    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }
-                };
+                const opts = { method, headers: { 'Content-Type': 'application/json' } };
+                if (token) opts.headers['Authorization'] = 'Bearer ' + token;
                 if (body) opts.body = JSON.stringify(body);
                 const res = await fetch(url, opts);
-                if (res.status === 401) { checkAuth(); return null; }
+                if (res.status === 401 && requireAuth) { checkAuth(); return null; }
+                if (!res.ok) return null;
                 return await res.json();
             } catch (e) { console.error('API error:', url, e); return null; }
         }
@@ -871,33 +870,49 @@
         }
 
         async function loadHealthBatch() {
-            const data = await api(API_HUB + '/health');
-            if (!data || !data.modules) return;
+            const data = await api(API_HUB + '/health', 'GET', null, false);
+            if (!data) {
+                document.getElementById('active-services').textContent = '?';
+                document.getElementById('health-status').textContent = 'OFFLINE';
+                document.getElementById('health-status').className = 'card-status danger';
+                return;
+            }
 
-            const modules = data.modules;
+            // Basic health check (hub itself is running)
+            if (data.status === 'ok') {
+                document.getElementById('health-status').textContent = 'ONLINE';
+                document.getElementById('health-status').className = 'card-status';
+            }
 
-            // Update sidebar status LEDs
-            if (modules.waf) updateStatusLed('waf-status', modules.waf.status);
-            if (modules.crowdsec) updateStatusLed('crowdsec-status', modules.crowdsec.status);
-            if (modules.metrics) updateStatusLed('metrics-status', modules.metrics.status);
-            if (modules.dns) updateStatusLed('dns-status', modules.dns.status);
-            if (modules.wireguard) updateStatusLed('wireguard-status', modules.wireguard.status);
-
-            // Count healthy services
-            let healthy = 0, total = 0;
-            Object.values(modules).forEach(m => {
-                total++;
-                if (m.status === 'ok') healthy++;
-            });
-
-            document.getElementById('active-services').textContent = healthy;
-            document.getElementById('health-status').textContent = healthy === total ? 'HEALTHY' : 'DEGRADED';
-            document.getElementById('health-status').className = 'card-status' + (healthy === total ? '' : ' warning');
+            // Try to get module health from module-health endpoint
+            const moduleHealth = await api(API_HUB + '/module-health/summary');
+            if (moduleHealth) {
+                const healthy = moduleHealth.healthy || 0;
+                const total = moduleHealth.total || 0;
+                document.getElementById('active-services').textContent = healthy;
+                document.getElementById('health-status').textContent = healthy === total ? 'HEALTHY' : 'DEGRADED';
+                document.getElementById('health-status').className = 'card-status' + (healthy === total ? '' : ' warning');
+                document.getElementById('uptime-info').textContent = Math.round(moduleHealth.health_percent || 0) + '% healthy';
+            } else {
+                // Fallback: just show hub is up
+                document.getElementById('active-services').textContent = '1';
+                document.getElementById('health-status').textContent = 'ONLINE';
+                document.getElementById('health-status').className = 'card-status';
+            }
         }
 
         async function loadWAFStats() {
-            const data = await api(API_WAF + '/stats');
-            if (!data) return;
+            const data = await api(API_WAF + '/stats', 'GET', null, false);
+            if (!data) {
+                document.getElementById('threats-blocked').textContent = '0';
+                document.getElementById('waf-card-status').textContent = 'OFFLINE';
+                document.getElementById('waf-card-status').className = 'card-status danger';
+                document.getElementById('waf-version').textContent = 'v- · offline';
+                document.getElementById('waf-status-detail').innerHTML = '<span class="danger">● OFFLINE</span>';
+                document.getElementById('top-countries').innerHTML = '<span style="color:var(--muted);">-</span>';
+                document.getElementById('waf-categories').innerHTML = '<span class="cat-tag">-</span>';
+                return;
+            }
 
             const blocked = data.blocked_24h || data.blocked_today || 0;
             document.getElementById('threats-blocked').textContent = blocked.toLocaleString();
@@ -1155,33 +1170,44 @@
 
         async function loadCrowdSecStats() {
             // Load health first for status panel
-            const health = await api(API_CROWDSEC + '/health');
-            if (health) {
-                document.getElementById('cs-agent-status').innerHTML = health.checks && health.checks.engine_running
-                    ? '<span class="highlight">● ACTIVE</span>'
-                    : '<span class="danger">● INACTIVE</span>';
-                document.getElementById('cs-version').textContent = health.version ? `v${health.version}` : 'v-';
+            const health = await api(API_CROWDSEC + '/health', 'GET', null, false);
+            if (!health) {
+                document.getElementById('cs-agent-status').innerHTML = '<span class="danger">● OFFLINE</span>';
+                document.getElementById('cs-version').textContent = 'v-';
+                document.getElementById('cs-card-status').textContent = 'OFFLINE';
+                document.getElementById('cs-card-status').className = 'card-status danger';
+                document.getElementById('active-decisions').textContent = '0';
+                document.getElementById('decisions-info').textContent = '- bouncers';
+                document.getElementById('cs-decisions-count').textContent = '0';
+                document.getElementById('cs-bouncers').textContent = '0';
+                document.getElementById('cs-categories').innerHTML = '<span class="cat-tag">-</span>';
+                return;
             }
 
-            const data = await api(API_CROWDSEC + '/decisions_stats');
+            document.getElementById('cs-agent-status').innerHTML = health.checks && health.checks.engine_running
+                ? '<span class="highlight">● ACTIVE</span>'
+                : '<span class="danger">● INACTIVE</span>';
+            document.getElementById('cs-version').textContent = health.version ? `v${health.version}` : 'v-';
+
+            const data = await api(API_CROWDSEC + '/decisions_stats', 'GET', null, false);
             if (!data) {
-                if (health) {
-                    document.getElementById('cs-card-status').textContent = health.status === 'ok' ? 'ACTIVE' : 'DEGRADED';
-                }
+                document.getElementById('cs-card-status').textContent = health.status === 'ok' ? 'ACTIVE' : 'DEGRADED';
+                document.getElementById('active-decisions').textContent = '0';
+                document.getElementById('decisions-info').textContent = '- bouncers';
                 return;
             }
 
             document.getElementById('active-decisions').textContent = data.active_decisions || 0;
             document.getElementById('cs-card-status').textContent = 'ACTIVE';
+            document.getElementById('cs-card-status').className = 'card-status';
             document.getElementById('decisions-info').textContent = `${data.bouncers || 0} bouncers`;
             document.getElementById('cs-decisions-count').textContent = data.active_decisions || 0;
             document.getElementById('cs-bouncers').textContent = data.bouncers || 0;
 
             // Categories
-            if (data.categories) {
-                // Render multi-layer donut for categories
+            if (data.categories && data.categories.length > 0) {
                 const csDonut = document.getElementById('cs-cat-donut');
-                if (csDonut && data.categories && data.categories.length > 0) {
+                if (csDonut) {
                     csDonut.innerHTML = createMultiLayerDonut(data.categories, CAT_COLORS, CATEGORY_EMOJI, 100);
                 }
             } else {
@@ -1194,19 +1220,18 @@
         }
 
         async function loadFirewallStats() {
-            const data = await api(API_CROWDSEC + '/health');
+            const data = await api(API_CROWDSEC + '/health', 'GET', null, false);
             if (!data) {
-                document.getElementById('fw-status').innerHTML = '<span class="danger">● UNKNOWN</span>';
-                return;
+                document.getElementById('fw-status').innerHTML = '<span class="warning">● UNKNOWN</span>';
+            } else {
+                const nftOk = data.checks && data.checks.nftables_ok;
+                document.getElementById('fw-status').innerHTML = nftOk
+                    ? '<span class="highlight">● ACTIVE</span>'
+                    : '<span class="danger">● INACTIVE</span>';
             }
 
-            const nftOk = data.checks && data.checks.nftables_ok;
-            document.getElementById('fw-status').innerHTML = nftOk
-                ? '<span class="highlight">● ACTIVE</span>'
-                : '<span class="danger">● INACTIVE</span>';
-
-            // Try to get more details from firewall endpoint
-            const fwData = await api(API_HUB + '/public/firewall_summary');
+            // Try to get more details from firewall endpoint (public, no auth required)
+            const fwData = await api(API_HUB + '/public/firewall_summary', 'GET', null, false);
             if (fwData && !fwData.error && fwData.tables > 0) {
                 document.getElementById('fw-tables').textContent = fwData.tables;
                 
@@ -1258,11 +1283,16 @@
                 document.getElementById('fw-chains').textContent = fwData.chains || '-';
                 document.getElementById('fw-rules').textContent = fwData.rules || '-';
             } else {
-                document.getElementById('fw-tables').textContent = nftOk ? '2' : '-';
-                document.getElementById('fw-chains').textContent = nftOk ? 'crowdsec' : '-';
-                document.getElementById('fw-rules').textContent = nftOk ? 'active' : '-';
+                document.getElementById('fw-tables').textContent = '-';
+                document.getElementById('fw-chains').textContent = '-';
+                document.getElementById('fw-rules').textContent = '-';
+                // Initialize scribe trace with empty
+                const scribeEl = document.getElementById('fw-scribe-trace');
+                if (scribeEl) scribeEl.innerHTML = '<div style="color:var(--muted);font-size:10px;">No data</div>';
+                document.getElementById('fw-drop-val').textContent = '🛑 0';
+                document.getElementById('fw-accept-val').textContent = '✅ 0';
+                document.getElementById('fw-reject-val').textContent = '❌ 0';
             }
-            updateStatusLed('firewall-status', nftOk ? 'ok' : 'error');
         }
 
         // Recent bans list
@@ -1327,8 +1357,14 @@
 
 
         async function loadMetrics() {
-            const data = await api(API_METRICS + '/overview');
-            if (!data) return;
+            const data = await api(API_METRICS + '/overview', 'GET', null, false);
+            if (!data) {
+                document.getElementById('cpu-load').textContent = '-';
+                document.getElementById('cpu-pct').textContent = '-';
+                document.getElementById('mem-info').textContent = '-';
+                document.getElementById('mem-pct').textContent = '-';
+                return;
+            }
 
             // System metrics
             const cpu = data.cpu_percent || (data.load_avg ? data.load_avg[0] * 10 : 0);
@@ -1351,7 +1387,7 @@
         }
 
         async function loadDashboard() {
-            const data = await api(API_HUB + '/dashboard');
+            const data = await api(API_HUB + '/dashboard', 'GET', null, true);
             if (!data) return;
 
             // CPU/Memory from dashboard
@@ -1378,8 +1414,12 @@
         }
 
         async function loadConnections() {
-            const data = await api(API_METRICS + '/connections');
-            if (!data) return;
+            const data = await api(API_METRICS + '/connections', 'GET', null, false);
+            if (!data) {
+                document.getElementById('throughput').textContent = '-';
+                document.getElementById('throughput-trend').textContent = '- HTTP · - HTTPS';
+                return;
+            }
 
             const total = data.total_tcp || (data.http + data.https + data.ssh) || 0;
             document.getElementById('throughput').textContent = total;
@@ -1387,8 +1427,12 @@
         }
 
         async function loadNetwork() {
-            const data = await api(API_HUB + '/network_summary');
-            if (!data) return;
+            const data = await api(API_HUB + '/network_summary', 'GET', null, true);
+            if (!data) {
+                document.getElementById('net-info').textContent = 'Unknown';
+                document.getElementById('net-pct').textContent = '-';
+                return;
+            }
 
             document.getElementById('net-info').textContent = data.wan_status || 'Unknown';
             const pct = data.interfaces_up && data.interfaces ? Math.round((data.interfaces_up / data.interfaces) * 100) : 100;
