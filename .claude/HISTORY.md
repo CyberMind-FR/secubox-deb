@@ -2727,3 +2727,17 @@ CONFIG_USB_NET_RNDIS_HOST=y
 - Test USB network with Eye Remote
 - Verify DSA switch works
 
+
+### LED Fixes (Session 118 continued)
+
+- [x] Fixed I2C communication errors (brightness value 10 optimal)
+- [x] Removed old conflicting LED scripts (secubox-led-heartbeat)
+- [x] Updated healthbump with rate-based security detection
+- [x] Timer enabled (30s interval)
+- [x] Activity pulse on each check
+- [x] Color gradient for hardware load level
+
+**Final LED Status:**
+- LED1 (HW): Green/Yellow/Orange/Red based on load %
+- LED2 (SVC): Green=ok, Red=error
+- LED3 (SEC): Green=clear, Blue=mitigating, Yellow=elevated, Red=attack
