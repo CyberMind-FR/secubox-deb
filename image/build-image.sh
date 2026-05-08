@@ -194,7 +194,7 @@ DEBOOTSTRAP_OPTS="--arch=${DEBIAN_ARCH}"
 INCLUDE_PKGS="systemd,systemd-sysv,dbus,netplan.io,nftables,openssh-server"
 INCLUDE_PKGS+=",python3,python3-pip,nginx,curl,wget,ca-certificates,gnupg,apt-transport-https"
 INCLUDE_PKGS+=",iproute2,iputils-ping,ethtool,net-tools,wireguard-tools"
-INCLUDE_PKGS+=",sudo,less,vim-tiny,logrotate,cron,rsync,jq,dnsmasq,cloud-guest-utils,parted"
+INCLUDE_PKGS+=",sudo,less,vim-tiny,logrotate,cron,rsync,jq,dnsmasq,cloud-guest-utils,parted,u-boot-tools,libubootenv-tool"
 
 # Python dependencies for SecuBox modules (apt packages)
 # Note: Complex deps (cryptography, jose) installed via pip after debootstrap
