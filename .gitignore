@@ -48,3 +48,4 @@ tools/Tow-Boot/output/
 kernel-build/*
 !kernel-build/README.md
 !kernel-build/patches/
+!kernel-build/build-kernel.sh

@@ -9,11 +9,10 @@ Custom Linux **6.6.x LTS** kernel for Marvell Armada 7040 (MOCHAbin) with OpenWr
 
 ### Built-in Drivers (=y)
 
-Unlike standard Debian kernels that use modules (=m), this kernel builds critical drivers directly into the image to avoid boot-time deferred probe issues:
+Critical boot drivers are built-in to avoid deferred probe issues:
 
 | Category | Driver | Config |
 |----------|--------|--------|
-| **LED** | IS31FL319X I2C LED controller | `CONFIG_LEDS_IS31FL319X=y` |
 | **DSA** | mv88e6xxx switch | `CONFIG_NET_DSA_MV88E6XXX=y` |
 | **Ethernet** | Marvell PPv2 | `CONFIG_MVPP2=y` |
 | **PHY** | Marvell 1G/10G | `CONFIG_MARVELL_PHY=y`, `CONFIG_MARVELL_10G_PHY=y` |
@@ -24,14 +23,20 @@ Unlike standard Debian kernels that use modules (=m), this kernel builds critica
 
 ### Module Drivers (=m)
 
-USB network drivers for Eye Remote gadget support:
+Drivers as modules for flexibility and recovery:
 
 | Module | Purpose |
 |--------|---------|
+| `leds-is31fl319x` | **LED controller** (module allows I2C recovery) |
 | `usbnet` | USB network framework |
 | `cdc_ether` | CDC-ECM USB Ethernet |
 | `cdc_ncm` | CDC-NCM USB Ethernet |
 | `rndis_host` | RNDIS USB Ethernet |
+
+> **Note**: LED driver is a module to allow recovery from I2C bus hangs:
+> ```bash
+> rmmod leds_is31fl319x && modprobe leds_is31fl319x
+> ```
 
 ## Build Instructions
 
