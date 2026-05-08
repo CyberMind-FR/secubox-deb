@@ -1,7 +1,7 @@
 /**
  * ═══════════════════════════════════════════════════════════════════════════════
  *  SECUBOX SIDEBAR — Health-Aware Navigation + Hybrid Skin Injector
- *  v2.25.2 — Smart Strip with persistent histogram cache (60 samples, 1h TTL)
+ *  v2.33.0 — Resilient sidebar with self-reinject and error recovery
  * ═══════════════════════════════════════════════════════════════════════════════
  *
  *  SecuBox-Deb :: Sidebar Component
@@ -14,6 +14,8 @@
  *  - Health-aware LED indicators with batch endpoint
  *  - Version & dev_stage badges
  *  - CHECKED = hide unknown, UNCHECKED = show all
+ *  - Resilient error handling with self-reinject mechanism
+ *  - Graceful degradation on API failures
  *
  * ═══════════════════════════════════════════════════════════════════════════════
  */
@@ -21,7 +23,45 @@
 (function() {
     const MENU_API = '/api/v1/hub/public/menu';
     const BATCH_HEALTH_API = '/api/v1/hub/public/health-batch';
-    const VERSION = 'v2.32.0';
+    const VERSION = 'v2.33.1';
+
+    // Resilience settings
+    const HEARTBEAT_INTERVAL = 15000;  // 15s - check sidebar health
+    const MAX_RETRY_ATTEMPTS = 3;
+    const RETRY_DELAY = 2000;  // 2s between retries
+    const MENU_CACHE_KEY = 'sbx_menu_cache';
+    const MENU_CACHE_TTL = 3600000;  // 1 hour menu cache
+    let sidebarHealthy = true;
+    let retryCount = 0;
+    let heartbeatTimer = null;
+
+    // Pre-cached menu for instant display during API warmup
+    function loadCachedMenu() {
+        try {
+            var cached = localStorage.getItem(MENU_CACHE_KEY);
+            if (cached) {
+                var data = JSON.parse(cached);
+                if (data.timestamp && (Date.now() - data.timestamp) < MENU_CACHE_TTL) {
+                    console.log('[Sidebar] Using cached menu (age: ' + Math.round((Date.now() - data.timestamp)/1000) + 's)');
+                    return data.menu;
+                }
+            }
+        } catch (e) {
+            console.log('[Sidebar] Menu cache load error:', e);
+        }
+        return null;
+    }
+
+    function saveCachedMenu(menu) {
+        try {
+            localStorage.setItem(MENU_CACHE_KEY, JSON.stringify({
+                timestamp: Date.now(),
+                menu: menu
+            }));
+        } catch (e) {
+            console.log('[Sidebar] Menu cache save error:', e);
+        }
+    }
 
     // Round UI Module Colors (6-module system)
     const MODULE_COLORS = {
@@ -546,16 +586,16 @@
         }, 100);
     }
 
-    // Load status bar data from API
+    // Load status bar data from API (with safe fetch)
     async function loadStatusBarData() {
         var token = localStorage.getItem('sbx_token');
         var headers = token ? { 'Authorization': 'Bearer ' + token } : {};
 
         try {
-            // Load dashboard for version and uptime
-            var res = await fetch('/api/v1/hub/dashboard', { headers: headers });
-            if (res.ok) {
-                var data = await res.json();
+            // Load dashboard for version and uptime (using safe fetch)
+            var result = await safeFetch('/api/v1/hub/dashboard', { headers: headers }, 5000);
+            if (result.ok) {
+                var data = result.data;
                 if (data.build_info && data.build_info.version) {
                     var el = document.getElementById('gsb-version');
                     if (el) el.textContent = 'v' + data.build_info.version;
@@ -566,10 +606,10 @@
                 }
             }
 
-            // Load boot mode
-            var modeRes = await fetch('/api/v1/hub/boot_mode', { headers: headers });
-            if (modeRes.ok) {
-                var modeData = await modeRes.json();
+            // Load boot mode (using safe fetch)
+            var modeResult = await safeFetch('/api/v1/hub/boot_mode', { headers: headers }, 3000);
+            if (modeResult.ok) {
+                var modeData = modeResult.data;
                 var modeEl = document.getElementById('gsb-mode');
                 if (modeEl && modeData.mode) {
                     modeEl.textContent = modeData.mode.charAt(0).toUpperCase() + modeData.mode.slice(1);
@@ -577,10 +617,10 @@
                 }
             }
 
-            // Load auth mode
-            var authRes = await fetch('/api/v1/hub/auth_mode', { headers: headers });
-            if (authRes.ok) {
-                var authData = await authRes.json();
+            // Load auth mode (using safe fetch)
+            var authResult = await safeFetch('/api/v1/hub/auth_mode', { headers: headers }, 3000);
+            if (authResult.ok) {
+                var authData = authResult.data;
                 var authEl = document.getElementById('gsb-auth');
                 if (authEl && authData.mode) {
                     authEl.textContent = authData.mode;
@@ -588,10 +628,10 @@
                 }
             }
 
-            // Load CPU, memory, and disk from dashboard
-            var dashRes = await fetch('/api/v1/hub/dashboard', { headers: headers });
-            if (dashRes.ok) {
-                var dashData = await dashRes.json();
+            // Load CPU, memory, and disk from dashboard (using safe fetch)
+            var dashResult = await safeFetch('/api/v1/hub/dashboard', { headers: headers }, 5000);
+            if (dashResult.ok) {
+                var dashData = dashResult.data;
                 var cpuEl = document.getElementById('gsb-cpu');
                 var cpuBar = document.getElementById('gsb-cpu-bar');
                 var memEl = document.getElementById('gsb-mem');
@@ -696,10 +736,10 @@
                 }
             }
 
-            // Load health summary from batch endpoint
-            var healthRes = await fetch('/api/v1/hub/public/health-batch', { headers: headers });
-            if (healthRes.ok) {
-                var healthData = await healthRes.json();
+            // Load health summary from batch endpoint (using safe fetch)
+            var healthResult = await safeFetch('/api/v1/hub/public/health-batch', { headers: headers }, 5000);
+            if (healthResult.ok) {
+                var healthData = healthResult.data;
                 var healthEl = document.getElementById('gsb-health');
                 if (healthEl && healthData.modules) {
                     var ok = 0, warn = 0, err = 0, total = 0;
@@ -740,32 +780,30 @@
                 }
             }
 
-            // Fetch security metrics (CrowdSec bans)
-            try {
-                var secRes = await fetch('/api/v1/crowdsec/stats', { headers: headers });
-                if (secRes.ok) {
-                    var secData = await secRes.json();
-                    var lmSec = document.getElementById('lm-sec');
-                    if (lmSec) {
-                        var bans = secData.active_bans || secData.decisions || 0;
-                        var alerts = secData.alerts_today || 0;
-                        lmSec.textContent = bans + 'B';
-                        lmSec.title = bans + ' bans, ' + alerts + ' alerts today';
-                        // Blue if actively blocking, else based on alert level
-                        if (bans > 20) {
-                            lmSec.className = 'led-metric-val info';  // Blue - active mitigation
-                        } else if (alerts > 50) {
-                            lmSec.className = 'led-metric-val error';
-                        } else if (alerts > 10) {
-                            lmSec.className = 'led-metric-val warn';
-                        } else {
-                            lmSec.className = 'led-metric-val ok';
-                        }
-                    }
+            // Fetch security metrics (CrowdSec bans) - using safe fetch
+            var secResult = await safeFetch('/api/v1/crowdsec/stats', { headers: headers }, 3000);
+            var lmSec = document.getElementById('lm-sec');
+            if (secResult.ok && lmSec) {
+                var secData = secResult.data;
+                var bans = secData.active_bans || secData.decisions || 0;
+                var alerts = secData.alerts_today || 0;
+                // Store for tooltip
+                currentStripMetrics.bans = bans;
+                currentStripMetrics.alerts = alerts;
+                lmSec.textContent = bans + 'B';
+                lmSec.title = bans + ' bans, ' + alerts + ' alerts today';
+                // Blue if actively blocking, else based on alert level
+                if (bans > 20) {
+                    lmSec.className = 'led-metric-val info';  // Blue - active mitigation
+                } else if (alerts > 50) {
+                    lmSec.className = 'led-metric-val error';
+                } else if (alerts > 10) {
+                    lmSec.className = 'led-metric-val warn';
+                } else {
+                    lmSec.className = 'led-metric-val ok';
                 }
-            } catch (e) {
-                var lmSec = document.getElementById('lm-sec');
-                if (lmSec) lmSec.textContent = '?';
+            } else if (lmSec) {
+                lmSec.textContent = '?';
             }
         } catch (e) {
             console.log('[Sidebar] Status bar data error:', e);
@@ -780,6 +818,140 @@
     let offlineCounters = {};
     // TRUE = hide black/unknown (show only green+yellow+red), FALSE = show all
     let hideUnknownEnabled = false;
+
+    // ============================================
+    // RESILIENCE & SAFE PARSING
+    // ============================================
+
+    // Safe JSON parse - never throws, returns null on error
+    function safeJsonParse(text, fallback) {
+        if (!text || typeof text !== 'string') return fallback || null;
+        try {
+            return JSON.parse(text);
+        } catch (e) {
+            console.warn('[Sidebar] JSON parse error:', e.message, 'Input:', text.substring(0, 100));
+            return fallback || null;
+        }
+    }
+
+    // Safe fetch with JSON - handles all error cases gracefully
+    async function safeFetch(url, options, timeout) {
+        timeout = timeout || 5000;
+        var ctrl = new AbortController();
+        var tm = setTimeout(function() { ctrl.abort(); }, timeout);
+
+        try {
+            var res = await fetch(url, { ...options, signal: ctrl.signal });
+            clearTimeout(tm);
+
+            if (!res.ok) {
+                return { ok: false, status: res.status, error: 'HTTP ' + res.status };
+            }
+
+            var ct = res.headers.get('content-type') || '';
+            var text = await res.text();
+
+            // Check if response is JSON
+            if (!ct.includes('application/json') && !text.trim().startsWith('{') && !text.trim().startsWith('[')) {
+                return { ok: false, status: res.status, error: 'Not JSON', text: text };
+            }
+
+            var data = safeJsonParse(text, null);
+            if (data === null) {
+                return { ok: false, status: res.status, error: 'Invalid JSON', text: text };
+            }
+
+            return { ok: true, status: res.status, data: data };
+        } catch (e) {
+            clearTimeout(tm);
+            if (e.name === 'AbortError') {
+                return { ok: false, status: 0, error: 'Timeout' };
+            }
+            return { ok: false, status: 0, error: e.message || 'Network error' };
+        }
+    }
+
+    // Check if sidebar is functioning
+    function checkSidebarHealth() {
+        var sidebar = document.getElementById('sidebar');
+        var nav = sidebar ? sidebar.querySelector('.sidebar-nav') : null;
+        var hasItems = nav && nav.querySelectorAll('.nav-item').length > 0;
+
+        if (!sidebar || !nav || !hasItems) {
+            console.warn('[Sidebar] Health check failed: sidebar=' + !!sidebar + ', nav=' + !!nav + ', items=' + hasItems);
+            sidebarHealthy = false;
+            return false;
+        }
+
+        sidebarHealthy = true;
+        return true;
+    }
+
+    // Self-reinject mechanism - rebuilds sidebar if broken
+    function startHeartbeat() {
+        if (heartbeatTimer) clearInterval(heartbeatTimer);
+
+        heartbeatTimer = setInterval(function() {
+            if (!checkSidebarHealth()) {
+                console.log('[Sidebar] Heartbeat detected issue, attempting reinject...');
+                reinjectSidebar();
+            }
+        }, HEARTBEAT_INTERVAL);
+    }
+
+    // Reinject sidebar with exponential backoff
+    async function reinjectSidebar() {
+        if (retryCount >= MAX_RETRY_ATTEMPTS) {
+            console.error('[Sidebar] Max retry attempts reached, showing fallback');
+            showFallbackSidebar();
+            retryCount = 0;
+            return;
+        }
+
+        retryCount++;
+        console.log('[Sidebar] Reinject attempt ' + retryCount + '/' + MAX_RETRY_ATTEMPTS);
+
+        // Wait before retry with exponential backoff
+        await new Promise(function(resolve) {
+            setTimeout(resolve, RETRY_DELAY * retryCount);
+        });
+
+        try {
+            await buildSidebar();
+            retryCount = 0;
+            console.log('[Sidebar] Reinject successful');
+        } catch (e) {
+            console.error('[Sidebar] Reinject failed:', e);
+            if (retryCount >= MAX_RETRY_ATTEMPTS) {
+                showFallbackSidebar();
+                retryCount = 0;
+            }
+        }
+    }
+
+    // Minimal fallback sidebar when everything fails
+    function showFallbackSidebar() {
+        var sidebar = document.getElementById('sidebar');
+        if (!sidebar) return;
+
+        sidebar.innerHTML = '<div class="sidebar-header">' +
+            '<a href="/"><span class="logo-icon">🔒</span><div><span class="logo">SECUBOX</span>' +
+            '<span class="logo-version">⚠️ ' + VERSION + '</span></div></a></div>' +
+            '<div class="sidebar-nav">' +
+            '<div class="nav-section"><div class="nav-section-title"><span>⚠️ OFFLINE MODE</span></div>' +
+            '<div class="nav-items">' +
+            '<a href="/" class="nav-item"><span class="icon">🏠</span><span>Dashboard</span></a>' +
+            '<a href="/system/" class="nav-item"><span class="icon">⚙️</span><span>System</span></a>' +
+            '<a href="/crowdsec/" class="nav-item"><span class="icon">👁️</span><span>CrowdSec</span></a>' +
+            '<a href="/soc/" class="nav-item"><span class="icon">🛡️</span><span>SOC</span></a>' +
+            '</div></div></div>' +
+            '<div class="sidebar-footer">' +
+            '<div style="color:#ff6b6b;font-size:0.75rem;padding:0.5rem;">API unavailable - showing cached links</div>' +
+            '<button onclick="SecuBoxSidebar.forceReinject()" style="width:100%;padding:0.5rem;background:#4466ff;color:#fff;border:none;border-radius:4px;cursor:pointer;">🔄 Retry</button>' +
+            '</div>';
+
+        console.log('[Sidebar] Fallback mode activated');
+    }
 
     // ============================================
     // HELPERS
@@ -873,7 +1045,6 @@
 
     async function checkModuleHealth(mod) {
         var endpoint = getHealthEndpoint(mod);
-        var fallbackPage = getPagePath(mod);
 
         if (healthCheckInProgress[mod]) {
             return healthCache[mod] || { status: 'checking', msg: 'In progress', timestamp: Date.now() };
@@ -883,59 +1054,44 @@
         try {
             var token = localStorage.getItem('sbx_token');
             var headers = token ? { 'Authorization': 'Bearer ' + token } : {};
-            var ctrl = new AbortController();
-            var tm = setTimeout(function() { ctrl.abort(); }, HEALTH_REQUEST_TIMEOUT);
 
-            try {
-                var res = await fetch(endpoint, { headers: headers, signal: ctrl.signal });
-                clearTimeout(tm);
+            // Use safe fetch for resilience
+            var result = await safeFetch(endpoint, { headers: headers }, HEALTH_REQUEST_TIMEOUT);
+            healthCheckInProgress[mod] = false;
 
-                if (res.ok) {
-                    var ct = res.headers.get('content-type') || '';
-                    if (ct.includes('application/json')) {
-                        var text = await res.text();
-                        try {
-                            var d = JSON.parse(text);
-                            healthCheckInProgress[mod] = false;
-                            // Extract version and dev_stage from standard health response
-                            var version = d.version || null;
-                            var devStage = d.dev_stage || 'production';
-                            if (d.status === 'ok' || d.healthy === true || d.status === 'healthy') {
-                                return { status: 'ok', msg: d.message || 'OK', version: version, dev_stage: devStage, timestamp: Date.now() };
-                            }
-                            if (d.status === 'degraded' || d.status === 'warn' || d.warning) {
-                                return { status: 'warn', msg: d.message || 'Degraded', version: version, dev_stage: devStage, timestamp: Date.now() };
-                            }
-                            return { status: 'error', msg: d.message || d.status || 'Error', version: version, dev_stage: devStage, timestamp: Date.now() };
-                        } catch (parseErr) {
-                            // JSON parse failed - treat as unknown
-                            healthCheckInProgress[mod] = false;
-                            return { status: 'unknown', msg: 'Invalid JSON', timestamp: Date.now() };
-                        }
-                    } else {
-                        // HTML response - no health API
-                        healthCheckInProgress[mod] = false;
-                        return { status: 'unknown', msg: 'No health API', timestamp: Date.now() };
-                    }
-                }
-
-                // Non-200 response = error (no fallback)
-                healthCheckInProgress[mod] = false;
-                if (res.status === 404) {
+            if (!result.ok) {
+                // Handle specific error cases
+                if (result.status === 404) {
                     return { status: 'error', msg: 'No API', timestamp: Date.now() };
                 }
-                return { status: 'error', msg: 'HTTP ' + res.status, timestamp: Date.now() };
-
-            } catch (fetchError) {
-                clearTimeout(tm);
-                healthCheckInProgress[mod] = false;
-                if (fetchError.name === 'AbortError') {
+                if (result.error === 'Timeout') {
                     return { status: 'error', msg: 'Timeout', timestamp: Date.now() };
                 }
-                return { status: 'error', msg: 'Network error', timestamp: Date.now() };
+                if (result.error === 'Not JSON') {
+                    return { status: 'unknown', msg: 'No health API', timestamp: Date.now() };
+                }
+                if (result.error === 'Invalid JSON') {
+                    return { status: 'unknown', msg: 'Invalid JSON', timestamp: Date.now() };
+                }
+                return { status: 'error', msg: result.error || 'HTTP ' + result.status, timestamp: Date.now() };
             }
+
+            // Successfully got JSON response
+            var d = result.data;
+            var version = d.version || null;
+            var devStage = d.dev_stage || 'production';
+
+            if (d.status === 'ok' || d.healthy === true || d.status === 'healthy') {
+                return { status: 'ok', msg: d.message || 'OK', version: version, dev_stage: devStage, timestamp: Date.now() };
+            }
+            if (d.status === 'degraded' || d.status === 'warn' || d.warning) {
+                return { status: 'warn', msg: d.message || 'Degraded', version: version, dev_stage: devStage, timestamp: Date.now() };
+            }
+            return { status: 'error', msg: d.message || d.status || 'Error', version: version, dev_stage: devStage, timestamp: Date.now() };
+
         } catch (e) {
             healthCheckInProgress[mod] = false;
+            console.warn('[Sidebar] Health check error for ' + mod + ':', e);
             return { status: 'error', msg: 'Check failed', timestamp: Date.now() };
         }
     }
@@ -1408,11 +1564,36 @@
         try {
             var token = localStorage.getItem('sbx_token');
             var headers = token ? { 'Authorization': 'Bearer ' + token } : {};
-            var res = await fetch(MENU_API, { headers: headers });
-            if (res.status === 401) { window.location.href = '/portal/login.html'; return; }
+            var data = null;
+            var fromCache = false;
 
-            var data = await res.json();
-            if (!data || !data.categories) throw new Error('Invalid menu');
+            // Strategy: Try cache first for instant display, then update from API
+            var cachedMenu = loadCachedMenu();
+
+            // Use safe fetch with timeout (API can be slow during warmup)
+            var result = await safeFetch(MENU_API, { headers: headers }, 20000);
+
+            if (result.ok && result.data && result.data.categories) {
+                data = result.data;
+                saveCachedMenu(data);  // Update cache with fresh data
+                console.log('[Sidebar] Menu from API');
+            } else if (cachedMenu && cachedMenu.categories) {
+                // API failed but we have cache - use it
+                data = cachedMenu;
+                fromCache = true;
+                console.log('[Sidebar] Menu from cache (API failed: ' + (result.error || 'unknown') + ')');
+            } else if (result.status === 401) {
+                window.location.href = '/portal/login.html';
+                return;
+            } else {
+                console.warn('[Sidebar] Menu API error:', result.error);
+                throw new Error('Menu API: ' + (result.error || 'No data'));
+            }
+
+            if (!data || !data.categories) {
+                console.warn('[Sidebar] Invalid menu structure:', data);
+                throw new Error('Invalid menu structure');
+            }
 
             ALL_MODULES = extractModulesFromMenu(data);
             console.log('[Sidebar ' + VERSION + '] ' + ALL_MODULES.length + ' modules');
@@ -1510,9 +1691,13 @@
             }, HEALTH_REFRESH_INTERVAL);
 
         } catch (e) {
-            console.error('[Sidebar] Error:', e);
-            sidebar.innerHTML = '<div class="sidebar-header"><a href="/"><span class="logo-icon">🔒</span><span class="logo">SECUBOX</span></a></div><div class="sidebar-nav"><a href="/" class="nav-item">Dashboard</a></div>';
+            console.error('[Sidebar] Build error:', e);
+            // Show fallback sidebar but allow retry
+            showFallbackSidebar();
         }
+
+        // Start heartbeat monitor
+        startHeartbeat();
     }
 
     // ============================================
@@ -1527,6 +1712,13 @@
             localStorage.removeItem('secubox_token');
             window.location.href = '/portal/login.html';
         },
+        // Resilience functions
+        forceReinject: function() {
+            retryCount = 0;
+            console.log('[Sidebar] Manual reinject requested');
+            return reinjectSidebar();
+        },
+        isHealthy: function() { return sidebarHealthy; },
         checkHealth: checkAllHealth,
         checkModule: checkModuleHealth,
         updateLEDs: updateLEDs,

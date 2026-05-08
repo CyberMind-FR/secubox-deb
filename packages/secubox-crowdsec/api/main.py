@@ -480,41 +480,59 @@ async def health():
 
     # Check CrowdSec engine
     try:
-        result = subprocess.run(["pgrep", "crowdsec"], capture_output=True, timeout=2)
+        result = subprocess.run(["pgrep", "-x", "crowdsec"], capture_output=True, timeout=2)
         checks["engine_running"] = result.returncode == 0
-    except Exception:
+    except Exception as e:
+        log.warning("Engine check failed: %s", e)
         checks["engine_running"] = False
 
-    # Check LAPI (Local API)
+    # Check LAPI (Local API) - use direct HTTP check instead of cscli
     try:
-        result = subprocess.run(
-            ["cscli", "lapi", "status", "-o", "json"],
-            capture_output=True, text=True, timeout=5
-        )
-        checks["lapi_ok"] = result.returncode == 0
-    except Exception:
-        checks["lapi_ok"] = False
+        import urllib.request
+        req = urllib.request.Request("http://127.0.0.1:8080/health", method="GET")
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            checks["lapi_ok"] = resp.status == 200
+    except Exception as e:
+        # Fallback: check if cscli lapi status succeeds (needs sudo)
+        try:
+            result = subprocess.run(
+                ["sudo", "cscli", "lapi", "status"],
+                capture_output=True, text=True, timeout=5
+            )
+            # Check if "successfully" appears in output
+            checks["lapi_ok"] = result.returncode == 0 and "successfully" in result.stdout.lower()
+        except Exception:
+            checks["lapi_ok"] = False
 
-    # Check bouncers registered
+    # Check bouncers registered (needs sudo for database access)
     try:
         result = subprocess.run(
-            ["cscli", "bouncers", "list", "-o", "json"],
+            ["sudo", "cscli", "bouncers", "list", "-o", "json"],
             capture_output=True, text=True, timeout=5
         )
-        if result.returncode == 0:
-            bouncers = json.loads(result.stdout) if result.stdout.strip() else []
-            checks["bouncers_count"] = len(bouncers)
-            checks["bouncers_ok"] = len(bouncers) > 0
+        if result.returncode == 0 and result.stdout.strip():
+            try:
+                bouncers = json.loads(result.stdout)
+                checks["bouncers_count"] = len(bouncers) if isinstance(bouncers, list) else 0
+                checks["bouncers_ok"] = checks["bouncers_count"] > 0
+            except json.JSONDecodeError:
+                checks["bouncers_ok"] = False
+                checks["bouncers_count"] = 0
         else:
             checks["bouncers_ok"] = False
-    except Exception:
+            checks["bouncers_count"] = 0
+    except Exception as e:
+        log.warning("Bouncers check failed: %s", e)
         checks["bouncers_ok"] = False
+        checks["bouncers_count"] = 0
 
     # Determine overall status
-    if checks.get("engine_running") and checks.get("lapi_ok"):
+    if checks.get("engine_running") and checks.get("lapi_ok") and checks.get("bouncers_ok"):
         status = "ok"
+    elif checks.get("engine_running") and checks.get("lapi_ok"):
+        status = "degraded"  # Engine + LAPI ok but no bouncers
     elif checks.get("engine_running"):
-        status = "degraded"
+        status = "degraded"  # Engine running but LAPI issues
     else:
         status = "error"
 
