@@ -1,9 +1,33 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-09 (Session 133)*
+*Mis à jour : 2026-05-09 (Session 134)*
 
 ---
 
-## 🔄 Session 133: WAF Categories + NFTables Donuts + Mini Histograms
+## 🔄 Session 134: CrowdSec Bans Limit Fix + Service Stability
+
+### CrowdSec Decisions API — FIXED
+- [x] **Bans limit increased** from 100 to 1000 default, up to 10000 max
+- [x] **Total count** now returned separately from paginated results
+- [x] **Frontend updated** to fetch 500 bans and display up to 200
+- [x] **"More bans" indicator** when total exceeds display limit
+- [x] GeoIP enrichment limited to first 100 for performance
+
+### Service Stability
+- [x] Identified vhost.sock intermittent creation issue
+- [x] Services health check: all 8 core APIs returning 200
+
+### Files Updated
+- `packages/secubox-crowdsec/api/routers/decisions.py` — Total count, higher limits
+- `packages/secubox-crowdsec/www/crowdsec/index.html` — Display total, show more
+
+### Live Server (192.168.1.200)
+- Actual bans: **143** (was showing max 100)
+- CrowdSec collections: 6 installed (base, linux, nginx, http-cve, whitelist, vpatch)
+- CPU stabilized at ~43% after log rotation
+
+---
+
+## ✅ Session 133: WAF Categories + NFTables Donuts + Mini Histograms
 
 ### WAF Dashboard — COMPLETE
 - [x] Category toggles (ON/OFF buttons for each WAF filter)
