@@ -61,6 +61,31 @@
         .btn.success { background: rgba(63,185,80,0.15); border-color: var(--green); color: var(--green); }
         .btn.danger { background: rgba(248,81,73,0.15); border-color: var(--red); color: var(--red); }
 
+        /* Panic Button */
+        .btn-panic {
+            padding: 0.6rem 1rem;
+            border-radius: 6px;
+            border: 2px solid #ff4466;
+            background: linear-gradient(135deg, rgba(255,68,102,0.2) 0%, rgba(255,0,0,0.3) 100%);
+            color: #ff4466;
+            font-family: 'Courier Prime', monospace;
+            font-weight: bold;
+            font-size: 0.8rem;
+            letter-spacing: 0.1em;
+            cursor: pointer;
+            animation: panic-pulse 2s ease-in-out infinite;
+            text-shadow: 0 0 8px rgba(255,68,102,0.5);
+        }
+        .btn-panic:hover {
+            background: linear-gradient(135deg, rgba(255,68,102,0.4) 0%, rgba(255,0,0,0.5) 100%);
+            box-shadow: 0 0 20px rgba(255,68,102,0.4);
+            transform: scale(1.05);
+        }
+        @keyframes panic-pulse {
+            0%, 100% { box-shadow: 0 0 5px rgba(255,68,102,0.3); }
+            50% { box-shadow: 0 0 15px rgba(255,68,102,0.6); }
+        }
+
         /* Stats row */
         .stats-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
         .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
@@ -324,9 +349,12 @@
     <script src="/shared/sidebar.js"></script>
     <main class="main">
         <header class="header">
-            <div>
-                <h1>👥 User Management</h1>
-                <p class="subtitle">Unified identity across all services</p>
+            <div style="display:flex;align-items:center;gap:1rem;">
+                <button class="btn-panic" onclick="revokeAllSessions()" title="Revoke ALL sessions immediately">🚨 REVOKE ALL</button>
+                <div>
+                    <h1>👥 User Management</h1>
+                    <p class="subtitle">Unified identity across all services</p>
+                </div>
             </div>
             <div>
                 <button class="btn" onclick="showImportModal()">Import</button>
@@ -776,6 +804,26 @@
                 loadSessions();
             } else {
                 showToast(result?.error || 'Failed to revoke session', 'error');
+            }
+        }
+
+        async function revokeAllSessions() {
+            if (!confirm('EMERGENCY: Revoke ALL sessions?\n\nThis will immediately log out ALL users including yourself.\nYou will need to log in again.')) return;
+            if (!confirm('Are you ABSOLUTELY sure? This cannot be undone.')) return;
+
+            try {
+                const result = await api('/sessions/revoke-all', { method: 'POST' });
+                if (result?.success) {
+                    showToast(`REVOKED ${result.revoked || 'all'} sessions`, 'warning');
+                    // Redirect to login after short delay
+                    setTimeout(() => {
+                        window.location.href = '/login';
+                    }, 1500);
+                } else {
+                    showToast(result?.error || 'Failed to revoke sessions', 'error');
+                }
+            } catch (e) {
+                showToast('Revoke failed: ' + e.message, 'error');
             }
         }
 

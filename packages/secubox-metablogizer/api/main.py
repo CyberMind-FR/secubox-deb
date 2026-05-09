@@ -58,34 +58,54 @@ def nginx_running() -> bool:
 def sync_mitmproxy_routes(sites: List[dict]) -> bool:
     """Sync metablogizer sites to mitmproxy haproxy-routes.json
 
-    This ensures mitmproxy knows how to route traffic to metablogizer sites.
+    Mitmproxy runs in LXC container (10.100.0.60), so we need to:
+    1. Use 10.100.0.1 as the backend IP (host from container perspective)
+    2. Use BASE_PORT (8900) for all sites (nginx listens on this port)
+    3. Write routes to the LXC container via lxc-attach
+
     Returns True if sync successful.
     """
-    try:
-        # Load existing routes
-        existing_routes = {}
-        if MITMPROXY_ROUTES.exists():
-            existing_routes = json.loads(MITMPROXY_ROUTES.read_text())
+    # IP address of host from mitmproxy container perspective
+    CONTAINER_BACKEND_IP = "10.100.0.1"
+    LXC_CONTAINER = "mitmproxy"
+    LXC_ROUTES_FILE = "/srv/mitmproxy/haproxy-routes.json"
 
-        # Add/update metablogizer site routes
+    try:
+        # Read existing routes from container
+        existing_routes = {}
+        result = subprocess.run(
+            ["lxc-attach", "-n", LXC_CONTAINER, "--", "cat", LXC_ROUTES_FILE],
+            capture_output=True, text=True, timeout=10
+        )
+        if result.returncode == 0:
+            existing_routes = json.loads(result.stdout)
+
+        # Add/update metablogizer site routes - ALL use BASE_PORT (8900)
         for site in sites:
             domain = site["domain"]
-            port = site.get("port", BASE_PORT)
-            existing_routes[domain] = [NGINX_BACKEND_IP, port]
+            # All metablogizer sites use BASE_PORT (8900) - nginx multiplexes by hostname
+            existing_routes[domain] = [CONTAINER_BACKEND_IP, BASE_PORT]
 
-        # Write back to both mitmproxy locations
+        # Write routes to container
         routes_json = json.dumps(existing_routes, indent=2)
 
-        MITMPROXY_ROUTES.parent.mkdir(parents=True, exist_ok=True)
-        MITMPROXY_ROUTES.write_text(routes_json)
+        # Use lxc-attach to write the file
+        write_cmd = subprocess.run(
+            ["lxc-attach", "-n", LXC_CONTAINER, "--", "sh", "-c",
+             f"cat > {LXC_ROUTES_FILE}"],
+            input=routes_json, capture_output=True, text=True, timeout=10
+        )
+        if write_cmd.returncode != 0:
+            logger.warning(f"Failed to write routes to container: {write_cmd.stderr}")
+            return False
 
-        if MITMPROXY_IN_ROUTES.parent.exists():
-            MITMPROXY_IN_ROUTES.write_text(routes_json)
+        # Reload mitmproxy in container
+        subprocess.run(
+            ["lxc-attach", "-n", LXC_CONTAINER, "--", "systemctl", "reload", "mitmproxy"],
+            capture_output=True, text=True, timeout=10
+        )
 
-        # Reload mitmproxy to pick up new routes
-        run_cmd(["sudo", "-n", "systemctl", "reload", "mitmproxy"])
-
-        logger.info(f"Synced {len(sites)} sites to mitmproxy routes")
+        logger.info(f"Synced {len(sites)} sites to mitmproxy container routes")
         return True
     except Exception as e:
         logger.warning(f"Failed to sync mitmproxy routes: {e}")
@@ -278,6 +298,43 @@ async def health():
     }
 
 
+@app.get("/health/{domain}")
+async def check_site_health(domain: str):
+    """Check health of a specific site by probing HTTP/HTTPS"""
+    import httpx
+
+    result = {
+        "domain": domain,
+        "http": None,
+        "https": None,
+        "waf": None,
+        "error": None
+    }
+
+    try:
+        # Check HTTPS (primary)
+        async with httpx.AsyncClient(verify=False, timeout=5.0, follow_redirects=True) as client:
+            try:
+                resp = await client.get(f"https://{domain}/", headers={"Host": domain})
+                result["https"] = resp.status_code
+                result["waf"] = resp.headers.get("X-SecuBox-WAF", "unknown")
+            except Exception as e:
+                result["https"] = 0
+                result["error"] = str(e)
+
+            # Check HTTP (secondary)
+            try:
+                resp = await client.get(f"http://{domain}/", headers={"Host": domain})
+                result["http"] = resp.status_code
+            except Exception:
+                result["http"] = 0
+
+    except Exception as e:
+        result["error"] = str(e)
+
+    return result
+
+
 # =============================================================================
 # ACCESS - Sites list and URLs
 # =============================================================================
@@ -298,6 +355,71 @@ async def get_access():
         ],
         "count": len(sites),
     }
+
+
+@app.get("/access/detailed")
+async def get_access_detailed():
+    """Get all published sites with certificate info and sizes"""
+    import subprocess
+    from datetime import datetime
+
+    sites = load_sites()
+    detailed = []
+
+    for s in sites:
+        if not s.get("published"):
+            continue
+
+        domain = s["domain"]
+        name = s["name"]
+        site_dir = SITES_ROOT / name
+
+        # Get size
+        size = "-"
+        if site_dir.exists():
+            try:
+                result = subprocess.run(
+                    ["du", "-sh", str(site_dir)],
+                    capture_output=True, text=True, timeout=5
+                )
+                if result.returncode == 0:
+                    size = result.stdout.split()[0]
+            except:
+                pass
+
+        # Check certificate
+        cert_info = {"exists": False}
+        cert_paths = [
+            Path(f"/etc/letsencrypt/live/{domain}/fullchain.pem"),
+            Path(f"/etc/haproxy/certs/{domain}.pem"),
+        ]
+
+        for cert_path in cert_paths:
+            if cert_path.exists():
+                cert_info["exists"] = True
+                try:
+                    result = subprocess.run(
+                        ["openssl", "x509", "-in", str(cert_path), "-noout", "-enddate"],
+                        capture_output=True, text=True, timeout=5
+                    )
+                    if result.returncode == 0:
+                        expiry_str = result.stdout.strip().replace("notAfter=", "")
+                        expiry = datetime.strptime(expiry_str, "%b %d %H:%M:%S %Y %Z")
+                        cert_info["expiry"] = expiry.strftime("%Y-%m-%d")
+                        cert_info["expired"] = expiry < datetime.now()
+                except:
+                    pass
+                break
+
+        detailed.append({
+            "name": name,
+            "domain": domain,
+            "url": f"https://{domain}",
+            "size": size,
+            "certificate": cert_info,
+        })
+
+    return {"sites": detailed, "count": len(detailed)}
 
 
 # =============================================================================
@@ -605,3 +727,322 @@ async def get_qrcode(name: str):
         return {"qrcode": f"data:image/png;base64,{b64}", "url": url}
     except ImportError:
         return {"url": url, "error": "qrcode module not installed"}
+
+
+@app.get("/site/{name}/export", dependencies=[Depends(require_jwt)])
+async def export_site(name: str):
+    """Export complete site package as ZIP archive
+
+    Includes:
+    - Site content (public/)
+    - site.json config
+    - nginx.conf (generated)
+    - haproxy.cfg (snippet for HAProxy vhost)
+    - certificate.pem (if available)
+    - README.md (republishing instructions)
+    """
+    from fastapi.responses import FileResponse
+    import zipfile
+    import tempfile
+    from datetime import datetime
+
+    site_dir = SITES_ROOT / name
+    if not site_dir.exists():
+        raise HTTPException(404, "Site not found")
+
+    # Read site config
+    domain = f"{name}.gk2.secubox.in"
+    config_file = site_dir / "site.json"
+    site_config = {"name": name, "domain": domain}
+    if config_file.exists():
+        try:
+            site_config = json.loads(config_file.read_text())
+            domain = site_config.get("domain", domain)
+        except:
+            pass
+
+    # Create temporary ZIP file
+    with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp:
+        with zipfile.ZipFile(tmp.name, 'w', zipfile.ZIP_DEFLATED) as zf:
+            # 1. Site content
+            for file_path in site_dir.rglob("*"):
+                if file_path.is_file():
+                    arcname = f"content/{file_path.relative_to(site_dir)}"
+                    zf.write(file_path, arcname)
+
+            # 2. Site config
+            zf.writestr("config/site.json", json.dumps(site_config, indent=2))
+
+            # 3. Nginx config
+            public_dir = site_dir / "public"
+            root_dir = str(public_dir) if public_dir.exists() else str(site_dir)
+            nginx_conf = f"""# Nginx config for {name}
+# Generated by SecuBox MetaBlogizer
+# Import: cp nginx.conf /etc/nginx/sites-available/{name}.conf
+
+server {{
+    listen 80;
+    listen 443 ssl http2;
+    server_name {domain};
+
+    # SSL (adjust paths if using custom certs)
+    ssl_certificate /etc/letsencrypt/live/{domain}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/{domain}/privkey.pem;
+
+    root {root_dir};
+    index index.html index.htm;
+
+    location / {{
+        try_files $uri $uri/ /index.html =404;
+    }}
+
+    # Cache static assets
+    location ~* \\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2)$ {{
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }}
+
+    access_log /var/log/nginx/{name}_access.log;
+    error_log /var/log/nginx/{name}_error.log;
+}}
+"""
+            zf.writestr("config/nginx.conf", nginx_conf)
+
+            # 4. HAProxy config snippet
+            haproxy_conf = f"""# HAProxy vhost snippet for {name}
+# Add ACL and use_backend rules to your haproxy.cfg frontend
+
+# ACL (add to frontend section)
+acl host_{name.replace('.', '_').replace('-', '_')} hdr(host) -i {domain}
+
+# Backend routing (add after ACLs)
+use_backend mitmproxy_inspector if host_{name.replace('.', '_').replace('-', '_')}
+
+# Note: Requires mitmproxy route configuration
+# Add to /srv/mitmproxy/haproxy-routes.json:
+# "{domain}": ["10.100.0.1", 8900]
+"""
+            zf.writestr("config/haproxy.cfg", haproxy_conf)
+
+            # 5. Certificate (if available)
+            cert_paths = [
+                Path(f"/etc/letsencrypt/live/{domain}/fullchain.pem"),
+                Path(f"/etc/haproxy/certs/{domain}.pem"),
+            ]
+            cert_found = False
+            for cert_path in cert_paths:
+                if cert_path.exists():
+                    try:
+                        zf.write(cert_path, "certs/certificate.pem")
+                        # Also try to get private key
+                        key_path = cert_path.parent / "privkey.pem"
+                        if key_path.exists():
+                            zf.write(key_path, "certs/privkey.pem")
+                        cert_found = True
+                    except:
+                        pass
+                    break
+
+            # 6. README with republishing instructions
+            readme = f"""# {name} - Site Export Package
+
+**Domain:** {domain}
+**Exported:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+**Generator:** SecuBox MetaBlogizer
+
+## Contents
+
+```
+{name}-export.zip/
+├── content/           # Site files (HTML, CSS, JS, images)
+│   ├── public/        # Public web root
+│   └── site.json      # Site configuration
+├── config/
+│   ├── site.json      # Site configuration
+│   ├── nginx.conf     # Nginx vhost config
+│   └── haproxy.cfg    # HAProxy routing snippet
+├── certs/             # SSL certificates (if available)
+│   ├── certificate.pem
+│   └── privkey.pem
+└── README.md          # This file
+```
+
+## Quick Republish (SecuBox)
+
+1. Upload ZIP to target SecuBox:
+   ```bash
+   scp {name}-export.zip root@secubox:/tmp/
+   ```
+
+2. Extract and deploy:
+   ```bash
+   cd /srv/metablogizer/sites
+   unzip /tmp/{name}-export.zip -d {name}/
+   mv {name}/content/* {name}/
+   rm -rf {name}/content
+   systemctl restart secubox-metablogizer
+   ```
+
+## Manual Republish (Any Server)
+
+### Nginx
+
+1. Copy content:
+   ```bash
+   mkdir -p /var/www/{name}
+   cp -r content/public/* /var/www/{name}/
+   ```
+
+2. Install nginx config:
+   ```bash
+   cp config/nginx.conf /etc/nginx/sites-available/{name}.conf
+   ln -s /etc/nginx/sites-available/{name}.conf /etc/nginx/sites-enabled/
+   nginx -t && systemctl reload nginx
+   ```
+
+3. SSL certificate (if included):
+   ```bash
+   mkdir -p /etc/ssl/{name}
+   cp certs/*.pem /etc/ssl/{name}/
+   ```
+   Update nginx.conf paths accordingly.
+
+### HAProxy (with SecuBox WAF)
+
+1. Add ACL to haproxy.cfg:
+   ```
+   acl host_{name.replace('.', '_').replace('-', '_')} hdr(host) -i {domain}
+   use_backend mitmproxy_inspector if host_{name.replace('.', '_').replace('-', '_')}
+   ```
+
+2. Add mitmproxy route:
+   ```json
+   "{domain}": ["10.100.0.1", 8900]
+   ```
+
+3. Reload:
+   ```bash
+   haproxy -c -f /etc/haproxy/haproxy.cfg && systemctl reload haproxy
+   systemctl restart mitmproxy
+   ```
+
+## DNS Configuration
+
+Point `{domain}` to your server IP:
+```
+{domain}. IN A <your-server-ip>
+```
+
+Or use wildcard if using subdomain:
+```
+*.gk2.secubox.in. IN A <your-server-ip>
+```
+
+## Certificate Status
+
+{'✅ Certificate included in export' if cert_found else '⚠️ No certificate found - use certbot to generate:'}
+{'' if cert_found else f'certbot certonly --webroot -w /var/www/{name} -d {domain}'}
+
+---
+Generated by SecuBox MetaBlogizer
+https://secubox.in | CyberMind
+"""
+            zf.writestr("README.md", readme)
+
+        return FileResponse(
+            tmp.name,
+            media_type="application/zip",
+            filename=f"{name}-export.zip",
+            headers={"Content-Disposition": f'attachment; filename="{name}-export.zip"'}
+        )
+
+
+@app.get("/site/{name}/cert", dependencies=[Depends(require_jwt)])
+async def get_site_cert(name: str):
+    """Get SSL certificate for site"""
+    from fastapi.responses import FileResponse
+
+    site_dir = SITES_ROOT / name
+    if not site_dir.exists():
+        raise HTTPException(404, "Site not found")
+
+    # Read site config to get domain
+    domain = f"{name}.gk2.secubox.in"
+    config_file = site_dir / "site.json"
+    if config_file.exists():
+        try:
+            cfg = json.loads(config_file.read_text())
+            domain = cfg.get("domain", domain)
+        except:
+            pass
+
+    # Check certbot cert locations
+    cert_paths = [
+        Path(f"/etc/letsencrypt/live/{domain}/fullchain.pem"),
+        Path(f"/etc/letsencrypt/live/{domain}/cert.pem"),
+        Path(f"/etc/haproxy/certs/{domain}.pem"),
+        Path(f"/etc/ssl/certs/{domain}.pem"),
+    ]
+
+    for cert_path in cert_paths:
+        if cert_path.exists():
+            return FileResponse(
+                str(cert_path),
+                media_type="application/x-pem-file",
+                filename=f"{domain}.pem",
+                headers={"Content-Disposition": f'attachment; filename="{domain}.pem"'}
+            )
+
+    raise HTTPException(404, f"No certificate found for {domain}")
+
+
+@app.get("/site/{name}/certificate", dependencies=[Depends(require_jwt)])
+async def get_certificate_info(name: str):
+    """Get certificate information for a site"""
+    import subprocess
+    from datetime import datetime
+
+    site_dir = SITES_ROOT / name
+    if not site_dir.exists():
+        raise HTTPException(404, "Site not found")
+
+    # Read site config to get domain
+    domain = f"{name}.gk2.secubox.in"
+    config_file = site_dir / "site.json"
+    if config_file.exists():
+        try:
+            cfg = json.loads(config_file.read_text())
+            domain = cfg.get("domain", domain)
+        except:
+            pass
+
+    # Check certbot cert
+    cert_path = Path(f"/etc/letsencrypt/live/{domain}/fullchain.pem")
+    if not cert_path.exists():
+        cert_path = Path(f"/etc/haproxy/certs/{domain}.pem")
+
+    if not cert_path.exists():
+        return {"exists": False, "domain": domain}
+
+    # Get cert expiry
+    try:
+        result = subprocess.run(
+            ["openssl", "x509", "-in", str(cert_path), "-noout", "-enddate"],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0:
+            # Parse expiry: notAfter=May 10 12:00:00 2026 GMT
+            expiry_str = result.stdout.strip().replace("notAfter=", "")
+            expiry = datetime.strptime(expiry_str, "%b %d %H:%M:%S %Y %Z")
+            expired = expiry < datetime.now()
+            return {
+                "exists": True,
+                "domain": domain,
+                "expiry": expiry.strftime("%Y-%m-%d"),
+                "expired": expired,
+                "path": str(cert_path)
+            }
+    except Exception as e:
+        return {"exists": True, "domain": domain, "error": str(e)}
+
+    return {"exists": True, "domain": domain, "path": str(cert_path)}

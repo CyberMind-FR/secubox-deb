@@ -383,9 +383,19 @@
             </div>
 
             <div id="sites" class="tab-content">
+                <div id="sitesHealth" style="margin-bottom:1rem;padding:0.75rem;background:var(--tube-pale);border:1px solid var(--tube-soft);border-radius:6px;">
+                    <span style="color:var(--p31-decay);font-weight:bold;letter-spacing:0.1em;">SITES HEALTH</span>
+                    <span style="margin-left:1rem;">
+                        <span id="healthGreen" style="color:#00ff41;">🟢 0</span>
+                        <span id="healthYellow" style="color:#ffb347;margin-left:0.5rem;">🟡 0</span>
+                        <span id="healthRed" style="color:#ff4466;margin-left:0.5rem;">🔴 0</span>
+                        <span id="healthGray" style="color:#888;margin-left:0.5rem;">⬜ 0</span>
+                    </span>
+                    <button class="btn" style="margin-left:1rem;padding:0.25rem 0.5rem;font-size:0.75rem;" onclick="checkAllHealth()">🔄 Check All</button>
+                </div>
                 <table>
-                    <thead><tr><th>Site</th><th>URL</th><th>Status</th><th>Actions</th></tr></thead>
-                    <tbody id="sitesTable"><tr><td colspan="4" class="empty">Loading...</td></tr></tbody>
+                    <thead><tr><th>Site</th><th>URL</th><th>HTTP</th><th>HTTPS</th><th>WAF</th><th>Status</th><th>Actions</th></tr></thead>
+                    <tbody id="sitesTable"><tr><td colspan="7" class="empty">Loading...</td></tr></tbody>
                 </table>
             </div>
         </div>
@@ -553,29 +563,118 @@
             // Sites table (uses `sites` from fallback)
             const sitesTable = document.getElementById('sitesTable');
             if (!sites || sites.length === 0) {
-                sitesTable.innerHTML = '<tr><td colspan="4" class="empty">No MetaBlogizer sites</td></tr>';
+                sitesTable.innerHTML = '<tr><td colspan="7" class="empty">No MetaBlogizer sites</td></tr>';
             } else {
+                // Store sites for health checking
+                window.currentSites = sites;
                 sitesTable.innerHTML = sites.map(s => {
-                    // Handle both formats: access API (domain/url) and sites API (name/domain/published)
-                    const url = s.url || (s.domain ? `https://${s.domain}` : '#');
-                    const displayUrl = s.url || s.domain || '-';
+                    const domain = s.domain || s.name + '.gk2.secubox.in';
+                    const url = s.url || `https://${domain}`;
+                    const displayUrl = s.url || domain || '-';
                     const isPublished = s.published !== undefined ? s.published : true;
                     const sizeInfo = s.size ? ` (${s.size})` : '';
+                    const siteId = (s.name || domain).replace(/[^a-z0-9]/gi, '-');
                     return `
-                    <tr>
+                    <tr data-site="${siteId}">
                         <td>${s.name}${sizeInfo}</td>
-                        <td><a href="${url}" target="_blank">${displayUrl}</a></td>
+                        <td><a href="${url}" target="_blank" style="font-size:0.8rem;">${displayUrl}</a></td>
+                        <td id="http-${siteId}" title="HTTP status">⬜</td>
+                        <td id="https-${siteId}" title="HTTPS status">⬜</td>
+                        <td id="waf-${siteId}" title="WAF pass">⬜</td>
                         <td><span class="badge ${isPublished ? 'published' : 'stopped'}">${isPublished ? '✅ Live' : '⏸️ Draft'}</span></td>
                         <td class="btn-group">
+                            <button class="btn" style="padding:0.25rem 0.5rem;font-size:0.7rem;" onclick="checkSiteHealth('${domain}','${siteId}')">🔍</button>
                             ${isPublished
-                                ? `<button class="btn danger" onclick="unpublishSite('${s.name}')">Unpublish</button>`
-                                : `<button class="btn primary" onclick="publishSite('${s.name}')">Publish</button>`
+                                ? `<button class="btn danger" style="padding:0.25rem 0.5rem;font-size:0.7rem;" onclick="unpublishSite('${s.name}')">⏹</button>`
+                                : `<button class="btn primary" style="padding:0.25rem 0.5rem;font-size:0.7rem;" onclick="publishSite('${s.name}')">▶</button>`
                             }
-                            <a class="btn" href="${url}" target="_blank">🔗 Visit</a>
+                            <a class="btn" style="padding:0.25rem 0.5rem;font-size:0.7rem;" href="${url}" target="_blank">🔗</a>
                         </td>
                     </tr>`;
                 }).join('');
             }
+        }
+
+        // Health checking functions
+        const healthStats = { green: 0, yellow: 0, red: 0, gray: 0 };
+
+        async function checkSiteHealth(domain, siteId) {
+            const httpEl = document.getElementById('http-' + siteId);
+            const httpsEl = document.getElementById('https-' + siteId);
+            const wafEl = document.getElementById('waf-' + siteId);
+
+            // Set loading state
+            if (httpEl) httpEl.textContent = '⏳';
+            if (httpsEl) httpsEl.textContent = '⏳';
+            if (wafEl) wafEl.textContent = '⏳';
+
+            try {
+                // Use health API endpoint
+                const res = await fetch(`/api/v1/metablogizer/health/${domain}`, {
+                    headers: headers(),
+                    signal: AbortSignal.timeout(10000)
+                });
+                const health = await res.json();
+
+                // Update HTTP status
+                if (httpEl) {
+                    if (health.http === 200) httpEl.textContent = '🟢';
+                    else if (health.http >= 500) httpEl.textContent = '🔴';
+                    else if (health.http >= 400) httpEl.textContent = '🟡';
+                    else httpEl.textContent = '⬜';
+                }
+
+                // Update HTTPS status
+                if (httpsEl) {
+                    if (health.https === 200) httpsEl.textContent = '🟢';
+                    else if (health.https >= 500) httpsEl.textContent = '🔴';
+                    else if (health.https >= 400) httpsEl.textContent = '🟡';
+                    else httpsEl.textContent = '⬜';
+                }
+
+                // Update WAF status (X-SecuBox-WAF header present means WAF passed)
+                if (wafEl) {
+                    if (health.waf === 'inspected') wafEl.textContent = '🟢';
+                    else if (health.waf === 'blocked' || health.waf === 'banned') wafEl.textContent = '🔴';
+                    else if (health.waf === 'warning') wafEl.textContent = '🟡';
+                    else wafEl.textContent = '⬜';
+                }
+            } catch (e) {
+                // Connection error
+                if (httpEl) httpEl.textContent = '🔴';
+                if (httpsEl) httpsEl.textContent = '🔴';
+                if (wafEl) wafEl.textContent = '⬜';
+            }
+        }
+
+        async function checkAllHealth() {
+            const sites = window.currentSites || [];
+            healthStats.green = 0;
+            healthStats.yellow = 0;
+            healthStats.red = 0;
+            healthStats.gray = 0;
+
+            for (const s of sites) {
+                const domain = s.domain || s.name + '.gk2.secubox.in';
+                const siteId = (s.name || domain).replace(/[^a-z0-9]/gi, '-');
+                await checkSiteHealth(domain, siteId);
+
+                // Count health stats
+                const httpsEl = document.getElementById('https-' + siteId);
+                if (httpsEl) {
+                    const status = httpsEl.textContent;
+                    if (status === '🟢') healthStats.green++;
+                    else if (status === '🟡') healthStats.yellow++;
+                    else if (status === '🔴') healthStats.red++;
+                    else healthStats.gray++;
+                }
+            }
+
+            // Update aggregated health display
+            document.getElementById('healthGreen').textContent = '🟢 ' + healthStats.green;
+            document.getElementById('healthYellow').textContent = '🟡 ' + healthStats.yellow;
+            document.getElementById('healthRed').textContent = '🔴 ' + healthStats.red;
+            document.getElementById('healthGray').textContent = '⬜ ' + healthStats.gray;
         }
 
         function showModal(id) { document.getElementById(id).classList.add('show'); }
