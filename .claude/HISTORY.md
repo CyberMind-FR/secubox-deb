@@ -4,6 +4,45 @@
 ---
 ## 2026-05-09
 
+### Session 140 — Domain Filtering, Error Pages, Mitmproxy Sync
+
+**New Features:**
+1. **Domain Filtering** - Only `admin.gk2.secubox.in` allowed for admin access
+   - Default server catches all other domains → wrong-domain.html
+   - Styled landing page with redirect to correct admin URL
+
+2. **Error Pages**
+   - `wrong-domain.html` - Funky styled page for unauthorized domains
+   - `unknown-module.html` - Styled 404 for unknown modules on admin
+   - `/login` URL without .html extension for cleaner aesthetics
+
+3. **Metablogizer Enhancements (v1.2.0)**
+   - Auto-publish all sites on service startup
+   - "Republish All" button in UI
+   - `empty-site.html` - Sketch-style error for sites with no content
+   - Default domain suffix changed from `.local` to `.gk2.secubox.in`
+   - **Mitmproxy sync** - Routes updated when publishing sites
+
+4. **Users Sessions**
+   - Active sessions display in Users module
+   - Session revocation endpoint
+
+**Infrastructure:**
+- Cleaned up nginx backup files (`webui.conf.bak*`)
+- Added sudoers for secubox user: nginx test/reload, mitmproxy reload
+- Fixed mitmproxy routes permissions for secubox user
+
+**Files:**
+- `packages/secubox-hub/www/shared/wrong-domain.html` (NEW)
+- `packages/secubox-hub/www/shared/unknown-module.html` (NEW)
+- `packages/secubox-metablogizer/api/main.py` - Mitmproxy sync, v1.2.0
+- `packages/secubox-metablogizer/www/metablogizer/empty-site.html` (NEW)
+- `packages/secubox-metablogizer/www/metablogizer/index.html` - Republish button
+- `packages/secubox-users/api/main.py` - Sessions endpoint
+- `packages/secubox-users/www/users/index.html` - Sessions display
+
+---
+
 ### Session 139 — Nginx Health Routes Fix
 
 **Problem:** Sidebar health checks returning 404 for most modules.
