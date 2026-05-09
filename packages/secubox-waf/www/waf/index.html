@@ -280,16 +280,17 @@
             border-radius: 50%;
             box-shadow: 0 0 8px currentColor;
         }
-        .ring-name {
-            font-size: 0.85rem;
-            font-weight: 600;
-            min-width: 70px;
-        }
         .ring-val {
             font-family: var(--font-mono);
             font-size: 1.1rem;
             font-weight: 700;
-            min-width: 40px;
+            min-width: 60px;
+        }
+        .legend-ring[title] {
+            cursor: help;
+        }
+        .legend-ring[title]:hover {
+            background: rgba(255,255,255,0.06);
         }
         .ring-flags {
             display: flex;
@@ -545,11 +546,11 @@
                     <div class="eyemote-total" id="eyemoteTotal">0</div>
                 </div>
                 <div class="eyemote-legend" id="eyemoteLegend">
-                    <div class="legend-ring" data-ring="1"><span class="ring-dot" style="background:#DF0024"></span><span class="ring-name">Americas</span><span class="ring-val" id="valAmericas">0</span><span class="ring-flags" id="flagsAmericas"></span></div>
-                    <div class="legend-ring" data-ring="2"><span class="ring-dot" style="background:#0085C7"></span><span class="ring-name">Europe</span><span class="ring-val" id="valEurope">0</span><span class="ring-flags" id="flagsEurope"></span></div>
-                    <div class="legend-ring" data-ring="3"><span class="ring-dot" style="background:#F4C300"></span><span class="ring-name">Asia</span><span class="ring-val" id="valAsia">0</span><span class="ring-flags" id="flagsAsia"></span></div>
-                    <div class="legend-ring" data-ring="4"><span class="ring-dot" style="background:#009F3D"></span><span class="ring-name">Oceania</span><span class="ring-val" id="valOceania">0</span><span class="ring-flags" id="flagsOceania"></span></div>
-                    <div class="legend-ring" data-ring="5"><span class="ring-dot" style="background:#666666"></span><span class="ring-name">Africa</span><span class="ring-val" id="valAfrica">0</span><span class="ring-flags" id="flagsAfrica"></span></div>
+                    <div class="legend-ring" data-ring="1" title="Americas - North & South America"><span class="ring-dot" style="background:#DF0024"></span><span class="ring-val" id="valAmericas">0</span><span class="ring-flags" id="flagsAmericas"></span></div>
+                    <div class="legend-ring" data-ring="2" title="Europe - European Union & neighbors"><span class="ring-dot" style="background:#0085C7"></span><span class="ring-val" id="valEurope">0</span><span class="ring-flags" id="flagsEurope"></span></div>
+                    <div class="legend-ring" data-ring="3" title="Asia - Asia & Middle East"><span class="ring-dot" style="background:#F4C300"></span><span class="ring-val" id="valAsia">0</span><span class="ring-flags" id="flagsAsia"></span></div>
+                    <div class="legend-ring" data-ring="4" title="Oceania - Australia & Pacific"><span class="ring-dot" style="background:#009F3D"></span><span class="ring-val" id="valOceania">0</span><span class="ring-flags" id="flagsOceania"></span></div>
+                    <div class="legend-ring" data-ring="5" title="Africa - African continent"><span class="ring-dot" style="background:#666666"></span><span class="ring-val" id="valAfrica">0</span><span class="ring-flags" id="flagsAfrica"></span></div>
                 </div>
             </div>
         </div>
@@ -622,19 +623,21 @@
                 }
             });
 
+            // Total = 100% base for percentage calculation
             const total = Object.values(counts).reduce((a, b) => a + b, 0);
-            const maxCount = Math.max(...Object.values(counts), 1);
 
             // Update total
             const totalEl = document.getElementById('eyemoteTotal');
             if (totalEl) totalEl.textContent = total;
 
-            // Update rings and legend
+            // Update rings and legend - each ring shows % of TOTAL attacks
             RING_CONFIG.forEach(cfg => {
                 const count = counts[cfg.continent] || 0;
-                const pct = count / maxCount;
+                // Percentage based on total sum (not max)
+                const pct = total > 0 ? count / total : 0;
+                const pctDisplay = Math.round(pct * 100);
 
-                // Update SVG ring
+                // Update SVG ring - fill proportional to percentage of total
                 const ringEl = document.getElementById('ring' + cfg.id);
                 if (ringEl) {
                     ringEl.style.stroke = cfg.color;
@@ -642,10 +645,12 @@
                     ringEl.style.strokeDasharray = dashLen + ' ' + cfg.circ;
                 }
 
-                // Update legend value
+                // Update legend value with count and percentage
                 const capCont = cfg.continent.charAt(0).toUpperCase() + cfg.continent.slice(1);
                 const valEl = document.getElementById('val' + capCont);
-                if (valEl) valEl.textContent = count;
+                if (valEl) {
+                    valEl.innerHTML = count + ' <span style="font-size:0.7rem;color:var(--muted-dark);">(' + pctDisplay + '%)</span>';
+                }
 
                 // Update flags as circles
                 const flagsEl = document.getElementById('flags' + capCont);
