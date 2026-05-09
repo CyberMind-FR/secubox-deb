@@ -348,6 +348,66 @@
             0%, 100% { transform: scale(1); opacity: 0.9; }
             50% { transform: scale(1.3); opacity: 0.6; }
         }
+        /* Quick Action Buttons */
+        .quick-actions {
+            display: flex;
+            gap: 8px;
+            margin-left: auto;
+        }
+        .quick-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: 1px solid var(--glass-border);
+            background: var(--glass-bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+        }
+        .quick-btn:hover {
+            border-color: var(--root-light);
+            background: rgba(20, 140, 102, 0.1);
+            transform: scale(1.1);
+        }
+        .quick-btn:active { transform: scale(0.95); }
+        .quick-btn.active {
+            border-color: #22c55e;
+            background: rgba(34, 197, 94, 0.15);
+            box-shadow: 0 0 8px rgba(34, 197, 94, 0.3);
+        }
+        .quick-btn.danger:hover {
+            border-color: #ef4444;
+            background: rgba(239, 68, 68, 0.1);
+        }
+        .quick-btn.paused {
+            border-color: #f97316;
+            background: rgba(249, 115, 22, 0.15);
+        }
+        .quick-btn .spinner {
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        .quick-btn-tooltip {
+            position: absolute;
+            bottom: -28px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #000;
+            color: #fff;
+            font-size: 0.65rem;
+            padding: 3px 8px;
+            border-radius: 4px;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+            z-index: 10;
+        }
+        .quick-btn:hover .quick-btn-tooltip { opacity: 1; }
         @media (max-width: 1200px) { .stats-grid { grid-template-columns: repeat(3, 1fr); } }
         @media (max-width: 768px) { .main { margin-left: 0; } .grid-2, .grid-3 { grid-template-columns: 1fr; } .stats-grid { grid-template-columns: repeat(2, 1fr); } }
     </style>
@@ -366,6 +426,28 @@
                 <span style="font-size:1.5rem;">✅</span>
                 <span class="last-attack-ip">All Clear</span>
                 <span class="last-attack-time">No recent attacks</span>
+            </div>
+            <div class="quick-actions">
+                <button class="quick-btn" id="btnRefresh" onclick="refresh()" title="Refresh">
+                    🔄
+                    <span class="quick-btn-tooltip">Refresh</span>
+                </button>
+                <button class="quick-btn active" id="btnWafToggle" onclick="toggleWaf()" title="WAF Status">
+                    🛡️
+                    <span class="quick-btn-tooltip">WAF Active</span>
+                </button>
+                <button class="quick-btn danger" id="btnClearBans" onclick="clearAllBans()" title="Clear Bans">
+                    🗑️
+                    <span class="quick-btn-tooltip">Clear Bans</span>
+                </button>
+                <button class="quick-btn" id="btnExport" onclick="exportLogs()" title="Export Logs">
+                    📤
+                    <span class="quick-btn-tooltip">Export</span>
+                </button>
+                <button class="quick-btn" id="btnSettings" onclick="location.href='/waf/settings.html'" title="Settings">
+                    ⚙️
+                    <span class="quick-btn-tooltip">Settings</span>
+                </button>
             </div>
         </div>
 
@@ -950,12 +1032,83 @@
         }
 
         async function refresh() {
+            const btn = document.getElementById('btnRefresh');
+            btn.innerHTML = '<span class="spinner">🔄</span><span class="quick-btn-tooltip">Loading...</span>';
             await Promise.all([
                 loadStatus(),
                 loadStats(),
                 loadSecurityEvents(),
                 loadCategories()
             ]);
+            btn.innerHTML = '🔄<span class="quick-btn-tooltip">Refresh</span>';
+        }
+
+        // WAF Toggle
+        let wafActive = true;
+        async function toggleWaf() {
+            const btn = document.getElementById('btnWafToggle');
+            const tooltip = btn.querySelector('.quick-btn-tooltip');
+            wafActive = !wafActive;
+
+            // Call API to toggle WAF mode
+            const res = await api('/mode', {
+                method: 'POST',
+                body: JSON.stringify({ enabled: wafActive })
+            });
+
+            if (wafActive) {
+                btn.classList.add('active');
+                btn.classList.remove('paused');
+                tooltip.textContent = 'WAF Active';
+            } else {
+                btn.classList.remove('active');
+                btn.classList.add('paused');
+                tooltip.textContent = 'WAF Paused';
+            }
+        }
+
+        // Clear All Bans
+        async function clearAllBans() {
+            if (!confirm('⚠️ Clear all active bans? This will unban all IPs.')) return;
+
+            const btn = document.getElementById('btnClearBans');
+            btn.innerHTML = '<span class="spinner">🗑️</span><span class="quick-btn-tooltip">Clearing...</span>';
+
+            const res = await api('/bans/clear', { method: 'POST' });
+
+            if (res?.success) {
+                await loadSecurityEvents();
+                await loadStats();
+            } else {
+                alert('Failed to clear bans: ' + (res?.error || 'Unknown error'));
+            }
+
+            btn.innerHTML = '🗑️<span class="quick-btn-tooltip">Clear Bans</span>';
+        }
+
+        // Export Logs
+        async function exportLogs() {
+            const btn = document.getElementById('btnExport');
+            btn.innerHTML = '<span class="spinner">📤</span><span class="quick-btn-tooltip">Exporting...</span>';
+
+            try {
+                const res = await fetch(API + '/export', { headers: headers() });
+                if (res.ok) {
+                    const blob = await res.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'waf-logs-' + new Date().toISOString().slice(0, 10) + '.json';
+                    a.click();
+                    URL.revokeObjectURL(url);
+                } else {
+                    alert('Export failed');
+                }
+            } catch (e) {
+                alert('Export error: ' + e.message);
+            }
+
+            btn.innerHTML = '📤<span class="quick-btn-tooltip">Export</span>';
         }
 
         refresh();
