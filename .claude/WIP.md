@@ -62,6 +62,10 @@ python scripts/generate-docs.py --include-screenshots
   - HW LED tooltip: Centered at bottom
   - Status panel: Full-screen on mobile
   - Better touch targets (44px min-height)
+- [x] Smart mobile detection (sidebar.js v2.38.0) ✓ DEPLOYED
+  - Touch device detection (touchstart, maxTouchPoints, pointer:coarse)
+  - Narrow viewport detection (≤768px)
+  - Auto resize/orientation change handling
 
 ### ⬜ Next Up
 - [ ] (Add new tasks here)
