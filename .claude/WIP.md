@@ -57,9 +57,14 @@ python scripts/generate-docs.py --include-screenshots
 ### ✅ Session 138 Additions
 - [x] Mobile hamburger menu toggle (sidebar.js v2.36.0)
 - [x] Portal/login.html transparent redirect to /login.html
+- [x] Mobile popup overrides — bottom sheet style (sidebar.js v2.37.0)
+  - Strip popup: Full-width bottom sheet on mobile
+  - HW LED tooltip: Centered at bottom
+  - Status panel: Full-screen on mobile
+  - Better touch targets (44px min-height)
 
 ### ⬜ Next Up
-- [ ] Web popup override for mobile menu
+- [ ] (Add new tasks here)
 
 ---
 
