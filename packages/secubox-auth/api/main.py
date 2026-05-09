@@ -1,7 +1,7 @@
 """SecuBox Auth API - OAuth2 + Vouchers + Sessions with Enhanced Monitoring"""
 from fastapi import FastAPI, APIRouter, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field, field_validator
-from secubox_core.auth import router as auth_router, require_jwt, create_token
+from secubox_core.auth import router as auth_router, require_jwt, create_token, set_session_callback
 from secubox_core.config import get_config
 import json
 import secrets
@@ -194,11 +194,29 @@ async def _periodic_cleanup():
         await asyncio.sleep(300)  # Every 5 minutes
 
 
+def _handle_session_event(event: str, username: str, details: dict):
+    """Handle session events from secubox_core.auth login."""
+    _record_event(event, {"username": username, **details})
+    # Also create session record for successful logins
+    if event == "login_success":
+        sessions = _load(SESSIONS_FILE, [])
+        sessions.append({
+            "id": secrets.token_hex(8),
+            "username": username,
+            "created": datetime.now().isoformat(),
+            "expires": int(time.time()) + details.get("expires_in", 86400),
+            "type": "jwt"
+        })
+        _save(SESSIONS_FILE, sessions)
+
+
 @app.on_event("startup")
 async def startup():
-    """Start background cleanup."""
+    """Start background cleanup and register session callback."""
     global _cleanup_task
     _cleanup_task = asyncio.create_task(_periodic_cleanup())
+    # Register callback for login events
+    set_session_callback(_handle_session_event)
 
 
 @app.on_event("shutdown")
