@@ -249,6 +249,60 @@ async def public_led_status():
     }
 
 
+@public_router.get("/health-batch")
+async def public_health_batch():
+    """Batch health check for all modules — returns status for sidebar LEDs.
+
+    Returns a dict of module_id -> {status: 'ok'|'warn'|'error', msg: str}
+    Used by sidebar.js for efficient status display.
+    """
+    import subprocess
+
+    modules = {}
+
+    # Get list of secubox services from systemd
+    try:
+        result = subprocess.run(
+            ["systemctl", "list-units", "--type=service", "--state=running,failed,inactive",
+             "--no-legend", "--plain", "secubox-*"],
+            capture_output=True, text=True, timeout=5
+        )
+        for line in result.stdout.strip().split("\n"):
+            if not line.strip():
+                continue
+            parts = line.split()
+            if len(parts) >= 4:
+                unit = parts[0]
+                load = parts[1]
+                active = parts[2]
+                sub = parts[3]
+
+                # Extract module id from unit name (secubox-xxx.service -> xxx)
+                if unit.startswith("secubox-") and unit.endswith(".service"):
+                    mod_id = unit[8:-8]  # Remove 'secubox-' and '.service'
+
+                    if active == "active" and sub == "running":
+                        modules[mod_id] = {"status": "ok", "msg": "Running"}
+                    elif active == "active":
+                        modules[mod_id] = {"status": "warn", "msg": f"Active ({sub})"}
+                    elif active == "failed":
+                        modules[mod_id] = {"status": "error", "msg": "Failed"}
+                    else:
+                        modules[mod_id] = {"status": "warn", "msg": f"{active}/{sub}"}
+    except Exception as e:
+        log.warning("health-batch systemctl error: %s", e)
+
+    # Also check socket-based services
+    socket_dir = Path("/run/secubox")
+    if socket_dir.exists():
+        for sock in socket_dir.glob("*.sock"):
+            mod_id = sock.stem
+            if mod_id not in modules:
+                modules[mod_id] = {"status": "ok", "msg": "Socket active"}
+
+    return {"modules": modules, "count": len(modules)}
+
+
 app.include_router(public_router)
 
 # ══════════════════════════════════════════════════════════════════
