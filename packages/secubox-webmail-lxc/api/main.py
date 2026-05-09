@@ -71,6 +71,16 @@ def _parse_mem(mem_str: str) -> int:
     return int(mem_str)
 
 
+
+# ══════════════════════════════════════════════════════════════════
+# Health Check Endpoint (public, no auth)
+# ══════════════════════════════════════════════════════════════════
+
+@app.get("/health")
+async def health_check():
+    """Public health check endpoint for sidebar status."""
+    return {"status": "ok", "module": "deb"}
+
 @app.get("/status")
 async def status():
     cfg = _cfg()

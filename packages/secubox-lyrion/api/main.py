@@ -17,6 +17,16 @@ from secubox_core.auth import router as auth_router, require_jwt
 from secubox_core.logger import get_logger
 
 app = FastAPI(title="secubox-lyrion", version="1.0.0", root_path="/api/v1/lyrion")
+
+# ══════════════════════════════════════════════════════════════════
+# Health Check Endpoint (public, no auth)
+# ══════════════════════════════════════════════════════════════════
+
+@app.get("/health")
+async def health_check():
+    """Public health check endpoint for sidebar status."""
+    return {"status": "ok", "module": "deb"}
+
 app.include_router(auth_router, prefix="/auth")
 router = APIRouter()
 log = get_logger("lyrion")

@@ -23,6 +23,16 @@ from pathlib import Path
 from typing import Optional
 
 app = FastAPI(title="secubox-qos", version="1.1.0", root_path="/api/v1/qos")
+
+# ══════════════════════════════════════════════════════════════════
+# Health Check Endpoint (public, no auth)
+# ══════════════════════════════════════════════════════════════════
+
+@app.get("/health")
+async def health_check():
+    """Public health check endpoint for sidebar status."""
+    return {"status": "ok", "module": "deb"}
+
 app.include_router(auth_router, prefix="/auth")
 
 router = APIRouter()

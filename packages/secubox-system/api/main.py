@@ -25,6 +25,16 @@ from typing import Optional, List, Dict, Any
 import platform
 
 app = FastAPI(title="secubox-system", version="1.2.0", root_path="/api/v1/system")
+
+# ══════════════════════════════════════════════════════════════════
+# Health Check Endpoint (public, no auth)
+# ══════════════════════════════════════════════════════════════════
+
+@app.get("/health")
+async def health_check():
+    """Public health check endpoint for sidebar status."""
+    return {"status": "ok", "module": "deb"}
+
 app.include_router(auth_router, prefix="/auth")
 router = APIRouter()
 log = get_logger("system")

@@ -36,6 +36,16 @@ except ImportError:
     httpx = None
 
 app = FastAPI(title="secubox-saas-relay", version="1.0.0", root_path="/api/v1/saas-relay")
+
+# ══════════════════════════════════════════════════════════════════
+# Health Check Endpoint (public, no auth)
+# ══════════════════════════════════════════════════════════════════
+
+@app.get("/health")
+async def health_check():
+    """Public health check endpoint for sidebar status."""
+    return {"status": "ok", "module": "deb"}
+
 app.include_router(auth_router, prefix="/auth")
 router = APIRouter()
 log = get_logger("saas-relay")

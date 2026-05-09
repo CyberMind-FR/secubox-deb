@@ -15,6 +15,16 @@ import time
 from pathlib import Path
 
 app = FastAPI(title="secubox-hub", version="1.7.0", root_path="/api/v1/hub")
+
+# ══════════════════════════════════════════════════════════════════
+# Health Check Endpoint (public, no auth)
+# ══════════════════════════════════════════════════════════════════
+
+@app.get("/health")
+async def health_check():
+    """Public health check endpoint for sidebar status."""
+    return {"status": "ok", "module": "deb"}
+
 # Auth router already has prefix="/auth" in secubox_core.auth
 app.include_router(auth_router, prefix="/auth")
 router = APIRouter()
