@@ -1385,4 +1385,118 @@ async def get_action_acl(user=Depends(require_jwt)):
     }
 
 
+# ══════════════════════════════════════════════════════════════════
+# Active WebUI Sessions
+# ══════════════════════════════════════════════════════════════════
+
+SESSIONS_FILE = Path("/var/lib/secubox/auth/sessions.json")
+
+
+def _load_sessions() -> List[Dict[str, Any]]:
+    """Load active sessions from auth module's session file."""
+    if not SESSIONS_FILE.exists():
+        return []
+    try:
+        data = json.loads(SESSIONS_FILE.read_text())
+        return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+
+def _filter_active_sessions(sessions: List[Dict]) -> List[Dict]:
+    """Filter only non-expired sessions."""
+    now = int(time.time())
+    active = []
+    for s in sessions:
+        expires = s.get("expires", 0)
+        if expires > now:
+            # Add time remaining
+            s["expires_in"] = expires - now
+            s["expires_in_formatted"] = _format_duration(expires - now)
+            active.append(s)
+    return active
+
+
+def _format_duration(seconds: int) -> str:
+    """Format duration in human-readable form."""
+    if seconds < 60:
+        return f"{seconds}s"
+    if seconds < 3600:
+        return f"{seconds // 60}m {seconds % 60}s"
+    hours = seconds // 3600
+    mins = (seconds % 3600) // 60
+    return f"{hours}h {mins}m"
+
+
+@router.get("/sessions")
+async def get_sessions(user=Depends(require_jwt)):
+    """Get active WebUI sessions."""
+    sessions = _load_sessions()
+    active = _filter_active_sessions(sessions)
+
+    return {
+        "sessions": active,
+        "total": len(active),
+        "current_user": user.get("sub", "unknown"),
+    }
+
+
+@router.get("/sessions/summary")
+async def get_sessions_summary():
+    """Get session summary for dashboard (public)."""
+    sessions = _load_sessions()
+    active = _filter_active_sessions(sessions)
+
+    # Group by user
+    by_user: Dict[str, int] = {}
+    for s in active:
+        u = s.get("username", "unknown")
+        by_user[u] = by_user.get(u, 0) + 1
+
+    return {
+        "active_count": len(active),
+        "by_user": by_user,
+        "users_online": list(by_user.keys()),
+    }
+
+
+@router.delete("/sessions/{session_id}")
+async def revoke_session(session_id: str, user=Depends(require_jwt)):
+    """Revoke a specific session (admin only)."""
+    role = get_user_role(user)
+    if role not in ("sysadmin", "admin"):
+        raise HTTPException(403, "Only admins can revoke sessions")
+
+    sessions = _load_sessions()
+    original_count = len(sessions)
+    sessions = [s for s in sessions if s.get("id") != session_id]
+
+    if len(sessions) == original_count:
+        raise HTTPException(404, "Session not found")
+
+    try:
+        SESSIONS_FILE.write_text(json.dumps(sessions, indent=2))
+        log.info("Session %s revoked by %s", session_id, user.get("sub"))
+        return {"success": True, "revoked": session_id}
+    except Exception as e:
+        log.error("Failed to revoke session: %s", e)
+        raise HTTPException(500, "Failed to revoke session")
+
+
+@router.post("/sessions/revoke-all")
+async def revoke_all_sessions(user=Depends(require_jwt)):
+    """Revoke all sessions except current (sysadmin only)."""
+    role = get_user_role(user)
+    if role != "sysadmin":
+        raise HTTPException(403, "Only sysadmin can revoke all sessions")
+
+    try:
+        SESSIONS_FILE.write_text("[]")
+        log.warning("All sessions revoked by %s", user.get("sub"))
+        return {"success": True, "message": "All sessions revoked"}
+    except Exception as e:
+        log.error("Failed to revoke all sessions: %s", e)
+        raise HTTPException(500, "Failed to revoke sessions")
+
+
 app.include_router(router)
