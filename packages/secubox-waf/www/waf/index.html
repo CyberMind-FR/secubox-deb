@@ -222,127 +222,112 @@
             align-items: center;
             flex-direction: column;
         }
-        /* Olympic Rings Style Geomap */
-        .olympic-rings-container {
+        /* Eyemote Concentric Donuts */
+        .eyemote-container {
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            gap: var(--space-l);
             background: linear-gradient(180deg, #000a0f 0%, #0a1520 100%);
             border-radius: var(--radius-md);
             padding: var(--space-l);
-            min-height: 200px;
+            min-height: 320px;
         }
-        .rings-row {
-            display: flex;
-            justify-content: center;
-            align-items: flex-end;
-            gap: var(--space-xl);
-            padding: var(--space-m) 0;
-        }
-        .ring-cylinder {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: var(--space-xs);
-            cursor: pointer;
-            transition: transform 0.2s;
-        }
-        .ring-cylinder:hover { transform: scale(1.05); }
-        .ring-inner {
-            width: 70px;
-            height: 70px;
-            border-radius: 50%;
-            border: 8px solid;
+        .eyemote-visual {
             position: relative;
-            box-shadow: 0 0 20px currentColor, inset 0 0 15px rgba(0,0,0,0.5);
-            animation: ringPulse 3s infinite;
-        }
-        .ring-cylinder.europe .ring-inner { border-color: #0085C7; color: #0085C7; }
-        .ring-cylinder.asia .ring-inner { border-color: #F4C300; color: #F4C300; }
-        .ring-cylinder.africa .ring-inner { border-color: #333333; color: #666666; box-shadow: 0 0 20px #666, inset 0 0 15px rgba(0,0,0,0.5); }
-        .ring-cylinder.oceania .ring-inner { border-color: #009F3D; color: #009F3D; }
-        .ring-cylinder.americas .ring-inner { border-color: #DF0024; color: #DF0024; }
-        @keyframes ringPulse {
-            0%, 100% { box-shadow: 0 0 15px currentColor, inset 0 0 15px rgba(0,0,0,0.5); }
-            50% { box-shadow: 0 0 30px currentColor, inset 0 0 15px rgba(0,0,0,0.3); }
-        }
-        .ring-label {
-            font-size: 0.9rem;
-            font-weight: 600;
-            color: var(--text-dark);
-        }
-        .ring-count {
-            font-family: var(--font-mono);
-            font-size: 1.4rem;
-            font-weight: 700;
-        }
-        .ring-cylinder.europe .ring-count { color: #0085C7; }
-        .ring-cylinder.asia .ring-count { color: #F4C300; }
-        .ring-cylinder.africa .ring-count { color: #888; }
-        .ring-cylinder.oceania .ring-count { color: #009F3D; }
-        .ring-cylinder.americas .ring-count { color: #DF0024; }
-        .ring-bar {
-            width: 60px;
-            height: 8px;
-            background: rgba(255,255,255,0.1);
-            border-radius: 4px;
-            overflow: hidden;
-        }
-        .ring-fill {
-            height: 100%;
-            width: 0%;
-            transition: width 0.5s ease-out;
-            border-radius: 4px;
-        }
-        .ring-cylinder.europe .ring-fill { background: linear-gradient(90deg, #0085C7, #00a8ff); }
-        .ring-cylinder.asia .ring-fill { background: linear-gradient(90deg, #F4C300, #ffdd44); }
-        .ring-cylinder.africa .ring-fill { background: linear-gradient(90deg, #333, #666); }
-        .ring-cylinder.oceania .ring-fill { background: linear-gradient(90deg, #009F3D, #00cc55); }
-        .ring-cylinder.americas .ring-fill { background: linear-gradient(90deg, #DF0024, #ff3355); }
-        .rings-legend {
             display: flex;
             justify-content: center;
-            gap: var(--space-m);
-            margin-top: var(--space-m);
-            font-size: 0.75rem;
-            color: var(--muted-dark);
+            align-items: center;
         }
-        .rings-flags {
-            margin-top: var(--space-m);
+        .eyemote-svg { width: 300px; height: 300px; }
+        .eyemote-svg .ring-fill { transition: stroke-dasharray 0.8s ease-out; }
+        .eyemote-svg .eyemote-pupil { animation: pupilPulse 2s infinite; }
+        @keyframes pupilPulse {
+            0%, 100% { r: 12; opacity: 1; }
+            50% { r: 15; opacity: 0.8; }
+        }
+        .eyemote-total {
+            position: absolute;
+            font-family: var(--font-mono);
+            font-size: 2rem;
+            font-weight: 700;
+            color: #00ff41;
+            text-shadow: 0 0 20px rgba(0,255,65,0.5);
+        }
+        .eyemote-legend {
             display: flex;
             flex-direction: column;
-            gap: 6px;
-            padding: var(--space-s);
-            background: rgba(0,0,0,0.3);
-            border-radius: var(--radius-md);
-        }
-        .flags-row {
-            display: flex;
-            align-items: center;
             gap: 8px;
-            padding: 4px 8px;
-            border-radius: var(--radius-sm);
-            min-height: 28px;
+            padding: var(--space-s);
         }
-        .flags-row.europe { border-left: 3px solid #0085C7; }
-        .flags-row.asia { border-left: 3px solid #F4C300; }
-        .flags-row.africa { border-left: 3px solid #666; }
-        .flags-row.oceania { border-left: 3px solid #009F3D; }
-        .flags-row.americas { border-left: 3px solid #DF0024; }
-        .flag-label { font-size: 1.2rem; min-width: 28px; }
-        .flags-list {
+        .legend-ring {
             display: flex;
             flex-wrap: wrap;
-            gap: 4px;
-            font-size: 0.9rem;
-        }
-        .flag-item {
-            display: inline-flex;
             align-items: center;
-            gap: 2px;
-            background: rgba(255,255,255,0.05);
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: 0.75rem;
+            gap: 8px;
+            padding: 10px 12px;
+            background: rgba(255,255,255,0.03);
+            border-radius: var(--radius-sm);
+            border-left: 4px solid;
         }
-        .flag-item .count { color: var(--muted-dark); font-family: var(--font-mono); }
+        .legend-ring[data-ring="1"] { border-color: #DF0024; }
+        .legend-ring[data-ring="2"] { border-color: #0085C7; }
+        .legend-ring[data-ring="3"] { border-color: #F4C300; }
+        .legend-ring[data-ring="4"] { border-color: #009F3D; }
+        .legend-ring[data-ring="5"] { border-color: #666666; }
+        .ring-dot {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            box-shadow: 0 0 8px currentColor;
+        }
+        .ring-name {
+            font-size: 0.85rem;
+            font-weight: 600;
+            min-width: 70px;
+        }
+        .ring-val {
+            font-family: var(--font-mono);
+            font-size: 1.1rem;
+            font-weight: 700;
+            min-width: 40px;
+        }
+        .ring-flags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            flex: 1;
+        }
+        .flag-circle {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.9rem;
+            border: 2px solid;
+            position: relative;
+        }
+        .flag-circle .fc-count {
+            position: absolute;
+            bottom: -4px;
+            right: -4px;
+            font-size: 0.55rem;
+            background: #000;
+            color: #fff;
+            padding: 1px 3px;
+            border-radius: 6px;
+            font-family: var(--font-mono);
+        }
+        .legend-ring[data-ring="1"] .flag-circle { border-color: #DF0024; }
+        .legend-ring[data-ring="2"] .flag-circle { border-color: #0085C7; }
+        .legend-ring[data-ring="3"] .flag-circle { border-color: #F4C300; }
+        .legend-ring[data-ring="4"] .flag-circle { border-color: #009F3D; }
+        .legend-ring[data-ring="5"] .flag-circle { border-color: #666666; }
+        @media (max-width: 768px) {
+            .eyemote-container { grid-template-columns: 1fr; }
+            .eyemote-visual { margin-bottom: var(--space-m); }
+        }
         /* Button */
         .btn {
             padding: var(--space-xs) var(--space-m);
@@ -437,48 +422,52 @@
             </div>
         </div>
 
-        <!-- Olympic Rings Geomap - Threat Origins by Continent -->
+        <!-- Eyemote Concentric Donuts - Threat Origins by Continent -->
         <div class="glass-card">
-            <h2>🌍 Attack Origins - Olympic Rings</h2>
-            <div class="olympic-rings-container" id="olympicRings">
-                <div class="rings-row">
-                    <div class="ring-cylinder europe" id="ringEurope" title="Europe">
-                        <div class="ring-inner"></div>
-                        <div class="ring-label">🇪🇺 EU</div>
-                        <div class="ring-count" id="countEurope">0</div>
-                        <div class="ring-bar"><div class="ring-fill" id="fillEurope"></div></div>
-                    </div>
-                    <div class="ring-cylinder asia" id="ringAsia" title="Asia">
-                        <div class="ring-inner"></div>
-                        <div class="ring-label">🌏 AS</div>
-                        <div class="ring-count" id="countAsia">0</div>
-                        <div class="ring-bar"><div class="ring-fill" id="fillAsia"></div></div>
-                    </div>
-                    <div class="ring-cylinder africa" id="ringAfrica" title="Africa">
-                        <div class="ring-inner"></div>
-                        <div class="ring-label">🌍 AF</div>
-                        <div class="ring-count" id="countAfrica">0</div>
-                        <div class="ring-bar"><div class="ring-fill" id="fillAfrica"></div></div>
-                    </div>
-                    <div class="ring-cylinder oceania" id="ringOceania" title="Oceania">
-                        <div class="ring-inner"></div>
-                        <div class="ring-label">🌊 OC</div>
-                        <div class="ring-count" id="countOceania">0</div>
-                        <div class="ring-bar"><div class="ring-fill" id="fillOceania"></div></div>
-                    </div>
-                    <div class="ring-cylinder americas" id="ringAmericas" title="Americas">
-                        <div class="ring-inner"></div>
-                        <div class="ring-label">🌎 AM</div>
-                        <div class="ring-count" id="countAmericas">0</div>
-                        <div class="ring-bar"><div class="ring-fill" id="fillAmericas"></div></div>
-                    </div>
+            <h2>👁️ Attack Origins - Eyemote</h2>
+            <div class="eyemote-container">
+                <div class="eyemote-visual">
+                    <svg viewBox="0 0 300 300" class="eyemote-svg" id="eyemoteSvg">
+                        <!-- Background glow -->
+                        <defs>
+                            <radialGradient id="eyeGlow" cx="50%" cy="50%" r="50%">
+                                <stop offset="0%" stop-color="#00ff41" stop-opacity="0.1"/>
+                                <stop offset="100%" stop-color="transparent"/>
+                            </radialGradient>
+                        </defs>
+                        <circle cx="150" cy="150" r="145" fill="url(#eyeGlow)"/>
+
+                        <!-- Ring 1 (outermost) - will be dynamically filled -->
+                        <circle class="ring-bg" cx="150" cy="150" r="130" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="20"/>
+                        <circle class="ring-fill" id="ring1" cx="150" cy="150" r="130" fill="none" stroke-width="20" stroke-dasharray="0 817" stroke-linecap="round" transform="rotate(-90 150 150)"/>
+
+                        <!-- Ring 2 -->
+                        <circle class="ring-bg" cx="150" cy="150" r="105" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="20"/>
+                        <circle class="ring-fill" id="ring2" cx="150" cy="150" r="105" fill="none" stroke-width="20" stroke-dasharray="0 660" stroke-linecap="round" transform="rotate(-90 150 150)"/>
+
+                        <!-- Ring 3 -->
+                        <circle class="ring-bg" cx="150" cy="150" r="80" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="20"/>
+                        <circle class="ring-fill" id="ring3" cx="150" cy="150" r="80" fill="none" stroke-width="20" stroke-dasharray="0 503" stroke-linecap="round" transform="rotate(-90 150 150)"/>
+
+                        <!-- Ring 4 -->
+                        <circle class="ring-bg" cx="150" cy="150" r="55" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="20"/>
+                        <circle class="ring-fill" id="ring4" cx="150" cy="150" r="55" fill="none" stroke-width="20" stroke-dasharray="0 346" stroke-linecap="round" transform="rotate(-90 150 150)"/>
+
+                        <!-- Ring 5 (center) -->
+                        <circle class="ring-bg" cx="150" cy="150" r="30" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="20"/>
+                        <circle class="ring-fill" id="ring5" cx="150" cy="150" r="30" fill="none" stroke-width="20" stroke-dasharray="0 188" stroke-linecap="round" transform="rotate(-90 150 150)"/>
+
+                        <!-- Center pupil -->
+                        <circle cx="150" cy="150" r="12" fill="#00ff41" class="eyemote-pupil"/>
+                    </svg>
+                    <div class="eyemote-total" id="eyemoteTotal">0</div>
                 </div>
-                <div class="rings-flags" id="ringsFlags">
-                    <div class="flags-row europe"><span class="flag-label">🇪🇺</span><span id="flagsEurope" class="flags-list"></span></div>
-                    <div class="flags-row asia"><span class="flag-label">🌏</span><span id="flagsAsia" class="flags-list"></span></div>
-                    <div class="flags-row africa"><span class="flag-label">🌍</span><span id="flagsAfrica" class="flags-list"></span></div>
-                    <div class="flags-row oceania"><span class="flag-label">🌊</span><span id="flagsOceania" class="flags-list"></span></div>
-                    <div class="flags-row americas"><span class="flag-label">🌎</span><span id="flagsAmericas" class="flags-list"></span></div>
+                <div class="eyemote-legend" id="eyemoteLegend">
+                    <div class="legend-ring" data-ring="1"><span class="ring-dot" style="background:#DF0024"></span><span class="ring-name">Americas</span><span class="ring-val" id="valAmericas">0</span><span class="ring-flags" id="flagsAmericas"></span></div>
+                    <div class="legend-ring" data-ring="2"><span class="ring-dot" style="background:#0085C7"></span><span class="ring-name">Europe</span><span class="ring-val" id="valEurope">0</span><span class="ring-flags" id="flagsEurope"></span></div>
+                    <div class="legend-ring" data-ring="3"><span class="ring-dot" style="background:#F4C300"></span><span class="ring-name">Asia</span><span class="ring-val" id="valAsia">0</span><span class="ring-flags" id="flagsAsia"></span></div>
+                    <div class="legend-ring" data-ring="4"><span class="ring-dot" style="background:#009F3D"></span><span class="ring-name">Oceania</span><span class="ring-val" id="valOceania">0</span><span class="ring-flags" id="flagsOceania"></span></div>
+                    <div class="legend-ring" data-ring="5"><span class="ring-dot" style="background:#666666"></span><span class="ring-name">Africa</span><span class="ring-val" id="valAfrica">0</span><span class="ring-flags" id="flagsAfrica"></span></div>
                 </div>
             </div>
         </div>
@@ -529,8 +518,16 @@
             return COUNTRY_CONTINENT[countryCode?.toUpperCase()] || 'americas';
         }
 
-        // Olympic Rings Update with Flags
-        function updateOlympicRings(events) {
+        // Eyemote Concentric Rings Update
+        const RING_CONFIG = [
+            { id: 1, continent: 'americas', color: '#DF0024', r: 130, circ: 817 },
+            { id: 2, continent: 'europe', color: '#0085C7', r: 105, circ: 660 },
+            { id: 3, continent: 'asia', color: '#F4C300', r: 80, circ: 503 },
+            { id: 4, continent: 'oceania', color: '#009F3D', r: 55, circ: 346 },
+            { id: 5, continent: 'africa', color: '#666666', r: 30, circ: 188 }
+        ];
+
+        function updateEyemote(events) {
             const counts = { europe: 0, asia: 0, africa: 0, oceania: 0, americas: 0 };
             const countryData = { europe: {}, asia: {}, africa: {}, oceania: {}, americas: {} };
 
@@ -543,30 +540,46 @@
                 }
             });
 
+            const total = Object.values(counts).reduce((a, b) => a + b, 0);
             const maxCount = Math.max(...Object.values(counts), 1);
-            for (const [cont, count] of Object.entries(counts)) {
-                const capCont = cont.charAt(0).toUpperCase() + cont.slice(1);
-                const countEl = document.getElementById('count' + capCont);
-                const fillEl = document.getElementById('fill' + capCont);
+
+            // Update total
+            const totalEl = document.getElementById('eyemoteTotal');
+            if (totalEl) totalEl.textContent = total;
+
+            // Update rings and legend
+            RING_CONFIG.forEach(cfg => {
+                const count = counts[cfg.continent] || 0;
+                const pct = count / maxCount;
+
+                // Update SVG ring
+                const ringEl = document.getElementById('ring' + cfg.id);
+                if (ringEl) {
+                    ringEl.style.stroke = cfg.color;
+                    const dashLen = pct * cfg.circ;
+                    ringEl.style.strokeDasharray = dashLen + ' ' + cfg.circ;
+                }
+
+                // Update legend value
+                const capCont = cfg.continent.charAt(0).toUpperCase() + cfg.continent.slice(1);
+                const valEl = document.getElementById('val' + capCont);
+                if (valEl) valEl.textContent = count;
+
+                // Update flags as circles
                 const flagsEl = document.getElementById('flags' + capCont);
-
-                if (countEl) countEl.textContent = count;
-                if (fillEl) fillEl.style.width = (count / maxCount * 100) + '%';
-
-                // Update flags list
                 if (flagsEl) {
-                    const countries = Object.entries(countryData[cont])
+                    const countries = Object.entries(countryData[cfg.continent])
                         .sort((a, b) => b[1] - a[1])
-                        .slice(0, 8);
+                        .slice(0, 10);
                     if (countries.length === 0) {
                         flagsEl.innerHTML = '<span style="color:var(--muted-dark);font-size:0.7rem;">No attacks</span>';
                     } else {
                         flagsEl.innerHTML = countries.map(([cc, cnt]) =>
-                            '<span class="flag-item">' + countryToFlag(cc) + '<span class="count">' + cnt + '</span></span>'
+                            '<span class="flag-circle">' + countryToFlag(cc) + '<span class="fc-count">' + cnt + '</span></span>'
                         ).join('');
                     }
                 }
-            }
+            });
         }
 
         function getCatEmoji(cat) {
@@ -677,8 +690,8 @@
                 updateLiveBanner(null);
             }
 
-            // Update Olympic Rings with continent data
-            updateOlympicRings(events);
+            // Update Eyemote concentric rings with continent data
+            updateEyemote(events);
 
             // Render table
             const tbody = document.getElementById('eventsTable');
