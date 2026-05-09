@@ -1,14 +1,15 @@
 """SecuBox WAF Addon for mitmproxy - Graduated Response Mode
 
 Progressive threat response:
-1. First detection -> Warning page (not block)
-2. Multiple attempts (3+) -> Auto-ban via CrowdSec
+1. First detection → Warning page (not block)
+2. Multiple attempts (3+) → Auto-ban via CrowdSec
 
 Features:
 - Pattern-based threat detection (SQLi, XSS, LFI, RCE, etc.)
 - Warning page on initial detection
 - Threat logging to /srv/mitmproxy/logs/waf-threats.log
 - Auto-ban after threshold reached
+- Styled error pages for backend failures (502/503)
 """
 import json
 import re
@@ -22,7 +23,7 @@ from mitmproxy import http, ctx
 ROUTES_FILE = Path("/srv/mitmproxy/haproxy-routes.json")
 RULES_FILE = Path("/srv/mitmproxy/waf-rules.json")
 THREATS_LOG = Path("/srv/mitmproxy/logs/waf-threats.log")
-WHITELIST = {"127.0.0.1", "192.168.255.1", "10.100.0.1"}
+WHITELIST = {"127.0.0.1", "192.168.255.1"}
 
 # Graduated response thresholds
 BAN_THRESHOLD = 3  # Number of threats before ban
@@ -134,8 +135,362 @@ WARNING_PAGE = b"""<!DOCTYPE html>
             </p>
         </div>
         <p class="footer">
-            Protected by <a href="https://cybermind.fr">CyberMind</a> |
+            Protected by <a href="https://cybermind.fr">CyberMind</a> | 
             <a href="https://secubox.in">SecuBox</a>
+        </p>
+    </div>
+</body>
+</html>"""
+
+ERROR_502_PAGE = b"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>502 - Service Unavailable | SecuBox</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: linear-gradient(135deg, #0a0a0f 0%, #0f0a1a 100%);
+            color: #e8e6d9;
+            font-family: "JetBrains Mono", "Courier New", monospace;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 1rem;
+        }
+        .container {
+            text-align: center;
+            max-width: 700px;
+            width: 100%;
+        }
+        .ascii-art {
+            font-size: clamp(6px, 1.2vw, 10px);
+            line-height: 1.15;
+            color: #6e40c9;
+            text-shadow: 0 0 15px rgba(110, 64, 201, 0.5);
+            white-space: pre;
+            margin-bottom: 2rem;
+            overflow: hidden;
+        }
+        .error-code {
+            font-size: clamp(4rem, 12vw, 7rem);
+            font-weight: bold;
+            color: #6e40c9;
+            text-shadow: 0 0 30px rgba(110, 64, 201, 0.6);
+            line-height: 1;
+            margin-bottom: 0.5rem;
+            animation: flicker 3s infinite;
+        }
+        @keyframes flicker {
+            0%, 100% { opacity: 1; }
+            92% { opacity: 1; }
+            93% { opacity: 0.8; }
+            94% { opacity: 1; }
+            96% { opacity: 0.9; }
+            97% { opacity: 1; }
+        }
+        .error-title {
+            font-size: clamp(1.2rem, 3vw, 1.6rem);
+            color: #c9a84c;
+            margin-bottom: 1.5rem;
+        }
+        .error-box {
+            background: rgba(110, 64, 201, 0.1);
+            border: 1px solid rgba(110, 64, 201, 0.3);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
+        .error-message {
+            color: #8b949e;
+            font-size: 1rem;
+            line-height: 1.6;
+        }
+        .error-message code {
+            background: rgba(110, 64, 201, 0.2);
+            padding: 2px 8px;
+            border-radius: 4px;
+            color: #c9a84c;
+            font-size: 0.9em;
+        }
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .status-item {
+            background: rgba(30, 30, 40, 0.5);
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 1rem;
+        }
+        .status-label {
+            font-size: 0.75rem;
+            color: #6b6b7a;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+        .status-value {
+            font-size: 1rem;
+            color: #e8e6d9;
+            margin-top: 0.3rem;
+        }
+        .status-value.down { color: #e63946; }
+        .status-value.checking { color: #c9a84c; }
+        .actions {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 2rem;
+        }
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background: #6e40c9;
+            color: white;
+            border: none;
+        }
+        .btn-primary:hover { background: #8250df; }
+        .btn-secondary {
+            background: transparent;
+            color: #8b949e;
+            border: 1px solid #30363d;
+        }
+        .btn-secondary:hover {
+            border-color: #6e40c9;
+            color: #c9a84c;
+        }
+        .footer {
+            margin-top: 3rem;
+            font-size: 0.75rem;
+            color: #6b6b7a;
+        }
+        .footer a { color: #c9a84c; text-decoration: none; }
+        .retry-timer {
+            color: #00ff41;
+            font-size: 0.9rem;
+            margin-top: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="ascii-art">
+ _____ _____ _____    _____         _               
+|   __|  |  |___  |  |   __|___ ___|_|___ ___       
+|__   |  |  |  _  |  |__   | -_|  _| | . |   |      
+|_____|_____|_____|  |_____|___|_|  |_|___|_|_|     
+                                                    
+    +-----------------------------------------------+
+    |  The backend service is temporarily offline  |
+    |                                               |
+    |     [ Retrying connection... ]               |
+    |                                               |
+    +-----------------------------------------------+
+        </div>
+
+        <div class="error-code">502</div>
+        <h1 class="error-title">Bad Gateway</h1>
+
+        <div class="error-box">
+            <p class="error-message">
+                The upstream server <code>{host}</code> is not responding.<br>
+                This could be due to maintenance, high load, or a service restart.
+            </p>
+        </div>
+
+        <div class="status-grid">
+            <div class="status-item">
+                <div class="status-label">Backend</div>
+                <div class="status-value down">{host}</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">WAF Status</div>
+                <div class="status-value" style="color: #00ff41;">Active</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Time</div>
+                <div class="status-value">{time}</div>
+            </div>
+        </div>
+
+        <p class="retry-timer">Auto-retry in <span id="countdown">10</span>s...</p>
+
+        <div class="actions">
+            <a href="javascript:location.reload()" class="btn btn-primary">Retry Now</a>
+            <a href="/" class="btn btn-secondary">Go Home</a>
+        </div>
+
+        <p class="footer">
+            SecuBox WAF | <a href="https://secubox.in">secubox.in</a> | 
+            <a href="https://cybermind.fr">CyberMind</a>
+        </p>
+    </div>
+
+    <script>
+    (function() {
+        let seconds = 10;
+        const el = document.getElementById('countdown');
+        const timer = setInterval(() => {
+            seconds--;
+            el.textContent = seconds;
+            if (seconds <= 0) {
+                clearInterval(timer);
+                location.reload();
+            }
+        }, 1000);
+    })();
+    </script>
+</body>
+</html>"""
+
+ERROR_503_PAGE = b"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>503 - Service Unavailable | SecuBox</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: linear-gradient(135deg, #0a0a0f 0%, #1a0f0a 100%);
+            color: #e8e6d9;
+            font-family: "JetBrains Mono", "Courier New", monospace;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 1rem;
+        }
+        .container {
+            text-align: center;
+            max-width: 700px;
+            width: 100%;
+        }
+        .ascii-art {
+            font-size: clamp(6px, 1.2vw, 10px);
+            line-height: 1.15;
+            color: #c9a84c;
+            text-shadow: 0 0 15px rgba(201, 168, 76, 0.5);
+            white-space: pre;
+            margin-bottom: 2rem;
+            overflow: hidden;
+        }
+        .error-code {
+            font-size: clamp(4rem, 12vw, 7rem);
+            font-weight: bold;
+            color: #c9a84c;
+            text-shadow: 0 0 30px rgba(201, 168, 76, 0.6);
+            line-height: 1;
+            margin-bottom: 0.5rem;
+        }
+        .error-title {
+            font-size: clamp(1.2rem, 3vw, 1.6rem);
+            color: #e63946;
+            margin-bottom: 1.5rem;
+        }
+        .maintenance-box {
+            background: rgba(201, 168, 76, 0.1);
+            border: 1px solid rgba(201, 168, 76, 0.3);
+            border-radius: 12px;
+            padding: 2rem;
+            margin: 1.5rem 0;
+        }
+        .maintenance-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            animation: spin 3s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .error-message {
+            color: #8b949e;
+            font-size: 1rem;
+            line-height: 1.6;
+        }
+        .actions {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 2rem;
+        }
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background: #c9a84c;
+            color: #0a0a0f;
+            border: none;
+        }
+        .btn-primary:hover { background: #d4b85c; }
+        .btn-secondary {
+            background: transparent;
+            color: #8b949e;
+            border: 1px solid #30363d;
+        }
+        .btn-secondary:hover {
+            border-color: #c9a84c;
+            color: #c9a84c;
+        }
+        .footer {
+            margin-top: 3rem;
+            font-size: 0.75rem;
+            color: #6b6b7a;
+        }
+        .footer a { color: #c9a84c; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="ascii-art">
+ _____ _____ _____    _____     _     _                         
+|   __|  |  |___  |  |     |___|_|___| |_ ___ ___ ___ ___ ___ ___ 
+|__   |  |  |  _  |  | | | | .'| |   |  _| -_|   | .'|   |  _| -_|
+|_____|_____|_____|  |_|_|_|__,|_|_|_|_| |___|_|_|__,|_|_|___|___|
+                                                                  
+    +-----------------------------------------------+
+    |       Service temporarily unavailable        |
+    |                                               |
+    |  The hamsters powering this service need     |
+    |  a quick coffee break. Back soon!            |
+    +-----------------------------------------------+
+        </div>
+
+        <div class="error-code">503</div>
+        <h1 class="error-title">Service Unavailable</h1>
+
+        <div class="maintenance-box">
+            <div class="maintenance-icon">&#x2699;&#xFE0F;</div>
+            <p class="error-message">
+                We're currently performing maintenance or experiencing high load.<br>
+                Please try again in a few moments.
+            </p>
+        </div>
+
+        <div class="actions">
+            <a href="javascript:location.reload()" class="btn btn-primary">Try Again</a>
+            <a href="/" class="btn btn-secondary">Go Home</a>
+        </div>
+
+        <p class="footer">
+            SecuBox WAF | <a href="https://secubox.in">secubox.in</a> | 
+            <a href="https://cybermind.fr">CyberMind</a>
         </p>
     </div>
 </body>
@@ -145,12 +500,12 @@ class SecuBoxWAF:
     def __init__(self):
         self.routes = {}
         self.compiled_patterns = {}
-        self.stats = {"requests": 0, "warnings": 0, "blocked": 0}
+        self.stats = {"requests": 0, "warnings": 0, "blocked": 0, "errors": 0}
         self.threat_counts = defaultdict(list)  # IP -> list of timestamps
         self.load_routes()
         self.load_rules()
         THREATS_LOG.parent.mkdir(parents=True, exist_ok=True)
-
+    
     def load_routes(self):
         if ROUTES_FILE.exists():
             try:
@@ -158,7 +513,7 @@ class SecuBoxWAF:
                 ctx.log.info(f"Loaded {len(self.routes)} routes")
             except Exception as e:
                 ctx.log.error(f"Failed to load routes: {e}")
-
+    
     def load_rules(self):
         if RULES_FILE.exists():
             try:
@@ -189,19 +544,19 @@ class SecuBoxWAF:
                 ctx.log.info(f"Loaded {total} WAF rules in {len(self.compiled_patterns)} categories")
             except Exception as e:
                 ctx.log.error(f"Failed to load WAF rules: {e}")
-
-    def check_request(self, flow: http.HTTPFlow):
+    
+    def check_request(self, flow: http.HTTPFlow) -> dict | None:
         """Check request against WAF rules."""
         raw_query = flow.request.query.to_dict() if flow.request.query else {}
         query_str = " ".join(f"{k}={v}" for k, v in raw_query.items())
-
+        
         path = urllib.parse.unquote_plus(flow.request.path)
         query = urllib.parse.unquote_plus(query_str)
         body = flow.request.get_text() or ""
         ua = flow.request.headers.get("User-Agent", "")
-
+        
         scan_text = f"{path} {query} {body} {ua}".lower()
-
+        
         for cat_id, cat_data in self.compiled_patterns.items():
             for pattern in cat_data["patterns"]:
                 if pattern["regex"].search(scan_text):
@@ -212,23 +567,23 @@ class SecuBoxWAF:
                         "severity": pattern["severity"]
                     }
         return None
-
+    
     def get_threat_count(self, ip: str) -> int:
         """Get threat count for IP within window."""
         now = datetime.now()
         cutoff = now - timedelta(seconds=BAN_WINDOW)
         self.threat_counts[ip] = [t for t in self.threat_counts[ip] if t > cutoff]
         return len(self.threat_counts[ip])
-
+    
     def add_threat(self, ip: str):
         """Record threat for IP."""
         self.threat_counts[ip].append(datetime.now())
-
+    
     def log_threat(self, flow: http.HTTPFlow, threat: dict, action: str):
         """Log threat to file."""
         entry = {
             "timestamp": datetime.now().isoformat(),
-            "client_ip": flow.request.headers.get("X-Forwarded-For", flow.request.headers.get("X-Real-IP", flow.client_conn.peername[0] if flow.client_conn.peername else "unknown")).split(",")[0].strip(),
+            "client_ip": flow.client_conn.peername[0] if flow.client_conn.peername else "unknown",
             "host": flow.request.pretty_host,
             "method": flow.request.method,
             "path": flow.request.path,
@@ -243,7 +598,7 @@ class SecuBoxWAF:
                 f.write(json.dumps(entry) + "\n")
         except Exception as e:
             ctx.log.error(f"Failed to log threat: {e}")
-
+    
     def ban_ip(self, ip: str, reason: str):
         """Ban IP via CrowdSec."""
         try:
@@ -257,12 +612,12 @@ class SecuBoxWAF:
             ctx.log.warn(f"BANNED {ip} for {reason}")
         except Exception:
             pass
-
+    
     def request(self, flow: http.HTTPFlow):
         self.stats["requests"] += 1
         host = flow.request.pretty_host
-        client_ip = flow.request.headers.get("X-Forwarded-For", flow.request.headers.get("X-Real-IP", flow.client_conn.peername[0] if flow.client_conn.peername else "unknown")).split(",")[0].strip()
-
+        client_ip = flow.client_conn.peername[0] if flow.client_conn.peername else "unknown"
+        
         # Skip whitelist
         if client_ip in WHITELIST:
             if host in self.routes:
@@ -270,18 +625,18 @@ class SecuBoxWAF:
                 flow.request.host = backend_ip
                 flow.request.port = backend_port
             return
-
+        
         # Check for threats
         threat = self.check_request(flow)
         if threat:
             self.add_threat(client_ip)
             count = self.get_threat_count(client_ip)
-
+            
             sev = threat["severity"]
             cat = threat["category"]
             rid = threat["rule_id"]
             ctx.log.warn(f"THREAT [{sev}] {client_ip} ({count}/{BAN_THRESHOLD}): {cat} {rid}")
-
+            
             if count >= BAN_THRESHOLD:
                 # Ban and block
                 self.stats["blocked"] += 1
@@ -304,13 +659,51 @@ class SecuBoxWAF:
                     {"Content-Type": "text/html", "X-SecuBox-WAF": "warning"}
                 )
             return
-
+        
         # Route to backend
         if host in self.routes:
             backend_ip, backend_port = self.routes[host]
             flow.request.host = backend_ip
             flow.request.port = backend_port
-
+    
+    def error(self, flow: http.HTTPFlow):
+        """Handle connection errors with styled error pages."""
+        self.stats["errors"] += 1
+        host = flow.request.pretty_host if flow.request else "unknown"
+        now = datetime.now().strftime("%H:%M:%S")
+        
+        error_msg = str(flow.error) if flow.error else "Unknown error"
+        ctx.log.warn(f"Backend error for {host}: {error_msg}")
+        
+        # Determine error type
+        if "Connection refused" in error_msg or "Errno 111" in error_msg:
+            # 502 Bad Gateway - backend not responding
+            page = ERROR_502_PAGE.replace(b"{host}", host.encode())
+            page = page.replace(b"{time}", now.encode())
+            flow.response = http.Response.make(
+                502,
+                page,
+                {"Content-Type": "text/html", "X-SecuBox-WAF": "error-502"}
+            )
+        elif "timed out" in error_msg.lower():
+            # 504 Gateway Timeout
+            page = ERROR_502_PAGE.replace(b"{host}", host.encode())
+            page = page.replace(b"{time}", now.encode())
+            page = page.replace(b"502", b"504")
+            page = page.replace(b"Bad Gateway", b"Gateway Timeout")
+            flow.response = http.Response.make(
+                504,
+                page,
+                {"Content-Type": "text/html", "X-SecuBox-WAF": "error-504"}
+            )
+        else:
+            # 503 Service Unavailable - general error
+            flow.response = http.Response.make(
+                503,
+                ERROR_503_PAGE,
+                {"Content-Type": "text/html", "X-SecuBox-WAF": "error-503"}
+            )
+    
     def response(self, flow: http.HTTPFlow):
         if flow.response:
             flow.response.headers["X-SecuBox-WAF"] = "inspected"
