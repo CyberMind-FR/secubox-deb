@@ -567,7 +567,7 @@
                 <td><a href="${v.ssl ? 'https' : 'http'}://${v.domain}" target="_blank" style="color:var(--primary)">${v.domain}</a></td>
                 <td style="color:var(--text-dim);font-family:monospace;font-size:0.8rem">${v.backend || '-'}</td>
                 <td>${v.ssl ? '<span class="badge ssl">' + (v.tls_mode || 'SSL') + '</span>' : '-'}</td>
-                <td><span class="badge ${v.enabled ? 'enabled' : 'disabled'}">${v.enabled ? 'Enabled' : 'Disabled'}</span></td>
+                <td><span class="badge ${v.enabled ? 'enabled' : 'disabled'}">${v.enabled ? '✅ Enabled' : '⏸️ Disabled'}</span></td>
                 <td>
                     <button class="btn" onclick="toggleVhost('${v.domain}', ${!v.enabled})" style="padding:2px 8px;font-size:0.7rem">${v.enabled ? 'Disable' : 'Enable'}</button>
                     <button class="btn danger" onclick="deleteVhost('${v.domain}')" style="padding:2px 8px;font-size:0.7rem">Delete</button>
