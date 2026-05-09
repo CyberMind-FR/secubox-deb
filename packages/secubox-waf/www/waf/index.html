@@ -942,9 +942,11 @@
                 updateLiveBanner(null);
             }
 
-            // Update all 3 Eyemote sensors
-            // Store events globally for stats to access
+            // Store events and stats globally, update eyemotes
             window._wafEvents = events;
+            if (window._wafStats) {
+                updateAllEyemotes(events, window._wafStats);
+            }
 
             // Render table
             const tbody = document.getElementById('eventsTable');
@@ -1023,10 +1025,8 @@
             // Top Vhosts
             renderTopVhosts(d.top_vhosts);
 
-            // Geomap
-            renderGeomap(d);
-
-            // Update all 3 Eyemote sensors with events + stats
+            // Store stats globally and update eyemotes (double-cache pattern)
+            window._wafStats = d;
             if (window._wafEvents) {
                 updateAllEyemotes(window._wafEvents, d);
             }
@@ -1094,90 +1094,6 @@
                     '</div>' +
                 '</div>';
             }).join('');
-        }
-
-        function renderGeomap(d) {
-            const geomarkers = document.getElementById('geomarkers');
-            const geoLegend = document.getElementById('geoLegend');
-            // Coordinates calibrated for wargames-earth.png with 200% width, object-position: 10% 50%
-            // Target = France (SecuBox HQ)
-            const countryPos = {
-                // Americas
-                'US': {x:15,y:38}, 'CA': {x:12,y:28}, 'MX': {x:10,y:48}, 'BR': {x:25,y:62}, 'AR': {x:22,y:72},
-                // Western Europe
-                'GB': {x:38,y:28}, 'IE': {x:36,y:29}, 'FR': {x:40,y:34}, 'ES': {x:37,y:40}, 'PT': {x:35,y:40},
-                'BE': {x:41,y:30}, 'NL': {x:41,y:28}, 'DE': {x:44,y:30}, 'CH': {x:43,y:34}, 'IT': {x:45,y:38},
-                'AT': {x:46,y:33}, 'PL': {x:48,y:29}, 'CZ': {x:46,y:30},
-                // Eastern Europe
-                'HU': {x:48,y:34}, 'RO': {x:51,y:35}, 'BG': {x:52,y:38}, 'GR': {x:50,y:42}, 'UA': {x:54,y:30},
-                // Nordic
-                'SE': {x:46,y:22}, 'NO': {x:44,y:20}, 'FI': {x:50,y:20}, 'DK': {x:44,y:26},
-                // Russia & Central Asia
-                'RU': {x:62,y:24}, 'KZ': {x:65,y:32},
-                // Middle East & Africa
-                'TR': {x:54,y:40}, 'IL': {x:56,y:44}, 'SA': {x:60,y:48}, 'AE': {x:62,y:48},
-                'EG': {x:54,y:48}, 'MA': {x:35,y:45}, 'ZA': {x:52,y:72}, 'NG': {x:44,y:55},
-                // Asia
-                'IN': {x:70,y:46}, 'PK': {x:66,y:42}, 'BD': {x:74,y:46},
-                'CN': {x:80,y:38}, 'HK': {x:82,y:46}, 'TW': {x:84,y:44},
-                'JP': {x:88,y:36}, 'KR': {x:86,y:38},
-                'TH': {x:78,y:52}, 'VN': {x:80,y:50}, 'SG': {x:80,y:56}, 'ID': {x:82,y:58}, 'MY': {x:79,y:55},
-                'PH': {x:85,y:52},
-                // Oceania
-                'AU': {x:88,y:70}, 'NZ': {x:95,y:76}
-            };
-
-            if (d?.top_ips && Object.keys(d.top_ips).length > 0) {
-                const ipCountries = d.top_ips_countries || {};
-                const countryThreats = {};
-                Object.entries(d.top_ips).forEach(([ip, count]) => {
-                    const cc = ipCountries[ip] || '';
-                    if (cc) countryThreats[cc] = (countryThreats[cc] || 0) + count;
-                });
-
-                const target = WAF_GEOMAP_TARGET; // France (SecuBox HQ) - use global variable for debug
-                let totalThreats = 0;
-                let svgContent = '<svg style="position:absolute;top:0;left:0;width:100%;height:120%;pointer-events:none;overflow:visible;" viewBox="0 0 100 120" preserveAspectRatio="none"><defs><filter id="glow"><feGaussianBlur stdDeviation="0.5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>';
-                let markers = '';
-                let legendFlags = '';
-                const entries = Object.entries(countryThreats).sort((a,b) => b[1] - a[1]).slice(0, 8);
-                const flagSpacing = 100 / (entries.length + 1);
-                const maxCountry = Math.max(...entries.map(e => e[1]));
-
-                entries.forEach(([cc, count], idx) => {
-                    totalThreats += count;
-                    const pos = countryPos[cc] || {x:50,y:50};
-                    const intensity = Math.max(0.3, count / maxCountry);
-                    const arcColor = ARC_COLORS[idx % ARC_COLORS.length];
-                    const strokeWidth = 0.4 + intensity * 1.2;
-                    const size = Math.max(8, Math.min(20, 8 + intensity * 12));
-                    const midX = (pos.x + target.x) / 2;
-                    const dist = Math.sqrt(Math.pow(pos.x - target.x, 2) + Math.pow(pos.y - target.y, 2));
-                    const arcHeight = Math.min(pos.y, target.y) - (dist * 0.35);
-                    const pathId = 'arc' + idx;
-
-                    svgContent += '<path id="' + pathId + '" d="M' + pos.x + ',' + pos.y + ' Q' + midX + ',' + arcHeight + ' ' + target.x + ',' + target.y + '" fill="none" stroke="' + arcColor + '" stroke-width="' + strokeWidth + '" opacity="0.7" filter="url(#glow)" stroke-linecap="round"/>';
-                    const missileCount = Math.min(3, Math.max(1, Math.floor(intensity * 3)));
-                    for (let m = 0; m < missileCount; m++) {
-                        const dur = 2.5 - intensity;
-                        const delay = idx * 0.2 + m * dur / missileCount;
-                        svgContent += '<circle r="' + (0.5 + intensity * 0.5) + '" fill="' + arcColor + '" filter="url(#glow)"><animateMotion dur="' + dur + 's" repeatCount="indefinite" begin="' + delay + 's"><mpath href="#' + pathId + '"/></animateMotion></circle>';
-                    }
-
-                    markers += '<div style="position:absolute;left:' + pos.x + '%;top:' + (pos.y * 0.85) + '%;transform:translate(-50%,-50%);z-index:5;"><div style="width:' + size + 'px;height:' + size + 'px;background:radial-gradient(circle,' + arcColor + ' 0%,' + arcColor + '60 50%,transparent 70%);border-radius:50%;animation:pulse ' + (1.5 - intensity * 0.7) + 's infinite;box-shadow:0 0 ' + (size * 1.2) + 'px ' + arcColor + ';"></div></div>';
-                    const legendX = flagSpacing * (idx + 1);
-                    legendFlags += '<div style="position:absolute;left:' + legendX + '%;top:100%;transform:translate(-50%,4px);text-align:center;z-index:10;"><div style="font-size:14px;filter:drop-shadow(0 0 4px ' + arcColor + ');">' + countryToFlag(cc) + '</div><div style="font-size:8px;color:' + arcColor + ';font-family:monospace;">' + count + '</div></div>';
-                    svgContent += '<line x1="' + legendX + '" y1="106" x2="' + pos.x + '" y2="' + pos.y + '" stroke="' + arcColor + '" stroke-width="0.3" stroke-dasharray="1,1" opacity="0.4"/>';
-                });
-
-                markers += '<div style="position:absolute;left:' + target.x + '%;top:' + (target.y * 0.85) + '%;transform:translate(-50%,-50%);z-index:10;"><div style="width:18px;height:18px;border:2px solid #00ff41;border-radius:50%;animation:pulse 0.5s infinite;box-shadow:0 0 12px #00ff41;"></div><div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:5px;height:5px;background:#00ff41;border-radius:50%;"></div></div>';
-                svgContent += '</svg>';
-                geomarkers.innerHTML = svgContent + markers + legendFlags;
-                geoLegend.innerHTML = '<span style="animation:pulse 1s infinite;">⚠</span> ' + totalThreats.toLocaleString() + ' INCOMING';
-            } else {
-                geomarkers.innerHTML = '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#00ff41;font-size:12px;">✓ SECURE</div>';
-                geoLegend.innerHTML = '<span style="color:#00ff41;">● SECURE</span>';
-            }
         }
 
         async function loadStatus() {
