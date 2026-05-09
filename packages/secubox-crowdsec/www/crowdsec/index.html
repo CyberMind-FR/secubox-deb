@@ -473,9 +473,10 @@
         let _alerts = [];
 
         async function loadDecisions() {
-            const data = await api('/decisions');
+            const data = await api('/decisions?limit=500');
             const decisions = data.decisions || [];
-            document.getElementById('total-decisions').textContent = decisions.length;
+            const total = data.total || decisions.length;
+            document.getElementById('total-decisions').textContent = total;
 
             const quickTbody = document.querySelector('#quick-bans-table tbody');
             if (decisions.length === 0) {
@@ -501,13 +502,18 @@
             if (decisions.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="5" style="color: var(--green);">No active bans</td></tr>';
             } else {
-                // Show loading state with pending GeoIP
-                tbody.innerHTML = decisions.slice(0, 50).map(d =>
+                // Show up to 200 decisions with GeoIP pending
+                const displayCount = Math.min(decisions.length, 200);
+                tbody.innerHTML = decisions.slice(0, displayCount).map(d =>
                     '<tr data-ip="' + d.value + '"><td class="geoip-pending">🌐</td><td style="font-family: monospace;">' + d.value + '</td><td><span class="status-badge ban">' + d.type + '</span> ' + (d.scenario || '-') + '</td><td>' + (d.duration || '-') + '</td><td><button class="btn danger" onclick="unban(\'' + d.value + '\')">Unban</button></td></tr>'
                 ).join('');
+                // Show "more" indicator if truncated
+                if (total > displayCount) {
+                    tbody.innerHTML += '<tr><td colspan="5" style="color: var(--text-dim); text-align: center;">... and ' + (total - displayCount) + ' more bans</td></tr>';
+                }
 
-                // Enrich with GeoIP in background
-                enrichWithGeoIP(decisions.slice(0, 50)).then(enriched => {
+                // Enrich with GeoIP in background (first 100 only for performance)
+                enrichWithGeoIP(decisions.slice(0, 100)).then(enriched => {
                     enriched.forEach(d => {
                         const row = tbody.querySelector('tr[data-ip="' + d.value + '"]');
                         if (row) {

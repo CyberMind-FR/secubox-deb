@@ -18,25 +18,30 @@ def _base():
 
 @router.get("/decisions")
 async def decisions(
-    limit: int  = Query(100, ge=1, le=5000),
+    limit: int  = Query(1000, ge=1, le=10000),
     scope: str  = Query("Ip"),
     type_: str  = Query("ban", alias="type"),
 ):
-    """Get decisions for dashboard (public)."""
+    """Get decisions for dashboard (public). Returns total count."""
     try:
         async with httpx.AsyncClient(timeout=10) as c:
-            r = await c.get(f"{_base()}/v1/decisions",
+            # Get total count first (unlimited)
+            r_count = await c.get(f"{_base()}/v1/decisions",
                             headers=_headers(),
-                            params={"limit": limit, "scope": scope, "type": type_})
-            data = r.json() or []
-            return {"decisions": data if isinstance(data, list) else []}
+                            params={"limit": 10000, "scope": scope, "type": type_})
+            all_data = r_count.json() or []
+            total = len(all_data) if isinstance(all_data, list) else 0
+
+            # Return paginated results with total
+            data = all_data[:limit] if isinstance(all_data, list) else []
+            return {"decisions": data, "total": total}
     except Exception as e:
         log.warning("decisions: %s", e)
-        return {"decisions": []}
+        return {"decisions": [], "total": 0}
 
 
 @router.get("/stats")
-async def stats(user=Depends(require_jwt)):
+async def stats(_user=Depends(require_jwt)):
     """Nombre de bans actifs par scope."""
     async with httpx.AsyncClient(timeout=10) as c:
         r = await c.get(f"{_base()}/v1/decisions?limit=5000", headers=_headers())

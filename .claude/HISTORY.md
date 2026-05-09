@@ -4,6 +4,32 @@
 ---
 ## 2026-05-09
 
+### Session 134 — CrowdSec Bans Display Fix, Service Stability (v2.7.2)
+
+**CrowdSec Dashboard:**
+- Fixed bans limit showing max 100 (actual: 143 bans on live server)
+- API now returns `total` count separate from paginated `decisions` array
+- Increased default limit from 100 to 1000, max to 10000
+- Frontend fetches 500 decisions, displays up to 200 with "X more" indicator
+- GeoIP enrichment limited to first 100 for performance
+
+**Service Debugging:**
+- Investigated vhost.sock intermittent creation issue
+- All 8 core API services verified healthy (hub, auth, crowdsec, system, vhost, certs, publish, waf)
+- MOCHAbin CPU stabilized at ~43% (down from 135%)
+
+**Live Server (192.168.1.200):**
+- 143 active bans in CrowdSec
+- 6 collections installed (base, linux, nginx, http-cve, whitelist, vpatch)
+- Custom SecuBox auth parser/scenario deployed
+
+**Files Updated:**
+- `packages/secubox-crowdsec/api/routers/decisions.py` — Total count, higher limits
+- `packages/secubox-crowdsec/www/crowdsec/index.html` — Display total, show more indicator
+- `.claude/WIP.md` — Session 134 tracking
+
+---
+
 ### Session 133 — WAF Category Toggles, API Error Handling (v2.7.1)
 
 **WAF Dashboard:**
