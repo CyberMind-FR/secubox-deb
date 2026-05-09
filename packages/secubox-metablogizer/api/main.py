@@ -18,7 +18,7 @@ from pydantic import BaseModel
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
 
-app = FastAPI(title="SecuBox MetaBlogizer", version="1.1.0")
+app = FastAPI(title="SecuBox MetaBlogizer", version="1.2.0")
 config = get_config("metablogizer")
 
 SITES_ROOT = Path(config.get("sites_root", "/srv/metablogizer/sites") if config else "/srv/metablogizer/sites")
@@ -27,8 +27,12 @@ DATA_PATH = Path(config.get("data_path", "/srv/metablogizer") if config else "/s
 NGINX_VHOST_DIR = Path("/etc/nginx/sites-available")
 NGINX_ENABLED_DIR = Path("/etc/nginx/sites-enabled")
 NGINX_METABLOGS_CONF = Path("/etc/nginx/sites-enabled/metablogizer")
+MITMPROXY_ROUTES = Path("/srv/mitmproxy/haproxy-routes.json")
+MITMPROXY_IN_ROUTES = Path("/srv/mitmproxy-in/haproxy-routes.json")
 BASE_PORT = 8900
 DEFAULT_DOMAIN_SUFFIX = ".gk2.secubox.in"
+# Internal IP where nginx listens for metablogizer sites
+NGINX_BACKEND_IP = "192.168.1.200"
 
 import logging
 logger = logging.getLogger("metablogizer")
@@ -49,6 +53,43 @@ def nginx_running() -> bool:
     """Check if nginx is running"""
     success, _, _ = run_cmd(["pgrep", "nginx"])
     return success
+
+
+def sync_mitmproxy_routes(sites: List[dict]) -> bool:
+    """Sync metablogizer sites to mitmproxy haproxy-routes.json
+
+    This ensures mitmproxy knows how to route traffic to metablogizer sites.
+    Returns True if sync successful.
+    """
+    try:
+        # Load existing routes
+        existing_routes = {}
+        if MITMPROXY_ROUTES.exists():
+            existing_routes = json.loads(MITMPROXY_ROUTES.read_text())
+
+        # Add/update metablogizer site routes
+        for site in sites:
+            domain = site["domain"]
+            port = site.get("port", BASE_PORT)
+            existing_routes[domain] = [NGINX_BACKEND_IP, port]
+
+        # Write back to both mitmproxy locations
+        routes_json = json.dumps(existing_routes, indent=2)
+
+        MITMPROXY_ROUTES.parent.mkdir(parents=True, exist_ok=True)
+        MITMPROXY_ROUTES.write_text(routes_json)
+
+        if MITMPROXY_IN_ROUTES.parent.exists():
+            MITMPROXY_IN_ROUTES.write_text(routes_json)
+
+        # Reload mitmproxy to pick up new routes
+        run_cmd(["sudo", "-n", "systemctl", "reload", "mitmproxy"])
+
+        logger.info(f"Synced {len(sites)} sites to mitmproxy routes")
+        return True
+    except Exception as e:
+        logger.warning(f"Failed to sync mitmproxy routes: {e}")
+        return False
 
 
 def load_sites() -> List[dict]:
@@ -173,6 +214,9 @@ server {{
         success, _, _ = run_cmd(["sudo", "-n", "systemctl", "reload", "nginx"])
         if not success:
             run_cmd(["systemctl", "reload", "nginx"])
+
+        # Sync routes to mitmproxy for WAF protection
+        sync_mitmproxy_routes(sites)
 
         logger.info(f"Published {len(sites)} metablogizer sites")
         return True, len(sites), f"Published {len(sites)} sites"
