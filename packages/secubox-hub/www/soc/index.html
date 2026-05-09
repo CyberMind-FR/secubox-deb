@@ -563,46 +563,78 @@
                 <p class="page-subtitle">Real-time threat monitoring and system status — <span id="last-update">updating...</span></p>
             </header>
 
-            <!-- GLASS CARDS GRID -->
+            <!-- GLASS CARDS GRID - Eyeremote Style -->
             <div class="cards-grid">
-                <div class="glass-card" style="--card-accent: #C06040; border-left: 3px solid #C06040;">
-                    <div class="card-header">
-                        <span class="card-icon">🛡️</span>
-                        <span class="card-status" id="waf-card-status">LOADING</span>
+                <!-- WAF Card -->
+                <div class="glass-card" style="--card-accent: #ef4444; border-left: 3px solid #ef4444;">
+                    <div style="display:flex;align-items:center;gap:0.75rem;">
+                        <div id="waf-card-donut" style="width:60px;height:60px;flex-shrink:0;"></div>
+                        <div style="flex:1;min-width:0;">
+                            <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
+                                <span style="font-size:1.1em;">🛡️</span>
+                                <span class="card-status" id="waf-card-status" style="font-size:0.65rem;">LOADING</span>
+                            </div>
+                            <div class="card-metric" id="threats-blocked" style="font-size:1.5rem;line-height:1;">-</div>
+                            <div style="font-size:0.65rem;color:var(--muted-dark);">Threats 24h</div>
+                        </div>
                     </div>
-                    <div class="card-metric" id="threats-blocked">-</div>
-                    <div class="card-label">Threats Blocked Today</div>
-                    <span class="card-trend up" id="threats-trend">↑ -% vs yesterday</span>
+                    <div id="waf-card-histogram" style="display:flex;align-items:flex-end;height:20px;gap:1px;margin-top:8px;background:rgba(0,0,0,0.2);border-radius:3px;padding:2px;"></div>
                 </div>
 
-                <div class="glass-card" style="--card-accent: #7068D0; border-left: 3px solid #7068D0;">
-                    <div class="card-header">
-                        <span class="card-icon">👁️</span>
-                        <span class="card-status" id="cs-card-status">LOADING</span>
+                <!-- CrowdSec Card -->
+                <div class="glass-card" style="--card-accent: #8b5cf6; border-left: 3px solid #8b5cf6;">
+                    <div style="display:flex;align-items:center;gap:0.75rem;">
+                        <div id="cs-card-donut" style="width:60px;height:60px;flex-shrink:0;"></div>
+                        <div style="flex:1;min-width:0;">
+                            <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
+                                <span style="font-size:1.1em;">👁️</span>
+                                <span class="card-status" id="cs-card-status" style="font-size:0.65rem;">LOADING</span>
+                            </div>
+                            <div class="card-metric" id="active-decisions" style="font-size:1.5rem;line-height:1;">-</div>
+                            <div style="font-size:0.65rem;color:var(--muted-dark);" id="decisions-info">- bouncers</div>
+                        </div>
                     </div>
-                    <div class="card-metric" id="active-decisions">-</div>
-                    <div class="card-label">Active Decisions</div>
-                    <span class="card-trend up" id="decisions-info">- bouncers</span>
+                    <div style="display:flex;gap:4px;margin-top:8px;font-size:0.6rem;">
+                        <span style="background:rgba(139,92,246,0.2);color:#a78bfa;padding:2px 6px;border-radius:3px;" id="cs-bans-tag">🚫 - bans</span>
+                        <span style="background:rgba(34,197,94,0.2);color:#22c55e;padding:2px 6px;border-radius:3px;" id="cs-captcha-tag">🔒 - captcha</span>
+                    </div>
                 </div>
 
-                <div class="glass-card" style="--card-accent: #2C70C0; border-left: 3px solid #2C70C0;">
-                    <div class="card-header">
-                        <span class="card-icon">🌐</span>
-                        <span class="card-status">ACTIVE</span>
+                <!-- Network Card -->
+                <div class="glass-card" style="--card-accent: #3b82f6; border-left: 3px solid #3b82f6;">
+                    <div style="display:flex;align-items:center;gap:0.75rem;">
+                        <div id="net-card-donut" style="width:60px;height:60px;flex-shrink:0;"></div>
+                        <div style="flex:1;min-width:0;">
+                            <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
+                                <span style="font-size:1.1em;">🌐</span>
+                                <span class="card-status" style="font-size:0.65rem;">ACTIVE</span>
+                            </div>
+                            <div class="card-metric" id="throughput" style="font-size:1.5rem;line-height:1;">-</div>
+                            <div style="font-size:0.65rem;color:var(--muted-dark);">MB/s Throughput</div>
+                        </div>
                     </div>
-                    <div class="card-metric" id="throughput">-</div>
-                    <div class="card-label">MB/s Throughput</div>
-                    <span class="card-trend" id="throughput-trend">- conns</span>
+                    <div style="display:flex;gap:4px;margin-top:8px;font-size:0.6rem;" id="throughput-trend">
+                        <span style="background:rgba(59,130,246,0.2);color:#60a5fa;padding:2px 6px;border-radius:3px;">HTTP -</span>
+                        <span style="background:rgba(34,197,94,0.2);color:#22c55e;padding:2px 6px;border-radius:3px;">HTTPS -</span>
+                    </div>
                 </div>
 
-                <div class="glass-card" style="--card-accent: #148C66; border-left: 3px solid #148C66;">
-                    <div class="card-header">
-                        <span class="card-icon">⚡</span>
-                        <span class="card-status" id="health-status">LOADING</span>
+                <!-- Health Card -->
+                <div class="glass-card" style="--card-accent: #22c55e; border-left: 3px solid #22c55e;">
+                    <div style="display:flex;align-items:center;gap:0.75rem;">
+                        <div id="health-card-donut" style="width:60px;height:60px;flex-shrink:0;"></div>
+                        <div style="flex:1;min-width:0;">
+                            <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
+                                <span style="font-size:1.1em;">⚡</span>
+                                <span class="card-status" id="health-status" style="font-size:0.65rem;">LOADING</span>
+                            </div>
+                            <div class="card-metric" id="active-services" style="font-size:1.5rem;line-height:1;">-</div>
+                            <div style="font-size:0.65rem;color:var(--muted-dark);">Active Services</div>
+                        </div>
                     </div>
-                    <div class="card-metric" id="active-services">-</div>
-                    <div class="card-label">Active Services</div>
-                    <span class="card-trend up" id="uptime-info">-% uptime</span>
+                    <div style="display:flex;gap:4px;margin-top:8px;font-size:0.6rem;" id="uptime-info">
+                        <span style="background:rgba(34,197,94,0.2);color:#22c55e;padding:2px 6px;border-radius:3px;">-% healthy</span>
+                    </div>
                 </div>
             </div>
 
@@ -878,6 +910,7 @@
                 document.getElementById('active-services').textContent = '?';
                 document.getElementById('health-status').textContent = 'OFFLINE';
                 document.getElementById('health-status').className = 'card-status danger';
+                document.getElementById('health-card-donut').innerHTML = createHealthCardDonut(0, 0, 0);
                 return;
             }
 
@@ -914,6 +947,7 @@
                 document.getElementById('waf-status-detail').innerHTML = '<span class="danger">● OFFLINE</span>';
                 document.getElementById('top-countries').innerHTML = '<span style="color:var(--muted);">-</span>';
                 document.getElementById('waf-categories').innerHTML = '<span class="cat-tag">-</span>';
+                document.getElementById('waf-card-donut').innerHTML = createCardDonut(0, 1, '#6b6b7a', '⚠️', '-');
                 return;
             }
 
@@ -921,6 +955,10 @@
             document.getElementById('threats-blocked').textContent = blocked.toLocaleString();
             document.getElementById('waf-card-status').textContent = data.running ? 'ACTIVE' : 'INACTIVE';
             document.getElementById('waf-card-status').className = 'card-status' + (data.running ? '' : ' danger');
+
+            // Card donut: blocked vs allowed (estimate 10x traffic)
+            const total = blocked * 10 || 1;
+            document.getElementById('waf-card-donut').innerHTML = createCardDonut(blocked, total, '#ef4444', '🛡️', 'threats');
 
             // WAF matrix details
             document.getElementById('waf-version').textContent = `v${data.version || '1.2.0'} · ${data.rules_loaded || 0} rules`;
@@ -1184,6 +1222,7 @@
                 document.getElementById('cs-decisions-count').textContent = '0';
                 document.getElementById('cs-bouncers').textContent = '0';
                 document.getElementById('cs-categories').innerHTML = '<span class="cat-tag">-</span>';
+                document.getElementById('cs-card-donut').innerHTML = createCardDonut(0, 1, '#6b6b7a', '⚠️', '-');
                 return;
             }
 
@@ -1206,6 +1245,10 @@
             document.getElementById('decisions-info').textContent = `${data.bouncers || 0} bouncers`;
             document.getElementById('cs-decisions-count').textContent = data.active_decisions || 0;
             document.getElementById('cs-bouncers').textContent = data.bouncers || 0;
+
+            // Card donut: active decisions
+            const decisions = data.active_decisions || 0;
+            document.getElementById('cs-card-donut').innerHTML = createCardDonut(decisions, Math.max(decisions, 100), '#f97316', '👁', 'bans');
 
             // Categories
             if (data.categories && data.categories.length > 0) {
@@ -1309,6 +1352,42 @@
             svg += '<text x="' + cx + '" y="' + (cy - 6) + '" text-anchor="middle" fill="var(--text-dark)" style="font-size:11px;font-weight:700;">' + formatNum(total) + '</text>';
             svg += '<text x="' + cx + '" y="' + (cy + 8) + '" text-anchor="middle" fill="var(--muted-dark)" style="font-size:8px;">packets</text>';
 
+            svg += '</svg>';
+            return svg;
+        }
+
+        // Mini donut for card headers (60x60)
+        function createCardDonut(value, max, color, icon, label) {
+            const size = 60, cx = 30, cy = 30, r = 22;
+            const pct = max > 0 ? Math.min(value / max, 1) : 0;
+            const circ = 2 * Math.PI * r;
+            const dash = Math.max(circ * pct, circ * 0.05); // Min 5% visible arc
+            let svg = '<svg viewBox="0 0 ' + size + ' ' + size + '" width="60" height="60">';
+            // Background circle
+            svg += '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="6"/>';
+            // Progress arc
+            svg += '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="' + color + '" stroke-width="6" stroke-linecap="round" stroke-dasharray="' + dash + ' ' + circ + '" transform="rotate(-90 ' + cx + ' ' + cy + ')" style="filter:drop-shadow(0 0 3px ' + color + ');"/>';
+            // Center icon
+            svg += '<text x="' + cx + '" y="' + (cy + 5) + '" text-anchor="middle" dominant-baseline="middle" style="font-size:16px;">' + icon + '</text>';
+            svg += '</svg>';
+            return svg;
+        }
+
+        // Multi-segment card donut (for health: CPU/Mem/Disk)
+        function createHealthCardDonut(cpu, mem, disk) {
+            const size = 60, cx = 30, cy = 30;
+            const rings = [
+                { r: 24, val: cpu || 0, color: '#ef4444' },
+                { r: 17, val: mem || 0, color: '#f97316' },
+                { r: 10, val: disk || 0, color: '#22c55e' }
+            ];
+            let svg = '<svg viewBox="0 0 ' + size + ' ' + size + '" width="60" height="60">';
+            rings.forEach(function(ring) {
+                const circ = 2 * Math.PI * ring.r;
+                const dash = Math.max(circ * (ring.val / 100), circ * 0.03);
+                svg += '<circle cx="' + cx + '" cy="' + cy + '" r="' + ring.r + '" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="4"/>';
+                svg += '<circle cx="' + cx + '" cy="' + cy + '" r="' + ring.r + '" fill="none" stroke="' + ring.color + '" stroke-width="4" stroke-linecap="round" stroke-dasharray="' + dash + ' ' + circ + '" transform="rotate(-90 ' + cx + ' ' + cy + ')" style="filter:drop-shadow(0 0 2px ' + ring.color + ');"/>';
+            });
             svg += '</svg>';
             return svg;
         }
@@ -1460,6 +1539,13 @@
                 document.getElementById('disk-pct').style.color = getHealthColor(disk);
                 updateMiniHistogram('disk-histogram', disk, '#22c55e');
             }
+
+            // Health card donut (CPU/Mem/Disk concentric)
+            const cpu = data.cpu_percent || 0;
+            const mem = data.memory_percent || 0;
+            const disk = data.disk_percent || 0;
+            document.getElementById('health-card-donut').innerHTML = createHealthCardDonut(cpu, mem, disk);
+
             // Load
             if (data.load_avg) {
                 document.getElementById('cpu-load').textContent = 'Load: ' + data.load_avg[0]?.toFixed(2);
@@ -1490,6 +1576,7 @@
                 document.getElementById('net-info').textContent = 'Unknown';
                 document.getElementById('net-pct').textContent = '-';
                 updateMiniHistogram('net-histogram', 0, '#3b82f6');
+                document.getElementById('net-card-donut').innerHTML = createCardDonut(0, 1, '#6b6b7a', '⚠️', '-');
                 return;
             }
             // Network activity (interfaces up percentage)
@@ -1499,9 +1586,15 @@
             updateMiniHistogram('net-histogram', netPct, '#3b82f6');
 
             document.getElementById('net-info').textContent = data.wan_status || 'Unknown';
-            const pct = data.interfaces_up && data.interfaces ? Math.round((data.interfaces_up / data.interfaces) * 100) : 100;
-            document.getElementById('net-bar').style.width = pct + '%';
-            document.getElementById('net-pct').textContent = pct + '%';
+
+            // Network card donut
+            document.getElementById('net-card-donut').innerHTML = createCardDonut(
+                data.interfaces_up || 0,
+                data.interfaces || 1,
+                data.wan_status === 'connected' ? '#22c55e' : '#ef4444',
+                '🌐',
+                'ifaces'
+            );
         }
 
         function updateTimestamp() {
