@@ -1,12 +1,17 @@
 """secubox-crowdsec — decisions router"""
 from fastapi import APIRouter, Depends, Query
 import httpx
+import time
 from secubox_core.auth   import require_jwt
 from secubox_core.config import get_config
 from secubox_core.logger import get_logger
 
 router = APIRouter()
 log    = get_logger("crowdsec")
+
+# Simple cache to avoid hammering LAPI
+_cache = {"data": [], "total": 0, "ts": 0}
+CACHE_TTL = 60  # seconds
 
 
 def _headers():
@@ -16,25 +21,50 @@ def _base():
     return get_config("crowdsec").get("lapi_url", "http://127.0.0.1:8080")
 
 
-@router.get("/decisions")
-async def decisions(
-    limit: int  = Query(1000, ge=1, le=10000),
-    scope: str  = Query("Ip"),
-    type_: str  = Query("ban", alias="type"),
-):
-    """Get decisions for dashboard (public). Returns total count."""
+async def _fetch_decisions_cached():
+    """Fetch and cache unique decisions (local only, not CAPI)."""
+    global _cache
+    now = time.time()
+
+    if now - _cache["ts"] < CACHE_TTL and _cache["data"]:
+        return _cache["data"], _cache["total"]
+
     try:
         async with httpx.AsyncClient(timeout=10) as c:
-            # Get total count first (unlimited)
-            r_count = await c.get(f"{_base()}/v1/decisions",
+            # Fetch local decisions only (limit 500 for performance)
+            r = await c.get(f"{_base()}/v1/decisions",
                             headers=_headers(),
-                            params={"limit": 10000, "scope": scope, "type": type_})
-            all_data = r_count.json() or []
-            total = len(all_data) if isinstance(all_data, list) else 0
+                            params={"limit": 500, "scope": "Ip", "type": "ban"})
+            all_data = r.json() or []
+            if not isinstance(all_data, list):
+                all_data = []
 
-            # Return paginated results with total
-            data = all_data[:limit] if isinstance(all_data, list) else []
-            return {"decisions": data, "total": total}
+            # Deduplicate by value (IP)
+            seen = set()
+            unique = []
+            for d in all_data:
+                val = d.get("value")
+                if val and val not in seen:
+                    seen.add(val)
+                    unique.append(d)
+
+            _cache["data"] = unique
+            _cache["total"] = len(unique)
+            _cache["ts"] = now
+            return unique, len(unique)
+    except Exception as e:
+        log.warning("decisions fetch: %s", e)
+        return _cache["data"], _cache["total"]
+
+
+@router.get("/decisions")
+async def decisions(
+    limit: int  = Query(200, ge=1, le=500),
+):
+    """Get unique active decisions for dashboard (public). Cached 60s."""
+    try:
+        data, total = await _fetch_decisions_cached()
+        return {"decisions": data[:limit], "total": total}
     except Exception as e:
         log.warning("decisions: %s", e)
         return {"decisions": [], "total": 0}
