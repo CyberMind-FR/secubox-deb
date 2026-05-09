@@ -1,6 +1,12 @@
 #!/bin/bash
 # SecuBox Route Sync - Ensures HAProxy vhosts are synced to mitmproxy routes
 # Run periodically via cron or systemd timer
+#
+# Features:
+# - Syncs HAProxy domains to mitmproxy routes
+# - Syncs metablogizer domains from nginx config
+# - Fixes dead container routes (10.100.0.10-50) to point to webui
+# - Runs via systemd timer every 5 minutes
 
 set -euo pipefail
 
@@ -12,6 +18,9 @@ NGINX_METABLOG="/etc/nginx/sites-enabled/metablogizer"
 WEBUI_PORT=9080
 METABLOG_PORT=8900
 BACKEND_IP="10.100.0.1"
+
+# Dead container IPs to fix (not running LXC containers)
+DEAD_CONTAINER_IPS="10.100.0.10 10.100.0.20 10.100.0.30 10.100.0.40 10.100.0.50"
 
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
@@ -49,6 +58,28 @@ get_port_for_domain() {
     echo "$WEBUI_PORT"
 }
 
+# Fix routes pointing to dead containers
+fix_dead_container_routes() {
+    local routes_json="$1"
+    local fixed=0
+
+    for dead_ip in $DEAD_CONTAINER_IPS; do
+        # Find domains pointing to this dead IP and fix them
+        local domains
+        domains=$(echo "$routes_json" | jq -r --arg ip "$dead_ip" 'to_entries[] | select(.value[0] == $ip) | .key')
+
+        for domain in $domains; do
+            [[ -z "$domain" ]] && continue
+            log "Fixing dead route: $domain ($dead_ip -> $BACKEND_IP:$WEBUI_PORT)"
+            routes_json=$(echo "$routes_json" | jq --arg d "$domain" --arg ip "$BACKEND_IP" --argjson p "$WEBUI_PORT" '.[$d] = [$ip, $p]')
+            fixed=$((fixed + 1))
+        done
+    done
+
+    echo "$routes_json"
+    return $fixed
+}
+
 # Main sync
 main() {
     log "Starting route sync..."
@@ -58,6 +89,10 @@ main() {
 
     local updated=0
     local routes_json="$current_routes"
+
+    # Fix dead container routes first
+    routes_json=$(fix_dead_container_routes "$routes_json")
+    updated=$((updated + $?)) || true
 
     # Sync HAProxy domains
     while IFS= read -r domain; do
