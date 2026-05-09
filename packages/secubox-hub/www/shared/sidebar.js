@@ -23,7 +23,7 @@
 (function() {
     const MENU_API = '/api/v1/hub/public/menu';
     const BATCH_HEALTH_API = '/api/v1/hub/public/health-batch';
-    const VERSION = 'v2.36.0';
+    const VERSION = 'v2.37.0';
 
     // Resilience settings
     const HEARTBEAT_INTERVAL = 15000;  // 15s - check sidebar health
@@ -789,7 +789,15 @@
             '<div class="popup-sparkline">' + sparkline + '</div>' +
             '<div class="popup-desc">' + info.desc + '</div>';
 
-        // Position popup below the element, centered
+        // On mobile, CSS handles positioning (bottom sheet style)
+        if (window.innerWidth <= 768) {
+            popup.style.left = '';
+            popup.style.top = '';
+            popup.style.display = 'block';
+            return;
+        }
+
+        // Desktop: Position popup below the element, centered
         var rect = el.getBoundingClientRect();
         var popupWidth = 180;  // Match CSS min-width
         var popupLeft = rect.left + (rect.width / 2) - (popupWidth / 2);
@@ -910,7 +918,15 @@
 
         tooltip.innerHTML = content;
 
-        // Position tooltip - check if inside sidebar (left < 220px)
+        // On mobile, CSS handles positioning (centered at bottom)
+        if (window.innerWidth <= 768) {
+            tooltip.style.left = '';
+            tooltip.style.top = '';
+            tooltip.style.display = 'block';
+            return;
+        }
+
+        // Desktop: Position tooltip - check if inside sidebar (left < 220px)
         var rect = el.getBoundingClientRect();
         var tooltipLeft = rect.left;
 
