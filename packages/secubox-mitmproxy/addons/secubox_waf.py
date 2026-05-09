@@ -23,7 +23,9 @@ from mitmproxy import http, ctx
 ROUTES_FILE = Path("/srv/mitmproxy/haproxy-routes.json")
 RULES_FILE = Path("/srv/mitmproxy/waf-rules.json")
 THREATS_LOG = Path("/srv/mitmproxy/logs/waf-threats.log")
+STATS_FILE = Path("/srv/mitmproxy/logs/waf-stats.json")
 WHITELIST = {"127.0.0.1", "192.168.255.1"}
+STATS_SAVE_INTERVAL = 100  # Save stats every N requests
 
 # Graduated response thresholds
 BAN_THRESHOLD = 3  # Number of threats before ban
@@ -506,6 +508,19 @@ class SecuBoxWAF:
         self.load_rules()
         THREATS_LOG.parent.mkdir(parents=True, exist_ok=True)
     
+    def save_stats(self):
+        """Save stats to file for external access."""
+        try:
+            stats_data = {
+                **self.stats,
+                "passed": self.stats["requests"] - self.stats["blocked"] - self.stats["warnings"],
+                "updated_at": datetime.now().isoformat(),
+                "routes_count": len(self.routes)
+            }
+            STATS_FILE.write_text(json.dumps(stats_data, indent=2))
+        except Exception as e:
+            ctx.log.warn(f"Failed to save stats: {e}")
+
     def load_routes(self):
         if ROUTES_FILE.exists():
             try:
@@ -547,7 +562,17 @@ class SecuBoxWAF:
     
     def check_request(self, flow: http.HTTPFlow) -> dict | None:
         """Check request against WAF rules."""
-        raw_query = flow.request.query.to_dict() if flow.request.query else {}
+        # Skip trusted internal services
+        host = flow.request.pretty_host
+        if host in ("git.gk2.secubox.in", "git.secubox.in", "10.100.0.1:9080", "admin.gk2.secubox.in"):
+            return None
+        # Fast path: skip static assets and health checks (no WAF check needed)
+        path_lower = flow.request.path.lower()
+        if any(path_lower.endswith(ext) for ext in (".js", ".css", ".png", ".jpg", ".jpeg", ".gif", ".ico", ".svg", ".woff", ".woff2", ".ttf", ".eot", ".map")):
+            return None
+        if "/health" in path_lower or "/status" in path_lower or "system_health" in path_lower:
+            return None
+        raw_query = dict(flow.request.query) if flow.request.query else {}
         query_str = " ".join(f"{k}={v}" for k, v in raw_query.items())
         
         path = urllib.parse.unquote_plus(flow.request.path)
@@ -615,6 +640,9 @@ class SecuBoxWAF:
     
     def request(self, flow: http.HTTPFlow):
         self.stats["requests"] += 1
+        # Periodically save stats
+        if self.stats["requests"] % STATS_SAVE_INTERVAL == 0:
+            self.save_stats()
         host = flow.request.pretty_host
         client_ip = flow.client_conn.peername[0] if flow.client_conn.peername else "unknown"
         
@@ -622,8 +650,10 @@ class SecuBoxWAF:
         if client_ip in WHITELIST:
             if host in self.routes:
                 backend_ip, backend_port = self.routes[host]
+                original_host = flow.request.headers.get("Host", host)
                 flow.request.host = backend_ip
                 flow.request.port = backend_port
+                flow.request.headers["Host"] = original_host
             return
         
         # Check for threats
@@ -660,11 +690,15 @@ class SecuBoxWAF:
                 )
             return
         
-        # Route to backend
+        # Route to backend - preserve original Host header for nginx vhost matching
         if host in self.routes:
             backend_ip, backend_port = self.routes[host]
+            # Store original host for nginx to match server_name
+            original_host = flow.request.headers.get("Host", host)
             flow.request.host = backend_ip
             flow.request.port = backend_port
+            # Restore the original Host header so nginx can match the correct server_name
+            flow.request.headers["Host"] = original_host
     
     def error(self, flow: http.HTTPFlow):
         """Handle connection errors with styled error pages."""
@@ -707,5 +741,10 @@ class SecuBoxWAF:
     def response(self, flow: http.HTTPFlow):
         if flow.response:
             flow.response.headers["X-SecuBox-WAF"] = "inspected"
+
+    def done(self):
+        """Called when mitmproxy shuts down - save final stats."""
+        self.save_stats()
+        ctx.log.info(f"WAF shutdown - stats: {self.stats}")
 
 addons = [SecuBoxWAF()]

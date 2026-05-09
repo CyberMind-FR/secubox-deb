@@ -4,6 +4,51 @@
 ---
 ## 2026-05-09
 
+### Session 141 — WAF Optimization, Route Fixes, Export Package
+
+**Problem:** Mitmproxy CPU at 90%+ constant, many sites returning 502/503.
+
+**Root Causes:**
+1. WAF regex checks running on every request (including static assets)
+2. Dead container routes (10.100.0.10-50) causing connection timeouts
+3. `MultiDictView.to_dict()` AttributeError on every request
+
+**Fixes:**
+
+1. **WAF Optimizations (secubox_waf.py)**
+   - Skip WAF checks for static assets (.js, .css, .png, etc.)
+   - Skip WAF checks for /health, /status, /system_health endpoints
+   - Skip WAF checks for trusted hosts (git, admin, internal API)
+   - Fixed `to_dict()` → `dict()` for MultiDictView
+   - Result: CPU dropped from 90%+ to 0% idle, 25-90% under load
+
+2. **Route Sync Script (sync-mitmproxy-routes.sh)**
+   - Added dead container detection and auto-fix
+   - Routes to dead IPs (10.100.0.10-50) → webui (9080)
+   - Fixed bash arithmetic for `set -e` compatibility
+
+3. **Metablogizer Export Package Enhanced**
+   - Full export ZIP with: content/, config/, certs/, README.md
+   - nginx.conf, haproxy.cfg generated configs
+   - Complete republishing instructions
+
+4. **Users Module**
+   - REVOKE ALL sessions panic button
+   - Emergency session revocation endpoint
+
+**Files Updated:**
+- `scripts/sync-mitmproxy-routes.sh` - Dead container auto-fix
+- `packages/secubox-waf/mitmproxy/secubox_waf.py` - Optimizations
+- `packages/secubox-mitmproxy/addons/secubox_waf.py` - Optimizations
+- `packages/secubox-metablogizer/api/main.py` - Enhanced export
+- `packages/secubox-users/api/main.py` - Revoke all endpoint
+- `packages/secubox-users/www/users/index.html` - Panic button
+
+**Systemd:**
+- `sync-mitmproxy-routes.timer` - Every 5 minutes
+
+---
+
 ### Session 140 — Domain Filtering, Error Pages, Mitmproxy Sync
 
 **New Features:**
