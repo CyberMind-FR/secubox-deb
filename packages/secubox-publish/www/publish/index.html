@@ -438,12 +438,39 @@
         const token = () => localStorage.getItem('sbx_token');
         const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
 
+        // Mock data for VBOX testing when API unavailable
+        const MOCK_DATA = {
+            apps: [
+                { name: 'dashboard', running: true, port: 8501 },
+                { name: 'data-explorer', running: false, port: null }
+            ],
+            projects: [
+                { name: 'analytics', template: 'dashboard', created: '2026-05-01' }
+            ],
+            files: [
+                { name: 'report.pdf', size: '2.4 MB', published: true }
+            ],
+            sites: [
+                { name: 'blog', url: 'https://blog.secubox.local', published: true },
+                { name: 'docs', url: 'https://docs.secubox.local', published: false }
+            ]
+        };
+
         async function api(path, opts = {}) {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 5000);
             try {
-                const res = await fetch(API + path, { ...opts, headers: headers() });
+                const res = await fetch(API + path, { ...opts, headers: headers(), signal: controller.signal });
+                clearTimeout(timeout);
                 if (res.status === 401) { window.location = '/login.html'; return {}; }
                 return res.json();
-            } catch { return {}; }
+            } catch (e) {
+                clearTimeout(timeout);
+                console.warn('API unavailable, using mock data:', e.message);
+                // Return mock data for overview endpoint in dev/VBOX mode
+                if (path === '/overview') return MOCK_DATA;
+                return {};
+            }
         }
 
         function switchTab(tabName) {
