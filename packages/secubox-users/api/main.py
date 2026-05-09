@@ -26,7 +26,7 @@ except ImportError:
 app = FastAPI(
     title="SecuBox Users API",
     description="Unified Identity Management with RBAC",
-    version="1.2.0",
+    version="1.3.0",
     docs_url="/docs",
     redoc_url=None
 )
@@ -918,32 +918,25 @@ async def import_users(file: UploadFile = File(...)):
 # Active Sessions
 # ══════════════════════════════════════════════════════════════════
 
-SESSIONS_FILE = "/var/cache/secubox/sessions/active.json"
+SESSIONS_FILE = "/var/lib/secubox/auth/sessions.json"
 
 @app.get("/sessions", dependencies=[Depends(require_jwt)])
 async def get_sessions():
     """Get active user sessions from auth module."""
     sessions = []
+    now = int(datetime.now().timestamp())
 
-    # Try to get sessions from auth module cache
+    # Read sessions from auth module file
     if os.path.exists(SESSIONS_FILE):
         try:
             data = json.loads(Path(SESSIONS_FILE).read_text())
-            sessions = data.get("sessions", [])
-        except Exception:
-            pass
-
-    # Fallback: try to get from auth API
-    if not sessions:
-        try:
-            result = subprocess.run(
-                ["curl", "-s", "--unix-socket", "/run/secubox/auth.sock",
-                 "http://localhost/sessions"],
-                capture_output=True, text=True, timeout=5
-            )
-            if result.returncode == 0:
-                data = json.loads(result.stdout)
+            # Handle both array and object with "sessions" key
+            if isinstance(data, list):
+                sessions = data
+            else:
                 sessions = data.get("sessions", [])
+            # Filter out expired sessions
+            sessions = [s for s in sessions if s.get("expires", 0) > now]
         except Exception:
             pass
 
@@ -955,14 +948,21 @@ async def get_sessions():
     for s in sessions:
         username = s.get("username", s.get("sub", "unknown"))
         user_info = user_map.get(username, {})
+        # Handle different timestamp formats
+        created = s.get("created", s.get("created_at", s.get("iat", "")))
+        expires = s.get("expires", s.get("expires_at", s.get("exp", "")))
+        # Convert unix timestamp to ISO if needed
+        if isinstance(expires, int):
+            expires = datetime.fromtimestamp(expires).isoformat()
         enriched.append({
             "id": s.get("id", s.get("jti", "")),
             "username": username,
             "email": user_info.get("email", ""),
             "ip": s.get("ip", s.get("client_ip", "unknown")),
-            "user_agent": s.get("user_agent", "")[:50],
-            "created_at": s.get("created_at", s.get("iat", "")),
-            "expires_at": s.get("expires_at", s.get("exp", "")),
+            "user_agent": (s.get("user_agent", "") or "")[:50],
+            "type": s.get("type", "jwt"),
+            "created_at": created,
+            "expires_at": expires,
             "last_active": s.get("last_active", ""),
             "current": s.get("current", False),
         })
