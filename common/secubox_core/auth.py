@@ -9,7 +9,7 @@ from __future__ import annotations
 import os, time
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 from pydantic import BaseModel
@@ -123,16 +123,32 @@ def _check_password(username: str, password: str) -> bool:
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(req: LoginRequest):
+async def login(req: LoginRequest, request: Request):
     """Endpoint de login — retourne un JWT."""
+    # Extract client info for session tracking
+    client_ip = request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+    if not client_ip:
+        client_ip = request.headers.get("X-Real-IP", "")
+    if not client_ip and request.client:
+        client_ip = request.client.host
+    user_agent = request.headers.get("User-Agent", "")
+
     if not _check_password(req.username, req.password):
-        log.warning("Échec login: %s", req.username)
-        _emit_session_event("login_failed", req.username, {"reason": "invalid_credentials"})
+        log.warning("Échec login: %s from %s", req.username, client_ip)
+        _emit_session_event("login_failed", req.username, {
+            "reason": "invalid_credentials",
+            "ip": client_ip,
+            "user_agent": user_agent[:100] if user_agent else ""
+        })
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Identifiants incorrects",
         )
     token = create_token(req.username)
-    log.info("Login OK: %s", req.username)
-    _emit_session_event("login_success", req.username, {"expires_in": 86400})
+    log.info("Login OK: %s from %s", req.username, client_ip)
+    _emit_session_event("login_success", req.username, {
+        "expires_in": 86400,
+        "ip": client_ip,
+        "user_agent": user_agent[:100] if user_agent else ""
+    })
     return TokenResponse(access_token=token)
