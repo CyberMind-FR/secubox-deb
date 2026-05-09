@@ -222,59 +222,93 @@
             align-items: center;
             flex-direction: column;
         }
-        /* Geomap */
-        .geomap {
-            position: relative;
-            width: 100%;
-            height: 220px;
-            background: #000a0f;
+        /* Olympic Rings Style Geomap */
+        .olympic-rings-container {
+            background: linear-gradient(180deg, #000a0f 0%, #0a1520 100%);
             border-radius: var(--radius-md);
-            overflow: hidden;
-            cursor: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="12" fill="none" stroke="%2300ff41" stroke-width="1.5"/><circle cx="16" cy="16" r="6" fill="none" stroke="%2300ff41" stroke-width="1"/><line x1="16" y1="0" x2="16" y2="10" stroke="%2300ff41" stroke-width="2"/><line x1="16" y1="22" x2="16" y2="32" stroke="%2300ff41" stroke-width="2"/><line x1="0" y1="16" x2="10" y2="16" stroke="%2300ff41" stroke-width="2"/><line x1="22" y1="16" x2="32" y2="16" stroke="%2300ff41" stroke-width="2"/><circle cx="16" cy="16" r="2" fill="%2300ff41"/></svg>') 16 16, crosshair;
+            padding: var(--space-l);
+            min-height: 200px;
         }
-        .geomap-bg {
-            position: absolute;
-            top: 0; left: 0;
-            width: 300%;
-            height: 100%;
-            background-image: url('/waf/wargames-earth.png');
-            background-repeat: no-repeat;
-            background-size: 100% 100%;
-            opacity: 0.8;
-            pointer-events: none;
-            transition: transform 0.3s ease;
+        .rings-row {
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            gap: var(--space-xl);
+            padding: var(--space-m) 0;
         }
-        .geomap-debug {
-            position: absolute;
-            top: 6px;
-            left: 10px;
-            font-size: 9px;
-            color: #00d4ff;
-            font-family: monospace;
-            background: rgba(0,0,0,0.7);
-            padding: 2px 6px;
+        .ring-cylinder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: var(--space-xs);
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .ring-cylinder:hover { transform: scale(1.05); }
+        .ring-inner {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            border: 8px solid;
+            position: relative;
+            box-shadow: 0 0 20px currentColor, inset 0 0 15px rgba(0,0,0,0.5);
+            animation: ringPulse 3s infinite;
+        }
+        .ring-cylinder.europe .ring-inner { border-color: #0085C7; color: #0085C7; }
+        .ring-cylinder.asia .ring-inner { border-color: #F4C300; color: #F4C300; }
+        .ring-cylinder.africa .ring-inner { border-color: #333333; color: #666666; box-shadow: 0 0 20px #666, inset 0 0 15px rgba(0,0,0,0.5); }
+        .ring-cylinder.oceania .ring-inner { border-color: #009F3D; color: #009F3D; }
+        .ring-cylinder.americas .ring-inner { border-color: #DF0024; color: #DF0024; }
+        @keyframes ringPulse {
+            0%, 100% { box-shadow: 0 0 15px currentColor, inset 0 0 15px rgba(0,0,0,0.5); }
+            50% { box-shadow: 0 0 30px currentColor, inset 0 0 15px rgba(0,0,0,0.3); }
+        }
+        .ring-label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-dark);
+        }
+        .ring-count {
+            font-family: var(--font-mono);
+            font-size: 1.4rem;
+            font-weight: 700;
+        }
+        .ring-cylinder.europe .ring-count { color: #0085C7; }
+        .ring-cylinder.asia .ring-count { color: #F4C300; }
+        .ring-cylinder.africa .ring-count { color: #888; }
+        .ring-cylinder.oceania .ring-count { color: #009F3D; }
+        .ring-cylinder.americas .ring-count { color: #DF0024; }
+        .ring-bar {
+            width: 60px;
+            height: 8px;
+            background: rgba(255,255,255,0.1);
             border-radius: 4px;
-            z-index: 100;
+            overflow: hidden;
         }
-        .geomap-legend {
-            position: absolute;
-            bottom: 6px;
-            right: 10px;
-            font-size: 10px;
-            color: #ff4466;
-            font-family: monospace;
-            text-shadow: 0 0 6px #ff4466;
+        .ring-fill {
+            height: 100%;
+            width: 0%;
+            transition: width 0.5s ease-out;
+            border-radius: 4px;
         }
-        .geomap-title {
-            position: absolute;
-            bottom: 6px;
-            left: 10px;
-            font-size: 10px;
-            color: #00ff88;
-            font-family: monospace;
-            text-shadow: 0 0 6px #00ff41;
-            letter-spacing: 2px;
+        .ring-cylinder.europe .ring-fill { background: linear-gradient(90deg, #0085C7, #00a8ff); }
+        .ring-cylinder.asia .ring-fill { background: linear-gradient(90deg, #F4C300, #ffdd44); }
+        .ring-cylinder.africa .ring-fill { background: linear-gradient(90deg, #333, #666); }
+        .ring-cylinder.oceania .ring-fill { background: linear-gradient(90deg, #009F3D, #00cc55); }
+        .ring-cylinder.americas .ring-fill { background: linear-gradient(90deg, #DF0024, #ff3355); }
+        .rings-legend {
+            display: flex;
+            justify-content: center;
+            gap: var(--space-m);
+            margin-top: var(--space-m);
+            font-size: 0.75rem;
+            color: var(--muted-dark);
         }
+        .legend-item.europe { color: #0085C7; }
+        .legend-item.asia { color: #F4C300; }
+        .legend-item.africa { color: #888; }
+        .legend-item.oceania { color: #009F3D; }
+        .legend-item.americas { color: #DF0024; }
         /* Button */
         .btn {
             padding: var(--space-xs) var(--space-m);
@@ -369,27 +403,49 @@
             </div>
         </div>
 
-        <!-- Geomap -->
+        <!-- Olympic Rings Geomap - Threat Origins by Continent -->
         <div class="glass-card">
-            <h2>🌍 Attack Origins - Global Threat Map</h2>
-            <div class="geomap" id="geomap">
-                <div class="geomap-bg" id="geomapBg"></div>
-                <div id="geomarkers" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;"></div>
-                <!-- Center target crosshair -->
-                <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:50;">
-                    <svg width="36" height="36" viewBox="0 0 40 40">
-                        <circle cx="20" cy="20" r="15" fill="none" stroke="#00ff41" stroke-width="1" opacity="0.6"/>
-                        <circle cx="20" cy="20" r="8" fill="none" stroke="#00ff41" stroke-width="1" opacity="0.8"/>
-                        <line x1="20" y1="2" x2="20" y2="12" stroke="#00ff41" stroke-width="1.5"/>
-                        <line x1="20" y1="28" x2="20" y2="38" stroke="#00ff41" stroke-width="1.5"/>
-                        <line x1="2" y1="20" x2="12" y2="20" stroke="#00ff41" stroke-width="1.5"/>
-                        <line x1="28" y1="20" x2="38" y2="20" stroke="#00ff41" stroke-width="1.5"/>
-                        <circle cx="20" cy="20" r="2" fill="#00ff41"/>
-                    </svg>
+            <h2>🌍 Attack Origins - Olympic Rings</h2>
+            <div class="olympic-rings-container" id="olympicRings">
+                <div class="rings-row">
+                    <div class="ring-cylinder europe" id="ringEurope" title="Europe">
+                        <div class="ring-inner"></div>
+                        <div class="ring-label">🇪🇺 EU</div>
+                        <div class="ring-count" id="countEurope">0</div>
+                        <div class="ring-bar"><div class="ring-fill" id="fillEurope"></div></div>
+                    </div>
+                    <div class="ring-cylinder asia" id="ringAsia" title="Asia">
+                        <div class="ring-inner"></div>
+                        <div class="ring-label">🌏 AS</div>
+                        <div class="ring-count" id="countAsia">0</div>
+                        <div class="ring-bar"><div class="ring-fill" id="fillAsia"></div></div>
+                    </div>
+                    <div class="ring-cylinder africa" id="ringAfrica" title="Africa">
+                        <div class="ring-inner"></div>
+                        <div class="ring-label">🌍 AF</div>
+                        <div class="ring-count" id="countAfrica">0</div>
+                        <div class="ring-bar"><div class="ring-fill" id="fillAfrica"></div></div>
+                    </div>
+                    <div class="ring-cylinder oceania" id="ringOceania" title="Oceania">
+                        <div class="ring-inner"></div>
+                        <div class="ring-label">🌊 OC</div>
+                        <div class="ring-count" id="countOceania">0</div>
+                        <div class="ring-bar"><div class="ring-fill" id="fillOceania"></div></div>
+                    </div>
+                    <div class="ring-cylinder americas" id="ringAmericas" title="Americas">
+                        <div class="ring-inner"></div>
+                        <div class="ring-label">🌎 AM</div>
+                        <div class="ring-count" id="countAmericas">0</div>
+                        <div class="ring-bar"><div class="ring-fill" id="fillAmericas"></div></div>
+                    </div>
                 </div>
-                <div class="geomap-debug" id="geomapDebug">Click to center | Offset: -100%</div>
-                <div class="geomap-title">GLOBAL THREAT MONITOR</div>
-                <div class="geomap-legend" id="geoLegend"></div>
+                <div class="rings-legend">
+                    <span class="legend-item europe">● Europe</span>
+                    <span class="legend-item asia">● Asia</span>
+                    <span class="legend-item africa">● Africa</span>
+                    <span class="legend-item oceania">● Oceania</span>
+                    <span class="legend-item americas">● Americas</span>
+                </div>
             </div>
         </div>
     </main>
@@ -411,35 +467,49 @@
         const CAT_COLORS = ['#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#f43f5e', '#0ea5e9', '#14b8a6'];
         const ARC_COLORS = ['#ff0044', '#ff4400', '#ff8800', '#ffcc00', '#88ff00', '#00ff44', '#00ffcc', '#0088ff', '#4400ff', '#cc00ff'];
 
-        // Click to center map on click position
-        let WAF_GEOMAP_OFFSET = {x: -100, y: 0};
-        let WAF_GEOMAP_TARGET = {x: 50, y: 50};
-        (function() {
-            document.addEventListener('DOMContentLoaded', () => {
-                const bg = document.getElementById('geomapBg');
-                const geomap = document.getElementById('geomap');
-                const debug = document.getElementById('geomapDebug');
-                if (!bg || !geomap || !debug) return;
+        // Country to Continent mapping
+        const COUNTRY_CONTINENT = {
+            // Europe (Blue Ring)
+            'FR': 'europe', 'DE': 'europe', 'GB': 'europe', 'IT': 'europe', 'ES': 'europe',
+            'NL': 'europe', 'BE': 'europe', 'PL': 'europe', 'SE': 'europe', 'NO': 'europe',
+            'FI': 'europe', 'DK': 'europe', 'AT': 'europe', 'CH': 'europe', 'PT': 'europe',
+            'IE': 'europe', 'CZ': 'europe', 'RO': 'europe', 'HU': 'europe', 'GR': 'europe',
+            'UA': 'europe', 'RU': 'europe', 'BY': 'europe', 'SK': 'europe', 'BG': 'europe',
+            // Asia (Yellow Ring)
+            'CN': 'asia', 'JP': 'asia', 'KR': 'asia', 'IN': 'asia', 'ID': 'asia',
+            'TH': 'asia', 'VN': 'asia', 'PH': 'asia', 'MY': 'asia', 'SG': 'asia',
+            'TW': 'asia', 'HK': 'asia', 'PK': 'asia', 'BD': 'asia', 'IR': 'asia',
+            'TR': 'asia', 'SA': 'asia', 'AE': 'asia', 'IL': 'asia', 'KZ': 'asia',
+            // Africa (Black Ring)
+            'ZA': 'africa', 'EG': 'africa', 'NG': 'africa', 'KE': 'africa', 'MA': 'africa',
+            'DZ': 'africa', 'TN': 'africa', 'GH': 'africa', 'ET': 'africa', 'TZ': 'africa',
+            // Oceania (Green Ring)
+            'AU': 'oceania', 'NZ': 'oceania', 'FJ': 'oceania', 'PG': 'oceania',
+            // Americas (Red Ring)
+            'US': 'americas', 'CA': 'americas', 'MX': 'americas', 'BR': 'americas',
+            'AR': 'americas', 'CL': 'americas', 'CO': 'americas', 'PE': 'americas',
+            'VE': 'americas', 'EC': 'americas', 'CU': 'americas', 'PR': 'americas'
+        };
 
-                function updateMap() {
-                    bg.style.transform = `translateX(${WAF_GEOMAP_OFFSET.x}%)`;
-                    debug.textContent = `Center: ${WAF_GEOMAP_TARGET.x.toFixed(0)}%,${WAF_GEOMAP_TARGET.y.toFixed(0)}%  |  Offset: ${WAF_GEOMAP_OFFSET.x.toFixed(0)}%`;
-                }
-                updateMap();
+        function getContinent(countryCode) {
+            return COUNTRY_CONTINENT[countryCode?.toUpperCase()] || 'americas';
+        }
 
-                // Click to center map on that point
-                geomap.addEventListener('click', (e) => {
-                    const rect = geomap.getBoundingClientRect();
-                    const clickX = (e.clientX - rect.left) / rect.width * 100;
-                    const shift = clickX - 50;
-                    WAF_GEOMAP_OFFSET.x -= shift;
-                    WAF_GEOMAP_OFFSET.x = Math.max(-200, Math.min(0, WAF_GEOMAP_OFFSET.x));
-                    WAF_GEOMAP_TARGET = {x: 50, y: ((e.clientY - rect.top) / rect.height * 100)};
-                    updateMap();
-                    console.log(`[WAF GEOMAP] Centered. Offset: ${WAF_GEOMAP_OFFSET.x}%`);
-                });
+        // Olympic Rings Update
+        function updateOlympicRings(events) {
+            const counts = { europe: 0, asia: 0, africa: 0, oceania: 0, americas: 0 };
+            events.forEach(e => {
+                const continent = getContinent(e.country);
+                counts[continent] = (counts[continent] || 0) + (e.count || 1);
             });
-        })();
+            const maxCount = Math.max(...Object.values(counts), 1);
+            for (const [cont, count] of Object.entries(counts)) {
+                const countEl = document.getElementById('count' + cont.charAt(0).toUpperCase() + cont.slice(1));
+                const fillEl = document.getElementById('fill' + cont.charAt(0).toUpperCase() + cont.slice(1));
+                if (countEl) countEl.textContent = count;
+                if (fillEl) fillEl.style.width = (count / maxCount * 100) + '%';
+            }
+        }
 
         function getCatEmoji(cat) {
             if (!cat) return CAT_EMOJI.default;
@@ -548,6 +618,9 @@
             } else {
                 updateLiveBanner(null);
             }
+
+            // Update Olympic Rings with continent data
+            updateOlympicRings(events);
 
             // Render table
             const tbody = document.getElementById('eventsTable');
