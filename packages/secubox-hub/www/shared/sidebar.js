@@ -23,7 +23,7 @@
 (function() {
     const MENU_API = '/api/v1/hub/public/menu';
     const BATCH_HEALTH_API = '/api/v1/hub/public/health-batch';
-    const VERSION = 'v2.37.0';
+    const VERSION = 'v2.38.0';
 
     // Resilience settings
     const HEARTBEAT_INTERVAL = 15000;  // 15s - check sidebar health
@@ -2069,12 +2069,19 @@
             '.api-status.checking{animation:apiPulse 0.5s infinite;}' +
             '@keyframes apiPulse{0%,100%{opacity:1;}50%{opacity:0.5;}}' +
             // Mobile hamburger and overlay
+            // Mobile hamburger toggle (hidden by default, JS controls visibility)
             '.sidebar-toggle{display:none;position:fixed;top:0.75rem;left:0.75rem;z-index:1002;background:var(--surface-dark,#1a1a2e);border:1px solid var(--border-dark,#333);color:var(--text-primary,#e8e6d9);width:40px;height:40px;font-size:1.4rem;cursor:pointer;align-items:center;justify-content:center;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.3);transition:all 0.2s;}' +
             '.sidebar-toggle:hover{background:var(--surface-hover,#252540);transform:scale(1.05);}' +
             '.sidebar-toggle:active{transform:scale(0.95);}' +
             '.sidebar-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:999;opacity:0;transition:opacity 0.3s;}' +
             '.sidebar-overlay.active{display:block;opacity:1;}' +
-            '@media(max-width:768px){.sidebar-toggle{display:flex;}.sidebar{transform:translateX(-100%);transition:transform 0.3s ease;z-index:1000;}.sidebar.open{transform:translateX(0);}.main,.main-content{margin-left:0!important;}}';
+            // Smart mobile mode (class-based, not just media query)
+            '.mobile-mode .sidebar{transform:translateX(-100%);transition:transform 0.3s ease;z-index:1000;}' +
+            '.mobile-mode .sidebar.open{transform:translateX(0);}' +
+            '.mobile-mode .sidebar.mobile-hidden{transform:translateX(-100%);}' +
+            '.mobile-mode .main,.mobile-mode .main-content{margin-left:0!important;}' +
+            // Fallback media query for initial load before JS runs
+            '@media(max-width:768px){.sidebar:not(.open){transform:translateX(-100%);}.main,.main-content{margin-left:0!important;}}';
 
         document.head.appendChild(s);
     }
@@ -2083,15 +2090,75 @@
     // Mobile Toggle
     // ============================================
 
+    // ============================================
+    // Smart Mobile Detection
+    // ============================================
+
+    var _mobileMode = false;
+    var _mobileInitialized = false;
+
+    function isTouchDevice() {
+        // Check multiple signals for touch capability
+        return (
+            ('ontouchstart' in window) ||
+            (navigator.maxTouchPoints > 0) ||
+            (window.matchMedia && window.matchMedia('(pointer: coarse)').matches)
+        );
+    }
+
+    function isNarrowViewport() {
+        return window.innerWidth <= 768;
+    }
+
+    function shouldUseMobileMode() {
+        // Smart detection: touch device OR narrow viewport
+        return isTouchDevice() || isNarrowViewport();
+    }
+
+    function applyMobileMode(enable) {
+        var sidebar = document.getElementById('sidebar');
+        var toggle = document.getElementById('sidebar-toggle');
+        var overlay = document.getElementById('sidebar-overlay');
+        var body = document.body;
+
+        if (enable) {
+            body.classList.add('mobile-mode');
+            if (toggle) toggle.style.display = 'flex';
+            if (sidebar && !sidebar.classList.contains('open')) {
+                sidebar.classList.add('mobile-hidden');
+            }
+            _mobileMode = true;
+        } else {
+            body.classList.remove('mobile-mode');
+            if (toggle) toggle.style.display = 'none';
+            if (sidebar) {
+                sidebar.classList.remove('mobile-hidden', 'open');
+            }
+            if (overlay) overlay.classList.remove('active');
+            _mobileMode = false;
+        }
+
+        console.log('[Sidebar] Mobile mode:', enable ? 'ON' : 'OFF',
+            '(touch:', isTouchDevice(), ', narrow:', isNarrowViewport(), ')');
+    }
+
+    function checkMobileMode() {
+        var shouldBeMobile = shouldUseMobileMode();
+        if (shouldBeMobile !== _mobileMode) {
+            applyMobileMode(shouldBeMobile);
+        }
+    }
+
     function createMobileToggle() {
         // Don't create if already exists
         if (document.getElementById('sidebar-toggle')) return;
 
-        // Create hamburger button
+        // Create hamburger button (hidden by default, shown via applyMobileMode)
         var toggle = document.createElement('button');
         toggle.id = 'sidebar-toggle';
         toggle.className = 'sidebar-toggle';
         toggle.innerHTML = '☰';
+        toggle.style.display = 'none';
         toggle.setAttribute('aria-label', 'Toggle menu');
         toggle.onclick = function() {
             toggleMobileSidebar();
@@ -2106,6 +2173,22 @@
             closeMobileSidebar();
         };
         document.body.appendChild(overlay);
+
+        // Initial check
+        checkMobileMode();
+
+        // Listen for resize and orientation changes
+        var resizeTimeout;
+        window.addEventListener('resize', function() {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(checkMobileMode, 150);
+        });
+
+        window.addEventListener('orientationchange', function() {
+            setTimeout(checkMobileMode, 300);
+        });
+
+        _mobileInitialized = true;
     }
 
     function toggleMobileSidebar() {
@@ -2118,6 +2201,7 @@
         if (isOpen) {
             closeMobileSidebar();
         } else {
+            sidebar.classList.remove('mobile-hidden');
             sidebar.classList.add('open');
             if (overlay) overlay.classList.add('active');
             if (toggle) toggle.innerHTML = '✕';
@@ -2128,7 +2212,10 @@
         var sidebar = document.getElementById('sidebar');
         var overlay = document.getElementById('sidebar-overlay');
         var toggle = document.getElementById('sidebar-toggle');
-        if (sidebar) sidebar.classList.remove('open');
+        if (sidebar) {
+            sidebar.classList.remove('open');
+            if (_mobileMode) sidebar.classList.add('mobile-hidden');
+        }
         if (overlay) overlay.classList.remove('active');
         if (toggle) toggle.innerHTML = '☰';
     }
@@ -2342,6 +2429,9 @@
         loadPageMetrics: loadPageMetrics,
         toggleMobile: toggleMobileSidebar,
         closeMobile: closeMobileSidebar,
+        isMobileMode: function() { return _mobileMode; },
+        isTouchDevice: isTouchDevice,
+        checkMobileMode: checkMobileMode,
         getAllModules: function() { return ALL_MODULES; },
         forceRefresh: function(mod) {
             if (mod) {
