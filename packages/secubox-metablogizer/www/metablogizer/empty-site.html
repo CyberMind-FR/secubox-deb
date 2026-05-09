@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Empty Site - Need Content!</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Courier New', monospace;
+            background: #0d1117;
+            color: #c9d1d9;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+        .container {
+            max-width: 600px;
+            text-align: center;
+        }
+        .emoji {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            animation: bounce 2s infinite;
+        }
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-20px); }
+        }
+        h1 {
+            font-size: 2rem;
+            color: #f0883e;
+            margin-bottom: 1rem;
+        }
+        .sketch {
+            background: #161b22;
+            border: 2px dashed #30363d;
+            border-radius: 12px;
+            padding: 2rem;
+            margin: 2rem 0;
+            text-align: left;
+        }
+        .sketch pre {
+            font-size: 0.7rem;
+            color: #7ee787;
+            line-height: 1.3;
+        }
+        .message {
+            font-size: 1.1rem;
+            color: #8b949e;
+            margin-bottom: 1.5rem;
+        }
+        .cta {
+            display: inline-block;
+            background: #238636;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 6px;
+            text-decoration: none;
+            margin-top: 1rem;
+        }
+        .cta:hover {
+            background: #2ea043;
+        }
+        .tip {
+            margin-top: 2rem;
+            font-size: 0.85rem;
+            color: #6e7681;
+        }
+        .tip code {
+            background: #161b22;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="emoji">🏗️ 📦 ❓</div>
+        <h1>Oops! This site is empty!</h1>
+        <p class="message">
+            This site exists but has no content yet.<br>
+            It's like a beautiful empty box waiting for treasures!
+        </p>
+
+        <div class="sketch">
+<pre>
+    ╔═══════════════════════════════╗
+    ║                               ║
+    ║    ┌─────────────────────┐    ║
+    ║    │                     │    ║
+    ║    │   📂 <- PUT FILES   │    ║
+    ║    │        HERE         │    ║
+    ║    │                     │    ║
+    ║    └─────────────────────┘    ║
+    ║                               ║
+    ║   Your static site awaits!    ║
+    ╚═══════════════════════════════╝
+</pre>
+        </div>
+
+        <p class="message">
+            Upload your HTML, CSS, and JavaScript files<br>
+            to bring this site to life! 🚀
+        </p>
+
+        <a href="/metablogizer/" class="cta">Go to MetaBlogizer Dashboard</a>
+
+        <p class="tip">
+            <strong>Quick tip:</strong> Upload a <code>.zip</code> or <code>.tar.gz</code> archive
+            containing your static site files.
+        </p>
+    </div>
+</body>
+</html>

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-SecuBox Users API v1.2.0 — Unified Identity Management with RBAC
-Roles, Permissions, and Access Control Lists
+SecuBox Users API v1.3.0 — Unified Identity Management with RBAC
+Roles, Permissions, Access Control Lists, and Active Sessions
 """
 import subprocess
 import json
@@ -915,12 +915,89 @@ async def import_users(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="Invalid JSON file")
 
 # ══════════════════════════════════════════════════════════════════
+# Active Sessions
+# ══════════════════════════════════════════════════════════════════
+
+SESSIONS_FILE = "/var/cache/secubox/sessions/active.json"
+
+@app.get("/sessions", dependencies=[Depends(require_jwt)])
+async def get_sessions():
+    """Get active user sessions from auth module."""
+    sessions = []
+
+    # Try to get sessions from auth module cache
+    if os.path.exists(SESSIONS_FILE):
+        try:
+            data = json.loads(Path(SESSIONS_FILE).read_text())
+            sessions = data.get("sessions", [])
+        except Exception:
+            pass
+
+    # Fallback: try to get from auth API
+    if not sessions:
+        try:
+            result = subprocess.run(
+                ["curl", "-s", "--unix-socket", "/run/secubox/auth.sock",
+                 "http://localhost/sessions"],
+                capture_output=True, text=True, timeout=5
+            )
+            if result.returncode == 0:
+                data = json.loads(result.stdout)
+                sessions = data.get("sessions", [])
+        except Exception:
+            pass
+
+    # Enrich with user info
+    data = load_users()
+    user_map = {u["username"]: u for u in data.get("users", [])}
+
+    enriched = []
+    for s in sessions:
+        username = s.get("username", s.get("sub", "unknown"))
+        user_info = user_map.get(username, {})
+        enriched.append({
+            "id": s.get("id", s.get("jti", "")),
+            "username": username,
+            "email": user_info.get("email", ""),
+            "ip": s.get("ip", s.get("client_ip", "unknown")),
+            "user_agent": s.get("user_agent", "")[:50],
+            "created_at": s.get("created_at", s.get("iat", "")),
+            "expires_at": s.get("expires_at", s.get("exp", "")),
+            "last_active": s.get("last_active", ""),
+            "current": s.get("current", False),
+        })
+
+    return {
+        "sessions": enriched,
+        "total": len(enriched),
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+@app.delete("/session/{session_id}", dependencies=[Depends(require_jwt)])
+async def revoke_session(session_id: str):
+    """Revoke a specific session."""
+    try:
+        result = subprocess.run(
+            ["curl", "-s", "-X", "DELETE", "--unix-socket", "/run/secubox/auth.sock",
+             f"http://localhost/session/{session_id}"],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0:
+            return {"success": True, "session_id": session_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return {"success": False, "error": "Failed to revoke session"}
+
+
+# ══════════════════════════════════════════════════════════════════
 # Health Check
 # ══════════════════════════════════════════════════════════════════
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "service": "secubox-users", "version": "1.2.0"}
+    return {"status": "ok", "service": "secubox-users", "version": "1.3.0"}
 
 if __name__ == "__main__":
     import uvicorn

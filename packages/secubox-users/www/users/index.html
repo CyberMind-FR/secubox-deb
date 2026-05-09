@@ -62,7 +62,7 @@
         .btn.danger { background: rgba(248,81,73,0.15); border-color: var(--red); color: var(--red); }
 
         /* Stats row */
-        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+        .stats-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
         .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
         .stat-card .value { font-size: 2rem; font-weight: bold; color: var(--mauve); }
         .stat-card .label { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; }
@@ -352,6 +352,10 @@
                 <div class="value" id="group-count">0</div>
                 <div class="label">Groups</div>
             </div>
+            <div class="stat-card" style="cursor:pointer" onclick="document.getElementById('sessions-card').scrollIntoView({behavior:'smooth'})">
+                <div class="value" id="session-count">-</div>
+                <div class="label">Active Sessions</div>
+            </div>
         </div>
 
         <div class="card">
@@ -373,6 +377,24 @@
                 </thead>
                 <tbody id="users-list">
                     <tr><td colspan="5" class="empty-state">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card" id="sessions-card">
+            <h2>🔐 Active Sessions</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>User</th>
+                        <th>IP Address</th>
+                        <th>Device</th>
+                        <th>Started</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="sessions-list">
+                    <tr><td colspan="5" class="empty-state">Loading sessions...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -708,10 +730,60 @@
             }
         }
 
+        async function loadSessions() {
+            const data = await api('/sessions');
+            const tbody = document.getElementById('sessions-list');
+            const sessions = data?.sessions || [];
+
+            document.getElementById('session-count').textContent = sessions.length;
+
+            if (!sessions.length) {
+                tbody.innerHTML = `<tr><td colspan="5" class="empty-state">No active sessions</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = sessions.map(s => {
+                const isCurrentBadge = s.current ? '<span class="badge enabled" style="margin-left:0.5rem">current</span>' : '';
+                const started = s.created_at ? new Date(s.created_at).toLocaleString() : '-';
+                const deviceShort = (s.user_agent || 'Unknown').substring(0, 30) + (s.user_agent?.length > 30 ? '...' : '');
+
+                return `
+                <tr>
+                    <td>
+                        <div class="user-info">
+                            <div class="user-avatar">${(s.username || '?')[0].toUpperCase()}</div>
+                            <div>
+                                <div class="name">${s.username}${isCurrentBadge}</div>
+                                <div class="email">${s.email || ''}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td><code style="font-size:0.8rem">${s.ip || 'unknown'}</code></td>
+                    <td style="font-size:0.75rem;color:var(--text-dim)">${deviceShort}</td>
+                    <td style="font-size:0.8rem;color:var(--text-dim)">${started}</td>
+                    <td>
+                        ${s.current ? '' : `<button class="btn-sm delete" onclick="revokeSession('${s.id}')">Revoke</button>`}
+                    </td>
+                </tr>
+            `}).join('');
+        }
+
+        async function revokeSession(sessionId) {
+            if (!confirm('Revoke this session? User will be logged out.')) return;
+            const result = await api(`/session/${encodeURIComponent(sessionId)}`, { method: 'DELETE' });
+            if (result?.success) {
+                showToast('Session revoked');
+                loadSessions();
+            } else {
+                showToast(result?.error || 'Failed to revoke session', 'error');
+            }
+        }
+
         function refresh() {
             loadStatus();
             loadServices();
             loadUsers();
+            loadSessions();
         }
 
         document.addEventListener('DOMContentLoaded', refresh);
