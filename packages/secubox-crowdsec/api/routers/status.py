@@ -27,6 +27,7 @@ STATUS_CACHE_FILE = CACHE_DIR / "status.json"
 METRICS_CACHE_FILE = CACHE_DIR / "metrics.json"
 HUB_CACHE_FILE = CACHE_DIR / "hub.json"
 OVERVIEW_CACHE_FILE = CACHE_DIR / "overview.json"
+LOCK_FILE = Path("/run/secubox/crowdsec-cache.lock")
 
 _status_cache: Dict[str, Any] = {}
 _metrics_cache: Dict[str, Any] = {}
@@ -34,6 +35,7 @@ _hub_cache: Dict[str, Any] = {}
 _overview_cache: Dict[str, Any] = {}
 _cache_lock = asyncio.Lock()
 _refresh_task: Optional[asyncio.Task] = None
+_refresh_running = False  # Guard against concurrent refresh
 
 
 def _lapi() -> tuple:
@@ -224,11 +226,54 @@ def _compute_hub_sync() -> Dict[str, Any]:
         return {"collections": [], "parsers": [], "scenarios": [], "cached_at": time.time()}
 
 
+def _acquire_lock() -> bool:
+    """Try to acquire the lock file. Returns True if acquired."""
+    try:
+        LOCK_FILE.parent.mkdir(parents=True, exist_ok=True)
+        # Check if another process holds the lock
+        if LOCK_FILE.exists():
+            try:
+                pid = int(LOCK_FILE.read_text().strip())
+                # Check if process is still running
+                import os
+                os.kill(pid, 0)  # Signal 0 = check if alive
+                log.warning("Another cache refresh process (%d) is running", pid)
+                return False
+            except (ValueError, ProcessLookupError, OSError):
+                # Stale lock file
+                LOCK_FILE.unlink(missing_ok=True)
+        # Write our PID
+        import os
+        LOCK_FILE.write_text(str(os.getpid()))
+        return True
+    except Exception as e:
+        log.warning("Lock acquisition failed: %s", e)
+        return False
+
+
+def _release_lock():
+    """Release the lock file."""
+    try:
+        LOCK_FILE.unlink(missing_ok=True)
+    except Exception:
+        pass
+
+
 async def _refresh_all_caches():
-    """Background task to refresh all caches every 30s."""
-    global _status_cache, _metrics_cache, _hub_cache, _overview_cache
+    """Background task to refresh all caches every 30s.
+
+    Protected against concurrent execution with lock file.
+    """
+    global _status_cache, _metrics_cache, _hub_cache, _overview_cache, _refresh_running
 
     while True:
+        # Guard against concurrent refresh
+        if _refresh_running:
+            log.debug("Skipping refresh - previous refresh still running")
+            await asyncio.sleep(30)
+            continue
+
+        _refresh_running = True
         try:
             loop = asyncio.get_event_loop()
             with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
@@ -236,8 +281,10 @@ async def _refresh_all_caches():
                 metrics_future = loop.run_in_executor(pool, _compute_metrics_sync)
                 hub_future = loop.run_in_executor(pool, _compute_hub_sync)
 
-                status_data, metrics_data, hub_data = await asyncio.gather(
-                    status_future, metrics_future, hub_future, return_exceptions=True
+                # Add timeout to prevent hanging
+                status_data, metrics_data, hub_data = await asyncio.wait_for(
+                    asyncio.gather(status_future, metrics_future, hub_future, return_exceptions=True),
+                    timeout=25  # Must complete before next cycle
                 )
 
             async with _cache_lock:
@@ -266,8 +313,12 @@ async def _refresh_all_caches():
             except Exception as e:
                 log.debug("Cache file write failed: %s", e)
 
+        except asyncio.TimeoutError:
+            log.warning("Cache refresh timed out - skipping cycle")
         except Exception as e:
             log.error("Cache refresh failed: %s", e)
+        finally:
+            _refresh_running = False
 
         await asyncio.sleep(30)
 
@@ -282,17 +333,36 @@ def _load_cache_from_file(path: Path) -> Dict[str, Any]:
 
 
 async def start_cache_refresh():
+    """Start background cache refresh task.
+
+    Uses lock file to prevent phantom processes on restart.
+    """
     global _refresh_task, _status_cache, _metrics_cache, _hub_cache, _overview_cache
+
+    # Acquire lock first
+    if not _acquire_lock():
+        log.warning("Could not acquire cache lock - using file cache only")
+        # Still load from files for instant responses
+        _status_cache = _load_cache_from_file(STATUS_CACHE_FILE)
+        _metrics_cache = _load_cache_from_file(METRICS_CACHE_FILE)
+        _hub_cache = _load_cache_from_file(HUB_CACHE_FILE)
+        _overview_cache = _load_cache_from_file(OVERVIEW_CACHE_FILE)
+        return
+
+    # Load file caches for instant startup
     _status_cache = _load_cache_from_file(STATUS_CACHE_FILE)
     _metrics_cache = _load_cache_from_file(METRICS_CACHE_FILE)
     _hub_cache = _load_cache_from_file(HUB_CACHE_FILE)
     _overview_cache = _load_cache_from_file(OVERVIEW_CACHE_FILE)
     if _status_cache:
         log.info("Loaded status cache from file")
+
     _refresh_task = asyncio.create_task(_refresh_all_caches())
+    log.info("Cache refresh task started")
 
 
 async def stop_cache_refresh():
+    """Stop background cache refresh and release lock."""
     global _refresh_task
     if _refresh_task:
         _refresh_task.cancel()
@@ -300,6 +370,8 @@ async def stop_cache_refresh():
             await _refresh_task
         except asyncio.CancelledError:
             pass
+    _release_lock()
+    log.info("Cache refresh task stopped")
 
 
 @router.get("/status")
