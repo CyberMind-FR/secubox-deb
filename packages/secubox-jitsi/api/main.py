@@ -36,6 +36,16 @@ app = FastAPI(
     version="1.0.0",
     root_path="/api/v1/jitsi"
 )
+
+# ══════════════════════════════════════════════════════════════════
+# Health Check Endpoint (public, no auth)
+# ══════════════════════════════════════════════════════════════════
+
+@app.get("/health")
+async def health_check():
+    """Public health check endpoint for sidebar status."""
+    return {"status": "ok", "module": "deb"}
+
 if auth_router:
     app.include_router(auth_router, prefix="/auth")
 

@@ -17,6 +17,16 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional
 
 app = FastAPI(title="secubox-auth", version="2.0.0", root_path="/api/v1/auth")
+
+# ══════════════════════════════════════════════════════════════════
+# Health Check Endpoint (public, no auth)
+# ══════════════════════════════════════════════════════════════════
+
+@app.get("/health")
+async def health_check():
+    """Public health check endpoint for sidebar status."""
+    return {"status": "ok", "module": "deb"}
+
 app.include_router(auth_router, prefix="/auth")
 router = APIRouter()
 

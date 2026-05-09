@@ -33,6 +33,16 @@ from secubox_core.kiosk import (
 )
 
 app = FastAPI(title="secubox-portal", version="2.1.0", root_path="/api/v1/portal")
+
+# ══════════════════════════════════════════════════════════════════
+# Health Check Endpoint (public, no auth)
+# ══════════════════════════════════════════════════════════════════
+
+@app.get("/health")
+async def health_check():
+    """Public health check endpoint for sidebar status."""
+    return {"status": "ok", "module": "deb"}
+
 router = APIRouter()
 log = get_logger("portal")
 

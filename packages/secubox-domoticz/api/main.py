@@ -33,6 +33,16 @@ CONTAINER_NAME = "domoticz"
 DEFAULT_PORT = 8080
 
 app = FastAPI(title="secubox-domoticz", version="1.0.0", root_path="/api/v1/domoticz")
+
+# ══════════════════════════════════════════════════════════════════
+# Health Check Endpoint (public, no auth)
+# ══════════════════════════════════════════════════════════════════
+
+@app.get("/health")
+async def health_check():
+    """Public health check endpoint for sidebar status."""
+    return {"status": "ok", "module": "deb"}
+
 app.include_router(auth_router, prefix="/auth")
 router = APIRouter()
 log = get_logger("domoticz")

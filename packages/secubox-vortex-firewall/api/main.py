@@ -224,6 +224,16 @@ def _check_nftables_available() -> bool:
         return False
 
 
+
+# ══════════════════════════════════════════════════════════════════
+# Health Check Endpoint (public, no auth)
+# ══════════════════════════════════════════════════════════════════
+
+@app.get("/health")
+async def health_check():
+    """Public health check endpoint for sidebar status."""
+    return {"status": "ok", "module": "deb"}
+
 @app.get("/status")
 async def status():
     """Public status endpoint."""

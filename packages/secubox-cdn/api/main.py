@@ -18,6 +18,16 @@ from typing import List, Optional, Dict
 from datetime import datetime
 
 app = FastAPI(title="secubox-cdn", version="1.1.0", root_path="/api/v1/cdn")
+
+# ══════════════════════════════════════════════════════════════════
+# Health Check Endpoint (public, no auth)
+# ══════════════════════════════════════════════════════════════════
+
+@app.get("/health")
+async def health_check():
+    """Public health check endpoint for sidebar status."""
+    return {"status": "ok", "module": "deb"}
+
 app.include_router(auth_router, prefix="/auth")
 router = APIRouter()
 log = get_logger("cdn")
