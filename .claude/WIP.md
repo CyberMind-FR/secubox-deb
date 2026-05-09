@@ -1,9 +1,35 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-09 (Session 139)*
+*Mis à jour : 2026-05-09 (Session 140)*
 
 ---
 
-## 🔄 Session 137: Module Screenshots Wiki Multilangue
+## ✅ Session 140: Route Sync + Export Package
+
+### Route Sync Script — FIXED
+- [x] Fixed `((updated++))` bash arithmetic failure in `scripts/sync-mitmproxy-routes.sh`
+- [x] Changed to `updated=$((updated + 1))` for `set -e` compatibility
+- [x] Deployed and tested — 4 routes synced successfully
+- [x] Systemd timer running every 5 minutes
+
+### Metablogizer Export Package — ENHANCED
+- [x] Complete export ZIP with:
+  - `content/` — Site files (HTML, CSS, JS)
+  - `config/site.json` — Site configuration
+  - `config/nginx.conf` — Generated nginx vhost config
+  - `config/haproxy.cfg` — HAProxy routing snippet
+  - `certs/` — SSL certificate + privkey (if available)
+  - `README.md` — Complete republishing instructions
+- [x] Includes Quick Republish (SecuBox) and Manual Republish (Any Server) guides
+- [x] DNS configuration examples
+- [x] Certificate status indicator
+
+### Files Updated
+- `scripts/sync-mitmproxy-routes.sh` — Fixed bash arithmetic
+- `packages/secubox-metablogizer/api/main.py` — Enhanced export endpoint
+
+---
+
+## ✅ Session 137: Module Screenshots Wiki Multilangue
 
 ### Screenshot Capture System — COMPLETE
 - [x] `scripts/capture-screenshots.py` — Auto-discovers 117 modules from packages/

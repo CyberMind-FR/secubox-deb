@@ -991,6 +991,49 @@ async def revoke_session(session_id: str):
     return {"success": False, "error": "Failed to revoke session"}
 
 
+@app.post("/sessions/revoke-all", dependencies=[Depends(require_jwt)])
+async def revoke_all_sessions():
+    """EMERGENCY: Revoke ALL active sessions immediately.
+    This is a panic button - all users will be logged out.
+    """
+    revoked = 0
+    errors = []
+
+    # Clear the sessions file
+    if os.path.exists(SESSIONS_FILE):
+        try:
+            # Read current count for reporting
+            data = json.loads(Path(SESSIONS_FILE).read_text())
+            if isinstance(data, list):
+                revoked = len(data)
+            else:
+                revoked = len(data.get("sessions", []))
+
+            # Write empty sessions
+            Path(SESSIONS_FILE).write_text(json.dumps({"sessions": [], "revoked_at": datetime.now().isoformat()}))
+        except Exception as e:
+            errors.append(f"Failed to clear sessions file: {e}")
+
+    # Also try to notify auth module via socket
+    try:
+        result = subprocess.run(
+            ["curl", "-s", "-X", "POST", "--unix-socket", "/run/secubox/auth.sock",
+             "http://localhost/sessions/revoke-all"],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode != 0:
+            errors.append("Auth module notification failed")
+    except Exception as e:
+        errors.append(f"Auth socket error: {e}")
+
+    return {
+        "success": True,
+        "revoked": revoked,
+        "timestamp": datetime.now().isoformat(),
+        "warnings": errors if errors else None
+    }
+
+
 # ══════════════════════════════════════════════════════════════════
 # Health Check
 # ══════════════════════════════════════════════════════════════════
