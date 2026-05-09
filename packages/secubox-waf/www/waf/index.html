@@ -304,11 +304,45 @@
             font-size: 0.75rem;
             color: var(--muted-dark);
         }
-        .legend-item.europe { color: #0085C7; }
-        .legend-item.asia { color: #F4C300; }
-        .legend-item.africa { color: #888; }
-        .legend-item.oceania { color: #009F3D; }
-        .legend-item.americas { color: #DF0024; }
+        .rings-flags {
+            margin-top: var(--space-m);
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding: var(--space-s);
+            background: rgba(0,0,0,0.3);
+            border-radius: var(--radius-md);
+        }
+        .flags-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 8px;
+            border-radius: var(--radius-sm);
+            min-height: 28px;
+        }
+        .flags-row.europe { border-left: 3px solid #0085C7; }
+        .flags-row.asia { border-left: 3px solid #F4C300; }
+        .flags-row.africa { border-left: 3px solid #666; }
+        .flags-row.oceania { border-left: 3px solid #009F3D; }
+        .flags-row.americas { border-left: 3px solid #DF0024; }
+        .flag-label { font-size: 1.2rem; min-width: 28px; }
+        .flags-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            font-size: 0.9rem;
+        }
+        .flag-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 2px;
+            background: rgba(255,255,255,0.05);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+        }
+        .flag-item .count { color: var(--muted-dark); font-family: var(--font-mono); }
         /* Button */
         .btn {
             padding: var(--space-xs) var(--space-m);
@@ -439,12 +473,12 @@
                         <div class="ring-bar"><div class="ring-fill" id="fillAmericas"></div></div>
                     </div>
                 </div>
-                <div class="rings-legend">
-                    <span class="legend-item europe">● Europe</span>
-                    <span class="legend-item asia">● Asia</span>
-                    <span class="legend-item africa">● Africa</span>
-                    <span class="legend-item oceania">● Oceania</span>
-                    <span class="legend-item americas">● Americas</span>
+                <div class="rings-flags" id="ringsFlags">
+                    <div class="flags-row europe"><span class="flag-label">🇪🇺</span><span id="flagsEurope" class="flags-list"></span></div>
+                    <div class="flags-row asia"><span class="flag-label">🌏</span><span id="flagsAsia" class="flags-list"></span></div>
+                    <div class="flags-row africa"><span class="flag-label">🌍</span><span id="flagsAfrica" class="flags-list"></span></div>
+                    <div class="flags-row oceania"><span class="flag-label">🌊</span><span id="flagsOceania" class="flags-list"></span></div>
+                    <div class="flags-row americas"><span class="flag-label">🌎</span><span id="flagsAmericas" class="flags-list"></span></div>
                 </div>
             </div>
         </div>
@@ -495,19 +529,43 @@
             return COUNTRY_CONTINENT[countryCode?.toUpperCase()] || 'americas';
         }
 
-        // Olympic Rings Update
+        // Olympic Rings Update with Flags
         function updateOlympicRings(events) {
             const counts = { europe: 0, asia: 0, africa: 0, oceania: 0, americas: 0 };
+            const countryData = { europe: {}, asia: {}, africa: {}, oceania: {}, americas: {} };
+
             events.forEach(e => {
                 const continent = getContinent(e.country);
-                counts[continent] = (counts[continent] || 0) + (e.count || 1);
+                const count = e.count || 1;
+                counts[continent] = (counts[continent] || 0) + count;
+                if (e.country) {
+                    countryData[continent][e.country] = (countryData[continent][e.country] || 0) + count;
+                }
             });
+
             const maxCount = Math.max(...Object.values(counts), 1);
             for (const [cont, count] of Object.entries(counts)) {
-                const countEl = document.getElementById('count' + cont.charAt(0).toUpperCase() + cont.slice(1));
-                const fillEl = document.getElementById('fill' + cont.charAt(0).toUpperCase() + cont.slice(1));
+                const capCont = cont.charAt(0).toUpperCase() + cont.slice(1);
+                const countEl = document.getElementById('count' + capCont);
+                const fillEl = document.getElementById('fill' + capCont);
+                const flagsEl = document.getElementById('flags' + capCont);
+
                 if (countEl) countEl.textContent = count;
                 if (fillEl) fillEl.style.width = (count / maxCount * 100) + '%';
+
+                // Update flags list
+                if (flagsEl) {
+                    const countries = Object.entries(countryData[cont])
+                        .sort((a, b) => b[1] - a[1])
+                        .slice(0, 8);
+                    if (countries.length === 0) {
+                        flagsEl.innerHTML = '<span style="color:var(--muted-dark);font-size:0.7rem;">No attacks</span>';
+                    } else {
+                        flagsEl.innerHTML = countries.map(([cc, cnt]) =>
+                            '<span class="flag-item">' + countryToFlag(cc) + '<span class="count">' + cnt + '</span></span>'
+                        ).join('');
+                    }
+                }
             }
         }
 
