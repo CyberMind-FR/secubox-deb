@@ -3,27 +3,39 @@
 
 ---
 
-## 🔄 Session 134: CrowdSec Bans Limit Fix + Service Stability
+## 🔄 Session 134: CrowdSec Bans Fix + Auth Parser + CPU Optimization
 
-### CrowdSec Decisions API — FIXED
-- [x] **Bans limit increased** from 100 to 1000 default, up to 10000 max
-- [x] **Total count** now returned separately from paginated results
-- [x] **Frontend updated** to fetch 500 bans and display up to 200
-- [x] **"More bans" indicator** when total exceeds display limit
-- [x] GeoIP enrichment limited to first 100 for performance
+### CrowdSec Decisions API — OPTIMIZED
+- [x] **Cache 60s** to avoid hammering LAPI (was causing high CPU)
+- [x] **Deduplication** by IP value (16574 raw → ~400 unique)
+- [x] **Limit 500** decisions per request (performance)
+- [x] **Total count** returned separately from paginated results
+- [x] Frontend displays up to 200 with "X more" indicator
 
-### Service Stability
-- [x] Identified vhost.sock intermittent creation issue
-- [x] Services health check: all 8 core APIs returning 200
+### SecuBox Auth CrowdSec Filter — NEW
+- [x] Parser: `secubox/secubox-auth` detects 401 on login endpoints
+- [x] Scenario: `secubox/secubox-auth-bf` triggers after 5 failures in 30s
+- [x] Uses `evt.Meta.http_path` and `evt.Meta.http_status` (correct fields)
 
-### Files Updated
-- `packages/secubox-crowdsec/api/routers/decisions.py` — Total count, higher limits
-- `packages/secubox-crowdsec/www/crowdsec/index.html` — Display total, show more
+### Auth Session Logging — COMPLETE
+- [x] Login events emit to callback in `secubox_core.auth`
+- [x] `secubox-auth` module records sessions in JSON
+- [x] Fixed `login.html` endpoint URLs
 
-### Live Server (192.168.1.200)
-- Actual bans: **143** (was showing max 100)
-- CrowdSec collections: 6 installed (base, linux, nginx, http-cve, whitelist, vpatch)
-- CPU stabilized at ~43% after log rotation
+### Live Server Stats
+- **407 unique bans** (down from 16574 total with CAPI)
+- **Top attacker**: 13.42.14.127 (AWS UK) - 291 alerts
+- **Load**: Still high (~10) due to Streamlit processes
+
+### Commits
+- `676630ca` fix(crowdsec): Display total bans count
+- `fb5c33ea` feat(auth): Add session event logging
+- `0887b81e` feat(crowdsec): Add SecuBox auth parser and scenario
+
+### ⬜ Next Up (from user requests)
+- [ ] Add active WebUI sessions display to System module
+- [ ] SOC mini histograms with progressive animation
+- [ ] Streamlit sleep/wake optimization (pausing system)
 
 ---
 
