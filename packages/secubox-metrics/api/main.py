@@ -139,28 +139,37 @@ def build_overview() -> dict:
 
     metablog_count = 0
     try:
-        metablog_conf = Path('/etc/secubox/metablogizer.toml')
-        if metablog_conf.exists():
-            content = metablog_conf.read_text()
-            metablog_count = content.count('[site.')
+        # Count actual site directories in /srv/metablogizer/sites/
+        metablog_dir = Path('/srv/metablogizer/sites')
+        if metablog_dir.exists():
+            metablog_count = len([d for d in metablog_dir.iterdir() if d.is_dir() and not d.name.startswith('.')])
     except Exception:
         pass
 
     streamlit_count = 0
     try:
-        streamlit_conf = Path('/etc/secubox/streamlit.toml')
-        if streamlit_conf.exists():
-            content = streamlit_conf.read_text()
-            streamlit_count = content.count('[instance.')
+        # Count running streamlit instances via systemd
+        result = run_cmd(['systemctl', 'list-units', '--type=service', '--state=running', '--plain', '--no-legend'])
+        if result:
+            streamlit_count = sum(1 for line in result.split('\n') if 'streamlit' in line.lower())
+        # Fallback: count config entries
+        if streamlit_count == 0:
+            streamlit_conf = Path('/etc/secubox/streamlit.toml')
+            if streamlit_conf.exists():
+                content = streamlit_conf.read_text()
+                streamlit_count = content.count('[instance.')
     except Exception:
         pass
 
     cert_count = 0
     try:
-        cert_dirs = [Path('/etc/letsencrypt/live'), Path('/srv/haproxy/certs')]
+        # Count certificates in HAProxy certs directory and Let's Encrypt
+        cert_dirs = [Path('/data/haproxy/certs'), Path('/srv/haproxy/certs'), Path('/etc/letsencrypt/live')]
         for cert_dir in cert_dirs:
             if cert_dir.exists():
-                cert_count += len(list(cert_dir.glob('*.pem'))) + len(list(cert_dir.glob('*/')))
+                # Count .pem files and subdirectories (for Let's Encrypt)
+                cert_count += len([f for f in cert_dir.glob('*.pem') if f.is_file()])
+                cert_count += len([d for d in cert_dir.iterdir() if d.is_dir() and not d.name.startswith('.')])
     except Exception:
         pass
 

@@ -23,7 +23,7 @@
 (function() {
     const MENU_API = '/api/v1/hub/public/menu';
     const BATCH_HEALTH_API = '/api/v1/hub/public/health-batch';
-    const VERSION = 'v2.33.1';
+    const VERSION = 'v2.35.0';
 
     // Resilience settings
     const HEARTBEAT_INTERVAL = 15000;  // 15s - check sidebar health
@@ -40,6 +40,12 @@
         try {
             var cached = localStorage.getItem(MENU_CACHE_KEY);
             if (cached) {
+                // Safety check - if starts with < it's HTML not JSON
+                if (cached.charAt(0) === '<') {
+                    console.warn('[Sidebar] Cache corrupted (HTML), clearing');
+                    localStorage.removeItem(MENU_CACHE_KEY);
+                    return null;
+                }
                 var data = JSON.parse(cached);
                 if (data.timestamp && (Date.now() - data.timestamp) < MENU_CACHE_TTL) {
                     console.log('[Sidebar] Using cached menu (age: ' + Math.round((Date.now() - data.timestamp)/1000) + 's)');
@@ -47,7 +53,8 @@
                 }
             }
         } catch (e) {
-            console.log('[Sidebar] Menu cache load error:', e);
+            console.warn('[Sidebar] Menu cache parse error, clearing:', e.message);
+            localStorage.removeItem(MENU_CACHE_KEY);
         }
         return null;
     }
@@ -63,6 +70,338 @@
         }
     }
 
+    // Status bar metrics cache for instant display
+    function loadStatusBarCache() {
+        try {
+            var cached = localStorage.getItem(STATUS_BAR_CACHE_KEY);
+            if (cached) {
+                if (cached.charAt(0) === '<') {
+                    localStorage.removeItem(STATUS_BAR_CACHE_KEY);
+                    return null;
+                }
+                var data = JSON.parse(cached);
+                if (data.ts && (Date.now() - data.ts) < STATUS_BAR_CACHE_TTL) {
+                    return data;
+                }
+            }
+        } catch (e) {
+            localStorage.removeItem(STATUS_BAR_CACHE_KEY);
+        }
+        return null;
+    }
+
+    function saveStatusBarCache(metrics) {
+        try {
+            localStorage.setItem(STATUS_BAR_CACHE_KEY, JSON.stringify({
+                ts: Date.now(),
+                ...metrics
+            }));
+        } catch (e) {}
+    }
+
+    // Apply cached status bar values instantly (before API fetch)
+    function applyCachedStatusBar() {
+        var cached = loadStatusBarCache();
+        if (!cached) return false;
+
+        console.log('[Sidebar] Applying cached status bar (age: ' + Math.round((Date.now() - cached.ts)/1000) + 's)');
+
+        // Hardware LED
+        var lmHw = document.getElementById('lm-hw');
+        if (lmHw && cached.hwMax !== undefined) {
+            lmHw.textContent = cached.hwMax + '%';
+            lmHw.className = 'led-metric-val ' + (cached.hwMax > 80 ? 'error' : cached.hwMax > 50 ? 'warn' : 'ok');
+            lmHw.title = cached.hwTooltip || ('Hardware: ' + cached.hwMax + '%');
+        }
+
+        // Services LED
+        var lmSvc = document.getElementById('lm-svc');
+        if (lmSvc && cached.svcOk !== undefined) {
+            lmSvc.textContent = cached.svcOk + '/' + cached.svcTotal;
+            lmSvc.className = 'led-metric-val ' + (cached.svcErr > 0 ? 'error' : cached.svcWarn > 0 ? 'warn' : 'ok');
+            lmSvc.title = cached.svcTooltip || (cached.svcOk + ' services OK');
+        }
+
+        // Security LED
+        var lmSec = document.getElementById('lm-sec');
+        if (lmSec && cached.secTotal !== undefined) {
+            lmSec.textContent = cached.secTotal + '🛡️';
+            lmSec.title = cached.secTooltip || ('Security: ' + cached.secTotal + ' threats mitigated');
+            var threatLevel = (cached.alerts || 0) + (cached.wafThreats || 0);
+            if (cached.secTotal > 50) {
+                lmSec.className = 'led-metric-val info';
+            } else if (threatLevel > 100) {
+                lmSec.className = 'led-metric-val error';
+            } else if (threatLevel > 20) {
+                lmSec.className = 'led-metric-val warn';
+            } else {
+                lmSec.className = 'led-metric-val ok';
+            }
+        }
+
+        return true;
+    }
+
+    // Status bar notification - inline in menu bar + sidebar sync LED
+    function showStatusBarNotification(text, type) {
+        var icons = { progress: '🔄', live: '🔴', cached: '📦', error: '⚠️', info: '💾' };
+        var icon = icons[type] || '⏳';
+
+        // Update sidebar sync LED (left side)
+        var syncLed = document.getElementById('sync-led');
+        var lmSync = document.getElementById('lm-sync');
+        if (syncLed && lmSync) {
+            syncLed.className = 'sync-led ' + (type === 'progress' ? 'fetching' : type);
+            syncLed.textContent = icon;
+            lmSync.textContent = text.replace(/[^\w\s]/g, '').trim().substring(0, 8);
+            lmSync.title = 'Sync: ' + text + (type === 'cached' ? ' (from localStorage)' : type === 'live' ? ' (fresh from API)' : '');
+        }
+    }
+
+    function hideStatusBarNotification() {
+        var syncLed = document.getElementById('sync-led');
+        if (syncLed) {
+            syncLed.className = 'sync-led';
+            syncLed.textContent = '✓';
+        }
+    }
+
+    // Page-specific metrics configuration
+    const PAGE_METRICS_CONFIG = {
+        '/crowdsec/': { metrics: ['bans', 'alerts', 'decisions'], api: '/api/v1/crowdsec/stats' },
+        '/waf/': { metrics: ['blocked', 'threats', 'inspected'], api: '/api/v1/waf/stats' },
+        '/wireguard/': { metrics: ['peers', 'tx', 'rx'], api: '/api/v1/wireguard/status' },
+        '/netdata/': { metrics: ['cpu', 'mem', 'disk'], api: '/api/v1/hub/dashboard' },
+        '/dpi/': { metrics: ['flows', 'protocols', 'hosts'], api: '/api/v1/dpi/stats' },
+        '/nac/': { metrics: ['devices', 'blocked', 'quarantine'], api: '/api/v1/nac/stats' },
+        '/qos/': { metrics: ['bandwidth', 'rules', 'shaped'], api: '/api/v1/qos/stats' },
+        '/soc/': { metrics: ['bans', 'blocked', 'alerts'], api: null },  // Combined from multiple APIs
+        '/hub/': { metrics: ['services', 'uptime', 'health'], api: '/api/v1/hub/dashboard' },
+        '/system/': { metrics: ['cpu', 'mem', 'uptime'], api: '/api/v1/hub/dashboard' },
+        '/certs/': { metrics: ['certs', 'expiring', 'domains'], api: '/api/v1/certs/stats' },
+        '/metablogizer/': { metrics: ['sites', 'published', 'nginx'], api: '/api/v1/metablogizer/status' },
+        '/vhost/': { metrics: ['vhosts', 'active', 'backends'], api: '/api/v1/vhost/stats' },
+        '/eye-remote/': { metrics: ['connected', 'boot', 'serial'], api: '/api/v1/eye-remote/status' },
+        '/metrics/': { metrics: ['cpu', 'mem', 'load'], api: '/api/v1/metrics/summary' },
+        '/': { metrics: ['services', 'threats', 'health'], api: '/api/v1/hub/dashboard' }
+    };
+
+    const PAGE_METRIC_ICONS = {
+        // Security
+        bans: '🚫', alerts: '🔔', decisions: '⚖️', blocked: '🛡️', threats: '⚠️', inspected: '🔍',
+        // Network
+        peers: '👥', tx: '📤', rx: '📥', requests: '📨', flows: '🌊', protocols: '📋',
+        // System
+        cpu: '💻', mem: '🧠', disk: '💾', net: '📡', load: '📊', uptime: '⏱️', temp: '🌡️',
+        // Devices
+        hosts: '🖥️', devices: '📱', quarantine: '🔒', connected: '🔌',
+        // QoS
+        bandwidth: '📶', rules: '📜', shaped: '🎚️',
+        // Services
+        services: '⚙️', health: '💚', active: '✅', backends: '🔄',
+        // Certs
+        certs: '📜', expiring: '⏰', domains: '🌐',
+        // Metablogizer
+        sites: '🌍', published: '📢', nginx: '🔧',
+        // Eye Remote
+        boot: '🚀', serial: '📟'
+    };
+
+    // Page metrics cache
+    const PAGE_METRICS_CACHE_KEY = 'sbx_page_metrics_cache';
+    const PAGE_METRICS_CACHE_TTL = 30000;  // 30 seconds
+
+    function loadPageMetricsCache(path) {
+        try {
+            var cached = localStorage.getItem(PAGE_METRICS_CACHE_KEY);
+            if (cached) {
+                var data = JSON.parse(cached);
+                if (data[path] && (Date.now() - data[path].ts) < PAGE_METRICS_CACHE_TTL) {
+                    return data[path].metrics;
+                }
+            }
+        } catch (e) {}
+        return null;
+    }
+
+    function savePageMetricsCache(path, metrics) {
+        try {
+            var cached = {};
+            try { cached = JSON.parse(localStorage.getItem(PAGE_METRICS_CACHE_KEY) || '{}'); } catch (e) {}
+            cached[path] = { ts: Date.now(), metrics: metrics };
+            localStorage.setItem(PAGE_METRICS_CACHE_KEY, JSON.stringify(cached));
+        } catch (e) {}
+    }
+
+    async function loadPageMetrics(forceRefresh) {
+        var pagePath = window.location.pathname;
+        var container = document.getElementById('gmb-page-metrics');
+        if (!container) return;
+
+        // Find matching config
+        var config = null;
+        var matchedPath = null;
+        for (var path in PAGE_METRICS_CONFIG) {
+            if (pagePath === path || pagePath.startsWith(path)) {
+                config = PAGE_METRICS_CONFIG[path];
+                matchedPath = path;
+                break;
+            }
+        }
+
+        if (!config) {
+            container.innerHTML = '';
+            return;
+        }
+
+        // Check cache first (unless forced refresh)
+        if (!forceRefresh) {
+            var cachedMetrics = loadPageMetricsCache(matchedPath);
+            if (cachedMetrics) {
+                renderPageMetrics(container, config.metrics, cachedMetrics, true);
+                // Refresh in background after 100ms
+                setTimeout(function() { loadPageMetrics(true); }, 100);
+                return;
+            }
+        }
+
+        // Show placeholders while loading
+        container.innerHTML = config.metrics.map(function(m) {
+            return '<span class="page-metric loading" title="' + m + '"><span class="pm-icon">' + (PAGE_METRIC_ICONS[m] || '📊') + '</span><span class="pm-val">--</span></span>';
+        }).join('');
+
+        // Fetch data based on page
+        var token = localStorage.getItem('sbx_token');
+        var headers = token ? { 'Authorization': 'Bearer ' + token } : {};
+        var metricsData = {};
+
+        try {
+            if (pagePath.startsWith('/soc/') || pagePath === '/' || pagePath === '/hub/') {
+                // SOC/Hub page: combine CrowdSec + WAF stats
+                var [csRes, wafRes, dashRes] = await Promise.all([
+                    safeFetch('/api/v1/crowdsec/stats', { headers: headers }, 3000),
+                    safeFetch('/api/v1/waf/stats', { headers: headers }, 3000),
+                    safeFetch('/api/v1/hub/dashboard', { headers: headers }, 3000)
+                ]);
+                if (csRes.ok) {
+                    metricsData.bans = csRes.data.active_bans || csRes.data.decisions || 0;
+                    metricsData.alerts = csRes.data.alerts_today || 0;
+                    metricsData.decisions = csRes.data.total_decisions || metricsData.bans;
+                }
+                if (wafRes.ok) {
+                    metricsData.blocked = wafRes.data.blocked_24h || wafRes.data.blocked || 0;
+                    metricsData.threats = (metricsData.bans || 0) + (metricsData.blocked || 0);
+                    metricsData.inspected = wafRes.data.inspected_24h || wafRes.data.requests || 0;
+                }
+                if (dashRes.ok && dashRes.data) {
+                    var d = dashRes.data;
+                    metricsData.cpu = d.cpu_percent || d.cpu || 0;
+                    metricsData.mem = d.memory_percent || d.mem || 0;
+                    metricsData.disk = d.disk_percent || d.disk || 0;
+                    metricsData.uptime = d.uptime || '--';
+                    if (d.modules) {
+                        metricsData.services = Object.keys(d.modules).length;
+                        var okCount = Object.values(d.modules).filter(function(mod) { return mod.status === 'ok'; }).length;
+                        metricsData.health = okCount + '/' + metricsData.services;
+                    }
+                }
+            } else if (config.api) {
+                var res = await safeFetch(config.api, { headers: headers }, 3000);
+                if (res.ok && res.data) {
+                    var d = res.data;
+                    // Map API response to metric names with multiple fallbacks
+                    config.metrics.forEach(function(m) {
+                        if (d[m] !== undefined) metricsData[m] = d[m];
+                        else if (d[m + '_count'] !== undefined) metricsData[m] = d[m + '_count'];
+                        else if (d[m + '_24h'] !== undefined) metricsData[m] = d[m + '_24h'];
+                        else if (d['active_' + m] !== undefined) metricsData[m] = d['active_' + m];
+                        else if (d['total_' + m] !== undefined) metricsData[m] = d['total_' + m];
+                        else if (d[m + '_percent'] !== undefined) metricsData[m] = d[m + '_percent'] + '%';
+                        // Special cases
+                        else if (m === 'services' && d.modules) metricsData[m] = Object.keys(d.modules).length;
+                        else if (m === 'health' && d.modules) {
+                            var okCount = Object.values(d.modules).filter(function(mod) { return mod.status === 'ok'; }).length;
+                            metricsData[m] = okCount + '/' + Object.keys(d.modules).length;
+                        }
+                        else if (m === 'sites' && d.site_count !== undefined) metricsData[m] = d.site_count;
+                        else if (m === 'published' && d.published_count !== undefined) metricsData[m] = d.published_count;
+                        else if (m === 'nginx' && d.running !== undefined) metricsData[m] = d.running ? '✓' : '✗';
+                        else if (m === 'peers' && d.peer_count !== undefined) metricsData[m] = d.peer_count;
+                        else if (m === 'certs' && d.total !== undefined) metricsData[m] = d.total;
+                        else if (m === 'expiring' && d.expiring_soon !== undefined) metricsData[m] = d.expiring_soon;
+                    });
+                }
+            }
+        } catch (e) {
+            console.log('[Sidebar] Page metrics error:', e);
+        }
+
+        // Save to cache and render
+        savePageMetricsCache(matchedPath, metricsData);
+        renderPageMetrics(container, config.metrics, metricsData, false);
+    }
+
+    function renderPageMetrics(container, metrics, data, fromCache) {
+        container.innerHTML = metrics.map(function(m) {
+            var val = data[m] !== undefined ? data[m] : '--';
+            var cls = 'page-metric';
+            // Highlight security metrics
+            if (typeof val === 'number' && val > 0) {
+                if (m === 'bans' || m === 'blocked' || m === 'alerts' || m === 'threats' || m === 'quarantine' || m === 'expiring') {
+                    cls += val > 10 ? ' alert' : ' highlight';
+                }
+            }
+            // Format large numbers
+            if (typeof val === 'number' && val > 999) {
+                val = (val / 1000).toFixed(1) + 'k';
+            }
+            var cacheIndicator = fromCache ? ' 📦' : '';
+            return '<span class="' + cls + '" title="' + m + ': ' + val + cacheIndicator + '"><span class="pm-icon">' + (PAGE_METRIC_ICONS[m] || '📊') + '</span><span class="pm-val">' + val + '</span></span>';
+        }).join('');
+    }
+
+    // API status checker
+    var lastApiStatus = 'unknown';
+    var apiLatency = 0;
+
+    async function checkApiStatus() {
+        var btn = document.getElementById('api-status-btn');
+        var icon = document.getElementById('api-status-icon');
+        if (!btn || !icon) return;
+
+        btn.className = 'menu-btn api-status checking';
+        btn.title = 'API Status: checking...';
+        icon.textContent = '🔌';
+
+        var token = localStorage.getItem('sbx_token');
+        var headers = token ? { 'Authorization': 'Bearer ' + token } : {};
+
+        try {
+            var startTime = Date.now();
+            var result = await safeFetch('/api/v1/hub/health', { headers: headers }, 5000);
+            apiLatency = Date.now() - startTime;
+
+            if (result.ok) {
+                lastApiStatus = 'connected';
+                btn.className = 'menu-btn api-status connected';
+                btn.title = 'API Connected (' + apiLatency + 'ms)\nClick to check again';
+                icon.textContent = '✅';
+            } else {
+                lastApiStatus = 'error';
+                btn.className = 'menu-btn api-status disconnected';
+                btn.title = 'API Error: ' + (result.error || 'Unknown') + '\nClick to retry';
+                icon.textContent = '⚠️';
+            }
+        } catch (e) {
+            lastApiStatus = 'disconnected';
+            btn.className = 'menu-btn api-status disconnected';
+            btn.title = 'API Disconnected: ' + e.message + '\nClick to retry';
+            icon.textContent = '❌';
+        }
+
+        return { status: lastApiStatus, latency: apiLatency };
+    }
+
     // Round UI Module Colors (6-module system)
     const MODULE_COLORS = {
         AUTH: { color: '#C04E24', metric: 'cpu', label: 'CPU' },
@@ -74,9 +413,11 @@
     };
     // Theme system removed - hybrid-skin is the universal theme
     const HEALTH_CACHE_KEY = 'sbx_health_cache';
+    const STATUS_BAR_CACHE_KEY = 'sbx_statusbar_cache';
     const SORT_PREF_KEY = 'sbx_health_sort';
 
     const HEALTH_CACHE_TTL = 300000;       // 5 min - cache validity
+    const STATUS_BAR_CACHE_TTL = 60000;    // 1 min - status bar cache
     const HEALTH_REFRESH_INTERVAL = 30000; // 30s - update interval
     const HEALTH_REQUEST_TIMEOUT = 4000;
     const BATCH_SIZE = 8;
@@ -217,8 +558,11 @@
                 '</div>' +
                 // Popup container for hover details
                 '<div class="strip-popup" id="strip-popup"></div>' +
+                // Page-specific context metrics (dynamic based on current module)
+                '<div class="page-metrics" id="gmb-page-metrics"></div>' +
                 '</div><div class="menu-right">' +
                 '<div class="hw-led-tooltip" id="hw-led-tooltip"></div>' +
+                '<button class="menu-btn api-status" id="api-status-btn" onclick="SecuBoxSidebar.checkApiStatus()" title="API Status: checking..."><span id="api-status-icon">🔌</span></button>' +
                 '<button class="menu-btn" onclick="location.reload()" title="Refresh">🔄</button>' +
                 '<button class="menu-btn" onclick="location.href=\'/system/\'" title="Settings">⚙️</button>' +
                 '<button class="menu-btn danger" onclick="SecuBoxSidebar.logout()" title="Logout">🚪</button>' +
@@ -233,6 +577,16 @@
                     }
                 });
             }, 50);
+
+            // Initialize page metrics and API status
+            setTimeout(function() {
+                loadPageMetrics();
+                checkApiStatus();
+                // Refresh page metrics every 30s
+                setInterval(function() { loadPageMetrics(true); }, 30000);
+                // Refresh API status every 60s
+                setInterval(checkApiStatus, 60000);
+            }, 100);
         }
 
         // 5d. Inject global BOTTOM status bar with health + Smart Strip
@@ -255,6 +609,10 @@
                 '<div class="status-item"><span class="status-value" style="color: var(--muted-dark);">CyberMind</span></div>' +
                 '</div>';
             document.body.appendChild(statusBar);
+            // Apply cached status bar values FIRST (instant display)
+            var hadCache = applyCachedStatusBar();
+            if (hadCache) showStatusBarNotification('📦 cached', 'info');
+            // Then fetch fresh data (async update)
             loadStatusBarData();
             // Start LED pulse sync
             startLedPulseSync();
@@ -350,6 +708,10 @@
         try {
             var cached = localStorage.getItem(STRIP_CACHE_KEY);
             if (cached) {
+                if (cached.charAt(0) !== '{') {
+                    localStorage.removeItem(STRIP_CACHE_KEY);
+                    return {};
+                }
                 var data = JSON.parse(cached);
                 // Check if cache is still valid
                 if (data.timestamp && (Date.now() - data.timestamp) < STRIP_CACHE_TTL) {
@@ -663,6 +1025,12 @@
         var token = localStorage.getItem('sbx_token');
         var headers = token ? { 'Authorization': 'Bearer ' + token } : {};
 
+        // Show progress notification
+        showStatusBarNotification('🔄 fetching...', 'progress');
+
+        // Cache data to save at end
+        var cacheData = {};
+
         try {
             // Load dashboard for version and uptime (using safe fetch)
             var result = await safeFetch('/api/v1/hub/dashboard', { headers: headers }, 5000);
@@ -838,12 +1206,25 @@
                         var hwMax = Math.max(currentStripMetrics.cpu || 0, currentStripMetrics.mem || 0);
                         lmHw.textContent = hwMax + '%';
                         lmHw.className = 'led-metric-val ' + (hwMax > 80 ? 'error' : hwMax > 50 ? 'warn' : 'ok');
+                        lmHw.title = 'Hardware: CPU ' + (currentStripMetrics.cpu || 0) + '%, MEM ' + (currentStripMetrics.mem || 0) + '%';
+                        // Save to cache
+                        cacheData.hwMax = hwMax;
+                        cacheData.hwTooltip = lmHw.title;
+                        cacheData.cpu = currentStripMetrics.cpu;
+                        cacheData.mem = currentStripMetrics.mem;
                     }
 
                     // LED2 (Services): ok/total
                     if (lmSvc) {
                         lmSvc.textContent = ok + '/' + total;
                         lmSvc.className = 'led-metric-val ' + (err > 0 ? 'error' : warn > 0 ? 'warn' : 'ok');
+                        lmSvc.title = 'Services: ' + ok + ' OK, ' + warn + ' warnings, ' + err + ' errors';
+                        // Save to cache
+                        cacheData.svcOk = ok;
+                        cacheData.svcWarn = warn;
+                        cacheData.svcErr = err;
+                        cacheData.svcTotal = total;
+                        cacheData.svcTooltip = lmSvc.title;
                     }
 
                     // LED3 (Security): fetch bans from CrowdSec
@@ -854,33 +1235,69 @@
                 }
             }
 
-            // Fetch security metrics (CrowdSec bans) - using safe fetch
-            var secResult = await safeFetch('/api/v1/crowdsec/stats', { headers: headers }, 3000);
+            // Fetch security metrics (CrowdSec + WAF combined) - parallel fetch
             var lmSec = document.getElementById('lm-sec');
-            if (secResult.ok && lmSec) {
-                var secData = secResult.data;
-                var bans = secData.active_bans || secData.decisions || 0;
-                var alerts = secData.alerts_today || 0;
-                // Store for tooltip
-                currentStripMetrics.bans = bans;
-                currentStripMetrics.alerts = alerts;
-                lmSec.textContent = bans + 'B';
-                lmSec.title = bans + ' bans, ' + alerts + ' alerts today';
-                // Blue if actively blocking, else based on alert level
-                if (bans > 20) {
+            var [csResult, wafResult] = await Promise.all([
+                safeFetch('/api/v1/crowdsec/stats', { headers: headers }, 3000),
+                safeFetch('/api/v1/waf/stats', { headers: headers }, 3000)
+            ]);
+
+            var bans = 0, alerts = 0, wafThreats = 0, wafBlocked = 0;
+
+            if (csResult.ok) {
+                var csData = csResult.data;
+                bans = csData.active_bans || csData.decisions || 0;
+                alerts = csData.alerts_today || 0;
+            }
+
+            if (wafResult.ok) {
+                var wafData = wafResult.data;
+                wafThreats = wafData.threats_24h || wafData.alerts_24h || 0;
+                wafBlocked = wafData.blocked_24h || wafData.blocked || 0;
+            }
+
+            // Store for tooltip
+            currentStripMetrics.bans = bans;
+            currentStripMetrics.alerts = alerts;
+            currentStripMetrics.wafThreats = wafThreats;
+            currentStripMetrics.wafBlocked = wafBlocked;
+
+            if (lmSec) {
+                var totalThreats = bans + wafBlocked;
+                lmSec.textContent = totalThreats + '🛡️';
+                lmSec.title = '🛡️ Security: ' + bans + ' IPs banned (CrowdSec), ' + wafBlocked + ' blocked (WAF), ' + alerts + ' alerts, ' + wafThreats + ' threats';
+
+                // Color based on combined threat level
+                var threatLevel = alerts + wafThreats;
+                if (totalThreats > 50) {
                     lmSec.className = 'led-metric-val info';  // Blue - active mitigation
-                } else if (alerts > 50) {
+                } else if (threatLevel > 100) {
                     lmSec.className = 'led-metric-val error';
-                } else if (alerts > 10) {
+                } else if (threatLevel > 20) {
                     lmSec.className = 'led-metric-val warn';
                 } else {
                     lmSec.className = 'led-metric-val ok';
                 }
-            } else if (lmSec) {
-                lmSec.textContent = '?';
+
+                // Save to cache
+                cacheData.secTotal = totalThreats;
+                cacheData.secTooltip = lmSec.title;
+                cacheData.bans = bans;
+                cacheData.alerts = alerts;
+                cacheData.wafThreats = wafThreats;
+                cacheData.wafBlocked = wafBlocked;
+            }
+
+            // Save all collected data to cache
+            if (cacheData.hwMax !== undefined || cacheData.svcOk !== undefined || cacheData.secTotal !== undefined) {
+                saveStatusBarCache(cacheData);
+                hideStatusBarNotification();
+                showStatusBarNotification('🔴 live', 'live');
             }
         } catch (e) {
             console.log('[Sidebar] Status bar data error:', e);
+            hideStatusBarNotification();
+            showStatusBarNotification('⚠️ error', 'error');
         }
 
         // Refresh every 30s
@@ -1609,7 +2026,31 @@
             '.status-indicator{display:flex;align-items:center;gap:0.3rem;font-size:0.7rem;padding:0.2rem 0.5rem;cursor:pointer;border-radius:4px;}' +
             '.status-panel{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:90%;max-width:400px;max-height:70vh;background:#1a1a2e;color:#e8e6d9;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.5);z-index:10001;overflow:hidden;font-family:monospace;}.status-panel-header{display:flex;justify-content:space-between;align-items:center;padding:0.75rem 1rem;background:#252540;font-size:0.9rem;}.status-panel-header button{background:none;border:none;color:#888;font-size:1rem;cursor:pointer;}.status-panel-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;padding:0.75rem;background:#1e1e32;}.status-panel-summary div{text-align:center;padding:0.4rem;border-radius:4px;background:#252540;font-size:0.75rem;}.status-panel-list{max-height:250px;overflow-y:auto;padding:0.5rem;}.status-item{display:flex;align-items:center;gap:0.5rem;padding:0.4rem;font-size:0.75rem;border-bottom:1px solid #333;}.status-mod{font-weight:bold;min-width:80px;}.status-msg{color:#888;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.status-panel-footer{padding:0.75rem;background:#252540;}.status-panel-footer button{width:100%;padding:0.5rem;background:#4466ff;color:#fff;border:none;border-radius:4px;cursor:pointer;}' +
             '.master-top-title{background:rgba(0,221,68,0.15);color:var(--p31-peak,#00dd44);font-weight:bold;}' +
-            '.health-toast{position:fixed;top:1rem;right:1rem;z-index:10000;animation:toastIn 0.3s;}.health-toast-content{display:flex;align-items:center;gap:0.5rem;background:rgba(255,68,68,0.95);color:#fff;padding:0.5rem 1rem;border-radius:8px;font-size:0.8rem;}@keyframes toastIn{from{opacity:0;transform:translateY(-10px);}to{opacity:1;transform:translateY(0);}}';
+            '.health-toast{position:fixed;top:1rem;right:1rem;z-index:10000;animation:toastIn 0.3s;}.health-toast-content{display:flex;align-items:center;gap:0.5rem;background:rgba(255,68,68,0.95);color:#fff;padding:0.5rem 1rem;border-radius:8px;font-size:0.8rem;}@keyframes toastIn{from{opacity:0;transform:translateY(-10px);}to{opacity:1;transform:translateY(0);}}' +
+            '@keyframes statusbar-progress{0%{width:0%;opacity:0.5;}50%{width:100%;opacity:1;}100%{width:0%;opacity:0.5;}}' +
+            '.sync-status{border-bottom:1px dashed rgba(100,150,200,0.2);padding-bottom:4px;margin-bottom:2px;}' +
+            '.sync-led{font-size:10px;width:14px;height:14px;display:flex;align-items:center;justify-content:center;border-radius:3px;transition:all 0.3s;}' +
+            '.sync-led.fetching{animation:syncPulse 0.8s infinite;background:rgba(68,170,255,0.2);}' +
+            '.sync-led.cached{background:rgba(100,200,150,0.15);color:#5f8;}' +
+            '.sync-led.live{background:rgba(255,100,100,0.15);color:#f88;}' +
+            '.sync-led.error{background:rgba(255,68,68,0.2);color:#f55;}' +
+            '.sync-val{font-size:9px!important;min-width:45px;}' +
+            '@keyframes syncPulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.5;transform:scale(0.9);}}' +
+            '.page-metrics{display:flex;gap:6px;align-items:center;margin-left:8px;padding-left:8px;border-left:1px solid rgba(100,150,200,0.2);}' +
+            '.page-metric{display:flex;align-items:center;gap:2px;font-size:10px;padding:2px 6px;border-radius:10px;background:rgba(50,100,150,0.15);cursor:help;transition:all 0.2s;}' +
+            '.page-metric:hover{background:rgba(50,100,150,0.25);transform:scale(1.05);}' +
+            '.page-metric .pm-icon{font-size:11px;}' +
+            '.page-metric .pm-val{font-family:monospace;font-weight:bold;color:#8cf;}' +
+            '.page-metric.highlight{background:rgba(100,200,100,0.2);}.page-metric.highlight .pm-val{color:#5f8;}' +
+            '.page-metric.alert{background:rgba(255,100,100,0.2);}.page-metric.alert .pm-val{color:#f88;}' +
+            '.page-metric.loading{opacity:0.6;}.page-metric.loading .pm-val{animation:pmPulse 1s infinite;}' +
+            '@keyframes pmPulse{0%,100%{opacity:1;}50%{opacity:0.3;}}' +
+            // Inline sync status in menu bar
+            '@keyframes syncProgressAnim{0%{width:0%;}50%{width:100%;}100%{width:0%;}}' +
+            '.api-status{position:relative;}.api-status.connected{background:rgba(50,200,100,0.2)!important;border-color:rgba(50,200,100,0.4)!important;}' +
+            '.api-status.disconnected{background:rgba(255,100,100,0.2)!important;border-color:rgba(255,100,100,0.4)!important;animation:apiPulse 1s infinite;}' +
+            '.api-status.checking{animation:apiPulse 0.5s infinite;}' +
+            '@keyframes apiPulse{0%,100%{opacity:1;}50%{opacity:0.5;}}';
 
         document.head.appendChild(s);
     }
@@ -1630,6 +2071,7 @@
 
         sidebar.innerHTML = '<div class="sidebar-header"><a href="/"><span class="logo-icon">🔒</span><div><span class="logo">SECUBOX</span><span class="logo-version">🚀 ' + VERSION + '</span></div></a>' +
             '<div class="header-leds-metrics" id="header-leds-metrics">' +
+            '<div class="led-metric-row sync-status" id="sync-status-row"><div class="sync-led" id="sync-led">⏳</div><span class="led-metric-val sync-val" id="lm-sync" title="Data sync status">--</span></div>' +
             '<div class="led-metric-row" onmouseenter="SecuBoxSidebar.showHwLedTooltip(this,3)" onmouseleave="SecuBoxSidebar.hideHwLedTooltip()"><div class="hw-led-v" id="hw-led-3"></div><span class="led-metric-val" id="lm-sec">--</span></div>' +
             '<div class="led-metric-row" onmouseenter="SecuBoxSidebar.showHwLedTooltip(this,2)" onmouseleave="SecuBoxSidebar.hideHwLedTooltip()"><div class="hw-led-v" id="hw-led-2"></div><span class="led-metric-val" id="lm-svc">--</span></div>' +
             '<div class="led-metric-row" onmouseenter="SecuBoxSidebar.showHwLedTooltip(this,1)" onmouseleave="SecuBoxSidebar.hideHwLedTooltip()"><div class="hw-led-v" id="hw-led-1"></div><span class="led-metric-val" id="lm-hw">--</span></div>' +
@@ -1732,6 +2174,7 @@
 
             sidebar.innerHTML = '<div class="sidebar-header"><a href="/"><span class="logo-icon">🔒</span><div><span class="logo">SECUBOX</span><span class="logo-version">🚀 ' + VERSION + '</span></div></a>' +
                 '<div class="header-leds-metrics" id="header-leds-metrics">' +
+                '<div class="led-metric-row sync-status" id="sync-status-row"><div class="sync-led" id="sync-led">⏳</div><span class="led-metric-val sync-val" id="lm-sync" title="Data sync status">--</span></div>' +
                 '<div class="led-metric-row" onmouseenter="SecuBoxSidebar.showHwLedTooltip(this,3)" onmouseleave="SecuBoxSidebar.hideHwLedTooltip()"><div class="hw-led-v" id="hw-led-3"></div><span class="led-metric-val" id="lm-sec">--</span></div>' +
                 '<div class="led-metric-row" onmouseenter="SecuBoxSidebar.showHwLedTooltip(this,2)" onmouseleave="SecuBoxSidebar.hideHwLedTooltip()"><div class="hw-led-v" id="hw-led-2"></div><span class="led-metric-val" id="lm-svc">--</span></div>' +
                 '<div class="led-metric-row" onmouseenter="SecuBoxSidebar.showHwLedTooltip(this,1)" onmouseleave="SecuBoxSidebar.hideHwLedTooltip()"><div class="hw-led-v" id="hw-led-1"></div><span class="led-metric-val" id="lm-hw">--</span></div>' +
@@ -1807,6 +2250,8 @@
         hideStripPopup: hideStripPopup,
         showHwLedTooltip: showHwLedTooltip,
         hideHwLedTooltip: hideHwLedTooltip,
+        checkApiStatus: checkApiStatus,
+        loadPageMetrics: loadPageMetrics,
         getAllModules: function() { return ALL_MODULES; },
         forceRefresh: function(mod) {
             if (mod) {

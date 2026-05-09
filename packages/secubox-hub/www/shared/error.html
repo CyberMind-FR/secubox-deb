@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox Error</title>
+    <link rel="stylesheet" href="/shared/design-tokens.css">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
+    <style>
+        body.crt-light {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: var(--space-l);
+        }
+        .error-container {
+            max-width: 700px;
+            width: 100%;
+            text-align: center;
+        }
+        .error-ascii {
+            font-family: var(--font-mono);
+            font-size: clamp(8px, 1.5vw, 12px);
+            line-height: 1.2;
+            color: var(--root-main);
+            text-shadow: var(--bloom-soft);
+            white-space: pre;
+            margin-bottom: var(--space-l);
+            overflow: hidden;
+        }
+        .error-code {
+            font-family: var(--font-display);
+            font-size: clamp(4rem, 15vw, 8rem);
+            font-weight: var(--weight-bold);
+            line-height: 1;
+            margin-bottom: var(--space-s);
+            animation: glitch 2s infinite;
+        }
+        .error-code.code-4xx { color: var(--wall-main); text-shadow: var(--bloom-amber); }
+        .error-code.code-5xx { color: var(--boot-main); }
+
+        .error-title {
+            font-family: var(--font-display);
+            font-size: clamp(1.2rem, 3vw, 1.8rem);
+            color: var(--text);
+            margin-bottom: var(--space-m);
+        }
+        .error-message {
+            color: var(--muted);
+            font-size: var(--size-base);
+            margin-bottom: var(--space-l);
+            line-height: var(--leading-relaxed);
+        }
+        .error-message code {
+            background: var(--surface2);
+            padding: 2px 6px;
+            border-radius: var(--radius-sm);
+            font-size: 0.9em;
+        }
+        .error-actions {
+            display: flex;
+            gap: var(--space-m);
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: var(--space-xl);
+        }
+        .btn {
+            padding: 0.75rem 1.5rem;
+            text-decoration: none;
+        }
+        .btn.primary {
+            background: var(--root-main);
+            color: white;
+            border: none;
+        }
+        .btn.secondary {
+            background: transparent;
+            border: 1px solid var(--border2);
+            color: var(--text);
+        }
+        .diagnostic-box {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: var(--space-m);
+            text-align: left;
+            font-family: var(--font-mono);
+            font-size: var(--size-sm);
+        }
+        .diagnostic-box .line {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.3rem 0;
+            border-bottom: 1px solid var(--border);
+        }
+        .diagnostic-box .line:last-child { border-bottom: none; }
+        .diagnostic-box .label { color: var(--muted); }
+        .diagnostic-box .value { color: var(--text); }
+        .diagnostic-box .value.ok { color: var(--root-main); }
+        .diagnostic-box .value.warn { color: var(--wall-main); }
+        .diagnostic-box .value.err { color: var(--boot-main); }
+
+        .coffee-tip {
+            margin-top: var(--space-xl);
+            font-size: var(--size-sm);
+            color: var(--muted);
+            opacity: 0.7;
+        }
+
+        @keyframes glitch {
+            0%, 90%, 100% { transform: translate(0); }
+            92% { transform: translate(-2px, 2px); }
+            94% { transform: translate(2px, -2px); }
+            96% { transform: translate(-1px, -1px); }
+            98% { transform: translate(1px, 1px); }
+        }
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+        .cursor-blink::after {
+            content: '_';
+            animation: blink 1s step-start infinite;
+        }
+
+        /* Fun hover effects */
+        .error-ascii:hover {
+            animation: shake 0.5s ease-in-out;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+    </style>
+</head>
+<body class="crt-light">
+    <div class="error-container">
+        <div class="error-ascii" id="ascii-art"></div>
+        <div class="error-code" id="error-code">???</div>
+        <h1 class="error-title" id="error-title">Something went sideways</h1>
+        <p class="error-message" id="error-message">Loading diagnostics<span class="cursor-blink"></span></p>
+
+        <div class="error-actions">
+            <a href="/" class="btn primary">Back to Dashboard</a>
+            <a href="javascript:history.back()" class="btn secondary">Go Back</a>
+            <a href="javascript:location.reload()" class="btn secondary">Retry</a>
+        </div>
+
+        <div class="diagnostic-box" id="diagnostics">
+            <div class="line"><span class="label">Status</span><span class="value" id="diag-status">checking...</span></div>
+            <div class="line"><span class="label">Request</span><span class="value" id="diag-request">-</span></div>
+            <div class="line"><span class="label">Time</span><span class="value" id="diag-time">-</span></div>
+            <div class="line"><span class="label">Server</span><span class="value" id="diag-server">SecuBox</span></div>
+        </div>
+
+        <p class="coffee-tip" id="coffee-tip"></p>
+    </div>
+
+    <script>
+    (function() {
+        // Parse URL params
+        const params = new URLSearchParams(window.location.search);
+        const code = parseInt(params.get('code')) || 404;
+        const uri = params.get('uri') || window.location.pathname;
+
+        // ASCII art by error type
+        const ASCII = {
+            '400': `
+    ┌──────────────────────────────────┐
+    │  ╔╗ ╔═╗╔╦╗  ╦═╗╔═╗╔═╗ ┐         │
+    │  ╠╩╗╠═╣ ║║  ╠╦╝║╣ ║═╬╦┘         │
+    │  ╚═╝╩ ╩═╩╝  ╩╚═╚═╝╚═╝           │
+    │     Your request made           │
+    │     the server confused         │
+    │        ( ._.)?                  │
+    └──────────────────────────────────┘`,
+            '401': `
+    ┌──────────────────────────────────┐
+    │  ╦ ╦╦ ╦╔═╗  ╔═╗╦═╗╔═╗  ╦ ╦╔═╗   │
+    │  ║║║╠═╣║ ║  ╠═╣╠╦╝║╣   ╚╦╝║ ║   │
+    │  ╚╩╝╩ ╩╚═╝  ╩ ╩╩╚═╚═╝   ╩ ╚═╝?  │
+    │                                  │
+    │     🔐 Authentication Required  │
+    │       ¯\\_(ツ)_/¯               │
+    └──────────────────────────────────┘`,
+            '403': `
+    ┌──────────────────────────────────┐
+    │  ╔═╗╔═╗╔═╗╔═╗╔═╗╔═╗             │
+    │  ╠═╣║  ║  ║╣ ╚═╗╚═╗             │
+    │  ╩ ╩╚═╝╚═╝╚═╝╚═╝╚═╝             │
+    │    ╔╦╗╔═╗╔╗╔╦╔═╗╔╦╗             │
+    │     ║║║╣ ║║║║║╣  ║║             │
+    │    ═╩╝╚═╝╝╚╝╩╚═╝═╩╝             │
+    │         🚫 (ノಠ益ಠ)ノ彡┻━┻      │
+    └──────────────────────────────────┘`,
+            '404': `
+    ┌──────────────────────────────────┐
+    │  ╔╗╔╔═╗╔╦╗  ╔═╗╔═╗╦ ╦╔╗╔╔╦╗     │
+    │  ║║║║ ║ ║   ╠╣ ║ ║║ ║║║║ ║║     │
+    │  ╝╚╝╚═╝ ╩   ╚  ╚═╝╚═╝╝╚╝═╩╝     │
+    │                                  │
+    │   The page you seek does not    │
+    │   exist in this dimension       │
+    │         ¯\\_(°_o)_/¯            │
+    └──────────────────────────────────┘`,
+            '500': `
+    ┌──────────────────────────────────┐
+    │  ╔═╗╔═╗╔═╗╔╦╗╔╦╗╔╦╗             │
+    │  ╚═╗║  ║ ║║║║║║║║║║             │
+    │  ╚═╝╚═╝╚═╝╩ ╩╩ ╩╩ ╩             │
+    │                                  │
+    │  🔥 Internal Server Error 🔥    │
+    │    The hamsters are tired       │
+    │         (╯°□°)╯︵ ┻━┻           │
+    └──────────────────────────────────┘`,
+            '502': `
+    ┌──────────────────────────────────┐
+    │  ╔╗ ╔═╗╔╦╗  ╔═╗╔═╗╔╦╗╔═╗╦ ╦╔═╗╦ ╦│
+    │  ╠╩╗╠═╣ ║║  ║ ╦╠═╣ ║ ║╣ ║║║╠═╣╚╦╝│
+    │  ╚═╝╩ ╩═╩╝  ╚═╝╩ ╩ ╩ ╚═╝╚╩╝╩ ╩ ╩ │
+    │                                  │
+    │   🌉 The upstream gave up       │
+    │     ┬─┬ノ( º _ ºノ)             │
+    └──────────────────────────────────┘`,
+            '503': `
+    ┌──────────────────────────────────┐
+    │  ╔═╗╔═╗╦═╗╦  ╦╦╔═╗╔═╗           │
+    │  ╚═╗║╣ ╠╦╝╚╗╔╝║║  ║╣            │
+    │  ╚═╝╚═╝╩╚═ ╚╝ ╩╚═╝╚═╝           │
+    │  ╦ ╦╔╗╔╔═╗╦  ╦╔═╗╦╦  ╔═╗╔╗ ╦  ╔═╗│
+    │  ║ ║║║║╠═╣╚╗╔╝╠═╣║║  ╠═╣╠╩╗║  ║╣ │
+    │  ╚═╝╝╚╝╩ ╩ ╚╝ ╩ ╩╩╩═╝╩ ╩╚═╝╩═╝╚═╝│
+    │         ☕ Be right back         │
+    └──────────────────────────────────┘`,
+            '504': `
+    ┌──────────────────────────────────┐
+    │  ╔╦╗╦╔╦╗╔═╗╔═╗╦ ╦╔╦╗            │
+    │   ║ ║║║║║╣ ║ ║║ ║ ║             │
+    │   ╩ ╩╩ ╩╚═╝╚═╝╚═╝ ╩             │
+    │                                  │
+    │   ⏱️ Gateway got bored waiting  │
+    │   The upstream is on vacation   │
+    │         (－_－) zzZ             │
+    └──────────────────────────────────┘`
+        };
+
+        // Error messages by type
+        const ERRORS = {
+            400: {
+                title: "Bad Request",
+                message: "The server couldn't understand what you're asking for. Check your syntax!",
+                tip: "Try speaking HTTP fluently next time."
+            },
+            401: {
+                title: "Authentication Required",
+                message: "You need to prove who you are. Please log in.",
+                tip: "Remember: admin/admin is never the right password."
+            },
+            403: {
+                title: "Access Forbidden",
+                message: "You don't have permission to access this resource. Nice try though!",
+                tip: "The firewall saw that coming from a mile away."
+            },
+            404: {
+                title: "Page Not Found",
+                message: `The page <code>${escapeHtml(uri)}</code> doesn't exist. Maybe it ran away?`,
+                tip: "Have you tried turning the internet off and on again?"
+            },
+            500: {
+                title: "Internal Server Error",
+                message: "Something broke on our end. The hamsters powering the server need a break.",
+                tip: "Our engineers have been poked. They're on it!"
+            },
+            502: {
+                title: "Bad Gateway",
+                message: "The upstream server sent an invalid response. Classic.",
+                tip: "It's not you, it's the backend service."
+            },
+            503: {
+                title: "Service Unavailable",
+                message: "The service is temporarily unavailable. We're either updating or panicking.",
+                tip: "Perfect time for a coffee break ☕"
+            },
+            504: {
+                title: "Gateway Timeout",
+                message: "The upstream server didn't respond in time. Probably solving hard math problems.",
+                tip: "Patience is a virtue. But maybe try again?"
+            }
+        };
+
+        // Get error info
+        const errorInfo = ERRORS[code] || ERRORS[500];
+        const codeClass = code >= 500 ? 'code-5xx' : 'code-4xx';
+
+        // Update page
+        document.getElementById('error-code').textContent = code;
+        document.getElementById('error-code').className = 'error-code ' + codeClass;
+        document.getElementById('error-title').textContent = errorInfo.title;
+        document.getElementById('error-message').innerHTML = errorInfo.message;
+        document.getElementById('coffee-tip').textContent = '💡 ' + errorInfo.tip;
+        document.title = code + ' - ' + errorInfo.title + ' | SecuBox';
+
+        // ASCII art
+        const asciiKey = String(code);
+        document.getElementById('ascii-art').textContent = ASCII[asciiKey] || ASCII['404'];
+
+        // Diagnostics
+        document.getElementById('diag-status').textContent = code + ' ' + errorInfo.title;
+        document.getElementById('diag-status').className = 'value ' + (code >= 500 ? 'err' : 'warn');
+        document.getElementById('diag-request').textContent = uri;
+        document.getElementById('diag-time').textContent = new Date().toISOString();
+
+        // Quick health checks
+        checkHealth();
+
+        async function checkHealth() {
+            const checks = [
+                { name: 'Hub', url: '/api/v1/hub/health' },
+                { name: 'Metrics', url: '/api/v1/metrics/health' }
+            ];
+
+            for (const check of checks) {
+                try {
+                    const r = await fetch(check.url, { timeout: 2000 });
+                    if (r.ok) {
+                        addDiagLine(check.name, 'online', 'ok');
+                    } else {
+                        addDiagLine(check.name, 'degraded', 'warn');
+                    }
+                } catch {
+                    addDiagLine(check.name, 'offline', 'err');
+                }
+            }
+        }
+
+        function addDiagLine(label, value, cls) {
+            const box = document.getElementById('diagnostics');
+            const div = document.createElement('div');
+            div.className = 'line';
+            div.innerHTML = '<span class="label">' + label + '</span><span class="value ' + cls + '">' + value + '</span>';
+            box.appendChild(div);
+        }
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+    })();
+    </script>
+</body>
+</html>
