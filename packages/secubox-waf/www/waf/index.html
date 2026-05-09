@@ -24,9 +24,74 @@
             background: linear-gradient(180deg, var(--bg-deep) 0%, var(--bg-dark) 100%);
             min-height: 100vh;
         }
-        .cards-grid {
+        /* Live Attack Banner */
+        .live-attack-banner {
+            background: linear-gradient(90deg, rgba(239,68,68,0.15) 0%, rgba(17,23,32,0.9) 100%);
+            border: 1px solid rgba(239,68,68,0.3);
+            border-radius: var(--radius-lg);
+            padding: var(--space-m);
+            margin-bottom: var(--space-l);
+            display: flex;
+            align-items: center;
+            gap: var(--space-l);
+        }
+        .live-attack-banner.secure {
+            background: linear-gradient(90deg, rgba(34,197,94,0.1) 0%, rgba(17,23,32,0.9) 100%);
+            border-color: rgba(34,197,94,0.3);
+        }
+        .live-indicator {
+            display: flex;
+            align-items: center;
+            gap: var(--space-xs);
+        }
+        .live-dot {
+            width: 10px;
+            height: 10px;
+            background: #ef4444;
+            border-radius: 50%;
+            animation: livePulse 1s infinite;
+        }
+        .live-attack-banner.secure .live-dot { background: #22c55e; animation: none; }
+        .live-label {
+            font-size: 0.7rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: #ef4444;
+        }
+        .live-attack-banner.secure .live-label { color: #22c55e; }
+        .last-attack {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: var(--space-m);
+        }
+        .last-attack-ip {
+            font-family: var(--font-mono);
+            font-size: 1.2rem;
+            color: var(--text-dark);
+        }
+        .last-attack-cat {
+            display: flex;
+            align-items: center;
+            gap: var(--space-xs);
+            background: rgba(239,68,68,0.2);
+            padding: 4px 10px;
+            border-radius: var(--radius-sm);
+            font-size: 0.8rem;
+        }
+        .last-attack-time {
+            color: var(--muted-dark);
+            font-size: 0.75rem;
+            font-family: var(--font-mono);
+        }
+        @keyframes livePulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.3); }
+        }
+        /* Stats Cards with Emoji Categories */
+        .stats-grid {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(6, 1fr);
             gap: var(--space-m);
             margin-bottom: var(--space-l);
         }
@@ -35,22 +100,32 @@
             backdrop-filter: blur(var(--glass-blur));
             border: 1px solid var(--glass-border);
             border-radius: var(--radius-lg);
-            padding: var(--space-l);
+            padding: var(--space-m);
             text-align: center;
+            transition: all 0.2s;
+        }
+        .stat-card:hover { border-color: var(--glass-highlight); transform: translateY(-2px); }
+        .stat-card .emoji {
+            font-size: 1.5rem;
+            margin-bottom: var(--space-xs);
         }
         .stat-card .value {
-            font-size: 2.5rem;
+            font-size: 1.8rem;
             font-weight: 700;
             font-family: var(--font-mono);
             color: var(--text-dark);
         }
         .stat-card .label {
-            font-size: 0.7rem;
+            font-size: 0.65rem;
             color: var(--muted-dark);
             text-transform: uppercase;
-            letter-spacing: 2px;
-            margin-top: var(--space-xs);
+            letter-spacing: 1px;
         }
+        .stat-card.critical .value { color: #ef4444; }
+        .stat-card.high .value { color: #f97316; }
+        .stat-card.medium .value { color: #eab308; }
+        .stat-card.low .value { color: #22c55e; }
+        /* Main Content */
         .glass-card {
             background: var(--glass-bg);
             backdrop-filter: blur(var(--glass-blur));
@@ -60,51 +135,147 @@
             margin-bottom: var(--space-m);
         }
         .glass-card h2 {
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             color: var(--muted-dark);
             margin-bottom: var(--space-m);
             display: flex;
             align-items: center;
             gap: var(--space-s);
-        }
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-m); }
-        .tabs {
-            display: flex;
-            gap: var(--space-m);
-            margin-bottom: var(--space-m);
-            border-bottom: 1px solid var(--glass-border);
-            padding-bottom: var(--space-s);
-        }
-        .tab {
-            padding: var(--space-s) var(--space-m);
-            cursor: pointer;
-            color: var(--muted-dark);
-            font-size: 0.85rem;
             text-transform: uppercase;
             letter-spacing: 1px;
-            border-bottom: 2px solid transparent;
+        }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-m); }
+        .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--space-m); }
+        /* Security Events Table (combined alerts/bans) */
+        .events-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .events-table th, .events-table td {
+            padding: var(--space-s) var(--space-m);
+            text-align: left;
+            border-bottom: 1px solid var(--glass-border);
+        }
+        .events-table th {
+            color: var(--muted-dark);
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            background: rgba(255,255,255,0.02);
+        }
+        .events-table td {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+        }
+        .events-table tr:hover {
+            background: rgba(255,255,255,0.02);
+        }
+        .event-type {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: var(--radius-sm);
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+        .event-type.alert { background: rgba(234,179,8,0.2); color: #eab308; }
+        .event-type.ban { background: rgba(239,68,68,0.2); color: #ef4444; }
+        .event-type.blocked { background: rgba(168,85,247,0.2); color: #a855f7; }
+        .severity-badge {
+            padding: 2px 6px;
+            border-radius: var(--radius-sm);
+            font-size: 0.65rem;
+            font-weight: 600;
+        }
+        .severity-badge.critical { background: rgba(239,68,68,0.2); color: #ef4444; }
+        .severity-badge.high { background: rgba(249,115,22,0.2); color: #f97316; }
+        .severity-badge.medium { background: rgba(234,179,8,0.2); color: #eab308; }
+        .severity-badge.low { background: rgba(34,197,94,0.2); color: #22c55e; }
+        /* Category Pills */
+        .category-pills {
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--space-s);
+        }
+        .cat-pill {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 14px;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
             transition: all 0.2s;
+            cursor: pointer;
         }
-        .tab:hover { color: var(--text-dark); }
-        .tab.active { color: var(--root-light); border-bottom-color: var(--root-light); }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-        .progress-bar {
-            height: 6px;
-            background: rgba(255,255,255,0.1);
-            border-radius: 3px;
+        .cat-pill:hover { border-color: var(--root-light); transform: translateY(-2px); }
+        .cat-pill.disabled { opacity: 0.4; }
+        .cat-pill .cat-emoji { font-size: 1.4rem; }
+        .cat-pill .cat-info { display: flex; flex-direction: column; }
+        .cat-pill .cat-name { font-weight: 600; font-size: 0.85rem; }
+        .cat-pill .cat-count { font-size: 0.7rem; color: var(--muted-dark); }
+        /* Donut Charts */
+        .donut-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+        /* Geomap */
+        .geomap {
+            position: relative;
+            width: 100%;
+            height: 220px;
+            background: #000a0f;
+            border-radius: var(--radius-md);
             overflow: hidden;
-            margin-top: 4px;
+            cursor: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="12" fill="none" stroke="%2300ff41" stroke-width="1.5"/><circle cx="16" cy="16" r="6" fill="none" stroke="%2300ff41" stroke-width="1"/><line x1="16" y1="0" x2="16" y2="10" stroke="%2300ff41" stroke-width="2"/><line x1="16" y1="22" x2="16" y2="32" stroke="%2300ff41" stroke-width="2"/><line x1="0" y1="16" x2="10" y2="16" stroke="%2300ff41" stroke-width="2"/><line x1="22" y1="16" x2="32" y2="16" stroke="%2300ff41" stroke-width="2"/><circle cx="16" cy="16" r="2" fill="%2300ff41"/></svg>') 16 16, crosshair;
         }
-        .progress-bar .fill {
+        .geomap-bg {
+            position: absolute;
+            top: 0; left: 0;
+            width: 300%;
             height: 100%;
-            border-radius: 3px;
-            transition: width 0.3s;
+            background-image: url('/waf/wargames-earth.png');
+            background-repeat: no-repeat;
+            background-size: 100% 100%;
+            opacity: 0.8;
+            pointer-events: none;
+            transition: transform 0.3s ease;
         }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: var(--space-s); text-align: left; border-bottom: 1px solid var(--glass-border); }
-        th { color: var(--muted-dark); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; }
-        td { font-family: var(--font-mono); font-size: 0.85rem; }
+        .geomap-debug {
+            position: absolute;
+            top: 6px;
+            left: 10px;
+            font-size: 9px;
+            color: #00d4ff;
+            font-family: monospace;
+            background: rgba(0,0,0,0.7);
+            padding: 2px 6px;
+            border-radius: 4px;
+            z-index: 100;
+        }
+        .geomap-legend {
+            position: absolute;
+            bottom: 6px;
+            right: 10px;
+            font-size: 10px;
+            color: #ff4466;
+            font-family: monospace;
+            text-shadow: 0 0 6px #ff4466;
+        }
+        .geomap-title {
+            position: absolute;
+            bottom: 6px;
+            left: 10px;
+            font-size: 10px;
+            color: #00ff88;
+            font-family: monospace;
+            text-shadow: 0 0 6px #00ff41;
+            letter-spacing: 2px;
+        }
+        /* Button */
         .btn {
             padding: var(--space-xs) var(--space-m);
             border-radius: var(--radius-sm);
@@ -112,72 +283,113 @@
             background: var(--glass-bg);
             color: var(--text-dark);
             cursor: pointer;
-            font-size: 0.8rem;
+            font-size: 0.75rem;
+            font-family: var(--font-mono);
             transition: all 0.2s;
         }
         .btn:hover { background: rgba(255,255,255,0.1); }
-        .btn.danger { border-color: var(--boot-light); color: var(--boot-light); }
+        .btn.danger { border-color: #ef4444; color: #ef4444; }
+        .btn.danger:hover { background: rgba(239,68,68,0.1); }
+        .btn.success { border-color: #22c55e; color: #22c55e; }
         @keyframes pulse {
             0%, 100% { transform: scale(1); opacity: 0.9; }
             50% { transform: scale(1.3); opacity: 0.6; }
         }
-        @media (max-width: 1200px) { .cards-grid { grid-template-columns: repeat(2, 1fr); } }
-        @media (max-width: 768px) { .main { margin-left: 0; } .grid-2 { grid-template-columns: 1fr; } }
+        @media (max-width: 1200px) { .stats-grid { grid-template-columns: repeat(3, 1fr); } }
+        @media (max-width: 768px) { .main { margin-left: 0; } .grid-2, .grid-3 { grid-template-columns: 1fr; } .stats-grid { grid-template-columns: repeat(2, 1fr); } }
     </style>
 </head>
 <body>
     <nav class="sidebar" id="sidebar"></nav>
     <script src="/shared/sidebar.js"></script>
     <main class="main">
-        <div class="cards-grid">
-            <div class="stat-card"><div class="value" id="threatsToday">-</div><div class="label">Threats 24h</div></div>
-            <div class="stat-card"><div class="value" id="totalRules">-</div><div class="label">Active Rules</div></div>
-            <div class="stat-card"><div class="value" id="activeCategories">-</div><div class="label">Categories</div></div>
-            <div class="stat-card"><div class="value" id="activeBans">-</div><div class="label">Active Bans</div></div>
+        <!-- Live Attack Banner -->
+        <div class="live-attack-banner secure" id="liveBanner">
+            <div class="live-indicator">
+                <div class="live-dot"></div>
+                <span class="live-label">LIVE</span>
+            </div>
+            <div class="last-attack" id="lastAttack">
+                <span style="font-size:1.5rem;">✅</span>
+                <span class="last-attack-ip">All Clear</span>
+                <span class="last-attack-time">No recent attacks</span>
+            </div>
         </div>
 
+        <!-- Emoji Stats Cards -->
+        <div class="stats-grid">
+            <div class="stat-card critical"><div class="emoji">🔥</div><div class="value" id="threats24h">0</div><div class="label">Threats 24h</div></div>
+            <div class="stat-card high"><div class="emoji">🚫</div><div class="value" id="activeBans">0</div><div class="label">Active Bans</div></div>
+            <div class="stat-card medium"><div class="emoji">⚡</div><div class="value" id="totalRules">0</div><div class="label">WAF Rules</div></div>
+            <div class="stat-card low"><div class="emoji">📁</div><div class="value" id="activeCategories">0</div><div class="label">Categories</div></div>
+            <div class="stat-card"><div class="emoji">🔒</div><div class="value" id="blocked24h">0</div><div class="label">Blocked</div></div>
+            <div class="stat-card"><div class="emoji">🛡️</div><div class="value" id="protectedSites">0</div><div class="label">Protected</div></div>
+        </div>
+
+        <div class="grid-2">
+            <!-- Security Events (combined alerts/bans) -->
+            <div class="glass-card">
+                <h2>🛡️ Security Events</h2>
+                <div style="max-height: 400px; overflow-y: auto;">
+                    <table class="events-table">
+                        <thead>
+                            <tr><th>Type</th><th>🌍</th><th>IP/Target</th><th>Category</th><th>Severity</th><th>Action</th></tr>
+                        </thead>
+                        <tbody id="eventsTable">
+                            <tr><td colspan="6" style="color:var(--muted-dark);text-align:center;">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Category Pills with Emojis -->
+            <div class="glass-card">
+                <h2>📁 Protection Categories</h2>
+                <div class="category-pills" id="categoryPills">Loading...</div>
+            </div>
+        </div>
+
+        <div class="grid-3">
+            <!-- Severity Donut -->
+            <div class="glass-card">
+                <h2>📊 By Severity</h2>
+                <div class="donut-container" id="severityDonut">Loading...</div>
+            </div>
+
+            <!-- Category Donut -->
+            <div class="glass-card">
+                <h2>🏷️ By Category</h2>
+                <div class="donut-container" id="categoryDonut">Loading...</div>
+            </div>
+
+            <!-- Top Attacked Sites -->
+            <div class="glass-card">
+                <h2>🎯 Top Attacked Sites</h2>
+                <div id="topVhosts">Loading...</div>
+            </div>
+        </div>
+
+        <!-- Geomap -->
         <div class="glass-card">
-            <div class="tabs">
-                <div class="tab active" data-tab="alerts" onclick="switchTab('alerts')">Alerts</div>
-                <div class="tab" data-tab="categories" onclick="switchTab('categories')">Categories</div>
-                <div class="tab" data-tab="bans" onclick="switchTab('bans')">Bans</div>
-                <div class="tab" data-tab="stats" onclick="switchTab('stats')">Statistics</div>
-            </div>
-
-            <div id="alerts" class="tab-content active">
-                <div id="alertsList">Loading...</div>
-            </div>
-
-            <div id="categories" class="tab-content">
-                <div id="categoriesList">Loading...</div>
-            </div>
-
-            <div id="bans" class="tab-content">
-                <table>
-                    <thead><tr><th>IP Address</th><th>🌍</th><th>Reason</th><th>Duration</th><th>Actions</th></tr></thead>
-                    <tbody id="bansTable"><tr><td colspan="5">Loading...</td></tr></tbody>
-                </table>
-            </div>
-
-            <div id="stats" class="tab-content">
-                <div class="grid-2">
-                    <div class="glass-card"><h2>📊 By Severity</h2><div id="severityStats" style="display:flex;justify-content:center;"></div></div>
-                    <div class="glass-card"><h2>📁 By Category</h2><div id="categoryStats" style="display:flex;justify-content:center;"></div></div>
+            <h2>🌍 Attack Origins - Global Threat Map</h2>
+            <div class="geomap" id="geomap">
+                <div class="geomap-bg" id="geomapBg"></div>
+                <div id="geomarkers" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;"></div>
+                <!-- Center target crosshair -->
+                <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:50;">
+                    <svg width="36" height="36" viewBox="0 0 40 40">
+                        <circle cx="20" cy="20" r="15" fill="none" stroke="#00ff41" stroke-width="1" opacity="0.6"/>
+                        <circle cx="20" cy="20" r="8" fill="none" stroke="#00ff41" stroke-width="1" opacity="0.8"/>
+                        <line x1="20" y1="2" x2="20" y2="12" stroke="#00ff41" stroke-width="1.5"/>
+                        <line x1="20" y1="28" x2="20" y2="38" stroke="#00ff41" stroke-width="1.5"/>
+                        <line x1="2" y1="20" x2="12" y2="20" stroke="#00ff41" stroke-width="1.5"/>
+                        <line x1="28" y1="20" x2="38" y2="20" stroke="#00ff41" stroke-width="1.5"/>
+                        <circle cx="20" cy="20" r="2" fill="#00ff41"/>
+                    </svg>
                 </div>
-                <div class="grid-2">
-                    <div class="glass-card">
-                        <h2>🌍 Attack Origins - Global Threat Map</h2>
-                        <div id="geomap" style="position:relative;width:100%;height:260px;background:#000a0f;border-radius:8px;overflow:visible;margin-bottom:2.5rem;">
-                            <div style="position:absolute;top:0;left:0;width:100%;height:100%;overflow:hidden;">
-                                <img src="/waf/wargames-earth.png" alt="World Map" style="width:200%;height:100%;object-fit:cover;object-position:10% 50%;opacity:0.9;">
-                            </div>
-                            <div id="geomarkers" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;"></div>
-                            <div style="position:absolute;bottom:6px;left:10px;font-size:10px;color:#00ff88;font-family:monospace;text-shadow:0 0 6px #00ff41;letter-spacing:2px;">GLOBAL THREAT MONITOR</div>
-                            <div id="geoLegend" style="position:absolute;bottom:6px;right:10px;font-size:10px;color:#ff4466;font-family:monospace;text-shadow:0 0 6px #ff4466;"></div>
-                        </div>
-                    </div>
-                    <div class="glass-card"><h2>🎯 Top Attacked Sites</h2><div id="topVhosts">Loading...</div></div>
-                </div>
+                <div class="geomap-debug" id="geomapDebug">Click to center | Offset: -100%</div>
+                <div class="geomap-title">GLOBAL THREAT MONITOR</div>
+                <div class="geomap-legend" id="geoLegend"></div>
             </div>
         </div>
     </main>
@@ -186,6 +398,73 @@
         const API = '/api/v1/waf';
         const token = () => localStorage.getItem('sbx_token');
         const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+
+        // Category Emojis
+        const CAT_EMOJI = {
+            'sqli': '💉', 'xss': '🔥', 'rce': '💀', 'lfi': '📂', 'rfi': '🌐',
+            'scanner': '🔍', 'bot': '🤖', 'router': '📡', 'cve': '🐛', 'dos': '💥',
+            'traversal': '🔗', 'injection': '💉', 'command': '⌨️', 'default': '⚠️'
+        };
+
+        const SEV_COLORS = { critical: '#ef4444', high: '#f97316', medium: '#eab308', low: '#22c55e' };
+        const SEV_EMOJI = { critical: '🔴', high: '🟠', medium: '🟡', low: '🟢' };
+        const CAT_COLORS = ['#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#f43f5e', '#0ea5e9', '#14b8a6'];
+        const ARC_COLORS = ['#ff0044', '#ff4400', '#ff8800', '#ffcc00', '#88ff00', '#00ff44', '#00ffcc', '#0088ff', '#4400ff', '#cc00ff'];
+
+        // Click to center map on click position
+        let WAF_GEOMAP_OFFSET = {x: -100, y: 0};
+        let WAF_GEOMAP_TARGET = {x: 50, y: 50};
+        (function() {
+            document.addEventListener('DOMContentLoaded', () => {
+                const bg = document.getElementById('geomapBg');
+                const geomap = document.getElementById('geomap');
+                const debug = document.getElementById('geomapDebug');
+                if (!bg || !geomap || !debug) return;
+
+                function updateMap() {
+                    bg.style.transform = `translateX(${WAF_GEOMAP_OFFSET.x}%)`;
+                    debug.textContent = `Center: ${WAF_GEOMAP_TARGET.x.toFixed(0)}%,${WAF_GEOMAP_TARGET.y.toFixed(0)}%  |  Offset: ${WAF_GEOMAP_OFFSET.x.toFixed(0)}%`;
+                }
+                updateMap();
+
+                // Click to center map on that point
+                geomap.addEventListener('click', (e) => {
+                    const rect = geomap.getBoundingClientRect();
+                    const clickX = (e.clientX - rect.left) / rect.width * 100;
+                    const shift = clickX - 50;
+                    WAF_GEOMAP_OFFSET.x -= shift;
+                    WAF_GEOMAP_OFFSET.x = Math.max(-200, Math.min(0, WAF_GEOMAP_OFFSET.x));
+                    WAF_GEOMAP_TARGET = {x: 50, y: ((e.clientY - rect.top) / rect.height * 100)};
+                    updateMap();
+                    console.log(`[WAF GEOMAP] Centered. Offset: ${WAF_GEOMAP_OFFSET.x}%`);
+                });
+            });
+        })();
+
+        function getCatEmoji(cat) {
+            if (!cat) return CAT_EMOJI.default;
+            const c = cat.toLowerCase();
+            for (const [key, emoji] of Object.entries(CAT_EMOJI)) {
+                if (c.includes(key)) return emoji;
+            }
+            return CAT_EMOJI.default;
+        }
+
+        function countryToFlag(code) {
+            if (!code || code === "LAN" || code.length !== 2) return "🌐";
+            return String.fromCodePoint(...[...code.toUpperCase()].map(c => 127397 + c.charCodeAt(0)));
+        }
+
+        function timeAgo(ts) {
+            if (!ts) return '';
+            const now = Date.now();
+            const date = typeof ts === 'string' ? new Date(ts).getTime() : ts * 1000;
+            const diff = Math.floor((now - date) / 1000);
+            if (diff < 60) return diff + 's ago';
+            if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+            if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+            return Math.floor(diff / 86400) + 'd ago';
+        }
 
         async function api(path, opts = {}) {
             try {
@@ -196,74 +475,163 @@
             } catch (e) { console.error('API error:', path, e); return null; }
         }
 
-        function countryToFlag(code) {
-            if (!code || code === "LAN" || code.length !== 2) return "🌐";
-            return String.fromCodePoint(...[...code.toUpperCase()].map(c => 127397 + c.charCodeAt(0)));
+        // Live Attack Banner
+        let lastEvent = null;
+        function updateLiveBanner(event) {
+            const banner = document.getElementById('liveBanner');
+            const lastAttack = document.getElementById('lastAttack');
+            if (!event) {
+                banner.classList.add('secure');
+                banner.classList.remove('attack');
+                lastAttack.innerHTML = '<span style="font-size:1.5rem;">✅</span><span class="last-attack-ip">All Clear</span><span class="last-attack-time">No recent attacks</span>';
+            } else {
+                banner.classList.remove('secure');
+                lastAttack.innerHTML =
+                    '<span style="font-size:1.5rem;">' + countryToFlag(event.country || '') + '</span>' +
+                    '<span class="last-attack-ip">' + (event.ip || event.client_ip || '-') + '</span>' +
+                    '<span class="last-attack-cat">' + getCatEmoji(event.category || event.scenario) + ' ' + (event.category || event.scenario || 'Attack') + '</span>' +
+                    '<span class="severity-badge ' + (event.severity || 'medium').toLowerCase() + '">' + (event.severity || 'MEDIUM') + '</span>' +
+                    '<span class="last-attack-time">' + timeAgo(event.timestamp) + '</span>';
+            }
         }
 
-        function getSiteEmoji(host) {
-            if (!host) return "🌐";
-            const h = host.toLowerCase();
-            if (h.includes("git")) return "💻";
-            if (h.includes("mail")) return "📧";
-            if (h.includes("api")) return "⚡";
-            if (h.includes("admin")) return "🔐";
-            return "🌐";
-        }
+        // Combined Security Events (alerts + bans)
+        async function loadSecurityEvents() {
+            const [alertsData, bansData] = await Promise.all([
+                api('/alerts?limit=20&aggregate=true'),
+                api('/bans')
+            ]);
 
-        function getCategoryEmoji(cat) {
-            if (!cat) return "⚠️";
-            const c = cat.toLowerCase();
-            if (c.includes("sqli")) return "💉";
-            if (c.includes("xss")) return "🔥";
-            if (c.includes("rce")) return "💀";
-            if (c.includes("scanner")) return "🔍";
-            if (c.includes("bot")) return "🤖";
-            if (c.includes("router")) return "📡";
-            return "⚠️";
-        }
+            const events = [];
 
-        const SEV_COLORS = { critical: '#ef4444', high: '#f97316', medium: '#eab308', low: '#22c55e' };
-        const SEV_EMOJI = { critical: '🔴', high: '🟠', medium: '🟡', low: '🟢' };
-        const CAT_COLORS = ['#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#f43f5e', '#0ea5e9', '#14b8a6'];
-        const ARC_COLORS = ['#ff0044', '#ff4400', '#ff8800', '#ffcc00', '#88ff00', '#00ff44', '#00ffcc', '#0088ff', '#4400ff', '#cc00ff'];
+            // Add alerts as events
+            if (alertsData?.alerts) {
+                alertsData.alerts.forEach(a => {
+                    events.push({
+                        type: 'alert',
+                        ip: a.client_ip || a.value,
+                        country: a.country,
+                        category: a.scenario || a.category || 'Unknown',
+                        severity: a.max_severity || a.severity || 'medium',
+                        timestamp: a.timestamp || a.created_at,
+                        count: a.count || 1
+                    });
+                });
+            }
 
-        function createSeverityDonut(data, size) {
-            size = size || 130;
-            if (!data || Object.keys(data).length === 0) return '<p style="color:var(--muted);">No data</p>';
-            const entries = Object.entries(data).filter(([k,v]) => v > 0);
-            const total = entries.reduce((s, [k,v]) => s + v, 0);
-            if (total === 0) return '<p style="color:var(--muted);">No data</p>';
-            const center = size / 2;
-            const ringWidth = 8;
-            const spacing = 3;
-            let svg = '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '">';
-            entries.forEach(([sev, count], i) => {
-                const r = center - 10 - (i * (ringWidth + spacing));
-                const pct = count / total;
-                const circ = 2 * Math.PI * r;
-                const dash = circ * pct;
-                const gap = circ - dash;
-                const color = SEV_COLORS[sev.toLowerCase()] || '#888';
-                const emoji = SEV_EMOJI[sev.toLowerCase()] || '⚪';
-                svg += '<circle cx="' + center + '" cy="' + center + '" r="' + r + '" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="' + ringWidth + '"/>';
-                svg += '<circle cx="' + center + '" cy="' + center + '" r="' + r + '" fill="none" stroke="' + color + '" stroke-width="' + ringWidth + '" stroke-dasharray="' + dash + ' ' + gap + '" stroke-dashoffset="' + (circ/4) + '" stroke-linecap="round" style="filter:drop-shadow(0 0 3px ' + color + ');"><title>' + emoji + ' ' + sev + ': ' + count + ' (' + Math.round(pct*100) + '%)</title></circle>';
+            // Add bans as events
+            if (bansData?.bans) {
+                document.getElementById('activeBans').textContent = bansData.total || bansData.bans.length;
+                bansData.bans.forEach(b => {
+                    events.push({
+                        type: 'ban',
+                        ip: b.value || b.ip,
+                        country: b.country,
+                        category: b.scenario || b.reason || 'Manual ban',
+                        severity: 'critical',
+                        timestamp: b.created_at,
+                        duration: b.duration
+                    });
+                });
+            }
+
+            // Sort by timestamp descending
+            events.sort((a, b) => {
+                const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+                const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+                return tb - ta;
             });
-            svg += '<text x="' + center + '" y="' + (center - 2) + '" text-anchor="middle" fill="var(--text)" font-size="16" font-weight="bold">' + total + '</text>';
-            svg += '<text x="' + center + '" y="' + (center + 12) + '" text-anchor="middle" fill="var(--muted)" font-size="7">ALERTS</text>';
-            svg += '</svg>';
-            const legend = entries.map(([sev, count]) => {
-                const color = SEV_COLORS[sev.toLowerCase()] || '#888';
-                const emoji = SEV_EMOJI[sev.toLowerCase()] || '⚪';
-                return '<span style="display:inline-flex;align-items:center;gap:3px;font-size:0.7rem;">' + emoji + ' <span style="color:' + color + '">' + count + '</span></span>';
-            }).join(' ');
-            return '<div style="display:flex;flex-direction:column;align-items:center;">' + svg + '<div style="margin-top:8px;">' + legend + '</div></div>';
+
+            // Update live banner with most recent
+            if (events.length > 0) {
+                updateLiveBanner(events[0]);
+            } else {
+                updateLiveBanner(null);
+            }
+
+            // Render table
+            const tbody = document.getElementById('eventsTable');
+            if (events.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="color:var(--muted-dark);text-align:center;">No security events</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = events.slice(0, 15).map(e => {
+                const typeClass = e.type === 'ban' ? 'ban' : (e.type === 'blocked' ? 'blocked' : 'alert');
+                const typeLabel = e.type === 'ban' ? '🚫 BAN' : (e.type === 'blocked' ? '🛡️ BLOCK' : '⚠️ ALERT');
+                const sevClass = (e.severity || 'medium').toLowerCase();
+                const actionBtn = e.type === 'ban'
+                    ? '<button class="btn success" onclick="unbanIp(\'' + e.ip + '\')">Unban</button>'
+                    : '<button class="btn danger" onclick="banIp(\'' + e.ip + '\')">Ban</button>';
+                return '<tr>' +
+                    '<td><span class="event-type ' + typeClass + '">' + typeLabel + '</span></td>' +
+                    '<td>' + countryToFlag(e.country) + '</td>' +
+                    '<td>' + e.ip + (e.count > 1 ? ' <span style="color:var(--muted-dark);">(' + e.count + 'x)</span>' : '') + '</td>' +
+                    '<td>' + getCatEmoji(e.category) + ' <span style="max-width:120px;overflow:hidden;text-overflow:ellipsis;display:inline-block;vertical-align:middle;">' + e.category + '</span></td>' +
+                    '<td><span class="severity-badge ' + sevClass + '">' + e.severity.toUpperCase() + '</span></td>' +
+                    '<td>' + actionBtn + '</td>' +
+                '</tr>';
+            }).join('');
         }
 
-        function createCategoryDonut(data, size) {
+        // Category Pills
+        async function loadCategories() {
+            const d = await api('/categories');
+            const el = document.getElementById('categoryPills');
+            if (!d || !d.categories || Object.keys(d.categories).length === 0) {
+                el.innerHTML = '<p style="color:var(--muted-dark);">No categories configured</p>';
+                document.getElementById('activeCategories').textContent = '0';
+                return;
+            }
+            const cats = Object.entries(d.categories).sort((a, b) => (b[1].rules_count || 0) - (a[1].rules_count || 0));
+            document.getElementById('activeCategories').textContent = cats.filter(([id, c]) => c.enabled !== false).length;
+            el.innerHTML = cats.map(([id, cat]) => {
+                const enabled = cat.enabled !== false;
+                const emoji = getCatEmoji(id);
+                return '<div class="cat-pill' + (enabled ? '' : ' disabled') + '" onclick="toggleCategory(\'' + id + '\', ' + !enabled + ')">' +
+                    '<span class="cat-emoji">' + emoji + '</span>' +
+                    '<span class="cat-info">' +
+                        '<span class="cat-name">' + (cat.name || id) + '</span>' +
+                        '<span class="cat-count">' + (cat.rules_count || 0) + ' rules • ' + (enabled ? '✓ ON' : '✗ OFF') + '</span>' +
+                    '</span>' +
+                '</div>';
+            }).join('');
+        }
+
+        // Stats
+        async function loadStats() {
+            const d = await api('/stats');
+            if (!d) {
+                document.getElementById('threats24h').textContent = '0';
+                document.getElementById('blocked24h').textContent = '0';
+                document.getElementById('severityDonut').innerHTML = '<p style="color:var(--muted-dark);">No data</p>';
+                document.getElementById('categoryDonut').innerHTML = '<p style="color:var(--muted-dark);">No data</p>';
+                document.getElementById('topVhosts').innerHTML = '<p style="color:var(--muted-dark);">No data</p>';
+                return;
+            }
+            document.getElementById('threats24h').textContent = (d.blocked_24h || d.threats_today || 0).toLocaleString();
+            document.getElementById('blocked24h').textContent = (d.blocked_24h || 0).toLocaleString();
+            document.getElementById('protectedSites').textContent = d.vhosts_count || (d.top_vhosts ? Object.keys(d.top_vhosts).length : 0);
+
+            // Severity donut
+            if (d.by_severity) {
+                document.getElementById('severityDonut').innerHTML = createDonut(d.by_severity, 'severity', 140);
+            }
+
+            // Category donut
+            if (d.by_category) {
+                document.getElementById('categoryDonut').innerHTML = createDonut(d.by_category, 'category', 140);
+            }
+
+            // Top Vhosts
+            renderTopVhosts(d.top_vhosts);
+
+            // Geomap
+            renderGeomap(d);
+        }
+
+        function createDonut(data, type, size) {
             size = size || 130;
-            if (!data || (Array.isArray(data) ? data.length === 0 : Object.keys(data).length === 0)) return '<p style="color:var(--muted);">No data</p>';
-            // Handle both array [{name, count}] and object {name: count} formats
             let entries;
             if (Array.isArray(data)) {
                 entries = data.slice(0, 6).map(c => [c.name || c.category || c[0], c.count || c[1] || 0]).filter(([k,v]) => v > 0);
@@ -271,100 +639,93 @@
                 entries = Object.entries(data).slice(0, 6).filter(([k,v]) => typeof v === 'number' && v > 0);
             }
             const total = entries.reduce((s, [k,v]) => s + v, 0);
-            if (total === 0) return '<p style="color:var(--muted);">No data</p>';
+            if (total === 0) return '<p style="color:var(--muted-dark);">No data</p>';
+
             const center = size / 2;
             const ringWidth = 8;
             const spacing = 3;
             let svg = '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '">';
-            entries.forEach(([cat, count], i) => {
+            entries.forEach(([key, count], i) => {
                 const r = center - 10 - (i * (ringWidth + spacing));
                 const pct = count / total;
                 const circ = 2 * Math.PI * r;
                 const dash = circ * pct;
                 const gap = circ - dash;
-                const color = CAT_COLORS[i % CAT_COLORS.length];
-                const emoji = getCategoryEmoji(cat);
+                const color = type === 'severity' ? (SEV_COLORS[key.toLowerCase()] || '#888') : CAT_COLORS[i % CAT_COLORS.length];
+                const emoji = type === 'severity' ? (SEV_EMOJI[key.toLowerCase()] || '⚪') : getCatEmoji(key);
                 svg += '<circle cx="' + center + '" cy="' + center + '" r="' + r + '" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="' + ringWidth + '"/>';
-                svg += '<circle cx="' + center + '" cy="' + center + '" r="' + r + '" fill="none" stroke="' + color + '" stroke-width="' + ringWidth + '" stroke-dasharray="' + dash + ' ' + gap + '" stroke-dashoffset="' + (circ/4) + '" stroke-linecap="round" style="filter:drop-shadow(0 0 3px ' + color + ');"><title>' + emoji + ' ' + cat + ': ' + count + ' (' + Math.round(pct*100) + '%)</title></circle>';
+                svg += '<circle cx="' + center + '" cy="' + center + '" r="' + r + '" fill="none" stroke="' + color + '" stroke-width="' + ringWidth + '" stroke-dasharray="' + dash + ' ' + gap + '" stroke-dashoffset="' + (circ/4) + '" stroke-linecap="round" style="filter:drop-shadow(0 0 3px ' + color + ');"><title>' + emoji + ' ' + key + ': ' + count + ' (' + Math.round(pct*100) + '%)</title></circle>';
             });
-            svg += '<text x="' + center + '" y="' + (center - 2) + '" text-anchor="middle" fill="var(--text)" font-size="16" font-weight="bold">' + total + '</text>';
-            svg += '<text x="' + center + '" y="' + (center + 12) + '" text-anchor="middle" fill="var(--muted)" font-size="7">THREATS</text>';
+            svg += '<text x="' + center + '" y="' + (center - 2) + '" text-anchor="middle" fill="var(--text-dark)" font-size="16" font-weight="bold">' + total + '</text>';
+            svg += '<text x="' + center + '" y="' + (center + 12) + '" text-anchor="middle" fill="var(--muted-dark)" font-size="7">' + (type === 'severity' ? 'ALERTS' : 'THREATS') + '</text>';
             svg += '</svg>';
-            const legend = entries.slice(0, 5).map(([cat, count], i) => {
-                const color = CAT_COLORS[i % CAT_COLORS.length];
-                const emoji = getCategoryEmoji(cat);
-                return '<span style="display:inline-flex;align-items:center;gap:2px;font-size:0.65rem;"><span style="width:6px;height:6px;background:' + color + ';border-radius:1px;"></span>' + emoji + '</span>';
+            const legend = entries.slice(0, 5).map(([key, count], i) => {
+                const color = type === 'severity' ? (SEV_COLORS[key.toLowerCase()] || '#888') : CAT_COLORS[i % CAT_COLORS.length];
+                const emoji = type === 'severity' ? (SEV_EMOJI[key.toLowerCase()] || '⚪') : getCatEmoji(key);
+                return '<span style="display:inline-flex;align-items:center;gap:3px;font-size:0.65rem;">' + emoji + ' <span style="color:' + color + '">' + count + '</span></span>';
             }).join(' ');
-            return '<div style="display:flex;flex-direction:column;align-items:center;">' + svg + '<div style="margin-top:6px;">' + legend + '</div></div>';
+            return '<div style="display:flex;flex-direction:column;align-items:center;">' + svg + '<div style="margin-top:8px;">' + legend + '</div></div>';
         }
 
-        function switchTab(tabName) {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            document.querySelector('[data-tab="' + tabName + '"]').classList.add('active');
-            document.getElementById(tabName).classList.add('active');
-        }
-
-        async function loadStatus() {
-            const d = await api('/status');
-            document.getElementById('totalRules').textContent = d?.total_rules || 0;
-            document.getElementById('activeCategories').textContent = d?.active_categories || 0;
-        }
-
-        async function loadStats() {
-            const d = await api('/stats');
-            if (!d) {
-                document.getElementById('threatsToday').textContent = '0';
-                document.getElementById('severityStats').innerHTML = '<p style="color:var(--muted);">No data</p>';
-                document.getElementById('categoryStats').innerHTML = '<p style="color:var(--muted);">No data</p>';
-                document.getElementById('topVhosts').innerHTML = '<p style="color:var(--muted);">No data</p>';
-                document.getElementById('geomarkers').innerHTML = '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#00ff41;font-size:12px;">✓ SECURE</div>';
-                document.getElementById('geoLegend').innerHTML = '<span style="color:#00ff41;">● SECURE</span>';
+        function renderTopVhosts(vhosts) {
+            const el = document.getElementById('topVhosts');
+            if (!vhosts) {
+                el.innerHTML = '<p style="color:var(--muted-dark);">No data</p>';
                 return;
             }
-            document.getElementById('threatsToday').textContent = (d.blocked_24h || d.threats_today || 0).toLocaleString();
-
-            // Severity donut
-            if (d.by_severity) {
-                document.getElementById('severityStats').innerHTML = createSeverityDonut(d.by_severity, 140);
-            }
-
-            // Category donut
-            if (d.by_category) {
-                document.getElementById('categoryStats').innerHTML = createCategoryDonut(d.by_category, 140);
-            }
-
-            // Top Vhosts with progress bars
-            const vhostsEl = document.getElementById('topVhosts');
-            if (d.top_vhosts) {
-                let vhostData = Array.isArray(d.top_vhosts)
-                    ? d.top_vhosts.map(v => ({host: v.host || v.vhost || v[0], count: v.count || v.threats || v[1] || 0}))
-                    : Object.entries(d.top_vhosts).map(([h, c]) => ({host: h, count: typeof c === 'object' ? c.count || 0 : c}));
-                const maxVhost = Math.max(...vhostData.map(v => v.count));
-                const totalVhost = vhostData.reduce((s, v) => s + v.count, 0);
-                vhostsEl.innerHTML = vhostData.slice(0, 6).map(v => {
-                    const pct = totalVhost > 0 ? Math.round(v.count / totalVhost * 100) : 0;
-                    const width = maxVhost > 0 ? Math.round(v.count / maxVhost * 100) : 0;
-                    return '<div style="margin-bottom:8px;"><div style="display:flex;justify-content:space-between;font-size:0.8rem;"><span>' + getSiteEmoji(v.host) + ' ' + v.host + '</span><span style="color:var(--wall-light);">' + v.count + ' <span style="color:var(--muted);">(' + pct + '%)</span></span></div><div class="progress-bar"><div class="fill" style="width:' + width + '%;background:linear-gradient(90deg, var(--wall-light), var(--boot-light));"></div></div></div>';
-                }).join('');
-            }
-
-            // Geomap
-            renderGeomap(d);
+            let vhostData = Array.isArray(vhosts)
+                ? vhosts.map(v => ({host: v.host || v.vhost || v[0], count: v.count || v.threats || v[1] || 0}))
+                : Object.entries(vhosts).map(([h, c]) => ({host: h, count: typeof c === 'object' ? c.count || 0 : c}));
+            const maxVhost = Math.max(...vhostData.map(v => v.count));
+            const totalVhost = vhostData.reduce((s, v) => s + v.count, 0);
+            el.innerHTML = vhostData.slice(0, 5).map(v => {
+                const pct = totalVhost > 0 ? Math.round(v.count / totalVhost * 100) : 0;
+                const width = maxVhost > 0 ? Math.round(v.count / maxVhost * 100) : 0;
+                const emoji = v.host.includes('git') ? '💻' : v.host.includes('mail') ? '📧' : v.host.includes('api') ? '⚡' : v.host.includes('admin') ? '🔐' : '🌐';
+                return '<div style="margin-bottom:10px;">' +
+                    '<div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:4px;">' +
+                        '<span>' + emoji + ' ' + v.host + '</span>' +
+                        '<span style="color:var(--wall-light);">' + v.count + ' <span style="color:var(--muted-dark);">(' + pct + '%)</span></span>' +
+                    '</div>' +
+                    '<div style="height:6px;background:rgba(255,255,255,0.1);border-radius:3px;overflow:hidden;">' +
+                        '<div style="height:100%;width:' + width + '%;background:linear-gradient(90deg, var(--wall-light), var(--boot-light));border-radius:3px;"></div>' +
+                    '</div>' +
+                '</div>';
+            }).join('');
         }
 
         function renderGeomap(d) {
             const geomarkers = document.getElementById('geomarkers');
             const geoLegend = document.getElementById('geoLegend');
+            // Coordinates calibrated for wargames-earth.png with 200% width, object-position: 10% 50%
+            // Target = France (SecuBox HQ)
             const countryPos = {
-                'US': {x:22,y:38}, 'CN': {x:82,y:40}, 'RU': {x:72,y:28}, 'DE': {x:52,y:32},
-                'FR': {x:50,y:35}, 'GB': {x:48,y:30}, 'BR': {x:28,y:62}, 'IN': {x:74,y:48},
-                'JP': {x:92,y:38}, 'KR': {x:88,y:38}, 'AU': {x:88,y:72}, 'CA': {x:24,y:30},
-                'NL': {x:51,y:30}, 'IT': {x:54,y:38}, 'ES': {x:47,y:40}, 'PL': {x:56,y:32},
-                'IE': {x:46,y:30}, 'SG': {x:82,y:56}
+                // Americas
+                'US': {x:15,y:38}, 'CA': {x:12,y:28}, 'MX': {x:10,y:48}, 'BR': {x:25,y:62}, 'AR': {x:22,y:72},
+                // Western Europe
+                'GB': {x:38,y:28}, 'IE': {x:36,y:29}, 'FR': {x:40,y:34}, 'ES': {x:37,y:40}, 'PT': {x:35,y:40},
+                'BE': {x:41,y:30}, 'NL': {x:41,y:28}, 'DE': {x:44,y:30}, 'CH': {x:43,y:34}, 'IT': {x:45,y:38},
+                'AT': {x:46,y:33}, 'PL': {x:48,y:29}, 'CZ': {x:46,y:30},
+                // Eastern Europe
+                'HU': {x:48,y:34}, 'RO': {x:51,y:35}, 'BG': {x:52,y:38}, 'GR': {x:50,y:42}, 'UA': {x:54,y:30},
+                // Nordic
+                'SE': {x:46,y:22}, 'NO': {x:44,y:20}, 'FI': {x:50,y:20}, 'DK': {x:44,y:26},
+                // Russia & Central Asia
+                'RU': {x:62,y:24}, 'KZ': {x:65,y:32},
+                // Middle East & Africa
+                'TR': {x:54,y:40}, 'IL': {x:56,y:44}, 'SA': {x:60,y:48}, 'AE': {x:62,y:48},
+                'EG': {x:54,y:48}, 'MA': {x:35,y:45}, 'ZA': {x:52,y:72}, 'NG': {x:44,y:55},
+                // Asia
+                'IN': {x:70,y:46}, 'PK': {x:66,y:42}, 'BD': {x:74,y:46},
+                'CN': {x:80,y:38}, 'HK': {x:82,y:46}, 'TW': {x:84,y:44},
+                'JP': {x:88,y:36}, 'KR': {x:86,y:38},
+                'TH': {x:78,y:52}, 'VN': {x:80,y:50}, 'SG': {x:80,y:56}, 'ID': {x:82,y:58}, 'MY': {x:79,y:55},
+                'PH': {x:85,y:52},
+                // Oceania
+                'AU': {x:88,y:70}, 'NZ': {x:95,y:76}
             };
 
-            if (d.top_ips && Object.keys(d.top_ips).length > 0) {
+            if (d?.top_ips && Object.keys(d.top_ips).length > 0) {
                 const ipCountries = d.top_ips_countries || {};
                 const countryThreats = {};
                 Object.entries(d.top_ips).forEach(([ip, count]) => {
@@ -372,7 +733,7 @@
                     if (cc) countryThreats[cc] = (countryThreats[cc] || 0) + count;
                 });
 
-                const target = {x: 50, y: 35};
+                const target = WAF_GEOMAP_TARGET; // France (SecuBox HQ) - use global variable for debug
                 let totalThreats = 0;
                 let svgContent = '<svg style="position:absolute;top:0;left:0;width:100%;height:120%;pointer-events:none;overflow:visible;" viewBox="0 0 100 120" preserveAspectRatio="none"><defs><filter id="glow"><feGaussianBlur stdDeviation="0.5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>';
                 let markers = '';
@@ -394,8 +755,7 @@
                     const pathId = 'arc' + idx;
 
                     svgContent += '<path id="' + pathId + '" d="M' + pos.x + ',' + pos.y + ' Q' + midX + ',' + arcHeight + ' ' + target.x + ',' + target.y + '" fill="none" stroke="' + arcColor + '" stroke-width="' + strokeWidth + '" opacity="0.7" filter="url(#glow)" stroke-linecap="round"/>';
-                    
-                    const missileCount = Math.min(4, Math.max(1, Math.floor(intensity * 4)));
+                    const missileCount = Math.min(3, Math.max(1, Math.floor(intensity * 3)));
                     for (let m = 0; m < missileCount; m++) {
                         const dur = 2.5 - intensity;
                         const delay = idx * 0.2 + m * dur / missileCount;
@@ -403,7 +763,6 @@
                     }
 
                     markers += '<div style="position:absolute;left:' + pos.x + '%;top:' + (pos.y * 0.85) + '%;transform:translate(-50%,-50%);z-index:5;"><div style="width:' + size + 'px;height:' + size + 'px;background:radial-gradient(circle,' + arcColor + ' 0%,' + arcColor + '60 50%,transparent 70%);border-radius:50%;animation:pulse ' + (1.5 - intensity * 0.7) + 's infinite;box-shadow:0 0 ' + (size * 1.2) + 'px ' + arcColor + ';"></div></div>';
-
                     const legendX = flagSpacing * (idx + 1);
                     legendFlags += '<div style="position:absolute;left:' + legendX + '%;top:100%;transform:translate(-50%,4px);text-align:center;z-index:10;"><div style="font-size:14px;filter:drop-shadow(0 0 4px ' + arcColor + ');">' + countryToFlag(cc) + '</div><div style="font-size:8px;color:' + arcColor + ';font-family:monospace;">' + count + '</div></div>';
                     svgContent += '<line x1="' + legendX + '" y1="106" x2="' + pos.x + '" y2="' + pos.y + '" stroke="' + arcColor + '" stroke-width="0.3" stroke-dasharray="1,1" opacity="0.4"/>';
@@ -419,80 +778,46 @@
             }
         }
 
-        async function loadBans() {
-            const d = await api('/bans');
-            document.getElementById('activeBans').textContent = d?.total || 0;
-            const tbody = document.getElementById('bansTable');
-            if (!d || !d.bans || d.bans.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" style="color:var(--muted);">No active bans</td></tr>';
-                return;
-            }
-            tbody.innerHTML = d.bans.slice(0, 10).map(b => {
-                const ip = b.value || b.ip || '-';
-                return '<tr><td>' + ip + '</td><td>' + countryToFlag(b.country || '') + '</td><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;">' + (b.scenario || b.reason || '-') + '</td><td>' + (b.duration || '-') + '</td><td><button class="btn" onclick="unbanIp(\'' + ip + '\')">Unban</button></td></tr>';
-            }).join('');
-        }
-
-        async function loadAlerts() {
-            const d = await api('/alerts?limit=10&aggregate=true');
-            const el = document.getElementById('alertsList');
-            if (!d || !d.alerts || d.alerts.length === 0) {
-                el.innerHTML = '<p style="color:var(--muted);">No recent alerts</p>';
-                return;
-            }
-            el.innerHTML = d.alerts.map(a => '<div style="display:flex;gap:1rem;align-items:center;padding:0.5rem 0;border-bottom:1px solid var(--glass-border);"><span style="font-size:1.2em;">' + countryToFlag(a.country || '') + '</span><span style="font-family:var(--font-mono);color:var(--root-light);">' + a.client_ip + '</span><span style="background:rgba(239,68,68,0.2);color:#ef4444;padding:2px 8px;border-radius:4px;font-size:0.75rem;">' + (a.max_severity || 'unknown') + '</span><span style="flex:1;color:var(--muted);font-size:0.8rem;overflow:hidden;text-overflow:ellipsis;">' + (a.count || 1) + ' alerts</span><button class="btn danger" onclick="banIpDirect(\'' + a.client_ip + '\')">Ban</button></div>').join('');
-        }
-
-        async function loadCategories() {
-            const d = await api('/categories');
-            const el = document.getElementById('categoriesList');
-            if (!d || !d.categories || Object.keys(d.categories).length === 0) {
-                el.innerHTML = '<p style="color:var(--muted);">No categories configured</p>';
-                return;
-            }
-            const cats = Object.entries(d.categories).sort((a, b) => (b[1].rules_count || 0) - (a[1].rules_count || 0));
-            el.innerHTML = cats.map(([id, cat]) => {
-                const enabled = cat.enabled !== false;
-                const severity = cat.severity || 'medium';
-                const sevColor = SEV_COLORS[severity] || '#888';
-                const emoji = getCategoryEmoji(id);
-                const toggleColor = enabled ? 'var(--root-light)' : 'var(--boot-light)';
-                const toggleBg = enabled ? 'rgba(20,140,102,0.2)' : 'rgba(239,68,68,0.2)';
-                return '<div style="display:flex;align-items:center;gap:1rem;padding:0.75rem;margin-bottom:0.5rem;background:var(--glass-bg);border:1px solid var(--glass-border);border-radius:var(--radius-md);border-left:3px solid ' + sevColor + ';opacity:' + (enabled ? '1' : '0.6') + ';">' +
-                    '<span style="font-size:1.5em;">' + emoji + '</span>' +
-                    '<div style="flex:1;">' +
-                        '<div style="font-weight:600;color:var(--text-dark);">' + (cat.name || id) + '</div>' +
-                        '<div style="font-size:0.75rem;color:var(--muted-dark);">' + (cat.rules_count || 0) + ' rules · ' + severity + (cat.owasp ? ' · OWASP ' + cat.owasp : '') + '</div>' +
-                    '</div>' +
-                    '<button onclick="toggleCategory(\'' + id + '\', ' + !enabled + ')" style="padding:6px 12px;border:1px solid ' + toggleColor + ';background:' + toggleBg + ';color:' + toggleColor + ';border-radius:var(--radius-sm);cursor:pointer;font-size:0.8rem;font-weight:600;transition:all 0.2s;">' + (enabled ? '✓ ON' : '✗ OFF') + '</button>' +
-                '</div>';
-            }).join('');
+        async function loadStatus() {
+            const d = await api('/status');
+            document.getElementById('totalRules').textContent = d?.total_rules || 0;
         }
 
         async function toggleCategory(categoryId, enabled) {
-            const btn = event.target;
-            btn.disabled = true;
-            btn.textContent = '...';
             const res = await api('/category/' + categoryId + '/toggle', {
                 method: 'POST',
                 body: JSON.stringify({ enabled: enabled })
             });
-            if (res && res.success) {
-                await loadCategories();
-                await loadStatus();
+            if (res?.success) {
+                loadCategories();
+                loadStatus();
             } else {
                 alert('Failed to toggle category: ' + (res?.error || 'Unknown error'));
-                btn.disabled = false;
-                btn.textContent = enabled ? '✓ ON' : '✗ OFF';
             }
         }
 
-        function banIpDirect(ip) { api('/ban', { method: 'POST', body: JSON.stringify({ ip, duration: '4h', reason: 'Manual ban' }) }).then(() => { loadBans(); loadStats(); }); }
-        function unbanIp(ip) { api('/unban', { method: 'POST', body: JSON.stringify({ ip }) }).then(() => loadBans()); }
+        function banIp(ip) {
+            api('/ban', { method: 'POST', body: JSON.stringify({ ip, duration: '4h', reason: 'Manual ban from WAF dashboard' }) })
+                .then(() => { loadSecurityEvents(); loadStats(); });
+        }
+        function unbanIp(ip) {
+            api('/unban', { method: 'POST', body: JSON.stringify({ ip }) })
+                .then(() => loadSecurityEvents());
+        }
 
-        async function refresh() { await Promise.all([loadStatus(), loadStats(), loadBans(), loadAlerts(), loadCategories()]); }
+        async function refresh() {
+            await Promise.all([
+                loadStatus(),
+                loadStats(),
+                loadSecurityEvents(),
+                loadCategories()
+            ]);
+        }
+
         refresh();
         setInterval(refresh, 30000);
+        // More frequent live updates
+        setInterval(loadSecurityEvents, 10000);
     </script>
 </body>
 </html>

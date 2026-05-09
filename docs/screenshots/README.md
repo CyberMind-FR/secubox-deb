@@ -1,24 +1,99 @@
 # SecuBox UI Module Screenshots
 
-HTML snapshots of all SecuBox web UI modules for compliance testing and documentation.
+Automated screenshots of all 120+ SecuBox web UI modules for documentation and compliance testing.
 
-## Modules
+## Directory Structure
 
-| Module | File | Description |
-|--------|------|-------------|
-| Home | [home.html](home.html) | SecuBox Control Center main dashboard |
-| CrowdSec | [crowdsec.html](crowdsec.html) | Security threats and ban lists |
-| Monitoring | [netdata.html](netdata.html) | System monitoring dashboard |
-| WireGuard | [wireguard.html](wireguard.html) | VPN configuration |
-| DPI | [dpi.html](dpi.html) | Deep Packet Inspection |
-| System | [system.html](system.html) | System settings and services |
+```
+docs/screenshots/
+├── vm/                      # Full-size screenshots (1920x1080)
+│   ├── hub.png
+│   ├── soc.png
+│   ├── crowdsec.png
+│   └── ...
+├── thumbnails/              # Thumbnails (400x225) for wiki
+│   ├── hub-thumb.png
+│   └── ...
+├── capture-manifest.json    # Capture results metadata
+└── README.md
+```
+
+## Capture Screenshots
+
+### Prerequisites
+
+```bash
+# Install dependencies
+pip install -r scripts/requirements-screenshot.txt
+
+# Install browser
+playwright install chromium
+```
+
+### Usage
+
+```bash
+# Capture all modules from SecuBox instance
+python scripts/capture-screenshots.py --base-url https://192.168.1.200
+
+# Capture specific modules
+python scripts/capture-screenshots.py --modules hub,soc,crowdsec
+
+# Generate thumbnails only (from existing screenshots)
+python scripts/capture-screenshots.py --thumbnails-only
+
+# Run with visible browser for debugging
+python scripts/capture-screenshots.py --headed
+
+# Use custom credentials
+SECUBOX_PASSWORD=mypassword python scripts/capture-screenshots.py
+```
+
+## Generate Documentation
+
+```bash
+# Generate wiki pages with screenshots
+python scripts/generate-docs.py --include-screenshots
+
+# Generate for specific language
+python scripts/generate-docs.py --include-screenshots --lang fr
+```
+
+## Module Count
+
+| Category | Count |
+|----------|-------|
+| Dashboard | 5 |
+| Security | 19 |
+| Network | 11 |
+| DNS | 6 |
+| VPN & Privacy | 9 |
+| Monitoring | 8 |
+| Access | 3 |
+| Services | 3 |
+| AI | 6 |
+| Email | 4 |
+| Media | 7 |
+| Publishing | 6 |
+| Apps | 3 |
+| IoT | 4 |
+| Communication | 4 |
+| System | 8 |
+| **Total** | **106** |
 
 ## Captured
 
-Date: 2026-04-14
-Version: 1.7.0
-Source: QEMU ARM64 emulator
+- **Date**: 2026-05-09
+- **Version**: 1.8.0
+- **Source**: QEMU ARM64 / VirtualBox
 
-## Usage
+## Integration
 
-Open in browser to view rendered UI, or use for automated compliance testing.
+Screenshots are integrated into:
+- Package READMEs: `packages/secubox-*/README.md`
+- Wiki pages: `docs/wiki/MODULES-*.md`
+- GitHub wiki
+
+## License
+
+MIT License - CyberMind © 2024-2026

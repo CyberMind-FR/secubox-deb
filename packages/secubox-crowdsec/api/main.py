@@ -474,7 +474,13 @@ async def capi_enroll(user=Depends(require_jwt)):
             ["sudo", "cscli", "capi", "register"],
             capture_output=True, text=True, timeout=30
         )
-        if result.returncode == 0 or "already registered" in result.stdout.lower():
+        output = (result.stdout + result.stderr).lower()
+        # Already enrolled scenarios
+        if "already registered" in output or "already enrolled" in output:
+            return {"success": True, "message": "Already enrolled to CAPI", "already_enrolled": True}
+        if "forbidden" in output or "403" in output:
+            return {"success": True, "message": "Already enrolled to CAPI", "already_enrolled": True}
+        if result.returncode == 0:
             return {"success": True, "message": "CAPI registered"}
         return {"success": False, "error": result.stderr or result.stdout}
     except Exception as e:

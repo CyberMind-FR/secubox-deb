@@ -435,26 +435,9 @@
 
     <script>
         const API = '/api/v1/publish';
+        const METABLOGIZER_API = '/api/v1/metablogizer';
         const token = () => localStorage.getItem('sbx_token');
         const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
-
-        // Mock data for VBOX testing when API unavailable
-        const MOCK_DATA = {
-            apps: [
-                { name: 'dashboard', running: true, port: 8501 },
-                { name: 'data-explorer', running: false, port: null }
-            ],
-            projects: [
-                { name: 'analytics', template: 'dashboard', created: '2026-05-01' }
-            ],
-            files: [
-                { name: 'report.pdf', size: '2.4 MB', published: true }
-            ],
-            sites: [
-                { name: 'blog', url: 'https://blog.secubox.local', published: true },
-                { name: 'docs', url: 'https://docs.secubox.local', published: false }
-            ]
-        };
 
         async function api(path, opts = {}) {
             const controller = new AbortController();
@@ -466,11 +449,33 @@
                 return res.json();
             } catch (e) {
                 clearTimeout(timeout);
-                console.warn('API unavailable, using mock data:', e.message);
-                // Return mock data for overview endpoint in dev/VBOX mode
-                if (path === '/overview') return MOCK_DATA;
+                console.warn('Publish API unavailable:', e.message);
                 return {};
             }
+        }
+
+        async function fetchMetablogizerSites() {
+            // Try metablogizer API directly
+            try {
+                const res = await fetch(METABLOGIZER_API + '/sites', { headers: headers(), signal: AbortSignal.timeout(5000) });
+                if (res.ok) {
+                    const data = await res.json();
+                    return data.sites || [];
+                }
+            } catch (e) {
+                console.warn('MetaBlogizer API via sites failed:', e.message);
+            }
+            // Fallback to access endpoint (public)
+            try {
+                const res = await fetch(METABLOGIZER_API + '/access', { signal: AbortSignal.timeout(5000) });
+                if (res.ok) {
+                    const data = await res.json();
+                    return data.sites || [];
+                }
+            } catch (e) {
+                console.warn('MetaBlogizer API via access failed:', e.message);
+            }
+            return [];
         }
 
         function switchTab(tabName) {
@@ -483,11 +488,17 @@
         async function loadOverview() {
             const d = await api('/overview');
 
+            // Fallback: fetch metablogizer sites directly if not in overview
+            let sites = d.sites || [];
+            if (sites.length === 0) {
+                sites = await fetchMetablogizerSites();
+            }
+
             // Update counts
             document.getElementById('streamlitCount').textContent = d.apps?.length || 0;
             document.getElementById('streamforgeCount').textContent = d.projects?.length || 0;
             document.getElementById('dropletCount').textContent = d.files?.length || 0;
-            document.getElementById('metablogizerCount').textContent = d.sites?.length || 0;
+            document.getElementById('metablogizerCount').textContent = sites.length;
 
             // Apps table
             const appsTable = document.getElementById('appsTable');
@@ -539,19 +550,31 @@
                 `).join('');
             }
 
-            // Sites table
+            // Sites table (uses `sites` from fallback)
             const sitesTable = document.getElementById('sitesTable');
-            if (!d.sites || d.sites.length === 0) {
+            if (!sites || sites.length === 0) {
                 sitesTable.innerHTML = '<tr><td colspan="4" class="empty">No MetaBlogizer sites</td></tr>';
             } else {
-                sitesTable.innerHTML = d.sites.map(s => `
+                sitesTable.innerHTML = sites.map(s => {
+                    // Handle both formats: access API (domain/url) and sites API (name/domain/published)
+                    const url = s.url || (s.domain ? `https://${s.domain}` : '#');
+                    const displayUrl = s.url || s.domain || '-';
+                    const isPublished = s.published !== undefined ? s.published : true;
+                    const sizeInfo = s.size ? ` (${s.size})` : '';
+                    return `
                     <tr>
-                        <td>${s.name}</td>
-                        <td><a href="${s.url || '#'}" target="_blank">${s.url || '-'}</a></td>
-                        <td><span class="badge ${s.published ? 'published' : 'stopped'}">${s.published ? 'Live' : 'Draft'}</span></td>
-                        <td><button class="btn primary" onclick="publishSite('${s.name}')">Publish</button></td>
-                    </tr>
-                `).join('');
+                        <td>${s.name}${sizeInfo}</td>
+                        <td><a href="${url}" target="_blank">${displayUrl}</a></td>
+                        <td><span class="badge ${isPublished ? 'published' : 'stopped'}">${isPublished ? '✅ Live' : '⏸️ Draft'}</span></td>
+                        <td class="btn-group">
+                            ${isPublished
+                                ? `<button class="btn danger" onclick="unpublishSite('${s.name}')">Unpublish</button>`
+                                : `<button class="btn primary" onclick="publishSite('${s.name}')">Publish</button>`
+                            }
+                            <a class="btn" href="${url}" target="_blank">🔗 Visit</a>
+                        </td>
+                    </tr>`;
+                }).join('');
             }
         }
 
@@ -598,7 +621,23 @@
         }
 
         async function publishSite(name) {
-            await api(`/metablogizer/publish/${name}`, { method: 'POST' });
+            // Try publish API first, fallback to metablogizer API
+            let result = await api(`/metablogizer/publish/${name}`, { method: 'POST' });
+            if (result.error) {
+                try {
+                    await fetch(`${METABLOGIZER_API}/site/${name}/publish`, { method: 'POST', headers: headers() });
+                } catch (e) {}
+            }
+            refresh();
+        }
+
+        async function unpublishSite(name) {
+            // Try metablogizer API directly
+            try {
+                await fetch(`${METABLOGIZER_API}/site/${name}/unpublish`, { method: 'POST', headers: headers() });
+            } catch (e) {
+                console.warn('Unpublish failed:', e.message);
+            }
             refresh();
         }
 

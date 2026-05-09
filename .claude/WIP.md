@@ -1,9 +1,155 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-09 (Session 134)*
+*Mis à jour : 2026-05-09 (Session 138)*
 
 ---
 
-## 🔄 Session 134: CrowdSec Bans Fix + Auth Parser + CPU Optimization
+## 🔄 Session 137: Module Screenshots Wiki Multilangue
+
+### Screenshot Capture System — COMPLETE
+- [x] `scripts/capture-screenshots.py` — Auto-discovers 117 modules from packages/
+- [x] Playwright-based capture with JWT authentication (admin/secubox)
+- [x] 30-second delay per page for cache refresh
+- [x] Thumbnail generation (400x225) for wiki index
+- [x] JSON manifest output (`capture-manifest.json`)
+
+### Documentation Generator — COMPLETE
+- [x] `scripts/generate-docs.py` — Extended to 105 modules
+- [x] Multilingual descriptions (EN, FR, DE, ZH)
+- [x] `--include-screenshots` flag for wiki integration
+- [x] Category index pages generation
+- [x] Screenshot existence checking
+
+### Module Categories (105 in generate-docs, 117 discovered)
+| Category | Count |
+|----------|-------|
+| Security | 19 |
+| Network | 11 |
+| Monitoring | 8 |
+| System | 8 |
+| Media | 7 |
+| AI | 6 |
+| DNS | 6 |
+| Publishing | 6 |
+| Dashboard | 5 |
+| VPN & Privacy | 9 |
+| Email | 4 |
+| IoT | 4 |
+| Communication | 4 |
+| Access | 3 |
+| Services | 3 |
+| Apps | 3 |
+
+### Files Created/Updated
+- `scripts/capture-screenshots.py` — NEW
+- `scripts/generate-docs.py` — Extended 47→105 modules
+- `docs/screenshots/README.md` — Updated
+- `docs/screenshots/thumbnails/` — NEW directory
+
+### Running
+```bash
+# Capture running in background (~1h for 117 modules @ 30s each)
+tail -f /tmp/capture-screenshots-full.log
+
+# Generate wiki with screenshots
+python scripts/generate-docs.py --include-screenshots
+```
+
+### ⬜ Next Up (Notes)
+- [ ] Make menubar smart mobile responsive, web popup override
+- [ ] Fix portal/login.html redirection to /login.html
+
+---
+
+## ✅ Session 136: API Routes + Unified NAC + Metablogizer Publish
+
+### Modular Nginx Routes — COMPLETE
+- [x] Created `/etc/nginx/secubox-routes.d/` for per-module route files
+- [x] Added routes for metablogizer, cyberfeed, hub, nac
+- [x] Each module can ship its own nginx route file
+
+### Hub Public Endpoints — COMPLETE
+- [x] Added `/api/v1/hub/public/menu` — returns sidebar menu structure
+- [x] Added `/api/v1/hub/public/led_status` — returns system health LEDs
+- [x] Added `/api/v1/hub/public/health-batch` — batch health check for modules
+- [x] No auth required for sidebar components
+
+### Safe JSON API Wrapper — COMPLETE
+- [x] Created `packages/secubox-hub/www/shared/api-utils.js`
+- [x] Safe JSON parsing (handles HTML error responses gracefully)
+- [x] Automatic 401 redirect to login
+- [x] Timeout handling
+
+### Unified NAC Module — COMPLETE
+- [x] Merged NAC (Client Guardian) + MAC-Guard into single module
+- [x] Tabs: Devices, Whitelist, Blacklist, Quarantine, Alerts, Vendors, Settings
+- [x] Full device management with search/filter
+- [x] Quick actions: whitelist, blacklist, quarantine
+- [x] Vendor statistics bar chart
+- [x] Network scan capability
+
+### Metablogizer Publish — COMPLETE
+- [x] Replaced all `.sb.local` and `.secubox.local` domains with `.gk2.secubox.in`
+- [x] Published 50+ unpublished sites with valid domains
+- [x] Sites now use wildcard cert `*.gk2.secubox.in`
+
+### Files Updated (Server)
+- `/usr/lib/secubox/admin/api/main.py` — Added public endpoints
+- `/etc/nginx/secubox-routes.d/*.conf` — Modular nginx routes
+- `/usr/share/secubox/www/nac/index.html` — Unified NAC module
+- `/usr/share/secubox/www/shared/api-utils.js` — Safe API wrapper
+- `/srv/metablogizer/sites/*/index.html` — Domain replacements
+
+### Files Updated (Repo)
+- `packages/secubox-hub/www/nac/index.html` — Unified NAC module
+- `packages/secubox-hub/www/shared/api-utils.js` — Safe API wrapper
+
+---
+
+## ✅ Session 135: Error Pages + WAF Rework + Geomap Fix
+
+### Error Pages — COMPLETE
+- [x] Created fun/smarty error pages (`packages/secubox-hub/www/shared/error.html`)
+- [x] ASCII art with kaomoji for each error code (400, 401, 403, 404, 500, 502, 503, 504)
+- [x] CRT light theme, system diagnostics, health checks
+- [x] Fixed nginx to properly return 404 for unknown paths (`try_files $uri $uri/ =404;`)
+- [x] Homepage route `location = /` serves index.html
+
+### WAF Dashboard Rework — COMPLETE
+- [x] **Live Attack Banner** at top with real-time last attack display
+- [x] Combined **Security Events** table (alerts + bans unified)
+- [x] Emoji stats cards: 🔥 Threats | 🚫 Bans | ⚡ Rules | 📁 Categories | 🔒 Blocked | 🛡️ Protected
+- [x] **Category Pills** with emojis (💉 SQLi, 🔥 XSS, 💀 RCE, 🔍 Scanner, 🤖 Bot...)
+- [x] 10s refresh for live banner, 30s for full stats
+
+### Geomap Positions — FIXED
+- [x] Recalibrated country coordinates for wargames-earth.png projection
+- [x] 50+ countries with accurate x,y positions
+- [x] Target set to France (SecuBox HQ - Notre-Dame-du-Cruet)
+
+### CrowdSec Enrollment — FIXED
+- [x] API now handles "already enrolled" gracefully (returns `already_enrolled: true`)
+- [x] Frontend shows "✅ Already enrolled to CAPI" instead of error
+
+### Sidebar JSON Fix — COMPLETE
+- [x] Added HTML detection to clear corrupted localStorage cache
+- [x] Better error handling with cache cleanup
+
+### USB Gadget Network — FIXED
+- [x] Brought up usb1 interface
+- [x] Assigned IP 192.168.42.1/24
+- [x] NAT forwarding for USB clients
+
+### Files Updated
+- `packages/secubox-hub/www/shared/error.html` — NEW
+- `packages/secubox-hub/www/shared/sidebar.js` — JSON.parse fix
+- `packages/secubox-waf/www/waf/index.html` — Full rework
+- `packages/secubox-crowdsec/api/main.py` — Enrollment fix
+- `packages/secubox-crowdsec/www/crowdsec/index.html` — Enrollment UI
+- `/etc/nginx/sites-enabled/webui.conf` — Error page routing
+
+---
+
+## ✅ Session 134: CrowdSec Bans Fix + Auth Parser + CPU Optimization
 
 ### CrowdSec Decisions API — OPTIMIZED
 - [x] **Cache 60s** to avoid hammering LAPI (was causing high CPU)

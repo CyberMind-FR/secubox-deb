@@ -463,9 +463,15 @@
             if (btn) btn.textContent = '⏳ Enrolling...';
             const result = await api('/capi/enroll', 'POST');
             if (result.success) {
-                alert('✅ CAPI enrollment successful! Community blocklists will sync shortly.');
+                if (result.already_enrolled) {
+                    alert('✅ Already enrolled to CAPI. Community blocklists are syncing.');
+                } else {
+                    alert('✅ CAPI enrollment successful! Community blocklists will sync shortly.');
+                }
+                if (btn) btn.remove();  // Remove button on success
             } else {
                 alert('❌ Enrollment failed: ' + (result.error || 'Check console enrollment key'));
+                if (btn) btn.textContent = '🔑 Enroll';  // Reset button
             }
             loadStatus();
         }
