@@ -4,7 +4,7 @@
 ---
 ## 2026-05-09
 
-### Session 141 — WAF Optimization, Route Fixes, Export Package
+### Session 141 — WAF Optimization, Route Fixes, Export Package, UI Enhancements
 
 **Problem:** Mitmproxy CPU at 90%+ constant, many sites returning 502/503.
 
@@ -36,6 +36,18 @@
    - REVOKE ALL sessions panic button
    - Emergency session revocation endpoint
 
+5. **WAF UI Enhancements**
+   - **Eyemote Visualization** - Concentric donut rings for attack origins by continent
+     - 5 Olympic-colored rings (Americas, Europe, Asia, Oceania, Africa)
+     - Pulsing center pupil with total attack count
+     - Legend with circular flag badges per country
+   - **Quick Action Buttons** - Circular buttons in status bar:
+     - 🔄 Refresh (with spinner animation)
+     - 🛡️ WAF Toggle (active/paused states)
+     - 🗑️ Clear All Bans (with confirmation)
+     - 📤 Export Logs (JSON download)
+     - ⚙️ Settings link
+
 **Files Updated:**
 - `scripts/sync-mitmproxy-routes.sh` - Dead container auto-fix
 - `packages/secubox-waf/mitmproxy/secubox_waf.py` - Optimizations
@@ -43,6 +55,7 @@
 - `packages/secubox-metablogizer/api/main.py` - Enhanced export
 - `packages/secubox-users/api/main.py` - Revoke all endpoint
 - `packages/secubox-users/www/users/index.html` - Panic button
+- `packages/secubox-waf/www/waf/index.html` - Eyemote rings, quick action buttons
 
 **Systemd:**
 - `sync-mitmproxy-routes.timer` - Every 5 minutes
