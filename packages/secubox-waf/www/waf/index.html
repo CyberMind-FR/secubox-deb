@@ -292,6 +292,105 @@
         .legend-ring[title]:hover {
             background: rgba(255,255,255,0.06);
         }
+        /* Mini Eyemote Cards */
+        .eyemote-card {
+            display: flex;
+            flex-direction: column;
+        }
+        .eyemote-mini {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: var(--space-m) 0;
+        }
+        .eyemote-svg-mini {
+            width: 180px;
+            height: 180px;
+        }
+        .eyemote-svg-mini .ring-fill { transition: stroke-dasharray 0.8s ease-out; }
+        .eyemote-svg-mini .eyemote-pupil { animation: pupilPulse 2s infinite; }
+        .eyemote-total-mini {
+            position: absolute;
+            font-family: var(--font-mono);
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: #00ff41;
+            text-shadow: 0 0 15px rgba(0,255,65,0.5);
+        }
+        .eyemote-total-mini.visitor { color: #00d4ff; text-shadow: 0 0 15px rgba(0,212,255,0.5); }
+        .eyemote-total-mini.vhost { color: #f97316; text-shadow: 0 0 15px rgba(249,115,22,0.5); }
+        .eyemote-legend-mini {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            padding: 0 var(--space-s);
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .legend-row-mini {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 8px;
+            background: rgba(255,255,255,0.03);
+            border-radius: var(--radius-sm);
+            border-left: 3px solid;
+        }
+        .legend-row-mini .row-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .legend-row-mini .row-val {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            font-weight: 600;
+            min-width: 50px;
+        }
+        .legend-row-mini .row-flags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            flex: 1;
+        }
+        .flag-mini {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            border: 2px solid;
+            position: relative;
+        }
+        .flag-mini .fm-count {
+            position: absolute;
+            bottom: -3px;
+            right: -3px;
+            font-size: 0.5rem;
+            background: #000;
+            color: #fff;
+            padding: 1px 2px;
+            border-radius: 4px;
+            font-family: var(--font-mono);
+        }
+        .vhost-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 8px;
+            background: rgba(255,255,255,0.05);
+            border-radius: var(--radius-sm);
+            font-size: 0.7rem;
+            font-family: var(--font-mono);
+            border: 1px solid;
+        }
+        .vhost-badge .vb-count {
+            font-weight: 700;
+        }
         .ring-flags {
             display: flex;
             flex-wrap: wrap;
@@ -505,53 +604,78 @@
             </div>
         </div>
 
-        <!-- Eyemote Concentric Donuts - Threat Origins by Continent -->
-        <div class="glass-card">
-            <h2>👁️ Attack Origin</h2>
-            <div class="eyemote-container">
-                <div class="eyemote-visual">
-                    <svg viewBox="0 0 300 300" class="eyemote-svg" id="eyemoteSvg">
-                        <!-- Background glow -->
-                        <defs>
-                            <radialGradient id="eyeGlow" cx="50%" cy="50%" r="50%">
-                                <stop offset="0%" stop-color="#00ff41" stop-opacity="0.1"/>
-                                <stop offset="100%" stop-color="transparent"/>
-                            </radialGradient>
-                        </defs>
-                        <circle cx="150" cy="150" r="145" fill="url(#eyeGlow)"/>
-
-                        <!-- Ring 1 (outermost) - will be dynamically filled -->
-                        <circle class="ring-bg" cx="150" cy="150" r="130" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="20"/>
-                        <circle class="ring-fill" id="ring1" cx="150" cy="150" r="130" fill="none" stroke-width="20" stroke-dasharray="0 817" stroke-linecap="round" transform="rotate(-90 150 150)"/>
-
-                        <!-- Ring 2 -->
-                        <circle class="ring-bg" cx="150" cy="150" r="105" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="20"/>
-                        <circle class="ring-fill" id="ring2" cx="150" cy="150" r="105" fill="none" stroke-width="20" stroke-dasharray="0 660" stroke-linecap="round" transform="rotate(-90 150 150)"/>
-
-                        <!-- Ring 3 -->
-                        <circle class="ring-bg" cx="150" cy="150" r="80" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="20"/>
-                        <circle class="ring-fill" id="ring3" cx="150" cy="150" r="80" fill="none" stroke-width="20" stroke-dasharray="0 503" stroke-linecap="round" transform="rotate(-90 150 150)"/>
-
-                        <!-- Ring 4 -->
-                        <circle class="ring-bg" cx="150" cy="150" r="55" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="20"/>
-                        <circle class="ring-fill" id="ring4" cx="150" cy="150" r="55" fill="none" stroke-width="20" stroke-dasharray="0 346" stroke-linecap="round" transform="rotate(-90 150 150)"/>
-
-                        <!-- Ring 5 (center) -->
-                        <circle class="ring-bg" cx="150" cy="150" r="30" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="20"/>
-                        <circle class="ring-fill" id="ring5" cx="150" cy="150" r="30" fill="none" stroke-width="20" stroke-dasharray="0 188" stroke-linecap="round" transform="rotate(-90 150 150)"/>
-
-                        <!-- Center pupil -->
-                        <circle cx="150" cy="150" r="12" fill="#00ff41" class="eyemote-pupil"/>
+        <!-- Triple Eyemote Sensors -->
+        <div class="grid-3">
+            <!-- Eyemote 1: Attack Origin by Continent -->
+            <div class="glass-card eyemote-card">
+                <h2>👁️ Attack Origin</h2>
+                <div class="eyemote-mini">
+                    <svg viewBox="0 0 200 200" class="eyemote-svg-mini" id="eyemoteSvgOrigin">
+                        <defs><radialGradient id="eyeGlow1" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#00ff41" stop-opacity="0.1"/><stop offset="100%" stop-color="transparent"/></radialGradient></defs>
+                        <circle cx="100" cy="100" r="95" fill="url(#eyeGlow1)"/>
+                        <circle class="ring-bg" cx="100" cy="100" r="85" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
+                        <circle class="ring-fill" id="originRing1" cx="100" cy="100" r="85" fill="none" stroke="#DF0024" stroke-width="14" stroke-dasharray="0 534" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+                        <circle class="ring-bg" cx="100" cy="100" r="68" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
+                        <circle class="ring-fill" id="originRing2" cx="100" cy="100" r="68" fill="none" stroke="#0085C7" stroke-width="14" stroke-dasharray="0 427" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+                        <circle class="ring-bg" cx="100" cy="100" r="51" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
+                        <circle class="ring-fill" id="originRing3" cx="100" cy="100" r="51" fill="none" stroke="#F4C300" stroke-width="14" stroke-dasharray="0 320" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+                        <circle class="ring-bg" cx="100" cy="100" r="34" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
+                        <circle class="ring-fill" id="originRing4" cx="100" cy="100" r="34" fill="none" stroke="#009F3D" stroke-width="14" stroke-dasharray="0 214" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+                        <circle class="ring-bg" cx="100" cy="100" r="17" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
+                        <circle class="ring-fill" id="originRing5" cx="100" cy="100" r="17" fill="none" stroke="#666666" stroke-width="14" stroke-dasharray="0 107" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+                        <circle cx="100" cy="100" r="8" fill="#00ff41" class="eyemote-pupil"/>
                     </svg>
-                    <div class="eyemote-total" id="eyemoteTotal">0</div>
+                    <div class="eyemote-total-mini" id="originTotal">0</div>
                 </div>
-                <div class="eyemote-legend" id="eyemoteLegend">
-                    <div class="legend-ring" data-ring="1" title="Americas - North & South America"><span class="ring-dot" style="background:#DF0024"></span><span class="ring-val" id="valAmericas">0</span><span class="ring-flags" id="flagsAmericas"></span></div>
-                    <div class="legend-ring" data-ring="2" title="Europe - European Union & neighbors"><span class="ring-dot" style="background:#0085C7"></span><span class="ring-val" id="valEurope">0</span><span class="ring-flags" id="flagsEurope"></span></div>
-                    <div class="legend-ring" data-ring="3" title="Asia - Asia & Middle East"><span class="ring-dot" style="background:#F4C300"></span><span class="ring-val" id="valAsia">0</span><span class="ring-flags" id="flagsAsia"></span></div>
-                    <div class="legend-ring" data-ring="4" title="Oceania - Australia & Pacific"><span class="ring-dot" style="background:#009F3D"></span><span class="ring-val" id="valOceania">0</span><span class="ring-flags" id="flagsOceania"></span></div>
-                    <div class="legend-ring" data-ring="5" title="Africa - African continent"><span class="ring-dot" style="background:#666666"></span><span class="ring-val" id="valAfrica">0</span><span class="ring-flags" id="flagsAfrica"></span></div>
+                <div class="eyemote-legend-mini" id="originLegend"></div>
+            </div>
+
+            <!-- Eyemote 2: Visitors by Country -->
+            <div class="glass-card eyemote-card">
+                <h2>👤 Visitors</h2>
+                <div class="eyemote-mini">
+                    <svg viewBox="0 0 200 200" class="eyemote-svg-mini" id="eyemoteSvgVisitors">
+                        <defs><radialGradient id="eyeGlow2" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#00d4ff" stop-opacity="0.1"/><stop offset="100%" stop-color="transparent"/></radialGradient></defs>
+                        <circle cx="100" cy="100" r="95" fill="url(#eyeGlow2)"/>
+                        <circle class="ring-bg" cx="100" cy="100" r="85" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
+                        <circle class="ring-fill" id="visitorRing1" cx="100" cy="100" r="85" fill="none" stroke="#00d4ff" stroke-width="14" stroke-dasharray="0 534" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+                        <circle class="ring-bg" cx="100" cy="100" r="68" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
+                        <circle class="ring-fill" id="visitorRing2" cx="100" cy="100" r="68" fill="none" stroke="#0ea5e9" stroke-width="14" stroke-dasharray="0 427" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+                        <circle class="ring-bg" cx="100" cy="100" r="51" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
+                        <circle class="ring-fill" id="visitorRing3" cx="100" cy="100" r="51" fill="none" stroke="#6366f1" stroke-width="14" stroke-dasharray="0 320" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+                        <circle class="ring-bg" cx="100" cy="100" r="34" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
+                        <circle class="ring-fill" id="visitorRing4" cx="100" cy="100" r="34" fill="none" stroke="#8b5cf6" stroke-width="14" stroke-dasharray="0 214" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+                        <circle class="ring-bg" cx="100" cy="100" r="17" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
+                        <circle class="ring-fill" id="visitorRing5" cx="100" cy="100" r="17" fill="none" stroke="#a855f7" stroke-width="14" stroke-dasharray="0 107" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+                        <circle cx="100" cy="100" r="8" fill="#00d4ff" class="eyemote-pupil"/>
+                    </svg>
+                    <div class="eyemote-total-mini visitor" id="visitorTotal">0</div>
                 </div>
+                <div class="eyemote-legend-mini" id="visitorLegend"></div>
+            </div>
+
+            <!-- Eyemote 3: Target Vhosts -->
+            <div class="glass-card eyemote-card">
+                <h2>🎯 Target Vhosts</h2>
+                <div class="eyemote-mini">
+                    <svg viewBox="0 0 200 200" class="eyemote-svg-mini" id="eyemoteSvgVhosts">
+                        <defs><radialGradient id="eyeGlow3" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#f97316" stop-opacity="0.1"/><stop offset="100%" stop-color="transparent"/></radialGradient></defs>
+                        <circle cx="100" cy="100" r="95" fill="url(#eyeGlow3)"/>
+                        <circle class="ring-bg" cx="100" cy="100" r="85" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
+                        <circle class="ring-fill" id="vhostRing1" cx="100" cy="100" r="85" fill="none" stroke="#ef4444" stroke-width="14" stroke-dasharray="0 534" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+                        <circle class="ring-bg" cx="100" cy="100" r="68" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
+                        <circle class="ring-fill" id="vhostRing2" cx="100" cy="100" r="68" fill="none" stroke="#f97316" stroke-width="14" stroke-dasharray="0 427" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+                        <circle class="ring-bg" cx="100" cy="100" r="51" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
+                        <circle class="ring-fill" id="vhostRing3" cx="100" cy="100" r="51" fill="none" stroke="#eab308" stroke-width="14" stroke-dasharray="0 320" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+                        <circle class="ring-bg" cx="100" cy="100" r="34" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
+                        <circle class="ring-fill" id="vhostRing4" cx="100" cy="100" r="34" fill="none" stroke="#22c55e" stroke-width="14" stroke-dasharray="0 214" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+                        <circle class="ring-bg" cx="100" cy="100" r="17" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
+                        <circle class="ring-fill" id="vhostRing5" cx="100" cy="100" r="17" fill="none" stroke="#14b8a6" stroke-width="14" stroke-dasharray="0 107" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+                        <circle cx="100" cy="100" r="8" fill="#f97316" class="eyemote-pupil"/>
+                    </svg>
+                    <div class="eyemote-total-mini vhost" id="vhostTotal">0</div>
+                </div>
+                <div class="eyemote-legend-mini" id="vhostLegend"></div>
             </div>
         </div>
     </main>
@@ -601,18 +725,25 @@
             return COUNTRY_CONTINENT[countryCode?.toUpperCase()] || 'americas';
         }
 
-        // Eyemote Concentric Rings Update
-        const RING_CONFIG = [
-            { id: 1, continent: 'americas', color: '#DF0024', r: 130, circ: 817 },
-            { id: 2, continent: 'europe', color: '#0085C7', r: 105, circ: 660 },
-            { id: 3, continent: 'asia', color: '#F4C300', r: 80, circ: 503 },
-            { id: 4, continent: 'oceania', color: '#009F3D', r: 55, circ: 346 },
-            { id: 5, continent: 'africa', color: '#666666', r: 30, circ: 188 }
+        // Mini Eyemote Ring Config (smaller version)
+        const RING_CONFIG_MINI = [
+            { id: 1, continent: 'americas', color: '#DF0024', circ: 534 },
+            { id: 2, continent: 'europe', color: '#0085C7', circ: 427 },
+            { id: 3, continent: 'asia', color: '#F4C300', circ: 320 },
+            { id: 4, continent: 'oceania', color: '#009F3D', circ: 214 },
+            { id: 5, continent: 'africa', color: '#666666', circ: 107 }
         ];
 
-        function updateEyemote(events) {
-            const counts = { europe: 0, asia: 0, africa: 0, oceania: 0, americas: 0 };
-            const countryData = { europe: {}, asia: {}, africa: {}, oceania: {}, americas: {} };
+        // Visitor ring colors (blue theme)
+        const VISITOR_COLORS = ['#00d4ff', '#0ea5e9', '#6366f1', '#8b5cf6', '#a855f7'];
+        // Vhost ring colors (warm theme)
+        const VHOST_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#14b8a6'];
+
+        // Generic eyemote updater for all 3 sensors
+        function updateEyemoteMini(prefix, events, colors, totalId, legendId, isVhost = false) {
+            const counts = { americas: 0, europe: 0, asia: 0, oceania: 0, africa: 0 };
+            const countryData = { americas: {}, europe: {}, asia: {}, oceania: {}, africa: {} };
+            const vhostData = {};
 
             events.forEach(e => {
                 const continent = getContinent(e.country);
@@ -621,52 +752,86 @@
                 if (e.country) {
                     countryData[continent][e.country] = (countryData[continent][e.country] || 0) + count;
                 }
+                if (isVhost && e.vhost) {
+                    vhostData[e.vhost] = (vhostData[e.vhost] || 0) + count;
+                }
             });
 
-            // Total = 100% base for percentage calculation
             const total = Object.values(counts).reduce((a, b) => a + b, 0);
-
-            // Update total
-            const totalEl = document.getElementById('eyemoteTotal');
+            const totalEl = document.getElementById(totalId);
             if (totalEl) totalEl.textContent = total;
 
-            // Update rings and legend - each ring shows % of TOTAL attacks
-            RING_CONFIG.forEach(cfg => {
+            // Update rings
+            RING_CONFIG_MINI.forEach((cfg, i) => {
                 const count = counts[cfg.continent] || 0;
-                // Percentage based on total sum (not max)
                 const pct = total > 0 ? count / total : 0;
-                const pctDisplay = Math.round(pct * 100);
-
-                // Update SVG ring - fill proportional to percentage of total
-                const ringEl = document.getElementById('ring' + cfg.id);
+                const ringEl = document.getElementById(prefix + 'Ring' + cfg.id);
                 if (ringEl) {
-                    ringEl.style.stroke = cfg.color;
-                    const dashLen = pct * cfg.circ;
-                    ringEl.style.strokeDasharray = dashLen + ' ' + cfg.circ;
-                }
-
-                // Update legend value with count and percentage
-                const capCont = cfg.continent.charAt(0).toUpperCase() + cfg.continent.slice(1);
-                const valEl = document.getElementById('val' + capCont);
-                if (valEl) {
-                    valEl.innerHTML = count + ' <span style="font-size:0.7rem;color:var(--muted-dark);">(' + pctDisplay + '%)</span>';
-                }
-
-                // Update flags as circles
-                const flagsEl = document.getElementById('flags' + capCont);
-                if (flagsEl) {
-                    const countries = Object.entries(countryData[cfg.continent])
-                        .sort((a, b) => b[1] - a[1])
-                        .slice(0, 10);
-                    if (countries.length === 0) {
-                        flagsEl.innerHTML = '<span style="color:var(--muted-dark);font-size:0.7rem;">No attacks</span>';
-                    } else {
-                        flagsEl.innerHTML = countries.map(([cc, cnt]) =>
-                            '<span class="flag-circle">' + countryToFlag(cc) + '<span class="fc-count">' + cnt + '</span></span>'
-                        ).join('');
-                    }
+                    ringEl.style.stroke = colors[i];
+                    ringEl.style.strokeDasharray = (pct * cfg.circ) + ' ' + cfg.circ;
                 }
             });
+
+            // Update legend
+            const legendEl = document.getElementById(legendId);
+            if (legendEl) {
+                if (isVhost) {
+                    // Vhost legend: show top vhosts
+                    const vhosts = Object.entries(vhostData).sort((a, b) => b[1] - a[1]).slice(0, 5);
+                    if (vhosts.length === 0) {
+                        legendEl.innerHTML = '<div style="color:var(--muted-dark);font-size:0.75rem;text-align:center;">No targets</div>';
+                    } else {
+                        legendEl.innerHTML = vhosts.map(([vh, cnt], i) => {
+                            const pct = total > 0 ? Math.round(cnt / total * 100) : 0;
+                            const emoji = vh.includes('git') ? '💻' : vh.includes('mail') ? '📧' : vh.includes('api') ? '⚡' : '🌐';
+                            return '<div class="legend-row-mini" style="border-color:' + VHOST_COLORS[i] + '"><span class="row-dot" style="background:' + VHOST_COLORS[i] + '"></span><span class="row-val">' + cnt + ' <span style="font-size:0.6rem;color:var(--muted-dark);">(' + pct + '%)</span></span><span class="vhost-badge" style="border-color:' + VHOST_COLORS[i] + '">' + emoji + ' ' + vh.replace(/\.gk2\.secubox\.in$/, '') + '</span></div>';
+                        }).join('');
+                    }
+                } else {
+                    // Country legend: show by continent with flags (% relative to continent total)
+                    const continents = ['americas', 'europe', 'asia', 'oceania', 'africa'];
+                    legendEl.innerHTML = continents.map((cont, i) => {
+                        const contTotal = counts[cont] || 0;
+                        if (contTotal === 0) return '';
+                        const pct = total > 0 ? Math.round(contTotal / total * 100) : 0;
+                        const countries = Object.entries(countryData[cont]).sort((a, b) => b[1] - a[1]).slice(0, 6);
+                        // Flag shows % relative to its own continent
+                        const flags = countries.map(([cc, cnt]) => {
+                            const flagPct = Math.round(cnt / contTotal * 100);
+                            return '<span class="flag-mini" style="border-color:' + colors[i] + '" title="' + cc + ': ' + cnt + ' (' + flagPct + '%)">' + countryToFlag(cc) + '<span class="fm-count">' + flagPct + '%</span></span>';
+                        }).join('');
+                        return '<div class="legend-row-mini" style="border-color:' + colors[i] + '"><span class="row-dot" style="background:' + colors[i] + '"></span><span class="row-val">' + contTotal + ' <span style="font-size:0.6rem;color:var(--muted-dark);">(' + pct + '%)</span></span><span class="row-flags">' + flags + '</span></div>';
+                    }).filter(Boolean).join('');
+                    if (!legendEl.innerHTML) legendEl.innerHTML = '<div style="color:var(--muted-dark);font-size:0.75rem;text-align:center;">No data</div>';
+                }
+            }
+        }
+
+        // Update all 3 eyemotes
+        function updateAllEyemotes(events, statsData) {
+            // 1. Attack Origin - by continent (attacks)
+            updateEyemoteMini('origin', events, RING_CONFIG_MINI.map(c => c.color), 'originTotal', 'originLegend', false);
+
+            // 2. Visitors - unique IPs by continent
+            const visitorEvents = [];
+            const seenIps = new Set();
+            events.forEach(e => {
+                if (e.ip && !seenIps.has(e.ip)) {
+                    seenIps.add(e.ip);
+                    visitorEvents.push({ country: e.country, count: 1 });
+                }
+            });
+            updateEyemoteMini('visitor', visitorEvents, VISITOR_COLORS, 'visitorTotal', 'visitorLegend', false);
+
+            // 3. Target Vhosts - attacks per vhost
+            const vhostEvents = [];
+            if (statsData?.top_vhosts) {
+                Object.entries(statsData.top_vhosts).forEach(([vh, data]) => {
+                    const count = typeof data === 'object' ? data.count || 0 : data;
+                    vhostEvents.push({ vhost: vh, count: count, country: 'XX' });
+                });
+            }
+            updateEyemoteMini('vhost', vhostEvents, VHOST_COLORS, 'vhostTotal', 'vhostLegend', true);
         }
 
         function getCatEmoji(cat) {
@@ -777,8 +942,9 @@
                 updateLiveBanner(null);
             }
 
-            // Update Eyemote concentric rings with continent data
-            updateEyemote(events);
+            // Update all 3 Eyemote sensors
+            // Store events globally for stats to access
+            window._wafEvents = events;
 
             // Render table
             const tbody = document.getElementById('eventsTable');
@@ -859,6 +1025,11 @@
 
             // Geomap
             renderGeomap(d);
+
+            // Update all 3 Eyemote sensors with events + stats
+            if (window._wafEvents) {
+                updateAllEyemotes(window._wafEvents, d);
+            }
         }
 
         function createDonut(data, type, size) {
