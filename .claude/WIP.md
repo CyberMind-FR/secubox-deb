@@ -54,9 +54,12 @@ tail -f /tmp/capture-screenshots-full.log
 python scripts/generate-docs.py --include-screenshots
 ```
 
-### ⬜ Next Up (Notes)
-- [ ] Make menubar smart mobile responsive, web popup override
-- [ ] Fix portal/login.html redirection to /login.html
+### ✅ Session 138 Additions
+- [x] Mobile hamburger menu toggle (sidebar.js v2.36.0)
+- [x] Portal/login.html transparent redirect to /login.html
+
+### ⬜ Next Up
+- [ ] Web popup override for mobile menu
 
 ---
 
