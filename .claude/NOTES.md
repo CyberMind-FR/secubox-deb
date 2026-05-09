@@ -215,3 +215,118 @@ Static assets in `/www/luci-static/secubox/`:
 - `cascade.css` (28KB) — main stylesheet
 - `index.html` (82KB) — standalone dashboard
 - `crt-engine.js` — CRT terminal effects
+
+---
+
+## Double-Buffer Pre-Cache Pattern with Lock File Protection (2026-05-09)
+
+### Problem
+Background cache refresh tasks in FastAPI can create **phantom processes** when:
+1. Service restarts while a refresh is running
+2. Multiple uvicorn workers spawn concurrent refreshes
+3. No timeout on blocking operations causes task to hang indefinitely
+
+### Solution: Lock File + Guards + Timeout
+
+```python
+import asyncio
+import concurrent.futures
+from pathlib import Path
+
+LOCK_FILE = Path("/run/secubox/<module>-cache.lock")
+_refresh_running = False  # In-process guard
+
+def _acquire_lock() -> bool:
+    """Try to acquire the lock file. Returns True if acquired."""
+    try:
+        LOCK_FILE.parent.mkdir(parents=True, exist_ok=True)
+        if LOCK_FILE.exists():
+            try:
+                pid = int(LOCK_FILE.read_text().strip())
+                import os
+                os.kill(pid, 0)  # Check if process alive
+                return False  # Another process holds lock
+            except (ValueError, ProcessLookupError, OSError):
+                LOCK_FILE.unlink(missing_ok=True)  # Stale lock
+        import os
+        LOCK_FILE.write_text(str(os.getpid()))
+        return True
+    except Exception:
+        return False
+
+def _release_lock():
+    """Release the lock file."""
+    LOCK_FILE.unlink(missing_ok=True)
+
+async def _refresh_all_caches():
+    """Background task with triple protection."""
+    global _refresh_running
+
+    while True:
+        # Guard 1: In-process concurrency check
+        if _refresh_running:
+            await asyncio.sleep(30)
+            continue
+
+        _refresh_running = True
+        try:
+            loop = asyncio.get_event_loop()
+            with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
+                futures = [
+                    loop.run_in_executor(pool, _compute_status_sync),
+                    loop.run_in_executor(pool, _compute_metrics_sync),
+                ]
+                # Guard 2: Timeout prevents infinite hang
+                results = await asyncio.wait_for(
+                    asyncio.gather(*futures, return_exceptions=True),
+                    timeout=25  # Must complete before next 30s cycle
+                )
+            # Update caches...
+        except asyncio.TimeoutError:
+            log.warning("Cache refresh timed out - skipping cycle")
+        except Exception as e:
+            log.error("Cache refresh failed: %s", e)
+        finally:
+            _refresh_running = False
+
+        await asyncio.sleep(30)
+
+async def start_cache_refresh():
+    """Start with lock file protection."""
+    # Guard 3: Cross-process lock file
+    if not _acquire_lock():
+        log.warning("Another process holds cache lock - using file cache only")
+        # Load from disk cache for instant responses
+        return
+
+    # Load file caches for instant startup
+    _status_cache = _load_cache_from_file(STATUS_CACHE_FILE)
+
+    asyncio.create_task(_refresh_all_caches())
+
+async def stop_cache_refresh():
+    """Cleanup on shutdown."""
+    _release_lock()
+```
+
+### Key Points
+
+| Protection | Purpose | Location |
+|------------|---------|----------|
+| `_refresh_running` | Prevents in-process overlap | `_refresh_all_caches()` |
+| `wait_for(timeout=25)` | Kills hung operations | `_refresh_all_caches()` |
+| Lock file (`/run/...`) | Prevents cross-process overlap | `start_cache_refresh()` |
+| PID check | Detects stale locks from crashed processes | `_acquire_lock()` |
+
+### When to Use
+
+- **Always** for stats-heavy endpoints (CPU, memory, disk, network)
+- **Always** when subprocess calls may hang (cscli, nft, ss)
+- **Always** when data can be 30-60s stale without impact
+- **Never** for real-time actions (start/stop/restart/ban)
+
+### Implementation in SecuBox
+
+Applied to:
+- `secubox-crowdsec/api/routers/status.py` — CrowdSec status/metrics/hub
+- `secubox-system/api/main.py` — System stats (planned)

@@ -1069,7 +1069,8 @@
             let svg = "<svg width=\"" + size + "\" height=\"" + size + "\" viewBox=\"0 0 " + size + " " + size + "\">";
             
             topCountries.forEach(function(c, i) {
-                const r = center - 8 - (i * (ringWidth + spacing));
+                const r = Math.max(5, center - 8 - (i * (ringWidth + spacing)));
+                if (r < 8) return; // Skip if ring too small
                 const pct = c.count / total;
                 const circ = 2 * Math.PI * r;
                 const dash = circ * pct;
@@ -1155,7 +1156,8 @@
             
             // Draw rings from outer to inner with emojis around them
             topData.forEach(function(cat, i) {
-                const r = center - 8 - (i * (ringWidth + spacing));
+                const r = Math.max(5, center - 8 - (i * (ringWidth + spacing)));
+                if (r < 8) return; // Skip if ring too small
                 const pct = cat.count / total;
                 const circ = 2 * Math.PI * r;
                 const dash = circ * pct;
@@ -1581,11 +1583,15 @@
             }
             // Network activity (interfaces up percentage)
             const netPct = data.interfaces_up && data.interfaces ? Math.round((data.interfaces_up / data.interfaces) * 100) : 0;
-            document.getElementById('net-pct').textContent = netPct + '%';
-            document.getElementById('net-pct').style.color = data.wan_status === 'connected' ? '#22c55e' : '#ef4444';
+            const netPctEl = document.getElementById('net-pct');
+            if (netPctEl) {
+                netPctEl.textContent = netPct + '%';
+                netPctEl.style.color = data.wan_status === 'connected' ? '#22c55e' : '#ef4444';
+            }
             updateMiniHistogram('net-histogram', netPct, '#3b82f6');
 
-            document.getElementById('net-info').textContent = data.wan_status || 'Unknown';
+            const netInfoEl = document.getElementById('net-info');
+            if (netInfoEl) netInfoEl.textContent = data.wan_status || 'Unknown';
 
             // Network card donut
             document.getElementById('net-card-donut').innerHTML = createCardDonut(
