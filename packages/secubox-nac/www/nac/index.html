@@ -325,15 +325,21 @@
             const clients = await api('/clients');
             const tbody = document.getElementById('clientsTable');
             if (clients.clients && clients.clients.length > 0) {
-                tbody.innerHTML = clients.clients.map(c => `
-                    <tr>
+                tbody.innerHTML = clients.clients.map(c => {
+                    const statusEmoji = c.status === 'online' ? '🟢' : c.status === 'offline' ? '🔴' : c.status === 'quarantine' ? '🟠' : '⚪';
+                    const statusLabel = c.status === 'online' ? 'Online' : c.status === 'offline' ? 'Offline' : c.status === 'quarantine' ? 'Quarantine' : c.status;
+                    return `<tr>
                         <td style="font-family:monospace">${c.mac}</td>
                         <td style="font-family:monospace">${c.ip}</td>
                         <td>${c.hostname || '-'}</td>
-                        <td><span class="badge ${c.status}">${c.status}</span></td>
-                        <td><button class="btn danger" onclick="quarantine('${c.mac}')">Quarantine</button></td>
-                    </tr>
-                `).join('');
+                        <td><span class="badge ${c.status}">${statusEmoji} ${statusLabel}</span></td>
+                        <td>
+                            ${c.status === 'quarantine'
+                                ? '<button class="btn" onclick="unquarantine(\'' + c.mac + '\')">🔓 Release</button>'
+                                : '<button class="btn danger" onclick="quarantine(\'' + c.mac + '\')">🔒 Quarantine</button>'}
+                        </td>
+                    </tr>`;
+                }).join('');
             } else {
                 tbody.innerHTML = '<tr><td colspan="5" style="color:var(--text-dim)">No clients connected</td></tr>';
             }
