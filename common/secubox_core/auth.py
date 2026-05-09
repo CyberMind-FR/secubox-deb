@@ -22,6 +22,22 @@ log = get_logger("auth")
 # auto_error=False allows us to handle missing token gracefully
 _bearer = HTTPBearer(auto_error=False)
 
+# Session event callback (set by auth module to record sessions)
+_session_callback = None
+
+def set_session_callback(callback):
+    """Set callback function for session events: callback(event, username, details)"""
+    global _session_callback
+    _session_callback = callback
+
+def _emit_session_event(event: str, username: str, details: dict = None):
+    """Emit session event to callback if set."""
+    if _session_callback:
+        try:
+            _session_callback(event, username, details or {})
+        except Exception as e:
+            log.warning("Session callback error: %s", e)
+
 # ── JWT helpers ────────────────────────────────────────────────────
 
 def _secret() -> str:
@@ -111,10 +127,12 @@ async def login(req: LoginRequest):
     """Endpoint de login — retourne un JWT."""
     if not _check_password(req.username, req.password):
         log.warning("Échec login: %s", req.username)
+        _emit_session_event("login_failed", req.username, {"reason": "invalid_credentials"})
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Identifiants incorrects",
         )
     token = create_token(req.username)
     log.info("Login OK: %s", req.username)
+    _emit_session_event("login_success", req.username, {"expires_in": 86400})
     return TokenResponse(access_token=token)
