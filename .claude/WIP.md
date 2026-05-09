@@ -1,5 +1,5 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-09 (Session 138)*
+*Mis à jour : 2026-05-09 (Session 139)*
 
 ---
 
@@ -66,6 +66,12 @@ python scripts/generate-docs.py --include-screenshots
   - Touch device detection (touchstart, maxTouchPoints, pointer:coarse)
   - Narrow viewport detection (≤768px)
   - Auto resize/orientation change handling
+
+### Session 139: Nginx Health Routes — COMPLETE
+- [x] Generated nginx routes for 82 modules with API sockets
+- [x] Fixed missing `include /etc/nginx/secubox-routes.d/*.conf;` in webui.conf
+- [x] All `/api/v1/<module>/health` endpoints now working
+- [x] Sidebar health checks functional
 
 ### ⬜ Next Up
 - [ ] (Add new tasks here)

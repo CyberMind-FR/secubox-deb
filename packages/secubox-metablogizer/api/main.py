@@ -18,13 +18,20 @@ from pydantic import BaseModel
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
 
-app = FastAPI(title="SecuBox MetaBlogizer", version="1.0.0")
+app = FastAPI(title="SecuBox MetaBlogizer", version="1.1.0")
 config = get_config("metablogizer")
 
 SITES_ROOT = Path(config.get("sites_root", "/srv/metablogizer/sites") if config else "/srv/metablogizer/sites")
+AUTO_PUBLISH = config.get("auto_publish", True) if config else True
 DATA_PATH = Path(config.get("data_path", "/srv/metablogizer") if config else "/srv/metablogizer")
 NGINX_VHOST_DIR = Path("/etc/nginx/sites-available")
 NGINX_ENABLED_DIR = Path("/etc/nginx/sites-enabled")
+NGINX_METABLOGS_CONF = Path("/etc/nginx/sites-enabled/metablogizer")
+BASE_PORT = 8900
+DEFAULT_DOMAIN_SUFFIX = ".gk2.secubox.in"
+
+import logging
+logger = logging.getLogger("metablogizer")
 
 
 def run_cmd(cmd: list, timeout: int = 30) -> tuple:
@@ -55,7 +62,8 @@ def load_sites() -> List[dict]:
             continue
 
         name = site_dir.name
-        domain = f"{name}.local"
+        domain = f"{name}{DEFAULT_DOMAIN_SUFFIX}"  # Use .gk2.secubox.in instead of .local
+        port = BASE_PORT
         published = False
 
         # Read site config
@@ -63,12 +71,20 @@ def load_sites() -> List[dict]:
         if config_file.exists():
             try:
                 cfg = json.loads(config_file.read_text())
-                domain = cfg.get("domain", domain)
+                # Replace .local with default domain suffix
+                saved_domain = cfg.get("domain", "")
+                if saved_domain.endswith(".local"):
+                    domain = saved_domain.replace(".local", DEFAULT_DOMAIN_SUFFIX)
+                elif saved_domain:
+                    domain = saved_domain
+                port = cfg.get("port", BASE_PORT)
             except:
                 pass
 
-        # Check if published
-        published = (NGINX_ENABLED_DIR / f"{name}.conf").exists()
+        # Check if published (in unified config)
+        if NGINX_METABLOGS_CONF.exists():
+            content = NGINX_METABLOGS_CONF.read_text()
+            published = f"root {site_dir}" in content or f"root {site_dir}/public" in content
 
         # Get size
         size = "0"
@@ -79,12 +95,105 @@ def load_sites() -> List[dict]:
         sites.append({
             "name": name,
             "domain": domain,
+            "port": port,
             "published": published,
             "directory": str(site_dir),
             "size": size,
         })
 
-    return sites
+    return sorted(sites, key=lambda x: x.get("port", BASE_PORT))
+
+
+def regenerate_nginx_config() -> tuple:
+    """Regenerate the unified nginx config for all metablogizer sites.
+
+    Returns (success, sites_count, message)
+    """
+    sites = load_sites()
+    if not sites:
+        return True, 0, "No sites to publish"
+
+    config_lines = ["# Metablogizer nginx config - auto-generated\n"]
+
+    for site in sites:
+        name = site["name"]
+        domain = site["domain"]
+        port = site.get("port", BASE_PORT)
+        site_dir = Path(site["directory"])
+        size = site.get("size", "0")
+
+        # Use public/ subdirectory if exists, otherwise site root
+        public_dir = site_dir / "public"
+        root_dir = str(public_dir) if public_dir.exists() else str(site_dir)
+
+        # Check if site is empty (size is 0 or only contains site.json)
+        is_empty = size in ("0", "0B", "4.0K") and not (Path(root_dir) / "index.html").exists()
+
+        if is_empty:
+            # Empty site - redirect to funky error page
+            config_lines.append(f"""
+server {{
+    listen 0.0.0.0:{port};
+    server_name {domain};
+    root /usr/share/secubox/www/metablogizer;
+    location / {{
+        try_files /empty-site.html =404;
+    }}
+}}
+""")
+        else:
+            # Normal site with content
+            config_lines.append(f"""
+server {{
+    listen 0.0.0.0:{port};
+    server_name {domain};
+    root {root_dir};
+    index index.html;
+    location / {{
+        try_files $uri $uri/ /index.html;
+    }}
+}}
+""")
+
+    # Write config
+    try:
+        NGINX_METABLOGS_CONF.parent.mkdir(parents=True, exist_ok=True)
+        NGINX_METABLOGS_CONF.write_text("".join(config_lines))
+
+        # Test nginx config (use sudo if needed)
+        success, _, err = run_cmd(["sudo", "-n", "nginx", "-t"])
+        if not success:
+            # Try without sudo (if running as root)
+            success, _, err = run_cmd(["nginx", "-t"])
+            if not success:
+                # Skip test and just reload - let systemd handle it
+                logger.warning(f"Nginx test skipped: {err}")
+
+        # Reload nginx (use sudo if needed)
+        success, _, _ = run_cmd(["sudo", "-n", "systemctl", "reload", "nginx"])
+        if not success:
+            run_cmd(["systemctl", "reload", "nginx"])
+
+        logger.info(f"Published {len(sites)} metablogizer sites")
+        return True, len(sites), f"Published {len(sites)} sites"
+    except Exception as e:
+        return False, 0, str(e)
+
+
+# =============================================================================
+# STARTUP - Auto-publish on service start
+# =============================================================================
+
+@app.on_event("startup")
+async def startup_event():
+    """Auto-publish all sites when service starts"""
+    if AUTO_PUBLISH:
+        logger.info("Auto-publishing metablogizer sites on startup...")
+        success, count, msg = regenerate_nginx_config()
+        if success:
+            logger.info(f"Startup auto-publish complete: {msg}")
+        else:
+            logger.warning(f"Startup auto-publish failed: {msg}")
 
 
 # =============================================================================
@@ -336,6 +445,17 @@ async def unpublish_site(name: str):
     run_cmd(["systemctl", "reload", "nginx"])
 
     return {"success": True, "name": name}
+
+
+@app.post("/republish-all", dependencies=[Depends(require_jwt)])
+async def republish_all():
+    """Republish all sites by regenerating nginx config"""
+    success, count, message = regenerate_nginx_config()
+    return {
+        "success": success,
+        "sites_published": count,
+        "message": message
+    }
 
 
 @app.post("/site/{name}/upload", dependencies=[Depends(require_jwt)])

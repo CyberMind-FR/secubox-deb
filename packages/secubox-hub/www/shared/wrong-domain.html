@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wrong Domain - SecuBox</title>
+    <link rel="stylesheet" href="/shared/design-tokens.css">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
+    <style>
+        body.crt-light {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: var(--space-l);
+        }
+        .error-container {
+            max-width: 700px;
+            width: 100%;
+            text-align: center;
+        }
+        .error-ascii {
+            font-family: var(--font-mono);
+            font-size: clamp(8px, 1.5vw, 11px);
+            line-height: 1.2;
+            color: var(--wall-main);
+            text-shadow: var(--bloom-amber);
+            white-space: pre;
+            margin-bottom: var(--space-l);
+            overflow: hidden;
+        }
+        .error-icon {
+            font-size: 5rem;
+            margin-bottom: var(--space-m);
+            animation: float 3s ease-in-out infinite;
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-15px); }
+        }
+        .error-title {
+            font-family: var(--font-display);
+            font-size: clamp(1.5rem, 4vw, 2.2rem);
+            color: var(--wall-main);
+            margin-bottom: var(--space-m);
+        }
+        .error-message {
+            color: var(--muted);
+            font-size: var(--size-base);
+            margin-bottom: var(--space-l);
+            line-height: var(--leading-relaxed);
+        }
+        .error-message code {
+            background: var(--surface2);
+            padding: 2px 8px;
+            border-radius: var(--radius-sm);
+            font-size: 0.9em;
+            color: var(--boot-main);
+        }
+        .domain-box {
+            background: var(--surface);
+            border: 2px dashed var(--border2);
+            border-radius: var(--radius-lg);
+            padding: var(--space-l);
+            margin: var(--space-l) 0;
+        }
+        .domain-box .label {
+            font-size: var(--size-sm);
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: var(--space-s);
+        }
+        .domain-box .you-tried {
+            font-family: var(--font-mono);
+            font-size: var(--size-lg);
+            color: var(--boot-main);
+            text-decoration: line-through;
+            opacity: 0.7;
+        }
+        .domain-box .arrow {
+            font-size: 2rem;
+            color: var(--muted);
+            margin: var(--space-s) 0;
+        }
+        .domain-box .correct {
+            font-family: var(--font-mono);
+            font-size: var(--size-lg);
+            color: var(--root-main);
+        }
+        .btn-redirect {
+            display: inline-block;
+            background: var(--root-main);
+            color: white;
+            padding: 1rem 2rem;
+            border-radius: var(--radius-md);
+            text-decoration: none;
+            font-weight: var(--weight-semibold);
+            margin-top: var(--space-m);
+            transition: all 0.2s;
+        }
+        .btn-redirect:hover {
+            background: var(--root-dark);
+            transform: translateY(-2px);
+        }
+        .info-text {
+            margin-top: var(--space-xl);
+            font-size: var(--size-sm);
+            color: var(--muted);
+            opacity: 0.7;
+        }
+    </style>
+</head>
+<body class="crt-light">
+    <div class="error-container">
+        <div class="error-ascii">
+    ╔═══════════════════════════════════════════════════╗
+    ║                                                   ║
+    ║   ╦ ╦╦═╗╔═╗╔╗╔╔═╗  ╔╦╗╔═╗╔╦╗╔═╗╦╔╗╔             ║
+    ║   ║║║╠╦╝║ ║║║║║ ╦   ║║║ ║║║║╠═╣║║║║             ║
+    ║   ╚╩╝╩╚═╚═╝╝╚╝╚═╝  ═╩╝╚═╝╩ ╩╩ ╩╩╝╚╝             ║
+    ║                                                   ║
+    ║   This domain is not the admin portal you seek.  ║
+    ║   You may have followed an old or wrong link.    ║
+    ║                                                   ║
+    ║          ╭─────────────────────────╮             ║
+    ║          │  🔒 Use official URL   │             ║
+    ║          ╰─────────────────────────╯             ║
+    ╚═══════════════════════════════════════════════════╝
+        </div>
+
+        <div class="error-icon">🚧</div>
+        <h1 class="error-title">Wrong Domain</h1>
+        <p class="error-message">
+            You're trying to access SecuBox admin from an unauthorized domain.
+        </p>
+
+        <div class="domain-box">
+            <div class="label">You tried</div>
+            <div class="you-tried" id="wrong-domain">unknown</div>
+            <div class="arrow">↓</div>
+            <div class="label">Correct admin URL</div>
+            <div class="correct">admin.gk2.secubox.in</div>
+        </div>
+
+        <a href="https://admin.gk2.secubox.in/" class="btn-redirect">
+            Go to Admin Portal →
+        </a>
+
+        <p class="info-text">
+            For security reasons, SecuBox admin is only accessible via the official domain.<br>
+            All other domains are protected and will show this page.
+        </p>
+    </div>
+
+    <script>
+    (function() {
+        document.getElementById('wrong-domain').textContent = window.location.hostname;
+    })();
+    </script>
+</body>
+</html>

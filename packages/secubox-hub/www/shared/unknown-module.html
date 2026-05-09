@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Module Not Found - SecuBox</title>
+    <link rel="stylesheet" href="/shared/design-tokens.css">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
+    <style>
+        body.crt-light {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: var(--space-l);
+        }
+        .error-container {
+            max-width: 800px;
+            width: 100%;
+            text-align: center;
+        }
+        .error-ascii {
+            font-family: var(--font-mono);
+            font-size: clamp(7px, 1.3vw, 10px);
+            line-height: 1.2;
+            color: var(--void-main);
+            text-shadow: 0 0 10px var(--void-main);
+            white-space: pre;
+            margin-bottom: var(--space-l);
+            overflow: hidden;
+        }
+        .error-icon {
+            font-size: 4rem;
+            margin-bottom: var(--space-m);
+            animation: pulse 2s ease-in-out infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(0.95); }
+        }
+        .error-title {
+            font-family: var(--font-display);
+            font-size: clamp(1.4rem, 3.5vw, 2rem);
+            color: var(--void-main);
+            margin-bottom: var(--space-m);
+        }
+        .error-message {
+            color: var(--muted);
+            font-size: var(--size-base);
+            margin-bottom: var(--space-l);
+            line-height: var(--leading-relaxed);
+        }
+        .error-message code {
+            background: var(--surface2);
+            padding: 2px 8px;
+            border-radius: var(--radius-sm);
+            font-size: 0.9em;
+            color: var(--wall-main);
+        }
+        .module-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: var(--space-s);
+            margin: var(--space-l) 0;
+        }
+        .module-link {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: var(--space-m);
+            text-decoration: none;
+            color: var(--text);
+            transition: all 0.2s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: var(--space-xs);
+        }
+        .module-link:hover {
+            border-color: var(--root-main);
+            background: var(--surface2);
+            transform: translateY(-2px);
+        }
+        .module-link .icon { font-size: 1.5rem; }
+        .module-link .name {
+            font-family: var(--font-mono);
+            font-size: var(--size-sm);
+        }
+        .section-title {
+            font-size: var(--size-sm);
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin: var(--space-l) 0 var(--space-m);
+        }
+        .btn-home {
+            display: inline-block;
+            background: var(--root-main);
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: var(--radius-md);
+            text-decoration: none;
+            margin-top: var(--space-l);
+        }
+        .btn-home:hover {
+            background: var(--root-dark);
+        }
+        .tip {
+            margin-top: var(--space-xl);
+            font-size: var(--size-sm);
+            color: var(--muted);
+            opacity: 0.7;
+        }
+    </style>
+</head>
+<body class="crt-light">
+    <div class="error-container">
+        <div class="error-ascii">
+    ╔═══════════════════════════════════════════════════════════════╗
+    ║                                                               ║
+    ║   ╔╦╗╔═╗╔╦╗╦ ╦╦  ╔═╗  ╔╗╔╔═╗╔╦╗  ╔═╗╔═╗╦ ╦╔╗╔╔╦╗             ║
+    ║   ║║║║ ║ ║║║ ║║  ║╣   ║║║║ ║ ║   ╠╣ ║ ║║ ║║║║ ║║             ║
+    ║   ╩ ╩╚═╝═╩╝╚═╝╩═╝╚═╝  ╝╚╝╚═╝ ╩   ╚  ╚═╝╚═╝╝╚╝═╩╝             ║
+    ║                                                               ║
+    ║    ┌─────────────────────────────────────────────────────┐   ║
+    ║    │                                                     │   ║
+    ║    │   The module you're looking for doesn't exist.     │   ║
+    ║    │                                                     │   ║
+    ║    │   📦 Check the module list below                   │   ║
+    ║    │   🔗 Or return to the main dashboard               │   ║
+    ║    │                                                     │   ║
+    ║    └─────────────────────────────────────────────────────┘   ║
+    ║                                                               ║
+    ╚═══════════════════════════════════════════════════════════════╝
+        </div>
+
+        <div class="error-icon">📦❓</div>
+        <h1 class="error-title">Module Not Found</h1>
+        <p class="error-message">
+            The module <code id="module-path">/unknown/</code> doesn't exist or isn't installed.
+        </p>
+
+        <div class="section-title">Available Modules</div>
+        <div class="module-grid" id="modules">
+            <a href="/hub/" class="module-link"><span class="icon">🏠</span><span class="name">hub</span></a>
+            <a href="/soc/" class="module-link"><span class="icon">🛡️</span><span class="name">soc</span></a>
+            <a href="/crowdsec/" class="module-link"><span class="icon">👁️</span><span class="name">crowdsec</span></a>
+            <a href="/waf/" class="module-link"><span class="icon">🔥</span><span class="name">waf</span></a>
+            <a href="/metrics/" class="module-link"><span class="icon">📊</span><span class="name">metrics</span></a>
+            <a href="/system/" class="module-link"><span class="icon">⚙️</span><span class="name">system</span></a>
+            <a href="/vhost/" class="module-link"><span class="icon">🌐</span><span class="name">vhost</span></a>
+            <a href="/users/" class="module-link"><span class="icon">👥</span><span class="name">users</span></a>
+            <a href="/certs/" class="module-link"><span class="icon">🔐</span><span class="name">certs</span></a>
+            <a href="/vortex-dns/" class="module-link"><span class="icon">🌀</span><span class="name">vortex-dns</span></a>
+            <a href="/metablogizer/" class="module-link"><span class="icon">📝</span><span class="name">metablogizer</span></a>
+            <a href="/publish/" class="module-link"><span class="icon">🚀</span><span class="name">publish</span></a>
+        </div>
+
+        <a href="/" class="btn-home">← Back to Dashboard</a>
+
+        <p class="tip">
+            Tip: Check the URL for typos, or this module might not be installed on this SecuBox instance.
+        </p>
+    </div>
+
+    <script>
+    (function() {
+        const path = window.location.pathname;
+        const module = path.split('/')[1] || 'unknown';
+        document.getElementById('module-path').textContent = '/' + module + '/';
+        document.title = 'Module "' + module + '" Not Found - SecuBox';
+    })();
+    </script>
+</body>
+</html>

@@ -4,6 +4,26 @@
 ---
 ## 2026-05-09
 
+### Session 139 — Nginx Health Routes Fix
+
+**Problem:** Sidebar health checks returning 404 for most modules.
+
+**Root Cause:**
+1. Only 6 modules had nginx routes configured in `/etc/nginx/secubox-routes.d/`
+2. The `include /etc/nginx/secubox-routes.d/*.conf;` was missing from `webui.conf`
+
+**Solution:**
+- Generated nginx routes for all 82 modules with API sockets
+- Removed 19 duplicates already hardcoded in webui.conf
+- Added missing include statement to webui.conf
+- All `/api/v1/<module>/health` endpoints now functional
+
+**Impact:**
+- Sidebar status indicators now work for all 100+ modules
+- Health-batch endpoint functional for efficient status polling
+
+---
+
 ### Session 134 — CrowdSec Bans Display Fix, Service Stability (v2.7.2)
 
 **CrowdSec Dashboard:**
