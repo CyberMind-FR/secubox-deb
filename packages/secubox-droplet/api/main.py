@@ -367,14 +367,30 @@ async def upload(
     background_tasks: BackgroundTasks = None,
     user=Depends(require_jwt),
 ):
-    """Upload and publish a file/archive."""
+    """Upload and publish a file/archive.
+
+    Supports:
+    - Single HTML file (.html, .htm)
+    - ZIP archive (.zip)
+    - TAR archive (.tar.gz, .tgz)
+    """
     cfg = _cfg()
 
     if not name:
-        raise HTTPException(400, "Name required")
+        # Auto-generate name from filename
+        if file.filename:
+            name = Path(file.filename).stem.lower().replace(" ", "-").replace("_", "-")
+        else:
+            raise HTTPException(400, "Name required")
 
     if not domain:
-        domain = cfg["default_domain"]
+        domain = f"{name}.{cfg['default_domain']}"
+
+    # Validate file type
+    filename = file.filename or ""
+    valid_extensions = (".html", ".htm", ".zip", ".tar.gz", ".tgz")
+    if not any(filename.lower().endswith(ext) for ext in valid_extensions):
+        raise HTTPException(400, f"Invalid file type. Supported: {', '.join(valid_extensions)}")
 
     # Ensure upload directory exists
     upload_dir = Path(cfg["upload_dir"])
@@ -388,6 +404,17 @@ async def upload(
     except Exception as e:
         raise HTTPException(500, f"Failed to save file: {e}")
 
+    # For single HTML files, wrap in a directory structure
+    if filename.lower().endswith((".html", ".htm")):
+        html_dir = upload_dir / f"{name}_html"
+        html_dir.mkdir(parents=True, exist_ok=True)
+
+        # Move HTML to index.html if not already
+        target_name = "index.html" if not filename.lower().startswith("index") else filename
+        (html_dir / target_name).write_bytes(content)
+        file_path.unlink()  # Remove temp file
+        file_path = html_dir  # Point to directory for publishing
+
     # Create job and start background publish
     job_id = f"{int(asyncio.get_event_loop().time())}_{uuid.uuid4().hex[:8]}"
     _jobs[job_id] = {
@@ -396,7 +423,11 @@ async def upload(
         "domain": domain,
     }
 
-    background_tasks.add_task(_run_publish, job_id, str(file_path), name, domain)
+    # Get file size and user info
+    file_size = len(content)
+    user_name = user.get("sub", "unknown") if isinstance(user, dict) else "unknown"
+
+    background_tasks.add_task(_run_publish, job_id, str(file_path), name, domain, file_size, user_name)
 
     log.info("Upload started: %s -> %s (job %s)", name, domain, job_id)
 
