@@ -1,6 +1,6 @@
 # 🛡️ CrowdSec
 
-Collaborative security engine
+Collaborative security engine with behavior analysis
 
 **Category:** Security
 
@@ -14,6 +14,7 @@ Collaborative security engine
 - Alerts
 - Bouncers
 - Collections
+- Community blocklists
 
 ## Installation
 

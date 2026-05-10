@@ -24,12 +24,74 @@ ROUTES_FILE = Path("/srv/mitmproxy/haproxy-routes.json")
 RULES_FILE = Path("/srv/mitmproxy/waf-rules.json")
 THREATS_LOG = Path("/srv/mitmproxy/logs/waf-threats.log")
 STATS_FILE = Path("/srv/mitmproxy/logs/waf-stats.json")
+CDN_CONFIG_FILE = Path("/srv/mitmproxy/cdn-config.json")
 WHITELIST = {"127.0.0.1", "192.168.255.1"}
 STATS_SAVE_INTERVAL = 100  # Save stats every N requests
+
+# CDN Options (loaded from cdn-config.json)
+CDN_OPTIONS = {
+    "banner_injection": True,
+    "banner_url": "https://admin.gk2.secubox.in/shared/health-banner.js",
+    "banner_api_url": "https://admin.gk2.secubox.in/api/v1/metrics/health/summary",
+    "inject_domains": ["*"],  # ["*"] = all, or list specific domains
+    "exclude_domains": [],    # Domains to exclude from injection
+}
+
+def load_cdn_config():
+    """Load CDN configuration from file."""
+    global CDN_OPTIONS
+    if CDN_CONFIG_FILE.exists():
+        try:
+            with open(CDN_CONFIG_FILE) as f:
+                loaded = json.load(f)
+                CDN_OPTIONS.update(loaded)
+        except Exception as e:
+            pass  # Use defaults
+    return CDN_OPTIONS
+
+def save_cdn_config():
+    """Save CDN configuration to file."""
+    try:
+        CDN_CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(CDN_CONFIG_FILE, "w") as f:
+            json.dump(CDN_OPTIONS, f, indent=2)
+    except Exception:
+        pass
 
 # Graduated response thresholds
 BAN_THRESHOLD = 3  # Number of threats before ban
 BAN_WINDOW = 300   # Window in seconds (5 min)
+
+# Trusted proxy IPs (HAProxy, Docker bridge)
+TRUSTED_PROXIES = {"10.100.0.1", "127.0.0.1", "172.17.0.1", "192.168.255.1"}
+
+def get_real_client_ip(flow: http.HTTPFlow) -> str:
+    """Extract real client IP from X-Forwarded-For or X-Real-IP headers.
+
+    Falls back to direct connection IP if no proxy headers found.
+    """
+    peer_ip = flow.client_conn.peername[0] if flow.client_conn.peername else "unknown"
+
+    # Check X-Forwarded-For first (may contain chain: client, proxy1, proxy2)
+    xff = flow.request.headers.get("X-Forwarded-For", "")
+    if xff:
+        # Take the first IP in the chain (original client)
+        ips = [ip.strip() for ip in xff.split(",")]
+        for ip in ips:
+            if ip and ip not in TRUSTED_PROXIES:
+                ctx.log.info(f"[IP] XFF={xff} -> real={ip} (peer={peer_ip})")
+                return ip
+
+    # Check X-Real-IP
+    xri = flow.request.headers.get("X-Real-IP", "")
+    if xri and xri not in TRUSTED_PROXIES:
+        ctx.log.info(f"[IP] XRI={xri} -> real={xri} (peer={peer_ip})")
+        return xri.strip()
+
+    # Fallback to direct connection - log ALL headers for debugging
+    all_headers = dict(flow.request.headers)
+    ctx.log.warn(f"[IP-DEBUG] peer={peer_ip} headers={all_headers}")
+    return peer_ip
 
 WARNING_PAGE = b"""<!DOCTYPE html>
 <html lang="en">
@@ -606,9 +668,14 @@ class SecuBoxWAF:
     
     def log_threat(self, flow: http.HTTPFlow, threat: dict, action: str):
         """Log threat to file."""
+        # Debug: log raw header values
+        xff = flow.request.headers.get("X-Forwarded-For", "")
+        xri = flow.request.headers.get("X-Real-IP", "")
         entry = {
             "timestamp": datetime.now().isoformat(),
-            "client_ip": flow.client_conn.peername[0] if flow.client_conn.peername else "unknown",
+            "client_ip": get_real_client_ip(flow),
+            "_debug_xff": xff,
+            "_debug_xri": xri,
             "host": flow.request.pretty_host,
             "method": flow.request.method,
             "path": flow.request.path,
@@ -644,7 +711,7 @@ class SecuBoxWAF:
         if self.stats["requests"] % STATS_SAVE_INTERVAL == 0:
             self.save_stats()
         host = flow.request.pretty_host
-        client_ip = flow.client_conn.peername[0] if flow.client_conn.peername else "unknown"
+        client_ip = get_real_client_ip(flow)
         
         # Skip whitelist
         if client_ip in WHITELIST:
@@ -741,6 +808,46 @@ class SecuBoxWAF:
     def response(self, flow: http.HTTPFlow):
         if flow.response:
             flow.response.headers["X-SecuBox-WAF"] = "inspected"
+
+            # CDN Banner Injection - inject health banner into all HTML responses
+            cfg = load_cdn_config()
+            if cfg.get("banner_injection", True):
+                content_type = flow.response.headers.get("Content-Type", "")
+                host = flow.request.host or ""
+
+                # Check domain filters
+                inject_domains = cfg.get("inject_domains", ["*"])
+                exclude_domains = cfg.get("exclude_domains", [])
+
+                should_inject = ("*" in inject_domains or host in inject_domains)
+                should_inject = should_inject and (host not in exclude_domains)
+
+                if "text/html" in content_type and flow.response.content and should_inject:
+                    try:
+                        html = flow.response.content.decode("utf-8", errors="ignore")
+                        if "</body>" in html.lower() and "health-banner.js" not in html:
+                            # Inject health banner script before </body>
+                            banner_url = cfg.get("banner_url", "https://admin.gk2.secubox.in/shared/health-banner.js")
+                            api_url = cfg.get("banner_api_url", "https://admin.gk2.secubox.in/api/v1/metrics/health/summary")
+                            banner_script = f'''
+<script>
+(function(){{
+    if(document.getElementById('health-banner'))return;
+    window.SECUBOX_HEALTH_API='{api_url}';
+    var s=document.createElement('script');
+    s.src='{banner_url}';
+    s.crossOrigin='anonymous';
+    s.onerror=function(){{console.warn('[SecuBox] Banner load failed')}};
+    document.body.appendChild(s);
+}})();
+</script>
+'''
+                            # Case-insensitive replacement
+                            html = re.sub(r'(</body>)', banner_script + r'\1', html, flags=re.IGNORECASE)
+                            flow.response.content = html.encode("utf-8")
+                            flow.response.headers["X-SecuBox-Banner"] = "injected"
+                    except Exception as e:
+                        ctx.log.warn(f"Banner injection failed: {e}")
 
     def done(self):
         """Called when mitmproxy shuts down - save final stats."""

@@ -500,4 +500,72 @@ async def mesh_stats(user=Depends(require_jwt)):
     }
 
 
+# ══════════════════════════════════════════════════════════════════
+# BANNER INJECTION CONFIG (CDN/WAF Transparent Injection)
+# ══════════════════════════════════════════════════════════════════
+
+CDN_BANNER_CONFIG = Path("/srv/mitmproxy/cdn-config.json")
+
+class BannerConfig(BaseModel):
+    banner_injection: bool = True
+    banner_url: str = "https://admin.gk2.secubox.in/shared/health-banner.js"
+    banner_api_url: str = "https://admin.gk2.secubox.in/api/v1/metrics/health/summary"
+    inject_domains: List[str] = ["*"]
+    exclude_domains: List[str] = []
+
+def _load_banner_config() -> dict:
+    """Load banner injection config."""
+    defaults = BannerConfig().dict()
+    if CDN_BANNER_CONFIG.exists():
+        try:
+            loaded = json.loads(CDN_BANNER_CONFIG.read_text())
+            defaults.update(loaded)
+        except Exception:
+            pass
+    return defaults
+
+def _save_banner_config(config: dict):
+    """Save banner injection config."""
+    CDN_BANNER_CONFIG.parent.mkdir(parents=True, exist_ok=True)
+    CDN_BANNER_CONFIG.write_text(json.dumps(config, indent=2))
+
+@router.get("/banner/config")
+async def get_banner_config(user=Depends(require_jwt)):
+    """Get CDN banner injection configuration."""
+    return _load_banner_config()
+
+@router.post("/banner/config")
+async def set_banner_config(config: BannerConfig, user=Depends(require_jwt)):
+    """Update CDN banner injection configuration."""
+    cfg = config.dict()
+    _save_banner_config(cfg)
+    return {"status": "ok", "config": cfg}
+
+@router.post("/banner/toggle")
+async def toggle_banner(enabled: bool = True, user=Depends(require_jwt)):
+    """Toggle banner injection on/off."""
+    cfg = _load_banner_config()
+    cfg["banner_injection"] = enabled
+    _save_banner_config(cfg)
+    return {"status": "ok", "banner_injection": enabled}
+
+@router.post("/banner/exclude")
+async def exclude_domain(domain: str, user=Depends(require_jwt)):
+    """Add domain to banner exclusion list."""
+    cfg = _load_banner_config()
+    if domain not in cfg.get("exclude_domains", []):
+        cfg.setdefault("exclude_domains", []).append(domain)
+        _save_banner_config(cfg)
+    return {"status": "ok", "exclude_domains": cfg["exclude_domains"]}
+
+@router.delete("/banner/exclude")
+async def remove_exclusion(domain: str, user=Depends(require_jwt)):
+    """Remove domain from banner exclusion list."""
+    cfg = _load_banner_config()
+    if domain in cfg.get("exclude_domains", []):
+        cfg["exclude_domains"].remove(domain)
+        _save_banner_config(cfg)
+    return {"status": "ok", "exclude_domains": cfg["exclude_domains"]}
+
+
 app.include_router(router)

@@ -1,5 +1,72 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-09 (Session 140)*
+*Mis à jour : 2026-05-10 (Session 143)*
+
+---
+
+## ✅ Session 143: Health Banner System + CDN Injection
+
+### Global Health Banner with Smart Doctor
+- [x] Created `health-banner.js` with double-buffer cache (active/shadow)
+- [x] Added Smart Doctor advisor with rule-based diagnostics
+- [x] Implemented spunky emoji-based UI with animations
+- [x] Added `/api/v1/metrics/health/summary` endpoint to metrics API
+- [x] Module status LEDs: WAF 🛡️, CrowdSec 👮, HAProxy 🌐, Nginx 🌍, System 💻
+- [x] Score-based vibes: VIBING (95%+), SOLID (85%+), OKAY (70%+), MEH (50%+), YIKES (<50%)
+- [x] Deployed to all HTML pages (hub, soc, nac)
+
+### Nginx CDN Injection (NEW)
+- [x] Added `/etc/nginx/conf.d/health-banner-inject.conf`
+- [x] Auto-injects `health-banner.js` via `sub_filter` on all HTML responses
+- [x] No need to modify source HTML files
+- [x] Banner at full-width top (28px height, z-index 9999)
+
+### GitHub Issues
+- [#70 ✅ DONE] Health Banner System: Smart Doctor + Auto-Detect Host
+- [#71 ✅ DONE] CDN Proxy Injection: Auto-inject scripts via nginx/HAProxy
+
+### Package Rebuild
+- [x] Rebuilt 126 packages successfully (0 failed)
+- [x] Locked packages: secubox-hub, secubox-waf, secubox-mitmproxy
+
+### Files Created/Modified
+- `packages/secubox-hub/www/shared/health-banner.js` — Banner UI (full-width top)
+- `packages/secubox-metrics/api/main.py` — Added health/summary endpoint
+- `/etc/nginx/conf.d/health-banner-inject.conf` — NEW (nginx injection)
+
+---
+
+## ✅ Session 142: SOC Triple Eyemotes Migration
+
+### SOC Dashboard — WarGames Geomap → Triple Eyemotes
+- [x] Replaced WarGames geomap CSS with eyemote mini CSS
+- [x] Replaced geomap HTML with 3 eyemote cards in grid layout
+- [x] Added `updateEyemoteMini()` and `updateAllEyemotes()` functions
+- [x] Implemented double-cache pattern for async API handling
+  - `window._socStats` — stores stats data from WAF API
+  - `window._socEvents` — stores alerts from `/alerts?limit=100`
+  - Either API can trigger eyemote update when counterpart ready
+- [x] Removed obsolete `renderGeomap()` call
+- [x] Deployed to `/srv/secubox/www/soc/index.html`
+
+### Triple Eyemote Sensors (SOC)
+| Sensor | Data Source | Visualization |
+|--------|-------------|---------------|
+| 👁️ Attack Origin | WAF alerts by country | Olympic rings by continent |
+| 👤 Visitors | Unique IPs by country | Cyan/purple gradient rings |
+| 🎯 Target Vhosts | Attacks per vhost | Red/orange/green rings |
+
+### Files Updated
+- `packages/secubox-hub/www/soc/index.html` — Triple eyemotes with double-cache
+
+---
+
+## ✅ Session 141: WAF Eyemotes + Quick Actions
+
+### WAF Dashboard Enhancements
+- [x] Triple Eyemote sensors (Attack Origin, Visitors, Target Vhosts)
+- [x] Quick action buttons (refresh, WAF toggle, clear bans, export, settings)
+- [x] Double-cache pattern for async API response handling
+- [x] Removed obsolete `renderGeomap()` function
 
 ---
 

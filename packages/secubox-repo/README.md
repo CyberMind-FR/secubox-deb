@@ -13,6 +13,7 @@ APT repository management
 - Package management
 - GPG signing
 - Multi-distro
+- Uploads
 
 ## Installation
 

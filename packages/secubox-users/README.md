@@ -13,6 +13,7 @@ Unified identity management
 - User CRUD
 - Groups
 - Service provisioning
+- RBAC
 
 ## Installation
 

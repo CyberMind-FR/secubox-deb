@@ -1,6 +1,6 @@
 # 🔥 Vortex Firewall
 
-nftables threat enforcement
+nftables-based threat enforcement firewall
 
 **Category:** Security
 
@@ -13,6 +13,7 @@ nftables threat enforcement
 - IP blocklists
 - nftables sets
 - Threat feeds
+- Geo-blocking
 
 ## Installation
 

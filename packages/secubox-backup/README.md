@@ -13,6 +13,7 @@ System and LXC backup
 - Config backup
 - LXC snapshots
 - Restore
+- Scheduling
 
 ## Installation
 

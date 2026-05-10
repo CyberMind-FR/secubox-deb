@@ -13,6 +13,7 @@ BIND DNS zone management
 - Zone management
 - Records
 - DNSSEC
+- Reverse DNS
 
 ## Installation
 

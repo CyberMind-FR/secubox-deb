@@ -13,6 +13,7 @@ Roundcube/SOGo webmail
 - Web interface
 - Address book
 - Calendar
+- Mobile
 
 ## Installation
 

@@ -13,6 +13,7 @@ File upload and publish
 - File upload
 - Share links
 - Expiration
+- Password protection
 
 ## Installation
 

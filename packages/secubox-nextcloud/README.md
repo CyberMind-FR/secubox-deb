@@ -14,6 +14,7 @@ File sync (LXC)
 - WebDAV
 - CalDAV
 - CardDAV
+- Talk
 
 ## Installation
 

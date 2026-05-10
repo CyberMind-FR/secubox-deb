@@ -29,6 +29,7 @@
 
 ### 🔵 MESH — Dev
 * [[Developer-Guide]]
+* [[Build-System]]
 * [[Design-System]]
 * [[API-Reference]]
 
@@ -38,6 +39,7 @@
 
 ### 👁️ Eye Remote
 * [[Eye-Remote|Overview]]
+* [[Eye-Remote-Multigadget|Multigadget]]
 * [[Eye-Remote-Hardware|Hardware]]
 * [[Eye-Remote-Implementation|Implementation]]
 * [[Eye-Remote-Bootstrap|Boot Media]]

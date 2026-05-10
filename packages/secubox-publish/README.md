@@ -13,6 +13,7 @@ Unified publishing dashboard
 - Multi-platform
 - Scheduling
 - Analytics
+- Templates
 
 ## Installation
 

@@ -13,6 +13,7 @@ Asset discovery and fingerprinting
 - ARP scanning
 - MAC vendor lookup
 - OS detection
+- Services
 
 ## Installation
 
