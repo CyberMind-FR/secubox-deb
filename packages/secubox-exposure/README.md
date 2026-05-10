@@ -1,6 +1,6 @@
 # 🌐 Exposure Settings
 
-Unified exposure (Tor, SSL, DNS, Mesh)
+Unified exposure management
 
 **Category:** Privacy
 

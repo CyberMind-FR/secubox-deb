@@ -13,6 +13,7 @@ TC/CAKE traffic shaping
 - Per-interface QoS
 - CAKE algorithm
 - Statistics
+- Real-time graphs
 
 ## Installation
 

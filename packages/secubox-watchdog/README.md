@@ -13,6 +13,7 @@ Service and container monitoring
 - Health checks
 - Auto-restart
 - Alerts
+- Logs
 
 ## Installation
 

@@ -1,0 +1,39 @@
+# 📉 Network Anomaly
+
+Network anomaly detection
+
+**Category:** Network
+
+## Screenshot
+
+![Network Anomaly](../../docs/screenshots/vm/network-anomaly.png)
+
+## Features
+
+- Traffic baselines
+- Anomaly alerts
+- ML detection
+- Visualization
+
+## Installation
+
+```bash
+# Add SecuBox repository
+curl -fsSL https://apt.secubox.in/install.sh | sudo bash
+
+# Install package
+sudo apt install secubox-network-anomaly
+```
+
+## Configuration
+
+Configuration file: `/etc/secubox/network-anomaly.toml`
+
+## API Endpoints
+
+- `GET /api/v1/network-anomaly/status` - Module status
+- `GET /api/v1/network-anomaly/health` - Health check
+
+## License
+
+MIT License - CyberMind © 2024-2026

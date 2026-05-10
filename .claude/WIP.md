@@ -20,9 +20,9 @@
 - [x] No need to modify source HTML files
 - [x] Banner at full-width top (28px height, z-index 9999)
 
-### GitHub Issues Created
-- [#70 PREPLANNED] Health Banner System: Auto-Detect Host + Desktop Widget + LLM Advisor
-- [#71 PREPLANNED] CDN Proxy Injection: Auto-inject scripts via nginx/HAProxy
+### GitHub Issues
+- [#70 ✅ DONE] Health Banner System: Smart Doctor + Auto-Detect Host
+- [#71 ✅ DONE] CDN Proxy Injection: Auto-inject scripts via nginx/HAProxy
 
 ### Package Rebuild
 - [x] Rebuilt 126 packages successfully (0 failed)

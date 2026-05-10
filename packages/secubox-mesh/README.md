@@ -1,6 +1,6 @@
 # 🕸️ Mesh Network
 
-Mesh networking (Yggdrasil)
+Mesh networking with Yggdrasil
 
 **Category:** VPN
 
@@ -13,6 +13,7 @@ Mesh networking (Yggdrasil)
 - Peer discovery
 - Routing
 - Encryption
+- IPv6 overlay
 
 ## Installation
 

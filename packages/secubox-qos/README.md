@@ -13,6 +13,7 @@ Quality of Service with HTB/VLAN
 - Bandwidth control
 - VLAN policies
 - 802.1p PCP
+- Per-user limits
 
 ## Installation
 

@@ -1,6 +1,6 @@
 # 🛡️ Vortex DNS
 
-DNS firewall with RPZ
+DNS firewall with RPZ blocklists
 
 **Category:** DNS
 
@@ -13,6 +13,7 @@ DNS firewall with RPZ
 - Blocklists
 - RPZ
 - Threat feeds
+- DoH/DoT
 
 ## Installation
 

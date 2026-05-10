@@ -1,6 +1,6 @@
 # 🔗 WireGuard VPN
 
-Modern VPN management
+Modern VPN with kernel integration
 
 **Category:** VPN
 
@@ -13,6 +13,7 @@ Modern VPN management
 - Peer management
 - QR codes
 - Traffic stats
+- Multi-tunnel
 
 ## Installation
 

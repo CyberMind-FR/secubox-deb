@@ -1,0 +1,39 @@
+# 🦙 Ollama
+
+Local LLM server
+
+**Category:** AI
+
+## Screenshot
+
+![Ollama](../../docs/screenshots/vm/ollama.png)
+
+## Features
+
+- Model management
+- API
+- Chat
+- GPU support
+
+## Installation
+
+```bash
+# Add SecuBox repository
+curl -fsSL https://apt.secubox.in/install.sh | sudo bash
+
+# Install package
+sudo apt install secubox-ollama
+```
+
+## Configuration
+
+Configuration file: `/etc/secubox/ollama.toml`
+
+## API Endpoints
+
+- `GET /api/v1/ollama/status` - Module status
+- `GET /api/v1/ollama/health` - Health check
+
+## License
+
+MIT License - CyberMind © 2024-2026
