@@ -1,5 +1,5 @@
 # Meta-Script Generator v2.0.0 Implementation Plan
-
+1
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build a Go-based CLI tool (`secubox`) for profile-based image generation with OTA updates.

@@ -6,7 +6,19 @@ import (
 	"path/filepath"
 )
 
-// Merger resolves profile inheritance
+// Merger resolves profile inheritance chains.
+//
+// Merge semantics:
+// - Packages.Required: union of parent + child, then subtract excluded
+// - Packages.Excluded: union of parent + child
+// - Kernel.Version: child overrides if set
+// - Kernel.Modules.Enable: union of parent + child
+// - Kernel.Modules.Blacklist: union of parent + child
+// - Services.Enable: union of parent + child
+// - Services.Disable: union of parent + child
+// - Sysctl: merged map, child overrides parent keys
+// - Features: child overrides parent for each field if set
+// - Constraints: field-by-field merge, child overrides if set
 type Merger struct {
 	profilesDir string
 	cache       map[string]*Profile
@@ -20,8 +32,20 @@ func NewMerger(profilesDir string) *Merger {
 	}
 }
 
-// Resolve loads a profile and merges all inherited profiles
+// Resolve loads a profile and merges all inherited profiles.
+// Returns error if circular inheritance is detected.
 func (m *Merger) Resolve(name string) (*Profile, error) {
+	return m.resolveWithPath(name, make(map[string]bool))
+}
+
+// resolveWithPath resolves with cycle detection via visited map
+func (m *Merger) resolveWithPath(name string, visited map[string]bool) (*Profile, error) {
+	// Check for circular inheritance
+	if visited[name] {
+		return nil, fmt.Errorf("circular inheritance detected: %s", name)
+	}
+	visited[name] = true
+
 	// Check cache
 	if p, ok := m.cache[name]; ok {
 		return p, nil
@@ -40,8 +64,8 @@ func (m *Merger) Resolve(name string) (*Profile, error) {
 		return p, nil
 	}
 
-	// Resolve parent first
-	parent, err := m.Resolve(p.Inherits)
+	// Resolve parent first (with visited map for cycle detection)
+	parent, err := m.resolveWithPath(p.Inherits, visited)
 	if err != nil {
 		return nil, fmt.Errorf("resolve parent %s: %w", p.Inherits, err)
 	}
@@ -59,31 +83,43 @@ func (m *Merger) merge(parent, child *Profile) *Profile {
 		Description: child.Description,
 	}
 
-	// Merge packages (combine required, child excluded wins)
+	// Merge packages (combine required, union excluded)
 	result.Packages.Required = append([]string{}, parent.Packages.Required...)
 	result.Packages.Required = append(result.Packages.Required, child.Packages.Required...)
 	result.Packages.Required = unique(result.Packages.Required)
-	result.Packages.Excluded = child.Packages.Excluded
+
+	// Merge excluded from both parent and child
+	result.Packages.Excluded = append([]string{}, parent.Packages.Excluded...)
+	result.Packages.Excluded = append(result.Packages.Excluded, child.Packages.Excluded...)
+	result.Packages.Excluded = unique(result.Packages.Excluded)
 
 	// Remove excluded packages from required
 	result.Packages.Required = subtract(result.Packages.Required, result.Packages.Excluded)
 
-	// Kernel: child overrides or inherits
-	result.Kernel = parent.Kernel
+	// Kernel: merge carefully with nil checks
+	result.Kernel.Version = parent.Kernel.Version
 	if child.Kernel.Version != "" {
 		result.Kernel.Version = child.Kernel.Version
 	}
-	if len(child.Kernel.Modules.Enable) > 0 {
-		result.Kernel.Modules.Enable = append(result.Kernel.Modules.Enable, child.Kernel.Modules.Enable...)
-	}
-	if len(child.Kernel.Modules.Blacklist) > 0 {
-		result.Kernel.Modules.Blacklist = child.Kernel.Modules.Blacklist
-	}
 
-	// Services: merge
-	result.Services.Enable = append(parent.Services.Enable, child.Services.Enable...)
+	// Initialize Modules.Enable before appending to avoid nil dereference
+	result.Kernel.Modules.Enable = append([]string{}, parent.Kernel.Modules.Enable...)
+	result.Kernel.Modules.Enable = append(result.Kernel.Modules.Enable, child.Kernel.Modules.Enable...)
+	result.Kernel.Modules.Enable = unique(result.Kernel.Modules.Enable)
+
+	// Merge Blacklist as well
+	result.Kernel.Modules.Blacklist = append([]string{}, parent.Kernel.Modules.Blacklist...)
+	result.Kernel.Modules.Blacklist = append(result.Kernel.Modules.Blacklist, child.Kernel.Modules.Blacklist...)
+	result.Kernel.Modules.Blacklist = unique(result.Kernel.Modules.Blacklist)
+
+	// Services: merge both enable and disable
+	result.Services.Enable = append([]string{}, parent.Services.Enable...)
+	result.Services.Enable = append(result.Services.Enable, child.Services.Enable...)
 	result.Services.Enable = unique(result.Services.Enable)
-	result.Services.Disable = child.Services.Disable
+
+	result.Services.Disable = append([]string{}, parent.Services.Disable...)
+	result.Services.Disable = append(result.Services.Disable, child.Services.Disable...)
+	result.Services.Disable = unique(result.Services.Disable)
 
 	// Sysctl: merge maps
 	result.Sysctl = make(map[string]interface{})
@@ -94,7 +130,9 @@ func (m *Merger) merge(parent, child *Profile) *Profile {
 		result.Sysctl[k] = v
 	}
 
-	// Features: child overrides
+	// Features: child overrides parent for each field
+	// Note: DPI is interface{}, so nil check works for explicit nil but not for
+	// distinguishing "not set" from "set to false". Current behavior: child nil = use parent.
 	result.Features = parent.Features
 	if child.Features.DPI != nil {
 		result.Features.DPI = child.Features.DPI
@@ -102,13 +140,17 @@ func (m *Merger) merge(parent, child *Profile) *Profile {
 	if child.Features.Swap != "" {
 		result.Features.Swap = child.Features.Swap
 	}
-	// LXC: explicit check since false is valid
+	// LXC: true if either parent or child enables it
 	result.Features.LXC = child.Features.LXC || parent.Features.LXC
 
-	// Constraints: child overrides
-	result.Constraints = child.Constraints
-	if result.Constraints.MinRAM == "" {
-		result.Constraints.MinRAM = parent.Constraints.MinRAM
+	// Constraints: field-by-field merge
+	result.Constraints.MinRAM = parent.Constraints.MinRAM
+	if child.Constraints.MinRAM != "" {
+		result.Constraints.MinRAM = child.Constraints.MinRAM
+	}
+	result.Constraints.MaxRAM = parent.Constraints.MaxRAM
+	if child.Constraints.MaxRAM != "" {
+		result.Constraints.MaxRAM = child.Constraints.MaxRAM
 	}
 
 	return result
