@@ -552,78 +552,92 @@
         .unban-btn:hover { background: rgba(239, 68, 68, 0.2); }
 
         /* ═══════════════════════════════════════════════════════════════
-           WARGAMES GEOMAP
+           TRIPLE EYEMOTE SENSORS
            ═══════════════════════════════════════════════════════════════ */
-        .geomap-panel {
+        .eyemotes-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: var(--space-m);
+            margin-bottom: var(--space-xl);
+        }
+        @media (max-width: 1200px) { .eyemotes-grid { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 768px) { .eyemotes-grid { grid-template-columns: 1fr; } }
+        .eyemote-card {
             background: var(--glass-bg);
             backdrop-filter: blur(var(--glass-blur));
             border: 1px solid var(--glass-border);
             border-radius: var(--radius-lg);
-            overflow: hidden;
-            margin-bottom: var(--space-xl);
-        }
-        .geomap-panel h2 {
-            padding: var(--space-m) var(--space-l);
-            margin: 0;
-            font-size: 14px;
-            font-weight: 600;
-            border-bottom: 1px solid var(--glass-border);
+            padding: var(--space-m);
             display: flex;
-            align-items: center;
-            gap: 8px;
+            flex-direction: column;
         }
-        .geomap {
-            position: relative;
-            width: 100%;
-            height: 280px;
-            background: #000a0f;
-            overflow: hidden;
-            cursor: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="12" fill="none" stroke="%2300ff41" stroke-width="1.5"/><circle cx="16" cy="16" r="6" fill="none" stroke="%2300ff41" stroke-width="1"/><line x1="16" y1="0" x2="16" y2="10" stroke="%2300ff41" stroke-width="2"/><line x1="16" y1="22" x2="16" y2="32" stroke="%2300ff41" stroke-width="2"/><line x1="0" y1="16" x2="10" y2="16" stroke="%2300ff41" stroke-width="2"/><line x1="22" y1="16" x2="32" y2="16" stroke="%2300ff41" stroke-width="2"/><circle cx="16" cy="16" r="2" fill="%2300ff41"/></svg>') 16 16, crosshair;
-        }
-        .geomap-bg {
-            position: absolute;
-            top: 0; left: 0;
-            width: 300%;
-            height: 100%;
-            background-image: url('/waf/wargames-earth.png');
-            background-repeat: no-repeat;
-            background-size: 100% 100%;
-            opacity: 0.85;
-            pointer-events: none;
-            transition: transform 0.3s ease;
-        }
-        .geomap-debug {
-            position: absolute;
-            top: 8px;
-            left: 12px;
-            font-size: 10px;
-            color: #00d4ff;
-            font-family: var(--font-mono);
-            background: rgba(0,0,0,0.7);
-            padding: 2px 6px;
-            border-radius: 4px;
-            z-index: 100;
-        }
-        .geomap-legend {
-            position: absolute;
-            bottom: 8px;
-            right: 12px;
-            font-size: 11px;
-            color: #ff4466;
-            font-family: var(--font-mono);
-            text-shadow: 0 0 8px #ff4466;
-        }
-        .geomap-title {
-            position: absolute;
-            bottom: 8px;
-            left: 12px;
-            font-size: 10px;
-            color: #00ff88;
-            font-family: var(--font-mono);
+        .eyemote-card h2 {
+            font-size: 0.85rem;
+            color: var(--muted-dark);
+            margin-bottom: var(--space-s);
             text-transform: uppercase;
             letter-spacing: 1px;
-            text-shadow: 0 0 8px #00ff88;
         }
+        .eyemote-mini {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: var(--space-s) 0;
+        }
+        .eyemote-svg-mini { width: 160px; height: 160px; }
+        .eyemote-svg-mini .ring-fill { transition: stroke-dasharray 0.8s ease-out; }
+        .eyemote-svg-mini .eyemote-pupil { animation: pupilPulse 2s infinite; }
+        @keyframes pupilPulse {
+            0%, 100% { r: 8; opacity: 1; }
+            50% { r: 10; opacity: 0.8; }
+        }
+        .eyemote-total-mini {
+            position: absolute;
+            font-family: var(--font-mono);
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #00ff41;
+            text-shadow: 0 0 12px rgba(0,255,65,0.5);
+        }
+        .eyemote-total-mini.visitor { color: #00d4ff; text-shadow: 0 0 12px rgba(0,212,255,0.5); }
+        .eyemote-total-mini.vhost { color: #f97316; text-shadow: 0 0 12px rgba(249,115,22,0.5); }
+        .eyemote-legend-mini {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            max-height: 180px;
+            overflow-y: auto;
+        }
+        .legend-row-mini {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 8px;
+            background: rgba(255,255,255,0.03);
+            border-radius: var(--radius-sm);
+            border-left: 3px solid;
+        }
+        .legend-row-mini .row-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+        .legend-row-mini .row-val { font-family: var(--font-mono); font-size: 0.8rem; font-weight: 600; min-width: 55px; }
+        .legend-row-mini .row-flags { display: flex; flex-wrap: wrap; gap: 3px; flex: 1; }
+        .flag-mini {
+            width: 20px; height: 20px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 0.7rem; border: 2px solid; position: relative;
+        }
+        .flag-mini .fm-count {
+            position: absolute; bottom: -2px; right: -2px;
+            font-size: 0.45rem; background: #000; color: #fff;
+            padding: 1px 2px; border-radius: 3px; font-family: var(--font-mono);
+        }
+        .vhost-badge {
+            display: inline-flex; align-items: center; gap: 3px;
+            padding: 2px 6px; background: rgba(255,255,255,0.05);
+            border-radius: var(--radius-sm); font-size: 0.65rem;
+            font-family: var(--font-mono); border: 1px solid;
+        }
+        .vhost-badge .vb-count { font-weight: 700; }
         @keyframes pulse {
             0%, 100% { opacity: 1; transform: scale(1); }
             50% { opacity: 0.6; transform: scale(1.1); }
@@ -813,27 +827,78 @@
                 </div>
             </div>
 
-            <!-- WARGAMES GEOMAP -->
-            <div class="geomap-panel">
-                <h2>🌍 Attack Origins — Global Threat Map</h2>
-                <div class="geomap" id="geomap">
-                    <div class="geomap-bg" id="geomapBg"></div>
-                    <div id="geomarkers" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;"></div>
-                    <!-- Center target crosshair -->
-                    <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:50;">
-                        <svg width="40" height="40" viewBox="0 0 40 40">
-                            <circle cx="20" cy="20" r="15" fill="none" stroke="#00ff41" stroke-width="1" opacity="0.6"/>
-                            <circle cx="20" cy="20" r="8" fill="none" stroke="#00ff41" stroke-width="1" opacity="0.8"/>
-                            <line x1="20" y1="2" x2="20" y2="12" stroke="#00ff41" stroke-width="1.5"/>
-                            <line x1="20" y1="28" x2="20" y2="38" stroke="#00ff41" stroke-width="1.5"/>
-                            <line x1="2" y1="20" x2="12" y2="20" stroke="#00ff41" stroke-width="1.5"/>
-                            <line x1="28" y1="20" x2="38" y2="20" stroke="#00ff41" stroke-width="1.5"/>
-                            <circle cx="20" cy="20" r="2" fill="#00ff41"/>
+            <!-- TRIPLE EYEMOTE SENSORS -->
+            <div class="eyemotes-grid">
+                <!-- Eyemote 1: Attack Origin by Continent -->
+                <div class="eyemote-card">
+                    <h2>👁️ Attack Origin</h2>
+                    <div class="eyemote-mini">
+                        <svg viewBox="0 0 200 200" class="eyemote-svg-mini" id="eyemoteSvgOrigin">
+                            <defs><radialGradient id="eyeGlow1" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#00ff41" stop-opacity="0.1"/><stop offset="100%" stop-color="transparent"/></radialGradient></defs>
+                            <circle cx="100" cy="100" r="95" fill="url(#eyeGlow1)"/>
+                            <circle class="ring-bg" cx="100" cy="100" r="85" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
+                            <circle class="ring-fill" id="originRing1" cx="100" cy="100" r="85" fill="none" stroke="#DF0024" stroke-width="14" stroke-dasharray="0 534" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+                            <circle class="ring-bg" cx="100" cy="100" r="68" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
+                            <circle class="ring-fill" id="originRing2" cx="100" cy="100" r="68" fill="none" stroke="#0085C7" stroke-width="14" stroke-dasharray="0 427" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+                            <circle class="ring-bg" cx="100" cy="100" r="51" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
+                            <circle class="ring-fill" id="originRing3" cx="100" cy="100" r="51" fill="none" stroke="#F4C300" stroke-width="14" stroke-dasharray="0 320" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+                            <circle class="ring-bg" cx="100" cy="100" r="34" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
+                            <circle class="ring-fill" id="originRing4" cx="100" cy="100" r="34" fill="none" stroke="#009F3D" stroke-width="14" stroke-dasharray="0 214" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+                            <circle class="ring-bg" cx="100" cy="100" r="17" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
+                            <circle class="ring-fill" id="originRing5" cx="100" cy="100" r="17" fill="none" stroke="#666666" stroke-width="14" stroke-dasharray="0 107" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+                            <circle cx="100" cy="100" r="8" fill="#00ff41" class="eyemote-pupil"/>
                         </svg>
+                        <div class="eyemote-total-mini" id="originTotal">0</div>
                     </div>
-                    <div class="geomap-debug" id="geomapDebug">Click to center | Offset: -100%</div>
-                    <div class="geomap-title">GLOBAL THREAT MONITOR</div>
-                    <div class="geomap-legend" id="geoLegend"></div>
+                    <div class="eyemote-legend-mini" id="originLegend"></div>
+                </div>
+
+                <!-- Eyemote 2: Visitors by Country -->
+                <div class="eyemote-card">
+                    <h2>👤 Visitors</h2>
+                    <div class="eyemote-mini">
+                        <svg viewBox="0 0 200 200" class="eyemote-svg-mini" id="eyemoteSvgVisitors">
+                            <defs><radialGradient id="eyeGlow2" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#00d4ff" stop-opacity="0.1"/><stop offset="100%" stop-color="transparent"/></radialGradient></defs>
+                            <circle cx="100" cy="100" r="95" fill="url(#eyeGlow2)"/>
+                            <circle class="ring-bg" cx="100" cy="100" r="85" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
+                            <circle class="ring-fill" id="visitorRing1" cx="100" cy="100" r="85" fill="none" stroke="#00d4ff" stroke-width="14" stroke-dasharray="0 534" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+                            <circle class="ring-bg" cx="100" cy="100" r="68" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
+                            <circle class="ring-fill" id="visitorRing2" cx="100" cy="100" r="68" fill="none" stroke="#0ea5e9" stroke-width="14" stroke-dasharray="0 427" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+                            <circle class="ring-bg" cx="100" cy="100" r="51" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
+                            <circle class="ring-fill" id="visitorRing3" cx="100" cy="100" r="51" fill="none" stroke="#6366f1" stroke-width="14" stroke-dasharray="0 320" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+                            <circle class="ring-bg" cx="100" cy="100" r="34" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
+                            <circle class="ring-fill" id="visitorRing4" cx="100" cy="100" r="34" fill="none" stroke="#8b5cf6" stroke-width="14" stroke-dasharray="0 214" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+                            <circle class="ring-bg" cx="100" cy="100" r="17" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
+                            <circle class="ring-fill" id="visitorRing5" cx="100" cy="100" r="17" fill="none" stroke="#a855f7" stroke-width="14" stroke-dasharray="0 107" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+                            <circle cx="100" cy="100" r="8" fill="#00d4ff" class="eyemote-pupil"/>
+                        </svg>
+                        <div class="eyemote-total-mini visitor" id="visitorTotal">0</div>
+                    </div>
+                    <div class="eyemote-legend-mini" id="visitorLegend"></div>
+                </div>
+
+                <!-- Eyemote 3: Target Vhosts -->
+                <div class="eyemote-card">
+                    <h2>🎯 Target Vhosts</h2>
+                    <div class="eyemote-mini">
+                        <svg viewBox="0 0 200 200" class="eyemote-svg-mini" id="eyemoteSvgVhosts">
+                            <defs><radialGradient id="eyeGlow3" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#f97316" stop-opacity="0.1"/><stop offset="100%" stop-color="transparent"/></radialGradient></defs>
+                            <circle cx="100" cy="100" r="95" fill="url(#eyeGlow3)"/>
+                            <circle class="ring-bg" cx="100" cy="100" r="85" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
+                            <circle class="ring-fill" id="vhostRing1" cx="100" cy="100" r="85" fill="none" stroke="#ef4444" stroke-width="14" stroke-dasharray="0 534" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+                            <circle class="ring-bg" cx="100" cy="100" r="68" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
+                            <circle class="ring-fill" id="vhostRing2" cx="100" cy="100" r="68" fill="none" stroke="#f97316" stroke-width="14" stroke-dasharray="0 427" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+                            <circle class="ring-bg" cx="100" cy="100" r="51" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
+                            <circle class="ring-fill" id="vhostRing3" cx="100" cy="100" r="51" fill="none" stroke="#eab308" stroke-width="14" stroke-dasharray="0 320" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+                            <circle class="ring-bg" cx="100" cy="100" r="34" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
+                            <circle class="ring-fill" id="vhostRing4" cx="100" cy="100" r="34" fill="none" stroke="#22c55e" stroke-width="14" stroke-dasharray="0 214" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+                            <circle class="ring-bg" cx="100" cy="100" r="17" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
+                            <circle class="ring-fill" id="vhostRing5" cx="100" cy="100" r="17" fill="none" stroke="#14b8a6" stroke-width="14" stroke-dasharray="0 107" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+                            <circle cx="100" cy="100" r="8" fill="#f97316" class="eyemote-pupil"/>
+                        </svg>
+                        <div class="eyemote-total-mini vhost" id="vhostTotal">0</div>
+                    </div>
+                    <div class="eyemote-legend-mini" id="vhostLegend"></div>
                 </div>
             </div>
 
@@ -934,6 +999,7 @@
     </div>
 
     <script src="/shared/sidebar.js"></script>
+    <script src="/shared/health-banner.js"></script>
     <script>
         const API_HUB = '/api/v1/hub';
         const API_WAF = '/api/v1/waf';
@@ -1106,13 +1172,22 @@
             // Also load top attacked sites with full DNS names
             await loadTopVhosts();
 
-            // Render WarGames geomap with attack arcs
-            renderGeomap(data);
+            // Store stats for double-cache eyemotes
+            window._socStats = data;
+            if (window._socEvents) {
+                updateAllEyemotes(window._socEvents, data);
+            }
         }
 
         async function loadTopVhosts() {
             const data = await api(API_WAF + '/alerts?limit=100&aggregate=true');
             if (!data || !data.alerts) return;
+
+            // Store events for double-cache eyemotes
+            window._socEvents = data.alerts;
+            if (window._socStats) {
+                updateAllEyemotes(data.alerts, window._socStats);
+            }
 
             // Aggregate by vhost
             const vhostCounts = {};
@@ -1138,183 +1213,131 @@
         }
 
         // ═══════════════════════════════════════════════════════════════
-        // WARGAMES GEOMAP
+        // TRIPLE EYEMOTE SENSORS (with double-cache)
         // ═══════════════════════════════════════════════════════════════
-        const ARC_COLORS = ['#ff0044', '#ff4400', '#ff8800', '#ffcc00', '#88ff00', '#00ff44', '#00ffcc', '#0088ff', '#4400ff', '#cc00ff'];
 
-        // Click to center map on click position
-        let GEOMAP_OFFSET = {x: -100, y: 0}; // Map offset in % of container width
-        let GEOMAP_TARGET = {x: 50, y: 50}; // Target center (France)
-        (function() {
-            document.addEventListener('DOMContentLoaded', () => {
-                const bg = document.getElementById('geomapBg');
-                const geomap = document.getElementById('geomap');
-                const debug = document.getElementById('geomapDebug');
-                if (!bg || !geomap || !debug) return;
-
-                function updateMap() {
-                    bg.style.transform = `translateX(${GEOMAP_OFFSET.x}%)`;
-                    debug.textContent = `Center: ${GEOMAP_TARGET.x.toFixed(0)}%,${GEOMAP_TARGET.y.toFixed(0)}%  |  Offset: ${GEOMAP_OFFSET.x.toFixed(0)}%`;
-                }
-                updateMap();
-
-                // Click to center map on that point
-                geomap.addEventListener('click', (e) => {
-                    const rect = geomap.getBoundingClientRect();
-                    const clickX = (e.clientX - rect.left) / rect.width * 100; // 0-100% of visible area
-
-                    // Calculate where on the full 300% map this click corresponds to
-                    // Visible area shows 1/3 of map, offset determines which third
-                    const mapX = (clickX / 3) - (GEOMAP_OFFSET.x / 3) + 50; // Approximate position on full map
-
-                    // Move map so clicked point is at center (50% of visible area)
-                    const shift = clickX - 50; // How far from center the click was
-                    GEOMAP_OFFSET.x -= shift; // Shift map to center on click
-
-                    // Clamp to valid range (-200% to 0%)
-                    GEOMAP_OFFSET.x = Math.max(-200, Math.min(0, GEOMAP_OFFSET.x));
-
-                    GEOMAP_TARGET = {x: 50, y: ((e.clientY - rect.top) / rect.height * 100)};
-
-                    updateMap();
-                    console.log(`[GEOMAP] Centered on click. Offset: ${GEOMAP_OFFSET.x}%`);
-                });
-            });
-        })();
-        const COUNTRY_POS = {
-            // Americas (-8x, +2y - inverse direction)
-            'US': {x:7,y:40}, 'CA': {x:4,y:30}, 'MX': {x:2,y:50}, 'BR': {x:17,y:64}, 'AR': {x:14,y:74},
-            // Western Europe
-            'GB': {x:30,y:30}, 'IE': {x:28,y:31}, 'FR': {x:32,y:36}, 'ES': {x:29,y:42}, 'PT': {x:27,y:42},
-            'BE': {x:33,y:32}, 'NL': {x:33,y:30}, 'DE': {x:36,y:32}, 'CH': {x:35,y:36}, 'IT': {x:37,y:40},
-            'AT': {x:38,y:35}, 'PL': {x:40,y:31}, 'CZ': {x:38,y:32},
-            // Eastern Europe
-            'HU': {x:40,y:36}, 'RO': {x:43,y:37}, 'BG': {x:44,y:40}, 'GR': {x:42,y:44}, 'UA': {x:46,y:32},
-            // Nordic
-            'SE': {x:38,y:24}, 'NO': {x:36,y:22}, 'FI': {x:42,y:22}, 'DK': {x:36,y:28},
-            // Russia & Central Asia
-            'RU': {x:54,y:26}, 'KZ': {x:57,y:34},
-            // Middle East & Africa
-            'TR': {x:46,y:42}, 'IL': {x:48,y:46}, 'SA': {x:52,y:50}, 'AE': {x:54,y:50},
-            'EG': {x:46,y:50}, 'MA': {x:27,y:47}, 'ZA': {x:44,y:74}, 'NG': {x:36,y:57},
-            // Asia
-            'IN': {x:62,y:48}, 'PK': {x:58,y:44}, 'BD': {x:66,y:48},
-            'CN': {x:72,y:40}, 'HK': {x:74,y:48}, 'TW': {x:76,y:46},
-            'JP': {x:80,y:38}, 'KR': {x:78,y:40},
-            'TH': {x:70,y:54}, 'VN': {x:72,y:52}, 'SG': {x:72,y:58}, 'ID': {x:74,y:60}, 'MY': {x:71,y:57},
-            'PH': {x:77,y:54},
-            // Oceania
-            'AU': {x:80,y:72}, 'NZ': {x:87,y:78}
+        // Country to Continent mapping
+        const COUNTRY_CONTINENT = {
+            'FR': 'europe', 'DE': 'europe', 'GB': 'europe', 'IT': 'europe', 'ES': 'europe',
+            'NL': 'europe', 'BE': 'europe', 'PL': 'europe', 'SE': 'europe', 'NO': 'europe',
+            'FI': 'europe', 'DK': 'europe', 'AT': 'europe', 'CH': 'europe', 'PT': 'europe',
+            'IE': 'europe', 'CZ': 'europe', 'RO': 'europe', 'HU': 'europe', 'GR': 'europe',
+            'UA': 'europe', 'RU': 'europe', 'BY': 'europe', 'SK': 'europe', 'BG': 'europe',
+            'CN': 'asia', 'JP': 'asia', 'KR': 'asia', 'IN': 'asia', 'ID': 'asia',
+            'TH': 'asia', 'VN': 'asia', 'PH': 'asia', 'MY': 'asia', 'SG': 'asia',
+            'TW': 'asia', 'HK': 'asia', 'PK': 'asia', 'BD': 'asia', 'IR': 'asia',
+            'TR': 'asia', 'SA': 'asia', 'AE': 'asia', 'IL': 'asia', 'KZ': 'asia',
+            'ZA': 'africa', 'EG': 'africa', 'NG': 'africa', 'KE': 'africa', 'MA': 'africa',
+            'DZ': 'africa', 'TN': 'africa', 'GH': 'africa', 'ET': 'africa', 'TZ': 'africa',
+            'AU': 'oceania', 'NZ': 'oceania', 'FJ': 'oceania', 'PG': 'oceania',
+            'US': 'americas', 'CA': 'americas', 'MX': 'americas', 'BR': 'americas',
+            'AR': 'americas', 'CL': 'americas', 'CO': 'americas', 'PE': 'americas',
+            'VE': 'americas', 'EC': 'americas', 'CU': 'americas', 'PR': 'americas', 'PA': 'americas'
         };
 
-        function renderGeomap(data) {
-            const geomarkers = document.getElementById('geomarkers');
-            const geoLegend = document.getElementById('geoLegend');
-            if (!geomarkers || !geoLegend) return;
+        function getContinent(cc) { return COUNTRY_CONTINENT[cc?.toUpperCase()] || 'americas'; }
 
-            // Build country threats from top_ips + top_ips_countries
-            if (data?.top_ips && Object.keys(data.top_ips).length > 0) {
-                const ipCountries = data.top_ips_countries || {};
-                const countryThreats = {};
-                Object.entries(data.top_ips).forEach(([ip, count]) => {
-                    const cc = ipCountries[ip] || '';
-                    if (cc) countryThreats[cc] = (countryThreats[cc] || 0) + count;
-                });
+        // Ring config for mini eyemotes
+        const RING_CONFIG_MINI = [
+            { id: 1, continent: 'americas', color: '#DF0024', circ: 534 },
+            { id: 2, continent: 'europe', color: '#0085C7', circ: 427 },
+            { id: 3, continent: 'asia', color: '#F4C300', circ: 320 },
+            { id: 4, continent: 'oceania', color: '#009F3D', circ: 214 },
+            { id: 5, continent: 'africa', color: '#666666', circ: 107 }
+        ];
+        const VISITOR_COLORS = ['#00d4ff', '#0ea5e9', '#6366f1', '#8b5cf6', '#a855f7'];
+        const VHOST_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#14b8a6'];
 
-                const target = GEOMAP_TARGET; // France (SecuBox HQ) - use global variable for debug
-                let totalThreats = 0;
-                let svgContent = '<svg style="position:absolute;top:0;left:0;width:100%;height:120%;pointer-events:none;overflow:visible;" viewBox="0 0 100 120" preserveAspectRatio="none"><defs><filter id="glow"><feGaussianBlur stdDeviation="0.5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>';
-                let markers = '';
-                let legendFlags = '';
-                const entries = Object.entries(countryThreats).sort((a,b) => b[1] - a[1]).slice(0, 8);
-                const flagSpacing = 100 / (entries.length + 1);
-                const maxCountry = Math.max(...entries.map(e => e[1]));
+        // Double-cache for eyemotes
+        window._socEvents = null;
+        window._socStats = null;
 
-                entries.forEach(([cc, count], idx) => {
-                    totalThreats += count;
-                    const pos = COUNTRY_POS[cc] || {x:50,y:50};
-                    const intensity = Math.max(0.3, count / maxCountry);
-                    const arcColor = ARC_COLORS[idx % ARC_COLORS.length];
-                    const strokeWidth = 0.4 + intensity * 1.2;
-                    const size = Math.max(8, Math.min(20, 8 + intensity * 12));
-                    const midX = (pos.x + target.x) / 2;
-                    const dist = Math.sqrt(Math.pow(pos.x - target.x, 2) + Math.pow(pos.y - target.y, 2));
-                    const arcHeight = Math.min(pos.y, target.y) - (dist * 0.35);
-                    const pathId = 'arc' + idx;
+        // Generic eyemote updater
+        function updateEyemoteMini(prefix, events, colors, totalId, legendId, isVhost = false) {
+            const counts = { americas: 0, europe: 0, asia: 0, oceania: 0, africa: 0 };
+            const countryData = { americas: {}, europe: {}, asia: {}, oceania: {}, africa: {} };
+            const vhostData = {};
 
-                    // Arc path
-                    svgContent += '<path id="' + pathId + '" d="M' + pos.x + ',' + pos.y + ' Q' + midX + ',' + arcHeight + ' ' + target.x + ',' + target.y + '" fill="none" stroke="' + arcColor + '" stroke-width="' + strokeWidth + '" opacity="0.7" filter="url(#glow)" stroke-linecap="round"/>';
+            events.forEach(e => {
+                const continent = getContinent(e.country);
+                const count = e.count || 1;
+                counts[continent] = (counts[continent] || 0) + count;
+                if (e.country) countryData[continent][e.country] = (countryData[continent][e.country] || 0) + count;
+                if (isVhost && e.vhost) vhostData[e.vhost] = (vhostData[e.vhost] || 0) + count;
+            });
 
-                    // Animated missiles
-                    const missileCount = Math.min(3, Math.max(1, Math.floor(intensity * 3)));
-                    for (let m = 0; m < missileCount; m++) {
-                        const dur = 2.5 - intensity;
-                        const delay = idx * 0.2 + m * dur / missileCount;
-                        svgContent += '<circle r="' + (0.5 + intensity * 0.5) + '" fill="' + arcColor + '" filter="url(#glow)"><animateMotion dur="' + dur + 's" repeatCount="indefinite" begin="' + delay + 's"><mpath href="#' + pathId + '"/></animateMotion></circle>';
-                    }
+            const total = Object.values(counts).reduce((a, b) => a + b, 0);
+            const totalEl = document.getElementById(totalId);
+            if (totalEl) totalEl.textContent = total;
 
-                    // Pulsing source marker
-                    markers += '<div style="position:absolute;left:' + pos.x + '%;top:' + (pos.y * 0.85) + '%;transform:translate(-50%,-50%);z-index:5;"><div style="width:' + size + 'px;height:' + size + 'px;background:radial-gradient(circle,' + arcColor + ' 0%,' + arcColor + '60 50%,transparent 70%);border-radius:50%;animation:pulse ' + (1.5 - intensity * 0.7) + 's infinite;box-shadow:0 0 ' + (size * 1.2) + 'px ' + arcColor + ';"></div></div>';
+            // Update rings
+            RING_CONFIG_MINI.forEach((cfg, i) => {
+                const count = counts[cfg.continent] || 0;
+                const pct = total > 0 ? count / total : 0;
+                const ringEl = document.getElementById(prefix + 'Ring' + cfg.id);
+                if (ringEl) {
+                    ringEl.style.stroke = colors[i];
+                    ringEl.style.strokeDasharray = (pct * cfg.circ) + ' ' + cfg.circ;
+                }
+            });
 
-                    // Legend flag at bottom
-                    const legendX = flagSpacing * (idx + 1);
-                    legendFlags += '<div style="position:absolute;left:' + legendX + '%;top:100%;transform:translate(-50%,4px);text-align:center;z-index:10;"><div style="font-size:14px;filter:drop-shadow(0 0 4px ' + arcColor + ');">' + countryToFlag(cc) + '</div><div style="font-size:8px;color:' + arcColor + ';font-family:monospace;">' + count + '</div></div>';
-                    svgContent += '<line x1="' + legendX + '" y1="106" x2="' + pos.x + '" y2="' + pos.y + '" stroke="' + arcColor + '" stroke-width="0.3" stroke-dasharray="1,1" opacity="0.4"/>';
-                });
+            // Update legend
+            const legendEl = document.getElementById(legendId);
+            if (!legendEl) return;
 
-                // Target marker (France) - Radar crosshairs with spectrum analyzer
-                markers += `<div style="position:absolute;left:${target.x}%;top:${target.y * 0.85}%;transform:translate(-50%,-50%);z-index:10;width:60px;height:60px;">
-                    <svg viewBox="0 0 60 60" style="width:100%;height:100%;overflow:visible;">
-                        <defs>
-                            <filter id="targetGlow"><feGaussianBlur stdDeviation="1.5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-                        </defs>
-                        <!-- Outer radar rings -->
-                        <circle cx="30" cy="30" r="28" fill="none" stroke="#00ff41" stroke-width="0.5" opacity="0.3"/>
-                        <circle cx="30" cy="30" r="22" fill="none" stroke="#00ff41" stroke-width="0.5" opacity="0.4"/>
-                        <circle cx="30" cy="30" r="16" fill="none" stroke="#00ff41" stroke-width="0.5" opacity="0.5"/>
-                        <circle cx="30" cy="30" r="10" fill="none" stroke="#00ff41" stroke-width="1" opacity="0.7" filter="url(#targetGlow)"/>
-                        <!-- Crosshairs -->
-                        <line x1="30" y1="2" x2="30" y2="18" stroke="#00ff41" stroke-width="1" opacity="0.8"/>
-                        <line x1="30" y1="42" x2="30" y2="58" stroke="#00ff41" stroke-width="1" opacity="0.8"/>
-                        <line x1="2" y1="30" x2="18" y2="30" stroke="#00ff41" stroke-width="1" opacity="0.8"/>
-                        <line x1="42" y1="30" x2="58" y2="30" stroke="#00ff41" stroke-width="1" opacity="0.8"/>
-                        <!-- Diagonal marks -->
-                        <line x1="8" y1="8" x2="14" y2="14" stroke="#00ff41" stroke-width="0.5" opacity="0.6"/>
-                        <line x1="46" y1="8" x2="52" y2="14" stroke="#00ff41" stroke-width="0.5" opacity="0.6"/>
-                        <line x1="8" y1="52" x2="14" y2="46" stroke="#00ff41" stroke-width="0.5" opacity="0.6"/>
-                        <line x1="46" y1="52" x2="52" y2="46" stroke="#00ff41" stroke-width="0.5" opacity="0.6"/>
-                        <!-- Rotating radar sweep -->
-                        <line x1="30" y1="30" x2="30" y2="4" stroke="url(#radarSweep)" stroke-width="2" opacity="0.6" transform-origin="30 30">
-                            <animateTransform attributeName="transform" type="rotate" from="0 30 30" to="360 30 30" dur="3s" repeatCount="indefinite"/>
-                        </line>
-                        <defs><linearGradient id="radarSweep" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" style="stop-color:#00ff41;stop-opacity:0.8"/><stop offset="100%" style="stop-color:#00ff41;stop-opacity:0"/></linearGradient></defs>
-                        <!-- Center target dot -->
-                        <circle cx="30" cy="30" r="3" fill="#00ff41" filter="url(#targetGlow)">
-                            <animate attributeName="r" values="2;4;2" dur="1s" repeatCount="indefinite"/>
-                        </circle>
-                        <!-- Spectrum analyzer bars around perimeter -->
-                        ${[0,30,60,90,120,150,180,210,240,270,300,330].map((angle, i) => {
-                            const rad = angle * Math.PI / 180;
-                            const x1 = 30 + Math.cos(rad) * 24;
-                            const y1 = 30 + Math.sin(rad) * 24;
-                            const x2 = 30 + Math.cos(rad) * (26 + (i % 3) * 2);
-                            const y2 = 30 + Math.sin(rad) * (26 + (i % 3) * 2);
-                            return '<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="#00ff41" stroke-width="1.5" opacity="0.7"><animate attributeName="opacity" values="0.3;1;0.3" dur="'+(0.5 + i*0.1)+'s" repeatCount="indefinite"/></line>';
-                        }).join('')}
-                        <!-- Pulsing outer ring -->
-                        <circle cx="30" cy="30" r="26" fill="none" stroke="#00ff41" stroke-width="1" opacity="0">
-                            <animate attributeName="r" values="20;30;20" dur="2s" repeatCount="indefinite"/>
-                            <animate attributeName="opacity" values="0.6;0;0.6" dur="2s" repeatCount="indefinite"/>
-                        </circle>
-                    </svg>
-                </div>`;
-                svgContent += '</svg>';
-                geomarkers.innerHTML = svgContent + markers + legendFlags;
-                geoLegend.innerHTML = '<span style="animation:pulse 1s infinite;">⚠</span> ' + totalThreats.toLocaleString() + ' INCOMING';
+            if (isVhost) {
+                const vhosts = Object.entries(vhostData).sort((a, b) => b[1] - a[1]).slice(0, 5);
+                if (vhosts.length === 0) {
+                    legendEl.innerHTML = '<div style="color:var(--muted-dark);font-size:0.7rem;text-align:center;">No targets</div>';
+                } else {
+                    legendEl.innerHTML = vhosts.map(([vh, cnt], i) => {
+                        const pct = total > 0 ? Math.round(cnt / total * 100) : 0;
+                        const emoji = vh.includes('git') ? '💻' : vh.includes('mail') ? '📧' : vh.includes('api') ? '⚡' : '🌐';
+                        return '<div class="legend-row-mini" style="border-color:' + VHOST_COLORS[i] + '"><span class="row-dot" style="background:' + VHOST_COLORS[i] + '"></span><span class="row-val">' + cnt + ' <span style="font-size:0.55rem;color:var(--muted-dark);">(' + pct + '%)</span></span><span class="vhost-badge" style="border-color:' + VHOST_COLORS[i] + '">' + emoji + ' ' + vh.replace(/\.gk2\.secubox\.in$/, '').slice(0, 12) + '</span></div>';
+                    }).join('');
+                }
             } else {
-                geomarkers.innerHTML = '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#00ff41;font-size:12px;">✓ SECURE</div>';
-                geoLegend.innerHTML = '<span style="color:#00ff41;">● SECURE</span>';
+                const continents = ['americas', 'europe', 'asia', 'oceania', 'africa'];
+                legendEl.innerHTML = continents.map((cont, i) => {
+                    const contTotal = counts[cont] || 0;
+                    if (contTotal === 0) return '';
+                    const pct = total > 0 ? Math.round(contTotal / total * 100) : 0;
+                    const countries = Object.entries(countryData[cont]).sort((a, b) => b[1] - a[1]).slice(0, 5);
+                    const flags = countries.map(([cc, cnt]) => {
+                        const flagPct = Math.round(cnt / contTotal * 100);
+                        return '<span class="flag-mini" style="border-color:' + colors[i] + '" title="' + cc + ': ' + cnt + '">' + countryToFlag(cc) + '<span class="fm-count">' + flagPct + '%</span></span>';
+                    }).join('');
+                    return '<div class="legend-row-mini" style="border-color:' + colors[i] + '"><span class="row-dot" style="background:' + colors[i] + '"></span><span class="row-val">' + contTotal + ' <span style="font-size:0.55rem;color:var(--muted-dark);">(' + pct + '%)</span></span><span class="row-flags">' + flags + '</span></div>';
+                }).filter(Boolean).join('');
+                if (!legendEl.innerHTML) legendEl.innerHTML = '<div style="color:var(--muted-dark);font-size:0.7rem;text-align:center;">No data</div>';
             }
+        }
+
+        // Update all 3 eyemotes (called when either events or stats are ready)
+        function updateAllEyemotes(events, statsData) {
+            // 1. Attack Origin - by continent
+            updateEyemoteMini('origin', events, RING_CONFIG_MINI.map(c => c.color), 'originTotal', 'originLegend', false);
+
+            // 2. Visitors - unique IPs by continent
+            const visitorEvents = [];
+            const seenIps = new Set();
+            events.forEach(e => {
+                if (e.ip && !seenIps.has(e.ip)) {
+                    seenIps.add(e.ip);
+                    visitorEvents.push({ country: e.country, count: 1 });
+                }
+            });
+            updateEyemoteMini('visitor', visitorEvents, VISITOR_COLORS, 'visitorTotal', 'visitorLegend', false);
+
+            // 3. Target Vhosts - attacks per vhost
+            const vhostEvents = [];
+            if (statsData?.top_vhosts) {
+                Object.entries(statsData.top_vhosts).forEach(([vh, data]) => {
+                    const count = typeof data === 'object' ? data.count || 0 : data;
+                    vhostEvents.push({ vhost: vh, count: count, country: 'XX' });
+                });
+            }
+            updateEyemoteMini('vhost', vhostEvents, VHOST_COLORS, 'vhostTotal', 'vhostLegend', true);
         }
 
         // Category emoji mapping
