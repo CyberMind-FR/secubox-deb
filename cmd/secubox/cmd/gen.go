@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/CyberMind-FR/secubox-deb/cmd/secubox/internal/hardware"
 	"github.com/CyberMind-FR/secubox-deb/cmd/secubox/internal/manifest"
 	"github.com/CyberMind-FR/secubox-deb/cmd/secubox/internal/profile"
 	"github.com/CyberMind-FR/secubox-deb/cmd/secubox/internal/wizard"
@@ -166,15 +167,21 @@ func removePackage(packages []string, pkg string) []string {
 	return result
 }
 
-// Placeholder for hardware detection
+// detectedHardware wraps hardware detection results
 type detectedHardware struct {
 	Board string
 	Tier  string
 }
 
 func detectHardware() (*detectedHardware, error) {
-	// TODO: Implement actual hardware detection
-	return nil, fmt.Errorf("hardware detection not implemented yet")
+	info, err := hardware.Detect()
+	if err != nil {
+		return nil, err
+	}
+	return &detectedHardware{
+		Board: info.Board,
+		Tier:  info.SuggestTier(),
+	}, nil
 }
 
 // writeOutput writes the manifest and Makefile to the output directory
