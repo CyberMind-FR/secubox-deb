@@ -8,6 +8,7 @@ import (
 
 	"github.com/CyberMind-FR/secubox-deb/cmd/secubox/internal/manifest"
 	"github.com/CyberMind-FR/secubox-deb/cmd/secubox/internal/profile"
+	"github.com/CyberMind-FR/secubox-deb/cmd/secubox/internal/wizard"
 	"github.com/spf13/cobra"
 )
 
@@ -113,32 +114,8 @@ func runGen(cmd *cobra.Command, args []string) error {
 	// Generate manifest
 	m := manifest.Generate(prof, board, version)
 
-	// Create output directory if needed
-	if err := os.MkdirAll(genOut, 0755); err != nil {
-		return fmt.Errorf("create output directory: %w", err)
-	}
-
-	// Write manifest.yaml
-	manifestPath := filepath.Join(genOut, "manifest.yaml")
-	manifestData, err := m.ToYAML()
-	if err != nil {
-		return fmt.Errorf("serialize manifest: %w", err)
-	}
-	if err := os.WriteFile(manifestPath, manifestData, 0644); err != nil {
-		return fmt.Errorf("write manifest: %w", err)
-	}
-	fmt.Printf("Generated: %s\n", manifestPath)
-
-	// Write Makefile
-	makefilePath := filepath.Join(genOut, "Makefile")
-	makefileData := manifest.GenerateMakefile(m)
-	if err := os.WriteFile(makefilePath, []byte(makefileData), 0644); err != nil {
-		return fmt.Errorf("write Makefile: %w", err)
-	}
-	fmt.Printf("Generated: %s\n", makefilePath)
-
-	fmt.Printf("\nNext: cd %s && make image\n", genOut)
-	return nil
+	// Write output files
+	return writeOutput(m)
 }
 
 func findRepoRoot() (string, error) {
@@ -200,9 +177,83 @@ func detectHardware() (*detectedHardware, error) {
 	return nil, fmt.Errorf("hardware detection not implemented yet")
 }
 
-// Placeholder for wizard
-func runWizard(repoRoot string) error {
-	fmt.Println("Interactive wizard not implemented yet.")
-	fmt.Println("Use: secubox gen --board <board> --tier <tier>")
+// writeOutput writes the manifest and Makefile to the output directory
+func writeOutput(m *manifest.Manifest) error {
+	// Create output directory if needed
+	if err := os.MkdirAll(genOut, 0755); err != nil {
+		return fmt.Errorf("create output directory: %w", err)
+	}
+
+	// Write manifest.yaml
+	manifestPath := filepath.Join(genOut, "manifest.yaml")
+	manifestData, err := m.ToYAML()
+	if err != nil {
+		return fmt.Errorf("serialize manifest: %w", err)
+	}
+	if err := os.WriteFile(manifestPath, manifestData, 0644); err != nil {
+		return fmt.Errorf("write manifest: %w", err)
+	}
+	fmt.Printf("Generated: %s\n", manifestPath)
+
+	// Write Makefile
+	makefilePath := filepath.Join(genOut, "Makefile")
+	makefileData := manifest.GenerateMakefile(m)
+	if err := os.WriteFile(makefilePath, []byte(makefileData), 0644); err != nil {
+		return fmt.Errorf("write Makefile: %w", err)
+	}
+	fmt.Printf("Generated: %s\n", makefilePath)
+
+	fmt.Printf("\nNext: cd %s && make image\n", genOut)
 	return nil
+}
+
+// runWizard launches the interactive wizard for configuration
+func runWizard(repoRoot string) error {
+	opts, err := wizard.Run(repoRoot)
+	if err != nil {
+		return fmt.Errorf("wizard: %w", err)
+	}
+
+	// Set global flags from wizard results
+	genBoard = opts.Board
+	genTier = opts.Tier
+	genEnable = opts.Enable
+
+	// Load board configuration
+	boardDir := filepath.Join(repoRoot, "board", genBoard)
+	board, err := profile.LoadBoard(boardDir)
+	if err != nil {
+		return fmt.Errorf("load board %s: %w", genBoard, err)
+	}
+
+	// Resolve profile with inheritance
+	profilesDir := filepath.Join(repoRoot, "profiles")
+	merger := profile.NewMerger(profilesDir)
+	prof, err := merger.Resolve(genTier)
+	if err != nil {
+		return fmt.Errorf("resolve profile %s: %w", genTier, err)
+	}
+
+	// Apply board tweaks
+	tweaks, err := profile.LoadTweaks(boardDir)
+	if err != nil {
+		return fmt.Errorf("load tweaks: %w", err)
+	}
+	applyTweaks(prof, tweaks)
+
+	// Add packages from wizard
+	for _, pkg := range genEnable {
+		prof.Packages.Required = append(prof.Packages.Required, "secubox-"+pkg)
+	}
+
+	// Generate manifest
+	m := manifest.Generate(prof, board, version)
+
+	// Update formats from wizard if specified
+	if len(opts.Formats) > 0 {
+		m.Output.Formats = opts.Formats
+	}
+
+	// Write output files
+	return writeOutput(m)
 }
