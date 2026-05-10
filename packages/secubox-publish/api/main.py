@@ -129,11 +129,14 @@ class ISPPublishResult(BaseModel):
     """Result of ISP Home Publish operation."""
     success: bool
     name: str
+    domain: str
     content_type: str
     url: Optional[str] = None
-    bundle_url: Optional[str] = None
+    download_url: Optional[str] = None
     qrcode_url: Optional[str] = None
+    files_count: int = 0
     detected_files: List[str] = []
+    infrastructure: Dict[str, Any] = {}
     message: str = ""
 
 
@@ -752,6 +755,145 @@ def _extract_archive(file_path: Path, extract_to: Path) -> List[str]:
     return extracted_files
 
 
+async def _prepare_infrastructure(name: str, domain: str, content_type: str) -> Dict[str, Any]:
+    """
+    Prepare full infrastructure for publishing:
+    - MetaBlogizer site
+    - Nginx VHost
+    - HAProxy VHost + ACL
+    - MITMProxy WAF route
+    - SSL Certificate
+    - Vortex DNS record (if available)
+
+    Returns status dict with infrastructure component statuses.
+    """
+    infra_status: Dict[str, Any] = {
+        "metablogizer": {"status": "pending"},
+        "vhost": {"status": "pending"},
+        "haproxy": {"status": "pending"},
+        "mitmproxy": {"status": "pending"},
+        "certificate": {"status": "pending"},
+        "dns": {"status": "pending"},
+    }
+
+    # 1. Create metablogizer site
+    try:
+        result = await _call_module("metablogizer", "/site", "POST", {
+            "name": name,
+            "domain": domain,
+        })
+        infra_status["metablogizer"] = {
+            "status": "ok" if "error" not in result else "error",
+            "details": result,
+        }
+    except Exception as e:
+        infra_status["metablogizer"] = {"status": "error", "error": str(e)}
+
+    # 2. Create nginx vhost via metablogizer publish
+    try:
+        result = await _call_module("metablogizer", f"/site/{name}/publish", "POST")
+        infra_status["vhost"] = {
+            "status": "ok" if "error" not in result else "error",
+            "details": result,
+        }
+    except Exception as e:
+        infra_status["vhost"] = {"status": "error", "error": str(e)}
+
+    # 3. Add HAProxy vhost
+    try:
+        result = await _call_module("haproxy", "/vhost", "POST", {"domain": domain})
+        infra_status["haproxy"] = {
+            "status": "ok" if "error" not in result else "error",
+            "details": result,
+        }
+    except Exception as e:
+        infra_status["haproxy"] = {"status": "skip", "error": str(e)}
+
+    # 4. Add MITMProxy WAF route
+    try:
+        result = await _call_module("waf", "/route", "POST", {
+            "domain": domain,
+            "backend_ip": "10.100.0.1",
+            "backend_port": 8900,
+        })
+        infra_status["mitmproxy"] = {
+            "status": "ok" if "error" not in result else "skip",
+            "details": result,
+        }
+    except Exception as e:
+        infra_status["mitmproxy"] = {"status": "skip", "error": str(e)}
+
+    # 5. Request SSL certificate
+    try:
+        result = await _call_module("haproxy", "/cert/request", "POST", {"domain": domain})
+        infra_status["certificate"] = {
+            "status": "ok" if "error" not in result else "pending",
+            "details": result,
+        }
+    except Exception as e:
+        infra_status["certificate"] = {"status": "pending", "error": str(e)}
+
+    # 6. Add DNS record (Vortex DNS)
+    try:
+        result = await _call_module("vortex-dns", "/record", "POST", {
+            "name": name,
+            "domain": domain,
+            "type": "A",
+            "target": "auto",  # Auto-detect server IP
+        })
+        infra_status["dns"] = {
+            "status": "ok" if "error" not in result else "skip",
+            "details": result,
+        }
+    except Exception as e:
+        infra_status["dns"] = {"status": "skip", "error": str(e)}
+
+    # 7. Register with NAC (Network Access Control) if IoT or device service
+    if content_type in ("iot", "device", "service"):
+        try:
+            result = await _call_module("nac", "/service/register", "POST", {
+                "name": name,
+                "domain": domain,
+                "type": content_type,
+            })
+            infra_status["nac"] = {
+                "status": "ok" if "error" not in result else "skip",
+                "details": result,
+            }
+        except Exception as e:
+            infra_status["nac"] = {"status": "skip", "error": str(e)}
+
+    # 8. Register with MAC Guardian for device binding
+    try:
+        result = await _call_module("mac-guard", "/service/register", "POST", {
+            "name": name,
+            "domain": domain,
+        })
+        infra_status["mac_guard"] = {
+            "status": "ok" if "error" not in result else "skip",
+            "details": result,
+        }
+    except Exception as e:
+        infra_status["mac_guard"] = {"status": "skip", "error": str(e)}
+
+    # 9. Register with IoT Gateway if applicable
+    if content_type in ("iot", "mqtt", "zigbee", "zwave"):
+        try:
+            result = await _call_module("iot-guard", "/device/register", "POST", {
+                "name": name,
+                "domain": domain,
+                "protocol": content_type,
+            })
+            infra_status["iot_gateway"] = {
+                "status": "ok" if "error" not in result else "skip",
+                "details": result,
+            }
+        except Exception as e:
+            infra_status["iot_gateway"] = {"status": "skip", "error": str(e)}
+
+    return infra_status
+
+
 async def _publish_to_module(content_type: str, name: str, source_path: Path, domain: Optional[str] = None) -> Dict[str, Any]:
     """Route content to appropriate publishing module."""
     if content_type == "streamlit":
@@ -845,16 +987,24 @@ async def isp_upload(
         # Publish if auto_publish is enabled
         result = {"success": False, "message": "Upload only, not published"}
         url = None
+        infra_status = {}
+
+        # Determine final domain
+        final_domain = domain or f"{name}.gk2.secubox.in"
 
         if auto_publish:
-            result = await _publish_to_module(content_type, name, extract_dir, domain)
+            # Prepare full infrastructure first
+            infra_status = await _prepare_infrastructure(name, final_domain, content_type)
+
+            # Then publish content to module
+            result = await _publish_to_module(content_type, name, extract_dir, final_domain)
 
             if "error" not in result:
                 # Determine URL based on content type
                 if content_type == "streamlit":
                     url = f"/apps/{name}/"
                 elif content_type in ("static", "hugo", "jekyll", "hexo"):
-                    url = f"https://{domain or name + '.secubox.local'}/"
+                    url = f"https://{final_domain}/"
                 else:
                     url = result.get("url")
 
@@ -890,11 +1040,14 @@ async def isp_upload(
         return ISPPublishResult(
             success="error" not in result,
             name=name,
+            domain=final_domain,
             content_type=content_type,
             url=url,
-            bundle_url=f"/api/v1/publish/bundle/{name}.zip",
+            download_url=f"/api/v1/publish/bundle/{name}.zip",
             qrcode_url=f"/api/v1/publish/bundle/{name}/qrcode" if url else None,
-            detected_files=extracted_files[:20],  # Limit to first 20
+            files_count=len(extracted_files),
+            detected_files=extracted_files[:20],
+            infrastructure=infra_status,
             message=result.get("message", "Published successfully" if "error" not in result else result.get("error", "Unknown error")),
         )
 
