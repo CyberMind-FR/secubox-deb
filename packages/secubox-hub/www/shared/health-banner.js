@@ -226,6 +226,16 @@
     }
 
     function createBannerElement() {
+        // Create trigger button (always visible)
+        const trigger = document.createElement('div');
+        trigger.id = 'health-banner-trigger';
+        trigger.className = 'hb-trigger';
+        trigger.innerHTML = `
+            <span class="hb-trigger-icon">◀</span>
+            <span class="hb-trigger-score">--</span>
+        `;
+
+        // Create banner panel (hidden by default)
         const banner = document.createElement('div');
         banner.id = 'health-banner';
         banner.className = 'health-banner';
@@ -233,20 +243,22 @@
             <div class="hb-content">
                 <div class="hb-score">
                     <span class="hb-icon">💖</span>
-                    <span class="hb-label">VIBING</span>
-                    <div class="hb-bar"><div class="hb-fill"></div></div>
+                    <div class="hb-score-info">
+                        <span class="hb-label">VIBING</span>
+                        <div class="hb-bar"><div class="hb-fill"></div></div>
+                    </div>
                     <span class="hb-pct">--</span>
                 </div>
                 <div class="hb-modules"></div>
                 <div class="hb-alerts"></div>
                 <div class="hb-sparkle">✨</div>
-                <button class="hb-toggle" title="Toggle details">▼</button>
-            </div>
-            <div class="hb-details">
-                <div class="hb-stats-grid"></div>
+                <div class="hb-details">
+                    <div class="hb-stats-grid"></div>
+                </div>
             </div>
         `;
-        return banner;
+
+        return { banner, trigger };
     }
 
     function injectBannerStyles() {
@@ -255,123 +267,260 @@
         const style = document.createElement('style');
         style.id = 'health-banner-styles';
         style.textContent = `
+            /* SIDE-SLIDING HEALTH BANNER */
+            /* Hidden by default, slides from right, pushes content */
+
             .health-banner {
                 position: fixed;
                 top: 0;
-                left: 0;
                 right: 0;
-                height: 28px;
-                background: linear-gradient(90deg, #0a0a0f 0%, #0f0f14 50%, #0a0a0f 100%);
-                border-bottom: 1px solid rgba(201,168,76,0.3);
-                z-index: 9999;
+                width: 0;
+                height: 100vh;
+                background: linear-gradient(180deg, #0a0a0f 0%, #0f0f14 50%, #0a0a0f 100%);
+                border-left: 1px solid rgba(201,168,76,0.3);
+                z-index: 9998;
                 font-family: 'JetBrains Mono', monospace;
                 font-size: 10px;
                 color: var(--text-primary, #e8e6d9);
-                transition: height 0.3s ease, box-shadow 0.3s ease;
+                transition: width 0.3s ease, box-shadow 0.3s ease;
                 overflow: hidden;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+                box-shadow: -4px 0 20px rgba(0,0,0,0.5);
             }
-            /* Expand on hover */
-            .health-banner:hover {
-                height: auto;
-                min-height: 28px;
-                box-shadow: 0 4px 20px rgba(201,168,76,0.3);
+
+            /* Hidden trigger button - always visible */
+            .hb-trigger {
+                position: fixed;
+                top: 50%;
+                right: 0;
+                transform: translateY(-50%);
+                width: 24px;
+                height: 60px;
+                background: linear-gradient(180deg, #0a0a0f 0%, #1a1a24 100%);
+                border: 1px solid rgba(201,168,76,0.4);
+                border-right: none;
+                border-radius: 8px 0 0 8px;
+                z-index: 9999;
+                cursor: pointer;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                gap: 4px;
+                transition: all 0.3s ease;
             }
+            .hb-trigger:hover {
+                width: 32px;
+                background: linear-gradient(180deg, #1a1a24 0%, #2a2a34 100%);
+                border-color: rgba(201,168,76,0.8);
+                box-shadow: -4px 0 15px rgba(201,168,76,0.2);
+            }
+            .hb-trigger-icon {
+                font-size: 14px;
+                transition: transform 0.3s ease;
+            }
+            .hb-trigger-score {
+                font-size: 8px;
+                color: var(--gold-hermetic, #c9a84c);
+                font-weight: bold;
+                writing-mode: vertical-rl;
+                text-orientation: mixed;
+            }
+            body.health-banner-open .hb-trigger {
+                right: 280px;
+            }
+            body.health-banner-open .hb-trigger-icon {
+                transform: rotate(180deg);
+            }
+
+            /* Expanded state */
             .health-banner.expanded {
-                height: auto;
-                min-height: 28px;
+                width: 280px;
             }
-            .health-banner.sidebar-collapsed {
-                /* No change needed - full width */
-            }
+
             .hb-content {
                 display: flex;
-                align-items: center;
-                height: 28px;
-                padding: 0 16px;
-                gap: 12px;
+                flex-direction: column;
+                padding: 16px;
+                gap: 16px;
+                width: 280px;
+                height: 100%;
+                overflow-y: auto;
             }
+
+            /* Score section */
             .hb-score {
                 display: flex;
                 align-items: center;
-                gap: 6px;
+                gap: 8px;
+                padding: 12px;
+                background: rgba(255,255,255,0.05);
+                border-radius: 8px;
+                border: 1px solid rgba(201,168,76,0.2);
             }
-            .hb-icon { font-size: 14px; }
+            .hb-icon { font-size: 24px; }
+            .hb-score-info {
+                flex: 1;
+            }
             .hb-label {
-                font-size: 9px;
+                font-size: 10px;
                 letter-spacing: 1px;
                 color: var(--gold-hermetic, #c9a84c);
-                opacity: 0.8;
+                display: block;
+                margin-bottom: 4px;
             }
             .hb-bar {
-                width: 60px;
-                height: 6px;
+                width: 100%;
+                height: 8px;
                 background: rgba(255,255,255,0.1);
-                border-radius: 3px;
+                border-radius: 4px;
                 overflow: hidden;
             }
             .hb-fill {
                 height: 100%;
                 background: linear-gradient(90deg, #ef4444, #eab308, #22c55e);
-                border-radius: 3px;
+                border-radius: 4px;
                 transition: width 0.5s ease;
                 width: 0%;
             }
             .hb-pct {
+                font-size: 18px;
                 font-weight: bold;
-                min-width: 32px;
+                color: var(--text-primary, #e8e6d9);
             }
+
+            /* Modules grid */
             .hb-modules {
-                display: flex;
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
                 gap: 8px;
-                flex: 1;
             }
+            .hb-mod {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 4px;
+                padding: 8px;
+                border-radius: 6px;
+                background: rgba(255,255,255,0.05);
+                cursor: pointer;
+                transition: all 0.2s;
+                text-decoration: none;
+                position: relative;
+            }
+            .hb-mod:hover {
+                background: rgba(255,255,255,0.12);
+                transform: translateY(-2px);
+            }
+            .hb-mod.ok { border: 1px solid rgba(34,197,94,0.5); }
+            .hb-mod.warn { border: 1px solid rgba(234,179,8,0.5); }
+            .hb-mod.err { border: 1px solid rgba(239,68,68,0.5); }
+            .hb-mod.off { border: 1px solid rgba(102,102,102,0.5); opacity: 0.6; }
+            .hb-mod-emoji { font-size: 20px; }
+            .hb-mod-name {
+                font-size: 8px;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                color: var(--text-muted, #6b6b7a);
+            }
+            .hb-mod-status {
+                font-size: 10px;
+                position: absolute;
+                top: 2px;
+                right: 4px;
+            }
+
+            /* Alerts */
             .hb-alerts {
                 display: flex;
-                gap: 8px;
+                flex-direction: column;
+                gap: 6px;
             }
             .hb-alert {
                 display: flex;
                 align-items: center;
-                gap: 4px;
-                padding: 2px 8px;
-                border-radius: 4px;
+                gap: 8px;
+                padding: 8px 10px;
+                border-radius: 6px;
                 font-size: 10px;
                 cursor: pointer;
-                animation: hb-pulse 2s infinite;
+                text-decoration: none;
             }
             .hb-alert.critical {
-                background: rgba(239,68,68,0.2);
-                border: 1px solid rgba(239,68,68,0.5);
+                background: rgba(239,68,68,0.15);
+                border: 1px solid rgba(239,68,68,0.4);
                 color: #ef4444;
             }
             .hb-alert.warning {
-                background: rgba(234,179,8,0.2);
-                border: 1px solid rgba(234,179,8,0.5);
+                background: rgba(234,179,8,0.15);
+                border: 1px solid rgba(234,179,8,0.4);
                 color: #eab308;
             }
             .hb-alert.info {
-                background: rgba(0,212,255,0.2);
-                border: 1px solid rgba(0,212,255,0.5);
+                background: rgba(0,212,255,0.15);
+                border: 1px solid rgba(0,212,255,0.4);
                 color: #00d4ff;
             }
             .hb-alert.celebration {
-                background: linear-gradient(135deg, rgba(201,168,76,0.3), rgba(255,215,0,0.2));
-                border: 1px solid rgba(255,215,0,0.6);
+                background: linear-gradient(135deg, rgba(201,168,76,0.2), rgba(255,215,0,0.15));
+                border: 1px solid rgba(255,215,0,0.5);
                 color: #ffd700;
-                animation: hb-glow 2s infinite;
             }
             .hb-alert.patrol {
-                background: rgba(100,149,237,0.2);
-                border: 1px solid rgba(100,149,237,0.5);
+                background: rgba(100,149,237,0.15);
+                border: 1px solid rgba(100,149,237,0.4);
                 color: #6495ed;
             }
+            .hb-alert-icon { font-size: 14px; }
             .hb-alert-text {
-                max-width: 150px;
+                flex: 1;
                 overflow: hidden;
                 text-overflow: ellipsis;
                 white-space: nowrap;
             }
+
+            /* Stats grid */
+            .hb-details {
+                margin-top: auto;
+                padding-top: 12px;
+                border-top: 1px solid rgba(201,168,76,0.2);
+            }
+            .hb-stats-grid {
+                display: grid;
+                grid-template-columns: repeat(2, 1fr);
+                gap: 8px;
+            }
+            .hb-stat {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 2px;
+                padding: 8px;
+                background: rgba(255,255,255,0.03);
+                border-radius: 6px;
+            }
+            .hb-stat-icon { font-size: 16px; }
+            .hb-stat-label {
+                font-size: 8px;
+                color: var(--gold-hermetic, #c9a84c);
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
+            .hb-stat-value {
+                font-size: 14px;
+                font-weight: bold;
+                color: var(--text-primary, #e8e6d9);
+            }
+
+            .hb-sparkle {
+                position: absolute;
+                top: 10px;
+                right: 10px;
+                font-size: 16px;
+                animation: hb-sparkle 3s infinite ease-in-out;
+                display: none;
+            }
+            .hb-toggle { display: none; } /* Hidden in sidebar mode */
+
             @keyframes hb-pulse {
                 0%, 100% { opacity: 1; }
                 50% { opacity: 0.7; }
@@ -384,128 +533,60 @@
                 0%, 100% { transform: scale(1) rotate(0deg); opacity: 1; }
                 50% { transform: scale(1.2) rotate(180deg); opacity: 0.8; }
             }
-            .hb-sparkle {
-                position: absolute;
-                right: 60px;
-                font-size: 16px;
-                animation: hb-sparkle 3s infinite ease-in-out;
-                display: none;
-            }
-            .hb-mod {
-                display: flex;
-                align-items: center;
-                gap: 2px;
-                padding: 2px 6px;
-                border-radius: 4px;
-                background: rgba(255,255,255,0.05);
-                cursor: pointer;
-                transition: all 0.2s;
-                text-decoration: none;
-                position: relative;
-            }
-            .hb-mod:hover {
-                background: rgba(255,255,255,0.15);
-                transform: translateY(-1px);
-            }
-            .hb-mod.ok { border-bottom: 2px solid #22c55e; }
-            .hb-mod.warn { border-bottom: 2px solid #eab308; }
-            .hb-mod.err { border-bottom: 2px solid #ef4444; }
-            .hb-mod.off { border-bottom: 2px solid #666; opacity: 0.6; }
-            .hb-mod-emoji { font-size: 14px; }
-            .hb-mod-status {
-                font-size: 8px;
-                position: absolute;
-                top: -2px;
-                right: -2px;
-            }
-            .hb-stats-grid {
-                display: grid;
-                grid-template-columns: repeat(6, 1fr);
-                gap: 12px;
-                padding: 8px 0;
-            }
-            .hb-stat {
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                gap: 2px;
-                padding: 8px;
-                background: rgba(255,255,255,0.05);
-                border-radius: 6px;
-            }
-            .hb-stat-icon { font-size: 18px; }
-            .hb-stat-label {
-                font-size: 9px;
-                color: var(--gold-hermetic, #c9a84c);
-                text-transform: uppercase;
-                letter-spacing: 0.5px;
-            }
-            .hb-stat-value {
-                font-size: 14px;
-                font-weight: bold;
-                color: var(--text-primary, #e8e6d9);
-            }
-            .hb-toggle {
-                background: none;
-                border: none;
-                color: var(--text-muted, #6b6b7a);
-                cursor: pointer;
-                padding: 4px 8px;
-                font-size: 10px;
-                transition: transform 0.3s, color 0.2s;
-                opacity: 0.5;
-            }
-            .health-banner:hover .hb-toggle {
-                opacity: 1;
-                color: var(--gold-hermetic, #c9a84c);
-            }
-            .health-banner:hover .hb-toggle,
-            .health-banner.expanded .hb-toggle {
-                transform: rotate(180deg);
-            }
-            .hb-details {
-                padding: 8px 16px;
-                border-top: 1px solid rgba(201,168,76,0.2);
-                display: none;
-                background: rgba(10,10,15,0.98);
-            }
-            .health-banner:hover .hb-details,
-            .health-banner.expanded .hb-details {
-                display: block;
+
+            /* Push main content when banner is open */
+            body.health-banner-open .main,
+            body.health-banner-open .sidebar + .main {
+                margin-right: 280px;
+                transition: margin-right 0.3s ease;
             }
 
-            /* Push main content and sidebar down */
-            body.has-health-banner {
-                padding-top: 28px;
-            }
-            body.has-health-banner .sidebar {
-                top: 28px;
-                height: calc(100vh - 28px);
-            }
-            body.has-health-banner .main {
-                margin-top: 28px;
-            }
-
-            /* Mobile */
+            /* Mobile: slide from bottom */
             @media (max-width: 768px) {
                 .health-banner {
-                    font-size: 9px;
+                    top: auto;
+                    bottom: 0;
+                    right: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 0;
+                    border-left: none;
+                    border-top: 1px solid rgba(201,168,76,0.3);
+                }
+                .health-banner.expanded {
+                    width: 100%;
+                    height: 60vh;
+                }
+                .hb-trigger {
+                    top: auto;
+                    bottom: 0;
+                    right: 50%;
+                    transform: translateX(50%);
+                    width: 60px;
                     height: 24px;
+                    border-radius: 8px 8px 0 0;
+                    border-bottom: none;
+                    flex-direction: row;
+                }
+                body.health-banner-open .hb-trigger {
+                    right: 50%;
+                    bottom: 60vh;
+                }
+                .hb-trigger-score {
+                    writing-mode: horizontal-tb;
                 }
                 .hb-content {
-                    height: 24px;
-                    padding: 0 8px;
-                    gap: 8px;
+                    width: 100%;
                 }
-                .hb-label { display: none; }
-                .hb-modules { display: none; }
-                .hb-alert-text { max-width: 100px; }
-                body.has-health-banner {
-                    padding-top: 24px;
+                .hb-modules {
+                    grid-template-columns: repeat(5, 1fr);
                 }
-                body.has-health-banner .sidebar {
-                    top: 24px;
-                    height: calc(100vh - 24px);
+                .hb-stats-grid {
+                    grid-template-columns: repeat(3, 1fr);
+                }
+                body.health-banner-open .main {
+                    margin-right: 0;
+                    margin-bottom: 60vh;
                 }
             }
         `;
@@ -514,6 +595,7 @@
 
     function renderBanner(health) {
         const banner = document.getElementById('health-banner');
+        const trigger = document.getElementById('health-banner-trigger');
         if (!banner) return;
 
         // Calculate overall score
@@ -523,6 +605,14 @@
         const iconEl = banner.querySelector('.hb-icon');
         const labelEl = banner.querySelector('.hb-label');
         const sparkleEl = banner.querySelector('.hb-sparkle');
+
+        // Update trigger score
+        if (trigger) {
+            const triggerScore = trigger.querySelector('.hb-trigger-score');
+            const triggerIcon = trigger.querySelector('.hb-trigger-icon');
+            if (triggerScore) triggerScore.textContent = score + '%';
+            if (triggerIcon) triggerIcon.textContent = getScoreEmoji(score);
+        }
 
         if (pctEl) pctEl.textContent = score + '%';
         if (fillEl) {
@@ -538,7 +628,7 @@
             sparkleEl.style.display = score >= 90 ? 'block' : 'none';
         }
 
-        // Render module LEDs with emojis
+        // Render module cards
         const modsEl = banner.querySelector('.hb-modules');
         if (modsEl && health?.modules) {
             const modules = ['waf', 'crowdsec', 'haproxy', 'nginx', 'system'];
@@ -552,6 +642,7 @@
                 const statusDot = statusEmojis[1] || statusEmojis[0];
                 return `<a href="/${m}/" class="hb-mod ${ledClass}" title="${m}: ${status}">
                     <span class="hb-mod-emoji">${emoji}</span>
+                    <span class="hb-mod-name">${m}</span>
                     <span class="hb-mod-status">${statusDot}</span>
                 </a>`;
             }).join('');
@@ -561,15 +652,15 @@
         const alertsEl = banner.querySelector('.hb-alerts');
         if (alertsEl) {
             const alerts = diagnose(health);
-            const visibleAlerts = alerts.filter(a => a.severity !== 'celebration' || score >= 95).slice(0, 3);
+            const visibleAlerts = alerts.filter(a => a.severity !== 'celebration' || score >= 95).slice(0, 5);
             alertsEl.innerHTML = visibleAlerts.map(a =>
                 a.action
                     ? `<a href="${a.action}" class="hb-alert ${a.severity}" title="${a.message}">
-                        <span>${a.icon}</span>
+                        <span class="hb-alert-icon">${a.icon}</span>
                         <span class="hb-alert-text">${a.message}</span>
                     </a>`
                     : `<div class="hb-alert ${a.severity}" title="${a.message}">
-                        <span>${a.icon}</span>
+                        <span class="hb-alert-icon">${a.icon}</span>
                         <span class="hb-alert-text">${a.message}</span>
                     </div>`
             ).join('');
@@ -656,18 +747,24 @@
         // Inject styles
         injectBannerStyles();
 
-        // Create banner
-        const banner = createBannerElement();
-        document.body.insertBefore(banner, document.body.firstChild);
-        document.body.classList.add('has-health-banner');
+        // Create banner and trigger
+        const { banner, trigger } = createBannerElement();
+        document.body.appendChild(trigger);
+        document.body.appendChild(banner);
 
-        // Toggle expand
-        const toggleBtn = banner.querySelector('.hb-toggle');
-        if (toggleBtn) {
-            toggleBtn.addEventListener('click', () => {
-                banner.classList.toggle('expanded');
-            });
-        }
+        // Toggle banner on trigger click
+        trigger.addEventListener('click', () => {
+            const isOpen = banner.classList.toggle('expanded');
+            document.body.classList.toggle('health-banner-open', isOpen);
+        });
+
+        // Close on escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && banner.classList.contains('expanded')) {
+                banner.classList.remove('expanded');
+                document.body.classList.remove('health-banner-open');
+            }
+        });
 
         // Restore from cache first (instant display)
         if (HealthCache.restore()) {
@@ -689,7 +786,7 @@
             }
         });
 
-        console.log('[HealthBanner] v' + VERSION + ' initialized');
+        console.log('[HealthBanner] v' + VERSION + ' initialized (sidebar mode)');
     }
 
     // Start
