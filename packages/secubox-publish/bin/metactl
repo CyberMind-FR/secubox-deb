@@ -295,7 +295,9 @@ cmd_download() {
 
     if "${curl_cmd[@]}"; then
         if [[ -f "$output" ]] && [[ $(file -b "$output") == *"Zip"* || $(file -b "$output") == *"gzip"* ]]; then
-            echo -e "${GREEN}✅ Downloaded:${NC} $output ($(ls -lh "$output" | awk '{print $5}'))"
+            local filesize
+            filesize=$(stat --printf="%s" "$output" 2>/dev/null || stat -f "%z" "$output" 2>/dev/null || echo "?")
+            echo -e "${GREEN}✅ Downloaded:${NC} $output (${filesize} bytes)"
         else
             echo -e "${RED}❌ Download failed or invalid file${NC}"
             rm -f "$output"

@@ -767,7 +767,7 @@ async def _prepare_infrastructure(name: str, domain: str, content_type: str) -> 
 
     Returns status dict with infrastructure component statuses.
     """
-    infra_status = {
+    infra_status: Dict[str, Any] = {
         "metablogizer": {"status": "pending"},
         "vhost": {"status": "pending"},
         "haproxy": {"status": "pending"},
