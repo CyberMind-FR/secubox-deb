@@ -817,6 +817,62 @@ vc4_dpi: Error applying setting, reverse things back
 
 This is handled automatically by `build-eye-remote-image.sh` v2.0.0+.
 
+### Pi Zero responds to ARP but not ping/TCP
+
+**Symptoms:**
+- `arping 10.55.0.2` returns replies (Layer 2 OK)
+- `ping 10.55.0.2` times out (Layer 3 blocked)
+- All TCP ports (22, 80, 5000, 8000) time out
+- Dashboard shows "Disconnected"
+
+**Diagnosis:**
+```bash
+# From MOCHAbin - check Layer 2
+arping -c 3 -I eye-remote 10.55.0.2
+# If replies → network link OK, problem is on Pi Zero
+
+# Check interface state
+ip addr show eye-remote
+cat /sys/class/net/eye-remote/carrier  # Should be 1
+```
+
+**Possible Causes:**
+1. **Firewall on Pi Zero** — iptables/nftables blocking INPUT
+2. **USB network service crashed** — NetworkManager or ifupdown issue
+3. **IP conflict** — Pi Zero lost its 10.55.0.2 address
+
+**Solutions:**
+
+1. **Via serial console** (from MOCHAbin):
+   ```bash
+   picocom -b 115200 /dev/ttyACM0
+   # Login: pi / raspberry
+   sudo iptables -F INPUT
+   sudo iptables -P INPUT ACCEPT
+   ip addr show usb0
+   # Ctrl+A then Ctrl+X to exit
+   ```
+
+2. **Make firewall fix permanent** (on Pi Zero):
+   ```bash
+   # Add to /etc/rc.local before "exit 0"
+   iptables -A INPUT -i usb0 -s 10.55.0.1 -j ACCEPT
+   ```
+
+3. **Restart USB network** (on Pi Zero):
+   ```bash
+   sudo systemctl restart networking
+   # or
+   sudo ifdown usb0 && sudo ifup usb0
+   ```
+
+4. **Check Pi Zero services**:
+   ```bash
+   systemctl status secubox-eye-agent
+   systemctl status secubox-fb-dashboard
+   journalctl -u secubox-eye-agent -n 20
+   ```
+
 ---
 
 ## Roadmap v2.0.0 (Issue #31)

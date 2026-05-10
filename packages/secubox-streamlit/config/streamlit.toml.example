@@ -37,3 +37,13 @@ url = "http://localhost:3001"
 # autostart = true
 # emancipated = true
 # domain = "myapp.example.com"
+
+# Power management (sleep/wake optimization)
+[power]
+auto_pause = false
+auto_pause_minutes = 30
+# presence_events enables banner injection on wake/sleep
+presence_events = true
+# metoblizer_log enables activity logging to metoblizer
+metoblizer_log = false
+metoblizer_endpoint = "http://localhost:9300/api/v1/metoblizer/ingest"

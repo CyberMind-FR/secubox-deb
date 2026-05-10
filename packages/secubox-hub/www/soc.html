@@ -435,6 +435,46 @@
         .loading { opacity: 0.5; animation: loading-pulse 1.5s infinite; }
         @keyframes loading-pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
 
+        /* ═══════════════════════════════════════════════════════════════
+           MINI HISTOGRAMS — Animated sparkline bars
+           ═══════════════════════════════════════════════════════════════ */
+        .mini-histogram {
+            display: flex;
+            align-items: flex-end;
+            justify-content: flex-end;
+            gap: 2px;
+            height: 24px;
+            margin-top: var(--space-s);
+            padding: 2px 4px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .mini-histogram .bar {
+            width: 4px;
+            min-height: 2px;
+            border-radius: 1px;
+            transition: height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            animation: bar-grow 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+            transform-origin: bottom;
+        }
+
+        @keyframes bar-grow {
+            from { transform: scaleY(0); opacity: 0; }
+            to { transform: scaleY(1); opacity: 1; }
+        }
+
+        .mini-histogram .bar.threats { background: linear-gradient(180deg, #C06040, rgba(192, 96, 64, 0.4)); }
+        .mini-histogram .bar.decisions { background: linear-gradient(180deg, #7068D0, rgba(112, 104, 208, 0.4)); }
+        .mini-histogram .bar.throughput { background: linear-gradient(180deg, #2C70C0, rgba(44, 112, 192, 0.4)); }
+        .mini-histogram .bar.services { background: linear-gradient(180deg, #148C66, rgba(20, 140, 102, 0.4)); }
+
+        .mini-histogram .bar:last-child { opacity: 1; }
+        .mini-histogram .bar:nth-last-child(2) { opacity: 0.9; }
+        .mini-histogram .bar:nth-last-child(3) { opacity: 0.8; }
+        .mini-histogram .bar:nth-last-child(n+4) { opacity: 0.6; }
+
         /* Three-column status layout */
         .status-columns {
             display: grid;
@@ -576,6 +616,7 @@
                     <div class="card-metric" id="threats-blocked">-</div>
                     <div class="card-label">Threats Blocked Today</div>
                     <span class="card-trend up" id="threats-trend">↑ -% vs yesterday</span>
+                    <div class="mini-histogram" id="hist-threats"></div>
                 </div>
 
                 <div class="glass-card" style="--card-accent: #7068D0; border-left: 3px solid #7068D0;">
@@ -586,6 +627,7 @@
                     <div class="card-metric" id="active-decisions">-</div>
                     <div class="card-label">Active Decisions</div>
                     <span class="card-trend up" id="decisions-info">- bouncers</span>
+                    <div class="mini-histogram" id="hist-decisions"></div>
                 </div>
 
                 <div class="glass-card" style="--card-accent: #2C70C0; border-left: 3px solid #2C70C0;">
@@ -596,6 +638,7 @@
                     <div class="card-metric" id="throughput">-</div>
                     <div class="card-label">MB/s Throughput</div>
                     <span class="card-trend" id="throughput-trend">- conns</span>
+                    <div class="mini-histogram" id="hist-throughput"></div>
                 </div>
 
                 <div class="glass-card" style="--card-accent: #148C66; border-left: 3px solid #148C66;">
@@ -606,6 +649,7 @@
                     <div class="card-metric" id="active-services">-</div>
                     <div class="card-label">Active Services</div>
                     <span class="card-trend up" id="uptime-info">-% uptime</span>
+                    <div class="mini-histogram" id="hist-services"></div>
                 </div>
             </div>
 
@@ -806,6 +850,47 @@
         const API_CROWDSEC = '/api/v1/crowdsec';
         const API_METRICS = '/api/v1/metrics';
 
+        // ════════════════��══════════════════════════════════════════════
+        // MINI HISTOGRAM — Progressive animation sparklines
+        // ═════════════════════════════════════��═════════════════════════
+        const HIST_MAX_SAMPLES = 12;
+        const historyData = {
+            threats: [],
+            decisions: [],
+            throughput: [],
+            services: []
+        };
+
+        function renderMiniHistogram(containerId, data, cssClass) {
+            const el = document.getElementById(containerId);
+            if (!el || data.length === 0) return;
+
+            const maxVal = Math.max(...data, 1);
+            const maxHeight = 20;
+
+            // Only re-render if data changed (prevent flicker)
+            const newBars = data.map((val, i) => {
+                const height = Math.max(2, (val / maxVal) * maxHeight);
+                const delay = (i * 30); // Progressive animation delay
+                return `<div class="bar ${cssClass}" style="height:${height}px;animation-delay:${delay}ms;"></div>`;
+            }).join('');
+
+            if (el.innerHTML !== newBars) {
+                el.innerHTML = newBars;
+            }
+        }
+
+        function updateHistogram(key, value) {
+            if (typeof value !== 'number' || isNaN(value)) return;
+
+            historyData[key].push(value);
+            if (historyData[key].length > HIST_MAX_SAMPLES) {
+                historyData[key].shift();
+            }
+
+            renderMiniHistogram('hist-' + key, historyData[key], key);
+        }
+
         function getToken() {
             return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token');
         }
@@ -896,6 +981,9 @@
             document.getElementById('active-services').textContent = healthy;
             document.getElementById('health-status').textContent = healthy === total ? 'HEALTHY' : 'DEGRADED';
             document.getElementById('health-status').className = 'card-status' + (healthy === total ? '' : ' warning');
+
+            // Update mini histogram
+            updateHistogram('services', healthy);
         }
 
         async function loadWAFStats() {
@@ -906,6 +994,9 @@
             document.getElementById('threats-blocked').textContent = blocked.toLocaleString();
             document.getElementById('waf-card-status').textContent = data.running ? 'ACTIVE' : 'INACTIVE';
             document.getElementById('waf-card-status').className = 'card-status' + (data.running ? '' : ' danger');
+
+            // Update mini histogram
+            updateHistogram('threats', blocked);
 
             // WAF matrix details
             document.getElementById('waf-version').textContent = `v${data.version || '1.2.0'} · ${data.rules_loaded || 0} rules`;
@@ -1180,6 +1271,9 @@
             document.getElementById('cs-decisions-count').textContent = data.active_decisions || 0;
             document.getElementById('cs-bouncers').textContent = data.bouncers || 0;
 
+            // Update mini histogram
+            updateHistogram('decisions', data.active_decisions || 0);
+
             // Categories
             if (data.categories) {
                 // Categories shown in donut only
@@ -1388,6 +1482,9 @@
             const total = data.total_tcp || (data.http + data.https + data.ssh) || 0;
             document.getElementById('throughput').textContent = total;
             document.getElementById('throughput-trend').textContent = `${data.http || 0} HTTP · ${data.https || 0} HTTPS`;
+
+            // Update mini histogram
+            updateHistogram('throughput', total);
         }
 
         async function loadNetwork() {

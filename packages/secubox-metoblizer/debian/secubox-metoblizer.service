@@ -1,0 +1,17 @@
+[Unit]
+Description=SecuBox Metoblizer - Centralized Log Aggregator
+After=network.target
+
+[Service]
+Type=simple
+User=secubox
+Group=secubox
+WorkingDirectory=/usr/lib/secubox/metoblizer
+ExecStart=/usr/bin/uvicorn api.main:app --uds /run/secubox/metoblizer.sock --workers 1
+Restart=on-failure
+RestartSec=5
+RuntimeDirectory=secubox
+StateDirectory=secubox/metoblizer
+
+[Install]
+WantedBy=multi-user.target

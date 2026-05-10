@@ -1,0 +1,8 @@
+secubox-metoblizer (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release
+  * Centralized log aggregation from netdata, glances, streamlit
+  * Presence event tracking and banner injection
+  * Event query API with filters
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 10 May 2025 18:00:00 +0200
