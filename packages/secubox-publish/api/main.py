@@ -2,6 +2,8 @@
 
 Layer 2 orchestrator module that provides a unified interface to all publishing modules.
 Follows the 2-layer architecture: simple UI -> aggregated API -> individual module APIs.
+
+ISP Home Publish feature: Upload ZIP → Auto-detect type → Publish → Download bundle
 """
 import httpx
 import json
@@ -10,15 +12,22 @@ import time
 import asyncio
 import hashlib
 import hmac
+import zipfile
+import tarfile
+import shutil
+import tempfile
+import importlib.util
+import io
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, Any, List, Optional
-from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks
+from typing import Dict, Any, List, Optional, Callable
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form
+from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel, Field, field_validator
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
 
-app = FastAPI(title="SecuBox Publishing Platform", version="2.0.0")
+app = FastAPI(title="SecuBox Publishing Platform", version="3.0.0")
 
 # Configuration
 DATA_DIR = Path("/var/lib/secubox/publish")
@@ -26,6 +35,10 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 HISTORY_FILE = DATA_DIR / "history.json"
 WEBHOOKS_FILE = DATA_DIR / "webhooks.json"
 STATS_FILE = DATA_DIR / "stats.json"
+BUNDLES_DIR = DATA_DIR / "bundles"
+BUNDLES_DIR.mkdir(parents=True, exist_ok=True)
+PLUGINS_DIR = Path("/srv/secubox/modules/publish/plugins")
+PLUGINS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Module socket paths
 MODULES = {
@@ -33,6 +46,15 @@ MODULES = {
     "streamforge": "/run/secubox/streamforge.sock",
     "droplet": "/run/secubox/droplet.sock",
     "metablogizer": "/run/secubox/metablogizer.sock",
+}
+
+# Content type detection patterns
+CONTENT_SIGNATURES = {
+    "streamlit": ["app.py", "streamlit_app.py", "main.py", "requirements.txt"],
+    "static": ["index.html", "index.htm", "default.html"],
+    "hugo": ["config.toml", "hugo.toml", "config.yaml"],
+    "jekyll": ["_config.yml", "Gemfile"],
+    "hexo": ["_config.yml", "package.json", "themes/"],
 }
 
 
@@ -101,6 +123,105 @@ class WebhookConfig(BaseModel):
         if not v.startswith(("http://", "https://")):
             raise ValueError("URL must start with http:// or https://")
         return v
+
+
+class ISPPublishResult(BaseModel):
+    """Result of ISP Home Publish operation."""
+    success: bool
+    name: str
+    content_type: str
+    url: Optional[str] = None
+    bundle_url: Optional[str] = None
+    qrcode_url: Optional[str] = None
+    detected_files: List[str] = []
+    message: str = ""
+
+
+class PluginInfo(BaseModel):
+    """Plugin metadata."""
+    name: str
+    version: str
+    description: str
+    author: str
+    hooks: List[str] = []
+    enabled: bool = True
+
+
+# Plugin system
+class PluginManager:
+    """Module injection plugin system for extending publish capabilities."""
+
+    def __init__(self):
+        self._plugins: Dict[str, Any] = {}
+        self._hooks: Dict[str, List[Callable]] = {
+            "pre_upload": [],
+            "post_upload": [],
+            "pre_publish": [],
+            "post_publish": [],
+            "content_detect": [],
+            "bundle_create": [],
+            "bundle_extract": [],
+        }
+
+    def load_plugins(self):
+        """Load all plugins from plugins directory."""
+        if not PLUGINS_DIR.exists():
+            return
+
+        for plugin_file in PLUGINS_DIR.glob("*.py"):
+            if plugin_file.name.startswith("_"):
+                continue
+            try:
+                spec = importlib.util.spec_from_file_location(
+                    plugin_file.stem, plugin_file
+                )
+                if spec and spec.loader:
+                    module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(module)
+
+                    if hasattr(module, "PLUGIN_INFO"):
+                        info = module.PLUGIN_INFO
+                        self._plugins[info.get("name", plugin_file.stem)] = {
+                            "module": module,
+                            "info": info,
+                        }
+
+                        # Register hooks
+                        for hook_name in self._hooks:
+                            if hasattr(module, f"hook_{hook_name}"):
+                                self._hooks[hook_name].append(
+                                    getattr(module, f"hook_{hook_name}")
+                                )
+            except Exception as e:
+                print(f"Failed to load plugin {plugin_file}: {e}")
+
+    async def run_hook(self, hook_name: str, **kwargs) -> Dict[str, Any]:
+        """Run all registered hooks for a given hook point."""
+        results = {}
+        for handler in self._hooks.get(hook_name, []):
+            try:
+                if asyncio.iscoroutinefunction(handler):
+                    result = await handler(**kwargs)
+                else:
+                    result = handler(**kwargs)
+                if result:
+                    results.update(result)
+            except Exception as e:
+                results[f"error_{handler.__name__}"] = str(e)
+        return results
+
+    def list_plugins(self) -> List[Dict[str, Any]]:
+        """List all loaded plugins."""
+        return [
+            {
+                "name": name,
+                "info": data.get("info", {}),
+            }
+            for name, data in self._plugins.items()
+        ]
+
+
+plugin_manager = PluginManager()
 
 
 # State
@@ -250,9 +371,10 @@ async def _monitor_modules():
 
 @app.on_event("startup")
 async def startup():
-    """Start background monitoring."""
+    """Start background monitoring and load plugins."""
     global _monitoring_task
     _monitoring_task = asyncio.create_task(_monitor_modules())
+    plugin_manager.load_plugins()
 
 
 @app.on_event("shutdown")
@@ -582,4 +704,354 @@ async def summary():
         "webhooks_configured": len(_load_webhooks()),
         "recent_events": _load_history()[-5:],
         "timestamp": datetime.now().isoformat()
+    }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ISP Home Publish — Upload ZIP → Auto-detect → Publish → Download Bundle
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _detect_content_type(extracted_path: Path) -> str:
+    """Auto-detect content type from extracted files."""
+    files = set()
+    for f in extracted_path.rglob("*"):
+        if f.is_file():
+            files.add(f.name)
+            files.add(f.relative_to(extracted_path).as_posix())
+
+    # Check each signature pattern
+    for content_type, patterns in CONTENT_SIGNATURES.items():
+        matches = sum(1 for p in patterns if any(p in f for f in files))
+        if matches >= 1:
+            return content_type
+
+    # Default to static if index.html exists anywhere
+    if any("index.html" in f or "index.htm" in f for f in files):
+        return "static"
+
+    return "unknown"
+
+
+def _extract_archive(file_path: Path, extract_to: Path) -> List[str]:
+    """Extract ZIP or TAR archive and return list of files."""
+    extracted_files = []
+
+    if file_path.suffix == ".zip" or str(file_path).endswith(".zip"):
+        with zipfile.ZipFile(file_path, "r") as zf:
+            zf.extractall(extract_to)
+            extracted_files = zf.namelist()
+    elif file_path.suffix in (".tar", ".gz", ".tgz", ".bz2"):
+        with tarfile.open(file_path, "r:*") as tf:
+            tf.extractall(extract_to)
+            extracted_files = tf.getnames()
+    else:
+        # Single file - just copy
+        shutil.copy(file_path, extract_to / file_path.name)
+        extracted_files = [file_path.name]
+
+    return extracted_files
+
+
+async def _publish_to_module(content_type: str, name: str, source_path: Path, domain: Optional[str] = None) -> Dict[str, Any]:
+    """Route content to appropriate publishing module."""
+    if content_type == "streamlit":
+        # Copy to streamlit apps directory and start
+        result = await _call_module("streamlit", "/app", "POST", {
+            "name": name,
+            "source": str(source_path),
+        })
+        if "error" not in result:
+            await _call_module("streamlit", f"/app/{name}/start", "POST")
+        return result
+
+    elif content_type in ("static", "hugo", "jekyll", "hexo"):
+        # Create metablogizer site and upload content
+        await _call_module("metablogizer", "/site", "POST", {"name": name})
+
+        # Create ZIP of content for upload
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+            for file in source_path.rglob("*"):
+                if file.is_file():
+                    zf.write(file, file.relative_to(source_path))
+        zip_buffer.seek(0)
+
+        # Upload via metablogizer
+        result = await _call_module("metablogizer", f"/site/{name}/upload", "POST", {
+            "content": zip_buffer.getvalue().hex(),
+        })
+
+        if "error" not in result:
+            await _call_module("metablogizer", f"/site/{name}/publish", "POST")
+
+        return result
+
+    else:
+        # Default: use droplet for unknown types
+        result = await _call_module("droplet", "/upload", "POST", {
+            "name": name,
+            "source": str(source_path),
+            "domain": domain,
+        })
+        return result
+
+
+@app.post("/isp/upload", dependencies=[Depends(require_jwt)])
+async def isp_upload(
+    file: UploadFile = File(...),
+    name: Optional[str] = Form(None),
+    domain: Optional[str] = Form(None),
+    auto_publish: bool = Form(True),
+):
+    """
+    ISP Home Publish: Upload ZIP/HTML → Auto-detect type → Publish
+
+    This is the main entry point for the "first ISP home publish all" feature.
+    Accepts ZIP, TAR.GZ, or HTML files and automatically:
+    1. Detects content type (Streamlit app, static site, Hugo, Jekyll, etc.)
+    2. Routes to appropriate publishing module (streamlit, metablogizer, droplet)
+    3. Publishes and returns live URL + downloadable bundle URL
+    """
+    # Run pre-upload hooks (results used by plugins for validation/logging)
+    await plugin_manager.run_hook("pre_upload", file=file, name=name)
+
+    # Generate name if not provided
+    if not name:
+        name = Path(file.filename).stem if file.filename else f"publish-{int(time.time())}"
+    name = name.lower().replace(" ", "-").replace("_", "-")
+
+    # Save uploaded file
+    temp_dir = Path(tempfile.mkdtemp(prefix="isp_publish_"))
+    upload_path = temp_dir / (file.filename or "upload.zip")
+
+    try:
+        content = await file.read()
+        upload_path.write_bytes(content)
+
+        # Extract archive
+        extract_dir = temp_dir / "extracted"
+        extract_dir.mkdir()
+        extracted_files = _extract_archive(upload_path, extract_dir)
+
+        # Run content detection hooks
+        hook_detect = await plugin_manager.run_hook("content_detect", path=extract_dir, files=extracted_files)
+
+        # Auto-detect content type
+        content_type = hook_detect.get("content_type") or _detect_content_type(extract_dir)
+
+        # Run pre-publish hooks
+        await plugin_manager.run_hook("pre_publish", name=name, content_type=content_type, path=extract_dir)
+
+        # Publish if auto_publish is enabled
+        result = {"success": False, "message": "Upload only, not published"}
+        url = None
+
+        if auto_publish:
+            result = await _publish_to_module(content_type, name, extract_dir, domain)
+
+            if "error" not in result:
+                # Determine URL based on content type
+                if content_type == "streamlit":
+                    url = f"/apps/{name}/"
+                elif content_type in ("static", "hugo", "jekyll", "hexo"):
+                    url = f"https://{domain or name + '.secubox.local'}/"
+                else:
+                    url = result.get("url")
+
+        # Create downloadable bundle
+        bundle_path = BUNDLES_DIR / f"{name}.zip"
+        with zipfile.ZipFile(bundle_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            for file_path in extract_dir.rglob("*"):
+                if file_path.is_file():
+                    zf.write(file_path, file_path.relative_to(extract_dir))
+
+        # Record event
+        _record_event("isp_publish", {
+            "name": name,
+            "content_type": content_type,
+            "files_count": len(extracted_files),
+            "auto_publish": auto_publish,
+            "domain": domain,
+        })
+
+        # Run post-publish hooks
+        await plugin_manager.run_hook("post_publish", name=name, content_type=content_type, url=url)
+
+        # Notify webhooks
+        await _notify_webhooks("publish", {
+            "type": "isp_home",
+            "name": name,
+            "content_type": content_type,
+            "url": url,
+        })
+
+        stats_cache.clear()
+
+        return ISPPublishResult(
+            success="error" not in result,
+            name=name,
+            content_type=content_type,
+            url=url,
+            bundle_url=f"/api/v1/publish/bundle/{name}.zip",
+            qrcode_url=f"/api/v1/publish/bundle/{name}/qrcode" if url else None,
+            detected_files=extracted_files[:20],  # Limit to first 20
+            message=result.get("message", "Published successfully" if "error" not in result else result.get("error", "Unknown error")),
+        )
+
+    except Exception as e:
+        _record_event("isp_publish_error", {"name": name, "error": str(e)})
+        raise HTTPException(500, f"Publishing failed: {str(e)}")
+
+    finally:
+        # Cleanup temp directory (keep bundle)
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+@app.get("/bundle/{name}.zip")
+async def download_bundle(name: str):
+    """
+    Download published content as ZIP bundle.
+
+    This enables the "zip downloadable from the banner" feature.
+    """
+    bundle_path = BUNDLES_DIR / f"{name}.zip"
+
+    if not bundle_path.exists():
+        # Try to create bundle from metablogizer
+        result = await _call_module("metablogizer", f"/site/{name}/export")
+        if "error" in result:
+            raise HTTPException(404, f"Bundle not found: {name}")
+
+        # Save the export
+        if "content" in result:
+            bundle_path.write_bytes(bytes.fromhex(result["content"]))
+
+    if not bundle_path.exists():
+        raise HTTPException(404, f"Bundle not found: {name}")
+
+    return FileResponse(
+        path=bundle_path,
+        filename=f"{name}.zip",
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="{name}.zip"',
+            "X-SecuBox-Bundle": name,
+        }
+    )
+
+
+@app.get("/bundle/{name}/qrcode")
+async def bundle_qrcode(name: str):
+    """Generate QR code for bundle download URL."""
+    try:
+        import qrcode  # type: ignore
+        from io import BytesIO
+
+        # Generate QR code for bundle URL
+        bundle_url = f"/api/v1/publish/bundle/{name}.zip"
+
+        qr = qrcode.QRCode(version=1, box_size=10, border=5)
+        qr.add_data(bundle_url)
+        qr.make(fit=True)
+
+        img = qr.make_image(fill_color="#c9a84c", back_color="#0a0a0f")
+
+        buffer = BytesIO()
+        img.save(buffer)  # PIL Image save defaults to PNG
+        buffer.seek(0)
+
+        return StreamingResponse(buffer, media_type="image/png")
+
+    except ImportError:
+        raise HTTPException(501, "QR code generation requires 'qrcode' package")
+
+
+@app.get("/bundles", dependencies=[Depends(require_jwt)])
+async def list_bundles():
+    """List all available download bundles."""
+    bundles = []
+
+    for bundle_file in BUNDLES_DIR.glob("*.zip"):
+        stat = bundle_file.stat()
+        bundles.append({
+            "name": bundle_file.stem,
+            "filename": bundle_file.name,
+            "size_bytes": stat.st_size,
+            "size_human": f"{stat.st_size / 1024 / 1024:.1f} MB",
+            "created": datetime.fromtimestamp(stat.st_ctime).isoformat(),
+            "download_url": f"/api/v1/publish/bundle/{bundle_file.name}",
+        })
+
+    return {
+        "bundles": sorted(bundles, key=lambda x: x["created"], reverse=True),
+        "total": len(bundles),
+    }
+
+
+@app.delete("/bundle/{name}", dependencies=[Depends(require_jwt)])
+async def delete_bundle(name: str):
+    """Delete a bundle."""
+    bundle_path = BUNDLES_DIR / f"{name}.zip"
+
+    if not bundle_path.exists():
+        raise HTTPException(404, f"Bundle not found: {name}")
+
+    bundle_path.unlink()
+    _record_event("bundle_deleted", {"name": name})
+
+    return {"success": True, "message": f"Bundle {name} deleted"}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Plugin System — Module Injection Enhancer
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/plugins", dependencies=[Depends(require_jwt)])
+async def list_plugins():
+    """List all loaded plugins."""
+    return {
+        "plugins": plugin_manager.list_plugins(),
+        "hooks": list(plugin_manager._hooks.keys()),
+    }
+
+
+@app.post("/plugins/reload", dependencies=[Depends(require_jwt)])
+async def reload_plugins():
+    """Reload all plugins from disk."""
+    plugin_manager._plugins.clear()
+    for hook_list in plugin_manager._hooks.values():
+        hook_list.clear()
+
+    plugin_manager.load_plugins()
+
+    return {
+        "success": True,
+        "loaded": len(plugin_manager._plugins),
+        "plugins": plugin_manager.list_plugins(),
+    }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Banner Integration — Eyemote Download Links
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/banner/links")
+async def banner_links():
+    """
+    Get links for eyemote banner integration.
+    Returns URLs that can be embedded in the SVG banner for direct downloads.
+    """
+    bundles = []
+
+    for bundle_file in sorted(BUNDLES_DIR.glob("*.zip"), key=lambda x: x.stat().st_mtime, reverse=True)[:5]:
+        bundles.append({
+            "name": bundle_file.stem,
+            "url": f"/api/v1/publish/bundle/{bundle_file.name}",
+            "size": f"{bundle_file.stat().st_size / 1024:.0f}K",
+        })
+
+    return {
+        "publish_url": "/api/v1/publish/isp/upload",
+        "bundles": bundles,
+        "recent_count": len(bundles),
     }
