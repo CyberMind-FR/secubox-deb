@@ -1,0 +1,149 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 200">
+  <defs>
+    <!-- Cyberpunk gradient background -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0a0a0f"/>
+      <stop offset="50%" style="stop-color:#12121a"/>
+      <stop offset="100%" style="stop-color:#0a0a0f"/>
+    </linearGradient>
+
+    <!-- Ring gradients matching 6-stack colors -->
+    <linearGradient id="authGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#ff8c00"/>
+      <stop offset="100%" style="stop-color:#ff6600"/>
+    </linearGradient>
+    <linearGradient id="wallGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#ffd700"/>
+      <stop offset="100%" style="stop-color:#ffaa00"/>
+    </linearGradient>
+    <linearGradient id="bootGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#e63946"/>
+      <stop offset="100%" style="stop-color:#c51d2a"/>
+    </linearGradient>
+    <linearGradient id="mindGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#6e40c9"/>
+      <stop offset="100%" style="stop-color:#9370db"/>
+    </linearGradient>
+    <linearGradient id="rootGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#00ff41"/>
+      <stop offset="100%" style="stop-color:#00cc33"/>
+    </linearGradient>
+    <linearGradient id="meshGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#00d4ff"/>
+      <stop offset="100%" style="stop-color:#0099cc"/>
+    </linearGradient>
+
+    <!-- Glow effect -->
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="200" fill="url(#bgGrad)" rx="10"/>
+
+  <!-- Decorative grid lines -->
+  <g stroke="#1a1a2e" stroke-width="0.5" opacity="0.5">
+    <line x1="0" y1="50" x2="800" y2="50"/>
+    <line x1="0" y1="100" x2="800" y2="100"/>
+    <line x1="0" y1="150" x2="800" y2="150"/>
+  </g>
+
+  <!-- Left Eye Ring (6-ring status) -->
+  <g transform="translate(100, 100)">
+    <!-- Outer rings -->
+    <circle cx="0" cy="0" r="75" fill="none" stroke="url(#meshGrad)" stroke-width="4" opacity="0.8"/>
+    <circle cx="0" cy="0" r="65" fill="none" stroke="url(#rootGrad)" stroke-width="4" opacity="0.8"/>
+    <circle cx="0" cy="0" r="55" fill="none" stroke="url(#mindGrad)" stroke-width="4" opacity="0.8"/>
+    <circle cx="0" cy="0" r="45" fill="none" stroke="url(#bootGrad)" stroke-width="4" opacity="0.8"/>
+    <circle cx="0" cy="0" r="35" fill="none" stroke="url(#wallGrad)" stroke-width="4" opacity="0.8"/>
+    <circle cx="0" cy="0" r="25" fill="none" stroke="url(#authGrad)" stroke-width="4" opacity="0.8"/>
+
+    <!-- Center eye -->
+    <circle cx="0" cy="0" r="15" fill="#c9a84c" filter="url(#glow)"/>
+    <circle cx="0" cy="0" r="8" fill="#0a0a0f"/>
+    <circle cx="0" cy="0" r="4" fill="#c9a84c"/>
+  </g>
+
+  <!-- Center Title Block -->
+  <g transform="translate(400, 50)">
+    <text x="0" y="0" fill="#c9a84c" font-family="Cinzel, Georgia, serif" font-size="36" font-weight="bold" text-anchor="middle" filter="url(#glow)">SecuBox OS</text>
+    <text x="0" y="25" fill="#e8e6d9" font-family="'IM Fell English', Georgia, serif" font-size="14" text-anchor="middle">Network Security Appliance · ANSSI CSPN Ready</text>
+  </g>
+
+  <!-- Metrics Display -->
+  <g transform="translate(400, 110)">
+    <!-- Metric boxes -->
+    <g transform="translate(-150, 0)">
+      <rect x="-45" y="-15" width="90" height="55" rx="5" fill="#1a1a2e" stroke="#c9a84c" stroke-width="1"/>
+      <text x="0" y="5" fill="#00ff41" font-family="'JetBrains Mono', monospace" font-size="24" font-weight="bold" text-anchor="middle">131</text>
+      <text x="0" y="25" fill="#6b6b7a" font-family="'JetBrains Mono', monospace" font-size="10" text-anchor="middle">PACKAGES</text>
+    </g>
+
+    <g transform="translate(-50, 0)">
+      <rect x="-45" y="-15" width="90" height="55" rx="5" fill="#1a1a2e" stroke="#c9a84c" stroke-width="1"/>
+      <text x="0" y="5" fill="#00d4ff" font-family="'JetBrains Mono', monospace" font-size="24" font-weight="bold" text-anchor="middle">2000+</text>
+      <text x="0" y="25" fill="#6b6b7a" font-family="'JetBrains Mono', monospace" font-size="10" text-anchor="middle">ENDPOINTS</text>
+    </g>
+
+    <g transform="translate(50, 0)">
+      <rect x="-45" y="-15" width="90" height="55" rx="5" fill="#1a1a2e" stroke="#c9a84c" stroke-width="1"/>
+      <text x="0" y="5" fill="#ffd700" font-family="'JetBrains Mono', monospace" font-size="24" font-weight="bold" text-anchor="middle">94%</text>
+      <text x="0" y="25" fill="#6b6b7a" font-family="'JetBrains Mono', monospace" font-size="10" text-anchor="middle">MIGRATION</text>
+    </g>
+
+    <g transform="translate(150, 0)">
+      <rect x="-45" y="-15" width="90" height="55" rx="5" fill="#1a1a2e" stroke="#c9a84c" stroke-width="1"/>
+      <text x="0" y="5" fill="#6e40c9" font-family="'JetBrains Mono', monospace" font-size="24" font-weight="bold" text-anchor="middle">v1.9</text>
+      <text x="0" y="25" fill="#6b6b7a" font-family="'JetBrains Mono', monospace" font-size="10" text-anchor="middle">VERSION</text>
+    </g>
+  </g>
+
+  <!-- Right Eye Ring (smaller, status indicator) -->
+  <g transform="translate(700, 100)">
+    <!-- Status rings -->
+    <circle cx="0" cy="0" r="55" fill="none" stroke="url(#meshGrad)" stroke-width="3" opacity="0.6" stroke-dasharray="15 5"/>
+    <circle cx="0" cy="0" r="45" fill="none" stroke="url(#rootGrad)" stroke-width="3" opacity="0.6" stroke-dasharray="12 4"/>
+    <circle cx="0" cy="0" r="35" fill="none" stroke="url(#mindGrad)" stroke-width="3" opacity="0.6" stroke-dasharray="10 3"/>
+    <circle cx="0" cy="0" r="25" fill="none" stroke="url(#wallGrad)" stroke-width="3" opacity="0.6"/>
+
+    <!-- Center status -->
+    <circle cx="0" cy="0" r="15" fill="#00ff41" filter="url(#glow)" opacity="0.9"/>
+    <text x="0" y="5" fill="#0a0a0f" font-family="'JetBrains Mono', monospace" font-size="10" font-weight="bold" text-anchor="middle">OK</text>
+  </g>
+
+  <!-- 6-Stack Legend (bottom) -->
+  <g transform="translate(400, 180)">
+    <g transform="translate(-180, 0)">
+      <circle cx="0" cy="0" r="5" fill="#ff8c00"/>
+      <text x="10" y="4" fill="#6b6b7a" font-family="'JetBrains Mono', monospace" font-size="9">AUTH</text>
+    </g>
+    <g transform="translate(-120, 0)">
+      <circle cx="0" cy="0" r="5" fill="#ffd700"/>
+      <text x="10" y="4" fill="#6b6b7a" font-family="'JetBrains Mono', monospace" font-size="9">WALL</text>
+    </g>
+    <g transform="translate(-60, 0)">
+      <circle cx="0" cy="0" r="5" fill="#e63946"/>
+      <text x="10" y="4" fill="#6b6b7a" font-family="'JetBrains Mono', monospace" font-size="9">BOOT</text>
+    </g>
+    <g transform="translate(0, 0)">
+      <circle cx="0" cy="0" r="5" fill="#6e40c9"/>
+      <text x="10" y="4" fill="#6b6b7a" font-family="'JetBrains Mono', monospace" font-size="9">MIND</text>
+    </g>
+    <g transform="translate(60, 0)">
+      <circle cx="0" cy="0" r="5" fill="#00ff41"/>
+      <text x="10" y="4" fill="#6b6b7a" font-family="'JetBrains Mono', monospace" font-size="9">ROOT</text>
+    </g>
+    <g transform="translate(120, 0)">
+      <circle cx="0" cy="0" r="5" fill="#00d4ff"/>
+      <text x="10" y="4" fill="#6b6b7a" font-family="'JetBrains Mono', monospace" font-size="9">MESH</text>
+    </g>
+  </g>
+
+  <!-- CyberMind watermark -->
+  <text x="790" y="190" fill="#6b6b7a" font-family="'JetBrains Mono', monospace" font-size="8" text-anchor="end" opacity="0.5">CyberMind © 2026</text>
+</svg>

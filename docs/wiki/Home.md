@@ -1,11 +1,13 @@
 # SecuBox OS
 
+<p align="center">
+  <img src="../assets/secubox-eyemote-banner.svg" alt="SecuBox OS - Network Security Appliance" width="800">
+</p>
+
 **CyberMind · Gondwana · Notre-Dame-du-Cruet · Savoie** | [FR](Home-FR) | [中文](Home-ZH)
 
 **SecuBox OS** — Appliance de cybersécurité complète portée depuis OpenWrt vers Debian bookworm.
 Conçue pour boards ARM64 GlobalScale (MOCHAbin, ESPRESSObin) et systèmes x86_64.
-
-**125 modules · 2000+ endpoints API · Candidat ANSSI CSPN**
 
 ---
 

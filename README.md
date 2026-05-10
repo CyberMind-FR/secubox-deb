@@ -1,5 +1,9 @@
 # SecuBox
 
+<p align="center">
+  <img src="docs/assets/secubox-eyemote-banner.svg" alt="SecuBox OS - Network Security Appliance" width="800">
+</p>
+
 **Your Network Security Appliance — Plug, Protect, Peace of Mind**
 
 [![Release](https://img.shields.io/github/v/release/CyberMind-FR/secubox-deb?label=Release&logo=github)](https://github.com/CyberMind-FR/secubox-deb/releases)
