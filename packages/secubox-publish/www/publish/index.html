@@ -284,8 +284,214 @@
         /* Empty states */
         .empty { color: var(--p31-dim); }
 
+        /* ISP Home Publish Wizard */
+        .wizard-step { transition: all 0.3s ease; }
+        .wizard-step.active { display: block; }
+
+        .drop-zone {
+            border: 2px dashed var(--p31-dim);
+            border-radius: 12px;
+            padding: 3rem 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: rgba(51,255,102,0.02);
+        }
+        .drop-zone:hover, .drop-zone.dragover {
+            border-color: var(--p31-peak);
+            background: rgba(51,255,102,0.08);
+            box-shadow: 0 0 20px rgba(51,255,102,0.15);
+        }
+        .drop-zone .drop-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+        .drop-zone .drop-text {
+            font-size: 1.1rem;
+            color: var(--p31-mid);
+            font-weight: 600;
+        }
+        .drop-zone .drop-subtext {
+            font-size: 0.85rem;
+            color: var(--p31-dim);
+            margin-top: 0.5rem;
+        }
+
+        .wizard-info {
+            background: rgba(51,255,102,0.05);
+            border: 1px solid var(--p31-dim);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        .detected-box {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+        .detected-label {
+            color: var(--p31-dim);
+            font-size: 0.8rem;
+        }
+        .detected-type {
+            color: var(--p31-peak);
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            text-shadow: var(--bloom-soft);
+        }
+        .detected-icon { font-size: 1.2rem; }
+        .file-info {
+            font-size: 0.85rem;
+            color: var(--p31-mid);
+        }
+
+        .publishing-status {
+            text-align: center;
+            padding: 2rem;
+        }
+        .spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid var(--p31-ghost);
+            border-top-color: var(--p31-peak);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: var(--p31-ghost);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 1rem;
+        }
+        .progress-fill {
+            height: 100%;
+            background: var(--p31-peak);
+            width: 0%;
+            transition: width 0.3s ease;
+            box-shadow: 0 0 10px var(--p31-peak);
+        }
+
+        .result-box {
+            text-align: center;
+            padding: 2rem;
+            border-radius: 8px;
+        }
+        .result-box.success {
+            background: rgba(51,255,102,0.08);
+            border: 1px solid var(--p31-peak);
+        }
+        .result-box.error {
+            background: rgba(255,68,102,0.08);
+            border: 1px solid #ff4466;
+        }
+        .result-icon { font-size: 3rem; margin-bottom: 0.5rem; }
+        .result-title {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--p31-peak);
+            margin-bottom: 0.5rem;
+        }
+        .result-box.error .result-title { color: #ff4466; }
+        .result-url {
+            font-family: 'Courier Prime', monospace;
+            font-size: 0.9rem;
+            color: var(--p31-mid);
+            margin-bottom: 1rem;
+            word-break: break-all;
+        }
+        .result-actions {
+            display: flex;
+            gap: 0.5rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .error-message {
+            color: #ff4466;
+            font-size: 0.9rem;
+            margin-top: 0.5rem;
+        }
+
+        /* Result summary */
+        .result-summary {
+            text-align: left;
+            background: rgba(51,255,102,0.05);
+            border: 1px solid var(--p31-ghost);
+            border-radius: 6px;
+            padding: 0.75rem;
+            margin: 1rem 0;
+            font-size: 0.85rem;
+        }
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.25rem 0;
+            border-bottom: 1px dashed var(--p31-ghost);
+        }
+        .summary-row:last-child { border-bottom: none; }
+        .summary-label { color: var(--p31-dim); }
+        .summary-value { color: var(--p31-mid); font-weight: 600; }
+
+        /* Infrastructure status */
+        .infra-status {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin: 1rem 0;
+            justify-content: center;
+        }
+        .infra-item {
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+            background: rgba(0,0,0,0.1);
+            padding: 0.4rem 0.6rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+        .status-icon { font-size: 1rem; }
+        .btn.mini {
+            padding: 0.15rem 0.4rem;
+            font-size: 0.7rem;
+            margin-left: 0.3rem;
+        }
+
+        /* Commands box */
+        .commands-box {
+            background: var(--tube-light);
+            border: 1px solid var(--p31-dim);
+            border-radius: 6px;
+            padding: 0.75rem;
+            text-align: left;
+        }
+        .commands-title {
+            color: var(--p31-decay);
+            font-weight: 600;
+            font-size: 0.8rem;
+            margin-bottom: 0.5rem;
+        }
+        .commands-code {
+            font-family: 'Courier Prime', monospace;
+            font-size: 0.75rem;
+            color: var(--p31-mid);
+            background: rgba(0,0,0,0.05);
+            padding: 0.5rem;
+            border-radius: 4px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            margin-bottom: 0.5rem;
+        }
+
         @media (max-width: 768px) {
             .main { margin-left: 0; }
+            .drop-zone { padding: 2rem 1rem; }
         }
     </style>
 </head>
@@ -325,10 +531,159 @@
             </div>
         </div>
 
+        <!-- ISP Home Publish Wizard -->
+        <div class="card" id="ispPublishCard">
+            <h2>📦 ISP Home Publish</h2>
+            <p style="color:var(--p31-dim);margin-bottom:1rem;font-size:0.85rem;">Upload ZIP → Auto-detect → Publish → Download</p>
+
+            <!-- Step 1: Upload -->
+            <div id="wizardStep1" class="wizard-step active">
+                <div id="dropZone" class="drop-zone">
+                    <div class="drop-icon">📤</div>
+                    <div class="drop-text">Drag & drop your ZIP file here</div>
+                    <div class="drop-subtext">or click to browse</div>
+                    <input type="file" id="fileInput" accept=".zip,.tar.gz,.tgz" style="display:none">
+                </div>
+            </div>
+
+            <!-- Step 2: Configure -->
+            <div id="wizardStep2" class="wizard-step" style="display:none;">
+                <div class="wizard-info">
+                    <div class="detected-box">
+                        <span class="detected-label">Detected:</span>
+                        <span id="detectedType" class="detected-type">-</span>
+                        <span id="detectedIcon" class="detected-icon">📄</span>
+                    </div>
+                    <div class="file-info">
+                        <span id="fileName">-</span>
+                        <span id="fileSize" style="color:var(--p31-dim);margin-left:0.5rem;">-</span>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Site/App Name</label>
+                    <input type="text" id="ispName" placeholder="my-site">
+                </div>
+                <div class="form-group">
+                    <label>Domain (optional)</label>
+                    <input type="text" id="ispDomain" placeholder="mysite.gk2.secubox.in">
+                </div>
+                <div class="form-group" style="display:flex;align-items:center;gap:0.5rem;">
+                    <input type="checkbox" id="ispAutoPublish" checked>
+                    <label for="ispAutoPublish" style="margin:0;">Auto-publish immediately</label>
+                </div>
+                <div class="btn-group">
+                    <button class="btn primary" onclick="ispPublish()">🚀 Publish</button>
+                    <button class="btn" onclick="ispReset()">Cancel</button>
+                </div>
+            </div>
+
+            <!-- Step 3: Publishing -->
+            <div id="wizardStep3" class="wizard-step" style="display:none;">
+                <div class="publishing-status">
+                    <div class="spinner"></div>
+                    <div id="publishStatus">Publishing...</div>
+                    <div class="progress-bar">
+                        <div id="progressFill" class="progress-fill"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 4: Result -->
+            <div id="wizardStep4" class="wizard-step" style="display:none;">
+                <div class="result-box success">
+                    <div class="result-icon">✅</div>
+                    <div class="result-title">Published Successfully!</div>
+                    <div id="resultUrl" class="result-url"></div>
+
+                    <!-- Content Summary -->
+                    <div class="result-summary">
+                        <div class="summary-row">
+                            <span class="summary-label">📦 Bundle:</span>
+                            <span id="summaryBundle" class="summary-value">-</span>
+                        </div>
+                        <div class="summary-row">
+                            <span class="summary-label">🔍 Type:</span>
+                            <span id="summaryType" class="summary-value">-</span>
+                        </div>
+                        <div class="summary-row">
+                            <span class="summary-label">🌐 Domain:</span>
+                            <span id="summaryDomain" class="summary-value">-</span>
+                        </div>
+                        <div class="summary-row">
+                            <span class="summary-label">📁 Files:</span>
+                            <span id="summaryFiles" class="summary-value">-</span>
+                        </div>
+                    </div>
+
+                    <!-- Infrastructure Status -->
+                    <div class="infra-status">
+                        <div class="infra-item">
+                            <span id="vhostStatus" class="status-icon">⏳</span>
+                            <span>Nginx VHost</span>
+                            <button id="createVhostBtn" class="btn mini" style="display:none;" onclick="createVhost()">Create</button>
+                        </div>
+                        <div class="infra-item">
+                            <span id="certStatus" class="status-icon">⏳</span>
+                            <span>SSL Certificate</span>
+                            <button id="createCertBtn" class="btn mini" style="display:none;" onclick="createCert()">Request</button>
+                        </div>
+                        <div class="infra-item">
+                            <span id="wafStatus" class="status-icon">⏳</span>
+                            <span>WAF Route</span>
+                            <button id="createWafBtn" class="btn mini" style="display:none;" onclick="createWafRoute()">Add</button>
+                        </div>
+                    </div>
+
+                    <div class="result-actions">
+                        <a id="resultLink" class="btn primary" href="#" target="_blank">🔗 Open Site</a>
+                        <a id="downloadLink" class="btn" href="#" download>📥 Download ZIP</a>
+                        <button class="btn" onclick="showQRCode()">📱 QR Code</button>
+                        <button class="btn" onclick="toggleCommands()">📋 CLI Commands</button>
+                    </div>
+
+                    <!-- QR Code -->
+                    <div id="qrCodeContainer" style="display:none;margin-top:1rem;text-align:center;">
+                        <img id="qrCodeImg" style="max-width:200px;border:2px solid var(--p31-dim);border-radius:8px;">
+                    </div>
+
+                    <!-- CLI Commands -->
+                    <div id="commandsContainer" style="display:none;margin-top:1rem;">
+                        <div class="commands-box">
+                            <div class="commands-title">📋 CLI Commands (metactl)</div>
+                            <pre id="cliCommands" class="commands-code"></pre>
+                            <button class="btn mini" onclick="copyCommands()">📋 Copy</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="btn-group" style="margin-top:1rem;">
+                    <button class="btn success" onclick="ispReset()">📦 Publish Another</button>
+                    <button class="btn" onclick="autoSetupAll()">⚡ Auto-Setup All</button>
+                </div>
+            </div>
+
+            <!-- Error State -->
+            <div id="wizardError" class="wizard-step" style="display:none;">
+                <div class="result-box error">
+                    <div class="result-icon">❌</div>
+                    <div class="result-title">Publishing Failed</div>
+                    <div id="errorMessage" class="error-message"></div>
+                </div>
+                <div class="btn-group" style="margin-top:1rem;">
+                    <button class="btn" onclick="ispReset()">Try Again</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Quick Actions -->
         <div class="card">
             <h2>Quick Actions</h2>
             <div class="quick-actions">
+                <div class="quick-action" onclick="document.getElementById('fileInput').click()">
+                    <div class="icon">📦</div>
+                    <div class="title">Upload ZIP</div>
+                    <div class="desc">ISP Home Publish</div>
+                </div>
                 <div class="quick-action" onclick="showCreateApp()">
                     <div class="icon">🚀</div>
                     <div class="title">New App</div>
@@ -343,11 +698,6 @@
                     <div class="icon">📁</div>
                     <div class="title">Upload File</div>
                     <div class="desc">Publish via Droplet</div>
-                </div>
-                <div class="quick-action" onclick="window.location='/streamforge/'">
-                    <div class="icon">📋</div>
-                    <div class="title">Templates</div>
-                    <div class="desc">Browse templates</div>
                 </div>
             </div>
         </div>
@@ -743,6 +1093,399 @@
         function refresh() { loadOverview(); }
         refresh();
         setInterval(refresh, 15000);
+
+        // ===== ISP Home Publish Wizard =====
+        let selectedFile = null;
+        let publishedData = null;
+
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+
+        // Drag & Drop
+        dropZone.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) handleFileSelect(files[0]);
+        });
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) handleFileSelect(e.target.files[0]);
+        });
+
+        function handleFileSelect(file) {
+            if (!file.name.match(/\.(zip|tar\.gz|tgz)$/i)) {
+                alert('Please select a .zip or .tar.gz file');
+                return;
+            }
+            selectedFile = file;
+
+            // Auto-detect content type based on filename
+            let detectedType = 'static';
+            let icon = '🌐';
+            if (file.name.includes('streamlit') || file.name.includes('app')) {
+                detectedType = 'streamlit';
+                icon = '🎯';
+            } else if (file.name.includes('hugo') || file.name.includes('blog')) {
+                detectedType = 'hugo';
+                icon = '📝';
+            } else if (file.name.includes('jekyll')) {
+                detectedType = 'jekyll';
+                icon = '📚';
+            } else if (file.name.includes('hexo')) {
+                detectedType = 'hexo';
+                icon = '🔷';
+            }
+
+            // Update UI
+            document.getElementById('detectedType').textContent = detectedType;
+            document.getElementById('detectedIcon').textContent = icon;
+            document.getElementById('fileName').textContent = file.name;
+            document.getElementById('fileSize').textContent = formatSize(file.size);
+
+            // Auto-generate name from filename
+            const baseName = file.name.replace(/\.(zip|tar\.gz|tgz)$/i, '').replace(/[^a-z0-9-]/gi, '-').toLowerCase();
+            document.getElementById('ispName').value = baseName;
+            document.getElementById('ispDomain').value = baseName + '.gk2.secubox.in';
+
+            // Switch to step 2
+            showWizardStep(2);
+        }
+
+        function formatSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+
+        function showWizardStep(step) {
+            ['wizardStep1', 'wizardStep2', 'wizardStep3', 'wizardStep4', 'wizardError'].forEach(id => {
+                document.getElementById(id).style.display = 'none';
+            });
+            document.getElementById('wizardStep' + step).style.display = 'block';
+        }
+
+        function showWizardError(message) {
+            document.getElementById('errorMessage').textContent = message;
+            ['wizardStep1', 'wizardStep2', 'wizardStep3', 'wizardStep4'].forEach(id => {
+                document.getElementById(id).style.display = 'none';
+            });
+            document.getElementById('wizardError').style.display = 'block';
+        }
+
+        async function ispPublish() {
+            const name = document.getElementById('ispName').value.trim();
+            const domain = document.getElementById('ispDomain').value.trim();
+            const autoPublish = document.getElementById('ispAutoPublish').checked;
+
+            if (!name) {
+                alert('Please enter a site/app name');
+                return;
+            }
+            if (!selectedFile) {
+                alert('No file selected');
+                return;
+            }
+
+            // Show publishing step
+            showWizardStep(3);
+            document.getElementById('publishStatus').textContent = 'Uploading...';
+            document.getElementById('progressFill').style.width = '10%';
+
+            try {
+                // Create FormData
+                const formData = new FormData();
+                formData.append('file', selectedFile);
+                formData.append('name', name);
+                if (domain) formData.append('domain', domain);
+                formData.append('auto_publish', autoPublish);
+
+                // Upload
+                document.getElementById('publishStatus').textContent = 'Uploading ZIP...';
+                document.getElementById('progressFill').style.width = '30%';
+
+                const response = await fetch(API + '/isp/upload', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + token() },
+                    body: formData
+                });
+
+                document.getElementById('progressFill').style.width = '70%';
+
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.detail || 'Upload failed');
+                }
+
+                const result = await response.json();
+                document.getElementById('publishStatus').textContent = 'Publishing...';
+                document.getElementById('progressFill').style.width = '90%';
+
+                // Success
+                publishedData = result;
+                document.getElementById('progressFill').style.width = '100%';
+
+                setTimeout(() => {
+                    showPublishResult(result);
+                }, 500);
+
+            } catch (err) {
+                showWizardError(err.message || 'Publishing failed');
+            }
+        }
+
+        async function showQRCode() {
+            const container = document.getElementById('qrCodeContainer');
+            const img = document.getElementById('qrCodeImg');
+
+            if (container.style.display === 'none') {
+                // Fetch QR code
+                try {
+                    const name = publishedData?.name || document.getElementById('ispName').value;
+                    const res = await fetch(API + `/bundle/${name}/qrcode`, {
+                        headers: headers()
+                    });
+                    const data = await res.json();
+                    if (data.qrcode) {
+                        img.src = data.qrcode;
+                        container.style.display = 'block';
+                    }
+                } catch (e) {
+                    console.error('QR code failed:', e);
+                }
+            } else {
+                container.style.display = 'none';
+            }
+        }
+
+        function ispReset() {
+            selectedFile = null;
+            publishedData = null;
+            fileInput.value = '';
+            document.getElementById('ispName').value = '';
+            document.getElementById('ispDomain').value = '';
+            document.getElementById('qrCodeContainer').style.display = 'none';
+            document.getElementById('commandsContainer').style.display = 'none';
+            document.getElementById('progressFill').style.width = '0%';
+            showWizardStep(1);
+        }
+
+        // ===== Result Panel Functions =====
+
+        async function showPublishResult(result) {
+            publishedData = result;
+            const name = result.name || 'site';
+            const domain = result.domain || name + '.gk2.secubox.in';
+            const url = result.url || `https://${domain}`;
+            const downloadUrl = result.download_url || `/api/v1/publish/bundle/${name}.zip`;
+
+            // Update basic info
+            document.getElementById('resultUrl').textContent = url;
+            document.getElementById('resultLink').href = url;
+            document.getElementById('downloadLink').href = downloadUrl;
+
+            // Update summary
+            document.getElementById('summaryBundle').textContent = name;
+            document.getElementById('summaryType').textContent = result.content_type || 'static';
+            document.getElementById('summaryDomain').textContent = domain;
+            document.getElementById('summaryFiles').textContent = result.files_count || '-';
+
+            // Generate CLI commands
+            const commands = `# Download bundle
+metactl download ${name} ${name}.zip
+
+# Check health
+metactl health ${domain}
+
+# Generate QR code
+metactl qrcode ${name} > qrcode.png
+
+# Republish
+metactl publish ${name}
+
+# Unpublish
+metactl unpublish ${name}`;
+            document.getElementById('cliCommands').textContent = commands;
+
+            showWizardStep(4);
+
+            // Check infrastructure status
+            await checkInfrastructure(name, domain);
+
+            refresh(); // Refresh overview
+        }
+
+        async function checkInfrastructure(name, domain) {
+            // Check VHost
+            const vhostEl = document.getElementById('vhostStatus');
+            const vhostBtn = document.getElementById('createVhostBtn');
+            try {
+                const res = await fetch(`/api/v1/metablogizer/site/${name}`, { headers: headers() });
+                if (res.ok) {
+                    const site = await res.json();
+                    if (site.published) {
+                        vhostEl.textContent = '✅';
+                    } else {
+                        vhostEl.textContent = '⚠️';
+                        vhostBtn.style.display = 'inline';
+                    }
+                } else {
+                    vhostEl.textContent = '❌';
+                    vhostBtn.style.display = 'inline';
+                }
+            } catch (e) {
+                vhostEl.textContent = '❓';
+            }
+
+            // Check Certificate
+            const certEl = document.getElementById('certStatus');
+            const certBtn = document.getElementById('createCertBtn');
+            try {
+                const res = await fetch(`/api/v1/metablogizer/site/${name}/certificate`, { headers: headers() });
+                if (res.ok) {
+                    const cert = await res.json();
+                    if (cert.exists && !cert.expired) {
+                        certEl.textContent = '✅';
+                    } else if (cert.exists && cert.expired) {
+                        certEl.textContent = '⚠️';
+                        certBtn.textContent = 'Renew';
+                        certBtn.style.display = 'inline';
+                    } else {
+                        certEl.textContent = '❌';
+                        certBtn.style.display = 'inline';
+                    }
+                } else {
+                    certEl.textContent = '❌';
+                    certBtn.style.display = 'inline';
+                }
+            } catch (e) {
+                certEl.textContent = '❓';
+            }
+
+            // Check WAF route
+            const wafEl = document.getElementById('wafStatus');
+            const wafBtn = document.getElementById('createWafBtn');
+            try {
+                const res = await fetch(`/api/v1/metablogizer/health/${domain}`, { headers: headers() });
+                if (res.ok) {
+                    const health = await res.json();
+                    if (health.waf === 'inspected') {
+                        wafEl.textContent = '✅';
+                    } else if (health.https === 200) {
+                        wafEl.textContent = '⚠️';
+                        wafBtn.style.display = 'inline';
+                    } else {
+                        wafEl.textContent = '❌';
+                        wafBtn.style.display = 'inline';
+                    }
+                } else {
+                    wafEl.textContent = '❓';
+                }
+            } catch (e) {
+                wafEl.textContent = '❓';
+            }
+        }
+
+        async function createVhost() {
+            const name = publishedData?.name;
+            if (!name) return;
+
+            document.getElementById('createVhostBtn').textContent = '...';
+            try {
+                await fetch(`/api/v1/metablogizer/site/${name}/publish`, {
+                    method: 'POST',
+                    headers: headers()
+                });
+                document.getElementById('vhostStatus').textContent = '✅';
+                document.getElementById('createVhostBtn').style.display = 'none';
+            } catch (e) {
+                alert('Failed to create VHost: ' + e.message);
+            }
+            document.getElementById('createVhostBtn').textContent = 'Create';
+        }
+
+        async function createCert() {
+            const domain = publishedData?.domain || publishedData?.name + '.gk2.secubox.in';
+            if (!domain) return;
+
+            document.getElementById('createCertBtn').textContent = '...';
+            try {
+                // Request certificate via certbot API
+                await fetch('/api/v1/haproxy/cert/request', {
+                    method: 'POST',
+                    headers: headers(),
+                    body: JSON.stringify({ domain: domain })
+                });
+                document.getElementById('certStatus').textContent = '✅';
+                document.getElementById('createCertBtn').style.display = 'none';
+            } catch (e) {
+                alert('Failed to request certificate. Run: certbot certonly -d ' + domain);
+            }
+            document.getElementById('createCertBtn').textContent = 'Request';
+        }
+
+        async function createWafRoute() {
+            const domain = publishedData?.domain || publishedData?.name + '.gk2.secubox.in';
+            if (!domain) return;
+
+            document.getElementById('createWafBtn').textContent = '...';
+            try {
+                // Add vhost to HAProxy
+                await fetch('/api/v1/haproxy/vhost', {
+                    method: 'POST',
+                    headers: headers(),
+                    body: JSON.stringify({ domain: domain })
+                });
+                document.getElementById('wafStatus').textContent = '✅';
+                document.getElementById('createWafBtn').style.display = 'none';
+            } catch (e) {
+                alert('Failed to add WAF route. Run: haproxyctl vhost add ' + domain);
+            }
+            document.getElementById('createWafBtn').textContent = 'Add';
+        }
+
+        async function autoSetupAll() {
+            const name = publishedData?.name;
+            const domain = publishedData?.domain || name + '.gk2.secubox.in';
+            if (!name) return;
+
+            // Create VHost
+            if (document.getElementById('vhostStatus').textContent !== '✅') {
+                await createVhost();
+            }
+
+            // Request cert
+            if (document.getElementById('certStatus').textContent !== '✅') {
+                await createCert();
+            }
+
+            // Add WAF route
+            if (document.getElementById('wafStatus').textContent !== '✅') {
+                await createWafRoute();
+            }
+
+            // Re-check all
+            await checkInfrastructure(name, domain);
+        }
+
+        function toggleCommands() {
+            const container = document.getElementById('commandsContainer');
+            container.style.display = container.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function copyCommands() {
+            const commands = document.getElementById('cliCommands').textContent;
+            navigator.clipboard.writeText(commands).then(() => {
+                alert('Commands copied to clipboard!');
+            });
+        }
     </script>
     <script src="/shared/crt-engine.js"></script>
 </body>

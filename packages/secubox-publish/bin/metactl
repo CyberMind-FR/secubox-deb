@@ -1,0 +1,426 @@
+#!/usr/bin/env bash
+# SecuBox MetaCtl — ISP Home Publish CLI
+# CyberMind — https://cybermind.fr
+set -euo pipefail
+
+VERSION="1.0.0"
+API_BASE="${SECUBOX_API_BASE:-http://127.0.0.1/api/v1/publish}"
+METABLOGIZER_API="${SECUBOX_METABLOGIZER_API:-http://127.0.0.1/api/v1/metablogizer}"
+TOKEN_FILE="${SECUBOX_TOKEN_FILE:-/etc/secubox/secrets/jwt-token}"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+usage() {
+    cat <<EOF
+${CYAN}metactl${NC} — ISP Home Publish CLI v${VERSION}
+
+${YELLOW}Usage:${NC}
+    metactl <command> [options]
+
+${YELLOW}Commands:${NC}
+    ${GREEN}upload${NC} <file.zip> [name] [--domain=D] [--auto-publish]
+        Upload and publish a ZIP/TAR.GZ archive
+
+    ${GREEN}publish${NC} <name>
+        Publish an existing site
+
+    ${GREEN}unpublish${NC} <name>
+        Unpublish a site
+
+    ${GREEN}list${NC}
+        List all published bundles/sites
+
+    ${GREEN}download${NC} <name> [output.zip]
+        Download published bundle as ZIP
+
+    ${GREEN}qrcode${NC} <name>
+        Generate QR code for site URL
+
+    ${GREEN}status${NC}
+        Show publishing platform status
+
+    ${GREEN}health${NC} <domain>
+        Check site health (HTTP/HTTPS/WAF)
+
+${YELLOW}Examples:${NC}
+    metactl upload mysite.zip mysite --auto-publish
+    metactl upload ~/blog.tar.gz blog --domain=blog.gk2.secubox.in
+    metactl list
+    metactl download mysite ~/backup.zip
+    metactl qrcode mysite > qr.png
+    metactl health mysite.gk2.secubox.in
+
+${YELLOW}Environment:${NC}
+    SECUBOX_API_BASE     API base URL (default: http://127.0.0.1/api/v1/publish)
+    SECUBOX_TOKEN_FILE   JWT token file (default: /etc/secubox/secrets/jwt-token)
+    SECUBOX_TOKEN        JWT token (override file)
+
+EOF
+    exit 0
+}
+
+get_token() {
+    if [[ -n "${SECUBOX_TOKEN:-}" ]]; then
+        echo "$SECUBOX_TOKEN"
+    elif [[ -f "$TOKEN_FILE" ]]; then
+        cat "$TOKEN_FILE"
+    else
+        echo ""
+    fi
+}
+
+api_call() {
+    local method="$1"
+    local path="$2"
+    shift 2
+    local token
+    token=$(get_token)
+
+    local auth_header=""
+    if [[ -n "$token" ]]; then
+        auth_header="Authorization: Bearer $token"
+    fi
+
+    if [[ -n "$auth_header" ]]; then
+        curl -s -X "$method" "${API_BASE}${path}" \
+            -H "Content-Type: application/json" \
+            -H "$auth_header" \
+            "$@"
+    else
+        curl -s -X "$method" "${API_BASE}${path}" \
+            -H "Content-Type: application/json" \
+            "$@"
+    fi
+}
+
+metablogizer_call() {
+    local method="$1"
+    local path="$2"
+    shift 2
+    local token
+    token=$(get_token)
+
+    local auth_header=""
+    if [[ -n "$token" ]]; then
+        auth_header="Authorization: Bearer $token"
+    fi
+
+    if [[ -n "$auth_header" ]]; then
+        curl -s -X "$method" "${METABLOGIZER_API}${path}" \
+            -H "Content-Type: application/json" \
+            -H "$auth_header" \
+            "$@"
+    else
+        curl -s -X "$method" "${METABLOGIZER_API}${path}" \
+            -H "Content-Type: application/json" \
+            "$@"
+    fi
+}
+
+cmd_upload() {
+    local file="${1:-}"
+    local name="${2:-}"
+    local domain=""
+    local auto_publish="true"
+
+    shift 2 2>/dev/null || true
+
+    # Parse options
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --domain=*) domain="${1#*=}" ;;
+            --domain) domain="$2"; shift ;;
+            --auto-publish) auto_publish="true" ;;
+            --no-auto-publish) auto_publish="false" ;;
+            *) ;;
+        esac
+        shift
+    done
+
+    if [[ -z "$file" ]]; then
+        echo -e "${RED}Error:${NC} No file specified"
+        echo "Usage: metactl upload <file.zip> [name] [--domain=D]"
+        exit 1
+    fi
+
+    if [[ ! -f "$file" ]]; then
+        echo -e "${RED}Error:${NC} File not found: $file"
+        exit 1
+    fi
+
+    # Auto-generate name from filename if not provided
+    if [[ -z "$name" ]]; then
+        name=$(basename "$file" | sed 's/\.\(zip\|tar\.gz\|tgz\)$//' | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9-' '-')
+    fi
+
+    echo -e "${CYAN}📦 Uploading:${NC} $file"
+    echo -e "${CYAN}   Name:${NC} $name"
+    [[ -n "$domain" ]] && echo -e "${CYAN}   Domain:${NC} $domain"
+    echo -e "${CYAN}   Auto-publish:${NC} $auto_publish"
+    echo ""
+
+    local token
+    token=$(get_token)
+
+    # Build curl command
+    local curl_cmd=(curl -s -X POST "${API_BASE}/isp/upload"
+        -F "file=@$file"
+        -F "name=$name"
+        -F "auto_publish=$auto_publish"
+    )
+
+    [[ -n "$domain" ]] && curl_cmd+=(-F "domain=$domain")
+    [[ -n "$token" ]] && curl_cmd+=(-H "Authorization: Bearer $token")
+
+    local result
+    result=$("${curl_cmd[@]}")
+
+    # Check result
+    if echo "$result" | jq -e '.error' >/dev/null 2>&1; then
+        echo -e "${RED}❌ Error:${NC} $(echo "$result" | jq -r '.detail // .error')"
+        exit 1
+    fi
+
+    local url
+    url=$(echo "$result" | jq -r '.url // empty')
+    local download_url
+    download_url=$(echo "$result" | jq -r '.download_url // empty')
+    local content_type
+    content_type=$(echo "$result" | jq -r '.content_type // "unknown"')
+
+    echo -e "${GREEN}✅ Published successfully!${NC}"
+    echo ""
+    echo -e "${CYAN}Content type:${NC} $content_type"
+    [[ -n "$url" ]] && echo -e "${CYAN}URL:${NC} $url"
+    [[ -n "$download_url" ]] && echo -e "${CYAN}Download:${NC} $download_url"
+    echo ""
+    echo -e "${YELLOW}Quick commands:${NC}"
+    echo "  metactl qrcode $name > qrcode.png"
+    echo "  metactl download $name backup.zip"
+    echo "  metactl health ${domain:-$name.gk2.secubox.in}"
+}
+
+cmd_publish() {
+    local name="${1:-}"
+
+    if [[ -z "$name" ]]; then
+        echo -e "${RED}Error:${NC} No site name specified"
+        exit 1
+    fi
+
+    echo -e "${CYAN}▶ Publishing:${NC} $name"
+
+    local result
+    result=$(metablogizer_call POST "/site/$name/publish")
+
+    if echo "$result" | jq -e '.success' >/dev/null 2>&1; then
+        local url
+        url=$(echo "$result" | jq -r '.url // empty')
+        echo -e "${GREEN}✅ Published:${NC} $url"
+    else
+        echo -e "${RED}❌ Failed:${NC} $(echo "$result" | jq -r '.detail // .error // "Unknown error"')"
+        exit 1
+    fi
+}
+
+cmd_unpublish() {
+    local name="${1:-}"
+
+    if [[ -z "$name" ]]; then
+        echo -e "${RED}Error:${NC} No site name specified"
+        exit 1
+    fi
+
+    echo -e "${CYAN}⏹ Unpublishing:${NC} $name"
+
+    local result
+    result=$(metablogizer_call POST "/site/$name/unpublish")
+
+    if echo "$result" | jq -e '.success' >/dev/null 2>&1; then
+        echo -e "${GREEN}✅ Unpublished${NC}"
+    else
+        echo -e "${RED}❌ Failed${NC}"
+        exit 1
+    fi
+}
+
+cmd_list() {
+    echo -e "${CYAN}📋 Published Bundles:${NC}"
+    echo ""
+
+    local bundles
+    bundles=$(api_call GET "/bundles" 2>/dev/null || echo '{"bundles":[]}')
+
+    if echo "$bundles" | jq -e '.bundles | length > 0' >/dev/null 2>&1; then
+        echo "$bundles" | jq -r '.bundles[] | "  \(.name)\t\(.content_type // "-")\t\(.url // "-")"' | column -t -s $'\t'
+    else
+        echo "  No bundles found"
+    fi
+
+    echo ""
+    echo -e "${CYAN}📝 MetaBlogizer Sites:${NC}"
+    echo ""
+
+    local sites
+    sites=$(metablogizer_call GET "/access" 2>/dev/null || echo '{"sites":[]}')
+
+    if echo "$sites" | jq -e '.sites | length > 0' >/dev/null 2>&1; then
+        echo "$sites" | jq -r '.sites[] | "  \(.name)\t\(.domain // "-")\t\(if .published then "✅ Live" else "⏸️ Draft" end)"' | column -t -s $'\t'
+    else
+        echo "  No sites found"
+    fi
+}
+
+cmd_download() {
+    local name="${1:-}"
+    local output="${2:-${name}.zip}"
+
+    if [[ -z "$name" ]]; then
+        echo -e "${RED}Error:${NC} No bundle name specified"
+        exit 1
+    fi
+
+    echo -e "${CYAN}📥 Downloading:${NC} $name → $output"
+
+    local token
+    token=$(get_token)
+
+    local curl_cmd=(curl -s -o "$output" "${API_BASE}/bundle/${name}.zip")
+    [[ -n "$token" ]] && curl_cmd+=(-H "Authorization: Bearer $token")
+
+    if "${curl_cmd[@]}"; then
+        if [[ -f "$output" ]] && [[ $(file -b "$output") == *"Zip"* || $(file -b "$output") == *"gzip"* ]]; then
+            echo -e "${GREEN}✅ Downloaded:${NC} $output ($(ls -lh "$output" | awk '{print $5}'))"
+        else
+            echo -e "${RED}❌ Download failed or invalid file${NC}"
+            rm -f "$output"
+            exit 1
+        fi
+    else
+        echo -e "${RED}❌ Download failed${NC}"
+        exit 1
+    fi
+}
+
+cmd_qrcode() {
+    local name="${1:-}"
+
+    if [[ -z "$name" ]]; then
+        echo -e "${RED}Error:${NC} No bundle name specified" >&2
+        exit 1
+    fi
+
+    local result
+    result=$(api_call GET "/bundle/${name}/qrcode")
+
+    if echo "$result" | jq -e '.qrcode' >/dev/null 2>&1; then
+        # Extract base64 PNG and decode
+        echo "$result" | jq -r '.qrcode' | sed 's/^data:image\/png;base64,//' | base64 -d
+    else
+        echo -e "${RED}❌ QR code generation failed${NC}" >&2
+        exit 1
+    fi
+}
+
+cmd_status() {
+    echo -e "${CYAN}📊 Publishing Platform Status${NC}"
+    echo ""
+
+    local status
+    status=$(api_call GET "/status" 2>/dev/null || echo '{}')
+
+    if [[ -n "$status" ]] && [[ "$status" != "{}" ]]; then
+        echo "$status" | jq -r '
+            "Module: \(.module // "publish")",
+            "Version: \(.version // "-")",
+            "Enabled: \(.enabled // true)",
+            "",
+            "Publishers:",
+            "  Streamlit: \(.streamlit.enabled // false)",
+            "  StreamForge: \(.streamforge.enabled // false)",
+            "  Droplet: \(.droplet.enabled // false)",
+            "  MetaBlogizer: \(.metablogizer.enabled // false)"
+        '
+    else
+        echo "  Status unavailable"
+    fi
+}
+
+cmd_health() {
+    local domain="${1:-}"
+
+    if [[ -z "$domain" ]]; then
+        echo -e "${RED}Error:${NC} No domain specified"
+        exit 1
+    fi
+
+    echo -e "${CYAN}🔍 Checking health:${NC} $domain"
+    echo ""
+
+    local result
+    result=$(metablogizer_call GET "/health/$domain" 2>/dev/null || echo '{}')
+
+    if [[ -n "$result" ]] && [[ "$result" != "{}" ]]; then
+        local http https waf
+        http=$(echo "$result" | jq -r '.http // 0')
+        https=$(echo "$result" | jq -r '.https // 0')
+        waf=$(echo "$result" | jq -r '.waf // "unknown"')
+
+        # HTTP status
+        if [[ "$http" == "200" ]]; then
+            echo -e "  HTTP:  ${GREEN}🟢 $http${NC}"
+        elif [[ "$http" -ge 500 ]]; then
+            echo -e "  HTTP:  ${RED}🔴 $http${NC}"
+        elif [[ "$http" -ge 400 ]]; then
+            echo -e "  HTTP:  ${YELLOW}🟡 $http${NC}"
+        else
+            echo -e "  HTTP:  ⬜ $http"
+        fi
+
+        # HTTPS status
+        if [[ "$https" == "200" ]]; then
+            echo -e "  HTTPS: ${GREEN}🟢 $https${NC}"
+        elif [[ "$https" -ge 500 ]]; then
+            echo -e "  HTTPS: ${RED}🔴 $https${NC}"
+        elif [[ "$https" -ge 400 ]]; then
+            echo -e "  HTTPS: ${YELLOW}🟡 $https${NC}"
+        else
+            echo -e "  HTTPS: ⬜ $https"
+        fi
+
+        # WAF status
+        if [[ "$waf" == "inspected" ]]; then
+            echo -e "  WAF:   ${GREEN}🟢 inspected${NC}"
+        elif [[ "$waf" == "blocked" ]] || [[ "$waf" == "banned" ]]; then
+            echo -e "  WAF:   ${RED}🔴 $waf${NC}"
+        else
+            echo -e "  WAF:   ⬜ $waf"
+        fi
+    else
+        echo -e "  ${RED}❌ Health check failed${NC}"
+    fi
+}
+
+# Main
+case "${1:-help}" in
+    upload)     shift; cmd_upload "$@" ;;
+    publish)    shift; cmd_publish "$@" ;;
+    unpublish)  shift; cmd_unpublish "$@" ;;
+    list|ls)    cmd_list ;;
+    download)   shift; cmd_download "$@" ;;
+    qrcode|qr)  shift; cmd_qrcode "$@" ;;
+    status)     cmd_status ;;
+    health)     shift; cmd_health "$@" ;;
+    -h|--help|help) usage ;;
+    -v|--version) echo "metactl v${VERSION}" ;;
+    *)
+        echo -e "${RED}Unknown command:${NC} $1"
+        echo "Run 'metactl --help' for usage"
+        exit 1
+        ;;
+esac
