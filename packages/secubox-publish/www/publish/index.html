@@ -540,9 +540,9 @@
             <div id="wizardStep1" class="wizard-step active">
                 <div id="dropZone" class="drop-zone">
                     <div class="drop-icon">📤</div>
-                    <div class="drop-text">Drag & drop your ZIP file here</div>
+                    <div class="drop-text">Drag & drop your HTML or ZIP file here</div>
                     <div class="drop-subtext">or click to browse</div>
-                    <input type="file" id="fileInput" accept=".zip,.tar.gz,.tgz" style="display:none">
+                    <input type="file" id="fileInput" accept=".html,.htm,.zip,.tar.gz,.tgz" style="display:none">
                 </div>
             </div>
 
@@ -1121,8 +1121,8 @@
         });
 
         function handleFileSelect(file) {
-            if (!file.name.match(/\.(zip|tar\.gz|tgz)$/i)) {
-                alert('Please select a .zip or .tar.gz file');
+            if (!file.name.match(/\.(html?|zip|tar\.gz|tgz)$/i)) {
+                alert('Please select a .html, .zip or .tar.gz file');
                 return;
             }
             selectedFile = file;
@@ -1130,7 +1130,11 @@
             // Auto-detect content type based on filename
             let detectedType = 'static';
             let icon = '🌐';
-            if (file.name.includes('streamlit') || file.name.includes('app')) {
+            const isHtml = file.name.match(/\.html?$/i);
+            if (isHtml) {
+                detectedType = 'html';
+                icon = '📄';
+            } else if (file.name.includes('streamlit') || file.name.includes('app')) {
                 detectedType = 'streamlit';
                 icon = '🎯';
             } else if (file.name.includes('hugo') || file.name.includes('blog')) {
@@ -1151,7 +1155,7 @@
             document.getElementById('fileSize').textContent = formatSize(file.size);
 
             // Auto-generate name from filename
-            const baseName = file.name.replace(/\.(zip|tar\.gz|tgz)$/i, '').replace(/[^a-z0-9-]/gi, '-').toLowerCase();
+            const baseName = file.name.replace(/\.(html?|zip|tar\.gz|tgz)$/i, '').replace(/[^a-z0-9-]/gi, '-').toLowerCase();
             document.getElementById('ispName').value = baseName;
             document.getElementById('ispDomain').value = baseName + '.gk2.secubox.in';
 
@@ -1220,11 +1224,31 @@
                 document.getElementById('progressFill').style.width = '70%';
 
                 if (!response.ok) {
-                    const err = await response.json();
-                    throw new Error(err.detail || 'Upload failed');
+                    const text = await response.text();
+                    let errMsg = 'Upload failed';
+                    try {
+                        const err = JSON.parse(text);
+                        errMsg = err.detail || err.error || errMsg;
+                    } catch {
+                        // Response is not JSON (probably HTML error page)
+                        if (text.includes('wrong-domain') || text.includes('Wrong Domain')) {
+                            errMsg = 'Access denied: Use admin.gk2.secubox.in';
+                        } else if (text.includes('405')) {
+                            errMsg = 'Method not allowed - check nginx config';
+                        } else {
+                            errMsg = `Server error (${response.status})`;
+                        }
+                    }
+                    throw new Error(errMsg);
                 }
 
-                const result = await response.json();
+                const resultText = await response.text();
+                let result;
+                try {
+                    result = JSON.parse(resultText);
+                } catch {
+                    throw new Error('Invalid response from server');
+                }
                 document.getElementById('publishStatus').textContent = 'Publishing...';
                 document.getElementById('progressFill').style.width = '90%';
 
