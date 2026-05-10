@@ -15,10 +15,12 @@
 (function() {
     'use strict';
 
-    const VERSION = '1.0.0';
-    const HEALTH_API = '/api/v1/metrics/health/summary';
+    const VERSION = '1.1.0';
+    // Use global config if injected by CDN/WAF, otherwise use relative path
+    const HEALTH_API = window.SECUBOX_HEALTH_API || '/api/v1/metrics/health/summary';
     const REFRESH_INTERVAL = 30000; // 30s
     const CACHE_KEY = 'sbx_health_cache';
+    const IS_CDN_INJECTED = !!window.SECUBOX_HEALTH_API;
 
     // ═══════════════════════════════════════════════════════════════════════════
     // DOUBLE-BUFFER CACHE with Lock Protection
