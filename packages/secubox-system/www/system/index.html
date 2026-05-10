@@ -433,6 +433,20 @@
                 </div>
 
                 <div class="card">
+                    <div class="card-header">
+                        <h2>👤 Active Sessions</h2>
+                        <span id="sessions-count" style="font-size: 0.9rem; color: var(--primary);">-</span>
+                    </div>
+                    <div id="sessions-list" class="scroll-list" style="max-height: 180px;">
+                        <p style="color: var(--text-dim);">Loading...</p>
+                    </div>
+                    <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem;">
+                        <button class="btn danger" onclick="revokeAllSessions()" style="font-size: 0.8rem;">🚫 Revoke All</button>
+                        <button class="btn" onclick="loadSessions()" style="font-size: 0.8rem;">🔄 Refresh</button>
+                    </div>
+                </div>
+
+                <div class="card">
                     <div class="card-header"><h2>📦 Packages</h2></div>
                     <div class="scroll-list" id="packages-list">
                         <p style="color: var(--text-dim);">Loading...</p>
@@ -845,7 +859,88 @@
             }
         }
 
-        function refresh() { loadSystemInfo(); loadResources(); loadServices(); loadNetwork(); loadSecurity(); loadBoardDetection(); loadKioskStatus(); }
+        // ═══════════════════════════════════════════════════════════════
+        // ACTIVE SESSIONS
+        // ═══════════════════════════════════════════════════════════════
+        async function loadSessions() {
+            try {
+                const data = await api('/sessions/summary');
+                if (!data) return;
+
+                const countEl = document.getElementById('sessions-count');
+                const listEl = document.getElementById('sessions-list');
+
+                countEl.textContent = `${data.active_count || 0} active`;
+
+                if (!data.users_online || data.users_online.length === 0) {
+                    listEl.innerHTML = '<p style="color: var(--text-dim); font-size: 0.9rem;">No active sessions</p>';
+                    return;
+                }
+
+                // Get detailed sessions for current user if available
+                const detailed = await api('/sessions');
+                const sessions = detailed?.sessions || [];
+
+                let html = '';
+                for (const user of data.users_online) {
+                    const count = data.by_user?.[user] || 1;
+                    const userSessions = sessions.filter(s => s.username === user);
+
+                    html += `<div class="service-item" style="flex-direction: column; align-items: flex-start; gap: 0.25rem;">
+                        <div style="display: flex; justify-content: space-between; width: 100%;">
+                            <span><span class="status-dot running"></span><strong>${user}</strong></span>
+                            <span style="font-size: 0.8rem; color: var(--text-dim);">${count} session${count > 1 ? 's' : ''}</span>
+                        </div>`;
+
+                    // Show session details if available
+                    if (userSessions.length > 0) {
+                        for (const s of userSessions.slice(0, 3)) {
+                            const expIn = s.expires_in_formatted || '-';
+                            html += `<div style="font-size: 0.75rem; color: var(--text-dim); padding-left: 1rem; display: flex; justify-content: space-between; width: 100%;">
+                                <span>🕐 expires in ${expIn}</span>
+                                <button onclick="revokeSession('${s.id}')" style="font-size: 0.7rem; padding: 0 4px; background: none; border: 1px solid var(--red); color: var(--red); border-radius: 3px; cursor: pointer;">✕</button>
+                            </div>`;
+                        }
+                    }
+                    html += '</div>';
+                }
+
+                listEl.innerHTML = html;
+            } catch (e) {
+                console.error('Failed to load sessions:', e);
+            }
+        }
+
+        async function revokeSession(sessionId) {
+            if (!confirm('Revoke this session?')) return;
+            const token = localStorage.getItem('token');
+            try {
+                await fetch(API + `/sessions/${sessionId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                loadSessions();
+            } catch (e) {
+                alert('Failed to revoke session');
+            }
+        }
+
+        async function revokeAllSessions() {
+            if (!confirm('⚠️ Revoke ALL sessions? You will be logged out.')) return;
+            const token = localStorage.getItem('token');
+            try {
+                await fetch(API + '/sessions/revoke-all', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                alert('All sessions revoked');
+                window.location.href = '/portal/';
+            } catch (e) {
+                alert('Failed to revoke sessions');
+            }
+        }
+
+        function refresh() { loadSystemInfo(); loadResources(); loadServices(); loadNetwork(); loadSecurity(); loadBoardDetection(); loadKioskStatus(); loadSessions(); }
         refresh();
         loadLogs();
         loadSecuboxLogs();

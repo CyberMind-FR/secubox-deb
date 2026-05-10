@@ -18,7 +18,7 @@ on:
         options:
           - all
           - x64
-          - espressobin-v7
+          - mochabin
           - rpi400
         default: all
       compress:
@@ -49,12 +49,12 @@ jobs:
             needs_qemu: false
             embed_image: false
 
-          # EspressoBin V7 (arm64) - U-Boot distroboot
-          - platform: espressobin-v7
+          # MOCHAbin (arm64) - U-Boot distroboot
+          - platform: mochabin
             arch: arm64
-            script: build-ebin-live-usb.sh
-            artifact_name: secubox-espressobin-v7-live-usb
-            output_pattern: "secubox-espressobin-v7-live-usb.img*"
+            script: build-mochabin-live-usb.sh
+            artifact_name: secubox-mochabin-live-usb
+            output_pattern: "secubox-mochabin-live-usb.img*"
             needs_qemu: true
             embed_image: true
 
@@ -125,23 +125,23 @@ jobs:
           ls output/debs/secubox-*.deb 2>/dev/null | wc -l || echo "0"
           ls output/debs/secubox-*.deb 2>/dev/null | xargs -I{} basename {} | sed 's/_.*$//' | sort -u || echo "No packages found"
 
-      - name: Build embedded eMMC image (EspressoBin only)
+      - name: Build embedded eMMC image (MOCHAbin only)
         if: steps.filter.outputs.skip != 'true' && matrix.embed_image
         run: |
           echo "=== Building embedded eMMC target image ==="
           sudo -E bash image/build-image.sh \
-            --board espressobin-v7 \
+            --board mochabin \
             --suite ${{ env.DEBIAN_SUITE }} \
             --out output/ \
             --slipstream
           echo "=== Checking eMMC image for embedding ==="
           # build-image.sh already compresses to .img.gz, just verify it exists
-          if [[ -f output/secubox-espressobin-v7-bookworm.img.gz ]]; then
-            ls -lh output/secubox-espressobin-v7-bookworm.img.gz
-          elif [[ -f output/secubox-espressobin-v7-bookworm.img ]]; then
+          if [[ -f output/secubox-mochabin-bookworm.img.gz ]]; then
+            ls -lh output/secubox-mochabin-bookworm.img.gz
+          elif [[ -f output/secubox-mochabin-bookworm.img ]]; then
             echo "Compressing uncompressed image..."
-            gzip -k output/secubox-espressobin-v7-bookworm.img
-            ls -lh output/secubox-espressobin-v7-bookworm.img.gz
+            gzip -k output/secubox-mochabin-bookworm.img
+            ls -lh output/secubox-mochabin-bookworm.img.gz
           else
             echo "ERROR: No eMMC image found!"
             ls -la output/
@@ -273,7 +273,7 @@ jobs:
             | Image | Platform | Architecture | Boot Method | Flasher Tool |
             |-------|----------|--------------|-------------|--------------|
             | `secubox-live-amd64-bookworm.img.gz` | x64 PC | amd64 | GRUB UEFI/BIOS | `secubox-flash-disk` (press `d`) |
-            | `secubox-espressobin-v7-live-usb.img` | EspressoBin V7 | arm64 | U-Boot extlinux | `secubox-flash-emmc` (press `f`) |
+            | `secubox-mochabin-live-usb.img` | MOCHAbin | arm64 | U-Boot extlinux | `secubox-flash-emmc` (press `f`) |
             | `secubox-rpi-arm64-bookworm.img.gz` | Raspberry Pi 400 | arm64 | Pi firmware | Manual install |
 
             ### Flash to USB Drive
@@ -282,8 +282,8 @@ jobs:
             # x64 PC
             zcat secubox-live-amd64-bookworm.img.gz | sudo dd of=/dev/sdX bs=4M status=progress
 
-            # EspressoBin V7
-            sudo dd if=secubox-espressobin-v7-live-usb.img of=/dev/sdX bs=4M status=progress
+            # MOCHAbin
+            sudo dd if=secubox-mochabin-live-usb.img of=/dev/sdX bs=4M status=progress
 
             # Raspberry Pi 400
             zcat secubox-rpi-arm64-bookworm.img.gz | sudo dd of=/dev/sdX bs=4M status=progress
@@ -294,7 +294,7 @@ jobs:
             | Platform | Boot Method | Install Command |
             |----------|-------------|-----------------|
             | **x64** | Boot USB, select "SecuBox Live" | Press `d` in TUI or run `secubox-flash-disk` |
-            | **EspressoBin** | Serial console (115200 8N1), U-Boot auto-boots | Press `f` in TUI or run `secubox-flash-emmc` |
+            | **MOCHAbin** | Serial console (115200 8N1), U-Boot auto-boots | Press `f` in TUI or run `secubox-flash-emmc` |
             | **Raspberry Pi** | HDMI/serial console, auto-boots | Manual: `dd` to SD card |
 
             ### Default Credentials

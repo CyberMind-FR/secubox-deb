@@ -301,24 +301,15 @@
         </header>
 
         <div class="tabs">
-            <div class="tab active" onclick="showTab('components')">Components</div>
-            <div class="tab" onclick="showTab('status')">Status</div>
+            <div class="tab active" onclick="showTab('status')">Status</div>
             <div class="tab" onclick="showTab('access')">Access</div>
             <div class="tab" onclick="showTab('apps')">Apps</div>
             <div class="tab" onclick="showTab('instances')">Instances</div>
             <div class="tab" onclick="showTab('actions')">Actions</div>
         </div>
 
-        <!-- COMPONENTS TAB -->
-        <div class="tab-content active" id="tab-components">
-            <div class="card">
-                <h2>System Components</h2>
-                <div id="components-list">Loading...</div>
-            </div>
-        </div>
-
         <!-- STATUS TAB -->
-        <div class="tab-content" id="tab-status">
+        <div class="tab-content active" id="tab-status">
             <div class="stats-row">
                 <div class="stat-card"><div class="value" id="app-count">-</div><div class="label">Apps</div></div>
                 <div class="stat-card"><div class="value" id="running-apps">-</div><div class="label">Running Apps</div></div>
@@ -328,6 +319,10 @@
             <div class="card">
                 <h2>Health Checks</h2>
                 <div id="health-checks">Loading...</div>
+            </div>
+            <div class="card">
+                <h2>Component Status</h2>
+                <div id="components-list">Loading...</div>
             </div>
         </div>
 
@@ -374,6 +369,21 @@
 
         <!-- ACTIONS TAB -->
         <div class="tab-content" id="tab-actions">
+            <div class="card">
+                <h2>Power Management</h2>
+                <p style="margin-bottom:1rem;color:var(--text-dim)">Sleep/wake optimization - pause container to save resources</p>
+                <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem">
+                    <div id="power-status" style="display:flex;align-items:center;gap:0.5rem">
+                        <span class="badge" id="power-state-badge">loading</span>
+                        <span id="power-idle-time" style="color:var(--text-dim);font-size:0.85rem"></span>
+                    </div>
+                </div>
+                <div id="power-actions">
+                    <button class="btn success" id="btn-wake" onclick="powerWake()" style="display:none">Wake Up</button>
+                    <button class="btn" id="btn-pause" onclick="powerPause()">Pause (Sleep)</button>
+                    <button class="btn primary" onclick="powerToggle()">Toggle Power</button>
+                </div>
+            </div>
             <div class="card">
                 <h2>Container Management</h2>
                 <p style="margin-bottom:1rem;color:var(--text-dim)">Manage the Streamlit LXC container</p>
@@ -658,6 +668,78 @@
             }
         });
 
+        // Power Management
+        async function loadPowerStatus() {
+            const d = await api('/power/status');
+            const badge = document.getElementById('power-state-badge');
+            const idleTime = document.getElementById('power-idle-time');
+            const btnWake = document.getElementById('btn-wake');
+            const btnPause = document.getElementById('btn-pause');
+
+            if (d.state === 'running') {
+                badge.textContent = 'RUNNING';
+                badge.className = 'badge running';
+                idleTime.textContent = `Idle: ${d.idle_formatted || '0s'}`;
+                btnWake.style.display = 'none';
+                btnPause.style.display = 'inline-block';
+            } else if (d.state === 'paused') {
+                badge.textContent = 'PAUSED';
+                badge.className = 'badge badge-yellow';
+                idleTime.textContent = d.paused_at ? `Since: ${new Date(d.paused_at).toLocaleTimeString()}` : '';
+                btnWake.style.display = 'inline-block';
+                btnPause.style.display = 'none';
+            } else {
+                badge.textContent = d.state || 'STOPPED';
+                badge.className = 'badge stopped';
+                idleTime.textContent = '';
+                btnWake.style.display = 'inline-block';
+                btnPause.style.display = 'none';
+            }
+        }
+
+        async function powerWake() {
+            const d = await api('/power/wake', { method: 'POST' });
+            if (d.success) {
+                showToast('Container waking up...', 'success');
+                setTimeout(refresh, 2000);
+            } else {
+                showToast('Failed to wake: ' + (d.detail || 'Unknown error'), 'error');
+            }
+        }
+
+        async function powerPause() {
+            const d = await api('/power/pause', { method: 'POST' });
+            if (d.success) {
+                showToast('Container paused (sleeping)', 'success');
+                refresh();
+            } else {
+                showToast('Failed to pause: ' + (d.detail || 'Unknown error'), 'error');
+            }
+        }
+
+        async function powerToggle() {
+            const d = await api('/power/toggle', { method: 'POST' });
+            if (d.success) {
+                showToast('Power state: ' + d.state, 'success');
+                setTimeout(refresh, d.state === 'running' ? 2000 : 500);
+            } else {
+                showToast('Failed to toggle: ' + (d.detail || 'Unknown error'), 'error');
+            }
+        }
+
+        function showToast(msg, type = 'info') {
+            const toast = document.createElement('div');
+            toast.style.cssText = `
+                position: fixed; bottom: 20px; right: 20px; padding: 12px 20px;
+                background: var(--bg-card); border: 1px solid ${type === 'success' ? 'var(--green)' : type === 'error' ? 'var(--red)' : 'var(--primary)'};
+                border-radius: 6px; color: ${type === 'success' ? 'var(--green)' : type === 'error' ? 'var(--red)' : 'var(--text)'};
+                z-index: 9999; font-size: 0.9rem; box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            `;
+            toast.textContent = msg;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 4000);
+        }
+
         function refresh() {
             loadComponents();
             loadStatus();
@@ -665,6 +747,7 @@
             loadAccess();
             loadApps();
             loadInstances();
+            loadPowerStatus();
         }
         refresh();
     </script>
