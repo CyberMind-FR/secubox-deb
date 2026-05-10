@@ -265,9 +265,15 @@
                 font-family: 'JetBrains Mono', monospace;
                 font-size: 10px;
                 color: var(--text-primary, #e8e6d9);
-                transition: height 0.3s ease;
+                transition: height 0.3s ease, box-shadow 0.3s ease;
                 overflow: hidden;
                 box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+            }
+            /* Expand on hover */
+            .health-banner:hover {
+                height: auto;
+                min-height: 28px;
+                box-shadow: 0 4px 20px rgba(201,168,76,0.3);
             }
             .health-banner.expanded {
                 height: auto;
@@ -442,18 +448,26 @@
                 border: none;
                 color: var(--text-muted, #6b6b7a);
                 cursor: pointer;
-                padding: 4px;
+                padding: 4px 8px;
                 font-size: 10px;
-                transition: transform 0.3s;
+                transition: transform 0.3s, color 0.2s;
+                opacity: 0.5;
             }
+            .health-banner:hover .hb-toggle {
+                opacity: 1;
+                color: var(--gold-hermetic, #c9a84c);
+            }
+            .health-banner:hover .hb-toggle,
             .health-banner.expanded .hb-toggle {
                 transform: rotate(180deg);
             }
             .hb-details {
-                padding: 8px 12px;
-                border-top: 1px solid rgba(255,255,255,0.1);
+                padding: 8px 16px;
+                border-top: 1px solid rgba(201,168,76,0.2);
                 display: none;
+                background: rgba(10,10,15,0.98);
             }
+            .health-banner:hover .hb-details,
             .health-banner.expanded .hb-details {
                 display: block;
             }
