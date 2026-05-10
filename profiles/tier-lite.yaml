@@ -1,0 +1,27 @@
+# profiles/tier-lite.yaml
+name: tier-lite
+inherits: base
+description: For 1-2GB RAM devices (ESPRESSObin)
+
+constraints:
+  min_ram: 1G
+  max_ram: 2G
+
+packages:
+  required:
+    - secubox-crowdsec
+    - secubox-wireguard
+    - secubox-netmodes
+    - secubox-nac
+  excluded:
+    - secubox-dpi
+    - secubox-ollama
+    - secubox-jellyfin
+    - secubox-matrix
+    - secubox-nextcloud
+    - secubox-gitea
+
+features:
+  dpi: false
+  lxc: false
+  swap: 512M

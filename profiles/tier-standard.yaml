@@ -1,0 +1,25 @@
+# profiles/tier-standard.yaml
+name: tier-standard
+inherits: base
+description: For 4GB RAM devices
+
+constraints:
+  min_ram: 4G
+  max_ram: 8G
+
+packages:
+  required:
+    - secubox-crowdsec
+    - secubox-wireguard
+    - secubox-netmodes
+    - secubox-nac
+    - secubox-dpi
+    - secubox-qos
+    - secubox-waf
+    - secubox-haproxy
+    - secubox-vhost
+
+features:
+  dpi: mirror
+  lxc: true
+  swap: "0"

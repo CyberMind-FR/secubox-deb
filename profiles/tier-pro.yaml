@@ -1,0 +1,16 @@
+# profiles/tier-pro.yaml
+name: tier-pro
+inherits: base
+description: For 8GB+ RAM devices (MOCHAbin)
+
+constraints:
+  min_ram: 8G
+
+packages:
+  required:
+    - secubox-full
+
+features:
+  dpi: inline
+  lxc: true
+  swap: "0"
