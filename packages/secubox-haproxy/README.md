@@ -1,6 +1,6 @@
 # ⚡ HAProxy
 
-Load balancer dashboard
+Load balancer with TLS 1.3
 
 **Category:** Network
 
@@ -14,6 +14,7 @@ Load balancer dashboard
 - Stats
 - ACLs
 - SSL termination
+- Health checks
 
 ## Installation
 

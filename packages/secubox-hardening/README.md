@@ -1,6 +1,6 @@
 # 🔒 System Hardening
 
-Kernel and system hardening
+Kernel and system hardening for ANSSI CSPN compliance
 
 **Category:** Security
 
@@ -13,6 +13,7 @@ Kernel and system hardening
 - Sysctl hardening
 - Module blacklist
 - Security score
+- AppArmor
 
 ## Installation
 

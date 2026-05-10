@@ -1,6 +1,6 @@
 # 🔐 Zero-Knowledge Proofs
 
-ZKP Hamiltonian management
+ZKP Hamiltonian authentication
 
 **Category:** Privacy
 
@@ -13,6 +13,7 @@ ZKP Hamiltonian management
 - Proof generation
 - Verification
 - Key management
+- MirrorNet
 
 ## Installation
 

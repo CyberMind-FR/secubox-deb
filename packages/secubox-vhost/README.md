@@ -13,6 +13,7 @@ Nginx virtual host management
 - Site management
 - SSL certificates
 - Reverse proxy
+- Let's Encrypt
 
 ## Installation
 

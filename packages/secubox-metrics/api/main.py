@@ -426,6 +426,199 @@ async def get_firewall_stats(auth: None = Depends(require_jwt)):
         "bouncer_blocks": 0
     }
 
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# HEALTH BANNER SUMMARY API
+# For the global health banner with smart doctor advisor
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def build_health_summary() -> dict:
+    """Build aggregated health summary for the health banner."""
+
+    # Get cached metrics or build fresh
+    cached = read_cache()
+    if not cached or not cache_is_fresh():
+        cached = build_cache()
+
+    overview = cached.get("overview", {})
+    waf_stats = cached.get("waf", {})
+
+    # Calculate module statuses
+    modules = {}
+
+    # WAF status (mitmproxy)
+    mitmproxy_up = overview.get("mitmproxy", False)
+    modules["waf"] = {
+        "status": "ok" if mitmproxy_up else "error",
+        "running": mitmproxy_up
+    }
+
+    # CrowdSec status
+    crowdsec_up = overview.get("crowdsec", False) or waf_stats.get("crowdsec_running", False)
+    modules["crowdsec"] = {
+        "status": "ok" if crowdsec_up else "error",
+        "running": crowdsec_up
+    }
+
+    # HAProxy status
+    haproxy_up = overview.get("haproxy", False)
+    modules["haproxy"] = {
+        "status": "ok" if haproxy_up else "error",
+        "running": haproxy_up
+    }
+
+    # Nginx status
+    nginx_up = run_cmd(['systemctl', 'is-active', 'nginx']) == 'active'
+    modules["nginx"] = {
+        "status": "ok" if nginx_up else "warn",
+        "running": nginx_up
+    }
+
+    # System status (based on resources)
+    mem_pct = overview.get("mem_pct", 0)
+    system_status = "ok"
+    if mem_pct > 90:
+        system_status = "error"
+    elif mem_pct > 75:
+        system_status = "warn"
+    modules["system"] = {
+        "status": system_status,
+        "mem_pct": mem_pct
+    }
+
+    # Get CPU usage
+    cpu_pct = 0
+    try:
+        with open('/proc/stat') as f:
+            cpu_line = f.readline()
+            parts = cpu_line.split()
+            if len(parts) >= 5:
+                idle = int(parts[4])
+                total = sum(int(p) for p in parts[1:])
+                # Rough estimate - proper would need delta
+                cpu_pct = min(99, max(0, 100 - (idle * 100 // max(1, total))))
+    except Exception:
+        pass
+
+    # Fallback: use load average as percentage
+    if cpu_pct == 0:
+        try:
+            load_str = overview.get("load", "0 0 0")
+            load_1m = float(load_str.split()[0])
+            # Estimate based on 4 cores
+            cpu_pct = min(100, int(load_1m * 25))
+        except Exception:
+            pass
+
+    # Get disk usage
+    disk_pct = 0
+    try:
+        result = run_cmd(['df', '-h', '/'])
+        lines = result.split('\n')
+        if len(lines) >= 2:
+            parts = lines[1].split()
+            if len(parts) >= 5:
+                disk_pct = int(parts[4].rstrip('%'))
+    except Exception:
+        pass
+
+    # Get WAF blocked percentage (estimate from recent logs)
+    blocked_pct = 0
+    try:
+        waf_log = Path('/var/log/mitmproxy/threats.jsonl')
+        if waf_log.exists():
+            # Count threats in last hour
+            result = run_cmd(['wc', '-l', str(waf_log)])
+            threat_count = int(result.split()[0]) if result else 0
+            # Rough estimate: 1000 requests/hour baseline
+            blocked_pct = min(100, threat_count // 10)
+    except Exception:
+        pass
+
+    # Count services down
+    services_down = 0
+    critical_services = ['haproxy', 'nginx', 'crowdsec']
+    for svc in critical_services:
+        if run_cmd(['systemctl', 'is-active', svc]) != 'active':
+            services_down += 1
+
+    # Calculate overall score (0-100)
+    score = 100
+
+    # Deduct for down modules
+    for mod_name, mod_info in modules.items():
+        if mod_info.get("status") == "error":
+            score -= 15
+        elif mod_info.get("status") == "warn":
+            score -= 5
+
+    # Deduct for high resource usage
+    if cpu_pct > 85:
+        score -= 10
+    elif cpu_pct > 70:
+        score -= 5
+
+    if mem_pct > 90:
+        score -= 10
+    elif mem_pct > 80:
+        score -= 5
+
+    if disk_pct > 85:
+        score -= 10
+    elif disk_pct > 75:
+        score -= 5
+
+    # Deduct for high WAF blocking
+    if blocked_pct > 25:
+        score -= 5
+
+    score = max(0, min(100, score))
+
+    return {
+        "score": score,
+        "modules": modules,
+        "waf": {
+            "blocked_pct": blocked_pct,
+            "active": waf_stats.get("mitmproxy_running", False)
+        },
+        "crowdsec": {
+            "active_decisions": waf_stats.get("active_bans", 0),
+            "alerts_today": waf_stats.get("alerts_today", 0)
+        },
+        "system": {
+            "cpu": cpu_pct,
+            "memory": mem_pct,
+            "disk": disk_pct,
+            "load": overview.get("load", "0 0 0"),
+            "uptime": overview.get("uptime", 0)
+        },
+        "services": {
+            "down": services_down,
+            "total": len(critical_services),
+            "lxc_running": overview.get("lxc_containers", 0)
+        },
+        "counts": {
+            "vhosts": overview.get("vhosts", 0),
+            "certificates": overview.get("certificates", 0),
+            "metablogs": overview.get("metablogs", 0)
+        },
+        "_cache": {
+            "age": get_cache_age(),
+            "fresh": cache_is_fresh()
+        },
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+@app.get("/api/v1/metrics/health/summary")
+async def get_health_summary():
+    """
+    Health summary for the global health banner.
+    Returns aggregated health score and module statuses.
+    No auth required for banner display.
+    """
+    return build_health_summary()
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8000)

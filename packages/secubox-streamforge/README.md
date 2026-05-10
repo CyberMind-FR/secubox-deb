@@ -13,6 +13,7 @@ Streamlit app development
 - Templates
 - Code editor
 - Preview
+- Deploy
 
 ## Installation
 

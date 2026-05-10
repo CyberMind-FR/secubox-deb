@@ -13,6 +13,7 @@ Content delivery cache
 - Cache management
 - Purge
 - Statistics
+- Edge rules
 
 ## Installation
 

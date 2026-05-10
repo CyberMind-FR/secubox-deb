@@ -1,0 +1,39 @@
+# 🚪 AI Gateway
+
+AI model API gateway
+
+**Category:** AI
+
+## Screenshot
+
+![AI Gateway](../../docs/screenshots/vm/ai-gateway.png)
+
+## Features
+
+- Rate limiting
+- Load balancing
+- Caching
+- Logging
+
+## Installation
+
+```bash
+# Add SecuBox repository
+curl -fsSL https://apt.secubox.in/install.sh | sudo bash
+
+# Install package
+sudo apt install secubox-ai-gateway
+```
+
+## Configuration
+
+Configuration file: `/etc/secubox/ai-gateway.toml`
+
+## API Endpoints
+
+- `GET /api/v1/ai-gateway/status` - Module status
+- `GET /api/v1/ai-gateway/health` - Health check
+
+## License
+
+MIT License - CyberMind © 2024-2026

@@ -13,6 +13,7 @@ Media traffic analytics
 - Stream detection
 - Bandwidth usage
 - Protocol analysis
+- QoE
 
 ## Installation
 

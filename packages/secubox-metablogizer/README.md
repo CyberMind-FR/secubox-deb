@@ -13,6 +13,7 @@ Static site publisher with Tor
 - Static sites
 - Tor publishing
 - Templates
+- Markdown
 
 ## Installation
 

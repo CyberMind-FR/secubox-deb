@@ -14,6 +14,7 @@ Git server (LXC)
 - Users
 - SSH/HTTP
 - LFS
+- Actions
 
 ## Installation
 
