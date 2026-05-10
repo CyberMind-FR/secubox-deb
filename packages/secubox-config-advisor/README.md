@@ -1,0 +1,39 @@
+# 📋 Config Advisor
+
+Configuration recommendations
+
+**Category:** System
+
+## Screenshot
+
+![Config Advisor](../../docs/screenshots/vm/config-advisor.png)
+
+## Features
+
+- Security audit
+- Best practices
+- Optimization
+- Reports
+
+## Installation
+
+```bash
+# Add SecuBox repository
+curl -fsSL https://apt.secubox.in/install.sh | sudo bash
+
+# Install package
+sudo apt install secubox-config-advisor
+```
+
+## Configuration
+
+Configuration file: `/etc/secubox/config-advisor.toml`
+
+## API Endpoints
+
+- `GET /api/v1/config-advisor/status` - Module status
+- `GET /api/v1/config-advisor/health` - Health check
+
+## License
+
+MIT License - CyberMind © 2024-2026

@@ -13,6 +13,7 @@ Mesh network domain resolution
 - mDNS/Avahi
 - Local DNS
 - Service discovery
+- Mesh integration
 
 ## Installation
 

@@ -1,6 +1,6 @@
 # 🔐 Auth Guardian
 
-Authentication management
+Unified authentication management
 
 **Category:** Security
 
@@ -12,7 +12,7 @@ Authentication management
 
 - OAuth2
 - LDAP
-- 2FA
+- 2FA/TOTP
 - Session management
 
 ## Installation

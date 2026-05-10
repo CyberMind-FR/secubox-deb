@@ -13,6 +13,7 @@ Peer-to-peer networking
 - Direct connections
 - NAT traversal
 - Encryption
+- DHT
 
 ## Installation
 

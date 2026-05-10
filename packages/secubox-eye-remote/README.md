@@ -1,49 +1,39 @@
-# secubox-eye-remote
+# 👁️ Eye Remote
 
-Host-side integration for SecuBox Eye Remote (Pi Zero W + HyperPixel 2.1 Round).
+Remote management interface
+
+**Category:** System
+
+## Screenshot
+
+![Eye Remote](../../docs/screenshots/vm/eye-remote.png)
 
 ## Features
 
-- **Auto-detection**: udev rules detect Pi Zero USB gadget connection
-- **Network**: Auto-configure 10.55.0.1/30 interface
-- **API**: FastAPI endpoint for metrics relay and control
-- **WebUI**: Control panel at /eye-remote/
-- **Kernel 6.12**: Requires kernel with CONFIG_PHY_MVEBU_CP110_UTMI for MOCHAbin
-
-## USB Gadget Modes
-
-| Mode | Functions |
-|------|-----------|
-| normal | ECM Network + Serial |
-| flash | Bootable USB + Serial |
-| debug | Network + Storage + Serial |
-| tty | HID Keyboard + Serial |
-| auth | FIDO/U2F HID + QR display |
-
-## API Endpoints
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | /api/v1/eye-remote/status | Connection status |
-| POST | /api/v1/eye-remote/connected | Notify connect (udev) |
-| GET | /api/v1/eye-remote/metrics | Relay metrics from Eye |
-| POST | /api/v1/eye-remote/mode | Change gadget mode |
-
-## Requirements
-
-- Kernel 6.12+ with CONFIG_PHY_MVEBU_CP110_UTMI=m (MOCHAbin)
-- Tow-Boot 2022.07+ (for proper USB initialization)
-- Pi Zero W with secubox-eye-gadget image
+- USB gadget
+- Serial console
+- Boot media
+- Recovery
 
 ## Installation
 
 ```bash
-apt install secubox-eye-remote
+# Add SecuBox repository
+curl -fsSL https://apt.secubox.in/install.sh | sudo bash
+
+# Install package
+sudo apt install secubox-eye-remote
 ```
 
-## Slipstream
+## Configuration
 
-Add to image build:
-```bash
-./image/build-image.sh --board mochabin --packages secubox-eye-remote
-```
+Configuration file: `/etc/secubox/eye-remote.toml`
+
+## API Endpoints
+
+- `GET /api/v1/eye-remote/status` - Module status
+- `GET /api/v1/eye-remote/health` - Health check
+
+## License
+
+MIT License - CyberMind © 2024-2026

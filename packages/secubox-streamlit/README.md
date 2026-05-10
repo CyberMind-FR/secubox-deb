@@ -13,6 +13,7 @@ Streamlit app platform
 - App hosting
 - Deployment
 - Management
+- Logs
 
 ## Installation
 

@@ -13,6 +13,7 @@ Tor anonymity and hidden services
 - Circuits
 - Hidden services
 - Bridges
+- Transparent proxy
 
 ## Installation
 

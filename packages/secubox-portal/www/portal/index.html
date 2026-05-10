@@ -7,10 +7,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/shared/crt-light.css">
-    <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
         :root {
-            /* P31 Phosphor spectrum */
             --p31-peak: #00dd44;
             --p31-hot: #00ff55;
             --p31-mid: #009933;
@@ -18,25 +16,17 @@
             --p31-ghost: #003311;
             --p31-decay: #ffb347;
             --p31-decay-dim: #cc7722;
-            /* Tube glass */
             --tube-light: #e8f5e9;
             --tube-pale: #c8e6c9;
             --tube-soft: #a5d6a7;
-            /* Legacy mappings */
-            --bg-dark: var(--tube-light);
-            --bg-card: var(--tube-pale);
-            --bg-sidebar: var(--tube-black);
-            --border: var(--tube-soft);
-            --text: var(--tube-dark);
+            --tube-dark: #1b1b1f;
             --text-dim: var(--p31-dim);
             --primary: var(--p31-peak);
-            --cyan: var(--p31-peak);
+            --cyan: #00d4ff;
             --green: var(--p31-peak);
             --red: #ff4466;
             --yellow: var(--p31-decay);
-            --orange: var(--p31-decay-dim);
             --purple: #a371f7;
-            /* Bloom effects */
             --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
             --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
             --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
@@ -47,424 +37,472 @@
             background: var(--tube-light);
             background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
             color: var(--tube-dark);
-            display: flex;
             min-height: 100vh;
+            padding: 2rem;
         }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-        .header h1 { font-size: 1.5rem; }
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.9rem; }
-        .btn:hover { background: var(--bg-dark); }
-        .btn.primary { background: rgba(88,166,255,0.1); border-color: var(--primary); color: var(--primary); }
-        .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
-        .btn-group { display: flex; gap: 0.5rem; }
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
-        .card h2 { font-size: 1rem; margin-bottom: 1rem; color: var(--cyan); }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
-        .stat-card .value { font-size: 1.8rem; font-weight: bold; }
-        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; }
-        .stat-card.sessions .value { color: var(--cyan); }
-        .stat-card.active .value { color: var(--green); }
-        .stat-card.users .value { color: var(--purple); }
-        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-        th, td { padding: 0.6rem; text-align: left; border-bottom: 1px solid var(--border); }
-        th { color: var(--text-dim); font-weight: 500; font-size: 0.8rem; }
-        .badge { display: inline-block; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600; }
-        .badge.admin { background: rgba(163,113,247,0.2); color: var(--purple); }
-        .badge.user { background: rgba(88,166,255,0.2); color: var(--primary); }
-        .badge.active { background: rgba(63,185,80,0.2); color: var(--green); }
-        .form-group { margin-bottom: 1rem; }
-        .form-group label { display: block; margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-dim); }
-        .form-group input, .form-group select { width: 100%; padding: 0.6rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-dark); color: var(--text); font-size: 0.9rem; }
-        .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center; }
-        .modal.show { display: flex; }
-        .modal-content { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; width: 400px; max-width: 90%; }
-        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-        .modal-header h3 { font-size: 1.1rem; }
-        .modal-close { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.5rem; }
-    
-        /* CRT Enhancements */
-        .main { margin-left: 220px; padding: 1.5rem; }
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(0,221,68,0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,221,68,0.02) 1px, transparent 1px);
+            background-size: 50px 50px;
+            pointer-events: none;
+            z-index: -1;
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
 
-        .header h1 {
+        /* Header */
+        .header { text-align: center; margin-bottom: 3rem; }
+        .logo-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 100px;
+            height: 100px;
+            background: linear-gradient(135deg, var(--p31-peak), var(--p31-mid));
+            border-radius: 24px;
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 8px 32px rgba(0,221,68,0.3);
+        }
+        .logo {
+            font-size: 2.5rem;
+            font-weight: 700;
             color: var(--p31-hot);
             text-shadow: var(--bloom-text);
-            font-weight: 700;
             letter-spacing: 0.05em;
         }
+        .tagline { color: var(--text-dim); font-size: 1.1rem; margin-top: 0.5rem; }
 
-        .badge {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            border: 1px solid;
+        /* Quick Actions */
+        .quick-actions {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-top: 1.5rem;
+            flex-wrap: wrap;
         }
-        .badge-blue, .badge-primary { background: rgba(51,255,102,0.1); border-color: var(--p31-peak); color: var(--p31-peak); }
-        .badge-green { background: rgba(51,255,102,0.15); border-color: var(--p31-peak); color: var(--p31-peak); text-shadow: var(--bloom-soft); }
-        .badge-cyan { background: rgba(51,255,102,0.1); border-color: var(--p31-mid); color: var(--p31-mid); }
-        .badge-purple { background: rgba(163,113,247,0.1); border-color: #a371f7; color: #a371f7; }
-        .badge-yellow, .badge-amber { background: rgba(255,179,71,0.1); border-color: var(--p31-decay); color: var(--p31-decay); }
-        .badge-red { background: rgba(255,68,102,0.1); border-color: #ff4466; color: #ff4466; }
-
-        .btn {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            border: 1px solid var(--tube-soft);
+        .quick-btn {
+            padding: 0.6rem 1.2rem;
             background: var(--tube-pale);
+            border: 1px solid var(--tube-soft);
+            border-radius: 8px;
             color: var(--p31-mid);
+            text-decoration: none;
+            font-size: 0.9rem;
+            font-family: inherit;
+            cursor: pointer;
             transition: all 0.2s;
         }
-        .btn:hover {
-            border-color: var(--p31-dim);
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            box-shadow: 0 0 12px rgba(51,255,102,0.1);
-        }
-        .btn-green, .btn-primary, .btn.primary, .btn.success {
+        .quick-btn:hover {
             border-color: var(--p31-peak);
             color: var(--p31-peak);
-            background: rgba(51,255,102,0.1);
+            text-shadow: var(--bloom-soft);
         }
-        .btn-green:hover, .btn-primary:hover, .btn.primary:hover, .btn.success:hover {
-            background: rgba(51,255,102,0.2);
-            box-shadow: 0 0 16px rgba(51,255,102,0.2);
-        }
-        .btn-red, .btn.danger {
-            border-color: #ff4466;
-            color: #ff4466;
-            background: rgba(255,68,102,0.1);
-        }
-        .btn-red:hover, .btn.danger:hover {
-            background: rgba(255,68,102,0.2);
-        }
-        .btn-blue {
-            border-color: var(--p31-mid);
-            color: var(--p31-mid);
-            background: rgba(51,255,102,0.05);
-        }
-        .btn-blue:hover {
+        .quick-btn.primary {
+            background: rgba(0,221,68,0.1);
             border-color: var(--p31-peak);
             color: var(--p31-peak);
         }
 
-        .card {
+        /* Stats Bar */
+        .stats-bar {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            margin: 2rem 0;
+            flex-wrap: wrap;
+        }
+        .stat {
+            text-align: center;
+            padding: 1rem 1.5rem;
             background: var(--tube-pale);
             border: 1px solid var(--tube-soft);
-            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
+            border-radius: 12px;
         }
-        .card:hover {
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.05), inset 0 0 20px rgba(0,0,0,0.3);
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--p31-peak);
+            text-shadow: 0 0 10px var(--p31-peak);
         }
-        .card-title, .card-header h2 {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-dim);
             text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        /* Sections */
+        .section { margin-bottom: 2.5rem; }
+        .section-title {
             font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            color: var(--p31-decay);
+            text-shadow: var(--bloom-amber);
+            margin-bottom: 1rem;
+            padding-left: 0.5rem;
+            border-left: 3px solid var(--p31-decay);
         }
 
-        .stat-card {
+        /* Service Grid */
+        .services-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 1rem;
+        }
+        .service-card {
             background: var(--tube-pale);
             border: 1px solid var(--tube-soft);
+            border-radius: 12px;
+            padding: 1.25rem;
+            text-align: center;
+            text-decoration: none;
+            color: var(--tube-dark);
+            transition: all 0.2s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
         }
-        .stat-value, .stat-card .value {
-            text-shadow: 0 0 10px currentColor;
+        .service-card:hover {
+            border-color: var(--p31-dim);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
         }
-        .stat-label, .stat-card .label {
-            color: var(--p31-dim);
-            letter-spacing: 0.15em;
+        .service-card .icon {
+            font-size: 2rem;
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
-        .stat-card.cyan .value, .stat-card.green .value { color: var(--p31-peak); }
-        .stat-card.yellow .value { color: var(--p31-decay); }
-        .stat-card.red .value { color: #ff4466; }
-
-        table, .table {
-            font-family: 'Courier Prime', monospace;
-        }
-        th, .table th {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.15em;
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        td, .table td {
-            border-bottom: 1px solid var(--p31-ghost);
-            color: var(--p31-mid);
-        }
-        tr:hover, .table tr:hover {
-            background: rgba(51,255,102,0.03);
-        }
-
-        .status-dot.active, .status-running {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-        }
-        .status-dot.active {
-            background: var(--p31-peak);
-            box-shadow: 0 0 8px var(--p31-peak);
-        }
-
-        .toast {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            font-family: 'Courier Prime', monospace;
-        }
-        .toast-success { border-color: var(--p31-peak); }
-        .toast-error { border-color: #ff4466; }
-
-        .modal {
-            background: rgba(0,0,0,0.85);
-        }
-        .modal-content {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            box-shadow: 0 0 30px rgba(51,255,102,0.1);
-        }
-        .modal-title {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-        }
-
-        .tabs {
-            background: var(--tube-pale);
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        .tab {
-            color: var(--p31-dim);
-            letter-spacing: 0.1em;
+        .service-card .name { font-weight: 600; font-size: 0.95rem; }
+        .service-card .desc { font-size: 0.7rem; color: var(--text-dim); }
+        .service-card .status {
+            font-size: 0.65rem;
+            padding: 2px 8px;
+            border-radius: 10px;
+            margin-top: auto;
             text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .status.online { background: rgba(0,221,68,0.15); color: var(--green); }
+        .status.offline { background: rgba(255,68,102,0.15); color: var(--red); }
+        .status.external { background: rgba(0,212,255,0.15); color: var(--cyan); }
+
+        /* Icon backgrounds */
+        .icon.security { background: rgba(255,68,102,0.1); }
+        .icon.network { background: rgba(0,212,255,0.1); }
+        .icon.monitoring { background: rgba(0,221,68,0.1); }
+        .icon.apps { background: rgba(163,113,247,0.1); }
+        .icon.comm { background: rgba(255,179,71,0.1); }
+
+        /* Published Sites */
+        .published-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1rem;
+        }
+        .published-card {
+            background: var(--tube-pale);
+            border: 1px solid var(--tube-soft);
+            border-radius: 12px;
+            padding: 1.25rem;
+            text-decoration: none;
+            color: var(--tube-dark);
+            transition: all 0.2s;
+        }
+        .published-card:hover {
+            border-color: var(--p31-dim);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+        }
+        .published-card .title {
+            font-weight: 600;
+            font-size: 1rem;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .published-card .domain {
+            font-size: 0.8rem;
+            color: var(--cyan);
+            font-family: monospace;
+        }
+        .published-card .meta {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            margin-top: 0.5rem;
+        }
+        .published-card .badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .badge.ssl { background: rgba(0,221,68,0.15); color: var(--green); }
+        .badge.static { background: rgba(163,113,247,0.15); color: var(--purple); }
+        .badge.proxy { background: rgba(0,212,255,0.15); color: var(--cyan); }
+
+        /* Empty State */
+        .empty {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-dim);
+            font-style: italic;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            margin-top: 3rem;
+            padding-top: 2rem;
+            border-top: 1px solid var(--tube-soft);
+            color: var(--text-dim);
             font-size: 0.8rem;
         }
-        .tab:hover { color: var(--p31-mid); }
-        .tab.active {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            border-bottom-color: var(--p31-peak);
-        }
+        .footer a { color: var(--p31-mid); text-decoration: none; }
+        .footer a:hover { color: var(--p31-peak); }
 
-        input, select, textarea {
-            font-family: 'Courier Prime', monospace;
-            background: var(--tube-light);
-            border: 1px solid var(--tube-soft);
-            color: var(--p31-mid);
-            padding: 0.5rem;
-        }
-        input:focus, select:focus, textarea:focus {
-            outline: none;
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.1);
-        }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: var(--tube-light); }
-        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
-        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
-
-        /* Empty states */
-        .empty { color: var(--p31-dim); }
+        /* Health Banner Space */
+        body { padding-top: 3rem; }
 
         @media (max-width: 768px) {
-            .main { margin-left: 0; }
+            body { padding: 1rem; padding-top: 3rem; }
+            .stats-bar { gap: 1rem; }
+            .stat { padding: 0.75rem 1rem; }
+            .stat-value { font-size: 1.5rem; }
         }
     </style>
 </head>
 <body class="crt-light">
-    <nav class="sidebar" id="sidebar"></nav>
-    <script src="/shared/sidebar.js"></script>
-    <main class="main">
+    <div class="container">
         <header class="header">
-            <h1>Portal - Authentication</h1>
-            <div class="btn-group">
-                <button class="btn" onclick="refresh()">Refresh</button>
-                <button class="btn primary" onclick="showAddUser()">Add User</button>
+            <div class="logo-icon">🔐</div>
+            <h1 class="logo" id="logo-text">SecuBox</h1>
+            <p class="tagline" id="tagline">Secure Network Appliance — Public Portal</p>
+            <div class="quick-actions">
+                <a href="/" class="quick-btn">📊 Dashboard</a>
+                <a href="/c3box/" class="quick-btn">🌐 Services</a>
+                <a href="/soc/" class="quick-btn">🛡️ SOC</a>
+                <a href="/login.html" class="quick-btn primary" id="auth-btn">🔑 Login</a>
             </div>
         </header>
 
-        <div class="grid">
-            <div class="stat-card sessions">
-                <div class="value" id="activeSessions">-</div>
-                <div class="label">Active Sessions</div>
+        <div class="stats-bar">
+            <div class="stat">
+                <div class="stat-value" id="stat-services">-</div>
+                <div class="stat-label">Services Online</div>
             </div>
-            <div class="stat-card users">
-                <div class="value" id="totalUsers">-</div>
-                <div class="label">Total Users</div>
+            <div class="stat">
+                <div class="stat-value" id="stat-sites">-</div>
+                <div class="stat-label">Published Sites</div>
             </div>
-            <div class="stat-card active">
-                <div class="value" id="authRequired">-</div>
-                <div class="label">Auth Status</div>
+            <div class="stat">
+                <div class="stat-value" id="stat-health">-</div>
+                <div class="stat-label">Health Score</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="stat-threats">-</div>
+                <div class="stat-label">Threats Blocked</div>
             </div>
         </div>
 
-        <div class="card">
-            <h2>Current Session</h2>
-            <table>
-                <tbody id="currentSession">
-                    <tr><td colspan="2">Checking session...</td></tr>
-                </tbody>
-            </table>
-        </div>
+        <section class="section">
+            <h2 class="section-title">🛡️ Security Services</h2>
+            <div class="services-grid" id="security-services"></div>
+        </section>
 
-        <div class="card">
-            <h2>Active Sessions</h2>
-            <table>
-                <thead><tr><th>Username</th><th>Login Time</th><th>IP</th><th>Actions</th></tr></thead>
-                <tbody id="sessionsTable"><tr><td colspan="4">Loading...</td></tr></tbody>
-            </table>
-        </div>
+        <section class="section">
+            <h2 class="section-title">🌐 Network Services</h2>
+            <div class="services-grid" id="network-services"></div>
+        </section>
 
-        <div class="card">
-            <h2>User Accounts</h2>
-            <table>
-                <thead><tr><th>Username</th><th>Email</th><th>Role</th><th>Created</th></tr></thead>
-                <tbody id="usersTable"><tr><td colspan="4">Loading...</td></tr></tbody>
-            </table>
-        </div>
-    </main>
+        <section class="section">
+            <h2 class="section-title">📦 Applications</h2>
+            <div class="services-grid" id="apps-services"></div>
+        </section>
 
-    <!-- Add User Modal -->
-    <div class="modal" id="addUserModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Add User</h3>
-                <button class="modal-close" onclick="closeModal()">&times;</button>
+        <section class="section">
+            <h2 class="section-title">🚀 Published Sites</h2>
+            <div class="published-grid" id="published-sites">
+                <div class="empty">Loading published sites...</div>
             </div>
-            <form id="addUserForm" onsubmit="createUser(event)">
-                <div class="form-group">
-                    <label>Username</label>
-                    <input type="text" name="username" required>
-                </div>
-                <div class="form-group">
-                    <label>Email</label>
-                    <input type="email" name="email" required>
-                </div>
-                <div class="form-group">
-                    <label>Password</label>
-                    <input type="password" name="password" required minlength="6">
-                </div>
-                <div class="form-group">
-                    <label>Role</label>
-                    <select name="role">
-                        <option value="user">User</option>
-                        <option value="admin">Admin</option>
-                    </select>
-                </div>
-                <button type="submit" class="btn primary" style="width:100%">Create User</button>
-            </form>
-        </div>
+        </section>
+
+        <section class="section">
+            <h2 class="section-title">📡 External Services</h2>
+            <div class="services-grid" id="external-services"></div>
+        </section>
+
+        <footer class="footer">
+            <p>SecuBox © 2024-2026 <a href="https://cybermind.fr">CyberMind</a></p>
+            <p style="margin-top: 0.5rem;">Public Portal • <span id="hostname">-</span></p>
+        </footer>
     </div>
 
     <script>
-        const API = '/api/v1/portal';
+        const services = {
+            security: [
+                { name: 'CrowdSec', icon: '🛡️', desc: 'IDS/IPS Protection', url: '/crowdsec/', iconClass: 'security' },
+                { name: 'WAF', icon: '🔥', desc: 'Web Application Firewall', url: '/waf/', iconClass: 'security' },
+                { name: 'WireGuard', icon: '🔒', desc: 'VPN Server', url: '/wireguard/', iconClass: 'security' },
+                { name: 'NAC', icon: '👁️', desc: 'Network Access Control', url: '/nac/', iconClass: 'security' },
+            ],
+            network: [
+                { name: 'HAProxy', icon: '⚡', desc: 'Load Balancer', url: '/haproxy/', iconClass: 'network' },
+                { name: 'VHosts', icon: '🌐', desc: 'Virtual Hosts', url: '/vhost/', iconClass: 'network' },
+                { name: 'DNS', icon: '🌍', desc: 'DNS Server', url: '/dns/', iconClass: 'network' },
+                { name: 'QoS', icon: '📶', desc: 'Bandwidth Manager', url: '/qos/', iconClass: 'network' },
+            ],
+            apps: [
+                { name: 'Publish', icon: '🚀', desc: 'Publishing Hub', url: '/publish/', iconClass: 'apps' },
+                { name: 'MetaBlogizer', icon: '📝', desc: 'Static Sites', url: '/metablogizer/', iconClass: 'apps' },
+                { name: 'Droplet', icon: '📁', desc: 'File Publisher', url: '/droplet/', iconClass: 'apps' },
+                { name: 'Streamlit', icon: '📊', desc: 'Python Apps', url: '/streamlit/', iconClass: 'apps' },
+            ],
+            external: [
+                { name: 'Netdata', icon: '📈', desc: 'Real-time Monitoring', url: '/netdata/', iconClass: 'monitoring', external: true },
+                { name: 'CDN', icon: '🌐', desc: 'Cache Server', url: '/cdn/', iconClass: 'network' },
+                { name: 'MediaFlow', icon: '🎬', desc: 'Media Streaming', url: '/mediaflow/', iconClass: 'apps' },
+            ]
+        };
 
-        async function api(path, opts = {}) {
+        function renderService(svc, status = null) {
+            const isOnline = status === null || status;
+            const statusClass = svc.external ? 'external' : (isOnline ? 'online' : 'offline');
+            const statusText = svc.external ? 'External' : (isOnline ? 'Online' : 'Offline');
+            return `
+                <a href="${svc.url}" class="service-card">
+                    <div class="icon ${svc.iconClass}">${svc.icon}</div>
+                    <div class="name">${svc.name}</div>
+                    <div class="desc">${svc.desc}</div>
+                    <div class="status ${statusClass}">${statusText}</div>
+                </a>
+            `;
+        }
+
+        function renderPublishedSite(site) {
+            const icon = site.ssl ? '🔒' : '🌐';
+            const typeClass = site.type === 'static' ? 'static' : 'proxy';
+            return `
+                <a href="https://${site.domain}" target="_blank" class="published-card">
+                    <div class="title">${icon} ${site.name || site.domain}</div>
+                    <div class="domain">${site.domain}</div>
+                    <div class="meta">
+                        <span class="badge ${site.ssl ? 'ssl' : ''}">${site.ssl ? 'SSL' : 'HTTP'}</span>
+                        <span class="badge ${typeClass}">${site.type || 'site'}</span>
+                    </div>
+                </a>
+            `;
+        }
+
+        async function loadStats() {
             try {
-                const res = await fetch(API + path, { credentials: 'include', ...opts });
-                return res.json();
-            } catch { return {}; }
-        }
+                // Health stats
+                const health = await fetch('/api/v1/metrics/health/summary').then(r => r.json()).catch(() => ({}));
+                document.getElementById('stat-health').textContent = health.score !== undefined ? health.score : '-';
 
-        async function refresh() {
-            // Status
-            const status = await api('/status');
-            document.getElementById('activeSessions').textContent = status.active_sessions || 0;
-            document.getElementById('authRequired').textContent = status.auth_required ? 'Enabled' : 'Disabled';
+                // Services count
+                const c3box = await fetch('/api/v1/c3box/services').then(r => r.json()).catch(() => ({}));
+                document.getElementById('stat-services').textContent = c3box.running !== undefined ? `${c3box.running}/${c3box.total}` : '-';
 
-            // Current session
-            const verify = await api('/verify');
-            const sessionBody = document.getElementById('currentSession');
-            if (verify.valid) {
-                sessionBody.innerHTML = `
-                    <tr><td style="color:var(--text-dim)">Username</td><td>${verify.username}</td></tr>
-                    <tr><td style="color:var(--text-dim)">Role</td><td><span class="badge ${verify.role}">${verify.role}</span></td></tr>
-                    <tr><td style="color:var(--text-dim)">Status</td><td><span class="badge active">Active</span></td></tr>
-                `;
-            } else {
-                sessionBody.innerHTML = '<tr><td colspan="2" style="color:var(--yellow)">Not logged in</td></tr>';
-            }
-
-            // Sessions (admin only)
-            const sessions = await api('/sessions');
-            const sessionsBody = document.getElementById('sessionsTable');
-            if (sessions.sessions && Object.keys(sessions.sessions).length > 0) {
-                sessionsBody.innerHTML = Object.entries(sessions.sessions).map(([user, s]) => `
-                    <tr>
-                        <td>${user}</td>
-                        <td style="font-family:monospace;font-size:0.8rem">${s.login_time || '-'}</td>
-                        <td style="font-family:monospace">${s.ip || '-'}</td>
-                        <td><button class="btn danger" onclick="endSession('${user}')">End</button></td>
-                    </tr>
-                `).join('');
-            } else if (sessions.detail) {
-                sessionsBody.innerHTML = '<tr><td colspan="4" style="color:var(--yellow)">Admin access required</td></tr>';
-            } else {
-                sessionsBody.innerHTML = '<tr><td colspan="4" style="color:var(--text-dim)">No active sessions</td></tr>';
-            }
-
-            // Users (admin only)
-            const users = await api('/users');
-            const usersBody = document.getElementById('usersTable');
-            document.getElementById('totalUsers').textContent = users.users?.length || 0;
-            if (users.users && users.users.length > 0) {
-                usersBody.innerHTML = users.users.map(u => `
-                    <tr>
-                        <td>${u.username}</td>
-                        <td>${u.email || '-'}</td>
-                        <td><span class="badge ${u.role}">${u.role}</span></td>
-                        <td style="font-size:0.8rem">${u.created ? new Date(u.created).toLocaleDateString() : '-'}</td>
-                    </tr>
-                `).join('');
-            } else if (users.detail) {
-                usersBody.innerHTML = '<tr><td colspan="4" style="color:var(--yellow)">Admin access required</td></tr>';
-            } else {
-                usersBody.innerHTML = '<tr><td colspan="4" style="color:var(--text-dim)">No users</td></tr>';
+                // CrowdSec threats
+                const crowdsec = await fetch('/api/v1/crowdsec/stats').then(r => r.json()).catch(() => ({}));
+                document.getElementById('stat-threats').textContent = crowdsec.alerts_24h !== undefined ? crowdsec.alerts_24h : '-';
+            } catch (e) {
+                console.log('Stats load error:', e);
             }
         }
 
-        function showAddUser() {
-            document.getElementById('addUserModal').classList.add('show');
-        }
+        async function loadPublishedSites() {
+            const container = document.getElementById('published-sites');
+            try {
+                // Try vhost API
+                const vhosts = await fetch('/api/v1/vhost/list').then(r => r.json()).catch(() => ({ vhosts: [] }));
 
-        function closeModal() {
-            document.getElementById('addUserModal').classList.remove('show');
-        }
-
-        async function createUser(e) {
-            e.preventDefault();
-            const form = e.target;
-            const data = {
-                username: form.username.value,
-                email: form.email.value,
-                password: form.password.value,
-                role: form.role.value
-            };
-            const res = await api('/users/create', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            });
-            if (res.success) {
-                closeModal();
-                form.reset();
-                refresh();
-            } else {
-                alert(res.detail || 'Error creating user');
+                if (vhosts.vhosts && vhosts.vhosts.length > 0) {
+                    const sites = vhosts.vhosts.map(v => ({
+                        domain: v.domain || v.name,
+                        name: v.name || v.domain,
+                        ssl: v.ssl || v.https || false,
+                        type: v.type || 'proxy'
+                    }));
+                    document.getElementById('stat-sites').textContent = sites.length;
+                    container.innerHTML = sites.map(renderPublishedSite).join('');
+                } else {
+                    // Fallback: try publish API
+                    const publish = await fetch('/api/v1/publish/sites').then(r => r.json()).catch(() => ({ sites: [] }));
+                    if (publish.sites && publish.sites.length > 0) {
+                        document.getElementById('stat-sites').textContent = publish.sites.length;
+                        container.innerHTML = publish.sites.map(s => renderPublishedSite({
+                            domain: s.domain || s.url,
+                            name: s.name || s.title,
+                            ssl: true,
+                            type: s.type || 'static'
+                        })).join('');
+                    } else {
+                        document.getElementById('stat-sites').textContent = '0';
+                        container.innerHTML = '<div class="empty">No published sites yet</div>';
+                    }
+                }
+            } catch (e) {
+                document.getElementById('stat-sites').textContent = '-';
+                container.innerHTML = '<div class="empty">Could not load published sites</div>';
             }
         }
 
-        async function endSession(username) {
-            if (!confirm(`End session for ${username}?`)) return;
-            // In production, would have an endpoint to end specific sessions
-            alert('Session management coming soon');
+        async function loadTheme() {
+            try {
+                const theme = await fetch('/api/v1/portal/theme').then(r => r.json()).catch(() => null);
+                if (theme && theme.theme) {
+                    document.getElementById('logo-text').textContent = theme.theme.logo_text || 'SecuBox';
+                    document.getElementById('tagline').textContent = theme.theme.logo_sub || 'Secure Network Appliance';
+                }
+            } catch (e) {}
         }
 
-        refresh();
-        setInterval(refresh, 30000);
+        function checkAuth() {
+            const token = document.cookie.includes('secubox_token');
+            if (token) {
+                const btn = document.getElementById('auth-btn');
+                btn.textContent = '🚪 Logout';
+                btn.href = '#';
+                btn.onclick = async (e) => {
+                    e.preventDefault();
+                    await fetch('/api/v1/portal/logout', { method: 'POST', credentials: 'include' });
+                    location.reload();
+                };
+            }
+        }
+
+        function render() {
+            document.getElementById('security-services').innerHTML = services.security.map(s => renderService(s)).join('');
+            document.getElementById('network-services').innerHTML = services.network.map(s => renderService(s)).join('');
+            document.getElementById('apps-services').innerHTML = services.apps.map(s => renderService(s)).join('');
+            document.getElementById('external-services').innerHTML = services.external.map(s => renderService(s)).join('');
+            document.getElementById('hostname').textContent = location.hostname;
+        }
+
+        // Initialize
+        render();
+        loadStats();
+        loadPublishedSites();
+        loadTheme();
+        checkAuth();
+
+        // Refresh stats every 30s
+        setInterval(loadStats, 30000);
     </script>
-    <script src="/shared/crt-engine.js"></script>
+    <script src="/shared/health-banner.js" defer></script>
 </body>
 </html>

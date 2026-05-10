@@ -1,6 +1,6 @@
 # 🛡️ Network Access Control
 
-Client guardian and NAC
+Client guardian and NAC with quarantine
 
 **Category:** Security
 
@@ -13,6 +13,7 @@ Client guardian and NAC
 - Device control
 - MAC filtering
 - Quarantine
+- VLAN assignment
 
 ## Installation
 

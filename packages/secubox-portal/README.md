@@ -13,6 +13,7 @@ Authentication portal with JWT
 - JWT auth
 - Sessions
 - Password recovery
+- Captive portal
 
 ## Installation
 

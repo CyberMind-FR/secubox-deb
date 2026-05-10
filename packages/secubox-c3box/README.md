@@ -13,6 +13,7 @@ C3Box services portal
 - Service links
 - Status overview
 - Quick access
+- Categories
 
 ## Installation
 

@@ -1,6 +1,6 @@
 # 🔬 Deep Packet Inspection
 
-DPI with netifyd
+DPI with netifyd/nDPId
 
 **Category:** Monitoring
 
@@ -13,6 +13,7 @@ DPI with netifyd
 - Protocol detection
 - App identification
 - Flow analysis
+- Statistics
 
 ## Installation
 
