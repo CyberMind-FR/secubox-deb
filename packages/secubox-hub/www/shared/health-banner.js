@@ -256,31 +256,32 @@
             .health-banner {
                 position: fixed;
                 top: 0;
-                left: var(--sidebar-width, 220px);
+                left: 0;
                 right: 0;
-                height: 32px;
-                background: linear-gradient(180deg, rgba(10,10,15,0.95) 0%, rgba(15,15,20,0.9) 100%);
-                border-bottom: 1px solid rgba(201,168,76,0.2);
-                z-index: 999;
+                height: 28px;
+                background: linear-gradient(90deg, #0a0a0f 0%, #0f0f14 50%, #0a0a0f 100%);
+                border-bottom: 1px solid rgba(201,168,76,0.3);
+                z-index: 9999;
                 font-family: 'JetBrains Mono', monospace;
-                font-size: 11px;
+                font-size: 10px;
                 color: var(--text-primary, #e8e6d9);
-                transition: height 0.3s ease, left 0.3s ease;
+                transition: height 0.3s ease;
                 overflow: hidden;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.5);
             }
             .health-banner.expanded {
                 height: auto;
-                min-height: 32px;
+                min-height: 28px;
             }
             .health-banner.sidebar-collapsed {
-                left: 48px;
+                /* No change needed - full width */
             }
             .hb-content {
                 display: flex;
                 align-items: center;
-                height: 32px;
-                padding: 0 12px;
-                gap: 16px;
+                height: 28px;
+                padding: 0 16px;
+                gap: 12px;
             }
             .hb-score {
                 display: flex;
@@ -457,23 +458,39 @@
                 display: block;
             }
 
-            /* Push main content down */
+            /* Push main content and sidebar down */
             body.has-health-banner {
-                padding-top: 32px;
+                padding-top: 28px;
             }
             body.has-health-banner .sidebar {
-                top: 32px;
-                height: calc(100vh - 32px);
+                top: 28px;
+                height: calc(100vh - 28px);
+            }
+            body.has-health-banner .main {
+                margin-top: 28px;
             }
 
             /* Mobile */
             @media (max-width: 768px) {
                 .health-banner {
-                    left: 0;
-                    font-size: 10px;
+                    font-size: 9px;
+                    height: 24px;
+                }
+                .hb-content {
+                    height: 24px;
+                    padding: 0 8px;
+                    gap: 8px;
                 }
                 .hb-label { display: none; }
                 .hb-modules { display: none; }
+                .hb-alert-text { max-width: 100px; }
+                body.has-health-banner {
+                    padding-top: 24px;
+                }
+                body.has-health-banner .sidebar {
+                    top: 24px;
+                    height: calc(100vh - 24px);
+                }
             }
         `;
         document.head.appendChild(style);

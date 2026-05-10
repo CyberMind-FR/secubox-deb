@@ -3,7 +3,7 @@
 
 ---
 
-## ✅ Session 143: Health Banner System
+## ✅ Session 143: Health Banner System + CDN Injection
 
 ### Global Health Banner with Smart Doctor
 - [x] Created `health-banner.js` with double-buffer cache (active/shadow)
@@ -14,21 +14,24 @@
 - [x] Score-based vibes: VIBING (95%+), SOLID (85%+), OKAY (70%+), MEH (50%+), YIKES (<50%)
 - [x] Deployed to all HTML pages (hub, soc, nac)
 
-### GitHub Issue Created
+### Nginx CDN Injection (NEW)
+- [x] Added `/etc/nginx/conf.d/health-banner-inject.conf`
+- [x] Auto-injects `health-banner.js` via `sub_filter` on all HTML responses
+- [x] No need to modify source HTML files
+- [x] Banner at full-width top (28px height, z-index 9999)
+
+### GitHub Issues Created
 - [#70 PREPLANNED] Health Banner System: Auto-Detect Host + Desktop Widget + LLM Advisor
-- Cross-platform support planned: Linux, Windows, macOS
-- LLM integration prompts for Gemini and ChatGPT
+- [#71 PREPLANNED] CDN Proxy Injection: Auto-inject scripts via nginx/HAProxy
 
 ### Package Rebuild
 - [x] Rebuilt 126 packages successfully (0 failed)
 - [x] Locked packages: secubox-hub, secubox-waf, secubox-mitmproxy
 
 ### Files Created/Modified
-- `packages/secubox-hub/www/shared/health-banner.js` — NEW (banner UI)
+- `packages/secubox-hub/www/shared/health-banner.js` — Banner UI (full-width top)
 - `packages/secubox-metrics/api/main.py` — Added health/summary endpoint
-- `packages/secubox-hub/www/index.html` — Added health-banner.js include
-- `packages/secubox-hub/www/soc/index.html` — Added health-banner.js include
-- `packages/secubox-hub/www/nac/index.html` — Added health-banner.js include
+- `/etc/nginx/conf.d/health-banner-inject.conf` — NEW (nginx injection)
 
 ---
 
