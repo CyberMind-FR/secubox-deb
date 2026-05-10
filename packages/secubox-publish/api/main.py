@@ -319,7 +319,7 @@ async def _notify_webhooks(event: str, data: Dict[str, Any]):
             )
 
 
-async def _call_module(module: str, path: str, method: str = "GET", data: dict = None) -> dict:
+async def _call_module(module: str, path: str, method: str = "GET", data: dict = None, timeout: int = 30) -> dict:
     """Call a module's API via Unix socket."""
     socket_path = MODULES.get(module)
     if not socket_path:
@@ -327,7 +327,7 @@ async def _call_module(module: str, path: str, method: str = "GET", data: dict =
 
     try:
         transport = httpx.AsyncHTTPTransport(uds=socket_path)
-        async with httpx.AsyncClient(transport=transport, base_url="http://localhost", timeout=30) as client:
+        async with httpx.AsyncClient(transport=transport, base_url="http://localhost", timeout=timeout) as client:
             if method == "GET":
                 resp = await client.get(path)
             elif method == "POST":
@@ -776,12 +776,12 @@ async def _prepare_infrastructure(name: str, domain: str, content_type: str) -> 
         "dns": {"status": "pending"},
     }
 
-    # 1. Create metablogizer site
+    # 1. Create metablogizer site (60s timeout for file operations)
     try:
         result = await _call_module("metablogizer", "/site", "POST", {
             "name": name,
             "domain": domain,
-        })
+        }, timeout=60)
         infra_status["metablogizer"] = {
             "status": "ok" if "error" not in result else "error",
             "details": result,
@@ -789,9 +789,9 @@ async def _prepare_infrastructure(name: str, domain: str, content_type: str) -> 
     except Exception as e:
         infra_status["metablogizer"] = {"status": "error", "error": str(e)}
 
-    # 2. Create nginx vhost via metablogizer publish
+    # 2. Create nginx vhost via metablogizer publish (60s timeout)
     try:
-        result = await _call_module("metablogizer", f"/site/{name}/publish", "POST")
+        result = await _call_module("metablogizer", f"/site/{name}/publish", "POST", timeout=60)
         infra_status["vhost"] = {
             "status": "ok" if "error" not in result else "error",
             "details": result,
@@ -823,9 +823,9 @@ async def _prepare_infrastructure(name: str, domain: str, content_type: str) -> 
     except Exception as e:
         infra_status["mitmproxy"] = {"status": "skip", "error": str(e)}
 
-    # 5. Request SSL certificate
+    # 5. Request SSL certificate (90s timeout for ACME challenge)
     try:
-        result = await _call_module("haproxy", "/cert/request", "POST", {"domain": domain})
+        result = await _call_module("haproxy", "/cert/request", "POST", {"domain": domain}, timeout=90)
         infra_status["certificate"] = {
             "status": "ok" if "error" not in result else "pending",
             "details": result,
