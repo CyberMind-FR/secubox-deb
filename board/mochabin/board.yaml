@@ -4,7 +4,7 @@
 
 name: mochabin
 arch: arm64
-tier: pro
+tier: tier-pro
 soc: armada-7040
 
 hardware:
