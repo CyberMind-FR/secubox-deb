@@ -129,11 +129,14 @@ class ISPPublishResult(BaseModel):
     """Result of ISP Home Publish operation."""
     success: bool
     name: str
+    domain: str
     content_type: str
     url: Optional[str] = None
-    bundle_url: Optional[str] = None
+    download_url: Optional[str] = None
     qrcode_url: Optional[str] = None
+    files_count: int = 0
     detected_files: List[str] = []
+    infrastructure: Dict[str, Any] = {}
     message: str = ""
 
 
@@ -1034,19 +1037,19 @@ async def isp_upload(
 
         stats_cache.clear()
 
-        return {
-            "success": "error" not in result,
-            "name": name,
-            "domain": final_domain,
-            "content_type": content_type,
-            "url": url,
-            "download_url": f"/api/v1/publish/bundle/{name}.zip",
-            "qrcode_url": f"/api/v1/publish/bundle/{name}/qrcode" if url else None,
-            "files_count": len(extracted_files),
-            "detected_files": extracted_files[:20],
-            "infrastructure": infra_status,
-            "message": result.get("message", "Published successfully" if "error" not in result else result.get("error", "Unknown error")),
-        }
+        return ISPPublishResult(
+            success="error" not in result,
+            name=name,
+            domain=final_domain,
+            content_type=content_type,
+            url=url,
+            download_url=f"/api/v1/publish/bundle/{name}.zip",
+            qrcode_url=f"/api/v1/publish/bundle/{name}/qrcode" if url else None,
+            files_count=len(extracted_files),
+            detected_files=extracted_files[:20],
+            infrastructure=infra_status,
+            message=result.get("message", "Published successfully" if "error" not in result else result.get("error", "Unknown error")),
+        )
 
     except Exception as e:
         _record_event("isp_publish_error", {"name": name, "error": str(e)})
