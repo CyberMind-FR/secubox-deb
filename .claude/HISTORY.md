@@ -48,6 +48,12 @@
      - 📤 Export Logs (JSON download)
      - ⚙️ Settings link
 
+6. **SOC Dashboard Migration**
+   - Replaced WarGames geomap with Triple Eyemote Sensors
+   - 3 mini eyemotes in grid: Attack Origin, Visitors, Target Vhosts
+   - Double-cache pattern for async API response handling
+   - Same Olympic-colored visualization as WAF page
+
 **Files Updated:**
 - `scripts/sync-mitmproxy-routes.sh` - Dead container auto-fix
 - `packages/secubox-waf/mitmproxy/secubox_waf.py` - Optimizations
@@ -56,6 +62,7 @@
 - `packages/secubox-users/api/main.py` - Revoke all endpoint
 - `packages/secubox-users/www/users/index.html` - Panic button
 - `packages/secubox-waf/www/waf/index.html` - Eyemote rings, quick action buttons
+- `packages/secubox-hub/www/soc/index.html` - Triple Eyemotes with double-cache
 
 **Systemd:**
 - `sync-mitmproxy-routes.timer` - Every 5 minutes
