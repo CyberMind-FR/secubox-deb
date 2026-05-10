@@ -1,0 +1,24 @@
+# board/mochabin/tweaks.yaml
+# Board-specific tweaks for GlobalScale MOCHAbin
+# Override defaults for Armada 7040 hardware
+
+kernel:
+  modules:
+    enable:
+      - mvpp2
+      - mvneta
+      - armada_thermal
+      - marvell_cesa
+    blacklist:
+      - mv88e6xxx
+
+sysctl:
+  net.core.netdev_max_backlog: 5000
+  net.core.rmem_max: 16777216
+  net.core.wmem_max: 16777216
+  net.ipv4.tcp_rmem: "4096 87380 16777216"
+  net.ipv4.tcp_wmem: "4096 65536 16777216"
+
+services:
+  enable:
+    - secubox-led

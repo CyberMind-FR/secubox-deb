@@ -1,0 +1,27 @@
+# board/mochabin/board.yaml
+# SecuBox board configuration for GlobalScale MOCHAbin
+# SoC: Marvell Armada 7040 (Cortex-A72 Quad-core 1.8GHz)
+
+name: mochabin
+arch: arm64
+tier: pro
+soc: armada-7040
+
+hardware:
+  ram: 4G-8G
+  emmc: 16G
+  interfaces:
+    wan: eth0
+    lan:
+      - eth1
+      - eth2
+      - eth3
+      - eth4
+    sfp:
+      - eth5
+      - eth6
+
+boot:
+  method: uboot
+  kernel_image: Image
+  dts: armada-7040-mochabin
