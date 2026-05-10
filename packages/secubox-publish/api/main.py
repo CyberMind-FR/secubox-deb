@@ -319,7 +319,7 @@ async def _notify_webhooks(event: str, data: Dict[str, Any]):
             )
 
 
-async def _call_module(module: str, path: str, method: str = "GET", data: dict = None) -> dict:
+async def _call_module(module: str, path: str, method: str = "GET", data: dict = None, timeout: int = 30) -> dict:
     """Call a module's API via Unix socket."""
     socket_path = MODULES.get(module)
     if not socket_path:
@@ -327,7 +327,7 @@ async def _call_module(module: str, path: str, method: str = "GET", data: dict =
 
     try:
         transport = httpx.AsyncHTTPTransport(uds=socket_path)
-        async with httpx.AsyncClient(transport=transport, base_url="http://localhost", timeout=30) as client:
+        async with httpx.AsyncClient(transport=transport, base_url="http://localhost", timeout=timeout) as client:
             if method == "GET":
                 resp = await client.get(path)
             elif method == "POST":
@@ -776,12 +776,12 @@ async def _prepare_infrastructure(name: str, domain: str, content_type: str) -> 
         "dns": {"status": "pending"},
     }
 
-    # 1. Create metablogizer site
+    # 1. Create metablogizer site (60s timeout for file operations)
     try:
         result = await _call_module("metablogizer", "/site", "POST", {
             "name": name,
             "domain": domain,
-        })
+        }, timeout=60)
         infra_status["metablogizer"] = {
             "status": "ok" if "error" not in result else "error",
             "details": result,
@@ -789,107 +789,89 @@ async def _prepare_infrastructure(name: str, domain: str, content_type: str) -> 
     except Exception as e:
         infra_status["metablogizer"] = {"status": "error", "error": str(e)}
 
-    # 2. Create nginx vhost via metablogizer publish
+    # 2. Create nginx vhost directly
     try:
-        result = await _call_module("metablogizer", f"/site/{name}/publish", "POST")
-        infra_status["vhost"] = {
-            "status": "ok" if "error" not in result else "error",
-            "details": result,
-        }
+        import subprocess
+        nginx_conf = f"/etc/nginx/sites-available/{name}.gk2.conf"
+        nginx_link = f"/etc/nginx/sites-enabled/{name}.gk2.conf"
+        site_root = f"/srv/metablogizer/sites/{name}"
+
+        # Create nginx config
+        nginx_content = f"""server {{
+    listen 9080;
+    server_name {domain};
+    root {site_root};
+    index index.html;
+
+    location / {{
+        try_files $uri $uri/ /index.html;
+    }}
+}}
+"""
+        Path(nginx_conf).write_text(nginx_content)
+
+        # Enable site
+        if not Path(nginx_link).exists():
+            Path(nginx_link).symlink_to(nginx_conf)
+
+        # Reload nginx
+        subprocess.run(["nginx", "-t"], check=True, capture_output=True)
+        subprocess.run(["systemctl", "reload", "nginx"], check=True)
+
+        infra_status["vhost"] = {"status": "ok", "details": f"Created {nginx_conf}"}
     except Exception as e:
         infra_status["vhost"] = {"status": "error", "error": str(e)}
 
-    # 3. Add HAProxy vhost
+    # 3. Add HAProxy vhost (direct config)
     try:
-        result = await _call_module("haproxy", "/vhost", "POST", {"domain": domain})
-        infra_status["haproxy"] = {
-            "status": "ok" if "error" not in result else "error",
-            "details": result,
-        }
+        import subprocess
+        haproxy_cfg = "/etc/haproxy/haproxy.cfg"
+        # Check if domain already in HAProxy
+        check = subprocess.run(["grep", "-q", domain, haproxy_cfg], capture_output=True)
+        if check.returncode != 0:
+            # Add ACL and use_backend rules
+            subprocess.run([
+                "sed", "-i",
+                f"/acl host_admin/a\\    acl host_{name} hdr(host) -i {domain}",
+                haproxy_cfg
+            ], check=True)
+            subprocess.run([
+                "sed", "-i",
+                f"/use_backend bk_nginx if host_admin/a\\    use_backend bk_nginx if host_{name}",
+                haproxy_cfg
+            ], check=True)
+            subprocess.run(["systemctl", "reload", "haproxy"], check=True)
+            infra_status["haproxy"] = {"status": "ok", "details": "ACL added"}
+        else:
+            infra_status["haproxy"] = {"status": "ok", "details": "Already configured"}
     except Exception as e:
-        infra_status["haproxy"] = {"status": "skip", "error": str(e)}
+        infra_status["haproxy"] = {"status": "error", "error": str(e)}
 
-    # 4. Add MITMProxy WAF route
+    # 4. Add MITMProxy route (direct JSON update)
     try:
-        result = await _call_module("waf", "/route", "POST", {
-            "domain": domain,
-            "backend_ip": "10.100.0.1",
-            "backend_port": 8900,
-        })
-        infra_status["mitmproxy"] = {
-            "status": "ok" if "error" not in result else "skip",
-            "details": result,
-        }
+        import json
+        routes_file = Path("/srv/mitmproxy/haproxy-routes.json")
+        if routes_file.exists():
+            routes = json.loads(routes_file.read_text())
+        else:
+            routes = {}
+        routes[domain] = ["127.0.0.1", 9080]
+        routes_file.write_text(json.dumps(routes, indent=2))
+        infra_status["mitmproxy"] = {"status": "ok", "details": "Route added"}
     except Exception as e:
         infra_status["mitmproxy"] = {"status": "skip", "error": str(e)}
 
-    # 5. Request SSL certificate
-    try:
-        result = await _call_module("haproxy", "/cert/request", "POST", {"domain": domain})
-        infra_status["certificate"] = {
-            "status": "ok" if "error" not in result else "pending",
-            "details": result,
-        }
-    except Exception as e:
-        infra_status["certificate"] = {"status": "pending", "error": str(e)}
+    # 5. SSL certificate (skip for now - wildcard cert covers *.gk2.secubox.in)
+    if domain.endswith(".gk2.secubox.in"):
+        infra_status["certificate"] = {"status": "ok", "details": "Covered by wildcard"}
+    else:
+        infra_status["certificate"] = {"status": "pending", "details": "Manual cert needed"}
 
-    # 6. Add DNS record (Vortex DNS)
-    try:
-        result = await _call_module("vortex-dns", "/record", "POST", {
-            "name": name,
-            "domain": domain,
-            "type": "A",
-            "target": "auto",  # Auto-detect server IP
-        })
-        infra_status["dns"] = {
-            "status": "ok" if "error" not in result else "skip",
-            "details": result,
-        }
-    except Exception as e:
-        infra_status["dns"] = {"status": "skip", "error": str(e)}
-
-    # 7. Register with NAC (Network Access Control) if IoT or device service
-    if content_type in ("iot", "device", "service"):
-        try:
-            result = await _call_module("nac", "/service/register", "POST", {
-                "name": name,
-                "domain": domain,
-                "type": content_type,
-            })
-            infra_status["nac"] = {
-                "status": "ok" if "error" not in result else "skip",
-                "details": result,
-            }
-        except Exception as e:
-            infra_status["nac"] = {"status": "skip", "error": str(e)}
-
-    # 8. Register with MAC Guardian for device binding
-    try:
-        result = await _call_module("mac-guard", "/service/register", "POST", {
-            "name": name,
-            "domain": domain,
-        })
-        infra_status["mac_guard"] = {
-            "status": "ok" if "error" not in result else "skip",
-            "details": result,
-        }
-    except Exception as e:
-        infra_status["mac_guard"] = {"status": "skip", "error": str(e)}
-
-    # 9. Register with IoT Gateway if applicable
-    if content_type in ("iot", "mqtt", "zigbee", "zwave"):
-        try:
-            result = await _call_module("iot-guard", "/device/register", "POST", {
-                "name": name,
-                "domain": domain,
-                "protocol": content_type,
-            })
-            infra_status["iot_gateway"] = {
-                "status": "ok" if "error" not in result else "skip",
-                "details": result,
-            }
-        except Exception as e:
-            infra_status["iot_gateway"] = {"status": "skip", "error": str(e)}
+    # 6. DNS - gk2.secubox.in domains use wildcard DNS
+    if domain.endswith(".gk2.secubox.in"):
+        infra_status["dns"] = {"status": "ok", "details": "Wildcard DNS active"}
+    else:
+        infra_status["dns"] = {"status": "pending", "details": "Manual DNS needed"}
 
     return infra_status
 
