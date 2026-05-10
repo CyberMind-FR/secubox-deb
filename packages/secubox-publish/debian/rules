@@ -12,3 +12,9 @@ override_dh_auto_install:
 	# Modular nginx config
 	install -d debian/secubox-publish/etc/nginx/secubox.d
 	[ -f nginx/publish.conf ] && cp nginx/publish.conf debian/secubox-publish/etc/nginx/secubox.d/ || true
+	# CLI tool
+	install -d debian/secubox-publish/usr/sbin
+	[ -f bin/metactl ] && install -m 755 bin/metactl debian/secubox-publish/usr/sbin/metactl || true
+	# Plugins directory
+	install -d debian/secubox-publish/srv/secubox/modules/publish/plugins
+	[ -d plugins ] && cp -r plugins/. debian/secubox-publish/srv/secubox/modules/publish/plugins/ || true
