@@ -126,3 +126,45 @@ func TestToYAML_EmptyManifest(t *testing.T) {
 		t.Error("YAML missing secubox_version for empty manifest")
 	}
 }
+
+func TestGenerateMakefile(t *testing.T) {
+	m := &Manifest{
+		SecuboxVersion: "2.8.0",
+		Board:          "mochabin",
+		Arch:           "arm64",
+		Output: ManifestOutput{
+			Formats:   []string{"img.gz", "img.xz"},
+			Checksums: []string{"sha256", "sha512"},
+		},
+	}
+
+	makefile := GenerateMakefile(m)
+
+	if !strings.Contains(makefile, "VERSION := 2.8.0") {
+		t.Error("Makefile missing VERSION")
+	}
+	if !strings.Contains(makefile, "BOARD := mochabin") {
+		t.Error("Makefile missing BOARD")
+	}
+	if !strings.Contains(makefile, "ARCH := arm64") {
+		t.Error("Makefile missing ARCH")
+	}
+	if !strings.Contains(makefile, "image:") {
+		t.Error("Makefile missing image target")
+	}
+	if !strings.Contains(makefile, "gzip -k") {
+		t.Error("Makefile missing gzip command")
+	}
+	if !strings.Contains(makefile, "xz -k") {
+		t.Error("Makefile missing xz command")
+	}
+	if !strings.Contains(makefile, "sha256sum") {
+		t.Error("Makefile missing sha256sum")
+	}
+	if !strings.Contains(makefile, "sha512sum") {
+		t.Error("Makefile missing sha512sum")
+	}
+	if !strings.Contains(makefile, "qemu-img convert") {
+		t.Error("Makefile missing qemu-img targets")
+	}
+}
