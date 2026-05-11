@@ -4,6 +4,32 @@
 ---
 ## 2026-05-11
 
+### Session 146 — Eye Remote v2.2.1 Build & Validation
+
+**Goal:** Update build script with fallback display fix, build & test new image.
+
+**Changes:**
+1. **Build script updated** (`build-eye-remote-image.sh` v2.2.1)
+   - Added `secubox-fallback-display.service` installation
+   - Enabled fallback-display instead of broken eye-agent
+   - Added PIL dependencies: libopenjp2-7, libtiff6
+   - All agent subdirectories: display, secubox, system, web, api, recovery, sync
+
+2. **Image built and tested**
+   - `/tmp/secubox-eye-remote-2.2.1.img` (5.3GB uncompressed)
+   - Flashed to SD card, tested on MOCHAbin
+   - Dashboard working: 3D cube + rainbow rings + real metrics
+
+3. **GitHub Issues created**
+   - #78: Fix eye-agent import errors (bug)
+   - #79: Investigate Buildroot/Busybox minimal image (enhancement)
+
+**Artifacts:**
+- Commit: `b2f046c1`
+- Image: `secubox-eye-remote-2.2.1.img.xz`
+
+---
+
 ### Session 145 — Eye Remote Dashboard Fix
 
 **Problem:** Eye Remote Pi Zero W showing wrong dashboard (plain fb_dashboard instead of nice fallback_manager with 3D cube and rainbow rings).

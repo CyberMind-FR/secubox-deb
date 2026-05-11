@@ -1,0 +1,21 @@
+[Unit]
+Description=SecuBox Eye Remote Droplet Configuration Watcher
+After=local-fs.target data.mount
+Wants=data.mount
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/droplet-watcher.sh
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Security
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/data/configs
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

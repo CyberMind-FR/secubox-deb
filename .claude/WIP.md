@@ -1,5 +1,30 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-11 (Session 145)*
+*Mis à jour : 2026-05-11 (Session 146)*
+
+---
+
+## ✅ Session 146: Eye Remote v2.2.1 Build & Validation
+
+### Build Script Updated
+- [x] Added `secubox-fallback-display.service` to build
+- [x] Enabled fallback-display instead of broken eye-agent
+- [x] Added PIL dependencies: libopenjp2-7, libtiff6
+- [x] Bumped version to 2.2.1
+- [x] All agent subdirectories copied: display, secubox, system, web, api, recovery, sync
+
+### Image Built & Tested
+- [x] Built `/tmp/secubox-eye-remote-2.2.1.img` (5.3GB)
+- [x] Flashed to SD card and tested on MOCHAbin
+- [x] Dashboard working: 3D cube + rainbow rings + real metrics
+- [x] Compressed to `.img.xz` for archival
+
+### GitHub Issues Created
+- [#78] Fix eye-agent import errors and missing DashboardRenderer class
+- [#79] Investigate Buildroot/Busybox minimal image for Eye Remote
+
+### Artifacts
+- `/tmp/secubox-eye-remote-2.2.1.img.xz` — Production image
+- Commit: `b2f046c1` — Build script fix
 
 ---
 
@@ -27,12 +52,6 @@
 ### Files Updated
 - `/etc/systemd/system/secubox-fallback-display.service` — NEW working service
 - `/usr/lib/secubox-eye/agent/display/fallback/` — Complete fallback display
-
-### Next Steps
-- [ ] Update build script to use fallback_manager.py
-- [ ] Add small central status indicator
-- [ ] Extract working dashboard from original SD card for reference
-- [ ] Reapply tweaks carefully
 
 ---
 
