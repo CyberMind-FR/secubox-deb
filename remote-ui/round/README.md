@@ -26,6 +26,61 @@ More than a simple status display — the Eye Remote transforms into a **powerfu
 
 ---
 
+## Roadmap
+
+```
+     v2.2.1 (current)          v2.3.0                    v3.0.0
+         │                        │                         │
+    ┌────┴────┐              ┌────┴────┐              ┌────┴────┐
+    │ Fallback │              │  Agent  │              │  Multi  │
+    │ Display  │──────────────│  Fixed  │──────────────│ SecuBox │
+    │ 3D Cube  │              │ Radial  │              │  Mesh   │
+    └──────────┘              │  Menu   │              └─────────┘
+                              └─────────┘
+```
+
+### v2.3.0 — Agent Revival
+
+| Task | Issue | Status |
+|------|-------|--------|
+| Fix Python imports (relative → absolute) | [#78](https://github.com/CyberMind-FR/secubox-deb/issues/78) | 🔄 TODO |
+| Implement DashboardRenderer class | #78 | 🔄 TODO |
+| Radial touch menu system | — | 🔄 TODO |
+| Multi-SecuBox device switching | — | 💭 Planned |
+
+### v2.4.0 — Performance
+
+| Task | Issue | Status |
+|------|-------|--------|
+| Buildroot minimal image (~100MB) | [#79](https://github.com/CyberMind-FR/secubox-deb/issues/79) | 💭 Research |
+| Fast boot (<10s) | #79 | 💭 Planned |
+| Reduced memory footprint | — | 💭 Planned |
+
+### v3.0.0 — Multi-Device Mesh
+
+| Task | Issue | Status |
+|------|-------|--------|
+| Multiple SecuBox discovery | — | 💭 Concept |
+| Mesh status aggregation | — | 💭 Concept |
+| Remote alert notifications | — | 💭 Concept |
+
+### Ideas & Proposals
+
+> Create issues to discuss these features!
+
+- **Droplet Mode**: Display config QR codes for device provisioning
+- **Alert Mode**: Flash display on security events
+- **Kiosk Auth**: FIDO2/WebAuthn hardware key mode
+- **OTA Updates**: Self-update via SecuBox API
+
+### References
+
+- **Wiki**: [Eye Remote Documentation](https://github.com/CyberMind-FR/secubox-deb/wiki/Eye-Remote)
+- **Issues**: [eye-remote label](https://github.com/CyberMind-FR/secubox-deb/issues?q=label%3Aeye-remote)
+- **Internal**: [.claude/WIP.md](../../.claude/WIP.md) | [.claude/TODO.md](../../.claude/TODO.md)
+
+---
+
 ## Overview
 
 ```
