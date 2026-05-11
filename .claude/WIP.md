@@ -1,5 +1,38 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-10 (Session 143)*
+*Mis à jour : 2026-05-11 (Session 145)*
+
+---
+
+## ✅ Session 145: Eye Remote Dashboard Fix
+
+### Working State Restored
+- [x] Fixed fallback_manager.py as main dashboard (3D cube + rainbow rings)
+- [x] Deployed to `/usr/lib/secubox-eye/agent/display/fallback/`
+- [x] Created `secubox-fallback-display.service` systemd unit
+- [x] NAT routing through MOCHAbin for Pi internet access
+- [x] PIL dependencies installed (libopenjp2-7, libtiff6)
+
+### Root Cause Analysis
+- Agent code incomplete: `DashboardRenderer` class missing
+- Relative imports failing when running as script
+- Build script missing `agent/api/` directory copy
+
+### Services Configuration
+| Service | Status | Purpose |
+|---------|--------|---------|
+| `secubox-fallback-display.service` | ✅ ACTIVE | Main dashboard (use this) |
+| `secubox-fb-dashboard.service` | DISABLED | Old simple dashboard |
+| `secubox-eye-agent.service` | DISABLED | Broken imports |
+
+### Files Updated
+- `/etc/systemd/system/secubox-fallback-display.service` — NEW working service
+- `/usr/lib/secubox-eye/agent/display/fallback/` — Complete fallback display
+
+### Next Steps
+- [ ] Update build script to use fallback_manager.py
+- [ ] Add small central status indicator
+- [ ] Extract working dashboard from original SD card for reference
+- [ ] Reapply tweaks carefully
 
 ---
 
