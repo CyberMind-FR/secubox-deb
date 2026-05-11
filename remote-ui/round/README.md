@@ -73,6 +73,51 @@ More than a simple status display — the Eye Remote transforms into a **powerfu
 - **Kiosk Auth**: FIDO2/WebAuthn hardware key mode
 - **OTA Updates**: Self-update via SecuBox API
 
+### Issue Template (for AI Assistants)
+
+<details>
+<summary>Prompt for GPT/Gemini/Claude to create Eye Remote issues</summary>
+
+```markdown
+You are creating a GitHub issue for SecuBox Eye Remote (Pi Zero W + HyperPixel 2.1 Round display).
+
+**Project context:**
+- Repo: CyberMind-FR/secubox-deb
+- Subproject: remote-ui/round/
+- Current version: v2.2.1 (fallback display working)
+- Hardware: Pi Zero W (armhf), HyperPixel 2.1 Round 480x480
+- Stack: Python 3, PIL/Pillow, FastAPI, systemd
+- Connection: USB OTG composite gadget to SecuBox (10.55.0.0/30)
+
+**Issue format:**
+## Context
+[Brief description of the feature/bug and why it matters]
+
+## Current Behavior
+[What happens now - for bugs only]
+
+## Expected Behavior / Goal
+[What should happen or what we want to achieve]
+
+## Tasks
+- [ ] Task 1
+- [ ] Task 2
+- [ ] Task 3
+
+## Technical Notes
+- Files: `remote-ui/round/agent/...`
+- Services: `secubox-fallback-display.service`
+- API: `http://10.55.0.1:8000/api/v1/system/metrics`
+
+## References
+- Related: #XX
+- Docs: [README](remote-ui/round/README.md)
+
+**Labels to use:** `eye-remote`, `enhancement` or `bug`, optionally `hardware`, `ui`
+```
+
+</details>
+
 ### References
 
 - **Wiki**: [Eye Remote Documentation](https://github.com/CyberMind-FR/secubox-deb/wiki/Eye-Remote)
