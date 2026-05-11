@@ -1,0 +1,58 @@
+# debian/secubox.yaml
+# Auto-generated from debian/control
+
+name: secubox-full
+category: misc
+tier: lite
+description: "SecuBox Full — All 49 modules"
+
+depends:
+  - secubox-core
+  - secubox-hub
+  - secubox-portal
+  - secubox-system
+  - secubox-crowdsec
+  - secubox-waf
+  - secubox-vortex-firewall
+  - secubox-auth
+  - secubox-nac
+  - secubox-wireguard
+  - secubox-mesh
+  - secubox-p2p
+  - secubox-netmodes
+  - secubox-dpi
+  - secubox-qos
+  - secubox-traffic
+  - secubox-vhost
+  - secubox-haproxy
+  - secubox-cdn
+  - secubox-dns
+  - secubox-vortex-dns
+  - secubox-meshname
+  - secubox-netdata
+  - secubox-mediaflow
+  - secubox-device-intel
+  - secubox-watchdog
+  - secubox-metrics
+  - secubox-soc
+  - secubox-roadmap
+  - secubox-mail
+  - secubox-mail-lxc
+  - secubox-webmail
+  - secubox-webmail-lxc
+  - secubox-users
+  - secubox-gitea
+  - secubox-nextcloud
+  - secubox-droplet
+  - secubox-streamlit
+  - secubox-streamforge
+  - secubox-metablogizer
+  - secubox-publish
+  - secubox-c3box
+  - secubox-backup
+  - secubox-tor
+  - secubox-exposure
+  - secubox-zkp
+  - secubox-mitmproxy
+  - secubox-repo
+  - secubox-hardening

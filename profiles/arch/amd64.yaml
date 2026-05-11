@@ -1,0 +1,29 @@
+# profiles/arch/amd64.yaml
+# Architecture profile for AMD64 (x86_64) devices
+name: arch-amd64
+inherits: base
+description: AMD64 architecture base (VMs, x64 hardware)
+
+kernel:
+  modules:
+    enable:
+      - kvm
+      - kvm_intel
+      - kvm_amd
+      - virtio_net
+      - virtio_blk
+      - virtio_scsi
+      - vfio
+      - vfio_pci
+
+packages:
+  required:
+    - intel-microcode
+    - amd64-microcode
+
+# x86_64-specific sysctl
+sysctl:
+  # Enable huge pages
+  vm.nr_hugepages: 128
+  # KVM-specific tuning
+  kernel.sched_rt_runtime_us: 950000

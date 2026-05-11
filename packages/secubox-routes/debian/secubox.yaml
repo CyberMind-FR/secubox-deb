@@ -1,0 +1,17 @@
+# debian/secubox.yaml
+# Auto-generated from debian/control
+
+name: secubox-routes
+category: misc
+tier: lite
+description: "SecuBox Routes - Routing table viewer and manager"
+
+depends:
+  - secubox-core
+
+api:
+  socket: /run/secubox/routes.sock
+  health: /api/v1/routes/health
+
+ui:
+  path: /srv/secubox/www/routes

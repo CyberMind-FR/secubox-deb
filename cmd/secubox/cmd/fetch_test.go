@@ -3,6 +3,7 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -225,7 +226,7 @@ type mockReader struct {
 
 func (m *mockReader) Read(p []byte) (int, error) {
 	if m.pos >= len(m.data) {
-		return 0, fmt.Errorf("EOF")
+		return 0, io.EOF
 	}
 	n := copy(p, m.data[m.pos:])
 	m.pos += n

@@ -1,0 +1,7 @@
+# debian/secubox.yaml
+# Auto-generated from debian/control
+
+name: secubox-ui-manager
+category: misc
+tier: lite
+description: "SecuBox Unified UI Manager"

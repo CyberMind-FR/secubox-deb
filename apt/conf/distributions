@@ -1,0 +1,27 @@
+# apt/conf/distributions
+# Reprepro configuration for SecuBox-DEB APT repository
+# Multi-arch support: arm64 + amd64
+
+Origin: SecuBox
+Label: SecuBox-DEB
+Suite: stable
+Codename: bookworm
+Version: 12
+Architectures: arm64 amd64 all source
+Components: main contrib
+Description: SecuBox-DEB packages for Debian Bookworm
+SignWith: default
+DebIndices: Packages Release . .gz .bz2
+DscIndices: Sources Release .gz .bz2
+
+Origin: SecuBox
+Label: SecuBox-DEB
+Suite: testing
+Codename: bookworm-testing
+Version: 12
+Architectures: arm64 amd64 all source
+Components: main contrib
+Description: SecuBox-DEB testing packages
+SignWith: default
+DebIndices: Packages Release . .gz .bz2
+DscIndices: Sources Release .gz .bz2

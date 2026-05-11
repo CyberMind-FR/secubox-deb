@@ -1,0 +1,17 @@
+# debian/secubox.yaml
+# Auto-generated from debian/control
+
+name: secubox-meshname
+category: vpn
+tier: lite
+description: "SecuBox Meshname Module"
+
+depends:
+  - secubox-core
+
+api:
+  socket: /run/secubox/meshname.sock
+  health: /api/v1/meshname/health
+
+ui:
+  path: /srv/secubox/www/meshname

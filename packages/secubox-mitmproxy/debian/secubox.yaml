@@ -1,0 +1,18 @@
+# debian/secubox.yaml
+# Auto-generated from debian/control
+
+name: secubox-mitmproxy
+category: misc
+tier: lite
+description: "SecuBox Mitmproxy WAF — Web Application Firewall"
+
+depends:
+  - secubox-core
+  - secubox-haproxy
+
+api:
+  socket: /run/secubox/mitmproxy.sock
+  health: /api/v1/mitmproxy/health
+
+ui:
+  path: /srv/secubox/www/mitmproxy

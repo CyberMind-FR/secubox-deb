@@ -1,0 +1,17 @@
+# debian/secubox.yaml
+# Auto-generated from debian/control
+
+name: secubox-peertube
+category: misc
+tier: lite
+description: "PeerTube federated video platform management"
+
+depends:
+  - secubox-core
+
+api:
+  socket: /run/secubox/peertube.sock
+  health: /api/v1/peertube/health
+
+ui:
+  path: /srv/secubox/www/peertube

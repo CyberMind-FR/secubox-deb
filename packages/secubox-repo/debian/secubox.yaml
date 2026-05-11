@@ -1,0 +1,17 @@
+# debian/secubox.yaml
+# Auto-generated from debian/control
+
+name: secubox-repo
+category: misc
+tier: lite
+description: "SecuBox APT Repository Manager"
+
+depends:
+  - secubox-core
+
+api:
+  socket: /run/secubox/repo.sock
+  health: /api/v1/repo/health
+
+ui:
+  path: /srv/secubox/www/repo

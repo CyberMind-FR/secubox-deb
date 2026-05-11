@@ -58,6 +58,57 @@ type BootState struct {
 	IsRecovery   bool
 }
 
+// atomicWriteFile writes data to a file atomically using temp file + rename.
+// This prevents partial writes and race conditions.
+func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
+	dir := filepath.Dir(path)
+
+	// Create temp file in same directory (required for atomic rename)
+	tmpFile, err := os.CreateTemp(dir, ".tmp-*")
+	if err != nil {
+		return fmt.Errorf("create temp file: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+
+	// Clean up temp file on any error
+	defer func() {
+		if tmpPath != "" {
+			os.Remove(tmpPath)
+		}
+	}()
+
+	// Set permissions before writing content
+	if err := tmpFile.Chmod(perm); err != nil {
+		tmpFile.Close()
+		return fmt.Errorf("chmod temp file: %w", err)
+	}
+
+	// Write data
+	if _, err := tmpFile.Write(data); err != nil {
+		tmpFile.Close()
+		return fmt.Errorf("write temp file: %w", err)
+	}
+
+	// Sync to disk
+	if err := tmpFile.Sync(); err != nil {
+		tmpFile.Close()
+		return fmt.Errorf("sync temp file: %w", err)
+	}
+
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("close temp file: %w", err)
+	}
+
+	// Atomic rename
+	if err := os.Rename(tmpPath, path); err != nil {
+		return fmt.Errorf("rename temp file: %w", err)
+	}
+
+	// Clear tmpPath so defer doesn't try to remove
+	tmpPath = ""
+	return nil
+}
+
 // GetActiveSlot reads the active boot slot from the boot control file
 func GetActiveSlot() (Slot, error) {
 	data, err := os.ReadFile(ActiveSlotFile)
@@ -143,7 +194,7 @@ func GetBootState() (*BootState, error) {
 	}, nil
 }
 
-// SetActiveSlot writes the active slot to the boot control file
+// SetActiveSlot writes the active slot to the boot control file atomically
 func SetActiveSlot(slot Slot) error {
 	if slot != SlotA && slot != SlotB {
 		return fmt.Errorf("invalid slot: %s", slot)
@@ -154,14 +205,15 @@ func SetActiveSlot(slot Slot) error {
 		return fmt.Errorf("create boot control dir: %w", err)
 	}
 
-	if err := os.WriteFile(ActiveSlotFile, []byte(string(slot)+"\n"), 0644); err != nil {
+	// Use atomic write: write to temp file then rename
+	if err := atomicWriteFile(ActiveSlotFile, []byte(string(slot)+"\n"), 0600); err != nil {
 		return fmt.Errorf("write active slot: %w", err)
 	}
 
 	return nil
 }
 
-// SetFallbackSlot writes the fallback slot to the boot control file
+// SetFallbackSlot writes the fallback slot to the boot control file atomically
 func SetFallbackSlot(slot Slot) error {
 	if slot != SlotA && slot != SlotB {
 		return fmt.Errorf("invalid slot: %s", slot)
@@ -172,14 +224,15 @@ func SetFallbackSlot(slot Slot) error {
 		return fmt.Errorf("create boot control dir: %w", err)
 	}
 
-	if err := os.WriteFile(FallbackSlotFile, []byte(string(slot)+"\n"), 0644); err != nil {
+	// Use atomic write with restrictive permissions
+	if err := atomicWriteFile(FallbackSlotFile, []byte(string(slot)+"\n"), 0600); err != nil {
 		return fmt.Errorf("write fallback slot: %w", err)
 	}
 
 	return nil
 }
 
-// SetBootCount sets the boot count value
+// SetBootCount sets the boot count value atomically
 func SetBootCount(count int) error {
 	if count < 0 {
 		count = 0
@@ -190,7 +243,8 @@ func SetBootCount(count int) error {
 		return fmt.Errorf("create boot control dir: %w", err)
 	}
 
-	if err := os.WriteFile(BootCountFile, []byte(strconv.Itoa(count)+"\n"), 0644); err != nil {
+	// Use atomic write with restrictive permissions
+	if err := atomicWriteFile(BootCountFile, []byte(strconv.Itoa(count)+"\n"), 0600); err != nil {
 		return fmt.Errorf("write boot count: %w", err)
 	}
 
@@ -312,13 +366,29 @@ func findRootDevice() (string, error) {
 
 // extractBaseDevice extracts the base device from a partition device
 // e.g., /dev/mmcblk0p2 -> /dev/mmcblk0
+// e.g., /dev/nvme0n1p2 -> /dev/nvme0n1
 // e.g., /dev/sda2 -> /dev/sda
+// e.g., /dev/loop0p1 -> /dev/loop0
 func extractBaseDevice(partDev string) string {
-	// Handle mmcblk and nvme style (e.g., /dev/mmcblk0p2 -> /dev/mmcblk0)
-	if strings.Contains(partDev, "mmcblk") || strings.Contains(partDev, "nvme") {
-		idx := strings.LastIndex(partDev, "p")
-		if idx > 0 {
-			return partDev[:idx]
+	// Handle devices with 'p' separator before partition number
+	// This includes: mmcblk0p2, nvme0n1p2, loop0p1
+	if strings.Contains(partDev, "mmcblk") || strings.Contains(partDev, "nvme") || strings.Contains(partDev, "loop") {
+		// Find the last 'p' followed by digits only
+		for i := len(partDev) - 1; i >= 0; i-- {
+			if partDev[i] == 'p' {
+				// Check if everything after 'p' is digits
+				suffix := partDev[i+1:]
+				allDigits := len(suffix) > 0
+				for _, c := range suffix {
+					if c < '0' || c > '9' {
+						allDigits = false
+						break
+					}
+				}
+				if allDigits {
+					return partDev[:i]
+				}
+			}
 		}
 	}
 

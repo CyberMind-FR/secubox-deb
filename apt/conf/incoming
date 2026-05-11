@@ -1,0 +1,8 @@
+# apt/conf/incoming
+# Reprepro incoming configuration
+
+Name: default
+IncomingDir: incoming
+TempDir: tmp
+Allow: bookworm bookworm-testing
+Cleanup: on_deny on_error

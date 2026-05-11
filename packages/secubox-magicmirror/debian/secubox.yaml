@@ -1,0 +1,17 @@
+# debian/secubox.yaml
+# Auto-generated from debian/control
+
+name: secubox-magicmirror
+category: misc
+tier: lite
+description: "SecuBox MagicMirror management"
+
+depends:
+  - secubox-core
+
+api:
+  socket: /run/secubox/magicmirror.sock
+  health: /api/v1/magicmirror/health
+
+ui:
+  path: /srv/secubox/www/magicmirror

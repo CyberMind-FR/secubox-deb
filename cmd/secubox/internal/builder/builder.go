@@ -17,6 +17,9 @@ import (
 // ValidStages lists all valid build stages in order
 var ValidStages = []string{"rootfs", "partition", "boot", "compress", "checksums"}
 
+// Package-level compiled regex for partition size parsing
+var partitionSizeRe = regexp.MustCompile(`^(\d+)([KMGT])$`)
+
 // Options holds builder configuration
 type Options struct {
 	Manifest     *manifest.Manifest
@@ -82,8 +85,7 @@ func ParsePartitionSize(size string) (int64, error) {
 		return 0, fmt.Errorf("empty size string")
 	}
 
-	re := regexp.MustCompile(`^(\d+)([KMGT])$`)
-	matches := re.FindStringSubmatch(strings.ToUpper(size))
+	matches := partitionSizeRe.FindStringSubmatch(strings.ToUpper(size))
 	if len(matches) != 3 {
 		return 0, fmt.Errorf("invalid size format: %s", size)
 	}
@@ -166,9 +168,11 @@ func (b *Builder) RunStage(stage string) ([]string, error) {
 	return cmds, nil
 }
 
-// execCommand executes a shell command
+// execCommand executes a shell command with error handling
 func (b *Builder) execCommand(cmd string) error {
-	c := exec.Command("sh", "-c", cmd)
+	// Wrap command with 'set -e' for fail-fast behavior
+	wrappedCmd := fmt.Sprintf("set -e\n%s", cmd)
+	c := exec.Command("sh", "-c", wrappedCmd)
 	c.Stdout = os.Stdout
 	c.Stderr = os.Stderr
 	return c.Run()

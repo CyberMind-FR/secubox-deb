@@ -1,0 +1,17 @@
+# debian/secubox.yaml
+# Auto-generated from debian/control
+
+name: secubox-hexo
+category: misc
+tier: lite
+description: "Hexo static blog generator management"
+
+depends:
+  - secubox-core
+
+api:
+  socket: /run/secubox/hexo.sock
+  health: /api/v1/hexo/health
+
+ui:
+  path: /srv/secubox/www/hexo

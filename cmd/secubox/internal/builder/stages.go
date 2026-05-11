@@ -200,50 +200,62 @@ func (b *Builder) stagePartition() ([]string, error) {
 		imagePath, dataStart, dataEnd,
 	))
 
-	// Set up loop device
-	cmds = append(cmds, fmt.Sprintf(
-		"LOOPDEV=$(losetup --find --show --partscan %s)",
-		imagePath,
-	))
-
-	// Format partitions
-	cmds = append(cmds, "mkfs.vfat -F 32 -n ESP ${LOOPDEV}p1")
-	cmds = append(cmds, "mkfs.ext4 -L rootfs ${LOOPDEV}p2")
-	cmds = append(cmds, "mkfs.ext4 -L data ${LOOPDEV}p3")
-
-	// Mount partitions and copy rootfs
+	// Mount operations as single script with cleanup trap
 	rootfs := b.rootfsPath()
 	mntDir := filepath.Join(b.outputDir, "mnt")
 
-	cmds = append(cmds, fmt.Sprintf("mkdir -p %s", mntDir))
-	cmds = append(cmds, fmt.Sprintf("mount ${LOOPDEV}p2 %s", mntDir))
-	cmds = append(cmds, fmt.Sprintf("mkdir -p %s/boot/efi", mntDir))
-	cmds = append(cmds, fmt.Sprintf("mount ${LOOPDEV}p1 %s/boot/efi", mntDir))
-	cmds = append(cmds, fmt.Sprintf("mkdir -p %s/srv", mntDir))
-	cmds = append(cmds, fmt.Sprintf("mount ${LOOPDEV}p3 %s/srv", mntDir))
-
-	// Copy rootfs to image
-	cmds = append(cmds, fmt.Sprintf(
-		"cp -a %s/* %s/",
-		rootfs, mntDir,
-	))
-
-	// Generate fstab
+	// Generate fstab content
 	fstab := `# /etc/fstab - SecuBox generated
 LABEL=rootfs    /           ext4    errors=remount-ro   0   1
 LABEL=ESP       /boot/efi   vfat    umask=0077          0   2
 LABEL=data      /srv        ext4    defaults            0   2
 `
-	cmds = append(cmds, fmt.Sprintf(
-		"echo '%s' > %s/etc/fstab",
-		fstab, mntDir,
-	))
 
-	// Unmount and cleanup
-	cmds = append(cmds, fmt.Sprintf("umount %s/srv", mntDir))
-	cmds = append(cmds, fmt.Sprintf("umount %s/boot/efi", mntDir))
-	cmds = append(cmds, fmt.Sprintf("umount %s", mntDir))
-	cmds = append(cmds, "losetup -d ${LOOPDEV}")
+	// Single script with trap for cleanup on failure
+	mountScript := fmt.Sprintf(`set -e
+
+# Set up loop device
+LOOPDEV=$(losetup --find --show --partscan %s)
+
+# Cleanup function
+cleanup() {
+    umount %s/srv 2>/dev/null || true
+    umount %s/boot/efi 2>/dev/null || true
+    umount %s 2>/dev/null || true
+    losetup -d $LOOPDEV 2>/dev/null || true
+}
+trap cleanup EXIT
+
+# Format partitions
+mkfs.vfat -F 32 -n ESP ${LOOPDEV}p1
+mkfs.ext4 -L rootfs ${LOOPDEV}p2
+mkfs.ext4 -L data ${LOOPDEV}p3
+
+# Mount partitions
+mkdir -p %s
+mount ${LOOPDEV}p2 %s
+mkdir -p %s/boot/efi
+mount ${LOOPDEV}p1 %s/boot/efi
+mkdir -p %s/srv
+mount ${LOOPDEV}p3 %s/srv
+
+# Copy rootfs to image
+cp -a %s/* %s/
+
+# Generate fstab
+cat > %s/etc/fstab << 'FSTAB_EOF'
+%sFSTAB_EOF
+
+# Cleanup runs via trap on exit
+`,
+		imagePath,
+		mntDir, mntDir, mntDir,
+		mntDir, mntDir, mntDir, mntDir, mntDir, mntDir,
+		rootfs, mntDir,
+		mntDir, fstab,
+	)
+
+	cmds = append(cmds, mountScript)
 
 	return cmds, nil
 }
@@ -258,31 +270,51 @@ func (b *Builder) stageBoot() ([]string, error) {
 		bootMethod = "uboot" // Default for ARM
 	}
 
-	// Set up loop device again for boot installation
-	cmds = append(cmds, fmt.Sprintf(
-		"LOOPDEV=$(losetup --find --show --partscan %s)",
-		imagePath,
-	))
-
 	mntDir := filepath.Join(b.outputDir, "mnt")
-	cmds = append(cmds, fmt.Sprintf("mount ${LOOPDEV}p2 %s", mntDir))
-	cmds = append(cmds, fmt.Sprintf("mount ${LOOPDEV}p1 %s/boot/efi", mntDir))
 
+	// Get boot-specific commands
+	var bootCmds []string
 	switch bootMethod {
 	case "uboot":
-		cmds = append(cmds, b.installUBoot(mntDir)...)
+		bootCmds = b.installUBoot(mntDir)
 	case "grub":
-		cmds = append(cmds, b.installGrub(mntDir)...)
+		bootCmds = b.installGrub(mntDir)
 	case "extlinux":
-		cmds = append(cmds, b.installExtlinux(mntDir)...)
+		bootCmds = b.installExtlinux(mntDir)
 	default:
-		cmds = append(cmds, fmt.Sprintf("# Unknown boot method: %s", bootMethod))
+		bootCmds = []string{fmt.Sprintf("echo 'Unknown boot method: %s'", bootMethod)}
 	}
 
-	// Unmount
-	cmds = append(cmds, fmt.Sprintf("umount %s/boot/efi", mntDir))
-	cmds = append(cmds, fmt.Sprintf("umount %s", mntDir))
-	cmds = append(cmds, "losetup -d ${LOOPDEV}")
+	// Single script with trap for cleanup on failure
+	bootScript := fmt.Sprintf(`set -e
+
+# Set up loop device
+LOOPDEV=$(losetup --find --show --partscan %s)
+
+# Cleanup function
+cleanup() {
+    umount %s/boot/efi 2>/dev/null || true
+    umount %s 2>/dev/null || true
+    losetup -d $LOOPDEV 2>/dev/null || true
+}
+trap cleanup EXIT
+
+# Mount partitions
+mount ${LOOPDEV}p2 %s
+mount ${LOOPDEV}p1 %s/boot/efi
+
+# Boot installation commands
+%s
+
+# Cleanup runs via trap on exit
+`,
+		imagePath,
+		mntDir, mntDir,
+		mntDir, mntDir,
+		strings.Join(bootCmds, "\n"),
+	)
+
+	cmds = append(cmds, bootScript)
 
 	return cmds, nil
 }

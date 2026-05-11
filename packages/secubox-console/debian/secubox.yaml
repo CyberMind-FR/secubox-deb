@@ -1,0 +1,7 @@
+# debian/secubox.yaml
+# Auto-generated from debian/control
+
+name: secubox-console
+category: misc
+tier: lite
+description: "SecuBox Console TUI — Terminal Dashboard"

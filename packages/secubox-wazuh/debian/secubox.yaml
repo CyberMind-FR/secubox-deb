@@ -1,0 +1,17 @@
+# debian/secubox.yaml
+# Auto-generated from debian/control
+
+name: secubox-wazuh
+category: misc
+tier: lite
+description: "SecuBox Wazuh SIEM integration"
+
+depends:
+  - secubox-core
+
+api:
+  socket: /run/secubox/wazuh.sock
+  health: /api/v1/wazuh/health
+
+ui:
+  path: /srv/secubox/www/wazuh

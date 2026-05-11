@@ -242,6 +242,154 @@ boot:
 	}
 }
 
+func TestResolveWithArch(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create base profile
+	base := `
+name: base
+packages:
+  required:
+    - secubox-core
+kernel:
+  version: "6.6"
+  modules:
+    enable:
+      - wireguard
+sysctl:
+  net.ipv4.ip_forward: 1
+`
+	if err := os.WriteFile(filepath.Join(dir, "base.yaml"), []byte(base), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create arch/arm64 profile
+	archDir := filepath.Join(dir, "arch")
+	if err := os.MkdirAll(archDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	archProfile := `
+name: arch-arm64
+inherits: base
+packages:
+  required:
+    - qemu-user-static
+kernel:
+  modules:
+    enable:
+      - cpufreq_dt
+sysctl:
+  vm.nr_hugepages: 64
+`
+	if err := os.WriteFile(filepath.Join(archDir, "arm64.yaml"), []byte(archProfile), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create tier profile
+	tier := `
+name: tier-pro
+inherits: base
+packages:
+  required:
+    - secubox-full
+features:
+  dpi: inline
+`
+	if err := os.WriteFile(filepath.Join(dir, "tier-pro.yaml"), []byte(tier), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	merger := NewMerger(dir)
+	result, err := merger.ResolveWithArch("tier-pro", "arm64")
+	if err != nil {
+		t.Fatalf("ResolveWithArch() error = %v", err)
+	}
+
+	// Should have base + arch + tier packages merged
+	required := result.Packages.Required
+	if !contains(required, "secubox-core") {
+		t.Errorf("missing secubox-core from base")
+	}
+	if !contains(required, "qemu-user-static") {
+		t.Errorf("missing qemu-user-static from arch/arm64")
+	}
+	if !contains(required, "secubox-full") {
+		t.Errorf("missing secubox-full from tier-pro")
+	}
+
+	// Should have merged kernel modules
+	modules := result.Kernel.Modules.Enable
+	if !contains(modules, "wireguard") {
+		t.Errorf("missing wireguard from base")
+	}
+	if !contains(modules, "cpufreq_dt") {
+		t.Errorf("missing cpufreq_dt from arch/arm64")
+	}
+
+	// Should have merged sysctl (arch overrides base for same key)
+	if result.Sysctl["net.ipv4.ip_forward"] != 1 {
+		t.Errorf("sysctl net.ipv4.ip_forward = %v, want 1", result.Sysctl["net.ipv4.ip_forward"])
+	}
+	if result.Sysctl["vm.nr_hugepages"] != 64 {
+		t.Errorf("sysctl vm.nr_hugepages = %v, want 64", result.Sysctl["vm.nr_hugepages"])
+	}
+
+	// Final name should be from tier
+	if result.Name != "tier-pro" {
+		t.Errorf("Name = %q, want tier-pro", result.Name)
+	}
+}
+
+func TestResolveWithArch_NoArchProfile(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create base profile
+	base := `
+name: base
+packages:
+  required:
+    - secubox-core
+`
+	if err := os.WriteFile(filepath.Join(dir, "base.yaml"), []byte(base), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create tier profile (no arch/ directory)
+	tier := `
+name: tier-lite
+inherits: base
+packages:
+  required:
+    - secubox-crowdsec
+`
+	if err := os.WriteFile(filepath.Join(dir, "tier-lite.yaml"), []byte(tier), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	merger := NewMerger(dir)
+	result, err := merger.ResolveWithArch("tier-lite", "riscv64")
+	if err != nil {
+		t.Fatalf("ResolveWithArch() should succeed without arch profile, got error = %v", err)
+	}
+
+	// Should still merge base + tier
+	if !contains(result.Packages.Required, "secubox-core") {
+		t.Errorf("missing secubox-core from base")
+	}
+	if !contains(result.Packages.Required, "secubox-crowdsec") {
+		t.Errorf("missing secubox-crowdsec from tier-lite")
+	}
+}
+
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
+}
+
 func TestLoadTweaks(t *testing.T) {
 	dir := t.TempDir()
 	boardDir := filepath.Join(dir, "test-board")

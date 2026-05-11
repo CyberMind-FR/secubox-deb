@@ -1,0 +1,22 @@
+# profiles/arch/arm64.yaml
+# Architecture profile for ARM64 (aarch64) devices
+name: arch-arm64
+inherits: base
+description: ARM64 architecture base (ESPRESSObin, MOCHAbin, RPi)
+
+kernel:
+  modules:
+    enable:
+      - arm_smccc
+      - cpufreq_dt
+      - panfrost   # Mali GPU on some boards
+      - tegra_smmu # For NVIDIA Jetson
+
+packages:
+  required:
+    - qemu-user-static  # For cross-arch container support
+
+# ARM64-specific sysctl
+sysctl:
+  # Enable huge pages for better performance on ARM
+  vm.nr_hugepages: 64

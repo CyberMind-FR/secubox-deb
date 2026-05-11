@@ -1,0 +1,18 @@
+# debian/secubox.yaml
+# Auto-generated from debian/control
+
+name: secubox-lite
+category: misc
+tier: lite
+description: "SecuBox Lite — Essential modules for low-RAM devices"
+
+depends:
+  - secubox-core
+  - secubox-hub
+  - secubox-portal
+  - secubox-crowdsec
+  - secubox-wireguard
+  - secubox-netmodes
+  - secubox-nac
+  - secubox-system
+  - secubox-hardening

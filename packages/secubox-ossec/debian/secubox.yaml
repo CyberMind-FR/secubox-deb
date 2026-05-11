@@ -1,0 +1,17 @@
+# debian/secubox.yaml
+# Auto-generated from debian/control
+
+name: secubox-ossec
+category: misc
+tier: lite
+description: "SecuBox OSSEC HIDS integration"
+
+depends:
+  - secubox-core
+
+api:
+  socket: /run/secubox/ossec.sock
+  health: /api/v1/ossec/health
+
+ui:
+  path: /srv/secubox/www/ossec

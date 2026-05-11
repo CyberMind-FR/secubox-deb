@@ -1,0 +1,7 @@
+# debian/secubox.yaml
+# Auto-generated from debian/control
+
+name: libzkp-hamiltonian1
+category: misc
+tier: lite
+description: "Zero-Knowledge Proof library based on Hamiltonian Cycle"
