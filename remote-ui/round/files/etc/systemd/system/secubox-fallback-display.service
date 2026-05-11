@@ -1,0 +1,16 @@
+[Unit]
+Description=SecuBox Eye Remote Fallback Display
+After=network.target pigpiod.service hyperpixel2r-init.service
+Wants=pigpiod.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/usr/lib/secubox-eye
+Environment=PYTHONPATH=/usr/lib/secubox-eye
+ExecStart=/usr/bin/python3 /usr/lib/secubox-eye/agent/display/fallback/fallback_manager.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

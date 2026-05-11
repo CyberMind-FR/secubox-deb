@@ -13,7 +13,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VERSION="2.2.0"
+VERSION="2.2.1"
 OUTPUT_DIR="${OUTPUT_DIR:-/tmp}"
 OUTPUT_NAME="secubox-eye-remote-${VERSION}.img"
 
@@ -57,6 +57,9 @@ PACKAGES_FRAMEBUFFER=(
     python3-aiohttp
     python3-evdev
     pigpio
+    # PIL runtime dependencies (v2.2.1 fix)
+    libopenjp2-7
+    libtiff6
     # Utilities
     i2c-tools
     # Fonts
@@ -651,8 +654,8 @@ if [[ -f "$SCRIPT_DIR/secubox-eye-agent.service" && -f "$SCRIPT_DIR/config.toml.
     # Copy agent modules (all .py files AND subdirectories)
     cp "$SCRIPT_DIR/agent"/*.py "$ROOT_MNT/usr/lib/secubox-eye/agent/" || err "Failed to copy agent modules"
 
-    # Copy agent subdirectories (display, secubox, system, web)
-    for subdir in display secubox system web; do
+    # Copy agent subdirectories (all required for fallback display)
+    for subdir in display secubox system web api recovery sync; do
         if [[ -d "$SCRIPT_DIR/agent/$subdir" ]]; then
             cp -r "$SCRIPT_DIR/agent/$subdir" "$ROOT_MNT/usr/lib/secubox-eye/agent/"
             log "Copied agent/$subdir/"
@@ -688,16 +691,18 @@ cp "$SCRIPT_DIR/secubox-otg-gadget.service" "$ROOT_MNT/etc/systemd/system/"
 cp "$SCRIPT_DIR/secubox-serial-console.service" "$ROOT_MNT/etc/systemd/system/"
 cp "$SCRIPT_DIR/secubox-fb-dashboard.service" "$ROOT_MNT/etc/systemd/system/"
 
+# v2.2.1: Install fallback display service (3D cube + rainbow rings)
+cp "$SCRIPT_DIR/files/etc/systemd/system/secubox-fallback-display.service" "$ROOT_MNT/etc/systemd/system/"
+log "Installed secubox-fallback-display.service"
+
 # Enable services
 mkdir -p "$ROOT_MNT/etc/systemd/system/multi-user.target.wants"
 ln -sf /etc/systemd/system/secubox-otg-gadget.service \
     "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/"
 ln -sf /etc/systemd/system/secubox-serial-console.service \
     "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/"
-# NOTE: fb-dashboard is DEPRECATED - use secubox-eye-agent instead
-# The old dashboard is kept for fallback but NOT enabled by default
-# ln -sf /etc/systemd/system/secubox-fb-dashboard.service \
-#     "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/"
+# NOTE: fb-dashboard is DEPRECATED - use fallback-display instead
+# The old dashboard is kept for reference but NOT enabled by default
 
 # Network config for usb0
 mkdir -p "$ROOT_MNT/etc/network/interfaces.d"
@@ -737,7 +742,10 @@ ln -sf /etc/systemd/system/hyperpixel2r-init.service "$ROOT_MNT/etc/systemd/syst
 
 # Eye Remote services
 ln -sf /etc/systemd/system/secubox-eye-gadget.service "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/" 2>/dev/null || true
-ln -sf /etc/systemd/system/secubox-eye-agent.service "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/" 2>/dev/null || true
+# v2.2.1: Use fallback-display instead of eye-agent (3D cube + rainbow rings, stable)
+ln -sf /etc/systemd/system/secubox-fallback-display.service "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/" 2>/dev/null || true
+# NOTE: secubox-eye-agent is broken (import errors) - disabled pending fix
+# ln -sf /etc/systemd/system/secubox-eye-agent.service "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/" 2>/dev/null || true
 ln -sf /etc/systemd/system/usb-network.service "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/" 2>/dev/null || true
 
 # Create gadget data directory
