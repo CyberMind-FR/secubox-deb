@@ -1,5 +1,47 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-11 (Session 146)*
+*Mis à jour : 2026-05-11 (Session 147)*
+
+---
+
+## ✅ Session 147: Fix Eye Agent Import Errors (#78)
+
+### Problem
+- `main.py` tried to import classes that don't exist: `DashboardRenderer`, `LocalRenderer`, `FlashRenderer`, `GatewayRenderer`, `RenderContext`
+- Missing modules: `agent.system`, `agent.secubox`, `agent.web`
+- Import chain failures due to missing optional dependencies (aiohttp)
+
+### Solution
+- Created stub implementations for missing modules:
+  - `system.py`: WifiManager, BluetoothManager, DisplayController
+  - `secubox.py`: DeviceManager, FleetAggregator
+  - `web.py`: WebServer
+- Created `display/renderers.py` with mode-specific renderers:
+  - DashboardRenderer: 3D cube + metric rings
+  - LocalRenderer: Disconnected mode display
+  - FlashRenderer: Alert messages
+  - GatewayRenderer: Fleet overview
+  - RenderContext: Data container
+- Rewrote imports in `main.py` with robust try/except handling
+- Updated `display/__init__.py` with graceful fallbacks
+
+### Branch
+- `fix/78-eye-agent-imports`
+- Commit: `e71209f5` — fix(eye-agent): Resolve import errors and add missing modules
+
+### Files Changed
+| File | Change |
+|------|--------|
+| `agent/main.py` | Robust import handling |
+| `agent/display/__init__.py` | Graceful fallbacks |
+| `agent/display/renderers.py` | NEW: Mode renderers |
+| `agent/system.py` | NEW: System controllers |
+| `agent/secubox.py` | NEW: Device management |
+| `agent/web.py` | NEW: Web server stub |
+
+### Status
+- ✅ Imports work without crashes
+- ✅ Core components instantiate correctly
+- ⚠️ Optional dependencies (aiohttp) show warnings but don't block startup
 
 ---
 
