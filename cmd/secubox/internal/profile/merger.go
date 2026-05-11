@@ -3,6 +3,7 @@ package profile
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 )
 
@@ -36,6 +37,48 @@ func NewMerger(profilesDir string) *Merger {
 // Returns error if circular inheritance is detected.
 func (m *Merger) Resolve(name string) (*Profile, error) {
 	return m.resolveWithPath(name, make(map[string]bool))
+}
+
+// ResolveWithArch resolves a tier profile with architecture layer inserted.
+// Chain: base → arch/<arch> → tier → (optional tweaks)
+// This is the recommended method for full profile resolution.
+func (m *Merger) ResolveWithArch(tierName, arch string) (*Profile, error) {
+	// First resolve base
+	base, err := m.Resolve("base")
+	if err != nil {
+		return nil, fmt.Errorf("resolve base: %w", err)
+	}
+
+	// Check if arch profile exists
+	archProfilePath := filepath.Join(m.profilesDir, "arch", arch+".yaml")
+	var archProfile *Profile
+	if _, statErr := os.Stat(archProfilePath); statErr == nil {
+		// Load arch profile directly (don't follow its inherits, we already have base)
+		archProfile, err = Load(archProfilePath)
+		if err != nil {
+			return nil, fmt.Errorf("load arch profile %s: %w", arch, err)
+		}
+	}
+
+	// Load tier profile directly (don't follow its inherits, we build chain manually)
+	tierProfilePath := filepath.Join(m.profilesDir, tierName+".yaml")
+	tierProfile, err := Load(tierProfilePath)
+	if err != nil {
+		return nil, fmt.Errorf("load tier profile %s: %w", tierName, err)
+	}
+
+	// Build merge chain: base → arch → tier
+	result := base
+	if archProfile != nil {
+		result = m.merge(result, archProfile)
+	}
+	result = m.merge(result, tierProfile)
+
+	// Set final name/description from tier
+	result.Name = tierProfile.Name
+	result.Description = tierProfile.Description
+
+	return result, nil
 }
 
 // resolveWithPath resolves with cycle detection via visited map

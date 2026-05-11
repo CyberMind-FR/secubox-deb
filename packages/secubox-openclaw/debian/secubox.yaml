@@ -1,0 +1,17 @@
+# debian/secubox.yaml
+# Auto-generated from debian/control
+
+name: secubox-openclaw
+category: misc
+tier: lite
+description: "SecuBox OpenClaw OSINT Module"
+
+depends:
+  - secubox-core
+
+api:
+  socket: /run/secubox/openclaw.sock
+  health: /api/v1/openclaw/health
+
+ui:
+  path: /srv/secubox/www/openclaw

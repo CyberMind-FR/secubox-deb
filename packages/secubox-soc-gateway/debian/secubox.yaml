@@ -1,0 +1,14 @@
+# debian/secubox.yaml
+# Auto-generated from debian/control
+
+name: secubox-soc-gateway
+category: dashboard
+tier: lite
+description: "SecuBox SOC Gateway — Central Fleet Monitoring Hub"
+
+depends:
+  - secubox-core
+
+api:
+  socket: /run/secubox/soc-gateway.sock
+  health: /api/v1/soc-gateway/health

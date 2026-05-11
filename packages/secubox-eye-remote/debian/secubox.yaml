@@ -1,0 +1,17 @@
+# debian/secubox.yaml
+# Auto-generated from debian/control
+
+name: secubox-eye-remote
+category: dashboard
+tier: lite
+description: "SecuBox Eye Remote USB Gadget Integration"
+
+depends:
+  - secubox-core
+
+api:
+  socket: /run/secubox/eye-remote.sock
+  health: /api/v1/eye-remote/health
+
+ui:
+  path: /srv/secubox/www/eye-remote

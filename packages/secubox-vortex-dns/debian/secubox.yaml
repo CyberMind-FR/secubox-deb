@@ -1,0 +1,17 @@
+# debian/secubox.yaml
+# Auto-generated from debian/control
+
+name: secubox-vortex-dns
+category: network
+tier: lite
+description: "SecuBox Vortex-dns Module"
+
+depends:
+  - secubox-core
+
+api:
+  socket: /run/secubox/vortex-dns.sock
+  health: /api/v1/vortex-dns/health
+
+ui:
+  path: /srv/secubox/www/vortex-dns

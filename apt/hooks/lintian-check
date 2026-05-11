@@ -1,0 +1,32 @@
+#!/bin/bash
+# apt/hooks/lintian-check
+# Pre-publish hook to run lintian on packages before adding to repository
+# SecuBox-DEB - CyberMind
+
+set -euo pipefail
+
+DEB_FILE="$1"
+
+if [ ! -f "$DEB_FILE" ]; then
+    echo "ERROR: Package file not found: $DEB_FILE"
+    exit 1
+fi
+
+echo "=== Running lintian on $(basename "$DEB_FILE") ==="
+
+# Run lintian with appropriate checks
+# --fail-on error: Fail if there are errors
+# --suppress-tags: Suppress some common warnings for our use case
+LINTIAN_OPTS="--fail-on error"
+LINTIAN_OPTS="$LINTIAN_OPTS --suppress-tags debian-changelog-file-missing-or-wrong-name"
+LINTIAN_OPTS="$LINTIAN_OPTS --suppress-tags changelog-file-missing-in-native-package"
+LINTIAN_OPTS="$LINTIAN_OPTS --suppress-tags file-missing-in-root-dir"
+
+if lintian $LINTIAN_OPTS "$DEB_FILE"; then
+    echo "=== Lintian check PASSED ==="
+    exit 0
+else
+    echo "=== Lintian check FAILED ==="
+    echo "Package will not be added to repository."
+    exit 1
+fi

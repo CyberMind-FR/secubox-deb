@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -32,6 +33,12 @@ const (
 	defaultTimeout  = 30 * time.Minute
 	progressBarSize = 50
 )
+
+// Package-level HTTP client for connection reuse
+var httpClient = &http.Client{Timeout: defaultTimeout}
+
+// Version tag regex for validation
+var versionTagRe = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
 
 // supportedBoards lists boards that have pre-built images
 var supportedBoards = []string{
@@ -161,6 +168,10 @@ func runFetch(cmd *cobra.Command, args []string) error {
 	if checksumAsset != nil {
 		fmt.Printf("\nVerifying checksum...\n")
 		if err := verifyChecksum(outputPath, checksumAsset, imageAsset.Name); err != nil {
+			// Clean up corrupted file
+			if rmErr := os.Remove(outputPath); rmErr != nil {
+				fmt.Fprintf(os.Stderr, "warning: could not remove corrupted file: %v\n", rmErr)
+			}
 			return fmt.Errorf("checksum verification failed: %w", err)
 		}
 		fmt.Printf("Checksum verified OK\n")
@@ -234,7 +245,6 @@ func listReleases() error {
 func getReleases() ([]GitHubRelease, error) {
 	url := fmt.Sprintf("%s/repos/%s/%s/releases", githubAPIBase, githubOwner, githubRepo)
 
-	client := &http.Client{Timeout: 30 * time.Second}
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
@@ -242,7 +252,7 @@ func getReleases() ([]GitHubRelease, error) {
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
 	req.Header.Set("User-Agent", "secubox-cli/"+version)
 
-	resp, err := client.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -261,20 +271,23 @@ func getReleases() ([]GitHubRelease, error) {
 	return releases, nil
 }
 
-func getRelease(version string) (*GitHubRelease, error) {
+func getRelease(ver string) (*GitHubRelease, error) {
 	var url string
-	if version == "" {
+	if ver == "" {
 		url = fmt.Sprintf("%s/repos/%s/%s/releases/latest", githubAPIBase, githubOwner, githubRepo)
 	} else {
 		// Normalize version tag
-		tag := version
+		tag := ver
 		if !strings.HasPrefix(tag, "v") {
 			tag = "v" + tag
+		}
+		// Validate version format to prevent URL injection
+		if !versionTagRe.MatchString(tag) {
+			return nil, fmt.Errorf("invalid version format: %s", ver)
 		}
 		url = fmt.Sprintf("%s/repos/%s/%s/releases/tags/%s", githubAPIBase, githubOwner, githubRepo, tag)
 	}
 
-	client := &http.Client{Timeout: 30 * time.Second}
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
@@ -282,17 +295,17 @@ func getRelease(version string) (*GitHubRelease, error) {
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
 	req.Header.Set("User-Agent", "secubox-cli/"+version)
 
-	resp, err := client.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotFound {
-		if version == "" {
+		if ver == "" {
 			return nil, fmt.Errorf("no releases found")
 		}
-		return nil, fmt.Errorf("release %s not found", version)
+		return nil, fmt.Errorf("release %s not found", ver)
 	}
 
 	if resp.StatusCode != http.StatusOK {
@@ -347,8 +360,7 @@ func downloadWithProgress(url, destPath string, totalSize int64) error {
 	defer out.Close()
 
 	// Start download
-	client := &http.Client{Timeout: defaultTimeout}
-	resp, err := client.Get(url)
+	resp, err := httpClient.Get(url)
 	if err != nil {
 		return fmt.Errorf("download: %w", err)
 	}
@@ -445,8 +457,7 @@ func (pr *progressReader) printProgress() {
 
 func verifyChecksum(filePath string, checksumAsset *GitHubAsset, imageName string) error {
 	// Download checksum file
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Get(checksumAsset.BrowserDownloadURL)
+	resp, err := httpClient.Get(checksumAsset.BrowserDownloadURL)
 	if err != nil {
 		return fmt.Errorf("download checksum: %w", err)
 	}

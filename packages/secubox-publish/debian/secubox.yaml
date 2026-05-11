@@ -1,0 +1,17 @@
+# debian/secubox.yaml
+# Auto-generated from debian/control
+
+name: secubox-publish
+category: publishing
+tier: lite
+description: "SecuBox Publishing Platform"
+
+depends:
+  - secubox-core
+
+api:
+  socket: /run/secubox/publish.sock
+  health: /api/v1/publish/health
+
+ui:
+  path: /srv/secubox/www/publish

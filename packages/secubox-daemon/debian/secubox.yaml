@@ -1,0 +1,7 @@
+# debian/secubox.yaml
+# Auto-generated from debian/control
+
+name: secubox-daemon
+category: system
+tier: lite
+description: "SecuBox Mesh Daemon - WireGuard mesh with ZKP authentication"

@@ -11,6 +11,9 @@ import (
 	"strings"
 )
 
+// Package-level compiled regex for performance
+var memTotalRe = regexp.MustCompile(`MemTotal:\s+(\d+)\s+kB`)
+
 // Info holds detected hardware information
 type Info struct {
 	Board      string
@@ -102,6 +105,18 @@ func detectCPU() (string, int) {
 		}
 	}
 
+	// Check for scanner errors
+	if err := scanner.Err(); err != nil {
+		// Log error but continue with what we have
+		if cores == 0 {
+			cores = runtime.NumCPU()
+		}
+		if model == "" {
+			model = "unknown"
+		}
+		return model, cores
+	}
+
 	// Fallback to runtime if no cores found
 	if cores == 0 {
 		cores = runtime.NumCPU()
@@ -122,15 +137,23 @@ func detectRAM() uint64 {
 	defer file.Close()
 
 	scanner := bufio.NewScanner(file)
-	re := regexp.MustCompile(`MemTotal:\s+(\d+)\s+kB`)
 
 	for scanner.Scan() {
-		matches := re.FindStringSubmatch(scanner.Text())
+		matches := memTotalRe.FindStringSubmatch(scanner.Text())
 		if len(matches) == 2 {
-			kb, _ := strconv.ParseUint(matches[1], 10, 64)
+			kb, err := strconv.ParseUint(matches[1], 10, 64)
+			if err != nil {
+				return 0
+			}
 			return kb * 1024 // Convert to bytes
 		}
 	}
+
+	// Check for scanner errors
+	if err := scanner.Err(); err != nil {
+		return 0
+	}
+
 	return 0
 }
 

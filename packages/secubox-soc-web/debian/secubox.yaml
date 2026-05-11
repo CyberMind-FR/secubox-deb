@@ -1,0 +1,7 @@
+# debian/secubox.yaml
+# Auto-generated from debian/control
+
+name: secubox-soc-web
+category: dashboard
+tier: lite
+description: "SecuBox SOC Web Dashboard — Browser-based Fleet Monitoring"

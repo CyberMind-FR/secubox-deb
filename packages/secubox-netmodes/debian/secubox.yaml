@@ -1,0 +1,17 @@
+# debian/secubox.yaml
+# Auto-generated from debian/control
+
+name: secubox-netmodes
+category: network
+tier: lite
+description: "SecuBox Network Modes"
+
+depends:
+  - secubox-core
+
+api:
+  socket: /run/secubox/netmodes.sock
+  health: /api/v1/netmodes/health
+
+ui:
+  path: /srv/secubox/www/netmodes

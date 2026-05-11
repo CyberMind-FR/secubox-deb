@@ -1,0 +1,17 @@
+# debian/secubox.yaml
+# Auto-generated from debian/control
+
+name: secubox-gotosocial
+category: dashboard
+tier: lite
+description: "GoToSocial Fediverse server management"
+
+depends:
+  - secubox-core
+
+api:
+  socket: /run/secubox/gotosocial.sock
+  health: /api/v1/gotosocial/health
+
+ui:
+  path: /srv/secubox/www/gotosocial

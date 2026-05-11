@@ -1,0 +1,17 @@
+# debian/secubox.yaml
+# Auto-generated from debian/control
+
+name: secubox-watchdog
+category: misc
+tier: lite
+description: "SecuBox Watchdog Module"
+
+depends:
+  - secubox-core
+
+api:
+  socket: /run/secubox/watchdog.sock
+  health: /api/v1/watchdog/health
+
+ui:
+  path: /srv/secubox/www/watchdog

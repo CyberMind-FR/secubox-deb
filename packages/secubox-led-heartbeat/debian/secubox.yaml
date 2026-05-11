@@ -1,0 +1,10 @@
+# debian/secubox.yaml
+# Auto-generated from debian/control
+
+name: secubox-led-heartbeat
+category: misc
+tier: lite
+description: "SecuBox LED heartbeat status indicator"
+
+depends:
+  - secubox-core

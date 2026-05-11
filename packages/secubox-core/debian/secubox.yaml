@@ -1,23 +1,10 @@
-# packages/secubox-core/debian/secubox.yaml
-# SecuBox package metadata for meta-script generator
+# debian/secubox.yaml
+# Auto-generated from debian/control
+
 name: secubox-core
-category: core
-description:
-  en: SecuBox core libraries and utilities
-  fr: Bibliotheques et utilitaires SecuBox
+category: system
+tier: all
+description: "SecuBox-DEB — bibliothèque centrale et infrastructure"
 
-requirements:
-  min_ram: 128M
-  arch:
-    - arm64
-    - amd64
-
-tags:
-  - core
-  - essential
-  - required
-
-services:
-  - secubox-core.service
-
-ports: []
+ui:
+  path: /srv/secubox/www/core

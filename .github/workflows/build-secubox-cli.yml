@@ -1,0 +1,201 @@
+# SecuBox CLI — Build Go Binary
+# Builds the secubox meta-script generator for linux-amd64 and linux-arm64
+name: Build SecuBox CLI
+
+on:
+  push:
+    branches: [master, main]
+    paths:
+      - 'cmd/secubox/**'
+      - '.github/workflows/build-secubox-cli.yml'
+    tags: ['v*']
+  pull_request:
+    branches: [master, main]
+    paths:
+      - 'cmd/secubox/**'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version override (e.g., v2.8.0)'
+        required: false
+
+env:
+  GO_VERSION: '1.22'
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: cmd/secubox/go.sum
+
+      - name: Download dependencies
+        working-directory: cmd/secubox
+        run: go mod download
+
+      - name: Run tests
+        working-directory: cmd/secubox
+        run: go test -v -race -coverprofile=coverage.out ./...
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: cmd/secubox/coverage.out
+
+  build:
+    name: Build
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            suffix: linux-amd64
+          - goos: linux
+            goarch: arm64
+            suffix: linux-arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # For git describe
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: cmd/secubox/go.sum
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION="${{ github.ref_name }}"
+          else
+            VERSION="$(git describe --tags --always --dirty 2>/dev/null || echo 'dev')"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
+
+      - name: Build binary
+        working-directory: cmd/secubox
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          BUILD_TIME=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+          COMMIT=$(git rev-parse --short HEAD)
+
+          go build -ldflags="-s -w \
+            -X main.Version=$VERSION \
+            -X main.BuildTime=$BUILD_TIME \
+            -X main.Commit=$COMMIT" \
+            -o secubox-${{ matrix.suffix }} .
+
+      - name: Compress binary
+        working-directory: cmd/secubox
+        run: |
+          tar -czvf secubox-${{ matrix.suffix }}.tar.gz secubox-${{ matrix.suffix }}
+          sha256sum secubox-${{ matrix.suffix }}.tar.gz > secubox-${{ matrix.suffix }}.tar.gz.sha256
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: secubox-${{ matrix.suffix }}
+          path: |
+            cmd/secubox/secubox-${{ matrix.suffix }}.tar.gz
+            cmd/secubox/secubox-${{ matrix.suffix }}.tar.gz.sha256
+
+  release:
+    name: Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+          merge-multiple: true
+
+      - name: Generate release notes
+        run: |
+          cat > RELEASE_NOTES.md << 'EOF'
+          # SecuBox CLI ${{ github.ref_name }}
+
+          Meta-script generator for SecuBox-DEB image building.
+
+          ## Features
+          - Profile-based image generation
+          - Board detection and auto-configuration
+          - A/B partition OTA updates
+          - GitHub releases integration
+
+          ## Downloads
+
+          | Platform | File | SHA256 |
+          |----------|------|--------|
+          | Linux x64 | `secubox-linux-amd64.tar.gz` | [checksum] |
+          | Linux ARM64 | `secubox-linux-arm64.tar.gz` | [checksum] |
+
+          ## Installation
+
+          ```bash
+          # Linux x64
+          curl -LO https://github.com/CyberMind-FR/secubox-deb/releases/download/${{ github.ref_name }}/secubox-linux-amd64.tar.gz
+          tar xzf secubox-linux-amd64.tar.gz
+          sudo mv secubox-linux-amd64 /usr/local/bin/secubox
+
+          # Linux ARM64
+          curl -LO https://github.com/CyberMind-FR/secubox-deb/releases/download/${{ github.ref_name }}/secubox-linux-arm64.tar.gz
+          tar xzf secubox-linux-arm64.tar.gz
+          sudo mv secubox-linux-arm64 /usr/local/bin/secubox
+          ```
+
+          ## Quick Start
+
+          ```bash
+          # Interactive wizard
+          secubox gen
+
+          # Generate for specific board
+          secubox gen --board mochabin --tier pro
+
+          # Build image
+          secubox build --board mochabin --output secubox.img
+
+          # Check hardware
+          secubox info
+
+          # OTA update
+          secubox ota update --url https://releases.secubox.in/v2.8.0/secubox-mochabin.img.gz
+          ```
+          EOF
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: SecuBox CLI ${{ github.ref_name }}
+          body_path: RELEASE_NOTES.md
+          files: |
+            artifacts/*.tar.gz
+            artifacts/*.sha256
+          draft: false
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}

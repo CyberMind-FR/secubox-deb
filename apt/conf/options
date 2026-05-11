@@ -1,0 +1,6 @@
+# apt/conf/options
+# Reprepro global options
+
+verbose
+ask-passphrase
+basedir /srv/apt
