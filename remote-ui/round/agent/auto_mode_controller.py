@@ -249,11 +249,54 @@ class GadgetController:
 
     GADGET_SCRIPT = Path("/etc/secubox/eye-remote/gadget-setup.sh")
     FALLBACK_SCRIPT = Path("/usr/lib/secubox/eye-gadget-switch.sh")
+    GADGET_CONFIG = Path("/sys/kernel/config/usb_gadget/secubox/configs/c.1")
 
     def __init__(self):
         self._current_mode: GadgetMode = GadgetMode.NONE
         self._last_switch_time: float = 0
         self._switch_in_progress: bool = False
+        # Detect current mode on startup
+        self._current_mode = self._detect_current_mode()
+
+    def _detect_current_mode(self) -> GadgetMode:
+        """Detect current gadget mode from configfs."""
+        if not self.GADGET_CONFIG.exists():
+            return GadgetMode.NONE
+
+        try:
+            # Check which functions are linked
+            links = list(self.GADGET_CONFIG.iterdir())
+            func_names = [l.name for l in links if l.is_symlink()]
+
+            has_ecm = any("ecm" in f for f in func_names)
+            has_acm = any("acm" in f for f in func_names)
+            has_storage = any("mass_storage" in f for f in func_names)
+            has_hid = any("hid" in f for f in func_names)
+
+            # Determine mode based on functions
+            if has_ecm and has_acm and has_storage:
+                log.info(f"Detected COMPOSITE mode (ECM+ACM+Storage)")
+                return GadgetMode.COMPOSITE
+            elif has_ecm and has_acm:
+                log.info(f"Detected NETWORK mode (ECM+ACM)")
+                return GadgetMode.NETWORK
+            elif has_hid and has_acm:
+                log.info(f"Detected HID mode (HID+ACM)")
+                return GadgetMode.HID
+            elif has_storage and has_acm:
+                log.info(f"Detected SILENT mode (Storage+ACM)")
+                return GadgetMode.SILENT
+            elif has_storage:
+                log.info(f"Detected STORAGE mode")
+                return GadgetMode.STORAGE
+            elif func_names:
+                log.info(f"Unknown functions: {func_names}, assuming NONE")
+                return GadgetMode.NONE
+            else:
+                return GadgetMode.NONE
+        except Exception as e:
+            log.warning(f"Failed to detect gadget mode: {e}")
+            return GadgetMode.NONE
 
     @property
     def current_mode(self) -> GadgetMode:
@@ -526,8 +569,25 @@ class AutoModeController:
 
     async def _handle_probing_network(self) -> None:
         """Handle PROBING_NETWORK state - try network mode."""
-        # Switch to network mode if not already
+        # Initialize prober if needed (do this first to check connectivity)
+        if self._prober is None:
+            self._prober = NetworkProber(
+                self._config.network_probe_endpoints,
+                self._config.network_probe_timeout_s_endpoint
+            )
+
+        # Check if network already works with current mode
+        # COMPOSITE mode has ECM, so network may already work
+        network_capable_modes = {GadgetMode.NETWORK, GadgetMode.COMPOSITE}
+        if self._gadget.current_mode in network_capable_modes:
+            if await self._prober.probe():
+                log.info(f"Network works with current mode ({self._gadget.current_mode.value})")
+                await self._transition_to(AutoModeState.NETWORK_ACTIVE)
+                return
+
+        # Network not working - try switching to network-only mode
         if self._gadget.current_mode != GadgetMode.NETWORK:
+            log.info("Switching to network-only mode")
             success = await self._gadget.switch_mode(
                 GadgetMode.NETWORK,
                 self._config.mode_switch_cooldown_s
@@ -540,14 +600,7 @@ class AutoModeController:
             # Wait for host to settle
             await asyncio.sleep(self._config.host_settle_delay_s)
 
-        # Initialize prober if needed
-        if self._prober is None:
-            self._prober = NetworkProber(
-                self._config.network_probe_endpoints,
-                self._config.network_probe_timeout_s_endpoint
-            )
-
-        # Probe network
+        # Probe network again after switch
         if await self._prober.probe():
             log.info("Network mode active - connectivity confirmed")
             await self._transition_to(AutoModeState.NETWORK_ACTIVE)

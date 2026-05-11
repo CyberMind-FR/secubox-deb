@@ -13,13 +13,18 @@
 
 set -euo pipefail
 
-readonly VERSION="2.5.0"
+readonly VERSION="2.5.1"
 readonly GADGET="/sys/kernel/config/usb_gadget/secubox"
 
 # Mass storage configuration
 readonly STORAGE_IMAGE="/var/lib/secubox/eye-remote/storage.img"
 readonly STORAGE_SIZE_MB=2048  # Size in MB for the storage image (2GB for live images)
 readonly STORAGE_ENABLED=true  # Set to false to disable mass storage
+
+# Mode switch safeguards
+readonly LOCK_FILE="/run/secubox/gadget-switch.lock"
+readonly SWITCH_DELAY=2  # Seconds to wait between down and up
+readonly LOCK_TIMEOUT=30 # Seconds before lock expires (stale lock cleanup)
 
 # HID keyboard report descriptor (boot protocol keyboard - 8 bytes)
 # Format: modifier, reserved, key1-key6
@@ -50,6 +55,71 @@ HID_KEYBOARD_REPORT_DESC() {
 }
 
 log() { echo "[eye-gadget] $*"; logger -t eye-gadget "$*"; }
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Mode Switch Safeguards (prevent crash from rapid switches)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+acquire_lock() {
+    mkdir -p "$(dirname "$LOCK_FILE")"
+
+    # Clean up stale lock (older than LOCK_TIMEOUT)
+    if [[ -f "$LOCK_FILE" ]]; then
+        local lock_age=$(( $(date +%s) - $(stat -c %Y "$LOCK_FILE" 2>/dev/null || echo 0) ))
+        if (( lock_age > LOCK_TIMEOUT )); then
+            log "Removing stale lock (age: ${lock_age}s)"
+            rm -f "$LOCK_FILE"
+        fi
+    fi
+
+    # Try to acquire lock
+    if [[ -f "$LOCK_FILE" ]]; then
+        local lock_pid=$(cat "$LOCK_FILE" 2>/dev/null)
+        if [[ -n "$lock_pid" ]] && kill -0 "$lock_pid" 2>/dev/null; then
+            log "Mode switch in progress (PID $lock_pid), waiting..."
+            # Wait up to 10 seconds for existing switch to complete
+            for i in {1..20}; do
+                sleep 0.5
+                [[ ! -f "$LOCK_FILE" ]] && break
+            done
+        fi
+    fi
+
+    # Acquire lock
+    echo $$ > "$LOCK_FILE"
+    trap 'rm -f "$LOCK_FILE"' EXIT
+    log "Lock acquired (PID $$)"
+}
+
+release_lock() {
+    rm -f "$LOCK_FILE"
+    trap - EXIT
+}
+
+safe_mode_switch() {
+    local target_mode="$1"
+
+    acquire_lock
+
+    # Stop existing gadget with delay
+    gadget_down
+
+    # Critical: Wait for USB host to detect disconnection
+    log "Waiting ${SWITCH_DELAY}s for USB bus to settle..."
+    sleep "$SWITCH_DELAY"
+
+    # Start new mode
+    case "$target_mode" in
+        up|start|composite) gadget_up ;;
+        network|ecm)        gadget_network ;;
+        hid|keyboard)       gadget_hid ;;
+        storage|uboot)      gadget_storage_only ;;
+        silent|silent-storage) gadget_silent_storage ;;
+        *)                  log "Unknown mode: $target_mode"; return 1 ;;
+    esac
+
+    release_lock
+}
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Tear down existing gadget
@@ -466,13 +536,35 @@ gadget_silent_storage() {
 # ═══════════════════════════════════════════════════════════════════════════════
 
 case "${1:-}" in
-    up|start)           gadget_up ;;
-    down|stop)          gadget_down ;;
-    status)             gadget_status ;;
-    storage|uboot)      gadget_storage_only ;;
-    hid|keyboard)       gadget_hid ;;
-    network|ecm)        gadget_network ;;
-    silent|silent-storage) gadget_silent_storage ;;
+    up|start)
+        # Direct start (boot time, no mode switch delay needed)
+        gadget_up
+        ;;
+    down|stop)
+        # Direct stop (no lock needed)
+        gadget_down
+        ;;
+    status)
+        # Query only, no lock needed
+        gadget_status
+        ;;
+    storage|uboot|hid|keyboard|network|ecm|silent|silent-storage)
+        # Mode switches use safe transition with lock and delay
+        safe_mode_switch "$1"
+        ;;
+    --force-*)
+        # Force mode without safety delay (for recovery)
+        mode="${1#--force-}"
+        log "Force mode: $mode (no delay)"
+        gadget_down
+        case "$mode" in
+            up)      gadget_up ;;
+            network) gadget_network ;;
+            hid)     gadget_hid ;;
+            storage) gadget_storage_only ;;
+            silent)  gadget_silent_storage ;;
+        esac
+        ;;
     *)
         echo "Usage: $0 {up|down|status|storage|hid|network|silent}"
         echo ""
@@ -484,6 +576,10 @@ case "${1:-}" in
         echo "  hid|keyboard  - Start HID keyboard + ACM gadget"
         echo "  network|ecm   - Start network-only gadget (ECM + ACM, no storage)"
         echo "  silent        - Start silent storage + ACM (for fallback mode)"
+        echo ""
+        echo "Safe Mode Switch:"
+        echo "  Mode changes include a ${SWITCH_DELAY}s delay for USB bus stability"
+        echo "  Use --force-<mode> to skip delay (recovery only)"
         echo ""
         echo "Auto-Mode Priority (highest to lowest):"
         echo "  1. network  - ECM + ACM (requires host network support)"
