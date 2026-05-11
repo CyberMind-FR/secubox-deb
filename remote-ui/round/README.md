@@ -73,10 +73,63 @@ More than a simple status display — the Eye Remote transforms into a **powerfu
 - **Kiosk Auth**: FIDO2/WebAuthn hardware key mode
 - **OTA Updates**: Self-update via SecuBox API
 
-### Issue Template (for AI Assistants)
+### AI Prompts (GPT/Gemini/Claude)
 
 <details>
-<summary>Prompt for GPT/Gemini/Claude to create Eye Remote issues</summary>
+<summary>Infographic Roadmap Generator</summary>
+
+```
+Create a colored infographic roadmap for "SecuBox Eye Remote" project.
+
+PRODUCT: Circular 480x480 touchscreen dashboard (Pi Zero W + HyperPixel Round)
+         Connects via USB to SecuBox security appliance
+         Shows real-time metrics with 3D cube + rainbow ring visualization
+
+COLOR PALETTE (Cyberpunk/Hermetic):
+- Background: #0a0a0f (cosmos black)
+- Gold accent: #c9a84c (hermetic gold)
+- Alert red: #e63946 (cinnabar)
+- Success green: #00ff41 (matrix green)
+- Info cyan: #00d4ff (cyber cyan)
+- Purple: #6e40c9 (void purple)
+
+TIMELINE (horizontal or diagonal flow):
+
+v2.2.1 [NOW - STABLE] - Gold border
+├─ 3D rotating cube display
+├─ Rainbow ring metrics (CPU/MEM/DISK/TEMP)
+├─ Connection states (OFFLINE→ONLINE)
+└─ USB OTG composite gadget
+
+v2.3.0 [NEXT] - Cyan border
+├─ Fix agent Python imports (#78)
+├─ Radial touch menu system
+├─ Multi-metric dashboard
+└─ Touch gesture navigation
+
+v2.4.0 [PERFORMANCE] - Green border
+├─ Buildroot minimal image (#79)
+├─ <10 second boot time
+├─ ~100MB image size
+└─ Reduced memory footprint
+
+v3.0.0 [FUTURE] - Purple border
+├─ Multi-SecuBox mesh discovery
+├─ Aggregated security status
+├─ Remote alert notifications
+└─ Distributed monitoring
+
+STYLE: Tech/cyberpunk aesthetic, circuit board patterns,
+       glowing edges, dark theme, minimal but informative
+       Include small icon of circular display device
+
+OUTPUT: 1920x1080 or 1200x630 (social preview size)
+```
+
+</details>
+
+<details>
+<summary>Issue Template Generator</summary>
 
 ```markdown
 You are creating a GitHub issue for SecuBox Eye Remote (Pi Zero W + HyperPixel 2.1 Round display).
