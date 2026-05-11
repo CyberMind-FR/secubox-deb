@@ -124,6 +124,41 @@ Automatic threat detection and IP blocking with community threat intelligence.
 
 ---
 
+## Eye Remote — External Dashboard
+
+<p align="center">
+  <img src="docs/assets/eye-remote-preview.png" alt="SecuBox Eye Remote" width="300">
+</p>
+
+A **standalone round display** that connects to SecuBox via USB OTG, showing real-time metrics with a cyberpunk 3D visualization.
+
+| Feature | Description |
+|---------|-------------|
+| **Hardware** | Raspberry Pi Zero W + HyperPixel 2.1 Round (480×480) |
+| **Connection** | USB OTG composite gadget (network + serial) |
+| **Display** | 3D rotating cube + rainbow ring metrics |
+| **Metrics** | CPU, Memory, Disk, Temperature, WiFi RSSI |
+
+### Quick Start
+
+```bash
+# Download Eye Remote image
+wget https://github.com/CyberMind-FR/secubox-deb/releases/download/v2.2.1-eye-remote/secubox-eye-remote-2.2.1.img.xz
+
+# Flash to SD card
+xzcat secubox-eye-remote-2.2.1.img.xz | sudo dd of=/dev/sdX bs=4M status=progress
+```
+
+1. Insert SD in Pi Zero W with HyperPixel display
+2. Connect USB **DATA** port (middle) to SecuBox
+3. Dashboard appears automatically (~60s boot)
+
+**SSH:** `pi@10.55.0.2` (password: `raspberry`)
+
+📖 **Full documentation:** [remote-ui/round/README.md](remote-ui/round/README.md)
+
+---
+
 ## Default Credentials
 
 | Service | Username | Password |
