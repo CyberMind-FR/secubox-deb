@@ -2,17 +2,17 @@
 Description=HyperPixel 2.1 Round LCD Display Initialization
 After=pigpiod.service
 Requires=pigpiod.service
-# Run early in boot, before display services
-Before=display-manager.service secubox-fb-dashboard.service
+# Run late in boot, after DPI overlay has stabilized
+Before=secubox-fb-dashboard.service
 
 [Service]
 Type=oneshot
-# Wait for pigpiod to be fully ready
-ExecStartPre=/bin/sleep 2
+# Wait 3 seconds for pigpiod to be fully ready
+ExecStartPre=/bin/sleep 3
 ExecStart=/usr/local/sbin/hyperpixel2r-init
 RemainAfterExit=yes
-# NO restart - LCD init is one-time at boot
-# If it fails, check pigpiod and GPIO availability
+# CRITICAL: NO restart - one-time init only
+# Restart causes IRQ conflicts with DPI overlay → kernel panic
 
 [Install]
 WantedBy=multi-user.target
