@@ -2,6 +2,47 @@
 *Tracking completed milestones with dates*
 
 ---
+## 2026-05-11
+
+### Session 145 — Eye Remote Dashboard Fix
+
+**Problem:** Eye Remote Pi Zero W showing wrong dashboard (plain fb_dashboard instead of nice fallback_manager with 3D cube and rainbow rings).
+
+**Root Causes:**
+1. Agent code incomplete - `DashboardRenderer` class doesn't exist
+2. Build script missing `agent/api/` directory copy
+3. Relative imports failing (`from ..api.setup import`)
+4. PIL dependencies missing (libopenjp2-7)
+
+**Fixes:**
+1. **Deployed fallback_manager.py** as main dashboard
+   - 3D rotating cube animation
+   - Rainbow concentric rings for modules
+   - Connection state: OFFLINE/CONNECTING/ONLINE/COMMUNICATING
+   - Real-time metrics from MOCHAbin API
+
+2. **Created secubox-fallback-display.service**
+   - Replaced broken secubox-eye-agent.service
+   - Proper PYTHONPATH and WorkingDirectory
+
+3. **NAT routing through MOCHAbin**
+   - IP forwarding enabled
+   - iptables MASQUERADE for 10.55.0.0/30
+   - Pi can reach internet via USB OTG
+
+4. **Missing directories copied**
+   - agent/api/ (metrics_fetcher, setup, gadget)
+   - agent/recovery/
+   - agent/sync/
+
+**Working Configuration:**
+```
+Service: secubox-fallback-display.service
+Display: /usr/lib/secubox-eye/agent/display/fallback/fallback_manager.py
+API: http://10.55.0.1:8000/api/v1/system/metrics
+```
+
+---
 ## 2026-05-09
 
 ### Session 141 — WAF Optimization, Route Fixes, Export Package, UI Enhancements
