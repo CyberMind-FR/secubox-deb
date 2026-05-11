@@ -8,10 +8,21 @@ More than a simple status display — the Eye Remote transforms into a **powerfu
 
 | Version | Status | Features |
 |---------|--------|----------|
-| **v1.11.0** | ✅ Stable | Framebuffer dashboard, simulation mode, HyperPixel working |
-| **v2.0.0** | 🔄 In Development | Real metrics, multi-SecuBox, WebUI management |
+| **v2.2.1** | ✅ Stable | 3D cube + rainbow rings, real metrics, fallback display |
+| **v2.0.0** | 🔄 Legacy | Agent-based (broken imports, see #78) |
 
-See [Issue #31](https://github.com/CyberMind-FR/secubox-deb/issues/31) for v2.0.0 roadmap.
+### What's New in v2.2.1
+
+- **Fallback Display**: Stable 3D rotating cube with rainbow ring visualization
+- **Real Metrics**: Direct API calls to MOCHAbin for CPU, memory, disk, temp
+- **Connection States**: OFFLINE → CONNECTING → ONLINE → COMMUNICATING
+- **PIL Dependencies**: libopenjp2-7, libtiff6 pre-installed
+- **Fast Boot**: All packages pre-installed via QEMU chroot
+
+### Known Issues
+
+- [#78](https://github.com/CyberMind-FR/secubox-deb/issues/78): eye-agent import errors (disabled)
+- [#79](https://github.com/CyberMind-FR/secubox-deb/issues/79): Buildroot investigation pending
 
 ---
 
