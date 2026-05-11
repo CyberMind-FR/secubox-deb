@@ -129,6 +129,69 @@ OUTPUT: 1920x1080 or 1200x630 (social preview size)
 </details>
 
 <details>
+<summary>Product Status Image Generator</summary>
+
+```
+Create a product status infographic for "SecuBox Eye Remote v2.2.1"
+
+DEVICE: Circular 480x480 touchscreen (HyperPixel 2.1 Round) mounted on Raspberry Pi Zero W
+PURPOSE: External security dashboard that connects via USB to SecuBox network appliance
+
+VISUAL LAYOUT:
+Center: 3D render of circular display device showing colorful dashboard
+        - Black circular bezel
+        - Display showing: rotating 3D cube + rainbow concentric rings + metrics text
+        - Small Pi Zero W board visible behind
+
+Around the device, status badges:
+
+[TOP LEFT - HARDWARE]
+✅ Pi Zero W (ARMv6 512MB)
+✅ HyperPixel 2.1 Round 480×480
+✅ USB OTG Composite Gadget
+✅ Touch input (I2C)
+
+[TOP RIGHT - SOFTWARE]
+✅ Debian armhf
+✅ Python 3 + PIL/Pillow
+✅ FastAPI client
+✅ Systemd service
+
+[BOTTOM LEFT - FEATURES]
+✅ 3D rotating cube animation
+✅ Rainbow ring metrics (6 modules)
+✅ Real-time: CPU/MEM/DISK/TEMP
+✅ Connection states display
+✅ 30 FPS framebuffer render
+
+[BOTTOM RIGHT - CONNECTIVITY]
+✅ USB Network (10.55.0.0/30)
+✅ USB Serial console
+✅ WiFi fallback
+✅ Direct API to SecuBox
+
+[BOTTOM CENTER - VERSION BOX]
+v2.2.1 STABLE
+Released: 2026-05-11
+Image: 576MB compressed
+Boot: ~60 seconds
+
+COLOR SCHEME (Cyberpunk):
+- Background: #0a0a0f (deep black)
+- Accent borders: #c9a84c (gold)
+- Success checks: #00ff41 (matrix green)
+- Info text: #00d4ff (cyber cyan)
+- Highlights: #6e40c9 (purple glow)
+
+STYLE: Dark tech aesthetic, subtle grid pattern background,
+       glowing edges on device, professional product sheet look
+
+SIZE: 1920x1080 or 1200x630
+```
+
+</details>
+
+<details>
 <summary>Issue Template Generator</summary>
 
 ```markdown
