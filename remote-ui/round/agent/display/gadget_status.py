@@ -49,6 +49,10 @@ MODE_COLORS = {
     'acm': (255, 200, 0),
     'mass_storage': (0, 255, 120),
     'composite': (200, 100, 255),
+    'hid': (255, 150, 0),       # Orange for HID keyboard
+    'network': (0, 200, 255),   # Cyan for network-only
+    'silent': (150, 150, 150),  # Gray for silent storage
+    'storage': (0, 255, 120),   # Green for storage (alias)
 }
 
 # Connection state colors
@@ -56,6 +60,7 @@ STATE_COLORS = {
     'disconnected': (255, 80, 80),
     'connected': (0, 255, 100),
     'transferring': (0, 200, 255),
+    'silent': (150, 150, 150),  # Gray for silent mode
 }
 
 # Mode icons (fallback text if no font)
@@ -65,6 +70,23 @@ MODE_ICONS = {
     'acm': '▣',
     'mass_storage': '▤',
     'composite': '◈',
+    'hid': '⌨',       # Keyboard icon for HID
+    'network': '◉',   # Network icon
+    'silent': '▤',    # Storage icon for silent mode
+    'storage': '▤',   # Storage icon
+}
+
+# Mode display names
+MODE_NAMES = {
+    'none': 'NONE',
+    'ecm': 'ECM',
+    'acm': 'ACM',
+    'mass_storage': 'STORAGE',
+    'composite': 'FULL',
+    'hid': 'KEYBD',
+    'network': 'NET',
+    'silent': 'SILENT',
+    'storage': 'BOOT',
 }
 
 
@@ -111,11 +133,18 @@ class GadgetStatusRenderer:
         draw.rectangle([10, y - 5, WIDTH - 10, y + 20], fill=(15, 15, 20))
 
         # Mode indicator (left side)
-        mode_info = get_gadget_mode_info() if HAS_GADGET_API and callable(get_gadget_mode_info) else {}  # type: ignore[misc]
-        mode_name = mode_info.get('name', mode.upper())
+        mode_name = MODE_NAMES.get(mode, mode.upper()[:8])
 
-        # Pulsing mode dot
-        pulse = (math.sin(self._pulse_phase) + 1) / 2
+        # For silent/storage mode, show special indicator
+        is_silent = mode in ('silent', 'storage', 'mass_storage')
+
+        # Pulsing mode dot (slower pulse for silent mode)
+        if is_silent:
+            pulse = (math.sin(self._pulse_phase * 0.5) + 1) / 2  # Slower pulse
+            mode_color = MODE_COLORS.get('silent', (150, 150, 150))
+        else:
+            pulse = (math.sin(self._pulse_phase) + 1) / 2
+
         dot_size = int(4 + pulse * 2)
         draw.ellipse([20 - dot_size, y + 5 - dot_size,
                      20 + dot_size, y + 5 + dot_size],
@@ -126,29 +155,37 @@ class GadgetStatusRenderer:
 
         # Connection state (center)
         state_x = CENTER - 30
-        state_text = conn.upper()[:6]
+        if is_silent:
+            state_text = "SILENT"
+            state_color = STATE_COLORS.get('silent', (150, 150, 150))
+        else:
+            state_text = conn.upper()[:6]
         draw.text((state_x, y - 2), state_text, fill=state_color)
 
-        # Transfer rates (right side) - only when connected
-        if conn in ('connected', 'transferring'):
-            rx_rate = self._status.rx_rate_kbps
-            tx_rate = self._status.tx_rate_kbps
+        # Transfer rates (right side) - only when connected or in storage mode
+        if conn in ('connected', 'transferring') or is_silent:
+            if hasattr(self._status, 'rx_rate_kbps'):
+                rx_rate = self._status.rx_rate_kbps
+                tx_rate = self._status.tx_rate_kbps
 
-            # RX arrow and rate
-            rx_x = WIDTH - 120
-            rx_color = (0, 255, 120) if rx_rate > 0 else (60, 60, 60)
-            draw.text((rx_x, y - 2), f"↓{rx_rate:.0f}", fill=rx_color)
+                # RX arrow and rate
+                rx_x = WIDTH - 120
+                rx_color = (0, 255, 120) if rx_rate > 0 else (60, 60, 60)
+                draw.text((rx_x, y - 2), f"↓{rx_rate:.0f}", fill=rx_color)
 
-            # TX arrow and rate
-            tx_x = WIDTH - 60
-            tx_color = (255, 120, 0) if tx_rate > 0 else (60, 60, 60)
-            draw.text((tx_x, y - 2), f"↑{tx_rate:.0f}", fill=tx_color)
+                # TX arrow and rate
+                tx_x = WIDTH - 60
+                tx_color = (255, 120, 0) if tx_rate > 0 else (60, 60, 60)
+                draw.text((tx_x, y - 2), f"↑{tx_rate:.0f}", fill=tx_color)
 
-            # Transfer animation
-            if conn == 'transferring':
-                anim_x = int(WIDTH - 140 + (self._transfer_anim % 1) * 20)
-                draw.ellipse([anim_x - 2, y + 3, anim_x + 2, y + 7],
-                            fill=(0, 255, 255))
+                # Transfer animation
+                if conn == 'transferring':
+                    anim_x = int(WIDTH - 140 + (self._transfer_anim % 1) * 20)
+                    draw.ellipse([anim_x - 2, y + 3, anim_x + 2, y + 7],
+                                fill=(0, 255, 255))
+            elif is_silent:
+                # Show "WAKE?" hint for silent mode
+                draw.text((WIDTH - 100, y - 2), "WAKE?", fill=(100, 100, 110))
 
     def render_full_status(self, draw: ImageDraw.ImageDraw):
         """Render detailed gadget status overlay."""
@@ -263,15 +300,27 @@ class GadgetStatusRenderer:
         if mode == 'none':
             return
 
+        is_silent = mode in ('silent', 'storage', 'mass_storage')
+
         # Small colored dot
-        pulse = (math.sin(self._pulse_phase * 2) + 1) / 2
+        if is_silent:
+            # Slower pulse for silent/storage mode
+            pulse = (math.sin(self._pulse_phase * 0.5) + 1) / 2
+            mode_color = MODE_COLORS.get('silent', (150, 150, 150))
+        else:
+            pulse = (math.sin(self._pulse_phase * 2) + 1) / 2
+
         size = int(4 + pulse * 2) if conn != 'disconnected' else 4
 
-        # Different dot style based on connection
+        # Different dot style based on connection and mode
         if conn == 'transferring':
             # Animated ring for transfer
             draw.ellipse([x - size - 2, y - size - 2, x + size + 2, y + size + 2],
                         outline=(0, 255, 255), width=2)
+        elif is_silent:
+            # Square indicator for storage/silent mode
+            draw.rectangle([x - size, y - size, x + size, y + size],
+                          fill=mode_color)
         elif conn == 'connected':
             # Filled dot for connected
             draw.ellipse([x - size, y - size, x + size, y + size],
@@ -281,9 +330,43 @@ class GadgetStatusRenderer:
             draw.ellipse([x - size, y - size, x + size, y + size],
                         outline=mode_color, width=1)
 
-        # Mode letter
-        mode_letter = mode[0].upper()
-        draw.text((x + size + 4, y - 6), mode_letter, fill=mode_color)
+        # Mode letter/icon
+        mode_icon = MODE_ICONS.get(mode, mode[0].upper())
+        draw.text((x + size + 4, y - 6), mode_icon, fill=mode_color)
+
+    def render_storage_status(self, draw: ImageDraw.ImageDraw,
+                              x: int = CENTER, y: int = CENTER):
+        """Render storage mode status in center of screen."""
+        self.update()
+
+        if not self._status:
+            return
+
+        mode = self._status.mode.value
+        if mode not in ('silent', 'storage', 'mass_storage'):
+            return
+
+        # Storage mode indicator
+        mode_color = MODE_COLORS.get('silent', (150, 150, 150))
+
+        # Large storage icon
+        icon_size = 40
+        draw.rectangle([x - icon_size, y - icon_size - 30,
+                       x + icon_size, y + icon_size - 30],
+                      outline=mode_color, width=3)
+
+        # "Storage" lines inside
+        for i in range(3):
+            ly = y - icon_size - 30 + 20 + i * 20
+            draw.line([x - icon_size + 10, ly, x + icon_size - 10, ly],
+                     fill=mode_color, width=2)
+
+        # Text below
+        draw.text((x - 50, y + 30), "STORAGE MODE", fill=mode_color)
+        draw.text((x - 70, y + 50), "Serial: /dev/ttyGS0", fill=(100, 100, 110))
+
+        # Wake hint
+        draw.text((x - 60, y + 80), "Send 'WAKE' to retry", fill=(80, 80, 90))
 
 
 # Singleton instance
@@ -311,3 +394,8 @@ def render_gadget_full_status(draw: ImageDraw.ImageDraw):
 def render_gadget_indicator(draw: ImageDraw.ImageDraw, x: int = 20, y: int = HEIGHT - 25):
     """Convenience function to render compact indicator."""
     get_renderer().render_compact_indicator(draw, x, y)
+
+
+def render_storage_mode(draw: ImageDraw.ImageDraw, x: int = WIDTH // 2, y: int = HEIGHT // 2):
+    """Convenience function to render storage mode indicator."""
+    get_renderer().render_storage_status(draw, x, y)

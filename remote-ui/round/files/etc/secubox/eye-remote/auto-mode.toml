@@ -1,0 +1,110 @@
+# SecuBox Eye Remote — Auto-Mode Configuration
+# CyberMind — https://cybermind.fr
+# Author: Gérald Kerma <gandalf@gk2.net>
+# License: Proprietary / ANSSI CSPN candidate
+#
+# Intelligent OTG mode switching based on host detection and connection state.
+# See: remote-ui/round/agent/auto_mode_controller.py
+
+[auto_mode]
+# Enable automatic mode switching
+enabled = true
+
+# Default mode when no host is detected (safest boot default)
+# Options: "storage", "network", "hid"
+default_mode = "storage"
+
+# Preferred mode when host is detected and supports it
+# Options: "network", "hid", "storage"
+preferred_mode = "network"
+
+# Mode priority order (highest to lowest):
+# 1. network - ECM + ACM (requires host network driver support)
+# 2. hid     - HID Keyboard + ACM (fallback when network fails)
+# 3. storage - Mass Storage + ACM (recovery mode, U-Boot compatible)
+
+[timing]
+# Seconds to wait for host configuration after power-on
+# If no configuration happens, assume U-Boot/bootloader → switch to storage
+network_probe_timeout_s = 10
+
+# Seconds to wait before considering network connection failed
+# After this time without successful ping/API, try HID or fall back to storage
+hid_probe_timeout_s = 5
+
+# Seconds without network connectivity before switching to silent storage fallback
+# This prevents constant reconnection attempts when host is unavailable
+silent_fallback_threshold_s = 60
+
+# Minimum time (seconds) between mode switch attempts
+# Prevents rapid mode cycling when conditions are unstable
+mode_switch_cooldown_s = 5
+
+# Time to wait (seconds) after gadget bind before checking host response
+host_settle_delay_s = 2
+
+[wakeup]
+# Wake-up triggers to exit silent storage mode and retry network
+
+# Monitor ACM serial console for activity (ACM always available with storage)
+serial_console_enabled = true
+serial_wake_patterns = ["WAKE", "wake", "NETWORK", "network"]
+
+# Check for magic file on mounted USB storage
+# Host can create this file to signal Eye Remote to retry network mode
+magic_file_enabled = true
+magic_file_name = "WAKE_NETWORK"
+
+# GPIO button wake-up support (long-press to retry network)
+gpio_button_enabled = true
+gpio_button_pin = 17
+gpio_long_press_seconds = 3
+
+# Periodic check to retry network connection from storage mode
+scheduled_check_enabled = true
+scheduled_check_interval_m = 5
+
+[host_detection]
+# Host type detection heuristics
+
+# Time powered without configuration to assume U-Boot/bootloader
+uboot_detect_threshold_s = 3
+
+# Endpoints to probe for network mode validation
+# Eye Remote pings these to verify network is working
+network_probe_endpoints = [
+    "http://10.55.0.1:8000/api/v1/health",
+    "http://10.55.0.1:8000/api/v1/system/metrics"
+]
+
+# Timeout for network probe requests
+network_probe_timeout_s = 3
+
+[storage]
+# Storage mode configuration
+
+# Image file to expose via mass storage
+image_path = "/var/lib/secubox/eye-remote/storage.img"
+
+# Image size in MB (created if not exists)
+image_size_mb = 2048
+
+# Make storage read-only when in silent fallback mode
+# Prevents accidental writes while Eye Remote monitors for wake triggers
+readonly_in_silent_mode = false
+
+[logging]
+# Logging configuration for auto-mode service
+
+# Log level: debug, info, warning, error
+level = "info"
+
+# Log to journald
+journal_enabled = true
+
+# Log to file
+file_enabled = false
+file_path = "/var/log/secubox/eye-remote-auto-mode.log"
+
+# Silence repeated warnings (avoid log spam in silent storage mode)
+dedupe_interval_s = 300
