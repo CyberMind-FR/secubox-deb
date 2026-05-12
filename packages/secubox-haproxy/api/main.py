@@ -35,6 +35,7 @@ from pydantic import BaseModel, Field
 from secubox_core.auth import router as auth_router, require_jwt
 from secubox_core.config import get_config
 from secubox_core.logger import get_logger
+from api import webui_identity as _webui_identity
 
 app = FastAPI(title="secubox-haproxy", version="2.0.0", root_path="/api/v1/haproxy")
 
@@ -2165,6 +2166,22 @@ async def migrate(req: MigrateRequest):
     else:
         log.error("Migration failed: %s", result.stderr)
         return {"success": False, "error": result.stderr or "Migration failed"}
+
+
+# ══════════════════════════════════════════════════════════════════
+# WebUI Identity Endpoints (issue #44 — admin.<HOSTNAME>.<SUFFIX> only)
+# ══════════════════════════════════════════════════════════════════
+
+@app.get("/webui/admin-domain")
+async def webui_admin_domain():
+    """Return the canonical admin URL identity for this board.
+
+    Reads /etc/default/secubox. No auth required (info is not secret).
+    """
+    try:
+        return _webui_identity.get_identity()
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
 
 
 app.include_router(router)
