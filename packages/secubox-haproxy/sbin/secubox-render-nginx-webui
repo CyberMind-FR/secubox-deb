@@ -1,0 +1,41 @@
+#!/bin/bash
+# secubox-render-nginx-webui — render strict-regex WebUI vhost from API
+#
+# Flow: snapshot → fetch from API → atomic stage → nginx -t → reload,
+# with rollback at any failure point.
+#
+# Issue #44: WebUI Obfuscation
+set -euo pipefail
+
+TARGET=/etc/nginx/sites-available/secubox-local
+TMP=$(mktemp /tmp/secubox-local.XXXXXX)
+SNAP="$TARGET.bak.$(date +%s)"
+SOCK=/run/secubox/haproxy.sock
+
+log() { echo "[$(date '+%F %T')] $*" >&2; }
+
+for cmd in curl nginx systemctl; do
+    command -v "$cmd" >/dev/null 2>&1 || { log "FATAL: required command not found: $cmd"; exit 1; }
+done
+
+[[ -S "$SOCK" ]] || { log "FATAL: $SOCK missing — is secubox-haproxy.service running?"; exit 2; }
+
+log "Fetch /webui/nginx-config from API"
+if ! curl -sf --unix-socket "$SOCK" http://localhost/webui/nginx-config -o "$TMP"; then
+    log "API call failed"
+    rm -f "$TMP"; exit 3
+fi
+[[ -s "$TMP" ]] || { log "API returned empty body"; rm -f "$TMP"; exit 3; }
+
+log "Snapshot $TARGET → $SNAP"
+[[ -f "$TARGET" ]] && cp -p "$TARGET" "$SNAP"
+mv "$TMP" "$TARGET"
+
+if ! nginx -t 2>&1 | grep -q "syntax is ok"; then
+    log "nginx -t FAILED — rolling back"
+    [[ -f "$SNAP" ]] && cp -p "$SNAP" "$TARGET"
+    exit 5
+fi
+
+log "Reload nginx"
+systemctl reload nginx && log "render OK (snapshot kept: $SNAP)"

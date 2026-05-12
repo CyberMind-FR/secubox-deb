@@ -1,0 +1,6 @@
+secubox-defaults (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release: ship /etc/default/secubox with SECUBOX_HOSTNAME and
+    SECUBOX_DOMAIN_SUFFIX. Addresses CyberMind-FR/secubox-deb#44.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 12 May 2026 12:00:00 +0200

@@ -1,0 +1,15 @@
+Source: secubox-defaults
+Section: admin
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://secubox.in
+
+Package: secubox-defaults
+Architecture: all
+Depends: ${misc:Depends}
+Description: SecuBox board identity defaults
+ Ships /etc/default/secubox, the single source of truth for SECUBOX_HOSTNAME
+ and SECUBOX_DOMAIN_SUFFIX. Other SecuBox packages depend on this for the
+ canonical admin URL pattern admin.<HOSTNAME>.<SUFFIX>.
