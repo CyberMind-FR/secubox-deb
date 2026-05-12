@@ -4,6 +4,71 @@
 ---
 ## 2026-05-12
 
+### Session 152 — APT Public Repo Staging Pipeline (Issue #80)
+
+**Goal:** Stage a complete signed APT repo at `output/repo/` for `bookworm` × {arm64, amd64}, validated end-to-end. User pushes to `apt.secubox.in` out-of-band.
+
+**Spec & plan:**
+- Design: `docs/superpowers/specs/2026-05-12-apt-public-repo-staging-design.md`
+- Plan: `docs/superpowers/plans/2026-05-12-apt-public-repo-staging.md`
+
+**Delivered (10 tasks, 9 commits — merged via PR #82, plus `0f1907df` chroot fix):**
+
+| Component | Commit | Purpose |
+|-----------|--------|---------|
+| `scripts/build-packages.sh --filter` + `--dry-run` | `ce82e13d` | Tier-driven build filtering via JSON manifest |
+| `scripts/lib/tier-manifest.sh` + hardening | `6f59de25`, `52463db1` | Resolve `base/tier-lite/tier-standard/tier-pro` → JSON package list |
+| `scripts/stage-gpg-bootstrap.sh` | `3b99bcf4` | Persistent GPG key at `~/.gnupg/secubox/`, writes `FINGERPRINT.txt` |
+| `scripts/stage-apt-repo.sh` | `5f7b8474` | Main orchestrator (GPG → reprepro init → tier loop → check gate) |
+| `scripts/render-deploy-artifacts.sh` | `d6fe14d5` | nginx vhost + DEPLOY.md + install.sh + CMSD-1.0 license copies |
+| `scripts/validate-staged-repo.sh` + chroot fix | `bb58789b`, `0f1907df` | reprepro check + gpg verify + license cmp + chroot apt-update smoke |
+| `.gitignore` for staging artifacts | `197eba63` | Ignore `output/repo/{db,pool,dists,conf,gpg}` and build logs |
+
+**Tooling used:**
+
+- `secubox gen --tier <tier> --board mochabin --out <dir>` (existing Go CLI; emits `manifest.yaml`)
+- `reprepro` with persistent `~/.gnupg/secubox/` keyring (SignWith fingerprint)
+- `dpkg-buildpackage` + `crossbuild-essential-arm64` (already installed)
+- `python3-yaml` (for parsing `secubox gen` output)
+
+**End-to-end validation (base + tier-lite × arm64+amd64):**
+
+- 9 packages published, all `Architecture: all`
+- `reprepro check` clean
+- `gpg --verify InRelease` → Good signature, fingerprint `31848880ED89C1722677D75A25C9E32645166DB9`
+- License files byte-match project root
+- `chroot apt-get update` against `file://output/repo/` succeeds (sees SecuBox repo)
+
+**Important finding (arch:all dominance):**
+
+| Architecture field | Count |
+|--------------------|-------|
+| `all` | 130 |
+| `any` | 2 (`secubox-daemon`, `zkp-hamiltonian`) |
+
+130/132 SecuBox packages are `Architecture: all` — the cross-arch (arm64 vs amd64) split is mostly cosmetic. The two `Architecture: any` packages aren't in `build-packages.sh`'s `PACKAGES=` list, so the `arm64` pool count is currently 0. Adding them is separate work.
+
+**GPG signing key:**
+
+- UID: `SecuBox Package Signing Key (apt.secubox.in) <packages@secubox.in>`
+- Fingerprint: `31848880ED89C1722677D75A25C9E32645166DB9`
+- Home: `~/.gnupg/secubox/` (persistent across rebuilds)
+- Public key: `output/repo/secubox-keyring.gpg` (ASCII-armored) + `.bin`
+
+**Open item (not blocking):**
+
+- TLS cert for `apt.secubox.in` shows `ERR_TLS_CERT_ALTNAME_INVALID` — must be re-issued by certbot for the exact SAN. Recipe is in `output/repo/DEPLOY.md`.
+
+**Next steps (user):**
+
+1. Optional: full pipeline run with `bash scripts/stage-apt-repo.sh` (no flags = all four tiers, 30-90 min).
+2. rsync to `apt.secubox.in` per `output/repo/DEPLOY.md` (excludes `db/`, `gpg/`, `conf/`).
+3. certbot --nginx for cert; verify SAN includes `apt.secubox.in`.
+4. Smoke-test from clean client: `curl -fsSL https://apt.secubox.in/install.sh | sudo bash && sudo apt-get update`.
+5. Close issue #80 on success.
+
+---
+
 ### Session 151 — Fix Sidebar Mobile Mode False-Positive on Touch Desktops
 
 **Goal:** Sidebar of secubox-hub forced mobile mode (hamburger + hidden sidebar) on Firefox PC because the detection logic used `isTouchDevice() || isNarrowViewport()` — any touch signal (touchscreen laptop, Firefox `pointer: coarse`, `maxTouchPoints > 0`) triggered mobile UX at desktop widths.
