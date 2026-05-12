@@ -4,6 +4,52 @@
 ---
 ## 2026-05-12
 
+### Session 162 — MetaBlogizer → Gitea ingest of 166 sites (Issue #94, sub-B of #49)
+
+**Goal:** Ingest the 166 directories under `/srv/metablogizer/sites/` into the new Gitea at `gitea.gk2.secubox.in` as `gandalf/metablog-<site>`, tagged `v1.0.0`. Prerequisite was sub-project A (#93, Gitea public routing).
+
+**Done:**
+- Spec: `docs/superpowers/specs/2026-05-12-metablog-gitea-ingest-design.md`
+- Plan: `docs/superpowers/plans/2026-05-12-metablog-gitea-ingest.md` (8 tasks)
+- One-time Gitea config patch (`ENABLE_PUSH_CREATE_USER=true`, `DEFAULT_BRANCH=main`) — `scripts/metablog-ingest-gitea-config.sh`
+- SSH preflight + key enrolment helper — `scripts/lib/gitea-ssh-preflight.sh`
+- Per-site ingest function — `scripts/lib/metablog-ingest-site.sh`
+- Orchestrator — `scripts/metablog-ingest.sh`
+- Smoke test — `tests/scripts/test-metablog-ingest.sh`
+- Full 166-site run — summary at `docs/superpowers/runs/2026-05-12-metablog-ingest-summary.md`
+
+**Discovered + fixed mid-execution:**
+
+1. **Gitea SSH user is `gitea`, not `git`** — the built-in SSH server validates the username against the OS user it runs as. Plan + all scripts updated.
+2. **Gitea CLI lacks `admin user keys add`** in v1.22 — replaced with generate-access-token + POST `/api/v1/user/keys` + token cleanup via sqlite.
+3. **`git rev-parse HEAD` returns literal `"HEAD"` on unborn branch**, not empty — used `--verify HEAD` instead.
+4. **awk INI patcher duplicated `[repository]` section** — fixed by setting `saw_*=1` after the mid-file flush so the END block doesn't re-append.
+5. **`app.ini` lives at `/var/lib/gitea/custom/conf/app.ini`**, not `/etc/gitea/app.ini` as the plan assumed.
+6. **python3 not installed in the Gitea LXC** — INI patcher rewritten in awk.
+7. **First pass had 72 failures** from pre-existing broken Gitea repo stubs (DB entry without on-disk git objects) created by earlier experiments. Bulk-deleted via API. Second pass cleaned to 0 fail.
+
+**Commits:**
+- `56abceae` — feat: One-time Gitea config patch (push-create)
+- `680275f4` — fix: awk INI patcher no longer duplicates [repository]
+- `06d35317` — feat: SSH preflight + key enrolment (gitea@, not git@)
+- `2e323bf3` — feat: Per-site ingest function
+- `8f4b777e` — feat: Orchestrator
+- `6f40e011` — test: 5-gate smoke + bug fix for unborn-branch case
+- `6ac39a6f` — docs: Full-run summary
+
+**Live verification (5 random sites, `git ls-remote main`):**
+```
+gandalf:   c234c6ff...
+dgse:      2e75a084...
+ganimed:   b37b971b...
+magic:     4749ca74...
+sweedtest: db740d25...
+```
+
+**Next:** sub-projects C, D, E, F of #49. F (#95) can start in parallel.
+
+---
+
 ### Session 160 — secubox apt + clone: validate against live repo (Issue #89)
 
 **Goal:** Audit the 2026-05-11 plan vs the implemented Go CLI; close any genuine gap; end-to-end against `https://apt.secubox.in/` (commissioned in Session 152 / Issue #80).
