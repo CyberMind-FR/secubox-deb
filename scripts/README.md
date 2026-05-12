@@ -333,6 +333,42 @@ cp -a /var/lib/secubox/rollback/pre-migration-20260429-143022/* /etc/
 
 ---
 
+## license-headers.py
+
+CMSD-1.0 SPDX header tool. Adds, verifies, or previews license headers
+on all first-party source files. Pure stdlib; no dependencies.
+
+**Usage:**
+
+```bash
+python3 scripts/license-headers.py --check        # CI mode; exit 1 if missing
+python3 scripts/license-headers.py --fix          # add headers in place
+python3 scripts/license-headers.py --list         # list files that would be touched
+python3 scripts/license-headers.py --diff         # unified diff per file (no writes)
+python3 scripts/license-headers.py --fix common/  # scope to a path
+```
+
+**Enrollment allowlist:** `scripts/license-headers-enrolled.txt`. One glob
+per line; `#`-prefixed lines are comments. Empty means no enforcement.
+Phase A leaves it nearly empty; Phase B adds lines per package; Phase C
+deletes it to enforce repo-wide.
+
+**Optional pre-commit hook** (off by default):
+
+```yaml
+- repo: local
+  hooks:
+    - id: license-headers
+      name: License Headers (CMSD-1.0)
+      entry: python3 scripts/license-headers.py --fix
+      language: system
+      pass_filenames: true
+```
+
+**Spec:** `docs/superpowers/specs/2026-05-12-license-headers-design.md`.
+
+---
+
 ## Environment Variables
 
 | Variable | Description |

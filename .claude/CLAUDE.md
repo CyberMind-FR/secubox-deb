@@ -38,20 +38,28 @@ Développeur : Gérald Kerma (Gandalf) — CyberMind, Notre-Dame-du-Cruet, Savoi
 
 ### Python
 ```python
-# Entête standard SecuBox-Deb
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
 """
 SecuBox-Deb :: <NomModule>
 CyberMind — https://cybermind.fr
-Author: Gérald Kerma <gandalf@gk2.net>
-License: Proprietary / ANSSI CSPN candidate
 """
 ```
+
+The SPDX block is added/verified by `scripts/license-headers.py`.
 
 ### Bash
 ```bash
 #!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
 # SecuBox-Deb :: <nom_script>
-# CyberMind — Gérald Kerma
 set -euo pipefail
 readonly MODULE="<nom>"
 readonly VERSION="<semver>"
