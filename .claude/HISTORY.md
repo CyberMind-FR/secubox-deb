@@ -4,6 +4,47 @@
 ---
 ## 2026-05-12
 
+### Session 163 — Streamlit Gitea version pinning (Issue #95, sub-F of #49)
+
+**Goal:** Mirror the 28 directory-form Streamlit apps from `/srv/streamlit/apps/` into Gitea as `gandalf/streamlit-<app>` with `v1.0.0` tag, then extend `streamlitctl` with tag-pinned deploy + rollback, and surface the active tag in the FastAPI.
+
+**Done:**
+- Spec: `docs/superpowers/specs/2026-05-12-streamlit-gitea-version-pinning-design.md`
+- Plan: `docs/superpowers/plans/2026-05-12-streamlit-gitea-version-pinning.md` (9 tasks)
+- Per-app ingest function (`scripts/lib/streamlit-ingest-app.sh`) — sibling of B's metablog version
+- Cherry-picked `scripts/lib/gitea-ssh-preflight.sh` from PR #97 (not yet merged to master)
+- Orchestrator (`scripts/streamlit-ingest.sh`) with preflights + JSON report + dot-dir/`__pycache__` filter
+- 3-app smoke + idempotent re-run
+- Full run: 28/28 apps in Gitea (20 ingested-fresh + 8 skip-already-current, 0 failed). First pass had 20 broken-stub failures; bulk-deleted via API and second pass cleaned. Summary at `docs/superpowers/runs/2026-05-12-streamlit-ingest-summary.md`.
+- `streamlitctl deploy <app> --from-gitea --tag <vX.Y.Z>` — clone+replace in-place, backup to `<app>.bak.<ts>`, max 3 backups, `.deploy.json` record
+- `streamlitctl rollback <app>` — promote latest backup, sentinel `<app>.bak.rolledback.<ts>`
+- FastAPI `_get_apps()` enrichment (`current_tag` + `deployed_at`) via `.deploy.json` or `git describe --tags --exact-match`
+- Deploy/rollback cycle smoke (canary: yijing) all gates pass
+
+**Discovered + fixed mid-execution:**
+
+1. **`set -- "${var[@]:-}"` empty-array expansion** produced a single empty positional arg, hitting the case default `Unknown flag: `. Fixed in both source-args and saved-args occurrences (commits `34a4760e`, `7d522e9a`).
+2. **Auto-restart removed** from deploy/rollback. `cmd_start`/`cmd_stop` in streamlitctl operate on the whole LXC, so restart-after-deploy would have killed all running Streamlit apps. Streamlit auto-reloads on file changes; operator can manually `streamlitctl restart` if needed (commit `15b2a737`).
+3. **20 pre-existing broken Gitea stubs** (DB entry without on-disk objects, same as B/#97) — bulk-deleted via one-shot admin token.
+4. **`.claude/` and `__pycache__/`** directories in `/srv/streamlit/apps/` got picked up as app candidates by the initial `find -type d` — filter added (`! -name '.*' ! -name '__pycache__'`).
+
+**Commits:**
+
+- `66693d89` — feat: per-app ingest function
+- `7007d40c` — feat: cherry-pick gitea-ssh-preflight helper from #97
+- `1a12c63f`, `76379cf5`, `c8747067`, `34a4760e`, `7d522e9a` — orchestrator + filters + empty-array fixes
+- `e3ef78b9` — test: 3-app smoke
+- `fc39bf2d` — docs: full-run summary (28/28, 0 fail)
+- `f975de18`, `15b2a737` — streamlitctl deploy --from-gitea --tag + rollback
+- `6e7f698a` — feat: FastAPI _get_apps() enrichment
+- `a23b2f45` — test: deploy/rollback cycle smoke
+
+**Verification (5 random apps via `git ls-remote`):** All return valid 40-char SHAs on `main` + `v1.0.0`.
+
+**Followup:** API service on MOCHAbin needs restart after package upgrade for `current_tag` to surface (existing `_get_apps()` cached in-process). Not blocking the PR.
+
+---
+
 ### Session 160 — Health Banner Live Panel (Issue #92)
 
 **Goal:** Add three public sections to the health banner — VisitorOrigin,

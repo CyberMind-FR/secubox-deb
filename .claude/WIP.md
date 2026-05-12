@@ -1,5 +1,32 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-12 (Session 160)*
+*Mis à jour : 2026-05-12 (Session 163)*
+
+---
+
+## ✅ Session 163: Streamlit Gitea version pinning (Issue #95, sub-F of #49)
+
+### Objective
+Mirror the 28 directory-form Streamlit apps from `/srv/streamlit/apps/` into Gitea as `gandalf/streamlit-<app>` with `v1.0.0` tag, extend `streamlitctl` with `--from-gitea --tag` deploy + `rollback`, and surface `current_tag`/`deployed_at` in the FastAPI.
+
+### Completed
+- Brainstormed design → `docs/superpowers/specs/2026-05-12-streamlit-gitea-version-pinning-design.md`
+- Plan (9 tasks) → `docs/superpowers/plans/2026-05-12-streamlit-gitea-version-pinning.md`
+- Per-app ingest function `scripts/lib/streamlit-ingest-app.sh` (sibling of metablog's)
+- Cherry-picked `scripts/lib/gitea-ssh-preflight.sh` from PR #97 (not yet on master)
+- Orchestrator `scripts/streamlit-ingest.sh` with preflights + JSON report
+- Filter dot-dirs + `__pycache__` (excluded `.claude`)
+- Fixed two `set -- "${var[@]:-}"` empty-array bugs
+- 3-app smoke + idempotent re-run
+- Full run: 28/28 apps, 0 failed — see `docs/superpowers/runs/2026-05-12-streamlit-ingest-summary.md`. First pass 20 fail-internal-error from broken stubs (same as B); bulk-deleted via API, second pass clean.
+- `streamlitctl deploy <app> --from-gitea --tag <vX.Y.Z>` — clone+replace in-place with backup, max 3 backups retained
+- `streamlitctl rollback <app>` — promote latest `.bak.*` to current, sentinel for the previous current
+- Auto-restart **removed** — `cmd_start`/`cmd_stop` operate on whole LXC; would kill other apps. Streamlit auto-reloads on file changes.
+- FastAPI `_get_apps()` enrichment: `current_tag` (from `.deploy.json` → fallback `git describe --tags --exact-match`), `deployed_at`
+- Deploy/rollback cycle smoke (canary: yijing) — all gates pass
+
+### Followups
+- Sub-projects C, D, E of #49 remain.
+- API gate during smoke showed empty `current_tag` — service on MOCHAbin needs restart after package upgrade for the new `_get_apps()` to take effect.
 
 ---
 

@@ -61,3 +61,9 @@ backups/*.img.xz
 /output/manifests/
 /output/chroot-update.log
 /output/build.log
+
+# Streamlit ingest artifacts (regenerated each run)
+/output/streamlit-ingest-report.json
+/output/streamlit-ingest.log
+/output/streamlit-ingest-full.out
+/output/broken-streamlit-repos.txt
