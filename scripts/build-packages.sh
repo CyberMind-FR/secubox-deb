@@ -94,11 +94,35 @@ rm -f *.deb *.changes *.buildinfo 2>/dev/null || true
 SUCCESS=0
 FAILED=0
 
+if [[ -n "$FILTER" ]]; then
+  if [[ ! -f "$FILTER" ]]; then
+    err "Filter manifest not found: $FILTER"
+    exit 1
+  fi
+  mapfile -t ALLOWED < <(jq -r '.[]' "$FILTER")
+  log "Filter active: ${#ALLOWED[@]} packages"
+fi
+
+is_allowed() {
+  local pkg="$1"
+  [[ -z "$FILTER" ]] && return 0
+  for a in "${ALLOWED[@]}"; do [[ "$a" == "$pkg" ]] && return 0; done
+  return 1
+}
+
 for PKG in "${PACKAGES[@]}"; do
   PKG_DIR="${PACKAGES_DIR}/${PKG}"
 
   if [[ ! -d "${PKG_DIR}/debian" ]]; then
     warn "SKIP ${PKG} — pas de debian/"
+    continue
+  fi
+
+  if ! is_allowed "$PKG"; then
+    continue
+  fi
+  if [[ $DRY_RUN -eq 1 ]]; then
+    log "DRY-RUN would build: $PKG"
     continue
   fi
 
@@ -142,10 +166,12 @@ for PKG in "${PACKAGES[@]}"; do
   fi
 done
 
-# Déplacer les .deb vers output/debs
-cd "${PACKAGES_DIR}"
-mv *.deb "${OUTPUT_DIR}/" 2>/dev/null || true
-rm -f *.changes *.buildinfo 2>/dev/null || true
+# Déplacer les .deb vers output/debs (pas en dry-run)
+if [[ $DRY_RUN -eq 0 ]]; then
+  cd "${PACKAGES_DIR}"
+  mv *.deb "${OUTPUT_DIR}/" 2>/dev/null || true
+  rm -f *.changes *.buildinfo 2>/dev/null || true
+fi
 
 # Résumé
 echo ""
@@ -154,8 +180,10 @@ echo -e "${GREEN}${BOLD}  Build terminé !${NC}"
 echo ""
 echo -e "  Succès : ${SUCCESS}"
 echo -e "  Échecs : ${FAILED}"
-echo ""
-echo -e "  Packages dans : ${OUTPUT_DIR}"
-ls -la "${OUTPUT_DIR}"/*.deb 2>/dev/null | head -20 || true
+if [[ $DRY_RUN -eq 0 ]]; then
+  echo ""
+  echo -e "  Packages dans : ${OUTPUT_DIR}"
+  ls -la "${OUTPUT_DIR}"/*.deb 2>/dev/null | head -20 || true
+fi
 echo ""
 echo -e "${GOLD}${BOLD}════════════════════════════════════════════════════════${NC}"
