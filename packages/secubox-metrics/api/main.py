@@ -10,6 +10,7 @@ import json
 import os
 import subprocess
 import time
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -28,8 +29,6 @@ except ImportError:
     AUTH_ENABLED = False
     async def require_jwt():
         pass
-
-from contextlib import asynccontextmanager
 
 from visitor_origin import VisitorOriginAggregator
 from live_hosts import LiveHostsAggregator
@@ -63,6 +62,7 @@ async def lifespan(_app):
     finally:
         for t in tasks:
             t.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
 
 
 app = FastAPI(
