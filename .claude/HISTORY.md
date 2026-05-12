@@ -4,6 +4,27 @@
 ---
 ## 2026-05-12
 
+### Session 158 — SSL Health Banner Fixes & HAProxy Recovery
+
+**Goal:** Fix SSL display not working in banner + recover broken HAProxy config.
+
+**Changes:**
+- `packages/secubox-metrics/api/main.py`:
+  - Added `domain` query parameter for SSL cert check (fixes cross-origin domain detection)
+  - Added `/data/haproxy/certs/` to cert search paths
+  - Added `PermissionError` handling for restricted cert files
+- `packages/secubox-hub/www/shared/health-banner.js` (v1.2.1):
+  - Pass `window.location.hostname` as query param to API
+  - Added version footer display for debugging
+- HAProxy config: Fixed broken `mitmproxy_inspector_DISABLED` references
+- Permissions: Granted `secubox` group read access to `/etc/letsencrypt/live/`
+
+**Commits:** `443e375f` (merge), `90e8b8fc` (fixes)
+
+**Reference:** CM-SSL-BANNER-FIX-2026-05-12
+
+---
+
 ### Session 157 — SSL Certificate Health in Health Banner
 
 **Goal:** Display SSL certificate expiration status in the Health Banner sidebar.
