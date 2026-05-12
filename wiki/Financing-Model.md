@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 # Modèle de financement
 
 SecuBox-Deb est un projet libre qui refuse le modèle des campagnes participatives avec deadline, tiers de récompense et urgence artificielle. Le financement repose sur trois piliers indépendants, chacun fonctionnant à son propre rythme.

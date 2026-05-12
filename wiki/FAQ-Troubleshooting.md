@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 # SecuBox FAQ & Troubleshooting
 
 Quick solutions to common issues. **For the latest fixes, always check [GitHub Issues](https://github.com/CyberMind-FR/secubox-deb/issues)** - community-reported problems often have solutions there before documentation is updated.

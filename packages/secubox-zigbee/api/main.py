@@ -1,3 +1,8 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
 """secubox-zigbee — FastAPI application for Zigbee2MQTT Gateway.
 
 Ported from OpenWRT luci-app-zigbee2mqtt RPCD backend.

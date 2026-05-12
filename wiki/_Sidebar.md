@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 **[SecuBox](Home)** | [FR](Home-FR) | [DE](Home-DE) | [中文](Home-ZH) | **v2.2.4-pre1**
 
 ---

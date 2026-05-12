@@ -1,3 +1,8 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
 # /etc/netplan/00-secubox.yaml — ESPRESSObin v7 — Mode Router
 # Marvell Armada 3720 : mvneta eth0 (CPU port) + DSA 88E6341 (wan/lan0/lan1)
 #

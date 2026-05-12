@@ -1,4 +1,9 @@
 #!/bin/bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
 # ══════════════════════════════════════════════════════════════════
 #  fix-emoji-fonts.sh — Configure fontconfig for emoji icons
 #  Run this on the SecuBox VM to fix sidebar emoji icons

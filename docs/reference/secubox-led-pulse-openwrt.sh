@@ -1,4 +1,9 @@
 #!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
 # SecuBox LED Pulse - Tri-Color Status with Critical Alert Mode
 # Original from OpenWrt secubox-openwrt (overlay filesystem)
 # Reference only - Debian uses 3-tier LED system instead
