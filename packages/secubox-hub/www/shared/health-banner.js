@@ -304,7 +304,7 @@
             el = document.createElement('div');
             el.id = id;
             el.className = 'sbx-live-section';
-            const banner = document.getElementById('sbx-health-banner');
+            const banner = document.getElementById('health-banner');
             if (banner) banner.appendChild(el);
         }
         return el;
