@@ -15,7 +15,7 @@
 (function() {
     'use strict';
 
-    const VERSION = '1.1.0';
+    const VERSION = '1.2.0';
     // Use global config if injected by CDN/WAF, otherwise use relative path
     const HEALTH_API = window.SECUBOX_HEALTH_API || '/api/v1/metrics/health/summary';
     const REFRESH_INTERVAL = 30000; // 30s
@@ -225,6 +225,30 @@
         return 'YIKES';
     }
 
+    function renderSslStatus(ssl) {
+        if (!ssl) return '';
+
+        const statusConfig = {
+            ok: { emoji: '🔒', label: 'Certificate OK' },
+            warn: { emoji: '🔐', label: 'Certificate expiring soon' },
+            error: { emoji: '🔓', label: 'Certificate critical' },
+            expired: { emoji: '🔓', label: 'Certificate EXPIRED' },
+            unknown: { emoji: '❓', label: 'Certificate unknown' }
+        };
+
+        const config = statusConfig[ssl.status] || statusConfig.unknown;
+        const days = ssl.days_remaining;
+        const daysText = ssl.status === 'expired' ? 'EXPIRÉ' :
+                         days !== null ? `${days}j` : '--';
+
+        return `
+            <div class="hb-ssl ssl-${ssl.status}" title="${config.label} — ${ssl.domain || 'unknown'}">
+                <span class="hb-ssl-icon">${config.emoji}</span>
+                <span class="hb-ssl-days">${daysText}</span>
+            </div>
+        `;
+    }
+
     function createBannerElement() {
         // Create trigger button (always visible)
         const trigger = document.createElement('div');
@@ -249,6 +273,7 @@
                     </div>
                     <span class="hb-pct">--</span>
                 </div>
+                <div class="hb-ssl-container"></div>
                 <div class="hb-modules"></div>
                 <div class="hb-alerts"></div>
                 <div class="hb-sparkle">✨</div>
@@ -387,6 +412,35 @@
                 font-weight: bold;
                 color: var(--text-primary, #e8e6d9);
             }
+
+            /* SSL Certificate Status */
+            .hb-ssl {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                padding: 8px 12px;
+                background: rgba(255,255,255,0.03);
+                border-radius: 6px;
+                border: 1px solid rgba(255,255,255,0.08);
+                font-size: 11px;
+            }
+            .hb-ssl-icon { font-size: 14px; }
+            .hb-ssl-days { font-weight: 600; }
+            .hb-ssl.ssl-ok { border-color: rgba(0, 255, 65, 0.3); }
+            .hb-ssl.ssl-ok .hb-ssl-days { color: #00ff41; }
+            .hb-ssl.ssl-warn { border-color: rgba(255, 193, 7, 0.3); }
+            .hb-ssl.ssl-warn .hb-ssl-days { color: #ffc107; }
+            .hb-ssl.ssl-error { border-color: rgba(230, 57, 70, 0.3); }
+            .hb-ssl.ssl-error .hb-ssl-days { color: #e63946; }
+            .hb-ssl.ssl-expired {
+                border-color: rgba(230, 57, 70, 0.5);
+                background: rgba(230, 57, 70, 0.1);
+                animation: ssl-blink 1s infinite;
+            }
+            .hb-ssl.ssl-expired .hb-ssl-days { color: #e63946; }
+            @keyframes ssl-blink { 50% { opacity: 0.6; } }
+            .hb-ssl.ssl-unknown { border-color: rgba(107, 107, 122, 0.3); }
+            .hb-ssl.ssl-unknown .hb-ssl-days { color: #6b6b7a; }
 
             /* Modules grid */
             .hb-modules {
@@ -626,6 +680,12 @@
         if (labelEl) labelEl.textContent = getScoreVibe(score);
         if (sparkleEl) {
             sparkleEl.style.display = score >= 90 ? 'block' : 'none';
+        }
+
+        // Update SSL status
+        const sslContainer = banner.querySelector('.hb-ssl-container');
+        if (sslContainer && health.ssl) {
+            sslContainer.innerHTML = renderSslStatus(health.ssl);
         }
 
         // Render module cards
