@@ -35,6 +35,8 @@ DEFAULT_DOMAIN_SUFFIX = ".gk2.secubox.in"
 NGINX_BACKEND_IP = "192.168.1.200"
 
 import logging
+from site_schema import enrich as _schema_enrich, validate as _schema_validate
+
 logger = logging.getLogger("metablogizer")
 
 
@@ -112,6 +114,30 @@ def sync_mitmproxy_routes(sites: List[dict]) -> bool:
         return False
 
 
+def _load_site_json(site_dir):
+    """Read site.json (if any), enrich from git, validate (warn-only).
+
+    Always returns a dict containing at least `name`. Missing/malformed
+    files are tolerated — the API stays up.
+    """
+    name = site_dir.name
+    config_file = site_dir / "site.json"
+    doc = {}
+    if config_file.exists():
+        try:
+            doc = json.loads(config_file.read_text())
+        except json.JSONDecodeError as e:
+            logger.warning("site.json malformed for %s: %s", name, e)
+            doc = {}
+    # Always anchor the name field to the dir name (defensive)
+    doc["name"] = name
+    doc = _schema_enrich(doc, site_dir)
+    ok, errs = _schema_validate(doc)
+    if not ok:
+        logger.warning("site.json schema violations for %s: %s", name, errs)
+    return doc
+
+
 def load_sites() -> List[dict]:
     """Load all sites from directory"""
     sites = []
@@ -127,20 +153,14 @@ def load_sites() -> List[dict]:
         port = BASE_PORT
         published = False
 
-        # Read site config
-        config_file = site_dir / "site.json"
-        if config_file.exists():
-            try:
-                cfg = json.loads(config_file.read_text())
-                # Replace .local with default domain suffix
-                saved_domain = cfg.get("domain", "")
-                if saved_domain.endswith(".local"):
-                    domain = saved_domain.replace(".local", DEFAULT_DOMAIN_SUFFIX)
-                elif saved_domain:
-                    domain = saved_domain
-                port = cfg.get("port", BASE_PORT)
-            except:
-                pass
+        # Read site config (via the schema-aware helper).
+        cfg = _load_site_json(site_dir)
+        saved_domain = cfg.get("domain", "") or ""
+        if saved_domain.endswith(".local"):
+            domain = saved_domain.replace(".local", DEFAULT_DOMAIN_SUFFIX)
+        elif saved_domain:
+            domain = saved_domain
+        port = cfg.get("port", BASE_PORT)
 
         # Check if published (in unified config)
         if NGINX_METABLOGS_CONF.exists():
@@ -153,14 +173,20 @@ def load_sites() -> List[dict]:
         if success:
             size = out.split()[0]
 
-        sites.append({
+        entry = {
             "name": name,
             "domain": domain,
             "port": port,
             "published": published,
             "directory": str(site_dir),
             "size": size,
-        })
+        }
+        # Overlay schema-enriched fields (version, last_updated, etc.)
+        for key in ("version", "title", "description", "category",
+                    "streamlit_app", "tags", "last_updated"):
+            if key in cfg and cfg[key] is not None:
+                entry[key] = cfg[key]
+        sites.append(entry)
 
     return sorted(sites, key=lambda x: x.get("port", BASE_PORT))
 
