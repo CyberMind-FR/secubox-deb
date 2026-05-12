@@ -20,3 +20,20 @@ derive_slug() {
   if [[ -z "$s" ]]; then s="issue"; fi
   printf '%s' "$s"
 }
+
+# Map a comma-separated label list to a branch prefix.
+# Mapping: bug|fix -> fix/, documentation -> docs/, infra|chore -> chore/,
+# everything else (including empty) -> feature/. First matching label wins.
+prefix_from_labels() {
+  local labels="${1:-}"
+  local IFS=','
+  local label
+  for label in $labels; do
+    case "$label" in
+      bug|fix)             printf 'fix/';     return 0 ;;
+      documentation)       printf 'docs/';    return 0 ;;
+      infra|chore)         printf 'chore/';   return 0 ;;
+    esac
+  done
+  printf 'feature/'
+}

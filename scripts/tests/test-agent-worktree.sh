@@ -68,6 +68,39 @@ test_derive_slug_empty_falls_back() {
   assert_eq "issue" "$(derive_slug '日本語のみ')" "all non-ASCII"
 }
 
+test_prefix_default_when_no_labels() {
+  source "$LIB"
+  assert_eq "feature/" "$(prefix_from_labels '')" "no labels"
+}
+
+test_prefix_bug_label() {
+  source "$LIB"
+  assert_eq "fix/" "$(prefix_from_labels 'bug')" "bug label"
+  assert_eq "fix/" "$(prefix_from_labels 'fix')" "fix label"
+}
+
+test_prefix_documentation_label() {
+  source "$LIB"
+  assert_eq "docs/" "$(prefix_from_labels 'documentation')" "documentation label"
+}
+
+test_prefix_infra_chore_label() {
+  source "$LIB"
+  assert_eq "chore/" "$(prefix_from_labels 'infra')" "infra label"
+  assert_eq "chore/" "$(prefix_from_labels 'chore')" "chore label"
+}
+
+test_prefix_unknown_label_defaults_feature() {
+  source "$LIB"
+  assert_eq "feature/" "$(prefix_from_labels 'enhancement,question')" "unknown labels"
+}
+
+test_prefix_first_match_wins() {
+  source "$LIB"
+  # bug appears first → fix/, even if documentation also present
+  assert_eq "fix/" "$(prefix_from_labels 'bug,documentation')" "first match"
+}
+
 # Auto-discover and run
 mapfile -t tests < <(declare -F | awk '{print $3}' | grep '^test_')
 for t in "${tests[@]}"; do run_test "$t"; done
