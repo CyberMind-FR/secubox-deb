@@ -94,7 +94,7 @@ log "Pre-flights OK"
 if [[ -n "$ONLY_APP" ]]; then
   apps=("$ONLY_APP")
 else
-  mapfile -t apps < <(ssh "root@$LXC_HOST" "find $APPS_DIR -maxdepth 1 -mindepth 1 -type d -printf '%f\n' | sort")
+  mapfile -t apps < <(ssh "root@$LXC_HOST" "find $APPS_DIR -maxdepth 1 -mindepth 1 -type d ! -name '.*' -printf '%f\n' | sort")
 fi
 [[ "$LIMIT" -gt 0 ]] && apps=("${apps[@]:0:$LIMIT}")
 total=${#apps[@]}
