@@ -200,14 +200,23 @@ cmd_finish() {
     echo "finish: cannot parse issue number from branch '$branch'" >&2; return 1
   fi
 
+  local issue_title
+  issue_title=$("$GH_BIN" issue view "$issue" --json title 2>/dev/null \
+    | sed -E 's/.*"title":"((\\.|[^"\\])*)".*/\1/')
+  if [[ -z "$issue_title" || "$issue_title" == *'"title"'* ]]; then
+    issue_title="$branch"
+  fi
+
   if (( dry_run )); then
-    echo "dry-run: would push $branch and open PR closing #$issue"
+    echo "dry-run: would push $branch and open PR closing #$issue with title '$issue_title'"
     return 0
   fi
 
-  "$GIT_BIN" push -u origin "$branch" >/dev/null
+  if ! "$GIT_BIN" push -u origin "$branch" >/dev/null; then
+    echo "finish: git push failed" >&2; return 4
+  fi
   "$GH_BIN" pr create --base master --head "$branch" \
-    --title "$branch" --body "Closes #$issue" \
+    --title "$issue_title" --body "Closes #$issue" \
     || return 4
 }
 cmd_clean() {
