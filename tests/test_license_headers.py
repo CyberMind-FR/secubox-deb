@@ -315,6 +315,26 @@ def test_walk_respects_glob_allowlist(tmp_path):
     assert rel == ["common/a.py"]
 
 
+def test_walk_subdir_with_repo_root_arg(tmp_path):
+    """Walking a subdirectory must match repo-relative allowlist patterns
+    (regression: discovered during Phase B pilot — user passes
+    `--fix packages/secubox-hub`, allowlist has `packages/secubox-hub/**`).
+    """
+    (tmp_path / "packages" / "hub").mkdir(parents=True)
+    (tmp_path / "packages" / "hub" / "a.py").write_text("x = 1\n")
+    (tmp_path / "packages" / "other" / "b.py").parent.mkdir(parents=True)
+    (tmp_path / "packages" / "other" / "b.py").write_text("y = 1\n")
+    result = list(
+        license_headers.walk(
+            [tmp_path / "packages" / "hub"],
+            enrolled=["packages/hub/**"],
+            repo_root=tmp_path,
+        )
+    )
+    rel = sorted(p.resolve().relative_to(tmp_path.resolve()).as_posix() for p in result)
+    assert rel == ["packages/hub/a.py"]
+
+
 def _write_enrolled(tmp_path: Path, patterns: list[str]) -> Path:
     f = tmp_path / "scripts" / "license-headers-enrolled.txt"
     f.parent.mkdir(parents=True, exist_ok=True)

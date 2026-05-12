@@ -183,12 +183,26 @@ def _matches_allowlist(rel: Path, enrolled: list[str]) -> bool:
     return False
 
 
-def walk(paths: list[Path], enrolled: list[str]):
-    """Yield in-scope files under each path, honoring SKIP_DIRS, SKIP_GLOBS, allowlist."""
+def walk(paths: list[Path], enrolled: list[str], repo_root: Path | None = None):
+    """Yield in-scope files under each path, honoring SKIP_DIRS, SKIP_GLOBS, allowlist.
+
+    `repo_root` (when provided) is the base for allowlist pattern matching.
+    Allowlist patterns are repo-relative, so a caller walking a subdirectory
+    must pass `repo_root` separately for the patterns to match. When omitted,
+    paths are matched relative to their walk root (backwards-compatible).
+    """
+    allowlist_base = repo_root.resolve() if repo_root is not None else None
     for root in paths:
         root = Path(root)
         if root.is_file():
-            if _is_in_scope(root):
+            if not _is_in_scope(root):
+                continue
+            rel = (
+                root.resolve().relative_to(allowlist_base)
+                if allowlist_base is not None
+                else root
+            )
+            if _matches_allowlist(rel, enrolled):
                 yield root
             continue
         for p in root.rglob("*"):
@@ -199,7 +213,13 @@ def walk(paths: list[Path], enrolled: list[str]):
                 continue
             if not _is_in_scope(p):
                 continue
-            rel = p.relative_to(root)
+            if allowlist_base is not None:
+                try:
+                    rel = p.resolve().relative_to(allowlist_base)
+                except ValueError:
+                    continue
+            else:
+                rel = p.relative_to(root)
             if not _matches_allowlist(rel, enrolled):
                 continue
             yield p
@@ -246,7 +266,7 @@ def main(argv: list[str] | None = None) -> int:
     paths = [Path(p) for p in args.paths] if args.paths else [repo_root]
 
     missing: list[Path] = []
-    for p in walk(paths, enrolled):
+    for p in walk(paths, enrolled, repo_root=repo_root):
         text = p.read_text(encoding="utf-8", errors="replace")
         status = detect_existing(text)
 
