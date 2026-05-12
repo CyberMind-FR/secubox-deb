@@ -173,6 +173,67 @@ test_start_happy_path() {
     || { echo "worktree dir missing" >&2; return 1; }
 }
 
+test_start_missing_issue_flag() {
+  export GH_BIN="$GH_MOCK"
+  local out rc
+  out=$(bash "$SCRIPT" start 2>&1) ; rc=$?
+  if [[ $rc -ne 1 ]]; then echo "rc=$rc out=$out" >&2; return 1; fi
+  assert_contains "$out" "--issue"
+}
+
+test_start_unknown_issue_exits_2() {
+  local repo wt
+  repo=$(make_sandbox_repo); wt=$(mktemp -d)
+  trap "rm -rf $repo $wt" RETURN
+  export GH_BIN="$GH_MOCK"; export GH_MOCK_AUTH=ok
+  export GH_MOCK_ISSUE_999_EXIT=2
+  export WORKTREE_ROOT="$wt"
+  local rc
+  (cd "$repo" && bash "$SCRIPT" start --issue 999) >/dev/null 2>&1 ; rc=$?
+  if [[ $rc -ne 2 ]]; then echo "expected rc=2 got $rc" >&2; return 1; fi
+}
+
+test_start_dirty_repo_exits_3() {
+  local repo wt
+  repo=$(make_sandbox_repo); wt=$(mktemp -d)
+  trap "rm -rf $repo $wt" RETURN
+  (cd "$repo" && echo dirty > newfile && git add newfile)
+  export GH_BIN="$GH_MOCK"; export GH_MOCK_AUTH=ok
+  export GH_MOCK_ISSUE_1_TITLE="t"; export GH_MOCK_ISSUE_1_LABELS=""
+  export WORKTREE_ROOT="$wt"
+  local rc
+  (cd "$repo" && bash "$SCRIPT" start --issue 1) >/dev/null 2>&1 ; rc=$?
+  if [[ $rc -ne 3 ]]; then echo "expected rc=3 got $rc" >&2; return 1; fi
+}
+
+test_start_twice_same_issue_refuses() {
+  local repo wt
+  repo=$(make_sandbox_repo); wt=$(mktemp -d)
+  trap "rm -rf $repo $wt" RETURN
+  export GH_BIN="$GH_MOCK"; export GH_MOCK_AUTH=ok
+  export GH_MOCK_ISSUE_7_TITLE="Same"; export GH_MOCK_ISSUE_7_LABELS=""
+  export WORKTREE_ROOT="$wt"
+  (cd "$repo" && bash "$SCRIPT" start --issue 7) >/dev/null
+  local rc
+  (cd "$repo" && bash "$SCRIPT" start --issue 7) >/dev/null 2>&1 ; rc=$?
+  if [[ $rc -ne 3 ]]; then echo "expected rc=3 got $rc" >&2; return 1; fi
+}
+
+test_start_dry_run_no_side_effects() {
+  local repo wt
+  repo=$(make_sandbox_repo); wt=$(mktemp -d)
+  trap "rm -rf $repo $wt" RETURN
+  export GH_BIN="$GH_MOCK"; export GH_MOCK_AUTH=ok
+  export GH_MOCK_ISSUE_5_TITLE="Dry"; export GH_MOCK_ISSUE_5_LABELS=""
+  export WORKTREE_ROOT="$wt"
+  (cd "$repo" && bash "$SCRIPT" start --issue 5 --dry-run) >/dev/null
+  # No branch should exist
+  (cd "$repo" && git show-ref --verify --quiet refs/heads/feature/5-dry) \
+    && { echo "branch leaked in dry-run" >&2; return 1; }
+  test -d "$wt/5-dry" && { echo "worktree leaked in dry-run" >&2; return 1; }
+  return 0
+}
+
 # Auto-discover and run
 mapfile -t tests < <(declare -F | awk '{print $3}' | grep '^test_')
 for t in "${tests[@]}"; do run_test "$t"; done
