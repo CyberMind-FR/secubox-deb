@@ -36,6 +36,7 @@ NGINX_BACKEND_IP = "192.168.1.200"
 
 import logging
 from site_schema import enrich as _schema_enrich, validate as _schema_validate
+from rmtree import force_remove as _rmtree_force
 
 logger = logging.getLogger("metablogizer")
 
@@ -562,8 +563,11 @@ async def delete_site(name: str):
     (NGINX_ENABLED_DIR / f"{name}.conf").unlink(missing_ok=True)
     (NGINX_VHOST_DIR / f"{name}.conf").unlink(missing_ok=True)
 
-    # Delete directory
-    shutil.rmtree(site_dir)
+    # Sites cloned from Gitea (sub-B of #49) carry a .git subtree whose pack
+    # files are 0444 and whose directories may be 0500 — shutil.rmtree then
+    # trips on os.open(..., O_RDONLY, dir_fd=topfd). _rmtree_force chmods
+    # restricted entries to 0700 and retries.
+    _rmtree_force(site_dir)
 
     return {"success": True, "name": name}
 
