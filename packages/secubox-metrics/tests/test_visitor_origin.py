@@ -73,13 +73,52 @@ def test_aggregate_top_n_and_tiebreak_by_asn():
     agg.cfg = dict(CFG, top_n=2, min_count=1)
     entries = agg._aggregate([IPv4Address(f"10.0.0.{i}") for i in range(1, 16)])
     assert len(entries) == 2
-    # Largest count first; tie -> smallest ASN first
-    assert entries[0]["count"] >= entries[1]["count"]
+    # All three ASNs (100, 101, 102) have count=5; tie must resolve to smallest ASN first.
+    assert entries[0]["asn"] == 100
+    assert entries[1]["asn"] == 101
+    assert entries[0]["count"] == 5
+    assert entries[1]["count"] == 5
 
 
-def test_lookup_asn_returns_none_for_private(monkeypatch):
+def test_lookup_asn_returns_none_for_private():
     agg = VisitorOriginAggregator(CFG)
-    # Force the reader to think the mmdb exists but private IPs short-circuit
     assert agg._lookup_asn(IPv4Address("10.0.0.1")) is None
     assert agg._lookup_asn(IPv4Address("192.168.1.1")) is None
     assert agg._lookup_asn(IPv4Address("127.0.0.1")) is None
+
+
+def test_lookup_asn_reopens_on_mtime_change(monkeypatch, tmp_path):
+    """If the mmdb file's mtime changes between calls, the handle is reopened."""
+    db_path = tmp_path / "asn.mmdb"
+    db_path.write_bytes(b"v1")
+    cfg = dict(CFG, asn_db_path=str(db_path))
+    agg = VisitorOriginAggregator(cfg)
+
+    open_calls = []
+
+    class FakeMmdb:
+        def __init__(self, n): self.n = n
+        def get(self, _): return None
+        def close(self): pass
+
+    def fake_open(path):
+        open_calls.append(path)
+        return FakeMmdb(len(open_calls))
+
+    monkeypatch.setattr("visitor_origin.maxminddb",
+                        type("M", (), {"open_database": staticmethod(fake_open)}))
+
+    # First lookup opens v1
+    agg._lookup_asn(IPv4Address("1.1.1.1"))
+    assert len(open_calls) == 1
+
+    # No file change → no reopen
+    agg._lookup_asn(IPv4Address("1.1.1.2"))
+    assert len(open_calls) == 1
+
+    # Bump mtime → reopen on next call
+    import os
+    new_mtime = db_path.stat().st_mtime + 100
+    os.utime(db_path, (new_mtime, new_mtime))
+    agg._lookup_asn(IPv4Address("1.1.1.3"))
+    assert len(open_calls) == 2
