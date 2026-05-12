@@ -55,6 +55,13 @@ LANG_TABLE: dict[str, tuple[str, str]] = {
     ".css": ("block", "top"),
     ".c": ("block", "top"),
     ".h": ("block", "top"),
+    ".html": ("html", "html"),
+    ".htm": ("html", "html"),
+    ".md": ("html", "markdown"),
+    ".toml": ("hash", "top"),
+    ".yaml": ("hash", "top"),
+    ".yml": ("hash", "top"),
+    ".conf": ("hash", "top"),
 }
 
 
@@ -82,10 +89,32 @@ def _place_top(header: str, text: str) -> str:
     return header + "\n" + text
 
 
+def _place_html(header: str, text: str) -> str:
+    lines = text.splitlines(keepends=True)
+    insert_at = 0
+    if lines and lines[0].lstrip().lower().startswith("<!doctype"):
+        insert_at = 1
+    return "".join(lines[:insert_at]) + header + "\n" + "".join(lines[insert_at:])
+
+
+def _place_markdown(header: str, text: str) -> str:
+    """Place after YAML frontmatter if present, else at top."""
+    lines = text.splitlines(keepends=True)
+    insert_at = 0
+    if lines and lines[0].rstrip() == "---":
+        for i in range(1, len(lines)):
+            if lines[i].rstrip() == "---":
+                insert_at = i + 1
+                break
+    return "".join(lines[:insert_at]) + header + "\n" + "".join(lines[insert_at:])
+
+
 _PLACERS = {
     "python": _place_python,
     "shebang_hash": _place_shebang_hash,
     "top": _place_top,
+    "html": _place_html,
+    "markdown": _place_markdown,
 }
 
 
