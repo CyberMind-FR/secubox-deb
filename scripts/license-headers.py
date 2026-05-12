@@ -48,6 +48,7 @@ def render_header(style: str) -> str:
 
 LANG_TABLE: dict[str, tuple[str, str]] = {
     ".py": ("hash", "python"),
+    ".sh": ("hash", "shebang_hash"),
 }
 
 
@@ -63,8 +64,16 @@ def _place_python(header: str, text: str) -> str:
     return "".join(lines[:insert_at]) + header + "\n" + "".join(lines[insert_at:])
 
 
+def _place_shebang_hash(header: str, text: str) -> str:
+    """Hash-comment language with a shebang line on line 1."""
+    lines = text.splitlines(keepends=True)
+    insert_at = 1 if lines and lines[0].startswith("#!") else 0
+    return "".join(lines[:insert_at]) + header + "\n" + "".join(lines[insert_at:])
+
+
 _PLACERS = {
     "python": _place_python,
+    "shebang_hash": _place_shebang_hash,
 }
 
 
