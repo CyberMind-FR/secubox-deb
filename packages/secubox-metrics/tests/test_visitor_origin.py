@@ -122,3 +122,37 @@ def test_lookup_asn_reopens_on_mtime_change(monkeypatch, tmp_path):
     os.utime(db_path, (new_mtime, new_mtime))
     agg._lookup_asn(IPv4Address("1.1.1.3"))
     assert len(open_calls) == 2
+
+
+def test_refresh_disabled_returns_disabled():
+    agg = VisitorOriginAggregator(dict(CFG, enabled=False))
+    import asyncio
+    out = asyncio.run(agg.refresh_once())
+    assert out["enabled"] is False
+    assert out["entries"] == []
+
+
+def test_refresh_missing_mmdb_returns_disabled(tmp_path):
+    agg = VisitorOriginAggregator(dict(CFG, asn_db_path=str(tmp_path / "missing.mmdb")))
+    import asyncio
+    out = asyncio.run(agg.refresh_once())
+    assert out["enabled"] is False
+
+
+def test_refresh_handles_nft_failure(monkeypatch, tmp_path):
+    # Pretend mmdb exists so we reach _read_nft_set
+    fake_db = tmp_path / "asn.mmdb"
+    fake_db.write_bytes(b"\x00")  # truthy existence
+    agg = VisitorOriginAggregator(dict(CFG, asn_db_path=str(fake_db)))
+    # Force maxminddb import path to succeed without a real db by mocking _lookup_asn
+    agg._lookup_asn = lambda ip: None  # type: ignore[assignment]
+    # Ensure module-level maxminddb guard passes even if package is not installed
+    monkeypatch.setattr("visitor_origin.maxminddb", object())
+    monkeypatch.setattr(
+        "visitor_origin.subprocess.run",
+        lambda *a, **kw: MagicMock(returncode=1, stdout=""),
+    )
+    import asyncio
+    out = asyncio.run(agg.refresh_once())
+    assert out["enabled"] is True
+    assert out["entries"] == []
