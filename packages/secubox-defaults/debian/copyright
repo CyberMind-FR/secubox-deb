@@ -1,0 +1,8 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Source: https://github.com/CyberMind-FR/secubox-deb
+Upstream-Name: secubox-defaults
+
+Files: *
+Copyright: 2026 CyberMind / Gerald KERMA <devel@cybermind.fr>
+License: Proprietary
+ SecuBox-Deb proprietary licence. ANSSI CSPN candidate.

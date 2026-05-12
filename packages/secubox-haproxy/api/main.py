@@ -31,10 +31,12 @@ from datetime import datetime, timedelta
 from enum import Enum
 
 from fastapi import FastAPI, APIRouter, Depends, HTTPException, Query, BackgroundTasks
+from fastapi.responses import PlainTextResponse, Response
 from pydantic import BaseModel, Field
 from secubox_core.auth import router as auth_router, require_jwt
 from secubox_core.config import get_config
 from secubox_core.logger import get_logger
+from api import webui_identity as _webui_identity
 
 app = FastAPI(title="secubox-haproxy", version="2.0.0", root_path="/api/v1/haproxy")
 
@@ -1529,14 +1531,38 @@ async def generate_config():
         "    mode http",
     ])
 
+    # WebUI Obfuscation (issue #44) — strict regex ACL at top of frontend
+    try:
+        _ident = _webui_identity.get_identity()
+        config_lines.extend([
+            "    # WebUI Obfuscation (issue #44)",
+            f"    acl is_webui_admin hdr(host) -m reg {_ident['regex']}",
+            "    use_backend webui_direct if is_webui_admin",
+        ])
+    except ValueError:
+        # SECUBOX_HOSTNAME not set — skip the strict ACL (legacy behaviour)
+        _ident = None
+
     # ACLs for vhosts
     for vh in vhosts:
         if vh.get("enabled"):
+            try:
+                _admin = _webui_identity.get_identity()["admin_domain"]
+                if vh.get("domain") == _admin:
+                    continue
+            except ValueError:
+                pass
             config_lines.append(f"    acl host_{vh['name']} hdr(host) -i {vh['domain']}")
 
     # Use backend rules (through WAF if enabled)
     for vh in vhosts:
         if vh.get("enabled"):
+            try:
+                _admin = _webui_identity.get_identity()["admin_domain"]
+                if vh.get("domain") == _admin:
+                    continue
+            except ValueError:
+                pass
             if cfg["waf_enabled"] and not vh.get("waf_bypass"):
                 config_lines.append(f"    use_backend mitmproxy_inspector if host_{vh['name']}")
             else:
@@ -1554,12 +1580,35 @@ async def generate_config():
         "    mode http",
     ])
 
+    # WebUI Obfuscation (issue #44) — strict regex ACL at top of frontend
+    try:
+        _ident = _webui_identity.get_identity()
+        config_lines.extend([
+            "    # WebUI Obfuscation (issue #44)",
+            f"    acl is_webui_admin hdr(host) -m reg {_ident['regex']}",
+            "    use_backend webui_direct if is_webui_admin",
+        ])
+    except ValueError:
+        _ident = None
+
     for vh in vhosts:
         if vh.get("enabled") and vh.get("ssl"):
+            try:
+                _admin = _webui_identity.get_identity()["admin_domain"]
+                if vh.get("domain") == _admin:
+                    continue
+            except ValueError:
+                pass
             config_lines.append(f"    acl host_{vh['name']} hdr(host) -i {vh['domain']}")
 
     for vh in vhosts:
         if vh.get("enabled") and vh.get("ssl"):
+            try:
+                _admin = _webui_identity.get_identity()["admin_domain"]
+                if vh.get("domain") == _admin:
+                    continue
+            except ValueError:
+                pass
             if cfg["waf_enabled"] and not vh.get("waf_bypass"):
                 config_lines.append(f"    use_backend mitmproxy_inspector if host_{vh['name']}")
             else:
@@ -1582,6 +1631,18 @@ async def generate_config():
             f"    server waf 127.0.0.1:{cfg['waf_backend_port']} check",
             "",
         ])
+
+    # WebUI direct backend (issue #44 — only emitted when strict ACL is in use)
+    try:
+        _webui_identity.get_identity()
+        config_lines.extend([
+            "",
+            "backend webui_direct",
+            "    mode http",
+            "    server srv0 127.0.0.1:9080 check",
+        ])
+    except ValueError:
+        pass
 
     # User backends
     for be in backends:
@@ -2165,6 +2226,65 @@ async def migrate(req: MigrateRequest):
     else:
         log.error("Migration failed: %s", result.stderr)
         return {"success": False, "error": result.stderr or "Migration failed"}
+
+
+# ══════════════════════════════════════════════════════════════════
+# WebUI Identity Endpoints (issue #44 — admin.<HOSTNAME>.<SUFFIX> only)
+# ══════════════════════════════════════════════════════════════════
+
+@app.get("/webui/admin-domain")
+async def webui_admin_domain():
+    """Return the canonical admin URL identity for this board.
+
+    Reads /etc/default/secubox. No auth required (info is not secret).
+    """
+    try:
+        return _webui_identity.get_identity()
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+
+
+def _render_nginx_vhost(ident: dict) -> str:
+    """Render the secubox-local nginx vhost with strict regex server_name."""
+    host_esc = ident["hostname"].replace(".", r"\.")
+    suffix_esc = ident["domain_suffix"].replace(".", r"\.")
+    regex = rf"~^admin\.{host_esc}\.{suffix_esc}$"
+    return (
+        "# SecuBox WebUI — strict-regex obfuscation (issue #44)\n"
+        "# Generated by /api/v1/haproxy/webui/nginx-config — do not edit by hand.\n"
+        "server {\n"
+        "    listen 0.0.0.0:9080;\n"
+        f"    server_name {regex};\n"
+        "    root /usr/share/secubox/www;\n"
+        "    index index.html;\n"
+        "    location / { try_files $uri $uri/ /index.html; }\n"
+        "    include /etc/nginx/secubox.d/*.conf;\n"
+        "    include /etc/nginx/snippets/api-error.conf;\n"
+        "    location /health {\n"
+        "        return 200 '{\"status\":\"ok\"}';\n"
+        "        add_header Content-Type application/json;\n"
+        "    }\n"
+        "}\n"
+    )
+
+
+@app.get("/webui/nginx-config", response_class=PlainTextResponse,
+         dependencies=[Depends(require_jwt)])
+async def webui_nginx_config():
+    """Return the rendered nginx vhost for the WebUI (text/plain)."""
+    try:
+        ident = _webui_identity.get_identity()
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+    return _render_nginx_vhost(ident)
+
+
+@app.post("/webui/refresh", status_code=204,
+          dependencies=[Depends(require_jwt)])
+async def webui_refresh():
+    """Invalidate the cached identity. Call after editing /etc/default/secubox."""
+    _webui_identity.invalidate_cache()
+    return Response(status_code=204)
 
 
 app.include_router(router)
