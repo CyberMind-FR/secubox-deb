@@ -84,3 +84,27 @@ def test_frontend_filter_strips_internal_names():
     assert "secubox.in" in kept
     assert "_stats" not in kept
     assert "stats-https" not in kept
+
+
+def test_parse_show_stat_csv_extracts_frontends():
+    csv = (
+        "# pxname,svname,qcur,scur,smax,slim,stot,req_tot,extra\n"
+        "stats-https,FRONTEND,0,0,0,0,0,5,\n"
+        "secubox.in,FRONTEND,0,1,1,0,42,142,\n"
+        "secubox.in,backend-a,0,0,0,0,0,0,\n"
+        "apt.secubox.in,FRONTEND,0,0,0,0,0,9,\n"
+    )
+    out = LiveHostsAggregator._parse_show_stat(csv)
+    assert out == {"stats-https": 5, "secubox.in": 142, "apt.secubox.in": 9}
+
+
+def test_parse_show_stat_empty_or_malformed_returns_empty():
+    assert LiveHostsAggregator._parse_show_stat("") == {}
+    assert LiveHostsAggregator._parse_show_stat("garbage\n") == {}
+
+
+def test_refresh_missing_socket_returns_disabled(tmp_path):
+    agg = LiveHostsAggregator(dict(CFG, haproxy_socket=str(tmp_path / "missing.sock")))
+    out = asyncio.run(agg.refresh_once())
+    assert out["enabled"] is False
+    assert out["entries"] == []
