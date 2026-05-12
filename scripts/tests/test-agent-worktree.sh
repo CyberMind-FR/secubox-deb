@@ -101,6 +101,25 @@ test_prefix_first_match_wins() {
   assert_eq "fix/" "$(prefix_from_labels 'bug,documentation')" "first match"
 }
 
+test_script_help_exits_zero() {
+  local out
+  out=$(bash "$SCRIPT" --help 2>&1)
+  assert_eq "0" "$?" "help exit"
+  assert_contains "$out" "agent-worktree.sh"
+  assert_contains "$out" "start"
+  assert_contains "$out" "list"
+  assert_contains "$out" "sync"
+  assert_contains "$out" "finish"
+  assert_contains "$out" "clean"
+}
+
+test_script_unknown_subcommand_exits_1() {
+  local out rc
+  out=$(bash "$SCRIPT" wibble 2>&1) ; rc=$?
+  if [[ $rc -ne 1 ]]; then echo "expected rc=1, got $rc; out=$out" >&2; return 1; fi
+  assert_contains "$out" "unknown"
+}
+
 # Auto-discover and run
 mapfile -t tests < <(declare -F | awk '{print $3}' | grep '^test_')
 for t in "${tests[@]}"; do run_test "$t"; done
