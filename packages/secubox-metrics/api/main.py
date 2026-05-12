@@ -10,12 +10,15 @@ import json
 import os
 import subprocess
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from cryptography import x509
+from cryptography.hazmat.backends import default_backend
 
 # Try to import auth, fallback to no-auth for development
 try:
@@ -30,6 +33,15 @@ app = FastAPI(
     title="SecuBox Metrics Dashboard",
     description="Real-time system metrics with caching",
     version="1.0.0"
+)
+
+# CORS middleware for cross-origin health banner requests
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Health banner injected on any domain
+    allow_credentials=False,
+    allow_methods=["GET"],
+    allow_headers=["*"],
 )
 
 # Cache configuration
@@ -610,14 +622,78 @@ def build_health_summary() -> dict:
     }
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# SSL CERTIFICATE STATUS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def get_ssl_status(domain: str) -> dict:
+    """
+    Get SSL certificate status for a domain.
+
+    Thresholds (aggressive for Let's Encrypt 90-day certs):
+    - ok: > 7 days remaining
+    - warn: 3-7 days remaining
+    - error: < 3 days remaining
+    - expired: <= 0 days remaining
+    """
+    if not domain:
+        return {"domain": None, "days_remaining": None, "status": "unknown", "expiry": None}
+
+    parent_domain = '.'.join(domain.split('.')[1:]) if '.' in domain else domain
+    cert_paths = [
+        Path(f"/etc/letsencrypt/live/{domain}/cert.pem"),
+        Path(f"/etc/letsencrypt/live/{parent_domain}/cert.pem"),
+        Path(f"/etc/haproxy/certs/{domain}.pem"),
+        Path(f"/etc/nginx/ssl/{domain}.crt"),
+    ]
+
+    cert_path = None
+    for p in cert_paths:
+        if p.exists():
+            cert_path = p
+            break
+
+    if not cert_path:
+        return {"domain": domain, "days_remaining": None, "status": "unknown", "expiry": None}
+
+    try:
+        cert_data = cert_path.read_bytes()
+        cert = x509.load_pem_x509_certificate(cert_data, default_backend())
+        now = datetime.now(timezone.utc)
+        expiry = cert.not_valid_after_utc
+        days_remaining = (expiry - now).days
+
+        if days_remaining <= 0:
+            status = "expired"
+        elif days_remaining < 3:
+            status = "error"
+        elif days_remaining <= 7:
+            status = "warn"
+        else:
+            status = "ok"
+
+        return {"domain": domain, "days_remaining": days_remaining, "status": status, "expiry": expiry.isoformat()}
+    except Exception as e:
+        return {"domain": domain, "days_remaining": None, "status": "unknown", "expiry": None, "error": str(e)}
+
+
 @app.get("/api/v1/metrics/health/summary")
-async def get_health_summary():
+async def get_health_summary(request: Request):
     """
     Health summary for the global health banner.
     Returns aggregated health score and module statuses.
     No auth required for banner display.
     """
-    return build_health_summary()
+    summary = build_health_summary()
+
+    # Add SSL certificate status for the current domain
+    host = request.headers.get("host", "").split(":")[0]  # Remove port if present
+    if host:
+        summary["ssl"] = get_ssl_status(host)
+    else:
+        summary["ssl"] = None
+
+    return summary
 
 if __name__ == "__main__":
     import uvicorn
