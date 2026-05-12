@@ -60,9 +60,14 @@ enabled = true
 warn_days = 30
 ```
 
-MaxMind GeoLite2-ASN refresh: drop a license file at
+MaxMind GeoLite2-ASN refresh: install `geoipupdate` (available in Debian
+bookworm's `contrib` repository; `secubox-metrics` lists it as a
+`Recommends`, not `Depends`, so `apt install secubox-metrics` succeeds
+without `contrib` enabled). Drop a license file at
 `/etc/secubox/secrets/maxmind.conf` (mode 0600, owner `secubox`).
-The `secubox-geoipupdate.timer` runs weekly; no key => no-op.
+The `secubox-geoipupdate.timer` runs weekly; if either the binary or the
+key is absent, the unit is a silent no-op and the VisitorOrigin banner
+section stays hidden.
 
 ## License
 

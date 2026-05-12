@@ -36,13 +36,14 @@ class VisitorOriginAggregator:
     def __init__(self, cfg: dict):
         self.cfg = cfg
         self._payload: dict = {"enabled": False, "entries": []}
+        self._refreshed = False
         self._mmdb = None
         self._mmdb_mtime: float = 0.0
 
     # -- public ---------------------------------------------
 
     def current(self) -> dict:
-        if self._payload.get("entries"):
+        if self._refreshed:
             return dict(self._payload)
         if CACHE_PATH.exists():
             try:
@@ -61,10 +62,12 @@ class VisitorOriginAggregator:
 
     async def refresh_once(self) -> dict:
         if not self.cfg.get("enabled"):
+            self._refreshed = True
             return self._disabled_payload()
         if not Path(self.cfg["asn_db_path"]).exists() or maxminddb is None:
+            self._refreshed = True
             return self._disabled_payload()
-        ips = self._read_nft_set()
+        ips = await asyncio.to_thread(self._read_nft_set)
         entries = self._aggregate(ips)
         payload = {
             "enabled": True,
@@ -73,6 +76,7 @@ class VisitorOriginAggregator:
             "entries": entries,
         }
         self._persist(payload)
+        self._refreshed = True
         return payload
 
     # -- pure helpers ---------------------------------------
