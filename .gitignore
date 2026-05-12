@@ -74,3 +74,7 @@ backups/*.img.xz
 /output/streamlit-ingest.log
 /output/streamlit-ingest-full.out
 /output/broken-streamlit-repos.txt
+
+# MetaBlogizer site backfill artifacts (regenerated each run)
+/output/metablog-backfill-report.json
+/output/metablog-backfill.log
