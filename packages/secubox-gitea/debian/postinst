@@ -4,6 +4,67 @@ if [ "$1" = "configure" ]; then
     systemctl daemon-reload
     systemctl enable secubox-gitea.service || true
     systemctl start secubox-gitea.service || true
+
+    # --- Gitea routing install (idempotent) ---
+    NGINX_VHOST=/etc/nginx/sites-available/gitea.conf
+    NGINX_ENABLED=/etc/nginx/sites-enabled/gitea
+    HAPROXY_CFG=/etc/haproxy/haproxy.cfg
+    SECUBOX_GITEA_CONF=/usr/share/secubox-gitea/conf
+
+    # 1. nginx vhost
+    if [ ! -f "$NGINX_VHOST" ] && [ -f "$SECUBOX_GITEA_CONF/gitea.nginx.conf" ]; then
+        install -m 0644 "$SECUBOX_GITEA_CONF/gitea.nginx.conf" "$NGINX_VHOST"
+        ln -sf "$NGINX_VHOST" "$NGINX_ENABLED"
+        if nginx -t 2>/dev/null; then
+            systemctl reload nginx || true
+        else
+            echo "secubox-gitea: nginx -t failed after vhost install — rolling back vhost" >&2
+            rm -f "$NGINX_ENABLED" "$NGINX_VHOST"
+        fi
+    fi
+
+    # 2. HAProxy ACLs + TCP frontend (only if gitea.gk2.secubox.in is not yet routed)
+    if [ -f "$HAPROXY_CFG" ] && ! grep -q "host_gitea_gk2_secubox_in" "$HAPROXY_CFG"; then
+        cp "$HAPROXY_CFG" "$HAPROXY_CFG.bak.gitea-postinst.$(date +%s)"
+        for frontend in http-in https-in; do
+            awk -v fe="$frontend" '
+                $0 ~ "^frontend "fe { inside=1 }
+                /^frontend / && $0 !~ "^frontend "fe { inside=0 }
+                inside && /^    default_backend / && !done {
+                    print "    acl host_gitea_gk2_secubox_in hdr(host) -i gitea.gk2.secubox.in"
+                    print "    use_backend nginx_vhosts if host_gitea_gk2_secubox_in"
+                    done=1
+                }
+                { print }
+            ' "$HAPROXY_CFG" > "$HAPROXY_CFG.new"
+            mv "$HAPROXY_CFG.new" "$HAPROXY_CFG"
+        done
+        if ! grep -q "^frontend gitea-ssh" "$HAPROXY_CFG"; then
+            cat >> "$HAPROXY_CFG" <<'GITEASSH'
+
+frontend gitea-ssh
+    bind *:2222
+    mode tcp
+    option tcplog
+    timeout client 1h
+    default_backend gitea_ssh
+
+backend gitea_ssh
+    mode tcp
+    option tcp-check
+    timeout server 1h
+    server gitea_lxc 10.100.0.40:2222 check
+GITEASSH
+        fi
+        if haproxy -f "$HAPROXY_CFG" -c >/dev/null 2>&1; then
+            systemctl reload haproxy || true
+        else
+            echo "secubox-gitea: haproxy -c failed after ACL install — rolling back" >&2
+            latest_bak=$(ls -t "$HAPROXY_CFG.bak.gitea-postinst."* 2>/dev/null | head -1)
+            if [ -n "$latest_bak" ]; then cp "$latest_bak" "$HAPROXY_CFG"; fi
+        fi
+    fi
+    # --- end Gitea routing install ---
 fi
 #DEBHELPER#
 exit 0
