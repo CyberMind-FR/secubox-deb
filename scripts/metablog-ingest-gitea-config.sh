@@ -60,8 +60,8 @@ BEGIN {
 /^\[/ {
     if (in_repo) {
         # Leaving [repository] — flush missing keys before new section
-        if (!saw_push)  { print need_push }
-        if (!saw_branch){ print need_branch }
+        if (!saw_push)  { print need_push;  saw_push = 1 }
+        if (!saw_branch){ print need_branch; saw_branch = 1 }
         in_repo = 0
     }
     in_repo = (tolower($0) == "[repository]")
