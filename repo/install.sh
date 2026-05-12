@@ -48,7 +48,7 @@ apt-get install -y -qq curl gnupg ca-certificates >/dev/null
 
 # Download and install GPG key
 log "Adding GPG key..."
-curl -fsSL "${REPO_URL}/secubox-keyring.gpg" | tee "${KEYRING_PATH}" >/dev/null
+curl -fsSL "${REPO_URL}/secubox-keyring.gpg" | gpg --dearmor | tee "${KEYRING_PATH}" >/dev/null
 chmod 644 "${KEYRING_PATH}"
 ok "GPG key installed"
 
