@@ -155,3 +155,23 @@ def test_apply_python_with_shebang_and_encoding():
     assert lines[0] == "#!/usr/bin/env python3"
     assert lines[1] == "# -*- coding: utf-8 -*-"
     assert lines[2] == "# SPDX-License-Identifier: LicenseRef-CMSD-1.0"
+
+
+def test_apply_bash_with_shebang():
+    src = '#!/usr/bin/env bash\nset -euo pipefail\necho "hi"\n'
+    out = license_headers.apply(src, ".sh")
+    assert out.startswith("#!/usr/bin/env bash\n")
+    assert out.splitlines()[1] == "# SPDX-License-Identifier: LicenseRef-CMSD-1.0"
+
+
+def test_apply_bash_without_shebang():
+    src = 'echo "hi"\n'
+    out = license_headers.apply(src, ".sh")
+    assert out.startswith("# SPDX-License-Identifier: LicenseRef-CMSD-1.0\n")
+
+
+def test_apply_bash_idempotent():
+    src = '#!/usr/bin/env bash\nset -e\n'
+    once = license_headers.apply(src, ".sh")
+    twice = license_headers.apply(once, ".sh")
+    assert once == twice
