@@ -7,6 +7,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 LIB="$REPO_ROOT/scripts/lib/agent-worktree-lib.sh"
 SCRIPT="$REPO_ROOT/scripts/agent-worktree.sh"
 GH_MOCK="$REPO_ROOT/scripts/tests/fixtures/gh-mock.sh"
+GIT_BIN="${GIT_BIN:-git}"
 
 pass=0
 fail=0
@@ -40,6 +41,23 @@ assert_contains() {
     echo "expected to contain '$needle' in: $haystack" >&2
     return 1
   fi
+}
+
+# Make a throwaway repo with one commit on master; returns its path on stdout.
+make_sandbox_repo() {
+  local dir
+  dir=$(mktemp -d)
+  (
+    cd "$dir"
+    "$GIT_BIN" init -q -b master
+    git config user.email "t@t" ; git config user.name "t"
+    echo "hello" > README.md
+    git add README.md
+    git commit -q -m "init"
+    # Simulate an origin/master so worktree-add can use it
+    git update-ref refs/remotes/origin/master HEAD
+  )
+  printf '%s' "$dir"
 }
 
 # Tests below
@@ -118,6 +136,41 @@ test_script_unknown_subcommand_exits_1() {
   out=$(bash "$SCRIPT" wibble 2>&1) ; rc=$?
   if [[ $rc -ne 1 ]]; then echo "expected rc=1, got $rc; out=$out" >&2; return 1; fi
   assert_contains "$out" "unknown"
+}
+
+test_branch_from_issue_chore() {
+  source "$LIB"
+  local json='{"title":"Add tier-manifest helper for APT staging","labels":[{"name":"infra"}]}'
+  assert_eq "chore/80-add-tier-manifest-helper-for-apt-staging" "$(branch_from_issue 80 "$json")" "infra issue"
+}
+
+test_branch_from_issue_default_feature() {
+  source "$LIB"
+  local json='{"title":"Multi-agent worktree workflow","labels":[{"name":"enhancement"}]}'
+  assert_eq "feature/83-multi-agent-worktree-workflow" "$(branch_from_issue 83 "$json")" "default feature"
+}
+
+test_start_happy_path() {
+  local repo wt_root
+  repo=$(make_sandbox_repo)
+  wt_root="$(mktemp -d)"
+  trap "rm -rf $repo $wt_root" RETURN
+
+  export GH_BIN="$GH_MOCK"
+  export GH_MOCK_AUTH=ok
+  export GH_MOCK_ISSUE_42_TITLE="Hello world"
+  export GH_MOCK_ISSUE_42_LABELS="bug"
+  export WORKTREE_ROOT="$wt_root"
+
+  (cd "$repo" && bash "$SCRIPT" start --issue 42) >/dev/null
+
+  # Branch exists locally
+  (cd "$repo" && git rev-parse --verify "fix/42-hello-world") >/dev/null \
+    || { echo "branch fix/42-hello-world missing" >&2; return 1; }
+
+  # Worktree dir exists
+  test -d "$wt_root/42-hello-world" \
+    || { echo "worktree dir missing" >&2; return 1; }
 }
 
 # Auto-discover and run

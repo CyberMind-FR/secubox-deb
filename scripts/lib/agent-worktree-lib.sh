@@ -37,3 +37,28 @@ prefix_from_labels() {
   done
   printf 'feature/'
 }
+
+# Extract title and label list from gh JSON (no jq required — minimal parse).
+# Expects the exact shape produced by `gh issue view --json title,labels`.
+_extract_title() {
+  # Match `"title":"..."` allowing escaped quotes inside.
+  printf '%s' "$1" | sed -E 's/.*"title":"((\\.|[^"\\])*)".*/\1/'
+}
+
+_extract_labels() {
+  # Print comma-separated label names from `[{"name":"a"},{"name":"b"}]`.
+  printf '%s' "$1" \
+    | grep -oE '"name":"[^"]+"' \
+    | sed -E 's/"name":"([^"]+)"/\1/' \
+    | paste -sd, -
+}
+
+branch_from_issue() {
+  local num="$1" json="$2"
+  local title labels prefix slug
+  title=$(_extract_title "$json")
+  labels=$(_extract_labels "$json")
+  prefix=$(prefix_from_labels "$labels")
+  slug=$(derive_slug "$title")
+  printf '%s%s-%s' "$prefix" "$num" "$slug"
+}
