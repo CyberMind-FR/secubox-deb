@@ -1,37 +1,40 @@
 # ==============================================================================
 # SecuBox Eye Remote - USB OTG Gadget Detection
-# Detects Pi Zero W composite gadget (RNDIS + CDC-ECM + ACM + Mass Storage)
+# Detects Pi Zero W composite gadget (CDC-ECM + ACM + Mass Storage)
 # CyberMind - https://cybermind.fr
+#
+# NOTE: CDC-ECM is preferred over RNDIS for better Linux compatibility.
+# RNDIS is disabled to prevent duplicate routes.
 # ==============================================================================
 
 # Pi Zero W Composite Gadget: Linux Foundation Multifunction (1d6b:0104)
-# Creates both RNDIS (usb0) and CDC-ECM (usb1) interfaces
-# We only want IP on RNDIS (usb0), disable CDC-ECM (usb1) to prevent conflicts
+# Creates both CDC-ECM and RNDIS interfaces; we use CDC-ECM only.
 
-# RNDIS interface (usb0) - Primary network connection
-# Configure IP and bring up
-ACTION=="add", SUBSYSTEM=="net", DRIVERS=="rndis_host", ATTR{address}=="02:fb:*", \
+# CDC-ECM interface - Primary network connection (preferred)
+# Rename to eye-remote, configure IP and bring up
+ACTION=="add", SUBSYSTEM=="net", DRIVERS=="cdc_ether", ATTR{address}=="02:fb:*", \
+    NAME="eye-remote", \
     RUN+="/sbin/ip link set %k up", \
-    RUN+="/sbin/ip addr add 10.55.0.1/24 dev %k 2>/dev/null || true", \
+    RUN+="/sbin/ip addr add 10.55.0.1/30 dev %k 2>/dev/null || true", \
     RUN+="/usr/lib/secubox/eye-remote-connected.sh %k"
 
-# CDC-ECM interface (usb1) - Disable to prevent duplicate IP route
-# Pi Zero creates both RNDIS and ECM; we only use RNDIS
-ACTION=="add", SUBSYSTEM=="net", DRIVERS=="cdc_ether", ATTR{address}=="02:fb:*", \
+# RNDIS interface - Disable to prevent duplicate IP route
+# Pi Zero creates both RNDIS and ECM; we only use CDC-ECM
+ACTION=="add", SUBSYSTEM=="net", DRIVERS=="rndis_host", ATTR{address}=="02:fb:*", \
     RUN+="/sbin/ip link set %k down"
 
 # Legacy: Pi Zero W CDC-ECM only gadget (NetChip signature)
 ACTION=="add", SUBSYSTEM=="net", ATTRS{idVendor}=="0525", ATTRS{idProduct}=="a4a2", \
     NAME="eye-remote", \
     RUN+="/sbin/ip link set %k up", \
-    RUN+="/sbin/ip addr add 10.55.0.1/24 dev %k 2>/dev/null || true", \
+    RUN+="/sbin/ip addr add 10.55.0.1/30 dev %k 2>/dev/null || true", \
     RUN+="/usr/lib/secubox/eye-remote-connected.sh %k"
 
 # Legacy: Alternative Raspberry Pi USB gadget signature
 ACTION=="add", SUBSYSTEM=="net", ATTRS{idVendor}=="0525", ATTRS{idProduct}=="a4a1", \
     NAME="eye-remote", \
     RUN+="/sbin/ip link set %k up", \
-    RUN+="/sbin/ip addr add 10.55.0.1/24 dev %k 2>/dev/null || true", \
+    RUN+="/sbin/ip addr add 10.55.0.1/30 dev %k 2>/dev/null || true", \
     RUN+="/usr/lib/secubox/eye-remote-connected.sh %k"
 
 # Serial console symlink (ACM interface)
@@ -39,7 +42,7 @@ ACTION=="add", SUBSYSTEM=="tty", ATTRS{idVendor}=="1d6b", ATTRS{idProduct}=="010
     SYMLINK+="eye-remote-console", MODE="0666"
 
 # Disconnect handler
-ACTION=="remove", SUBSYSTEM=="net", DRIVERS=="rndis_host", ATTR{address}=="02:fb:*", \
+ACTION=="remove", SUBSYSTEM=="net", DRIVERS=="cdc_ether", ATTR{address}=="02:fb:*", \
     RUN+="/usr/lib/secubox/eye-remote-disconnected.sh"
 
 ACTION=="remove", SUBSYSTEM=="net", ENV{INTERFACE}=="eye-remote", \

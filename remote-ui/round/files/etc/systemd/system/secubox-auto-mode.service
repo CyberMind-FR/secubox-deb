@@ -1,0 +1,62 @@
+# SecuBox Eye Remote — Auto-Mode Service
+# CyberMind — https://cybermind.fr
+# Author: Gérald Kerma <gandalf@gk2.net>
+# License: Proprietary / ANSSI CSPN candidate
+#
+# Intelligent OTG mode switching based on host detection and connection state.
+# Starts after USB gadget is configured, manages mode transitions.
+
+[Unit]
+Description=SecuBox Eye Remote Auto-Mode Controller
+Documentation=https://docs.secubox.in/eye-remote/auto-mode
+After=network.target secubox-otg-gadget.service
+Wants=secubox-otg-gadget.service
+PartOf=secubox-eye-agent.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+
+# Working directory
+WorkingDirectory=/usr/lib/secubox/eye-remote
+
+# Python path for agent modules
+Environment=PYTHONPATH=/usr/lib/secubox/eye-remote
+Environment=PYTHONUNBUFFERED=1
+
+# Run the auto-mode controller
+ExecStart=/usr/bin/python3 -m agent.auto_mode_controller
+
+# Graceful restart on failure
+Restart=on-failure
+RestartSec=5
+
+# Watchdog (30s timeout)
+WatchdogSec=30
+
+# Resource limits
+Nice=0
+IOSchedulingClass=realtime
+IOSchedulingPriority=4
+
+# Security hardening
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=false
+# Note: NoNewPrivileges=false required for gadget setup which needs root
+
+# Read-write paths for gadget configuration
+ReadWritePaths=/sys/kernel/config/usb_gadget
+ReadWritePaths=/var/lib/secubox
+ReadWritePaths=/run/secubox
+ReadWritePaths=/var/log/secubox
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=secubox-auto-mode
+
+[Install]
+WantedBy=multi-user.target

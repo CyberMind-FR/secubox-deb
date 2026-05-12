@@ -1,5 +1,130 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-11 (Session 146)*
+*Mis à jour : 2026-05-12 (Session 149)*
+
+---
+
+## ✅ Session 149: Mode Control API & Dashboard Integration
+
+### Objective
+Add web-based mode control to the Eye Remote admin dashboard for safer manual gadget switching.
+
+### Completed
+- **Mode Control API** (`mode_api.py`):
+  - HTTP API on port 8081 (8080 used by CrowdSec)
+  - `GET /api/status`: Current gadget mode and functions
+  - `POST /api/switch/<mode>`: Switch composite/network/storage/silent/hid
+  - `GET /health`: Health check endpoint
+  - `GET /metrics`: System metrics (CPU, RAM, disk, temp, load, uptime)
+  - HTML control panel with mode buttons
+
+- **Dashboard Integration** (`admin.gk2.secubox.in/eye-remote/`):
+  - USB Gadget Mode card with current status
+  - Mode switch buttons (COMPOSITE, NETWORK, STORAGE, SILENT)
+  - Live metrics display (CPU, RAM, Temp, Uptime)
+  - Auto-refresh every 10 seconds
+
+- **Infrastructure**:
+  - Systemd service `secubox-mode-api.service` on Pi
+  - Nginx proxy `/eye-remote/mode/` → `http://10.55.0.2:8081/`
+  - Nginx proxy `/api/v1/eye-remote/` → `http://10.55.0.2:8081/`
+
+### Commits
+- `462d2712` — feat(eye-remote): Add Mode Control API with metrics endpoint
+
+### Files Changed
+| File | Change |
+|------|--------|
+| `remote-ui/round/agent/api/mode_api.py` | NEW: Mode Control API with metrics |
+| `remote-ui/round/agent/auto_mode_controller.py` | Minor improvements |
+| `.gitignore` | Exclude backup images |
+
+### Deployed To
+- Pi Zero W: `/home/pi/eye-remote/agent/api/mode_api.py`
+- MOCHAbin: nginx config updated for port 8081
+
+### Current State
+- ✅ Mode API running on Pi (port 8081)
+- ✅ Dashboard shows Pi metrics and connection status
+- ✅ Mode control buttons integrated in admin panel
+- ✅ Health and metrics endpoints working
+- ✅ Composite mode active (ECM+ACM+RNDIS+Storage)
+
+### Next Steps
+1. ⬜ Test mode switching from web UI
+2. ⬜ Add HID mode button to dashboard
+3. ⬜ Create new backup image v2.2.2 with mode API
+4. ⬜ Investigate gadget crash root cause during mode switch
+
+---
+
+## ✅ Session 148: Eye Remote Auto-Mode Stability
+
+### Problem
+- Auto-mode controller caused USB gadget crashes when switching modes
+- Mode detection not working (always saw "none" instead of COMPOSITE)
+- Multiple display processes could run simultaneously
+- Network probing triggered unnecessary mode switches
+
+### Solution Implemented
+- **Mode Detection**: Added `_detect_current_mode()` to read configfs functions
+- **Smart Probing**: Check network connectivity BEFORE attempting mode switches
+- **Single Instance**: PID file locking in `fallback_manager.py`
+- **Storage Recovery**: If storage not mounted after 30s, switch back to composite
+
+### Commits
+- `b859817e` — fix(eye-remote): Improve auto-mode stability and single-instance display
+
+### Files Changed
+| File | Change |
+|------|--------|
+| `agent/auto_mode_controller.py` | Mode detection, smart probing, storage recovery |
+| `agent/display/fallback/fallback_manager.py` | PID lock for single instance |
+| `files/etc/secubox/eye-remote/gadget-setup.sh` | Lock file, cooldown safeguards |
+
+### Status
+- ✅ Completed — mode detection and stability fixes deployed
+
+---
+
+## ✅ Session 147: Fix Eye Agent Import Errors (#78)
+
+### Problem
+- `main.py` tried to import classes that don't exist: `DashboardRenderer`, `LocalRenderer`, `FlashRenderer`, `GatewayRenderer`, `RenderContext`
+- Missing modules: `agent.system`, `agent.secubox`, `agent.web`
+- Import chain failures due to missing optional dependencies (aiohttp)
+
+### Solution
+- Created stub implementations for missing modules:
+  - `system.py`: WifiManager, BluetoothManager, DisplayController
+  - `secubox.py`: DeviceManager, FleetAggregator
+  - `web.py`: WebServer
+- Created `display/renderers.py` with mode-specific renderers:
+  - DashboardRenderer: 3D cube + metric rings
+  - LocalRenderer: Disconnected mode display
+  - FlashRenderer: Alert messages
+  - GatewayRenderer: Fleet overview
+  - RenderContext: Data container
+- Rewrote imports in `main.py` with robust try/except handling
+- Updated `display/__init__.py` with graceful fallbacks
+
+### Branch
+- `fix/78-eye-agent-imports`
+- Commit: `e71209f5` — fix(eye-agent): Resolve import errors and add missing modules
+
+### Files Changed
+| File | Change |
+|------|--------|
+| `agent/main.py` | Robust import handling |
+| `agent/display/__init__.py` | Graceful fallbacks |
+| `agent/display/renderers.py` | NEW: Mode renderers |
+| `agent/system.py` | NEW: System controllers |
+| `agent/secubox.py` | NEW: Device management |
+| `agent/web.py` | NEW: Web server stub |
+
+### Status
+- ✅ Imports work without crashes
+- ✅ Core components instantiate correctly
+- ⚠️ Optional dependencies (aiohttp) show warnings but don't block startup
 
 ---
 

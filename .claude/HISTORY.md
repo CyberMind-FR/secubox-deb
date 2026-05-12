@@ -2,7 +2,99 @@
 *Tracking completed milestones with dates*
 
 ---
+## 2026-05-12
+
+### Session 150 — OPAD Doctrine Documents v2.4.0
+
+**Goal:** Create the 5 foundational OPAD (Off-Path Active Defense) doctrinal documents for SecuBox-Deb migration to passive observation + packet injection architecture.
+
+**Reference:** CM-WALL-OPAD-2026-05
+
+**Architecture Overview:**
+- **OPAD Principle:** SecuBox observes traffic passively (port mirroring) and injects packets to neutralize threats, never sits in the data path
+- **4 Injection Primitives:** DNS-R (99%), DHCP-R (95%), RST-I (90%), ARP-R (98%)
+- **8 Invariants (INV-01 to INV-08):** Fail-silent, no forwarding, zero WAN surface, etc.
+- **3-Prong Profile:** Observation / Injection / Policy configuration structure
+
+**Files Created:**
+
+| File | Lines | Description |
+|------|-------|-------------|
+| `doctrine/opad/OPAD.md` | 671 | Core doctrine, principles, invariants, injection specs |
+| `doctrine/opad/CSPN.matrix.md` | 569 | ANSSI threat × capability matrix (36 threats, 72% coverage) |
+| `doctrine/opad/OPAD-OPERATIONS.md` | 948 | Operational guide, troubleshooting, 4R rollback |
+| `schemas/opad-profile.schema.json` | 365 | JSON Schema draft-07 for profile validation |
+| `common/secubox_core/opad/models.py` | 400 | Pydantic v2 models (OPADProfile, configs) |
+| `common/secubox_core/opad/__init__.py` | 85 | Package exports |
+| `tests/test_opad_schema.py` | 374 | 18 tests (JSON Schema + Pydantic equivalence) |
+| **Total** | **3412** | |
+
+**Technical Notes:**
+- Pydantic v2 syntax: `@field_validator`, `ConfigDict`, `model_json_schema()`
+- JSON Schema draft-07 with `$defs` for reusable definitions
+- MAC address validation: `^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$`
+- Success rate constraints: 0.90 ≤ rate ≤ 1.0 for injection primitives
+
+**Tests:** 18 passed (0.13s)
+- JSON Schema Draft7 validation
+- Pydantic model equivalence
+- MAC address format validation
+- Success rate bounds checking
+- Policy rule priority range (0-9999)
+
+**Commits:** Cherry-picked to `feature/eye-remote-auto-mode`
+
+---
+
 ## 2026-05-11
+
+### Session 147 — Fix Eye Agent Import Errors (#78)
+
+**Goal:** Fix import errors in eye-agent main.py that prevented the service from starting.
+
+**Problem Analysis:**
+- `main.py` imported nonexistent classes: `DashboardRenderer`, `LocalRenderer`, `FlashRenderer`, `GatewayRenderer`, `RenderContext`
+- Missing modules: `agent.system`, `agent.secubox`, `agent.web`
+- Import chain failures due to missing aiohttp dependency
+
+**Solution:**
+1. **Created stub modules** with working implementations:
+   - `system.py`: WifiManager, BluetoothManager, DisplayController
+   - `secubox.py`: DeviceManager, FleetAggregator
+   - `web.py`: WebServer (FastAPI-based)
+
+2. **Created `display/renderers.py`** with mode-specific renderers:
+   - DashboardRenderer: 3D cube + metric rings (PIL-based)
+   - LocalRenderer: Disconnected mode display
+   - FlashRenderer: Alert/splash messages
+   - GatewayRenderer: Fleet overview for multi-device
+   - RenderContext: Dataclass for render state
+
+3. **Refactored imports in `main.py`**:
+   - Replaced single try/except with `_try_import()` helper
+   - Each module imported individually with fallbacks
+   - Missing modules set to None instead of crashing
+   - Warnings logged for missing optional components
+
+4. **Updated `display/__init__.py`**:
+   - Added graceful fallbacks for all exports
+   - Missing classes set to None
+   - Logged warnings instead of crashing
+
+**Branch:** `fix/78-eye-agent-imports`
+**Commit:** `e71209f5`
+
+**Files Created/Modified:**
+| File | Status |
+|------|--------|
+| `agent/main.py` | Modified |
+| `agent/display/__init__.py` | Modified |
+| `agent/display/renderers.py` | New |
+| `agent/system.py` | New |
+| `agent/secubox.py` | New |
+| `agent/web.py` | New |
+
+---
 
 ### Session 146 — Eye Remote v2.2.1 Build & Validation
 

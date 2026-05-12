@@ -1252,9 +1252,37 @@ class FallbackManager:
             draw.text((WIDTH - 100, 10), hostname, fill=(150, 150, 160))
 
 
+PID_FILE = Path("/run/secubox/fallback-display.pid")
+
+
 def run_fallback_display():
     """Run the fallback display loop."""
+    import fcntl
+    import atexit
+
     print("SecuBox Eye Remote - Fallback Display")
+
+    # Ensure single instance via PID file lock
+    PID_FILE.parent.mkdir(parents=True, exist_ok=True)
+    pid_fd = open(PID_FILE, 'w')
+    try:
+        fcntl.flock(pid_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except (IOError, OSError):
+        print("Another instance is already running. Exiting.")
+        pid_fd.close()
+        return
+    pid_fd.write(str(os.getpid()))
+    pid_fd.flush()
+
+    def cleanup():
+        try:
+            fcntl.flock(pid_fd, fcntl.LOCK_UN)
+            pid_fd.close()
+            PID_FILE.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+    atexit.register(cleanup)
 
     # Hide cursor on framebuffer console
     try:
@@ -1282,6 +1310,8 @@ def run_fallback_display():
 
     except KeyboardInterrupt:
         print("\nStopped")
+    finally:
+        cleanup()
 
 
 if __name__ == "__main__":

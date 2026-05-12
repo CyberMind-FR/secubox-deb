@@ -10,8 +10,19 @@ REPO_DIR="$(dirname "$SCRIPT_DIR")"
 PACKAGES_DIR="${REPO_DIR}/packages"
 OUTPUT_DIR="${REPO_DIR}/output/debs"
 
-SUITE="${1:-bookworm}"
-ARCH="${2:-$(dpkg --print-architecture)}"
+# Parse positional + flags
+SUITE="${1:-bookworm}"; shift || true
+ARCH="${1:-$(dpkg --print-architecture)}"; shift || true
+
+FILTER=""
+DRY_RUN=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --filter)   FILTER="$2"; shift 2 ;;
+    --dry-run)  DRY_RUN=1; shift ;;
+    *)          err "Unknown flag: $1"; exit 2 ;;
+  esac
+done
 
 RED='\033[0;31m'; CYAN='\033[0;36m'; GOLD='\033[0;33m'
 GREEN='\033[0;32m'; NC='\033[0m'; BOLD='\033[1m'
@@ -83,11 +94,35 @@ rm -f *.deb *.changes *.buildinfo 2>/dev/null || true
 SUCCESS=0
 FAILED=0
 
+if [[ -n "$FILTER" ]]; then
+  if [[ ! -f "$FILTER" ]]; then
+    err "Filter manifest not found: $FILTER"
+    exit 1
+  fi
+  mapfile -t ALLOWED < <(jq -r '.[]' "$FILTER")
+  log "Filter active: ${#ALLOWED[@]} packages"
+fi
+
+is_allowed() {
+  local pkg="$1"
+  [[ -z "$FILTER" ]] && return 0
+  for a in "${ALLOWED[@]}"; do [[ "$a" == "$pkg" ]] && return 0; done
+  return 1
+}
+
 for PKG in "${PACKAGES[@]}"; do
   PKG_DIR="${PACKAGES_DIR}/${PKG}"
 
   if [[ ! -d "${PKG_DIR}/debian" ]]; then
     warn "SKIP ${PKG} — pas de debian/"
+    continue
+  fi
+
+  if ! is_allowed "$PKG"; then
+    continue
+  fi
+  if [[ $DRY_RUN -eq 1 ]]; then
+    log "DRY-RUN would build: $PKG"
     continue
   fi
 
@@ -131,10 +166,12 @@ for PKG in "${PACKAGES[@]}"; do
   fi
 done
 
-# Déplacer les .deb vers output/debs
-cd "${PACKAGES_DIR}"
-mv *.deb "${OUTPUT_DIR}/" 2>/dev/null || true
-rm -f *.changes *.buildinfo 2>/dev/null || true
+# Déplacer les .deb vers output/debs (pas en dry-run)
+if [[ $DRY_RUN -eq 0 ]]; then
+  cd "${PACKAGES_DIR}"
+  mv *.deb "${OUTPUT_DIR}/" 2>/dev/null || true
+  rm -f *.changes *.buildinfo 2>/dev/null || true
+fi
 
 # Résumé
 echo ""
@@ -143,8 +180,10 @@ echo -e "${GREEN}${BOLD}  Build terminé !${NC}"
 echo ""
 echo -e "  Succès : ${SUCCESS}"
 echo -e "  Échecs : ${FAILED}"
-echo ""
-echo -e "  Packages dans : ${OUTPUT_DIR}"
-ls -la "${OUTPUT_DIR}"/*.deb 2>/dev/null | head -20 || true
+if [[ $DRY_RUN -eq 0 ]]; then
+  echo ""
+  echo -e "  Packages dans : ${OUTPUT_DIR}"
+  ls -la "${OUTPUT_DIR}"/*.deb 2>/dev/null | head -20 || true
+fi
 echo ""
 echo -e "${GOLD}${BOLD}════════════════════════════════════════════════════════${NC}"
