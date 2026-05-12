@@ -6,6 +6,8 @@ on every first-party source file. See docs/superpowers/specs/2026-05-12-license-
 """
 from __future__ import annotations
 
+import argparse
+import difflib
 import fnmatch
 import re
 import sys
@@ -22,6 +24,8 @@ HEADER_LINES = (
 
 _SPDX_RE = re.compile(r"SPDX-License-Identifier:\s*(\S+)")
 _CMSD_ID = "LicenseRef-CMSD-1.0"
+
+ENROLLMENT_FILE = "scripts/license-headers-enrolled.txt"
 
 
 def detect_existing(text: str) -> str:
@@ -196,8 +200,87 @@ def walk(paths: list[Path], enrolled: list[str]):
             yield p
 
 
+def _find_repo_root(start: Path) -> Path:
+    cur = start.resolve()
+    while cur != cur.parent:
+        if (cur / ".git").exists():
+            return cur
+        cur = cur.parent
+    return start
+
+
+def _read_enrollment(repo_root: Path) -> list[str]:
+    f = repo_root / ENROLLMENT_FILE
+    if not f.exists():
+        return []
+    patterns: list[str] = []
+    for raw in f.read_text().splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        patterns.append(line)
+    return patterns
+
+
 def main(argv: list[str] | None = None) -> int:
-    raise NotImplementedError("see Task 11")
+    parser = argparse.ArgumentParser(description="CMSD-1.0 license header tool")
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--check", action="store_true")
+    mode.add_argument("--fix", action="store_true")
+    mode.add_argument("--list", dest="list_", action="store_true")
+    mode.add_argument("--diff", action="store_true")
+    parser.add_argument("paths", nargs="*")
+
+    try:
+        args = parser.parse_args(argv)
+    except SystemExit as e:
+        return int(e.code) if isinstance(e.code, int) else 2
+
+    repo_root = _find_repo_root(Path.cwd())
+    enrolled = _read_enrollment(repo_root)
+    paths = [Path(p) for p in args.paths] if args.paths else [repo_root]
+
+    missing: list[Path] = []
+    for p in walk(paths, enrolled):
+        text = p.read_text(encoding="utf-8", errors="replace")
+        status = detect_existing(text)
+
+        if status == "FOREIGN":
+            print(f"skip (foreign SPDX): {p}", file=sys.stderr)
+            continue
+
+        if args.list_:
+            if status == "NONE":
+                print(p)
+            continue
+
+        if args.diff:
+            if status == "NONE":
+                new = apply(text, p.suffix)
+                for line in difflib.unified_diff(
+                    text.splitlines(keepends=True),
+                    new.splitlines(keepends=True),
+                    fromfile=str(p),
+                    tofile=str(p),
+                ):
+                    sys.stdout.write(line)
+            continue
+
+        if args.fix:
+            if status == "NONE":
+                p.write_text(apply(text, p.suffix), encoding="utf-8")
+            continue
+
+        if args.check:
+            if status == "NONE":
+                missing.append(p)
+
+    if args.check and missing:
+        print("Files missing CMSD-1.0 header:")
+        for p in missing:
+            print(f"  {p}")
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
