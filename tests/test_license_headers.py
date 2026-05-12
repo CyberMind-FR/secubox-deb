@@ -132,3 +132,26 @@ def test_apply_foreign_python_unchanged():
     src = "# SPDX-License-Identifier: MIT\nprint('x')\n"
     out = license_headers.apply(src, ".py")
     assert out == src
+
+
+def test_apply_python_with_shebang():
+    src = '#!/usr/bin/env python3\nprint("x")\n'
+    out = license_headers.apply(src, ".py")
+    assert out.startswith("#!/usr/bin/env python3\n")
+    assert out.splitlines()[1] == "# SPDX-License-Identifier: LicenseRef-CMSD-1.0"
+
+
+def test_apply_python_with_encoding():
+    src = '# -*- coding: utf-8 -*-\nprint("x")\n'
+    out = license_headers.apply(src, ".py")
+    assert out.startswith("# -*- coding: utf-8 -*-\n")
+    assert out.splitlines()[1] == "# SPDX-License-Identifier: LicenseRef-CMSD-1.0"
+
+
+def test_apply_python_with_shebang_and_encoding():
+    src = '#!/usr/bin/env python3\n# -*- coding: utf-8 -*-\nprint("x")\n'
+    out = license_headers.apply(src, ".py")
+    lines = out.splitlines()
+    assert lines[0] == "#!/usr/bin/env python3"
+    assert lines[1] == "# -*- coding: utf-8 -*-"
+    assert lines[2] == "# SPDX-License-Identifier: LicenseRef-CMSD-1.0"
