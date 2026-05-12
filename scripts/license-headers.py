@@ -49,6 +49,12 @@ def render_header(style: str) -> str:
 LANG_TABLE: dict[str, tuple[str, str]] = {
     ".py": ("hash", "python"),
     ".sh": ("hash", "shebang_hash"),
+    ".js": ("slash", "top"),
+    ".mjs": ("slash", "top"),
+    ".ts": ("slash", "top"),
+    ".css": ("block", "top"),
+    ".c": ("block", "top"),
+    ".h": ("block", "top"),
 }
 
 
@@ -71,9 +77,15 @@ def _place_shebang_hash(header: str, text: str) -> str:
     return "".join(lines[:insert_at]) + header + "\n" + "".join(lines[insert_at:])
 
 
+def _place_top(header: str, text: str) -> str:
+    """Insert header at line 1 with one blank line separator."""
+    return header + "\n" + text
+
+
 _PLACERS = {
     "python": _place_python,
     "shebang_hash": _place_shebang_hash,
+    "top": _place_top,
 }
 
 
