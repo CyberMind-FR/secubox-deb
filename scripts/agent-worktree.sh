@@ -169,7 +169,47 @@ _resolve_worktree_path_by_issue() {
   done
   return 1
 }
-cmd_finish() { echo "finish: not implemented" >&2; return 1; }
+cmd_finish() {
+  local dry_run=0
+  while (($#)); do
+    case "$1" in
+      --dry-run) dry_run=1; shift ;;
+      *) echo "finish: unexpected arg: $1" >&2; return 1 ;;
+    esac
+  done
+
+  if ! "$GIT_BIN" diff-index --quiet HEAD --; then
+    echo "finish: working tree dirty; commit or stash first" >&2; return 3
+  fi
+
+  local branch ; branch=$("$GIT_BIN" rev-parse --abbrev-ref HEAD)
+  case "$branch" in
+    feature/*|fix/*|docs/*|chore/*) : ;;
+    *) echo "finish: not on an agent branch ($branch)" >&2; return 1 ;;
+  esac
+
+  local ahead
+  ahead=$("$GIT_BIN" rev-list --count origin/master.."$branch" 2>/dev/null || echo 0)
+  if [[ "$ahead" -eq 0 ]]; then
+    echo "finish: branch has no commits ahead of origin/master" >&2; return 3
+  fi
+
+  local issue
+  issue=$(printf '%s' "$branch" | sed -E 's|^[^/]+/([0-9]+)-.*|\1|')
+  if [[ -z "$issue" || "$issue" == "$branch" ]]; then
+    echo "finish: cannot parse issue number from branch '$branch'" >&2; return 1
+  fi
+
+  if (( dry_run )); then
+    echo "dry-run: would push $branch and open PR closing #$issue"
+    return 0
+  fi
+
+  "$GIT_BIN" push -u origin "$branch" >/dev/null
+  "$GH_BIN" pr create --base master --head "$branch" \
+    --title "$branch" --body "Closes #$issue" \
+    || return 4
+}
 cmd_clean()  { echo "clean: not implemented" >&2 ; return 1; }
 
 main() {
