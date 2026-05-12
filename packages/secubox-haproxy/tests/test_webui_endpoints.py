@@ -41,3 +41,26 @@ def test_admin_domain_503_when_unset(client, tmp_path, monkeypatch):
     r = client.get("/webui/admin-domain")
     assert r.status_code == 503
     assert "SECUBOX_HOSTNAME" in r.json()["detail"]
+
+
+def test_nginx_config_requires_jwt(client):
+    r = client.get("/webui/nginx-config")
+    assert r.status_code in (401, 403)
+
+
+def test_nginx_config_returns_rendered_vhost(client, monkeypatch):
+    # Bypass JWT for this test by overriding the dependency
+    from api.main import app
+    from secubox_core.auth import require_jwt
+    app.dependency_overrides[require_jwt] = lambda: {"sub": "tester"}
+    try:
+        r = client.get("/webui/nginx-config")
+    finally:
+        app.dependency_overrides.clear()
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("text/plain")
+    body = r.text
+    assert r"server_name ~^admin\.gk2\.secubox\.in$;" in body
+    assert "listen 0.0.0.0:9080;" in body
+    assert "root /usr/share/secubox/www;" in body
+    assert "include /etc/nginx/secubox.d/*.conf;" in body
