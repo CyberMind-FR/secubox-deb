@@ -15,8 +15,11 @@ override_dh_auto_install:
 	# Install control scripts (system-wide admin tools)
 	install -d debian/secubox-haproxy/usr/sbin
 	[ -d sbin ] && find sbin -maxdepth 1 -type f ! -name 'secubox-render-nginx-webui' \
+	    ! -name 'secubox-haproxy-regen-safe' \
 	    -exec install -m 755 {} debian/secubox-haproxy/usr/sbin/ \; || true
 	# Install local admin tools (issue #44 — kept in /usr/local/bin for admin-only invocation)
 	install -d debian/secubox-haproxy/usr/local/bin
 	[ -f sbin/secubox-render-nginx-webui ] && \
 	    install -m 755 sbin/secubox-render-nginx-webui debian/secubox-haproxy/usr/local/bin/ || true
+	[ -f sbin/secubox-haproxy-regen-safe ] && \
+	    install -m 755 sbin/secubox-haproxy-regen-safe debian/secubox-haproxy/usr/local/bin/ || true
