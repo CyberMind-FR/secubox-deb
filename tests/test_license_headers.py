@@ -113,3 +113,22 @@ def test_detect_existing_only_checks_first_10_lines():
     """A CMSD line buried deep in the file should NOT be treated as MATCH."""
     text = "\n".join(["# unrelated"] * 20) + "\n# SPDX-License-Identifier: LicenseRef-CMSD-1.0\n"
     assert license_headers.detect_existing(text) == "NONE"
+
+
+def test_apply_python_plain():
+    src = '"""Docstring."""\nprint("hi")\n'
+    out = license_headers.apply(src, ".py")
+    assert out == EXPECTED_HASH_HEADER + "\n" + src
+
+
+def test_apply_python_idempotent():
+    src = '"""Docstring."""\nprint("hi")\n'
+    once = license_headers.apply(src, ".py")
+    twice = license_headers.apply(once, ".py")
+    assert once == twice
+
+
+def test_apply_foreign_python_unchanged():
+    src = "# SPDX-License-Identifier: MIT\nprint('x')\n"
+    out = license_headers.apply(src, ".py")
+    assert out == src
