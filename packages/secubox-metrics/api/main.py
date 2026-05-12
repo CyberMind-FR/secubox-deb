@@ -9,6 +9,7 @@ import asyncio
 import json
 import os
 import subprocess
+import sys
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -29,6 +30,11 @@ except ImportError:
     AUTH_ENABLED = False
     async def require_jwt():
         pass
+
+# When uvicorn loads us as `api.main`, sibling modules in this directory
+# are not on sys.path. Mirror what tests/conftest.py does at test time so
+# the bare imports below resolve in both environments.
+sys.path.insert(0, os.path.dirname(__file__))
 
 from visitor_origin import VisitorOriginAggregator
 from live_hosts import LiveHostsAggregator
