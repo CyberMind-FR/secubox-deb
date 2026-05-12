@@ -4,6 +4,32 @@
 ---
 ## 2026-05-12
 
+### Session 160 — secubox apt + clone: validate against live repo (Issue #89)
+
+**Goal:** Audit the 2026-05-11 plan vs the implemented Go CLI; close any genuine gap; end-to-end against `https://apt.secubox.in/` (commissioned in Session 152 / Issue #80).
+
+**Done:**
+- All 48 plan steps in `docs/superpowers/plans/2026-05-11-secubox-apt-clone.md` ticked after walking each against `cmd/secubox/{cmd,internal/apt}/*.go`. `go test ./internal/apt/... ./cmd/...` passes; binary builds; subcommand `--help` strings correct.
+- **One real bug found** during E2E: `apt.Client.DefaultGPGKeyURL` was `https://apt.secubox.in/secubox.gpg`, which doesn't exist on the public repo. nginx `try_files` falls through to `index.html`, so the Go code wrote a 2.5 kB HTML landing page as the keyring → `apt update` exit 100. Fixed by pointing at `/secubox-keyring.gpg.bin` (binary OpenPGP). The unit tests didn't catch this because they use `httptest` servers that don't hit the real URL.
+
+**Commits:**
+- `4e8eadf4` — docs(apt): Tick plan checkboxes per code audit (ref #89)
+- `6e3276bb` — fix(apt): Use binary keyring URL so apt accepts the signed-by= source (ref #89)
+
+**E2E proof (fresh bookworm chroot):**
+```
+secubox apt setup     # OK: SecuBox repository configured successfully!
+apt-get update        # Hit:1 https://apt.secubox.in bookworm InRelease
+apt-cache search secubox # 15 packages
+```
+
+`secubox clone --minimal -y` reaches `apt install`; dpkg postinst then fails inside `minbase` (no systemd) — not a CLI bug, expected limitation of `--variant=minbase`. Validates on real targets with systemd (MOCHAbin, VM).
+
+**Follow-up (separate work):**
+- Add an E2E smoke job to CI that exercises `secubox apt setup` against a real or recorded `apt.secubox.in` (would have caught the URL bug). Out of scope here.
+
+---
+
 ### Session 158 — SSL Health Banner Fixes & HAProxy Recovery
 
 **Goal:** Fix SSL display not working in banner + recover broken HAProxy config.
