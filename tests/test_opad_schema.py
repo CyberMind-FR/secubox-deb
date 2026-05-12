@@ -273,7 +273,7 @@ def test_policy_rule_creation():
 
 def test_export_json_schema():
     """Test that Pydantic models can export JSON Schema."""
-    schema = OPADProfile.schema()
+    schema = OPADProfile.model_json_schema()
     assert schema["title"] == "OPADProfile"
     assert "properties" in schema
     assert "version" in schema["properties"]
