@@ -1,0 +1,37 @@
+#!/bin/sh
+# secubox-defaults postinst: autodetect SECUBOX_HOSTNAME if empty,
+# then activate the secubox-defaults-changed trigger so consumers refresh.
+set -e
+
+DEFAULTS=/etc/default/secubox
+
+case "$1" in
+    configure)
+        if [ ! -f "$DEFAULTS" ]; then
+            echo "secubox-defaults: $DEFAULTS missing — package files not installed?" >&2
+            exit 1
+        fi
+
+        # Source the existing values
+        # shellcheck disable=SC1090
+        . "$DEFAULTS" 2>/dev/null || true
+
+        if [ -z "${SECUBOX_HOSTNAME:-}" ]; then
+            # Autodetect: hostname -s minus any 'secubox-' prefix
+            DETECTED=$(hostname -s 2>/dev/null | sed 's/^secubox-//')
+            if [ -n "$DETECTED" ]; then
+                echo "secubox-defaults: setting SECUBOX_HOSTNAME=$DETECTED (autodetected)"
+                sed -i "s/^SECUBOX_HOSTNAME=.*/SECUBOX_HOSTNAME=\"$DETECTED\"/" "$DEFAULTS"
+            else
+                echo "secubox-defaults: WARNING — SECUBOX_HOSTNAME unset and could not autodetect" >&2
+            fi
+        fi
+
+        # Activate the trigger so other packages (secubox-haproxy etc.) refresh
+        dpkg-trigger secubox-defaults-changed || true
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0
