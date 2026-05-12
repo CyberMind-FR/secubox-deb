@@ -1,5 +1,45 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-12 (Session 152)*
+*Mis à jour : 2026-05-12 (Session 159)*
+
+---
+
+## ✅ Session 159: CMSD-1.0 License Headers — Phase A merged, B/C in review (Issue #81)
+
+### Objective
+Add the CyberMind Source-Disclosed License (CMSD-1.0) SPDX header to every first-party source file in the repository, build the tooling and CI gate to keep it that way, and roll out repo-wide.
+
+### Completed
+- Brainstormed design → `docs/superpowers/specs/2026-05-12-license-headers-design.md`
+- Implementation plan → `docs/superpowers/plans/2026-05-12-license-headers.md`
+- **`scripts/license-headers.py`** — stdlib-only CLI with `--check` / `--fix` / `--list` / `--diff`, language-aware comment rendering (hash / slash / block / html), placement rules per language (Python shebang+encoding, Bash shebang, HTML doctype, Markdown frontmatter), idempotent `apply()`, enrollment-allowlist walker
+- **`.github/workflows/license-check.yml`** — CI runs `--check` on PRs and pushes to master
+- **`tests/test_license_headers.py`** — 53 pytest cases (rendering, MATCH/FOREIGN/NONE detection, idempotence, walker pruning, allowlist filtering, CLI dispatch + exit codes, plus regression tests for two mid-rollout fixes)
+- **`scripts/README.md`** + **`.claude/CLAUDE.md`** — documented the new SPDX convention and updated Python/Bash header examples
+
+### Stack status
+| PR | Status | Description |
+|---|---|---|
+| #84 | ✅ Merged | Phase A — tool + CI + conventions + walker-subdir fix + detect-regex-tightening + missing-file=repo-wide fix |
+| #86 | 📝 Draft | Phase B pilot — `secubox-hub` enrollment (51 files, 1 foreign Apache-2.0 skipped) |
+| #88 | 📝 Draft | Phase B+C bulk — repo-wide enrollment via `**` (1,529 files, 11 foreign SPDX skipped) |
+
+### Two mid-rollout bug fixes (rolled into #84)
+1. `walk()` now accepts `repo_root` so subdir invocations (`--fix packages/foo`) resolve repo-relative allowlist patterns correctly
+2. `detect_existing()` regex now requires comment-start markers — prose mentions of "SPDX-License-Identifier:" inside docstrings no longer false-match
+3. `_read_enrollment()` missing file now returns `["**"]` per spec §5.2 — Phase C closure can delete the file
+
+### Foreign SPDX preserved (11 files)
+- 1× Apache-2.0 (`packages/secubox-hub/www/luci-static/resources/secubox/secubox.css`)
+- 9× GPL-2.0-or-later in `packages/zkp-hamiltonian/` (cryptographic primitives)
+- 1× GPL-2.0-only kernel module (`packages/secubox-led-heartbeat/kmod/leds-is31fl319x.c`)
+
+### Next steps
+1. Move #86 and #88 out of draft when ready for review
+2. Merge #86 → #88 → master
+3. Close #81
+
+### Commits (Phase A, merged via #84)
+`cdc74563` `c7166597` `bd7975d1` `f08eb380` `70ac535e` `5b4d3e25` `63e62c1d` `9b0fce3f` `6474728d` `ada50406` `2bd965f4` `72733385` `c93cfdb6` `e90a07a5` `4d937995` `9eb75676` `643d39af` `2763009f` `b88b8ada` `b0b6e78c (merge)`
 
 ---
 
