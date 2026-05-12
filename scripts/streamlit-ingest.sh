@@ -26,7 +26,7 @@ set --
 source "$REPO/scripts/lib/gitea-ssh-preflight.sh"
 # shellcheck source=lib/streamlit-ingest-app.sh
 source "$REPO/scripts/lib/streamlit-ingest-app.sh"
-set -- "${_saved_source_args[@]:-}"
+set -- "${_saved_source_args[@]}"
 unset _saved_source_args
 
 LXC_HOST="${LXC_HOST:-192.168.1.200}"
