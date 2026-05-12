@@ -17,7 +17,12 @@ import (
 )
 
 const (
-	DefaultGPGKeyURL  = "https://apt.secubox.in/secubox.gpg"
+	// The repo serves the public key in two formats:
+	//   /secubox-keyring.gpg     ASCII-armored
+	//   /secubox-keyring.gpg.bin binary (what apt needs in /usr/share/keyrings)
+	// We fetch the binary form so we can write it directly to the keyring path
+	// without piping through `gpg --dearmor`.
+	DefaultGPGKeyURL  = "https://apt.secubox.in/secubox-keyring.gpg.bin"
 	DefaultKeyringDir = "/usr/share/keyrings"
 	DefaultSourcesDir = "/etc/apt/sources.list.d"
 	DefaultRepoURL    = "https://apt.secubox.in"
