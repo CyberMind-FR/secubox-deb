@@ -1,5 +1,30 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-12 (Session 159)*
+*Mis à jour : 2026-05-12 (Session 160)*
+
+---
+
+## ✅ Session 160: secubox apt + clone — validate implementation (Issue #89)
+
+### Objective
+Walk the 2026-05-11 apt+clone plan against the implemented Go CLI, fix any genuine gaps, and end-to-end the workflow against the now-live `https://apt.secubox.in/`.
+
+### Completed
+- **Plan audit** (`docs/superpowers/plans/2026-05-11-secubox-apt-clone.md`): all 48 task steps ticked. `go test ./internal/apt/... ./cmd/...` passes; binary builds; `--help` correct for `apt setup`, `apt init/publish/sync/list/remove/check`, `clone`.
+- **Real bug found in E2E**: `apt.Client.DefaultGPGKeyURL` pointed at `https://apt.secubox.in/secubox.gpg`. That URL doesn't exist on the public repo (nginx `try_files` falls through to `index.html`, so the Go code wrote a 2.5 kB HTML page as the keyring → `apt update` returned exit 100). Fixed by pointing at `/secubox-keyring.gpg.bin` (binary OpenPGP, exactly what apt expects under `signed-by=`). No dearmor step needed.
+- **E2E verified in fresh bookworm chroot**:
+  ```
+  secubox apt setup       # OK
+  apt-get update          # Hit:1 https://apt.secubox.in bookworm InRelease
+  apt-cache search secubox  # 15 packages
+  ```
+  `clone --minimal -y` reaches `apt install`; the dpkg postinst then fails inside a minbase chroot (no systemd) — environmental, not a CLI bug. Real targets (MOCHAbin, VM with systemd) will succeed.
+
+### Commits
+- `4e8eadf4` — docs(apt): Tick plan checkboxes per code audit (ref #89)
+- `6e3276bb` — fix(apt): Use binary keyring URL so apt accepts the signed-by= source (ref #89)
+
+### Outcome
+Code matched the plan within one bug — the wrong default GPG URL was masked because the existing tests use `httptest` servers (so they never hit the real URL). Plan is retroactively complete; CLI is functional against production.
 
 ---
 
