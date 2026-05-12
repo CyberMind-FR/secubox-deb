@@ -210,7 +210,45 @@ cmd_finish() {
     --title "$branch" --body "Closes #$issue" \
     || return 4
 }
-cmd_clean()  { echo "clean: not implemented" >&2 ; return 1; }
+cmd_clean() {
+  local force=0
+  local issue=""
+  while (($#)); do
+    case "$1" in
+      --force) force=1; shift ;;
+      -*) echo "clean: unknown flag $1" >&2; return 1 ;;
+      *) issue="$1"; shift ;;
+    esac
+  done
+  if [[ -z "$issue" ]]; then
+    echo "clean: usage: clean <issue#>" >&2; return 1
+  fi
+
+  local wt_path
+  wt_path=$(_resolve_worktree_path_by_issue "$issue") \
+    || { echo "clean: no worktree for issue #$issue" >&2; return 2; }
+
+  if ! "$GIT_BIN" -C "$wt_path" diff-index --quiet HEAD --; then
+    echo "clean: worktree dirty: $wt_path" >&2; return 3
+  fi
+
+  local branch
+  branch=$("$GIT_BIN" -C "$wt_path" rev-parse --abbrev-ref HEAD)
+
+  if (( ! force )); then
+    local pr_json state
+    pr_json=$("$GH_BIN" pr view --head "$branch" --json state,mergedAt 2>/dev/null || true)
+    state=$(printf '%s' "$pr_json" | sed -E 's/.*"state":"([^"]+)".*/\1/')
+    if [[ "$state" != "MERGED" ]]; then
+      echo "clean: PR for $branch is '$state', refusing (use --force)" >&2; return 3
+    fi
+  fi
+
+  "$GIT_BIN" worktree remove "$wt_path"
+  "$GIT_BIN" branch -d "$branch" 2>/dev/null \
+    || "$GIT_BIN" branch -D "$branch"
+  echo "removed: $wt_path branch=$branch"
+}
 
 main() {
   local sub="${1:-}"
