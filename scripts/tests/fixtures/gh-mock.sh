@@ -49,12 +49,17 @@ case "$cmd" in
       view|list)
         # Look up by --head or by branch arg
         branch=""
+        _prev=""
         for arg in "$@"; do
+          if [[ "$_prev" == "--head" ]]; then branch="$arg"; fi
           case "$arg" in --head=*) branch="${arg#--head=}";; esac
+          _prev="$arg"
         done
         if [[ -z "$branch" ]]; then branch="${1:-}"; fi
-        var_state="GH_MOCK_PR_${branch//\//_}_STATE"
-        var_merged="GH_MOCK_PR_${branch//\//_}_MERGED"
+        sanitized="${branch//\//_}"
+        sanitized="${sanitized//-/_}"
+        var_state="GH_MOCK_PR_${sanitized}_STATE"
+        var_merged="GH_MOCK_PR_${sanitized}_MERGED"
         state="${!var_state:-MERGED}"
         merged="${!var_merged:-2026-05-12T10:00:00Z}"
         printf '{"state":"%s","mergedAt":"%s"}\n' "$state" "$merged"

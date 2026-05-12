@@ -293,6 +293,40 @@ test_finish_dirty_refuses() {
   if [[ $rc -ne 3 ]]; then echo "expected rc=3 got $rc" >&2; return 1; fi
 }
 
+test_clean_refuses_open_pr() {
+  local repo wt
+  repo=$(make_sandbox_repo); wt=$(mktemp -d)
+  trap "rm -rf $repo $wt" RETURN
+  export GH_BIN="$GH_MOCK"; export GH_MOCK_AUTH=ok
+  export GH_MOCK_ISSUE_11_TITLE="C"; export GH_MOCK_ISSUE_11_LABELS=""
+  export GH_MOCK_PR_feature_11_c_STATE="OPEN"
+  export GH_MOCK_PR_feature_11_c_MERGED=""
+  export WORKTREE_ROOT="$wt"
+  (cd "$repo" && bash "$SCRIPT" start --issue 11) >/dev/null
+  local rc
+  (cd "$repo" && bash "$SCRIPT" clean 11) >/dev/null 2>&1 ; rc=$?
+  if [[ $rc -ne 3 ]]; then echo "expected rc=3 got $rc" >&2; return 1; fi
+}
+
+test_clean_merged_pr_removes() {
+  local repo wt
+  repo=$(make_sandbox_repo); wt=$(mktemp -d)
+  trap "rm -rf $repo $wt" RETURN
+  export GH_BIN="$GH_MOCK"; export GH_MOCK_AUTH=ok
+  export GH_MOCK_ISSUE_12_TITLE="C"; export GH_MOCK_ISSUE_12_LABELS=""
+  export GH_MOCK_PR_feature_12_c_STATE="MERGED"
+  export WORKTREE_ROOT="$wt"
+  (cd "$repo" && bash "$SCRIPT" start --issue 12) >/dev/null
+  # Make a real commit on the branch then fold into master so branch is "merged"
+  (cd "$wt/12-c" && echo x > x && git add x && git commit -q -m "x")
+  (cd "$repo" && git merge --no-ff -q feature/12-c)
+  (cd "$repo" && bash "$SCRIPT" clean 12) >/dev/null
+  test -d "$wt/12-c" && { echo "worktree still present" >&2; return 1; }
+  (cd "$repo" && git show-ref --verify --quiet refs/heads/feature/12-c) \
+    && { echo "branch still present" >&2; return 1; }
+  return 0
+}
+
 # Auto-discover and run
 mapfile -t tests < <(declare -F | awk '{print $3}' | grep '^test_')
 for t in "${tests[@]}"; do run_test "$t"; done
