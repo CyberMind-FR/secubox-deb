@@ -1,5 +1,28 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-12 (Session 163)*
+*Mis à jour : 2026-05-12 (Session 164)*
+
+---
+
+## ✅ Session 164: MetaBlogizer site.json schema + version metadata (Issue #101, sub-C of #49)
+
+### Objective
+Formal JSON Schema for site.json + Python validator/enricher (derives `version`/`last_updated` from git) + backfill script for missing files + API extension exposing enriched fields. Unblocks sub-D (Dashboard).
+
+### Completed
+- Brainstormed design → `docs/superpowers/specs/2026-05-12-metablog-site-schema-design.md`
+- Plan (8 tasks) → `docs/superpowers/plans/2026-05-12-metablog-site-schema.md`
+- JSON Schema draft-07 at `packages/secubox-metablogizer/schema/site.json.schema.json`
+- `api/site_schema.py` (`load_schema`/`validate`/`enrich`) + 8 pytest cases
+- `load_sites()` calls `_load_site_json()` (validate warn-only, log violations)
+- `python3-jsonschema` added to `debian/control`
+- `scripts/metablog-site-backfill.sh` — creates missing, merges with `--force`
+- 3-gate smoke test (`tests/scripts/test-metablog-site-schema.sh`)
+- Live run: 165 sites, 104 created, 61 skipped (incl. 2 fixed via `--force`: `money`, `evolution` missing `published`), 0 failed
+- Summary at `docs/superpowers/runs/2026-05-12-metablog-site-backfill-summary.md`
+
+### Followups
+- Sub-D (Dashboard) — depends on this enriched API.
+- Sub-E (deploy webhook) — independent.
 
 ---
 
