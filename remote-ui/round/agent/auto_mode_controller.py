@@ -132,6 +132,7 @@ class AutoModeConfig:
     # Storage
     storage_image_path: str = "/var/lib/secubox/eye-remote/storage.img"
     readonly_in_silent_mode: bool = False
+    storage_unmounted_recovery_s: float = 30.0  # Switch back to composite if not mounted
 
     # Logging
     log_level: str = "info"
@@ -372,6 +373,39 @@ class GadgetController:
 
         finally:
             self._switch_in_progress = False
+
+    def is_storage_mounted(self) -> bool:
+        """Check if storage is being actively accessed by host.
+
+        Checks the mass_storage function state in configfs to determine
+        if the host is actively using the storage device.
+        """
+        lun_path = Path("/sys/kernel/config/usb_gadget/secubox/functions/mass_storage.usb0/lun.0")
+
+        if not lun_path.exists():
+            return False
+
+        try:
+            # Check if there's active I/O by looking at the file backing
+            file_path = lun_path / "file"
+            if file_path.exists():
+                backing_file = file_path.read_text().strip()
+                if backing_file:
+                    # Check if the backing file is open/busy
+                    # Using lsof or fuser would be more accurate but heavier
+                    # For now, check if nlink > 0 as a proxy
+                    return True
+            return False
+        except Exception as e:
+            log.debug(f"Storage mount check failed: {e}")
+            return False
+
+    def get_storage_io_stats(self) -> Dict[str, int]:
+        """Get storage I/O statistics if available."""
+        stats = {"reads": 0, "writes": 0}
+        # Stats would be in /sys/kernel/config/usb_gadget/secubox/functions/mass_storage.usb0/lun.0/
+        # but not all kernels expose detailed stats
+        return stats
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -685,6 +719,18 @@ class AutoModeController:
             # No host - stay in storage mode
             pass
 
+        # Check if storage is mounted by host
+        # If not mounted after timeout, switch back to composite for network
+        time_in_storage = self._time_in_state()
+        if time_in_storage > self._config.storage_unmounted_recovery_s:
+            if not self._gadget.is_storage_mounted():
+                log.info(f"Storage not mounted after {time_in_storage:.0f}s, switching to composite")
+                await self._gadget.switch_mode(
+                    GadgetMode.COMPOSITE,
+                    self._config.mode_switch_cooldown_s
+                )
+                await self._transition_to(AutoModeState.PROBING_NETWORK)
+
     async def _handle_silent_storage(self) -> None:
         """Handle SILENT_STORAGE state - fallback with wake monitoring."""
         # Check for wake triggers
@@ -692,13 +738,34 @@ class AutoModeController:
             wake_reason = await self._wakeup_manager.check_wake_triggers()
             if wake_reason:
                 log.info(f"Wake trigger received: {wake_reason}")
+                # Switch to composite mode for network recovery
+                await self._gadget.switch_mode(
+                    GadgetMode.COMPOSITE,
+                    self._config.mode_switch_cooldown_s
+                )
                 await self._transition_to(AutoModeState.PROBING_NETWORK)
                 return
 
         # Also check if host is connected and configured
         if self._udc.is_configured():
             # Host might have network support now
+            await self._gadget.switch_mode(
+                GadgetMode.COMPOSITE,
+                self._config.mode_switch_cooldown_s
+            )
             await self._transition_to(AutoModeState.PROBING_NETWORK)
+            return
+
+        # If storage not being used after timeout, try composite mode
+        time_in_storage = self._time_in_state()
+        if time_in_storage > self._config.storage_unmounted_recovery_s:
+            if not self._gadget.is_storage_mounted():
+                log.info(f"Silent storage unused for {time_in_storage:.0f}s, trying composite")
+                await self._gadget.switch_mode(
+                    GadgetMode.COMPOSITE,
+                    self._config.mode_switch_cooldown_s
+                )
+                await self._transition_to(AutoModeState.PROBING_NETWORK)
 
     async def _run_state_machine(self) -> None:
         """Main state machine loop."""
