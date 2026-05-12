@@ -4,6 +4,30 @@
 ---
 ## 2026-05-12
 
+### Session 157 — SSL Certificate Health in Health Banner
+
+**Goal:** Display SSL certificate expiration status in the Health Banner sidebar.
+
+**Changes:**
+- `packages/secubox-metrics/api/main.py`: Added `get_ssl_status()` function + endpoint enrichment
+- `packages/secubox-hub/www/shared/health-banner.js`: Added SSL display (v1.2.0)
+- `tests/test_ssl_status.py`: 5 unit tests
+
+**Features:**
+- Reads cert from `/etc/letsencrypt/live/{domain}/cert.pem` (with fallbacks)
+- Displays after score section: 🔒 45j
+- Color-coded thresholds:
+  - 🔒 >7j (green)
+  - 🔐 3-7j (yellow)
+  - 🔓 <3j (red)
+  - 🔓 EXPIRÉ (red blink)
+
+**Commits:** `6bd4fb3e`, `9c07eda6`, `593b991f`
+
+**Reference:** CM-SSL-BANNER-2026-05-12
+
+---
+
 ### Session 156 — HAProxy Routing Catastrophe & Generator Fix
 
 **Trigger:** User flagged `https://cpf.gk2.secubox.in/` returning "Wrong Domain". Investigation revealed a much wider regression that surfaced minutes after Session 154 — the entire HAProxy https-in routing for metablog/streamlit sites had silently broken.
