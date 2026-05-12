@@ -69,6 +69,38 @@ bash port-frontend.sh crowdsec-dashboard
 
 ---
 
+## Multi-Agent Worktrees
+
+| Script | Description |
+|--------|-------------|
+| `agent-worktree.sh` | Lifecycle helper for one-branch-per-issue work in isolated git worktrees |
+
+### Usage
+
+```bash
+# Create a worktree bound to GitHub issue #83
+bash scripts/agent-worktree.sh start --issue 83
+cd ~/CyberMindStudio/secubox-deb-worktrees/83-multi-agent-worktree-workflow
+
+# List active worktrees + ahead/behind/dirty status
+bash scripts/agent-worktree.sh list
+
+# Rebase the current worktree on origin/master
+bash scripts/agent-worktree.sh sync
+
+# Push and open the PR (`Closes #83` in body)
+bash scripts/agent-worktree.sh finish
+
+# After merge, remove the worktree and local branch
+bash scripts/agent-worktree.sh clean 83
+```
+
+See `scripts/agent-worktree.sh --help` for the full reference and
+`docs/superpowers/specs/2026-05-12-multi-agent-worktree-workflow-design.md`
+for the design rationale.
+
+---
+
 ## Local Cache Setup
 
 | Script | Description |

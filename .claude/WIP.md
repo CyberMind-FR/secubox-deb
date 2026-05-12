@@ -1,5 +1,32 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-12 (Session 149)*
+*Mis à jour : 2026-05-12 (Session 152)*
+
+---
+
+## ✅ Session 152: APT Public Repo Staging Pipeline (Issue #80)
+
+### Objective
+Stage a signed APT repo at `output/repo/` for bookworm × {arm64, amd64}, validated end-to-end. User pushes to `apt.secubox.in` out-of-band.
+
+### Completed
+- Brainstormed design → `docs/superpowers/specs/2026-05-12-apt-public-repo-staging-design.md`
+- Implementation plan → `docs/superpowers/plans/2026-05-12-apt-public-repo-staging.md`
+- All 10 tasks delivered. Pipeline runs end-to-end on base + tier-lite × arm64+amd64; 9 packages published; all four validation gates pass (`reprepro check`, `gpg --verify InRelease`, license byte-match, chroot `apt-get update`).
+- GPG fingerprint: `31848880ED89C1722677D75A25C9E32645166DB9` (persistent in `~/.gnupg/secubox/`)
+- Deploy artifacts ready: `output/repo/{nginx-apt.conf, DEPLOY.md, install.sh, LICENCE-CMSD-1.0.md, LICENSE-CMSD-1.0.en.md, secubox-keyring.gpg, FINGERPRINT.txt, MANIFEST.txt}`
+
+### Key finding
+130/132 SecuBox packages are `Architecture: all`. Only `secubox-daemon` and `zkp-hamiltonian` are `Architecture: any`, and neither is in `scripts/build-packages.sh`'s PACKAGES list. So the arm64-specific pool is currently empty; adding those two to the build list is separate work.
+
+### Next steps (pending user action)
+1. Optional: full pipeline (`bash scripts/stage-apt-repo.sh`) for all four tiers (30-90 min).
+2. rsync staged tree to `apt.secubox.in` per `output/repo/DEPLOY.md`.
+3. certbot --nginx; verify SAN includes `apt.secubox.in` (fixes the current `ERR_TLS_CERT_ALTNAME_INVALID`).
+4. Validate from clean client: `curl -fsSL https://apt.secubox.in/install.sh | sudo bash && sudo apt-get update`.
+5. Close issue #80.
+
+### Commits (merged via PR #82, plus `0f1907df` follow-up)
+`ce82e13d` `6f59de25` `52463db1` `3b99bcf4` `5f7b8474` `d6fe14d5` `bb58789b` `197eba63` `0f1907df`
 
 ---
 

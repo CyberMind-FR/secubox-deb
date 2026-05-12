@@ -4,6 +4,209 @@
 ---
 ## 2026-05-12
 
+### Session 155 — Multi-Agent Worktree Workflow
+
+**Goal:** Enable parallel multi-agent work via one-branch-per-issue isolated worktrees.
+
+**Delivered:**
+
+- `scripts/agent-worktree.sh` with sub-commands `start`, `list`, `sync`, `finish`, `clean`
+- `scripts/lib/agent-worktree-lib.sh` (slug + label→prefix helpers)
+- Test suite `scripts/tests/test-agent-worktree.sh` (26 cases, no bats dep)
+- `gh` CLI mock at `scripts/tests/fixtures/gh-mock.sh`
+- New section in `CLAUDE.md`: `## 🌿 Multi-Agent Worktree Workflow — Obligatoire`
+- `scripts/README.md` updated with usage
+
+**Issue:** #83. **Spec:** `docs/superpowers/specs/2026-05-12-multi-agent-worktree-workflow-design.md`. **Plan:** `docs/superpowers/plans/2026-05-12-multi-agent-worktree-workflow.md`.
+
+---
+
+### Session 154 — Metablogizer Vhosts Audit & Regeneration
+
+**Goal:** User flagged `https://lldh.ganimed.fr/` returning 404. Apply the same diagnostic + fix workflow to all metablogizer vhosts, find every site with broken routing / missing content / port mismatch.
+
+**Trigger case — `lldh.ganimed.fr`:**
+
+- nginx had `server_name lldh.gk2.secubox.in` only (no `.ganimed.fr` alias) → 404 from default_server.
+- mitmproxy route pointed to port `8000` instead of `8900` (where metablog nginx listens).
+- `/srv/metablogizer/sites/lldh/` contained only `La_Livree_dHermes_Galerie-1.zip` (31 MB) + `.git` — no `index.html` to serve.
+
+**Trigger fix (3 steps):**
+
+1. Extracted zip via `python3 -m zipfile` (84 files: `index.html` + `planches/*.jpg`).
+2. Added `lldh.ganimed.fr` to existing `server_name lldh.gk2.secubox.in` block in `/etc/nginx/sites-enabled/metablogizer`, `nginx -t && systemctl reload nginx`.
+3. Patched `/srv/mitmproxy/haproxy-routes.json`: `lldh.ganimed.fr` → `[192.168.1.200, 8900]`, pushed to LXC container, `systemctl restart mitmproxy` (SIGHUP alone wasn't enough — mitmproxy serving cached/wrong content until full restart).
+
+**Systematic audit of all metablog vhosts (Python script in `/tmp` on board):**
+
+Scanned `/etc/nginx/sites-enabled/metablogizer` for every `server_name` → root pair, cross-checked each domain against `/srv/mitmproxy/haproxy-routes.json` and the on-disk `index.html`.
+
+| Metric | Count |
+| --- | --- |
+| Sites scanned | 159 |
+| Server_names total | 162 |
+| OK after fixes | 162 (100%) |
+| `wrong_port` (route ≠ 8900) | 0 |
+| `missing_route` (in nginx, absent from routes) | 1 → `pub.gk2.secubox.in` |
+| `extract_zip` (zip not extracted) | 0 (after lldh) |
+| `no_index_no_zip` real cases | 1 → `werdl` |
+
+**Additional fixes applied:**
+
+- `pub.gk2.secubox.in` → added to mitmproxy routes `[10.100.0.1, 8900]`, mitmproxy restarted. Now HTTP 200 ("GK² · NET — Opérateur Internet & Services Numériques").
+- `werdl/index.html` → symlink to `famille_index.html` (3 HTML files existed: `famille_index`, `famille_bebe-enfant`, `famille_papy-mamy`; preserved originals, no destructive rename). Now HTTP 200 ("Retrouver son téléphone — Pour toute la famille").
+
+**False positive identified:**
+
+- Initial audit flagged `public` as a "site without index", but my regex over-captured: it was matching the trailing `public` in Laravel-style paths `/srv/metablogizer/sites/{money,live,evolution}/public/`. Those parent sites (`money`, `live`, `evolution`) serve fine via their normal `server_name` blocks. No action needed.
+
+**Backups on board:**
+
+- `/srv/mitmproxy/haproxy-routes.json.bak.<epoch>` (pre-patch)
+- `/etc/nginx/sites-enabled/metablogizer.bak.<epoch>` (pre-server_name-add)
+- Symlink for `werdl` is non-destructive (`famille_index.html` untouched).
+
+**Verification (live, fresh HTTPS, no cache):**
+
+- `lldh.ganimed.fr` → 200, 43959 b, "La Livrée d'Hermès"
+- `lldh.gk2.secubox.in` → 200, 43959 b, same content
+- `pub.gk2.secubox.in` → 200, 47584 b, "GK² · NET"
+- `werdl.gk2.secubox.in` → 200, 6017 b, "Retrouver son téléphone"
+- Spot-check `admin.gk2`, `arm.gk2`, `zkp.gk2`, `3d.gk2` from Session 153 still 200 ✅ (no regression).
+
+**Note:** all fixes were applied to live board state (routes JSON, nginx vhost config, site content). The metablogizer vhost config (`/etc/nginx/sites-enabled/metablogizer`) is auto-generated per site by the metablogizer service and is not tracked in the repo, so no repo file changed from this session beyond this HISTORY entry.
+
+---
+
+### Session 153 — Mitmproxy Route Sync Stability Fix
+
+**Goal:** All `*.gk2.secubox.in` metablogizer sites (arm, zkp, 3d, …) returned "Wrong Domain" page on HTTPS. Investigate, restore service, and harden the auto-sync infrastructure.
+
+**Symptom chain:**
+
+1. User report: `https://arm.gk2.secubox.in/` → "Wrong Domain - SecuBox" landing page.
+2. `~160` metablogizer sites affected (all routed via mitmproxy WAF).
+3. Two systemd timers (`sync-mitmproxy-routes.timer` + `secubox-route-sync.timer`) firing at the same second on the same routes file.
+4. `sync-mitmproxy-routes.service` had been failing with exit code 30/4 for >30 minutes (chronic).
+
+**Root cause (deepest):**
+
+`log()` function in `/usr/local/bin/sync-mitmproxy-routes.sh` wrote to **stdout**. `fix_dead_container_routes()` calls `log "Fixing dead route: …"` and is itself captured via `routes_json=$(fix_dead_container_routes "$routes_json")` — every log line was concatenated into the JSON variable, producing `[date] Fixing dead route: …{"255.gk2..."`. jq then complained `Invalid numeric literal at line 1, column 12`, `set -e` killed the script, and the corrupted JSON got pushed to the mitmproxy container (`lxc-attach … tee /srv/mitmproxy/haproxy-routes.json`). mitmproxy restart-looped on `Failed to load routes: Expecting ',' delimiter`, HAProxy backend `mitmproxy_inspector` went DOWN, every public domain returned **HTTP 503**.
+
+**Additional contributing bugs:**
+
+- `fix_dead_container_routes` returned `$fixed` (a count) instead of `0` — non-zero return tripped `set -e` in the caller's command substitution.
+- `sync-all-routes.sh` step 2 wrote metablogizer routes to port **9080** (nginx default_server → "Wrong Domain") instead of **8900** (where nginx actually listens with `server_name` per metablog site).
+- jq read calls had no error tolerance — any malformed JSON fed in via `$routes_json` aborted the whole script via `set -euo pipefail`.
+- Two systemd services bound to the **same script** (`sync-mitmproxy-routes.service` + `secubox-route-sync.service`) racing on the same file.
+
+**Fixes applied:**
+
+| # | Fix | Cible | Mechanism |
+| --- | --- | --- | --- |
+| 1 | Routes patchées 9080→8900 (165 sites metablog) | `/srv/mitmproxy/haproxy-routes.json` (host + container) | Python script (extract `server_name` from nginx, rewrite port) |
+| 2 | `return $fixed` → `return 0` | `sync-mitmproxy-routes.sh:fix_dead_container_routes` | sed |
+| 3 | Port metablog 9080 → 8900 in step 2 | `sync-all-routes.sh:62` | sed |
+| 4 | **`log()` writes to stderr** (root-cause fix) | `sync-mitmproxy-routes.sh:log` | adds `>&2` so `$()` capture is clean |
+| 5 | Defensive `2>/dev/null \|\| true` on jq read | `sync-mitmproxy-routes.sh` (2 occurrences) | tolerate corrupted input |
+| 6 | Fallback preserving old `routes_json` on jq write failure | `sync-mitmproxy-routes.sh` (3 occurrences) | `new_rj=$(... \|\| true); [[ -n "$new_rj" ]] && routes_json="$new_rj"` |
+| 7 | `flock -n` guard prevents concurrent runs | `sync-mitmproxy-routes.sh` (head) | `/run/sync-mitmproxy-routes.lock` |
+| 8 | Disable duplicate timer | `systemctl disable --now secubox-route-sync.timer` | systemd |
+
+**Verification (post-fix):**
+
+- `sync-mitmproxy-routes.service` via systemd → exit 0/SUCCESS, "Sync complete".
+- Container routes JSON valid: 244 keys, all metablogizer domains → `[10.100.0.1, 8900]`.
+- mitmproxy: `active`, listening on `0.0.0.0:8080`.
+- HAProxy backend `mitmproxy_inspector srv0 10.100.0.60:8080` op_state=UP.
+- Live tests: `admin.gk2`, `arm.gk2`, `zkp.gk2`, `3d.gk2` all HTTP 200 with correct titles.
+
+**Files modified (versioned in repo):**
+
+- `scripts/sync-mitmproxy-routes.sh` (synced from board `/usr/local/bin/`)
+- `scripts/sync-all-routes.sh` (new in repo, synced from board)
+
+**Backups created on board (timestamped, kept for rollback):**
+
+- `/srv/mitmproxy/haproxy-routes.json.bak.<epoch>` (pre-patch JSON)
+- `/usr/local/bin/sync-mitmproxy-routes.sh.bak.<epoch>` and `.bak.<epoch>-preflock`
+- `/usr/local/bin/sync-all-routes.sh.bak.<epoch>`
+
+**Topology note discovered:**
+
+- Canonical Hub vhosts (nginx `sites-available/secubox-local`): `admin.gk2.secubox.in`, `gk2.secubox.in`, `secubox.maegia.tv`, `c3box.maegia.tv` + LAN aliases.
+- `~165` metablogizer sites listed in `/etc/nginx/sites-enabled/metablogizer`, each `listen 0.0.0.0:8900` with per-site `server_name`, `root /srv/metablogizer/sites/<name>/`.
+- Public flow: HAProxy `https-in` (443) → ACL host match → backend `mitmproxy_inspector` (LXC `10.100.0.60:8080`) → mitmproxy looks up host in `haproxy-routes.json` → upstream `[10.100.0.1, 8900]` → nginx vhost matches `server_name` → serves static site.
+
+**Open follow-up:** the `sync-streamlit-routes.timer` last fired 2026-05-10 (1d 15h ago) and didn't fire since — needs separate investigation. Not blocking metablog/Hub stability.
+
+---
+
+### Session 152 — APT Public Repo Staging Pipeline (Issue #80)
+
+**Goal:** Stage a complete signed APT repo at `output/repo/` for `bookworm` × {arm64, amd64}, validated end-to-end. User pushes to `apt.secubox.in` out-of-band.
+
+**Spec & plan:**
+- Design: `docs/superpowers/specs/2026-05-12-apt-public-repo-staging-design.md`
+- Plan: `docs/superpowers/plans/2026-05-12-apt-public-repo-staging.md`
+
+**Delivered (10 tasks, 9 commits — merged via PR #82, plus `0f1907df` chroot fix):**
+
+| Component | Commit | Purpose |
+|-----------|--------|---------|
+| `scripts/build-packages.sh --filter` + `--dry-run` | `ce82e13d` | Tier-driven build filtering via JSON manifest |
+| `scripts/lib/tier-manifest.sh` + hardening | `6f59de25`, `52463db1` | Resolve `base/tier-lite/tier-standard/tier-pro` → JSON package list |
+| `scripts/stage-gpg-bootstrap.sh` | `3b99bcf4` | Persistent GPG key at `~/.gnupg/secubox/`, writes `FINGERPRINT.txt` |
+| `scripts/stage-apt-repo.sh` | `5f7b8474` | Main orchestrator (GPG → reprepro init → tier loop → check gate) |
+| `scripts/render-deploy-artifacts.sh` | `d6fe14d5` | nginx vhost + DEPLOY.md + install.sh + CMSD-1.0 license copies |
+| `scripts/validate-staged-repo.sh` + chroot fix | `bb58789b`, `0f1907df` | reprepro check + gpg verify + license cmp + chroot apt-update smoke |
+| `.gitignore` for staging artifacts | `197eba63` | Ignore `output/repo/{db,pool,dists,conf,gpg}` and build logs |
+
+**Tooling used:**
+
+- `secubox gen --tier <tier> --board mochabin --out <dir>` (existing Go CLI; emits `manifest.yaml`)
+- `reprepro` with persistent `~/.gnupg/secubox/` keyring (SignWith fingerprint)
+- `dpkg-buildpackage` + `crossbuild-essential-arm64` (already installed)
+- `python3-yaml` (for parsing `secubox gen` output)
+
+**End-to-end validation (base + tier-lite × arm64+amd64):**
+
+- 9 packages published, all `Architecture: all`
+- `reprepro check` clean
+- `gpg --verify InRelease` → Good signature, fingerprint `31848880ED89C1722677D75A25C9E32645166DB9`
+- License files byte-match project root
+- `chroot apt-get update` against `file://output/repo/` succeeds (sees SecuBox repo)
+
+**Important finding (arch:all dominance):**
+
+| Architecture field | Count |
+|--------------------|-------|
+| `all` | 130 |
+| `any` | 2 (`secubox-daemon`, `zkp-hamiltonian`) |
+
+130/132 SecuBox packages are `Architecture: all` — the cross-arch (arm64 vs amd64) split is mostly cosmetic. The two `Architecture: any` packages aren't in `build-packages.sh`'s `PACKAGES=` list, so the `arm64` pool count is currently 0. Adding them is separate work.
+
+**GPG signing key:**
+
+- UID: `SecuBox Package Signing Key (apt.secubox.in) <packages@secubox.in>`
+- Fingerprint: `31848880ED89C1722677D75A25C9E32645166DB9`
+- Home: `~/.gnupg/secubox/` (persistent across rebuilds)
+- Public key: `output/repo/secubox-keyring.gpg` (ASCII-armored) + `.bin`
+
+**Open item (not blocking):**
+
+- TLS cert for `apt.secubox.in` shows `ERR_TLS_CERT_ALTNAME_INVALID` — must be re-issued by certbot for the exact SAN. Recipe is in `output/repo/DEPLOY.md`.
+
+**Next steps (user):**
+
+1. Optional: full pipeline run with `bash scripts/stage-apt-repo.sh` (no flags = all four tiers, 30-90 min).
+2. rsync to `apt.secubox.in` per `output/repo/DEPLOY.md` (excludes `db/`, `gpg/`, `conf/`).
+3. certbot --nginx for cert; verify SAN includes `apt.secubox.in`.
+4. Smoke-test from clean client: `curl -fsSL https://apt.secubox.in/install.sh | sudo bash && sudo apt-get update`.
+5. Close issue #80 on success.
+
+---
+
 ### Session 151 — Fix Sidebar Mobile Mode False-Positive on Touch Desktops
 
 **Goal:** Sidebar of secubox-hub forced mobile mode (hamburger + hidden sidebar) on Firefox PC because the detection logic used `isTouchDevice() || isNarrowViewport()` — any touch signal (touchscreen laptop, Firefox `pointer: coarse`, `maxTouchPoints > 0`) triggered mobile UX at desktop widths.
