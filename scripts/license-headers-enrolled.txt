@@ -5,3 +5,4 @@
 # Phase C: this file is deleted; CI then enforces repo-wide.
 scripts/license-headers.py
 tests/test_license_headers.py
+.github/workflows/license-check.yml
