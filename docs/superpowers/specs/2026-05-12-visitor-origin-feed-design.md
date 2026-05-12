@@ -66,6 +66,7 @@ after the existing SSL/health indicators:
 ```
 
 Each section is hidden independently when:
+
 - Its data source is unavailable (e.g. `mmdb` missing for VisitorOrigin,
   HAProxy socket missing for LiveHosts, no certs found for CertStatus).
 - Its `entries` list is empty after filtering.
@@ -128,7 +129,10 @@ table inet secubox_metrics {
 - `size 65536` caps memory; on overflow the kernel evicts oldest entries.
 - Per-packet cost on Armada 3720/7040: ~hundreds of nanoseconds. Negligible.
 
-### 5.2 Config block (`/etc/secubox/metrics.toml`)
+### 5.2 Config blocks (`/etc/secubox/secubox.conf`)
+
+The codebase uses a single TOML config file `/etc/secubox/secubox.conf` read by
+`secubox_core.config.get_config(section)`. Three new sections are added:
 
 ```toml
 [visitor_origin]
@@ -287,7 +291,7 @@ Each endpoint returns its aggregator's `current()` payload or
 - `apt install geoipupdate python3-maxminddb` (added to `debian/control`
   Depends).
 - License key in `/etc/secubox/secrets/maxmind.conf` (mode `0600`, owner
-  `secubox-metrics`). Operator-supplied; absent ⇒ updater no-op (logged once).
+  `secubox`). Operator-supplied; absent ⇒ updater no-op (logged once).
 - `secubox-geoipupdate.timer` runs weekly, calling
   `secubox-geoipupdate.service` which exec's `geoipupdate -f /etc/secubox/secrets/maxmind.conf`.
 - Aggregator opens the mmdb read-only via `maxminddb.open_database(path, MODE_MMAP)`
@@ -322,26 +326,27 @@ for CertStatus pass/fail icons.
 
 ## 6. Failure modes (catalogue)
 
-| Trigger                                  | Affected section | Effect                                | UI |
-|------------------------------------------|------------------|---------------------------------------|----|
-| `mmdb` missing                           | VisitorOrigin    | `enabled=false`                       | Section hidden |
-| `mmdb` lookup raises                     | VisitorOrigin    | IP skipped, others continue           | Logged |
-| `nft` set missing                        | VisitorOrigin    | `enabled=false`, logged once          | Section hidden |
-| `nft -j` returns malformed JSON          | VisitorOrigin    | Refresh skipped, prior payload kept   | Logged warning |
-| All ASNs below `min_count`               | VisitorOrigin    | `entries=[]`                          | Section hidden |
-| HAProxy socket missing/unreadable        | LiveHosts        | `enabled=false`, logged once          | Section hidden |
-| HAProxy `show stat` parse fail           | LiveHosts        | Refresh skipped, prior payload kept   | Logged warning |
-| All frontends below 1 req in 60 min      | LiveHosts        | `entries=[]`                          | Section hidden |
-| `/etc/letsencrypt/live` missing or empty | CertStatus       | `enabled=false`                       | Section hidden |
-| Cert parse error on one host             | CertStatus       | That host skipped, others continue    | Logged |
-| Endpoint 5xx                             | Any              | Banner caches prior payload 5 min then hides | Section hidden |
-| Aggregator task dies                     | Any              | Watchdog logs, asyncio restart        | Stale data until restart |
+| Trigger                                  | Affected      | Effect                                       | UI                       |
+|------------------------------------------|---------------|----------------------------------------------|--------------------------|
+| `mmdb` missing                           | VisitorOrigin | `enabled=false`                              | Section hidden           |
+| `mmdb` lookup raises                     | VisitorOrigin | IP skipped, others continue                  | Logged                   |
+| `nft` set missing                        | VisitorOrigin | `enabled=false`, logged once                 | Section hidden           |
+| `nft -j` returns malformed JSON          | VisitorOrigin | Refresh skipped, prior payload kept          | Logged warning           |
+| All ASNs below `min_count`               | VisitorOrigin | `entries=[]`                                 | Section hidden           |
+| HAProxy socket missing/unreadable        | LiveHosts     | `enabled=false`, logged once                 | Section hidden           |
+| HAProxy `show stat` parse fail           | LiveHosts     | Refresh skipped, prior payload kept          | Logged warning           |
+| All frontends below 1 req in 60 min      | LiveHosts     | `entries=[]`                                 | Section hidden           |
+| `/etc/letsencrypt/live` missing or empty | CertStatus    | `enabled=false`                              | Section hidden           |
+| Cert parse error on one host             | CertStatus    | That host skipped, others continue           | Logged                   |
+| Endpoint 5xx                             | Any           | Banner caches prior payload 5 min then hides | Section hidden           |
+| Aggregator task dies                     | Any           | Watchdog logs, asyncio restart               | Stale data until restart |
 
 ## 7. Testing strategy
 
 ### 7.1 Unit tests
 
 `packages/secubox-metrics/tests/test_visitor_origin.py`
+
 - `_aggregate`: synthetic IPs → expected counts.
 - `_aggregate`: threshold edge — `min_count` kept, `min_count - 1` dropped.
 - `_aggregate`: top-N sort, ASN-numeric tiebreak.
@@ -350,6 +355,7 @@ for CertStatus pass/fail icons.
 - `_persist`: atomic write, `0644`, parent dir created.
 
 `packages/secubox-metrics/tests/test_live_hosts.py`
+
 - Ring-buffer accumulates 60 buckets, oldest evicted.
 - Delta computation handles HAProxy restart (counter reset) without negatives.
 - Frontend filter excludes internal names.
@@ -357,6 +363,7 @@ for CertStatus pass/fail icons.
 - Missing socket / malformed CSV → `enabled=false` or prior payload.
 
 `packages/secubox-metrics/tests/test_cert_status.py`
+
 - Classifier: `now < not_valid_after - warn_days` → valid.
 - Classifier: critical/expired/expiring_soon boundaries.
 - Summary counts match fixtures.
@@ -389,10 +396,10 @@ for CertStatus pass/fail icons.
    no install breakage.
 2. **nftables conflict with `secubox-firewall`**: avoided by living in a
    separate table `inet secubox_metrics`, separate chain, priority `-300`.
-3. **HAProxy socket reachability from `secubox-metrics`**: the
-   `secubox-metrics` system user is added to the `haproxy` group in postinst,
-   matching the socket's group ownership (mode `0660`). No new sudoers
-   exceptions.
+3. **HAProxy socket reachability from `secubox-metrics`**: the `secubox`
+   system user (already used by the service) is added to the `haproxy` group in
+   postinst, matching the socket's group ownership (mode `0660`). No new
+   sudoers exceptions.
 
 ## 9. Acceptance criteria
 
