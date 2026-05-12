@@ -641,6 +641,8 @@ def get_ssl_status(domain: str) -> dict:
 
     parent_domain = '.'.join(domain.split('.')[1:]) if '.' in domain else domain
     cert_paths = [
+        Path(f"/data/haproxy/certs/{domain}.pem"),  # HAProxy certs (primary)
+        Path(f"/data/haproxy/certs/_wildcard_.{parent_domain}.pem"),  # Wildcard certs
         Path(f"/etc/letsencrypt/live/{domain}/cert.pem"),
         Path(f"/etc/letsencrypt/live/{parent_domain}/cert.pem"),
         Path(f"/etc/haproxy/certs/{domain}.pem"),
@@ -649,9 +651,13 @@ def get_ssl_status(domain: str) -> dict:
 
     cert_path = None
     for p in cert_paths:
-        if p.exists():
-            cert_path = p
-            break
+        try:
+            if p.exists():
+                cert_path = p
+                break
+        except PermissionError:
+            # Can't access this path, try next
+            continue
 
     if not cert_path:
         return {"domain": domain, "days_remaining": None, "status": "unknown", "expiry": None}
@@ -678,18 +684,22 @@ def get_ssl_status(domain: str) -> dict:
 
 
 @app.get("/api/v1/metrics/health/summary")
-async def get_health_summary(request: Request):
+async def get_health_summary(request: Request, domain: Optional[str] = None):
     """
     Health summary for the global health banner.
     Returns aggregated health score and module statuses.
     No auth required for banner display.
+
+    Args:
+        domain: Optional domain to check SSL certificate for. If not provided,
+                falls back to the Host header.
     """
     summary = build_health_summary()
 
-    # Add SSL certificate status for the current domain
-    host = request.headers.get("host", "").split(":")[0]  # Remove port if present
-    if host:
-        summary["ssl"] = get_ssl_status(host)
+    # Add SSL certificate status for the specified domain or Host header
+    ssl_domain = domain or request.headers.get("host", "").split(":")[0]
+    if ssl_domain:
+        summary["ssl"] = get_ssl_status(ssl_domain)
     else:
         summary["ssl"] = None
 

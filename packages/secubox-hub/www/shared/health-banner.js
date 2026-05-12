@@ -15,7 +15,7 @@
 (function() {
     'use strict';
 
-    const VERSION = '1.2.0';
+    const VERSION = '1.2.1';
     // Use global config if injected by CDN/WAF, otherwise use relative path
     const HEALTH_API = window.SECUBOX_HEALTH_API || '/api/v1/metrics/health/summary';
     const REFRESH_INTERVAL = 30000; // 30s
@@ -280,6 +280,7 @@
                 <div class="hb-details">
                     <div class="hb-stats-grid"></div>
                 </div>
+                <div class="hb-footer">v${VERSION}</div>
             </div>
         `;
 
@@ -573,6 +574,15 @@
                 animation: hb-sparkle 3s infinite ease-in-out;
                 display: none;
             }
+            .hb-footer {
+                position: absolute;
+                bottom: 5px;
+                left: 50%;
+                transform: translateX(-50%);
+                font-size: 9px;
+                color: #444;
+                font-family: monospace;
+            }
             .hb-toggle { display: none; } /* Hidden in sidebar mode */
 
             @keyframes hb-pulse {
@@ -770,9 +780,13 @@
 
     async function fetchHealth() {
         try {
-            const resp = await fetch(HEALTH_API, {
+            // Pass current domain for SSL certificate check
+            const currentDomain = window.location.hostname;
+            const apiUrl = HEALTH_API + (HEALTH_API.includes('?') ? '&' : '?') + 'domain=' + encodeURIComponent(currentDomain);
+
+            const resp = await fetch(apiUrl, {
                 headers: { 'Accept': 'application/json' },
-                credentials: 'same-origin'
+                credentials: 'omit'  // Cross-origin request
             });
             if (!resp.ok) throw new Error('HTTP ' + resp.status);
             return await resp.json();
