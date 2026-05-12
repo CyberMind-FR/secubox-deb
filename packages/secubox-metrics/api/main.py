@@ -10,12 +10,14 @@ import json
 import os
 import subprocess
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.responses import JSONResponse
+from cryptography import x509
+from cryptography.hazmat.backends import default_backend
 
 # Try to import auth, fallback to no-auth for development
 try:
@@ -608,6 +610,61 @@ def build_health_summary() -> dict:
         },
         "timestamp": datetime.now().isoformat()
     }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SSL CERTIFICATE STATUS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def get_ssl_status(domain: str) -> dict:
+    """
+    Get SSL certificate status for a domain.
+
+    Thresholds (aggressive for Let's Encrypt 90-day certs):
+    - ok: > 7 days remaining
+    - warn: 3-7 days remaining
+    - error: < 3 days remaining
+    - expired: <= 0 days remaining
+    """
+    if not domain:
+        return {"domain": None, "days_remaining": None, "status": "unknown", "expiry": None}
+
+    parent_domain = '.'.join(domain.split('.')[1:]) if '.' in domain else domain
+    cert_paths = [
+        Path(f"/etc/letsencrypt/live/{domain}/cert.pem"),
+        Path(f"/etc/letsencrypt/live/{parent_domain}/cert.pem"),
+        Path(f"/etc/haproxy/certs/{domain}.pem"),
+        Path(f"/etc/nginx/ssl/{domain}.crt"),
+    ]
+
+    cert_path = None
+    for p in cert_paths:
+        if p.exists():
+            cert_path = p
+            break
+
+    if not cert_path:
+        return {"domain": domain, "days_remaining": None, "status": "unknown", "expiry": None}
+
+    try:
+        cert_data = cert_path.read_bytes()
+        cert = x509.load_pem_x509_certificate(cert_data, default_backend())
+        now = datetime.now(timezone.utc)
+        expiry = cert.not_valid_after_utc
+        days_remaining = (expiry - now).days
+
+        if days_remaining <= 0:
+            status = "expired"
+        elif days_remaining < 3:
+            status = "error"
+        elif days_remaining <= 7:
+            status = "warn"
+        else:
+            status = "ok"
+
+        return {"domain": domain, "days_remaining": days_remaining, "status": status, "expiry": expiry.isoformat()}
+    except Exception as e:
+        return {"domain": domain, "days_remaining": None, "status": "unknown", "expiry": None, "error": str(e)}
 
 
 @app.get("/api/v1/metrics/health/summary")
